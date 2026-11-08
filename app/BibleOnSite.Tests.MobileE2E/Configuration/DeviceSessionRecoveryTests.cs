@@ -90,6 +90,32 @@ public sealed class DeviceSessionRecoveryTests
     }
 
     [Fact]
+    public async Task SessionEndingProxyTimeoutUsesTheExistingSingleStartupRecovery()
+    {
+        _test.ConnectFailures.Enqueue(new WebDriverTimeoutException(
+            "The driver did not receive any response from the 'findElements' command within 120000 ms"));
+
+        await _test.Start();
+
+        Assert.Equal(2, _test.Rebuilds);
+        Assert.Contains(_log, line => line.Contains("died during startup"));
+    }
+
+    [Fact]
+    public async Task ASecondSessionEndingProxyTimeoutStillFails()
+    {
+        const string message = "The driver did not receive any response from the 'findElements' command within 120000 ms";
+        _test.ConnectFailures.Enqueue(new WebDriverTimeoutException(message));
+        var failure = new WebDriverTimeoutException(message);
+        _test.ConnectFailures.Enqueue(failure);
+
+        var thrown = await Assert.ThrowsAsync<WebDriverTimeoutException>(() => _test.Start().AsTask());
+
+        Assert.Same(failure, thrown);
+        Assert.Equal(2, _test.Rebuilds);
+    }
+
+    [Fact]
     public async Task StartupFailuresUnrelatedToTheTransportAreNotRetried()
     {
         var failure = new TimeoutException("session creation timed out before a session id existed");

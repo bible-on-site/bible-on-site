@@ -3,6 +3,8 @@ export type AppPlatform = {
 	name: string;
 	description: string;
 	icon: string;
+	iconWidth?: number;
+	iconHeight?: number;
 	href: string | null; // null means coming soon (no link)
 };
 
@@ -26,6 +28,8 @@ export const appPlatforms: AppPlatform[] = [
 		name: "Microsoft Store",
 		description: 'יישומון תנ"ך על הפרק לווינדוס',
 		icon: "/icons/windows.svg",
+		iconWidth: 448,
+		iconHeight: 512,
 		href: "https://apps.microsoft.com/detail/9nblggh6b55k",
 	},
 ];

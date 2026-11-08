@@ -14,7 +14,7 @@
  * also selected (#2140) — the same typo tolerance the in-memory
  * corpora get by scoring everything.
  *
- * The scan runs in two stages with different cost profiles: WHERE
+ * Pools that can exceed the output cap use two SQL stages: WHERE
  * holds only the anchor-free chunk gate — the one pattern shape a
  * giant field can't make ICU backtrack on — under an inner
  * location-ordered LIMIT that early-terminates via an index for dense
@@ -34,10 +34,18 @@
 import { toLetters } from "gematry";
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { queryText } from "@/lib/api-client";
-import { authorNameToSlug } from "@/lib/authors";
+// Import the pure slug helper directly — never the barrel: `authors/service`
+// pulls `server-only` via reading-metrics, and Playwright e2e specs import
+// this module under plain Node where that guard throws (#2607).
+import { authorNameToSlug } from "@/lib/authors/url-utils";
 import type { Scored } from "./corpus";
 import { htmlToPlainText } from "./normalize";
-import { maxEdits, prepareQuery, scorePreparedText } from "./score";
+import {
+	MAX_SEARCH_SCORE,
+	maxEdits,
+	prepareQuery,
+	scorePreparedText,
+} from "./score";
 
 /**
  * Candidate rows pulled from MySQL before JS re-scoring. Bounded so a
@@ -335,12 +343,13 @@ function matchClauses(
  * then `LEAST` over the terms' word-level score estimates, mirroring
  * the scorer's minimum-term rule. A single-term query skips the phrase
  * flag: the estimate's exact flag is the same pattern, and the
- * estimate's 90 tier already sorts those rows first. Each term's estimate is
- * `10*exact + 20*prefix + 60*candidate` evaluated on a single
- * `REGEXP_LIKE` per {@link termRankPatterns pattern}: the patterns are
- * nested (exact ⇒ prefix ⇒ fuzzy-eligible), so the sum lands on 90,
- * 80, 60, or 0 — the tier `tokenScore` gives the term's best word in
- * that fragment. The `60*candidate` flag is the length-windowed
+ * estimate's 90 tier already sorts those rows first. The patterns are
+ * nested (exact ⇒ prefix ⇒ fuzzy-eligible), so CASE returns the same
+ * 90/80/60/0 tiers as `10*exact + 20*prefix + 60*candidate`, without
+ * evaluating the expensive fuzzy pattern after an exact/prefix hit.
+ * The final `60*candidate` also preserves SQL NULL for a NULL field,
+ * including its existing ordering below a nonmatching non-NULL field.
+ * The candidate flag is the length-windowed
  * {@link termRegexp}: WHERE admits rows on the cheaper
  * {@link termGateRegexp} superset, so a chunk inside an over-long
  * word still reaches ORDER BY — but its flag is 0, which pushes the
@@ -369,7 +378,8 @@ function rankPredicates(
 	const singleTerm = terms.length === 1;
 	const estimate = (predicate: string) => {
 		const estimates = terms.map(
-			() => `(10*${predicate} + 20*${predicate} + 60*${predicate})`,
+			() =>
+				`(CASE WHEN ${predicate} THEN 90 WHEN ${predicate} THEN 80 ELSE 60*${predicate} END)`,
 		);
 		// LEAST takes two or more arguments — a single-term query emits
 		// the bare estimate.
@@ -594,6 +604,8 @@ export interface ArticleHit {
  * scored article hits out) should replace/augment this provider — see
  * docs/website/search.md for the expected request/response contract.
  * Keep `searchArticles` as the only call site so the swap touches one file.
+ * Its location-ordered candidate pool fits the output cap completely, so
+ * the exact JS scorer ranks it without a redundant SQL rank estimate.
  */
 export async function searchArticles(
 	phrase: string,
@@ -606,7 +618,9 @@ export async function searchArticles(
 		["a.name", "a.abstract", "a.content"],
 		terms,
 	);
-	const rank = rankClauses(["a2.name", "a2.abstract", "a2.content"], terms);
+	// This existing pool holds at most 666 rows, below CANDIDATE_LIMIT.
+	// SQL ranking cannot discard any of them; the exact JS scoring below
+	// already ranks the complete pool. Keep its size and id ordering.
 	const rows = await queryText<{
 		id: number;
 		perek_id: number;
@@ -625,12 +639,28 @@ export async function searchArticles(
 			 LIMIT ${innerCandidateLimit(3, terms.length)}
 		 ) a2
 		 JOIN tanah_author au ON a2.author_id = au.id
-		 ORDER BY ${rank.orderBy}, a2.id
+		 ORDER BY a2.id
 		 LIMIT ${CANDIDATE_LIMIT}`,
-		[...params, ...rank.params],
+		params,
 	);
-	return rows
-		.map((row) => {
+	const candidates = rows.map((row) => ({
+		row,
+		titleScore: scorePreparedText(row.name, prepared) * 2,
+	}));
+	// A weighted title above the maximum body score cannot be displaced by
+	// an article matching only in its body. When titles fill the requested
+	// results, decode and score only their bodies to preserve snippet choice.
+	const dominantTitles = candidates
+		.filter(({ titleScore }) => titleScore > MAX_SEARCH_SCORE)
+		.sort(
+			(left, right) =>
+				right.titleScore - left.titleScore || left.row.id - right.row.id,
+		)
+		.slice(0, limit);
+	const finalists =
+		dominantTitles.length === limit ? dominantTitles : candidates;
+	return finalists
+		.map(({ row, titleScore }) => {
 			// Name, abstract, and content are each scored on their own: the
 			// SQL candidate may have matched only the abstract, so falling
 			// back to content alone would score a real match as zero.
@@ -651,11 +681,7 @@ export async function searchArticles(
 							? abstractPlain
 							: contentPlain || abstractPlain,
 				},
-				score: Math.max(
-					scorePreparedText(row.name, prepared) * 2,
-					contentScore,
-					abstractScore,
-				),
+				score: Math.max(titleScore, contentScore, abstractScore),
 			};
 		})
 		.filter((hit) => hit.score > 0)

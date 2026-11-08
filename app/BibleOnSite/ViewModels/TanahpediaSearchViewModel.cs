@@ -228,8 +228,10 @@ public partial class TanahpediaSearchViewModel : ObservableObject
         {
             // A newer search or a closed panel cancelled this one.
         }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) //NOSONAR — failure boundary: a failed search must land on the availability note, not crash the panel.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia scoped search failed: {ex}");
             if (version == _searchVersion)
             {

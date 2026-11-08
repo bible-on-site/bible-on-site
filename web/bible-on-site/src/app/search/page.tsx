@@ -1,17 +1,23 @@
 import type { Metadata } from "next";
 import { searchSite } from "@/lib/search/service";
 import {
-	SEARCH_LIMIT_DEFAULT,
 	parseSearchTypes,
+	SEARCH_LIMIT_DEFAULT,
 	type SearchResponse,
 } from "@/lib/search/types";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { SearchExperience } from "./components/SearchExperience";
 import styles from "./search.module.css";
 
-export const metadata: Metadata = {
+const searchMetadata = pageMetadata({
 	title: 'חיפוש | תנ"ך על הפרק',
 	description:
 		'חיפוש בפרקים, פסוקים, פירושים, רבנים, מאמרים וערכי תנכפדיה של תנ"ך על הפרק',
+	canonical: "/search",
+});
+
+export const metadata: Metadata = {
+	...searchMetadata,
 	// Internal search results are an unbounded duplicate space: indexable
 	// query URLs would create crawl traps and low-quality landing pages.
 	// noindex keeps them out of Search while follow still lets crawlers
@@ -30,7 +36,8 @@ interface SearchPageProps {
 export default async function SearchPage({ searchParams }: SearchPageProps) {
 	const resolved = await searchParams;
 	const rawQuery = resolved.q;
-	const query = (Array.isArray(rawQuery) ? rawQuery[0] : rawQuery)?.trim() ?? "";
+	const query =
+		(Array.isArray(rawQuery) ? rawQuery[0] : rawQuery)?.trim() ?? "";
 	const types = parseSearchTypes(resolved.type);
 	let response: SearchResponse | null = null;
 	let searchFailed = false;

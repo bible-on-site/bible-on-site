@@ -1,10 +1,14 @@
 import DOMPurify from "isomorphic-dompurify";
 import Image from "next/image";
 import Link from "next/link";
+import { ReadingTime } from "@/app/components/ReadingTime";
+import { Skeleton, SkeletonLabel } from "@/app/components/Skeleton";
 import type { ArticleSummary } from "@/lib/articles";
 import { normalizeAbstractHtml } from "@/lib/authors/articles-grid";
 import styles from "./articles-section.module.css";
 import { Carousel } from "./Carousel";
+
+const SKELETON_KEYS = ["a", "b", "c"];
 
 interface ArticlesSectionProps {
 	articles?: ArticleSummary[] | null;
@@ -48,6 +52,7 @@ export function ArticlesSection({
 					src="/icons/book.svg"
 					alt=""
 					aria-hidden="true"
+					unoptimized
 					width={18}
 					height={18}
 					className={styles.sectionIcon}
@@ -64,7 +69,22 @@ export function ArticlesSection({
 				{safeArticles.length === 0 ? (
 					<p className={styles.emptyMessage}>{emptyMessage}</p>
 				) : loading ? (
-					<p className={styles.emptyMessage}>מתחבר למאמרים...</p>
+					SKELETON_KEYS.map((key, index) => (
+						<div
+							key={key}
+							className={`${styles.carouselItem} ${styles.skeletonItem}`}
+						>
+							{index === 0 && <SkeletonLabel>מתחבר למאמרים...</SkeletonLabel>}
+							<Skeleton variant="round" width="64px" height="64px" />
+							<Skeleton width="60%" height="1rem" />
+							<Skeleton width="35%" height="0.75rem" />
+							<div className={styles.skeletonAbstract}>
+								<Skeleton />
+								<Skeleton />
+								<Skeleton width="70%" />
+							</div>
+						</div>
+					))
 				) : (
 					safeArticles.map((article) => (
 						<Link
@@ -99,6 +119,11 @@ export function ArticlesSection({
 								/>
 							</div>
 							<span className={styles.authorName}>{article.authorName}</span>
+							{/* Pre-entry estimate over the FULL content (#2607). */}
+							<ReadingTime
+								estimatedSeconds={article.metric?.estimatedSeconds}
+								className={styles.readingTime}
+							/>
 							{article.abstract && (
 								<div
 									className={styles.articleAbstract}

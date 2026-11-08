@@ -29,17 +29,34 @@ public partial class TanahpediaEntityTypePage : ContentPage
         BindingContext = _viewModel;
         SetupFontSizeResources();
         IntroHtml.LinkTapped += OnIntroLinkTapped;
-        TanahpediaSearch.OnEntrySelected = async uniqueName =>
+        TanahpediaSearch.OnEntrySelected = uniqueName => _ = OpenEntrySafelyAsync(uniqueName);
+    }
+
+    /// <summary>
+    /// The panel's callback is a fire-and-forget Action - an async lambda
+    /// would go async-void, and a route failure there is an unobserved crash.
+    /// </summary>
+    private async Task OpenEntrySafelyAsync(string uniqueName)
+    {
+        try
+        {
             await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: entry navigation failure must not crash the page
+        catch (Exception ex) //NOSONAR — entry navigation failure must not crash the page.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Tanahpedia entry navigation failed for {uniqueName}: {ex}");
+        }
     }
 
     private void SetupFontSizeResources()
     {
         var prefs = PreferencesService.Instance;
-        UpdateFontSizeResources(prefs.FontFactor);
-        prefs.PreferencesChanged += (_, _) =>
+        UpdateFontSizeResources(prefs.ArticleFontFactor);
+        WeakPreferencesSubscription.Subscribe(this, prefs, page =>
             MainThread.BeginInvokeOnMainThread(() =>
-                UpdateFontSizeResources(prefs.FontFactor));
+                page.UpdateFontSizeResources(prefs.ArticleFontFactor)));
     }
 
     private void UpdateFontSizeResources(double factor)
@@ -66,14 +83,6 @@ public partial class TanahpediaEntityTypePage : ContentPage
         }
     }
 
-    private void OnMenuButtonClicked(object sender, EventArgs e)
-    {
-        if (Shell.Current is AppShell shell)
-        {
-            shell.FlyoutIsPresented = true;
-        }
-    }
-
     private async void OnSearchTitleClicked(object sender, EventArgs e) //NOSONAR
     {
         await TanahpediaSearch.OpenAsync();
@@ -91,20 +100,28 @@ public partial class TanahpediaEntityTypePage : ContentPage
 
     /// <summary>
     /// Links inside the intro content: <c>/pedia/{slug}</c> routes in-app;
+    /// <c>/929/...</c> links ride the app-link channel into the reader (#1227);
     /// everything else opens in the external browser.
     /// </summary>
     private async void OnIntroLinkTapped(object? sender, Controls.LinkTappedEventArgs e)
     {
         e.Handled = true;
-        if (TanahpediaLinks.TryGetEntryUniqueName(e.Url, out var uniqueName))
+        try
         {
-            await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
-            return;
-        }
+            if (TanahpediaLinks.TryGetEntryUniqueName(e.Url, out var uniqueName))
+            {
+                await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
+                return;
+            }
 
-        if (Uri.TryCreate(e.Url, UriKind.Absolute, out var uri))
+            await AppLinkHelper.FollowHtmlLinkAsync(e.Url, Launcher.Default, ShellAppNavigator.Instance);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: link navigation/launcher failure must not crash the page
+        catch (Exception ex) //NOSONAR — link navigation/launcher failure must not crash the page.
         {
-            await Launcher.OpenAsync(uri);
+            #pragma warning restore S2221
+            // async void - an unhandled navigation/launcher exception is a crash.
+            Console.Error.WriteLine($"Tanahpedia link navigation failed for {e.Url}: {ex}");
         }
     }
 }

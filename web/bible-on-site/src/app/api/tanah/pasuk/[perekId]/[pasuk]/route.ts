@@ -1,7 +1,7 @@
 import { toLetters } from "gematry";
 import { NextResponse } from "next/server";
 import { getPerekByPerekId } from "@/data/perek-dto";
-import { getPerushimByPerekId, getPerushNotes } from "@/lib/perushim";
+import { getPerushNotesForPasuk } from "@/lib/perushim";
 import { pasukPlainText } from "@/lib/tanach/pasuk-plain-text";
 import {
 	toPreviewHtml,
@@ -16,11 +16,11 @@ async function perushNoteSnippet(
 	perekId: number,
 	pasukNum: number,
 ): Promise<string | null> {
-	const perushim = await getPerushimByPerekId(perekId);
-	const perush = perushim.find((p) => p.name === perushName);
-	if (!perush) return null;
-	const notes = await getPerushNotes(perush.id, perekId);
-	const pasukNotes = notes.filter((n) => n.pasuk === pasukNum);
+	const pasukNotes = await getPerushNotesForPasuk(
+		perushName,
+		perekId,
+		pasukNum,
+	);
 	if (pasukNotes.length === 0) return null;
 	const html = pasukNotes.map((n) => n.noteContent).join("\n");
 	return truncatePreviewSnippet(toPreviewHtml(html), MAX_NOTE_SNIPPET_LENGTH);

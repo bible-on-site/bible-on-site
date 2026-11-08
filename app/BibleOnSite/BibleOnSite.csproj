@@ -33,6 +33,26 @@
 		<DisableAnalytics Condition="'$(DisableAnalytics)' == '' AND '$(Configuration)' == 'Debug'">true</DisableAnalytics>
 		<DefineConstants Condition="'$(DisableAnalytics)' == 'true'">$(DefineConstants);DISABLE_ANALYTICS</DefineConstants>
 
+		<!-- Push gating (#1097): Debug builds and every mobile-e2e build (which sets
+		     DisableAnalytics explicitly) get DISABLE_PUSH — PushNotificationService
+		     becomes a no-op, the iOS CloudMessaging wiring is skipped (required:
+		     DISABLE_ANALYTICS builds never call CrossFirebase.Initialize, so the
+		     Messaging SDK would be unconfigured), and the suite cannot receive or
+		     render notifications. Release builds default to push on; a Debug build
+		     can opt in with -p:DisablePush=false, which also drives the iOS
+		     CrossFirebase.Initialize call the Messaging SDK depends on while the
+		     plist flag still keeps analytics collection off. -->
+		<DisablePush Condition="'$(DisablePush)' == ''">$(DisableAnalytics)</DisablePush>
+		<DefineConstants Condition="'$(DisablePush)' == 'true'">$(DefineConstants);DISABLE_PUSH</DefineConstants>
+
+		<!-- #1097: stays false until the App ID's Push Notifications capability is
+		     enabled and the provisioning profiles regenerated (operator checklist in
+		     docs/app/push-notifications.md). While false, iOS device signing selects
+		     Entitlements.Base.plist (app groups only); pass
+		     -p:IosPushProvisioned=true — or flip this default — once aps-environment
+		     is authorized. -->
+		<IosPushProvisioned Condition="'$(IosPushProvisioned)' == ''">false</IosPushProvisioned>
+
 		<!-- Treat C# compiler warnings as errors so iOS/Android-only issues are caught early -->
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 		<!-- Suppress XamlC warnings: XC0022 bindings without x:DataType; XC0045 Path in MultiBinding with Source=page validated against template DataType (Article) -->
@@ -58,11 +78,17 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.0.194</ApplicationDisplayVersion>
-		<!-- Windows MSIX requires each version component ≤65535, so we use a separate incrementing value -->
-		<!-- Android versionCode can be large, continuing from Play Store's 40000017 -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">50000194</ApplicationVersion>
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'android'">194</ApplicationVersion>
+		<ApplicationDisplayVersion>5.1.17</ApplicationDisplayVersion>
+		<!-- Platform build number = major*10^7 + minor*10^5 + patch (5.1.0 -> 50100000) for
+		     every store that accepts large integers: Android versionCode (continuing Play
+		     Store's 40000017 base) and Apple CFBundleVersion, which must never regress
+		     across marketing versions, including on minor bumps where the patch resets. -->
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">50100017</ApplicationVersion>
+		<!-- Windows MSIX merges the display version and this value into a 4-part version.
+		     The Microsoft Store reserves the revision component, so it stays 0 (the Nuke
+		     packer also pins it); the leading marketing version keeps packages strictly
+		     increasing (5.1.0.0 > 5.0.224.0). -->
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">0</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<!-- WindowsPackageType None = unpackaged (fixes "Class not registered" when running from CLI). MSIX for Store: /p:WindowsPackageType=MSIX -->
@@ -95,12 +121,29 @@
 		     uncompressed DEX 25.4 -> 14.0 MB, arm64 install download -3.8 MB, installed
 		     size -15 MB, with unchanged cold/warm startup and build time. The SDK's
 		     generated proguard_xamarin.cfg plus each AAR's consumer rules keep the JNI
-		     peers, so no project keep rules are needed. Obfuscation stays off (the SDK
-		     default), so Java stack traces remain readable; the SDK embeds mapping.txt as
-		     BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map in the AAB,
-		     which Play ingests with that exact versionCode (#1161).
-		     Rollback: delete this line to return to D8. -->
+		     peers, so no project keep rules are needed.
+
+		     AndroidR8ObfuscationMode=private-members (#2708): Google Play's technical
+		     quality requirements enforce a minimum 25% for optimization, obfuscation
+		     and shrinking on apps with over 10 MB of uncompressed DEX starting
+		     February 2027; the flagged store build (5.0.139, cut before R8 landed)
+		     reported "Low"/3% because it shipped the SDK's default -dontobfuscate
+		     config. private-members switches R8 to the proguard-android-optimize.txt
+		     baseline (real optimization passes) and obfuscates private/package-private
+		     members while preserving every class/interface name and all
+		     public/protected members — the exact surface JNI/ACW callbacks and the
+		     SDK's generated keep rules cover. Requires Microsoft.Android.Sdk
+		     36.1.118+ (workload set 10.0.402.1); older SDKs silently ignore the
+		     property, so the _RequireR8ObfuscationSdkSupport target below fails
+		     Release builds on stale workloads. The SDK embeds mapping.txt as
+		     BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map and
+		     r8.json as BUNDLE-METADATA/com.android.tools/r8.json in the AAB — Play
+		     ingests both with that exact versionCode (#1161) — and
+		     devops/verify_android_dex_metadata.py asserts both on every packaged
+		     bundle in CI.
+		     Rollback: delete both properties to return to D8. -->
 		<AndroidLinkTool Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">r8</AndroidLinkTool>
+		<AndroidR8ObfuscationMode Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">private-members</AndroidR8ObfuscationMode>
 		<!-- Debug APKs include the large commentary database. Store SQLite assets directly
 		     to avoid recompressing it on every local edit; Release packaging keeps compression. -->
 		<AndroidStoreUncompressedFileExtensions Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug'">$(AndroidStoreUncompressedFileExtensions);.sqlite</AndroidStoreUncompressedFileExtensions>
@@ -110,7 +153,10 @@
 		     on the command line (immutable global property). UseCurrentRuntimeIdentifier=false
 		     provides defense-in-depth for local dev builds. -->
 		<UseCurrentRuntimeIdentifier Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">false</UseCurrentRuntimeIdentifier>
-		<RuntimeIdentifiers Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">android-arm64;android-arm;android-x64;android-x86</RuntimeIdentifiers>
+		<!-- arm64 covers every device the store serves (the NUKE packager already
+		     pins android-arm64) and x64 covers emulators; 32-bit arm/x86 only ever
+		     reached local debug APKs. -->
+		<RuntimeIdentifiers Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">android-arm64;android-x64</RuntimeIdentifiers>
 		<!-- Optional: Build AAB in Debug for local PAD testing (asset packs require AAB). Uncomment to test on-demand downloads. -->
 		<!-- <AndroidPackageFormat Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug'">aab</AndroidPackageFormat> -->
 		<!-- <EmbedAssembliesIntoApk Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Debug'">true</EmbedAssembliesIntoApk> -->
@@ -119,6 +165,20 @@
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'tizen'">6.5</SupportedOSPlatformVersion>
 	</PropertyGroup>
+
+	<!-- #2708: AndroidR8ObfuscationMode only exists in Microsoft.Android.Sdk
+	     36.1.118+ (workload set 10.0.402.1); on older packs the property is a
+	     silent no-op and the build would ship a non-obfuscated bundle that looks
+	     compliant on paper. Fail instead of silently shipping -dontobfuscate.
+	     The version suffix is stripped so preview SDKs (e.g. 37.0.0-rc.1) compare
+	     correctly; an empty version means the Android workload never loaded. -->
+	<Target Name="_RequireR8ObfuscationSdkSupport" BeforeTargets="PrepareForBuild"
+			Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(AndroidR8ObfuscationMode)' != '' AND '$(AndroidR8ObfuscationMode)' != 'disabled'">
+		<Error Condition="'$(AndroidNETSdkVersion)' == ''"
+				Text="AndroidR8ObfuscationMode='$(AndroidR8ObfuscationMode)' requires the Android workload to report its SDK version; none was found." />
+		<Error Condition="'$(AndroidNETSdkVersion)' != '' AND $([MSBuild]::VersionLessThan($(AndroidNETSdkVersion.Split('-')[0]), '36.1.118'))"
+				Text="AndroidR8ObfuscationMode='$(AndroidR8ObfuscationMode)' requires Microsoft.Android.Sdk 36.1.118+ (workload set 10.0.402.1+); found $(AndroidNETSdkVersion). Run 'dotnet workload update' or install maui-android with --version 10.0.402.1." />
+	</Target>
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="BibleOnSite.Tests" />
@@ -139,6 +199,9 @@
 
 		<!-- Custom Fonts -->
 		<MauiFont Include="Resources\Fonts\*.ttf;Resources\Fonts\*.otf" />
+		<!-- The MauiFont glob covers the TTF only — ship the font's GPL
+		     attribution inside the package too (#2623). -->
+		<MauiAsset Include="Resources\Fonts\TaameyD-license.txt" LogicalName="TaameyD-license.txt" />
 
 		<!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
@@ -186,13 +249,26 @@
 	       builds do not have. RuntimeIdentifier defaults are only resolved after
 	       csproj evaluation (a RID-less Debug build lands on iossimulator), so the
 	       assignment runs in a target where the SDK-computed _SdkIsSimulator flag —
-	       the same flag DetectSigningIdentity consumes — is already known. -->
+	       the same flag DetectSigningIdentity consumes — is already known.
+	     - #1097: aps-environment must literally match the provisioning profile.
+	       Debug device builds sign against development profiles; Release selects
+	       Entitlements.Dist.plist so App Store validation and
+	       ios_signing_requirements.py (evaluated with Configuration=Release)
+	       both see `production`.
+	     - #1097: the App ID's Push Notifications capability is not enabled yet,
+	       so no provisioning profile authorizes `aps-environment` — signing with
+	       it fails codesign and CI validation alike. Until the operator enables
+	       the capability and regenerates the profiles, builds sign with
+	       Entitlements.Base.plist (app groups only). Pass
+	       -p:IosPushProvisioned=true to switch to the aps-environment plists. -->
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 		<CodesignEntitlements>Platforms\MacCatalyst\Entitlements.plist</CodesignEntitlements>
 	</PropertyGroup>
 	<Target Name="_SetIosCodesignEntitlements" BeforeTargets="_DetectSigningIdentity" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' AND '$(_SdkIsSimulator)' != 'true' AND '$(EnableCodeSigning)' != 'false'">
 		<PropertyGroup>
-			<CodesignEntitlements>Platforms\iOS\Entitlements.App.plist</CodesignEntitlements>
+			<CodesignEntitlements Condition="'$(IosPushProvisioned)' == 'true' AND '$(Configuration)' == 'Release'">Platforms\iOS\Entitlements.Dist.plist</CodesignEntitlements>
+			<CodesignEntitlements Condition="'$(IosPushProvisioned)' == 'true' AND '$(Configuration)' != 'Release'">Platforms\iOS\Entitlements.App.plist</CodesignEntitlements>
+			<CodesignEntitlements Condition="'$(IosPushProvisioned)' != 'true'">Platforms\iOS\Entitlements.Base.plist</CodesignEntitlements>
 		</PropertyGroup>
 		<Message Importance="low" Text="=== iOS device/desktop build: CodesignEntitlements = $(CodesignEntitlements) ===" />
 	</Target>
@@ -214,7 +290,7 @@
 		<!-- Fragment 1.9 merges Kotlin extensions into the main artifact. Keep Ktx
 		     aligned so Firebase's older transitive Ktx does not duplicate those classes.
 		     https://developer.android.com/jetpack/androidx/releases/fragment#1.9.0-alpha01 -->
-		<PackageReference Include="Xamarin.AndroidX.Fragment.Ktx" Version="1.9.0" />
+		<PackageReference Include="Xamarin.AndroidX.Fragment.Ktx" Version="1.9.1" />
 	</ItemGroup>
 	<Target Name="_RemoveDuplicateAndroidXAars" BeforeTargets="_ResolveAars;_ExtractAar;_GetLibraryImports" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<ItemGroup>
@@ -224,9 +300,9 @@
 
 	<!-- Auto-decompress perushim notes .gz → .sqlite if needed (checked out from git as compressed).
 	     Calls the devops setup script which has the canonical decompress logic.
-	     WorkingDirectory must be devops/ so that tsx is resolvable from devops/node_modules. -->
+	     WorkingDirectory must be devops/ so the script's node_modules resolve. -->
 	<Target Name="DecompressPerushimNotes" BeforeTargets="PrepareForBuild" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND&#xD;&#xA;			((!Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')) OR&#xD;&#xA;			(!Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')))">
-		<Exec Command="node --import tsx setup-dev-env.mts decompress-perushim-notes" WorkingDirectory="$(MSBuildProjectDirectory)/../../devops" />
+		<Exec Command="node setup-dev-env.mts decompress-perushim-notes" WorkingDirectory="$(MSBuildProjectDirectory)/../../devops" />
 	</Target>
 
 	<!-- Android: PAD on-demand asset pack. Run perushim-view pipeline to generate.
@@ -286,8 +362,36 @@
 		<AndroidAsset Include="Platforms\Android\AssetPacks\recitation_*\*.zip" Link="%(Filename)%(Extension)" AssetPack="%(Filename)" DeliveryType="OnDemand" />
 		<MauiAsset Include="Platforms\Android\AssetPacks\recitation_*\*.zip" LogicalName="%(Filename)%(Extension)" Condition="'$(Configuration)' == 'Debug'" />
 	</ItemGroup>
+	<!-- Windows: extension packs are MSIX optional packages on Release —
+	     generated under .artifacts/extension-packs/ by the packaging target
+	     (Store-delivered DLC add-ons), never bundled into the base MSIX.
+	     Debug keeps them bundled so unpackaged dev installs keep the fallback. -->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows' AND '$(Configuration)' == 'Debug'">
+		<MauiAsset Include="Platforms\Windows\ExtensionPacks\*\*.zip" LogicalName="%(Filename)%(Extension)" />
+		<!-- Evaluated before DecompressPerushimNotesWindows runs: a *.sqlite glob
+		     cannot see the files that target creates, so each payload names itself
+		     and its producer — prepared Windows/Android output or the checked-in
+		     .gz — the same pattern the Android Debug bundle below uses. -->
+		<MauiAsset Include="Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" Condition="Exists('Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')" />
+		<MauiAsset Include="Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" LogicalName="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" />
+	</ItemGroup>
+	<!-- Debug perushim bundle: materialize the .sqlite payloads into the
+	     Windows pack dir — a prepared Android payload copies straight over;
+	     otherwise expand the checked-in .gz, same as the iOS Debug leg above.
+	     PowerShell's GzipStream needs no external tool on a Windows build host. -->
+	<Target Name="DecompressPerushimNotesWindows" BeforeTargets="PrepareForBuild;Build" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows' AND '$(Configuration)' == 'Debug' AND&#xD;&#xA;			((!Exists('Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			(Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz'))) OR&#xD;&#xA;			(!Exists('Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND&#xD;&#xA;			(Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') OR Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz'))))">
+		<MakeDir Directories="Platforms\Windows\ExtensionPacks\perushim_notes" />
+		<Copy Condition="!Exists('Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite')" SourceFiles="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" DestinationFiles="Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
+		<Copy Condition="!Exists('Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" SourceFiles="Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" DestinationFiles="Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" />
+		<Exec Condition="!Exists('Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')" Command="powershell -NoProfile -Command &quot;$i=[IO.File]::OpenRead('$(MSBuildProjectDirectory)\Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz'); $o=[IO.File]::Create('$(MSBuildProjectDirectory)\Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite'); (New-Object IO.Compression.GzipStream($i,[IO.Compression.CompressionMode]::Decompress)).CopyTo($o); $o.Close(); $i.Close()&quot;" />
+		<Exec Condition="!Exists('Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Command="powershell -NoProfile -Command &quot;$i=[IO.File]::OpenRead('$(MSBuildProjectDirectory)\Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz'); $o=[IO.File]::Create('$(MSBuildProjectDirectory)\Platforms\Windows\ExtensionPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite'); (New-Object IO.Compression.GzipStream($i,[IO.Compression.CompressionMode]::Decompress)).CopyTo($o); $o.Close(); $i.Close()&quot;" />
+	</Target>
+	<!-- Pack → Store add-on StoreId map for the Windows DLC install leg.
+	     Populated after the Partner Center add-ons are created; an empty
+	     addOns object means every pack ships through the release-payload
+	     fallback. See docs/app/extension-packs.md. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
-		<MauiAsset Include="Platforms\Windows\Recitation\*.zip" LogicalName="%(Filename)%(Extension)" />
+		<MauiAsset Include="Platforms\Windows\extension-packs.json5" LogicalName="windows-extension-packs.json" />
 	</ItemGroup>
 	<ItemGroup Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND '$(Configuration)' == 'Debug'">
 		<MauiAsset Include="Platforms\iOS\AssetPacks\recitation-*\*.zip" LogicalName="%(Filename)%(Extension)" />
@@ -316,19 +420,24 @@
 		<PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />
 		<PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.120" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.13" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.14" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
 	</ItemGroup>
 
 	<!-- Desktop reliability fixes for navigation layout, focus and keyboard input. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
-		<PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+		<PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.5" />
 	</ItemGroup>
 
-	<!-- Plugin.Firebase supports iOS and Android only (not MacCatalyst or Windows) -->
+	<!-- Plugin.Firebase supports iOS and Android only (not MacCatalyst or Windows).
+	     Firestore + Auth power the cloud preferences sync (#1095); both degrade to
+	     local-only when Firebase is unavailable. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Plugin.Firebase.Analytics" Version="4.0.0" />
+		<PackageReference Include="Plugin.Firebase.Auth" Version="5.0.1" />
+		<PackageReference Include="Plugin.Firebase.CloudMessaging" Version="4.0.1" />
 		<PackageReference Include="Plugin.Firebase.Core" Version="4.2.0" />
+		<PackageReference Include="Plugin.Firebase.Firestore" Version="4.0.0" />
 	</ItemGroup>
 
 	<!-- ============================================================

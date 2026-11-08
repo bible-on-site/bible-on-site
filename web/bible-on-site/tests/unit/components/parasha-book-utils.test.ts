@@ -30,6 +30,7 @@ function makeUnits(): ParashaBookUnit[] {
 	return [
 		{
 			unitId: 1,
+			slug: "בראשית",
 			name: "בראשית",
 			order: 1,
 			refSpan: "בראשית א א - ו ח",
@@ -39,6 +40,7 @@ function makeUnits(): ParashaBookUnit[] {
 		},
 		{
 			unitId: 2,
+			slug: "נח",
 			name: "נח",
 			order: 2,
 			refSpan: "בראשית ו ט - יא לב",
@@ -48,6 +50,7 @@ function makeUnits(): ParashaBookUnit[] {
 		},
 		{
 			unitId: 3,
+			slug: "לך-לך",
 			name: "לך לך",
 			order: 3,
 			refSpan: "בראשית יב א - יז כז",
@@ -161,19 +164,22 @@ describe("buildParashaHistoryMapper", () => {
 	it("maps spread pages to their shared unit routes", () => {
 		// Torah text and its blank share the bare unit route; Haftarah
 		// text and its blank share the &haftara route.
-		expect(mapper.pageToRoute(3, undefined)).toBe("/פרשה/1?book");
-		expect(mapper.pageToRoute(4, undefined)).toBe("/פרשה/1?book");
-		expect(mapper.pageToRoute(5, undefined)).toBe("/פרשה/1?book&haftara");
-		expect(mapper.pageToRoute(6, undefined)).toBe("/פרשה/1?book&haftara");
-		expect(mapper.pageToRoute(7, undefined)).toBe("/פרשה/2?book");
-		expect(mapper.pageToRoute(9, undefined)).toBe("/פרשה/2?book&haftara");
+		expect(mapper.pageToRoute(3, undefined)).toBe("/פרשה/בראשית?book");
+		expect(mapper.pageToRoute(4, undefined)).toBe("/פרשה/בראשית?book");
+		expect(mapper.pageToRoute(5, undefined)).toBe("/פרשה/בראשית?book&haftara");
+		expect(mapper.pageToRoute(6, undefined)).toBe("/פרשה/בראשית?book&haftara");
+		expect(mapper.pageToRoute(7, undefined)).toBe("/פרשה/נח?book");
+		expect(mapper.pageToRoute(9, undefined)).toBe("/פרשה/נח?book&haftara");
 	});
 
 	it("resolves unit routes back to their text pages", () => {
-		expect(mapper.routeToPage("/פרשה/1?book")).toBe(3);
-		expect(mapper.routeToPage("/פרשה/1?book&haftara")).toBe(5);
+		expect(mapper.routeToPage("/פרשה/בראשית?book")).toBe(3);
+		expect(mapper.routeToPage("/פרשה/בראשית?book&haftara")).toBe(5);
+		expect(mapper.routeToPage("/פרשה/לך-לך?book")).toBe(11);
+		expect(mapper.routeToPage("/פרשה/לך-לך?book&haftara=1")).toBe(13);
+		// Aliases and legacy numeric ids resolve to the same spread.
+		expect(mapper.routeToPage("/פרשה/לך לך?book")).toBe(11);
 		expect(mapper.routeToPage("/פרשה/3?book")).toBe(11);
-		expect(mapper.routeToPage("/פרשה/3?book&haftara=1")).toBe(13);
 	});
 
 	it("resolves book-chrome routes back to chrome pages", () => {
@@ -183,19 +189,24 @@ describe("buildParashaHistoryMapper", () => {
 	});
 
 	it("resolves percent-encoded unit routes", () => {
-		expect(mapper.routeToPage(`/${encodeURIComponent("פרשה")}/2?book`)).toBe(7);
+		expect(
+			mapper.routeToPage(
+				`/${encodeURIComponent("פרשה")}/${encodeURIComponent("נח")}?book`,
+			),
+		).toBe(7);
 	});
 
 	it("rejects non-book and unknown routes", () => {
-		expect(mapper.routeToPage("/פרשה/1")).toBeNull();
+		expect(mapper.routeToPage("/פרשה/בראשית")).toBeNull();
 		expect(mapper.routeToPage("/פרשה/99?book")).toBeNull();
+		expect(mapper.routeToPage("/פרשה/בראשיתי?book")).toBeNull();
 		expect(mapper.routeToPage("/929/5?book")).toBeNull();
 	});
 
 	it("maps an empty unit list to nothing", () => {
 		const empty = buildParashaHistoryMapper([], "בראשית");
 		expect(empty.pageToRoute(3, undefined)).toBeNull();
-		expect(empty.routeToPage("/פרשה/1?book")).toBeNull();
+		expect(empty.routeToPage("/פרשה/בראשית?book")).toBeNull();
 	});
 
 	it("rejects page indices before the content offset", () => {
@@ -205,56 +216,63 @@ describe("buildParashaHistoryMapper", () => {
 
 describe("pathnameWithParashaBookQuery", () => {
 	it("adds ?book while preserving other params", () => {
-		expect(pathnameWithParashaBookQuery("/פרשה/1", "haftara&x=1", true)).toBe(
-			"/פרשה/1?haftara=&x=1&book=",
+		expect(pathnameWithParashaBookQuery("/פרשה/בראשית", "haftara&x=1", true)).toBe(
+			"/פרשה/בראשית?haftara=&x=1&book=",
 		);
 	});
 
 	it("accepts a leading question mark on the current query", () => {
-		expect(pathnameWithParashaBookQuery("/פרשה/1", "?keep=1", true)).toBe(
-			"/פרשה/1?keep=1&book=",
+		expect(pathnameWithParashaBookQuery("/פרשה/בראשית", "?keep=1", true)).toBe(
+			"/פרשה/בראשית?keep=1&book=",
 		);
 	});
 
 	it("strips every book param when leaving book view", () => {
 		expect(
 			pathnameWithParashaBookQuery(
-				"/פרשה/1",
+				"/פרשה/בראשית",
 				"book&haftara&toc=1&bookPage=front&keep=2",
 				false,
 			),
-		).toBe("/פרשה/1?keep=2");
+		).toBe("/פרשה/בראשית?keep=2");
 	});
 
 	it("returns the bare pathname when nothing remains", () => {
-		expect(pathnameWithParashaBookQuery("/פרשה/1", "book", false)).toBe(
-			"/פרשה/1",
+		expect(pathnameWithParashaBookQuery("/פרשה/בראשית", "book", false)).toBe(
+			"/פרשה/בראשית",
 		);
 	});
 });
 
 describe("parashaBookExitPath", () => {
-	it("returns the unit the flipbook's history wrote to the location", () => {
-		expect(parashaBookExitPath("/פרשה/8", 1)).toBe("/פרשה/8");
-		expect(parashaBookExitPath("/parasha/8", 1)).toBe("/פרשה/8");
+	it("returns the canonical path for the unit the flipbook wrote", () => {
+		expect(parashaBookExitPath("/פרשה/וישלח", 1)).toBe("/פרשה/וישלח");
+		expect(parashaBookExitPath("/parasha/וישלח", 1)).toBe("/פרשה/וישלח");
+		// Legacy numeric ids and aliases canonicalize on exit.
+		expect(parashaBookExitPath("/פרשה/8", 1)).toBe("/פרשה/וישלח");
 		expect(
 			parashaBookExitPath("/%D7%A4%D7%A8%D7%A9%D7%94/8", 1),
-		).toBe("/פרשה/8");
+		).toBe("/פרשה/וישלח");
 	});
 
 	it("falls back to the entry unit on book-chrome exits", () => {
 		expect(parashaBookExitPath("/פרשה/בראשית/כריכה", 5)).toBe(
-			"/פרשה/5",
+			"/פרשה/חיי-שרה",
 		);
 		expect(parashaBookExitPath("/פרשה/בראשית/תוכן", 5)).toBe(
-			"/פרשה/5",
+			"/פרשה/חיי-שרה",
 		);
-		expect(parashaBookExitPath("/פרשה/בראשית/גב", 5)).toBe("/פרשה/5");
+		expect(parashaBookExitPath("/פרשה/בראשית/גב", 5)).toBe(
+			"/פרשה/חיי-שרה",
+		);
 	});
 
 	it("falls back to the entry unit on non-unit paths", () => {
-		expect(parashaBookExitPath("/פרשה", 3)).toBe("/פרשה/3");
-		expect(parashaBookExitPath("/929/12", 3)).toBe("/פרשה/3");
+		expect(parashaBookExitPath("/פרשה", 3)).toBe("/פרשה/לך-לך");
+		expect(parashaBookExitPath("/929/12", 3)).toBe("/פרשה/לך-לך");
+		expect(parashaBookExitPath("/פרשה/מחיר-פרות", 3)).toBe(
+			"/פרשה/לך-לך",
+		);
 	});
 });
 

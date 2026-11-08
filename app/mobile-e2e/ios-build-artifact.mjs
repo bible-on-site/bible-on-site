@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -13,9 +13,6 @@ const projectOutputs = [
   "app/BibleOnSite.Tests.MobileE2E/bin/Debug", "app/BibleOnSite.Tests.MobileE2E/obj",
 ];
 const roots = [appBundle, ...projectOutputs, "coverage-app"];
-// --force-local keeps a drive-letter archive path (C:\…) local under GNU
-// tar on Windows; bsdtar (macOS) does not support the flag.
-const forceLocal = process.platform === "win32" ? ["--force-local"] : [];
 const requiredFiles = [
   `${appBundle}/BibleOnSite`, `${appBundle}/Info.plist`, `${appBundle}/GoogleService-Info.plist`,
   `${appBundle}/_CodeSignature/CodeResources`,
@@ -85,11 +82,13 @@ export async function packIosBuild(root, coverage, output, sourceSha, toolchain)
   // outside the declared output roots; signatures live in the bundle itself.
   // https://github.com/libarchive/libarchive/blob/master/tar/bsdtar.c
   // The coverage template travels with these exact assemblies.
-  await execute("tar", [...forceLocal, "-czf", archive, "-C", root, appBundle, ...projectOutputs,
+  // A relative archive name works with both GNU tar and bsdtar, including
+  // Windows drive-letter paths, without relying on GNU-only flags.
+  await execute("tar", ["-czf", basename(archive), "-C", root, appBundle, ...projectOutputs,
     "-C", dirname(coverage), "coverage-app"], {
-    windowsHide: true, env: { ...process.env, COPYFILE_DISABLE: "1" },
+    cwd: dirname(archive), windowsHide: true, env: { ...process.env, COPYFILE_DISABLE: "1" },
   });
-  const { stdout } = await execute("tar", [...forceLocal, "-tzf", archive], { maxBuffer: 8 * 1024 * 1024, windowsHide: true });
+  const { stdout } = await execute("tar", ["-tzf", basename(archive)], { cwd: dirname(archive), maxBuffer: 8 * 1024 * 1024, windowsHide: true });
   validateArchiveEntries(stdout);
   const manifest = {
     kind: "ios-mobile-e2e-build/1", sourceSha, toolchain, workspace: root,
@@ -101,6 +100,8 @@ export async function packIosBuild(root, coverage, output, sourceSha, toolchain)
 
 export async function restoreIosBuild(root, input, artifacts, sourceSha, toolchain) {
   root = resolve(root);
+  input = resolve(input);
+  artifacts = resolve(artifacts);
   validateIdentity(sourceSha, toolchain);
   const manifest = JSON.parse(await readFile(join(input, "ios-build.json"), "utf8"));
   // MSBuild intermediates retain absolute checkout/NuGet paths. Refuse a host
@@ -113,11 +114,11 @@ export async function restoreIosBuild(root, input, artifacts, sourceSha, toolcha
   if (manifest.archiveBytes !== (await stat(archive)).size || manifest.archiveSha256 !== await digest(archive)) {
     throw new Error("iOS build archive integrity check failed.");
   }
-  const { stdout } = await execute("tar", [...forceLocal, "-tzf", archive], { maxBuffer: 8 * 1024 * 1024, windowsHide: true });
+  const { stdout } = await execute("tar", ["-tzf", basename(archive)], { cwd: dirname(archive), maxBuffer: 8 * 1024 * 1024, windowsHide: true });
   validateArchiveEntries(stdout);
-  await execute("tar", [...forceLocal, "-xzf", archive, "-C", root, appBundle, ...projectOutputs], { windowsHide: true });
+  await execute("tar", ["-xzf", basename(archive), "-C", root, appBundle, ...projectOutputs], { cwd: dirname(archive), windowsHide: true });
   await mkdir(artifacts, { recursive: true });
-  await execute("tar", [...forceLocal, "-xzf", archive, "-C", artifacts, "coverage-app"], { windowsHide: true });
+  await execute("tar", ["-xzf", basename(archive), "-C", artifacts, "coverage-app"], { cwd: dirname(archive), windowsHide: true });
   const coverage = join(artifacts, "coverage-app");
   await validateFiles(root, coverage);
   await validateCoverage(coverage, sourceSha);

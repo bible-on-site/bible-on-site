@@ -1,0 +1,30 @@
+/*
+ * Word-weighted reading-position bar (#2607). The track sticks to the top
+ * of its scroll container (or the viewport edge under the fixed nav on
+ * window-scrolled pages); the fill grows from the inline-start edge —
+ * right in this RTL UI — as counted words pass the reading anchor.
+ */
+.track {
+	position: sticky;
+	z-index: 5;
+	height: 0;
+	overflow: visible;
+	/* The bar is a visual indicator only — it must never eat taps or
+	   change the container's scroll geometry. */
+	pointer-events: none;
+}
+
+.bar {
+	height: 3px;
+	background: color-mix(in srgb, var(--muted-text, #666) 18%, transparent);
+	border-radius: 2px;
+	overflow: hidden;
+}
+
+.fill {
+	height: 100%;
+	width: 0%;
+	background: var(--pasuk-num-color, #1c2c5d);
+	border-radius: 2px;
+	transition: width 120ms linear;
+}

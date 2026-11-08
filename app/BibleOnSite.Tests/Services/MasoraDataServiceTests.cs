@@ -300,7 +300,7 @@ public class MasoraDataServiceTests
     }
 
     [Fact]
-    public async Task PackagedAsset_MasoraHeadings_CarryParashaIdentity()
+    public void PackagedAsset_MasoraHeadings_CarryParashaIdentity()
     {
         // The app reads `heading` verbatim from the packaged tanah_view
         // database, so the tracked asset itself must carry parasha-identity
@@ -309,28 +309,26 @@ public class MasoraDataServiceTests
         var dbPath = FindPackagedDbPath();
         Assert.SkipUnless(dbPath != null && File.Exists(dbPath), "Packaged tanah_view database not present");
 
-        var db = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
-        try
-        {
-            var unitCount = await db.ExecuteScalarAsync<int>(
-                "SELECT COUNT(*) FROM tanah_reading_unit WHERE division_id = 'masora'");
-            unitCount.Should().Be(3197);
+        // A plain synchronous connection, not the async pool: the shared pool
+        // hands one SQLiteConnectionWithLock per connection string to every
+        // caller, and any parallel CloseConnection on it would null the handle
+        // out from under these queries.
+        using var db = new SQLiteConnection(dbPath, SQLiteOpenFlags.ReadOnly);
 
-            // Every heading is the parasha identity "<sefer name> פרשה <ordinal>" —
-            // a scripture-reference span (e.g. "בראשית א א-ה") fails this check.
-            var nonParashaHeadings = await db.ExecuteScalarAsync<int>(
-                "SELECT COUNT(*) FROM tanah_reading_unit u " +
-                "JOIN tanah_sefer s ON s.id = u.sefer_id " +
-                "WHERE u.division_id = 'masora' AND u.heading NOT LIKE s.name || ' פרשה %'");
-            nonParashaHeadings.Should().Be(0);
+        var unitCount = db.ExecuteScalar<int>(
+            "SELECT COUNT(*) FROM tanah_reading_unit WHERE division_id = 'masora'");
+        unitCount.Should().Be(3197);
 
-            var firstHeading = await db.ExecuteScalarAsync<string>(
-                "SELECT heading FROM tanah_reading_unit WHERE division_id = 'masora' AND unit_id = 1");
-            firstHeading.Should().Be("בראשית פרשה א");
-        }
-        finally
-        {
-            await db.CloseAsync();
-        }
+        // Every heading is the parasha identity "<sefer name> פרשה <ordinal>" —
+        // a scripture-reference span (e.g. "בראשית א א-ה") fails this check.
+        var nonParashaHeadings = db.ExecuteScalar<int>(
+            "SELECT COUNT(*) FROM tanah_reading_unit u " +
+            "JOIN tanah_sefer s ON s.id = u.sefer_id " +
+            "WHERE u.division_id = 'masora' AND u.heading NOT LIKE s.name || ' פרשה %'");
+        nonParashaHeadings.Should().Be(0);
+
+        var firstHeading = db.ExecuteScalar<string>(
+            "SELECT heading FROM tanah_reading_unit WHERE division_id = 'masora' AND unit_id = 1");
+        firstHeading.Should().Be("בראשית פרשה א");
     }
 }

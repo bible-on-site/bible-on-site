@@ -42,7 +42,8 @@ interface DiscoveredEntry {
 
 const REGEX_META = /[.*+?^${}()|[\]\\]/g;
 
-const escapeTitle = (title: string): string => title.replace(REGEX_META, "\\$&");
+const escapeTitle = (title: string): string =>
+	title.replace(REGEX_META, "\\$&");
 
 const stripPrefix = (path: string, prefix: string): string =>
 	path.startsWith(`${prefix}/`) ? path.slice(prefix.length + 1) : path;
@@ -64,7 +65,7 @@ export function playwrightArgs(
 		discovered?: DiscoveredEntry[];
 	},
 ): PlaywrightArgs {
-	const base = {
+	const base: Pick<PlaywrightArgs, "kind" | "schemaVersion"> = {
 		kind: PLAYWRIGHT_ARGS_KIND,
 		schemaVersion: PLAYWRIGHT_ARGS_SCHEMA_VERSION,
 	};
@@ -89,7 +90,8 @@ export function playwrightArgs(
 	for (const file of dynamic) files.add(stripPrefix(file, options.packageDir));
 	if (options.discovered !== undefined) {
 		for (const test of options.discovered) {
-			if (dynamicTestDirRel.has(test.file)) titles.add(test.titlePath.join(" "));
+			if (dynamicTestDirRel.has(test.file))
+				titles.add(test.titlePath.join(" "));
 		}
 	}
 	const alternation = [...titles].sort().map(escapeTitle).join("|");
@@ -107,7 +109,6 @@ export function loadDiscovered(path: string): DiscoveredEntry[] {
 		tests?: DiscoveredEntry[];
 	};
 	return (parsed.tests ?? []).filter(
-		(test) =>
-			typeof test.file === "string" && Array.isArray(test.titlePath),
+		(test) => typeof test.file === "string" && Array.isArray(test.titlePath),
 	);
 }

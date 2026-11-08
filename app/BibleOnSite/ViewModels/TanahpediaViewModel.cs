@@ -19,6 +19,10 @@ public partial class TanahpediaViewModel : ObservableObject
     private readonly ITanahpediaService _service;
     private readonly IAppNavigator _navigator;
 
+    /// <summary>ExecuteAsync does not dedupe in-flight calls - rapid result or
+    /// category taps must not stack duplicate pushed pages (#2640).</summary>
+    private readonly NavigationGate _navigationGate = new();
+
     public TanahpediaViewModel() : this(TanahpediaService.Instance, ShellAppNavigator.Instance)
     {
     }
@@ -94,8 +98,10 @@ public partial class TanahpediaViewModel : ObservableObject
                 TanahpediaTaxonomy.Hierarchy.Select(cat => TanahpediaCategoryGroup.Create(cat, counts)));
             IsLoaded = true;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: landing load failure surfaces as ErrorMessage
+        catch (Exception ex) //NOSONAR — landing load failure surfaces as ErrorMessage.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia landing load failed: {ex}");
             ErrorMessage = "התוכן אינו זמין כרגע";
         }
@@ -120,7 +126,16 @@ public partial class TanahpediaViewModel : ObservableObject
         {
             route += $"&sub={Uri.EscapeDataString(sub)}";
         }
-        await _navigator.GoToAsync(route);
+        try
+        {
+            await _navigationGate.RunAsync(() => _navigator.GoToAsync(route));
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Category navigation failed for {route}: {ex}");
+        }
     }
 
     /// <summary>Opens an entry by its canonical unique name.</summary>
@@ -132,7 +147,17 @@ public partial class TanahpediaViewModel : ObservableObject
             return;
         }
 
-        await _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}");
+        try
+        {
+            await _navigationGate.RunAsync(() =>
+                _navigator.GoToAsync(AppRoutes.TanahpediaEntry(uniqueName)));
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Entry navigation failed for {uniqueName}: {ex}");
+        }
     }
 }
 

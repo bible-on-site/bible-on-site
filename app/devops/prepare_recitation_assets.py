@@ -7,6 +7,7 @@ import errno
 import hashlib
 from http.client import HTTPException, IncompleteRead, RemoteDisconnected
 import json
+import os
 from pathlib import Path
 import shutil
 import sqlite3
@@ -59,6 +60,7 @@ def transient_download_error(error):
 
 def download_original(url, temporary, perek_id):
     """Restart an interrupted GET; never append partial bytes or retry bad content."""
+    url = asset_download_url(url, os.environ.get("RECITATION_ASSETS_ORIGIN"))
     for attempt in range(DOWNLOAD_ATTEMPTS):
         try:
             with open_https(url) as source, temporary.open("wb") as target:
@@ -74,6 +76,31 @@ def download_original(url, temporary, perek_id):
             print(f'{perek_id}: transient recording download failure; retry {attempt + 2}/{DOWNLOAD_ATTEMPTS} in {delay}s',
                   file=sys.stderr, flush=True)
             time.sleep(delay)
+
+
+def asset_download_url(url, origin=None):
+    """Optionally change build delivery origin without changing canonical URLs or hashes."""
+    if not origin:
+        return url
+    target = urlsplit(origin)
+    if (target.scheme != "https" or not target.hostname or target.username or target.password
+            or target.path not in ("", "/") or target.query or target.fragment or target.port not in (None, 443)):
+        raise ValueError("RECITATION_ASSETS_ORIGIN must be a bare HTTPS delivery origin")
+    return f"{target.scheme}://{target.netloc}{urlsplit(url).path}"
+
+
+def audio_cache_key(platform, intermediate=None):
+    """Reuse audio across timing/catalog edits; invalidate only changed byte inventories."""
+    database = intermediate or ROOT / "data/recitation/recitation.sqlite"
+    with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)) as connection:
+        tracks = connection.execute("SELECT perek_id,audio_sha256 FROM recitation_track").fetchall()
+    if not tracks or any(not isinstance(sha, str) or len(sha) != 64
+                         or any(c not in "0123456789abcdef" for c in sha) for _, sha in tracks):
+        raise ValueError("Invalid audio identity inventory")
+    use_opus = platform in ("Android", "iOS")
+    hashes = {load_playback(pid, sha)["sha256"] if use_opus else sha for pid, sha in tracks}
+    identity = hashlib.sha256("\n".join(sorted(hashes)).encode("ascii")).hexdigest()
+    return f"recitation-audio-v2-{'opus' if use_opus else 'mp3'}-{identity}"
 
 
 def recording(track, cache, recordings=None):
@@ -210,13 +237,17 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
         elif platform == "iOS":
             directory = app / "Platforms/iOS/AssetPacks" / pack
         else:
-            directory = app / "Platforms/Windows/Recitation"
+            # Per-pack directories mirror the mobile AssetPacks layout; the
+            # packaging target turns each into an MSIX optional package.
+            directory = app / "Platforms/Windows/ExtensionPacks" / pack
         directory.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, directory / path.name)
         if platform == "iOS":
             # xcrun ba-package turns each folder + manifest into an Apple-hosted .aar.
+            # App Store Connect supports iOS only — declaring macOS trips
+            # ITMS-91139 (invalid manifest) at delivery (#2578).
             manifest = {"assetPackID": pack, "downloadPolicy": {"onDemand": {}},
-                        "fileSelectors": [{"file": path.name}], "platforms": ["iOS", "macOS"]}
+                        "fileSelectors": [{"file": path.name}], "platforms": ["iOS"]}
             (directory / "Manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     raw = app / "Resources/Raw"
     raw.mkdir(parents=True, exist_ok=True)
@@ -234,7 +265,16 @@ def main():
     parser.add_argument("--recordings", type=Path)
     parser.add_argument("--local-originals", action="store_true",
                         help="Use verified original MP3s from --recordings for local development")
+    parser.add_argument("--cache-key", action="store_true",
+                        help="Print the audio-only cache key and set the GitHub Actions key output; no downloads")
     args = parser.parse_args()
+    if args.cache_key:
+        key = audio_cache_key(args.platform)
+        if output := os.environ.get("GITHUB_OUTPUT"):
+            with Path(output).open("a", encoding="utf-8") as target:
+                target.write(f"key={key}\n")
+        print(key)
+        return
     prepare_assets(args.app_directory, args.platform, args.cache, args.recordings,
                    local_originals=args.local_originals)
 

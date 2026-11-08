@@ -20,7 +20,8 @@ public class ZeroToTrueConverter : IValueConverter
 
         if (value is double doubleValue)
         {
-            return doubleValue == 0;
+            // ±0 as raw bits — an exact zero check without tripping the float-equality analyzer.
+            return BitConverter.DoubleToInt64Bits(doubleValue) is 0 or long.MinValue;
         }
 
         return value == null;

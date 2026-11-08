@@ -18,8 +18,8 @@ function fixture(t) {
 	const appDirectory = path.join(root, "app", "BibleOnSite");
 	const recordings = path.join(root, "audio with spaces");
 	// Every path in these tests belongs to this fixture's fresh temporary directory.
-	fs.mkdirSync(appDirectory, { recursive: true }); // nosemgrep
-	fs.mkdirSync(recordings); // nosemgrep
+	fs.mkdirSync(appDirectory, { recursive: true });
+	fs.mkdirSync(recordings);
 	return {
 		root,
 		appDirectory,
@@ -38,7 +38,7 @@ test("default recordings path belongs to the current user's source checkout", (t
 
 test("environment overrides saved configuration, including paths with spaces", (t) => {
 	const { appDirectory, recordings, envFile, root } = fixture(t);
-	fs.writeFileSync( // nosemgrep - Fixture-owned temporary configuration.
+	fs.writeFileSync(
 		envFile,
 		`${recordingsKey}=${JSON.stringify(recordings.replace(/\\/g, "/"))}\n`,
 	);
@@ -52,8 +52,8 @@ test("environment overrides saved configuration, including paths with spaces", (
 test("setup prompts with the default and saves the accepted path without changing other settings", async (t) => {
 	const { root, appDirectory, envFile } = fixture(t);
 	const expected = path.join(root, "git", "tanah-s3", "recordings");
-	fs.mkdirSync(expected, { recursive: true }); // nosemgrep - Fixture-owned temporary directory.
-	fs.writeFileSync( // nosemgrep - Fixture-owned temporary configuration.
+	fs.mkdirSync(expected, { recursive: true });
+	fs.writeFileSync(
 		envFile,
 		"# Local app settings\nAPI_URL=https://example.test\n",
 	);
@@ -72,14 +72,14 @@ test("setup prompts with the default and saves the accepted path without changin
 	);
 	assert.ok(question.includes(expected));
 	assert.ok(
-		fs.readFileSync(envFile, "utf8").includes("API_URL=https://example.test"), // nosemgrep - Fixture-owned temporary configuration.
+		fs.readFileSync(envFile, "utf8").includes("API_URL=https://example.test"),
 	);
 	assert.equal(resolveRecordingsPath({ appDirectory, env: {} }), expected);
 });
 
 test("setup replaces an old value and retains a configurable path with spaces", async (t) => {
 	const { appDirectory, envFile, recordings, root } = fixture(t);
-	fs.writeFileSync( // nosemgrep - Fixture-owned temporary configuration.
+	fs.writeFileSync(
 		envFile,
 		`API_URL=http://localhost:3003\n${recordingsKey}=${JSON.stringify(root.replace(/\\/g, "/"))}\n`,
 	);
@@ -88,7 +88,7 @@ test("setup replaces an old value and retains a configurable path with spaces", 
 		env: {},
 		prompt: async () => recordings,
 	});
-	const saved = fs.readFileSync(envFile, "utf8"); // nosemgrep - Fixture-owned temporary configuration.
+	const saved = fs.readFileSync(envFile, "utf8");
 	assert.equal(
 		saved.split("\n").filter((line) => line.startsWith(recordingsKey)).length,
 		1,
@@ -99,7 +99,7 @@ test("setup replaces an old value and retains a configurable path with spaces", 
 test("an invalid prompted path does not overwrite working configuration", async (t) => {
 	const { root, appDirectory, recordings, envFile } = fixture(t);
 	const original = `${recordingsKey}=${JSON.stringify(recordings.replace(/\\/g, "/"))}\n`;
-	fs.writeFileSync(envFile, original); // nosemgrep - Fixture-owned temporary configuration.
+	fs.writeFileSync(envFile, original);
 	await assert.rejects(
 		configureRecordings({
 			appDirectory,
@@ -108,7 +108,7 @@ test("an invalid prompted path does not overwrite working configuration", async 
 		}),
 		/Recordings directory does not exist/,
 	);
-	assert.equal(fs.readFileSync(envFile, "utf8"), original); // nosemgrep - Fixture-owned temporary configuration.
+	assert.equal(fs.readFileSync(envFile, "utf8"), original);
 });
 
 test("preparation passes the local source as one argument to the existing audited generator", (t) => {

@@ -17,16 +17,16 @@ fork
 fork again
   :Determine Baseline Availability;
   note right
-    Download trusted master artifacts,
-    re-upload into this run:
+    Check trusted master artifacts
+    exist (REST name lookup):
     module coverage, perushim data,
     app E2E coverage (android/ios)
   end note
 fork again
   :Determine Docker Image Availability;
   note right
-    LCOV artifact + GHCR Sefaria
-    MongoDB (tree-hash tag),
+    GHCR Sefaria MongoDB
+    (tree-hash tag),
     can_publish flag for forks
   end note
 end fork
@@ -40,9 +40,6 @@ note right
 end note
 
 fork
-  :Build LCOV Docker Image;
-  note right: only on artifact miss
-fork again
   :Build Sefaria MongoDB Image;
   note right: only when GHCR tag missing
 fork again
@@ -106,7 +103,7 @@ end note
 :Restore Coverage Reports;
 note right
   From module CI (run artifact)
-  OR re-uploaded master baseline.
+  OR master baseline via REST.
   App = unit+integration+E2E(android+ios)
   merged hits-only.
 end note

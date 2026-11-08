@@ -17,6 +17,10 @@ web/api/docs/migration.md
 actionlint
 test-results/
 
+# Session/PR evidence artifacts — attach to issues and PRs instead of committing
+/evidence/
+/pr-*/
+
 # Rust build artifacts
 **/target/
 
@@ -32,9 +36,11 @@ app/BibleOnSite/Resources/Raw/*
 **/.outputs/
 .artifacts/
 app/.artifacts/
+# Nested artifact-storage worktrees (artifacts/* branches holding PR evidence)
+/artifacts-*/
 app/BibleOnSite/Platforms/Android/AssetPacks/recitation_*/
 app/BibleOnSite/Platforms/iOS/AssetPacks/recitation-*/
-app/BibleOnSite/Platforms/Windows/Recitation/
+app/BibleOnSite/Platforms/Windows/ExtensionPacks/
 data/mysql/tanah_full_dump.sql
 data/mysql/perushim_data.sql
 nul
@@ -42,3 +48,4 @@ nul
 # QA service (present on qa-bot branch; ignore when untracked on other branches)
 web/qa-service/
 /app/.dev.env.local
+.junit-report/

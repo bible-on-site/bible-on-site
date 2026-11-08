@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import styles from "./NumbersSection.module.css";
 
@@ -18,6 +19,13 @@ const easeOutCubic = (progress: number) => 1 - (1 - progress) ** 3;
 export interface NumericStatItem {
 	label: string;
 	value: number;
+	/**
+	 * Optional public destination — when the counter describes something
+	 * the visitor can browse (e.g. /929/authors), the whole tile becomes
+	 * one understandable link. Counters without a real destination stay
+	 * plain text (#2397).
+	 */
+	href?: string;
 }
 
 /**
@@ -28,6 +36,8 @@ export interface NumericStatItem {
 export interface TextStatItem {
 	label: string;
 	text: string;
+	/** Optional public destination — see NumericStatItem.href. */
+	href?: string;
 }
 
 export type StatItem = NumericStatItem | TextStatItem;
@@ -104,11 +114,10 @@ export function StatsCounters({ stats }: { stats: StatItem[] }) {
 
 	return (
 		<dl ref={ref} className={styles.stats}>
-			{stats.map((stat, index) => (
-				<div key={stat.label} className={styles.stat}>
-					<dt className={styles.label}>{stat.label}</dt>
-					{"text" in stat ? (
-						<dd className={styles.value}>
+			{stats.map((stat, index) => {
+				const body =
+					"text" in stat ? (
+						<>
 							<span className={styles.srOnly}>{stat.text}</span>
 							<span
 								aria-hidden="true"
@@ -116,12 +125,10 @@ export function StatsCounters({ stats }: { stats: StatItem[] }) {
 							>
 								{stat.text}
 							</span>
-						</dd>
+						</>
 					) : (
-						<dd className={styles.value}>
-							<span className={styles.srOnly}>
-								{formatNumber(stat.value)}
-							</span>
+						<>
+							<span className={styles.srOnly}>{formatNumber(stat.value)}</span>
 							<span
 								aria-hidden="true"
 								className={styles.number}
@@ -131,10 +138,55 @@ export function StatsCounters({ stats }: { stats: StatItem[] }) {
 							>
 								{formatNumber(displayed[index] ?? stat.value)}
 							</span>
+						</>
+					);
+				return (
+					<div key={stat.label} className={styles.stat}>
+						<dt className={styles.label}>{stat.label}</dt>
+						<dd className={styles.value}>
+							{stat.href ? (
+								/* One understandable link target per counter: the anchor
+								   covers the whole stat tile via ::after, so the label and
+								   value read as a single destination without nested links.
+								   The accessible name tracks the currently displayed value so
+								   the link's visible text always stays inside its name —
+								   required while the count-up paints intermediate digits. */
+								<Link
+									className={styles.statLink}
+									href={stat.href}
+									aria-label={`${stat.label}: ${
+										"text" in stat
+											? stat.text
+											: formatNumber(displayed[index] ?? stat.value)
+									}`}
+								>
+									<span
+										aria-hidden="true"
+										className={
+											"text" in stat
+												? `${styles.word} ${textRevealed ? "" : styles.wordHidden}`
+												: styles.number
+										}
+										style={
+											"text" in stat
+												? undefined
+												: {
+														minWidth: `${formatNumber(stat.value).length}ch`,
+													}
+										}
+									>
+										{"text" in stat
+											? stat.text
+											: formatNumber(displayed[index] ?? stat.value)}
+									</span>
+								</Link>
+							) : (
+								body
+							)}
 						</dd>
-					)}
-				</div>
-			))}
+					</div>
+				);
+			})}
 		</dl>
 	);
 }

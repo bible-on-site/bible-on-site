@@ -7,16 +7,17 @@
  * available.
  */
 
+import { setImmediate } from "node:timers/promises";
 import { entryHref } from "@/lib/tanahpedia/synonym-resolution";
+import { searchPerakim, searchPesukim } from "./corpus";
 import {
+	perushHitReference,
 	searchArticles,
 	searchAuthors,
 	searchPerushNotes,
 	searchTanahpediaEntries,
-	perushHitReference,
 } from "./db-content";
 import { normalizeSearchText } from "./normalize";
-import { searchPerakim, searchPesukim } from "./corpus";
 import { searchSnippet } from "./snippet";
 import type {
 	SearchResponse,
@@ -28,6 +29,7 @@ import {
 	SEARCH_LIMIT_MAX,
 	SEARCH_QUERY_MAX_CHARS,
 	SEARCH_QUERY_MAX_TERMS,
+	SEARCH_TYPE_ORDER,
 } from "./types";
 
 const AVAILABILITY_MESSAGES: Record<SearchResultType, string> = {
@@ -66,53 +68,23 @@ export async function searchSite(
 		return response;
 	}
 
+	const hitsByType = new Map<SearchResultType, SearchResultItem[]>();
+	const failedTypes = new Set<SearchResultType>();
 	const add = (type: SearchResultType, items: SearchResultItem[]) => {
-		response.results.push(...items);
-		response.counts[type] = items.length;
+		hitsByType.set(type, items);
 	};
 	const fail = (type: SearchResultType, error: unknown) => {
 		console.warn(
 			`[search] ${type} provider failed:`,
 			error instanceof Error ? error.message : error,
 		);
-		response.availability.push(AVAILABILITY_MESSAGES[type]);
+		failedTypes.add(type);
 	};
 
-	// In-memory providers run synchronously; DB providers are async. Run
-	// everything concurrently so total latency is the slowest provider.
+	// Start database work before scoring the in-memory corpora. Yield once
+	// after scheduling it so pooled queries can reach MySQL while the CPU
+	// scores scripture, instead of adding both costs to the request latency.
 	const tasks: Promise<void>[] = [];
-	if (types.includes("perek")) {
-		try {
-			add(
-				"perek",
-				searchPerakim(phrase, limit).map(({ entry, score }) => ({
-					type: "perek" as const,
-					title: entry.source,
-					snippetHtml: searchSnippet(entry.header, phrase),
-					href: `/929/${entry.perekId}`,
-					score,
-				})),
-			);
-		} catch (error) {
-			fail("perek", error);
-		}
-	}
-	if (types.includes("pasuk")) {
-		try {
-			add(
-				"pasuk",
-				searchPesukim(phrase, limit).map(({ entry, score }) => ({
-					type: "pasuk" as const,
-					title: entry.reference,
-					snippetHtml: searchSnippet(entry.text, phrase),
-					href: `/929/${entry.perekId}#pasuk-${entry.pasukNum}`,
-					score,
-				})),
-			);
-		} catch (error) {
-			fail("pasuk", error);
-		}
-	}
 	if (types.includes("perush")) {
 		tasks.push(
 			searchPerushNotes(phrase, limit)
@@ -192,6 +164,51 @@ export async function searchSite(
 				.catch((error) => fail("tanahpedia", error)),
 		);
 	}
+	if (tasks.length > 0) await setImmediate();
+	if (types.includes("perek")) {
+		try {
+			add(
+				"perek",
+				searchPerakim(phrase, limit).map(({ entry, score }) => ({
+					type: "perek" as const,
+					title: entry.source,
+					snippetHtml: searchSnippet(entry.header, phrase),
+					href: `/929/${entry.perekId}`,
+					score,
+				})),
+			);
+		} catch (error) {
+			fail("perek", error);
+		}
+	}
+	if (types.includes("pasuk")) {
+		try {
+			add(
+				"pasuk",
+				searchPesukim(phrase, limit).map(({ entry, score }) => ({
+					type: "pasuk" as const,
+					title: entry.reference,
+					snippetHtml: searchSnippet(entry.text, phrase),
+					href: `/929/${entry.perekId}#pasuk-${entry.pasukNum}`,
+					score,
+				})),
+			);
+		} catch (error) {
+			fail("pasuk", error);
+		}
+	}
 	await Promise.all(tasks);
+	// Provider completion depends on database scheduling. Keep section order,
+	// counts and degradation notices stable for identical requests.
+	for (const type of SEARCH_TYPE_ORDER) {
+		const hits = hitsByType.get(type);
+		if (hits) {
+			response.results.push(...hits);
+			response.counts[type] = hits.length;
+		}
+		if (failedTypes.has(type)) {
+			response.availability.push(AVAILABILITY_MESSAGES[type]);
+		}
+	}
 	return response;
 }

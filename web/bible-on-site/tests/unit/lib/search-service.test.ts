@@ -21,10 +21,7 @@ jest.mock("@/lib/search/corpus", () => {
 	};
 });
 
-import {
-	searchPerakim,
-	searchPesukim,
-} from "@/lib/search/corpus";
+import { searchPerakim, searchPesukim } from "@/lib/search/corpus";
 import {
 	searchArticles,
 	searchAuthors,
@@ -87,6 +84,22 @@ describe("searchSite", () => {
 		jest.spyOn(console, "warn").mockImplementation(() => {});
 	});
 
+	it("lets scheduled database work start before synchronous scripture scoring", async () => {
+		const events: string[] = [];
+		mockNotes.mockImplementation(async () => {
+			events.push("database-start");
+			await Promise.resolve();
+			events.push("database-ready");
+			return [];
+		});
+		mockPerakim.mockImplementation(() => {
+			events.push("scripture");
+			return [];
+		});
+		await searchSite("בראשית", ["perek", "perush"]);
+		expect(events).toEqual(["database-start", "database-ready", "scripture"]);
+	});
+
 	afterEach(() => {
 		jest.restoreAllMocks();
 	});
@@ -102,7 +115,7 @@ describe("searchSite", () => {
 	});
 
 	it("normalizes the query and echoes it back", async () => {
-		const response = await searchSite('  בְּרֵאשִׁית  ', ["perek"]);
+		const response = await searchSite("  בְּרֵאשִׁית  ", ["perek"]);
 		expect(response.query).toBe("בראשית");
 		expect(response.results[0]?.title).toBe("בראשית א");
 	});
@@ -135,7 +148,7 @@ describe("searchSite", () => {
 				score: 90,
 				entry: {
 					perushId: 23,
-					perushName: "רש\"י",
+					perushName: 'רש"י',
 					perekId: 1,
 					pasukNum: 1,
 					noteIdx: 2,
@@ -280,4 +293,42 @@ describe("searchSite", () => {
 		const response = await searchSite("את", ["pasuk"], { limit: 3 });
 		expect(response.counts.pasuk).toBeLessThanOrEqual(3);
 	});
+
+	it.each([false, true])(
+		"serializes providers consistently across completion orders (failures: %s)",
+		async (failures) => {
+			mockPerakim.mockReturnValue([]);
+			mockPesukim.mockReturnValue([]);
+			async function run(reverse: boolean) {
+				const release: (() => void)[] = [];
+				for (const provider of [
+					mockNotes,
+					mockAuthors,
+					mockArticles,
+					mockTanahpedia,
+				]) {
+					provider.mockImplementationOnce(
+						() =>
+							new Promise<never[]>((resolve, reject) => {
+								release.push(() =>
+									failures ? reject(new Error("unavailable")) : resolve([]),
+								);
+							}),
+					);
+				}
+				const pending = searchSite("בראשית", [
+					"perush",
+					"author",
+					"article",
+					"tanahpedia",
+				]);
+				for (const done of reverse ? release.toReversed() : release) {
+					done();
+					await Promise.resolve();
+				}
+				return JSON.stringify(await pending);
+			}
+			expect(await run(false)).toBe(await run(true));
+		},
+	);
 });

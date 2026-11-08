@@ -1,9 +1,19 @@
 """Probe review audio without opening a console in the windowless server."""
 
 import json
+from contextlib import contextmanager
 import subprocess  # nosec B404: resolved FFmpeg executables and fixed argv, no shell.
 
 from recite import executable
+
+
+@contextmanager
+def original_audio_errors(message):
+    """Expose decoder transport failures as audio I/O errors, retaining their cause."""
+    try:
+        yield
+    except subprocess.SubprocessError as error:
+        raise OSError(message) from error
 
 
 def hidden_audio_options():

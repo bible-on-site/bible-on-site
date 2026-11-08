@@ -1,23 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-
-/**
- * Bencher Metric Format (BMF) types.
- * @see https://bencher.dev/docs/reference/bencher-metric-format/
- */
-interface BencherMetric {
-	value: number;
-	lower_value?: number;
-	upper_value?: number;
-}
-
-interface BencherMeasures {
-	[measureName: string]: BencherMetric;
-}
-
-interface BencherMetricFormat {
-	[benchmarkName: string]: BencherMeasures;
-}
+import { writeBenchmark } from "../../scripts/benchmark-store.cjs";
 
 /**
  * Unified measure names for Bencher reporting.
@@ -28,7 +10,14 @@ interface BencherMetricFormat {
  * - `memory_mb`: Memory usage in megabytes (browser heap, server RSS, server heap)
  * - `size_mb`: File/directory sizes in megabytes (standalone bundle, .next dir)
  * - `score`: Pass/fail or 0-1 scores (audit scores, category scores)
- * - `ratio`: Ratios/proportions (CLS)
+ * - `ratio`: Ratios/proportions (sefer flip 929-vs-dev ratio)
+ * - `frame_budget_ratio`: Blocking/response time divided by its existing browser
+ *   test budget. A static bound of 1 preserves that budget even when healthy
+ *   blocking time is zero or close to zero, including Lighthouse TBT.
+ * - `cls_ratio`: Cumulative Layout Shift. CLS gets its own measure so the
+ *   Bencher threshold can use a static bound: a percentage threshold on a
+ *   zero CLS baseline collapses the upper boundary limit to 0 and alerts on
+ *   any nonzero reading (#2718).
  * - `bytes`: Raw byte counts
  * - `count`: Element/item counts
  */
@@ -38,6 +27,8 @@ export type BencherMeasure =
 	| "size_mb"
 	| "score"
 	| "ratio"
+	| "frame_budget_ratio"
+	| "cls_ratio"
 	| "bytes"
 	| "count";
 
@@ -58,7 +49,6 @@ const BENCHMARK_OUTPUT_DIR = resolve(
 	__dirname,
 	"../../.playwright-report/perf/bencher",
 );
-const BENCHMARK_OUTPUT_FILE = resolve(BENCHMARK_OUTPUT_DIR, "benchmark.json");
 
 /**
  * Appends a benchmark entry to the benchmark output file.
@@ -66,34 +56,29 @@ const BENCHMARK_OUTPUT_FILE = resolve(BENCHMARK_OUTPUT_DIR, "benchmark.json");
  * @see https://bencher.dev/docs/reference/bencher-metric-format/
  */
 export function reportBenchmark(entry: BenchmarkEntry): void {
-	mkdirSync(BENCHMARK_OUTPUT_DIR, { recursive: true });
+	writeBenchmark(BENCHMARK_OUTPUT_DIR, entry);
+}
 
-	let bmf: BencherMetricFormat = {};
-	if (existsSync(BENCHMARK_OUTPUT_FILE)) {
-		try {
-			bmf = JSON.parse(readFileSync(BENCHMARK_OUTPUT_FILE, "utf8"));
-		} catch {
-			console.warn("Failed to parse existing benchmark file, starting fresh");
-			bmf = {};
-		}
-	}
+/** Report frame blocking against the same calibrated bound as the browser test. */
+export function reportFrameBlockingBenchmark(
+	name: string,
+	blockedMs: number,
+	budgetMs: number,
+): void {
+	reportBenchmark({
+		name,
+		measure: "frame_budget_ratio",
+		value: blockedMs / budgetMs,
+		upperValue: 1,
+	});
+}
 
-	// Initialize benchmark entry if it doesn't exist
-	if (!bmf[entry.name]) {
-		bmf[entry.name] = {};
-	}
-
-	// Add the measure
-	const metric: BencherMetric = { value: entry.value };
-	if (entry.lowerValue !== undefined) {
-		metric.lower_value = entry.lowerValue;
-	}
-	if (entry.upperValue !== undefined) {
-		metric.upper_value = entry.upperValue;
-	}
-	bmf[entry.name][entry.measure] = metric;
-
-	writeFileSync(BENCHMARK_OUTPUT_FILE, JSON.stringify(bmf, null, 2), "utf8");
+/**
+ * Maps a Web Vitals metric name to its unified Bencher measure name.
+ * CLS is the only unitless Web Vitals metric; all others are timings.
+ */
+export function webVitalsMeasure(metricName: string): BencherMeasure {
+	return metricName === "CLS" ? "cls_ratio" : "time_ms";
 }
 
 /**

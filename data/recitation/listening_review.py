@@ -93,10 +93,14 @@ def validate_case(case, canonical_words, manifest):
         raise ValueError("Unknown canonical verse")
     validate_timings(verse_words, case["words"], manifest["durationMs"], require_complete=True)
     start, end = case["clipStartMs"], case["clipEndMs"]
+    human_context = (case.get("preparationKind") == "human-selected-context-v1"
+                     and case.get("manualSourceInspection") is False
+                     and case.get("requiresFreshHumanCutReview") is True)
     if (not isinstance(start, int) or isinstance(start, bool) or
             not isinstance(end, int) or isinstance(end, bool) or
-            not 0 <= start < end <= manifest["durationMs"] or end - start > 45000):
-        raise ValueError("Context must be inside the original recording and at most 45 seconds")
+            not 0 <= start < end <= manifest["durationMs"]
+            or end - start > 45000 and not human_context):
+        raise ValueError("Context must be inside the original recording; automatic contexts allow at most 45 seconds")
     for word in case["words"]:
         if not start <= word["startMs"] < word["endMs"] <= end:
             raise ValueError("Candidate falls outside its diagnostic context")
@@ -194,14 +198,17 @@ def load_queue(path):
         raise ValueError("Unknown listening queue")
     if digest_json(queue["cases"]) != queue["queueSha256"]:
         raise ValueError("Queue changed after preparation")
-    chapters = load_chapters(Path(queue["canonicalPath"]))
+    canonical = Path(queue["canonicalPath"])
+    canonical_sha = queue.get("canonicalSha256") or digest_file(canonical)
+    from listening_machine import canonical_words
     sources = {}
     for case in queue["cases"]:
         if candidate_digest(case) != case["candidateSha256"]:
             raise ValueError("Candidate changed after diagnostic preparation")
         if digest_file(Path(case["diagnosticPath"])) != case["diagnosticSha256"]:
             raise ValueError("Diagnostic evidence changed")
-        validate_case(case, words_for(chapters[case["perekId"]]), read_json(Path(case["manifestPath"])))
+        validate_case(case, canonical_words(canonical, canonical_sha, case["perekId"]),
+                      read_json(Path(case["manifestPath"])))
         source = Path(case["audioPath"])
         if source not in sources:
             sources[source] = digest_file(source)
@@ -329,23 +336,74 @@ class ReviewStore:
         self.lock = threading.Lock()
         self.decisions = {}
         self.on_saved = None
-        self.entries = read_json(path)["entries"] if path.exists() else []
+        self.document = read_json(path) if path.exists() else {"version": 1, "entries": []}
+        self.entries = self.document["entries"]
+        self.word_reviews = self.document.get("wordReviews", [])
+        self.word_requests = self.document.get("wordReviewRequests", {})
+        if (not isinstance(self.word_reviews, list) or not isinstance(self.word_requests, dict)
+                or any(not isinstance(row, dict) for row in self.word_reviews)):
+            raise ValueError("Invalid saved manual word review history")
         for row in self.entries:
             case = next((case for case in queue["cases"] if case["id"] == row["caseId"]), None)
             if case and row["candidateSha256"] == case["candidateSha256"]:
                 self.decisions[row["caseId"]] = row
 
     def save(self, case, payload):
+        if payload.get("timingEdits"):
+            raise ValueError("Edited word timings require a current whole-verse timing review; the draft was not approved")
         row = validate_decision(case, payload)
         row["queueSha256"] = self.queue["queueSha256"]
         with self.lock:
             entries = [*self.entries, row]
-            write_json(self.path, {"version": 1, "entries": entries})
+            document = {**self.document, "entries": entries}
+            write_json(self.path, document)
+            self.document = document
             self.entries = entries
             self.decisions[case["id"]] = row
         if self.on_saved is not None:
             self.on_saved()
         return row
+
+    def save_word_review(self, payload):
+        """Durably append a real typed verdict without replacing legacy JSON history."""
+        from listening_edits import validate_word_review
+        request = dict(payload)
+        if (not isinstance(request.get("submissionId"), str)
+                or any(not isinstance(request.get(key), str) for key in
+                       ("caseId", "candidateSha256", "clipSha256"))):
+            raise ValueError("Exact review submission and candidate identities must be text")
+        if request.get("verdict") in ("good", "skip"):
+            request["note"] = ""
+        request_sha = digest_json(request)
+        with self.lock:
+            previous = next((row for row in self.word_reviews
+                             if row.get("submissionId") == request["submissionId"]), None)
+            if previous:
+                if self.word_requests.get(request["submissionId"]) != request_sha:
+                    raise ValueError("This submission identity already belongs to a different review")
+                return previous
+            case = next((case for case in self.queue["cases"] if case["id"] == request["caseId"]), None)
+            if case is None:
+                raise ValueError("Unknown current listening candidate")
+            row = validate_word_review(case, request)
+            row.update(queueSha256=self.queue["queueSha256"], savedAt=datetime.now(timezone.utc).isoformat())
+            reviews = [*self.word_reviews, row]
+            requests = {**self.word_requests, request["submissionId"]: request_sha}
+            document = {**self.document, "wordReviews": reviews, "wordReviewRequests": requests}
+            write_json(self.path, document)
+            self.document, self.word_reviews, self.word_requests = document, reviews, requests
+        if self.on_saved is not None:
+            self.on_saved()
+        return row
+
+    def word_review_snapshot(self):
+        with self.lock:
+            return {":".join((row["caseId"], row["candidateSha256"], row["clipSha256"])): row
+                    for row in self.word_reviews}
+
+    def export_feedback(self):
+        with self.lock:
+            return {"entries": list(self.entries), "wordReviews": list(self.word_reviews)}
 
     def snapshot(self):
         with self.lock:
@@ -376,20 +434,32 @@ class ListeningHandler(BaseHTTPRequestHandler):
         if self.path == "/":
             return self.send(200, self.server.template, "text/html; charset=utf-8")
         if self.path == "/api/queue":
+            manual = self.server.review_store.word_review_snapshot()
             public = [{key: value for key, value in case.items() if not key.endswith("Path")}
-                      for case in self.server.queue["cases"]]
+                      for case in self.server.queue["cases"]
+                      if ":".join((case["id"], case["candidateSha256"], case["clipSha256"])) not in manual]
             return self.json_response(200, {"cases": public, "token": self.server.token,
-                                           "decisions": self.server.review_store.snapshot()})
+                                           "decisions": self.server.review_store.snapshot(),
+                                           "wordReviewDecisions": manual})
         if self.path == "/api/recovery":
             return self.json_response(200, self.server.recovery.snapshot() if self.server.recovery else {})
         if self.path == "/api/archive":
-            return self.json_response(200, self.server.archived_rounds)
+            manual = self.server.review_store.export_feedback()["wordReviews"]
+            rounds = list(self.server.archived_rounds)
+            if manual:
+                rounds.append({"caseCount": len(manual), "cases": [
+                    {"id": row["caseId"], "label": self.server.cases.get(row["caseId"], {}).get("label", row["caseId"]),
+                     "decision": row} for row in manual]})
+            return self.json_response(200, rounds)
         if self.path == "/archive":
             return self.send(200, Path(__file__).with_name("listening_archive.html").read_bytes(), "text/html; charset=utf-8")
         if self.path == "/api/export":
             return self.json_response(200, {"queueSha256": self.server.queue["queueSha256"],
                                            "decisions": self.server.review_store.snapshot(),
+                                           **self.server.review_store.export_feedback(),
                                            "publicationStatus": "held"})
+        if self.path == "/api/word-reviews":
+            return self.json_response(200, {"entries": self.server.review_store.export_feedback()["wordReviews"]})
         if self.path.startswith("/clips/"):
             case = self.server.cases.get(self.path.removeprefix("/clips/"))
             if case:
@@ -430,11 +500,12 @@ class ListeningHandler(BaseHTTPRequestHandler):
                 # Invalid sessions remain rejected even if their body cannot be drained.
                 pass
             return self.json_response(403, {"error": "Local review session required"})
-        if self.path != "/api/reviews":
+        if self.path not in ("/api/reviews", "/api/word-reviews"):
             return self.json_response(404, {"error": "Not found"})
         try:
             case, payload = self.review_payload()
-            row = self.server.review_store.save(case, payload)
+            row = (self.server.review_store.save_word_review(payload) if self.path == "/api/word-reviews"
+                   else self.server.review_store.save(case, payload))
             return self.json_response(200, row)
         except (ValueError, KeyError, TypeError) as error:
             return self.json_response(400, {"error": str(error)})

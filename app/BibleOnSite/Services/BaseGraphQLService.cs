@@ -125,6 +125,8 @@ public class GraphQLException : Exception
 [JsonSerializable(typeof(GraphQLResponse<TanahpediaService.CategoryHomepageResponse>))]
 [JsonSerializable(typeof(GraphQLResponse<TanahpediaService.PersonFamilyResponse>))]
 [JsonSerializable(typeof(GraphQLResponse<TanahpediaService.PlaceMarkersResponse>))]
+[JsonSerializable(typeof(GraphQLResponse<DedicationService.DedicationsResponse>))]
+[JsonSerializable(typeof(Models.DedicationContext))]
 #pragma warning disable S2333 // System.Text.Json source generation supplies this partial implementation.
 internal partial class GraphQLJsonContext : JsonSerializerContext;
 #pragma warning restore S2333

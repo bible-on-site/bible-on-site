@@ -20,6 +20,14 @@ export function Footer() {
 	return (
 		<footer className={styles.footer}>
 			<nav className={styles.footerNav}>
+				<Link
+					href="/#privacyPolicy"
+					rel="privacy-policy"
+					className={styles.footerLink}
+				>
+					מדיניות פרטיות
+				</Link>
+				<span className={styles.separator}>|</span>
 				<Link href="/journalism" className={styles.footerLink}>
 					על הפרק בתקשורת
 				</Link>
@@ -47,6 +55,7 @@ export function Footer() {
 					<Image
 						src="/icons/github.svg"
 						alt="GitHub"
+						unoptimized
 						width={18}
 						height={18}
 						className={styles.githubIcon}

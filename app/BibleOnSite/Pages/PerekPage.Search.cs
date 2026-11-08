@@ -16,6 +16,13 @@ public partial class PerekPage
 
     /// <summary>Perek requested via the calendarReader?perekId= query route.</summary>
     private int? _pendingPerekId;
+
+    /// <summary>
+    /// Calendar-selected Hebrew date (YYYYMMDD) the reader was opened for.
+    /// When set, the daily article override (#3098) resolves against this
+    /// date; today stays an implicit context inside StarterService too.
+    /// </summary>
+    private int? _dailyDateNum;
     private View? _searchHeader;
     private double _searchHeaderHeight;
     private const string SearchExpansionAnimation = "ReaderSearchExpansion";
@@ -30,7 +37,7 @@ public partial class PerekPage
 
     private async void OnPerekSourceClicked(object? sender, EventArgs e)
     {
-        ReaderMenuOverlay.IsVisible = false;
+        ReaderMenuOverlay.Close();
         var sourceBounds = SearchIntroduction.IsVisible ? SearchIntroduction.Bounds : NormalNavigationTitle.Bounds;
         FinishSearchIntroduction();
         var opening = ChapterSearch.OpenAsync();
@@ -144,7 +151,7 @@ public partial class PerekPage
         // The permanent navigation control stays available during loading and
         // search landing. Animate only the decorative introduction above it.
         NormalNavigationTitle.Opacity = 1;
-        var sourceWidth = NormalNavigationBar.Width - 2 * NormalNavigationBar.NavigationButton.Width - NormalNavigationTitle.Margin.HorizontalThickness;
+        var sourceWidth = NormalNavigationBar.Width - NormalNavigationBar.EdgeChromeWidth - NormalNavigationTitle.Margin.HorizontalThickness;
         var introductionWidth = Math.Min(ReaderToolbar.Width - 8, sourceWidth * 1.06);
         if (sourceWidth <= 0 || introductionWidth <= 0)
         {
@@ -181,59 +188,6 @@ public partial class PerekPage
         NormalNavigationTitle.Opacity = 1;
     }
 
-#if IOS
-    private void ConfigureIosReaderHistory()
-    {
-        if (Handler is not IPlatformViewHandler pageHandler ||
-            pageHandler.ViewController?.NavigationController is not { } navigation ||
-            navigation.InteractivePopGestureRecognizer is not { } back)
-        {
-            return;
-        }
-        navigation.View!.SemanticContentAttribute = UIKit.UISemanticContentAttribute.ForceRightToLeft;
-        // An enabled interactive-pop recognizer keeps claiming the right edge
-        // even at the navigation root where nothing can pop. System edge
-        // recognizers get edge touches before ordinary recognizers, so it can
-        // win the race against the RTL flyout's pan and leave the drawer
-        // gesture dead (#2432). Keep it on only while real history exists;
-        // OnDisappearing restores it for pages pushed above.
-        back.Enabled = Navigation.NavigationStack.Count > 1;
-        // Native history owns the edge before the chapter carousel or verse list.
-        // Keep UIKit's interactive pop and MAUI's navigation delegate intact.
-        if (PerekCarousel.Handler?.PlatformView is UIKit.UIView carousel)
-        {
-            GiveNativeBackPriority(carousel, back);
-        }
-        DebugLog.Write($"[ReaderBack] stack={Navigation.NavigationStack.Count} enabled={back.Enabled} direction={navigation.View.EffectiveUserInterfaceLayoutDirection}");
-    }
-
-    /// <summary>
-    /// Re-enables the system edge-back recognizer that
-    /// <see cref="ConfigureIosReaderHistory"/> switches off at the navigation
-    /// root, so a page pushed above this reader keeps its native back swipe.
-    /// </summary>
-    private void RestoreIosInteractiveBack()
-    {
-        if (Handler is IPlatformViewHandler pageHandler &&
-            pageHandler.ViewController?.NavigationController?.InteractivePopGestureRecognizer is { } back)
-        {
-            back.Enabled = true;
-        }
-    }
-
-    private static void GiveNativeBackPriority(UIKit.UIView view, UIKit.UIGestureRecognizer back)
-    {
-        if (view is UIKit.UIScrollView scroll)
-        {
-            scroll.PanGestureRecognizer.RequireGestureRecognizerToFail(back);
-        }
-        foreach (var child in view.Subviews)
-        {
-            GiveNativeBackPriority(child, back);
-        }
-    }
-#endif
-
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
         if (query.TryGetValue("searchResult", out var value) && value is SearchResult result && GetSearchPerekId(result) > 0)
@@ -251,6 +205,15 @@ public partial class PerekPage
         {
             _pendingPerekId = perekId;
             _initialPerekId = null;
+        }
+
+        // …and carries the tapped Hebrew date so the daily article override
+        // (#3098) resolves against the selected day, not just today.
+        if (query.TryGetValue("dateNum", out var dateNumValue) &&
+            int.TryParse(dateNumValue?.ToString(), out var dateNum) &&
+            dateNum is >= 1000000 and <= 99999999)
+        {
+            _dailyDateNum = dateNum;
         }
     }
 
@@ -275,14 +238,14 @@ public partial class PerekPage
         {
             if (result is AuthorSearchResult author)
             {
-                await Shell.Current.GoToAsync($"ArticlesPage?authorId={author.Author.Id}&authorName={Uri.EscapeDataString(author.Author.Name)}");
+                await ShellAppNavigator.Instance.GoToAsync($"ArticlesPage?authorId={author.Author.Id}&authorName={Uri.EscapeDataString(author.Author.Name)}");
             }
             else if (result is ArticleSearchResult article)
             {
                 // Excerpt + phrase fully describe the jump target; plain query
                 // parameters keep the destination self-contained and survive
                 // Shell's string-only query handling (#2078).
-                await Shell.Current.GoToAsync(
+                await ShellAppNavigator.Instance.GoToAsync(
                     $"articleDetail?articleId={article.ArticleId}&perekId={article.PerekId}" +
                     $"&searchExcerpt={Uri.EscapeDataString(article.Excerpt)}" +
                     $"&searchPhrase={Uri.EscapeDataString(article.SearchPhrase)}");
@@ -291,21 +254,23 @@ public partial class PerekPage
             {
                 // UniqueName is the canonical slug — alias hits already resolve
                 // server-side, so this always opens the right entry (#2104).
-                await Shell.Current.GoToAsync(
-                    $"tanahpediaEntry?uniqueName={Uri.EscapeDataString(entry.UniqueName)}");
+                await ShellAppNavigator.Instance.GoToAsync(
+                    AppRoutes.TanahpediaEntry(entry.UniqueName));
             }
             else if (GetSearchPerekId(result) > 0)
             {
-                await Shell.Current.GoToAsync(AppRoutes.SearchReader, false, new ShellNavigationQueryParameters
+                await ShellAppNavigator.Instance.GoToAsync(AppRoutes.SearchReader, false, new ShellNavigationQueryParameters
                 {
                     ["searchResult"] = result
                 });
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: search-result navigation failure alerts the user
+        catch (Exception ex) //NOSONAR — search-result navigation failure alerts the user.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Search navigation failed: {ex}");
-            await DisplayAlertAsync("חיפוש", "לא ניתן לפתוח את תוצאת החיפוש. נסו שוב", "אישור");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("חיפוש", "לא ניתן לפתוח את תוצאת החיפוש. נסו שוב", "אישור");
         }
         finally
         {

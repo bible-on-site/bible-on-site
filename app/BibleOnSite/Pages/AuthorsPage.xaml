@@ -12,9 +12,9 @@
              FlowDirection="RightToLeft"
              Shell.NavBarIsVisible="False">
 
-       <!-- Regular page presentation: no popup chrome or on-screen Back
-            arrow. The page stays on the navigation stack, so the
-            device/system Back still returns to the previous page. -->
+       <!-- Regular page presentation: no popup chrome. The shared capsule
+            Back beside the hamburger rides the same pipeline as device Back
+            (#2467) — the page owns no return affordance of its own. -->
        <Grid RowDefinitions="Auto,*">
               <!-- The same shared top bar as the על הפרק reader: flyout
                    hamburger, the pill-shaped control in the center slot and a
@@ -44,7 +44,7 @@
                                     Padding="0"
                                     BorderWidth="0"
                                     BackgroundColor="Transparent"
-                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"
+                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                     VerticalOptions="Center"
                                     SemanticProperties.Description="ניקוי החיפוש"
                                     AutomationId="ClearAuthorsSearchButton"
@@ -82,7 +82,7 @@
                                                          WidthRequest="82"
                                                          HeightRequest="82"
                                                          StrokeShape="RoundRectangle 41"
-                                                         Stroke="{StaticResource Primary}"
+                                                         Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                                          StrokeThickness="1"
                                                          HorizontalOptions="Center">
                                                         <Image Source="{Binding ImageUrl}"
@@ -108,7 +108,7 @@
                                                         Text="{Binding ArticlesCount, StringFormat='{0} מאמרים'}"
                                                         FontSize="11"
                                                         HorizontalTextAlignment="Center"
-                                                        TextColor="{StaticResource Primary}"/>
+                                                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
 
                                                  <!-- Details -->
                                                  <Label Grid.Row="3"

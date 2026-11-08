@@ -20,11 +20,30 @@ public sealed class PasukTextLabelHandler : LabelHandler
     {
         var mapper = new PropertyMapper<ILabel, PasukTextLabelHandler>(Mapper);
         mapper.AppendToMapping(nameof(PasukTextLabel.Justify), static (handler, _) => handler.ApplyJustification());
+        // Controls.MapFont re-applies FormattedText for spanned labels instead
+        // of calling UpdateFont, so the platform view keeps its creation
+        // default (14sp). Any span range without a baked PlatformFontSpan then
+        // renders at 14sp regardless of the bound FontSize — syncing the view
+        // size keeps unstyled ranges and the plain-Text path honest (#2461).
+        mapper.AppendToMapping(nameof(ILabel.Font), static (handler, _) => handler.ApplyViewFontSize());
+        mapper.AppendToMapping(nameof(PasukTextLabel.FontSize), static (handler, _) => handler.ApplyViewFontSize());
         return mapper;
     }
 
     public PasukTextLabelHandler() : base(PasukMapper)
     {
+    }
+
+    private void ApplyViewFontSize()
+    {
+        if (PlatformView is not { } textView || VirtualView is not { } label)
+        {
+            return;
+        }
+
+        var fontManager = this.GetRequiredService<IFontManager>();
+        var fontSize = fontManager.GetFontSize(label.Font);
+        textView.SetTextSize(fontSize.Unit, fontSize.Value);
     }
 
     private void ApplyJustification()

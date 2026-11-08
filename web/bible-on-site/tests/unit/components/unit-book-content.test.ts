@@ -14,9 +14,14 @@ import {
 	unitBookContentSlug,
 	writeUnitBookContentHistory,
 } from "@/app/components/reading/unit-book-content";
+import { resolveParashaSegment } from "@/data/parasha/parasha-slugs";
 
 const MASORA_ROOTS = ["/מסורה", "/masora"] as const;
 const PARASHA_ROOTS = ["/פרשה", "/parasha"] as const;
+/** The פרשה division's segment adapter: canonical slugs plus every
+ * backward-compatible form (issue #2738). */
+const parashaUnitIdFor = (segment: string) =>
+	resolveParashaSegment(segment)?.unitId ?? null;
 
 describe("unitBookContentParam", () => {
 	it("maps scopes and kinds to the flat page's param names", () => {
@@ -43,11 +48,12 @@ describe("unitBookContentFromRoute", () => {
 		});
 	});
 
-	it("parses a Haftarah content deep link", () => {
+	it("parses a Haftarah content deep link on a canonical slug", () => {
 		expect(
 			unitBookContentFromRoute(
-				"/פרשה/3?book&haftara&haftaraPerush=y",
+				"/פרשה/לך-לך?book&haftara&haftaraPerush=y",
 				PARASHA_ROOTS,
+				parashaUnitIdFor,
 			),
 		).toEqual({
 			unitId: 3,
@@ -57,6 +63,30 @@ describe("unitBookContentFromRoute", () => {
 			haftaraPerush: "y",
 			haftaraArticle: undefined,
 		});
+	});
+
+	it("parses legacy numeric and alias parasha segments", () => {
+		expect(
+			unitBookContentFromRoute(
+				"/פרשה/3?book&article=4",
+				PARASHA_ROOTS,
+				parashaUnitIdFor,
+			),
+		).toMatchObject({ unitId: 3, article: "4" });
+		expect(
+			unitBookContentFromRoute(
+				"/parasha/שלח לך?book",
+				PARASHA_ROOTS,
+				parashaUnitIdFor,
+			),
+		).toMatchObject({ unitId: 37 });
+		expect(
+			unitBookContentFromRoute(
+				"/פרשה/דמיון?book",
+				PARASHA_ROOTS,
+				parashaUnitIdFor,
+			),
+		).toBeNull();
 	});
 
 	it("accepts the ASCII route dir and percent-encoded roots", () => {
@@ -84,7 +114,11 @@ describe("unitBookContentFromRoute", () => {
 		// The bare division root has no unit.
 		expect(unitBookContentFromRoute("/מסורה?book", MASORA_ROOTS)).toBeNull();
 		expect(
-			unitBookContentFromRoute("/פרשה/5?book", MASORA_ROOTS),
+			unitBookContentFromRoute(
+				"/פרשה/חיי-שרה?book",
+				MASORA_ROOTS,
+				parashaUnitIdFor,
+			),
 		).toBeNull();
 		expect(unitBookContentFromRoute("/929/5?book", MASORA_ROOTS)).toBeNull();
 		// Book-chrome paths carry no unit selection on their own either —
@@ -136,12 +170,12 @@ describe("unitBookContentHref", () => {
 		expect(unitBookContentHref("/מסורה/5", "torah", "perush", "x")).toBe(
 			"/מסורה/5?book=&perush=x",
 		);
-		expect(unitBookContentHref("/פרשה/3", "haftara", "perush", "y")).toBe(
-			"/פרשה/3?book=&haftara=&haftaraPerush=y",
-		);
-		expect(unitBookContentHref("/פרשה/3", "haftara", "article", "7")).toBe(
-			"/פרשה/3?book=&haftara=&haftaraArticle=7",
-		);
+		expect(
+			unitBookContentHref("/פרשה/לך-לך", "haftara", "perush", "y"),
+		).toBe("/פרשה/לך-לך?book=&haftara=&haftaraPerush=y");
+		expect(
+			unitBookContentHref("/פרשה/לך-לך", "haftara", "article", "7"),
+		).toBe("/פרשה/לך-לך?book=&haftara=&haftaraArticle=7");
 	});
 });
 
@@ -168,20 +202,21 @@ describe("writeUnitBookContentHistory", () => {
 		history.replaceState(
 			null,
 			"",
-			"/פרשה/3?book=&haftara=&haftaraPerush=y&perush=z",
+			"/פרשה/לך-לך?book=&haftara=&haftaraPerush=y&perush=z",
 		);
-		writeUnitBookContentHistory("/פרשה", 3, "haftara");
+		// The פרשה caller passes the canonical slug as the unit segment.
+		writeUnitBookContentHistory("/פרשה", "לך-לך", "haftara");
 		// Clearing the haftara selection drops only its params; the
 		// spread flag and the Torah selection survive.
 		expect(decodeURIComponent(location.pathname) + location.search).toBe(
-			"/פרשה/3?book=&haftara=&perush=z",
+			"/פרשה/לך-לך?book=&haftara=&perush=z",
 		);
 	});
 
 	it("marks the haftara scope on the route", () => {
-		writeUnitBookContentHistory("/פרשה", 3, "haftara", "perush", "y");
+		writeUnitBookContentHistory("/פרשה", "לך-לך", "haftara", "perush", "y");
 		expect(decodeURIComponent(location.pathname) + location.search).toBe(
-			"/פרשה/3?book=&keep=1&haftara=&haftaraPerush=y",
+			"/פרשה/לך-לך?book=&keep=1&haftara=&haftaraPerush=y",
 		);
 	});
 

@@ -154,8 +154,10 @@ public partial class RecitationPacksViewModel : ObservableObject
 
             Refresh();
         }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) //NOSONAR — the install surface spans IO/network; a failed load shows the retry hint.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"Recitation load failed: {ex.Message}");
             Status = "לא ניתן לטעון את חבילת ההקראה. נסו להתקין אותה שוב.";
         }
@@ -200,7 +202,7 @@ public partial class RecitationPacksViewModel : ObservableObject
             return;
         }
 
-        if (!await _navigator.DisplayChoiceAsync("הסרת כל ההקלטות",
+        if (!await _navigator.DisplayDestructiveChoiceAsync("הסרת כל ההקלטות",
             "כל הקלטות הקריינות יוסרו מהמכשיר. ניתן להתקין אותן שוב בכל עת.", "הסרה", "ביטול"))
         {
             return;
@@ -210,8 +212,10 @@ public partial class RecitationPacksViewModel : ObservableObject
         {
             await _recitation.RemoveAllAsync();
         }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) //NOSONAR — removal spans IO/platform errors; failure is reported and the list refreshed.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"Recitation removal failed: {ex.Message}");
             Status = "לא ניתן להסיר את ההקלטות. נסו שוב.";
             Refresh();
@@ -236,7 +240,7 @@ public partial class RecitationPacksViewModel : ObservableObject
             return;
         }
 
-        if (!await _navigator.DisplayChoiceAsync("הסרת הקלטות",
+        if (!await _navigator.DisplayDestructiveChoiceAsync("הסרת הקלטות",
             $"ההקלטות של ספר {book.Name} יוסרו מהמכשיר. ניתן להתקין אותן שוב בכל עת.", "הסרה", "ביטול"))
         {
             return;
@@ -246,8 +250,10 @@ public partial class RecitationPacksViewModel : ObservableObject
         {
             await _recitation.RemoveAsync(book.PerekIds);
         }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) //NOSONAR — removal spans IO/platform errors; failure is reported and the list refreshed.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"Recitation removal failed: {ex.Message}");
             Status = "לא ניתן להסיר את ההקלטות. נסו שוב.";
             Refresh();
@@ -332,7 +338,9 @@ public partial class RecitationPacksViewModel : ObservableObject
         catch (OperationCanceledException) { outcome = "ההורדה הופסקה. הקלטות שהושלמו נשמרו להמשך."; }
         // Any non-cancellation failure — catalog, package, checksum, filesystem
         // or platform delivery errors — collapses to one retriable status.
-        catch (Exception ex) when (ex is not OperationCanceledException) { outcome = "לא ניתן להשלים את ההורדה. נסו שוב; הקלטות שהושלמו נשמרו."; }
+        #pragma warning disable S2221 // Deliberate failure boundary: multi-source download failure collapses to one retriable status
+        catch (Exception ex) when (ex is not OperationCanceledException) { outcome = "לא ניתן להשלים את ההורדה. נסו שוב; הקלטות שהושלמו נשמרו."; } //NOSONAR — multi-source download failure collapses to one retriable status.
+        #pragma warning restore S2221
         finally
         {
             lock (_statusGate)

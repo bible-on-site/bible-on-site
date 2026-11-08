@@ -18,7 +18,7 @@ public class FocusedPasukOverlayLayoutTests
     public void FocusedPerushim_keeps_scrollbar_in_outer_gutter_clear_of_text()
     {
         XNamespace p = "http://schemas.microsoft.com/dotnet/2021/maui";
-        var doc = XDocument.Load(Path.Join(AppRoot, "Pages", "PerekPage.xaml"));
+        var doc = XDocument.Load(Path.Join(AppRoot, "Controls", "FocusedPasukOverlay.xaml"));
 
         var collection = doc.Descendants(p + "CollectionView")
             .First(e => (string?)e.Attribute("AutomationId") == "FocusedPerushimCollection");

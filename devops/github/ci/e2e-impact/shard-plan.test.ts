@@ -69,6 +69,16 @@ describe("planShards", () => {
 		assert.equal(partition(shards).sort().join(","), "Perushim,Pilot,Reader,Scroll,Shared");
 	});
 
+	test("packs the full suite onto the fewest runners the default capacity allows", () => {
+		// 18 cases ≈ 25m is the measured full suite: one runner, not three legs
+		// each repeating ~6m of macOS setup.
+		const suite = Array.from({ length: 18 }, (_, i) =>
+			estimate(`T${String(i).padStart(2, "0")}`, 75_000 + i * 1_000));
+		assert.equal(planShards(suite, config()).length, 1);
+		const grown = suite.map((entry) => ({ ...entry, estimatedMs: entry.estimatedMs * 2 }));
+		assert.equal(planShards(grown, config()).length, 2);
+	});
+
 	test("caps the shard count at the configured maximum", () => {
 		const estimates = Array.from({ length: 20 }, (_, i) =>
 			estimate(`T${String(i).padStart(2, "0")}`, 10 * 60_000));

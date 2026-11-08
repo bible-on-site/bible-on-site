@@ -14,7 +14,9 @@ export const READER_SETTINGS_STORAGE_KEY = "perekReaderSettings" as const;
  * #2405: extended to 200% — new steps are appended so stored indices keep
  * meaning the same scale (index 4 is still 130%).
  */
-export const PEREK_FONT_SCALES = [0.85, 0.92, 1, 1.15, 1.3, 1.5, 1.7, 2] as const;
+export const PEREK_FONT_SCALES = [
+	0.85, 0.92, 1, 1.15, 1.3, 1.5, 1.7, 2,
+] as const;
 
 /**
  * Line-height and word-spacing steps applied to the perek text (5 levels
@@ -116,17 +118,29 @@ export function getStoredReaderSettings(): ReaderSettings {
 	}
 }
 
+/**
+ * Same-tab change broadcast, mirroring RECITATION_SETTINGS_EVENT — writers
+ * other than the reader settings dialog (the top-nav accessibility menu)
+ * dispatch through this so every open control reflects the same values.
+ */
+export const READER_SETTINGS_EVENT = "reader-settings-changed";
+
 export function setStoredReaderSettings(
 	settings: Partial<ReaderSettings>,
 ): void {
+	const next = normalizeSettings(settings);
 	try {
-		localStorage.setItem(
-			READER_SETTINGS_STORAGE_KEY,
-			JSON.stringify(normalizeSettings(settings)),
-		);
+		localStorage.setItem(READER_SETTINGS_STORAGE_KEY, JSON.stringify(next));
 	} catch {
 		/* quota / private mode */
 	}
+	/* istanbul ignore next: SSR has no window; callers are client-only */
+	if (typeof window !== "undefined")
+		window.dispatchEvent(
+			new CustomEvent<ReaderSettings>(READER_SETTINGS_EVENT, {
+				detail: next,
+			}),
+		);
 }
 
 /** Apply the settings as CSS variables on the document root. */

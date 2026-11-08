@@ -29,6 +29,15 @@ vi.mock("@tanstack/react-start/server-entry", () => ({
 	}) => config,
 }));
 
+// Worker startup and dedication scheduling have their own integration suites.
+// Authentication/coverage assertions must not load their DB/provider graph.
+vi.mock("~/server/email-worker-runtime.server", () => ({
+	ensureEmailWorkerStarted: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("~/server/dedication-expiry", () => ({
+	rescanDedicationExpiries: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("~/server/auth", () => ({
 	buildClearSessionCookie: buildClearSessionCookieMock,
 	buildSessionCookie: buildSessionCookieMock,
@@ -171,6 +180,24 @@ describe("admin server auth gate", () => {
 		expect(response.status).toBe(200);
 		expect(verifyServiceAccessTokenMock).not.toHaveBeenCalled();
 		expect(verifyIdTokenMock).not.toHaveBeenCalled();
+	});
+
+	// #3069: a stray SKIP_AUTH in the deployment environment must never
+	// disable the Cognito boundary — the bypass fails closed in production.
+	it("enforces auth in production even when SKIP_AUTH is accidentally set", async () => {
+		vi.stubEnv("SKIP_AUTH", "true");
+		vi.stubEnv("NODE_ENV", "production");
+		const entry = await loadServer();
+
+		const response = await entry.fetch(
+			new Request("https://admin.example.com/"),
+		);
+
+		expect(handlerFetchMock).not.toHaveBeenCalled();
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toBe(
+			"https://login.example.com/",
+		);
 	});
 });
 

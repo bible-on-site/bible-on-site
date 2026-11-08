@@ -33,9 +33,16 @@
 		"הפטרת שבת ראש חודש, וכן הפטרת שבת ערב ראש חודש, נדחות מפני הפטרות שבת שקלים, החודש, שבת חנוכה, וכן ראש חודש מנחם-אב שחל בשבת. לגבי ראש חודש אלול או ערב ראש חודש אלול שחל בשבת - ראה הערת פרשת ראה.",
 		"הטבלה והנתונים מתייחסים לנהוג בארץ ישראל; מנהגי חוץ לארץ (למשל יום טוב שני) אינם מכוסים כאן."
 	],
+	"nameAudit": {
+		"inspected": "2026-11-05",
+		"source": "Sefaria Terms API — https://www.sefaria.org/api/terms/{term} (scheme 'Parasha')",
+		"note": "All 54 records were reviewed against Sefaria's parasha term records. Every unit accepts the shared 'פרשת {name}' / 'פרשת {alias}' prefix plus delimiter (space/hyphen/maqaf) and niqqud variants automatically — those are normalization forms, not stored aliases. 'aliases' carries only genuine lexical variants: long/short names and attested spellings (נוח, תצווה, אחרי, בחוקתי, בחקתי, שלח לך, קורח, חקת, פנחס, ניצבים, ברכה). Joined-parasha names (ויקהל-פקודי and friends) are deliberately absent — a joined name never maps to a single constituent unit.",
+		"sefariaTerms": ["Bereshit","Noach","Lech Lecha","Vayera","Chayei Sara","Toldot","Vayetzei","Vayishlach","Vayeshev","Miketz","Vayigash","Vayechi","Shemot","Vaera","Bo","Beshalach","Yitro","Mishpatim","Terumah","Tetzaveh","Ki Tisa","Vayakhel","Pekudei","Vayikra","Tzav","Shmini","Tazria","Metzora","Achrei Mot","Kedoshim","Emor","Behar","Bechukotai","Bamidbar","Nasso","Beha'alotcha","Sh'lach","Korach","Chukat","Balak","Pinchas","Matot","Masei","Devarim","Vaetchanan","Eikev","Re'eh","Shoftim","Ki Teitzei","Ki Tavo","Nitzavim","Vayeilech","Ha'Azinu","V'Zot HaBerachah","Shlach Lecha"]
+	},
 	"units": [
 		{
 			"name": "בראשית",
+			"slug": "בראשית",
 			"sefer": "בראשית",
 			"start": { "perek": 1, "pasuk": 1 },
 			"end": { "perek": 6, "pasuk": 8 },
@@ -74,6 +81,8 @@
 		},
 		{
 			"name": "נח",
+			"slug": "נח",
+			"aliases": ["נוח"],
 			"sefer": "בראשית",
 			"start": { "perek": 6, "pasuk": 9 },
 			"end": { "perek": 11, "pasuk": 32 },
@@ -102,6 +111,7 @@
 		},
 		{
 			"name": "לך לך",
+			"slug": "לך-לך",
 			"sefer": "בראשית",
 			"start": { "perek": 12, "pasuk": 1 },
 			"end": { "perek": 17, "pasuk": 27 },
@@ -130,6 +140,7 @@
 		},
 		{
 			"name": "וירא",
+			"slug": "וירא",
 			"sefer": "בראשית",
 			"start": { "perek": 18, "pasuk": 1 },
 			"end": { "perek": 22, "pasuk": 24 },
@@ -160,6 +171,7 @@
 		},
 		{
 			"name": "חיי שרה",
+			"slug": "חיי-שרה",
 			"sefer": "בראשית",
 			"start": { "perek": 23, "pasuk": 1 },
 			"end": { "perek": 25, "pasuk": 18 },
@@ -179,6 +191,7 @@
 		},
 		{
 			"name": "תולדות",
+			"slug": "תולדות",
 			"sefer": "בראשית",
 			"start": { "perek": 25, "pasuk": 19 },
 			"end": { "perek": 28, "pasuk": 9 },
@@ -207,6 +220,7 @@
 		},
 		{
 			"name": "ויצא",
+			"slug": "ויצא",
 			"sefer": "בראשית",
 			"start": { "perek": 28, "pasuk": 10 },
 			"end": { "perek": 32, "pasuk": 3 },
@@ -247,6 +261,7 @@
 		},
 		{
 			"name": "וישלח",
+			"slug": "וישלח",
 			"sefer": "בראשית",
 			"start": { "perek": 32, "pasuk": 4 },
 			"end": { "perek": 36, "pasuk": 43 },
@@ -265,6 +280,7 @@
 		},
 		{
 			"name": "וישב",
+			"slug": "וישב",
 			"sefer": "בראשית",
 			"start": { "perek": 37, "pasuk": 1 },
 			"end": { "perek": 40, "pasuk": 23 },
@@ -283,6 +299,7 @@
 		},
 		{
 			"name": "מקץ",
+			"slug": "מקץ",
 			"sefer": "בראשית",
 			"start": { "perek": 41, "pasuk": 1 },
 			"end": { "perek": 44, "pasuk": 17 },
@@ -302,6 +319,7 @@
 		},
 		{
 			"name": "ויגש",
+			"slug": "ויגש",
 			"sefer": "בראשית",
 			"start": { "perek": 44, "pasuk": 18 },
 			"end": { "perek": 47, "pasuk": 27 },
@@ -320,6 +338,7 @@
 		},
 		{
 			"name": "ויחי",
+			"slug": "ויחי",
 			"sefer": "בראשית",
 			"start": { "perek": 47, "pasuk": 28 },
 			"end": { "perek": 50, "pasuk": 26 },
@@ -339,6 +358,7 @@
 		},
 		{
 			"name": "שמות",
+			"slug": "שמות",
 			"sefer": "שמות",
 			"start": { "perek": 1, "pasuk": 1 },
 			"end": { "perek": 6, "pasuk": 1 },
@@ -382,6 +402,7 @@
 		},
 		{
 			"name": "וארא",
+			"slug": "וארא",
 			"sefer": "שמות",
 			"start": { "perek": 6, "pasuk": 2 },
 			"end": { "perek": 9, "pasuk": 35 },
@@ -410,6 +431,7 @@
 		},
 		{
 			"name": "בא",
+			"slug": "בא",
 			"sefer": "שמות",
 			"start": { "perek": 10, "pasuk": 1 },
 			"end": { "perek": 13, "pasuk": 16 },
@@ -438,6 +460,7 @@
 		},
 		{
 			"name": "בשלח",
+			"slug": "בשלח",
 			"sefer": "שמות",
 			"start": { "perek": 13, "pasuk": 17 },
 			"end": { "perek": 17, "pasuk": 16 },
@@ -476,6 +499,7 @@
 		},
 		{
 			"name": "יתרו",
+			"slug": "יתרו",
 			"sefer": "שמות",
 			"start": { "perek": 18, "pasuk": 1 },
 			"end": { "perek": 20, "pasuk": 23 },
@@ -524,6 +548,7 @@
 		},
 		{
 			"name": "משפטים",
+			"slug": "משפטים",
 			"sefer": "שמות",
 			"start": { "perek": 21, "pasuk": 1 },
 			"end": { "perek": 24, "pasuk": 18 },
@@ -557,6 +582,7 @@
 		},
 		{
 			"name": "תרומה",
+			"slug": "תרומה",
 			"sefer": "שמות",
 			"start": { "perek": 25, "pasuk": 1 },
 			"end": { "perek": 27, "pasuk": 19 },
@@ -576,6 +602,8 @@
 		},
 		{
 			"name": "תצוה",
+			"slug": "תצוה",
+			"aliases": ["תצווה"],
 			"sefer": "שמות",
 			"start": { "perek": 27, "pasuk": 20 },
 			"end": { "perek": 30, "pasuk": 10 },
@@ -594,6 +622,7 @@
 		},
 		{
 			"name": "כי תשא",
+			"slug": "כי-תשא",
 			"sefer": "שמות",
 			"start": { "perek": 30, "pasuk": 11 },
 			"end": { "perek": 34, "pasuk": 35 },
@@ -635,6 +664,7 @@
 		},
 		{
 			"name": "ויקהל",
+			"slug": "ויקהל",
 			"sefer": "שמות",
 			"start": { "perek": 35, "pasuk": 1 },
 			"end": { "perek": 38, "pasuk": 20 },
@@ -677,6 +707,7 @@
 		},
 		{
 			"name": "פקודי",
+			"slug": "פקודי",
 			"sefer": "שמות",
 			"start": { "perek": 38, "pasuk": 21 },
 			"end": { "perek": 40, "pasuk": 38 },
@@ -707,6 +738,7 @@
 		},
 		{
 			"name": "ויקרא",
+			"slug": "ויקרא",
 			"sefer": "ויקרא",
 			"start": { "perek": 1, "pasuk": 1 },
 			"end": { "perek": 5, "pasuk": 26 },
@@ -735,6 +767,7 @@
 		},
 		{
 			"name": "צו",
+			"slug": "צו",
 			"sefer": "ויקרא",
 			"start": { "perek": 6, "pasuk": 1 },
 			"end": { "perek": 8, "pasuk": 36 },
@@ -768,6 +801,7 @@
 		},
 		{
 			"name": "שמיני",
+			"slug": "שמיני",
 			"sefer": "ויקרא",
 			"start": { "perek": 9, "pasuk": 1 },
 			"end": { "perek": 11, "pasuk": 47 },
@@ -810,6 +844,7 @@
 		},
 		{
 			"name": "תזריע",
+			"slug": "תזריע",
 			"sefer": "ויקרא",
 			"start": { "perek": 12, "pasuk": 1 },
 			"end": { "perek": 13, "pasuk": 59 },
@@ -829,6 +864,7 @@
 		},
 		{
 			"name": "מצורע",
+			"slug": "מצורע",
 			"sefer": "ויקרא",
 			"start": { "perek": 14, "pasuk": 1 },
 			"end": { "perek": 15, "pasuk": 33 },
@@ -865,6 +901,8 @@
 		},
 		{
 			"name": "אחרי מות",
+			"slug": "אחרי-מות",
+			"aliases": ["אחרי"],
 			"sefer": "ויקרא",
 			"start": { "perek": 16, "pasuk": 1 },
 			"end": { "perek": 18, "pasuk": 30 },
@@ -896,6 +934,7 @@
 		},
 		{
 			"name": "קדושים",
+			"slug": "קדושים",
 			"sefer": "ויקרא",
 			"start": { "perek": 19, "pasuk": 1 },
 			"end": { "perek": 20, "pasuk": 27 },
@@ -938,6 +977,7 @@
 		},
 		{
 			"name": "אמור",
+			"slug": "אמור",
 			"sefer": "ויקרא",
 			"start": { "perek": 21, "pasuk": 1 },
 			"end": { "perek": 24, "pasuk": 23 },
@@ -956,6 +996,7 @@
 		},
 		{
 			"name": "בהר",
+			"slug": "בהר",
 			"sefer": "ויקרא",
 			"start": { "perek": 25, "pasuk": 1 },
 			"end": { "perek": 26, "pasuk": 2 },
@@ -975,6 +1016,8 @@
 		},
 		{
 			"name": "בחוקותי",
+			"slug": "בחוקותי",
+			"aliases": ["בחוקתי", "בחקתי"],
 			"sefer": "ויקרא",
 			"start": { "perek": 26, "pasuk": 3 },
 			"end": { "perek": 27, "pasuk": 34 },
@@ -1003,6 +1046,7 @@
 		},
 		{
 			"name": "במדבר",
+			"slug": "במדבר",
 			"sefer": "במדבר",
 			"start": { "perek": 1, "pasuk": 1 },
 			"end": { "perek": 4, "pasuk": 20 },
@@ -1021,6 +1065,7 @@
 		},
 		{
 			"name": "נשא",
+			"slug": "נשא",
 			"sefer": "במדבר",
 			"start": { "perek": 4, "pasuk": 21 },
 			"end": { "perek": 7, "pasuk": 89 },
@@ -1039,6 +1084,7 @@
 		},
 		{
 			"name": "בהעלותך",
+			"slug": "בהעלותך",
 			"sefer": "במדבר",
 			"start": { "perek": 8, "pasuk": 1 },
 			"end": { "perek": 12, "pasuk": 16 },
@@ -1067,6 +1113,8 @@
 		},
 		{
 			"name": "שלח",
+			"slug": "שלח",
+			"aliases": ["שלח לך"],
 			"sefer": "במדבר",
 			"start": { "perek": 13, "pasuk": 1 },
 			"end": { "perek": 15, "pasuk": 41 },
@@ -1085,6 +1133,8 @@
 		},
 		{
 			"name": "קרח",
+			"slug": "קרח",
+			"aliases": ["קורח"],
 			"sefer": "במדבר",
 			"start": { "perek": 16, "pasuk": 1 },
 			"end": { "perek": 18, "pasuk": 32 },
@@ -1104,6 +1154,8 @@
 		},
 		{
 			"name": "חוקת",
+			"slug": "חוקת",
+			"aliases": ["חקת"],
 			"sefer": "במדבר",
 			"start": { "perek": 19, "pasuk": 1 },
 			"end": { "perek": 22, "pasuk": 1 },
@@ -1132,6 +1184,7 @@
 		},
 		{
 			"name": "בלק",
+			"slug": "בלק",
 			"sefer": "במדבר",
 			"start": { "perek": 22, "pasuk": 2 },
 			"end": { "perek": 25, "pasuk": 9 },
@@ -1150,6 +1203,8 @@
 		},
 		{
 			"name": "פינחס",
+			"slug": "פינחס",
+			"aliases": ["פנחס"],
 			"sefer": "במדבר",
 			"start": { "perek": 25, "pasuk": 10 },
 			"end": { "perek": 30, "pasuk": 1 },
@@ -1172,6 +1227,7 @@
 		},
 		{
 			"name": "מטות",
+			"slug": "מטות",
 			"sefer": "במדבר",
 			"start": { "perek": 30, "pasuk": 2 },
 			"end": { "perek": 32, "pasuk": 42 },
@@ -1201,6 +1257,7 @@
 		},
 		{
 			"name": "מסעי",
+			"slug": "מסעי",
 			"sefer": "במדבר",
 			"start": { "perek": 33, "pasuk": 1 },
 			"end": { "perek": 36, "pasuk": 13 },
@@ -1239,6 +1296,7 @@
 		},
 		{
 			"name": "דברים",
+			"slug": "דברים",
 			"sefer": "דברים",
 			"start": { "perek": 1, "pasuk": 1 },
 			"end": { "perek": 3, "pasuk": 22 },
@@ -1267,6 +1325,7 @@
 		},
 		{
 			"name": "ואתחנן",
+			"slug": "ואתחנן",
 			"sefer": "דברים",
 			"start": { "perek": 3, "pasuk": 23 },
 			"end": { "perek": 7, "pasuk": 11 },
@@ -1300,6 +1359,7 @@
 		},
 		{
 			"name": "עקב",
+			"slug": "עקב",
 			"sefer": "דברים",
 			"start": { "perek": 7, "pasuk": 12 },
 			"end": { "perek": 11, "pasuk": 25 },
@@ -1318,6 +1378,7 @@
 		},
 		{
 			"name": "ראה",
+			"slug": "ראה",
 			"sefer": "דברים",
 			"start": { "perek": 11, "pasuk": 26 },
 			"end": { "perek": 16, "pasuk": 17 },
@@ -1339,6 +1400,7 @@
 		},
 		{
 			"name": "שופטים",
+			"slug": "שופטים",
 			"sefer": "דברים",
 			"start": { "perek": 16, "pasuk": 18 },
 			"end": { "perek": 21, "pasuk": 9 },
@@ -1357,6 +1419,7 @@
 		},
 		{
 			"name": "כי תצא",
+			"slug": "כי-תצא",
 			"sefer": "דברים",
 			"start": { "perek": 21, "pasuk": 10 },
 			"end": { "perek": 25, "pasuk": 19 },
@@ -1375,6 +1438,7 @@
 		},
 		{
 			"name": "כי תבוא",
+			"slug": "כי-תבוא",
 			"sefer": "דברים",
 			"start": { "perek": 26, "pasuk": 1 },
 			"end": { "perek": 29, "pasuk": 8 },
@@ -1393,6 +1457,8 @@
 		},
 		{
 			"name": "נצבים",
+			"slug": "נצבים",
+			"aliases": ["ניצבים"],
 			"sefer": "דברים",
 			"start": { "perek": 29, "pasuk": 9 },
 			"end": { "perek": 30, "pasuk": 20 },
@@ -1421,6 +1487,7 @@
 		},
 		{
 			"name": "וילך",
+			"slug": "וילך",
 			"sefer": "דברים",
 			"start": { "perek": 31, "pasuk": 1 },
 			"end": { "perek": 31, "pasuk": 30 },
@@ -1462,6 +1529,7 @@
 		},
 		{
 			"name": "האזינו",
+			"slug": "האזינו",
 			"sefer": "דברים",
 			"start": { "perek": 32, "pasuk": 1 },
 			"end": { "perek": 32, "pasuk": 52 },
@@ -1484,6 +1552,8 @@
 		},
 		{
 			"name": "וזאת הברכה",
+			"slug": "וזאת-הברכה",
+			"aliases": ["ברכה"],
 			"sefer": "דברים",
 			"start": { "perek": 33, "pasuk": 1 },
 			"end": { "perek": 34, "pasuk": 12 },

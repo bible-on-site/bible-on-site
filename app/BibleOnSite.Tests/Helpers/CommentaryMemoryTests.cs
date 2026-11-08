@@ -2,6 +2,7 @@ using BibleOnSite.Controls;
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
+using BibleOnSite.Tests.Support;
 using BibleOnSite.ViewModels;
 using FluentAssertions;
 
@@ -30,9 +31,7 @@ public class CommentaryMemoryTests
     {
         var preferences = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
         var reader = CreateClosedReader(preferences);
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
+        GarbageCollection.CollectCycles();
         reader.IsAlive.Should().BeFalse("the singleton preferences must not retain a closed reader and its commentary cache");
         preferences.FontFactor = 1.2;
         GC.KeepAlive(preferences);
@@ -48,9 +47,7 @@ public class CommentaryMemoryTests
     {
         var preferences = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
         var settings = CreateClosedSettings(preferences, screen);
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
+        GarbageCollection.CollectCycles();
         settings.IsAlive.Should().BeFalse("category settings pages must not remain owned by singleton services");
         preferences.FontFactor = 1.2;
         GC.KeepAlive(preferences);
@@ -145,6 +142,86 @@ public class CommentaryMemoryTests
         chapter.DecodeScans.Should().Be(30, "the most recent pasuk is still cached");
         await chapter.GetDisplays(1, sources, new HashSet<int> { 1 })[0].ContentLoader!();
         chapter.DecodeScans.Should().Be(31, "pasuk 1 fell out of the bounded slice cache");
+        chapter.FullScans.Should().Be(2, "an evicted pasuk re-inflates its own chunk — the perek is never rescanned");
+    }
+
+    [Fact]
+    public async Task AWholePerekFlingSplitsTheBlobOnce()
+    {
+        // #2310: a fling through a commentary-dense perek used to pay one
+        // whole-blob zlib scan per missed pasuk; the scroll path must now
+        // amortize to a single split plus a per-pasuk chunk inflation.
+        var chapter = new PerushNoteChapter(PerushNoteBlob.Encode(
+            Enumerable.Range(1, 30).SelectMany(p => Enumerable.Range(1, 3)
+                .Select(perush => new PerushNoteBlob.Note(perush, p, 0, $"note {p}/{perush}"))).ToList()));
+        chapter.FullScans.Should().Be(1, "construction reads only the headers");
+        List<Perush> sources = [new() { Id = 1, Name = "A" }, new() { Id = 2, Name = "B" }, new() { Id = 3, Name = "C" }];
+
+        for (var p = 1; p <= 30; p++)
+        {
+            foreach (var display in chapter.GetDisplays(p, sources))
+            {
+                (await display.ContentLoader!()).Should().Equal($"note {p}/{display.PerushId}");
+            }
+        }
+
+        chapter.DecodeScans.Should().Be(30, "each pasuk still materializes once");
+        chapter.FullScans.Should().Be(2, "the whole perek decompresses once for headers and once for the split — never once per pasuk");
+    }
+
+    [Fact]
+    public async Task ConcurrentMissesForTheSamePasukShareOneScan()
+    {
+        var chapter = new PerushNoteChapter(PerushNoteBlob.Encode([
+            new(1, 1, 0, "a1"), new(2, 1, 0, "b1")]));
+        List<Perush> sources = [new() { Id = 1, Name = "A" }, new() { Id = 2, Name = "B" }];
+        var displays = chapter.GetDisplays(1, sources, new HashSet<int> { 1, 2 });
+        var contents = await Task.WhenAll(displays.Select(d => d.ContentLoader!()));
+        contents.Should().AllSatisfy(c => c.Should().NotBeEmpty());
+        chapter.DecodeScans.Should().Be(1, "concurrent cells of the same pasuk share one blob scan");
+    }
+
+    [Fact]
+    public async Task ConcurrentMissesForDifferentPesukimAllDecode()
+    {
+        var chapter = new PerushNoteChapter(PerushNoteBlob.Encode(
+            Enumerable.Range(1, 10).Select(p => new PerushNoteBlob.Note(1, p, 0, $"note {p}")).ToList()));
+        List<Perush> sources = [new() { Id = 1, Name = "A" }];
+        var loaders = Enumerable.Range(1, 10)
+            .Select(p => chapter.GetDisplays(p, sources, new HashSet<int> { 1 })[0].ContentLoader!)
+            .ToList();
+        var contents = await Task.WhenAll(loaders.Select(l => l()));
+        for (var i = 0; i < contents.Length; i++)
+        {
+            contents[i].Should().Equal($"note {i + 1}");
+        }
+        chapter.DecodeScans.Should().Be(10);
+    }
+
+    [Fact]
+    public async Task AFailedScanIsEvictedAndRetriedOnTheNextRead()
+    {
+        var blob = PerushNoteBlob.Encode([new(1, 1, 0, "a1")]);
+        var chapter = new PerushNoteChapter(blob);
+        var pristine = (byte[])blob.Clone();
+        Array.Fill(blob, (byte)0xFF, blob.Length - 3, 3);
+        List<Perush> sources = [new() { Id = 1, Name = "A" }];
+        Func<Task<List<string>>> act = () => chapter.GetDisplays(1, sources)[0].ContentLoader!();
+        await act.Should().ThrowAsync<Exception>("the corrupted blob must fail its scan");
+        pristine.CopyTo(blob, 0);
+        (await act()).Should().Equal("a1");
+        chapter.DecodeScans.Should().Be(1, "the failed scan was evicted so the retry rescanned");
+        chapter.FullScans.Should().Be(2, "the faulted split Lazy was swapped, so the retry resplit instead of rethrowing the cached failure");
+    }
+
+    [Fact]
+    public void NotesForAPerushAbsentFromThePasukReturnsEmpty()
+    {
+        var chapter = new PerushNoteChapter(PerushNoteBlob.Encode([new(1, 1, 0, "a1")]));
+        var notesFor = typeof(PerushNoteChapter).GetMethod("NotesFor",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var notes = (List<string>)notesFor.Invoke(chapter, [1, 999])!;
+        notes.Should().BeEmpty("a perush id with no notes in the pasuk must yield an empty list, not null");
     }
 
     [Fact]

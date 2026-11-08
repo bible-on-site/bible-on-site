@@ -62,9 +62,7 @@ jest.mock("next/dynamic", () => {
 					data-testid="sefer"
 					data-book-page={props.initialBookPage ?? "unit"}
 					data-mount={mount}
-					data-initial-content={JSON.stringify(
-						props.initialContent ?? null,
-					)}
+					data-initial-content={JSON.stringify(props.initialContent ?? null)}
 				/>
 			);
 		};
@@ -126,9 +124,7 @@ describe("MasoraSeferComposite (wide screen)", () => {
 
 	it("does not re-apply the preference when ?book is already present", () => {
 		localStorage.setItem("masoraViewMode", "book");
-		mockGet.mockImplementation((key: string) =>
-			key === "book" ? "" : null,
-		);
+		mockGet.mockImplementation((key: string) => (key === "book" ? "" : null));
 		render(<MasoraSeferComposite {...props} />);
 		expect(mockReplace).not.toHaveBeenCalled();
 		expect(localStorage.getItem("masoraViewMode")).toBe("book");
@@ -166,13 +162,70 @@ describe("MasoraSeferComposite (wide screen)", () => {
 	});
 
 	it("shows Sefer view immediately when ?book is in URL", async () => {
-		mockGet.mockImplementation((key: string) =>
-			key === "book" ? "" : null,
-		);
+		mockGet.mockImplementation((key: string) => (key === "book" ? "" : null));
 		await act(async () => {
 			render(<MasoraSeferComposite {...props} />);
 		});
 		expect(await screen.findByTestId("sefer")).toBeTruthy();
+	});
+
+	it("keeps a rapidly reopened book visible after the previous close delay", async () => {
+		jest.useFakeTimers();
+		try {
+			render(<MasoraSeferComposite {...props} />);
+			const toggle = screen.getByRole("checkbox");
+			await act(async () => fireEvent.click(toggle));
+			const book = screen.getByTestId("sefer");
+			const mount = book.getAttribute("data-mount");
+			fireEvent.click(toggle);
+			act(() => jest.advanceTimersByTime(100));
+			await act(async () => fireEvent.click(toggle));
+			expect(book).toBeVisible();
+			act(() => jest.advanceTimersByTime(300));
+			expect(toggle).toBeChecked();
+			expect(document.documentElement).toHaveAttribute("data-book-view");
+			expect(book).toBeVisible();
+			expect(book.getAttribute("data-mount")).toBe(mount);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it("retains the existing 300ms close delay", async () => {
+		jest.useFakeTimers();
+		try {
+			render(<MasoraSeferComposite {...props} />);
+			const toggle = screen.getByRole("checkbox");
+			await act(async () => fireEvent.click(toggle));
+			const overlay = screen.getByTestId("sefer").parentElement;
+			fireEvent.click(toggle);
+			expect(toggle).not.toBeChecked();
+			expect(document.documentElement).not.toHaveAttribute("data-book-view");
+			act(() => jest.advanceTimersByTime(299));
+			expect(overlay).toHaveStyle({ display: "initial" });
+			act(() => jest.advanceTimersByTime(1));
+			expect(overlay).toHaveStyle({ display: "none" });
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it("releases a pending close timer when the reader unmounts", async () => {
+		jest.useFakeTimers();
+		try {
+			const { unmount } = render(<MasoraSeferComposite {...props} />);
+			const toggle = screen.getByRole("checkbox");
+			await act(async () => fireEvent.click(toggle));
+			const initialTimers = jest.getTimerCount();
+			fireEvent.click(toggle);
+			expect(jest.getTimerCount()).toBe(initialTimers + 1);
+			unmount();
+			expect(jest.getTimerCount()).toBe(initialTimers);
+			expect(screen.queryByTestId("sefer")).toBeNull();
+			expect(document.documentElement).not.toHaveAttribute("data-book-view");
+		} finally {
+			jest.useRealTimers();
+		}
 	});
 
 	it("reopens an already mounted book after closing it", async () => {
@@ -203,9 +256,7 @@ describe("MasoraSeferComposite (wide screen)", () => {
 		jest.useFakeTimers();
 		try {
 			mockPathname = "/מסורה/1/תוכן";
-			mockGet.mockImplementation((key: string) =>
-				key === "book" ? "" : null,
-			);
+			mockGet.mockImplementation((key: string) => (key === "book" ? "" : null));
 			await act(async () => {
 				render(<MasoraSeferComposite {...props} />);
 			});

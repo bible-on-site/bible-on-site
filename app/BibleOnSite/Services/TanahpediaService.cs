@@ -112,6 +112,18 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                         segmentStart
                         segmentEnd
                     }
+                    readingMetric {
+                        wordCount
+                        estimatedSeconds
+                        wordsPerMinute
+                        calcVersion
+                        sourceHash
+                    }
+                    progressUnits {
+                        key
+                        wordCount
+                        cumulativeWords
+                    }
                 }
             }",
             "TanahpediaEntry",
@@ -138,6 +150,8 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
                 EntityType = e.EntityType ?? string.Empty,
                 EntityName = e.EntityName ?? string.Empty,
             }).ToList(),
+            ReadingMetric = dto.ReadingMetric?.ToModel(),
+            ProgressUnits = (dto.ProgressUnits ?? []).Select(unit => unit.ToModel()).ToList(),
             Occurrences = (dto.Occurrences ?? []).Select(o => new TanahpediaEntryOccurrence
             {
                 PerekId = o.PerekId,
@@ -497,6 +511,52 @@ public class TanahpediaService : BaseGraphQLService, ITanahpediaService
         public List<LinkedEntityDto>? Entities { get; set; }
         [JsonPropertyName("occurrences")]
         public List<OccurrenceDto>? Occurrences { get; set; }
+        [JsonPropertyName("readingMetric")]
+        public EntryReadingMetricDto? ReadingMetric { get; set; }
+        [JsonPropertyName("progressUnits")]
+        public List<EntryProgressUnitDto>? ProgressUnits { get; set; }
+    }
+
+    /// <summary>Persisted reading metric as the API returns it (issue #2607).</summary>
+    internal class EntryReadingMetricDto
+    {
+        [JsonPropertyName("wordCount")]
+        public int? WordCount { get; set; }
+        [JsonPropertyName("estimatedSeconds")]
+        public int? EstimatedSeconds { get; set; }
+        [JsonPropertyName("wordsPerMinute")]
+        public int WordsPerMinute { get; set; }
+        [JsonPropertyName("calcVersion")]
+        public int CalcVersion { get; set; }
+        [JsonPropertyName("sourceHash")]
+        public string? SourceHash { get; set; }
+
+        public ReadingMetric ToModel() => new()
+        {
+            WordCount = WordCount,
+            EstimatedSeconds = EstimatedSeconds,
+            WordsPerMinute = WordsPerMinute,
+            CalcVersion = CalcVersion,
+            SourceHash = SourceHash ?? string.Empty
+        };
+    }
+
+    /// <summary>Ordered progress unit as the API returns it (issue #2607).</summary>
+    internal class EntryProgressUnitDto
+    {
+        [JsonPropertyName("key")]
+        public string? Key { get; set; }
+        [JsonPropertyName("wordCount")]
+        public int WordCount { get; set; }
+        [JsonPropertyName("cumulativeWords")]
+        public int CumulativeWords { get; set; }
+
+        public ReadingProgressUnit ToModel() => new()
+        {
+            Key = Key ?? string.Empty,
+            WordCount = WordCount,
+            CumulativeWords = CumulativeWords
+        };
     }
 
     internal class LinkedEntityDto

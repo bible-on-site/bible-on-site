@@ -130,7 +130,10 @@ public sealed class DriverTelemetryTests
                     ["enabled"] = true,
                     ["rect"] = new Dictionary<string, object>
                     {
-                        ["x"] = 1, ["y"] = 1, ["width"] = 10, ["height"] = 10
+                        ["x"] = 1,
+                        ["y"] = 1,
+                        ["width"] = 10,
+                        ["height"] = 10
                     }
                 };
                 if (!StripHittable)

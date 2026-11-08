@@ -208,5 +208,16 @@ describe("ArticlesSection", () => {
 			const section = container.querySelector("section");
 			expect(section?.getAttribute("aria-busy")).toBe("true");
 		});
+
+		it("renders skeleton cards instead of article links", () => {
+			const { container } = render(
+				<ArticlesSection articles={mockArticles} loading />,
+			);
+			expect(screen.getByText("מתחבר למאמרים...")).toBeTruthy();
+			expect(screen.queryByRole("link")).toBeNull();
+			expect(
+				container.querySelectorAll('[data-skeleton="round"]'),
+			).toHaveLength(3);
+		});
 	});
 });

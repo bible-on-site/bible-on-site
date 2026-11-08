@@ -40,17 +40,17 @@ public class SharedToolbarTests(AppFixture fixture)
             window.FindFirstDescendant(fixture.CF.ByAutomationId("AuthorsSearchInput")));
         searchField.Should().NotBeNull("the pill hosts the רבנים search field");
 
-        authorsMenu!.BoundingRectangle.Top.Should().BeApproximately(menuBounds.Top, 4,
+        authorsMenu!.BoundingRectangle.Top.Should().BeInRange(menuBounds.Top - 4, menuBounds.Top + 4,
             "the hamburger sits at the same height as on על הפרק");
-        authorsMenu.BoundingRectangle.Right.Should().BeApproximately(menuBounds.Right, 4,
+        authorsMenu.BoundingRectangle.Right.Should().BeInRange(menuBounds.Right - 4, menuBounds.Right + 4,
             "the hamburger hugs the same edge as on על הפרק");
-        authorsMenu.BoundingRectangle.Height.Should().BeApproximately(menuBounds.Height, 4,
+        authorsMenu.BoundingRectangle.Height.Should().BeInRange(menuBounds.Height - 4, menuBounds.Height + 4,
             "the shared bar keeps the reader's 56px height");
-        authorsPill!.BoundingRectangle.Top.Should().BeApproximately(pillBounds.Top, 4,
+        authorsPill!.BoundingRectangle.Top.Should().BeInRange(pillBounds.Top - 4, pillBounds.Top + 4,
             "the search pill aligns with the reader's title pill");
-        authorsPill.BoundingRectangle.Height.Should().BeApproximately(pillBounds.Height, 4,
+        authorsPill.BoundingRectangle.Height.Should().BeInRange(pillBounds.Height - 4, pillBounds.Height + 4,
             "the search pill keeps the reader's pill height");
-        authorsPill.BoundingRectangle.Right.Should().BeApproximately(pillBounds.Right, 4,
+        authorsPill.BoundingRectangle.Right.Should().BeInRange(pillBounds.Right - 4, pillBounds.Right + 4,
             "the search pill spans the same width as the reader's pill");
 
         var fieldBounds = searchField!.BoundingRectangle;

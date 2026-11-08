@@ -17,6 +17,10 @@
  *   - "The string method replaceAll is not supported ... older browsers"
  *     (JS/TS): String.prototype.replaceAll is not transpiled; use a global
  *     regex replace.
+ *   - XAML *Request="-1" / property-element Default="-1" (*.xaml): not a
+ *     Codacy pattern — a functional trap. An explicitly assigned -1 counts
+ *     as a *set* bound and collapses the element on Android/iOS (blank
+ *     screen, e2e red); use {x:Static x:Double.PositiveInfinity}.
  *
  * Not gated: Codacy's "Use of unicode characters in a non unicode string"
  * (*.sql) is a SQL Server idiom — in MySQL a quoted literal already takes the
@@ -248,8 +252,37 @@ function checkNonLiteralRegExp(file, src, masked) {
 	}
 }
 
+/**
+ * XAML *Request properties assigned -1. In MAUI an explicitly assigned -1
+ * counts as a *set* bound, not "unset" — Width/Height/Min/Max*Request
+ * collapses the element to nothing on Android/iOS (whole screen rendered
+ * blank; PR #2775's Windows column caps hit this exactly). Use
+ * `{x:Static x:Double.PositiveInfinity}` for "uncapped" defaults.
+ */
+function checkXamlRequestSentinel(file, src) {
+	// Blank XML comments in place — a `*Request="-1"` mention inside one must
+	// not flag. Attribute values are the subject of the check, so there is no
+	// string masking.
+	const masked = src.replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\r\n]/g, " "));
+	const toLine = lineMapper(src);
+	const detail =
+		'explicit "-1" on a *Request property collapses the element on mobile — use {x:Static x:Double.PositiveInfinity} for "uncapped" (#2766)';
+	for (const match of masked.matchAll(
+		/\b(?:(?:Minimum|Maximum)?(?:Width|Height)Request)\s*=\s*"\s*-\s*1/g,
+	)) {
+		report(file, toLine, match.index, "xaml-neg-request", detail);
+	}
+	for (const match of masked.matchAll(
+		/<\w+\.(?:(?:Minimum|Maximum)?(?:Width|Height)Request)>[\s\S]*?<\/\w+\.(?:(?:Minimum|Maximum)?(?:Width|Height)Request)>/g,
+	)) {
+		const di = match[0].indexOf('Default="-1"');
+		if (di !== -1) report(file, toLine, match.index + di, "xaml-neg-request", detail);
+	}
+}
+
 const RUST_RE = /\.rs$/;
 const JS_RE = /\.(?:m?[jt]sx?|c[jt]s)$/;
+const XAML_RE = /\.xaml$/;
 
 for (const file of files) {
 	let src;
@@ -264,6 +297,7 @@ for (const file of files) {
 		checkReplaceAll(file, src, masked);
 		checkNonLiteralRegExp(file, src, masked);
 	}
+	if (XAML_RE.test(file)) checkXamlRequestSentinel(file, src);
 }
 
 if (findings.length > 0) {

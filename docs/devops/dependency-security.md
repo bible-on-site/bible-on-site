@@ -54,8 +54,8 @@ graph submissions are another recorded source. Do not forge detector/ref metadat
 upload empty graphs, weaken vulnerability/license checks, or sync a conflict-free
 green PR to work around this.
 
-Use `npm --prefix devops run test:dependency-snapshots` for local regression tests.
-Use `npm --prefix devops run verify:dependency-snapshots` to check a specific pair,
+Use `bun run --cwd devops test:dependency-snapshots` for local regression tests.
+Use `bun run --cwd devops verify:dependency-snapshots` to check a specific pair,
 with `GITHUB_REPOSITORY`, immutable `DEPENDENCY_BASE_SHA`/`DEPENDENCY_HEAD_SHA`, and
 `GH_TOKEN` supplied by the invoking environment. On GitHub, inspect the completed
 reusable submission job logs directly; the parent workflow log may omit them.

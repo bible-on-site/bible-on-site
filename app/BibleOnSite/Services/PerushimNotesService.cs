@@ -14,7 +14,7 @@ namespace BibleOnSite.Services;
 /// version and auto-upgrades if the store copy is newer.
 /// If the notes DB is not yet available, returns empty; download can be triggered separately.
 /// </summary>
-public class PerushimNotesService
+public class PerushimNotesService : IReaderNotesAvailability
 {
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
 #if IOS || MACCATALYST
@@ -62,6 +62,14 @@ public class PerushimNotesService
 
     private readonly object _operationCompletedSync = new();
     private Action? _operationCompleted;
+
+    // Explicit: the app-facing event stays internal while the reader
+    // display-sync consumes it through the narrow availability seam (#2573).
+    event Action? IReaderNotesAvailability.OperationCompleted
+    {
+        add => OperationCompleted += value;
+        remove => OperationCompleted -= value;
+    }
 
     private void ReleaseOperation()
     {
@@ -190,15 +198,19 @@ public class PerushimNotesService
     {
         var diagnosticErrors = new List<string>();
         try { await InitializeAsync(); }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: any failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: any failure becomes a report line.
         {
+            #pragma warning restore S2221
             diagnosticErrors.Add($"Initialization error: {ex.GetType().Name}: {ex.Message}");
         }
         var dbPath = Path.Join(DataDirectory, NotesDbName);
         string? padPath = null;
         try { padPath = await _padService.TryGetAssetPathAsync(PerushimNotesPackName, CancellationToken.None); }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: any failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: any failure becomes a report line.
         {
+            #pragma warning restore S2221
             diagnosticErrors.Add($"Delivery path error: {ex.GetType().Name}: {ex.Message}");
         }
         var appPackageHasFile = await AppPackageHasNotesAsync();
@@ -239,8 +251,10 @@ public class PerushimNotesService
             var deliveryDiag = await _padService.GetDeliveryDiagnosticsAsync(PerushimNotesPackName);
             lines.AddRange(deliveryDiag);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: any failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: any failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"Delivery diagnostics error: {ex.GetType().Name}: {ex.Message}");
         }
 
@@ -255,8 +269,10 @@ public class PerushimNotesService
             await using var s = await _fileSystem.OpenAppPackageFileAsync(NotesDbName);
             hasNotes = s != null;
         }
-        catch
+        #pragma warning disable S2221 // Deliberate failure boundary: any package-probe failure means "no notes" — callers degrade, never abort
+        catch (Exception) //NOSONAR — any package-probe failure means "no notes"; callers degrade, never abort.
         {
+            #pragma warning restore S2221
             return false;
         }
         return hasNotes;
@@ -518,8 +534,10 @@ public class PerushimNotesService
                 return true;
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: validation failure rejects the pack generation
+        catch (Exception ex) //NOSONAR — validation failure rejects the pack generation.
         {
+            #pragma warning restore S2221
             _notesValidationStatus = $"Validation error: {ex.GetType().Name}: {ex.Message}";
             Console.Error.WriteLine($"Could not verify perushim attribution: {ex.Message}");
             // A mid-validation error can come from a locally corrupted file —
@@ -802,8 +820,10 @@ public class PerushimNotesService
                 Console.WriteLine($"Perushim notes upgraded from PAD (local={localTs}, pad={padTs})");
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: PAD check/upgrade is best-effort
+        catch (Exception ex) //NOSONAR — PAD check/upgrade is best-effort.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Failed to check/upgrade perushim notes from PAD: {ex.Message}");
         }
     }
@@ -830,7 +850,7 @@ public class PerushimNotesService
                 return ts;
             }
         }
-        catch { /* DB may not have _metadata table (legacy) */ }
+        catch (SQLiteException) { /* DB may not have _metadata table (legacy) */ }
         finally
         {
             if (conn != null)
@@ -877,8 +897,10 @@ public class PerushimNotesService
             await TryCopyPadIndexAsync(padAssetsPath);
             copied = true;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: pack copy failure degrades to not-copied
+        catch (Exception ex) //NOSONAR — pack copy failure degrades to not-copied.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Failed to copy perushim notes from PAD: {ex.Message}");
         }
         return copied;
@@ -886,8 +908,9 @@ public class PerushimNotesService
 
     /// <summary>
     /// Copies the pack's delivered search index next to the notes DB when the
-    /// pack carries one. Optional: packs older than the delivered-index format
-    /// simply leave the app to build the index on-device.
+    /// pack carries one. The commentary index is never rebuilt on-device
+    /// (#2222), so a pack without it leaves commentary search unavailable —
+    /// the delivery contract requires it (<see cref="PadDeliveryService"/>).
     /// </summary>
     private async Task TryCopyPadIndexAsync(string padAssetsPath)
     {
@@ -905,8 +928,10 @@ public class PerushimNotesService
             await using var source = File.OpenRead(srcPath);
             await AtomicFile.CopyAsync(source, Path.Join(DataDirectory, SearchIndexDbName));
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        #pragma warning disable S2221 // Deliberate failure boundary: package copy failure degrades to not-copied
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) //NOSONAR — package copy failure degrades to not-copied.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Failed to copy delivered search index from PAD: {ex.Message}");
         }
     }
@@ -930,8 +955,10 @@ public class PerushimNotesService
         {
             return false;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: package copy failure degrades to not-copied
+        catch (Exception ex) //NOSONAR — package copy failure degrades to not-copied.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"Perushim notes copy from app package failed: {ex.Message}");
             return false;
         }
@@ -955,7 +982,8 @@ public class PerushimNotesService
         }
         catch (FileNotFoundException)
         {
-            // Bundled package may not carry the index — the app builds it on-device.
+            // A bundled package may not carry the index — commentary search
+            // stays unavailable until a delivered pack provides it.
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -1031,10 +1059,153 @@ public class PerushimNotesService
             .ToList();
     }
 
+    /// <summary>
+    /// Reading metric for one perush's notes on a perek, read from the notes
+    /// pack (issue #2607). Null when the pack predates the metric tables or
+    /// has no row — the reader keeps working either way.
+    /// </summary>
+    public async Task<ReadingMetric?> GetPerushReadingMetricAsync(int perushId, int perekId)
+    {
+        await InitializeAsync();
+        if (_connection == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var rows = await _connection.QueryAsync<PerushMetricRow>(
+                "SELECT word_count, estimated_seconds, words_per_minute, calc_version, source_hash " +
+                "FROM tanah_perush_metric WHERE perush_id = ? AND perek_id = ?",
+                perushId, perekId);
+            var row = rows.FirstOrDefault();
+            return row == null
+                ? null
+                : new ReadingMetric
+                {
+                    WordCount = row.WordCount,
+                    EstimatedSeconds = row.EstimatedSeconds,
+                    WordsPerMinute = row.WordsPerMinute,
+                    CalcVersion = row.CalcVersion,
+                    SourceHash = row.SourceHash ?? string.Empty
+                };
+        }
+        catch (SQLiteException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Ordered note progress units for a perush on a perek (issue #2607),
+    /// cumulative across the perush's notes in (pasuk, note_idx) order.
+    /// Empty when the metric table is absent.
+    /// </summary>
+    public async Task<IReadOnlyList<ReadingProgressUnit>> GetNoteProgressUnitsAsync(int perushId, int perekId)
+    {
+        await InitializeAsync();
+        if (_connection == null)
+        {
+            return Array.Empty<ReadingProgressUnit>();
+        }
+
+        try
+        {
+            var rows = await _connection.QueryAsync<NoteMetricRow>(
+                "SELECT pasuk, note_idx, word_count, cumulative_words " +
+                "FROM tanah_note_metric WHERE perush_id = ? AND perek_id = ? ORDER BY pasuk, note_idx",
+                perushId, perekId);
+            return rows
+                .Select(r => new ReadingProgressUnit
+                {
+                    Key = $"{r.Pasuk}:{r.NoteIdx}",
+                    WordCount = r.WordCount,
+                    CumulativeWords = r.CumulativeWords
+                })
+                .ToList();
+        }
+        catch (SQLiteException)
+        {
+            return Array.Empty<ReadingProgressUnit>();
+        }
+    }
+
+    /// <summary>
+    /// All stored perush reading metrics for a perek in one query (issue
+    /// #2607) — the sheet's badge source. Empty when the pack predates the
+    /// metric tables.
+    /// </summary>
+    public virtual async Task<IReadOnlyDictionary<int, ReadingMetric>> GetPerushMetricsForPerekAsync(int perekId)
+    {
+        await InitializeAsync();
+        if (_connection == null)
+        {
+            return new Dictionary<int, ReadingMetric>();
+        }
+
+        try
+        {
+            var rows = await _connection.QueryAsync<PerushMetricRow>(
+                "SELECT perush_id, word_count, estimated_seconds, words_per_minute, calc_version, source_hash " +
+                "FROM tanah_perush_metric WHERE perek_id = ?",
+                perekId);
+            return rows.ToDictionary(
+                r => r.PerushId,
+                r => new ReadingMetric
+                {
+                    WordCount = r.WordCount,
+                    EstimatedSeconds = r.EstimatedSeconds,
+                    WordsPerMinute = r.WordsPerMinute,
+                    CalcVersion = r.CalcVersion,
+                    SourceHash = r.SourceHash ?? string.Empty
+                });
+        }
+        catch (SQLiteException)
+        {
+            return new Dictionary<int, ReadingMetric>();
+        }
+    }
+
     private class MetadataRow
     {
         [Column("Value")]
         public string? Value { get; set; }
+    }
+
+    private class PerushMetricRow
+    {
+        [Column("perush_id")]
+        public int PerushId { get; set; }
+
+        [Column("word_count")]
+        public int? WordCount { get; set; }
+
+        [Column("estimated_seconds")]
+        public int? EstimatedSeconds { get; set; }
+
+        [Column("words_per_minute")]
+        public int WordsPerMinute { get; set; }
+
+        [Column("calc_version")]
+        public int CalcVersion { get; set; }
+
+        [Column("source_hash")]
+        public string? SourceHash { get; set; }
+    }
+
+    private class NoteMetricRow
+    {
+        [Column("pasuk")]
+        public int Pasuk { get; set; }
+
+        [Column("note_idx")]
+        public int NoteIdx { get; set; }
+
+        [Column("word_count")]
+        public int WordCount { get; set; }
+
+        [Column("cumulative_words")]
+        public int CumulativeWords { get; set; }
     }
 
     private class IdRow

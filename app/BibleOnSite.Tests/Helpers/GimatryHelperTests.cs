@@ -241,6 +241,39 @@ public class GimatryHelperTests
 
     #endregion
 
+    #region ToDisplayLetters Tests
+
+    // The cycle-label numeral form (#2725): a lone letter takes an ASCII
+    // geresh, longer values an ASCII gershayim before the final letter, and
+    // the ט"ו/ט"ז substitutions still apply.
+    [Theory]
+    [InlineData(1, "א'")]
+    [InlineData(4, "ד'")]
+    [InlineData(10, "י'")]
+    [InlineData(11, "י\"א")]
+    [InlineData(15, "ט\"ו")]
+    [InlineData(16, "ט\"ז")]
+    [InlineData(20, "כ'")]
+    [InlineData(100, "ק'")]
+    [InlineData(115, "קט\"ו")]
+    [InlineData(116, "קט\"ז")]
+    [InlineData(929, "תתקכ\"ט")]
+    [InlineData(1000, "תת\"ר")]
+    [InlineData(1500, "תתת\"ש")]
+    public void ToDisplayLetters_ShouldPunctuateDisplayNumerals(int number, string expected)
+    {
+        GimatryHelper.ToDisplayLetters(number).Should().Be(expected);
+    }
+
+    [Fact]
+    public void ToDisplayLetters_WithNonPositiveInput_ShouldReturnEmpty()
+    {
+        GimatryHelper.ToDisplayLetters(0).Should().BeEmpty();
+        GimatryHelper.ToDisplayLetters(-4).Should().BeEmpty();
+    }
+
+    #endregion
+
     #region Thousands Tests
 
     [Fact]

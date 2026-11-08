@@ -10,8 +10,10 @@ import RecitationPlayer, {
 	RecitationHeader,
 	RecitationLink,
 	RecitationPasukControl,
+	RecitationVerse,
 	RecitationWordControl,
 	stopRecitation,
+	useRecitationEnabled,
 } from "@/app/929/[number]/components/RecitationPlayer";
 import { RecitationAudio } from "@/lib/recitation-audio";
 import {
@@ -100,7 +102,7 @@ beforeEach(() => {
 		clipEnded = ended;
 		return true;
 	});
-	prepare.mockResolvedValue(undefined);
+	prepare.mockReset().mockResolvedValue(undefined);
 	playRanges.mockImplementation(async (_ranges, _pauseMs, ended) => {
 		positionMs = _ranges[0]?.startMs ?? null;
 		clipEnded = ended;
@@ -138,6 +140,18 @@ afterEach(() => {
 	jest.restoreAllMocks();
 });
 
+function ModeAwareScripture({ onRender }: { onRender: () => void }) {
+	const enabled = useRecitationEnabled();
+	onRender();
+	return enabled ? (
+		<RecitationWordControl pasuk={1} segment={1}>
+			בְּרֵאשִׁית
+		</RecitationWordControl>
+	) : (
+		<>בְּרֵאשִׁית</>
+	);
+}
+
 async function openPlayer() {
 	const view = render(
 		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
@@ -158,6 +172,92 @@ async function openPlayer() {
 	await screen.findByRole("button", { name: "השמעת כל הפרק" });
 	return view;
 }
+
+test("reader words can omit inactive wrappers while the default keeps them", () => {
+	render(
+		<>
+			<div data-testid="reader-word">
+				<RecitationWordControl pasuk={1} segment={1} plainWhenInactive>
+					בְּרֵאשִׁית
+				</RecitationWordControl>
+			</div>
+			<div data-testid="default-word">
+				<RecitationWordControl pasuk={1} segment={1}>
+					בְּרֵאשִׁית
+				</RecitationWordControl>
+			</div>
+		</>,
+	);
+	const reader = screen.getByTestId("reader-word");
+	expect(reader.textContent).toBe("בְּרֵאשִׁית");
+	expect(reader.childElementCount).toBe(0);
+	expect(screen.getByTestId("default-word").firstElementChild?.tagName).toBe(
+		"SPAN",
+	);
+});
+
+test("scripture mode consumers stay stable through progress and playback frames", async () => {
+	let bodyRenders = 0;
+	const pending = deferred<void>();
+	prepare.mockReturnValueOnce(pending.promise);
+	render(
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="בריאת העולם" />
+			<ModeAwareScripture onRender={() => bodyRenders++} />
+		</RecitationPlayer>,
+	);
+	const initialRenders = bodyRenders;
+	const toggle = screen.getByRole("button", { name: "מצב הקראה" });
+	fireEvent.click(toggle);
+	await waitFor(() => expect(prepare).toHaveBeenCalledTimes(1));
+	act(() => downloadProgress(42));
+	expect(bodyRenders).toBe(initialRenders);
+	await act(async () => pending.resolve());
+	const word = screen.getByRole("button", { name: "השמעת המילה בְּרֵאשִׁית" });
+	const enabledRenders = bodyRenders;
+	expect(enabledRenders).toBeGreaterThan(initialRenders);
+	fireEvent.click(word);
+	await screen.findByText("משמיע…");
+	frame(1300);
+	expect(word).toHaveAttribute("aria-pressed", "true");
+	expect(bodyRenders).toBe(enabledRenders);
+	fireEvent.click(toggle);
+	expect(bodyRenders).toBeGreaterThan(enabledRenders);
+	expect(
+		screen.queryByRole("button", { name: "השמעת המילה בְּרֵאשִׁית" }),
+	).toBeNull();
+});
+
+test("plain reader words regain playback controls only when listening is ready", async () => {
+	const pending = deferred<void>();
+	prepare.mockReturnValueOnce(pending.promise);
+	render(
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="בריאת העולם" />
+			<div data-testid="reader-word">
+				<RecitationWordControl pasuk={1} segment={1} plainWhenInactive>
+					בְּרֵאשִׁית
+				</RecitationWordControl>
+			</div>
+		</RecitationPlayer>,
+	);
+	const reader = screen.getByTestId("reader-word");
+	expect(reader.childElementCount).toBe(0);
+	const toggle = screen.getByRole("button", { name: "מצב הקראה" });
+	fireEvent.click(toggle);
+	await waitFor(() => expect(prepare).toHaveBeenCalledTimes(1));
+	expect(reader.childElementCount).toBe(0);
+	await act(async () => pending.resolve());
+	const word = screen.getByRole("button", { name: "השמעת המילה בְּרֵאשִׁית" });
+	expect(word).toHaveAttribute("tabindex", "0");
+	fireEvent.keyDown(word, { key: "Enter" });
+	await waitFor(() =>
+		expect(clipPlay).toHaveBeenCalledWith(1200, 1800, expect.any(Function)),
+	);
+	fireEvent.click(toggle);
+	expect(reader.childElementCount).toBe(0);
+	expect(reader.textContent).toBe("בְּרֵאשִׁית");
+});
 
 test("pasuk control navigates to the open perush instead of playing", async () => {
 	const navigate = jest.fn();
@@ -926,6 +1026,49 @@ test("chapter highlights follow the audio clock, clear in gaps, freeze on pause 
 	await act(async () => clipEnded());
 	expect(second).not.toHaveAttribute("aria-current");
 	expect(frames.size).toBe(0);
+});
+
+test("scripture controls render inertly without a provider and on the server", async () => {
+	render(
+		<>
+			<RecitationWordControl pasuk={1} segment={1}>
+				בְּרֵאשִׁית
+			</RecitationWordControl>
+			<RecitationPasukControl pasuk={1}>א</RecitationPasukControl>
+			<RecitationVerse pasuk={1}>בראשית א</RecitationVerse>
+		</>,
+	);
+	expect(screen.queryByRole("button")).toBeNull();
+	expect(screen.getByText("בראשית א")).toHaveAttribute(
+		"data-sefer-pasuk",
+		"1",
+	);
+	const { renderToString } = await import("react-dom/server");
+	expect(
+		renderToString(
+			<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
+				<RecitationWordControl pasuk={1} segment={1}>
+					בְּרֵאשִׁית
+				</RecitationWordControl>
+			</RecitationPlayer>,
+		),
+	).toContain("בְּרֵאשִׁית");
+});
+
+test("controls for pesukim without aligned words stay inert while listening", async () => {
+	render(
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="פרק" />
+			<RecitationPasukControl pasuk={3}>ג</RecitationPasukControl>
+			<RecitationWordControl pasuk={3} segment={1}>
+				אין
+			</RecitationWordControl>
+		</RecitationPlayer>,
+	);
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	await screen.findByRole("button", { name: "השמעת כל הפרק" });
+	expect(screen.queryByRole("button", { name: "השמעת פסוק ג" })).toBeNull();
+	expect(screen.queryByRole("button", { name: "השמעת המילה אין" })).toBeNull();
 });
 
 test("verse highlights advance beyond the clicked control and stop cancels the animation", async () => {

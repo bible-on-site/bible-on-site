@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
@@ -16,11 +15,23 @@ import {
 	masoraPasukCount,
 } from "@/data/masora/masora-units";
 import { getPerekByPerekId } from "@/data/perek-dto";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "@/app/components/dedications/DedicationLines";
 import { getArticleSummariesForRanges } from "@/lib/articles/service";
+import { getMasoraDedications } from "@/lib/dedications/loaders";
 import { getPerushimForRanges } from "@/lib/perushim/service";
 import { rangePerekSources } from "@/lib/reading/queries";
 import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
+import {
+	cachedPerKey,
+	COLLECTION_TAGS,
+	masoraArticlesTag,
+	masoraPerushimTag,
+} from "@/lib/revalidate/tags";
 import { SITE_NAME } from "@/lib/seo/jsonld";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
 import { MasoraSeferComposite } from "./components/MasoraSeferComposite";
 import { UnitBreadcrumb } from "./components/UnitBreadcrumb";
@@ -38,27 +49,23 @@ export function generateStaticParams() {
 	}));
 }
 
-const getCachedRangePerushim = unstable_cache(
+const getCachedRangePerushim = cachedPerKey(
+	"range-perushim",
+	(unitId: number) => String(unitId),
+	(key) => [COLLECTION_TAGS.perushim, masoraPerushimTag(Number(key))],
 	async (unitId: number) => {
 		const unit = getMasoraUnitById(unitId);
 		return getPerushimForRanges(unit.ranges);
 	},
-	["range-perushim"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
-	},
 );
 
-const getCachedRangeArticles = unstable_cache(
+const getCachedRangeArticles = cachedPerKey(
+	"range-article-summaries",
+	(unitId: number) => String(unitId),
+	(key) => [COLLECTION_TAGS.articles, masoraArticlesTag(Number(key))],
 	async (unitId: number) => {
 		const unit = getMasoraUnitById(unitId);
 		return getArticleSummariesForRanges(unit.ranges);
-	},
-	["range-article-summaries"],
-	{
-		tags: ["articles"],
-		revalidate: false,
 	},
 );
 
@@ -79,12 +86,10 @@ function seferUnitsPerekIds(seferName: string): number[] {
  * same canonical corpus as /929, so they must not compete with the
  * canonical perek pages in the index.
  *
- * - A unit spanning exactly one whole perek (e.g. marker-free single-
- *   perek sefarim) consolidates: canonical points at the /929 perek.
- * - Every other unit is a deliberate alternate slicing — `noindex` with
- *   `follow`, so crawlers still discover links but the pages stay out of
- *   the index. The canonical stays self-referential rather than pointing
- *   at an unrelated span.
+ * The section layout applies noindex,follow to every unit, including exact
+ * whole-perek equivalents. Preserve the /929 canonical for an equivalent
+ * span; other units stay self-canonical rather than pointing at unrelated
+ * scripture.
  */
 export async function generateMetadata({
 	params,
@@ -100,19 +105,16 @@ export async function generateMetadata({
 	const equivalentPerekId = unitEquivalentPerekId(unit, masoraPasukCount);
 	const title = `${unit.heading} | ${MASORA_DIVISION.menuLabel} | ${SITE_NAME}`;
 	const description = `קריאת ${unit.heading} לפי חלוקת המסורה (פתוחה/סתומה) בתנ"ך, עם פירושים ומאמרים.`;
-	if (equivalentPerekId !== null) {
-		return {
-			title,
-			description,
-			alternates: { canonical: `/929/${equivalentPerekId}` },
-		};
-	}
-	return {
+	// og:url stays aligned with the canonical link even when the canonical
+	// points at the equivalent /929 perek page.
+	return pageMetadata({
 		title,
 		description,
-		alternates: { canonical: `${MASORA_DIVISION.rootPath}/${unitId}` },
-		robots: { index: false, follow: true },
-	};
+		canonical:
+			equivalentPerekId !== null
+				? `/929/${equivalentPerekId}`
+				: `${MASORA_DIVISION.rootPath}/${unitId}`,
+	});
 }
 
 export default async function MasoraUnitPage({
@@ -126,11 +128,17 @@ export default async function MasoraUnitPage({
 		notFound();
 	}
 	const unit = getMasoraUnitById(unitId);
-	const [perushim, articles, entityRefsByPerek] = await Promise.all([
-		getCachedRangePerushim(unitId),
-		getCachedRangeArticles(unitId),
-		fetchAllEntityRefs(seferUnitsPerekIds(unit.seferName)),
-	]);
+	const [perushim, articles, entityRefsByPerek, masoraDedications] =
+		await Promise.all([
+			getCachedRangePerushim(unitId),
+			getCachedRangeArticles(unitId),
+			fetchAllEntityRefs(seferUnitsPerekIds(unit.seferName)),
+			getMasoraDedications(),
+		]);
+	// Feature-level מסורה על הפרק dedications (#2731): one shared set for the
+	// whole feature — the flat page shows it once and the book renders it on
+	// the cover, never duplicated per internal unit.
+	const coverDedications = dedicationLines(masoraDedications);
 	const { prev, next } = getAdjacentMasoraUnits(unitId);
 	const bookUnits = getMasoraUnitsForSefer(unit.seferName).map((bookUnit) => ({
 		unitId: bookUnit.unitId,
@@ -158,6 +166,7 @@ export default async function MasoraUnitPage({
 					perekSources={bookPerekSources}
 					articles={articles}
 					perushim={perushim}
+					coverDedications={coverDedications}
 				/>
 			</Suspense>
 			<div className={`${perekStyles.perekContainer} seo-content`}>
@@ -170,6 +179,7 @@ export default async function MasoraUnitPage({
 						</span>
 					)}
 				</h1>
+				<DedicationLines lines={coverDedications} />
 				<UnitText unit={unit} entityRefsByPerek={entityRefsByPerek} />
 				<UnitNav prev={prev} next={next} />
 

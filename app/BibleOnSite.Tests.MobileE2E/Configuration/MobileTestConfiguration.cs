@@ -14,6 +14,13 @@ public sealed record MobileTestConfiguration(
     public int? WdaLocalPort { get; init; }
     public bool KeepAppForReview { get; init; }
 
+    /// <summary>
+    /// run.mjs already installed the Android package itself — the session must
+    /// reuse it (noReset) because a driver-initiated install can pick the IncFS
+    /// incremental path that SIGSEGVs the app in libmonodroid (#2773).
+    /// </summary>
+    public bool AppPreinstalled { get; init; }
+
     public static MobilePlatform ParsePlatform(string? value) => value?.ToLowerInvariant() switch
     {
         "android" => MobilePlatform.Android,
@@ -27,7 +34,7 @@ public sealed record MobileTestConfiguration(
         var appPath = Path.GetFullPath(Required("MOBILE_APP_PATH"));
         if (!File.Exists(appPath) && !Directory.Exists(appPath))
         {
-            throw new FileNotFoundException("Build the simulator app with npm run build:app first.", appPath);
+            throw new FileNotFoundException("Build the simulator app with bun run build:app first.", appPath);
         }
 
         return new(platform, appPath, Required("MOBILE_UDID"),
@@ -39,6 +46,7 @@ public sealed record MobileTestConfiguration(
                 ? wdaPort
                 : null,
             KeepAppForReview = Environment.GetEnvironmentVariable("MOBILE_KEEP_APP") == "1",
+            AppPreinstalled = Environment.GetEnvironmentVariable("MOBILE_APP_PREINSTALLED") == "1",
             PrebuiltWdaPath = platform == MobilePlatform.IOS ? Required("MOBILE_WDA_PATH") : null
         };
     }

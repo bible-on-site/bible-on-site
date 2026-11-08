@@ -137,7 +137,7 @@ public partial class TanahpediaSearchPanel : ContentView
 
     private Grid FilterRow(string title, string automationId, bool enabled, Action<bool> changed)
     {
-        var checkBox = new CheckBox { IsChecked = enabled, AutomationId = automationId, WidthRequest = 32, HeightRequest = 44 };
+        var checkBox = new CenteredCheckBox { IsChecked = enabled, AutomationId = automationId };
         SemanticProperties.SetDescription(checkBox, title);
         checkBox.CheckedChanged += (_, e) =>
         {
@@ -267,8 +267,10 @@ public partial class TanahpediaSearchPanel : ContentView
         {
             // Replaced queries and closing the panel intentionally cancel this search.
         }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) //NOSONAR — failure boundary: a failed search must not crash the overlay.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia search failed: {ex}");
         }
         UpdateStatus();
@@ -294,8 +296,10 @@ public partial class TanahpediaSearchPanel : ContentView
         {
             await SearchInput.HideSoftInputAsync(CancellationToken.None);
         }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) //NOSONAR — keyboard dismissal is best-effort and must not crash the panel.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Could not dismiss search keyboard: {ex}");
         }
         SearchInput.Unfocus();

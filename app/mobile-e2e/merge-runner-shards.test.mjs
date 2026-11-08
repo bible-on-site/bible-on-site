@@ -61,6 +61,18 @@ test("a timed-out runner or failed scenario cannot publish a complete union", ()
   assert.throws(() => validateRunnerEvidence([{ timing, evidence: [{ ...evidence("a"), outcome: "failed" }] }, part("b")], ["a", "b"]), /Unsuccessful/);
 });
 
+test("a single-shard plan reads the artifact download-artifact extracted into the inputs root", () => {
+  const root = mkdtempSync(join(tmpdir(), "shard-inputs-"));
+  try {
+    assert.throws(() => discoverShardInputs(root, plan(["a"])), /Missing artifacts for iOS shard 1/);
+    writeFileSync(join(root, "case-manifest.json"), "{}");
+    assert.deepEqual(discoverShardInputs(root, plan(["a"])), [root]);
+    assert.throws(() => discoverShardInputs(root, plan(["a"], ["b"])), /Missing artifacts for iOS shard 1/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("locates shard artifact directories by the shard number in their name", () => {
   const root = mkdtempSync(join(tmpdir(), "shard-inputs-"));
   try {
@@ -138,12 +150,11 @@ function writeShardInput(input, shard, shards, ids, junitTimes) {
   }
   if (junitTimes) {
     writeFileSync(join(input, "results", "mobile-e2e.xml"),
-      // nosemgrep -- JUnit fixture markup, never rendered as HTML
       `<testsuite>${Object.entries(junitTimes).map(([name, seconds]) =>
-        `<testcase classname="Suite.Pilot" name="${name}" time="${seconds}"/>`).join("")}</testsuite>`); // nosemgrep -- JUnit fixture markup, never rendered as HTML
+        `<testcase classname="Suite.Pilot" name="${name}" time="${seconds}"/>`).join("")}</testsuite>`);
   }
   writeFileSync(join(input, "app-coverage", "_startup-passed.json"), JSON.stringify({ source: shard }));
-  writeFileSync(join(input, "exec-coverage-tree.json"), JSON.stringify(tree(ids[0], `hash-${shard}`))); // nosemgrep -- fixture serialization, not a cache/hmac key
+  writeFileSync(join(input, "exec-coverage-tree.json"), JSON.stringify(tree(ids[0], `hash-${shard}`)));
   writeFileSync(join(input, "coverage-app", "lcov.info"), `SF:/runner/app/BibleOnSite/X.cs\nDA:1,${shard === 1 ? 1 : 0}\nDA:2,${shard === 2 ? 1 : 0}\nend_of_record\n`);
 }
 

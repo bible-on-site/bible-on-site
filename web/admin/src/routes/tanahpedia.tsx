@@ -14,15 +14,11 @@ import {
 	websiteSubcategoryPath,
 } from "~/lib/tanahpedia/category-hierarchy";
 import { CATEGORY_LABELS, type CategoryKey } from "~/lib/tanahpedia/labels";
+import { WEBSITE_BASE } from "~/lib/website-base";
 import {
 	getTanahpediaCategoryCounts,
 	listTanahpediaEntriesForAdmin,
 } from "~/server/tanahpedia/entries";
-
-const WEBSITE_BASE =
-	typeof import.meta.env.VITE_WEBSITE_URL === "string"
-		? import.meta.env.VITE_WEBSITE_URL.replace(/\/$/, "")
-		: "http://localhost:3001";
 
 type TanahpediaSearch = {
 	category?: CategoryKey;

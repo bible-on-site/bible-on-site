@@ -56,22 +56,19 @@ public class MainActivity : MauiAppCompatActivity
         Console.WriteLine("[Analytics] collection deactivated at build time (DISABLE_ANALYTICS)");
 #else
         // The manifest keeps collection off because FirebaseInitProvider runs
-        // before managed code; enable it only when the user stored an explicit
-        // opt-in outside the e2e suite (#2400), and set it explicitly both ways
-        // so a flag persisted by an earlier install on this device cannot leak
-        // suite or pre-consent traffic either. PreferencesService.Load runs
-        // later on the loading page, so the consent read goes straight to
-        // storage; MauiPreferencesStorage wraps the same MAUI prefs.
+        // before managed code; enable it only outside the e2e suite, and set it
+        // explicitly both ways so a flag persisted by an earlier non-suite
+        // install on this device cannot leak test traffic either.
         // The standalone Plugin.Firebase.Analytics package does not bind the
         // native instance on Android; without this every call NREs (#2247).
         Plugin.Firebase.Analytics.FirebaseAnalyticsImplementation.Initialize(this);
-        var analyticsCollectionEnabled =
-            Services.AnalyticsConsent.IsCollectionEnabled(new Services.MauiPreferencesStorage());
+        var analyticsCollectionEnabled = !Services.SearchIndexService.IsE2eMarkedProcess();
         Plugin.Firebase.Analytics.CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled =
             analyticsCollectionEnabled;
         Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
 #endif
         HandleAppLinkIntent(Intent);
+        HandlePushIntent(Intent);
         // Firebase initialized from google-services.json (Plugin.Firebase / Xamarin.Firebase.Analytics process it at build).
         // For explicit init use Plugin.Firebase.Core CrossFirebase.Initialize(activity, settings) when needed.
     }
@@ -92,6 +89,7 @@ public class MainActivity : MauiAppCompatActivity
         }
 #endif
         HandleAppLinkIntent(intent);
+        HandlePushIntent(intent);
     }
 
     /// <summary>Routes a VIEW intent for a website perek URL into app navigation.</summary>
@@ -105,6 +103,18 @@ public class MainActivity : MauiAppCompatActivity
         {
             AppLinkHelper.Request(target);
         }
+    }
+
+    /// <summary>
+    /// Routes a notification-tap launch intent (#1097) into the shared data
+    /// payload → app-link pipeline. Fire-and-forget: the tapped target lands in
+    /// <see cref="AppLinkHelper.PendingTarget"/> or the running reader's event.
+    /// </summary>
+    private static void HandlePushIntent(Intent? intent)
+    {
+#if !DISABLE_PUSH
+        _ = Services.AndroidPushPlatformClient.HandleLaunchIntentAsync(intent);
+#endif
     }
 
     private readonly PressGestureTracker _touch = new();

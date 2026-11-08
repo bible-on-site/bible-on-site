@@ -62,25 +62,30 @@ The website communicates **directly** with the MySQL database rather than going 
 Keep the full canonical scripture JSON in server imports. The bookshelf, date
 lookup and citation parser use `client-catalog.generated.json`, a small projection
 of book ranges and learning dates. `scripts/generate-client-catalog.mjs` also writes
-individual reader books under `public/generated/sefarim/`, named by their content
-hash. Installation, builds and unit tests regenerate both outputs from the same
-canonical source; generated files are ignored. Do not edit them or maintain a
-second content source. After an intentional source change during development,
-rerun the generator or restart `npm run dev`.
+each reader book as a Brotli file under `public/generated/sefarim/`, named by the
+raw payload's content hash. Installation, builds and unit tests regenerate both
+outputs from the same canonical source; generated files are ignored. Do not edit
+them or maintain a second content source. After an intentional source change
+during development, rerun the generator or restart `bun run dev`.
 
-`LoadedSefer` fetches the selected book when the reader opens, with visible loading
-and retry feedback. Uninitialized reader pages stay unpainted until FlipBook
-has applied their dimensions, preserving geometry and preventing a layout flash.
-Network requests revalidate HTTP cache entries so an older
-server's cached 404 cannot prevent recovery during a rolling deployment. A missing
-asset offers a full page refresh, preserving the reader route and query while
-loading the current asset catalog. The browser cache retains at most four recent
-books. Avoid
-passing whole books through every static page: that repeats scripture in HTML/RSC
-and increases server memory and deployment size. Chapter navigation within the
-same book reuses its data; late requests cannot replace another selected book.
-Download helpers load only when requested, so metadata requests do not initialize
-the PDF generator's corpus.
+The books are served as static files: `next.config.mjs` marks
+`/generated/sefarim/*` as `Content-Encoding: br` with `Cache-Control: immutable`,
+since a content-addressed name can never change bytes — the payloads are multi-MB,
+so compression cuts the wire transfer by an order of magnitude. They are static
+files rather than a route handler because the App Router response pipeline can
+drop `Content-Encoding` while still sending the encoded body, which leaves
+browsers unable to decode it. `LoadedSefer` fetches the selected book when the reader
+opens, with visible loading feedback. Uninitialized reader pages stay unpainted
+until FlipBook has applied their dimensions, preserving geometry and preventing a
+layout flash. A transient failure offers a manual retry; a missing asset offers a
+full page refresh — the 404 itself is `no-store`, and only a fresh page load can
+pick up a consistent bundle/deployment pair — while a flat-view escape keeps the
+chapter/article reachable. The browser cache retains at most four recent books.
+Avoid passing whole books through every static page: that repeats scripture in
+HTML/RSC and increases server memory and deployment size. Chapter navigation
+within the same book reuses its data; late requests cannot replace another
+selected book. Download helpers load only when requested, so metadata requests do
+not initialize the PDF generator's corpus.
 
 The source text, reading order and recitation fields remain unchanged, including
 canonical JSON precision handling in `next.config.mjs`. Tests compare every
@@ -106,6 +111,29 @@ The website uses Next.js Static Site Generation (SSG) with the following pattern
 - **Static Pages**: All 929 perek pages are pre-rendered at build time
 - **Dynamic Data**: Articles are fetched at request time (ISR) with caching
 - **Graceful Degradation**: If database is unavailable during SSG build, pages render without articles
+
+### Sitemap & Missing Pages
+
+- `/sitemap.xml` is generated at build time by `src/app/sitemap.ts`
+  (`dynamic = "error"`, `revalidate = false`). The public URL
+  `/sitemap_www.xml` stays a permanent redirect to that single canonical
+  document (`next.config.mjs`) so external consumers that still fetch the
+  old name — e.g. past Search Console submissions — never hit a 404.
+- Every human-facing miss renders `src/app/not-found.tsx`: one branded
+  Hebrew page at a real 404 status with noindex and a home recovery link.
+  Route-level "entity missing" metadata fallbacks (pedia entry, author,
+  article, perush) return the shared `NOT_FOUND_METADATA`
+  (`src/lib/seo/missing-page.ts`) so the title and OpenGraph contract are
+  identical on every 404 surface.
+- The nginx router's `/www/` static tree is a supported surface and stays
+  router-local end to end: missing files answer with the branded Hebrew
+  page deployed into the tree as `/www/404.html` (committed at
+  `docs/aws/cloudformation/ec2-nginx/router/404.html`, wired by
+  `error_page 404 /www/404.html` in `router.conf`) instead of the stock
+  nginx 404 — no app proxying, no extra backend renders. The post-deploy
+  `verify-canonical-hosts.mjs` smoke check asserts both contracts on each
+  public domain: a permanent `/sitemap_www.xml` → `/sitemap.xml` redirect
+  and a branded-body 404 for a missing `/www/` file.
 
 ## Content Freshness (On-Demand Revalidation)
 
@@ -135,6 +163,9 @@ entry CRUD and entity links, entry-revision approval/restore, and entity /
 person / place / family structural edits. Each mutation reports the exact
 public URLs it changed — including the old URL after a rename/move and the
 removed URL after a delete — so notification covers stale URLs too.
+Article, author and Tanahpedia entry changes also expire the prerendered
+`/sitemap.xml`, which lists those entities from uncached DB reads and would
+otherwise keep build-time URLs until the next deploy.
 
 **Limits**: invalidation is local to the website instance that receives the
 call — the service normally runs a single task (`DesiredCount: 1`), but
@@ -174,6 +205,46 @@ never delays or fails the admin request.
 - **Verification**: submitting is not proof Bing received the URLs —
   confirm receipt in Bing Webmaster Tools as an operational follow-up.
 
+## Web Push Notifications (Daily Perek Reminder)
+
+Readers can opt in to a browser notification with the daily perek (#1096).
+
+- **Opt-in UI**: `PushNotificationsToggle` in the app section of the home
+  page. It registers `public/sw.js` only when the reader opts in, asks for
+  notification permission, subscribes with the VAPID public key and stores
+  the subscription. Unchecking deletes it on the server and unsubscribes the
+  browser. Unsupported browsers get an explanation; iPhone/iPad readers are
+  told to add the site to the home screen first (iOS/iPadOS 16.4+ only
+  expose Web Push to installed web apps). Blocked permission is explained
+  instead of re-prompting.
+- **Storage**: `tanah_web_push_subscription`
+  (`data/mysql/tanah_web_push_upgrade.sql`, data-deploy manifest), keyed by
+  the sha256 of the endpoint. A row is the opt-in, and there is no other
+  personal data. The website DB user needs `INSERT`/`DELETE`/`SELECT` on it.
+- **API**: `GET /api/push/subscription` returns the public key (`null` while
+  push is unconfigured, which hides the UI; 200 so pages log no console
+  error), `POST` stores a
+  `PushSubscription.toJSON()` body, `DELETE {endpoint}` removes it. Only
+  endpoints on known browser push services (FCM, Mozilla, WNS, Apple) are
+  accepted, so the sender never POSTs to arbitrary URLs.
+- **Trigger**: `.github/workflows/web-push-daily.yml` calls
+  `POST /api/push/daily` at 05:00 UTC Sunday-Friday with
+  `Authorization: Bearer $PUSH_SEND_SECRET`. The route resolves the day with
+  the shared learning schedule and sends only on study days (never on
+  Shabbat or review days). Payloads link to `/929/<perekId>`, use topic
+  `daily-perek` (an undelivered reminder is replaced, not stacked) and a
+  12-hour TTL. Subscriptions the push service reports as gone (404/410) are
+  deleted.
+- **Service worker**: `public/sw.js` only renders pushes (RTL Hebrew) and
+  focuses or opens the linked page on click, same-origin only. It has no
+  fetch handler, so it never affects loading or caching.
+- **Configuration** (server-only env on the website task):
+  `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
+  (`mailto:` or site URL) and `PUSH_SEND_SECRET`. Generate the key pair with
+  `bunx web-push generate-vapid-keys`. Any unset value turns the feature off.
+  The workflow runs only when the repository variable `WEB_PUSH_ENABLED` is
+  `true` and the repository secret `PUSH_SEND_SECRET` matches the website's.
+
 ## Database Configuration
 
 Environment variables for database connection (supports both formats):
@@ -209,6 +280,47 @@ User clicks "Download" → Server Action (actions.ts)
 ```
 
 **Why AWS SDK instead of HTTP?** Lambda Function URLs are not supported in `il-central-1`. The ECS task role (`bible-on-site-website-task-role`) grants `lambda:InvokeFunction` permission, and the `BULLETIN_LAMBDA_NAME` environment variable tells the website which Lambda to invoke.
+
+## Server Event-Loop Diagnostics (#2991)
+
+`src/instrumentation.ts` can start a bounded, per-process diagnostic that
+explains stalls the minute-scale ECS metrics cannot see (for example a
+`/api/health` upstream wait where the handler itself ran instantly). It is
+**disabled by default and fully inert when disabled**: nothing is constructed,
+no timers or observers exist, and there is no public endpoint — output is a
+single JSON line per interval on stdout, visible only in the container logs.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENABLE_EVENT_LOOP_DIAGNOSTICS` | unset (off) | `1` enables emission; any other value keeps it inert |
+| `EVENT_LOOP_DIAGNOSTICS_INTERVAL_MS` | `60000` | Summary interval; clamped to 1000–900000 ms |
+
+Emissions align to UTC wall-clock boundaries so `intervalStart`/`intervalEnd`
+correlate directly with nginx upstream logs. Each line carries `version`
+(package version), `uptimeSeconds`, `eventLoopDelay` (sample count plus
+min/mean/max/p50/p90/p95/p99 in ms, sampled once per event-loop iteration so
+queueing delay ahead of a request handler is recorded), `eventLoopUtilization`
+(idle/active ms and the delta ratio), `cpu` (user/system ms deltas) and `gc`
+(count, total/max ms, per-kind counts). Accumulators reset every interval; the
+timer is unref'd so drain behavior is unchanged. Enabling in production is a
+separate deployment decision — the instrumentation PR does not turn it on.
+
+Local verification against the real compiled server:
+
+```bash
+bun run build                      # produces .next/standalone via postbuild
+cd .next/standalone
+# --import the helper by absolute file URL, so it resolves from this cwd
+NODE_OPTIONS="--import <absolute-file-url-to scripts/test-support/block-event-loop.mjs>" \
+BLOCK_EVENT_LOOP_AFTER_MS=8000 BLOCK_EVENT_LOOP_MS=3000 \
+ENABLE_EVENT_LOOP_DIAGNOSTICS=1 EVENT_LOOP_DIAGNOSTICS_INTERVAL_MS=5000 \
+node server.js
+```
+
+The 3 s block lands inside one 5 s interval: its `eventLoopDelay.maxMs` shows
+~3000 while a health request queued during the block still returns instantly
+once the loop turns, reproducing the production signature. An interval without
+the block shows only baseline delay — the asynchronous-wait control.
 
 ## Layers
 

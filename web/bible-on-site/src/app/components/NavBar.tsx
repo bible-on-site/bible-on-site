@@ -72,6 +72,7 @@ export const NavBar = () => {
 						<Image
 							src="/images/logos/logo192.webp"
 							alt="עמוד ראשי"
+							unoptimized
 							width={72}
 							height={72}
 						/>
@@ -79,27 +80,58 @@ export const NavBar = () => {
 				</header>
 				<ul className={styles.menuList}>
 					<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
-						<Image src="/icons/book.svg" alt="" width={16} height={16} />
+						<Image
+							src="/icons/book.svg"
+							alt=""
+							unoptimized
+							width={16}
+							height={16}
+						/>
 						<Link href="/929">
 							<span>על הפרק</span>
 						</Link>
 					</li>
 					<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
-						<Image src="/icons/book.svg" alt="" width={16} height={16} />
+						<Image
+							src="/icons/book.svg"
+							alt=""
+							unoptimized
+							width={16}
+							height={16}
+						/>
 						<Link href="/מסורה">
 							<span>מסורה על הפרק</span>
 						</Link>
 					</li>
 					<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
-						<Image src="/icons/book.svg" alt="" width={16} height={16} />
+						<Image
+							src="/icons/book.svg"
+							alt=""
+							unoptimized
+							width={16}
+							height={16}
+						/>
 						<Link href="/פרשה">
 							<span>פרשה על הפרק</span>
+						</Link>
+					</li>
+					<li className={`${styles.menuItem} ${styles.ribbonBuilding}`}>
+						<Image
+							src="/icons/calendar-today.svg"
+							alt=""
+							unoptimized
+							width={16}
+							height={16}
+						/>
+						<Link href="/מועדים">
+							<span>מועדים על הפרק</span>
 						</Link>
 					</li>
 					<li className={styles.menuItem}>
 						<Image
 							src="/icons/calendar-today.svg"
 							alt=""
+							unoptimized
 							width={16}
 							height={16}
 						/>
@@ -108,13 +140,25 @@ export const NavBar = () => {
 						</Link>
 					</li>
 					<li className={styles.menuItem}>
-						<Image src="/icons/rabbi.svg" alt="" width={16} height={16} />
+						<Image
+							src="/icons/rabbi.svg"
+							alt=""
+							unoptimized
+							width={16}
+							height={16}
+						/>
 						<Link href="/929/authors">
 							<span>הרבנים</span>
 						</Link>
 					</li>
 					<li className={`${styles.menuItem} ${styles.ribbonComingSoon}`}>
-						<Image src="/icons/book.svg" alt="" width={16} height={16} />
+						<Image
+							src="/icons/book.svg"
+							alt=""
+							unoptimized
+							width={16}
+							height={16}
+						/>
 						<Link href="/pedia">
 							<span>תנכפדיה</span>
 						</Link>
@@ -123,6 +167,7 @@ export const NavBar = () => {
 						<Image
 							src="/icons/daily-bulletin.svg"
 							alt=""
+							unoptimized
 							width={16}
 							height={16}
 						/>
@@ -134,6 +179,7 @@ export const NavBar = () => {
 								<Image
 									src="/icons/whatsapp.svg"
 									alt=""
+									unoptimized
 									width={16}
 									height={16}
 								/>
@@ -144,24 +190,25 @@ export const NavBar = () => {
 						</ul>
 					</li>
 					<li className={styles.menuItem}>
-						<Image src="/icons/handshake.svg" alt="" width={16} height={16} />
+						<Image
+							src="/icons/handshake.svg"
+							alt=""
+							unoptimized
+							width={16}
+							height={16}
+						/>
 						<Link href="/tos">
 							<span>תנאי שימוש</span>
 						</Link>
 					</li>
 					<li className={styles.menuItem}>
 						<Image
-							src="/icons/accessibility.svg"
+							src="/icons/smartphone.svg"
 							alt=""
+							unoptimized
 							width={16}
 							height={16}
 						/>
-						<Link href="/accessibility">
-							<span>הצהרת נגישות</span>
-						</Link>
-					</li>
-					<li className={styles.menuItem}>
-						<Image src="/icons/smartphone.svg" alt="" width={16} height={16} />
 						<Link href="/app">
 							<span>יישומון</span>
 						</Link>
@@ -172,7 +219,13 @@ export const NavBar = () => {
 									className={styles.menuItem}
 									title={platform.description}
 								>
-									<Image src={platform.icon} alt="" width={16} height={16} />
+									<Image
+										src={platform.icon}
+										alt=""
+										unoptimized
+										width={16}
+										height={16}
+									/>
 									<a
 										href={platform.href ?? undefined}
 										target="_blank"
@@ -185,13 +238,25 @@ export const NavBar = () => {
 						</ul>
 					</li>
 					<li className={styles.menuItem}>
-						<Image src="/icons/contact.svg" alt="" width={16} height={16} />
+						<Image
+							src="/icons/contact.svg"
+							alt=""
+							unoptimized
+							width={16}
+							height={16}
+						/>
 						<Link href="/contact">
 							<span>צור קשר</span>
 						</Link>
 					</li>
 					<li className={styles.menuItem}>
-						<Image src="/icons/donation.svg" alt="" width={16} height={16} />
+						<Image
+							src="/icons/donation.svg"
+							alt=""
+							unoptimized
+							width={16}
+							height={16}
+						/>
 						<Link href="/donation">
 							<span>תרומות</span>
 						</Link>

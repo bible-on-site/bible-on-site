@@ -1,9 +1,8 @@
 /* ===================================================================
- * Base flipbook styles — replicated from html-flip-book-vanilla pages.scss
- * & flipbook.scss (v0.0.0-alpha.46) because the vanilla CSS is not
- * importable from this Next.js project (transitive dep; the package's
- * "./style.css" export points at a file the tarball does not ship).
- * IMPORTANT: keep in sync with the library version.
+ * Sefer host styles. The library's complete base stylesheet comes from
+ * html-flip-book-react/styles.css (imported in Sefer.tsx): pages, folds,
+ * covers, scrollports, bookmarks, TOC and toolbar all ship in the package
+ * since alpha.75 — only host-specific rules live here.
  * =================================================================== */
 
 /* While a Sefer reader is mounted, lock the outer document so the page
@@ -13,160 +12,78 @@
    The perek route's layout.css applies the same lock on data-book-view so
    it is already effective during the lazy-loading phase. Inner content
    panes keep their own overflow scrolling; scrollbar-gutter: stable avoids
-   a layout shift when the lock engages or releases. */
+   a layout shift when the lock engages or releases — but only on hosts that
+   scroll at the root (e.g. /dev/sefer). On perek pages the reader scrolls
+   inside .perekContainer and the root shows no scrollbar, so a lock-time
+   gutter would itself add/remove ~15px of width per toggle and become the
+   shift it was meant to prevent. The route marker is a direct body child;
+   restrict that check so reader descendant changes do not invalidate it. */
 html[data-sefer-view] {
-  overflow: hidden;
-  scrollbar-gutter: stable;
+	overflow: hidden;
+}
+html[data-sefer-view]:not(:has(> body > .perek-layout)) {
+	scrollbar-gutter: stable;
 }
 
 /* Container — the library adds .flipbook to this element.
    position:relative is host-only: it anchors the absolutely-positioned
    .page elements the library lays out with inline top/left/right. */
 .he-book {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
-  position: relative;
+	height: 100%;
+	width: 100%;
+	overflow: hidden;
+	position: relative;
 }
 
-/* Page base — position:absolute WITHOUT inset:0 (inset:0 overrides the
-   library's inline right/left positioning and breaks the RTL spread). */
-.he-book .page {
-  position: absolute;
-  backface-visibility: hidden;
-  transform-style: preserve-3d;
-  /* Every page is opaque by default (like paper). Without this, blank pages
-     (e.g. cover interiors) would be transparent and the other side of the
-     leaf would bleed through mirrored via the 3D transform. */
-  background: #fff;
-  /* Performance: isolate each page so the browser can skip re-layout/repaint
-     of page internals during 3D flip transforms. */
-  contain: layout style paint;
-  --inner-shadow-shadow: 0;
-  --inner-shadow-highlight: 0;
-  --inner-shadow-edge: right;
+/* Prepare the covered back face before the next turn starts. Keep the hint
+   off the current spread and hover folds to preserve their text antialiasing.
+   Leaf owns the inline hint throughout an active drag or animation. */
+.he-book .page--paper.even:not(.current-page):not(.page--folded) {
+	will-change: transform, clip-path;
 }
 
-/* Inner shadow / highlight pseudo-elements (from library pages.scss). */
-.he-book .page::before,
-.he-book .page::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  backface-visibility: hidden;
-  transition: opacity 120ms ease;
-  will-change: opacity;
-  /* Host-only: every Sefer page child is a positioned, opaque sheet
-     (sefer.module.css .page/.pageContentPage/.pageBlank), which paints over
-     un-indexed overlays and hid all page/fold shading (issue #2331). Keep the
-     overlays above page content layers (carousel, recitation player). */
-  z-index: 10;
+/* Keep the original pane content ready before the paper's crease moves.
+   A steady hint lets both faces reuse their rendering during consecutive turns.
+   Chrome can change glyph-edge smoothing in motion; text layout, font styles,
+   colors, controls and resting-page appearance stay intact. */
+.he-book .page--paper > .flipbook-page-scrollport {
+	will-change: opacity;
 }
 
-/* Inner shadow: simulates shadow cast by lifted page onto the page below.
-   (Upstream dropped the translateZ lift — `contain: layout style paint` on
-   .page flattens preserve-3d, making translateZ a no-op.) */
-.he-book .page::before {
-  background: linear-gradient(
-    to var(--inner-shadow-edge),
-    rgba(0, 0, 0, calc(0.35 * var(--inner-shadow-shadow))) 0%,
-    rgba(0, 0, 0, 0) 40%
-  );
-  opacity: var(--inner-shadow-shadow);
-  mix-blend-mode: multiply;
+/* Skip covered pane painting while retaining its layout and existing masks.
+   Keep page boxes available for back-face preparation; the library clears
+   the pane mask before exposing its content. Dormancy is marked only by the
+   class — the library never writes inline visibility — so no !important is
+   needed to win the cascade here. */
+.he-book .flipbook-page-scrollport.flipbook-layout-dormant {
+	visibility: hidden;
 }
 
-/* Edge highlight: simulates light catching the lifted page edge. */
-.he-book .page::after {
-  background: linear-gradient(
-    to var(--inner-shadow-edge),
-    rgba(255, 255, 255, calc(0.4 * var(--inner-shadow-highlight))) 0%,
-    rgba(255, 255, 255, 0) 45%
-  );
-  opacity: var(--inner-shadow-highlight);
+/* Sefer pages are app-like panels — fixed headers/footers with inner
+   scroll panes — so every page root carries the library's
+   flipbook-page-bounded class (#279) and the scrollport never engages. */
+
+/* ===================================================================
+ * Spine-side in-leaf scrollbars (issue #2994)
+ * The library computes each leaf's scrollbar side:
+ *   .page[data-scrollbar-side=left]  → --flipbook-page-scroll-direction:rtl
+ *   .page[data-scrollbar-side=right] → --flipbook-page-scroll-direction:ltr
+ * — the `direction` value that puts a native scrollbar on that leaf's
+ * inner (spine-facing) edge. Because Sefer pages are flipbook-page-
+ * bounded, the library's own scrollport never consumes that token, so
+ * the bounded inner panes adopt it on their scrolling element while
+ * their content children keep direction:rtl.
+ * --sefer-spine-row is the matching main axis for flex-wrap scrollers
+ * (the perush chip list): direction:ltr puts the bar on the right edge,
+ * so row-reverse restores Hebrew first-item-at-right order, and vice
+ * versa.
+ * =================================================================== */
+.page[data-scrollbar-side="right"] {
+	--sefer-spine-row: row-reverse;
 }
 
-/* Upstream's shadow opt-out: pageShadow={false} adds .flipbook--no-page-shadow
-   to the book element (the flicker workaround for upstream issue #167). We
-   render with shadows on, so the class never appears — the rule stays for
-   parity with pages.scss and as a ready kill-switch if the flicker returns.
-   Upstream needs !important to beat .page--folded's opacity:1; the extra
-   .he-book class gives this rule higher specificity without it. It suppresses
-   every pseudo-overlay, including the alpha.46 fold crease shading (the
-   library also skips writing --fold-shading then). */
-.he-book.flipbook--no-page-shadow .page::before,
-.he-book.flipbook--no-page-shadow .page::after {
-  opacity: 0;
-}
-
-/* alpha.46 paper folds: both faces of the lifted leaf carry .page--folded.
-   The crease shading rides ::before in page coordinates so it follows the
-   clipped fold without moving or cloning page content; the flat-face
-   shadow/highlight gradients are muted while the fold geometry applies. */
-.he-book .page--folded::before {
-  background: var(--fold-shading, none);
-  opacity: 1;
-  transition: none;
-  mix-blend-mode: normal;
-}
-.he-book .page--folded::after {
-  opacity: 0;
-  transition: none;
-}
-
-/* Applied during flip animation while snapshotDuringFlip is enabled. The
-   browser freezes the page rendering as a GPU texture; scrollbar chrome
-   and text selection are hidden so the snapshot looks clean. overflow is
-   NOT changed — scroll position is fully preserved. scrollbar-color keeps
-   the gutter allocated so content doesn't reflow; the webkit rule is only
-   needed for engines where overlay scrollbars occupy no space. */
-.he-book .page--flipping {
-  contain: strict;
-  user-select: none;
-  scrollbar-color: transparent transparent;
-}
-.he-book .page--flipping::-webkit-scrollbar {
-  display: none;
-}
-/* Descendant rules stay effective without upstream's !important — the
-   .he-book scope outranks the page content's own scrollbar styling. */
-.he-book .page--flipping * {
-  scrollbar-color: transparent transparent;
-}
-.he-book .page--flipping *::-webkit-scrollbar {
-  display: none;
-}
-
-/* Enforce page children fill page */
-.he-book .page > * {
-  max-width: 100%;
-  max-height: 100%;
-  height: 100%;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* coverConfig.noShadow: the React wrapper tags cover pages with
-   .page--no-shadow but ships no rule for it, and the library writes the
-   inner-shadow vars inline (beating any stylesheet value), so hide the
-   overlays themselves to keep hard covers flat. */
-.he-book .page--no-shadow::before,
-.he-book .page--no-shadow::after {
-  opacity: 0;
-}
-
-/* Interior cover from library flipbook.scss */
-.page--cover-interior {
-  overflow: hidden;
-}
-.page--cover-interior-inset {
-  padding-top: var(--cover-inset, 5%);
-  padding-bottom: var(--cover-inset, 5%);
-  padding-left: var(--cover-inset-left, var(--cover-inset, 5%));
-  padding-right: var(--cover-inset-right, var(--cover-inset, 5%));
-  background: #fffef8;
-  background-clip: content-box;
+.page[data-scrollbar-side="left"] {
+	--sefer-spine-row: row;
 }
 
 /* Toolbar: base styles now come from html-flip-book-react/styles.css.
@@ -174,42 +91,197 @@ html[data-sefer-view] {
 
 /* Override border-radius: flat bottom to sit flush against book edge */
 .flipbook-toolbar {
-  border-radius: 8px 8px 0 0;
+	border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 
 /* Page indicator - bible-on-site customizations */
 .flipbook-toolbar input.flipbook-toolbar-indicator {
-  background: rgb(30 30 30 / 0.8);
-  border-color: rgb(255 255 255 / 0.2);
-  color: #fff;
-  min-width: 80px;
-  min-height: 32px;
-  text-align: center;
+	background: rgb(30 30 30 / 0.8);
+	border-color: rgb(255 255 255 / 0.2);
+	color: #fff;
+	min-width: 80px;
+	min-height: 32px;
+	text-align: center;
 }
 
 .flipbook-toolbar input.flipbook-toolbar-indicator--editing {
-  background: #fff;
-  border-color: rgb(0 0 0 / 0.2);
-  color: #0f172a;
+	background: #fff;
+	border-color: rgb(0 0 0 / 0.2);
+	color: #0f172a;
 }
 
-.flipbook-toolbar input.flipbook-toolbar-indicator:hover {
-  border-color: rgb(255 255 255 / 0.4);
+@media (hover: hover) {
+	.flipbook-toolbar input.flipbook-toolbar-indicator:hover {
+		border-color: rgb(255 255 255 / 0.4);
+	}
 }
 
 .flipbook-toolbar input.flipbook-toolbar-indicator:focus {
-  outline-color: #fff;
-  border-color: transparent;
+	outline-color: #fff;
+	border-color: transparent;
+}
+
+/* ===================================================================
+ * TOC page — intentional site overrides on top of the library's TocPage
+ * stylesheet (html-flip-book-react/styles.css, complete since
+ * alpha.75 and carrying the bounded-scroll pane since alpha.92). These
+ * live in this reader-shared stylesheet — not a route-level CSS file —
+ * so they apply on every book host (the /929 overlay, /dev/sefer,
+ * Parasha and Masora) regardless of which route loaded first.
+ * =================================================================== */
+
+/* Single-line title policy: a long perek title stays on one row and
+   truncates with an ellipsis instead of wrapping (upstream's default). */
+.toc-title {
+	max-width: 85%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Spine-side scrollbar (#2994): the TOC leaf scrolls through its bounded
+   .toc-page__scroll pane (the library scrollport stays disengaged), so
+   the pane adopts the leaf's scroll direction while the entry list keeps
+   RTL order — matching every other in-leaf scroller. */
+.toc-page__scroll {
+	overscroll-behavior: contain;
+	direction: var(--flipbook-page-scroll-direction, rtl);
+}
+
+.toc-page__scroll > * {
+	direction: rtl;
 }
 
 @media (prefers-color-scheme: dark) {
-  /* Dark-mode paper: keep the book metaphor but invert the sheet so the
-     light inherited text stays readable. */
-  .he-book .page {
-    background: #1a1f2e;
-  }
+	/* Dark TOC palette — upstream ships no dark scheme for TocPage. */
+	.toc-page {
+		background-color: #1c1915;
+	}
 
-  .page--cover-interior-inset {
-    background: #1c1a15;
-  }
+	.toc-heading {
+		color: #f0ebe3;
+	}
+
+	@media (hover: hover) {
+		.toc-link:hover {
+			background-color: rgba(255, 255, 255, 0.06);
+		}
+	}
+
+	.toc-dots {
+		border-bottom-color: #555;
+	}
+
+	.toc-page-num {
+		color: #8ab4f8;
+	}
+}
+
+/* ===================================================================
+ * Bookmark layer base styles ship inside html-flip-book-react/styles.css
+ * (alpha.75+ — the export is now complete). The Sefer-specific theming
+ * below stays intentionally unscoped: .flipbook-bookmark-preview and the
+ * tab element it hosts are portaled to document.body on expand, so an
+ * .he-book scope would stop matching exactly when the tab is expanded.
+ * =================================================================== */
+
+/* ===================================================================
+ * Sefer chapter tabs (issue #2543) — one tab per perek, tinted with the
+ * sefer's cover color like the hard cover itself. --cover-color is set
+ * inline on .bookWrapper and inherited by the bookmark layer inside
+ * .he-book. On expand the library copies the tab's computed look onto it
+ * before portaling, so the accent survives into the body-level preview
+ * without global theming.
+ * =================================================================== */
+
+/* The provider's className follows a tab from its resting layer to a moving
+   surface. Keep the same theme and selector specificity in both parents so
+   reparenting a tab cannot replace the book colors with library defaults. */
+.he-book
+	.sefer-bookmarks:is(.flipbook-bookmarks, .flipbook-bookmark-surface)
+	.flipbook-bookmark {
+	background: var(--cover-color, #333);
+	border-color: rgb(255 255 255 / 0.25);
+	color: rgb(255 255 255 / 0.95);
+}
+
+.he-book
+	.sefer-bookmarks:is(.flipbook-bookmarks, .flipbook-bookmark-surface)
+	.flipbook-bookmark[aria-current="page"] {
+	background: color-mix(in srgb, var(--cover-color, #333) 78%, #fff);
+}
+
+@media (hover: hover) {
+	.he-book
+		.sefer-bookmarks:is(.flipbook-bookmarks, .flipbook-bookmark-surface)
+		.flipbook-bookmark:hover {
+		background: color-mix(in srgb, var(--cover-color, #333) 78%, #fff);
+	}
+}
+
+/* White inner frame — the same convention the cover's inset border uses —
+   stays visible on every cover color, light and dark. */
+.he-book
+	.sefer-bookmarks:is(.flipbook-bookmarks, .flipbook-bookmark-surface)
+	.flipbook-bookmark:focus-visible {
+	outline: 2px solid #fff;
+	outline-offset: -3px;
+}
+
+/* Compact tab label: just the perek letter(s), weighted like cover type.
+   Lives on the rendered span (inside the tab) so the shadow travels with
+   it — text-shadow is not among the computed props the preview copies. */
+.sefer-bookmark-label {
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	text-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+}
+
+/* Expanded tab content: the chapter reference and perek title laid
+   out as one horizontal strip — a perpendicular side tab reveals roughly
+   220×24px. The element is a direct flex item of __expanded-content (the
+   library's renderer slot is display:contents), so it needs flex sizing
+   and min-width:0 itself to stretch and truncate. It is portaled inside
+   .flipbook-bookmark-preview, so it must style itself — it cannot rely
+   on .he-book ancestors. --cover-color is passed inline by the renderer
+   for the same reason. */
+.sefer-bookmark-expanded {
+	display: flex;
+	flex-direction: row;
+	align-items: baseline;
+	gap: 6px;
+	flex: 1;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	padding: 0 6px;
+	box-sizing: border-box;
+	overflow: hidden;
+	white-space: nowrap;
+	color: rgb(255 255 255 / 0.95);
+	text-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+}
+
+.sefer-bookmark-expanded-perek {
+	flex: none;
+	font-weight: 700;
+}
+
+.sefer-bookmark-expanded-title {
+	font-weight: 600;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+@media (prefers-color-scheme: dark) {
+	/* Dark-mode paper: keep the book metaphor but invert the sheet so the
+     light inherited text stays readable. */
+	.he-book .page {
+		background: #1a1f2e;
+	}
+
+	.page--cover-interior-inset {
+		background: #1c1a15;
+	}
 }

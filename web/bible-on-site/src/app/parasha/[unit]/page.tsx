@@ -1,31 +1,50 @@
-import type { Metadata } from "next";
-import { unstable_cache } from "next/cache";
-import { notFound } from "next/navigation";
-import { Suspense } from "react";
 import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
 import { PerushimSection } from "@/app/929/[number]/components/PerushimSection";
 import perekStyles from "@/app/929/[number]/page.module.css";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "@/app/components/dedications/DedicationLines";
 import { UnitPerushimSection } from "@/app/components/reading/UnitPerushimSection";
 import { SharedUnitText } from "@/app/components/reading/UnitText";
 import { unitPerushHref } from "@/app/components/reading/unit-perush";
 import {
+	DEFAULT_ALIYAH_SCHEME,
+	getStandaloneReading,
+	getUnitAliyahMarkers,
+	getUnitAliyahMarkersForSefer,
+} from "@/data/parasha/parasha-aliyot";
+import { resolveParashaSegment } from "@/data/parasha/parasha-slugs";
+import {
+	PARASHA_DIVISION,
 	getAdjacentParashaUnits,
+	getAllParashaUnits,
 	getParashaEntry,
 	getParashaUnitById,
-	getParashaUnitCount,
 	getParashaUnitsForSefer,
-	PARASHA_DIVISION,
 	parashaAuxiliaryRanges,
 	parashaRefSpan,
 	rangesRefSpans,
 } from "@/data/parasha/parasha-units";
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { getArticleSummariesForRanges } from "@/lib/articles/service";
+import { getParashaDedications } from "@/lib/dedications/loaders";
 import { getPerushimForRanges } from "@/lib/perushim/service";
 import { canonicalPasukCount, rangePerekSources } from "@/lib/reading/queries";
-import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
+import { unitPerekIds } from "@/lib/reading/ranges";
+import {
+	COLLECTION_TAGS,
+	cachedPerKey,
+	parashaArticlesTag,
+	parashaPerushimTag,
+} from "@/lib/revalidate/tags";
 import { SITE_NAME } from "@/lib/seo/jsonld";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { Suspense } from "react";
+import { AliyahLegend } from "./components/AliyahLegend";
 import { HaftaraSection } from "./components/HaftaraSection";
 import { ParashaSeferComposite } from "./components/ParashaSeferComposite";
 import { UnitBreadcrumb } from "./components/UnitBreadcrumb";
@@ -36,36 +55,44 @@ import styles from "./page.module.css";
 export const dynamicParams = false;
 
 export function generateStaticParams() {
-	return Array.from({ length: getParashaUnitCount() }, (_, i) => ({
-		unit: String(i + 1),
-	}));
+	// Decoded segment values — Next encodes URLs; runtime `params` match
+	// this shape (same convention as the pedia slug route).
+	return getAllParashaUnits().map((unit) => ({ unit: unit.slug }));
 }
 
-const getCachedRangePerushim = unstable_cache(
+const getCachedRangePerushim = cachedPerKey(
+	"parasha-range-perushim",
+	(unitId: number, scope: "torah" | "haftara") => `${unitId}:${scope}`,
+	(key) => {
+		const [unitId, scope] = key.split(":");
+		return [
+			COLLECTION_TAGS.perushim,
+			parashaPerushimTag(Number(unitId), scope),
+		];
+	},
 	async (unitId: number, scope: "torah" | "haftara") => {
 		const unit = getParashaUnitById(unitId);
 		const ranges =
 			scope === "haftara" ? parashaAuxiliaryRanges(unit) : unit.ranges;
 		return getPerushimForRanges(ranges);
 	},
-	["parasha-range-perushim"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
-	},
 );
 
-const getCachedRangeArticles = unstable_cache(
+const getCachedRangeArticles = cachedPerKey(
+	"parasha-range-article-summaries",
+	(unitId: number, scope: "torah" | "haftara") => `${unitId}:${scope}`,
+	(key) => {
+		const [unitId, scope] = key.split(":");
+		return [
+			COLLECTION_TAGS.articles,
+			parashaArticlesTag(Number(unitId), scope),
+		];
+	},
 	async (unitId: number, scope: "torah" | "haftara") => {
 		const unit = getParashaUnitById(unitId);
 		const ranges =
 			scope === "haftara" ? parashaAuxiliaryRanges(unit) : unit.ranges;
 		return getArticleSummariesForRanges(ranges);
-	},
-	["parasha-range-article-summaries"],
-	{
-		tags: ["articles"],
-		revalidate: false,
 	},
 );
 
@@ -82,17 +109,31 @@ function seferUnitsPerekIds(seferName: string): number[] {
 }
 
 /**
- * Deliberate SEO policy for the פרשה division: these pages re-slice the
- * same canonical corpus as /929, so they must not compete with the
- * canonical perek pages in the index.
- *
- * - A unit spanning exactly one whole perek with no auxiliary readings
- *   would consolidate to the /929 perek (none today — every parasha
- *   carries Haftarot).
- * - Every other unit is a deliberate alternate slicing — `noindex` with
- *   `follow`, so crawlers still discover links but the pages stay out of
- *   the index. The canonical stays self-referential rather than pointing
- *   at an unrelated span.
+ * Resolve a route `[unit]` param to its parasha — canonical slugs only
+ * (issue #2738). Params arrive percent-encoded (same convention as
+ * /929/[slug], which decodes its rawSlug); numeric ids, aliases, and
+ * malformed segments redirect or 404 at the proxy before reaching the
+ * router, and `dynamicParams = false` gates the rest.
+ */
+function resolveCanonicalParasha(param: string) {
+	let segment = param;
+	try {
+		segment = decodeURIComponent(param);
+	} catch {
+		notFound();
+	}
+	const resolved = resolveParashaSegment(segment);
+	if (resolved?.kind !== "canonical") {
+		notFound();
+	}
+	return getParashaUnitById(resolved.unitId);
+}
+
+/**
+ * Each weekly parasha has one indexable, self-canonical page, including
+ * its auxiliary Haftarah readings. Presentation and selected-content
+ * variants are excluded by the proxy response policy without making
+ * this prerendered metadata depend on request query parameters.
  */
 export async function generateMetadata({
 	params,
@@ -100,27 +141,14 @@ export async function generateMetadata({
 	params: Promise<{ unit: string }>;
 }): Promise<Metadata> {
 	const { unit: unitParam } = await params;
-	const unitId = Number.parseInt(unitParam, 10);
-	if (Number.isNaN(unitId) || unitId < 1 || unitId > getParashaUnitCount()) {
-		notFound();
-	}
-	const unit = getParashaUnitById(unitId);
-	const equivalentPerekId = unitEquivalentPerekId(unit, canonicalPasukCount);
+	const unit = resolveCanonicalParasha(unitParam);
 	const title = `פרשת ${unit.heading} | ${PARASHA_DIVISION.menuLabel} | ${SITE_NAME}`;
 	const description = `קריאת פרשת ${unit.heading} (${parashaRefSpan(unit)}) וההפטרה למנהגי הספרדים האשכנזים והתימנים, עם פירושים ומאמרים.`;
-	if (equivalentPerekId !== null) {
-		return {
-			title,
-			description,
-			alternates: { canonical: `/929/${equivalentPerekId}` },
-		};
-	}
-	return {
+	return pageMetadata({
 		title,
 		description,
-		alternates: { canonical: `${PARASHA_DIVISION.rootPath}/${unitId}` },
-		robots: { index: false, follow: true },
-	};
+		canonical: `${PARASHA_DIVISION.rootPath}/${unit.slug}`,
+	});
 }
 
 export default async function ParashaUnitPage({
@@ -129,11 +157,8 @@ export default async function ParashaUnitPage({
 	params: Promise<{ unit: string }>;
 }) {
 	const { unit: unitParam } = await params;
-	const unitId = Number.parseInt(unitParam, 10);
-	if (Number.isNaN(unitId) || unitId < 1 || unitId > getParashaUnitCount()) {
-		notFound();
-	}
-	const unit = getParashaUnitById(unitId);
+	const unit = resolveCanonicalParasha(unitParam);
+	const unitId = unit.unitId;
 	const auxPerekId = unit.auxiliaryReadings?.[0]?.ranges[0]?.start.perekId;
 	const [
 		perushim,
@@ -149,14 +174,23 @@ export default async function ParashaUnitPage({
 		fetchAllEntityRefs(seferUnitsPerekIds(unit.seferName)),
 	]);
 	const { prev, next } = getAdjacentParashaUnits(unitId);
+	// Aliyah boundary layers (issues #2519/#3165): every applicable
+	// context/scheme/custom marker embeds in the text and ALL render
+	// inline together; AliyahLegend emphasizes the URL-selected layer
+	// without remounting scripture. The book spreads share the same
+	// full marker contract — no Shabbat-only layer.
+	const aliyahLayer = getUnitAliyahMarkers(unitId);
 	const bookUnits = getParashaUnitsForSefer(unit.seferName).map((bookUnit) => {
 		const bookEntry = getParashaEntry(bookUnit.unitId);
 		return {
 			unitId: bookUnit.unitId,
+			slug: bookUnit.slug,
 			name: bookEntry.name,
 			order: bookUnit.order,
 			refSpan: parashaRefSpan(bookUnit),
 			ranges: bookUnit.ranges,
+			aliyahMarkers: getUnitAliyahMarkersForSefer(bookUnit.unitId),
+			aliyahEmphasisKey: `${getStandaloneReading(bookUnit.unitId).id}:${DEFAULT_ALIYAH_SCHEME}`,
 			haftarot: bookEntry.haftarot.map((haftara) => ({
 				...haftara,
 				refSpan: rangesRefSpans(haftara.ranges).join(", "),
@@ -169,6 +203,19 @@ export default async function ParashaUnitPage({
 	for (const perekId of seferUnitsPerekIds(unit.seferName)) {
 		bookPerekSources[perekId] = getPerekByPerekId(perekId).source;
 	}
+
+	// Parasha dedications (#2731): each unit's dedication renders once on
+	// its Torah spread in the book, so the page collects a cached
+	// `parasha:{id}:dedications` tag per unit the book can reach.
+	const dedicationsByUnit: Record<number, string[]> = {};
+	await Promise.all(
+		bookUnits.map(async (bookUnit) => {
+			const lines = dedicationLines(
+				await getParashaDedications(bookUnit.unitId),
+			);
+			if (lines.length > 0) dedicationsByUnit[bookUnit.unitId] = lines;
+		}),
+	);
 
 	return (
 		<>
@@ -189,6 +236,7 @@ export default async function ParashaUnitPage({
 					perushim={perushim}
 					haftaraArticles={haftaraArticles}
 					haftaraPerushim={haftaraPerushim}
+					dedicationsByUnit={dedicationsByUnit}
 				/>
 			</Suspense>
 			<div className={`${perekStyles.perekContainer} seo-content`}>
@@ -197,12 +245,21 @@ export default async function ParashaUnitPage({
 					פרשת {unit.heading}
 					<span className={styles.refSpan}>{parashaRefSpan(unit)}</span>
 				</h1>
+				<DedicationLines lines={dedicationsByUnit[unitId] ?? []} />
 				<h2 className={styles.readingLabel}>קריאת התורה</h2>
+				<Suspense>
+					<AliyahLegend
+						contexts={aliyahLayer.contexts}
+						defaultKey={aliyahLayer.defaultKey}
+					/>
+				</Suspense>
 				<SharedUnitText
 					ranges={unit.ranges}
 					entityRefsByPerek={entityRefsByPerek}
 					pasukCount={canonicalPasukCount}
 					scrollScope="torah"
+					boundaryMarkers={new Map(Object.entries(aliyahLayer.markers))}
+					emphasisMarkerKey={aliyahLayer.defaultKey}
 				/>
 				<HaftaraSection unit={unit} entityRefsByPerek={entityRefsByPerek} />
 				<UnitNav prev={prev} next={next} />
@@ -221,7 +278,7 @@ export default async function ParashaUnitPage({
 							emptyMessage="אין פרשנות לפרשה זו"
 							hrefForPerush={(perush) =>
 								unitPerushHref(
-									`${PARASHA_DIVISION.rootPath}/${unitId}`,
+									`${PARASHA_DIVISION.rootPath}/${unit.slug}`,
 									"torah",
 									perush.name,
 								)
@@ -233,7 +290,7 @@ export default async function ParashaUnitPage({
 						division="parasha"
 						unitId={unitId}
 						scope="torah"
-						unitPath={`${PARASHA_DIVISION.rootPath}/${unitId}`}
+						unitPath={`${PARASHA_DIVISION.rootPath}/${unit.slug}`}
 						perekId={unit.ranges[0].start.perekId}
 						perushim={perushim}
 						title="פרשנים על הפרשה"
@@ -260,7 +317,7 @@ export default async function ParashaUnitPage({
 							emptyMessage="אין פרשנות להפטרה זו"
 							hrefForPerush={(perush) =>
 								unitPerushHref(
-									`${PARASHA_DIVISION.rootPath}/${unitId}`,
+									`${PARASHA_DIVISION.rootPath}/${unit.slug}`,
 									"haftara",
 									perush.name,
 								)
@@ -272,7 +329,7 @@ export default async function ParashaUnitPage({
 						division="parasha"
 						unitId={unitId}
 						scope="haftara"
-						unitPath={`${PARASHA_DIVISION.rootPath}/${unitId}`}
+						unitPath={`${PARASHA_DIVISION.rootPath}/${unit.slug}`}
 						perekId={auxPerekId ?? unit.ranges[0].start.perekId}
 						perushim={haftaraPerushim}
 						title="פרשנים על ההפטרה"

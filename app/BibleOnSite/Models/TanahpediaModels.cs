@@ -74,6 +74,23 @@ public class TanahpediaEntryDetail
     public string UpdatedAt { get; set; } = string.Empty;
     public List<TanahpediaLinkedEntity> Entities { get; set; } = new();
     public List<TanahpediaEntryOccurrence> Occurrences { get; set; } = new();
+
+    /// <summary>
+    /// Persisted canonical reading metric for the entry body (issue #2607).
+    /// Null when the API has no metric row — badges render nothing.
+    /// </summary>
+    public ReadingMetric? ReadingMetric { get; set; }
+
+    /// <summary>
+    /// Ordered readable-block progress units over the entry body (issue
+    /// #2607) — the word-position axis the reader maps scroll onto. Empty
+    /// when the API has no block rows.
+    /// </summary>
+    public IReadOnlyList<ReadingProgressUnit> ProgressUnits { get; set; } = [];
+
+    /// <summary>"זמן קריאה משוער: X" badge text or null when nothing to show.</summary>
+    public string? ReadingTimeBadge =>
+        Helpers.ReadingTimeFormatter.FormatReadingTimeLabel(ReadingMetric?.EstimatedSeconds);
 }
 
 /// <summary>

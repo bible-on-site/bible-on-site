@@ -8,7 +8,7 @@ import { addCoverageReport } from "monocart-reporter";
 import { dumpImpactCoverage } from "../../../../shared/tests-util/e2e-impact";
 import { shouldMeasureCov } from "../../../../shared/tests-util/environment.mjs";
 import { TABLET_MIN_WIDTH } from "../../../src/hooks/useIsWideEnough";
-import { sanitizeCoverage } from "../coverage/sanitize-coverage";
+import { sanitizeCoverage } from "../coverage/sanitize-coverage.mjs";
 
 declare global {
 	interface Window {
@@ -108,4 +108,4 @@ async function coverageSetup(context: BrowserContext) {
 	);
 }
 
-export { test, expect };
+export { expect, test };

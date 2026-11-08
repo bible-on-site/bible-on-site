@@ -1,4 +1,5 @@
 using BibleOnSite.Controls;
+using BibleOnSite.Helpers;
 using FluentAssertions;
 using Microsoft.Maui.Controls;
 
@@ -48,6 +49,60 @@ public class PasukTextLabelTests
         label.FontSize = 24;
 
         reRendered.Should().BeFalse();
+    }
+
+    // #2964: the shared scripture-direction contract — pasuk text is Hebrew
+    // RTL, so the control pins FlowDirection the same way it pins the
+    // scripture font. The iOS/MacCatalyst handlers read the effective
+    // direction to set the attributed paragraph's base writing direction —
+    // a "natural" direction resolves from the device locale, which is what
+    // flushed justified last/short lines left on English devices.
+    [Fact]
+    public void defaults_to_rtl_flow_direction()
+    {
+        new PasukTextLabel().FlowDirection.Should().Be(Microsoft.Maui.FlowDirection.RightToLeft);
+    }
+
+    [Fact]
+    public void a_flow_direction_change_notifies_so_handlers_reapply_direction()
+    {
+        var label = new PasukTextLabel();
+        var notified = false;
+        label.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(VisualElement.FlowDirection))
+            {
+                notified = true;
+            }
+        };
+
+        label.FlowDirection = Microsoft.Maui.FlowDirection.LeftToRight;
+
+        notified.Should().BeTrue();
+        label.FlowDirection.Should().Be(Microsoft.Maui.FlowDirection.LeftToRight);
+    }
+
+    // #2623: the shared scripture contract — every pasuk label renders Taamey
+    // D. The ctor sets it as a local value so the implicit Label style's
+    // OpenSansRegular can never win; spans without their own family inherit it.
+    [Fact]
+    public void defaults_to_the_scripture_font_family()
+    {
+        new PasukTextLabel().FontFamily.Should().Be(ScriptureFonts.Family);
+    }
+
+    [Fact]
+    public void spans_without_a_family_inherit_the_scripture_face()
+    {
+        // The whole formatted-text path (qri/ktiv, reciting words, {פ}/{ס})
+        // leaves Span.FontFamily unset — pin that the label face is the only
+        // one they can resolve to. The pasuk-number marker is the deliberate
+        // exception: PasukMarkerTextConverter pins the app's main face on it.
+        var label = new PasukTextLabel();
+        var span = new Span { Text = "א" };
+
+        span.FontFamily.Should().BeNull();
+        label.FontFamily.Should().Be(ScriptureFonts.Family);
     }
 
     // #2402: the reader's pasuk text is fully justified like the commentary

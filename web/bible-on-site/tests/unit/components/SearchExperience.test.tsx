@@ -79,9 +79,7 @@ function renderSearch(
 	props: Partial<Parameters<typeof SearchExperience>[0]> = {},
 ) {
 	const query = props.initialQuery ?? "";
-	const url = query
-		? `/search?q=${encodeURIComponent(query)}`
-		: "/search";
+	const url = query ? `/search?q=${encodeURIComponent(query)}` : "/search";
 	window.history.replaceState(window.history.state, "", url);
 	return render(
 		<SearchExperience
@@ -99,6 +97,20 @@ async function settle() {
 	});
 }
 
+async function expectFetchWarning(
+	message: string,
+	action: () => Promise<void>,
+) {
+	const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+	try {
+		await action();
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn).toHaveBeenCalledWith("[search] fetch failed:", message);
+	} finally {
+		warn.mockRestore();
+	}
+}
+
 describe("SearchExperience", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -113,6 +125,16 @@ describe("SearchExperience", () => {
 	afterEach(() => {
 		jest.useRealTimers();
 		global.fetch = realFetch;
+	});
+
+	it("shows result skeletons while the first fetch is pending", async () => {
+		mockFetch.mockReturnValue(new Promise(() => {}));
+		const { container } = renderSearch({ initialQuery: "את" });
+		await act(async () => {});
+		expect(screen.getByRole("status")).toHaveTextContent("מחפש...");
+		expect(
+			container.querySelectorAll("[data-skeleton]").length,
+		).toBeGreaterThan(0);
 	});
 
 	it("renders the SSR results on first paint", () => {
@@ -202,9 +224,7 @@ describe("SearchExperience", () => {
 				counts: { tanahpedia: 1 },
 			},
 		});
-		expect(
-			screen.getByRole("checkbox", { name: "תנכפדיה" }),
-		).toBeChecked();
+		expect(screen.getByRole("checkbox", { name: "תנכפדיה" })).toBeChecked();
 		expect(
 			screen.getByRole("heading", { name: /תנכפדיה/ }),
 		).toBeInTheDocument();
@@ -215,35 +235,39 @@ describe("SearchExperience", () => {
 	});
 
 	it("shows the error state when the fetch fails", async () => {
-		mockFetch.mockResolvedValue({ ok: false, status: 500 });
-		renderSearch();
-		fireEvent.change(screen.getByRole("searchbox", { name: "מונח חיפוש" }), {
-			target: { value: "את" },
+		await expectFetchWarning("search failed: 500", async () => {
+			mockFetch.mockResolvedValue({ ok: false, status: 500 });
+			renderSearch();
+			fireEvent.change(screen.getByRole("searchbox", { name: "מונח חיפוש" }), {
+				target: { value: "את" },
+			});
+			await settle();
+			await act(async () => {});
+			expect(screen.getByRole("status")).toHaveTextContent("שגיאה בחיפוש");
 		});
-		await settle();
-		await act(async () => {});
-		expect(screen.getByRole("status")).toHaveTextContent("שגיאה בחיפוש");
 	});
 
 	it("retries the same query when resubmitted after a failure", async () => {
-		mockFetch
-			.mockResolvedValueOnce({ ok: false, status: 500 })
-			.mockResolvedValue({ ok: true, json: async () => RESULTS });
-		renderSearch();
-		const input = screen.getByRole("searchbox", { name: "מונח חיפוש" });
-		fireEvent.change(input, { target: { value: "את" } });
-		await settle();
-		await act(async () => {});
-		expect(screen.getByRole("status")).toHaveTextContent("שגיאה בחיפוש");
-		expect(mockFetch).toHaveBeenCalledTimes(1);
-		// The URL already holds the failed query, so settle() alone cannot
-		// trigger a refetch — resubmitting must bump the retry trigger.
-		fireEvent.submit(input.closest("form") as HTMLFormElement);
-		await act(async () => {});
-		expect(mockFetch).toHaveBeenCalledTimes(2);
-		expect(
-			await screen.findByRole("link", { name: /בראשית א/ }),
-		).toBeInTheDocument();
+		await expectFetchWarning("search failed: 500", async () => {
+			mockFetch
+				.mockResolvedValueOnce({ ok: false, status: 500 })
+				.mockResolvedValue({ ok: true, json: async () => RESULTS });
+			renderSearch();
+			const input = screen.getByRole("searchbox", { name: "מונח חיפוש" });
+			fireEvent.change(input, { target: { value: "את" } });
+			await settle();
+			await act(async () => {});
+			expect(screen.getByRole("status")).toHaveTextContent("שגיאה בחיפוש");
+			expect(mockFetch).toHaveBeenCalledTimes(1);
+			// The URL already holds the failed query, so settle() alone cannot
+			// trigger a refetch — resubmitting must bump the retry trigger.
+			fireEvent.submit(input.closest("form") as HTMLFormElement);
+			await act(async () => {});
+			expect(mockFetch).toHaveBeenCalledTimes(2);
+			expect(
+				await screen.findByRole("link", { name: /בראשית א/ }),
+			).toBeInTheDocument();
+		});
 	});
 
 	it("moves focus through results with arrow keys and back to the input", async () => {
@@ -321,9 +345,7 @@ describe("SearchExperience", () => {
 		fireEvent.click(perekBox);
 		await act(async () => {});
 		expect(perekBox).toBeChecked();
-		expect(
-			screen.getByRole("checkbox", { name: "פסוקים" }),
-		).not.toBeChecked();
+		expect(screen.getByRole("checkbox", { name: "פסוקים" })).not.toBeChecked();
 		expect(window.location.search).toContain("type=perek");
 	});
 
@@ -365,9 +387,7 @@ describe("SearchExperience", () => {
 		expect(
 			screen.getByText("חיפוש הפירושים אינו זמין כרגע"),
 		).toBeInTheDocument();
-		expect(
-			screen.getByRole("link", { name: "בראשית ב" }),
-		).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "בראשית ב" })).toBeInTheDocument();
 	});
 
 	it("drops the response of a fetch aborted by a newer settled state", async () => {
@@ -395,14 +415,16 @@ describe("SearchExperience", () => {
 	});
 
 	it("shows the error state for a non-Error rejection", async () => {
-		mockFetch.mockRejectedValue("plain failure");
-		renderSearch();
-		fireEvent.change(screen.getByRole("searchbox", { name: "מונח חיפוש" }), {
-			target: { value: "את" },
+		await expectFetchWarning("plain failure", async () => {
+			mockFetch.mockRejectedValue("plain failure");
+			renderSearch();
+			fireEvent.change(screen.getByRole("searchbox", { name: "מונח חיפוש" }), {
+				target: { value: "את" },
+			});
+			await settle();
+			await act(async () => {});
+			expect(screen.getByRole("status")).toHaveTextContent("שגיאה בחיפוש");
 		});
-		await settle();
-		await act(async () => {});
-		expect(screen.getByRole("status")).toHaveTextContent("שגיאה בחיפוש");
 	});
 
 	it("evicts the oldest cached response past the cache cap", async () => {

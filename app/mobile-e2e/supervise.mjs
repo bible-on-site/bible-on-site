@@ -1,9 +1,19 @@
 import { execFileSync, spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const PILOT_TIMEOUT_MS = 15 * 60 * 1000;
+export const MAX_PILOT_TIMEOUT_MS = 45 * 60 * 1000;
+
+// A planned iOS shard may carry the whole suite on one runner (fewer macOS
+// runner-minutes than parallel legs repeating setup), so its deadline scales
+// with the plan's estimate; unplanned runs keep the fixed 15-minute deadline.
+export function pilotTimeoutMs(estimatedMs) {
+  if (!Number.isFinite(estimatedMs) || estimatedMs <= 0) return PILOT_TIMEOUT_MS;
+  return Math.min(MAX_PILOT_TIMEOUT_MS,
+    Math.max(PILOT_TIMEOUT_MS, Math.ceil(estimatedMs * 1.5) + 5 * 60 * 1000));
+}
 
 // The supervisor runs outside the harness process group. Its clock continues
 // even when a native export or synchronous build blocks the harness's event loop.
@@ -145,15 +155,18 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const artifacts = process.env.MOBILE_E2E_ARTIFACTS ?? resolve(directory,
     "../.artifacts/mobile-e2e", process.env.MOBILE_PLATFORM?.toLowerCase() ?? "unknown");
   mkdirSync(artifacts, { recursive: true });
+  const selection = process.env.MOBILE_E2E_SELECTION;
+  const timeoutMs = pilotTimeoutMs(selection
+    ? JSON.parse(readFileSync(selection, "utf8")).estimatedMs : undefined);
   const started = Date.now();
   const timingPath = resolve(artifacts, "pilot-timing.json");
   const save = extra => writeFileSync(timingPath, JSON.stringify({
     startedAt: new Date(started).toISOString(), elapsedMs: Date.now() - started,
-    deadlineMs: PILOT_TIMEOUT_MS, ...extra,
+    deadlineMs: timeoutMs, ...extra,
   }, null, 2));
   save({ status: "running" });
   const run = supervise(process.execPath, [resolve(directory, "run.mjs")], {
-    cwd: directory, onDeadline: () => save({ status: "timed-out" }),
+    cwd: directory, timeoutMs, onDeadline: () => save({ status: "timed-out" }),
   });
   process.exitCode = await run.result;
   save({ status: process.exitCode === 124 ? "timed-out" : "completed", exitCode: process.exitCode });

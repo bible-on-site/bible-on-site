@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { act, render } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
 
 jest.mock("next/script", () => {
 	return function MockScript({
@@ -23,12 +23,9 @@ jest.mock("@/util/environment", () => ({
 	isProduction: jest.fn(),
 }));
 
-import {
-	ANALYTICS_CONSENT_KEY,
-	setAnalyticsConsent,
-} from "@/lib/analytics-consent";
 import { isProduction } from "@/util/environment";
 import { GoogleAnalytics } from "../../../src/app/components/GoogleAnalytics";
+import { GA_GATE_SCRIPT } from "../../../src/app/components/google-analytics-gate";
 
 const mockIsProduction = isProduction as jest.MockedFunction<
 	typeof isProduction
@@ -38,62 +35,60 @@ const mockIsProduction = isProduction as jest.MockedFunction<
 const BOT_UA_PATTERN =
 	/bot|crawl|spider|slurp|Bytespider|GPTBot|ClaudeBot|CCBot|Amazonbot|Diffbot|PetalBot|AhrefsBot|SemrushBot|DotBot|MJ12bot|BLEXBot|YandexBot|Sogou|Applebot|Googlebot|bingbot|PerplexityBot|FacebookBot|anthropic|TikTokSpider|Baiduspider|MegaIndex/i;
 
-const GA_DISABLE_FLAG = "ga-disable-G-2CHER7MM85";
-
 describe("GoogleAnalytics", () => {
 	beforeEach(() => {
-		localStorage.clear();
-		delete (window as unknown as Record<string, boolean>)[GA_DISABLE_FLAG];
 		mockIsProduction.mockReturnValue(true);
 	});
 
 	describe("when in production", () => {
-		describe("consent gating (#2400)", () => {
-			it("renders nothing before the user decides", () => {
-				const { container } = render(<GoogleAnalytics />);
-				expect(container.querySelectorAll("[data-script]")).toHaveLength(0);
-			});
-
-			it("renders nothing after the user denies analytics", () => {
-				localStorage.setItem(ANALYTICS_CONSENT_KEY, "denied");
-				const { container } = render(<GoogleAnalytics />);
-				expect(container.querySelectorAll("[data-script]")).toHaveLength(0);
-			});
-
-			it("mounts the scripts once consent is granted mid-session", () => {
-				const { container } = render(<GoogleAnalytics />);
-				expect(container.querySelectorAll("[data-script]")).toHaveLength(0);
-				act(() => setAnalyticsConsent("granted"));
-				expect(
-					container.querySelectorAll("[data-script]").length,
-				).toBeGreaterThan(0);
-			});
-
-			it("sets the ga-disable opt-out flag on mid-session denial", () => {
-				const win = window as unknown as Record<string, boolean>;
-				render(<GoogleAnalytics />);
-				act(() => setAnalyticsConsent("granted"));
-				expect(win[GA_DISABLE_FLAG]).toBe(false);
-				act(() => setAnalyticsConsent("denied"));
-				expect(win[GA_DISABLE_FLAG]).toBe(true);
-			});
-		});
-
-		describe("when analytics consent is granted", () => {
-			beforeEach(() => {
-				localStorage.setItem(ANALYTICS_CONSENT_KEY, "granted");
-			});
-
-			it("renders Google Analytics scripts for regular traffic", () => {
+		describe("when measurement is enabled", () => {
+			it("renders only the inline gate script", () => {
 				const { container } = render(<GoogleAnalytics />);
 				const scripts = container.querySelectorAll("[data-script]");
-				expect(scripts.length).toBeGreaterThan(0);
+				expect(scripts).toHaveLength(1);
+				expect(scripts[0]).toHaveAttribute("data-testid", "google-analytics");
+			});
+
+			it("does not eagerly request the gtag library", () => {
+				const { getByTestId } = render(<GoogleAnalytics />);
+				const script = getByTestId("google-analytics").textContent ?? "";
+				// The ~90 KiB library must be injected after the human-traffic
+				// decision, not as a sibling <Script src> (#2736).
+				expect(script).not.toContain("strategy=");
+				const initIndex = script.indexOf("function initGA");
+				const gtagSrcIndex = script.indexOf("googletagmanager.com/gtag/js");
+				const botdImportIndex = script.indexOf("import(");
+				expect(gtagSrcIndex).toBeGreaterThan(initIndex);
+				expect(gtagSrcIndex).toBeLessThan(
+					script.indexOf("import(", initIndex),
+				);
+				expect(script.indexOf("el.src")).toBeGreaterThan(initIndex);
+				expect(script.indexOf("el.src")).toBeLessThan(botdImportIndex);
+				expect(script).toContain("document.head.appendChild(el)");
+				// initGA is only invoked from the BotD resolution handlers.
+				expect(script.lastIndexOf("initGA()")).toBeGreaterThan(
+					botdImportIndex,
+				);
 			});
 
 			it("includes the GA measurement ID in the script", () => {
 				const { getByTestId } = render(<GoogleAnalytics />);
 				const gaScript = getByTestId("google-analytics");
 				expect(gaScript.textContent).toContain("G-2CHER7MM85");
+			});
+
+			it("disables advertising and Google signals before the first measurement config", () => {
+				const { getByTestId } = render(<GoogleAnalytics />);
+				const script = getByTestId("google-analytics").textContent ?? "";
+				expect(script).toContain("allow_google_signals: false");
+				expect(script).toContain("allow_ad_personalization_signals: false");
+				expect(script).toContain("ad_storage: 'denied'");
+				expect(script).toContain("ad_user_data: 'denied'");
+				expect(script).toContain("ad_personalization: 'denied'");
+				expect(script.indexOf("gtag('consent', 'default'")).toBeLessThan(
+					script.indexOf("gtag('config'"),
+				);
+				expect(script).toContain("Botd.load({ monitoring: false })");
 			});
 
 			describe("client-side bot detection", () => {
@@ -164,16 +159,101 @@ describe("GoogleAnalytics", () => {
 					expect(catchBlock).toContain("initGA");
 				});
 			});
+
+			describe("gate script behavior (#2736)", () => {
+				const runGate = () => new Function(GA_GATE_SCRIPT)();
+				const gtagElements = () =>
+					document.querySelectorAll('script[src*="googletagmanager.com/gtag"]');
+				const dataLayerCalls = () =>
+					(
+						(window as { dataLayer?: ArrayLike<unknown>[] }).dataLayer ?? []
+					).map((entry) => Array.from(entry));
+
+				afterEach(() => {
+					for (const el of gtagElements()) el.remove();
+					delete (window as { dataLayer?: unknown[] }).dataLayer;
+				});
+
+				it("leaves gtag unloaded while the bot decision is pending", () => {
+					// The CDN import only resolves asynchronously, so immediately after
+					// the gate ran no measurement request can have been scheduled.
+					runGate();
+					expect(gtagElements()).toHaveLength(0);
+					expect(
+						(window as { dataLayer?: unknown[] }).dataLayer,
+					).toBeUndefined();
+				});
+
+				it("injects the deferred gtag script when the decision fails open", async () => {
+					// jsdom cannot import the https BotD module, so the gate's .catch
+					// branch runs — the documented fail-open fallback.
+					runGate();
+					await waitFor(() => expect(gtagElements()).toHaveLength(1));
+					const el = gtagElements()[0] as HTMLScriptElement;
+					expect(el.async).toBe(true);
+					expect(el.src).toBe(
+						"https://www.googletagmanager.com/gtag/js?id=G-2CHER7MM85",
+					);
+				});
+
+				it("queues js, denied consent defaults and config in order", async () => {
+					runGate();
+					await waitFor(() => expect(dataLayerCalls()).toHaveLength(3));
+					const calls = dataLayerCalls();
+					expect(calls[0]?.[0]).toBe("js");
+					expect(calls[1]?.slice(0, 2)).toEqual(["consent", "default"]);
+					expect(calls[1]?.[2]).toEqual({
+						ad_storage: "denied",
+						ad_user_data: "denied",
+						ad_personalization: "denied",
+					});
+					expect(calls[2]?.slice(0, 2)).toEqual(["config", "G-2CHER7MM85"]);
+					expect(calls[2]?.[2]).toEqual({
+						allow_google_signals: false,
+						allow_ad_personalization_signals: false,
+					});
+				});
+
+				describe("with a bot user agent", () => {
+					const originalUA = window.navigator.userAgent;
+					beforeEach(() => {
+						Object.defineProperty(window.navigator, "userAgent", {
+							value:
+								"Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+							configurable: true,
+						});
+					});
+					afterEach(() => {
+						Object.defineProperty(window.navigator, "userAgent", {
+							value: originalUA,
+							configurable: true,
+						});
+					});
+
+					it("returns before scheduling BotD or gtag", async () => {
+						// Flush several macrotasks: had the gate reached the CDN import,
+						// jsdom's failed import would have run the fail-open initGA by
+						// now — so a still-empty head proves the early return held.
+						runGate();
+						for (let i = 0; i < 5; i++) {
+							await new Promise((resolve) => setTimeout(resolve, 0));
+						}
+						expect(gtagElements()).toHaveLength(0);
+						expect(
+							(window as { dataLayer?: unknown[] }).dataLayer,
+						).toBeUndefined();
+					});
+				});
+			});
 		});
 	});
 
 	describe("when not in production", () => {
 		beforeEach(() => {
 			mockIsProduction.mockReturnValue(false);
-			localStorage.setItem(ANALYTICS_CONSENT_KEY, "granted");
 		});
 
-		it("renders nothing even with consent", () => {
+		it("renders nothing outside production", () => {
 			const { container } = render(<GoogleAnalytics />);
 			expect(container).toBeEmptyDOMElement();
 		});

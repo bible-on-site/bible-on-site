@@ -1,12 +1,15 @@
 using Microsoft.Extensions.Logging;
 using CommunityToolkit.Maui;
 using Microsoft.Maui.LifecycleEvents;
+using BibleOnSite.Helpers;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using BibleOnSite.Controls;
 using BibleOnSite.Handlers;
-#if IOS && !DISABLE_ANALYTICS
+#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH)
 using Plugin.Firebase.Core.Platforms.iOS;
+#endif
+#if IOS && !DISABLE_ANALYTICS
 using Plugin.Firebase.Analytics;
 #endif
 
@@ -24,6 +27,21 @@ public static class MauiProgram
 
     public static MauiApp CreateMauiApp()
     {
+        // A managed exception that reaches a native boundary is a SIGABRT and
+        // the .ips report strips its stack — log every fatal channel to the
+        // device console before the runtime kills the process.
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            Console.Error.WriteLine($"Unhandled exception (terminating={e.IsTerminating}): {e.ExceptionObject}");
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            Console.Error.WriteLine($"Unobserved task exception: {e.Exception}");
+            e.SetObserved();
+        };
+#if IOS || MACCATALYST
+        ObjCRuntime.Runtime.MarshalManagedException += (_, e) =>
+            Console.Error.WriteLine($"Managed exception escaping to native ({e.ExceptionMode}): {e.Exception}");
+#endif
+
         var builder = MauiApp.CreateBuilder();
 #pragma warning disable CA1416 // MediaElement requires Android 26+; harmless on older devices
         builder
@@ -36,11 +54,22 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 fonts.AddFont("FluentSystemIcons-Regular.ttf", "FluentIcons");
+                // The native pasuk face (#2623) — packaged offline via MauiFont
+                // (Resources\Fonts\*.ttf glob), license beside the file.
+                fonts.AddFont("TaameyD-Regular.ttf", ScriptureFonts.Family);
             })
             .ConfigureMauiHandlers(handlers =>
             {
                 handlers.AddHandler<HtmlView, HtmlViewHandler>();
                 handlers.AddHandler<PasukTextLabel, PasukTextLabelHandler>();
+#if WINDOWS
+                // Native Button host gives flyout rows keyboard focus,
+                // Enter/Space activation and hover/focus visuals (#2766).
+                handlers.AddHandler<FlyoutMenuRow, FlyoutMenuRowHandler>();
+                // The draggable exit-fullscreen circle gets the same
+                // treatment: tab stop + Enter/Space + UIA button role (#2766).
+                handlers.AddHandler<ReaderExitFullscreenButton, ReaderExitFullscreenButtonHandler>();
+#endif
 #if IOS || MACCATALYST
                 handlers.AddHandler<ReaderCellBorder, ReaderCellBorderHandler>();
 				// Keep the Items2 handlers (.NET 10 default) but pin every native
@@ -52,6 +81,23 @@ public static class MauiProgram
 #endif
             });
 
+#if WINDOWS
+        // Readable Narrator names for every CollectionView row (#2766).
+        Microsoft.Maui.Controls.Handlers.Items.CollectionViewHandler.Mapper.AppendToMapping("ItemAutomationNames", (handler, _) =>
+        {
+            if (handler.PlatformView is Microsoft.UI.Xaml.Controls.ListViewBase list)
+            {
+                ListItemAutomationNames.Attach(list);
+            }
+        });
+        Microsoft.Maui.Controls.Handlers.Items.CarouselViewHandler.Mapper.AppendToMapping("ItemAutomationNames", (handler, _) =>
+        {
+            if (handler.PlatformView is Microsoft.UI.Xaml.Controls.ListViewBase list)
+            {
+                ListItemAutomationNames.Attach(list);
+            }
+        });
+#endif
 #if ANDROID
         // Increase CarouselView's internal RecyclerView cache so pre-rendered views
         // aren't evicted after ~2 swipes. This eliminates the ~250ms lag when visiting
@@ -101,7 +147,10 @@ public static class MauiProgram
         //
         // #2120: DISABLE_ANALYTICS builds (Debug/e2e) skip Firebase entirely —
         // with no init call the SDK never configures, so no automatic or manual
-        // event can be emitted, queued or flushed on iOS.
+        // event can be emitted, queued or flushed on iOS. #1097: the same init
+        // also configures the Messaging SDK, so it additionally runs whenever
+        // push is enabled (-p:DisablePush=false) even on a DISABLE_ANALYTICS
+        // build; the plist flag still keeps analytics collection off there.
         // If initialization raises a managed exception, leave analytics disabled.
         // Native crashes require a device crash report and cannot be caught here.
         builder.ConfigureLifecycleEvents(events =>
@@ -115,27 +164,34 @@ public static class MauiProgram
                 return true;
             }));
 #endif
-#if IOS && !DISABLE_ANALYTICS
+#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH)
 			events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
 			{
 				try
 				{
 					CrossFirebase.Initialize();
 					IsFirebaseInitialized = true;
+#if !DISABLE_ANALYTICS
 					// Info.plist keeps collection off so nothing can emit before
-					// this point; collection then enables only for a stored
-					// user opt-in (#2400), never in e2e-marked processes so
-					// automatic and custom suite events never reach the
-					// production property, and the explicit value also
-					// overrides a flag a previous non-suite install persisted
-					// on this device.
-					var analyticsCollectionEnabled =
-						AnalyticsConsent.IsCollectionEnabled(new MauiPreferencesStorage());
+					// this point; e2e-marked processes keep it off so automatic
+					// and custom suite events never reach the production
+					// property, and the explicit value also overrides a flag a
+					// previous non-suite install persisted on this device.
+					var analyticsCollectionEnabled = !SearchIndexService.IsE2eMarkedProcess();
 					CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled = analyticsCollectionEnabled;
 					Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
+#endif
+#if !DISABLE_PUSH
+					// Cloud Messaging delegate wiring — queued notification taps
+					// replay once the service subscribes. The APNs device-token
+					// request is deferred to the opt-in flow.
+					Services.IosPushPlatformClient.PlatformInitialize();
+#endif
 				}
-				catch (Exception ex)
+				#pragma warning disable S2221 // Deliberate failure boundary: Firebase init failure disables analytics/push, not the app
+				catch (Exception ex) //NOSONAR — Firebase init failure disables analytics/push, not the app.
 				{
+				    #pragma warning restore S2221
 					System.Diagnostics.Debug.WriteLine($"[Firebase] Initialization failed (analytics disabled): {ex.Message}");
 					Console.Error.WriteLine($"[Firebase] Initialization failed (analytics disabled): {ex.Message}");
 				}
@@ -144,8 +200,24 @@ public static class MauiProgram
 #endif
         });
 
-        // Initialize PreferencesService with MAUI storage
-        PreferencesService.Initialize(new MauiPreferencesStorage());
+        // Initialize PreferencesService with MAUI storage wrapped in the
+        // sync-stamping decorator so every preference write carries the
+        // timestamp cloud merge needs (#1095).
+        var preferencesStorage = new SyncStampingPreferencesStorage(new MauiPreferencesStorage());
+        PreferencesService.Initialize(preferencesStorage);
+        PreferencesSyncService.Initialize(
+            preferencesStorage,
+            PreferencesService.Instance,
+#if ANDROID || IOS
+            new FirestorePreferencesStore(),
+            new FirebaseUserIdentity()
+#else
+            // Windows/MacCatalyst and every build without Firebase stay
+            // local-only: the anonymous fallback the issue requires.
+            NullPreferencesCloudStore.Instance,
+            AnonymousUserIdentity.Instance
+#endif
+        );
 
         // Register services
         builder.Services.AddSingleton<IPadDeliveryService>(_ => PadDeliveryService.Instance);

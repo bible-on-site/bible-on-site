@@ -45,6 +45,7 @@ class ShadowCacheTests(unittest.TestCase):
         model._extract_token_timestamps = capture
         recorder = model.register_forward_hook(
             lambda module, args, output: logits.append(output["logits"].detach().cpu().clone()))
+        self.addCleanup(recorder.remove)
         counters = shadow.new_counters()
         context = torch.inference_mode if inference else torch.no_grad
         with context(), experimental_memory(model, shadow.PARENT_PROFILE):
@@ -66,12 +67,13 @@ class ShadowCacheTests(unittest.TestCase):
             self.assertGreater(counters["avoidedReturnBytes"], 0)
         for module, expected in hooks.items():
             self.assertEqual((set(module._forward_pre_hooks), set(module._forward_hooks)), expected)
-        with self.assertRaisesRegex(RuntimeError, "interrupt"):
-            with shadow.shadow_memory(model):
-                raise RuntimeError("interrupt")
-        for module, expected in hooks.items():
-            self.assertEqual((set(module._forward_pre_hooks), set(module._forward_hooks)), expected)
-        recorder.remove()
+        try:
+            with self.assertRaisesRegex(RuntimeError, "interrupt"):
+                with shadow.shadow_memory(model):
+                    raise RuntimeError("interrupt")
+        finally:
+            for module, expected in hooks.items():
+                self.assertEqual((set(module._forward_pre_hooks), set(module._forward_hooks)), expected)
 
     def test_cpu_exact_tokens_logits_timestamps_and_maps_three_seeds(self):
         for seed in (17, 29, 43):

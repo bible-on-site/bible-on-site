@@ -7,8 +7,8 @@ const MASORA_ROOT = `/${encodeURIComponent("מסורה")}`;
  * מסורה reader e2e — the shared reading-unit contract rendered under
  * its own root. Covers the derivation shapes the contract supports: a
  * regular unit ending mid-pasuk, a cross-perek unit, a single-pasuk
- * unit, and the deliberate SEO policy (equivalent whole-perek units
- * consolidate to /929; the rest stay noindex).
+ * unit, and the section-wide noindex policy (equivalent whole-perek
+ * units retain their /929 canonical).
  */
 test.describe("מסורה reading root", () => {
 	test("landing lists sefarim with links into their first units", async ({
@@ -118,11 +118,11 @@ test.describe("מסורה reading root", () => {
 		await expect(page.locator("#pasuk-869-29")).toBeAttached();
 	});
 
-	test("seo policy: non-equivalent unit is noindex, whole-perek unit canonicalizes", async ({
+	test("seo policy: every Masora view is noindex with its existing canonical", async ({
 		page,
 	}) => {
 		// Unit 1 is not a whole perek → self canonical + noindex,follow.
-		await page.goto(`${MASORA_ROOT}/1`);
+		await page.goto(`${MASORA_ROOT}/1`, { waitUntil: "domcontentloaded" });
 		await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
 			"content",
 			/noindex/,
@@ -133,11 +133,37 @@ test.describe("מסורה reading root", () => {
 		);
 
 		// Unit 523 covers exactly במדבר לו (perek 153) → canonical /929/153.
-		await page.goto(`${MASORA_ROOT}/523`);
+		await page.goto(`${MASORA_ROOT}/523`, { waitUntil: "domcontentloaded" });
+		await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+			"content",
+			/noindex/,
+		);
 		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
 			"href",
 			/\/929\/153$/,
 		);
+	});
+
+	test("seo policy: initial HTML excludes landing, aliases and book variants", async ({
+		request,
+	}) => {
+		for (const path of [
+			MASORA_ROOT,
+			`${MASORA_ROOT}/1?book`,
+			`${MASORA_ROOT}/523?perush=Rashi`,
+			"/masora",
+			"/masora/523?book",
+			`${MASORA_ROOT}/1/${encodeURIComponent("כריכה")}?book`,
+		]) {
+			const response = await request.get(path, {
+				headers: { "user-agent": "Googlebot/2.1" },
+			});
+			expect(response.status(), path).toBe(200);
+			const html = await response.text();
+			expect(html, path).toMatch(
+				/<meta name="robots" content="[^"]*noindex[^"]*"/,
+			);
+		}
 	});
 
 	test("book view opens on ?book and shows the sefer book", async ({

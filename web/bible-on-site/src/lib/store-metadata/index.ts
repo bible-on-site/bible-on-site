@@ -1,236 +1,314 @@
 /**
- * Store metadata for README badges and machine-readable lookups (#2371).
+ * Store metadata for README badges and machine-readable lookups
+ * (#2371, resilience rework #2395).
  *
- * Sources (all public, no credentials):
- * - android: play.google.com listing HTML for the IL market (gl=IL); version
- *   anchored at the "141" details key, star rating from the "Rated X.X stars"
- *   aria-label Play only renders for the Israeli market. If Play stops
- *   publishing it, rating stays null rather than fabricated.
- * - windows: Microsoft displaycatalog v7.0 product API. The published package
- *   version is decoded from the packed integers in
- *   Sku.Properties.Packages[].Version (four uint16 components). Star rating
- *   is not published — it stays null. sourceUpdatedAt carries the catalog
- *   LastModifiedDate; fetchedAt stays the actual fetch time.
- * - ios: itunes.apple.com lookup (same source the existing README badge uses).
+ * The pipeline feeds Shields dynamic-JSON badges. Shields gives the upstream
+ * fetch 3.5 s before rendering "inaccessible", renders an absent JSONPath as
+ * "no result" and a null one as a bare suffix ("/5"), and caches each badge
+ * for ~2 min. So this module is built around serving a retained last-good
+ * answer fast instead of scraping a store on the request path:
  *
- * Upstream responses are cached per process (24 h) and Next revalidates the
- * fetch (6 h). A failed fetch serves the last good value with stale: true;
- * when nothing is cached, fields are null and stale stays true — never a
- * fabricated zero.
+ * - Each observed field (version, rating, ratingCount, sourceUpdatedAt) is
+ *   kept separately with the time it was observed. A store answer merges
+ *   into those observations field by field — an incomplete parse never
+ *   evicts a still-valid last-good value, and never pretends to be a fresh
+ *   observation of a field it did not carry.
+ * - Responses are assembled from observations younger than 24 h. `stale` is
+ *   true when any served field is older than the 1 h fresh window or when
+ *   nothing was ever observed — a partial answer is never stamped fresh.
+ *   `attemptedAt` still exposes failed re-verification for diagnostics.
+ * - Refresh work is deduplicated per platform (one in-flight fetch) and
+ *   bounded: nextRefreshAt is +1 h after an answer that carried fields and
+ *   +60 s doubling to 15 min after failures, so a store that stops
+ *   publishing a field cannot trigger a fetch per request.
+ * - With nothing usable to serve, the caller waits only up to
+ *   RESPONSE_DEADLINE_MS — inside Shields' 3.5 s upstream timeout — so a slow
+ *   scrape yields a degraded answer instead of "inaccessible".
+ * - A build-time snapshot (src/data/db/store-metadata-snapshot.generated.json,
+ *   written by scripts/collect-store-metadata.mts during `next build`) seeds
+ *   the last-good store so a cold process already has real observations.
+ *
+ * Honesty: fields are omitted downstream when never observed or expired,
+ * fetchedAt is the last time the source actually answered with data, and
+ * attemptedAt exposes the most recent refresh attempt for debugging.
  */
 
+import snapshot from "@/data/db/store-metadata-snapshot.generated.json";
+import {
+	type CollectedStoreMetadata,
+	collectStoreMetadata,
+	STORE_METADATA_SOURCES,
+	type StorePlatform,
+} from "./collect";
+
 export interface StoreMetadata {
-	platform: "android" | "windows" | "ios";
+	platform: StorePlatform;
 	version: string | null;
 	/** Star rating on ratingScale; null when the store does not publish it. */
 	rating: number | null;
 	ratingScale: 5;
 	ratingCount: number | null;
 	source: string;
-	/** ISO time the upstream source last answered successfully. */
+	/** ISO time the upstream source last answered with any observed field. */
 	fetchedAt: string | null;
+	/** ISO time of the most recent refresh attempt, successful or not. */
+	attemptedAt: string | null;
 	/** ISO time the source catalog reports its data last modified (windows). */
 	sourceUpdatedAt: string | null;
-	/** True when serving a cached value or no upstream answer ever landed. */
+	/**
+	 * True when any served field is past its fresh window or the source never
+	 * answered — a partial answer is never reported as fresh.
+	 */
 	stale: boolean;
 }
 
-const ANDROID_URL =
-	"https://play.google.com/store/apps/details?id=com.tanah.daily929&hl=en&gl=IL";
-const WINDOWS_URL =
-	"https://displaycatalog.mp.microsoft.com/v7.0/products/9NBLGGH6B55K?fieldsTemplate=Details&market=IL&languages=en-us";
-const IOS_URL = "https://itunes.apple.com/lookup?id=1045128150&country=il";
+/** After an answer, the next refresh is due once the fresh window passes. */
+const FRESH_MS = 60 * 60 * 1000;
+/** A last-good field observation is served for at most this long. */
+const LAST_GOOD_MS = 24 * 60 * 60 * 1000;
+/**
+ * How long a request with nothing usable waits for a refresh before
+ * answering degraded. Must stay below the 3.5 s Shields upstream timeout so
+ * badge fetches get JSON instead of an "inaccessible" timeout.
+ */
+const RESPONSE_DEADLINE_MS = 3_000;
+const RETRY_BACKOFF_BASE_MS = 60_000;
+const RETRY_BACKOFF_MAX_MS = 15 * 60 * 1000;
 
-function isDottedNumber(value: string): boolean {
-	const parts = value.split(".");
-	return (
-		parts.length > 1 &&
-		parts.every(
-			(part) =>
-				part.length > 0 &&
-				[...part].every((char) => char >= "0" && char <= "9"),
+interface FieldObservation<T> {
+	value: T;
+	observedAt: number;
+}
+
+interface PlatformState {
+	version?: FieldObservation<string>;
+	rating?: FieldObservation<number>;
+	ratingCount?: FieldObservation<number>;
+	sourceUpdatedAt?: FieldObservation<string>;
+	/** Last time the source answered with at least one usable field. */
+	lastAnswerAt: number | null;
+	/** Last refresh attempt time (success or failure). */
+	lastAttemptAt: number | null;
+	consecutiveFailures: number;
+	/** No new upstream attempt before this time (cadence or backoff). */
+	nextRefreshAt: number;
+}
+
+const states = new Map<StorePlatform, PlatformState>();
+const inFlight = new Map<StorePlatform, Promise<void>>();
+
+function emptyState(): PlatformState {
+	return {
+		lastAnswerAt: null,
+		lastAttemptAt: null,
+		consecutiveFailures: 0,
+		nextRefreshAt: 0,
+	};
+}
+
+function getState(platform: StorePlatform): PlatformState {
+	let state = states.get(platform);
+	if (!state) {
+		state = emptyState();
+		states.set(platform, state);
+	}
+	return state;
+}
+
+/** Seed the last-good store from the build-time snapshot, if present. */
+function hydrateFromSnapshot(): void {
+	const entries = snapshot as unknown as Partial<
+		Record<StorePlatform, CollectedStoreMetadata | undefined>
+	>;
+	for (const platform of Object.keys(
+		STORE_METADATA_SOURCES,
+	) as StorePlatform[]) {
+		const collected = entries[platform];
+		const observedAt = Date.parse(collected?.fetchedAt ?? "");
+		if (!collected || !Number.isFinite(observedAt)) continue;
+		const state = getState(platform);
+		if (collected.version !== null)
+			state.version = { value: collected.version, observedAt };
+		if (collected.rating !== null)
+			state.rating = { value: collected.rating, observedAt };
+		if (collected.ratingCount !== null)
+			state.ratingCount = { value: collected.ratingCount, observedAt };
+		if (collected.sourceUpdatedAt !== null)
+			state.sourceUpdatedAt = {
+				value: collected.sourceUpdatedAt,
+				observedAt,
+			};
+		if (
+			state.version ||
+			state.rating ||
+			state.ratingCount ||
+			state.sourceUpdatedAt
 		)
+			state.lastAnswerAt = observedAt;
+	}
+}
+
+hydrateFromSnapshot();
+
+function servedObservation<T>(
+	observation: FieldObservation<T> | undefined,
+	now: number,
+): T | null {
+	return observation && now - observation.observedAt < LAST_GOOD_MS
+		? observation.value
+		: null;
+}
+
+function assemble(
+	platform: StorePlatform,
+	state: PlatformState,
+	now: number,
+): StoreMetadata {
+	const observations = [
+		state.version,
+		state.rating,
+		state.ratingCount,
+		state.sourceUpdatedAt,
+	].filter(
+		(observation): observation is NonNullable<typeof observation> =>
+			observation !== undefined &&
+			now - observation.observedAt < LAST_GOOD_MS,
+	);
+	const fresh =
+		observations.length > 0 &&
+		observations.every(
+			(observation) => now - observation.observedAt < FRESH_MS,
+		);
+	return {
+		platform,
+		version: servedObservation(state.version, now),
+		rating: servedObservation(state.rating, now),
+		ratingScale: 5,
+		ratingCount: servedObservation(state.ratingCount, now),
+		source: STORE_METADATA_SOURCES[platform],
+		fetchedAt: state.lastAnswerAt
+			? new Date(state.lastAnswerAt).toISOString()
+			: null,
+		attemptedAt: state.lastAttemptAt
+			? new Date(state.lastAttemptAt).toISOString()
+			: null,
+		sourceUpdatedAt: servedObservation(state.sourceUpdatedAt, now),
+		stale: !fresh,
+	};
+}
+
+function hasServedData(metadata: StoreMetadata): boolean {
+	return (
+		metadata.version !== null ||
+		metadata.rating !== null ||
+		metadata.ratingCount !== null ||
+		metadata.sourceUpdatedAt !== null
 	);
 }
 
-const REVALIDATE_SECONDS = 6 * 60 * 60;
-const STALE_MS = 24 * 60 * 60 * 1000;
-
-export function parsePlayStoreHtml(html: string): {
-	version: string | null;
-	rating: number | null;
-} {
-	const version = html.match(/"141":\s*\[\[\["([^"]+)"\]\]/)?.[1] ?? null;
-	// Defensive best-effort: some locales embed a "Rated X.X" label.
-	const ratingText =
-		html.match(/aria-label="Rated ([0-5](?:\.[0-9])?) stars/i)?.[1] ??
-		html.match(/"aggregateRating"\s*:\s*([0-5](?:\.[0-9])?)/)?.[1] ??
-		null;
-	return {
-		version: version && isDottedNumber(version) ? version : null,
-		rating: ratingText === null ? null : Number(ratingText),
-	};
-}
-
-export function parseItunesLookup(json: unknown): {
-	version: string | null;
-	rating: number | null;
-	ratingCount: number | null;
-} {
-	const result = (json as { results?: Array<Record<string, unknown>> })
-		?.results?.[0];
-	return {
-		version: typeof result?.version === "string" ? result.version : null,
-		rating:
-			typeof result?.averageUserRating === "number"
-				? result.averageUserRating
-				: null,
-		ratingCount:
-			typeof result?.userRatingCount === "number"
-				? result.userRatingCount
-				: null,
-	};
-}
-
-const cache = new Map<StoreMetadata["platform"], StoreMetadata>();
-
-async function fetchJson(url: string): Promise<unknown> {
-	const response = await fetch(url, {
-		next: { revalidate: REVALIDATE_SECONDS },
-		signal: AbortSignal.timeout(15_000),
-	});
-	if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
-	return response.json();
-}
-
-async function fetchText(url: string): Promise<string> {
-	const response = await fetch(url, {
-		next: { revalidate: REVALIDATE_SECONDS },
-		signal: AbortSignal.timeout(15_000),
-		headers: { "user-agent": "Mozilla/5.0 store-metadata" },
-	});
-	if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
-	return response.text();
-}
-
-const WINDOWS_PACKAGE_COMPONENTS = 4;
-const WINDOWS_PACKAGE_SHIFT = 16;
-
-/** Packed MS package version → "major.minor.build.revision". */
-function decodeWindowsPackageVersion(packed: bigint): string {
-	const parts: string[] = [];
-	for (let i = 0; i < WINDOWS_PACKAGE_COMPONENTS; i++) {
-		const shift = BigInt(
-			(WINDOWS_PACKAGE_COMPONENTS - 1 - i) * WINDOWS_PACKAGE_SHIFT,
+function noteFailure(state: PlatformState, attemptAt: number): void {
+	state.consecutiveFailures += 1;
+	state.nextRefreshAt =
+		attemptAt +
+		Math.min(
+			RETRY_BACKOFF_BASE_MS * 2 ** (state.consecutiveFailures - 1),
+			RETRY_BACKOFF_MAX_MS,
 		);
-		parts.push(((packed >> shift) & 0xffffn).toString());
-	}
-	return parts.join(".");
 }
 
-export function parseWindowsCatalog(json: unknown): {
-	version: string | null;
-	sourceUpdatedAt: string | null;
-} {
-	const product = (json as { Product?: Record<string, unknown> })?.Product;
-	const packed = (
-		(product?.DisplaySkuAvailabilities ?? []) as Array<{
-			Sku?: { Properties?: { Packages?: Array<{ Version?: string }> } };
-		}>
-	).flatMap((sku) => sku.Sku?.Properties?.Packages ?? [])
-		.map((pkg) => pkg.Version)
-		.filter(
-			(v): v is string => typeof v === "string" && /^[0-9]+$/.test(v),
-		)
-		.map((v) => BigInt(v));
-	const max = packed.length
-		? packed.reduce((a, b) => (b > a ? b : a))
-		: null;
-	const modified = product?.LastModifiedDate;
-	return {
-		version: max === null ? null : decodeWindowsPackageVersion(max),
-		sourceUpdatedAt: typeof modified === "string" ? modified : null,
-	};
+function noteAnswer(
+	state: PlatformState,
+	collected: CollectedStoreMetadata,
+	attemptAt: number,
+): void {
+	let observed = false;
+	if (collected.version !== null) {
+		state.version = { value: collected.version, observedAt: attemptAt };
+		observed = true;
+	}
+	if (collected.rating !== null) {
+		state.rating = { value: collected.rating, observedAt: attemptAt };
+		observed = true;
+	}
+	if (collected.ratingCount !== null) {
+		state.ratingCount = { value: collected.ratingCount, observedAt: attemptAt };
+		observed = true;
+	}
+	if (collected.sourceUpdatedAt !== null) {
+		state.sourceUpdatedAt = {
+			value: collected.sourceUpdatedAt,
+			observedAt: attemptAt,
+		};
+		observed = true;
+	}
+	if (observed) {
+		state.lastAnswerAt = attemptAt;
+		state.consecutiveFailures = 0;
+		state.nextRefreshAt = attemptAt + FRESH_MS;
+	} else {
+		// An HTTP answer carrying zero usable fields is a failed observation:
+		// it must not overwrite last-good and must back off like an error.
+		console.warn(
+			`store-metadata ${collected.platform}: answer carried no usable fields`,
+		);
+		noteFailure(state, attemptAt);
+	}
 }
 
-async function collect(
-	platform: StoreMetadata["platform"],
-): Promise<Omit<StoreMetadata, "stale">> {
-	const base = {
-		platform,
-		ratingScale: 5 as const,
-		sourceUpdatedAt: null as string | null,
-	};
-	switch (platform) {
-		case "android": {
-			const { version, rating } = parsePlayStoreHtml(
-				await fetchText(ANDROID_URL),
-			);
-			return {
-				...base,
-				version,
-				rating,
-				ratingCount: null,
-				source: ANDROID_URL,
-				fetchedAt: new Date().toISOString(),
-			};
+/**
+ * Start (or join) a deduplicated background refresh. Always resolves; the
+ * failure path records the backoff instead of rejecting so fire-and-forget
+ * callers never see an unhandled rejection.
+ */
+function requestRefresh(platform: StorePlatform): Promise<void> {
+	const pending = inFlight.get(platform);
+	if (pending) return pending;
+	const state = getState(platform);
+	if (Date.now() < state.nextRefreshAt) return Promise.resolve();
+	const task = (async () => {
+		const attemptAt = Date.now();
+		state.lastAttemptAt = attemptAt;
+		try {
+			const collected = await collectStoreMetadata(platform);
+			noteAnswer(state, collected, attemptAt);
+		} catch (error) {
+			console.warn(`store-metadata ${platform}: upstream failed`, error);
+			noteFailure(state, attemptAt);
 		}
-		case "windows": {
-			const parsed = parseWindowsCatalog(await fetchJson(WINDOWS_URL));
-			return {
-				...base,
-				version: parsed.version,
-				rating: null,
-				ratingCount: null,
-				sourceUpdatedAt: parsed.sourceUpdatedAt,
-				source: WINDOWS_URL,
-				fetchedAt: new Date().toISOString(),
-			};
-		}
-		case "ios": {
-			const parsed = parseItunesLookup(await fetchJson(IOS_URL));
-			return {
-				...base,
-				...parsed,
-				source: IOS_URL,
-				fetchedAt: new Date().toISOString(),
-			};
-		}
-	}
+	})().finally(() => {
+		inFlight.delete(platform);
+	});
+	inFlight.set(platform, task);
+	return task;
 }
 
 export async function getStoreMetadata(
-	platform: StoreMetadata["platform"],
+	platform: StorePlatform,
 ): Promise<StoreMetadata> {
-	const cached = cache.get(platform);
-	if (cached) {
-		const ageMs =
-			Date.now() -
-			Date.parse(cached.fetchedAt ?? /* istanbul ignore next */ "");
-		if (ageMs < STALE_MS) return cached;
+	const now = Date.now();
+	const state = getState(platform);
+	const record = assemble(platform, state, now);
+	if (!record.stale) return record;
+	const refresh = requestRefresh(platform);
+	if (hasServedData(record)) {
+		// Stale-while-revalidate: answer from last-good immediately.
+		void refresh;
+		return record;
 	}
-	try {
-		const fresh: StoreMetadata = { ...(await collect(platform)), stale: false };
-		cache.set(platform, fresh);
-		return fresh;
-	} catch (error) {
-		console.warn(`store-metadata ${platform}: upstream failed`, error);
-		if (cached) return { ...cached, stale: true };
-		return {
-			platform,
-			version: null,
-			rating: null,
-			ratingScale: 5,
-			ratingCount: null,
-			source:
-				platform === "android"
-					? ANDROID_URL
-					: platform === "windows"
-						? WINDOWS_URL
-						: IOS_URL,
-			fetchedAt: null,
-			sourceUpdatedAt: null,
-			stale: true,
-		};
-	}
+	// Nothing usable yet (cold start, all observations expired): give the
+	// refresh a bounded window so badges get data instead of a timeout.
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const deadline = new Promise<void>((resolve) => {
+		timer = setTimeout(resolve, RESPONSE_DEADLINE_MS);
+	});
+	await Promise.race([refresh, deadline]);
+	clearTimeout(timer);
+	return assemble(platform, state, Date.now());
 }
+
+export {
+	collectStoreMetadata,
+	parseItunesLookup,
+	parsePlayStoreHtml,
+	parseWindowsCatalog,
+} from "./collect";

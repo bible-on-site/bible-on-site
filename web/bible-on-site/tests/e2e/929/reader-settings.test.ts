@@ -50,6 +50,7 @@ test("display settings independently change font and both spacing directions, pe
 	await button.click();
 	const dialog = page.getByRole("dialog", { name: "הגדרות קריאה" });
 	await expect(dialog).toBeVisible();
+	await page.getByRole("button", { name: "ריווח", exact: true }).click();
 	await expect(page.getByRole("slider", { name: "ריווח אופקי" })).toHaveValue(
 		"2",
 	);

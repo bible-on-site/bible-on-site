@@ -63,7 +63,7 @@ public class LocalDatabaseService
             }
 
             await PackagedDatabase.RefreshAsync(_fileSystem, DbName, _appInfo);
-            var dbPath = Path.Combine(_fileSystem.AppDataDirectory, DbName);
+            var dbPath = Path.Join(_fileSystem.AppDataDirectory, DbName);
             _database = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
             _isInitialized = true;
         }

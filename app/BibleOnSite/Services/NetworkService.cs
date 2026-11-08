@@ -74,8 +74,10 @@ public class NetworkService : IDisposable
             {
                 await _refresh();
             }
-            catch (Exception ex)
+            #pragma warning disable S2221 // Deliberate failure boundary: connectivity-refresh failure is log-only
+            catch (Exception ex) //NOSONAR — connectivity-refresh failure is log-only.
             {
+                #pragma warning restore S2221
                 Console.Error.WriteLine($"[Network] Refresh failed: {ex.Message}");
             }
         }

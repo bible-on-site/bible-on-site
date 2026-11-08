@@ -79,6 +79,21 @@ public class PerekDataServiceTests
         service.GetPerek(1).Should().BeSameAs(first, "a completed load is cached");
     }
 
+    [Fact]
+    public async Task GetPerekRangeSource_JoinsDisjointRunsWithVavNotCommas()
+    {
+        await using var storage = new TestStorage();
+        var db = await storage.CreateDatabaseAsync(DbName, Schema);
+        await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,50),(2,'שמות','Exodus',51,90)");
+        await db.ExecuteAsync("INSERT INTO tanah_perek VALUES (1,1,NULL),(2,2,NULL),(3,3,NULL),(4,4,NULL),(5,5,NULL),(50,50,NULL),(51,1,NULL),(52,2,NULL)");
+        var service = new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object));
+        await service.LoadAsync();
+        service.GetPerekRangeSource([1, 2, 3, 4, 5]).Should().Be("בראשית א-ה");
+        service.GetPerekRangeSource([50, 51]).Should().Be("בראשית נ - שמות א");
+        service.GetPerekRangeSource([1, 2, 4]).Should().Be("בראשית א-ב ובראשית ד");
+        service.GetPerekRangeSource([]).Should().BeEmpty();
+    }
+
     [Theory]
     [InlineData("א", 1)] [InlineData("ב", 2)] [InlineData("ג", 3)] [InlineData("ד", 4)]
     [InlineData("ה", 5)] [InlineData("ו", 6)] [InlineData("ז", 7)] [InlineData("ח", 8)]
