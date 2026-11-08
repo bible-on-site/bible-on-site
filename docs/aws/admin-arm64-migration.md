@@ -69,11 +69,15 @@ an existing immutable tag.
 
 The scoped repair for that prerequisite is `bun run deploy:admin-ecr-policy`
 from `devops/` (`--verify` is read-only; `--rollback` restores the recorded
-`MUTABLE` baseline). It only writes `PutImageTagMutability` on
-`bible-on-site-admin`, only after the live policy matches the recorded
-baseline or already converged target, and re-verifies the result through the
-publisher's own `assertAPIRepositoryPolicy` guard. Any other observed live
-state refuses the transition.
+`MUTABLE` baseline). Every path first proves the caller through STS with the
+same credentials the ECR client uses — a supplied `AWS_ACCOUNT_ID` is only a
+hint — and refuses to run outside account `250598594267` / region
+`il-central-1`; every ECR call also names that account as `registryId` and the
+returned repository identity is validated. It only writes
+`PutImageTagMutability` on `bible-on-site-admin`, only after the live policy
+matches the recorded baseline or already converged target, and re-verifies
+the result through the publisher's own `assertAPIRepositoryPolicy` guard. Any
+other observed live state refuses the transition.
 
 ## Rollback prerequisites
 

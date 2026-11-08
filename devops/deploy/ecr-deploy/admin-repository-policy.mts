@@ -6,6 +6,7 @@ import {
 	type ImageTagMutability,
 	PutImageTagMutabilityCommand,
 } from "@aws-sdk/client-ecr";
+import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { assertAPIRepositoryPolicy } from "./api-images.mts";
@@ -17,8 +18,19 @@ import { createECRClient, getECRConfig, withRetry } from "./ecr-client.mts";
  * write is PutImageTagMutability on bible-on-site-admin, and only after the
  * live policy is read back and matched against the recorded baseline. Any
  * other observed state refuses the transition instead of guessing.
+ *
+ * Every path — repair, rollback and --verify — is bound to the approved AWS
+ * scope before a single ECR request: the caller identity is proven through
+ * STS with the same credentials the ECR client uses (a supplied
+ * AWS_ACCOUNT_ID is only a hint and is never trusted), the client region must
+ * be EXPECTED_REGION, and every ECR call names EXPECTED_ACCOUNT_ID as
+ * registryId so a same-named repository elsewhere can never be hit.
  */
 export const ADMIN_REPOSITORY_NAME = "bible-on-site-admin";
+
+/** Approved AWS scope for this repair (docs/aws/admin-arm64-migration.md). */
+export const EXPECTED_ACCOUNT_ID = "250598594267";
+export const EXPECTED_REGION = "il-central-1";
 
 export type TagExclusion = { filterType: string; filter: string };
 export type RepositoryTagPolicy = {
@@ -65,6 +77,42 @@ export function sameTagPolicy(
 	return b.exclusions.every((entry) => keys.has(key(entry)));
 }
 
+/**
+ * Fails closed unless the credentials behind `client` resolve to the approved
+ * account in the approved region. STS GetCallerIdentity is always consulted —
+ * even when AWS_ACCOUNT_ID is set — and the STS client reuses the exact
+ * credential provider the ECR client was built with, so both calls provably
+ * act as the same caller. The observed account id is deliberately not echoed:
+ * only the approved scope is named in diagnostics.
+ */
+export async function assertExpectedCallerIdentity(
+	client: ECRClient,
+): Promise<void> {
+	// The resolved client config keeps region and credentials as providers;
+	// reusing them verbatim guarantees STS acts as the exact same caller.
+	const { region: regionProvider, credentials } = client.config;
+	const region = await regionProvider();
+	if (region !== EXPECTED_REGION)
+		throw new Error(
+			`Refusing to run outside the approved region ${EXPECTED_REGION}: ` +
+				`the ECR client region is ${region}`,
+		);
+	const stsClient = new STSClient({
+		region: EXPECTED_REGION,
+		credentials,
+	});
+	const identity = await withRetry(
+		() => stsClient.send(new GetCallerIdentityCommand({})),
+		{},
+		"STS GetCallerIdentity",
+	);
+	if (identity.Account !== EXPECTED_ACCOUNT_ID)
+		throw new Error(
+			`Refusing to run outside the approved account ${EXPECTED_ACCOUNT_ID}: ` +
+				"STS resolved an unexpected caller account",
+		);
+}
+
 export async function describeRepositoryTagPolicy(
 	client: ECRClient,
 	repositoryName: string,
@@ -73,6 +121,7 @@ export async function describeRepositoryTagPolicy(
 		() =>
 			client.send(
 				new DescribeRepositoriesCommand({
+					registryId: EXPECTED_ACCOUNT_ID,
 					repositoryNames: [repositoryName],
 				}),
 			),
@@ -84,6 +133,11 @@ export async function describeRepositoryTagPolicy(
 	);
 	if (!repository)
 		throw new Error(`Repository ${repositoryName} was not found`);
+	if (repository.registryId !== EXPECTED_ACCOUNT_ID)
+		throw new Error(
+			`Repository ${repositoryName} is not in the approved registry ` +
+				`${EXPECTED_ACCOUNT_ID}: the response carried a different registry id`,
+		);
 	return {
 		mutability: repository.imageTagMutability,
 		exclusions: (repository.imageTagMutabilityExclusionFilters ?? [])
@@ -124,6 +178,9 @@ async function transitionAdminTagPolicy(
 	from: RepositoryTagPolicy,
 	to: RepositoryTagPolicy,
 ): Promise<PolicyTransition> {
+	// Both mutating paths prove the approved account/region before any ECR
+	// request, so a wrong credential set or region can never reach a write.
+	await assertExpectedCallerIdentity(client);
 	const current = await describeRepositoryTagPolicy(
 		client,
 		ADMIN_REPOSITORY_NAME,
@@ -140,6 +197,7 @@ async function transitionAdminTagPolicy(
 		() =>
 			client.send(
 				new PutImageTagMutabilityCommand({
+					registryId: EXPECTED_ACCOUNT_ID,
 					repositoryName: ADMIN_REPOSITORY_NAME,
 					imageTagMutability: to.mutability,
 					// Exclusion filters are only valid for the *_WITH_EXCLUSION
@@ -160,8 +218,10 @@ async function transitionAdminTagPolicy(
 		"ECR PutImageTagMutability",
 	);
 	if (
-		(receipt.repositoryName && receipt.repositoryName !== ADMIN_REPOSITORY_NAME) ||
-		(receipt.imageTagMutability && receipt.imageTagMutability !== to.mutability)
+		receipt.registryId !== EXPECTED_ACCOUNT_ID ||
+		receipt.repositoryName !== ADMIN_REPOSITORY_NAME ||
+		(receipt.imageTagMutability &&
+			receipt.imageTagMutability !== to.mutability)
 	)
 		throw new Error(
 			`Mutability receipt does not match the ${ADMIN_REPOSITORY_NAME} target policy`,
@@ -190,7 +250,12 @@ export async function repairAdminRepositoryPolicy(
 		ADMIN_PRIOR_POLICY,
 		ADMIN_TARGET_POLICY,
 	);
-	await assertAPIRepositoryPolicy(client, ADMIN_REPOSITORY_NAME);
+	await assertAPIRepositoryPolicy(
+		client,
+		ADMIN_REPOSITORY_NAME,
+		["latest"],
+		EXPECTED_ACCOUNT_ID,
+	);
 	return transition;
 }
 
@@ -252,6 +317,10 @@ async function main(): Promise<void> {
 	const config = await getECRConfig();
 	console.info(`Using AWS region: ${config.region}`);
 	const client = createECRClient(config);
+	// Bind the approved account/region before any ECR request — this also
+	// covers --verify, which never reaches the mutating transition.
+	await assertExpectedCallerIdentity(client);
+	console.info("Verified caller identity for the approved account and region");
 	const current = await describeRepositoryTagPolicy(
 		client,
 		ADMIN_REPOSITORY_NAME,
