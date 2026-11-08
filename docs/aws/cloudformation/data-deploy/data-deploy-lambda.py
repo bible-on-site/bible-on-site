@@ -23,19 +23,49 @@ import boto3
 import pymysql
 
 
+def _db_url_from_ssm():
+    """Read the database URL from SSM Parameter Store (legacy contract).
+
+    The live pre-payload handler resolved its credentials from the
+    ``{SSM_PREFIX}-*`` parameters on every invocation. Callers that omit
+    ``db_url`` — manual invokes and older deployer checkouts — still rely
+    on that path, so it stays as the last credential source until the
+    approved endpoint migration proves no VPC consumer remains.
+    """
+    ssm = boto3.client("ssm")
+    prefix = os.environ.get("SSM_PREFIX", "bible-on-site-tanah-db")
+    param_name = f"{prefix}-url"
+    param = ssm.get_parameter(Name=param_name, WithDecryption=True)
+    db_url = param.get("Parameter", {}).get("Value", "")
+    if not db_url:
+        raise ValueError(f"SSM parameter {param_name} is empty or missing")
+    return db_url
+
+
 def db_credentials(event):
     """Parse host/port/user/password/database from the DB URL.
 
-    The CD deployer reads the URL from SSM Parameter Store and delivers it
-    inside the invoke payload as ``db_url``, so the function never calls
-    SSM from inside the VPC. A ``DB_URL`` env var is accepted as a
-    fallback for manual invocations.
+    Credential sources, in order:
+
+    1. ``db_url`` in the invoke payload — the CD deployer reads the URL
+       from SSM Parameter Store and delivers it inside the payload, so the
+       function normally never calls SSM from inside the VPC.
+    2. ``DB_URL`` env var — fallback for manual invocations.
+    3. SSM Parameter Store ``{SSM_PREFIX}-url`` — the legacy contract used
+       by callers that predate the payload field. Transitional: it keeps
+       working until the approved endpoint migration removes the need.
+
+    The resolved value must be a mysql://user:pass@host:port/db URL. Never
+    log it.
     """
     db_url = event.get("db_url") or os.environ.get("DB_URL", "")
+    if not db_url:
+        db_url = _db_url_from_ssm()
     parts = urlparse(db_url)
     if parts.scheme != "mysql" or not parts.hostname or not parts.username:
         raise ValueError(
-            "db_url event field (or DB_URL env var) must be a mysql://user:pass@host:port/db URL"
+            "resolved DB URL (db_url payload, DB_URL env or SSM "
+            "{SSM_PREFIX}-url) must be a mysql://user:pass@host:port/db URL"
         )
     return {
         "host": parts.hostname,
@@ -53,12 +83,12 @@ def handler(event, context):
     {
         "sql_files": ["file1.sql", "file2.sql"],
         "s3_prefix": "sql/2024-01-01-120000/",
-        "db_url": "mysql://user:pass@host:3306/db"
+        "db_url": "mysql://user:pass@host:3306/db"   # optional; see db_credentials
     }
 
     The handler:
-    1. Reads DB credentials from the event's db_url field (DB_URL env var
-       as fallback for manual invocations)
+    1. Resolves DB credentials from db_url, then DB_URL env, then SSM
+       {SSM_PREFIX}-url for callers that omit the payload field
     2. Downloads SQL files from S3
     3. Preprocesses SQL to add DROP TABLE/VIEW IF EXISTS
     4. Filters out MySQL dump artifacts
