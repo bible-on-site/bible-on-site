@@ -185,9 +185,26 @@ const units: ParashaBookUnit[] = [
 		refSpan: "בראשית א א - ו ח",
 		ranges: [range(1, 1, 6, 8)],
 		aliyahMarkers: {
-			"1:12": [{ key: "bereshit:shabbat", label: "שני", role: "aliyah" }],
+			"1:12": [
+				{
+					key: "bereshit:shabbat",
+					label: "שני",
+					role: "aliyah",
+					tag: "שבת",
+					category: "shabbat",
+					detail: "פרשת בראשית · קריאת שבת · עלייה שנייה (בראשית א יב - א יד)",
+				},
+				{
+					key: "bereshit:weekday",
+					label: "שני",
+					role: "aliyah",
+					tag: "חול",
+					category: "weekday",
+					detail: "פרשת בראשית · קריאת חול · עלייה שנייה (בראשית א יב - א יד)",
+				},
+			],
 		},
-		aliyahMarkerKey: "bereshit:shabbat",
+		aliyahEmphasisKey: "bereshit:shabbat",
 		haftarot: [
 			{
 				id: "haftara-ashkenazi",
@@ -370,15 +387,19 @@ describe("ParashaSefer", () => {
 		expect(mockUnitTextBodies[0].anchorScope).toBe("book-1");
 		expect(mockUnitTextBodies[1].anchorScope).toBe("book-1-haftara-ashkenazi");
 		expect(mockUnitTextBodies[2].anchorScope).toBe("book-2");
-		// The Torah spread carries the unit's standalone-Shabbat marker
-		// layer rebuilt into the renderer's map (issue #2519); the
-		// Haftarah body and markerless units get none.
+		// The Torah spread carries the unit's full aliyah marker layers —
+		// every applicable division, not only standalone Shabbat (issue
+		// #3165) — rebuilt into the renderer's map; the Haftarah body
+		// and markerless units get none.
 		const torahMarkers = mockUnitTextBodies[0].boundaryMarkers;
 		expect(torahMarkers).toBeInstanceOf(Map);
-		expect((torahMarkers as Map<string, unknown>).get("1:12")).toEqual([
-			{ key: "bereshit:shabbat", label: "שני", role: "aliyah" },
+		expect(
+			(torahMarkers as Map<string, { key: string }[]>).get("1:12"),
+		).toEqual([
+			expect.objectContaining({ key: "bereshit:shabbat" }),
+			expect.objectContaining({ key: "bereshit:weekday" }),
 		]);
-		expect(mockUnitTextBodies[0].defaultMarkerKey).toBe("bereshit:shabbat");
+		expect(mockUnitTextBodies[0].emphasisMarkerKey).toBe("bereshit:shabbat");
 		expect(mockUnitTextBodies[0].modestPerekLabels).toBe(true);
 		expect(mockUnitTextBodies[1].boundaryMarkers).toBeUndefined();
 		expect(mockUnitTextBodies[2].boundaryMarkers).toBeUndefined();
