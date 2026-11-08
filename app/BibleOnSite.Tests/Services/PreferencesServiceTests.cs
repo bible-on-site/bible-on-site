@@ -563,15 +563,16 @@ public class PreferencesServiceTests : IDisposable
     public void AlwaysOnTop_ChangeFiresPreferencesChanged_SameValueIsNoOp()
     {
         _service.Load();
+        _service.AlwaysOnTop = true;
         var eventCount = 0;
         _service.PreferencesChanged += (_, _) => eventCount++;
 
-        _service.AlwaysOnTop = _service.AlwaysOnTop;
+        _service.AlwaysOnTop = true;
         eventCount.Should().Be(0, "writing the current value is a no-op");
 
-        _service.AlwaysOnTop = true;
+        _service.AlwaysOnTop = false;
         eventCount.Should().Be(1, "a real change notifies so the window applies it immediately");
-        _storage.Get("alwaysOnTop", false).Should().BeTrue();
+        _storage.Get("alwaysOnTop", true).Should().BeFalse();
     }
 
     #region InMemoryPreferencesStorage Tests

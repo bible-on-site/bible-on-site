@@ -48,6 +48,7 @@ internal sealed class DesktopWindowChrome
 	private bool _hasNormalBounds;
 	private bool _pendingMaximized;
 	private IntPtr _hwnd;
+	private IntPtr _topmostHwnd;
 	private bool _topmostApplied;
 	// The window's last Restored/Maximized state — Minimized is reported on
 	// close too, so the saved "maximized" bit must not read it directly.
@@ -121,10 +122,11 @@ internal sealed class DesktopWindowChrome
 					}
 				});
 
-			// Sever MAUI's Toolbar→IsBackButtonVisible binding (ClearValue
-			// removes the bound local value), then pin the arrow collapsed;
-			// the callback re-asserts it if a later template pass or toolbar
-			// update pushes a visible value again.
+			// ClearValue severs the Toolbar binding MAUI puts on the native
+			// view so its back-visibility stops following the Shell toolbar.
+			// The arrow is then pinned collapsed, and the callback re-asserts
+			// it whenever a later template pass or toolbar update pushes a
+			// visible value again.
 			nav.ClearValue(Microsoft.UI.Xaml.Controls.NavigationView.IsBackButtonVisibleProperty);
 			nav.IsBackButtonVisible = Microsoft.UI.Xaml.Controls.NavigationViewBackButtonVisible.Collapsed;
 			nav.RegisterPropertyChangedCallback(
@@ -324,7 +326,9 @@ internal sealed class DesktopWindowChrome
 		}
 
 		var wanted = PreferencesService.Instance.AlwaysOnTop;
-		if (!force && wanted == _topmostApplied)
+		// The cached band only counts for the HWND it was pushed onto — a
+		// replaced window handler must re-apply even when the value matches.
+		if (!force && wanted == _topmostApplied && _topmostHwnd == _hwnd)
 		{
 			return;
 		}
@@ -332,6 +336,7 @@ internal sealed class DesktopWindowChrome
 		if (WindowZOrder.SetTopMost(_hwnd, wanted))
 		{
 			_topmostApplied = wanted;
+			_topmostHwnd = _hwnd;
 		}
 	}
 
