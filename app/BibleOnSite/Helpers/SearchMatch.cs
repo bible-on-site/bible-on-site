@@ -28,7 +28,7 @@ public static class SearchMatch
     /// Finds the best match for <paramref name="query"/> in
     /// <paramref name="content"/> (plain text or HTML). Returns the span in
     /// normalized-text coordinates, or null when nothing matches — mirroring
-    /// <see cref="SearchText.Score"/>: a whole-word phrase first, then a bare
+    /// <see cref="SearchText.ScoreNormalized"/>: a whole-word phrase first, then a bare
     /// substring, then the first word scoring against any query term.
     /// </summary>
     public static SearchMatchSpan? Locate(string content, string? query)
@@ -309,7 +309,7 @@ public static class SearchMatch
         {
             return null;
         }
-        // Whole-word phrase — the hit SearchText.Score ranks at 100.
+        // Whole-word phrase — the hit SearchText.ScoreNormalized ranks at 100.
         var phraseIndex = (" " + normalized + " ").IndexOf(" " + needle + " ", StringComparison.Ordinal);
         if (phraseIndex >= 0)
         {
