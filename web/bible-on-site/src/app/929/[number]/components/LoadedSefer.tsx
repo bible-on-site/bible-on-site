@@ -12,16 +12,6 @@ import Sefer from "./Sefer";
 import styles from "./sefer-composite.module.css";
 import { bookPageFromPath } from "./sefer-page-utils";
 
-/**
- * A missing asset answers a real 404: bundle and deployment no longer
- * agree, so retrying the same hashed URL cannot help — only a fresh page
- * load picks up a consistent pair. Every other failure (an ingress 5xx
- * during a deploy handover, a dropped connection, a truncated body) is
- * retried automatically a bounded number of times while the spinner stays
- * up, so short deploy-window faults never surface as an error (#3095).
- */
-const AUTO_RETRY_DELAYS_MS = [1500, 3000] as const;
-
 export default function LoadedSefer(
 	props: Omit<ComponentProps<typeof Sefer>, "sefer">,
 ) {
@@ -53,7 +43,6 @@ export default function LoadedSefer(
 	useEffect(() => {
 		if (!file) return;
 		let current = true;
-		let retryTimer: ReturnType<typeof setTimeout> | undefined;
 		if (attempt > 0) setResult(null);
 		setFailure(null);
 		loadSefer(file)
@@ -61,22 +50,17 @@ export default function LoadedSefer(
 				if (current) setResult({ file, sefer });
 			})
 			.catch((error) => {
-				if (!current) return;
-				console.error("Failed to load reader book", { file, error });
-				const refreshPage =
-					error instanceof BookRequestError && error.status === 404;
-				if (!refreshPage && attempt < AUTO_RETRY_DELAYS_MS.length) {
-					// Cleanup clears the timer, so the callback only runs mounted.
-					retryTimer = setTimeout(() => {
-						setAttempt((value) => value + 1);
-					}, AUTO_RETRY_DELAYS_MS[attempt]);
-					return;
+				if (current) {
+					console.error("Failed to load reader book", { file, error });
+					setFailure({
+						file,
+						refreshPage:
+							error instanceof BookRequestError && error.status === 404,
+					});
 				}
-				setFailure({ file, refreshPage });
 			});
 		return () => {
 			current = false;
-			if (retryTimer !== undefined) clearTimeout(retryTimer);
 		};
 	}, [file, attempt]);
 

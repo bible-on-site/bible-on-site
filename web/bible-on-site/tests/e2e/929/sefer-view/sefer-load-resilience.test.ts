@@ -5,9 +5,9 @@ import mysql from "mysql2/promise";
  * Regression coverage for the production failure reported at
  * https://xn--febl3a.co.il/929/693/2215?book= (#3095): a deep-linked
  * article inside the תהילים reader showed "לא ניתן לטעון את הספר." when
- * the lazy book asset hit a transient (non-404) failure. The reader now
- * retries a bounded number of times behind the loading indicator, and
- * an exhausted load still offers refresh plus a flat-view escape.
+ * the multi-MB uncompressed book asset failed in transit. The reader
+ * route now serves the Brotli payload with immutable caching, and an
+ * unrecoverable load still offers refresh plus a flat-view escape.
  */
 
 const PEREK_ID = 693;
@@ -61,23 +61,37 @@ test.describe("929 sefer deep link resilience (#3095)", () => {
 	// Both specs share the seeded 2215 row; parallel workers would delete and
 	// re-insert it mid-test, so the file runs serially in one worker.
 	test.describe.configure({ mode: "serial" });
-	test("loads the book and the deep-linked article after a transient asset failure", async ({
+	test("loads the deep-linked article from a Brotli, immutable-cached asset", async ({
 		page,
 	}) => {
 		test.setTimeout(120_000);
-		// Two transient 5xx responses imitate an ingress/deploy-window fault;
-		// the third request is served for real.
-		let failures = 0;
-		await page.route(TANAH_TEILLIM_ASSET, (route) => {
-			if (failures < 2) {
-				failures += 1;
-				return route.fulfill({ status: 503, body: "Bad Gateway" });
-			}
-			return route.continue();
-		});
+		const assetResponse = page.waitForResponse(
+			(response) =>
+				TANAH_TEILLIM_ASSET.test(response.url()) && response.ok(),
+			{ timeout: 60_000 },
+		);
 		await page.goto(DEEP_LINK);
-		// The bounded automatic retry rides through the blip: the reader opens
-		// instead of stopping at "לא ניתן לטעון את הספר." after one failure.
+		const response = await assetResponse;
+		// The fix: the reader payload travels compressed — a few hundred KB
+		// instead of the 2 MB raw transfer that failed in production — and
+		// content-addressed URLs are immutable-cached so repeat opens stay off
+		// the network. Chromium does not advertise br on http://localhost, so
+		// the wire here is the dev server's gzip of the same decoded payload.
+		expect(response.headers()["cache-control"]).toContain("immutable");
+		expect(response.headers()["content-encoding"]).toMatch(/^(br|gzip)$/);
+		// The Brotli contract itself is the production behavior: request the
+		// same asset like a real browser over HTTPS does.
+		const brotliResponse = await page.request.get(response.url(), {
+			headers: { "accept-encoding": "br" },
+		});
+		expect(brotliResponse.status()).toBe(200);
+		expect(brotliResponse.headers()["content-encoding"]).toBe("br");
+		expect(brotliResponse.headers()["cache-control"]).toContain("immutable");
+		// Playwright decodes the body transparently; the wire itself was Brotli.
+		expect(await brotliResponse.json()).toMatchObject({
+			name: "תהילים",
+			perekFrom: 568,
+		});
 		const book = page.locator(".he-book");
 		await expect(book).toBeVisible({ timeout: 60_000 });
 		await expect(
@@ -86,7 +100,6 @@ test.describe("929 sefer deep link resilience (#3095)", () => {
 		await expect(
 			book.getByRole("heading", { name: ARTICLE_NAME }),
 		).toBeVisible();
-		expect(failures).toBe(2);
 	});
 
 	test("a persistent asset failure offers a working flat-view escape", async ({

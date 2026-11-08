@@ -46,9 +46,6 @@ beforeEach(() => {
 	mockLoad.mockReset();
 	localStorage.clear();
 });
-afterEach(() => {
-	jest.useRealTimers();
-});
 
 it("shows loading feedback before displaying the selected book", async () => {
 	let resolve!: (value: ReturnType<typeof seferFixture>) => void;
@@ -65,37 +62,9 @@ it("shows loading feedback before displaying the selected book", async () => {
 	expect(screen.getByTestId("loaded-book")).toHaveTextContent("בראשית/1");
 });
 
-it("retries a transient book load failure automatically with loading feedback (#3095)", async () => {
-	jest.useFakeTimers();
-	const diagnostic = jest.spyOn(console, "error").mockImplementation(() => {});
-	try {
-		mockLoad
-			.mockRejectedValueOnce(new Error("network"))
-			.mockResolvedValueOnce(seferFixture(perek()));
-		render(<LoadedSefer {...props()} />);
-		// The first rejection schedules a bounded automatic retry — the reader
-		// keeps the loading indicator instead of surfacing a deploy-window blip.
-		await act(async () => {});
-		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-		expect(screen.getByLabelText("טוען תצוגת ספר...")).toBeInTheDocument();
-		expect(diagnostic).toHaveBeenCalledWith("Failed to load reader book", {
-			file: expect.stringMatching(/^\/generated\/sefarim\/1\..+\.json$/),
-			error: expect.any(Error),
-		});
-		await act(async () => {
-			jest.advanceTimersByTime(1500);
-		});
-		expect(screen.getByTestId("loaded-book")).toHaveTextContent("בראשית/1");
-		expect(mockLoad).toHaveBeenCalledTimes(2);
-	} finally {
-		diagnostic.mockRestore();
-	}
-});
-
 it.each([new Error("network"), new BookRequestError(503)])(
-	"surfaces a persistent failure with bounded retries, refresh and a flat-view escape (%s)",
+	"surfaces a persistent failure with a contextual diagnostic, refresh and a flat-view escape (%s)",
 	async (failure) => {
-		jest.useFakeTimers();
 		const previousUrl = window.location.href;
 		const diagnostic = jest
 			.spyOn(console, "error")
@@ -105,21 +74,16 @@ it.each([new Error("network"), new BookRequestError(503)])(
 			localStorage.setItem("perekViewMode", "book");
 			mockLoad.mockRejectedValue(failure);
 			render(<LoadedSefer {...props(693)} />);
-			await act(async () => {});
-			// Two bounded automatic retries run before the error surfaces.
-			await act(async () => {
-				jest.advanceTimersByTime(1500);
-			});
-			expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-			await act(async () => {
-				jest.advanceTimersByTime(3000);
-			});
-			expect(mockLoad).toHaveBeenCalledTimes(3);
-			expect(screen.getByRole("alert")).toHaveTextContent(
+			expect(await screen.findByRole("alert")).toHaveTextContent(
 				"לא ניתן לטעון את הספר.",
 			);
-			// Manual retry stays available for a later transient, refresh picks up
-			// a redeployed bundle, and the escape returns to the same flat article.
+			expect(mockLoad).toHaveBeenCalledTimes(1);
+			expect(diagnostic).toHaveBeenCalledWith("Failed to load reader book", {
+				file: expect.stringMatching(/^\/generated\/sefarim\/568\..+\.json$/),
+				error: failure,
+			});
+			// A manual retry stays available for a later transient, refresh picks
+			// up a redeployed bundle, and the escape returns to the same flat article.
 			expect(
 				screen.getByRole("button", { name: "נסה שוב" }),
 			).toBeInTheDocument();
@@ -136,7 +100,7 @@ it.each([new Error("network"), new BookRequestError(503)])(
 			// A manual retry issues exactly one new request per click.
 			mockLoad.mockResolvedValueOnce(seferFixture(perek(693)));
 			fireEvent.click(screen.getByRole("button", { name: "נסה שוב" }));
-			expect(mockLoad).toHaveBeenCalledTimes(4);
+			expect(mockLoad).toHaveBeenCalledTimes(2);
 			await act(async () => {});
 			expect(screen.getByTestId("loaded-book")).toBeInTheDocument();
 		} finally {
@@ -226,8 +190,8 @@ it("offers a full page refresh for a missing asset while preserving the reader r
 		history.replaceState(null, "", "/929/1?book&bookPage=5#pasuk-1");
 		mockLoad.mockRejectedValueOnce(new BookRequestError(404));
 		render(<LoadedSefer {...props()} />);
-		// A missing asset cannot self-heal — the error surfaces immediately
-		// without spending the automatic retry budget.
+		// A missing asset cannot self-heal on a client retry — only a fresh
+		// page load can pick up a consistent bundle/deployment pair.
 		expect(await screen.findByRole("alert")).toBeInTheDocument();
 		expect(mockLoad).toHaveBeenCalledTimes(1);
 		expect(screen.getByRole("link", { name: "רענן את הדף" })).toHaveAttribute("href", "/929/1?book&bookPage=5");

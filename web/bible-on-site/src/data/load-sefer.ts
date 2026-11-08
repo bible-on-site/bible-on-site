@@ -37,7 +37,10 @@ export function loadSefer(file: string): Promise<SefarimItem> {
 	}
 	const request: Promise<SefarimItem> = Promise.resolve()
 		.then(async () => {
-			const response = await fetch(file, { cache: "no-cache" });
+			// The asset URL is content-addressed and the route answers with
+			// immutable caching, so the browser cache may serve repeat opens —
+			// a forced revalidation would keep every book open on the network.
+			const response = await fetch(file);
 			if (!response.ok)
 				throw new BookRequestError(response.status);
 			return (await response.json()) as SefarimItem;

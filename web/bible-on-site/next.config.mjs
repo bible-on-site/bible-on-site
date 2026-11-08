@@ -66,6 +66,7 @@ const nextConfig = {
 	outputFileTracingIncludes: {
 		"/*": [
 			"./src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json.br",
+			"./src/data/db/sefer-books/*.br",
 			"./cache-handler.mjs",
 		],
 	},
