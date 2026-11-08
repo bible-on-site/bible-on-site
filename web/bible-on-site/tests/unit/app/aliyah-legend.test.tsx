@@ -226,6 +226,8 @@ describe("AliyahLegend", () => {
 						data-aliyah-marker=""
 						data-aliyah-key="matot:shabbat matot:weekday"
 					/>
+					{/* A marker without a key is never emphasized. */}
+					<span data-aliyah-marker="" />
 				</div>
 				<AliyahLegend contexts={CONTEXTS} defaultKey={DEFAULT_KEY} />
 			</>,

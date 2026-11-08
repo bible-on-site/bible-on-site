@@ -11,7 +11,10 @@
  * unchanged when no markers are passed.
  */
 import { render } from "@testing-library/react";
-import { UnitTextBody } from "../../../src/app/components/reading/UnitTextBody";
+import {
+	type UnitBoundaryMarker,
+	UnitTextBody,
+} from "../../../src/app/components/reading/UnitTextBody";
 import { getUnitAliyahMarkers } from "../../../src/data/parasha/parasha-aliyot";
 import {
 	getAllParashaUnits,
@@ -257,6 +260,75 @@ describe("aliyah boundary markers", () => {
 		expect(
 			container.querySelectorAll("[data-aliyah-marker]").length,
 		).toBeGreaterThan(0);
+	});
+
+	it("keeps the common category when coincident layers share one", () => {
+		// Two custom divisions agreeing at one coordinate — both variant
+		// category — share a pill that keeps variant styling and lists
+		// every community's tag (the all-variant group has no non-variant
+		// tag source to prefer).
+		const { container } = renderBody({
+			boundaryMarkers: new Map<string, UnitBoundaryMarker[]>([
+				[
+					"1:5",
+					[
+						{
+							key: 'vayigash:shabbat:חב"ד',
+							label: "שני",
+							category: "variant",
+							tag: 'חב"ד',
+						},
+						{
+							key: "vayigash:shabbat:אשכנז",
+							label: "שני",
+							category: "variant",
+							tag: "אשכנז",
+						},
+					],
+				],
+			]),
+		});
+		const marker = must(
+			container.querySelector("#pasuk-1-5 [data-aliyah-marker]"),
+		);
+		expect(
+			container.querySelectorAll("#pasuk-1-5 [data-aliyah-marker]"),
+		).toHaveLength(1);
+		expect(marker.getAttribute("data-aliyah-key")).toBe(
+			'vayigash:shabbat:חב"ד vayigash:shabbat:אשכנז',
+		);
+		expect(marker.getAttribute("data-aliyah-category")).toBe("variant");
+		expect(marker.querySelector(".aliyahMarkerTag")?.textContent).toBe(
+			'חב"ד+אשכנז',
+		);
+		// No detail provided — the fallback composes tag + ordinal per layer.
+		expect(marker.getAttribute("aria-label")).toBe('חב"ד שני\nאשכנז שני');
+	});
+
+	it("merges an untagged layer into the shared pill", () => {
+		// A layer without a tag contributes its key and detail line but
+		// adds no tag text — the pill shows only the tagged layers' names.
+		const { container } = renderBody({
+			boundaryMarkers: new Map<string, UnitBoundaryMarker[]>([
+				[
+					"1:7",
+					[
+						{ key: "x:shabbat", label: "שלישי", category: "shabbat" },
+						{
+							key: "x:weekday",
+							label: "שלישי",
+							category: "weekday",
+							tag: "חול",
+						},
+					],
+				],
+			]),
+		});
+		const marker = must(
+			container.querySelector("#pasuk-1-7 [data-aliyah-marker]"),
+		);
+		expect(marker.querySelector(".aliyahMarkerTag")?.textContent).toBe("חול");
+		expect(marker.getAttribute("aria-label")).toBe("שלישי\nחול שלישי");
 	});
 
 	it("demotes perek-break labels while markers are present", () => {
