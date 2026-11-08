@@ -103,9 +103,10 @@ async function nextJestConfigPromise() {
 		// bun installs flat via `linker = "hoisted"` (bunfig.toml), so the
 		// node_modules layout matches npm's — no store indirection to unwrap.
 		// The @exodus/@asamuzakjp/@bramus/@csstools scopes and
-		// css-tree/entities/lru-cache/parse5/tough-cookie are jsdom 30's
-		// ESM-only dependency subtree.
-		"/node_modules/(?!(?:gematry|temporal-polyfill|temporal-utils|sunrise-sunset-js|@exodus|@asamuzakjp|@bramus|@csstools|css-tree|entities|lru-cache|parse5|tough-cookie)/)",
+		// css-tree/entities/lru-cache/parse5/parse5-parser-stream/tough-cookie
+		// are jsdom's ESM-only dependency subtree; jsdom 31 adds bcp-47 and
+		// bcp-47-match (CSS :lang() support) with their is-* transitive deps.
+		"/node_modules/(?!(?:gematry|temporal-polyfill|temporal-utils|sunrise-sunset-js|@exodus|@asamuzakjp|@bramus|@csstools|bcp-47|bcp-47-match|css-tree|entities|is-alphabetical|is-alphanumerical|is-decimal|lru-cache|parse5|parse5-parser-stream|tough-cookie)/)",
 	];
 
 	return nextJestConfig;
