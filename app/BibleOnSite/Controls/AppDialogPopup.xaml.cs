@@ -20,6 +20,14 @@ public partial class AppDialogPopup : Popup<AppDialogAction>
 {
 	private bool _completed;
 
+	/// <summary>
+	/// Open dialogs, topmost last (#2766). The shared Windows input layer
+	/// consults it so Back/Esc peel the modal surface instead of reaching the
+	/// page underneath. Weak references: a dialog leaked by a crashed close
+	/// path can never trap the registry or stay a ghost dismissal target.
+	/// </summary>
+	private static readonly List<WeakReference<AppDialogPopup>> _openDialogs = [];
+
 	public AppDialogPopup(AppDialogRequest request)
 	{
 		InitializeComponent();
@@ -29,6 +37,63 @@ public partial class AppDialogPopup : Popup<AppDialogAction>
 		MessageLabel.AutomationId = $"{request.AutomationIdPrefix}Message";
 		MessageLabel.Text = request.Message;
 		BuildActions(request);
+#if WINDOWS
+		// Esc dismissal for keyboard users (#2766): window-scoped
+		// accelerators sit in a different XAML subtree than the popup, so
+		// the card carries its own — it is an ancestor of every focusable
+		// element inside the dialog. Resolves to the safe-dismiss (null)
+		// outcome like outside-tap and system Back.
+		Card.HandlerChanged += (_, _) =>
+		{
+			if (Card.Handler?.PlatformView is Microsoft.UI.Xaml.UIElement element)
+			{
+				var esc = new Microsoft.UI.Xaml.Input.KeyboardAccelerator
+				{
+					Key = Windows.System.VirtualKey.Escape,
+				};
+				esc.Invoked += (s, args) =>
+				{
+					args.Handled = true;
+					_ = DismissByDesktopInputAsync();
+				};
+				element.KeyboardAccelerators.Add(esc);
+			}
+		};
+#endif
+	}
+
+	/// <summary>
+	/// Dismisses the newest open dialog with the safe-dismiss (null) result.
+	/// Called by the desktop Esc/Back pipelines before they reach the page
+	/// underneath; returns false when no dialog is open so the press can
+	/// continue down the surface chain.
+	/// </summary>
+	internal static bool TryDismissTopmost()
+	{
+		for (var i = _openDialogs.Count - 1; i >= 0; i--)
+		{
+			var top = _openDialogs[i];
+			_openDialogs.RemoveAt(i);
+			if (top.TryGetTarget(out var popup))
+			{
+				_ = popup.DismissByDesktopInputAsync();
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/// <summary>Safe-dismiss close — same null resolution as outside-tap.</summary>
+	private async Task DismissByDesktopInputAsync()
+	{
+		if (_completed)
+		{
+			return;
+		}
+
+		_completed = true;
+		await CloseAsync(null!);
 	}
 
 	private void BuildActions(AppDialogRequest request)
@@ -91,14 +156,23 @@ public partial class AppDialogPopup : Popup<AppDialogAction>
 			popup.MessageScroll.MaximumHeightRequest = messageHeight;
 		}
 
-		var result = await shell!.ShowPopupAsync<AppDialogAction>(
-			popup,
-			new PopupOptions
-			{
-				CanBeDismissedByTappingOutsideOfPopup = true,
-				PageOverlayColor = AppDialogStyle.ScrimColor,
-			},
-			CancellationToken.None);
-		return result is { WasDismissedByTappingOutsideOfPopup: false } ? result.Result : null;
+		var registration = new WeakReference<AppDialogPopup>(popup);
+		_openDialogs.Add(registration);
+		try
+		{
+			var result = await shell!.ShowPopupAsync<AppDialogAction>(
+				popup,
+				new PopupOptions
+				{
+					CanBeDismissedByTappingOutsideOfPopup = true,
+					PageOverlayColor = AppDialogStyle.ScrimColor,
+				},
+				CancellationToken.None);
+			return result is { WasDismissedByTappingOutsideOfPopup: false } ? result.Result : null;
+		}
+		finally
+		{
+			_openDialogs.Remove(registration);
+		}
 	}
 }

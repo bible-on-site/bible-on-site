@@ -21,6 +21,7 @@ public sealed class FlyoutMenuRowHandler : ViewHandler<FlyoutMenuRow, Microsoft.
 		{
 			[nameof(FlyoutMenuRow.Title)] = MapPresentation,
 			[nameof(FlyoutMenuRow.Subtitle)] = MapPresentation,
+			[nameof(FlyoutMenuRow.IsSelected)] = MapPresentation,
 			[SemanticProperties.DescriptionProperty.PropertyName] = MapPresentation,
 			[ToolTipProperties.TextProperty.PropertyName] = MapPresentation,
 		};
@@ -77,6 +78,11 @@ public sealed class FlyoutMenuRowHandler : ViewHandler<FlyoutMenuRow, Microsoft.
 			? description
 			: string.IsNullOrWhiteSpace(row.Subtitle) ? row.Title : $"{row.Title}, {row.Subtitle}";
 		Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, name);
+		// Selected-destination state for screen readers (#2766): a Button has
+		// no SelectionItem pattern, so the pinned rail's current row carries
+		// it as UIA ItemStatus — verifiable in Accessibility Insights.
+		Microsoft.UI.Xaml.Automation.AutomationProperties.SetItemStatus(button,
+			row.IsSelected ? "נבחר" : string.Empty);
 		ToolTipService.SetToolTip(button, ToolTipProperties.GetText(row));
 	}
 }

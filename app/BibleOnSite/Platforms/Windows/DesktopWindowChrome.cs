@@ -69,6 +69,11 @@ internal sealed class DesktopWindowChrome
 		chrome.ApplyInitialPlacement();
 		window.HandlerChanged += chrome.OnWindowHandlerChanged;
 		window.Destroying += chrome.OnDestroying;
+		// The adaptive nav pane locks above the breakpoint and releases below
+		// it; the width set by ApplyInitialPlacement is already the first data
+		// point, so evaluate immediately, not only on later resizes.
+		window.SizeChanged += chrome.OnWindowSizeChanged;
+		shell.ApplyNavPaneWidth(window.Width);
 		shell.Navigated += chrome.OnNavigated;
 		// CompleteStartup swaps the loading ShellContent's page in place —
 		// not a navigation — so the startup reader's focus only arrives via
@@ -125,10 +130,7 @@ internal sealed class DesktopWindowChrome
 			// MinVisibleEdge of title bar somewhere reachable. For a rect
 			// already inside a display the clamp is a no-op, and a rect on no
 			// display falls back to the primary work area.
-			var workAreas = DisplayArea.FindAll()
-				.Select(d => new DesktopRect(d.WorkArea.X / density, d.WorkArea.Y / density,
-					d.WorkArea.Width / density, d.WorkArea.Height / density))
-				.ToList();
+			var workAreas = AllWorkAreas(density);
 			bounds = WindowPlacementPlan.ClampToBestDisplay(saved, workAreas, workArea);
 			_pendingMaximized = maximized;
 		}
@@ -143,6 +145,28 @@ internal sealed class DesktopWindowChrome
 		_window.Height = bounds.Height;
 		_lastNormalBounds = bounds;
 		_hasNormalBounds = true;
+	}
+
+	/// <summary>
+	/// Every display's work area in dips — an empty list when the WinRT
+	/// display enumeration itself faults (session locked, driver reset),
+	/// because a placement nicety must never block app startup.
+	/// </summary>
+	private static List<DesktopRect> AllWorkAreas(double density)
+	{
+		try
+		{
+			return DisplayArea.FindAll()
+				.Select(d => new DesktopRect(d.WorkArea.X / density, d.WorkArea.Y / density,
+					d.WorkArea.Width / density, d.WorkArea.Height / density))
+				.ToList();
+		}
+		#pragma warning disable S2221 // Deliberate failure boundary: display enumeration must never block startup
+		catch (Exception) //NOSONAR — fall back to the primary work area below.
+		{
+			#pragma warning restore S2221
+			return [];
+		}
 	}
 
 	private void TrackWindowChanges()
@@ -206,6 +230,8 @@ internal sealed class DesktopWindowChrome
 	}
 
 	private void OnDestroying(object? sender, EventArgs e) => SavePlacement();
+
+	private void OnWindowSizeChanged(object? sender, EventArgs e) => _shell.ApplyNavPaneWidth(_window.Width);
 
 	#endregion
 
@@ -294,7 +320,7 @@ internal sealed class DesktopWindowChrome
 
 	private void OnFullscreenAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
 	{
-		if (!_shell.FlyoutIsPresented && _shell.CurrentPage is IWindowsFullscreenSurface reader)
+		if (!_shell.IsFlyoutOverlayOpen && _shell.CurrentPage is IWindowsFullscreenSurface reader)
 		{
 			args.Handled = true;
 			reader.ToggleDesktopFullscreen();
@@ -312,11 +338,20 @@ internal sealed class DesktopWindowChrome
 	/// </summary>
 	internal void RunBack()
 	{
-		var surfaceDismissed = !_shell.FlyoutIsPresented
+		// A blocking dialog owns the input layer before anything else — a
+		// Back that reached the window while one is open peels it (the
+		// safe-dismiss result) instead of navigating away underneath it.
+		if (Controls.AppDialogPopup.TryDismissTopmost())
+		{
+			return;
+		}
+
+		var overlayOpen = _shell.IsFlyoutOverlayOpen;
+		var surfaceDismissed = !overlayOpen
 			&& (_shell.CurrentPage as IWindowsDesktopSurface)?.DismissTopmostSurface() == true;
 
 		var route = DesktopInputPlan.EvaluateBack(
-			_shell.FlyoutIsPresented, surfaceDismissed, _shell.Navigation.NavigationStack.Count > 1);
+			overlayOpen, surfaceDismissed, _shell.Navigation.NavigationStack.Count > 1);
 		if (route == DesktopBackRoute.CloseFlyout)
 		{
 			_shell.FlyoutIsPresented = false;
@@ -333,14 +368,20 @@ internal sealed class DesktopWindowChrome
 	/// </summary>
 	private bool RunEscape()
 	{
-		var surfaceDismissed = !_shell.FlyoutIsPresented
+		if (Controls.AppDialogPopup.TryDismissTopmost())
+		{
+			return true;
+		}
+
+		var overlayOpen = _shell.IsFlyoutOverlayOpen;
+		var surfaceDismissed = !overlayOpen
 			&& (_shell.CurrentPage as IWindowsDesktopSurface)?.DismissTopmostSurface() == true;
-		if (!DesktopInputPlan.EvaluateEscape(_shell.FlyoutIsPresented, surfaceDismissed))
+		if (!DesktopInputPlan.EvaluateEscape(overlayOpen, surfaceDismissed))
 		{
 			return false;
 		}
 
-		if (_shell.FlyoutIsPresented)
+		if (overlayOpen)
 		{
 			_shell.FlyoutIsPresented = false;
 		}

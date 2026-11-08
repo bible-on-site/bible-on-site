@@ -34,4 +34,12 @@ public static class DesktopLayout
     /// about-style pages, article/tanahpedia entry bodies).
     /// </summary>
     public static double ContentColumnMaxWidth { get; } = 960;
+
+    /// <summary>
+    /// Minimum window content width (dips) at which the flyout locks into a
+    /// persistent navigation pane instead of staying an overlay. Matches
+    /// WinUI's own expanded-pane threshold (1008): the 300-wide pane still
+    /// leaves ≥700 dips of content width below it.
+    /// </summary>
+    public static double NavPaneBreakpoint { get; } = 1008;
 }

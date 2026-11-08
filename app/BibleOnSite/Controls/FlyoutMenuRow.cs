@@ -23,6 +23,16 @@ public sealed class FlyoutMenuRow : ContentView
 		BindableProperty.Create(nameof(Subtitle), typeof(string), typeof(FlyoutMenuRow), string.Empty,
 			propertyChanged: static (b, _, v) => ((FlyoutMenuRow)b).ApplySubtitle((string)v));
 
+	/// <summary>
+	/// Whether this row is the current page's destination (#2766). The marker
+	/// only paints on Windows — the desktop nav pane is persistent chrome and
+	/// needs the Fluent-style selected indicator; touch platforms keep the
+	/// identical unselected visuals.
+	/// </summary>
+	public static readonly BindableProperty IsSelectedProperty =
+		BindableProperty.Create(nameof(IsSelected), typeof(bool), typeof(FlyoutMenuRow), false,
+			propertyChanged: static (b, _, _) => ((FlyoutMenuRow)b).ApplySelectedVisual());
+
 	public string Icon
 	{
 		get => (string)GetValue(IconProperty);
@@ -39,6 +49,12 @@ public sealed class FlyoutMenuRow : ContentView
 	{
 		get => (string)GetValue(SubtitleProperty);
 		set => SetValue(SubtitleProperty, value);
+	}
+
+	public bool IsSelected
+	{
+		get => (bool)GetValue(IsSelectedProperty);
+		set => SetValue(IsSelectedProperty, value);
 	}
 
 	/// <summary>
@@ -58,6 +74,11 @@ public sealed class FlyoutMenuRow : ContentView
 	private readonly Label _iconLabel;
 	private readonly Label _titleLabel;
 	private readonly Label _subtitleLabel;
+#if WINDOWS
+	// Selection-repaint targets (#2766) — stored only where the repaint runs.
+	private readonly Label _chevron;
+	private readonly Grid _rowGrid;
+#endif
 
 	public FlyoutMenuRow()
 	{
@@ -96,7 +117,7 @@ public sealed class FlyoutMenuRow : ContentView
 		Grid.SetColumn(textColumn, 1);
 		Grid.SetColumn(chevron, 2);
 
-		Content = new Grid
+		var rowGrid = new Grid
 		{
 			Padding = new Thickness(16, 12),
 			ColumnDefinitions = new ColumnDefinitionCollection(
@@ -105,6 +126,11 @@ public sealed class FlyoutMenuRow : ContentView
 				new ColumnDefinition(GridLength.Auto)),
 			Children = { _iconLabel, textColumn, chevron },
 		};
+#if WINDOWS
+		_chevron = chevron;
+		_rowGrid = rowGrid;
+#endif
+		Content = rowGrid;
 
 #if !WINDOWS
 		// Touch platforms activate through the gesture recognizer; on Windows
@@ -121,6 +147,48 @@ public sealed class FlyoutMenuRow : ContentView
 		_subtitleLabel.Text = value;
 		_subtitleLabel.IsVisible = !string.IsNullOrEmpty(value);
 	}
+
+	/// <summary>
+	/// Paints the Fluent-style selected indicator: an accent-tinted band and
+	/// accent icon/title/chevron instead of the neutral greys. Windows-only —
+	/// the pane there is persistent chrome that must show where the user is;
+	/// touch flyouts keep their unselected look (#2766). No-ops in unit tests
+	/// where no application resources exist.
+	/// </summary>
+	private void ApplySelectedVisual()
+	{
+#if !WINDOWS
+		// Windows-only repaint (#2766); touch rows keep their default chrome.
+#else
+		if (!IsSelected)
+		{
+			_rowGrid.BackgroundColor = Colors.Transparent;
+			SetThemeColor(_iconLabel, Label.TextColorProperty, "Gray600", "Gray300");
+			SetThemeColor(_titleLabel, Label.TextColorProperty, "Gray900", "Gray100");
+			SetThemeColor(_chevron, Label.TextColorProperty, "Gray400", "Gray500");
+			return;
+		}
+
+		var light = ThemeColor("Primary");
+		var dark = ThemeColor("AccentOnDark");
+		if (light is null || dark is null)
+		{
+			return;
+		}
+
+		_rowGrid.SetAppThemeColor(VisualElement.BackgroundColorProperty,
+			light.WithAlpha(0.10f), dark.WithAlpha(0.16f));
+		_iconLabel.SetAppThemeColor(Label.TextColorProperty, light, dark);
+		_titleLabel.SetAppThemeColor(Label.TextColorProperty, light, dark);
+		_chevron.SetAppThemeColor(Label.TextColorProperty, light, dark);
+#endif
+	}
+
+#if WINDOWS
+	private static Color? ThemeColor(string key) =>
+		Application.Current?.Resources.TryGetValue(key, out var value) == true
+			&& value is Color color ? color : null;
+#endif
 
 	/// <summary>
 	/// Applies the same light/dark color pair the XAML rows declared via

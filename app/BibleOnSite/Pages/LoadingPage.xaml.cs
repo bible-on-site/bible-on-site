@@ -50,6 +50,10 @@ public partial class LoadingPage : ContentPage, IAnalyticsScreenName
             // merge sees the loaded local state. Fire-and-forget: it never
             // blocks the reader and stays local-only when offline/anonymous.
             _ = PreferencesSyncService.Instance.StartAsync();
+            // Re-apply the stored daily-perek push opt-in (#1097): idempotent
+            // topic re-subscription covers reinstalls and token churn. Runs off
+            // the startup path — no-op on unsupported platforms and when off.
+            _ = PushNotificationService.Instance.ApplyEnabledPreferenceAsync(CancellationToken.None);
 
             // Starter data (GraphQL with cache/offline fallbacks) is independent
             // of the local catalog — wait for both before opening the reader.

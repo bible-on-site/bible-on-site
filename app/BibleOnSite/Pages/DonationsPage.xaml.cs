@@ -13,7 +13,7 @@ public partial class DonationsPage : ContentPage
     {
         try
         {
-            await ShellAppNavigator.Instance.GoToAsync("ContactPage");
+            await ShellAppNavigator.Instance.GoToAsync(AppRoutes.Contact);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: navigation failure is log-only
         catch (Exception ex) //NOSONAR — navigation failure is log-only.
