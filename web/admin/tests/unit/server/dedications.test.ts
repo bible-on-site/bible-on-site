@@ -585,8 +585,9 @@ describe("listDedications", () => {
 
 		const [sql] = mocks.query.mock.calls[0] as [string];
 		expect(sql).toContain("d.expires_at > UTC_TIMESTAMP()");
-		expect(sql).toContain("tanah_sefer_dedication lt");
-		expect(sql).toContain("tanah_masora_dedication lt");
+		expect(sql).toContain("lt.dedication_id IS NOT NULL");
+		expect(sql).toContain("FROM tanah_sefer_dedication");
+		expect(sql).toContain("FROM tanah_masora_dedication");
 	});
 
 	it("treats rows with no live target as expired", async () => {
@@ -596,7 +597,7 @@ describe("listDedications", () => {
 
 		const [sql] = mocks.query.mock.calls[0] as [string];
 		expect(sql).toContain("d.expires_at <= UTC_TIMESTAMP()");
-		expect(sql).toContain("OR NOT (EXISTS");
+		expect(sql).toContain("OR lt.dedication_id IS NULL");
 		// The badge mirrors the tab rule — assignment expiry counts too.
 		expect(sql).toContain("AS expired");
 	});
