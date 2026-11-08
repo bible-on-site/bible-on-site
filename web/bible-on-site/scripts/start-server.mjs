@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { constants } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,12 +45,121 @@ export async function reportImageSnapshotter({
 	}
 }
 
-/** Keep accepting requests while Cloud Map removal reaches cached DNS answers. */
-export function startServer({ drainMs = 90_000, cwd = process.cwd() } = {}) {
-	if (!Number.isSafeInteger(drainMs) || drainMs < 0 || drainMs > 90_000)
+// /proc/net/tcp states that can still receive a request or complete a response.
+// Dying half-close states and TIME_WAIT are intentionally absent: their bytes
+// are already exchanged, so they must not hold the drain open.
+const LIVE_STATES = new Set(["01", "03", "08"]); // ESTABLISHED, SYN_RECV, CLOSE_WAIT
+
+/**
+ * /proc stores IPv4 little-endian (127.0.0.1 appears as 0100007F), so the
+ * first dotted octet is the last hex pair. IPv6 appears as four little-endian
+ * words; ::1 ends in 01000000 and v4-mapped addresses carry FFFF0000 in the
+ * third word. Same-host clients (container health checks, exec sessions) are
+ * loopback remotes and do not need DNS-drain protection: nothing can reach
+ * them once the task stops anyway.
+ */
+function isLoopback(hexAddress) {
+	const hex = hexAddress.toUpperCase();
+	if (hex.length === 8) return hex.slice(6, 8) === "7F";
+	if (hex.length === 32) {
+		if (hex === "00000000000000000000000001000000") return true;
+		if (
+			hex.slice(0, 16) === "0000000000000000" &&
+			hex.slice(16, 24) === "FFFF0000"
+		)
+			return isLoopback(hex.slice(24));
+	}
+	return false;
+}
+
+function countLiveInbound(text, portHex) {
+	let count = 0;
+	for (const line of text.split("\n")) {
+		const fields = line.trim().split(/\s+/);
+		if (fields.length < 4) continue;
+		const separator = fields[1].lastIndexOf(":");
+		if (
+			separator < 0 ||
+			fields[1].slice(separator + 1).toUpperCase() !== portHex ||
+			!LIVE_STATES.has(fields[3])
+		)
+			continue;
+		const remote = fields[2].slice(0, fields[2].lastIndexOf(":"));
+		if (isLoopback(remote)) continue;
+		count += 1;
+	}
+	return count;
+}
+
+/**
+ * Count non-loopback sockets still serving bytes on the server port, read
+ * from the task's own network namespace via procfs. The router opens a fresh
+ * connection per proxied request (no upstream keepalive), so a nonzero count
+ * means a cached-DNS client is still being served. Throws when the table is
+ * unreadable so callers can fail closed on platforms without procfs.
+ */
+export async function inboundConnections(
+	port,
+	{
+		read = readFile,
+		files = [
+			{ path: "/proc/net/tcp", optional: false },
+			{ path: "/proc/net/tcp6", optional: true }, // absent when IPv6 is disabled
+		],
+	} = {},
+) {
+	if (!Number.isSafeInteger(port) || port < 0 || port > 65_535)
+		throw new RangeError("Website port must be between 0 and 65535");
+	const portHex = port.toString(16).toUpperCase().padStart(4, "0");
+	let total = 0;
+	for (const { path: table, optional } of files) {
+		let text;
+		try {
+			text = await read(table, "utf8");
+		} catch (error) {
+			if (optional && error?.code === "ENOENT") continue;
+			throw error;
+		}
+		total += countLiveInbound(text, portHex);
+	}
+	return total;
+}
+
+/**
+ * Keep accepting requests while Cloud Map removal reaches cached DNS answers.
+ * `minDrainMs` is the floor covering that propagation: quiet termination is
+ * allowed only after it elapses, because a zero socket count cannot prove the
+ * router has stopped resolving the old address.
+ */
+export function startServer({
+	drainMs = 90_000,
+	minDrainMs = 45_000,
+	quietMs = 30_000,
+	pollMs = 500,
+	port = Number(process.env.PORT) || 3000,
+	cwd = process.cwd(),
+	measure = () => inboundConnections(port),
+	now = Date.now,
+	log = console.log,
+} = {}) {
+	for (const [name, value] of [
+		["drain", drainMs],
+		["minimum drain", minDrainMs],
+		["quiet window", quietMs],
+	]) {
+		if (!Number.isSafeInteger(value) || value < 0 || value > 90_000)
+			throw new RangeError(
+				`Website ${name} must be between 0 and 90000 milliseconds`,
+			);
+	}
+	if (minDrainMs > drainMs)
+		throw new RangeError("Website minimum drain must not exceed the drain");
+	if (!Number.isSafeInteger(pollMs) || pollMs < 1 || pollMs > 90_000)
 		throw new RangeError(
-			"Website drain must be between 0 and 90000 milliseconds",
+			"Website drain poll must be between 1 and 90000 milliseconds",
 		);
+	if (!Number.isSafeInteger(port) || port < 0 || port > 65_535)
+		throw new RangeError("Website port must be between 0 and 65535");
 	const child = spawn(process.execPath, ["server.js"], {
 		cwd,
 		stdio: "inherit",
@@ -64,8 +174,42 @@ export function startServer({ drainMs = 90_000, cwd = process.cwd() } = {}) {
 	};
 	const terminate = () => {
 		if (stopping || drainTimer) return;
-		console.log(`Website draining cached DNS requests for ${drainMs}ms`);
-		drainTimer = setTimeout(() => forward("SIGTERM"), drainMs);
+		log(
+			`Website draining cached DNS requests: forwarding SIGTERM after ${quietMs}ms without inbound connections, no earlier than ${minDrainMs}ms, or ${drainMs}ms at most`,
+		);
+		const startedAt = now();
+		let lastBusy = startedAt;
+		let polling = false;
+		const finish = (reason) => {
+			if (stopping) return;
+			log(
+				`Website drain ${reason} after ${now() - startedAt}ms; forwarding SIGTERM to server.js`,
+			);
+			forward("SIGTERM");
+		};
+		const check = async () => {
+			if (stopping || polling) return;
+			polling = true;
+			let inbound;
+			try {
+				inbound = await measure();
+			} catch {
+				// An unreadable metric keeps the drain serving, identical to
+				// the previous unconditional wait — but the deadline still holds.
+				inbound = Number.NaN;
+			} finally {
+				polling = false;
+			}
+			const at = now();
+			// Only an exact zero is quiet; errors and junk fail closed.
+			if (!Number.isFinite(inbound) || inbound !== 0) lastBusy = at;
+			if (at - startedAt >= drainMs) return finish("reached the deadline");
+			if (at - startedAt >= minDrainMs && at - lastBusy >= quietMs)
+				return finish("saw no inbound connections");
+		};
+		void check();
+		drainTimer = setInterval(() => void check(), pollMs);
+		drainTimer.unref();
 	};
 	const interrupt = () => forward("SIGINT");
 	const cleanup = () => {
