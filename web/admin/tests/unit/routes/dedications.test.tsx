@@ -184,9 +184,7 @@ describe("DedicationsPage", () => {
 			}),
 		]);
 		renderPage();
-		expect(
-			await screen.findByText("לעילוי נשמת שרה"),
-		).toBeInTheDocument();
+		expect(await screen.findByText("לעילוי נשמת שרה")).toBeInTheDocument();
 		expect(screen.getByText("מתמשך")).toBeInTheDocument();
 		const expiredRow = screen.getByText("דוד").closest("tr");
 		expect(expiredRow).toHaveClass("opacity-60");
@@ -403,7 +401,9 @@ describe("DedicationsPage", () => {
 
 	it("stores the displayed default helek when its selector is left unchanged", async () => {
 		await newForm();
-		fireEvent.change(screen.getByLabelText("מוקדש ל"), { target: { value: "רחל" } });
+		fireEvent.change(screen.getByLabelText("מוקדש ל"), {
+			target: { value: "רחל" },
+		});
 		const row = addTarget("helek");
 		expect(row.getAllByRole("combobox")[1]).toHaveValue("1");
 		fireEvent.click(screen.getByRole("button", { name: "צור" }));
