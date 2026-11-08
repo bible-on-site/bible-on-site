@@ -242,6 +242,21 @@ repos:
         files: ^(devops/import-parasha-aliyot\.mjs|devops/data-sources/(hebcal-leyning-aliyot|opentorah-tanach-aliyot)|web/bible-on-site/src/data/parasha/parasha-aliyot\.json)$
         pass_filenames: false
         priority: 10
+      # cargo-make ZIP ingestion gate (#2826): the installed CLI embeds an
+      # SDK whose nonoptional zip ^2 dependency is affected by
+      # GHSA-m665-v7pm-7grj. A Makefile.toml task that starts ingesting
+      # archives through the duckscript SDK is the live exposure, so this
+      # gate runs whenever task definitions, install pins, Renovate
+      # tracking, or the guard itself change — audit runs repo-wide so a
+      # stale allowlist entry or a split pin version fails here, not later.
+      - id: cargo-make-zip-guard
+        name: cargo-make ZIP ingestion gate
+        entry: node devops/github/ci/cargo-make-zip-guard.mjs
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: (^|/)Makefile\.toml$|(^|/)Cargo\.toml$|\.ds$|^\.github/workflows/[^/]+\.ya?ml$|^renovate\.json$|^devops/github/ci/cargo-make-(zip-guard\.test\.mjs|zip-guard\.mjs|archive-allowlist\.json)$
+        pass_filenames: false
+        priority: 10
       - id: flip-book-local-restore
         name: restore local html-flip-book-react
         entry: node devops/flip-book-dep.mjs post
