@@ -27,8 +27,10 @@ export function largestTopLevelTask(tasks) {
  * Observed (pre-simulation) record of the largest top-level main-thread task:
  * start time, duration and the URL Lighthouse attributes the task to. Under
  * throttlingMethod "simulate" the LHR's long-tasks/TBT values are Lantern
- * models, so this record is what identifies which observed task a modeled
- * long task was built from — including runs where modeled TBT stays 0.
+ * models, so this is an independent observed-task signal — ranking observed
+ * durations does not prove this task produced a modeled long task. On a
+ * modeled-TBT recurrence the retained *.artifacts.json trace resolves the
+ * exact modeled/observed mapping, including runs where modeled TBT stays 0.
  *
  * @param {import("lighthouse").RunnerResult["artifacts"]} artifacts
  * @returns {Promise<{startTime: number, duration: number, attributableUrl: string} | null>}

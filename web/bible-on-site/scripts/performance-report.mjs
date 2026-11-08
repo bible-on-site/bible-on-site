@@ -76,6 +76,7 @@ export function summarizeLighthouse(
 		environment = "ci",
 		knownIssues = [],
 		largestObservedTask,
+		largestObservedTaskError,
 	},
 ) {
 	const metrics = Object.fromEntries(
@@ -142,8 +143,10 @@ export function summarizeLighthouse(
 		// Observed trace timing of the largest top-level task, before the
 		// Lantern cpuSlowdownMultiplier is applied. A modeled TBT of 0 can
 		// still sit one borderline observed task away from recurring; keep
-		// the record visible on every run, pass or fail.
+		// the record visible on every run, pass or fail. The error field
+		// records an extraction failure without losing the audit's evidence.
 		largestObservedTask,
+		largestObservedTaskError,
 	};
 }
 
@@ -233,6 +236,19 @@ export function performanceMarkdown(reports, field = [], assets = []) {
 				);
 			for (const warning of run.warnings)
 				lines.push(`- Run ${run.run} warning: ${cell(warning)}`);
+			// Every run reports its largest observed task, including failed
+			// and nonmedian samples the detailed section below would hide.
+			const observedTask = run.largestObservedTask;
+			if (observedTask) {
+				lines.push(
+					`- Run ${run.run} largest observed top-level task: ${number(observedTask.duration)}ms at ${number(observedTask.startTime)}ms; attributable to ${cell(observedTask.attributableUrl)}`,
+				);
+			}
+			if (run.largestObservedTaskError) {
+				lines.push(
+					`- Run ${run.run} largest observed task extraction failed: ${cell(run.largestObservedTaskError)}`,
+				);
+			}
 		}
 		const valid = runs
 			.filter((r) => !r.runtimeError && Number.isFinite(r.metrics.LCP))
@@ -243,13 +259,6 @@ export function performanceMarkdown(reports, field = [], assets = []) {
 			`Diagnostics from run ${selected.run} (middle LCP sample). Full report: [JSON](${selected.rawReport})${selected.htmlReport ? ` / [HTML](${selected.htmlReport})` : ""}.`,
 			"",
 		);
-		const observedTask = selected.largestObservedTask;
-		if (observedTask) {
-			lines.push(
-				`Largest observed top-level task (run ${selected.run}): ${number(observedTask.duration)}ms starting at ${number(observedTask.startTime)}ms; attributable to ${cell(observedTask.attributableUrl)}.`,
-				"",
-			);
-		}
 		for (const diagnostic of selected.diagnostics || []) {
 			lines.push(`### ${diagnostic.title} (${diagnostic.id})`, "");
 			for (const evidence of diagnostic.evidence.slice(0, 30))

@@ -50,6 +50,13 @@ const REPORTS_DIR = resolve(
 	"../../.playwright-report/perf/diagnostics/lighthouse",
 );
 
+// Each worker-fixture lifetime audits the same four page/device pairs, but a
+// failed test stops the worker and Playwright retries in a fresh process.
+// Namespace reports by worker pid + per-process sequence so a retry's raw
+// reports and bound *.artifacts.json never collide with or overwrite a
+// previous attempt's retained evidence.
+let lighthouseReportSequence = 0;
+
 function getResultKey(path: string, strategy: DeviceStrategy): ResultKey {
 	return `${path}-${strategy}`;
 }
@@ -77,6 +84,7 @@ const test = base.extend<
 				rawReport: string;
 				artifacts: RunnerResult["artifacts"];
 			}[] = [];
+			const reportRun = `${process.pid}-${++lighthouseReportSequence}`;
 
 			// Launch browser once for all audits
 			const context = await chromium.launchPersistentContext(
@@ -116,11 +124,26 @@ const test = base.extend<
 						);
 						const lhr = audit.lhr;
 						// Observed trace timing of the largest top-level task,
-						// recorded even when the modeled TBT stays at 0.
-						const observedTask = await largestObservedTopLevelTask(
-							audit.artifacts,
-						);
-						const report = saveReport(lhr, strategy, observedTask);
+						// recorded even when the modeled TBT stays at 0. This is
+						// diagnostics-only: a malformed trace must not cost the
+						// audit's report or its buffered artifacts below.
+						let observedTask: ObservedTopLevelTask | null = null;
+						let observedTaskError: string | null = null;
+						try {
+							observedTask = await largestObservedTopLevelTask(audit.artifacts);
+						} catch (error) {
+							observedTaskError =
+								error instanceof Error ? error.message : String(error);
+							console.warn(
+								`Largest observed task extraction failed for ${url} (${strategy}):`,
+								error,
+							);
+						}
+						const report = saveReport(lhr, strategy, {
+							run: reportRun,
+							observedTask,
+							observedTaskError,
+						});
 						reports.push(report);
 						bufferedArtifacts.push({
 							rawReport: report.rawReport,
@@ -501,23 +524,29 @@ async function runLighthouseAudit(
 	return runnerResult;
 }
 
+type ObservedTopLevelTask = NonNullable<
+	Awaited<ReturnType<typeof largestObservedTopLevelTask>>
+>;
+
 function saveReport(
 	lhr: Result,
 	strategy: DeviceStrategy,
-	observedTask?: {
-		startTime: number;
-		duration: number;
-		attributableUrl: string;
-	} | null,
+	diagnostics: {
+		run: string;
+		observedTask?: ObservedTopLevelTask | null;
+		observedTaskError?: string | null;
+	},
 ) {
 	const report = saveLighthouseReport(REPORTS_DIR, lhr, {
 		device: strategy,
+		run: diagnostics.run,
 		knownIssues: [...KNOWN_ISSUES.values()]
 			.filter(
 				(issue) => issue.strategy === "all" || issue.strategy === strategy,
 			)
 			.map((issue) => issue.id),
-		largestObservedTask: observedTask ?? undefined,
+		largestObservedTask: diagnostics.observedTask ?? undefined,
+		largestObservedTaskError: diagnostics.observedTaskError ?? undefined,
 	});
 	console.log(`Lighthouse ${report.url} (${strategy}):`, report.metrics);
 	return report;

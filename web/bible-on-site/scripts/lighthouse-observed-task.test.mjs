@@ -21,10 +21,7 @@ test("largestTopLevelTask returns the biggest observed top-level task", () => {
 	const small = task({ duration: 8, startTime: 8.7 });
 	const mid = task({ duration: 28.4, startTime: 110.5 });
 	const largest = task({ duration: 36.119, startTime: 20.46 });
-	assert.equal(
-		largestTopLevelTask([small, mid, largest]),
-		largest,
-	);
+	assert.equal(largestTopLevelTask([small, mid, largest]), largest);
 });
 
 test("largestTopLevelTask ignores child tasks and tasks at the audit floor", () => {

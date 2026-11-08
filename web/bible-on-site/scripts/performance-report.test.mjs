@@ -221,7 +221,7 @@ test("the largest observed top-level task reaches the summary and markdown", () 
 	assert.deepEqual(summary.largestObservedTask, observedTask);
 	assert.match(
 		performanceMarkdown([summary]),
-		/Largest observed top-level task \(run 1\): 36\.12ms starting at 20\.46ms; attributable to Unattributable\./,
+		/Run 1 largest observed top-level task: 36\.12ms at 20\.46ms; attributable to Unattributable/,
 	);
 	// A run without the record renders no task line and keeps the field unset.
 	const plain = {
@@ -231,8 +231,75 @@ test("the largest observed top-level task reaches the summary and markdown", () 
 	assert.equal(plain.largestObservedTask, undefined);
 	assert.doesNotMatch(
 		performanceMarkdown([plain]),
-		/Largest observed top-level task/,
+		/largest observed top-level task/,
 	);
+});
+
+test("failed and nonmedian runs keep their observed task and extraction error visible", () => {
+	const task = { startTime: 1, duration: 12.5, attributableUrl: "a.js" };
+	// Three samples: the failed run is neither valid nor the median pick, yet
+	// its observed-task record must still reach the published markdown.
+	const reports = [10, 20, 30].map((lcp, i) => ({
+		...summarizeLighthouse(fixture(undefined, lcp), {
+			device: "desktop",
+			run: `worker-${i + 1}`,
+			largestObservedTask: task,
+			largestObservedTaskError:
+				i === 0 ? "Trace traceEvents missing" : undefined,
+		}),
+		rawReport: `run-${i}.json`,
+		runtimeError: i === 2 ? { code: "NO_FCP", message: "boom" } : undefined,
+	}));
+	const text = performanceMarkdown(reports);
+	for (const run of ["worker-1", "worker-2", "worker-3"]) {
+		assert.ok(
+			text.includes(
+				`Run ${run} largest observed top-level task: 12.5ms at 1ms; attributable to a.js`,
+			),
+		);
+	}
+	assert.match(text, /Run worker-1 largest observed task extraction failed/);
+	assert.doesNotMatch(text, /Run worker-2 largest observed task extraction/);
+	assert.match(text, /Run worker-3 failed: boom/);
+});
+
+test("retry-namespaced reports keep distinct raw reports and artifact bindings", () => {
+	const dir = mkdtempSync(join(tmpdir(), "lighthouse-retry-"));
+	try {
+		// A failed test stops the worker; the retry audits in a fresh process
+		// and must not overwrite the previous attempt's retained evidence.
+		const first = saveLighthouseReport(dir, fixture(), {
+			device: "desktop",
+			run: "111-1",
+		});
+		const second = saveLighthouseReport(dir, fixture(), {
+			device: "desktop",
+			run: "222-1",
+		});
+		assert.notEqual(first.rawReport, second.rawReport);
+		saveLighthouseArtifacts(dir, [
+			{ rawReport: first.rawReport, artifacts: { attempt: 1 } },
+			{ rawReport: second.rawReport, artifacts: { attempt: 2 } },
+		]);
+		assert.deepEqual(
+			JSON.parse(
+				readFileSync(
+					join(dir, first.rawReport.replace(/\.json$/, ".artifacts.json")),
+				),
+			),
+			{ rawReport: first.rawReport, artifacts: { attempt: 1 } },
+		);
+		assert.deepEqual(
+			JSON.parse(
+				readFileSync(
+					join(dir, second.rawReport.replace(/\.json$/, ".artifacts.json")),
+				),
+			),
+			{ rawReport: second.rawReport, artifacts: { attempt: 2 } },
+		);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
 });
 
 test("page and device benchmark keys retain all four measurements", () => {
