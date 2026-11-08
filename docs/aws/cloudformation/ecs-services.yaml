@@ -300,7 +300,9 @@ Resources:
         - Name: website
           Image: !Ref WebsiteImageUri
           Essential: true
-          # 90 seconds for cached DNS requests, then 30 seconds for Next shutdown.
+          # Measured drain keeps serving cached-DNS requests while non-loopback
+          # inbound connections remain, ending early once they stay quiet (30s)
+          # past a 45-second minimum, or at 90 seconds; 30 more cover shutdown.
           StopTimeout: 120
           PortMappings:
             - ContainerPort: 3000
@@ -313,7 +315,9 @@ Resources:
               - CMD-SHELL
               # Three bounded requests fit within the ten-second check timeout.
               - 'for route in api/health/ready api/recitation api/recitation/2; do curl -sf --max-time 3 "http://localhost:3000/$route" > /dev/null || exit 1; done'
-            Interval: 30
+            # The first passing probe marks the task healthy, so the interval
+            # bounds time-to-healthy and the start of the route-bundle warm.
+            Interval: 10
             Timeout: 10
             Retries: 5
             StartPeriod: 120 # Grace period for container startup before health checks count
