@@ -260,3 +260,18 @@
 		display: none;
 	}
 }
+
+/* Dark mode: the hero's bottom divider permanently paints this band light
+   blue, so the section stays light in dark mode too — text color and the
+   control tokens are re-pinned to their light-mode values (color is set
+   directly because inherited `color` is already resolved at body), and
+   color-scheme keeps the signup controls light. */
+@media (prefers-color-scheme: dark) {
+	.section {
+		--link-accent: var(--accent-600, #1552ac);
+		--link-accent-hover: var(--accent-700, #11469c);
+		--muted-text: #666;
+		color: #171717;
+		color-scheme: light;
+	}
+}
