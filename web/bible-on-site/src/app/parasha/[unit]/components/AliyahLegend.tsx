@@ -91,9 +91,11 @@ export function AliyahLegend({
 		for (const el of document.querySelectorAll<HTMLElement>(
 			"[data-aliyah-marker]",
 		)) {
+			// A merged marker carries every constituent layer key
+			// space-separated — selecting any of them emphasizes it.
 			el.toggleAttribute(
 				"data-aliyah-selected",
-				el.dataset.aliyahKey === selectedKey,
+				(el.dataset.aliyahKey ?? "").split(" ").includes(selectedKey),
 			);
 		}
 	}, [selectedKey]);

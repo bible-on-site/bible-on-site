@@ -3,11 +3,12 @@
  *
  * Marker rendering coverage for the aliyah boundary layer in
  * UnitTextBody (issues #2519/#3165): every applicable division layer
- * renders inline together at exact boundary starts — tagged,
- * categorized, and focus-revealable — coincident boundaries cluster
- * deterministically, the URL-selected layer emphasizes without hiding
- * the rest, perek labels stay modest alongside them, and the legacy
- * path stays unchanged when no markers are passed.
+ * renders inline at exact boundary starts — coincident boundaries that
+ * agree on the ordinal merge into one shared pill whose detail keeps
+ * each constituent layer, divergent communities keep their own tagged
+ * markers, the URL-selected layer emphasizes without hiding the rest,
+ * perek labels stay modest alongside them, and the legacy path stays
+ * unchanged when no markers are passed.
  */
 import { render } from "@testing-library/react";
 import { UnitTextBody } from "../../../src/app/components/reading/UnitTextBody";
@@ -57,9 +58,10 @@ describe("aliyah boundary markers", () => {
 			emphasisMarkerKey: layer.defaultKey,
 		});
 		// The Shabbat layer's seven aliyot + maftir all render — every
-		// marker stays visible regardless of layer (issue #3165).
+		// marker stays visible regardless of layer (issue #3165), merged
+		// or not (`~=` matches a constituent key inside a merged key).
 		const shabbatMarkers = Array.from(
-			container.querySelectorAll('[data-aliyah-key="Bereshit:shabbat"]'),
+			container.querySelectorAll('[data-aliyah-key~="Bereshit:shabbat"]'),
 		);
 		expect(shabbatMarkers).toHaveLength(8);
 		for (const el of shabbatMarkers) {
@@ -86,11 +88,11 @@ describe("aliyah boundary markers", () => {
 			boundaryMarkers: markers,
 			emphasisMarkerKey: layer.defaultKey,
 		});
-		// Weekday markers render beside Shabbat's at their own canonical
-		// coordinates; the replaced single-layer switch left no hidden
-		// layer behind (issue #3165).
+		// Weekday markers render beside Shabbat's — their own marker at
+		// weekday-only coordinates and inside the merged start pill;
+		// the replaced single-layer switch left no hidden layer behind.
 		const weekdayMarkers = container.querySelectorAll(
-			'[data-aliyah-key="Bereshit:weekday"]',
+			'[data-aliyah-key~="Bereshit:weekday"]',
 		);
 		expect(weekdayMarkers.length).toBe(3);
 		for (const el of weekdayMarkers) {
@@ -101,30 +103,60 @@ describe("aliyah boundary markers", () => {
 		).toHaveLength(0);
 	});
 
-	it("clusters coincident boundaries deterministically", () => {
+	it("merges coincident agreeing boundaries into one marker", () => {
 		const { container } = renderBody({
 			boundaryMarkers: markers,
 			emphasisMarkerKey: layer.defaultKey,
 		});
-		// בראשית א א opens the unit under all three layers — base
-		// Shabbat, its hebcal variant, then weekday — in the stable
-		// scheme→variant→next-scheme order the data contract emits.
-		const first = container.querySelector("#pasuk-1-1");
-		const keys = Array.from(
-			first?.querySelectorAll("[data-aliyah-marker]") ?? [],
-		).map((el) => el.getAttribute("data-aliyah-key"));
-		expect(keys).toEqual([
-			"Bereshit:shabbat",
-			"Bereshit:shabbat:alt-hebcal",
-			"Bereshit:weekday",
-		]);
-		// Each marker is tagged so the coincident ראשוןs stay
-		// distinguishable.
-		expect(clusterOrdinals(first)).toEqual(["ראשון", "ראשון", "ראשון"]);
-		const tags = Array.from(
-			first?.querySelectorAll(".aliyahMarkerTag") ?? [],
-		).map((el) => el.textContent);
-		expect(tags).toEqual(["שבת", "חלוקה אחרת", "חול"]);
+		// בראשית א א opens the unit under all three agreeing layers —
+		// base Shabbat, its hebcal variant, and weekday — merged into a
+		// single shared pill (issue #3165 review): one decoration for
+		// the common boundary, not three indistinguishable ראשוןs.
+		const first = must(container.querySelector("#pasuk-1-1"));
+		const merged = first.querySelectorAll("[data-aliyah-marker]");
+		expect(merged).toHaveLength(1);
+		expect(merged[0].getAttribute("data-aliyah-key")).toBe(
+			"Bereshit:shabbat Bereshit:shabbat:alt-hebcal Bereshit:weekday",
+		);
+		expect(merged[0].getAttribute("data-aliyah-category")).toBe("shared");
+		expect(clusterOrdinals(first)).toEqual(["ראשון"]);
+		// The visible tag lists the shared schemes; the agreeing variant
+		// community folds in without a name of its own.
+		expect(first.querySelector(".aliyahMarkerTag")?.textContent).toBe(
+			"שבת+חול",
+		);
+		// Every merged layer keeps its full detail — the accessible name
+		// enumerates each division sharing the boundary.
+		const ariaLabel = merged[0].getAttribute("aria-label") ?? "";
+		expect(ariaLabel).toContain("קריאת שבת");
+		expect(ariaLabel).toContain("קריאת חול");
+		expect(ariaLabel).toContain("חלוקה אחרת");
+		expect(ariaLabel).toContain("עלייה ראשונה");
+	});
+
+	it("keeps a divergent community's own tagged marker", () => {
+		const { container } = renderBody({
+			boundaryMarkers: markers,
+			emphasisMarkerKey: layer.defaultKey,
+		});
+		// The alt-hebcal re-slicing moves שישי from ד כג to ה א — both
+		// boundaries render at their own coordinates, the base's as a
+		// standalone pill and the community's with its variant tag.
+		const base = must(
+			container
+				.querySelector("#pasuk-4-23")
+				?.querySelector('[data-aliyah-key="Bereshit:shabbat"]'),
+		);
+		expect(base.textContent).toContain("שישי");
+		expect(base.getAttribute("data-aliyah-category")).toBe("shabbat");
+		const variant = must(
+			container
+				.querySelector("#pasuk-5-1")
+				?.querySelector('[data-aliyah-key="Bereshit:shabbat:alt-hebcal"]'),
+		);
+		expect(variant.textContent).toContain("שישי");
+		expect(variant.textContent).toContain("חלוקה אחרת");
+		expect(variant.getAttribute("data-aliyah-category")).toBe("variant");
 	});
 
 	it("tags each marker with its layer and exposes richer detail", () => {
@@ -132,30 +164,32 @@ describe("aliyah boundary markers", () => {
 			boundaryMarkers: markers,
 			emphasisMarkerKey: layer.defaultKey,
 		});
-		const shabbat2 = must(
+		// ד כג: the variant moved its שישי elsewhere, so the base marker
+		// stands alone — a single-layer pill keeps its own styling.
+		const shabbat6 = must(
 			container
-				.querySelector("#pasuk-2-4")
+				.querySelector("#pasuk-4-23")
 				?.querySelector('[data-aliyah-key="Bereshit:shabbat"]'),
 		);
-		expect(shabbat2.tagName).toBe("BUTTON");
-		expect(shabbat2.getAttribute("data-aliyah-category")).toBe("shabbat");
-		expect(shabbat2.getAttribute("aria-label")).toBe(
-			"פרשת בראשית · קריאת שבת · עלייה שנייה (בראשית ב ד-יט)",
+		expect(shabbat6.tagName).toBe("BUTTON");
+		expect(shabbat6.getAttribute("data-aliyah-category")).toBe("shabbat");
+		expect(shabbat6.getAttribute("aria-label")).toBe(
+			"פרשת בראשית · קריאת שבת · עלייה שישית (בראשית ד כג - ה כד)",
 		);
 		// Tag + ordinal stay visible without hover; the detail bubble is
 		// the CSS-revealed richer layer and is hidden from AT (the
 		// button's aria-label already carries it).
-		expect(shabbat2.textContent).toContain("שבת");
-		expect(shabbat2.textContent).toContain("שני");
-		const detail = shabbat2.querySelector(".aliyahMarkerDetail");
+		expect(shabbat6.textContent).toContain("שבת");
+		expect(shabbat6.textContent).toContain("שישי");
+		const detail = shabbat6.querySelector(".aliyahMarkerDetail");
 		expect(detail?.getAttribute("aria-hidden")).toBe("true");
 
-		const variant2 = container
-			.querySelector("#pasuk-2-4")
+		const variant6 = container
+			.querySelector("#pasuk-5-1")
 			?.querySelector('[data-aliyah-key="Bereshit:shabbat:alt-hebcal"]');
-		expect(variant2?.getAttribute("data-aliyah-category")).toBe("variant");
-		expect(variant2?.getAttribute("aria-label")).toBe(
-			"פרשת בראשית · קריאת שבת · חלוקה אחרת · עלייה שנייה (בראשית ב ד-יט)",
+		expect(variant6?.getAttribute("data-aliyah-category")).toBe("variant");
+		expect(variant6?.getAttribute("aria-label")).toBe(
+			"פרשת בראשית · קריאת שבת · חלוקה אחרת · עלייה שישית (בראשית ה א-כד)",
 		);
 	});
 
@@ -164,14 +198,17 @@ describe("aliyah boundary markers", () => {
 			boundaryMarkers: markers,
 			emphasisMarkerKey: layer.defaultKey,
 		});
-		// שני begins at בראשית ב ד — the marker sits inside the pasuk-2-4 span.
+		// שני begins at בראשית ב ד — the marker sits inside the pasuk-2-4
+		// span (merged with the agreeing variant there).
 		const pasuk = container.querySelector("#pasuk-2-4");
-		const marker = pasuk?.querySelector('[data-aliyah-key="Bereshit:shabbat"]');
+		const marker = pasuk?.querySelector(
+			'[data-aliyah-key~="Bereshit:shabbat"]',
+		);
 		expect(marker?.textContent).toContain("שני");
 		// מפטיר re-reads the tail: marker inside pasuk-6-5.
 		const maftir = container
 			.querySelector("#pasuk-6-5")
-			?.querySelector('[data-aliyah-key="Bereshit:shabbat"]');
+			?.querySelector('[data-aliyah-key~="Bereshit:shabbat"]');
 		expect(maftir?.textContent).toContain("מפטיר");
 		expect(maftir?.getAttribute("data-aliyah-role")).toBe("maftir");
 		expect(maftir?.getAttribute("aria-label")).toContain("מפטיר");
@@ -183,10 +220,33 @@ describe("aliyah boundary markers", () => {
 			emphasisMarkerKey: layer.defaultKey,
 		});
 		const emphasized = container.querySelectorAll("[data-aliyah-selected]");
+		// Eight Shabbat boundaries — merged pills count once since they
+		// contain the selected key among their constituents.
 		expect(emphasized.length).toBe(8);
 		for (const el of emphasized) {
-			expect(el.getAttribute("data-aliyah-key")).toBe("Bereshit:shabbat");
+			expect(el.getAttribute("data-aliyah-key")?.split(" ")).toContain(
+				"Bereshit:shabbat",
+			);
 		}
+	});
+
+	it("emphasizes a merged marker for any constituent layer", () => {
+		const { container } = renderBody({
+			boundaryMarkers: markers,
+			emphasisMarkerKey: "Bereshit:weekday",
+		});
+		const emphasized = Array.from(
+			container.querySelectorAll("[data-aliyah-selected]"),
+		).map((el) => el.getAttribute("data-aliyah-key"));
+		// The merged start pill plus weekday's two own boundaries.
+		expect(emphasized).toHaveLength(3);
+		expect(emphasized[0]).toBe(
+			"Bereshit:shabbat Bereshit:shabbat:alt-hebcal Bereshit:weekday",
+		);
+		expect(emphasized.slice(1)).toEqual([
+			"Bereshit:weekday",
+			"Bereshit:weekday",
+		]);
 	});
 
 	it("renders no emphasis without an emphasis key", () => {
@@ -227,7 +287,7 @@ describe("aliyah boundary markers", () => {
 		);
 		const firstPasuk = container.querySelector("#pasuk-91-1");
 		expect(
-			firstPasuk?.querySelector('[data-aliyah-key="Vayikra:shabbat"]')
+			firstPasuk?.querySelector('[data-aliyah-key~="Vayikra:shabbat"]')
 				?.textContent,
 		).toContain("ראשון");
 		// The modest perek label for ויקרא א renders just before it.
@@ -262,7 +322,7 @@ describe("aliyah boundary markers", () => {
 		// every layer at its coordinate, none hidden.
 		expect(container.querySelector(".perekBreakLabelModest")).toBeNull();
 		expect(
-			container.querySelector('[data-aliyah-key="Bereshit:shabbat"]')
+			container.querySelector('[data-aliyah-key~="Bereshit:shabbat"]')
 				?.textContent,
 		).toContain("שני");
 	});

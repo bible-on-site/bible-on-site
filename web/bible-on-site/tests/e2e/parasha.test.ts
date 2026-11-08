@@ -213,9 +213,11 @@ test.describe("פרשה reading root", () => {
 		).toBeVisible();
 
 		const torahText = page.locator('[data-unit-text="torah"]');
+		// `~=` matches a layer's key inside a merged marker's
+		// space-separated constituent keys as well as a standalone one.
 		const markersAt = (pasukId: string, key?: string) =>
 			torahText.locator(
-				`#${pasukId} [data-aliyah-marker]${key ? `[data-aliyah-key='${key}']` : ""}`,
+				`#${pasukId} [data-aliyah-marker]${key ? `[data-aliyah-key~='${key}']` : ""}`,
 			);
 
 		// No layer hides — the marker contract renders everything.
@@ -235,23 +237,28 @@ test.describe("פרשה reading root", () => {
 			/חב"ד חמישי/,
 		);
 
-		// Coincident boundaries cluster deterministically — base scheme,
-		// its variant, then the weekday layer — all tagged so the three
-		// coincident ראשוןs stay distinguishable.
+		// Coincident agreeing boundaries merge into one shared pill —
+		// the three coincident ראשוןs become a single marker tagged with
+		// the shared schemes; the agreeing חב"ד custom folds into the
+		// detail without a name of its own, while every constituent key
+		// rides along so emphasis works for any merged layer.
 		const startCluster = markersAt("pasuk-44-18");
-		await expect(startCluster).toHaveCount(3);
-		expect(
-			await startCluster.evaluateAll((els) =>
-				els.map((el) => el.getAttribute("data-aliyah-key")),
-			),
-		).toEqual([
-			"Vayigash:shabbat",
-			'Vayigash:shabbat:חב"ד',
-			"Vayigash:weekday",
-		]);
-		await expect(
-			startCluster.locator('[class*="aliyahMarkerOrdinal"]'),
-		).toHaveText(["ראשון", "ראשון", "ראשון"]);
+		await expect(startCluster).toHaveCount(1);
+		expect(await startCluster.getAttribute("data-aliyah-key")).toBe(
+			'Vayigash:shabbat Vayigash:shabbat:חב"ד Vayigash:weekday',
+		);
+		await expect(startCluster).toHaveText(/שבת\+חול ראשון/);
+		await expect(startCluster).toHaveAttribute(
+			"data-aliyah-category",
+			"shared",
+		);
+		// The merged detail still enumerates every agreeing layer.
+		expect(await startCluster.getAttribute("aria-label")).toContain(
+			"קריאת חול",
+		);
+		expect(await startCluster.getAttribute("aria-label")).toContain(
+			'מנהג חב"ד',
+		);
 
 		// Weekday boundaries mark their own positions too.
 		await expect(markersAt("pasuk-44-21", "Vayigash:weekday")).toHaveText(
@@ -293,12 +300,13 @@ test.describe("פרשה reading root", () => {
 		const emphasized = () =>
 			torahText.locator("[data-aliyah-marker][data-aliyah-selected]");
 
-		// The default Shabbat layer is emphasized out of the box.
+		// The default Shabbat layer is emphasized out of the box — merged
+		// pills count when the layer rides among their constituents.
 		expect(await emphasized().count()).toBeGreaterThan(0);
 		for (const key of await emphasized().evaluateAll((els) =>
 			els.map((el) => el.getAttribute("data-aliyah-key")),
 		)) {
-			expect(key).toBe("Vayigash:shabbat");
+			expect(key?.split(" ")).toContain("Vayigash:shabbat");
 		}
 
 		// Selecting the custom emphasizes it and mirrors ?variant= — the
@@ -309,12 +317,15 @@ test.describe("פרשה reading root", () => {
 		});
 		await chabadEntry.click();
 		await expect(chabadEntry).toHaveAttribute("aria-pressed", "true");
-		await expect(
-			torahText.locator(
-				'[data-aliyah-key="Vayigash:shabbat"][data-aliyah-selected]',
-			),
-		).toHaveCount(0);
+		// Emphasis moves wholly to the variant layer: every lit marker —
+		// merged pill or standalone — carries the variant key, and no
+		// variant-free marker stays selected.
 		expect(await emphasized().count()).toBeGreaterThan(0);
+		for (const key of await emphasized().evaluateAll((els) =>
+			els.map((el) => el.getAttribute("data-aliyah-key")),
+		)) {
+			expect(key?.split(" ")).toContain('Vayigash:shabbat:חב"ד');
+		}
 		await expect(page).toHaveURL(/variant=/, { timeout: 60_000 });
 		await testInfo.attach("aliyah-variant-emphasized", {
 			body: await legend.screenshot(),
@@ -327,7 +338,7 @@ test.describe("פרשה reading root", () => {
 		await expect(
 			page
 				.locator(
-					'[data-unit-text="torah"] [data-aliyah-key="Vayigash:weekday"][data-aliyah-selected]',
+					'[data-unit-text="torah"] [data-aliyah-key~="Vayigash:weekday"][data-aliyah-selected]',
 				)
 				.first(),
 		).toBeAttached();
@@ -338,7 +349,7 @@ test.describe("פרשה reading root", () => {
 	}) => {
 		await page.goto(unitPath("ויגש"));
 		const marker = page
-			.locator('[data-unit-text="torah"] [data-aliyah-key="Vayigash:shabbat"]')
+			.locator('[data-unit-text="torah"] [data-aliyah-key~="Vayigash:shabbat"]')
 			.first();
 		// The full division detail is the marker's accessible name.
 		await expect(marker).toHaveAttribute(
@@ -368,7 +379,9 @@ test.describe("פרשה reading root", () => {
 			page.getByRole("heading", { level: 1, name: /פרשת מסעי/ }),
 		).toBeVisible();
 		const torahText = page.locator('[data-unit-text="torah"]');
-		const joined = torahText.locator('[data-aliyah-key="Matot-Masei:shabbat"]');
+		const joined = torahText.locator(
+			'[data-aliyah-key~="Matot-Masei:shabbat"]',
+		);
 		expect(await joined.count()).toBeGreaterThan(0);
 		await expect(joined.first()).toHaveAttribute(
 			"data-aliyah-category",
@@ -391,7 +404,7 @@ test.describe("פרשה reading root", () => {
 		).toHaveText(/אשכנז חמישי/);
 		await expect(
 			torahText.locator(
-				'#pasuk-150-50 [data-aliyah-key="Matot-Masei:shabbat"]',
+				'#pasuk-150-50 [data-aliyah-key~="Matot-Masei:shabbat"]',
 			),
 		).toHaveText(/מטות-מסעי חמישי/);
 	});
@@ -410,10 +423,10 @@ test.describe("פרשה reading root", () => {
 		const bookTorah = page.locator('[data-sefer-unit-text="11:torah"]');
 		await expect(bookTorah.first()).toBeAttached({ timeout: 30_000 });
 		await expect(
-			bookTorah.locator('[data-aliyah-key="Vayigash:weekday"]').first(),
+			bookTorah.locator('[data-aliyah-key~="Vayigash:weekday"]').first(),
 		).toBeAttached();
 		await expect(
-			bookTorah.locator("[data-aliyah-key='Vayigash:shabbat:חב\"ד']").first(),
+			bookTorah.locator("[data-aliyah-key~='Vayigash:shabbat:חב\"ד']").first(),
 		).toBeAttached();
 	});
 
@@ -424,9 +437,10 @@ test.describe("פרשה reading root", () => {
 		await page.goto(unitPath("ויגש"));
 		const torahText = page.locator('[data-unit-text="torah"]');
 		const cluster = torahText.locator("#pasuk-44-18 [data-aliyah-marker]");
-		await expect(cluster).toHaveCount(3);
-		// All three coincident markers stay inside the text column —
-		// inline flow wraps them rather than overflowing.
+		// The three coincident layers merge into one pill that still
+		// stays inside the text column — inline flow wraps it rather
+		// than overflowing.
+		await expect(cluster).toHaveCount(1);
 		const textBox = await torahText.boundingBox();
 		for (const box of await cluster.evaluateAll((els) =>
 			els.map((el) => {

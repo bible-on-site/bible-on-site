@@ -215,6 +215,28 @@ describe("AliyahLegend", () => {
 		expect(pressed(utils, "שבת").getAttribute("aria-pressed")).toBe("true");
 	});
 
+	it("emphasizes a merged marker for any of its constituent layers", () => {
+		// A coincident boundary renders one merged pill carrying every
+		// constituent key space-separated — selecting any of them
+		// emphasizes the shared marker.
+		const utils = render(
+			<>
+				<div data-unit-text="">
+					<span
+						data-aliyah-marker=""
+						data-aliyah-key="matot:shabbat matot:weekday"
+					/>
+				</div>
+				<AliyahLegend contexts={CONTEXTS} defaultKey={DEFAULT_KEY} />
+			</>,
+		);
+
+		expect(emphasizedKeys()).toEqual(["matot:shabbat matot:weekday"]);
+		fireEvent.click(pressed(utils, "שני וחמישי"));
+		expect(emphasizedKeys()).toEqual(["matot:shabbat matot:weekday"]);
+		expect(allVisible()).toBe(true);
+	});
+
 	it("falls back to the URL-resolved layer when the offered contexts narrow under the active selection", () => {
 		const utils = renderLayer();
 		fireEvent.click(pressed(utils, "שני וחמישי")); // selection: matot:weekday

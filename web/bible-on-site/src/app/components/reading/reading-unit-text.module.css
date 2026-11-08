@@ -110,7 +110,9 @@
 	font-weight: 400;
 	font-style: normal;
 	line-height: 1.55;
-	white-space: normal;
+	/* A merged marker lists each agreeing layer's detail on its own
+	   line. */
+	white-space: pre-line;
 	text-align: start;
 	box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
 	pointer-events: none;
