@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { pageHeader } from "@/app/components/PageShell";
 import { getBookshelfDedicationLines } from "@/lib/dedications/loaders";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
@@ -100,7 +101,10 @@ export default async function Home({ params }: Props) {
 	const dedications = await getBookshelfDedicationLines();
 	return (
 		<>
-			<main className={styles.page}>
+			{/* The alHaperek hero paints the brand backdrop under the bar, so
+			    this family opts out of the solid bar — the declared overlay
+			    policy keeps it intentionally transparent (issue #3161). */}
+			<main {...pageHeader("overlay")} className={styles.page}>
 				{scrollTarget && <ScrollToSection sectionId={scrollTarget} />}
 				<section className={styles.alHaperekSection}>
 					<header className={styles.sectionHeader}>
