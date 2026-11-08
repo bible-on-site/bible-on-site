@@ -1,6 +1,7 @@
 pub mod article;
 pub mod article_covering_source;
 pub mod article_dedication;
+pub mod article_hebrew_date;
 pub mod article_moed;
 pub mod author;
 pub mod dedication;

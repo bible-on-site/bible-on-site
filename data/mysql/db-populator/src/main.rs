@@ -300,6 +300,10 @@ async fn run(cli: Cli) -> Result<()> {
 
         apply_article_covering_source_upgrade(&mut conn, base_path).await?;
 
+        // Recurring Hebrew-date article overrides (#3098); standalone
+        // idempotent table keyed by (hebrew_month, hebrew_day).
+        apply_article_hebrew_date_upgrade(&mut conn, base_path).await?;
+
         apply_perek_pasuk_count_upgrade(&mut conn, base_path).await?;
 
         apply_article_content_hash_upgrade(&mut conn, base_path).await?;
@@ -347,6 +351,12 @@ async fn run(cli: Cli) -> Result<()> {
         // fixtures link test articles into seeded moed rows (#3101).
         apply_moed_upgrade(&mut conn, base_path).await?;
         apply_moed_seed(&mut conn, base_path).await?;
+
+        // tanah_test_data.sql inserts Hebrew-date override fixtures
+        // (#3098): re-apply the idempotent table upgrade here so
+        // `mysql-populate-data-only` creates it on databases whose
+        // structure predates the table, before any fixture references it.
+        apply_article_hebrew_date_upgrade(&mut conn, base_path).await?;
 
         if !cli.skip_tanah_test_data {
             let data_path = base_path.join(&cli.data_script);
@@ -607,6 +617,18 @@ async fn apply_article_covering_source_upgrade(
     )
     .await?;
     apply_article_index_upgrade(conn, base_path).await
+}
+
+async fn apply_article_hebrew_date_upgrade(
+    conn: &mut MySqlConnection,
+    base_path: &Path,
+) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_article_hebrew_date_upgrade.sql"),
+        "article-hebrew-date-upgrade",
+    )
+    .await
 }
 
 async fn apply_article_index_upgrade(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {

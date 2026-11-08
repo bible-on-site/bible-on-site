@@ -723,7 +723,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         try
         {
             BottomBar.ArticlesBadgeCount =
-                StarterService.Instance.GetPerekArticlesCount(_viewModel.PerekId);
+                StarterService.Instance.GetDailyPerekArticlesCount(_viewModel.PerekId, _dailyDateNum);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: articles-count badge degrades to hidden
         catch (Exception ex) //NOSONAR — articles-count badge degrades to hidden.
@@ -1460,7 +1460,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         try
         {
-            ArticlesCollection.ItemsSource = StarterService.Instance.GetArticlesByPerekId(_viewModel.PerekId);
+            ArticlesCollection.ItemsSource = StarterService.Instance.GetDailyArticles(_viewModel.PerekId, _dailyDateNum);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: articles list degrades to empty
         catch (Exception ex) //NOSONAR — articles list degrades to empty.
