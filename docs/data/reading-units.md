@@ -163,11 +163,14 @@ live in `docs/data/aliyah-sources.md`. Consumers:
   dropped as renderer-identical. The flat parasha page embeds all
   context/scheme/variant marker layers and renders every applicable
   one inline at its canonical coordinate — tagged, categorized, and
-  hover/focus-detailed (issue #3165); a legend emphasizes the layer the
-  compatible `?reading=`/`?scheme=`/`?variant=` params select without
-  hiding the rest. The sefer book renders the same full layer set per
-  unit. Aliyah markers take the prominent separator treatment; perek
-  labels demote to pasuk-number styling.
+  hover/focus-detailed (issue #3165); boundaries that agree on the
+  ordinal merge into one shared pill carrying every constituent layer
+  key, while divergent divisions keep their own tagged marker; a
+  legend emphasizes the layer the compatible
+  `?reading=`/`?scheme=`/`?variant=` params select without hiding the
+  rest. The sefer book renders the same full layer set per unit.
+  Aliyah markers take the prominent separator treatment; perek labels
+  demote to pasuk-number styling.
 - **SQLite export** — `reading_units.rs::insert_parasha_aliyot` resolves
   the same JSON through the same canonical-resolution path and emits:
   - `tanah_parasha_aliyah_scheme` — `{ id, label, description,
