@@ -231,6 +231,7 @@ export async function getAuthorizationToken(
 export async function ensureRepositoryExists(
 	client: ECRClient,
 	repositoryName: string,
+	mutableTags: readonly string[] = ["latest"],
 ): Promise<string> {
 	try {
 		const describeCommand = new DescribeRepositoriesCommand({
@@ -249,10 +250,16 @@ export async function ensureRepositoryExists(
 	} catch (error: unknown) {
 		if ((error as { name?: string }).name === "RepositoryNotFoundException") {
 			console.info(`Repository ${repositoryName} not found, creating...`);
+			// New repositories must satisfy the publication guard
+			// (assertAPIRepositoryPolicy): only the listed tags stay mutable.
 			const createCommand = new CreateRepositoryCommand({
 				repositoryName,
 				imageScanningConfiguration: { scanOnPush: true },
-				imageTagMutability: "MUTABLE",
+				imageTagMutability: "IMMUTABLE_WITH_EXCLUSION",
+				imageTagMutabilityExclusionFilters: mutableTags.map((tag) => ({
+					filterType: "WILDCARD" as const,
+					filter: tag,
+				})),
 			});
 			const response = await withRetry(
 				() => client.send(createCommand),
