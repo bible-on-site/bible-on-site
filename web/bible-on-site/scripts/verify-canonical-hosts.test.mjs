@@ -338,7 +338,8 @@ test("router.conf serves missing /www/ files with the router-local branded 404",
 			"location /www/ must not re-dispatch misses into the app proxy",
 		);
 	}
-	const fallbackBlocks = conf.match(/location = \/www\/404\.html \{[^}]+\}/g) ?? [];
+	const fallbackBlocks =
+		conf.match(/location = \/www\/404\.html \{[^}]+\}/g) ?? [];
 	assert.equal(
 		fallbackBlocks.length,
 		2,
@@ -380,8 +381,10 @@ test("router/404.html keeps the app's branded missing-page contract", () => {
 
 	const title = metadataSource.match(/title: "([^"]+)"/)?.[1];
 	assert.ok(title, "could not read the shared missing-page title");
-	assert.ok(
-		html.includes("<title>" + title + "</title>"),
+	const pageTitle = html.match(/<title>([^<]*)<\/title>/)?.[1];
+	assert.equal(
+		pageTitle,
+		title,
 		"router/404.html must title itself with the shared missing-page title",
 	);
 
