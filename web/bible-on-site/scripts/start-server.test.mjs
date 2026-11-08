@@ -7,7 +7,11 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { inboundConnections, reportImageSnapshotter } from "./start-server.mjs";
+import {
+	inboundConnections,
+	reportImageSnapshotter,
+	startReadinessProbe,
+} from "./start-server.mjs";
 
 const entry = new URL("./start-server.mjs", import.meta.url).href;
 const nativeSignals = { skip: process.platform === "win32", timeout: 15_000 };
@@ -431,6 +435,85 @@ test("a held remote connection keeps the real measured drain open until it close
 	client.destroy();
 	assert.deepEqual(await server.exited, [143, null]);
 	assert.match(server.output(), /saw no inbound connections/);
+});
+
+test("readiness probe retries refused connections and logs the first response once", async () => {
+	let attempts = 0;
+	const lines = [];
+	let clock = 1_000;
+	const stop = startReadinessProbe({
+		port: 3000,
+		request: async (url, options) => {
+			assert.equal(url, "http://127.0.0.1:3000/api/health/ready");
+			assert.ok(options.signal instanceof AbortSignal);
+			attempts += 1;
+			if (attempts < 3) throw new Error("connect ECONNREFUSED");
+			clock += 400; // response lands 400ms after the probe started
+			return Response.json({ status: "ready" });
+		},
+		sleep: async () => {},
+		now: () => clock,
+		log: (line) => lines.push(line),
+	});
+	const deadline = Date.now() + 2_000;
+	while (lines.length === 0) {
+		if (Date.now() > deadline) throw new Error("probe never logged");
+		await new Promise((resolve) => setTimeout(resolve, 5));
+	}
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	assert.deepEqual(lines, ["Website readiness probe: HTTP 200 after 400ms"]);
+	assert.equal(attempts, 3);
+	stop();
+});
+
+test("readiness probe stop aborts a pending request without logging", async () => {
+	const lines = [];
+	let requested = false;
+	const stop = startReadinessProbe({
+		port: 3000,
+		request: (_url, { signal }) => {
+			requested = true;
+			return new Promise((_resolve, reject) => {
+				signal.addEventListener("abort", () => reject(new Error("aborted")));
+			});
+		},
+		sleep: async () => {},
+		log: (line) => lines.push(line),
+	});
+	const deadline = Date.now() + 2_000;
+	while (!requested) {
+		if (Date.now() > deadline) throw new Error("probe never requested");
+		await new Promise((resolve) => setTimeout(resolve, 5));
+	}
+	stop();
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	assert.deepEqual(lines, []);
+	stop(); // idempotent
+});
+
+test("readiness probe rejects unusable ports", () => {
+	for (const port of [0, -1, 65_536, 1.5, Number.NaN]) {
+		assert.throws(() => startReadinessProbe({ port }), RangeError);
+	}
+});
+
+test("the launcher probes readiness as soon as the listener accepts", {
+	timeout: 15_000,
+}, async (t) => {
+	const port = await freePort();
+	const server = await fixture(t, boundServer, {
+		drainMs: 500,
+		measure: "0",
+		env: { PORT: String(port) },
+	});
+	await server.waitFor("READY ");
+	// The fixture answers every path, so the probe's first response is the
+	// warm-up trigger plus startup timing evidence — long before any
+	// simulated container check could arrive.
+	await server.waitFor("Website readiness probe: HTTP 200");
+	server.wrapper.kill("SIGINT");
+	// boundServer has no SIGINT handler, so the child dies by the signal.
+	assert.deepEqual(await server.exited, [null, "SIGINT"]);
 });
 
 test("child startup failures keep their nonzero exit code", {
