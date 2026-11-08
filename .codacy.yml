@@ -41,6 +41,7 @@ exclude_paths:
   - "data/mysql/tanah_daily_bulletin_telegram_upgrade.sql"
   - "data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"
   - "data/mysql/tanah_article_covering_source_upgrade.sql"
+  - "data/mysql/tanah_article_hebrew_date_upgrade.sql"
   - "data/mysql/tanah_article_content_hash_upgrade.sql"
   - "data/mysql/tanah_article_index_upgrade.sql"
   - "data/mysql/tanah_reading_metrics_upgrade.sql"

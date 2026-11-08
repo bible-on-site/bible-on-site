@@ -75,6 +75,15 @@ export const masoraDedicationsTag = "masora:dedications";
 /** Article row `id` — `/929/{perek}/{article}` and anywhere it is embedded. */
 export const articleTag = (articleId: number) => `article:${articleId}`;
 
+/**
+ * Every recurring Hebrew-month/day article assignment (#3098) — one small
+ * collection tag covering all cached date-override reads. The admin
+ * assignment editor emits it directly; `resolveArticle` also emits it for
+ * any article change because an edit can alter the assigned article's
+ * rendered summary.
+ */
+export const articleDateOverridesTag = "article-date-overrides";
+
 /** Article summaries listed on `/929/{perek}` and in its sefer view. */
 export const perekArticlesTag = (perekId: number) =>
 	`perek:${perekId}:articles`;
