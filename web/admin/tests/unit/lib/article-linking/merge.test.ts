@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { planProposalApply } from "~/lib/article-linking/merge";
+import type {
+	AuthorTarget,
+	DedicationLinkTarget,
+	PasukCoordinate,
+	ProposalTarget,
+} from "~/lib/article-linking/types";
 import { snapshot } from "./fixture";
 
 const base = {
@@ -98,7 +104,7 @@ describe("planProposalApply", () => {
 					...base,
 					relationshipKey: "coveringSources",
 					action: "add",
-					target: {},
+					target: {} as ProposalTarget,
 				},
 				snapshot,
 				hash,
@@ -120,7 +126,7 @@ describe("planProposalApply", () => {
 						pasukCoordinates: [
 							{ perekId: 18, pasuk: 2 },
 							{ perekId: Number.NaN, pasuk: 1 },
-							{ perekId: 5 },
+							{ perekId: 5 } as PasukCoordinate,
 						],
 					},
 				},
@@ -320,7 +326,7 @@ describe("planProposalApply", () => {
 					...base,
 					relationshipKey: "primaryPerek",
 					action: "replace",
-					target: {},
+					target: {} as ProposalTarget,
 				},
 				snapshot,
 				hash,
@@ -356,7 +362,7 @@ describe("planProposalApply", () => {
 					...base,
 					relationshipKey: "author",
 					action: "clear",
-					target: {},
+					target: {} as ProposalTarget,
 				},
 				snapshot,
 				hash,
@@ -371,7 +377,7 @@ describe("planProposalApply", () => {
 					...base,
 					relationshipKey: "author",
 					action: "replace",
-					target: { authorId: "הרב קוק" },
+					target: { authorId: "הרב קוק" } as unknown as AuthorTarget,
 				},
 				snapshot,
 				hash,
@@ -426,7 +432,7 @@ describe("planProposalApply", () => {
 					...base,
 					relationshipKey: "dedicationAssignments",
 					action: "add",
-					target: { dedicationId: "הקדשה" },
+					target: { dedicationId: "הקדשה" } as unknown as DedicationLinkTarget,
 				},
 				snapshot,
 				hash,

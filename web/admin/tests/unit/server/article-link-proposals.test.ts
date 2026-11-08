@@ -737,14 +737,14 @@ describe("article link proposals server", () => {
 				}
 				return dispatchQuery(sql);
 			});
-			const runs = await listLinkRuns({ data: {} });
+			const runs = await listLinkRuns({});
 			expect(runs).toHaveLength(1);
 			expect(runs[0].runId).toBe("run-9");
 			expect(runs[0].pending).toBe(1);
 		});
 
 		it("surfaces pipeline capability", async () => {
-			const status = await getLinkPipelineStatus({ data: {} });
+			const status = await getLinkPipelineStatus({});
 			expect(status.schemaReady).toBe(true);
 			expect(status.llmEnabled).toBe(true);
 			expect(status.articleApiConfigured).toBe(true);
@@ -759,7 +759,7 @@ describe("article link proposals server", () => {
 					code: "ER_NO_SUCH_TABLE",
 				}),
 			);
-			const status = await getLinkPipelineStatus({ data: {} });
+			const status = await getLinkPipelineStatus({});
 			expect(status.schemaReady).toBe(false);
 		});
 	});

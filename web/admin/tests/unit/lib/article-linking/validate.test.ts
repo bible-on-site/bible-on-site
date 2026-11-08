@@ -235,7 +235,7 @@ describe("validateModelOutput", () => {
 							citations: [{ sefer: "בראשית", perek: "יח", pasuk: "ג" }],
 						},
 						evidence: [{ quote: "בראשית" }],
-						confidence: "high",
+						confidence: "high" as unknown as number,
 					},
 				],
 			});
