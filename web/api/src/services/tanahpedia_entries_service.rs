@@ -717,6 +717,10 @@ mod tests {
         )
     }
 
+    /// `get_today_entities` caches in one process-wide slot, so tests calling
+    /// it must run one at a time — parallel calls evict each other's entry.
+    static TODAY_ENTITIES_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
     #[tokio::test]
     async fn get_entries_returns_mapped_entries() {
         let db = Database::from_connection(
@@ -1180,6 +1184,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_today_entities_groups_entries_per_entity() {
+        let _cache_guard = TODAY_ENTITIES_TEST_LOCK.lock().await;
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
@@ -1217,6 +1222,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_today_entities_caches_results_per_day() {
+        let _cache_guard = TODAY_ENTITIES_TEST_LOCK.lock().await;
         // Unique month_day values so the shared cache cannot leak between tests.
         let today = 9801;
         let tomorrow = 9802;
