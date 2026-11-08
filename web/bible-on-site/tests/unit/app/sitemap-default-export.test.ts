@@ -20,6 +20,11 @@ jest.mock("@/lib/tanahpedia/service", () => ({
 jest.mock("@/lib/seo/perek-images-data", () => ({
 	getPerekImagesByChapter: jest.fn(),
 }));
+jest.mock("@/lib/moadim", () => ({
+	getPublishedMoedSlugs: jest.fn(),
+	MOADIM_ROOT: "/מועדים",
+	moedHref: (slug: string) => `/מועדים/${slug}`,
+}));
 
 import { headers } from "next/headers";
 import sitemap, { SITEMAP_SECTIONS, TOTAL_PERAKIM } from "@/app/sitemap";
@@ -30,6 +35,7 @@ import { SITE_ORIGIN } from "@/lib/seo/jsonld";
 import { getPerekImagesByChapter } from "@/lib/seo/perek-images-data";
 import { CATEGORY_SLUGS } from "@/lib/tanahpedia/category-slug";
 import { getAllEntryUniqueNames } from "@/lib/tanahpedia/service";
+import { getPublishedMoedSlugs } from "@/lib/moadim";
 
 const BUILD_LOADERS = [
 	["authors", getAllAuthorSlugs],
@@ -37,10 +43,12 @@ const BUILD_LOADERS = [
 	["commentaries", getAllPerushPerekNamePairs],
 	["Tanahpedia entries", getAllEntryUniqueNames],
 	["chapter images", getPerekImagesByChapter],
+	["moadim", getPublishedMoedSlugs],
 ] as const;
 
 // Root, sections, 929 index/chapters, author index, pedia index/categories,
-// and the Parasha hub with all 54 portions. No Masora URLs.
+// the /מועדים landing, and the Parasha hub with all 54 portions. No
+// Masora URLs.
 const STATIC_COUNT =
 	1 +
 	SITEMAP_SECTIONS.length +
@@ -49,6 +57,7 @@ const STATIC_COUNT =
 	1 +
 	1 +
 	Object.keys(CATEGORY_SLUGS).length +
+	1 +
 	55;
 
 describe("sitemap build-time snapshot", () => {
@@ -63,12 +72,13 @@ describe("sitemap build-time snapshot", () => {
 		]);
 		(getAllEntryUniqueNames as jest.Mock).mockResolvedValue(["יעקב"]);
 		(getPerekImagesByChapter as jest.Mock).mockResolvedValue({});
+		(getPublishedMoedSlugs as jest.Mock).mockResolvedValue(["פסח"]);
 	});
 
 	it("includes every fixture family using the configured canonical origin", async () => {
 		const result = await sitemap();
 		const urls = result.map((entry) => entry.url);
-		expect(result).toHaveLength(STATIC_COUNT + 5);
+		expect(result).toHaveLength(STATIC_COUNT + 6);
 		expect(urls).toEqual(
 			expect.arrayContaining([
 				SITE_ORIGIN,
@@ -79,6 +89,8 @@ describe("sitemap build-time snapshot", () => {
 				`${SITE_ORIGIN}/929/authors/${encodeURIComponent("הרב א")}`,
 				`${SITE_ORIGIN}/929/authors/${encodeURIComponent("הרב ב")}`,
 				`${SITE_ORIGIN}/pedia/${encodeURIComponent("יעקב")}`,
+				`${SITE_ORIGIN}/מועדים`,
+				`${SITE_ORIGIN}/מועדים/פסח`,
 				`${SITE_ORIGIN}/פרשה/וזאת-הברכה`,
 			]),
 		);

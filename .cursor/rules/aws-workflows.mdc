@@ -32,7 +32,10 @@ alwaysApply: false
   replacement or resize (#2561), edge caching in front of the router (#2508),
   admin scale-to-zero scheduling, and further log-retention reduction. Each
   item's prerequisites are in `docs/aws/cost-risk-audit-2026-10-23.md`; the
-  withdrawn #2563 recipes must not be rerun.
+  withdrawn #2563 recipes must not be rerun. Applying the cost-monitoring
+  reference (`docs/aws/cloudformation/cost-monitoring.yaml` — budget, anomaly
+  monitor, billing alarm) is likewise gated; the read-only baseline check in
+  `devops/cost-audit.mjs` is not.
 
 - Connect: `aws sso login --profile AdministratorAccess-<AccountID>`.
 - Every accepted change must be reflected in the existing reference IaC under `docs/aws/cloudformation/`, but never run CloudFormation from those templates — they are reference-only. Update `docs/aws/` when the process changes.

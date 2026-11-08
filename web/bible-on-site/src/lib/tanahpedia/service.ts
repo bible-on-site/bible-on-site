@@ -72,23 +72,26 @@ export async function getEntryByUniqueName(
 	const entry = entries[0];
 	// Stored reading metric (#2607): degrades to null when the schema is not
 	// deployed yet, and a failed metric read must not take down the entry.
-	const metric = await metricOrFallback(`entry ${entry.id}`, null, () =>
-		getEntryMetric(entry.id),
-	);
-	const entities = await query<{
-		id: string;
-		entryId: string;
-		entityId: string;
-		entityType: EntityType;
-		entityName: string;
-	}>(
-		`SELECT ee.id, ee.entry_id AS entryId, ee.entity_id AS entityId,
-		        e.entity_type AS entityType, e.name AS entityName
-		 FROM tanahpedia_entry_entity ee
-		 JOIN tanahpedia_entity e ON e.id = ee.entity_id
-		 WHERE ee.entry_id = ?`,
-		[entry.id],
-	);
+	// The metric and entity lookups are independent — issue them together.
+	const [metric, entities] = await Promise.all([
+		metricOrFallback(`entry ${entry.id}`, null, () =>
+			getEntryMetric(entry.id),
+		),
+		query<{
+			id: string;
+			entryId: string;
+			entityId: string;
+			entityType: EntityType;
+			entityName: string;
+		}>(
+			`SELECT ee.id, ee.entry_id AS entryId, ee.entity_id AS entityId,
+			        e.entity_type AS entityType, e.name AS entityName
+			 FROM tanahpedia_entry_entity ee
+			 JOIN tanahpedia_entity e ON e.id = ee.entity_id
+			 WHERE ee.entry_id = ?`,
+			[entry.id],
+		),
+	]);
 
 	return { ...entry, ...(metric ? { metric } : {}), entities };
 }
@@ -749,6 +752,54 @@ export async function getRecentEntries(limit = 10): Promise<EntryStub[]> {
 }
 
 /**
+ * Summary-only recent entries — same ordering as getRecentEntries but
+ * without the (potentially large) content body. Powers the /pedia
+ * landing list, which renders titles only.
+ */
+export async function getRecentEntrySummaries(
+	limit = 10,
+): Promise<EntryStub[]> {
+	return query<EntryStub>(
+		"SELECT id, unique_name AS uniqueName, title FROM tanahpedia_entry ORDER BY updated_at DESC LIMIT ?",
+		[String(limit)],
+	);
+}
+
+/**
+ * Summary-only entries of one entity type, ordered by title — the same
+ * row set as getEntriesByEntityType without the content body. Powers the
+ * entry-page sibling dropdown.
+ */
+export async function getEntityTypeEntrySummaries(
+	entityType: EntityType,
+): Promise<EntryStub[]> {
+	return query<EntryStub>(
+		`SELECT DISTINCT ent.id, ent.unique_name AS uniqueName, ent.title
+	     FROM tanahpedia_entry ent
+	     JOIN tanahpedia_entry_entity ee ON ee.entry_id = ent.id
+	     JOIN tanahpedia_entity e ON e.id = ee.entity_id
+	     WHERE e.entity_type = ?
+	     ORDER BY ent.title`,
+		[entityType],
+	);
+}
+
+/**
+ * Summary-only version of getEntries — same title ordering, without the
+ * content body. Used by the entry-page sibling dropdown when an entry
+ * has no primary entity type.
+ */
+export async function getAllEntrySummaries(
+	limit = 50,
+	offset = 0,
+): Promise<EntryStub[]> {
+	return query<EntryStub>(
+		"SELECT id, unique_name AS uniqueName, title FROM tanahpedia_entry ORDER BY title LIMIT ? OFFSET ?",
+		[String(limit), String(offset)],
+	);
+}
+
+/**
  * Get all entry unique names for SSG.
  * This function is used by generateStaticParams to pre-render all entry pages.
  */
@@ -823,6 +874,13 @@ export async function getAllEntityTypeParams(): Promise<
 
 // ─── Today in Tanah ─────────────────────────────────────────
 // Anniversaries match the Hebrew month and day, regardless of year.
+//
+// `month_day` is a stored generated column (`col % 10000`) on every
+// anniversary date column, so each EXISTS below is an index seek instead
+// of a modulo-forced full scan. It reproduces the old predicate exactly:
+// NULL dates stay NULL (never match) and the 99991229 "forever"
+// sentinel yields month_day 1229, which can only match on T'kufat
+// Kislev — same as the previous explicit guards.
 export async function getTodayInTanahEntities(
 	hebrewMonth: number,
 	hebrewDay: number,
@@ -849,29 +907,22 @@ export async function getTodayInTanahEntities(
 		 WHERE EXISTS (
 		   SELECT 1 FROM tanahpedia_event ev
 		   JOIN tanahpedia_event_date_range d ON d.event_id = ev.id
-		   WHERE ev.entity_id = e.id AND (
-		     (d.start_date > 0 AND d.start_date <> 99991229 AND d.start_date % 10000 = ?)
-		     OR (d.end_date > 0 AND d.end_date <> 99991229 AND d.end_date % 10000 = ?)
-		   )
+		   WHERE ev.entity_id = e.id AND (d.start_month_day = ? OR d.end_month_day = ?)
 		 ) OR EXISTS (
 		   SELECT 1 FROM tanahpedia_saying s
-		   WHERE s.entity_id = e.id
-		     AND s.saying_date > 0 AND s.saying_date <> 99991229 AND s.saying_date % 10000 = ?
+		   WHERE s.entity_id = e.id AND s.month_day = ?
 		 ) OR EXISTS (
 		   SELECT 1 FROM tanahpedia_person p
 		   WHERE p.entity_id = e.id AND (
 		     EXISTS (
 		       SELECT 1 FROM tanahpedia_person_birth_date d WHERE d.person_id = p.id
-		       AND d.birth_date > 0 AND d.birth_date <> 99991229 AND d.birth_date % 10000 = ?
+		       AND d.month_day = ?
 		     ) OR EXISTS (
 		       SELECT 1 FROM tanahpedia_person_death_date d WHERE d.person_id = p.id
-		       AND d.death_date > 0 AND d.death_date <> 99991229 AND d.death_date % 10000 = ?
+		       AND d.month_day = ?
 		     ) OR EXISTS (
 		       SELECT 1 FROM tanahpedia_person_union u
-		       WHERE (u.person1_id = p.id OR u.person2_id = p.id) AND (
-		         (u.start_date > 0 AND u.start_date <> 99991229 AND u.start_date % 10000 = ?)
-		         OR (u.end_date > 0 AND u.end_date <> 99991229 AND u.end_date % 10000 = ?)
-		       )
+		       WHERE (u.person1_id = p.id OR u.person2_id = p.id) AND (u.start_month_day = ? OR u.end_month_day = ?)
 		     )
 		   )
 		 )

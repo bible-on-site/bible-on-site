@@ -88,6 +88,15 @@ export type EntityChange =
 			refPerekIds?: number[];
 	  }
 	| {
+			kind: "moed";
+			/** tanah_moed.id — survives edits/deletes. */
+			id: number;
+			/** Current canonical slug (the deleted slug on deletes). */
+			slug: string;
+			/** The pre-rename slug — expires the old detail route. */
+			oldSlug?: string;
+	  }
+	| {
 			kind: "dedication";
 			/** tanah_dedication.id — survives edits/deletes. */
 			id: number;
@@ -494,6 +503,28 @@ export function authorChange(input: {
  * the entity types, synonyms and source perakim while the row still
  * exists — after the delete they are unresolvable.
  */
+/**
+ * A moed create/update/delete or an article↔moed link-set change touching
+ * it (#3101). `oldSlug` carries the pre-rename slug so the website expires
+ * the old detail route too; deletes pass the deleted slug as both.
+ */
+export function moedChange(input: {
+	id: number;
+	slug: string;
+	oldSlug?: string;
+}): RevalidateRequest {
+	return {
+		changes: [
+			{
+				kind: "moed",
+				id: input.id,
+				slug: input.slug,
+				...(input.oldSlug ? { oldSlug: input.oldSlug } : {}),
+			},
+		],
+	};
+}
+
 /**
  * A dedication create/update/delete (#2731). The caller supplies the old ∪
  * new assignment set — gathered pre-commit on deletes, post-commit

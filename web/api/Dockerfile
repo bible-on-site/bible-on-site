@@ -22,6 +22,10 @@ COPY api/src ./src
 COPY api/Cargo.toml ./Cargo.toml
 COPY api/Cargo.lock ./Cargo.lock
 COPY api/entities ./entities
+# The shared article-relationship registry is compiled into the binary —
+# article_relationships_service.rs anchors it at CARGO_MANIFEST_DIR/../shared,
+# which is /shared inside this image.
+COPY shared/article-relationships /shared/article-relationships
 
 # Build the application in release mode.
 RUN cargo build --locked --release && \
@@ -32,7 +36,7 @@ RUN cargo build --locked --release && \
 # runtime dependencies for the application. This often uses a different base
 # image from the build stage where the necessary files are copied from the build
 # stage.
-FROM alpine:3.24.3 AS final
+FROM alpine:3.24.4 AS final
 
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/go/dockerfile-user-best-practices/

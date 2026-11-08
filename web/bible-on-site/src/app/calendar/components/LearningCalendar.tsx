@@ -27,11 +27,11 @@ import {
 	getCycleName,
 	getCycleStartMonth,
 	getDateLabel,
+	getDaySourceLabel,
 	getMonthLabel,
 	getMonthName,
 	getMonthOrder,
 	getPerekRangeLabel,
-	getPerekSource,
 	getYearLabel,
 	isMergedReviewPair,
 	type MonthCell,
@@ -108,10 +108,7 @@ const dayAriaLabel = (day: CalendarDay): string => {
 	if (day.perekId === undefined) {
 		return `${dateLabel} - לא משובץ`;
 	}
-	const perekLabel =
-		day.status === "review" && day.reviewPerekIds?.length
-			? getPerekRangeLabel(day.reviewPerekIds)
-			: getPerekSource(day.perekId);
+	const perekLabel = getDaySourceLabel(day);
 	return day.status === "review"
 		? `${dateLabel} - חזרה: ${perekLabel}`
 		: `${dateLabel} - ${perekLabel}`;
@@ -779,10 +776,7 @@ function CalendarCell({
 	}
 
 	const perekId = day.perekId;
-	const perekLabel =
-		day.status === "review" && day.reviewPerekIds?.length
-			? getPerekRangeLabel(day.reviewPerekIds)
-			: getPerekSource(perekId);
+	const perekLabel = getDaySourceLabel(day);
 	return (
 		<button
 			type="button"
@@ -894,9 +888,24 @@ function MiniCell({
 	]
 		.filter(Boolean)
 		.join(" ");
-	const content = mergedWith
+	const dateText = mergedWith
 		? `${toLetters(day.day, { addQuotes: true })} - ${toLetters(mergedWith.day, { addQuotes: true })}`
 		: toLetters(day.day, { addQuotes: true });
+	// Dimmed out-of-cycle cells keep the established date-only look — their
+	// assignment belongs to another selected cycle, exactly like the calendar
+	// PDFs, which print no label on dimmed cells (#2975).
+	const source = dimmed ? "" : getDaySourceLabel(day);
+	const content = (
+		<>
+			<span className={styles.miniDayText}>{dateText}</span>
+			{source !== "" && (
+				<span className={styles.miniPerekRef}>{source}</span>
+			)}
+			{source !== "" && day.status === "review" && (
+				<span className={styles.miniReviewBadge}>חזרה</span>
+			)}
+		</>
+	);
 
 	if (day.perekId === undefined || dimmed) {
 		return (

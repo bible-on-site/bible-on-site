@@ -59,6 +59,15 @@ function stubDb(handlers: {
 	entityRefPereks?: number[];
 	entityTypes?: string[];
 	linkedSynonyms?: string[];
+	moedRanges?: {
+		moed_id: number;
+		slug: string;
+		perek_id_start: number;
+		pasuk_start: number;
+		perek_id_end: number;
+		pasuk_end: number;
+	}[];
+	linkedMoedSlugs?: string[];
 }) {
 	mockQuery.mockImplementation(async (sql: string) => {
 		if (/FROM tanah_author/.test(sql))
@@ -93,6 +102,10 @@ function stubDb(handlers: {
 			}));
 		if (/FROM tanahpedia_entry_synonym s/.test(sql))
 			return (handlers.linkedSynonyms ?? []).map((name) => ({ name }));
+		if (/FROM tanah_moed m\s+JOIN tanah_moed_section/.test(sql))
+			return handlers.moedRanges ?? [];
+		if (/FROM tanah_article_moed am\s+JOIN tanah_moed/.test(sql))
+			return (handlers.linkedMoedSlugs ?? []).map((slug) => ({ slug }));
 		throw new Error(`unstubbed SQL: ${sql}`);
 	});
 }
@@ -134,9 +147,195 @@ describe("resolveEntityChanges", () => {
 				"/929/authors/slug:רשי",
 				"/parasha/בראשית",
 				"/masora/1",
+				"/sitemap.xml",
 			]),
 		);
 		expect(out.urls).toEqual(out.paths);
+	});
+
+	it("expires a moed's detail and the wheel on a moed change, including the old slug", async () => {
+		const out = await resolveEntityChanges([
+			{ kind: "moed", id: 3, slug: "חנוכה", oldSlug: "חנוכה-ישן" },
+		]);
+		expect(out.tags).toEqual(
+			expect.arrayContaining(["moadim", "moed:חנוכה", "moed:חנוכה-ישן"]),
+		);
+		expect(out.paths).toEqual(
+			expect.arrayContaining([
+				"/מועדים",
+				"/מועדים/חנוכה",
+				"/מועדים/חנוכה-ישן",
+			]),
+		);
+	});
+
+	it("expires the moeds whose ranges an article's coverage intersects", async () => {
+		stubDb({
+			moedRanges: [
+				{
+					moed_id: 1,
+					slug: "פסח",
+					perek_id_start: 9,
+					pasuk_start: 1,
+					perek_id_end: 9,
+					pasuk_end: 5,
+				},
+				{
+					moed_id: 2,
+					slug: "סוכות",
+					perek_id_start: 400,
+					pasuk_start: 1,
+					perek_id_end: 401,
+					pasuk_end: 10,
+				},
+			],
+		});
+		const out = await resolveEntityChanges([
+			{
+				kind: "article",
+				id: 12,
+				perekIds: [5],
+				authorIds: [],
+				coveringSpans: [{ perekId: 9, pasukFrom: 2, pasukTo: 4 }],
+			},
+		]);
+		expect(out.tags).toEqual(expect.arrayContaining(["moed:פסח"]));
+		expect(out.tags).not.toContain("moed:סוכות");
+		expect(out.paths).toContain("/מועדים/פסח");
+	});
+
+	it("expires the moeds explicitly linked to a changed article", async () => {
+		stubDb({ linkedMoedSlugs: ["חנוכה"] });
+		const out = await resolveEntityChanges([
+			{
+				kind: "article",
+				id: 12,
+				perekIds: [5],
+				authorIds: [],
+				coveringSpans: [],
+			},
+		]);
+		expect(out.tags).toContain("moed:חנוכה");
+		expect(out.paths).toContain("/מועדים/חנוכה");
+	});
+
+	it("expires moeds reached through an author's articles", async () => {
+		stubDb({
+			authorArticles: [{ id: 7, perek_id: 9 }],
+			moedRanges: [
+				{
+					moed_id: 1,
+					slug: "פסח",
+					perek_id_start: 9,
+					pasuk_start: 1,
+					perek_id_end: 9,
+					pasuk_end: 20,
+				},
+			],
+		});
+		const out = await resolveEntityChanges([
+			{ kind: "author", id: 3, name: "רשי" },
+		]);
+		expect(out.tags).toContain("moed:פסח");
+	});
+
+	it("skips moed invalidation while the moed schema is not deployed", async () => {
+		stubDb({ authorName: "רשי" });
+		const inner = mockQuery.getMockImplementation();
+		const missing = Object.assign(new Error("no table"), {
+			code: "ER_NO_SUCH_TABLE",
+		});
+		mockQuery.mockImplementation(async (sql: string) => {
+			if (/tanah_moed/.test(sql)) throw missing;
+			return inner!(sql);
+		});
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		const out = await resolveEntityChanges([
+			{
+				kind: "article",
+				id: 12,
+				perekIds: [5],
+				authorIds: [3],
+				coveringSpans: [{ perekId: 9, pasukFrom: 2, pasukTo: 4 }],
+			},
+		]);
+		// The article's own deps still resolve; only the moed side degrades.
+		expect(out.tags).toContain("article:12");
+		expect(out.tags.some((tag) => tag.startsWith("moed:"))).toBe(false);
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("Moed schema is not deployed"),
+		);
+		warn.mockRestore();
+	});
+
+	it("propagates a moed lookup failure instead of under-invalidating", async () => {
+		stubDb({});
+		const inner = mockQuery.getMockImplementation();
+		mockQuery.mockImplementation(async (sql: string) => {
+			if (/FROM tanah_moed m\s+JOIN/.test(sql))
+				throw new Error("connection lost");
+			return inner!(sql);
+		});
+		await expect(
+			resolveEntityChanges([
+				{
+					kind: "article",
+					id: 12,
+					perekIds: [5],
+					authorIds: [],
+					coveringSpans: [],
+				},
+			]),
+		).rejects.toThrow("connection lost");
+	});
+
+	it("matches an interior perek of a multi-perek range and dedupes the moed", async () => {
+		stubDb({
+			moedRanges: [
+				// Two stored ranges of one moed — the first matches through an
+				// interior perek's full width, the second matches too but the
+				// moed still lists once.
+				{
+					moed_id: 1,
+					slug: "סליחות",
+					perek_id_start: 9,
+					pasuk_start: 10,
+					perek_id_end: 11,
+					pasuk_end: 4,
+				},
+				{
+					moed_id: 1,
+					slug: "סליחות",
+					perek_id_start: 10,
+					pasuk_start: 1,
+					perek_id_end: 10,
+					pasuk_end: 3,
+				},
+			],
+		});
+		const out = await resolveEntityChanges([
+			{
+				kind: "article",
+				id: 12,
+				perekIds: [],
+				authorIds: [],
+				coveringSpans: [{ perekId: 10, pasukFrom: 1, pasukTo: 1 }],
+			},
+		]);
+		expect(out.tags.filter((tag) => tag === "moed:סליחות")).toHaveLength(1);
+	});
+
+	it("resolves an author with no articles without touching the link read", async () => {
+		stubDb({});
+		const out = await resolveEntityChanges([
+			{ kind: "author", id: 3, name: "רשי" },
+		]);
+		expect(out.tags).toContain("author:3:articles");
+		expect(
+			mockQuery.mock.calls.some(([sql]) =>
+				/FROM tanah_article_moed/.test(sql),
+			),
+		).toBe(false);
 	});
 
 	it("expires the articles collection for an unlocatable article", async () => {
@@ -258,6 +457,7 @@ describe("resolveEntityChanges", () => {
 				"/929/5/12",
 				"/parasha/בראשית",
 				"/masora/1",
+				"/sitemap.xml",
 			]),
 		);
 	});
@@ -302,6 +502,7 @@ describe("resolveEntityChanges", () => {
 				"/pedia/משה רבנו",
 				"/pedia/מושה",
 				"/pedia",
+				"/sitemap.xml",
 				"/pedia/אישים",
 				"/pedia/מקומות",
 			]),
@@ -425,6 +626,10 @@ describe("resolveEntityChanges", () => {
 				"authors",
 				"tanahpedia-entity-refs",
 				"tanahpedia-mention-refs",
+				// An overflowing batch must still expire every cached moed
+				// read — the moed loaders are tag-keyed, paths alone cannot
+				// reach them.
+				"moadim",
 			]),
 		);
 		expect(out.paths).toEqual(

@@ -21,6 +21,20 @@ public class CalendarCellViewModel
     /// <summary>Readable sefer/perek reference (e.g. שמואל ב ה); empty when unscheduled.</summary>
     public string PerekSource { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Whether <see cref="PerekSource"/> renders as a visible line in grouped
+    /// (yearly / full-cycle) cells (#2975): the day carries a source and is
+    /// not dimmed out of the selected cycle — the same "no label on dimmed
+    /// cells" rule the calendar PDFs apply.
+    /// </summary>
+    public bool HasVisibleSource => PerekSource.Length > 0 && !IsDimmed;
+
+    /// <summary>
+    /// Whether the חזרה badge renders in grouped cells: review days inside
+    /// the viewed period. Dimmed out-of-cycle review cells stay date-only.
+    /// </summary>
+    public bool ShowsReviewBadge => IsReview && !IsDimmed;
+
     /// <summary>True for a study or review day that opens the perek reader.</summary>
     public bool IsTappable => PerekId is not null;
 
@@ -731,7 +745,10 @@ public partial class LearningCalendarViewModel : ObservableObject
 
         try
         {
-            await _navigator.GoToAsync($"{AppRoutes.CalendarReader}?perekId={perekId}");
+            // The tapped Hebrew date rides along so the reader's daily article
+            // override (#3098) resolves against the selected day.
+            var dateQuery = cell.DateNumber > 0 ? $"&dateNum={cell.DateNumber}" : string.Empty;
+            await _navigator.GoToAsync($"{AppRoutes.CalendarReader}?perekId={perekId}{dateQuery}");
         }
         #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
         catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.

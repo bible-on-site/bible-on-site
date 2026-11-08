@@ -339,8 +339,8 @@
                                         <BindableLayout.ItemTemplate>
                                             <DataTemplate x:DataType="viewmodels:CalendarCellViewModel">
                                             <Border Margin="1"
-                                                    Padding="0"
-                                                    HeightRequest="24"
+                                                    Padding="1"
+                                                    MinimumHeightRequest="26"
                                                     Grid.Column="{Binding Column}"
                                                     Grid.ColumnSpan="{Binding ColumnSpan}"
                                                     AutomationId="MiniMonthDay"
@@ -382,36 +382,57 @@
                                                         <Setter Property="Opacity" Value="0.3"/>
                                                     </DataTrigger>
                                                 </Border.Triggers>
-                                                <Grid ColumnDefinitions="*,*" ColumnSpacing="0">
-                                                    <Label Text="{Binding DayText}"
-                                                           Grid.Column="0"
-                                                           FontSize="11"
-                                                           IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}"
-                                                           HorizontalOptions="Fill"
+                                                <!-- Date + visible source lines (#2975): the grouped cells
+                                                     carry the same PerekSource the month grid shows, plus the
+                                                     חזרה badge on review days. Dimmed out-of-cycle cells keep
+                                                     the established date-only look via the *Visible* flags. -->
+                                                <VerticalStackLayout Spacing="0"
+                                                                     VerticalOptions="Center"
+                                                                     IsVisible="{Binding IsBlank, Converter={StaticResource InvertedBoolConverter}}">
+                                                    <Grid ColumnDefinitions="*,*" ColumnSpacing="0">
+                                                        <Label Text="{Binding DayText}"
+                                                               Grid.Column="0"
+                                                               FontSize="11"
+                                                               HorizontalOptions="Fill"
+                                                               HorizontalTextAlignment="Center"
+                                                               VerticalTextAlignment="Center"
+                                                               AutomationId="MiniMonthDayText"
+                                                               SemanticProperties.Description="{Binding AccessibilityText}"
+                                                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}">
+                                                            <Label.Triggers>
+                                                                <DataTrigger TargetType="Label"
+                                                                             Binding="{Binding HasMergedDay}"
+                                                                             Value="False">
+                                                                    <Setter Property="Grid.ColumnSpan" Value="2"/>
+                                                                </DataTrigger>
+                                                            </Label.Triggers>
+                                                        </Label>
+                                                        <Label Text="{Binding MergedDayText}"
+                                                               Grid.Column="1"
+                                                               FontSize="11"
+                                                               HorizontalOptions="Fill"
+                                                               HorizontalTextAlignment="Center"
+                                                               VerticalTextAlignment="Center"
+                                                               IsVisible="{Binding HasMergedDay}"
+                                                               AutomationId="MiniMonthDayText"
+                                                               SemanticProperties.Description="{Binding MergedDayAccessibilityText}"
+                                                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                                    </Grid>
+                                                    <Label Text="{Binding PerekSource}"
+                                                           FontSize="9"
+                                                           LineBreakMode="WordWrap"
                                                            HorizontalTextAlignment="Center"
-                                                           VerticalTextAlignment="Center"
-                                                           AutomationId="MiniMonthDayText"
-                                                           SemanticProperties.Description="{Binding AccessibilityText}"
-                                                           TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}">
-                                                        <Label.Triggers>
-                                                            <DataTrigger TargetType="Label"
-                                                                         Binding="{Binding HasMergedDay}"
-                                                                         Value="False">
-                                                                <Setter Property="Grid.ColumnSpan" Value="2"/>
-                                                            </DataTrigger>
-                                                        </Label.Triggers>
-                                                    </Label>
-                                                    <Label Text="{Binding MergedDayText}"
-                                                           Grid.Column="1"
-                                                           FontSize="11"
-                                                           HorizontalOptions="Fill"
+                                                           IsVisible="{Binding HasVisibleSource}"
+                                                           AutomationId="MiniMonthDaySource"
+                                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
+                                                    <Label Text="חזרה"
+                                                           FontSize="8"
+                                                           FontAttributes="Bold"
                                                            HorizontalTextAlignment="Center"
-                                                           VerticalTextAlignment="Center"
-                                                           IsVisible="{Binding HasMergedDay}"
-                                                           AutomationId="MiniMonthDayText"
-                                                           SemanticProperties.Description="{Binding MergedDayAccessibilityText}"
-                                                           TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                                                </Grid>
+                                                           IsVisible="{Binding ShowsReviewBadge}"
+                                                           AutomationId="MiniMonthReviewBadge"
+                                                           TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                                                </VerticalStackLayout>
                                             </Border>
                                             </DataTemplate>
                                         </BindableLayout.ItemTemplate>
