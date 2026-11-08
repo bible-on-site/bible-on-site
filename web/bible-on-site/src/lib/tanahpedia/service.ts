@@ -1107,6 +1107,9 @@ async function queryPerekMentionReferences(
 			// The columns only land when Data CD applies the alter; until
 			// then resolve through the pre-migration REPLACE() join so a
 			// website released ahead of it keeps working.
+			console.warn(
+				"tanahpedia normalized_name not deployed yet; falling back to REPLACE() mention resolution",
+			);
 			return query<PerekEntityReference>(
 				`SELECT
 				   ${scoped ? "d.perek_id AS perekId," : ""}
@@ -1175,6 +1178,9 @@ export async function getMentionReferencesForArticle(
 			[String(articleId), contentHash],
 		).catch((error) => {
 			if (!isMissingNormalizedNameColumn(error)) throw error;
+			console.warn(
+				"tanahpedia normalized_name not deployed yet; falling back to REPLACE() mention resolution",
+			);
 			return query<ArticleMentionReference>(
 				`SELECT
 				   ANY_VALUE(ent.unique_name) AS entryUniqueName,
