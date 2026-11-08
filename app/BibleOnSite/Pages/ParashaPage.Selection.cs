@@ -263,7 +263,7 @@ public partial class ParashaPage
         var searching = ChapterSearch.IsSearchOpen;
         Shell.SetNavBarIsVisible(this, false);
         ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible;
-        Shell.SetFlyoutBehavior(this, isSelectionMode || searching ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
+        (Shell.Current as AppShell)?.SetPageNavHidden(this, isSelectionMode || searching);
         Shell.SetBackButtonBehavior(this, new BackButtonBehavior { IsVisible = !searching });
         // Selection mode paints the shared accent over the whole band; otherwise
         // bind the reader band colors so a theme flip repaints both surfaces.
