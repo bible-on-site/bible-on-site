@@ -201,56 +201,244 @@ test.describe("פרשה reading root", () => {
 		await expect(page.locator('[id^="pasuk-342-"]')).toHaveCount(0);
 	});
 
-	test("aliyah markers and the מנהג variant swap in place", async ({
+	test("renders every aliyah division inline at its canonical positions", async ({
 		page,
 	}, testInfo) => {
-		// פרשת ויגש (unit 11): the documented חב"ד division re-slices
-		// עליות ג-ה — רביעי moves from בראשית מה יט to מה כח (#2519).
+		// פרשת ויגש (unit 11): שבת + חול + the documented חב"ד re-slicing
+		// of עליות ג-ה — all three layers show together inline (#3165);
+		// nothing is hidden behind a selector.
 		await page.goto(unitPath("ויגש"));
 		await expect(
 			page.getByRole("heading", { level: 1, name: /פרשת ויגש/ }),
 		).toBeVisible();
 
-		const markerAt = (pasukId: string) =>
-			page.locator(`#${pasukId} [data-aliyah-marker]:visible`);
-		// Default Shabbat layer — prominent aliyah pills at the exact
-		// boundary pesukim; the perek label stays a modest pasuk-like
-		// text, not the old banner.
-		await expect(markerAt("pasuk-44-18").first()).toHaveText("ראשון");
-		await expect(markerAt("pasuk-45-19").first()).toHaveText("רביעי");
+		const torahText = page.locator('[data-unit-text="torah"]');
+		const markersAt = (pasukId: string, key?: string) =>
+			torahText.locator(
+				`#${pasukId} [data-aliyah-marker]${key ? `[data-aliyah-key='${key}']` : ""}`,
+			);
+
+		// No layer hides — the marker contract renders everything.
+		await expect(torahText.locator("[data-aliyah-marker][hidden]")).toHaveCount(
+			0,
+		);
+
+		// The base and custom divisions each sit at their own canonical
+		// starts: Shabbat's רביעי at מה יט, חב"ד's רביעי at מה כח.
+		await expect(markersAt("pasuk-45-19", "Vayigash:shabbat")).toHaveText(
+			/שבת רביעי/,
+		);
+		await expect(markersAt("pasuk-45-28", 'Vayigash:shabbat:חב"ד')).toHaveText(
+			/חב"ד רביעי/,
+		);
+		await expect(markersAt("pasuk-46-8", 'Vayigash:shabbat:חב"ד')).toHaveText(
+			/חב"ד חמישי/,
+		);
+
+		// Coincident boundaries cluster deterministically — base scheme,
+		// its variant, then the weekday layer — all tagged so the three
+		// coincident ראשוןs stay distinguishable.
+		const startCluster = markersAt("pasuk-44-18");
+		await expect(startCluster).toHaveCount(3);
+		expect(
+			await startCluster.evaluateAll((els) =>
+				els.map((el) => el.getAttribute("data-aliyah-key")),
+			),
+		).toEqual([
+			"Vayigash:shabbat",
+			'Vayigash:shabbat:חב"ד',
+			"Vayigash:weekday",
+		]);
 		await expect(
-			page.locator('[class*="perekBreakLabelModest"]', {
-				hasText: "בראשית מה",
-			}),
-		).toBeAttached();
+			startCluster.locator('[class*="aliyahMarkerOrdinal"]'),
+		).toHaveText(["ראשון", "ראשון", "ראשון"]);
 
-		// The מנהג group offers the documented חב"ד variant. The layer
-		// swaps instantly without remounting scripture — it must not
-		// wait for the soft-navigation round-trip. The first click must
-		// survive hydration without a second user action.
-		const chabadButton = page.getByRole("button", { name: 'חב"ד' });
-		await chabadButton.click();
-		await expect(chabadButton).toHaveAttribute("aria-pressed", "true");
-		await expect(markerAt("pasuk-45-19")).toHaveCount(0);
-		await expect(markerAt("pasuk-45-28").first()).toHaveText("רביעי");
-		await expect(markerAt("pasuk-46-8").first()).toHaveText("חמישי");
-		await testInfo.attach("aliyah-first-variant-click", {
-			body: await page.getByRole("group", { name: "חלוקת עליות" }).screenshot(),
+		// Weekday boundaries mark their own positions too.
+		await expect(markersAt("pasuk-44-21", "Vayigash:weekday")).toHaveText(
+			/חול שני/,
+		);
+
+		// Maftir keeps its role distinction.
+		await expect(markersAt("pasuk-47-25", "Vayigash:shabbat")).toHaveAttribute(
+			"data-aliyah-role",
+			"maftir",
+		);
+
+		// Scripture itself is never duplicated — one span per pasuk.
+		await expect(page.locator("#pasuk-45-19")).toHaveCount(1);
+		await expect(page.locator("#pasuk-45-28")).toHaveCount(1);
+
+		await testInfo.attach("aliyah-all-layers", {
+			body: await page.locator("#pasuk-44-18").screenshot(),
 			contentType: "image/png",
 		});
-		// The choice mirrors into ?variant= once the soft navigation
-		// commits — dev-server RSC renders can take tens of seconds.
+	});
+
+	test("the legend emphasizes a layer without hiding the rest", async ({
+		page,
+	}, testInfo) => {
+		await page.goto(unitPath("ויגש"));
+		const legend = page.getByRole("group", {
+			name: "חלוקות העליות בטקסט",
+		});
+		await expect(legend).toBeVisible();
+		// One entry per rendered layer, each in its own marker style.
+		for (const entry of ["שבת", 'חב"ד', "חול"]) {
+			await expect(
+				legend.getByRole("button", { name: entry, exact: true }),
+			).toBeVisible();
+		}
+
+		const torahText = page.locator('[data-unit-text="torah"]');
+		const emphasized = () =>
+			torahText.locator("[data-aliyah-marker][data-aliyah-selected]");
+
+		// The default Shabbat layer is emphasized out of the box.
+		expect(await emphasized().count()).toBeGreaterThan(0);
+		for (const key of await emphasized().evaluateAll((els) =>
+			els.map((el) => el.getAttribute("data-aliyah-key")),
+		)) {
+			expect(key).toBe("Vayigash:shabbat");
+		}
+
+		// Selecting the custom emphasizes it and mirrors ?variant= — the
+		// base markers remain visible beside it.
+		const chabadEntry = legend.getByRole("button", {
+			name: 'חב"ד',
+			exact: true,
+		});
+		await chabadEntry.click();
+		await expect(chabadEntry).toHaveAttribute("aria-pressed", "true");
+		await expect(
+			torahText.locator(
+				'[data-aliyah-key="Vayigash:shabbat"][data-aliyah-selected]',
+			),
+		).toHaveCount(0);
+		expect(await emphasized().count()).toBeGreaterThan(0);
 		await expect(page).toHaveURL(/variant=/, { timeout: 60_000 });
-
-		// Re-selecting the common split clears the selection params.
-		const commonButton = page.getByRole("button", { name: "נפוץ" });
-		await commonButton.click();
-		await expect(commonButton).toHaveAttribute("aria-pressed", "true");
-		await expect(markerAt("pasuk-45-19").first()).toHaveText("רביעי");
-		await testInfo.attach("aliyah-first-common-click", {
-			body: await page.getByRole("group", { name: "חלוקת עליות" }).screenshot(),
+		await testInfo.attach("aliyah-variant-emphasized", {
+			body: await legend.screenshot(),
 			contentType: "image/png",
 		});
+
+		// The old selector's URL contract still applies as an emphasis
+		// input — ?scheme= emphasizes the weekday layer on load.
+		await page.goto(`${unitPath("ויגש")}?scheme=weekday`);
+		await expect(
+			page
+				.locator(
+					'[data-unit-text="torah"] [data-aliyah-key="Vayigash:weekday"][data-aliyah-selected]',
+				)
+				.first(),
+		).toBeAttached();
+	});
+
+	test("marker detail reveals on hover and keyboard focus", async ({
+		page,
+	}) => {
+		await page.goto(unitPath("ויגש"));
+		const marker = page
+			.locator('[data-unit-text="torah"] [data-aliyah-key="Vayigash:shabbat"]')
+			.first();
+		// The full division detail is the marker's accessible name.
+		await expect(marker).toHaveAttribute(
+			"aria-label",
+			/פרשת ויגש · קריאת שבת · עלייה ראשונה/,
+		);
+		const detail = marker.locator('[class*="aliyahMarkerDetail"]');
+		await expect(detail).toBeHidden();
+		await marker.focus();
+		await expect(detail).toBeVisible();
+		await expect(detail).toHaveText(/עלייה ראשונה \(בראשית מד יח-ל\)/);
+		// Hover reveals the same bubble.
+		await marker.evaluate((el) => el.blur());
+		await marker.hover();
+		await expect(detail).toBeVisible();
+	});
+
+	test("joined-reading markers keep their own numbering inline", async ({
+		page,
+	}) => {
+		// מסעי (unit 43): the joined מטות-מסעי layer marks its later
+		// aliyot inside the unit under the joined reading's own tag and
+		// numbering — beside מסעי's standalone markers and the join's
+		// documented אשכנז re-slicing at its own coordinate (#3165).
+		await page.goto(unitPath("מסעי"));
+		await expect(
+			page.getByRole("heading", { level: 1, name: /פרשת מסעי/ }),
+		).toBeVisible();
+		const torahText = page.locator('[data-unit-text="torah"]');
+		const joined = torahText.locator('[data-aliyah-key="Matot-Masei:shabbat"]');
+		expect(await joined.count()).toBeGreaterThan(0);
+		await expect(joined.first()).toHaveAttribute(
+			"data-aliyah-category",
+			"joined",
+		);
+		// Joined ordinals continue the combined reading — the unit's
+		// joined markers start mid-sequence (חמישי), never remapped to
+		// standalone numbering.
+		const ordinals = await joined
+			.locator('[class*="aliyahMarkerOrdinal"]')
+			.allTextContents();
+		expect(ordinals).not.toContain("ראשון");
+		expect(ordinals).toContain("מפטיר");
+		// The join's אשכנז re-slicing marks its חמישי at במדבר לג יא —
+		// the base joined חמישי stays at לג נ, both visible inline.
+		await expect(
+			torahText.locator(
+				'#pasuk-150-11 [data-aliyah-marker][data-aliyah-category="variant"]',
+			),
+		).toHaveText(/אשכנז חמישי/);
+		await expect(
+			torahText.locator(
+				'#pasuk-150-50 [data-aliyah-key="Matot-Masei:shabbat"]',
+			),
+		).toHaveText(/מטות-מסעי חמישי/);
+	});
+
+	test("book spreads show every division layer, not only Shabbat", async ({
+		page,
+	}) => {
+		// Issue #3165: the Sefer must not silently keep a Shabbat-only
+		// layer — ויגש's spread carries its weekday and חב"ד markers in
+		// the book DOM too.
+		await page.goto(`${unitPath("ויגש")}?book`);
+		const overlay = page.locator('[class*="seferOverlay"]');
+		await expect(overlay).toBeVisible({ timeout: 15_000 });
+		// The flipbook mounts spreads lazily after the overlay opens — wait
+		// for the unit's book text before asserting its marker layers.
+		const bookTorah = page.locator('[data-sefer-unit-text="11:torah"]');
+		await expect(bookTorah.first()).toBeAttached({ timeout: 30_000 });
+		await expect(
+			bookTorah.locator('[data-aliyah-key="Vayigash:weekday"]').first(),
+		).toBeAttached();
+		await expect(
+			bookTorah.locator("[data-aliyah-key='Vayigash:shabbat:חב\"ד']").first(),
+		).toBeAttached();
+	});
+
+	test("inline markers wrap naturally on narrow viewports", async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width: 360, height: 720 });
+		await page.goto(unitPath("ויגש"));
+		const torahText = page.locator('[data-unit-text="torah"]');
+		const cluster = torahText.locator("#pasuk-44-18 [data-aliyah-marker]");
+		await expect(cluster).toHaveCount(3);
+		// All three coincident markers stay inside the text column —
+		// inline flow wraps them rather than overflowing.
+		const textBox = await torahText.boundingBox();
+		for (const box of await cluster.evaluateAll((els) =>
+			els.map((el) => {
+				const rect = el.getBoundingClientRect();
+				return { left: rect.left, right: rect.right };
+			}),
+		)) {
+			expect(box.left).toBeGreaterThanOrEqual((textBox?.x ?? 0) - 1);
+			expect(box.right).toBeLessThanOrEqual(
+				(textBox?.x ?? 0) + (textBox?.width ?? 0) + 1,
+			);
+		}
 	});
 
 	test("joined parashot keep separate unit identities", async ({ page }) => {
