@@ -20,6 +20,7 @@ from model_versions import ALIGN_MODEL, ALIGN_REVISION, ASR_MODEL, ASR_REVISION
 
 try:
     import fcntl
+    msvcrt = None
 except ImportError:  # Windows
     fcntl = None
     import msvcrt
@@ -27,7 +28,8 @@ except ImportError:  # Windows
 
 @contextmanager
 def database_lock(database):
-    """Serialize copy-mutate-replace writers across processes via a lockfile.
+    """
+    Serialize copy-mutate-replace writers across processes via a lockfile.
 
     Held from before the database snapshot until after the atomic replace so a
     concurrent exporter or review overlay cannot overwrite committed rows.
