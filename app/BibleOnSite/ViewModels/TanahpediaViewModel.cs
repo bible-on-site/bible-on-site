@@ -150,7 +150,7 @@ public partial class TanahpediaViewModel : ObservableObject
         try
         {
             await _navigationGate.RunAsync(() =>
-                _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}"));
+                _navigator.GoToAsync(AppRoutes.TanahpediaEntry(uniqueName)));
         }
         #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
         catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.

@@ -125,12 +125,30 @@ public static class AppRoutes
     /// <summary>The פרשה על הפרק reader instance — a reader page like PerekPage.</summary>
     public static string Parasha => "ParashaPage";
 
+    /// <summary>The פרשה listing above the reader — same flyout destination.</summary>
+    public static string ParashaList => "ParashaListPage";
+
+    public static string Tanahpedia => "TanahpediaPage";
+    public static string TanahpediaCategory => "tanahpediaCategory";
+    public static string TanahpediaEntryRoute => "tanahpediaEntry";
+    public static string Articles => "ArticlesPage";
+    public static string ArticleDetail => "articleDetail";
+    public static string Authors => "AuthorsPage";
+    public static string DailyBulletin => "DailyBulletinPage";
+
+    /// <summary>Terms of service — named for the flyout row, not the page class.</summary>
+    public static string Terms => "TosPage";
+
+    public static string Preferences => "PreferencesPage";
+    public static string Contact => "ContactPage";
+    public static string Donations => "DonationsPage";
+
     /// <summary>
     /// A תנכפדיה entry page pushed above the caller — the page resolves
     /// synonyms and ambiguous names itself.
     /// </summary>
     public static string TanahpediaEntry(string uniqueName) =>
-        $"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}";
+        $"{TanahpediaEntryRoute}?uniqueName={Uri.EscapeDataString(uniqueName)}";
 
     /// <summary>
     /// Flyout pages replace another menu page above the most recent reader.
