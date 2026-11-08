@@ -187,8 +187,24 @@ public static class MauiProgram
 #endif
         });
 
-        // Initialize PreferencesService with MAUI storage
-        PreferencesService.Initialize(new MauiPreferencesStorage());
+        // Initialize PreferencesService with MAUI storage wrapped in the
+        // sync-stamping decorator so every preference write carries the
+        // timestamp cloud merge needs (#1095).
+        var preferencesStorage = new SyncStampingPreferencesStorage(new MauiPreferencesStorage());
+        PreferencesService.Initialize(preferencesStorage);
+        PreferencesSyncService.Initialize(
+            preferencesStorage,
+            PreferencesService.Instance,
+#if ANDROID || IOS
+            new FirestorePreferencesStore(),
+            new FirebaseUserIdentity()
+#else
+            // Windows/MacCatalyst and every build without Firebase stay
+            // local-only: the anonymous fallback the issue requires.
+            NullPreferencesCloudStore.Instance,
+            AnonymousUserIdentity.Instance
+#endif
+        );
 
         // Register services
         builder.Services.AddSingleton<IPadDeliveryService>(_ => PadDeliveryService.Instance);

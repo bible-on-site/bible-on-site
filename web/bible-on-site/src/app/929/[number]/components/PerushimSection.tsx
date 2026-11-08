@@ -54,6 +54,7 @@ export function PerushimSection({
 					src="/icons/open-book.svg"
 					alt=""
 					aria-hidden="true"
+					unoptimized
 					width={18}
 					height={18}
 					className={styles.sectionIcon}
@@ -109,6 +110,7 @@ export function PerushimSection({
 								src="/icons/note.svg"
 								alt=""
 								aria-hidden="true"
+								unoptimized
 								width={28}
 								height={28}
 								className={styles.perushIcon}

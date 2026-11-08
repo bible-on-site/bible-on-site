@@ -65,7 +65,7 @@ sources on the Baladi cycle); מטות-מסעי is conversely never joined by
 בלדים.
 
 The reader derives **selectable variant layers** from these
-alternatives (`?variant=` in `AliyahControls`): each (custom |
+alternatives (`?variant=` in `AliyahLegend`): each (custom |
 alt-source) group substitutes its recorded ranges for the covered
 ordinals, re-validated for contiguous coverage. Two recorded variants
 — נשא and דברים weekday — move only their last aliyah's *end* and are

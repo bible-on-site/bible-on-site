@@ -81,6 +81,13 @@ public class TanahpediaEntryDetail
     /// </summary>
     public ReadingMetric? ReadingMetric { get; set; }
 
+    /// <summary>
+    /// Ordered readable-block progress units over the entry body (issue
+    /// #2607) — the word-position axis the reader maps scroll onto. Empty
+    /// when the API has no block rows.
+    /// </summary>
+    public IReadOnlyList<ReadingProgressUnit> ProgressUnits { get; set; } = [];
+
     /// <summary>"זמן קריאה משוער: X" badge text or null when nothing to show.</summary>
     public string? ReadingTimeBadge =>
         Helpers.ReadingTimeFormatter.FormatReadingTimeLabel(ReadingMetric?.EstimatedSeconds);

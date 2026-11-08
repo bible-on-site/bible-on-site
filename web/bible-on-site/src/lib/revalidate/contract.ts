@@ -85,6 +85,15 @@ export type EntityChange =
 			refPerekIds?: number[];
 	  }
 	| {
+			kind: "moed";
+			/** tanah_moed.id — survives edits/deletes. */
+			id: number;
+			/** Current canonical slug (the deleted slug on deletes). */
+			slug: string;
+			/** The pre-rename slug — expires the stale detail route/tag. */
+			oldSlug?: string;
+	  }
+	| {
 			kind: "dedication";
 			/** tanah_dedication.id — survives edits/deletes. */
 			id: number;
@@ -288,6 +297,13 @@ function parseChange(value: unknown, at: string): EntityChange {
 					`${at}.entityTypes`,
 				),
 				refPerekIds: optIntList(rec.refPerekIds, `${at}.refPerekIds`),
+			};
+		case "moed":
+			return {
+				kind: "moed",
+				id: reqInt(rec.id, `${at}.id`),
+				slug: reqString(rec.slug, `${at}.slug`),
+				oldSlug: optString(rec.oldSlug, `${at}.oldSlug`),
 			};
 		case "dedication":
 			return {

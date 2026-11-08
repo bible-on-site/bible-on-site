@@ -67,6 +67,53 @@ public partial class TanahpediaEntryPage : ContentPage
     }
 
     /// <summary>
+    /// Maps the scroll offset onto the entry body (issue #2607): the anchor
+    /// sweeps the measured HtmlView extent, so the title, map and family
+    /// tree above and the occurrence rows below stay off the counted axis.
+    /// Fresh extents each scroll keep font-size and late-layout changes
+    /// honest.
+    /// </summary>
+    private void OnEntryScrolled(object? sender, ScrolledEventArgs e) =>
+        RefreshReadingProgress(e.ScrollY);
+
+    /// <summary>
+    /// Font-size changes and relayouts of the chrome above the body shift
+    /// the counted extent without scrolling — re-measure at the current
+    /// offset so the bar stays honest (issue #2607).
+    /// </summary>
+    private void OnEntryContentSizeChanged(object? sender, EventArgs e) =>
+        RefreshReadingProgress(EntryScroll.ScrollY);
+
+    private void RefreshReadingProgress(double scrollY)
+    {
+        if (!_viewModel.HasReadingProgress || EntryHtml.Height < 0)
+        {
+            // No stored units — or the body has not measured yet and any
+            // extent read off it would be fabricated (issue #2607).
+            return;
+        }
+        var top = ContentYOffset(EntryHtml);
+        _viewModel.UpdateReadingProgress(
+            scrollY,
+            EntryScroll.Height,
+            EntryScroll.ContentSize.Height,
+            [(top, top + EntryHtml.Height)]);
+    }
+
+    /// <summary>Accumulated Y of an element within the ScrollView's content.</summary>
+    private double ContentYOffset(VisualElement element)
+    {
+        double y = 0;
+        VisualElement? current = element;
+        while (current != null && !ReferenceEquals(current, EntryScroll.Content))
+        {
+            y += current.Y;
+            current = current.Parent as VisualElement;
+        }
+        return y;
+    }
+
+    /// <summary>
     /// Hardware/system Back steps through the in-place person trail first
     /// (the same logical history pushed pages used to give), then leaves.
     /// </summary>
@@ -96,6 +143,7 @@ public partial class TanahpediaEntryPage : ContentPage
     /// <summary>
     /// Links inside the entry body: <c>/pedia/{slug}</c> routes in-app through
     /// the entry route (synonyms and ambiguous names resolve on that page);
+    /// <c>/929/...</c> links ride the app-link channel into the reader (#1227);
     /// everything else opens in the external browser.
     /// </summary>
     private async void OnEntryLinkTapped(object? sender, LinkTappedEventArgs e)
@@ -109,10 +157,7 @@ public partial class TanahpediaEntryPage : ContentPage
                 return;
             }
 
-            if (Uri.TryCreate(e.Url, UriKind.Absolute, out var uri))
-            {
-                await Launcher.OpenAsync(uri);
-            }
+            await AppLinkHelper.FollowHtmlLinkAsync(e.Url, Launcher.Default, ShellAppNavigator.Instance);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: link navigation/launcher failure must not crash the page
         catch (Exception ex) //NOSONAR — link navigation/launcher failure must not crash the page.

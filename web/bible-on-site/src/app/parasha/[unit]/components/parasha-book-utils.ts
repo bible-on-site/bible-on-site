@@ -1,5 +1,3 @@
-import { toLetters, toNumber } from "gematry";
-import type { HistoryMapper, PageSemantics } from "html-flip-book-react";
 import type { UnitBoundaryMarker } from "@/app/components/reading/UnitTextBody";
 import bookPageSlugs from "@/data/book-page-slugs.json";
 import divisionData from "@/data/parasha/parasha-division.json";
@@ -9,6 +7,8 @@ import {
 } from "@/data/parasha/parasha-slugs";
 import type { AuxiliaryReading, ScriptureRange } from "@/lib/reading/contract";
 import { SITE_NAME } from "@/lib/seo/jsonld";
+import { toLetters, toNumber } from "gematry";
+import type { HistoryMapper, PageSemantics } from "html-flip-book-react";
 
 // The division root comes from the shared JSON so this module stays
 // client-safe (the data module resolves the server-only corpus).
@@ -39,15 +39,15 @@ export interface ParashaBookUnit {
 	/** Scripture reference span of the primary range, formatted server-side. */
 	refSpan: string;
 	ranges: ScriptureRange[];
-	/** Aliyah boundary markers for the unit's standalone Shabbat scheme
-	 * (issue #2519): `"{perekId}:{pasuk}"` → marker specs, serialized
-	 * server-side and rebuilt into the renderer's map client-side. */
-	aliyahMarkers?: Record<
-		string,
-		readonly { key: string; label: string; role?: "aliyah" | "maftir" }[]
-	>;
-	/** The single marker key this unit's book spread shows. */
-	aliyahMarkerKey?: string;
+	/** Aliyah boundary markers for every applicable division layer
+	 * (issues #2519/#3165): `"{perekId}:{pasuk}"` → marker specs — the
+	 * standalone schemes and customs plus joined readings clipped to
+	 * the unit — serialized server-side and rebuilt into the
+	 * renderer's map client-side. All render inline together. */
+	aliyahMarkers?: Record<string, readonly UnitBoundaryMarker[]>;
+	/** The marker layer this unit's book spread renders emphasized —
+	 * its standalone Shabbat scheme; every layer still shows. */
+	aliyahEmphasisKey?: string;
 	haftarot: ParashaBookHaftara[];
 	notes: string[];
 }
@@ -188,9 +188,7 @@ export function buildParashaHistoryMapper(
 			if (bookPage === "front") return FRONT_COVER_INDEX;
 			if (bookPage === "toc") return TOC_SPREAD_INDEX;
 			if (bookPage === "back") return backCoverIndex;
-			const segments = decodeURIComponent(pathname)
-				.split("/")
-				.filter(Boolean);
+			const segments = decodeURIComponent(pathname).split("/").filter(Boolean);
 			if (
 				segments.length === 2 &&
 				(segments[0] === "פרשה" || segments[0] === "parasha")
@@ -283,7 +281,7 @@ export function parashaUnitDocumentTitle(name: string): string {
 
 /**
  * Rebuild the renderer's coord→markers map from a book unit's
- * serialized standalone-Shabbat marker layer (issue #2519); undefined
+ * serialized aliyah marker layers (issues #2519/#3165); undefined
  * when the unit carries no markers.
  */
 export function unitBoundaryMarkers(

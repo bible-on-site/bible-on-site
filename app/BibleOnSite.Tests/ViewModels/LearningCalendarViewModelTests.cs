@@ -336,7 +336,8 @@ public class LearningCalendarViewModelTests
         await vm.OpenPerekCommand.ExecuteAsync(tappable);
 
         fixture.Navigator.Verify(
-            n => n.GoToAsync($"{AppRoutes.CalendarReader}?perekId={tappable.PerekId}"),
+            n => n.GoToAsync(
+                $"{AppRoutes.CalendarReader}?perekId={tappable.PerekId}&dateNum={tappable.DateNumber}"),
             Times.Once);
 
         // Blank and perek-less cells are not tappable and navigate nowhere.
@@ -471,6 +472,78 @@ public class LearningCalendarViewModelTests
         merged.ColumnSpan.Should().Be(2);
         merged.MergedDayText.Should().Be(5.ToHebrewLetters());
         week.Cells.Should().NotContain(c => c.DateNumber == 57750405);
+    }
+
+    [Fact]
+    public async Task YearView_CellsCarryTheSourcesTheTemplateShows()
+    {
+        // #2975: the grouped cell template now binds a visible source line +
+        // חזרה badge to PerekSource/HasVisibleSource/ShowsReviewBadge — the
+        // same canonical assignments the month grid and the PDFs show.
+        await using var fixture = await CreateFixtureAsync(WeekReviewCycle);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Year);
+        vm.SelectedYear = Option(vm.YearOptions, 5775);
+
+        var cells = vm.MonthGroups.SelectMany(g => g.Cells).ToList();
+        var study = cells.Single(c => c.DateNumber == 57750329); // כט כסלו - perek 1
+        study.IsReview.Should().BeFalse();
+        study.PerekSource.Should().Be("בראשית א");
+        study.HasVisibleSource.Should().BeTrue();
+        study.ShowsReviewBadge.Should().BeFalse();
+
+        var friday = cells.Single(c => c.DateNumber == 57750404);
+        friday.IsReview.Should().BeTrue();
+        friday.PerekSource.Should().Be("בראשית א-ג");
+        friday.HasVisibleSource.Should().BeTrue();
+        friday.ShowsReviewBadge.Should().BeTrue();
+
+        // The merged Friday block keeps its whole-week range visible too.
+        var merged = vm.MonthGroups
+            .SelectMany(g => g.Weeks)
+            .SelectMany(w => w.Cells)
+            .Single(c => c.DateNumber == 57750404);
+        merged.PerekSource.Should().Be("בראשית א-ג");
+        merged.HasVisibleSource.Should().BeTrue();
+        merged.ShowsReviewBadge.Should().BeTrue();
+
+        // Days before cycle 1 (Kislev's first weeks) stay source-less.
+        var unscheduled = cells.First(c => c.DateNumber == 57750301);
+        unscheduled.PerekSource.Should().BeEmpty();
+        unscheduled.HasVisibleSource.Should().BeFalse();
+        unscheduled.ShowsReviewBadge.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CycleView_DimmedOutOfCycleCellsHideTheirSources()
+    {
+        // #2975: boundary months of the cycle view hold another cycle's days —
+        // they stay dimmed and date-only, like the PDF's unlabeled dimmed cells.
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+
+        vm.SetViewModeCommand.Execute(CalendarViewMode.Cycle);
+
+        var cells = vm.MonthGroups.SelectMany(g => g.Cells)
+            .Where(c => !c.IsBlank)
+            .ToList();
+        // In-cycle study days show their source; review days add the badge.
+        var study = cells.First(c => !c.IsDimmed && !c.IsReview && c.PerekId != null);
+        study.HasVisibleSource.Should().BeTrue();
+        study.PerekSource.Should().NotBeEmpty();
+        var review = cells.First(c => !c.IsDimmed && c.IsReview);
+        review.HasVisibleSource.Should().BeTrue();
+        review.ShowsReviewBadge.Should().BeTrue();
+
+        var dimmed = cells.Where(c => c.IsDimmed).ToList();
+        dimmed.Should().NotBeEmpty();
+        // Another cycle's scheduled days still know their real assignment —
+        // it just must not render while the cell is dimmed.
+        dimmed.Should().Contain(c => c.PerekId != null && c.PerekSource.Length > 0);
+        dimmed.Should().OnlyContain(c => !c.HasVisibleSource && !c.ShowsReviewBadge);
     }
 
     [Fact]
@@ -901,6 +974,71 @@ public class LearningCalendarViewModelTests
         vm.SelectedCycle!.Value.Should().Be(6);
         vm.CycleOptions.Last().Value.Should().Be(7);
         vm.CanExportPdf.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CellComputedProperties_ReflectTheirInputs()
+    {
+        var empty = new CalendarCellViewModel();
+        empty.HasMergedDay.Should().BeFalse();
+        empty.HasVisibleSource.Should().BeFalse();
+        empty.ShowsReviewBadge.Should().BeFalse();
+        empty.IsTappable.Should().BeFalse();
+
+        var study = new CalendarCellViewModel
+        {
+            PerekSource = "בראשית א",
+            IsReview = true,
+            PerekId = 1,
+            MergedDayText = "ה'",
+        };
+        study.HasMergedDay.Should().BeTrue();
+        study.HasVisibleSource.Should().BeTrue();
+        study.ShowsReviewBadge.Should().BeTrue();
+        study.IsTappable.Should().BeTrue();
+
+        // Dimmed out-of-cycle cells keep their merged label but hide the
+        // source line and the review badge — the PDF rule mirrored in XAML.
+        var dimmed = new CalendarCellViewModel
+        {
+            PerekSource = "בראשית א",
+            IsReview = true,
+            IsDimmed = true,
+            MergedDayText = "ה'",
+        };
+        dimmed.HasMergedDay.Should().BeTrue();
+        dimmed.HasVisibleSource.Should().BeFalse();
+        dimmed.ShowsReviewBadge.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CellTapped_WithPerekId_NavigatesToTheReader()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        var navigations = new List<string>();
+        var navigated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var navigator = new Mock<IAppNavigator>();
+        navigator.Setup(n => n.GoToAsync(It.IsAny<string>()))
+            .Callback<string>(route => { navigations.Add(route); navigated.TrySetResult(); })
+            .Returns(Task.CompletedTask);
+        var tappedVm = new LearningCalendarViewModel(fixture.Schedule, fixture.PerekData, navigator.Object,
+            today: () => 57870217);
+        await tappedVm.InitializeAsync();
+        var page = new CalendarPageUnderTest(tappedVm);
+        var onCellTapped = typeof(LearningCalendarPage)
+            .GetMethod("OnCellTapped", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+
+        var cell = new CalendarCellViewModel { PerekId = 1, DateNumber = 57870101 };
+        onCellTapped.Invoke(page, [page, new TappedEventArgs(cell)]);
+        await navigated.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        navigations.Should().Contain(route => route.Contains("perekId=1") && route.Contains("dateNum=57870101"));
+
+        // A non-cell parameter is ignored.
+        onCellTapped.Invoke(page, [page, new TappedEventArgs("לא תא")]);
+        navigations.Should().HaveCount(1);
     }
 
     private sealed class CalendarPageUnderTest(LearningCalendarViewModel vm) : LearningCalendarPage(vm)

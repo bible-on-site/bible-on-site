@@ -153,12 +153,14 @@ for (const moduleName of ["website", "api", "admin"]) {
 						...process.env,
 						MODULE_NAME: moduleName,
 						GITHUB_WORKSPACE: workspace,
-						API_ARM64_ARCHIVE: archive,
-						API_RELEASE_SOURCE: "a".repeat(40),
+						RELEASE_ARM64_ARCHIVE: archive,
+						RELEASE_SOURCE: "a".repeat(40),
 						API_HAS_ARM64: "true",
 						WEBSITE_HAS_ARM64: "true",
+						ADMIN_HAS_ARM64: "true",
 						API_PUBLISH_INDEX: index,
 						WEBSITE_PUBLISH_INDEX: index,
+						ADMIN_PUBLISH_INDEX: index,
 					},
 				},
 			);
@@ -168,17 +170,12 @@ for (const moduleName of ["website", "api", "admin"]) {
 				args[args.indexOf("--docker-image") + 1],
 				`${workspace}/web/candidate/native.tar.gz`,
 			);
-			if (moduleName !== "admin") {
-				assert.equal(
-					args[args.indexOf("--docker-image-arm64") + 1],
-					`${workspace}/${archive}`,
-				);
-				assert.equal(args[args.indexOf("--source-ref") + 1], "a".repeat(40));
-				assert.equal(args.includes("--publish-index"), index === "true");
-			} else {
-				assert.equal(args.includes("--docker-image-arm64"), false);
-				assert.equal(args.includes("--publish-index"), false);
-			}
+			assert.equal(
+				args[args.indexOf("--docker-image-arm64") + 1],
+				`${workspace}/${archive}`,
+			);
+			assert.equal(args[args.indexOf("--source-ref") + 1], "a".repeat(40));
+			assert.equal(args.includes("--publish-index"), index === "true");
 		});
 	}
 }

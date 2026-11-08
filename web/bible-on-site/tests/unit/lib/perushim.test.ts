@@ -13,6 +13,7 @@ import {
 	getPerushDetail,
 	getPerushNotes,
 	getPerushNotesBatch,
+	getPerushNotesForPasuk,
 	getPerushNotesForRanges,
 	getPerushimByPerekId,
 	getPerushimByPerekIds,
@@ -283,6 +284,58 @@ describe("perushim service", () => {
 			await expect(getPerushNotes(5, 3)).rejects.toBe(42);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch notes for perush %d perek %d:",
+				5,
+				3,
+				42,
+			);
+		});
+	});
+
+	describe("getPerushNotesForPasuk", () => {
+		it("queries notes for a single pasuk by perush name", async () => {
+			mockQuery.mockResolvedValue([
+				{ pasuk: 23, note_idx: 0, note_content: "<p>A</p>" },
+				{ pasuk: 23, note_idx: 1, note_content: "<p>B</p>" },
+			]);
+
+			const result = await getPerushNotesForPasuk("רש\"י", 32, 23);
+
+			expect(mockQuery).toHaveBeenCalledWith(
+				expect.stringContaining(
+					"WHERE p.name = ? AND n.perek_id = ? AND n.pasuk = ?",
+				),
+				['רש"י', 32, 23],
+			);
+			expect(result).toEqual([
+				{ pasuk: 23, noteIdx: 0, noteContent: "<p>A</p>" },
+				{ pasuk: 23, noteIdx: 1, noteContent: "<p>B</p>" },
+			]);
+		});
+
+		it("rethrows on Error instance so a false empty is never cached", async () => {
+			mockQuery.mockRejectedValue(new Error("connection lost"));
+
+			await expect(
+				getPerushNotesForPasuk("רש\"י", 5, 3),
+			).rejects.toThrow("connection lost");
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch notes for perush %s perek %d pasuk %d:",
+				'רש"י',
+				5,
+				3,
+				"connection lost",
+			);
+		});
+
+		it("rethrows on non-Error rejection", async () => {
+			mockQuery.mockRejectedValue(42);
+
+			await expect(getPerushNotesForPasuk("רש\"י", 5, 3)).rejects.toBe(
+				42,
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch notes for perush %s perek %d pasuk %d:",
+				'רש"י',
 				5,
 				3,
 				42,

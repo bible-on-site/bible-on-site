@@ -7,12 +7,64 @@ import test from "node:test";
 import { finalizeBenchmarks, writeBenchmark } from "./benchmark-store.cjs";
 import {
 	collectEvidence,
+	lighthouseBenchmarkEntry,
 	lighthouseBenchmarkName,
 	performanceMarkdown,
 	saveLighthouseReport,
 	summarizeLighthouse,
 	writePerformanceIndex,
 } from "./performance-report.mjs";
+
+test("both TBT reporting paths preserve the existing browser blocking budget", () => {
+	// PR #3005: 7ms exceeded a 6.43ms history-derived limit even though the
+	// unchanged desktop test allows 5000ms. The duplicate audit must use the
+	// same gate as the named TBT metric; neither may clip a real breach.
+	assert.ok(7 > (15 / 14) * 6);
+	for (const name of ["metric: TBT", "audit: total-blocking-time"]) {
+		for (const budget of [5000, 10000]) {
+			for (const value of [0, 7, budget, budget + 1]) {
+				const entry = { name, measure: "time_ms", value, upperValue: budget };
+				const result = lighthouseBenchmarkEntry(
+					entry,
+					"total-blocking-time",
+					budget,
+				);
+				assert.equal(result.name, name);
+				assert.equal(result.measure, "frame_budget_ratio");
+				assert.equal(result.upperValue, 1);
+				assert.equal(result.value > result.upperValue, value > budget);
+				assert.equal(result.value * budget, value);
+				assert.equal(entry.value, value);
+				assert.equal(entry.measure, "time_ms");
+			}
+		}
+	}
+});
+
+test("TBT normalization preserves raw evidence and other benchmark measures", () => {
+	const lhr = fixture();
+	lhr.audits["total-blocking-time"] = { numericValue: 7, score: 1 };
+	assert.equal(summarizeLighthouse(lhr, { device: "desktop" }).metrics.TBT, 7);
+	for (const [auditId, measure, value] of [
+		["first-contentful-paint", "time_ms", 3000],
+		["cumulative-layout-shift", "cls_ratio", 0.05],
+		["total-blocking-time", "score", 1],
+	]) {
+		const entry = { name: auditId, measure, value };
+		assert.equal(lighthouseBenchmarkEntry(entry, auditId, 5000), entry);
+	}
+	for (const budget of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+		assert.throws(
+			() =>
+				lighthouseBenchmarkEntry(
+					{ name: "TBT", measure: "time_ms", value: 7 },
+					"total-blocking-time",
+					budget,
+				),
+			/finite and positive/,
+		);
+	}
+});
 
 function fixture(url = "https://example.com/", lcp = 2000) {
 	return {

@@ -1,8 +1,9 @@
 import "@/lib/download/register-tanach";
 import type React from "react";
-import UnitSwipeNavigation from "@/app/components/UnitSwipeNavigation";
 import ReaderSettings from "@/app/929/[number]/components/ReaderSettings";
 import { hebrewSerif, taameyD } from "@/app/929/[number]/hebrew-font";
+import { PageShell } from "@/app/components/PageShell";
+import UnitSwipeNavigation from "@/app/components/UnitSwipeNavigation";
 import "@/app/929/[number]/layout.css";
 import {
 	getAdjacentMasoraUnits,
@@ -32,17 +33,17 @@ export default async function MasoraUnitLayout({
 		: { prev: null, next: null };
 
 	return (
-		<UnitSwipeNavigation
-			prevHref={
-				prev ? `${MASORA_DIVISION.rootPath}/${prev.unitId}` : null
-			}
-			nextHref={
-				next ? `${MASORA_DIVISION.rootPath}/${next.unitId}` : null
-			}
+		<PageShell
+			header="solid"
 			className={`perek-layout ${hebrewSerif.variable} ${taameyD.variable}`}
 		>
-			<ReaderSettings />
-			{children}
-		</UnitSwipeNavigation>
+			<UnitSwipeNavigation
+				prevHref={prev ? `${MASORA_DIVISION.rootPath}/${prev.unitId}` : null}
+				nextHref={next ? `${MASORA_DIVISION.rootPath}/${next.unitId}` : null}
+			>
+				<ReaderSettings />
+				{children}
+			</UnitSwipeNavigation>
+		</PageShell>
 	);
 }

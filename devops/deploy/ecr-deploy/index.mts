@@ -45,7 +45,7 @@ async function main() {
 			type: "string",
 		})
 		.option("docker-image-arm64", {
-			describe: "Path to the native ARM64 API or website Docker archive",
+			describe: "Path to the native ARM64 API, website or admin Docker archive",
 			type: "string",
 		})
 		.option("source-ref", {
@@ -71,11 +71,11 @@ async function main() {
 				args.sourceRef !== undefined ||
 				args.publishIndex;
 			if (
-				!["api", "website"].includes(args.moduleName) &&
+				!["api", "website", "admin"].includes(args.moduleName) &&
 				(dual || indexSpecified)
 			)
 				throw new Error(
-					"Dual archives and publish-index are API-only or website options",
+					"Dual archives and publish-index are API, website or admin options",
 				);
 			if (
 				dual &&
@@ -136,7 +136,9 @@ async function main() {
 			const configure =
 				moduleName === "website"
 					? deployer.setWebsiteImageOptions
-					: deployer.setAPIImageOptions;
+					: moduleName === "admin"
+						? deployer.setAdminImageOptions
+						: deployer.setAPIImageOptions;
 			configure.call(deployer, {
 				arm64ArchivePath: argv.dockerImageArm64,
 				sourceRef: argv.sourceRef,
