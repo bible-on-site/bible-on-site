@@ -23,6 +23,26 @@ test.describe("מועדים על הפרק", () => {
 		).toBeVisible();
 		await expect(page).toHaveTitle(/מועדים על הפרק/);
 
+		// The annual wheel is a nav landmark with one sector-link per moed.
+		// Fixture moadim 90+92 carry no month, so the trailing "other" band
+		// wraps the year and the canonical months label their own arcs.
+		const wheelNav = page.getByRole("navigation", {
+			name: "גלגל המועדים",
+		});
+		await expect(wheelNav.getByRole("link")).toHaveCount(16);
+		// Exact match: the band label "תשרי" must not collide with the
+		// "…בתשרי" date tspans inside the slice links.
+		await expect(
+			wheelNav.getByText("תשרי", { exact: true }),
+		).toBeVisible();
+		await expect(wheelNav.getByText("אדר", { exact: true })).toBeVisible();
+		await expect(
+			wheelNav.getByText("מועדים נוספים", { exact: true }),
+		).toBeVisible();
+		await expect(
+			wheelNav.getByRole("link", { name: /פסח/ }),
+		).toHaveAttribute("href", "/מועדים/פסח");
+
 		// Wheel anchors carry the canonical Hebrew href; ראש השנה opens the year.
 		const index = page.getByRole("navigation", { name: "רשימת המועדים" });
 		const indexLinks = index.getByRole("link");

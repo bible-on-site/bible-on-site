@@ -241,12 +241,13 @@ describe("resolveEntityChanges", () => {
 	it("skips moed invalidation while the moed schema is not deployed", async () => {
 		stubDb({ authorName: "רשי" });
 		const inner = mockQuery.getMockImplementation();
+		if (inner == null) throw new Error("stubDb must run first");
 		const missing = Object.assign(new Error("no table"), {
 			code: "ER_NO_SUCH_TABLE",
 		});
 		mockQuery.mockImplementation(async (sql: string) => {
 			if (/tanah_moed/.test(sql)) throw missing;
-			return inner!(sql);
+			return inner(sql);
 		});
 		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 		const out = await resolveEntityChanges([
@@ -270,10 +271,11 @@ describe("resolveEntityChanges", () => {
 	it("propagates a moed lookup failure instead of under-invalidating", async () => {
 		stubDb({});
 		const inner = mockQuery.getMockImplementation();
+		if (inner == null) throw new Error("stubDb must run first");
 		mockQuery.mockImplementation(async (sql: string) => {
 			if (/FROM tanah_moed m\s+JOIN/.test(sql))
 				throw new Error("connection lost");
-			return inner!(sql);
+			return inner(sql);
 		});
 		await expect(
 			resolveEntityChanges([
