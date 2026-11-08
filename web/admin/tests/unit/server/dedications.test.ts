@@ -46,6 +46,7 @@ vi.mock("@tanstack/react-start", () => ({
 
 import {
 	__resetDedicationExpiryForTests,
+	changeFromTargets,
 	clearDedicationExpiry,
 	rescanDedicationExpiries,
 	syncDedicationExpiry,
@@ -53,6 +54,7 @@ import {
 import {
 	applyArticleDedicationLink,
 	normalizeExpiry,
+	validateReferenceTargets,
 } from "~/server/dedication-targets.server";
 import type { DedicationTargetInput } from "~/server/dedications";
 import {
@@ -623,6 +625,11 @@ describe("listDedications", () => {
 			label: "ספר ויקרא",
 		});
 	});
+
+	it("lists without a filter payload", async () => {
+		stubQueries({ dedication: [] });
+		await expect(listDedications({ data: undefined })).resolves.toEqual([]);
+	});
 });
 
 describe("getDedication", () => {
@@ -973,5 +980,66 @@ describe("applyArticleDedicationLink", () => {
 			}),
 		).rejects.toThrow("תוקף");
 		expect(mocks.txExecute).not.toHaveBeenCalled();
+	});
+});
+
+describe("changeFromTargets", () => {
+	it("maps every target kind into its invalidation bucket", () => {
+		expect(
+			changeFromTargets([
+				{ kind: "perek", perekIdLow: 1, perekIdHigh: 3 },
+				{ kind: "sefer", seferId: 4 },
+				{ kind: "helek", helekId: 5 },
+				{ kind: "parasha", parashaId: 6 },
+				{ kind: "article", articleId: 7 },
+				{ kind: "entry", entryId: "e-1" },
+				{ kind: "masora" },
+			]),
+		).toEqual({
+			perekRanges: [{ low: 1, high: 3 }],
+			seferIds: [4],
+			helekIds: [5],
+			parashaIds: [6],
+			articleIds: [7],
+			entryIds: ["e-1"],
+			masora: true,
+		});
+	});
+
+	it("defaults missing id fields to the zero/empty sentinels", () => {
+		expect(
+			changeFromTargets([
+				{ kind: "perek" },
+				{ kind: "sefer" },
+				{ kind: "helek" },
+				{ kind: "parasha" },
+				{ kind: "article" },
+				{ kind: "entry" },
+			]),
+		).toEqual({
+			perekRanges: [{ low: 0, high: 0 }],
+			seferIds: [0],
+			helekIds: [0],
+			parashaIds: [0],
+			articleIds: [0],
+			entryIds: [""],
+			masora: false,
+		});
+	});
+});
+
+describe("validateReferenceTargets", () => {
+	it("treats a missing sefer/helek id as zero and reports it missing", async () => {
+		mocks.queryOne.mockResolvedValue(null);
+		await expect(validateReferenceTargets([{ kind: "sefer" }])).rejects.toThrow(
+			"ספר 0 לא קיים",
+		);
+		await expect(validateReferenceTargets([{ kind: "helek" }])).rejects.toThrow(
+			"חלק 0 לא קיים",
+		);
+		expect(mocks.queryOne).toHaveBeenCalledWith(
+			expect.stringContaining("tanah_sefer"),
+			[0],
+		);
 	});
 });

@@ -73,6 +73,17 @@ describe("resolvePerekRef", () => {
 			}).kind,
 		).toBe("ambiguous");
 	});
+
+	it("inherits the alias's additional letter when the citation omits it", () => {
+		const out = resolvePerekRef(catalogue, {
+			sefer: "עזרא",
+			additional: null,
+			perek: 7,
+			pasuk: null,
+		});
+		expect(out.kind).toBe("resolved");
+		if (out.kind === "resolved") expect(out.perek.id).toBe(800);
+	});
 });
 
 describe("catalogue labels", () => {

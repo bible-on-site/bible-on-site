@@ -403,33 +403,30 @@ export const getDedication = createServerFn({ method: "GET" })
 	});
 
 function validateTarget(target: DedicationTargetInput): void {
-	const int = (v: unknown) => typeof v === "number" && Number.isInteger(v);
+	const int = (v: unknown): v is number =>
+		typeof v === "number" && Number.isInteger(v);
 	switch (target.kind) {
-		case "perek":
-			if (
-				!int(target.perekIdLow) ||
-				!int(target.perekIdHigh) ||
-				(target.perekIdLow ?? 0) < 1 ||
-				(target.perekIdHigh ?? 0) < (target.perekIdLow ?? 0)
-			) {
+		case "perek": {
+			const low = target.perekIdLow;
+			const high = target.perekIdHigh;
+			if (!int(low) || !int(high) || low < 1 || high < low) {
 				throw new Error("טווח פרקים אינו חוקי");
 			}
 			break;
+		}
 		case "sefer":
 			if (!int(target.seferId)) throw new Error("יש לבחור ספר");
 			break;
 		case "helek":
 			if (!int(target.helekId)) throw new Error("יש לבחור חלק");
 			break;
-		case "parasha":
-			if (
-				!int(target.parashaId) ||
-				(target.parashaId ?? 0) < 1 ||
-				(target.parashaId ?? 0) > PARASHA_UNIT_COUNT
-			) {
+		case "parasha": {
+			const parashaId = target.parashaId;
+			if (!int(parashaId) || parashaId < 1 || parashaId > PARASHA_UNIT_COUNT) {
 				throw new Error(`פרשה שבועית חייבת להיות מספר 1-${PARASHA_UNIT_COUNT}`);
 			}
 			break;
+		}
 		case "article":
 			if (!int(target.articleId)) throw new Error("מזהה מאמר אינו חוקי");
 			break;

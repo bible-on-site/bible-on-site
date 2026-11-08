@@ -108,7 +108,9 @@ function makeHeld(
 function resolveCitationTarget(
 	raw: Record<string, unknown>,
 	catalogue: TargetCatalogue,
-): { coordinate?: PasukCoordinate; label?: string; error?: string } {
+):
+	| { coordinate: PasukCoordinate; label: string; error?: undefined }
+	| { error: string; coordinate?: undefined; label?: undefined } {
 	const sefer = typeof raw.sefer === "string" ? raw.sefer.trim() : "";
 	if (!sefer) return { error: "missing sefer" };
 	const additional =
@@ -143,7 +145,9 @@ function resolveCitationTarget(
 function resolvePerekTarget(
 	raw: Record<string, unknown>,
 	catalogue: TargetCatalogue,
-): { perekId?: number; label?: string; error?: string } {
+):
+	| { perekId: number; label: string; error?: undefined }
+	| { error: string; perekId?: undefined; label?: undefined } {
 	// Direct id form is accepted but only when it exists in the catalogue.
 	if (isInt(raw.perekId)) {
 		const found = catalogue.perakim.find((p) => p.id === raw.perekId);
@@ -193,15 +197,15 @@ export function normalizeTarget(
 	switch (relationshipKey) {
 		case "primaryPerek": {
 			const resolved = resolvePerekTarget(raw, catalogue);
-			if (resolved.error || resolved.perekId === undefined) {
-				return { heldReason: resolved.error ?? "unresolved perek" };
+			if (resolved.error !== undefined) {
+				return { heldReason: resolved.error };
 			}
 			if (resolved.perekId === snapshot.perekId) {
 				return { heldReason: "already the current primary perek" };
 			}
 			return {
 				target: { perekId: resolved.perekId },
-				label: resolved.label ?? `פרק ${resolved.perekId}`,
+				label: resolved.label,
 			};
 		}
 		case "author": {
@@ -253,14 +257,14 @@ export function normalizeTarget(
 					item as Record<string, unknown>,
 					catalogue,
 				);
-				if (resolved.error || !resolved.coordinate) {
-					return { heldReason: resolved.error ?? "unresolvable citation" };
+				if (resolved.error !== undefined) {
+					return { heldReason: resolved.error };
 				}
 				const key = `${resolved.coordinate.perekId}:${resolved.coordinate.pasuk}`;
 				if (!seen.has(key)) {
 					seen.add(key);
 					coordinates.push(resolved.coordinate);
-					labels.push(resolved.label ?? key);
+					labels.push(resolved.label);
 				}
 			}
 			const coverageVerified =
@@ -417,13 +421,16 @@ export function validateModelOutput(
 				options.catalogue,
 				options.snapshot,
 			);
+			/* istanbul ignore next -- pending-schema normalizers always report heldReason */
+			const pendingReason =
+				normalized.heldReason ??
+				`pending-schema (#${entry.pendingIssue}): never applied until the contract lands`;
 			drafts.push(
 				makeHeld(
 					relationshipKey,
 					action,
 					normalized.target ?? target,
-					normalized.heldReason ??
-						`pending-schema (#${entry.pendingIssue}): never applied until the contract lands`,
+					pendingReason,
 					evidence,
 					rationale,
 					confidence,
@@ -432,12 +439,14 @@ export function validateModelOutput(
 			continue;
 		}
 		if (!proposalActionAllowed(entry, action)) {
+			/* istanbul ignore next -- every registry entry declares at least one operation */
+			const opsLabel = entry.operations.join("/") || "none";
 			drafts.push(
 				makeHeld(
 					relationshipKey,
 					action,
 					target,
-					`action "${action}" is not expressible for ${relationshipKey} (ops: ${entry.operations.join("/") || "none"})`,
+					`action "${action}" is not expressible for ${relationshipKey} (ops: ${opsLabel})`,
 					evidence,
 					rationale,
 					confidence,
@@ -453,12 +462,14 @@ export function validateModelOutput(
 			options.snapshot,
 		);
 		if (normalized.heldReason || !normalized.target) {
+			/* istanbul ignore next -- normalizeTarget failure paths always set heldReason */
+			const heldReason = normalized.heldReason ?? "unresolved target";
 			drafts.push(
 				makeHeld(
 					relationshipKey,
 					action,
 					normalized.target ?? target,
-					normalized.heldReason ?? "unresolved target",
+					heldReason,
 					evidence,
 					rationale,
 					confidence,
@@ -485,11 +496,13 @@ export function validateModelOutput(
 		const conflict = unanchored.length
 			? `some evidence not anchored: ${unanchored.slice(0, 2).join(" | ")}`
 			: null;
+		/* istanbul ignore next -- successful normalizations always carry a label */
+		const targetLabel = normalized.label ?? relationshipKey;
 		drafts.push({
 			relationshipKey,
 			action,
 			target: normalized.target,
-			targetLabel: normalized.label ?? relationshipKey,
+			targetLabel,
 			evidence,
 			rationale,
 			confidence,

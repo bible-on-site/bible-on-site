@@ -210,6 +210,23 @@ describe("planProposalApply", () => {
 			expect(plan.input.expectedContentHash).toBeUndefined();
 		});
 
+		it("keeps the live verified flag when a replace omits it", () => {
+			const plan = planProposalApply(
+				{
+					...base,
+					relationshipKey: "coveringSources",
+					action: "replace",
+					target: { pasukCoordinates: [{ perekId: 18, pasuk: 2 }] },
+				},
+				snapshot,
+				hash,
+				reviewer,
+			);
+			expect(plan.kind).toBe("article-mutation");
+			if (plan.kind !== "article-mutation") return;
+			expect(plan.input.coverageVerified).toBe(true);
+		});
+
 		it("clears the verified flag when a replace empties the set", () => {
 			const plan = planProposalApply(
 				{

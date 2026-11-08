@@ -232,9 +232,7 @@ function findSpans(plainText: string, names: Set<string>): RawSpan[] {
 			slot,
 			{
 				leadToken: lead === null ? null : atoms[i - 2].text,
-				numbers: tail
-					? [perek, pasuk, tail.pasukTo]
-					: [perek, pasuk],
+				numbers: tail ? [perek, pasuk, tail.pasukTo] : [perek, pasuk],
 				bareForm: false,
 			},
 			tail ? atoms[tail.endIndex] : atoms[i + 1],
@@ -263,9 +261,7 @@ function findSpans(plainText: string, names: Set<string>): RawSpan[] {
 			slot,
 			{
 				leadToken: lead === null ? null : atoms[perekIndex - 2].text,
-				numbers: tail
-					? [perek, pasuk, tail.pasukTo]
-					: [perek, pasuk],
+				numbers: tail ? [perek, pasuk, tail.pasukTo] : [perek, pasuk],
 				bareForm: false,
 			},
 			tail ? atoms[tail.endIndex] : atoms[i + 1],
@@ -362,6 +358,8 @@ function interpret(
 		// Bare form on a plain (or alias-pinned) sefer: the first token is the
 		// perek itself — prepend it back onto the numbers list.
 		const leadNum = parseHebrewNumber(span.leadToken);
+		/* istanbul ignore next -- bareForm spans are only emitted for a lead
+		   token that already parsed as a numeral */
 		if (leadNum !== null) numbers = [leadNum, ...numbers];
 	}
 

@@ -182,10 +182,7 @@ describe("extractCitations", () => {
 		});
 
 		it("labels a range with its end pasuk", () => {
-			const { resolved } = extractCitations(
-				"בראשית יח, ב-ה מראה.",
-				catalogue,
-			);
+			const { resolved } = extractCitations("בראשית יח, ב-ה מראה.", catalogue);
 			expect(resolved[0].label).toContain("-5");
 		});
 
@@ -205,6 +202,176 @@ describe("extractCitations", () => {
 			});
 			expect(ambiguous).toHaveLength(1);
 			expect(ambiguous[0].reason).toContain("perakim");
+		});
+	});
+
+	describe("with numeral atoms carrying quote marks", () => {
+		it("resolves a gershayim-marked numeral", () => {
+			const { resolved, ambiguous } = extractCitations(
+				'בראשית י"ח, ב.',
+				catalogue,
+			);
+			expect(ambiguous).toHaveLength(0);
+			expect(resolved).toHaveLength(1);
+			expect(resolved[0].perekId).toBe(18);
+			expect(resolved[0].pasuk).toBe(2);
+		});
+
+		it("drops a numeral whose mark sits before any letter", () => {
+			const { resolved, ambiguous } = extractCitations(
+				'בראשית "א, ב.',
+				catalogue,
+			);
+			expect(resolved).toHaveLength(0);
+			expect(ambiguous).toHaveLength(0);
+		});
+
+		it("drops an atom made only of quote marks", () => {
+			const { resolved, ambiguous } = extractCitations(
+				"בראשית \"', ב.",
+				catalogue,
+			);
+			expect(resolved).toHaveLength(0);
+			expect(ambiguous).toHaveLength(0);
+		});
+	});
+
+	describe("with malformed citation shapes", () => {
+		it("ignores a numeral pair not preceded by a word", () => {
+			const { resolved, ambiguous } = extractCitations(
+				"ראה (יח, ב) בפרק.",
+				catalogue,
+			);
+			expect(resolved).toHaveLength(0);
+			expect(ambiguous).toHaveLength(0);
+		});
+
+		it("ignores a comma whose left side is not a numeral", () => {
+			const { resolved, ambiguous } = extractCitations(
+				"בראשית המאמר, ב.",
+				catalogue,
+			);
+			expect(resolved).toHaveLength(0);
+			expect(ambiguous).toHaveLength(0);
+		});
+
+		it("ignores a comma whose right side is not a numeral", () => {
+			const { resolved, ambiguous } = extractCitations(
+				"בראשית יח, המאמר.",
+				catalogue,
+			);
+			expect(resolved).toHaveLength(0);
+			expect(ambiguous).toHaveLength(0);
+		});
+
+		it("holds a reversed pasuk range as implausible", () => {
+			const { resolved, ambiguous } = extractCitations(
+				"בראשית יח, ה-ב.",
+				catalogue,
+			);
+			expect(resolved).toHaveLength(0);
+			expect(ambiguous).toHaveLength(1);
+			expect(ambiguous[0].reason).toContain("implausible");
+		});
+
+		it("resolves a citation even when the pasuk bound is unknown", () => {
+			const unbounded: typeof catalogue = {
+				...catalogue,
+				perakim: catalogue.perakim.map((p) => ({
+					...p,
+					pasukCount: null,
+				})),
+			};
+			const { resolved, ambiguous } = extractCitations(
+				"בראשית א, צ.",
+				unbounded,
+			);
+			expect(ambiguous).toHaveLength(0);
+			expect(resolved).toHaveLength(1);
+			expect(resolved[0].pasuk).toBe(90);
+		});
+	});
+
+	describe("with the פרק/פסוק keyword form", () => {
+		it("resolves the phrasing with a comma before פסוק", () => {
+			const { resolved } = extractCitations(
+				"בראשית פרק יח, פסוק ב.",
+				catalogue,
+			);
+			expect(resolved).toHaveLength(1);
+			expect(resolved[0].perekId).toBe(18);
+			expect(resolved[0].pasuk).toBe(2);
+		});
+
+		it("ignores פסוק not followed by a numeral", () => {
+			const { resolved, ambiguous } = extractCitations(
+				"בראשית פרק יח פסוק המאמר.",
+				catalogue,
+			);
+			expect(resolved).toHaveLength(0);
+			expect(ambiguous).toHaveLength(0);
+		});
+
+		it("ignores a פסוק span without the פרק keyword", () => {
+			const { resolved, ambiguous } = extractCitations(
+				"בראשית יח פסוק ב.",
+				catalogue,
+			);
+			expect(resolved).toHaveLength(0);
+			expect(ambiguous).toHaveLength(0);
+		});
+
+		it("ignores a פסוק span with no perek numeral at all", () => {
+			const { resolved, ambiguous } = extractCitations("פסוק ב.", catalogue);
+			expect(resolved).toHaveLength(0);
+			expect(ambiguous).toHaveLength(0);
+		});
+
+		it("ignores a פסוק span with no sefer slot before פרק", () => {
+			const { resolved, ambiguous } = extractCitations(
+				"פרק יח פסוק ב.",
+				catalogue,
+			);
+			expect(resolved).toHaveLength(0);
+			expect(ambiguous).toHaveLength(0);
+		});
+
+		it("resolves an additional-letter citation in the keyword form", () => {
+			const { resolved } = extractCitations("שמואל ב פרק ה פסוק ז.", catalogue);
+			expect(resolved).toHaveLength(1);
+			expect(resolved[0].perekId).toBe(605);
+			expect(resolved[0].pasuk).toBe(7);
+		});
+
+		it("resolves a pasuk range in the keyword form", () => {
+			const { resolved } = extractCitations(
+				"בראשית פרק יח פסוק ב-ה.",
+				catalogue,
+			);
+			expect(resolved).toHaveLength(1);
+			expect(resolved[0].pasuk).toBe(2);
+			expect(resolved[0].pasukTo).toBe(5);
+		});
+	});
+
+	describe("with the bare form's optional third token", () => {
+		it("resolves a bare citation carrying a pasuk range", () => {
+			const { resolved } = extractCitations("בראשית יח ב-ג.", catalogue);
+			expect(resolved).toHaveLength(1);
+			expect(resolved[0].perekId).toBe(18);
+			expect(resolved[0].pasuk).toBe(2);
+			expect(resolved[0].pasukTo).toBe(3);
+		});
+	});
+
+	describe("with quoted sefer surfaces", () => {
+		it("resolves a sefer name wrapped in quote marks", () => {
+			const { resolved } = extractCitations(
+				'המאמר "בראשית" יח, ב אומר.',
+				catalogue,
+			);
+			expect(resolved).toHaveLength(1);
+			expect(resolved[0].perekId).toBe(18);
 		});
 	});
 });

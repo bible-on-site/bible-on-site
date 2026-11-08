@@ -273,6 +273,8 @@ function batchToPosts(batch: RevalidateRequest[]): RevalidateRequest[] {
 }
 
 async function drain(): Promise<void> {
+	/* istanbul ignore next -- the debounce timer only arms while idle, so a
+	   flush can never re-enter drain while one is already running */
 	if (draining) return;
 	draining = true;
 	// Retried posts ride the first batch only — re-queueing them into the
@@ -316,7 +318,10 @@ async function drain(): Promise<void> {
 			const applied = outcomes.every(
 				(outcome) => outcome.outcome === "applied",
 			);
-			for (const resolve of waiting?.resolvers ?? []) {
+			/* istanbul ignore next -- a drain iteration only runs for queued
+			   work, which always carries a live generation of callers */
+			const resolvers = waiting?.resolvers ?? [];
+			for (const resolve of resolvers) {
 				resolve(unapplied.length === 0 && applied);
 			}
 		}

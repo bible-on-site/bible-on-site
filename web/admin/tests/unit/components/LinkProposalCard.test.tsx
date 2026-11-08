@@ -181,4 +181,16 @@ describe("LinkProposalCard", () => {
 		expect(screen.getByText(/ללא מיקום/)).toBeInTheDocument();
 		expect(screen.getByText(/editor-3/)).toBeInTheDocument();
 	});
+
+	it("renders a timestamp without a reviewer name", () => {
+		renderCard(
+			makeProposal({
+				status: "rejected",
+				reviewer: null,
+				reviewedAt: "2026-02-03T10:00:00Z",
+			}),
+		);
+		expect(screen.getByText(/נסקר על ידי —/)).toBeInTheDocument();
+		expect(screen.getByText(/2026-02-03/)).toBeInTheDocument();
+	});
 });

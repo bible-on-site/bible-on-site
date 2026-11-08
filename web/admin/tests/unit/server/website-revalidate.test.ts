@@ -15,15 +15,21 @@ vi.mock("@tanstack/react-start", () => ({
 }));
 
 import {
+	__resetRevalidateForTests,
 	articleChange,
+	articleInvalidation,
 	articlePath,
 	authorChange,
+	authorInvalidation,
 	authorPath,
+	dedicationChange,
 	getWebsiteRevalidationStatus,
 	lastRevalidationFailure,
 	mergeCoveringSpans,
+	moedChange,
 	pediaEntryChange,
 	pediaEntryPath,
+	pediaInvalidation,
 	revalidateWebsite,
 } from "~/server/website-revalidate";
 
@@ -308,6 +314,51 @@ describe("revalidateWebsite", () => {
 			expect(status.lastFailure?.requests).toEqual([{ tag: "articles" }]);
 		});
 	});
+
+	it("picks up requests enqueued while a flush is still posting", async () => {
+		let enqueued = false;
+		fetchSpy.mockImplementation(async () => {
+			// The second enqueue lands mid-drain: no new timer arms while
+			// `draining`, so the running loop must pick the work up itself.
+			if (!enqueued) {
+				enqueued = true;
+				void revalidateWebsite([{ tag: "authors" }]);
+			}
+			return new Response("{}", { status: 200 });
+		});
+		await expect(flush(revalidateWebsite([{ tag: "articles" }]))).resolves.toBe(
+			true,
+		);
+		expect(fetchSpy).toHaveBeenCalledTimes(2);
+		expect(calledUrls()[0].searchParams.get("tag")).toBe("articles");
+		expect(calledUrls()[1].searchParams.get("tag")).toBe("authors");
+	});
+
+	it("rides queued urls on the first changes chunk", async () => {
+		await flush(
+			revalidateWebsite([
+				{
+					changes: [{ kind: "article", id: 1, perekIds: [1] }],
+					urls: ["/929/1/1"],
+				},
+			]),
+		);
+		const url = calledUrls()[0];
+		expect(url.searchParams.getAll("url")).toEqual(["/929/1/1"]);
+		const body = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body));
+		expect(body.changes).toEqual([{ kind: "article", id: 1, perekIds: [1] }]);
+	});
+
+	it("reset clears queued work, resolves callers and disarms the timer", async () => {
+		const pending = revalidateWebsite([{ tag: "articles" }]);
+		__resetRevalidateForTests();
+		await expect(pending).resolves.toBe(true);
+		// A second reset exercises the already-idle path.
+		__resetRevalidateForTests();
+		await vi.advanceTimersByTimeAsync(FLUSH_MS);
+		expect(fetchSpy).not.toHaveBeenCalled();
+		expect(lastRevalidationFailure()).toBeNull();
+	});
 });
 
 describe("typed-change builders", () => {
@@ -369,6 +420,86 @@ describe("typed-change builders", () => {
 				},
 			],
 		});
+	});
+
+	it("articleChange omits absent optional fields", () => {
+		expect(articleChange({ id: 1, perekIds: [2] })).toEqual({
+			changes: [{ kind: "article", id: 1, perekIds: [2] }],
+		});
+	});
+
+	it("moedChange omits the old slug when the name did not change", () => {
+		expect(moedChange({ id: 2, slug: "sukkot" })).toEqual({
+			changes: [{ kind: "moed", id: 2, slug: "sukkot" }],
+		});
+		expect(moedChange({ id: 2, slug: "sukkot", oldSlug: "chag" })).toEqual({
+			changes: [{ kind: "moed", id: 2, slug: "sukkot", oldSlug: "chag" }],
+		});
+	});
+
+	it("dedicationChange emits only the supplied assignment sets", () => {
+		expect(dedicationChange({ id: 5 })).toEqual({
+			changes: [{ kind: "dedication", id: 5 }],
+		});
+		expect(
+			dedicationChange({
+				id: 5,
+				perekRanges: [{ low: 1, high: 2 }],
+				seferIds: [3],
+				helekIds: [4],
+				parashaIds: [5],
+				articleIds: [6],
+				entryIds: ["e1"],
+				masora: true,
+			}),
+		).toEqual({
+			changes: [
+				{
+					kind: "dedication",
+					id: 5,
+					perekRanges: [{ low: 1, high: 2 }],
+					seferIds: [3],
+					helekIds: [4],
+					parashaIds: [5],
+					articleIds: [6],
+					entryIds: ["e1"],
+					masora: true,
+				},
+			],
+		});
+	});
+
+	it("pediaEntryChange omits absent optional fields", () => {
+		expect(pediaEntryChange({ uniqueName: "x" })).toEqual({
+			changes: [{ kind: "pedia-entry", uniqueName: "x" }],
+		});
+	});
+
+	it("invalidation helpers include urls only when given", () => {
+		expect(articleInvalidation()).toEqual([{ tag: "articles" }]);
+		expect(articleInvalidation("/929/1/2")).toEqual([
+			{ tag: "articles", urls: ["/929/1/2"] },
+		]);
+		expect(authorInvalidation()).toEqual([
+			{ tag: "authors" },
+			{ tag: "articles" },
+		]);
+		expect(authorInvalidation("/929/authors/x")).toEqual([
+			{ tag: "authors" },
+			{ tag: "articles", urls: ["/929/authors/x"] },
+		]);
+		expect(pediaInvalidation()).toEqual([
+			{ tag: "tanahpedia-entity-refs" },
+			{ path: "/pedia/[slug]", type: "page" },
+			{ path: "/pedia" },
+			{ tag: "tanahpedia-mention-refs" },
+		]);
+		expect(pediaInvalidation("/pedia/x")).toEqual([
+			{ tag: "tanahpedia-entity-refs" },
+			{ path: "/pedia/[slug]", type: "page" },
+			{ path: "/pedia", urls: ["/pedia/x"] },
+			{ tag: "tanahpedia-mention-refs" },
+		]);
 	});
 
 	it("mergeCoveringSpans merges contiguous verses within each perek", () => {

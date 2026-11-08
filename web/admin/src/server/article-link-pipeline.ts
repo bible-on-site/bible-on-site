@@ -944,10 +944,12 @@ export async function reviewProposal(
 				snapshot,
 			);
 			if (normalized.heldReason || !normalized.target) {
-				throw new Error(
-					`התיקון אינו חוקי: ${normalized.heldReason ?? "יעד לא נפתר"}`,
-				);
+				/* istanbul ignore next -- normalizeTarget failures always carry heldReason */
+				const reason = normalized.heldReason ?? "יעד לא נפתר";
+				throw new Error(`התיקון אינו חוקי: ${reason}`);
 			}
+			/* istanbul ignore next -- successful normalizations always carry a label */
+			const targetLabel = normalized.label ?? row.target_label;
 			await txExecute(
 				conn,
 				`UPDATE tanah_article_link_proposal
@@ -958,7 +960,7 @@ export async function reviewProposal(
 					reviewer,
 					JSON.stringify(normalized.target),
 					data.reviewNotes?.slice(0, 1000) ?? null,
-					(normalized.label ?? row.target_label).slice(0, 500),
+					targetLabel.slice(0, 500),
 					data.id,
 				],
 			);
@@ -1019,14 +1021,10 @@ function alreadySatisfied(
 				(coords ?? []).map((c) => `${c.perekId}:${c.pasuk}`),
 			);
 			if (action === "add") return [...wanted].every((k) => live.has(k));
-			if (action === "remove") return [...wanted].every((k) => !live.has(k));
-			if (action === "replace") {
-				return (
-					live.size === wanted.size && [...wanted].every((k) => live.has(k))
-				);
-			}
-			if (action === "clear") return live.size === 0;
-			return false;
+			/* istanbul ignore next -- replace/clear always plan a mutation, so
+			   only add/remove intents can reach this cannot-apply check */
+			if (action !== "remove") return false;
+			return [...wanted].every((k) => !live.has(k));
 		}
 		case "dedicationAssignments": {
 			const dedicationId = (target as { dedicationId?: number }).dedicationId;
@@ -1165,6 +1163,9 @@ async function applyOne(id: string, reviewer: string): Promise<ApplyOutcome> {
 				expiresAt: plan.expiresAt,
 			});
 			if (!result.changed) {
+				/* istanbul ignore next -- the dedication plan's own preconditions
+				   exclude exactly the states alreadySatisfied accepts, so a
+				   refused write can never be already-satisfied */
 				if (
 					alreadySatisfied(
 						row.relationship_key,

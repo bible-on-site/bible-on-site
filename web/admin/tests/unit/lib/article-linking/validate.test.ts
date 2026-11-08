@@ -175,10 +175,7 @@ describe("validateModelOutput", () => {
 						target: {
 							citations: [{ sefer: "בראשית", perek: "יח", pasuk: "ב" }],
 						},
-						evidence: [
-							{ quote: "בראשית יח, ב" },
-							{ quote: "ציטוט שאינו כאן" },
-						],
+						evidence: [{ quote: "בראשית יח, ב" }, { quote: "ציטוט שאינו כאן" }],
 					},
 				],
 			});
@@ -257,6 +254,158 @@ describe("validateModelOutput", () => {
 			expect(drafts[0].status).toBe("pending");
 			expect(drafts[0].target).toEqual({ perekId: 18 });
 		});
+
+		it("accepts ASCII digit strings for citation numerals", () => {
+			const { drafts } = validate({
+				proposals: [
+					{
+						relationshipKey: "coveringSources",
+						action: "add",
+						target: {
+							citations: [{ sefer: "בראשית", perek: "18", pasuk: "2" }],
+						},
+						evidence: [{ quote: "בראשית יח, ב" }],
+					},
+				],
+			});
+			expect(drafts[0].status).toBe("pending");
+			expect(drafts[0].target).toEqual({
+				pasukCoordinates: [{ perekId: 18, pasuk: 2 }],
+			});
+		});
+
+		it("skips evidence items without a usable quote", () => {
+			const { drafts } = validate({
+				proposals: [
+					{
+						relationshipKey: "coveringSources",
+						action: "add",
+						target: {
+							citations: [{ sefer: "בראשית", perek: "יח", pasuk: "ב" }],
+						},
+						evidence: [{ quote: 42 as unknown as string }, {}, { quote: "" }],
+					},
+				],
+			});
+			expect(drafts[0].status).toBe("pending");
+			expect(drafts[0].evidence).toHaveLength(0);
+		});
+
+		it("plans a pending coveringSources remove as a set-merge intent", () => {
+			const { drafts } = validate({
+				proposals: [
+					{
+						relationshipKey: "coveringSources",
+						action: "remove",
+						target: {
+							citations: [{ sefer: "בראשית", perek: "יח", pasuk: "ג" }],
+						},
+						evidence: [{ quote: "בראשית" }],
+					},
+				],
+			});
+			expect(drafts[0].status).toBe("pending");
+			expect(drafts[0].action).toBe("remove");
+		});
+
+		it("holds a remove action on a read-only many-cardinality key", () => {
+			const { drafts } = validate({
+				proposals: [
+					{
+						relationshipKey: "mentionAnnotations",
+						action: "add",
+						target: {},
+						evidence: [{ quote: "המאמר" }],
+					},
+					{
+						relationshipKey: "dedicationAssignments",
+						action: "clear",
+						target: { dedicationId: 5 },
+						evidence: [{ quote: "המאמר" }],
+					},
+				],
+			});
+			expect(drafts[0].status).toBe("held");
+			expect(drafts[0].conflict).toContain("not expressible");
+			expect(drafts[0].conflict).toContain("ops: read");
+			expect(drafts[1].status).toBe("held");
+			expect(drafts[1].conflict).toContain("not expressible");
+		});
+
+		it("keeps the raw target on a held supported proposal", () => {
+			const { drafts } = validate({
+				proposals: [
+					{
+						relationshipKey: "coveringSources",
+						action: "add",
+						target: {},
+						evidence: [{ quote: "המאמר" }],
+					},
+				],
+			});
+			expect(drafts[0].status).toBe("held");
+			expect(drafts[0].target).toEqual({});
+			expect(drafts[0].conflict).toContain("no citations");
+		});
+
+		it("keeps the raw target on an unnormalizable pending-schema proposal", () => {
+			const { drafts } = validate({
+				proposals: [
+					{
+						relationshipKey: "recurringHebrewDate",
+						action: "add",
+						target: { month: "ניסן" },
+						evidence: [{ quote: "המאמר" }],
+					},
+				],
+			});
+			expect(drafts[0].status).toBe("held");
+			expect(drafts[0].target).toEqual({ month: "ניסן" });
+			expect(drafts[0].conflict).toContain("month+day");
+		});
+
+		it("trims a rationale and normalizes blank or non-string ones to null", () => {
+			const { drafts } = validate({
+				proposals: [
+					{
+						relationshipKey: "coveringSources",
+						action: "add",
+						target: {
+							citations: [{ sefer: "בראשית", perek: "יח", pasuk: "ב" }],
+						},
+						evidence: [{ quote: "בראשית יח, ב" }],
+						rationale: "  ציטוט ישיר  ",
+					},
+					{
+						relationshipKey: "coveringSources",
+						action: "add",
+						target: {
+							citations: [{ sefer: "בראשית", perek: "יח", pasuk: "ג" }],
+						},
+						evidence: [{ quote: "בראשית" }],
+						rationale: "   ",
+					},
+					{
+						relationshipKey: "coveringSources",
+						action: "add",
+						target: {
+							citations: [{ sefer: "בראשית", perek: "יח", pasuk: "ד" }],
+						},
+						evidence: [{ quote: "בראשית" }],
+						rationale: 9 as unknown as string,
+					},
+				],
+			});
+			expect(drafts[0].rationale).toBe("ציטוט ישיר");
+			expect(drafts[1].rationale).toBeNull();
+			expect(drafts[2].rationale).toBeNull();
+		});
+
+		it("tolerates output without a proposals array", () => {
+			const { drafts, malformed } = validate({});
+			expect(drafts).toHaveLength(0);
+			expect(malformed).toBe(0);
+		});
 	});
 });
 
@@ -294,6 +443,26 @@ describe("normalizeTarget", () => {
 				norm("primaryPerek", { sefer: "שמואל", perek: 5 }).heldReason,
 			).toBeTruthy();
 		});
+
+		it("resolves an additional-letter perek through the sefer letter", () => {
+			const out = norm("primaryPerek", {
+				sefer: "שמואל",
+				additional: "ב",
+				perek: 5,
+			});
+			expect(out.target).toEqual({ perekId: 605 });
+			expect(out.label).toContain("שמואל");
+		});
+
+		it("treats a blank additional letter as absent", () => {
+			expect(
+				norm("primaryPerek", {
+					sefer: "שמואל",
+					additional: "   ",
+					perek: 5,
+				}).heldReason,
+			).toBeTruthy();
+		});
 	});
 
 	describe("for author", () => {
@@ -301,7 +470,10 @@ describe("normalizeTarget", () => {
 			const out = normalizeTarget(
 				"author",
 				{ authorId: "ז" },
-				{ ...catalogue, authors: [...catalogue.authors, { id: 7, name: "רש" }] },
+				{
+					...catalogue,
+					authors: [...catalogue.authors, { id: 7, name: "רש" }],
+				},
 				snapshot,
 			);
 			expect(out.target).toEqual({ authorId: 7 });
@@ -393,6 +565,41 @@ describe("normalizeTarget", () => {
 				}).heldReason,
 			).toContain("unparseable");
 		});
+
+		it("dedupes repeated citation-form coordinates", () => {
+			const out = norm("coveringSources", {
+				citations: [
+					{ sefer: "בראשית", perek: "יח", pasuk: "ב" },
+					{ sefer: "בראשית", perek: 18, pasuk: 2 },
+				],
+			});
+			expect(out.target).toEqual({
+				pasukCoordinates: [{ perekId: 18, pasuk: 2 }],
+				coverageVerified: undefined,
+			});
+		});
+
+		it("resolves a citation pinned to an additional-letter sefer", () => {
+			const out = norm("coveringSources", {
+				citations: [
+					{ sefer: "שמואל", additional: "ב", perek: "ה", pasuk: "ז" },
+				],
+			});
+			expect(out.target).toEqual({
+				pasukCoordinates: [{ perekId: 605, pasuk: 7 }],
+				coverageVerified: undefined,
+			});
+		});
+
+		it("treats a blank citation additional letter as absent", () => {
+			const out = norm("coveringSources", {
+				citations: [
+					{ sefer: "שמואל", additional: "  ", perek: "ה", pasuk: "ז" },
+				],
+			});
+			// Blank additional leaves שמואל ambiguous — held, not guessed.
+			expect(out.heldReason).toBeTruthy();
+		});
 	});
 
 	describe("for dedicationAssignments", () => {
@@ -412,6 +619,26 @@ describe("normalizeTarget", () => {
 				norm("dedicationAssignments", { dedicationId: 42 }).heldReason,
 			).toContain("not in catalogue");
 		});
+
+		it("accepts the id alias and normalizes a missing expiry to null", () => {
+			const out = norm("dedicationAssignments", { id: 5 });
+			expect(out.target).toEqual({ dedicationId: 5, expiresAt: null });
+		});
+
+		it("normalizes blank and non-string expiries to null", () => {
+			expect(
+				norm("dedicationAssignments", {
+					dedicationId: 5,
+					expiresAt: "   ",
+				}).target,
+			).toEqual({ dedicationId: 5, expiresAt: null });
+			expect(
+				norm("dedicationAssignments", {
+					dedicationId: 5,
+					expiresAt: 123,
+				}).target,
+			).toEqual({ dedicationId: 5, expiresAt: null });
+		});
 	});
 
 	describe("for pending-schema and unknown keys", () => {
@@ -424,6 +651,12 @@ describe("normalizeTarget", () => {
 		it("holds a recurringHebrewDate missing its day", () => {
 			expect(
 				norm("recurringHebrewDate", { month: "ניסן" }).heldReason,
+			).toContain("month+day");
+		});
+
+		it("holds a recurringHebrewDate with a non-string month", () => {
+			expect(
+				norm("recurringHebrewDate", { month: 7, day: 3 }).heldReason,
 			).toContain("month+day");
 		});
 
