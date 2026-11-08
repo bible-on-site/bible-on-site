@@ -368,10 +368,14 @@
 		<PackageReference Include="Microsoft.WindowsAppSDK" Version="2.6.5" />
 	</ItemGroup>
 
-	<!-- Plugin.Firebase supports iOS and Android only (not MacCatalyst or Windows) -->
+	<!-- Plugin.Firebase supports iOS and Android only (not MacCatalyst or Windows).
+	     Firestore + Auth power the cloud preferences sync (#1095); both degrade to
+	     local-only when Firebase is unavailable. -->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Plugin.Firebase.Analytics" Version="4.0.0" />
+		<PackageReference Include="Plugin.Firebase.Auth" Version="5.0.1" />
 		<PackageReference Include="Plugin.Firebase.Core" Version="4.2.0" />
+		<PackageReference Include="Plugin.Firebase.Firestore" Version="4.0.0" />
 	</ItemGroup>
 
 	<!-- ============================================================
