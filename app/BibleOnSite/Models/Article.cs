@@ -31,6 +31,13 @@ public class Article
     public ReadingMetric? ReadingMetric { get; set; }
 
     /// <summary>
+    /// Ordered readable-block progress units over the article body (issue
+    /// #2607) — the word-position axis the detail reader maps scroll onto.
+    /// Empty when the API has no block rows.
+    /// </summary>
+    public IReadOnlyList<ReadingProgressUnit> ProgressUnits { get; set; } = [];
+
+    /// <summary>
     /// "זמן קריאה משוער: X" badge text measured over the whole article body —
     /// never the abstract alone (issue #2607). Null when there is nothing to
     /// show (unknown or verified-empty metric).
