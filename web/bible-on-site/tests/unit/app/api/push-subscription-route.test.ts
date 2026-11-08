@@ -76,12 +76,17 @@ describe("/api/push/subscription", () => {
 	it.each(["POST", "DELETE"])(
 		"%s rejects an unreadable body",
 		async (method) => {
+			const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 			const handler = method === "POST" ? POST : DELETE;
 			const req = request(method, subscription);
 			jest.spyOn(req, "text").mockRejectedValue(new Error("read failed"));
 			expect((await handler(req)).status).toBe(400);
 			expect(mockSave).not.toHaveBeenCalled();
 			expect(mockDelete).not.toHaveBeenCalled();
+			expect(warn).toHaveBeenCalledWith(
+				"Push subscription body read failed",
+				expect.any(Error),
+			);
 		},
 	);
 

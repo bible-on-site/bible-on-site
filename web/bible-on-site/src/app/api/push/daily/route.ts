@@ -22,11 +22,17 @@ const MAX_BODY_BYTES = 4 * 1024;
 async function readBody(
 	request: Request,
 ): Promise<{ ok: boolean; body: unknown }> {
+	let text: string;
 	try {
-		const text = await request.text();
-		if (text.length === 0) return { ok: true, body: undefined };
-		if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES)
-			return { ok: false, body: null };
+		text = await request.text();
+	} catch (error) {
+		console.warn("Push daily request body read failed", error);
+		return { ok: false, body: null };
+	}
+	if (text.length === 0) return { ok: true, body: undefined };
+	if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES)
+		return { ok: false, body: null };
+	try {
 		return { ok: true, body: JSON.parse(text) };
 	} catch {
 		return { ok: false, body: null };

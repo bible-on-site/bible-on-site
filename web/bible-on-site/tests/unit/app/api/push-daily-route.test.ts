@@ -138,6 +138,7 @@ describe("POST /api/push/daily", () => {
 		});
 
 		it("rejects an unreadable body without sending", async () => {
+			const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 			const request = new Request("http://localhost/api/push/daily", {
 				method: "POST",
 				headers: { authorization: "Bearer s3cret" },
@@ -145,6 +146,10 @@ describe("POST /api/push/daily", () => {
 			jest.spyOn(request, "text").mockRejectedValue(new Error("read failed"));
 			expect((await POST(request)).status).toBe(400);
 			expect(mockSend).not.toHaveBeenCalled();
+			expect(warn).toHaveBeenCalledWith(
+				"Push daily request body read failed",
+				expect.any(Error),
+			);
 		});
 
 		it("returns 500 when sending fails", async () => {
