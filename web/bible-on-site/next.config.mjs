@@ -283,10 +283,11 @@ const nextConfig = {
 				destination: "/pedia/:uniqueName",
 				permanent: true,
 			},
-			// /sitemap_www.xml is a legacy public sitemap URL (a per-host sitemap
-			// name external consumers still fetch — e.g. Search Console
-			// submissions). Keep it pointing at the single canonical document
-			// instead of letting it hit the missing-page 404 (issue #2935).
+			// /sitemap_www.xml is a public sitemap URL external consumers
+			// still fetch — e.g. past Search Console submissions on the
+			// supported www host. Keep it pointing at the single canonical
+			// document instead of letting it hit the missing-page 404
+			// (issue #2935).
 			{
 				source: "/sitemap_www.xml",
 				destination: "/sitemap.xml",

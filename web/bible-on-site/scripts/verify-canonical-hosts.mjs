@@ -9,6 +9,10 @@ import { fileURLToPath } from "node:url";
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 2;
 const BROWSER_UA = "bible-on-site-canonical-hosts-check";
+// Identifying comment inside docs/aws/cloudformation/ec2-nginx/router/404.html.
+// The app renders the same branded title, so only this marker proves the
+// committed router fallback — not an app-rendered page — answered the miss.
+const ROUTER_404_MARKER = "bible-on-site router branded 404 fallback";
 // Ahrefs Site Audit sends this UA (distinct from the blocked AhrefsBot).
 const CRAWLER_UA =
 	"Mozilla/5.0 (compatible; AhrefsSiteAudit/6.1; +http://ahrefs.com/robot/)";
@@ -95,7 +99,7 @@ export async function verifyCanonicalHosts(
 		}
 	}
 
-	// The legacy public sitemap URL must permanently redirect into the
+	// The public sitemap alias must permanently redirect into the
 	// single canonical document — a 404 or an HTML body here is the
 	// reported defect (#2935). The exact supplied URL starts on the www
 	// host, so the compatibility chain is asserted on both host variants:
@@ -120,10 +124,27 @@ export async function verifyCanonicalHosts(
 		}
 	}
 
-	// A router-owned static miss must surface the app's branded Hebrew 404
-	// at a real 404 status — never nginx's stock page or a soft-200. The
-	// router re-dispatches misses through the app proxy keeping the real
-	// path (#2935); the branded title proves it was the app that answered.
+	// The /www/ static tree is a supported surface served router-local: a
+	// miss must answer with the branded Hebrew 404 file deployed into the
+	// tree as /www/404.html — never nginx's stock page, a soft-200, or an
+	// app-rendered page (#2935). Probe the fallback file directly first so
+	// a missing deploy is diagnosed before the miss behavior is checked.
+	const fallbackProbe = await fetchPage(`${bare}/www/404.html`, {
+		redirect: "manual",
+		signal: AbortSignal.timeout(30_000),
+		headers: { "user-agent": BROWSER_UA },
+	});
+	if (fallbackProbe.status !== 200) {
+		throw new Error(
+			`${bare}/www/404.html: expected 200 for the deployed router 404 fallback, got ${fallbackProbe.status}`,
+		);
+	}
+	if (!(await fallbackProbe.text()).includes(ROUTER_404_MARKER)) {
+		throw new Error(
+			`${bare}/www/404.html: response is not the committed router 404 fallback`,
+		);
+	}
+
 	const staticMissing = `/www/no-such-file-${Date.now()}.html`;
 	const staticResponse = await fetchPage(`${bare}${staticMissing}`, {
 		redirect: "manual",
@@ -135,9 +156,15 @@ export async function verifyCanonicalHosts(
 			`${bare}${staticMissing}: expected 404, got ${staticResponse.status}`,
 		);
 	}
-	if (!(await staticResponse.text()).includes("העמוד לא נמצא")) {
+	const staticBody = await staticResponse.text();
+	if (!staticBody.includes("העמוד לא נמצא")) {
 		throw new Error(
 			`${bare}${staticMissing}: missing static file did not render the branded Hebrew 404`,
+		);
+	}
+	if (!staticBody.includes(ROUTER_404_MARKER)) {
+		throw new Error(
+			`${bare}${staticMissing}: branded 404 was not served by the router fallback file (misses must stay router-local)`,
 		);
 	}
 

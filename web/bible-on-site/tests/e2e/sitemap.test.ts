@@ -188,8 +188,8 @@ test.describe("sitemap.xml", () => {
 	});
 });
 
-// /sitemap_www.xml is a legacy public sitemap URL external consumers still
-// fetch. It must permanently redirect into the single canonical document —
+// /sitemap_www.xml is a public sitemap URL external consumers still fetch.
+// It must permanently redirect into the single canonical document —
 // a 200 HTML missing-page is a regression, not a fix (issue #2935).
 test.describe("sitemap_www.xml compatibility", () => {
 	test("answers a permanent redirect to the canonical sitemap", async ({

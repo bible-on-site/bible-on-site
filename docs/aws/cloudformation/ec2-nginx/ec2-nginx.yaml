@@ -170,7 +170,7 @@ Metadata:
       - www → canonical bare host redirect on HTTP and HTTPS (www.תנך.co.il → תנך.co.il, www.תנך.com → תנך.com), preserving path and query
       - Reverse proxy to ECS services via Cloud Map DNS
       - VPC DNS resolver (172.31.0.2) for service discovery
-      - Static file serving from /var/www/html/ — missing files re-dispatch through the app proxy so they answer with the website's branded 404 page, not the stock nginx one (#2935)
+      - Static file serving from /var/www/html/ — missing files answer with the branded 404 page deployed into the tree as /www/404.html (committed at router/404.html), keeping the www surface router-local instead of the stock nginx page (#2935)
       - GeoIP support for geographic routing
       - Catch-all default_server for unknown subdomains → 301 to root domain /404
       - Rate limiting: per-IP crawler (10 req/min), global crawler (30 req/min total), global backend (300 req/min hard ceiling); no general per-IP limit (Next.js RSC prefetch fires 20-30 requests per page load)

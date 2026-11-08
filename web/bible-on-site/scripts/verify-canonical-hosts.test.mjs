@@ -10,8 +10,17 @@ const BARE = `https://${DOMAIN}`;
 const WWW = `https://www.${DOMAIN}`;
 
 // The deployed app answers every miss with its branded Hebrew 404 — the
-// mocks mirror that so the /www/ fallback probe has a body to assert.
+// mocks mirror that so the 404 probes have a body to assert. For /www/
+// misses the router serves the committed fallback file instead, which
+// carries the same title plus its identifying marker (issue #2935).
 const BRANDED_404 = "<title>העמוד לא נמצא</title>";
+const ROUTER_BRANDED_404 =
+	"<!-- bible-on-site router branded 404 fallback (issue #2935) -->" +
+	BRANDED_404;
+
+/** Default 404 body for a path: the router fallback file under /www/. */
+const missingBody = (path) =>
+	path.startsWith("/www/") ? ROUTER_BRANDED_404 : BRANDED_404;
 
 /** Serve `redirects`/`pages` as a fake origin: map url -> 301 target or body. */
 const fetchFrom =
@@ -26,7 +35,7 @@ const fetchFrom =
 		}
 		const path = new URL(url).pathname;
 		const body = pages[path];
-		return new Response(body ?? BRANDED_404, {
+		return new Response(body ?? missingBody(path), {
 			status: body === undefined ? 404 : 200,
 		});
 	};
@@ -47,6 +56,8 @@ const healthyPages = {
 	"/929/1": "chapter",
 	"/sitemap.xml":
 		'<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>',
+	// The branded router fallback deployed into the /www/ tree (#2935).
+	"/www/404.html": ROUTER_BRANDED_404,
 };
 
 test("all scheme/host combinations reach the canonical bare host", async () => {
@@ -91,7 +102,7 @@ const redirectTo = (location) =>
 	new Response(null, { status: 301, headers: { location } });
 const pageAt = (url) => {
 	const path = new URL(url).pathname;
-	return new Response(healthyPages[path] ?? BRANDED_404, {
+	return new Response(healthyPages[path] ?? missingBody(path), {
 		status: healthyPages[path] === undefined ? 404 : 200,
 	});
 };
@@ -147,7 +158,7 @@ test("the seed crawler UA is used for its own request", async () => {
 				});
 			}
 			const path = new URL(url).pathname;
-			return new Response(healthyPages[path] ?? BRANDED_404, {
+			return new Response(healthyPages[path] ?? missingBody(path), {
 				status: healthyPages[path] === undefined ? 404 : 200,
 			});
 		},
@@ -197,11 +208,41 @@ test("a non-permanent sitemap alias redirect fails", async () => {
 	);
 });
 
+test("the router fallback file missing from the /www/ tree fails — the deploy gap (#2935)", async () => {
+	await assert.rejects(
+		verifyCanonicalHosts(DOMAIN, {
+			fetchPage: healthyWith((url, path) =>
+				url.startsWith(BARE) && path === "/www/404.html"
+					? new Response("<html><body><h1>404 Not Found</h1></body></html>", {
+							status: 404,
+						})
+					: undefined,
+			),
+		}),
+		/\/www\/404\.html: expected 200 for the deployed router 404 fallback/,
+	);
+});
+
+test("a wrong file deployed at /www/404.html fails", async () => {
+	await assert.rejects(
+		verifyCanonicalHosts(DOMAIN, {
+			fetchPage: healthyWith((url, path) =>
+				url.startsWith(BARE) && path === "/www/404.html"
+					? new Response("<html>placeholder</html>", { status: 200 })
+					: undefined,
+			),
+		}),
+		/\/www\/404\.html: response is not the committed router 404 fallback/,
+	);
+});
+
 test("nginx's stock 404 on a /www/ miss fails — the branded page must answer (#2935)", async () => {
 	await assert.rejects(
 		verifyCanonicalHosts(DOMAIN, {
 			fetchPage: healthyWith((url, path) =>
-				url.startsWith(BARE) && path.startsWith("/www/")
+				url.startsWith(BARE) &&
+				path.startsWith("/www/") &&
+				path !== "/www/404.html"
 					? new Response("<html><body><h1>404 Not Found</h1></body></html>", {
 							status: 404,
 						})
@@ -212,11 +253,31 @@ test("nginx's stock 404 on a /www/ miss fails — the branded page must answer (
 	);
 });
 
+test("an app-rendered branded 404 on a /www/ miss fails — the miss must stay router-local (#2935)", async () => {
+	// The app's own branded page carries the same title but not the router
+	// file's marker — catching a regression that proxies /www/ misses into
+	// the website backend again.
+	await assert.rejects(
+		verifyCanonicalHosts(DOMAIN, {
+			fetchPage: healthyWith((url, path) =>
+				url.startsWith(BARE) &&
+				path.startsWith("/www/") &&
+				path !== "/www/404.html"
+					? new Response(BRANDED_404, { status: 404 })
+					: undefined,
+			),
+		}),
+		/not served by the router fallback file/,
+	);
+});
+
 test("a soft-200 on a /www/ miss fails", async () => {
 	await assert.rejects(
 		verifyCanonicalHosts(DOMAIN, {
 			fetchPage: healthyWith((url, path) =>
-				url.startsWith(BARE) && path.startsWith("/www/")
+				url.startsWith(BARE) &&
+				path.startsWith("/www/") &&
+				path !== "/www/404.html"
 					? new Response("<html>index</html>", { status: 200 })
 					: undefined,
 			),
@@ -255,10 +316,11 @@ test("router.conf redirects www to the bare host on 80 and 443", () => {
 	}
 });
 
-// The router-owned /www/ static tree must not leak nginx's stock English
-// 404 — every website-facing server block re-dispatches a missing file
-// through the app proxy so the shared branded page answers (issue #2935).
-test("router.conf routes missing /www/ files to the branded app 404", () => {
+// The router-owned /www/ static tree is a supported surface: its misses
+// stay router-local, answered by the branded fallback file deployed into
+// the tree — never nginx's stock English 404 and never an app proxy hop
+// (issue #2935).
+test("router.conf serves missing /www/ files with the router-local branded 404", () => {
 	const conf = readFileSync(ROUTER_CONF, "utf8");
 	const wwwBlocks = conf.match(/location \/www\/ \{[^}]+\}/g) ?? [];
 	assert.equal(
@@ -268,8 +330,93 @@ test("router.conf routes missing /www/ files to the branded app 404", () => {
 	);
 	for (const block of wwwBlocks) {
 		assert.ok(
-			block.includes("error_page 404 /404"),
-			"location /www/ missing the branded-404 error_page fallback",
+			block.includes("error_page 404 /www/404.html"),
+			"location /www/ missing the router-local branded-404 error_page",
+		);
+		assert.ok(
+			!block.includes("error_page 404 /404"),
+			"location /www/ must not re-dispatch misses into the app proxy",
 		);
 	}
+	const fallbackBlocks = conf.match(/location = \/www\/404\.html \{[^}]+\}/g) ?? [];
+	assert.equal(
+		fallbackBlocks.length,
+		2,
+		`expected an exact-match /www/404.html block in both TLD servers, found ${fallbackBlocks.length}`,
+	);
+	for (const block of fallbackBlocks) {
+		assert.ok(
+			block.includes("alias /var/www/html/404.html"),
+			"the /www/404.html block must serve the deployed fallback file",
+		);
+		assert.ok(
+			!block.includes("error_page"),
+			"the /www/404.html block must define no error_page of its own (missing file degrades, no loop)",
+		);
+	}
+});
+
+const ROUTER_404 = path.resolve(
+	path.dirname(fileURLToPath(import.meta.url)),
+	"../../../docs/aws/cloudformation/ec2-nginx/router/404.html",
+);
+const APP_NOT_FOUND = path.resolve(
+	path.dirname(fileURLToPath(import.meta.url)),
+	"../src/app/not-found.tsx",
+);
+const APP_MISSING_PAGE = path.resolve(
+	path.dirname(fileURLToPath(import.meta.url)),
+	"../src/lib/seo/missing-page.ts",
+);
+
+// The router fallback is a static snapshot of the app's branded missing
+// page. Pin the shared contract — title, pasuk, source, recovery link,
+// noindex — so a branding change in the app fails CI until the deployed
+// file is regenerated (#2935).
+test("router/404.html keeps the app's branded missing-page contract", () => {
+	const html = readFileSync(ROUTER_404, "utf8");
+	const appSource = readFileSync(APP_NOT_FOUND, "utf8");
+	const metadataSource = readFileSync(APP_MISSING_PAGE, "utf8");
+
+	const title = metadataSource.match(/title: "([^"]+)"/)?.[1];
+	assert.ok(title, "could not read the shared missing-page title");
+	assert.ok(
+		html.includes(`<title>${title}</title>`),
+		"router/404.html must title itself with the shared missing-page title",
+	);
+
+	const pasuk = appSource.match(/<h1[^>]*>([^<]+)<\/h1>/)?.[1]?.trim();
+	assert.ok(pasuk, "could not read the branded pasuk");
+	assert.ok(html.includes(pasuk), "router/404.html must show the same pasuk");
+
+	const source = appSource.match(/styles\.source\}>([^<]+)<\/p>/)?.[1]?.trim();
+	assert.ok(source, "could not read the pasuk source");
+	assert.ok(html.includes(source), "router/404.html must show the same source");
+
+	const homeLink = appSource.match(/>([^<]+)<\/Link>/)?.[1]?.trim();
+	assert.ok(homeLink, "could not read the recovery link text");
+	assert.ok(
+		html.includes(`href="/"`) && html.includes(homeLink),
+		"router/404.html must keep the same home recovery link",
+	);
+});
+
+test("router/404.html is a deployable router-local page", () => {
+	const html = readFileSync(ROUTER_404, "utf8");
+	assert.ok(
+		html.includes("bible-on-site router branded 404 fallback"),
+		"router/404.html must carry the marker the deployed probe asserts",
+	);
+	assert.ok(
+		html.includes('dir="rtl"') && html.includes('lang="he"'),
+		"router/404.html must be an RTL Hebrew page",
+	);
+	assert.ok(
+		/name="robots" content="noindex"/.test(html),
+		"router/404.html must be noindex like the app's 404",
+	);
+	assert.ok(
+		!html.includes("/_next/") && !html.includes("<script"),
+		"router/404.html must be self-contained — app-asset references break on redeploys",
+	);
 });
