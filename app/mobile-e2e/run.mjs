@@ -145,7 +145,7 @@ async function sampleIosApp(phase) {
     writeFileSync(`${prefix}.json`, JSON.stringify(result, null, 2));
     if (result.status === "error") {
       diagnosticsFailed = true;
-      console.error("Could not sample the iOS app:", result.error ?? result.frameError);
+      console.error("Could not sample the iOS app:", result.error ?? result.frameError ?? result.threadsError);
     }
   } catch (error) {
     diagnosticsFailed = true;

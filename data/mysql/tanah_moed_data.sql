@@ -66,7 +66,7 @@ SELECT 9, 'פסח', 'פסח', 'חג הפסח - זמן חירותנו, חג המ�
 WHERE NOT EXISTS (SELECT 1 FROM tanah_moed WHERE slug = 'פסח' OR id = 9);
 
 INSERT INTO tanah_moed (id, slug, name, summary, hebrew_month, date_label, annual_order, published)
-SELECT 10, 'יום-העצמאות', 'יום העצמאות', 'יום העצמאות - ה'' באייר, יום הכרזת מדינת ישראל. ההפטרה נקבעה מנהג בחלק מהשנים בלבד.', 'אייר', 'ה'' באייר', 10, TRUE FROM DUAL
+SELECT 10, 'יום-העצמאות', 'יום העצמאות', 'יום העצמאות - ה'' באייר, יום הכרזת מדינת ישראל.', 'אייר', 'ה'' באייר', 10, TRUE FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM tanah_moed WHERE slug = 'יום-העצמאות' OR id = 10);
 
 INSERT INTO tanah_moed (id, slug, name, summary, hebrew_month, date_label, annual_order, published)
@@ -129,7 +129,7 @@ SELECT * FROM (SELECT 901 AS id, 9 AS moed_id, 'הפטרת יום א'' - אשכ�
 WHERE NOT EXISTS (SELECT 1 FROM tanah_moed_section WHERE moed_id = 9);
 
 INSERT INTO tanah_moed_section (id, moed_id, label, position)
-SELECT * FROM (SELECT 1001 AS id, 10 AS moed_id, 'הפטרה - כאשר נהוג לקרוא' AS label, 1 AS position) seed
+SELECT * FROM (SELECT 1001 AS id, 10 AS moed_id, 'הפטרה' AS label, 1 AS position) seed
 WHERE NOT EXISTS (SELECT 1 FROM tanah_moed_section WHERE moed_id = 10);
 
 INSERT INTO tanah_moed_section (id, moed_id, label, position)
@@ -230,3 +230,25 @@ WHERE m.slug = 'תשעה-באב';
 INSERT IGNORE INTO tanah_article_moed (article_id, moed_id)
 SELECT a.id, m.id FROM tanah_moed m JOIN tanah_article a ON a.id = 2860
 WHERE m.slug = 'יום-העצמאות';
+
+-- ---------------------------------------------------------------------------
+-- Editorial corrections (#3160): the owner asked to drop the conditional
+-- haftarah wording from יום העצמאות. The insert-if-absent seed cannot fix
+-- rows that already exist, so these UPDATEs carry the correction to them.
+-- Both are guarded by the stale text still being there — they only rewrite
+-- rows that never received the correction, stay a no-op on every redeploy,
+-- and never overwrite a later admin edit (a rewritten summary or label no
+-- longer matches the guard). Rows are matched by the moed slug, the stable
+-- identity, never by seed ids.
+-- ---------------------------------------------------------------------------
+
+UPDATE tanah_moed
+SET summary = REPLACE(summary, ' ההפטרה נקבעה מנהג בחלק מהשנים בלבד.', '')
+WHERE slug = 'יום-העצמאות'
+  AND summary LIKE '%ההפטרה נקבעה מנהג בחלק מהשנים בלבד%';
+
+UPDATE tanah_moed_section s
+JOIN tanah_moed m ON m.id = s.moed_id
+SET s.label = 'הפטרה'
+WHERE m.slug = 'יום-העצמאות'
+  AND s.label = 'הפטרה - כאשר נהוג לקרוא';
