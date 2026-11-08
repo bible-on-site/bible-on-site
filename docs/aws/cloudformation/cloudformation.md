@@ -278,6 +278,19 @@ See the [S3 bill reassessment and approval-gated runbook](../s3-delivery-cost-20
 for costs, compatibility checks, CLI request generation and rollback. Never
 deploy this reference file as a CloudFormation stack.
 
+### Cost-monitoring proposal: `cost-monitoring.yaml`
+
+Reference-only proposal for the cost-alerting gap recorded in
+[s3-delivery-cost-2026-11-01.md](../s3-delivery-cost-2026-11-01.md): a monthly
+AWS Budget (forecast/actual email alerts), a per-service Cost Explorer anomaly
+monitor with a daily subscription, and an `EstimatedCharges` billing alarm on a
+template-local us-east-1 SNS topic. Applying it creates real resources and is a
+gated #2576 change; see [cost-observability.md](../cost-observability.md) and
+the template's own `Metadata.Documentation` for prerequisites, thresholds and
+rollback. The recurring read-only baseline check lives in
+`devops/cost-audit.mjs`. Never deploy this reference file as a CloudFormation
+stack.
+
 ## Data Flow: ECR → ECS → nginx → Internet
 
 1. **GitHub Actions** pushes Docker images to **ECR** (via OIDC role)
