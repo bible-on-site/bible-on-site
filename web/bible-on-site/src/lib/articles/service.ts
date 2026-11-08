@@ -473,3 +473,59 @@ export async function getArticleById(
 		throw error;
 	}
 }
+
+/**
+ * The article assigned to one recurring Hebrew month/day (#3098), or null
+ * when the date has no assignment and ordinary per-perek selection applies.
+ * `hebrewMonth` uses the uniform numbering shared with the app, the API and
+ * the bulletin (1=Tishrei..12=Elul, 6=Adar of a non-leap year, 13=Adar I,
+ * 14=Adar II in leap years). The assignment is a complete override — the
+ * returned summary is the day's sole article, never an extra candidate.
+ * Before the migration is deployed the table is absent and the lookup
+ * rejects rather than resolving null: the caller caches loader results
+ * without expiry (`revalidate: false`), so a cached null would keep hiding
+ * the assignment after the migration lands — a thrown loader error is never
+ * cached, and the client hook degrades the rejection to the ordinary list.
+ */
+export async function getArticleHebrewDateOverride(
+	hebrewMonth: number,
+	hebrewDay: number,
+): Promise<ArticleSummary | null> {
+	try {
+		const rows = await query<ArticleSummaryRow>(
+			`SELECT
+				a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority,
+				au.name AS author_name
+			 FROM tanah_article_hebrew_date hd
+			 JOIN tanah_article a ON a.id = hd.article_id
+			 JOIN tanah_author au ON a.author_id = au.id
+			 WHERE hd.hebrew_month = ? AND hd.hebrew_day = ?
+			 LIMIT 1`,
+			[hebrewMonth, hebrewDay],
+		);
+
+		if (rows.length === 0) {
+			return null;
+		}
+		const [enriched] = await withArticleMetrics([toArticleSummary(rows[0])]);
+		return enriched;
+	} catch (error) {
+		if (isMissingMysqlSchema(error)) {
+			console.warn(
+				"Article Hebrew-date override schema is not deployed yet; " +
+					"dates keep ordinary article lists until the migration runs.",
+			);
+		} else {
+			console.warn(
+				"Failed to fetch Hebrew-date article override %d-%d:",
+				hebrewMonth,
+				hebrewDay,
+				error instanceof Error ? error.message : error,
+			);
+		}
+		// Never resolve a missing schema to null — see the doc comment: a
+		// thrown loader error is never cached, so the rollout window retries
+		// until the table exists instead of pinning a false "no assignment".
+		throw error;
+	}
+}

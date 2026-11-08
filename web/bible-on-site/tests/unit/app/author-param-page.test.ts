@@ -42,6 +42,7 @@ import {
 	getArticlesByAuthorId,
 	getAuthorByName,
 } from "../../../src/lib/authors";
+import { NOT_FOUND_METADATA } from "../../../src/lib/seo/missing-page";
 
 const mockGetAllAuthorSlugs = getAllAuthorSlugs as jest.MockedFunction<
 	typeof getAllAuthorSlugs
@@ -148,9 +149,7 @@ describe("[authorParam] page", () => {
 				params: Promise.resolve({ authorParam: "nonexistent" }),
 			});
 
-			expect(result).toEqual({
-				title: 'הרב לא נמצא | תנ"ך באתר',
-			});
+			expect(result).toEqual(NOT_FOUND_METADATA);
 		});
 
 		it("truncates long details to 160 chars for description", async () => {

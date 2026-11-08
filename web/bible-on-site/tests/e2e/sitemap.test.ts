@@ -195,3 +195,53 @@ test.describe("sitemap.xml", () => {
 		}
 	});
 });
+
+// /sitemap_www.xml is a public sitemap URL external consumers still fetch.
+// It must permanently redirect into the single canonical document —
+// a 200 HTML missing-page is a regression, not a fix (issue #2935).
+test.describe("sitemap_www.xml compatibility", () => {
+	test("answers a permanent redirect to the canonical sitemap", async ({
+		request,
+	}) => {
+		const response = await request.get("/sitemap_www.xml", {
+			maxRedirects: 0,
+		});
+
+		expect(response.status()).toBe(308);
+		expect(response.headers().location).toMatch(/\/sitemap\.xml$/);
+	});
+
+	test("following the chain serves valid sitemap XML, not an HTML error page", async ({
+		request,
+		page,
+	}) => {
+		const response = await request.get("/sitemap_www.xml");
+
+		expect(response.status()).toBe(200);
+		expect(response.headers()["content-type"]).toContain("application/xml");
+		const body = await response.text();
+		expect(body).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+		expect(body).toContain("http://www.sitemaps.org/schemas/sitemap/0.9");
+		expect(body).toContain("<urlset");
+		expect(body).toContain("<loc>");
+		expect(body).not.toMatch(/<!doctype html|<html[\s>]/i);
+		const parsed = await page.evaluate((xml) => {
+			const document = new DOMParser().parseFromString(xml, "application/xml");
+			return {
+				errors: document.getElementsByTagName("parsererror").length,
+				root: document.documentElement.localName,
+				namespace: document.documentElement.namespaceURI,
+				locations: document.getElementsByTagNameNS(
+					"http://www.sitemaps.org/schemas/sitemap/0.9",
+					"loc",
+				).length,
+			};
+		}, body);
+		expect(parsed.errors).toBe(0);
+		expect(parsed.root).toBe("urlset");
+		expect(parsed.namespace).toBe(
+			"http://www.sitemaps.org/schemas/sitemap/0.9",
+		);
+		expect(parsed.locations).toBeGreaterThan(0);
+	});
+});

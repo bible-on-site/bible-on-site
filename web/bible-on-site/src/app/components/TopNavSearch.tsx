@@ -68,7 +68,14 @@ export function TopNavSearch() {
 		<Link href="/search" className="top-nav-search" aria-label="חיפוש">
 			{/* Above-the-fold chrome icon — eager like the accessibility
 			    trigger's so it never lands after first paint. */}
-			<Image src="/icons/search.svg" alt="" width={24} height={24} loading="eager" />
+			<Image
+				src="/icons/search.svg"
+				alt=""
+				unoptimized
+				width={24}
+				height={24}
+				loading="eager"
+			/>
 		</Link>
 	);
 }

@@ -110,6 +110,7 @@ import {
 	toHebrewChapterNumber,
 } from "./sefer-page-utils";
 import { TanahpediaLink } from "./TanahpediaLink";
+import { useDailyArticleOverride } from "./use-daily-article-override";
 import { useSeferContentNavigation } from "./useSeferContentNavigation";
 import "html-flip-book-react/styles.css";
 import "./sefer.css";
@@ -492,19 +493,49 @@ const Sefer = (props: {
 	const [batchSummaries, setBatchSummaries] = useState<
 		Record<string, PerekSummaries>
 	>({});
+	const summaryPerekIds =
+		perekIds?.filter((id) => id !== perekObj.perekId).join(",") ?? "";
+	const summaryRequest = useRef<{
+		ids: string;
+		sefer: string;
+		result: ReturnType<typeof getPerekSummariesBatch>;
+	} | null>(null);
 	useEffect(() => {
-		const idsToFetch = perekIds?.filter((id) => id !== perekObj.perekId) ?? [];
-		if (idsToFetch.length === 0) return;
-		getPerekSummariesBatch(idsToFetch)
-			.then(setBatchSummaries)
+		if (!summaryPerekIds) {
+			summaryRequest.current = null;
+			return;
+		}
+		const idsToFetch = summaryPerekIds.split(",").map(Number);
+		// Server Actions share a serial client queue. Reuse this book read
+		// across effect replay and equivalent array props so a settings change
+		// cannot enqueue another whole-book read ahead of selected commentary.
+		if (
+			summaryRequest.current?.ids !== summaryPerekIds ||
+			summaryRequest.current.sefer !== perekObj.sefer
+		) {
+			summaryRequest.current = {
+				ids: summaryPerekIds,
+				sefer: perekObj.sefer,
+				result: getPerekSummariesBatch(idsToFetch),
+			};
+		}
+		let current = true;
+		summaryRequest.current.result
+			.then((summaries) => {
+				if (current) setBatchSummaries(summaries);
+			})
 			.catch((error) => {
+				if (!current) return;
 				console.error("Failed to load book summaries", {
 					sefer: perekObj.sefer,
 					perekIds: idsToFetch,
 					error,
 				});
 			});
-	}, [perekIds, perekObj.perekId, perekObj.sefer]);
+		return () => {
+			current = false;
+		};
+	}, [summaryPerekIds, perekObj.sefer]);
 
 	// Keep scripture independent of async summaries and commentary selection.
 	// Those updates must not rebuild or reconcile every word in the book.
@@ -628,6 +659,10 @@ const Sefer = (props: {
 		],
 	);
 
+	// Daily Hebrew-date override (#3098): the panel whose perek is today's
+	// resolved daily perek swaps its whole article list for the assignment.
+	const dailyOverride = useDailyArticleOverride();
+
 	const panelPages = useMemo(
 		() =>
 			perakim.map((_perek, perekIdx) => {
@@ -643,9 +678,13 @@ const Sefer = (props: {
 								pagePerekId === activePerekId
 							}
 							articles={
-								perekIdx === currentPerekIdx
-									? articles
-									: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]?.articles
+								perekIds?.[perekIdx] === dailyOverride?.perekId &&
+								dailyOverride != null
+									? dailyOverride.articles
+									: perekIdx === currentPerekIdx
+										? articles
+										: batchSummaries[String(perekIds?.[perekIdx] ?? 0)]
+												?.articles
 							}
 							perushim={
 								perekIdx === currentPerekIdx
@@ -683,6 +722,7 @@ const Sefer = (props: {
 			articles,
 			perushim,
 			batchSummaries,
+			dailyOverride,
 			hebrewDateStr,
 			seferPerekTitles,
 			contentNavigation.content,

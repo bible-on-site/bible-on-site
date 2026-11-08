@@ -21,6 +21,36 @@ function errorDetails(error) {
     signal: error.signal, stdout: error.stdout, stderr: error.stderr };
 }
 
+// Kernel thread rows are the only native critical-path evidence guaranteed to
+// land while the runner is saturated: proc_pidinfo thread flavors copy
+// proc-table state inside one syscall each — no task_for_pid, no suspension,
+// no debugger handshake, no CoreSimulator RPC. During the original stall the
+// 5s simctl frame, a 10s lldb attach and (in a later run) a 1s `sample` all
+// died inside their existing caps with zero output, while this inspector's
+// kernel listing finished. The read does not touch the target, so it is also
+// safe next to a potentially healthy app at the pending-request threshold.
+// One instantaneous enumeration per event — state letter, name, cpu and sleep
+// counters answer "runnable progress vs kernel-blocked" without sampling.
+async function capturePinnedThreads({ inspectorPath, pid, destination, errorPath, execute, options }) {
+  let details;
+  if (typeof inspectorPath !== 'string' || !posix.isAbsolute(inspectorPath)) {
+    details = { message: 'Require the prepared native iOS process inspector.' };
+  } else if (!Number.isSafeInteger(pid) || pid <= 1) {
+    details = { message: 'No pinned app identity is available for kernel thread enumeration.' };
+  }
+  if (!details) {
+    try {
+      const listing = await execute(inspectorPath, ['--threads', String(pid)], options);
+      writeFileSync(destination, listing.stdout);
+      return null;
+    } catch (error) {
+      details = errorDetails(error);
+    }
+  }
+  writeFileSync(errorPath, JSON.stringify(details, null, 2));
+  return details;
+}
+
 export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execute, inspectorPath, devicesRoot,
   now = Date.now, signal: handoffSignal }) {
   const remaining = Math.min(15000, Date.parse(deadlineUtc) - now());
@@ -48,13 +78,15 @@ export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execu
     }
     writeFileSync(`${prefix}-process-${pid}.txt`, listing.stdout);
     let frameError;
+    let threadsError;
     signal.throwIfAborted();
     // Existing 10s debugger cap, within the same 15s overall failure budget.
     // This branch runs only after the test has actually failed and while its
     // request/ack handoff prevents the following scenario from relaunching.
-    // Capture the frame and stack independently: a stuck screenshot must not
-    // consume the debugger's budget. Both finish before acknowledging failure.
-    const [frame, stack] = await Promise.allSettled([
+    // Capture the frame, kernel thread states and stack independently: a
+    // stuck screenshot or a dead debugger must not consume the other's
+    // budget. All finish before acknowledging failure.
+    const [frame, threads, stack] = await Promise.allSettled([
       (async () => {
         try {
           await execute('xcrun', ['simctl', 'io', udid, 'screenshot', `${prefix}.png`],
@@ -64,6 +96,11 @@ export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execu
           writeFileSync(`${prefix}-screenshot-error.json`, JSON.stringify(frameError, null, 2));
         }
       })(),
+      capturePinnedThreads({ inspectorPath, pid, execute,
+        destination: `${prefix}-threads-${pid}.txt`,
+        errorPath: `${prefix}-threads-error.json`,
+        options: { timeout: 5000, signal } })
+        .then(error => { threadsError = error; }),
       (async () => {
         const captured = await execute('sudo', ['-n', 'xcrun', 'lldb', '--no-lldbinit', '--batch',
           '--one-line-before-file', 'settings set target.preload-symbols false',
@@ -75,7 +112,9 @@ export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execu
     ]);
     if (stack.status === 'rejected') throw stack.reason;
     if (frame.status === 'rejected') throw frame.reason;
-    return { status: frameError ? 'error' : 'captured', pid, ...(frameError ? { frameError } : {}) };
+    if (threads.status === 'rejected') throw threads.reason;
+    return { status: (frameError || threadsError) ? 'error' : 'captured', pid,
+      ...(frameError ? { frameError } : {}), ...(threadsError ? { threadsError } : {}) };
   } catch (error) {
     const details = errorDetails(error);
     writeFileSync(`${prefix}-stack-error.json`, JSON.stringify(details, null, 2));
@@ -101,11 +140,23 @@ export function iosInteractionDiagnostics({ artifacts, udid, nativeLog, execute,
       records.push(record);
       writeFileSync(`${prefix}.json`, JSON.stringify(record, null, 2));
       writeFileSync(`${prefix}-command.txt`, command + (request.request ? ` ${request.request}` : ''));
-      const frameError = await captureNativeFrame('xcrun', ['simctl', 'io', udid, 'screenshot'],
-        `${prefix}.png`, execute);
+      // The in-flight operation is the evidence: the kernel thread rows must
+      // describe the same still-pending request, not a later post-mortem.
+      const [frameError, threadsError] = await Promise.all([
+        captureNativeFrame('xcrun', ['simctl', 'io', udid, 'screenshot'],
+          `${prefix}.png`, execute),
+        capturePinnedThreads({ inspectorPath, pid, execute,
+          destination: `${prefix}-threads.txt`,
+          errorPath: `${prefix}-threads-error.json`,
+          options: { timeout: 5000, windowsHide: true } }),
+      ]);
       if (frameError) {
         record.frameError = errorDetails(frameError);
         console.error("Could not capture the pending interaction frame:", frameError.message);
+      }
+      if (threadsError) {
+        record.threadsError = threadsError;
+        console.error("Could not capture the pending interaction's kernel thread states:", threadsError.message);
       }
       writeFileSync(`${prefix}.json`, JSON.stringify(record, null, 2));
       return record;

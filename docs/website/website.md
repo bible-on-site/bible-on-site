@@ -62,25 +62,30 @@ The website communicates **directly** with the MySQL database rather than going 
 Keep the full canonical scripture JSON in server imports. The bookshelf, date
 lookup and citation parser use `client-catalog.generated.json`, a small projection
 of book ranges and learning dates. `scripts/generate-client-catalog.mjs` also writes
-individual reader books under `public/generated/sefarim/`, named by their content
-hash. Installation, builds and unit tests regenerate both outputs from the same
-canonical source; generated files are ignored. Do not edit them or maintain a
-second content source. After an intentional source change during development,
-rerun the generator or restart `bun run dev`.
+each reader book as a Brotli file under `public/generated/sefarim/`, named by the
+raw payload's content hash. Installation, builds and unit tests regenerate both
+outputs from the same canonical source; generated files are ignored. Do not edit
+them or maintain a second content source. After an intentional source change
+during development, rerun the generator or restart `bun run dev`.
 
-`LoadedSefer` fetches the selected book when the reader opens, with visible loading
-and retry feedback. Uninitialized reader pages stay unpainted until FlipBook
-has applied their dimensions, preserving geometry and preventing a layout flash.
-Network requests revalidate HTTP cache entries so an older
-server's cached 404 cannot prevent recovery during a rolling deployment. A missing
-asset offers a full page refresh, preserving the reader route and query while
-loading the current asset catalog. The browser cache retains at most four recent
-books. Avoid
-passing whole books through every static page: that repeats scripture in HTML/RSC
-and increases server memory and deployment size. Chapter navigation within the
-same book reuses its data; late requests cannot replace another selected book.
-Download helpers load only when requested, so metadata requests do not initialize
-the PDF generator's corpus.
+The books are served as static files: `next.config.mjs` marks
+`/generated/sefarim/*` as `Content-Encoding: br` with `Cache-Control: immutable`,
+since a content-addressed name can never change bytes — the payloads are multi-MB,
+so compression cuts the wire transfer by an order of magnitude. They are static
+files rather than a route handler because the App Router response pipeline can
+drop `Content-Encoding` while still sending the encoded body, which leaves
+browsers unable to decode it. `LoadedSefer` fetches the selected book when the reader
+opens, with visible loading feedback. Uninitialized reader pages stay unpainted
+until FlipBook has applied their dimensions, preserving geometry and preventing a
+layout flash. A transient failure offers a manual retry; a missing asset offers a
+full page refresh — the 404 itself is `no-store`, and only a fresh page load can
+pick up a consistent bundle/deployment pair — while a flat-view escape keeps the
+chapter/article reachable. The browser cache retains at most four recent books.
+Avoid passing whole books through every static page: that repeats scripture in
+HTML/RSC and increases server memory and deployment size. Chapter navigation
+within the same book reuses its data; late requests cannot replace another
+selected book. Download helpers load only when requested, so metadata requests do
+not initialize the PDF generator's corpus.
 
 The source text, reading order and recitation fields remain unchanged, including
 canonical JSON precision handling in `next.config.mjs`. Tests compare every
@@ -106,6 +111,29 @@ The website uses Next.js Static Site Generation (SSG) with the following pattern
 - **Static Pages**: All 929 perek pages are pre-rendered at build time
 - **Dynamic Data**: Articles are fetched at request time (ISR) with caching
 - **Graceful Degradation**: If database is unavailable during SSG build, pages render without articles
+
+### Sitemap & Missing Pages
+
+- `/sitemap.xml` is generated at build time by `src/app/sitemap.ts`
+  (`dynamic = "error"`, `revalidate = false`). The public URL
+  `/sitemap_www.xml` stays a permanent redirect to that single canonical
+  document (`next.config.mjs`) so external consumers that still fetch the
+  old name — e.g. past Search Console submissions — never hit a 404.
+- Every human-facing miss renders `src/app/not-found.tsx`: one branded
+  Hebrew page at a real 404 status with noindex and a home recovery link.
+  Route-level "entity missing" metadata fallbacks (pedia entry, author,
+  article, perush) return the shared `NOT_FOUND_METADATA`
+  (`src/lib/seo/missing-page.ts`) so the title and OpenGraph contract are
+  identical on every 404 surface.
+- The nginx router's `/www/` static tree is a supported surface and stays
+  router-local end to end: missing files answer with the branded Hebrew
+  page deployed into the tree as `/www/404.html` (committed at
+  `docs/aws/cloudformation/ec2-nginx/router/404.html`, wired by
+  `error_page 404 /www/404.html` in `router.conf`) instead of the stock
+  nginx 404 — no app proxying, no extra backend renders. The post-deploy
+  `verify-canonical-hosts.mjs` smoke check asserts both contracts on each
+  public domain: a permanent `/sitemap_www.xml` → `/sitemap.xml` redirect
+  and a branded-body 404 for a missing `/www/` file.
 
 ## Content Freshness (On-Demand Revalidation)
 

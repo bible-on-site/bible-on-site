@@ -14,6 +14,7 @@
 	"tanah_moed_upgrade.sql",
 	"tanah_moed_data.sql",
 	"tanah_article_link_proposal_upgrade.sql",
+	"tanah_article_hebrew_date_upgrade.sql",
 	"tanahpedia_alter_source_citation.sql",
 	"tanahpedia_alter_person_source_citation.sql",
 	"tanahpedia_alter_child_birth_order.sql",

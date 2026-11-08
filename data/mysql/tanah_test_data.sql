@@ -152,6 +152,14 @@ INSERT INTO tanah_article_covering_source (article_id, perek_id, pasuk)
 VALUES (1, 1, 1), (1, 1, 2);
 UPDATE tanah_article SET coverage_verified = TRUE WHERE id = 1;
 
+-- Representative recurring Hebrew-date overrides (#3098). These are test
+-- fixtures, NOT the production assignments (2199->9 Av, 2860->5 Iyar live in
+-- tanah_article_hebrew_date_upgrade.sql). Article 2 is bound to 9 Av (11,9)
+-- and article 3 to 5 Iyar (8,5) so date lookups exercise the override path
+-- across different primary perek/author ownership than the scheduled perek.
+INSERT INTO tanah_article_hebrew_date (article_id, hebrew_month, hebrew_day)
+VALUES (2, 11, 9), (3, 8, 5);
+
 -- ---------------------------------------------------------------------------
 -- Representative test data for perushim (commentaries)
 -- parshan = commentator, perush = commentary work, note = text per pasuk

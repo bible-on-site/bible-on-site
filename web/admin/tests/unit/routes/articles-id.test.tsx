@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const server = vi.hoisted(() => ({
+	navigate: vi.fn(),
 	getArticle: vi.fn(),
 	createArticle: vi.fn(),
 	updateArticle: vi.fn(),
@@ -10,6 +11,9 @@ const server = vi.hoisted(() => ({
 	getAuthors: vi.fn(),
 	getPerakim: vi.fn(),
 	listMoadim: vi.fn(),
+	hebrewDatesEditor: vi.fn((_props: { dates: unknown; onChange: unknown }) => (
+		<div data-testid="hebrew-dates-editor" />
+	)),
 	params: { id: "7" },
 	links: [] as Record<string, unknown>[],
 	panelProps: [] as Record<string, unknown>[],
@@ -26,6 +30,10 @@ vi.mock("~/server/moadim", () => ({ listMoadim: server.listMoadim }));
 vi.mock("~/server/perakim", () => ({ getPerakim: server.getPerakim }));
 vi.mock("~/components/WysiwygEditor", () => ({
 	WysiwygEditor: () => <div data-testid="wysiwyg" />,
+}));
+vi.mock("~/components/HebrewDatesEditor", () => ({
+	HebrewDatesEditor: (props: { dates: unknown; onChange: unknown }) =>
+		server.hebrewDatesEditor(props),
 }));
 vi.mock("~/components/CoveringSourcesEditor", () => ({
 	CoveringSourcesEditor: () => <div data-testid="covering-sources" />,
@@ -48,7 +56,7 @@ vi.mock("@tanstack/react-router", () => ({
 		useParams: () => ({ id: server.params.id }),
 	}),
 	useSearch: () => ({ perekId: undefined }),
-	useNavigate: () => vi.fn(),
+	useNavigate: () => server.navigate,
 	Link: (props: {
 		children?: React.ReactNode;
 		to?: string;
@@ -73,6 +81,7 @@ const article = {
 	coverage_verified: true,
 	coveringSources: [{ perek_id: 1, pasuk: 1 }],
 	moedIds: [1],
+	hebrewDates: [{ hebrew_month: 11, hebrew_day: 9 }],
 };
 
 function renderPage() {
@@ -156,5 +165,60 @@ describe("ArticleEditPage", () => {
 			false,
 		);
 		expect(server.getArticle).not.toHaveBeenCalled();
+	});
+});
+
+describe("Article edit Hebrew dates (#3098)", () => {
+	beforeEach(() => {
+		for (const mock of [
+			server.navigate,
+			server.getArticle,
+			server.getAuthors,
+			server.getPerakim,
+			server.createArticle,
+			server.updateArticle,
+			server.deleteArticle,
+			server.hebrewDatesEditor,
+		])
+			mock.mockReset();
+		server.hebrewDatesEditor.mockImplementation(() => (
+			<div data-testid="hebrew-dates-editor" />
+		));
+		server.listMoadim.mockResolvedValue([]);
+		server.getArticle.mockResolvedValue(article);
+		server.getAuthors.mockResolvedValue([]);
+		server.getPerakim.mockResolvedValue([]);
+	});
+
+	it("shows the assignment editor for a persisted article with dates", async () => {
+		server.params = { id: "7" };
+		renderPage();
+		await waitFor(() =>
+			expect(screen.getByTestId("hebrew-dates-editor")).toBeTruthy(),
+		);
+		expect(server.hebrewDatesEditor).toHaveBeenCalledWith(
+			expect.objectContaining({
+				dates: [{ hebrew_month: 11, hebrew_day: 9 }],
+			}),
+		);
+	});
+
+	it("hides the assignment editor when the schema is not deployed", async () => {
+		server.params = { id: "7" };
+		server.getArticle.mockResolvedValue({ ...article, hebrewDates: undefined });
+		renderPage();
+		await waitFor(() => expect(screen.getByText("✏️ עריכת מאמר")).toBeTruthy());
+		expect(screen.queryByTestId("hebrew-dates-editor")).toBeNull();
+	});
+
+	it("opens a new article with an editable empty assignment set", async () => {
+		server.params = { id: "new" };
+		renderPage();
+		await waitFor(() =>
+			expect(screen.getByTestId("hebrew-dates-editor")).toBeTruthy(),
+		);
+		expect(server.hebrewDatesEditor).toHaveBeenCalledWith(
+			expect.objectContaining({ dates: [] }),
+		);
 	});
 });

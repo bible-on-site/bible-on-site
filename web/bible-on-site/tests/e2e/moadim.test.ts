@@ -126,6 +126,48 @@ test.describe("מועדים על הפרק", () => {
 		).toHaveCount(0);
 	});
 
+	// Regression for #3160 — the owner's editorial correction: the
+	// conditional-haftarah wording is gone from the stored יום העצמאות
+	// content, so it reaches neither visible copy nor generated metadata,
+	// while the haftarah reading itself still renders bounded.
+	test("יום העצמאות drops the conditional haftarah wording", async ({
+		page,
+	}) => {
+		await page.goto(
+			`${MOADIM_ROOT}/${encodeURIComponent("יום-העצמאות")}`,
+		);
+		await expect(
+			page.getByRole("heading", { name: "יום העצמאות", level: 1 }),
+		).toBeVisible();
+
+		// The summary is the bare editorial line, verbatim.
+		await expect(
+			page.getByText("יום העצמאות - ה' באייר, יום הכרזת מדינת ישראל."),
+		).toBeVisible();
+
+		// The reading section heading is exactly הפטרה — no qualification.
+		await expect(
+			page.getByRole("heading", {
+				name: "הפטרה",
+				level: 2,
+				exact: true,
+			}),
+		).toBeVisible();
+
+		// Neither removed phrase survives anywhere in the document — body
+		// copy, description, Open Graph or Twitter metadata.
+		const html = await page.content();
+		expect(html).not.toContain("ההפטרה נקבעה מנהג");
+		expect(html).not.toContain("כאשר נהוג לקרוא");
+
+		// The stored haftarah range (ישעיהו י לב - יב ו) still renders
+		// bounded: the opening and closing pesukim exist, the next does not.
+		const section = page.getByRole("region", { name: "הפטרה" });
+		await expect(section.locator('[id^="pasuk-344-32"]')).toHaveCount(1);
+		await expect(section.locator('[id^="pasuk-346-6"]')).toHaveCount(1);
+		await expect(section.locator('[id^="pasuk-346-7"]')).toHaveCount(0);
+	});
+
 	test("canonical slug navigates between wheel and detail", async ({
 		page,
 	}) => {
