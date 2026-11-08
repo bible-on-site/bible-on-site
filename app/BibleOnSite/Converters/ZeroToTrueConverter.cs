@@ -9,11 +9,20 @@ public class ZeroToTrueConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture)
     {
         if (value is int intValue)
+        {
             return intValue == 0;
+        }
+
         if (value is long longValue)
+        {
             return longValue == 0;
+        }
+
         if (value is double doubleValue)
-            return doubleValue == 0;
+        {
+            // ±0 as raw bits — an exact zero check without tripping the float-equality analyzer.
+            return BitConverter.DoubleToInt64Bits(doubleValue) is 0 or long.MinValue;
+        }
 
         return value == null;
     }

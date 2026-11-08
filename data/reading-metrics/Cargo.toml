@@ -1,0 +1,11 @@
+[package]
+name = "reading-metrics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+unicode-normalization.workspace = true
+unicode_categories.workspace = true
+sha2.workspace = true

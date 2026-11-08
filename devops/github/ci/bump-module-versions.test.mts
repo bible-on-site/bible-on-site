@@ -70,15 +70,24 @@ describe("nextReleaseVersion", () => {
 });
 
 describe("rewritePackageVersions", () => {
-	it("updates the package version and the lockfile root versions", () => {
+	it("bumps the manifest version and leaves the bun lockfile untouched", () => {
 		const packageText = '{"name":"package","version":"0.1.25"}';
 		const lockText =
-			'{"name":"package","version":"0.1.25","packages":{"":{"version":"0.1.25"},"node_modules/other":{"version":"0.1.25"}}}';
+			'{\n  "lockfileVersion": 3,\n  "configVersion": 1,\n  "workspaces": {}\n}\n';
 		const updated = rewritePackageVersions(packageText, lockText, "0.1.26");
 		assert.equal(updated.packageText, '{"name":"package","version":"0.1.26"}');
-		assert.equal(
-			updated.lockText,
-			'{"name":"package","version":"0.1.26","packages":{"":{"version":"0.1.26"},"node_modules/other":{"version":"0.1.25"}}}',
+		assert.equal(updated.lockText, lockText);
+	});
+
+	it("rejects an npm-format lockfile", () => {
+		assert.throws(
+			() =>
+				rewritePackageVersions(
+					'{"name":"package","version":"0.1.25"}',
+					'{"name":"package","version":"0.1.25","packages":{"":{"version":"0.1.25"}}}',
+					"0.1.26",
+				),
+			/Expected bun\.lock content/,
 		);
 	});
 });
@@ -99,19 +108,31 @@ describe("rewriteCargoVersions", () => {
 });
 
 describe("rewriteAppVersions", () => {
-	it("keeps platform build numbers aligned with the display version", () => {
-		const csproj = [
-			"<ApplicationDisplayVersion>5.0.111</ApplicationDisplayVersion>",
-			`<ApplicationVersion Condition="$(X) == 'android'">50000111</ApplicationVersion>`,
-			`<ApplicationVersion Condition="$(X) != 'android'">111</ApplicationVersion>`,
+	const csproj = (display: string, shared: number, windows: number) =>
+		[
+			`<ApplicationDisplayVersion>${display}</ApplicationDisplayVersion>`,
+			`<ApplicationVersion Condition="$(X) != 'windows'">${shared}</ApplicationVersion>`,
+			`<ApplicationVersion Condition="$(X) == 'windows'">${windows}</ApplicationVersion>`,
 		].join("\n");
+
+	it("keeps platform build numbers aligned with the display version", () => {
 		assert.equal(
-			rewriteAppVersions(csproj, "5.1.112"),
-			[
-				"<ApplicationDisplayVersion>5.1.112</ApplicationDisplayVersion>",
-				`<ApplicationVersion Condition="$(X) == 'android'">50100112</ApplicationVersion>`,
-				`<ApplicationVersion Condition="$(X) != 'android'">112</ApplicationVersion>`,
-			].join("\n"),
+			rewriteAppVersions(csproj("5.0.111", 50000111, 0), "5.1.112"),
+			csproj("5.1.112", 50100112, 0),
+		);
+	});
+
+	it("advances the shared build number when a minor bump resets the patch", () => {
+		assert.equal(
+			rewriteAppVersions(csproj("5.0.224", 50000224, 0), "5.1.0"),
+			csproj("5.1.0", 50100000, 0),
+		);
+	});
+
+	it("advances the shared build number on the first patch after a minor bump", () => {
+		assert.equal(
+			rewriteAppVersions(csproj("5.1.0", 50100000, 0), "5.1.1"),
+			csproj("5.1.1", 50100001, 0),
 		);
 	});
 });

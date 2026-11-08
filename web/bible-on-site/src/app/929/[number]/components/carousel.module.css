@@ -23,13 +23,21 @@
   transition: opacity 0.15s ease;
 }
 
+/* 32px visual, 44px hit area. */
+.navButton::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+}
+
 .navButton[hidden] {
   display: none;
 }
 
 .navButton:disabled {
   opacity: 0.35;
-  cursor: default;
+  cursor: not-allowed;
 }
 
 .navButton:focus-visible {
@@ -65,4 +73,8 @@
   font-size: 0.75rem;
   line-height: 1;
   opacity: 0.75;
+}
+
+.navButton:active:not(:disabled) {
+  scale: var(--press-scale);
 }

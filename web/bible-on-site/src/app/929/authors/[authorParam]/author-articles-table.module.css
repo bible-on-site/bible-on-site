@@ -16,7 +16,7 @@
 	padding: 8px 12px;
 	font-size: 0.95rem;
 	border: 1px solid var(--border-subtle);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	background: var(--surface-elevated);
 	color: var(--foreground);
 }
@@ -25,7 +25,7 @@
 	padding: 8px 12px;
 	font-size: 0.95rem;
 	border: 1px solid var(--border-subtle);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 	background: var(--surface-elevated);
 	color: var(--foreground);
 }
@@ -33,7 +33,7 @@
 .tableWrap {
 	overflow-x: auto;
 	border: 1px solid var(--border-subtle);
-	border-radius: 8px;
+	border-radius: var(--radius-md);
 }
 
 .table {
@@ -86,8 +86,10 @@
 	transition: background 0.15s ease;
 }
 
-.row:hover {
-	background: var(--surface-muted);
+@media (hover: hover) {
+	.row:hover {
+		background: var(--surface-muted);
+	}
 }
 
 .nameCell a {
@@ -96,8 +98,10 @@
 	text-decoration: none;
 }
 
-.nameCell a:hover {
-	text-decoration: underline;
+@media (hover: hover) {
+	.nameCell a:hover {
+		text-decoration: underline;
+	}
 }
 
 .abstractCell {
@@ -114,6 +118,15 @@
 
 .abstractCell .abstractHeading {
 	font-weight: 600;
+}
+
+/* Reading-metrics badge (#2607) beside the abstract — same subdued meta
+   style as the perek/article pages. */
+.abstractReadingTime {
+	display: block;
+	margin-top: 6px;
+	font-size: 0.78rem;
+	color: var(--muted-text);
 }
 
 .noResults {

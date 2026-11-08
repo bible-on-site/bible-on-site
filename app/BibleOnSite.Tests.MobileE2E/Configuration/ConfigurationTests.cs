@@ -37,6 +37,7 @@ public sealed class ConfigurationTests
         Assert.Equal("com.tanah.daily929", options[$"appium:{appIdKey}"]);
         Assert.Equal(false, options["appium:noReset"]);
         Assert.Equal(platform == MobilePlatform.Android, options["appium:fullReset"]);
+        Assert.Equal(false, options["appium:forceAppLaunch"]);
         if (platform == MobilePlatform.IOS)
         {
             Assert.Equal(true, options["appium:enforceAppInstall"]);
@@ -44,15 +45,48 @@ public sealed class ConfigurationTests
             Assert.Equal("/test/WebDriverAgentRunner-Runner.app", options["appium:prebuiltWDAPath"]);
             Assert.Equal(1, options["appium:wdaStartupRetries"]);
             Assert.Equal(240000, options["appium:wdaConnectionTimeout"]);
-            Assert.Equal(1.0, options["appium:waitForIdleTimeout"]);
+            using var deadlines = System.Text.Json.JsonDocument.Parse((string)options["appium:commandTimeouts"]);
+            Assert.Equal(120000, deadlines.RootElement.GetProperty("default").GetInt32());
+            Assert.Equal(240000, deadlines.RootElement.GetProperty("createSession").GetInt32());
+            Assert.Equal(120000, deadlines.RootElement.GetProperty("execute").GetInt32());
+            Assert.Equal(15000, deadlines.RootElement.GetProperty("deleteSession").GetInt32());
+            // Idle checks are disabled (0): a churning reader never reaches
+            // XCTest's idle threshold, so every proxied WDA command stalled.
+            Assert.Equal(0, options["appium:waitForIdleTimeout"]);
+            Assert.Equal(0.5, options["appium:animationCoolOffTimeout"]);
             Assert.Equal(true, options["appium:skipLogCapture"]);
+            Assert.Equal(false, options["appium:shouldTerminateApp"]);
+            var settings = Assert.IsType<Dictionary<string, object>>(options["appium:settings"]);
+            Assert.Equal("visible,accessible", settings["pageSourceExcludedAttributes"]);
+            Assert.Equal(false, settings["shouldUseCompactResponses"]);
+            Assert.Equal("rect,displayed,text,enabled", settings["elementResponseAttributes"]);
         }
         else
         {
             Assert.False(options.ContainsKey("appium:prebuiltWDAPath"));
             Assert.False(options.ContainsKey("appium:waitForIdleTimeout"));
             Assert.False(options.ContainsKey("appium:skipLogCapture"));
+            Assert.False(options.ContainsKey("appium:shouldTerminateApp"));
+            Assert.False(options.ContainsKey("appium:commandTimeouts"));
+            Assert.False(options.ContainsKey("appium:settings"));
         }
         Assert.False(options.ContainsKey($"appium:{otherPlatformKey}"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AndroidPreinstalledSessionReusesTheHarnessInstall(bool keepForReview)
+    {
+        var configuration = new MobileTestConfiguration(MobilePlatform.Android, "/test/app", "emulator-5554",
+            "/test/artifacts", new("http://localhost:4723"))
+        {
+            AppPreinstalled = true,
+            KeepAppForReview = keepForReview
+        };
+        var options = MobilePlatformAdapter.For(MobilePlatform.Android).CreateOptions(configuration).ToDictionary();
+        Assert.Equal(true, options["appium:noReset"]);
+        Assert.Equal(false, options["appium:fullReset"]);
+        Assert.Equal(true, options["appium:forceAppLaunch"]);
     }
 }

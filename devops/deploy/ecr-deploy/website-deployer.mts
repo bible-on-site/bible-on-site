@@ -4,8 +4,8 @@ import type { ECRClient } from "@aws-sdk/client-ecr";
 import packageJson from "../../../web/bible-on-site/package.json" with {
 	type: "json",
 };
-import type { ECRConfig } from "./ecr-client.mjs";
-import { ECRDeployerBase } from "./ecr-deployer-base.mjs";
+import type { ECRConfig } from "./ecr-client.mts";
+import { ECRDeployerBase } from "./ecr-deployer-base.mts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

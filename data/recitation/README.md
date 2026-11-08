@@ -152,6 +152,10 @@ keep the display on. For a worker started before this support was added,
 
 ## Review
 
+For a minimal verse queue with automatic local saving, see [verse listening](LISTENING.md).
+It collects source-bound feedback without changing the continuous worker or publishing timings.
+
+
 ```powershell
 .venv/Scripts/python.exe review.py --perek 829 --output .outputs/review-829.html
 .venv/Scripts/python.exe -m http.server 8765 --bind 127.0.0.1 --directory .outputs
@@ -168,6 +172,154 @@ word reviewed. Export the reviewed JSON, then import it:
 Import rechecks the real MP3 hash, canonical text hash, every word identity,
 complete coverage, and nonoverlapping in-range timestamps. It cannot approve a
 partial word list or a review of different audio/text.
+
+### Local preparation and automatic queue refill
+
+`listening_prepare.py` connects a completed diagnostic job to the existing local
+listening application. It reads the selective repair plan, verifies the saved
+full-FP32 CUDA results, original MP3/report/ASR/canonical identities, actual decoded
+PCM context and full-chapter geometry, then creates immutable listening batches.
+It reuses the completed model output: **no new inference, model loading, GPU
+utilization probe, or hosted model call is needed for this node**. Decoding clips,
+checking hashes and managing the queue run locally on the CPU.
+
+A machine proposal is not a manually inspected or corrected cut. Its evidence
+method is `machine-diagnostic-initial-candidate-v1`; original model coordinates and
+scores remain exact, with `sourceInspectionPerformed: false` and
+`automaticApproval: false`. The editor lets the reviewer hear and adjust these
+proposals. Every offered cut requires genuine fresh hearing before a GOOD answer
+can be imported. `listening_accept.py` still checks the original source, exact
+saved answer, complete chapter and unchanged automatic remainder. Preparation
+never writes publication timings or turns diagnostic scores into approval.
+
+Supply a JSON configuration with `version: 1`, the exact immutable `planSha256`,
+and these **absolute** paths:
+
+| Field | Meaning |
+| --- | --- |
+| `planPath` | Selective repair plan containing target verses and raw diagnostic hashes. |
+| `jobRoot` | Completed diagnostic job with `status.json`, `source/` and raw diagnostics. |
+| `canonicalPath` | Canonical chapter JSON used for identities and display labels. |
+| `recordings` | Unchanged original MP3 directory. |
+| `batchRoot` | Permanent task-owned directory for immutable prepared groups and offered batches. |
+| `stateDirectory` | Permanent task-owned directory for `ledger.json`, `status.json` and `worker.lock`. |
+| `publicationDatabase` | Durable publication database, opened briefly read-only to exclude ready chapters. Never a worker checkpoint. |
+| `reviewStore` | Existing accumulated review database, used only by its short transactional append writer. |
+
+Set `reviewUrl` to the existing loopback application, for example
+`http://127.0.0.1:8792/`. Optional positive integer limits are `targetVisible`
+(default 20 verses), `maxVisibleCuts` (default 150 cuts) and `pollSeconds`
+(default 5 seconds). `knownSourceHoldIds` defaults to `[28, 136, 231]`; retain
+explicit source holds when configuring a job. To populate all supported targets
+before review starts, size both limits for the full prepared verse and cut
+inventory, including existing visible cases. These limits govern queue loading,
+not quality checks; unsupported targets remain visible only in the blocked
+inventory until their source and context checks pass.
+
+Run the copied permanent runtime, rather than a disposable checkout:
+
+```powershell
+C:/recitation-preparation/runtime/python.exe -X utf8 C:/recitation-preparation/runtime/listening_prepare.py --config C:/recitation-preparation/config.json
+```
+
+The executable above represents the existing task-authorized Python runtime;
+use its real absolute path, not a new environment or model installation. Copy the
+matching preparation/review modules into the task-owned runtime before launching.
+A limited local Scheduler job can keep that runtime independent of the checkout;
+use a single instance (`IgnoreNew`). The worker also takes an OS-owned lock, which
+is released on exit or crash without deleting another process's lock file.
+Neither output directory may be inside the completed diagnostic job.
+
+The worker prepares complete source groups once, records progress after each
+chapter and fills available review capacity without exceeding either limit.
+`/api/preparation-workload` supplies one atomic inventory of all previously
+offered IDs and currently visible work. The append writer's `--only-unseen`
+transaction refuses to replace an existing candidate, including a typed GOOD or
+an active draft. Previously offered chapters and ready chapters are excluded;
+existing answers, hidden GOOD cuts, candidates and browser drafts are preserved.
+When capacity is full, preparation continues offline and the worker waits before
+refilling. `--once` prepares and refills once, then returns instead of waiting for
+more capacity. A normal run exits when no prepared cases remain to be queued;
+this does not mean the queued cases are approved or published.
+
+The review page also has a collapsible full inventory, separate from playable
+review cases. `GET /api/preparation-inventory` lists every classified target with
+its canonical label, preparation state and safe reason code. The page derives
+prepared, held and previously offered totals from those rows and filters all,
+blocked or prepared targets. Held rows describe work still needed; they do not
+create playable cuts, approvals or repeat review requests. Loading or refreshing
+this inventory preserves active playback, hearing and drafts. The inventory is
+loaded once and on explicit refresh, rather than on every status poll.
+
+The action workspace makes unresolved concerns actionable, including targets
+without valid word candidates. `GET /api/actions` returns immutable task identities
+and their current workflow states. A locate task starts with unset boundaries:
+the user plays the complete original-source audio, chooses the whole verse range,
+listens to that exact range, then requests local cut preparation. Source playback
+uses a verified original-bound 16 kHz mono WAV: its separate playback SHA-256 and
+the exact decoded frame count are checked before playback. Numeric seconds cover
+the original recording; the fine sliders stay within 150 ms of a selected value.
+
+`POST /api/action-responses` saves typed, session-authenticated range or source
+remediation evidence with exact task, original audio and canonical text bindings.
+A completed range playback is separate from word-cut hearing and never saves a
+GOOD verdict. Source problems require a real decision and nonempty note; the
+original recording is preserved and a corrected edition needs separate handling.
+Source remediation is available from every task type, including word review.
+The full original source can also be opened explicitly from a review task
+without changing its candidate or granting word hearing. If its existing context
+is wrong or clipped, the user can select and hear a new whole-verse source range
+and request new local preparation. That request does not approve the old word
+cuts. Ordinary completed GOODs remain protected; a genuine new chapter concern
+is a separate exception. A virtual preparation state with `cutReviewComplete`
+is labeled as waiting for chapter completion, not as active model computation.
+There is no unrestricted mark-resolved action. New locally prepared cuts still
+require genuine fresh word hearing and the unchanged complete-chapter acceptance
+checks. `GET /api/action-case/{taskId}` can explicitly reopen only a current
+unresolved candidate; approved or stale candidates are rejected. Its drafts and
+history remain separate and survive queue polling.
+
+A distinct chapter-concern task may reference a genuine failed full-chapter
+check after a previous GOOD. This exception is bound to the complete saved
+decision digest (including saved timestamp and queue binding, not its inner
+`reviewSha256` content hash), the immutable failed-validation digest and reported segment
+identities; ordinary GOOD protection remains unchanged. The editor restores the
+actual approved coordinates, reuses only recorded direct hearing for those exact
+coordinates, and highlights the newly reported chapter boundary. For a candidate
+without hearing reuse, saved `heardSegments` are direct listening evidence.
+When `listeningReuseSha256` is present, only saved `freshHeardSegments` identify
+direct original-cut listening; inherited hearing is never promoted. A changed reported boundary
+needs fresh playback, and resaving unchanged old coordinates is not presented as
+a correction. A genuinely newer GOOD closes the earlier concern editor.
+
+`GET /api/workflow-status` reports chapter progress separately from individual
+task completion. Saving an action or a word review does not itself mean that a
+chapter is validated, segmented or published.
+
+Inspect progress, counts and reasons through the existing app's `GET /api/preparation-status`, or
+read it without starting a worker:
+
+```powershell
+C:/recitation-preparation/runtime/python.exe -X utf8 C:/recitation-preparation/runtime/listening_prepare.py --config C:/recitation-preparation/config.json --status-only
+```
+
+These readers preserve Windows file-replacement sharing. Do not poll active
+state files with `Get-Content`, `Path.read_text` or an ordinary file handle.
+The task-state writer atomically replaces each flushed JSON generation; an open
+supported reader retains its old generation while subsequent readers see the
+new one. Unchanged ledger content is not rewritten on each status heartbeat.
+This protocol is limited to preparation progress and its resume ledger;
+publication and immutable review-queue writers retain their existing behavior.
+
+The ledger distinguishes `prepared`, `queued`, `excluded` and `held`. Explicit
+holds include `known_original_source_hold`, `chapter_requires_supported_context`,
+`source_or_full_chapter_guard` (with the actual guard detail) and
+`verse_exceeds_configured_review_window`. Score-only diagnostics are not blanket
+listening requests. Unsupported contexts, source defects and failed quality
+checks remain held; the node does not invent anchors or pad, clamp or rewrite
+boundaries to make them pass. Unexpected runtime failures set `state: failed`
+with the error. An unchanged configuration resumes from the ledger; changed plan,
+canonical source or preparation policy requires a distinct state directory.
 
 ## Pipeline boundary and storage
 
@@ -271,6 +423,25 @@ This describes existing content; it does not promise rich results or rankings.
 Google's [AI features guidance](https://developers.google.com/search/docs/appearance/ai-features)
 states that no special AI schema is required.
 
+## Incremental timing delivery
+
+Keep eight-hour accumulation pushes in one rolling draft with automatic merge
+turned off. Validate locally and include `[skip ci]` in the final pushed commit
+message, including any interim merge commit. Do not dispatch or rerun cloud CI
+for these accumulation pushes.
+
+At the two-day delivery opportunity, gather all eligible results and preserve the
+complete task history under a pushed recovery tag. At the already included base,
+use normal hooks to create one clean release commit with the identical validated
+tree and no skip directives anywhere in its message or body. Protect any task
+branch history update with an exact remote lease and preserve human changes.
+An empty final commit does not remove historical skip directives: the merge
+queue can copy earlier commit messages into its generated master commit. Inspect
+that generated message before merge, and require fresh current-head checks,
+reviews, queue CI, release and website/native delivery verification. This history
+cleanup does not authorize a base sync; the repository's branch-sync rule still
+applies. Count the next two-day interval only after full production verification.
+
 ## RustFS and checks
 
 Start and initialize the repository's [RustFS mock](../../devops/rustfs/README.md).
@@ -307,3 +478,165 @@ Two canonical JSON defects found during the audit were repaired at the same
 segment IDs: the final words of Eikhah 5:22 and Kohelet 12:14 had absorbed editorial
 repetition notes and lost their first letter. The source aggregation now removes
 those notes before qri-bracket parsing; regression tests preserve genuine qri.
+
+## Apply targeted human listening
+
+`listening_review.py` saves actual source-bound verse decisions and their history.
+Use `listening_accept.py` to turn those decisions into complete recovered chapters:
+
+```powershell
+.venv/Scripts/python.exe listening_accept.py --queue /absolute/review/queue/queue.json --reviews /absolute/review/reviews.json --text /absolute/canonical.json --output /absolute/accepted --database /absolute/durable/recitation.sqlite
+.venv/Scripts/python.exe publish.py --input /absolute/durable/recitation.sqlite --database /absolute/canonical.json
+.venv/Scripts/python.exe audit.py --input /absolute/durable/recitation.sqlite --database /absolute/canonical.json
+```
+
+Run this import alongside automatic `trusted.py` staging at each collection follow-up.
+It reads saved snapshots and original MP3s without model inference or changing the
+continuous worker. Start with a copied durable database and verify the recovered
+chapters before overlaying the delivery database. Never point it at the active
+worker checkpoint. Only current GOOD decisions that cover every exact word cut
+can resolve the reviewed verse's ASR failure. A later problem/skip answer, changed
+source/candidate, unreviewed held verse, invalid duration or global overlap keeps
+the chapter held. The other verses retain the original automatic anchor, score,
+diagnostic and timing gates, including the existing low-acoustic-score warning
+policy. Nothing is padded, clamped or fabricated.
+
+Accepted provenance uses `trusted-process-with-human-verse-review` and the
+versioned `targeted-human-listening-v1` policy. It stores the actual reviewed
+pesukim, decisions, listening evidence, diagnostic/source hashes and unchanged
+execution profile. It does not claim whole-chapter human listening or set
+invented word-level `reviewed` flags. Publish and audit the durable overlay, then
+include recovered chapters in the same rolling timing batch. Preserve the review
+queue, answer history and original diagnostic evidence for corrections; do not
+feed verse feedback to the whole-chapter `review.py` importer.
+
+Revisiting an answer is supported: on the next import, a new problem/skip answer
+withdraws only this policy's approval and clears that chapter's published word
+rows atomically. Independent manual and automatic approvals stay intact. A new
+GOOD answer can recover it again after the same complete-chapter checks.
+
+The page outlines every cut that still needs hearing, including unchanged words with no actual prior direct hearing. "חיתוכים שטרם נשמעו" plays only those cuts. GOOD remains disabled until every cut has genuine completed playback; navigation retains unsaved notes and hearing already completed in the open page. Frontend regressions run through the Python suite and require Node.js, as provided by recitation CI.
+
+Completed listening rounds can be copied with `listening_round.archive_round`. Add each returned immutable `path`/`sha256` descriptor to the next queue's `archivedQueues`. The active page shows only the new queue; `/archive` retains prior answers and notes. The importer validates archived sources and uses earlier good answers only for unchanged candidates. Changed cuts require fresh word listening and a new answer.
+
+Serve with `--recovery-database <separate-preview.sqlite> --recovery-output <preview-alignments>` to run the guarded importer after saved answers. Use a copy of the durable database, never the live worker checkpoint. The page reports completed local recoveries; normal canonical, native-package and delivery checks still precede publication.
+
+`listening_tail.py` prepares diagnostic-only trailing-vowel candidates from the pinned CTC character/separator path. It never changes the automatic worker, pads endpoints or approves a candidate. Every corrected boundary requires fresh human listening and the same complete-chapter geometry checks.
+
+The pinned CTC letter endpoints are raw diagnostic evidence, not proof that a
+spoken ending is complete. Before installing a new listening queue, inspect each
+candidate against the original decoded source, including trailing vowels,
+frication and consonant decay. Do not send a known clipped letter endpoint back
+to the listener unchanged. Do not extend every word to `followingWordStartMs` or
+apply one offset: either can include a gap or part of the next word.
+
+For a first candidate, `source-inspected-initial-candidate-v1` supports individually
+inspected boundaries without inventing an earlier problem answer. It binds the
+unchanged pinned CPU/full-FP32/two-thread raw diagnostic, original letter rows and
+scores, source spectrum hash, context and per-word observations. It preserves
+canonical identities and all original timing geometry. The candidate remains
+unapproved: every cut needs genuine fresh hearing and a current source-bound
+GOOD answer; inherited listening and stale answers cannot approve it. Automatic
+worker/model/ASR gates are unchanged. Reported-problem revisions continue using
+`source-inspected-word-boundaries-v1` and their actual saved feedback. Neither
+source inspection nor forced alignment approves or publishes an interval.
+
+Letter endpoints can also stop before a spoken vowel finishes. When a reported
+defect falls between the recorded CTC endpoints, inspect the original decoded
+source waveform and spectrogram for that word. `source-inspected-word-boundaries-v1`
+records a diagnostic proposal separately from the unchanged CTC letter score,
+with immutable inspection and actual problem-answer evidence. This is not an
+automatic alignment policy: it needs a new source-bound GOOD answer covering
+the exact proposed cuts, plus all existing complete-chapter checks. Do not apply
+one offset or endpoint rule to an entire review queue.
+
+Archive the previous queue before installing revised candidates and preserve the
+append-only answer history. Verify the complete archive chain in an isolated
+recovery preview so all earlier chapter approvals remain intact. Changed cuts
+require new candidate hashes and fresh listening; unchanged cases retain their
+actual answers. For a revised verse, `listeningReusePath` and
+`listeningReuseSha256` can reference an immutable prior queue and actual saved
+answer. Only byte-identical word rows from the same original source, canonical
+text and lossless clip retain their actual completed listening evidence. The
+human must freshly hear every changed cut and explicitly give the revised verse
+a new answer. Provenance distinguishes `freshHeardSegments` from
+`reusedHeardSegments`; a prior PROBLEM answer supplies listening evidence only,
+never approval. Verified source-bound CTC and lossless clip evidence may be
+reused, with no claim of fresh inference. The original-MP3 worker and approved
+intervals remain independent of this preparation.
+
+Reported clipped starts, clipped endings and overlong cuts can also be proposed with `propose_path_boundaries`. Each endpoint must be an actual recorded letter/separator boundary from the same pinned CTC path. The verifier rejects unrecorded offsets, changed canonical identities or acoustic scores, missing/duplicate proof, overlaps and invalid durations. These remain diagnostic candidates: every changed verse requires fresh completed word listening before the guarded importer can recover its chapter.
+
+A later review round can reuse a cut directly heard in a round that also reused other cuts. The importer revalidates that round and every original source/history binding, then uses only its saved `freshHeardSegments`. Inherited cuts never become fresh hearing. Changed cuts still require genuine listening and a new answer.
+
+Unchanged cuts directly heard in different completed rounds may share one `listeningReusePath` proof with a `sources` list. Each source retains its immutable queue/history hashes and exact saved answer. The verifier independently revalidates each source and pools only identical cuts listed in that round's actual direct hearing. Inherited hearing never becomes direct hearing, and every changed cut still requires fresh listening and a new answer.
+
+### One accumulated listening application
+
+Use one permanent review server and append prepared batches to its separate
+listening database. Do not start another app/port for each eight-hour batch.
+The browser polls the queue and adds new passages without reloading the document,
+interrupting playback, moving the current passage, or replacing an unsaved note.
+Drafts and completed listening are stored by exact candidate and clip hashes;
+changed cuts never inherit old hearing.
+
+Create the store once from the existing fixed queue/history bindings using
+`ReviewDatabase.seed(sources)`. Keep every older page and its drafts intact.
+The store imports later answers from those still-open pages; it never rewrites
+their queues or histories. Completed answers are not offered again during migration.
+
+```powershell
+python listening_queue.py --store R/review-app/reviews.sqlite serve --port 8792 --session-token-file R/review-app/session.json
+python listening_queue.py --store R/review-app/reviews.sqlite append --queue R/review-app/batches/NEW/queue.json
+python listening_queue.py --store R/review-app/reviews.sqlite snapshot --output E/actual-review-import --database E/current-durable-preview.sqlite
+```
+
+Each appended queue remains immutable source evidence. Use new candidate hashes
+for revised cuts and fresh human hearing as before. Snapshot output preserves
+all actual decision fields, repeated edits and original queue bindings, and feeds
+the existing guarded importer. Always copy CURRENT durable publication data to
+a separate preview first. The listening database is not the alignment worker
+checkpoint or the approved publication database. No append or review save publishes
+timings or changes the original alignment process.
+
+### Complete local concern workflow
+
+Run `python listening_workflow.py --config /absolute/workflow/config.json` for one
+local owner. `--once` performs a guarded pass without leaving a polling process.
+The configuration binds `planPath`/`planSha256`, `canonicalPath`, completed
+`jobRoot`, original `recordings`, `batchRoot`, `stateDirectory`, a separate
+`actionStore`, `reviewStore`, the existing loopback `reviewUrl`, and the CURRENT
+`publicationDatabase`/`publicationSha256`. `queueSnapshot` binds the immutable
+review chain; `preparedLedger` includes any later packets from the local preparer.
+`sourceFallback` contains the four earlier concerns' completed alignment, report
+and ASR artifacts. Every path is absolute; no source checkpoint is read.
+
+The node accounts for every recorded chapter. Ready chapters stay finished;
+pending chapters receive explicit cut-review, source-location or source-remediation
+actions. Individually supported verses can be reviewed before every sibling has
+a supported range, while the whole chapter remains held. A genuine saved range
+can also replace an unusable existing review context. Only that actual human
+response triggers pinned local full-FP32 diagnostics, with exact replay; new cuts
+still require fresh hearing. A newer source selection supersedes an in-flight
+one before append, and a genuinely newer GOOD always remains protected.
+
+Actual review saves feed the unchanged complete-chapter importer through CLOSED
+JSON evidence and a CURRENT private preview. Successful results live under
+`stateDirectory/results/recitation.sqlite`; authoritative publication and source
+files are untouched. A real failed chapter check creates another precise action,
+including a newly bound chapter-boundary concern when necessary. The local ready
+status requires complete canonical geometry, original source evidence and the
+unchanged automatic remainder. Normal publication and release checks remain
+separate. An actual recording defect requires a corrected source edition, not a
+timing approval.
+
+History files are verified before the short SQLite writer transaction. Unchanged
+polls perform no writes, and only genuine new history tails are imported. Source
+actions have a separate append-only response stream; neither source selection nor
+a source-problem report invents word hearing, GOOD, or completion.
+
+Actual app before and after the full inventory was populated:
+
+![Earlier limited listening window](docs/complete-concern-before.png)
+
+![All concern actions and chapter progress](docs/complete-concern-after.png)

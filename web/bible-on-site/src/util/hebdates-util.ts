@@ -11,7 +11,7 @@ const JERUSALEM_TIMEZONE = "Asia/Jerusalem";
  * Map from uniform month number (used in our date number format) to Temporal month code
  * Uniform months: 1=Tishrei, 2=Cheshvan, ..., 5=Shevat, 6=Adar, ..., 12=Elul, 13=Adar I, 14=Adar II
  */
-function uniformMonthToTemporalMonthCode(
+export function uniformMonthToTemporalMonthCode(
 	uniformMonth: number,
 	isLeapYear: boolean,
 ): string {
@@ -73,9 +73,24 @@ function temporalMonthCodeToUniformMonth(
  */
 export class HebrewDate {
 	private readonly date: Temporal.PlainDate;
+	private epochDays?: number;
 
 	constructor(date: Temporal.PlainDate) {
 		this.date = date.withCalendar("hebrew");
+	}
+
+	/**
+	 * Days since the ISO epoch (1970-01-01), cached after first use.
+	 * Field reads on the ISO view are far cheaper than building a
+	 * `until` Duration, which matters in schedule scans that compare
+	 * every day against cycle entries.
+	 */
+	private get epochDayCount(): number {
+		if (this.epochDays === undefined) {
+			const iso = this.date.withCalendar("iso8601");
+			this.epochDays = Date.UTC(iso.year, iso.month - 1, iso.day) / 86_400_000;
+		}
+		return this.epochDays;
 	}
 
 	static fromGregorian(gregorianDate: Date): HebrewDate {
@@ -167,11 +182,9 @@ export class HebrewDate {
 	 * Returns negative if this date is before other
 	 */
 	deltaDays(other: HebrewDate): number {
-		// Convert both to ISO calendar for comparison
-		const thisIso = this.date.withCalendar("iso8601");
-		const otherIso = other.date.withCalendar("iso8601");
-		// Temporal.until returns (other - this), we want (this - other)
-		return -thisIso.until(otherIso, { largestUnit: "days" }).days;
+		// Epoch-day difference — equivalent to an ISO `until` in days but
+		// avoids building a Duration per call (hot loop in buildMonth).
+		return this.epochDayCount - other.epochDayCount;
 	}
 
 	/**
@@ -221,14 +234,24 @@ export class HebrewDate {
 	}
 
 	/**
+	 * Hebrew month name with ASCII punctuation (e.g. "חשוון", "אדר א'").
+	 */
+	toMonthName(): string {
+		return this.date
+			.toLocaleString("he-IL-u-ca-hebrew", {
+				month: "long",
+			})
+			.replace(/׳/g, "'")
+			.replace(/״/g, '"');
+	}
+
+	/**
 	 * Traditional Hebrew date format: day (Hebrew letters + geresh), month name, year (e.g. י"ח שבט התשפ"ו).
 	 * Uses standard Intl for month name and gematry (project dependency) for day/year letters.
 	 */
 	toTraditionalHebrewString(): string {
 		const dayStr = toLetters(this.day, { addQuotes: true });
-		const monthStr = this.date.toLocaleString("he-IL-u-ca-hebrew", {
-			month: "long",
-		});
+		const monthStr = this.toMonthName();
 		const yearStr =
 			this.year >= 5000
 				? `ה'${toLetters(this.year - 5000, { addQuotes: true })}`
@@ -320,7 +343,7 @@ export function parseNumericalDateToHebcalDate(
  * Check if a Hebrew year is a leap year
  * Hebrew leap years follow a 19-year Metonic cycle: years 3, 6, 8, 11, 14, 17, 19
  */
-function isHebrewLeapYear(year: number): boolean {
+export function isHebrewLeapYear(year: number): boolean {
 	const yearInCycle = ((year - 1) % 19) + 1;
 	return [3, 6, 8, 11, 14, 17, 19].includes(yearInCycle);
 }

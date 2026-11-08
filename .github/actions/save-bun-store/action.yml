@@ -1,0 +1,21 @@
+name: Save bun store cache
+description: >-
+  Saves ~/.bun/install/cache under the resolved key emitted by
+  ./.github/actions/setup-js. Exists as its own action so the caller can mark
+  the step `background: true` — composite steps cannot run in the background,
+  so this cannot live inside setup-js.
+
+inputs:
+  key:
+    description: >-
+      Resolved primary cache key, normally the setup-js `cache-primary-key`
+      output.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache/save@v6
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ inputs.key }}

@@ -15,9 +15,10 @@ jest.mock("next/link", () => ({
 	default: ({
 		children,
 		href,
-	}: { children: React.ReactNode; href: string }) => (
-		<a href={href}>{children}</a>
-	),
+	}: {
+		children: React.ReactNode;
+		href: string;
+	}) => <a href={href}>{children}</a>,
 }));
 
 import { Footer } from "@/app/components/Footer";
@@ -28,9 +29,14 @@ describe("Footer", () => {
 		expect(
 			screen.getByRole("link", { name: /על הפרק בתקשורת/i }),
 		).toHaveAttribute("href", "/journalism");
-		expect(
-			screen.getByRole("link", { name: /רבנים מברכים/i }),
-		).toHaveAttribute("href", "/rabbis-blessing");
+		expect(screen.getByRole("link", { name: /רבנים מברכים/i })).toHaveAttribute(
+			"href",
+			"/rabbis-blessing",
+		);
+		expect(screen.getByRole("link", { name: /הצהרת נגישות/i })).toHaveAttribute(
+			"href",
+			"/accessibility",
+		);
 	});
 
 	it("renders copyright with year range", () => {
@@ -66,9 +72,10 @@ describe("Footer", () => {
 			default: ({
 				children,
 				href,
-			}: { children: React.ReactNode; href: string }) => (
-				<a href={href}>{children}</a>
-			),
+			}: {
+				children: React.ReactNode;
+				href: string;
+			}) => <a href={href}>{children}</a>,
 		}));
 
 		// eslint-disable-next-line @typescript-eslint/no-require-imports

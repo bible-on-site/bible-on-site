@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import {
 	BatchGetImageCommand,
+	DescribeImagesCommand,
 	type ECRClient,
 	PutImageCommand,
 } from "@aws-sdk/client-ecr";
@@ -100,10 +102,26 @@ class RetriedDeployment extends ECRDeployerBase {
 }
 
 test("the real deployer resumes the same version and still rejects older versions", async () => {
+	const manifest = JSON.stringify({
+		schemaVersion: 2,
+		config: { digest: `sha256:${"a".repeat(64)}` },
+		layers: [],
+	});
+	const digest = `sha256:${createHash("sha256").update(manifest).digest("hex")}`;
+	const stored = (tag: string) => ({
+		...image(tag, digest),
+		imageManifest: manifest,
+	});
 	const client = {
 		send: async (command: unknown) => {
+			if (command instanceof DescribeImagesCommand)
+				return { imageDetails: [{ imageDigest: digest }] };
 			if (command instanceof BatchGetImageCommand)
-				return { images: [image("v0.2.433"), image("latest")] };
+				return {
+					images: command.input.imageIds?.[0]?.imageDigest
+						? [stored("latest")]
+						: [stored("v0.2.433"), stored("latest")],
+				};
 			return {
 				repositories: [{ repositoryUri: "registry.example/bible-on-site" }],
 			};

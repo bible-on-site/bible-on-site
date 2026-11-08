@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
+import { brotliDecompressSync } from "node:zlib";
 import catalog from "../../../src/data/db/client-catalog.generated.json";
 import { sefarim } from "../../../src/data/db/sefarim";
 import { getAllPerakim } from "../../../src/data/sefer-dto";
@@ -45,7 +46,16 @@ it("retains citation volumes and their exact chapter ranges", () => {
 
 it("reader assets retain every canonical field, including approved timing precision", () => {
 	for (const [index, book] of catalog.books.entries()) {
-		const file = resolve(__dirname, "../../../public", book.file.slice(1));
-		expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(sefarim[index]);
+		// The public URL keeps the raw payload hash; the served file is that
+		// same name under public/generated/sefarim holding Brotli bytes that
+		// next.config.mjs labels Content-Encoding: br (#3095).
+		const file = resolve(
+			__dirname,
+			"../../../public/generated/sefarim",
+			basename(book.file),
+		);
+		expect(
+			JSON.parse(brotliDecompressSync(readFileSync(file)).toString("utf8")),
+		).toEqual(sefarim[index]);
 	}
 });

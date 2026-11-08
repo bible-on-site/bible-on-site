@@ -106,6 +106,27 @@ describe("ArticlesSection", () => {
 			expect(strongElement).toBeTruthy();
 			expect(strongElement?.textContent).toBe("טקסט מודגש");
 		});
+
+		it("renders adjacent abstract headings as separate block paragraphs", () => {
+			const { container } = render(
+				<ArticlesSection
+					articles={[
+						{
+							...mockArticles[0],
+							abstract:
+								"<h1>על מה נכרתה ברית בין הבתרים</h1><h1>ומה משמעותה לדורות?</h1>",
+						},
+					]}
+				/>,
+			);
+
+			expect(container.querySelector("h1")).toBeNull();
+			const headings = container.querySelectorAll("p.abstractHeading");
+			expect([...headings].map((h) => h.textContent)).toEqual([
+				"על מה נכרתה ברית בין הבתרים",
+				"ומה משמעותה לדורות?",
+			]);
+		});
 	});
 
 	describe("when onArticleClick is provided (callback mode)", () => {
@@ -186,6 +207,17 @@ describe("ArticlesSection", () => {
 			);
 			const section = container.querySelector("section");
 			expect(section?.getAttribute("aria-busy")).toBe("true");
+		});
+
+		it("renders skeleton cards instead of article links", () => {
+			const { container } = render(
+				<ArticlesSection articles={mockArticles} loading />,
+			);
+			expect(screen.getByText("מתחבר למאמרים...")).toBeTruthy();
+			expect(screen.queryByRole("link")).toBeNull();
+			expect(
+				container.querySelectorAll('[data-skeleton="round"]'),
+			).toHaveLength(3);
 		});
 	});
 });

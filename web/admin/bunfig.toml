@@ -1,0 +1,18 @@
+[install]
+linker = "hoisted"
+# Supply-chain freshness gate (was pnpm minimumReleaseAge=1440min):
+minimumReleaseAge = 86400
+minimumReleaseAgeExcludes = [
+	"@biomejs/biome@2.6.3",
+	"@biomejs/cli-android-arm64@2.6.3",
+	"@biomejs/cli-android-x64@2.6.3",
+	"@biomejs/cli-darwin-arm64@2.6.3",
+	"@biomejs/cli-darwin-x64@2.6.3",
+	"@biomejs/cli-linux-arm64-musl@2.6.3",
+	"@biomejs/cli-linux-arm64@2.6.3",
+	"@biomejs/cli-linux-x64-musl@2.6.3",
+	"@biomejs/cli-linux-x64@2.6.3",
+	"@biomejs/cli-win32-arm64@2.6.3",
+	"@biomejs/cli-win32-x64@2.6.3",
+	"@napi-rs/wasm-runtime@1.2.6",
+]

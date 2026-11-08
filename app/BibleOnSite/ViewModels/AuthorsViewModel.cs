@@ -41,7 +41,9 @@ public partial class AuthorsViewModel : ObservableObject
         get
         {
             if (string.IsNullOrWhiteSpace(SearchPhrase))
+            {
                 return SearchPhraseAll;
+            }
 
             return SearchPhrase.Trim().Replace("הרב ", string.Empty);
         }
@@ -57,7 +59,9 @@ public partial class AuthorsViewModel : ObservableObject
             var authorsWithArticles = Authors.Where(a => a.ArticlesCount > 0);
 
             if (OptimizedSearchPhrase == SearchPhraseAll)
+            {
                 return authorsWithArticles.ToList();
+            }
 
             var searchTerm = OptimizedSearchPhrase.ToLowerInvariant();
 
@@ -102,8 +106,10 @@ public partial class AuthorsViewModel : ObservableObject
 
             SetAuthors(_starterService.Authors);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: authors load failure surfaces as a user message
+        catch (Exception ex) //NOSONAR — authors load failure surfaces as a user message.
         {
+            #pragma warning restore S2221
             ErrorMessage = $"שגיאה בטעינת הרבנים: {ex.Message}";
             Console.Error.WriteLine($"Error loading authors: {ex}");
         }

@@ -1,6 +1,8 @@
 # Delivery Rule
 
-For repository change, build, or fix tasks, local-only work is not a completed delivery. Commit and push the finished, validated changes at minimum. When authorization and repository policy permit, carry the pull request through CI and merge it. Stop short only when the user explicitly requests review before publication or a hard blocker prevents pushing or merging; report that blocker and the exact remaining action.
+For repository change, build, or fix tasks, local-only work is not a completed delivery. Commit and push the finished, validated changes at minimum. When authorization and repository policy permit, carry the pull request through CI and review feedback, then merge it. Stop short only when the user explicitly requests review before publication or a hard blocker prevents pushing or merging; report that blocker and the exact remaining action.
+
+Following a pull request through CI includes checking its complete review state: workflow results and check annotations, coverage and quality reports, bot and issue comments (including Codacy), submitted reviews, and every review thread. Check feedback against the current head, investigate and fix each actionable finding, record evidence for findings that do not apply, and resolve addressed threads. Recheck these channels after each push, before merging, and when verifying delivery. Do not declare delivery complete while actionable review or quality findings remain unresolved, even when workflow runs are green.
 
 Take responsibility for the overall quality of this project and every flaw encountered while working on it. Investigate and fix flaws whether they are related to the current request, predate the task, appear in another module, or are found by tests, CI, review, or direct inspection. Do not leave a known flaw merely because it does not block the pull request or was caused elsewhere. Validate and deliver each fix through the repository's normal commit, push, CI, and merge process. Stop with a known flaw unresolved only if the user explicitly defers it or a hard blocker prevents a fix; report the evidence and exact remaining action.
 
@@ -31,3 +33,25 @@ For a dependency upgrade task, refresh every dependency kind within the user's r
 # Pull Request Branch Sync
 
 Sync a pull request branch with its base only when both conditions hold: the current head has no green CI result, and there is an actual merge conflict. A branch being behind its base is not, by itself, a reason to sync.
+
+# Coverage Gates
+
+Codecov enforces per-module project coverage with `threshold: 0%`: a change may not lower any flag below its target. Targets (`codecov.yml`): website 99%, app 98.5%, api 97%, bulletin 90%, admin 86%, data 84%. The unflagged `codecov/project` check is informational only. Codacy additionally gates pull requests on diff coverage (70%).
+
+Keep every touched module at or above its target: add or extend tests before pushing rather than after CI fails. Do not lower targets, raise thresholds, or misuse `istanbul ignore` comments to bypass a gate.
+
+# Performance Failures
+
+Do not increase timeouts, retries, sleeps, polling budgets, or hang-watchdog limits to make a failing or slow operation pass. Treat a timeout as evidence: reproduce it, measure the critical path, and fix the underlying algorithm, blocking work, contention, or delivery defect. Keep the existing interaction deadline as a regression check. A timeout change is permitted only when the user explicitly requests it after seeing the root cause and measured tradeoff.
+
+# Visual Change Evidence
+
+When a change affects user-visible UI, show before/after evidence in the pull request description and when reporting the result to the user: screenshots, screen recordings, or captured device/emulator frames. Prefer real captures from the app's own e2e artifacts over mockups.
+
+# AWS Change Approval
+
+Never merge an AWS-related pull request without Dorad's explicit approval of that specific pull request and its current AWS-impacting changes. This includes infrastructure/IaC, IAM and networking, DNS/CDN/cache behavior, S3 access and public asset URLs, deployment workflows, production resource settings, and cost optimizations.
+
+An investigation/optimization request, approval of another change, green CI, a bot recommendation, or auto-merge is not merge approval. Prepare, validate and push the change, present its production and backward-compatibility impact with rollback, and wait for explicit approval. Do not enable auto-merge or bypass this requirement. Material AWS-impacting changes after approval require renewed approval.
+
+Production stability and backward compatibility of existing public and crawled URLs take priority over cost savings. Apply live AWS changes only within the user's explicit authorization, after verifying the target account, current state, validation and rollback.

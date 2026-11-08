@@ -25,9 +25,9 @@ it("shares a request for the same immutable book", async () => {
 	expect(second).toBe(first);
 	expect(await first).toEqual({ name: "/book.json" });
 	expect(mockFetch).toHaveBeenCalledTimes(1);
-	expect(mockFetch).toHaveBeenCalledWith("/book.json", {
-		cache: "no-cache",
-	});
+	// Content-addressed URLs are immutable-cached by the server route — the
+	// browser cache must be allowed to serve repeat opens (#3095).
+	expect(mockFetch).toHaveBeenCalledWith("/book.json");
 });
 it("retries a failed request rather than caching its rejection", async () => {
 	mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });

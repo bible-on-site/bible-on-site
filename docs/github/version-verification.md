@@ -18,6 +18,27 @@ the colliding release.
 Hosted Renovate needs no version-bump configuration. It updates dependencies normally;
 module version bumps happen only after releases on `master`.
 
+## App platform build numbers
+
+`ApplicationDisplayVersion` is the shared marketing version (e.g. 5.1.0). Each
+platform also carries a store build number in `ApplicationVersion`:
+
+- **Android, iOS and MacCatalyst** share one large integer:
+  `major*10^7 + minor*10^5 + patch` (5.1.0 → 50100000). Android versionCode continues
+  the Play Store numbering that started above 40000017; Apple CFBundleVersion must
+  never regress, so the same encoding keeps it increasing across minor and major
+  bumps even though the semantic patch resets to zero.
+- **Windows** keeps `ApplicationVersion` at 0. MSIX merges it with the display
+  version into a 4-part package version (`5.1.0.0`), and the Microsoft Store
+  reserves that trailing revision component — the Nuke packer also pins it to 0.
+  Because the marketing version leads, packages stay strictly increasing across
+  minor bumps (`5.1.0.0` > `5.0.224.0`).
+
+`devops/check-app-version.py` (pre-commit and CI) enforces this derivation and the
+`devops/github/ci/bump-module-versions.ts` rewriter applies it, so an automated
+patch bump like 5.1.0 → 5.1.1 advances every build number and never reintroduces a
+zero or regressing counter.
+
 ## Concurrent releases and deployment
 
 CI packages an immutable commit, creates its module tag and GitHub Release, and

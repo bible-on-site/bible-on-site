@@ -87,6 +87,23 @@ public class Perek : INotifyPropertyChanged
     /// The pasukim (verses) within this perek.
     /// Setter raises PropertyChanged so the UI rebinds when pasukim are lazy-loaded.
     /// </summary>
+    private bool _isOffscreenCarouselPage = true;
+
+    /// <summary>
+    /// Neighbour carousel pages stay out of the accessibility tree: they are off
+    /// screen, and every XCTest snapshot would otherwise serialize them too.
+    /// </summary>
+    public bool IsOffscreenCarouselPage
+    {
+        get => _isOffscreenCarouselPage;
+        set
+        {
+            if (_isOffscreenCarouselPage == value) { return; }
+            _isOffscreenCarouselPage = value;
+            OnPropertyChanged(nameof(IsOffscreenCarouselPage));
+        }
+    }
+
     private List<Pasuk> _pasukim = new();
     public List<Pasuk> Pasukim
     {
@@ -97,4 +114,57 @@ public class Perek : INotifyPropertyChanged
             OnPropertyChanged(nameof(Pasukim));
         }
     }
+
+    /// <summary>
+    /// Persisted canonical reading metric for the whole chapter (issue #2607);
+    /// attached lazily from the packaged sqlite. Null when the pack predates
+    /// the metric tables — the badge simply hides.
+    /// </summary>
+    private ReadingMetric? _readingMetric;
+    public ReadingMetric? ReadingMetric
+    {
+        get => _readingMetric;
+        set
+        {
+            _readingMetric = value;
+            OnPropertyChanged(nameof(ReadingMetric));
+            OnPropertyChanged(nameof(ReadingTimeBadge));
+        }
+    }
+
+    /// <summary>Ordered pasuk word counts for word-weighted reading position.</summary>
+    private IReadOnlyList<ReadingProgressUnit> _progressUnits = [];
+    public IReadOnlyList<ReadingProgressUnit> ProgressUnits
+    {
+        get => _progressUnits;
+        set
+        {
+            _progressUnits = value;
+            OnPropertyChanged(nameof(ProgressUnits));
+        }
+    }
+
+    /// <summary>"זמן קריאה משוער: X" badge text or null when nothing to show.</summary>
+    public string? ReadingTimeBadge =>
+        Helpers.ReadingTimeFormatter.FormatReadingTimeLabel(ReadingMetric?.EstimatedSeconds);
+
+    /// <summary>Creates independent reading state for a page on the navigation stack.</summary>
+    public Perek CreateReaderCopy() => new()
+    {
+        PerekId = PerekId,
+        Additional = Additional,
+        Date = Date,
+        HasRecording = HasRecording,
+        Header = Header,
+        HebDate = HebDate,
+        HebDateNumeric = HebDateNumeric,
+        PerekNumber = PerekNumber,
+        SeferId = SeferId,
+        SeferName = SeferName,
+        SeferTanahUsName = SeferTanahUsName,
+        Tseit = Tseit,
+        ArticlesCount = ArticlesCount,
+        ReadingMetric = ReadingMetric,
+        ProgressUnits = ProgressUnits
+    };
 }

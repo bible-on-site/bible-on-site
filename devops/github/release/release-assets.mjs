@@ -1,25 +1,15 @@
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { globSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { ghApi } from "./gh-api.mjs";
 import { releasePayload } from "./release-provenance.mjs";
 
 export { releasePayload } from "./release-provenance.mjs";
 
 /** The tag endpoint only returns published releases; authenticated lists include drafts. */
-export function findRelease(
-	repository,
-	tag,
-	api = (endpoint) =>
-		JSON.parse(
-			execFileSync("gh", ["api", endpoint], {
-				encoding: "utf8",
-				maxBuffer: 16 * 1024 * 1024,
-			}),
-		),
-) {
+export function findRelease(repository, tag, api = ghApi) {
 	if (
 		!/^[\w.-]+\/[\w.-]+$/.test(repository ?? "") ||
 		repository.split("/").some((part) => part === "." || part === "..") ||

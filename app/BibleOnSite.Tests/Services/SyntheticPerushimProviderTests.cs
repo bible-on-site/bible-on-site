@@ -7,6 +7,7 @@ namespace BibleOnSite.Tests.Services;
 // The provider fabricates the perushim data that PerushimCellsSurviveScrollStorm
 // (iOS e2e) depends on; these tests pin its shape so the e2e cannot silently
 // lose its HtmlView coverage.
+[Collection("Process environment")]
 public class SyntheticPerushimProviderTests
 {
     [Fact]
@@ -65,5 +66,24 @@ public class SyntheticPerushimProviderTests
 
         notes.Select(n => n.NoteIdx).Should().Equal(
             Enumerable.Range(0, SyntheticPerushimProvider.Perushim.Count));
+    }
+
+[Fact]
+    public void NotesFor_LongPerushimEnv_InflatesOnlyTheFlaggedFirstNote()
+    {
+        var previous = Environment.GetEnvironmentVariable("BIBLE_E2E_LONG_PERUSHIM");
+        Environment.SetEnvironmentVariable("BIBLE_E2E_LONG_PERUSHIM", "1");
+        try
+        {
+            var notes = SyntheticPerushimProvider.NotesFor(42, [1, 2]);
+
+            var longNote = notes.Single(n => n.PerushId == -1 && n.Pasuk == 1);
+            longNote.NoteContent!.Length.Should().BeGreaterThan(100_000);
+            notes.Where(n => n.PerushId == -1 && n.Pasuk == 2).Should().OnlyContain(n => n.NoteContent!.Length < 1000);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("BIBLE_E2E_LONG_PERUSHIM", previous);
+        }
     }
 }

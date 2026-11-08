@@ -2,7 +2,7 @@
 
 ## Pre-commit Hooks
 
-The repository uses pre-commit hooks managed by [pre-commit](https://pre-commit.com/):
+The repository uses pre-commit hooks run by [prek](https://prek.j178.dev/) (a Rust drop-in for pre-commit reading the same `.pre-commit-config.yaml`):
 
 | Item | Location |
 | ---- | -------- |
@@ -10,7 +10,7 @@ The repository uses pre-commit hooks managed by [pre-commit](https://pre-commit.
 | Python venv | `devops/.venv/` |
 | Tool configurations | `devops/pyproject.toml` |
 
-**Git hook installation**: pre-commit installs the repository's git hooks itself (`pre-commit install --hook-type pre-commit --hook-type post-commit`), wired into `devops/setup-dev-env.mts`. No Husky/npm hook layer remains.
+**Git hook installation**: prek installs the repository's git hooks itself (`prek install --hook-type pre-commit --hook-type post-commit`), wired into `devops/setup-dev-env.mts`. No Husky/npm hook layer remains.
 
 ### Running Hooks Manually
 
@@ -20,7 +20,7 @@ source devops/.venv/Scripts/activate  # Windows
 source devops/.venv/bin/activate      # Unix
 
 # Run a specific hook
-pre-commit run <hook-id> --all-files
+prek run <hook-id> --all-files
 ```
 
 ### Adding a New Pre-commit Hook

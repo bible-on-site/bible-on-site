@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using HtmlAgilityPack;
 
@@ -23,6 +24,10 @@ public sealed record HtmlRun
     public int HeadingLevel { get; init; }
     /// <summary>Link target for &lt;a href&gt; runs.</summary>
     public string? Link { get; init; }
+    /// <summary>Paint with the view's accent/link color without a link
+    /// target — e.g. generated note-list markers share the inline
+    /// reference's color (#2723).</summary>
+    public bool Accent { get; init; }
 }
 
 /// <summary>
@@ -35,6 +40,11 @@ public sealed record HtmlRun
 /// </summary>
 public static class HtmlRuns
 {
+    /// <summary>Compact size shared by sup/sub runs and the generated
+    /// note-list markers, so both sides resolve to the same size
+    /// under one effective font (#2723).</summary>
+    private const double ScriptScale = 0.75;
+
     private static readonly HashSet<string> SkipContentTags = new(StringComparer.OrdinalIgnoreCase)
     {
         "script", "style", "noscript", "template", "head", "title", "meta", "link",
@@ -104,6 +114,7 @@ public static class HtmlRuns
         public double FontScale = 1.0;
         public int HeadingLevel;
         public string? Link;
+        public bool Accent;
         public bool PreserveWhitespace;
 
         public Style Clone() => (Style)MemberwiseClone();
@@ -145,7 +156,7 @@ public static class HtmlRuns
         {
             PendingSpace = false;
             Flush();
-            if (Runs.Count > 0 && LastChar != '\n')
+            if (Runs.Count > 0 && LastChar.GetValueOrDefault() != '\n')
             {
                 Append("\n", new Style());
             }
@@ -169,7 +180,8 @@ public static class HtmlRuns
                 BaselineShift = style.BaselineShift,
                 FontScale = style.FontScale,
                 HeadingLevel = style.HeadingLevel,
-                Link = style.Link
+                Link = style.Link,
+                Accent = style.Accent
             });
             _text.Clear();
         }
@@ -178,7 +190,7 @@ public static class HtmlRuns
             a.Bold == b.Bold && a.Italic == b.Italic && a.Underline == b.Underline &&
             a.Strikethrough == b.Strikethrough && a.BaselineShift == b.BaselineShift &&
             Math.Abs(a.FontScale - b.FontScale) < 0.0001 &&
-            a.HeadingLevel == b.HeadingLevel && a.Link == b.Link;
+            a.HeadingLevel == b.HeadingLevel && a.Link == b.Link && a.Accent == b.Accent;
     }
 
     private static void Walk(HtmlNode node, Style style, Context context)
@@ -223,10 +235,24 @@ public static class HtmlRuns
 
         var childStyle = ApplyTag(node, tag, style);
 
+        HtmlNode? inlineLead = null;
         if (tag.Equals("li", StringComparison.OrdinalIgnoreCase))
         {
             context.Break();
-            context.Append(ListMarker(node), childStyle);
+            var (marker, markerStyle, footnote) = ListMarker(node, childStyle);
+            context.Append(marker, markerStyle);
+            if (footnote)
+            {
+                /* The note's leading <p> flows on the marker's line — the
+                   website's `li > p:first-child { display: inline }` — so the
+                   marker labels the note instead of floating above it; later
+                   paragraphs keep their block break (#2723). */
+                var first = node.ChildNodes.FirstOrDefault(c => c.NodeType == HtmlNodeType.Element);
+                if (first?.Name.Equals("p", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    inlineLead = first;
+                }
+            }
         }
         else if (BlockTags.Contains(tag))
         {
@@ -235,6 +261,18 @@ public static class HtmlRuns
 
         foreach (var child in node.ChildNodes)
         {
+            if (child == inlineLead)
+            {
+                /* Render the lead paragraph's content at its own position —
+                   loose text before it keeps document order — and carry the
+                   paragraph's own attributes without its block break. */
+                var leadStyle = ApplyTag(child, "p", childStyle);
+                foreach (var grandchild in child.ChildNodes)
+                {
+                    Walk(grandchild, leadStyle, context);
+                }
+                continue;
+            }
             Walk(child, childStyle, context);
         }
 
@@ -249,13 +287,13 @@ public static class HtmlRuns
         }
     }
 
-    private static string ListMarker(HtmlNode liNode)
+    private static (string Text, Style Style, bool Footnote) ListMarker(HtmlNode liNode, Style textStyle)
     {
         for (var parent = liNode.ParentNode; parent != null; parent = parent.ParentNode)
         {
             if (parent.Name.Equals("ul", StringComparison.OrdinalIgnoreCase))
             {
-                return "\u2022 ";
+                return ("\u2022 ", textStyle, false);
             }
             if (parent.Name.Equals("ol", StringComparison.OrdinalIgnoreCase))
             {
@@ -271,11 +309,41 @@ public static class HtmlRuns
                         number++;
                     }
                 }
-                return $"{number}. ";
+                /* ol.footnotes carries each item's Hebrew marker in
+                   data-marker (TanahpediaFootnotes.Normalize) so the note's own
+                   number shows — sparse numbering is preserved (#2639). The
+                   marker wears the same compact raised accent style as the
+                   inline reference sup (#2723). */
+                if (IsFootnotesList(parent))
+                {
+                    var marker = liNode.GetAttributeValue("data-marker", string.Empty);
+                    return ($"{(marker.Length > 0 ? marker : GimatryHelper.ToLetters(number))} ",
+                        NoteMarkerStyle(textStyle), true);
+                }
+                return ($"{number}. ", textStyle, false);
             }
         }
-        return "\u2022 ";
+        return ("\u2022 ", textStyle, false);
     }
+
+    /// <summary>The generated note-list letter shares the inline reference
+    /// sup's raised baseline and compact scale, plus the accent color a link
+    /// would get — without a link target (#2723).</summary>
+    private static Style NoteMarkerStyle(Style textStyle)
+    {
+        var style = textStyle.Clone();
+        style.BaselineShift = 1;
+        style.FontScale = textStyle.FontScale * ScriptScale;
+        style.Accent = true;
+        return style;
+    }
+
+    /// <summary>Whether the element is the canonical footnotes list
+    /// (<c>ol class="footnotes"</c>) produced by TanahpediaFootnotes.Normalize.</summary>
+    private static bool IsFootnotesList(HtmlNode node) =>
+        node.GetAttributeValue("class", string.Empty)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Contains("footnotes", StringComparer.OrdinalIgnoreCase);
 
     private static Style ApplyTag(HtmlNode node, string tag, Style parent)
     {
@@ -310,11 +378,11 @@ public static class HtmlRuns
                 break;
             case "sup":
                 Mutated().BaselineShift = 1;
-                Mutated().FontScale = parent.FontScale * 0.75;
+                Mutated().FontScale = parent.FontScale * ScriptScale;
                 break;
             case "sub":
                 Mutated().BaselineShift = -1;
-                Mutated().FontScale = parent.FontScale * 0.75;
+                Mutated().FontScale = parent.FontScale * ScriptScale;
                 break;
             case "small":
                 Mutated().FontScale = parent.FontScale * 0.83;
@@ -374,13 +442,15 @@ public static class HtmlRuns
                 case "font-style" when value is "italic" or "oblique":
                     mutate().Italic = true;
                     break;
-                case "text-decoration" or "text-decoration-line"
-                    when value.Contains("underline"):
-                    mutate().Underline = true;
-                    break;
-                case "text-decoration" or "text-decoration-line"
-                    when value.Contains("line-through"):
-                    mutate().Strikethrough = true;
+                case "text-decoration" or "text-decoration-line":
+                    if (value.Contains("underline"))
+                    {
+                        mutate().Underline = true;
+                    }
+                    if (value.Contains("line-through"))
+                    {
+                        mutate().Strikethrough = true;
+                    }
                     break;
                 case "vertical-align" when value is "super":
                     mutate().BaselineShift = 1;
@@ -400,23 +470,38 @@ public static class HtmlRuns
 
     private static void ApplyFontSize(string value, Func<Style> mutate)
     {
+        double scale;
         if (value.EndsWith('%') &&
-            double.TryParse(value[..^1], out var percent))
+            double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent))
         {
-            mutate().FontScale *= percent / 100.0;
+            scale = percent / 100.0;
         }
         else if (value.EndsWith("em") &&
-            double.TryParse(value[..^2], out var em))
+            double.TryParse(value[..^2], NumberStyles.Float, CultureInfo.InvariantCulture, out var em))
         {
-            mutate().FontScale *= em;
+            scale = em;
         }
         else if (value is "smaller" or "x-small" or "xx-small")
         {
-            mutate().FontScale *= 0.83;
+            scale = 0.83;
         }
         else if (value is "larger" or "x-large" or "xx-large")
         {
-            mutate().FontScale *= 1.17;
+            scale = 1.17;
+        }
+        else
+        {
+            return;
+        }
+        // Invalid sizes must never reach UIKit's native font constructor.
+        if (double.IsFinite(scale) && scale > 0)
+        {
+            var style = mutate();
+            var result = style.FontScale * scale;
+            if (double.IsFinite(result) && result > 0)
+            {
+                style.FontScale = result;
+            }
         }
     }
 

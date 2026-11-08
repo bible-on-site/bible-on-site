@@ -1,0 +1,509 @@
+{
+  "kind": "Actual normal production builds; no injected styles or JavaScript; registry alpha.104, all 153 dist files validated",
+  "profile": {
+    "platform": "Linux",
+    "browser": "Chromium 156.0.8078.4",
+    "rendering": "SwiftShader",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "locale": "he-IL"
+  },
+  "before": {
+    "time": "2026-11-03T07:54:38.678Z",
+    "siteHead": "e946ff7917346bbc3372a74b2bb6e610716dde02",
+    "libraryVersion": "0.0.0-alpha.104",
+    "registryByteBinding": "reader291-byte-binding.json",
+    "registry": true,
+    "prerenderedRoutes": 20497,
+    "buildId": "9CGBBTasqTMfe4fmB4wWE",
+    "chunks": [
+      {
+        "name": "0mtijly53e9nm.css",
+        "bytes": 38639,
+        "sha256": "194f5febde0b3b0e0029384fd7bf7ea04d751fd58bf812f3a1f5fb5f52f11a88",
+        "paper": true,
+        "reader": false,
+        "paperShading": false
+      },
+      {
+        "name": "218jd2l5tq1zq.js",
+        "bytes": 5580,
+        "sha256": "303776894bfb86799a14d95952deec014dfbb8db15b87ce0ba3830173464a12c",
+        "paper": false,
+        "reader": true,
+        "paperShading": false
+      },
+      {
+        "name": "23ofzraoczo-5.js",
+        "bytes": 120276,
+        "sha256": "e932993446ba93ec485535f2f958bd1dfedad538e21417e25a9470079dfb34a1",
+        "paper": true,
+        "reader": false,
+        "paperShading": true
+      },
+      {
+        "name": "2aw1kwaona72h.js",
+        "bytes": 49489,
+        "sha256": "2379feef0b7b2ebda8d46770d03edf021f1a86af87064319df66d0ea3a9016d4",
+        "paper": false,
+        "reader": true,
+        "paperShading": false
+      },
+      {
+        "name": "3do-h0syd6wcq.js",
+        "bytes": 8958,
+        "sha256": "131c0ded2a6ba45671e3fdf153a658e09a211ef5ba31bd1d2390303ad26873f2",
+        "paper": false,
+        "reader": true,
+        "paperShading": false
+      }
+    ],
+    "sourceTree": "1f3bbf0b4b06eee5897bc4b929b7bb8d5056965d",
+    "representative": "reader-final-after.png",
+    "positiveControls": "Actual computed overlay contain=paint, Kings300 147fragmentfibers/1146textnodes/106elements; Kings288 three data-qri-label spans and zero labels in light/dark"
+  },
+  "after": {
+    "time": "2026-11-03T11:41:09.389Z",
+    "siteHead": "fa45ef73f3b5d5c7e6ab78112d678b9d7a32ad72",
+    "libraryVersion": "0.0.0-alpha.104",
+    "registryByteBinding": "reader384-byte-binding.json",
+    "registry": true,
+    "prerenderedRoutes": 20497,
+    "buildId": "N5WBWuRiA4bjxnty-3Wsk",
+    "chunks": [
+      {
+        "name": "087xadx55ko0o.css",
+        "bytes": 38737,
+        "sha256": "6d0cde0bc265a3e5af6f3771060fe20f0b306b33077cb8aba551806237392d6f",
+        "paper": true,
+        "reader": false,
+        "coveredBack": true,
+        "paperShading": false
+      },
+      {
+        "name": "1-juyx1agiqd1.js",
+        "bytes": 8958,
+        "sha256": "a59abc643495043dad2cd8e2da902fbd31cb25756a95f4a9c2e75b52f0042bdc",
+        "paper": false,
+        "reader": true,
+        "coveredBack": false,
+        "paperShading": false
+      },
+      {
+        "name": "23ofzraoczo-5.js",
+        "bytes": 120276,
+        "sha256": "e932993446ba93ec485535f2f958bd1dfedad538e21417e25a9470079dfb34a1",
+        "paper": true,
+        "reader": false,
+        "coveredBack": false,
+        "paperShading": true
+      },
+      {
+        "name": "2mv1u9_hakbh_.js",
+        "bytes": 5580,
+        "sha256": "4c776cf6854c1a4c9d0fc02ef47251169d012354a701c67ab79ca189d0a47efc",
+        "paper": false,
+        "reader": true,
+        "coveredBack": false,
+        "paperShading": false
+      },
+      {
+        "name": "3d4z0erv0ctz4.js",
+        "bytes": 49489,
+        "sha256": "01873355116e855d6059b543bccecd7954347c5b715a0a33e2e4c92f14362576",
+        "paper": false,
+        "reader": true,
+        "coveredBack": false,
+        "paperShading": false
+      }
+    ],
+    "sourceTree": "da51ce090329a87be3b62ee11cc4a1a8e105ea2c",
+    "representative": "reader-covered-back-after.png"
+  },
+  "representativePose": "300-leaf-light-angled.png",
+  "representativeSha256": {
+    "before": "146e26b4f201f3cb64a38cd52d58e65e01c26a51aeedf7da2acbb14853af5582",
+    "after": "146e26b4f201f3cb64a38cd52d58e65e01c26a51aeedf7da2acbb14853af5582"
+  },
+  "pairs": [
+    {
+      "chapter": 125,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "rest",
+      "characters": 3243,
+      "maxDelta": 0,
+      "changedPixels": 0
+    },
+    {
+      "chapter": 125,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "straight",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 125,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "angled",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 125,
+      "mode": "pinned",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "rest",
+      "characters": 3243,
+      "maxDelta": 0,
+      "changedPixels": 0
+    },
+    {
+      "chapter": 125,
+      "mode": "pinned",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "straight",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 125,
+      "mode": "pinned",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "angled",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 125,
+      "mode": "hidden",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "rest",
+      "characters": 3243,
+      "maxDelta": 0,
+      "changedPixels": 0
+    },
+    {
+      "chapter": 125,
+      "mode": "hidden",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "straight",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 125,
+      "mode": "hidden",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 94,
+        "textNodes": 694,
+        "elements": 81,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "angled",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 300,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "rest",
+      "characters": 5319,
+      "maxDelta": 0,
+      "changedPixels": 0
+    },
+    {
+      "chapter": 300,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "straight",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 300,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "angled",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 300,
+      "mode": "pinned",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "rest",
+      "characters": 5319,
+      "maxDelta": 0,
+      "changedPixels": 0
+    },
+    {
+      "chapter": 300,
+      "mode": "pinned",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "straight",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 300,
+      "mode": "pinned",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "angled",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 300,
+      "mode": "hidden",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "rest",
+      "characters": 5319,
+      "maxDelta": 0,
+      "changedPixels": 0
+    },
+    {
+      "chapter": 300,
+      "mode": "hidden",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "straight",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 300,
+      "mode": "hidden",
+      "colorScheme": "light",
+      "annotations": 0,
+      "implementation": {
+        "fragments": 147,
+        "textNodes": 1146,
+        "elements": 106,
+        "labels": 0,
+        "markers": 0
+      },
+      "pose": "angled",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 288,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 3,
+      "implementation": {
+        "fragments": 173,
+        "textNodes": 1580,
+        "elements": 168,
+        "labels": 0,
+        "markers": 3
+      },
+      "pose": "rest",
+      "characters": 7729,
+      "maxDelta": 0,
+      "changedPixels": 0
+    },
+    {
+      "chapter": 288,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 3,
+      "implementation": {
+        "fragments": 173,
+        "textNodes": 1580,
+        "elements": 168,
+        "labels": 0,
+        "markers": 3
+      },
+      "pose": "straight",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 288,
+      "mode": "leaf",
+      "colorScheme": "light",
+      "annotations": 3,
+      "implementation": {
+        "fragments": 173,
+        "textNodes": 1580,
+        "elements": 168,
+        "labels": 0,
+        "markers": 3
+      },
+      "pose": "angled",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 288,
+      "mode": "leaf",
+      "colorScheme": "dark",
+      "annotations": 3,
+      "implementation": {
+        "fragments": 173,
+        "textNodes": 1580,
+        "elements": 168,
+        "labels": 0,
+        "markers": 3
+      },
+      "pose": "rest",
+      "characters": 7729,
+      "maxDelta": 0,
+      "changedPixels": 0
+    },
+    {
+      "chapter": 288,
+      "mode": "leaf",
+      "colorScheme": "dark",
+      "annotations": 3,
+      "implementation": {
+        "fragments": 173,
+        "textNodes": 1580,
+        "elements": 168,
+        "labels": 0,
+        "markers": 3
+      },
+      "pose": "straight",
+      "changedPixels": 0
+    },
+    {
+      "chapter": 288,
+      "mode": "leaf",
+      "colorScheme": "dark",
+      "annotations": 3,
+      "implementation": {
+        "fragments": 173,
+        "textNodes": 1580,
+        "elements": 168,
+        "labels": 0,
+        "markers": 3
+      },
+      "pose": "angled",
+      "changedPixels": 0
+    }
+  ],
+  "priorOriginalComparison": "reader-final-comparison.json"
+}
