@@ -1185,9 +1185,7 @@ describe("EntryAliasesPanel", () => {
 			target: { value: "משה" },
 		});
 
-		expect(
-			await screen.findByText(/בדיקת השם נכשלה/),
-		).toBeInTheDocument();
+		expect(await screen.findByText(/בדיקת השם נכשלה/)).toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "שמור כתובת" })).toBeDisabled();
 	});
 

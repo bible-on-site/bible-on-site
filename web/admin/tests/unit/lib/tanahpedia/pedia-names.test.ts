@@ -212,9 +212,7 @@ describe("sameAliasTargetSet", () => {
 	});
 
 	it("detects an added or removed target", () => {
-		expect(
-			sameAliasTargetSet([{ entryId: "a", label: "" }], []),
-		).toBe(false);
+		expect(sameAliasTargetSet([{ entryId: "a", label: "" }], [])).toBe(false);
 		expect(
 			sameAliasTargetSet(
 				[{ entryId: "a", label: "" }],

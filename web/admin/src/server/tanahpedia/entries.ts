@@ -15,10 +15,7 @@ import {
 	txQueryOne,
 } from "../db";
 import { recomputeEntryMetrics } from "../reading-metrics";
-import {
-	pediaEntryChange,
-	revalidateWebsite,
-} from "../website-revalidate";
+import { pediaEntryChange, revalidateWebsite } from "../website-revalidate";
 import {
 	dropSelfShadowedAliasInTx,
 	keepOldNameAsAliasInTx,

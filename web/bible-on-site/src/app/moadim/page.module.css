@@ -1,7 +1,7 @@
 .container {
-	max-width: 960px;
+	max-width: 1180px;
 	margin: 0 auto;
-	padding: 96px 16px 48px;
+	padding: 88px 16px 48px;
 	font-family: inherit;
 }
 
@@ -15,7 +15,7 @@
 .intro {
 	color: var(--muted-text, #555);
 	line-height: 1.7;
-	margin-bottom: 32px;
+	margin-bottom: 28px;
 	max-width: 60ch;
 }
 
@@ -24,112 +24,115 @@
 	padding: 24px 0;
 }
 
-/* מעגל השנה — the decorative annual wheel. The rings are pure chrome;
-   only the anchors carry semantics. */
-.wheel {
-	position: relative;
-	width: min(100%, 34rem);
-	aspect-ratio: 1;
+/* מעגל השנה — the annual chart owns most of the viewport: sized against
+   the shorter viewport axis so the whole circle stays on screen. The
+   wheel is one SVG — month bands on the rim, a clickable sector per
+   moed, names radiating along the spokes. */
+.wheelNav {
+	width: min(96vw - 2rem, 82vh, 1080px);
 	margin: 0 auto 40px;
 }
 
-.wheelRing,
-.wheelRingInner {
-	position: absolute;
-	border-radius: 50%;
+.wheel {
+	display: block;
+	width: 100%;
+	height: auto;
+	font-family: inherit;
+	filter: drop-shadow(0 18px 42px rgb(21 44 93 / 0.16));
+}
+
+/* ── Chrome: rim, ticks, hub ─────────────────────────────────────── */
+
+.rim {
+	fill: none;
+	stroke: hsl(222 34% 62%);
+	stroke-width: 2.5;
+}
+
+.tick {
+	stroke: hsl(222 30% 70%);
+	stroke-width: 2;
+}
+
+.hub {
+	fill: hsl(44 55% 96%);
+	stroke: hsl(40 45% 80%);
+	stroke-width: 1.5;
+}
+
+.hubStar {
+	fill: none;
+	stroke: hsl(40 60% 55%);
+	stroke-width: 3;
+	stroke-linejoin: round;
+	opacity: 0.85;
+}
+
+.hubTitle {
+	fill: var(--pasuk-num-color, #1c2c5d);
+	font-size: 40px;
+	font-weight: 700;
+}
+
+/* ── Month bands (rim) ───────────────────────────────────────────── */
+
+.monthBand,
+.monthBandNeutral {
+	fill: hsl(var(--moed-h, 218) var(--moed-s, 56%) 62%);
+	stroke: var(--background, #fff);
+	stroke-width: 2;
+}
+
+.monthLabel {
+	fill: hsl(var(--moed-h, 218) 64% 20%);
+	font-size: 34px;
+	font-weight: 800;
+	letter-spacing: 0.5px;
 	pointer-events: none;
 }
 
-.wheelRing {
-	inset: 4%;
-	border: 2px solid rgba(21, 82, 172, 0.25);
-	background: radial-gradient(
-		circle,
-		rgba(21, 82, 172, 0.05) 55%,
-		transparent 56%
-	);
+/* ── Moed sectors + spoke labels ─────────────────────────────────── */
+
+.moedSlice {
+	outline: none;
 }
 
-.wheelRingInner {
-	inset: 30%;
-	border: 1px dashed rgba(21, 82, 172, 0.3);
+.moedCell,
+.moedCellNeutral {
+	fill: hsl(var(--moed-h, 218) var(--moed-s, 62%) 88%);
+	stroke: var(--background, #fff);
+	stroke-width: 3;
+	transition: fill 0.15s ease;
 }
 
-.wheelList {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	position: absolute;
-	inset: 0;
+.moedSlice:hover .moedCell,
+.moedSlice:hover .moedCellNeutral {
+	fill: hsl(var(--moed-h, 218) var(--moed-s, 62%) 79%);
 }
 
-/* The item is a zero-size pivot at the circle center: rotate + outward
-   translate around its own center lands it on the ring at --angle. The
-   anchor then counter-rotates around its own center — the label stays
-   upright and the Hebrew never flips. */
-.wheelItem {
-	position: absolute;
-	inset-block-start: 50%;
-	inset-inline-start: 50%;
-	width: 0;
-	height: 0;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	transform: rotate(var(--angle)) translateY(-14rem);
+.moedSlice:focus-visible .moedCell,
+.moedSlice:focus-visible .moedCellNeutral {
+	fill: hsl(var(--moed-h, 218) var(--moed-s, 66%) 74%);
+	stroke: var(--pasuk-num-color, #1c2c5d);
+	stroke-width: 4;
 }
 
-/* A full year of moadim on one ring crowds the labels; alternating items
-   drop to an inner ring so every name keeps breathing room. The DOM order
-   (and therefore keyboard order) stays the annual order either way. */
-.wheelItem:nth-child(even) {
-	transform: rotate(var(--angle)) translateY(-10rem);
-}
-
-.wheelLink {
-	transform: rotate(calc(-1 * var(--angle)));
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 1px;
-	padding: 8px 12px;
-	border-radius: 10px;
-	background: var(--card-bg, #fff);
-	border: 1px solid rgba(21, 82, 172, 0.3);
-	box-shadow: 0 2px 8px rgba(21, 82, 172, 0.12);
-	text-decoration: none;
-	color: var(--pasuk-num-color, #1c2c5d);
+.moedName {
+	fill: hsl(var(--moed-h, 218) 58% 26%);
+	font-size: 21px;
 	font-weight: 600;
-	font-size: 0.95rem;
-	line-height: 1.25;
-	text-align: center;
-	max-width: 8rem;
-	white-space: normal;
+	pointer-events: none;
 }
 
-.wheelLink:hover,
-.wheelLink:focus-visible {
-	border-color: rgba(21, 82, 172, 0.65);
-	box-shadow: 0 4px 14px rgba(21, 82, 172, 0.25);
-}
-
-.wheelLink:focus-visible {
-	outline: 3px solid rgba(21, 82, 172, 0.8);
-	outline-offset: 2px;
-}
-
-.wheelName {
-	display: block;
-}
-
-.wheelDate {
-	font-size: 0.7rem;
+.moedDate {
+	fill: hsl(var(--moed-h, 218) 44% 38%);
+	font-size: 15px;
 	font-weight: 400;
-	color: var(--muted-text, #666);
 }
 
 /* The ordered index — same links, guaranteed order and touch targets
-   regardless of how the wheel fits the viewport. */
+   regardless of how the wheel fits the viewport. Each row carries its
+   month hue as an inline-start accent so the legend lives in the list. */
 .index {
 	margin-top: 8px;
 }
@@ -139,7 +142,7 @@
 	margin: 0;
 	padding: 0;
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
 	gap: 8px;
 	counter-reset: moed;
 }
@@ -153,29 +156,31 @@
 	align-items: baseline;
 	gap: 6px;
 	padding: 10px 14px;
-	border: 1px solid rgba(21, 82, 172, 0.18);
+	border: 1px solid hsl(var(--moed-h, 218) var(--moed-s, 40%) 82%);
+	border-inline-start: 6px solid
+		hsl(var(--moed-h, 218) var(--moed-s, 55%) 60%);
 	border-radius: 10px;
 	text-decoration: none;
 	color: var(--pasuk-num-color, #1c2c5d);
-	background: var(--card-bg, #fff);
+	background: hsl(var(--moed-h, 218) var(--moed-s, 55%) 97%);
 }
 
 .indexLink::before {
 	content: counter(moed);
 	font-size: 0.75rem;
 	font-weight: 700;
-	color: rgba(21, 82, 172, 0.55);
+	color: hsl(var(--moed-h, 218) var(--moed-s, 45%) 50%);
 	min-width: 1.2em;
 }
 
 .indexLink:hover,
 .indexLink:focus-visible {
-	border-color: rgba(21, 82, 172, 0.55);
-	background: rgba(21, 82, 172, 0.05);
+	border-color: hsl(var(--moed-h, 218) var(--moed-s, 55%) 55%);
+	background: hsl(var(--moed-h, 218) var(--moed-s, 60%) 93%);
 }
 
 .indexLink:focus-visible {
-	outline: 3px solid rgba(21, 82, 172, 0.8);
+	outline: 3px solid hsl(var(--moed-h, 218) 60% 45%);
 	outline-offset: 2px;
 }
 
@@ -190,43 +195,174 @@
 	font-weight: 400;
 }
 
-@media (max-width: 640px) {
-	.container {
-		padding-top: 80px;
+.indexMonth {
+	margin-inline-start: auto;
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: hsl(var(--moed-h, 218) var(--moed-s, 55%) 90%);
+	color: hsl(var(--moed-h, 218) 55% 32%);
+	font-weight: 600;
+}
+
+/* ── Dark scheme — the wheel keeps its palette, retuned for dark ──── */
+
+@media (prefers-color-scheme: dark) {
+	.wheel {
+		filter: drop-shadow(0 18px 42px rgb(0 0 0 / 0.5));
 	}
 
-	.wheelItem {
-		transform: rotate(var(--angle)) translateY(-42vw);
+	.rim {
+		stroke: hsl(222 25% 42%);
 	}
 
-	.wheelItem:nth-child(even) {
-		transform: rotate(var(--angle)) translateY(-28vw);
+	.tick {
+		stroke: hsl(222 25% 48%);
 	}
 
-	.wheelLink {
-		font-size: 0.7rem;
-		padding: 5px 7px;
-		max-width: 4.5rem;
+	.hub {
+		fill: hsl(228 24% 13%);
+		stroke: hsl(228 20% 32%);
 	}
 
-	.wheelDate {
-		font-size: 0.6rem;
+	.hubStar {
+		stroke: hsl(42 45% 58%);
+	}
+
+	.monthBand,
+	.monthBandNeutral {
+		fill: hsl(var(--moed-h, 218) var(--moed-s, 50%) 46%);
+	}
+
+	.monthLabel {
+		fill: hsl(var(--moed-h, 218) 60% 94%);
+	}
+
+	.moedCell,
+	.moedCellNeutral {
+		fill: hsl(var(--moed-h, 218) var(--moed-s, 44%) 28%);
+	}
+
+	.moedSlice:hover .moedCell,
+	.moedSlice:hover .moedCellNeutral {
+		fill: hsl(var(--moed-h, 218) var(--moed-s, 46%) 37%);
+	}
+
+	.moedSlice:focus-visible .moedCell,
+	.moedSlice:focus-visible .moedCellNeutral {
+		fill: hsl(var(--moed-h, 218) var(--moed-s, 50%) 44%);
+		stroke: var(--pasuk-num-color, #a8b9ff);
+	}
+
+	.moedName {
+		fill: hsl(var(--moed-h, 218) 55% 91%);
+	}
+
+	.moedDate {
+		fill: hsl(var(--moed-h, 218) 38% 74%);
+	}
+
+	.indexLink {
+		border-color: hsl(var(--moed-h, 218) var(--moed-s, 30%) 40%);
+		border-inline-start-color: hsl(
+			var(--moed-h, 218) var(--moed-s, 50%) 55%
+		);
+		background: hsl(var(--moed-h, 218) var(--moed-s, 26%) 15%);
+	}
+
+	.indexLink::before {
+		color: hsl(var(--moed-h, 218) var(--moed-s, 50%) 65%);
+	}
+
+	.indexLink:hover,
+	.indexLink:focus-visible {
+		border-color: hsl(var(--moed-h, 218) var(--moed-s, 50%) 55%);
+		background: hsl(var(--moed-h, 218) var(--moed-s, 30%) 22%);
+	}
+
+	.indexMonth {
+		background: hsl(var(--moed-h, 218) var(--moed-s, 40%) 24%);
+		color: hsl(var(--moed-h, 218) 55% 82%);
 	}
 }
 
+/* ── Accessibility fallbacks ─────────────────────────────────────── */
+
 @media (prefers-contrast: more) {
-	.wheelLink,
+	.moedCell,
+	.moedCellNeutral,
+	.monthBand,
+	.monthBandNeutral,
 	.indexLink {
+		stroke: currentColor;
 		border-color: currentColor;
 	}
 
-	.wheelRing {
-		border-color: currentColor;
+	.rim,
+	.tick {
+		stroke: currentColor;
+	}
+}
+
+@media (forced-colors: active) {
+	.rim,
+	.tick,
+	.moedCell,
+	.moedCellNeutral,
+	.monthBand,
+	.monthBandNeutral {
+		fill: Canvas;
+		stroke: CanvasText;
+	}
+
+	.hub {
+		fill: Canvas;
+		stroke: CanvasText;
+	}
+
+	.hubStar {
+		stroke: CanvasText;
+	}
+
+	.monthLabel,
+	.moedName,
+	.moedDate,
+	.hubTitle {
+		fill: CanvasText;
+	}
+
+	.moedSlice:focus-visible .moedCell,
+	.moedSlice:focus-visible .moedCellNeutral {
+		fill: Highlight;
 	}
 }
 
 @media (prefers-reduced-motion: no-preference) {
-	.wheelLink {
-		transition: box-shadow 0.15s ease, border-color 0.15s ease;
+	.moedSlice {
+		animation: moed-wedge-in 0.45s ease both;
+		animation-delay: calc(var(--moed-i, 0) * 45ms);
+	}
+
+	/* The sweep-in reveals sectors one by one around the circle — a
+	   subtle nod to the year turning. Opacity only: transform would
+	   fight the spoke rotations. */
+	@keyframes moed-wedge-in {
+		from {
+			opacity: 0;
+		}
+
+		to {
+			opacity: 1;
+		}
+	}
+}
+
+@media (max-width: 640px) {
+	.container {
+		padding-top: 76px;
+	}
+
+	.wheelNav {
+		width: min(96vw - 1rem, 78vh);
+		margin-bottom: 28px;
 	}
 }

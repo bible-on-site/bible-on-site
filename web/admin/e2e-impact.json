@@ -15,9 +15,7 @@
 		"root": "web/admin",
 		"globs": ["src/**"]
 	},
-	"alwaysRun": [
-		"health.test.ts :: Admin App Health :: homepage loads"
-	],
+	"alwaysRun": ["health.test.ts :: Admin App Health :: homepage loads"],
 	"runAllOnChange": [
 		"web/admin/package.json",
 		"web/admin/bun.lock",

@@ -143,9 +143,7 @@ export const deleteAuthor = createServerFn({ method: "POST" })
 		// The author's pages and their articles' surfaces expire; the website
 		// resolves the orphaned articles by id.
 		if (previous) {
-			await revalidateWebsite([
-				authorChange({ id, name: previous.name }),
-			]);
+			await revalidateWebsite([authorChange({ id, name: previous.name })]);
 		}
 		return { success: true };
 	});

@@ -495,6 +495,17 @@ function ArticleEditPage() {
 			{/* Full relationship picture (#3102) — every registry entry, each
 			    managed through its owning workflow. Only for persisted articles. */}
 			{articleId !== null && (
+				<div className="flex justify-end">
+					<Link
+						to="/link-proposals"
+						search={{ articleId }}
+						className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+					>
+						🔗 הצעות קישור למאמר זה ←
+					</Link>
+				</div>
+			)}
+			{articleId !== null && (
 				<ArticleRelationshipsPanel
 					articleId={articleId}
 					perekId={formData.perek_id}
