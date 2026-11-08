@@ -112,6 +112,29 @@ The website uses Next.js Static Site Generation (SSG) with the following pattern
 - **Dynamic Data**: Articles are fetched at request time (ISR) with caching
 - **Graceful Degradation**: If database is unavailable during SSG build, pages render without articles
 
+### Sitemap & Missing Pages
+
+- `/sitemap.xml` is generated at build time by `src/app/sitemap.ts`
+  (`dynamic = "error"`, `revalidate = false`). The public URL
+  `/sitemap_www.xml` stays a permanent redirect to that single canonical
+  document (`next.config.mjs`) so external consumers that still fetch the
+  old name — e.g. past Search Console submissions — never hit a 404.
+- Every human-facing miss renders `src/app/not-found.tsx`: one branded
+  Hebrew page at a real 404 status with noindex and a home recovery link.
+  Route-level "entity missing" metadata fallbacks (pedia entry, author,
+  article, perush) return the shared `NOT_FOUND_METADATA`
+  (`src/lib/seo/missing-page.ts`) so the title and OpenGraph contract are
+  identical on every 404 surface.
+- The nginx router's `/www/` static tree is a supported surface and stays
+  router-local end to end: missing files answer with the branded Hebrew
+  page deployed into the tree as `/www/404.html` (committed at
+  `docs/aws/cloudformation/ec2-nginx/router/404.html`, wired by
+  `error_page 404 /www/404.html` in `router.conf`) instead of the stock
+  nginx 404 — no app proxying, no extra backend renders. The post-deploy
+  `verify-canonical-hosts.mjs` smoke check asserts both contracts on each
+  public domain: a permanent `/sitemap_www.xml` → `/sitemap.xml` redirect
+  and a branded-body 404 for a missing `/www/` file.
+
 ## Content Freshness (On-Demand Revalidation)
 
 DB-backed reads are cached indefinitely (`unstable_cache` with
