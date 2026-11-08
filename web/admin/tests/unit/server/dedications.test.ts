@@ -82,6 +82,17 @@ interface FixtureRows {
 	masora?: unknown[];
 	seferNames?: unknown[];
 	helekNames?: unknown[];
+	/**
+	 * Ids the batched existence checks report as absent. Every other
+	 * requested id comes back as a found row, mirroring a healthy schema.
+	 */
+	missing?: {
+		sefer?: number[];
+		helek?: number[];
+		perek?: number[];
+		article?: number[];
+		entry?: string[];
+	};
 }
 
 /**
@@ -92,7 +103,23 @@ interface FixtureRows {
  * `*_dedication` link table.
  */
 function stubQueries(rows: FixtureRows) {
-	mocks.query.mockImplementation(async (sql: string) => {
+	mocks.query.mockImplementation(async (sql: string, params?: unknown[]) => {
+		// Batched existence checks (`WHERE id IN (JSON_TABLE ...)`) answer
+		// with every requested id except the fixture's `missing` set.
+		const found = (absent?: (number | string)[]) =>
+			(JSON.parse((params?.[0] as string) ?? "[]") as (number | string)[])
+				.filter((id) => !(absent ?? []).includes(id))
+				.map((id) => ({ id }));
+		if (sql.includes("FROM tanah_sefer WHERE id"))
+			return found(rows.missing?.sefer);
+		if (sql.includes("FROM tanah_helek WHERE id"))
+			return found(rows.missing?.helek);
+		if (sql.includes("FROM tanah_perek WHERE id"))
+			return found(rows.missing?.perek);
+		if (sql.includes("FROM tanah_article WHERE id"))
+			return found(rows.missing?.article);
+		if (sql.includes("FROM tanahpedia_entry WHERE id"))
+			return found(rows.missing?.entry);
 		if (sql.startsWith("SELECT DISTINCT")) return rows.ids ?? [];
 		if (sql.includes("MIN(CASE")) return rows.state ?? [];
 		if (sql.includes("FROM tanah_dedication ")) return rows.dedication ?? [];
@@ -348,7 +375,14 @@ describe("dedication management regression cases", () => {
 	] as const)(
 		"rejects a missing referenced row %j",
 		async (target, message) => {
-			mocks.queryOne.mockResolvedValue(null);
+			stubQueries({
+				missing: {
+					helek: [8],
+					perek: [7, 9],
+					article: [7],
+					entry: ["missing"],
+				},
+			});
 			await expect(
 				createDedication({
 					data: {
@@ -363,7 +397,7 @@ describe("dedication management regression cases", () => {
 	);
 
 	it("checks both endpoints of a perek range", async () => {
-		mocks.queryOne.mockResolvedValueOnce({ id: 7 }).mockResolvedValueOnce(null);
+		stubQueries({ missing: { perek: [9] } });
 		await expect(
 			createDedication({
 				data: {
@@ -670,7 +704,7 @@ describe("createDedication", () => {
 	});
 
 	it("rejects an unknown sefer target", async () => {
-		mocks.queryOne.mockResolvedValue(null);
+		stubQueries({ missing: { sefer: [99] } });
 		await expect(
 			createDedication({
 				data: {
@@ -1030,16 +1064,16 @@ describe("changeFromTargets", () => {
 
 describe("validateReferenceTargets", () => {
 	it("treats a missing sefer/helek id as zero and reports it missing", async () => {
-		mocks.queryOne.mockResolvedValue(null);
+		stubQueries({ missing: { sefer: [0], helek: [0] } });
 		await expect(validateReferenceTargets([{ kind: "sefer" }])).rejects.toThrow(
 			"ספר 0 לא קיים",
 		);
 		await expect(validateReferenceTargets([{ kind: "helek" }])).rejects.toThrow(
 			"חלק 0 לא קיים",
 		);
-		expect(mocks.queryOne).toHaveBeenCalledWith(
-			expect.stringContaining("tanah_sefer"),
-			[0],
+		expect(mocks.query).toHaveBeenCalledWith(
+			expect.stringContaining("FROM tanah_sefer WHERE id"),
+			["[0]"],
 		);
 	});
 });
