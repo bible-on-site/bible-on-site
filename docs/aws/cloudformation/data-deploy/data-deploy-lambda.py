@@ -23,27 +23,51 @@ import boto3
 import pymysql
 
 
-def _db_url_from_ssm():
-    """Read the database URL from SSM Parameter Store (legacy contract).
+def _credentials_from_ssm():
+    """Resolve DB credentials from SSM Parameter Store (legacy contract).
 
-    The live pre-payload handler resolved its credentials from the
-    ``{SSM_PREFIX}-*`` parameters on every invocation. Callers that omit
-    ``db_url`` — manual invokes and older deployer checkouts — still rely
-    on that path, so it stays as the last credential source until the
+    Replicates the live pre-payload handler exactly: it reads the
+    ``{SSM_PREFIX}-{host,port,name,username,url}`` SecureStrings and takes
+    host/user/database from the discrete parameters (port defaults to
+    3306), extracting only the password from the ``-url`` mysql:// URL —
+    including the legacy quirk of NOT percent-decoding it. Callers that
+    omit ``db_url`` — manual invokes and older deployer checkouts — still
+    rely on that path, so it stays as the last credential source until the
     approved endpoint migration proves no VPC consumer remains.
     """
     ssm = boto3.client("ssm")
     prefix = os.environ.get("SSM_PREFIX", "bible-on-site-tanah-db")
-    param_name = f"{prefix}-url"
-    param = ssm.get_parameter(Name=param_name, WithDecryption=True)
-    db_url = param.get("Parameter", {}).get("Value", "")
-    if not db_url:
-        raise ValueError(f"SSM parameter {param_name} is empty or missing")
-    return db_url
+    suffixes = ("host", "port", "name", "username", "url")
+    params = ssm.get_parameters(
+        Names=[f"{prefix}-{suffix}" for suffix in suffixes],
+        WithDecryption=True,
+    )
+    param_dict = {
+        p["Name"].rsplit("-", 1)[-1]: p["Value"] for p in params["Parameters"]
+    }
+    # host/name/username are mandatory in the legacy contract (it indexed
+    # them unconditionally); port defaults to 3306 and url only feeds the
+    # password extraction, exactly as the live handler treats them.
+    missing = [s for s in ("host", "name", "username") if not param_dict.get(s)]
+    if missing:
+        raise ValueError(
+            f"SSM parameters {prefix}-{{{', '.join(missing)}}} missing or empty"
+        )
+    # Legacy extraction: password is the substring between the first ':'
+    # after '://' and the next '@', verbatim (no percent-decoding).
+    db_url = param_dict.get("url", "")
+    password = db_url.split(":")[2].split("@")[0] if "://" in db_url else ""
+    return {
+        "host": param_dict["host"],
+        "port": int(param_dict.get("port") or 3306),
+        "user": param_dict["username"],
+        "password": password,
+        "database": param_dict["name"],
+    }
 
 
 def db_credentials(event):
-    """Parse host/port/user/password/database from the DB URL.
+    """Resolve host/port/user/password/database for the MySQL connection.
 
     Credential sources, in order:
 
@@ -51,21 +75,21 @@ def db_credentials(event):
        from SSM Parameter Store and delivers it inside the payload, so the
        function normally never calls SSM from inside the VPC.
     2. ``DB_URL`` env var — fallback for manual invocations.
-    3. SSM Parameter Store ``{SSM_PREFIX}-url`` — the legacy contract used
-       by callers that predate the payload field. Transitional: it keeps
-       working until the approved endpoint migration removes the need.
+    3. SSM Parameter Store ``{SSM_PREFIX}-*`` parameters — the legacy
+       contract used by callers that predate the payload field.
+       Transitional: it keeps working until the approved endpoint
+       migration removes the need.
 
-    The resolved value must be a mysql://user:pass@host:port/db URL. Never
-    log it.
+    Never log resolved values.
     """
     db_url = event.get("db_url") or os.environ.get("DB_URL", "")
     if not db_url:
-        db_url = _db_url_from_ssm()
+        return _credentials_from_ssm()
     parts = urlparse(db_url)
     if parts.scheme != "mysql" or not parts.hostname or not parts.username:
         raise ValueError(
-            "resolved DB URL (db_url payload, DB_URL env or SSM "
-            "{SSM_PREFIX}-url) must be a mysql://user:pass@host:port/db URL"
+            "resolved DB URL (db_url payload or DB_URL env) must be a "
+            "mysql://user:pass@host:port/db URL"
         )
     return {
         "host": parts.hostname,
