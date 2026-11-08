@@ -2,12 +2,23 @@ use crate::{
     common::error_handling::{INTERNAL_SERVER_ERROR, ServiceError},
     providers::Database,
 };
-use entities::author::{Entity, Model};
-use sea_orm::EntityTrait;
+use entities::author::{Column, Entity, Model};
+use sea_orm::{EntityTrait, QueryOrder, QuerySelect};
 
+// Safety cap for the legacy all-authors GraphQL contract; raise it with pagination.
+const MAX_AUTHORS: u64 = 10_000;
+
+/// Returns the author fields exposed by the starter resolver, with a safety cap.
 pub async fn find_all(db: &Database) -> Result<Vec<Model>, ServiceError> {
     tracing::info_span!("authors_service::find_all");
     let authors = Entity::find()
+        .select_only()
+        .column(Column::Id)
+        .column(Column::Name)
+        .column(Column::Details)
+        .order_by_asc(Column::Id)
+        .limit(MAX_AUTHORS)
+        .into_model::<Model>()
         .all(db.get_connection())
         .await
         .map_err(|db_err| {
