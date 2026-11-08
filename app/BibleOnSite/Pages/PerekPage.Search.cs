@@ -16,6 +16,13 @@ public partial class PerekPage
 
     /// <summary>Perek requested via the calendarReader?perekId= query route.</summary>
     private int? _pendingPerekId;
+
+    /// <summary>
+    /// Calendar-selected Hebrew date (YYYYMMDD) the reader was opened for.
+    /// When set, the daily article override (#3098) resolves against this
+    /// date; today stays an implicit context inside StarterService too.
+    /// </summary>
+    private int? _dailyDateNum;
     private View? _searchHeader;
     private double _searchHeaderHeight;
     private const string SearchExpansionAnimation = "ReaderSearchExpansion";
@@ -199,6 +206,15 @@ public partial class PerekPage
             _pendingPerekId = perekId;
             _initialPerekId = null;
         }
+
+        // …and carries the tapped Hebrew date so the daily article override
+        // (#3098) resolves against the selected day, not just today.
+        if (query.TryGetValue("dateNum", out var dateNumValue) &&
+            int.TryParse(dateNumValue?.ToString(), out var dateNum) &&
+            dateNum is >= 1000000 and <= 99999999)
+        {
+            _dailyDateNum = dateNum;
+        }
     }
 
     private static int GetSearchPerekId(SearchResult result) => result switch
@@ -239,7 +255,7 @@ public partial class PerekPage
                 // UniqueName is the canonical slug — alias hits already resolve
                 // server-side, so this always opens the right entry (#2104).
                 await ShellAppNavigator.Instance.GoToAsync(
-                    $"tanahpediaEntry?uniqueName={Uri.EscapeDataString(entry.UniqueName)}");
+                    AppRoutes.TanahpediaEntry(entry.UniqueName));
             }
             else if (GetSearchPerekId(result) > 0)
             {

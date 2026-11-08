@@ -153,6 +153,109 @@ CREATE TABLE `tanah_article_dedication` (
 /*!40101 SET character_set_client = @saved_cs_client */
 ;
 --
+-- Table structure for table `tanah_article_link_proposal`
+--
+DROP TABLE IF EXISTS `tanah_article_link_proposal`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */
+;
+/*!50503 SET character_set_client = utf8mb4 */
+;
+-- LLM/heuristic article-linking drafts (#3103). Rows are proposals only —
+-- they are never read by public consumers and never mutate the live
+-- relationship tables; a human review in the admin applies the approved
+-- patch through the typed relationship write path (#3102).
+CREATE TABLE `tanah_article_link_proposal` (
+    `id` char(36) NOT NULL,
+    -- Generation run grouping — all proposals of one pipeline execution.
+    `run_id` char(36) NOT NULL,
+    `article_id` mediumint NOT NULL,
+    -- The shared registry key (#3102), never a table/column name.
+    `relationship_key` varchar(40) NOT NULL,
+    -- 'add' | 'remove' | 'replace' | 'clear' (registry operation names).
+    `action` varchar(10) NOT NULL,
+    -- Canonical normalized target payload (e.g. {"perekId":12},
+    -- {"pasukCoordinates":[{"perekId":1,"pasuk":3}]}). Original model output
+    -- stays in evidence/rationale; review_patch_json carries the human edit.
+    `target_json` json NOT NULL,
+    -- Human-readable target for the review queue (e.g. "בראשית א ג").
+    `target_label` varchar(500) NOT NULL,
+    -- [{"quote","spanStart","spanEnd"}] — offsets in the extracted plain-text
+    -- view of the article content snapshot the proposal was generated on.
+    `evidence_json` json DEFAULT NULL,
+    `rationale` text,
+    -- Advisory score only — never an automatic approval threshold.
+    `confidence` decimal(4,3) DEFAULT NULL,
+    -- Detected collision/ambiguity the reviewer must see (e.g. occupied
+    -- month/day, competing manual link, ambiguous citation, pending schema).
+    `conflict` varchar(500) DEFAULT NULL,
+    -- pending | held | approved | rejected | applied | stale.
+    `status` varchar(12) NOT NULL DEFAULT 'pending',
+    -- sha256(dedupe input incl. generator+prompt_version+base_content_hash):
+    -- rerun idempotency — same inputs never insert a second row.
+    `dedupe_key` char(64) NOT NULL,
+    -- sha256(article+relationship+action+canonical target): the durable
+    -- identity a reject/apply decision binds to, across generators/versions.
+    `decision_key` char(64) NOT NULL,
+    -- 'openai:<model>' | 'heuristic:<ver>' — which draft path produced it.
+    `generator` varchar(120) NOT NULL,
+    -- Provider-reported model identifier/revision when available.
+    `model` varchar(120) DEFAULT NULL,
+    `prompt_version` varchar(40) NOT NULL,
+    -- Freshness token: LOWER(HEX(tanah_article.content_hash)) at generation;
+    -- '' when the generated column is not deployed (staleness then unchecked).
+    `base_content_hash` char(32) NOT NULL DEFAULT '',
+    -- The relationship state the proposal was generated against.
+    `base_snapshot_json` json DEFAULT NULL,
+    `prompt_tokens` int DEFAULT NULL,
+    `completion_tokens` int DEFAULT NULL,
+    -- The human-edited final patch — kept separate from the model output.
+    `review_patch_json` json DEFAULT NULL,
+    `review_notes` varchar(1000) DEFAULT NULL,
+    -- The approving/rejecting editor identity (Cognito sub, or 'local' dev).
+    `reviewer` varchar(200) DEFAULT NULL,
+    `reviewed_at` timestamp(6) NULL DEFAULT NULL,
+    `applied_at` timestamp(6) NULL DEFAULT NULL,
+    -- The post-apply relationship state (the exact after-record).
+    `applied_snapshot_json` json DEFAULT NULL,
+    `created_at` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    `updated_at` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+        ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uq_link_proposal_dedupe` (`dedupe_key`),
+    KEY `idx_link_proposal_queue` (`status`, `article_id`),
+    KEY `idx_link_proposal_run` (`run_id`),
+    KEY `idx_link_proposal_decision` (`decision_key`),
+    CONSTRAINT `fk_link_proposal_article` FOREIGN KEY (`article_id`)
+        REFERENCES `tanah_article` (`id`) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */
+;
+--
+-- Table structure for table `tanah_article_link_checkpoint`
+--
+DROP TABLE IF EXISTS `tanah_article_link_checkpoint`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */
+;
+/*!50503 SET character_set_client = utf8mb4 */
+;
+-- Resumable-run checkpointing (#3103): one row per
+-- (article, generator, prompt_version, content_hash) already processed —
+-- unchanged inputs reuse the prior generation instead of re-calling the model.
+CREATE TABLE `tanah_article_link_checkpoint` (
+    `article_id` mediumint NOT NULL,
+    `generator` varchar(120) NOT NULL,
+    `prompt_version` varchar(40) NOT NULL,
+    `content_hash` char(32) NOT NULL DEFAULT '',
+    `run_id` char(36) NOT NULL,
+    `proposal_count` int NOT NULL DEFAULT 0,
+    `processed_at` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (`article_id`, `generator`, `prompt_version`, `content_hash`),
+    CONSTRAINT `fk_link_checkpoint_article` FOREIGN KEY (`article_id`)
+        REFERENCES `tanah_article` (`id`) ON DELETE CASCADE
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+/*!40101 SET character_set_client = @saved_cs_client */
+;
+--
 -- Table structure for table `tanah_dedication_dedication_type`
 --
 DROP TABLE IF EXISTS `tanah_dedication_dedication_type`;

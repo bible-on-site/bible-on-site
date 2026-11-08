@@ -6,6 +6,29 @@ export function lighthouseBenchmarkName(path, device, name) {
 	return `lighthouse: ${path} (${device}) | ${name}`;
 }
 
+/**
+ * TBT can approach zero, so a percentage of historical milliseconds is not
+ * the browser test's blocking-time gate. Use its unchanged budget for both
+ * Lighthouse reporting paths, as for the other blocking-time benchmarks.
+ * Raw milliseconds remain in the Lighthouse JSON, HTML and summary reports.
+ * @param {import("../tests/util/benchmark").BenchmarkEntry} entry
+ * @param {string} auditId
+ * @param {number} blockingBudgetMs
+ * @returns {import("../tests/util/benchmark").BenchmarkEntry}
+ */
+export function lighthouseBenchmarkEntry(entry, auditId, blockingBudgetMs) {
+	if (auditId !== "total-blocking-time" || entry.measure !== "time_ms")
+		return entry;
+	if (!Number.isFinite(blockingBudgetMs) || blockingBudgetMs <= 0)
+		throw new Error("Lighthouse blocking budget must be finite and positive");
+	return {
+		...entry,
+		measure: "frame_budget_ratio",
+		value: entry.value / blockingBudgetMs,
+		upperValue: 1,
+	};
+}
+
 const METRICS = {
 	FCP: "first-contentful-paint",
 	LCP: "largest-contentful-paint",

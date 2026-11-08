@@ -4,6 +4,8 @@ namespace BibleOnSite.Services;
 /// On-demand asset delivery abstraction.
 /// Android: Play Asset Delivery (PAD) via AssetPackManager.
 /// iOS / Mac Catalyst: Apple Background Assets via BAAssetPackManager (managed asset packs).
+/// Windows: MSIX optional packages via Store DLC, or the release-payload
+/// fallback when Store add-ons are not configured or the app runs unpackaged.
 /// Other platforms: no-op (always returns false/null).
 /// </summary>
 public interface IPadDeliveryService

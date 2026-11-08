@@ -16,6 +16,13 @@ public class ReaderExitFullscreenButton : Border
     public event EventHandler? ExitRequested;
 #pragma warning restore S3264
 
+    /// <summary>
+    /// Raises <see cref="ExitRequested"/>. Every exit path — the Windows
+    /// platform Button click (#2766), the touch tap, the native Android
+    /// touch-up — funnels through here.
+    /// </summary>
+    internal void SendExitRequested() => ExitRequested?.Invoke(this, EventArgs.Empty);
+
     public ReaderExitFullscreenButton()
     {
         AutomationId = "ExitFullScreenButton";
@@ -70,14 +77,19 @@ public class ReaderExitFullscreenButton : Border
                 nativeView.Touch += OnNativeTouch;
             }
         };
-#else
+#elif !WINDOWS
         var tap = new TapGestureRecognizer();
-        tap.Tapped += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
+        tap.Tapped += (_, _) => SendExitRequested();
         GestureRecognizers.Add(tap);
 
         var pan = new PanGestureRecognizer();
         pan.PanUpdated += OnPan;
         GestureRecognizers.Add(pan);
+#else
+        // Windows: the platform view IS an activatable Button — recognizers
+        // would double-fire ExitRequested alongside Click, and the native
+        // Button swallows the pointer events a pan recognizer needs (#2766).
+        // The handler owns click + drag.
 #endif
     }
 
@@ -143,7 +155,7 @@ public class ReaderExitFullscreenButton : Border
             case Android.Views.MotionEventActions.Up:
                 if (!_isDragging)
                 {
-                    ExitRequested?.Invoke(this, EventArgs.Empty);
+                    SendExitRequested();
                 }
                 e.Handled = true;
                 break;
@@ -157,7 +169,7 @@ public class ReaderExitFullscreenButton : Border
                 break;
         }
     }
-#else
+#elif !WINDOWS
     private double _panStartX;
     private double _panStartY;
 

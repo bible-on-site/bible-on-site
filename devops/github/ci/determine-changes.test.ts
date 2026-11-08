@@ -191,6 +191,9 @@ describe("detectChanges", () => {
 			"devops/github/ci/native-api-fixture.test.mjs",
 			"devops/github/ci/native-api-fixture.sql",
 			"devops/github/ci/native-api-fixture-rows.sql",
+			"devops/github/ci/native-admin-fixture.mjs",
+			"devops/github/ci/native-admin-fixture.test.mjs",
+			"devops/github/ci/native-admin-fixture.sql",
 			"devops/github/ci/verify-api-native.mjs",
 			"devops/github/ci/verify-api-native.test.mjs",
 			"devops/github/ci/verify-website-native.mjs",
@@ -593,10 +596,16 @@ describe("detectChanges", () => {
 
 	test("release workflow changes validate only released modules", () => {
 		const changes = detectChanges([".github/workflows/shared-release.yml"]);
-		for (const key of ["website", "api", "app", "bulletin"] as const) {
+		for (const key of [
+			"website",
+			"api",
+			"app",
+			"bulletin",
+			"admin",
+		] as const) {
 			assert.equal(changes[key].ci_changed, true, key);
 		}
-		for (const key of ["admin", "data", "perushim_pipeline"] as const) {
+		for (const key of ["data", "perushim_pipeline"] as const) {
 			assert.equal(changes[key].ci_changed, false, key);
 		}
 	});
@@ -647,6 +656,8 @@ describe("detectChanges", () => {
 			"devops/deploy/ecr-deploy/ecr-client.test.mts",
 			"devops/deploy/ecr-deploy/resume-image.mts",
 			"devops/deploy/ecr-deploy/resume-image.test.mts",
+			"devops/deploy/ecr-deploy/admin-repository-policy.mts",
+			"devops/deploy/ecr-deploy/admin-repository-policy.test.mts",
 		]) {
 			const changes = detectChanges([file]);
 			for (const [key, flags] of Object.entries(changes)) {
@@ -1505,9 +1516,15 @@ describe("merge-group workflow contract", () => {
 							? "skipped"
 							: "success";
 					}
-					if (expression === "needs.package_api.outputs.module_version")
+					if (
+						expression === "needs.package_api.outputs.module_version" ||
+						expression === "needs.package_admin.outputs.module_version"
+					)
 						return versions.amd64;
-					if (expression === "needs.package_api_arm64.outputs.module_version")
+					if (
+						expression === "needs.package_api_arm64.outputs.module_version" ||
+						expression === "needs.package_admin_arm64.outputs.module_version"
+					)
 						return versions.arm64;
 					if (
 						expression === "needs.package_website.outputs.module_version" ||
@@ -1583,6 +1600,7 @@ fi
 			"package_api",
 			"package_bulletin",
 			"package_admin",
+			"package_admin_arm64",
 			"validate_website_architectures",
 			"validate_api_architectures",
 			"validate_admin_architectures",

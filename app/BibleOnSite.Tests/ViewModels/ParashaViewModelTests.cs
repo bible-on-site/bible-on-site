@@ -397,6 +397,63 @@ public class ParashaViewModelTests
         fixture.Prefs.Get("divineNameMaskingEnabled", true).Should().BeFalse();
     }
 
+    /// <summary>
+    /// #2461: parasha rows resolve pasuk sizes from the effective פסוקים
+    /// factor (master × category percent) — not the bare master — so a
+    /// category-only change scales the reader like on the perek and masora
+    /// pages. The refresh is async: wait for the unit's Rows property change
+    /// after each preference edit.
+    /// </summary>
+    [Fact]
+    public async Task PasukFontPercent_Change_RebuildsRowsAtEffectiveFactor()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+        var unit = fixture.Model.Unit!;
+        unit.Rows.First(r => r.PasukFontSize > 0).PasukFontSize
+            .Should().Be(PasukDisplayItems.PasukFontSizeBase);
+
+        async Task ApplyPreferenceAsync(Action change)
+        {
+            var rowsUpdated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            void OnRowsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+            {
+                if (args.PropertyName == nameof(ParashaUnit.Rows))
+                {
+                    rowsUpdated.TrySetResult();
+                }
+            }
+
+            unit.PropertyChanged += OnRowsChanged;
+            try
+            {
+                change();
+                await rowsUpdated.Task.WaitAsync(TestContext.Current.CancellationToken);
+            }
+            finally
+            {
+                unit.PropertyChanged -= OnRowsChanged;
+            }
+        }
+
+        // A category-only change still reaches the rows: master 1.5 × פסוקים
+        // 50% → effective 0.75 → 18 × 0.75 = 13.5, marker 16 × 0.75 = 12.
+        await ApplyPreferenceAsync(() => fixture.Preferences.FontFactor = 1.5);
+        await ApplyPreferenceAsync(() => fixture.Preferences.PasukFontPercent = 50);
+        fixture.Model.FontFactor.Should().BeApproximately(0.75, 1e-9);
+        unit.Rows.First(r => r.PasukFontSize > 0).PasukFontSize
+            .Should().BeApproximately(PasukDisplayItems.PasukFontSizeBase * 0.75, 1e-9);
+        unit.Rows.First(r => r.PasukMarkerFontSize > 0).PasukMarkerFontSize
+            .Should().BeApproximately(PasukDisplayItems.PasukMarkerFontSizeBase * 0.75, 1e-9);
+
+        // Restoring 100% returns the rows to the master scale.
+        await ApplyPreferenceAsync(() => fixture.Preferences.PasukFontPercent = 100);
+        fixture.Model.FontFactor.Should().Be(1.5);
+        unit.Rows.First(r => r.PasukFontSize > 0).PasukFontSize
+            .Should().BeApproximately(PasukDisplayItems.PasukFontSizeBase * 1.5, 1e-9);
+    }
+
     [Fact]
     public async Task LoadPerushim_FiltersNotesToUnitBounds()
     {

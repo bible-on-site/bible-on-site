@@ -27,7 +27,9 @@ describe("RevalidationWarning", () => {
 
 		const { container } = render(
 			<QueryClientProvider
-				client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+				client={
+					new QueryClient({ defaultOptions: { queries: { retry: false } } })
+				}
 			>
 				<RevalidationWarning />
 			</QueryClientProvider>,
@@ -46,9 +48,7 @@ describe("RevalidationWarning", () => {
 		});
 		renderWarning();
 
-		expect(
-			await screen.findByText(/עדכון האתר נכשל/),
-		).toBeInTheDocument();
+		expect(await screen.findByText(/עדכון האתר נכשל/)).toBeInTheDocument();
 	});
 
 	it("names the config gap when the endpoint is not configured", async () => {
@@ -61,8 +61,6 @@ describe("RevalidationWarning", () => {
 		});
 		renderWarning();
 
-		expect(
-			await screen.findByText(/אינו מוגדר בשרת/),
-		).toBeInTheDocument();
+		expect(await screen.findByText(/אינו מוגדר בשרת/)).toBeInTheDocument();
 	});
 });

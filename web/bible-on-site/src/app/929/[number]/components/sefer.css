@@ -42,16 +42,49 @@ html[data-sefer-view]:not(:has(> body > .perek-layout)) {
 	will-change: transform, clip-path;
 }
 
+/* Keep the original pane content ready before the paper's crease moves.
+   A steady hint lets both faces reuse their rendering during consecutive turns.
+   Chrome can change glyph-edge smoothing in motion; text layout, font styles,
+   colors, controls and resting-page appearance stay intact. */
+.he-book .page--paper > .flipbook-page-scrollport {
+	will-change: opacity;
+}
+
 /* Skip covered pane painting while retaining its layout and existing masks.
    Keep page boxes available for back-face preparation; the library clears
-   the pane mask before exposing its content. */
+   the pane mask before exposing its content. Dormancy is marked only by the
+   class — the library never writes inline visibility — so no !important is
+   needed to win the cascade here. */
 .he-book .flipbook-page-scrollport.flipbook-layout-dormant {
-	visibility: hidden !important;
+	visibility: hidden;
 }
 
 /* Sefer pages are app-like panels — fixed headers/footers with inner
    scroll panes — so every page root carries the library's
    flipbook-page-bounded class (#279) and the scrollport never engages. */
+
+/* ===================================================================
+ * Spine-side in-leaf scrollbars (issue #2994)
+ * The library computes each leaf's scrollbar side:
+ *   .page[data-scrollbar-side=left]  → --flipbook-page-scroll-direction:rtl
+ *   .page[data-scrollbar-side=right] → --flipbook-page-scroll-direction:ltr
+ * — the `direction` value that puts a native scrollbar on that leaf's
+ * inner (spine-facing) edge. Because Sefer pages are flipbook-page-
+ * bounded, the library's own scrollport never consumes that token, so
+ * the bounded inner panes adopt it on their scrolling element while
+ * their content children keep direction:rtl.
+ * --sefer-spine-row is the matching main axis for flex-wrap scrollers
+ * (the perush chip list): direction:ltr puts the bar on the right edge,
+ * so row-reverse restores Hebrew first-item-at-right order, and vice
+ * versa.
+ * =================================================================== */
+.page[data-scrollbar-side="right"] {
+	--sefer-spine-row: row-reverse;
+}
+
+.page[data-scrollbar-side="left"] {
+	--sefer-spine-row: row;
+}
 
 /* Toolbar: base styles now come from html-flip-book-react/styles.css.
    Only site-specific overrides below. */
@@ -104,6 +137,19 @@ html[data-sefer-view]:not(:has(> body > .perek-layout)) {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* Spine-side scrollbar (#2994): the TOC leaf scrolls through its bounded
+   .toc-page__scroll pane (the library scrollport stays disengaged), so
+   the pane adopts the leaf's scroll direction while the entry list keeps
+   RTL order — matching every other in-leaf scroller. */
+.toc-page__scroll {
+	overscroll-behavior: contain;
+	direction: var(--flipbook-page-scroll-direction, rtl);
+}
+
+.toc-page__scroll > * {
+	direction: rtl;
 }
 
 @media (prefers-color-scheme: dark) {

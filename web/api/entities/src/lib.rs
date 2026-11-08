@@ -1,6 +1,8 @@
 pub mod article;
 pub mod article_covering_source;
 pub mod article_dedication;
+pub mod article_hebrew_date;
+pub mod article_moed;
 pub mod author;
 pub mod dedication;
 pub mod dedication_dedication_type;
@@ -8,6 +10,9 @@ pub mod dedication_type;
 pub mod helek;
 pub mod helek_dedication;
 pub mod masora_dedication;
+pub mod moed;
+pub mod moed_range;
+pub mod moed_section;
 pub mod parasha_dedication;
 pub mod perek;
 pub mod perek_dedication;

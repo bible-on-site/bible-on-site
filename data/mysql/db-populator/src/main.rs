@@ -300,6 +300,10 @@ async fn run(cli: Cli) -> Result<()> {
 
         apply_article_covering_source_upgrade(&mut conn, base_path).await?;
 
+        // Recurring Hebrew-date article overrides (#3098); standalone
+        // idempotent table keyed by (hebrew_month, hebrew_day).
+        apply_article_hebrew_date_upgrade(&mut conn, base_path).await?;
+
         apply_perek_pasuk_count_upgrade(&mut conn, base_path).await?;
 
         apply_article_content_hash_upgrade(&mut conn, base_path).await?;
@@ -325,6 +329,10 @@ async fn run(cli: Cli) -> Result<()> {
 
         // Website push subscriptions (#1096); standalone, idempotent table.
         apply_web_push_upgrade(&mut conn, base_path).await?;
+
+        // מועדים על הפרק (#3101): the catalogue/section/range/link tables;
+        // needs tanah_perek (static) and tanah_article (dynamic) to exist.
+        apply_moed_upgrade(&mut conn, base_path).await?;
     }
 
     if !cli.skip_data {
@@ -336,6 +344,19 @@ async fn run(cli: Cli) -> Result<()> {
         // The upgrade is re-applied here so `mysql-populate-data-only`
         // upgrades databases whose structure predates the column.
         apply_perek_pasuk_count_data(&mut conn, base_path).await?;
+
+        // Re-applied here so `mysql-populate-data-only` creates the moed
+        // tables on databases populated before this schema, then the
+        // initial catalogue. Runs BEFORE tanah_test_data.sql: the test
+        // fixtures link test articles into seeded moed rows (#3101).
+        apply_moed_upgrade(&mut conn, base_path).await?;
+        apply_moed_seed(&mut conn, base_path).await?;
+
+        // tanah_test_data.sql inserts Hebrew-date override fixtures
+        // (#3098): re-apply the idempotent table upgrade here so
+        // `mysql-populate-data-only` creates it on databases whose
+        // structure predates the table, before any fixture references it.
+        apply_article_hebrew_date_upgrade(&mut conn, base_path).await?;
 
         if !cli.skip_tanah_test_data {
             let data_path = base_path.join(&cli.data_script);
@@ -598,6 +619,18 @@ async fn apply_article_covering_source_upgrade(
     apply_article_index_upgrade(conn, base_path).await
 }
 
+async fn apply_article_hebrew_date_upgrade(
+    conn: &mut MySqlConnection,
+    base_path: &Path,
+) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_article_hebrew_date_upgrade.sql"),
+        "article-hebrew-date-upgrade",
+    )
+    .await
+}
+
 async fn apply_article_index_upgrade(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
     execute_script(
         conn,
@@ -692,6 +725,25 @@ async fn apply_web_push_upgrade(conn: &mut MySqlConnection, base_path: &Path) ->
         "web-push-upgrade",
     )
     .await
+}
+
+/// Creates the מועדים על הפרק tables (#3101): the moed catalogue, ordered
+/// reading sections/ranges and the article<->moed junction. Idempotent and
+/// non-destructive, so it runs in both phases.
+async fn apply_moed_upgrade(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_moed_upgrade.sql"),
+        "moed-upgrade",
+    )
+    .await
+}
+
+/// Seeds the initial moed catalogue (moadim, sections, ranges and the two
+/// issue-named article links). Every statement is existence-guarded so
+/// re-running and editor-authored content are preserved.
+async fn apply_moed_seed(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
+    execute_script(conn, &base_path.join("../tanah_moed_data.sql"), "moed-seed").await
 }
 
 /// Re-applies the idempotent pasuk_count upgrade and loads the generated

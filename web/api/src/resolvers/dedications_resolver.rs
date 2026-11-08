@@ -2,6 +2,7 @@ use async_graphql::{Context, ErrorExtensions, Object, Result};
 use chrono::Utc;
 
 use crate::common::auth::ApiAuth;
+use crate::common::website_revalidate::WebsiteRevalidator;
 use crate::dtos::dedication::{
     CreateDedicationInput, Dedication, DedicationContextInput, UpdateDedicationInput,
 };
@@ -75,16 +76,17 @@ impl DedicationsMutation {
         ctx.data::<ApiAuth>()?
             .authorize_dedication_manager()
             .map_err(|e| e.extend())?;
-        Ok(dedications_service::create(
+        let outcome = dedications_service::create(
             ctx.data::<Database>()?,
+            &WebsiteRevalidator::from_env(),
             input.subject,
             input.expires_at,
             input.purpose_type_ids.unwrap_or_default(),
             input.targets.unwrap_or_default(),
         )
         .await
-        .map_err(|e| e.extend())?
-        .into())
+        .map_err(|e| e.extend())?;
+        Ok(Dedication::from_write(outcome))
     }
 
     /// Updates subject/expiry and optionally replaces the purpose and target
@@ -99,12 +101,15 @@ impl DedicationsMutation {
         ctx.data::<ApiAuth>()?
             .authorize_dedication_manager()
             .map_err(|e| e.extend())?;
-        Ok(
-            dedications_service::update(ctx.data::<Database>()?, id, input)
-                .await
-                .map_err(|e| e.extend())?
-                .into(),
+        let outcome = dedications_service::update(
+            ctx.data::<Database>()?,
+            &WebsiteRevalidator::from_env(),
+            id,
+            input,
         )
+        .await
+        .map_err(|e| e.extend())?;
+        Ok(Dedication::from_write(outcome))
     }
 
     /// Deletes a dedication and all its assignments. Returns false when the
@@ -114,7 +119,7 @@ impl DedicationsMutation {
         ctx.data::<ApiAuth>()?
             .authorize_dedication_manager()
             .map_err(|e| e.extend())?;
-        dedications_service::remove(ctx.data::<Database>()?, id)
+        dedications_service::remove(ctx.data::<Database>()?, &WebsiteRevalidator::from_env(), id)
             .await
             .map_err(|e| e.extend())
     }
@@ -251,6 +256,12 @@ mod tests {
                     subject: "old".into(),
                     expires_at: None,
                 }]])
+                // Pre-write link read (old ∪ new invalidation payload).
+                .append_query_results::<
+                    std::collections::BTreeMap<String, sea_orm::Value>,
+                    Vec<_>,
+                    _,
+                >([vec![]])
                 .append_exec_results([MockExecResult {
                     last_insert_id: 0,
                     rows_affected: 1,
@@ -282,6 +293,12 @@ mod tests {
         for rows_affected in [0, 1] {
             let db = Database::from_connection(
                 MockDatabase::new(DatabaseBackend::MySql)
+                    // Pre-delete link read (old-side invalidation payload).
+                    .append_query_results::<
+                        std::collections::BTreeMap<String, sea_orm::Value>,
+                        Vec<_>,
+                        _,
+                    >([vec![]])
                     .append_exec_results((0..9).map(|_| MockExecResult {
                         last_insert_id: 0,
                         rows_affected,
