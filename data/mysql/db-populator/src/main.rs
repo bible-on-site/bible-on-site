@@ -1649,6 +1649,17 @@ SELECT 1";
             apply_article_index_upgrade(&mut conn, base_path).await?;
             apply_article_index_upgrade(&mut conn, base_path).await?;
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(DISTINCT INDEX_NAME) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_article' AND INDEX_NAME IN ('idx_article_perek', 'idx_article_author')").fetch_one(&mut conn).await?, 2);
+            // The perek lookups order by priority, so the index must carry both
+            // columns and resolve the filter and the sort in one range scan.
+            assert_eq!(query_scalar::<MySql, String>("SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_article' AND INDEX_NAME = 'idx_article_perek'").fetch_one(&mut conn).await?, "perek_id,priority");
+
+            // Simulate the intermediate single-column index shipped before the
+            // priority column and upgrade it repeatedly.
+            raw_sql("ALTER TABLE tanah_article DROP INDEX idx_article_perek, ADD KEY idx_article_perek (perek_id);")
+                .execute(&mut conn).await?;
+            apply_article_index_upgrade(&mut conn, base_path).await?;
+            apply_article_index_upgrade(&mut conn, base_path).await?;
+            assert_eq!(query_scalar::<MySql, String>("SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_article' AND INDEX_NAME = 'idx_article_perek'").fetch_one(&mut conn).await?, "perek_id,priority");
 
             // Simulate the pre-pasuk-count schema and upgrade it repeatedly;
             // the generated data file then fills the canonical bound for the
