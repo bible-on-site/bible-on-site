@@ -55,6 +55,7 @@ export function Footer() {
 					<Image
 						src="/icons/github.svg"
 						alt="GitHub"
+						unoptimized
 						width={18}
 						height={18}
 						className={styles.githubIcon}
