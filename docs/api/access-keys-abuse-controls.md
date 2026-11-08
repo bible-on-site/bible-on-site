@@ -9,6 +9,12 @@ already-installed app releases on Android, iOS, Mac Catalyst and Windows.
 
 Inspected: `master` at `ab4fe9cc6` (supersedes the issue baseline `70d08d6d`;
 behavior noted below is from the newer tree unless marked otherwise).
+Revised 2026-11-08 (PR review): the embedded signing-key design proposed in
+review (option C2 below) was evaluated against `master` `1fe2ef272`; the
+packaging, auth and client claims were re-verified in code
+(`app-package.yml`, `app/devops/Build.Package.cs`, `AppConfig.cs`,
+`BaseGraphQLService.cs`, `web/api/src/common/auth.rs`,
+`web/api/src/startup/`).
 Related issues: #3065 (immediate Playground removal + dev-route fail-closed —
 do **not** gate it on this research), #3069 (admin-boundary cleanup — a
 public-read credential must never authorize admin operations).
@@ -40,6 +46,15 @@ packs from GitHub releases), so API traffic is articles, dedications and
 Tanahpedia — but `starter` alone already returns all authors + article
 headers + a 929-perek counter array, i.e. a large slice of the corpus in one
 request.
+
+**Build-time secret injection already exists for this app.** CI secrets are
+compiled into every native package and never stored in the repo:
+`MAPBOX_PUBLIC_TOKEN` flows through `app-package.yml` env →
+`PackagePrepare` → `WriteMapboxTokenFile()` (`app/devops/Build.Package.cs`)
+into the gitignored `Resources/Raw/mapbox-token.txt`, read at runtime by
+`AppConfig`; `api-config.txt` uses the same channel for the API URL override.
+An API signing key would reuse this exact path — this is what makes the C2
+design below cheap to try.
 
 ## 2. Current controls (verified)
 
@@ -101,9 +116,9 @@ request.
 | Compute DoS via alias amplification, deep nesting, `searchArticles` floods | Single 0.25-vCPU task; a few expensive queries can starve it | **High** — easiest kill vector |
 | Connection/body floods | NGINX default 1 MB body cap is the only limit; no conn caps | High-ish, mitigated by TLS fronting |
 | Brute-forcing the revision/dedication bearer keys | Constant-time compare, fail-closed, but **zero throttling** on attempts | Low probability / high impact |
-| Credential leak of a future app key | Extractable by definition (RFC 8252 §8.5); must be treated as public | Structural |
+| Credential leak of a future app key | Extractable by definition (RFC 8252 §8.5) — and concretely so in this app: Android Release embeds the .NET IL assemblies (`EmbedAssembliesIntoApk` + IL deliberately kept for JIT fallback, `BibleOnSite.csproj`) and the `Resources/Raw` asset is plaintext inside the APK/.app/MSIX; iOS AOT raises the effort but the runtime must still read the file. Any embedded key is effectively public on release | Structural |
 | Direct origin bypass (task public IP) | SG says VPC-only; must verify live SG | Guardrail check |
-| Forced-upgrade risk of any auth rollout | No version floor exists; old builds break permanently if gated | **Blocks any breaking design** |
+| Forced-upgrade risk of any auth rollout | No version floor exists; old builds break permanently if gated | **Blocks any breaking design** — only credential shapes that keep serving unsigned traffic (C2 observe mode, D/E anonymous lane, H) are safe |
 
 ## 4. Options evaluated
 
@@ -111,7 +126,8 @@ request.
 | --- | --- | --- |
 | **A. Query/resource budgets** (schema depth+complexity limits, alias control, introspection off, body cap, timeout, resolver-cost awareness) | Converts "unbounded work per request" into a hard ceiling; kills the cheapest DoS vectors with **zero client changes** | **Adopt first.** async-graphql `Schema::build().limit_depth(d).limit_complexity(c)`; pick ceilings from the app's real queries (measure, then set e.g. depth ~8–10, complexity a few hundred). Disable introspection behind `PROFILE=prod` (land via/alongside #3065). Bound execution with `tokio::time::timeout` around `schema.execute` in `graphql_request` (or a request timeout middleware) — `HttpServer::keep_alive` only bounds idle connections and does not cap resolver duration. |
 | **B. Edge rate limiting on api.* NGINX blocks** | Per-IP + global request ceilings independent of query cost; absorbs startup bursts gracefully if thresholds are right | **Adopt early, observe-first.** Mirror the website pattern: `limit_req_zone $remote_addr` (per-IP) + a global zone, `burst` sized for app cold-start bursts (`starter` + perek prefetch), `limit_req_status 429`. Start generous and log-driven; mobile carrier-NAT means per-IP must be lenient. No code change in app or API. |
-| **C. Static shared app key in the binary** | A public client identifier; coarse partitioning; a tiny hurdle for the laziest curl | **Do not adopt as a control.** Extractable/replayable; it authenticates a *distribution*, not a call. Optional later as a low-value telemetry header (`x-app-channel`) — never a quota or authorization boundary. |
+| **C. Static shared app key sent as a header (unsigned bearer)** | A public client identifier; coarse partitioning; a tiny hurdle for the laziest curl | **Do not adopt as a control.** Extractable/replayable and binds nothing to the request — strictly weaker than its signed variant (C2). Optional later as a low-value telemetry header (`x-app-channel`) — never a quota or authorization boundary. |
+| **C2. Build-time-injected request-signing key (HMAC)** — a key held in CI secrets (never in the repo), compiled into each native build; the app uses it to *sign* requests; the API verifies the signature server-side | Cohort identification ("this request carries a valid signature from key-id X"), request-integrity binding (signature covers method + path + body hash), a bounded replay window (timestamp, optionally nonce), per-cohort revocation (drop a leaked key-id to the anonymous lane), and *differential* treatment (the signed lane can earn more headroom) — all with zero user accounts and no issuance protocol | **Conditionally adopt — the cheapest client-facing credential available, but it is obscurity plus policy, not a security boundary.** The key is extractable from every shipped package (§3); once extracted it signs anything — it proves *key possession*, not an unmodified app, and does nothing to bound per-request work (A stays mandatory). TLS already covers wire integrity; signing's real value is that the API can distinguish known-build traffic from anonymous curl and can revoke a cohort's *privileges* without stranding its *access*. The injection path already exists (packaged `Resources/Raw` secret, §1); verification is one actix middleware + `hmac`/`sha2` crates; the client side is one `DelegatingHandler` at the single `GraphQLHttpClient` construction — mechanics in §5.1. Works on all four platforms including sideloaded Android and Windows — no attestation gaps. **Adopt observe-first; any enforcement waits behind the same adoption gate as every client-facing change.** |
 | **D. Anonymous short-lived session tokens** (open issuance endpoint → signed token → metered reads) | Per-installation metering, expiry, revocation without user accounts | **Defer.** An open bootstrap is itself scriptable, so tokens meter honest clients more than they stop abusers; adds issuance/refresh/offline-retry complexity to every app release train. Revisit only if A+B insufficient. If built: opaque signed token (HMAC or JWT, `aud=api-read`, expiry ~hours), issuance itself rate-limited, renewal idempotent, never sent per-verse. |
 | **E. Attestation (Play Integrity standard / App Attest) + session binding** | Best available evidence a call came from an unmodified store-installed app | **Defer, non-universal.** No Windows equivalent; Mac Catalyst support must be verified per distribution path; sideloaded/no-Play-account Android users get weak/no verdicts — and we committed to keep them reading. So attested lane can only ever be a *preferred* lane, with a permanent bounded anonymous read lane — which means budgets (A) must exist anyway. Prototype only if abuse persists after A+B; server must verify challenge, nonce/requestHash, package+signature, freshness, and treat "unsupported/outage" ≠ "tampered". |
 | **F. Persisted-operation allowlist / known-operation manifest** | Anonymous traffic constrained to the ~17 known read operations; arbitrary introspection/crafted queries rejected | **Defer; strongest of the deferred options.** App already sends `operationName`; a versioned manifest of allowed operations × per-app-version gives real work reduction. Costs: manifest maintenance across all shipped versions + docs/tooling queries. `operationName` alone is not an allowlist — must bind to stored query documents (hash or exact text). Revisit if scraping via arbitrary queries becomes the residual problem after A. |
@@ -124,18 +140,87 @@ request.
 the schema and observe-mode rate limits on the api NGINX blocks; #3065 removes
 Playground/introspection-adjacent tooling independently. No client ships.
 
-**Phase 1 (measure):** dashboards on per-op cost, 429s, top IPs/UAs; decide
-whether residual abuse justifies F (persisted-ops manifest) or D.
+**Phase 1 (measure + first credential experiment):** dashboards on per-op
+cost, 429s, top IPs/UAs. In parallel, land **C2 in observe mode**: package the
+signing key, ship app builds that sign, and have the API verify-and-*count*
+signed vs unsigned traffic — no enforcement. It is the lowest-cost
+client-facing credential we have (proven packaging path, one handler + one
+middleware, all platforms, backward-compatible by construction since unsigned
+traffic stays anonymous), and its telemetry answers the adoption question D/E
+would otherwise have to bootstrap. If the data instead shows arbitrary-query
+scraping as the residual problem, F outranks further credential work.
 
-**Phase 2 (only if evidence demands):** prototype D or E on Android+iOS with a
+**Phase 2 (only if evidence demands):** differential treatment for the signed
+lane (e.g. higher budgets for verified signatures — the signature informs
+limits, it never bypasses them); or prototype D or E on Android+iOS with a
 permanent anonymous read lane; never a universal requirement. G only with
 explicit approval.
 
-**Never:** a shared secret in the app binary as an enforcement gate; a native
-credential that can reach admin/mutation scope; URL-carried keys; UA/Origin as
-authorization.
+**Never:** treat an embedded client key as confidential or as proof of an
+unmodified app — it is extractable by design; let a signature satisfy
+`authorize_revision_manager`/`authorize_dedication_manager` or reach any
+admin/mutation scope; gate *access* on signatures while no min-version floor
+exists (the unsigned lane is permanent by design — that is C2's rollback
+story); carry keys in URLs; write key material or signatures to logs; use
+UA/Origin as authorization.
 
-## 5. Request flow if D/E is ever built (reference design, not current plan)
+## 5. Reference designs for deferred client-facing options
+
+### 5.1 Embedded signing lane (C2) — mechanics if adopted
+
+- **Key material & injection.** The server holds verification keys as a
+  `key-id → secret` map in env/SSM (one entry to start; N-1 overlap during
+  rotation). The client copy is *not* a secret — assume it is public on
+  release; for symmetric HMAC the server-side verification material is the
+  same value, so a compromised build means rotating that `key-id`. Injection
+  reuses the packaged-asset path proven by `mapbox-token.txt` (§1): a new
+  GitHub secret (e.g. `APP_API_SIGNING_KEY`) → env on each `Package` step in
+  `app-package.yml` → devops writes `Resources/Raw/api-signing-key.txt`
+  (gitignored) → `AppConfig` reads it in `InitializeAsync`. DEBUG/dev builds
+  package an empty file → unsigned → anonymous lane; an env override keeps
+  local signing tests possible. Per-platform or per-release `key-id`s can be
+  added later for finer cohort attribution.
+- **Signature format.** Canonical string
+  `v1\n<key-id>\n<METHOD>\n<path>\n<unix-timestamp>\n<nonce>\n<hex-sha256(body)>`,
+  HMAC-SHA256, hex-encoded. Headers: `x-api-key-id`, `x-api-timestamp`,
+  `x-api-nonce`, `x-api-signature`. Client: one `DelegatingHandler` via
+  `GraphQLHttpClientOptions.HttpMessageHandler` at the single
+  `GraphQLHttpClient` construction in `BaseGraphQLService` — it buffers the
+  JSON body once to hash it; all ~18 operations are covered with zero
+  call-site changes (the app sends queries only today). Server: verification
+  needs the raw body, which the `GraphQLRequest` extractor consumes — implement
+  as an actix middleware that buffers + verifies before the handler, or take
+  `web::Bytes` in `graphql_request` and parse manually. Adds `hmac` + `sha2`
+  crates (not currently dependencies); verification cost is microseconds —
+  irrelevant on the 0.25-vCPU task. Keep verification out of NGINX: it cannot
+  hash bodies cheaply; NGINX stays responsible for option B.
+- **Freshness & replay.** Timestamp tolerance ±5 min to absorb device clock
+  skew. Nonce cache: optional bounded TTL set keyed `(key-id, nonce)` — at
+  current scale (single task, modest QPS) a few-thousand-entry map is
+  negligible; if the service ever runs more than one task the cache needs
+  shared state — or drop nonces. Honest trade-off: for public reads, replay
+  inside the window ≈ re-query, which is low harm; the nonce mainly matters
+  if the lane later gates costlier operations. Timestamp-only is an
+  acceptable v1.
+- **Verification outcome.** Missing/invalid/expired signature ⇒ **anonymous
+  lane, not 401** — unsigned traffic is legitimate (pre-C2 builds, dev
+  builds). An env flag (`API_REQUIRE_SIGNATURE=observe|enforce`) can exist for
+  a future hard gate, but enforce mode is a product decision that requires a
+  min-version floor we do not have.
+- **Rotation & compromise response.** Rotate by shipping builds with a new
+  `key-id` and adding it server-side; keep N-1 accepted during adoption, then
+  retire. Compromise: remove the `key-id` server-side → affected builds
+  silently degrade to anonymous — graceful *because* the unsigned lane
+  persists. This is the honest meaning of per-build revocation: a cohort's
+  *signed status* is revocable; its *access* is not — old apps cannot be
+  force-updated, so only privilege revocation exists.
+- **Scope isolation.** A valid signature must never satisfy
+  `authorize_revision_manager`/`authorize_dedication_manager` — the same
+  fail-closed `ApiAuth` split as today (`api-sign` is its own scope). Signed
+  requests get **no exemption** from A/B budgets: the signature informs
+  limits, it never bypasses them.
+
+### 5.2 Session tokens + attestation (D/E) — reference flow, not current plan
 
 1. App start → `POST /session` (open, rate-limited per IP+device-claim) returns
    a short-lived signed `api-read` token bound to a random per-install
@@ -160,6 +245,12 @@ authorization.
   only to the deferred D/E token design; `api-read`-type credential must fail
   `*_manager` checks; anonymous fails mutations, `dedicationsAdmin`,
   `tanahpediaEntryRevisions`.
+- Signature lane (if C2 lands): valid signature marks the signed lane;
+  missing/invalid signature, wrong `key-id`, expired timestamp, tampered body
+  and (if enabled) replayed nonce all degrade to anonymous — never 401 in
+  observe mode; a **valid** signature still fails `*_manager` scopes;
+  rotation overlap accepts N-1 then drops it to anonymous; unsigned → 401
+  only behind the `API_REQUIRE_SIGNATURE=enforce` flag.
 - Compatibility: app client without new headers works; both api domains; HEAD/GET
   `/health` + `/health/ready` unchanged; compression unchanged.
 - NGINX (staging): burst tolerance ≥ app cold-start pattern; shared-NAT
@@ -185,10 +276,11 @@ authorization.
    rebuild + redeploy — make them env-configurable so tightening/rollback is
    an env change + task restart; NGINX limits are config-reload — document
    both.
-3. **Adoption gate for anything client-facing** — only if a later phase adds
-   headers/tokens: ship app support first, monitor adoption; enforcement
-   requires a separate product decision and must never strand old builds
-   (anonymous lane persists forever by design).
+3. **Adoption gate for anything client-facing** — C2 lands observe-only
+   first (app signs, API counts signed vs unsigned); differential treatment
+   or any hard gate requires a separate product decision and must never
+   strand old builds (the unsigned lane persists forever by design; a
+   signature *access* gate without a min-version floor is off the table).
 4. **Rollback** — each control independently reversible: NGINX `reload`,
    env var for introspection/depth, no stored state to unwind.
 
@@ -202,4 +294,6 @@ authorization.
 - Live-config verification: ECS SG :3003 ingress = VPC CIDR only;
   `client_max_body_size` effective value on api hosts.
 - (Conditional) persisted-operations manifest; (conditional) anonymous
-  session-token prototype; (conditional) attestation spike on Android/iOS.
+  session-token prototype; (conditional) attestation spike on Android/iOS;
+  (conditional) C2 prototype — signing-key packaging + actix verification
+  middleware + app `DelegatingHandler`, observe-only (D2, app+API).
