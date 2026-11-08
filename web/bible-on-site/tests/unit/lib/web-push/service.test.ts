@@ -10,10 +10,8 @@ const mockSend = jest.fn();
 const mockSetVapid = jest.fn();
 jest.mock("web-push", () => ({
 	__esModule: true,
-	default: {
-		sendNotification: (...args: unknown[]) => mockSend(...args),
-		setVapidDetails: (...args: unknown[]) => mockSetVapid(...args),
-	},
+	sendNotification: (...args: unknown[]) => mockSend(...args),
+	setVapidDetails: (...args: unknown[]) => mockSetVapid(...args),
 	WebPushError: class extends Error {
 		constructor(public statusCode: number) {
 			super(`status ${statusCode}`);

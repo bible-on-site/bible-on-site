@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import webpush, { WebPushError } from "web-push";
+import { sendNotification, setVapidDetails, WebPushError } from "web-push";
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { query } from "@/lib/api-client";
 
@@ -120,7 +120,7 @@ export async function sendDailyPerek(
 	perekId: number,
 	endpoint?: string,
 ): Promise<DailySendResult> {
-	webpush.setVapidDetails(
+	setVapidDetails(
 		process.env.VAPID_SUBJECT as string,
 		process.env.VAPID_PUBLIC_KEY as string,
 		process.env.VAPID_PRIVATE_KEY as string,
@@ -139,7 +139,7 @@ export async function sendDailyPerek(
 		await Promise.all(
 			rows.slice(i, i + SEND_BATCH_SIZE).map(async (row) => {
 				try {
-					await webpush.sendNotification(
+					await sendNotification(
 						{
 							endpoint: row.endpoint,
 							keys: { p256dh: row.p256dh, auth: row.auth },

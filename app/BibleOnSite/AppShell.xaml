@@ -65,6 +65,7 @@
                                             Title="על הפרק"
                                             Subtitle="לימוד תנ&quot;ך יומי"
                                             AutomationId="FlyoutAlHaperek"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsAlHaperekCurrent}"
                                             Activated="OnAlHaperekTapped"/>
 
                     <!-- תנכפדיה -->
@@ -72,6 +73,7 @@
                                             Title="תנכפדיה"
                                             Subtitle="אנציקלופדיה לתנ&quot;ך"
                                             AutomationId="FlyoutTanahpedia"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsTanahpediaCurrent}"
                                             Activated="OnTanahpediaTapped"/>
 
                     <!-- לוח לימוד יומי -->
@@ -79,6 +81,7 @@
                                             Title="לוח לימוד יומי"
                                             Subtitle="הפרק היומי בלוח השנה"
                                             AutomationId="FlyoutLearningCalendar"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsLearningCalendarCurrent}"
                                             Activated="OnLearningCalendarTapped"/>
 
                     <!-- מסורה על הפרק — opt-in entry gated by the מסורה preference (#2181) -->
@@ -86,6 +89,7 @@
                                             Title="מסורה על הפרק"
                                             Subtitle="חלוקת פרשיות פתוחה וסתומה"
                                             AutomationId="FlyoutMasora"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsMasoraCurrent}"
                                             IsVisible="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=ShowMasoraEntry}"
                                             Activated="OnMasoraTapped"/>
 
@@ -94,6 +98,7 @@
                                             Title="פרשה על הפרק"
                                             Subtitle="קריאת התורה וההפטרה"
                                             AutomationId="FlyoutParasha"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsParashaCurrent}"
                                             Activated="OnParashaTapped"/>
 
                     <!-- רבנים -->
@@ -101,6 +106,7 @@
                                             Title="רבנים"
                                             Subtitle="כותבים בתכנית"
                                             AutomationId="FlyoutAuthors"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsAuthorsCurrent}"
                                             Activated="OnAuthorsTapped"/>
 
                     <!-- עלון יומי — join cards (#2806) -->
@@ -108,6 +114,7 @@
                                             Title="עלון יומי"
                                             Subtitle="במייל, בטלגרם ובווטסאפ"
                                             AutomationId="FlyoutDailyBulletin"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsDailyBulletinCurrent}"
                                             Activated="OnDailyBulletinTapped"/>
 
                     <!-- תנאי שימוש -->
@@ -115,6 +122,7 @@
                                             Title="תנאי שימוש"
                                             Subtitle="הצהרות פרטיות ונגישות"
                                             AutomationId="FlyoutTerms"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsTermsCurrent}"
                                             Activated="OnTermsTapped"/>
 
                     <!-- העדפות -->
@@ -122,6 +130,7 @@
                                             Title="העדפות"
                                             Subtitle="הגדרות משתמש"
                                             AutomationId="FlyoutPreferences"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsPreferencesCurrent}"
                                             Activated="OnPreferencesTapped"/>
 
                     <!-- צור קשר -->
@@ -129,6 +138,7 @@
                                             Title="צור קשר"
                                             Subtitle="צוות התכנית"
                                             AutomationId="FlyoutContact"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsContactCurrent}"
                                             Activated="OnContactTapped"/>
 
                     <!-- תרומות -->
@@ -136,6 +146,7 @@
                                             Title="תרומות"
                                             Subtitle="תמיכה בקיום התכנית"
                                             AutomationId="FlyoutDonations"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsDonationsCurrent}"
                                             Activated="OnDonationsTapped"/>
                 </VerticalStackLayout>
             </ScrollView>

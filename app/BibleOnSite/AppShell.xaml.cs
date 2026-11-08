@@ -9,7 +9,7 @@ using UIKit;
 
 namespace BibleOnSite;
 
-public partial class AppShell : Shell
+public partial class AppShell : Shell, Helpers.IAdaptiveNavPane
 {
 	public AppShell()
 	{
@@ -27,26 +27,28 @@ public partial class AppShell : Shell
 		FlyoutHeader = null;
 #endif
 
-		// Register routes for pages that are navigated to with parameters
-		Routing.RegisterRoute("ArticlesPage", typeof(ArticlesPage));
-		Routing.RegisterRoute("AuthorsPage", typeof(AuthorsPage));
-		Routing.RegisterRoute("articleDetail", typeof(ArticleDetailPage));
-		Routing.RegisterRoute("ContactPage", typeof(ContactPage));
-		Routing.RegisterRoute("DailyBulletinPage", typeof(DailyBulletinPage));
-		Routing.RegisterRoute("DonationsPage", typeof(DonationsPage));
-		Routing.RegisterRoute("TosPage", typeof(TosPage));
-		Routing.RegisterRoute("PreferencesPage", typeof(PreferencesPage));
-		Routing.RegisterRoute("TanahpediaPage", typeof(TanahpediaPage));
-		Routing.RegisterRoute("tanahpediaCategory", typeof(TanahpediaEntityTypePage));
-		Routing.RegisterRoute("tanahpediaEntry", typeof(TanahpediaEntryPage));
+		// Register routes for pages that are navigated to with parameters —
+		// the same AppRoutes constants the flyout destination map resolves
+		// (#2766), so registration and selection can never drift apart.
+		Routing.RegisterRoute(AppRoutes.Articles, typeof(ArticlesPage));
+		Routing.RegisterRoute(AppRoutes.Authors, typeof(AuthorsPage));
+		Routing.RegisterRoute(AppRoutes.ArticleDetail, typeof(ArticleDetailPage));
+		Routing.RegisterRoute(AppRoutes.Contact, typeof(ContactPage));
+		Routing.RegisterRoute(AppRoutes.DailyBulletin, typeof(DailyBulletinPage));
+		Routing.RegisterRoute(AppRoutes.Donations, typeof(DonationsPage));
+		Routing.RegisterRoute(AppRoutes.Terms, typeof(TosPage));
+		Routing.RegisterRoute(AppRoutes.Preferences, typeof(PreferencesPage));
+		Routing.RegisterRoute(AppRoutes.Tanahpedia, typeof(TanahpediaPage));
+		Routing.RegisterRoute(AppRoutes.TanahpediaCategory, typeof(TanahpediaEntityTypePage));
+		Routing.RegisterRoute(AppRoutes.TanahpediaEntryRoute, typeof(TanahpediaEntryPage));
 		Routing.RegisterRoute(AppRoutes.RecitationPreferences, typeof(RecitationPreferencesPage));
 		Routing.RegisterRoute(AppRoutes.DisplayPreferences, typeof(DisplayPreferencesPage));
 		Routing.RegisterRoute(AppRoutes.PerekPreferences, typeof(PerekPreferencesPage));
 		Routing.RegisterRoute(AppRoutes.ExtensionPacks, typeof(ExtensionPacksPage));
 		Routing.RegisterRoute(AppRoutes.SoundPreferences, typeof(SoundPreferencesPage));
 		Routing.RegisterRoute(AppRoutes.SupportPreferences, typeof(SupportPreferencesPage));
-		Routing.RegisterRoute("ParashaListPage", typeof(ParashaListPage));
-		Routing.RegisterRoute("ParashaPage", typeof(ParashaPage));
+		Routing.RegisterRoute(AppRoutes.ParashaList, typeof(ParashaListPage));
+		Routing.RegisterRoute(AppRoutes.Parasha, typeof(ParashaPage));
 		Routing.RegisterRoute(AppRoutes.LearningCalendar, typeof(LearningCalendarPage));
 		Routing.RegisterRoute(AppRoutes.CalendarReader, typeof(PerekPage));
 		Routing.RegisterRoute(AppRoutes.SearchReader, typeof(PerekPage));
@@ -65,7 +67,156 @@ public partial class AppShell : Shell
 		// Android override changes, not only to pages navigated to later (#2467).
 		WeakPreferencesSubscription.Subscribe(this, PreferencesService.Instance,
 			static shell => shell.ApplyBackChrome());
+
+		// The flyout's selected-destination marker tracks the current page
+		// (#2766). PropertyChanged — not Navigated — also covers the startup
+		// content swap, which never raises a navigation.
+		PropertyChanged += OnShellPropertyChanged;
 	}
+
+	private void OnShellPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+	{
+		if (e.PropertyName == nameof(CurrentPage))
+		{
+			UpdateSelectedDestination();
+		}
+		else if (e.PropertyName == nameof(FlyoutIsPresented) &&
+			_navPane.Locked && !_navPane.PanePinned && FlyoutIsPresented)
+		{
+			// The platform's locked pane materializes open and can sync
+			// FlyoutIsPresented back to true; while the user left it
+			// collapsed, the pane stays collapsed (#2766).
+			FlyoutIsPresented = false;
+		}
+	}
+
+	private void UpdateSelectedDestination() =>
+		ViewModels.FlyoutMenuState.Instance.CurrentDestination =
+			ViewModels.FlyoutMenuState.DestinationForLocation(CurrentState.Location.OriginalString);
+
+	#region Adaptive navigation pane (#2766)
+
+	/// <summary>Preference storing the desktop nav pane's collapse choice.</summary>
+	private const string NavPanePinnedPreferenceKey = "BibleOnSite.WindowsNavPanePinned";
+
+	/// <summary>
+	/// Locked/pinned state for the adaptive navigation pane. <c>Locked</c>
+	/// stays false on touch platforms and on narrow Windows windows — only
+	/// <see cref="ApplyNavPaneWidth"/> (driven by the Windows chrome layer)
+	/// ever sets it. <c>PanePinned</c> is the user's collapse choice,
+	/// persisted on Windows.
+	/// </summary>
+	private DesktopNavPaneState _navPane = new() { Locked = false, PanePinned = true };
+	private bool _navPanePinnedLoaded;
+
+	/// <summary>The flyout is pinned open beside the content (wide Windows windows).</summary>
+	internal bool IsNavPaneLocked => _navPane.Locked;
+
+	/// <summary>
+	/// The flyout is showing as a transient overlay that Back/Esc must peel.
+	/// A locked pane is persistent chrome — it never blocks Back like an
+	/// open drawer does.
+	/// </summary>
+	internal bool IsFlyoutOverlayOpen => !_navPane.Locked && FlyoutIsPresented;
+
+	/// <summary>
+	/// Windows-only entry point from the desktop window chrome layer on
+	/// window size changes: pins the flyout into a nav pane above the
+	/// breakpoint and releases it below, preserving the collapse choice and
+	/// never popping an overlay on a narrow transition.
+	/// </summary>
+	internal void ApplyNavPaneWidth(double contentWidth)
+	{
+		LoadNavPanePinned();
+		var (state, presented) = DesktopNavPlan.ForWidth(_navPane, FlyoutIsPresented, contentWidth);
+		ApplyNavPane(state, presented);
+	}
+
+	/// <summary>
+	/// The hamburger: collapses/expands the pinned pane when locked, opens
+	/// the overlay otherwise. Touch behavior is unchanged — the button is
+	/// unreachable while the overlay covers it, so a press still always opens.
+	/// </summary>
+	public void ToggleNavPane()
+	{
+		LoadNavPanePinned();
+		var (state, presented) = DesktopNavPlan.Toggle(_navPane, FlyoutIsPresented);
+		ApplyNavPane(state, presented);
+	}
+
+	/// <summary>
+	/// A flyout destination was activated: close the overlay so it does not
+	/// cover the new page. A pinned pane stays — it is the rail showing
+	/// where the user landed.
+	/// </summary>
+	internal void CloseFlyoutOverlay() =>
+		FlyoutIsPresented = DesktopNavPlan.PresentedAfterDestination(_navPane, FlyoutIsPresented);
+
+	/// <summary>
+	/// Re-asserts the pinned pane after a page-level
+	/// <see cref="Shell.FlyoutBehaviorProperty"/> override is cleared — the
+	/// platform closes the pane for the Disabled override and nothing
+	/// restores it on its own.
+	/// </summary>
+	internal void RestoreNavPaneVisibility()
+	{
+		if (_navPane.Locked)
+		{
+			FlyoutIsPresented = _navPane.PanePinned;
+		}
+	}
+
+	/// <summary>
+	/// The readers pin the drawer shut while a selection/search surface is
+	/// up; on exit the page returns to the ambient (adaptive) behavior —
+	/// <see cref="FlyoutBehavior"/> on the Shell — instead of forcing Flyout,
+	/// so a wide window's locked pane comes back.
+	/// </summary>
+	internal void SetPageNavHidden(Page page, bool hidden)
+	{
+		if (hidden)
+		{
+			SetFlyoutBehavior(page, FlyoutBehavior.Disabled);
+		}
+		else
+		{
+			page.ClearValue(FlyoutBehaviorProperty);
+			RestoreNavPaneVisibility();
+		}
+	}
+
+	private void ApplyNavPane(DesktopNavPaneState state, bool presented)
+	{
+		var pinChanged = state.PanePinned != _navPane.PanePinned;
+		_navPane = state;
+		FlyoutBehavior = state.Locked ? FlyoutBehavior.Locked : FlyoutBehavior.Flyout;
+		FlyoutIsPresented = presented;
+		if (pinChanged)
+		{
+			PersistNavPanePinned();
+		}
+	}
+
+	private void LoadNavPanePinned()
+	{
+		if (_navPanePinnedLoaded || !OperatingSystem.IsWindows())
+		{
+			return;
+		}
+
+		_navPanePinnedLoaded = true;
+		_navPane = _navPane with { PanePinned = Preferences.Default.Get(NavPanePinnedPreferenceKey, true) };
+	}
+
+	private void PersistNavPanePinned()
+	{
+		if (OperatingSystem.IsWindows())
+		{
+			Preferences.Default.Set(NavPanePinnedPreferenceKey, _navPane.PanePinned);
+		}
+	}
+
+	#endregion
 
 	private void ApplyBackChrome()
 	{
@@ -76,14 +227,18 @@ public partial class AppShell : Shell
 	}
 
 	/// <summary>
-	/// True while a Shell navigation transition is still settling. Back presses
-	/// that land inside that window are consumed rather than fed back into the
-	/// base pipeline — a second pass can pop the page beneath the one already
-	/// transitioning out and leave an empty surface after "stay" (#2460).
+	/// The Navigating→Navigated window that owns Back presses. Back presses that
+	/// land inside it are consumed rather than fed back into the base pipeline —
+	/// a second pass can pop the page beneath the one already transitioning out
+	/// and leave an empty surface after "stay" (#2460). Proposals that cannot
+	/// change the location never report Navigated, so they must not arm the
+	/// watch — the packs shortcut leaves a <c>PreferencesPage</c> entry on top
+	/// and the flyout's העדפות entry targets that same location (#2926).
 	/// </summary>
-	private bool _navigationInFlight;
+	private readonly NavigationSettleWatch _settleWatch = new();
 
-	private void OnShellNavigating(object? sender, ShellNavigatingEventArgs e) => _navigationInFlight = true;
+	private void OnShellNavigating(object? sender, ShellNavigatingEventArgs e) =>
+		_settleWatch.Begin(e.Current?.Location, e.Target?.Location, DateTimeOffset.UtcNow);
 
 	internal void CompleteStartup()
 	{
@@ -240,7 +395,7 @@ public partial class AppShell : Shell
 			return true;
 		}
 
-		return BackExitPlan.Evaluate(_navigationInFlight, base.OnBackButtonPressed, FlyoutIsPresented,
+		return BackExitPlan.Evaluate(_settleWatch.OwnsBack(DateTimeOffset.UtcNow), base.OnBackButtonPressed, IsFlyoutOverlayOpen,
 			Navigation.NavigationStack.Count > 1, RootBackMayExitApp) switch
 		{
 			BackExitAction.Consume => true,
@@ -263,7 +418,10 @@ public partial class AppShell : Shell
 	private void OnNavigated(object? sender, ShellNavigatedEventArgs e)
 	{
 		ApplyBackChrome();
-		_navigationInFlight = false;
+		_settleWatch.Complete();
+		// Re-assert the highlight from the settled location — PropertyChanged
+		// can fire before CurrentState.Location reflects the pushed page.
+		UpdateSelectedDestination();
 #if IOS || MACCATALYST
 		GateIosInteractiveBack();
 		// The pushed page's native controller can lag the Navigated event.
@@ -327,67 +485,67 @@ public partial class AppShell : Shell
 
 	private async void OnAlHaperekTapped(object? sender, EventArgs e)
 	{
-		FlyoutIsPresented = false;
-		await GoToFlyoutAsync(AppRoutes.FlyoutPage("PerekPage", CurrentState.Location.OriginalString));
+		CloseFlyoutOverlay();
+		await GoToFlyoutAsync(AppRoutes.FlyoutPage(AppRoutes.Perek, CurrentState.Location.OriginalString));
 	}
 
 	private async void OnTanahpediaTapped(object? sender, EventArgs e)
 	{
-		FlyoutIsPresented = false;
-		await GoToFlyoutAsync(AppRoutes.FlyoutPage("TanahpediaPage", CurrentState.Location.OriginalString));
+		CloseFlyoutOverlay();
+		await GoToFlyoutAsync(AppRoutes.FlyoutPage(AppRoutes.Tanahpedia, CurrentState.Location.OriginalString));
 	}
 
 	private async void OnLearningCalendarTapped(object? sender, EventArgs e)
 	{
-		FlyoutIsPresented = false;
+		CloseFlyoutOverlay();
 		await GoToFlyoutAsync(AppRoutes.FlyoutPage(AppRoutes.LearningCalendar, CurrentState.Location.OriginalString));
 	}
 
 	private async void OnMasoraTapped(object? sender, EventArgs e)
 	{
-		FlyoutIsPresented = false;
+		CloseFlyoutOverlay();
 		await GoToFlyoutAsync(AppRoutes.FlyoutPage(AppRoutes.Masora, CurrentState.Location.OriginalString));
 	}
 
 	private async void OnParashaTapped(object? sender, EventArgs e)
 	{
-		FlyoutIsPresented = false;
-		await GoToFlyoutAsync(AppRoutes.FlyoutPage("ParashaListPage", CurrentState.Location.OriginalString));
+		CloseFlyoutOverlay();
+		await GoToFlyoutAsync(AppRoutes.FlyoutPage(AppRoutes.ParashaList, CurrentState.Location.OriginalString));
 	}
 
 	private async void OnAuthorsTapped(object? sender, EventArgs e)
 	{
-		FlyoutIsPresented = false;
-		await GoToFlyoutAsync(AppRoutes.FlyoutPage("AuthorsPage", CurrentState.Location.OriginalString));
+		CloseFlyoutOverlay();
+		await GoToFlyoutAsync(AppRoutes.FlyoutPage(AppRoutes.Authors, CurrentState.Location.OriginalString));
 	}
 
 	private async void OnDailyBulletinTapped(object? sender, EventArgs e)
 	{
-		FlyoutIsPresented = false;
-		await GoToFlyoutAsync(AppRoutes.FlyoutPage("DailyBulletinPage", CurrentState.Location.OriginalString));
+		CloseFlyoutOverlay();
+		await GoToFlyoutAsync(AppRoutes.FlyoutPage(AppRoutes.DailyBulletin, CurrentState.Location.OriginalString));
 	}
 
 	private async void OnTermsTapped(object? sender, EventArgs e)
 	{
-		FlyoutIsPresented = false;
-		await GoToFlyoutAsync(AppRoutes.FlyoutPage("TosPage", CurrentState.Location.OriginalString));
+		CloseFlyoutOverlay();
+		await GoToFlyoutAsync(AppRoutes.FlyoutPage(AppRoutes.Terms, CurrentState.Location.OriginalString));
 	}
 
 	private async void OnPreferencesTapped(object? sender, EventArgs e)
 	{
-		FlyoutIsPresented = false;
-		await GoToFlyoutAsync(AppRoutes.FlyoutPage("PreferencesPage", CurrentState.Location.OriginalString));
+		CloseFlyoutOverlay();
+		await GoToFlyoutAsync(AppRoutes.FlyoutPage(AppRoutes.Preferences, CurrentState.Location.OriginalString));
 	}
 
 	private async void OnContactTapped(object? sender, EventArgs e)
 	{
-		FlyoutIsPresented = false;
-		await GoToFlyoutAsync(AppRoutes.FlyoutPage("ContactPage", CurrentState.Location.OriginalString));
+		CloseFlyoutOverlay();
+		await GoToFlyoutAsync(AppRoutes.FlyoutPage(AppRoutes.Contact, CurrentState.Location.OriginalString));
 	}
 
 	private async void OnDonationsTapped(object? sender, EventArgs e)
 	{
-		FlyoutIsPresented = false;
-		await GoToFlyoutAsync(AppRoutes.FlyoutPage("DonationsPage", CurrentState.Location.OriginalString));
+		CloseFlyoutOverlay();
+		await GoToFlyoutAsync(AppRoutes.FlyoutPage(AppRoutes.Donations, CurrentState.Location.OriginalString));
 	}
 }

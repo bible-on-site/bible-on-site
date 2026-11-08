@@ -220,8 +220,18 @@ jest.mock("@/util/hebdates-util", () => ({
 	}),
 }));
 
+// The live date check has dedicated tests; here the Sefer renders its
+// static article lists unless a test returns an override.
+jest.mock("@/app/929/[number]/components/use-daily-article-override", () => ({
+	useDailyArticleOverride: jest.fn(() => null),
+}));
+
+let capturedSeferPanelProps: { articles?: unknown[] }[] = [];
 jest.mock("@/app/929/[number]/components/SeferPanel", () => ({
-	SeferPanel: () => <div data-testid="blank-page" />,
+	SeferPanel: (props: { articles?: unknown[] }) => {
+		capturedSeferPanelProps.push(props);
+		return <div data-testid="blank-page" />;
+	},
 }));
 
 jest.mock("@/app/929/[number]/components/Ptuha", () => ({
@@ -232,7 +242,7 @@ jest.mock("@/app/929/[number]/components/Stuma", () => ({
 	Stuma: () => <span />,
 }));
 
-import type { ComponentProps } from "react";
+import { type ComponentProps, StrictMode } from "react";
 import SeferContents from "@/app/929/[number]/components/Sefer";
 import { setSeferOpenPerush } from "@/app/929/[number]/components/sefer-pasuk-navigation";
 import type { QriSegment } from "@/data/db/tanah-view-types";
@@ -381,6 +391,105 @@ describe("Sefer component", () => {
 		const renders = jest.mocked(renderPasukWithEntityRefs).mock.calls.length;
 		await act(async () => finish({ "2": { articles: [], perushim: [] } }));
 		expect(renderPasukWithEntityRefs).toHaveBeenCalledTimes(renders);
+	});
+	it("shares one background read across effect replay and equivalent chapter props", async () => {
+		let finish!: (value: unknown) => void;
+		mockGetPerekSummariesBatch.mockReturnValueOnce(
+			new Promise((resolve) => {
+				finish = resolve;
+			}),
+		);
+		const original = getSeferByName(minimalPerek.sefer);
+		const chapter =
+			"perakim" in original
+				? original.perakim[0]
+				: original.additionals[0].perakim[0];
+		const props = {
+			perekObj: minimalPerek,
+			articles: [],
+			perushim: [],
+			perekIds: [1, 2],
+			sefer: { ...original, perakim: [chapter, chapter] },
+		};
+		const { container, rerender } = render(
+			<StrictMode>
+				<SeferContents {...props} />
+			</StrictMode>,
+		);
+		expect(mockGetPerekSummariesBatch).toHaveBeenCalledTimes(1);
+		rerender(
+			<StrictMode>
+				<SeferContents
+					{...props}
+					perekObj={{ ...minimalPerek }}
+					perekIds={[1, 2]}
+				/>
+			</StrictMode>,
+		);
+		expect(mockGetPerekSummariesBatch).toHaveBeenCalledTimes(1);
+		await act(async () =>
+			finish({
+				"2": {
+					articles: [],
+					perushim: [],
+					perekMetric: { wordCount: 70, estimatedSeconds: 420 },
+					pasukUnits: [],
+				},
+			}),
+		);
+		expect(container.querySelector('[data-sefer-perek="2"]')).toHaveTextContent(
+			"7 דקות",
+		);
+	});
+	it("ignores an older background read after the requested chapters change", async () => {
+		let finishOld!: (value: unknown) => void;
+		let finishLatest!: (value: unknown) => void;
+		mockGetPerekSummariesBatch
+			.mockReturnValueOnce(
+				new Promise((resolve) => {
+					finishOld = resolve;
+				}),
+			)
+			.mockReturnValueOnce(
+				new Promise((resolve) => {
+					finishLatest = resolve;
+				}),
+			);
+		const original = getSeferByName(minimalPerek.sefer);
+		const chapter =
+			"perakim" in original
+				? original.perakim[0]
+				: original.additionals[0].perakim[0];
+		const props = {
+			perekObj: minimalPerek,
+			articles: [],
+			perushim: [],
+			perekIds: [1, 2],
+			sefer: { ...original, perakim: [chapter, chapter] },
+		};
+		const { container, rerender } = render(<SeferContents {...props} />);
+		rerender(<SeferContents {...props} perekIds={[1, 3]} />);
+		await act(async () =>
+			finishLatest({
+				"3": {
+					articles: [],
+					perushim: [],
+					perekMetric: { wordCount: 70, estimatedSeconds: 420 },
+					pasukUnits: [],
+				},
+			}),
+		);
+		expect(container.querySelector('[data-sefer-perek="3"]')).toHaveTextContent(
+			"7 דקות",
+		);
+		await act(async () =>
+			finishOld({
+				"2": { articles: [], perushim: [], perekMetric: null, pasukUnits: [] },
+			}),
+		);
+		expect(container.querySelector('[data-sefer-perek="3"]')).toHaveTextContent(
+			"7 דקות",
+		);
 	});
 	it("refreshes reading metrics without rebuilding scripture", async () => {
 		let finish!: (value: unknown) => void;
@@ -552,6 +661,7 @@ describe("Sefer component", () => {
 		mockVisiblePageIndices = undefined;
 		capturedFlipBookProps = {};
 		capturedTocProps = {};
+		capturedSeferPanelProps = [];
 		mockDownloadSefer.mockReset();
 		mockDownloadPageRanges.mockReset();
 		mockRestorePage.mockReset();
@@ -910,6 +1020,58 @@ describe("Sefer component", () => {
 			]);
 		});
 
+		describe.each(["renderBookmark", "renderExpandedBookmark"] as const)(
+			"%s",
+			(kind) => {
+				it.each([16, 96])(
+					"bounds new static bookmark content allocations for %i tabs",
+					(count) => {
+						render(
+							<Sefer
+								perekObj={minimalPerek}
+								articles={[]}
+								perushim={[]}
+								perekIds={[1]}
+							/>,
+						);
+						const p = provider();
+						const context = {
+							currentPageIndex: 3,
+							currentLeafIndex: 1,
+							direction: "rtl" as const,
+						};
+						const template = p.getBookmarks(context)[0];
+						const renderContent =
+							kind === "renderBookmark"
+								? p.renderBookmark
+								: p.renderExpandedBookmark;
+						if (!renderContent) throw new Error("Missing chapter-tab renderer");
+						const bookmarks = Array.from({ length: count }, (_, index) => ({
+							...template,
+							id: `static-${index}`,
+							data: {
+								compact: String(index + 1),
+								source: "בראשית א",
+								title: `כותרת ${index + 1}`,
+							},
+						}));
+						const before = bookmarks.map(renderContent);
+						p.getBookmarks({
+							...context,
+							currentPageIndex: 5,
+							currentLeafIndex: 2,
+						});
+						const after = bookmarks.map((bookmark) =>
+							renderContent({ ...bookmark, data: { ...bookmark.data } }),
+						);
+						expect(
+							after.filter((node, index) => node !== before[index]),
+						).toHaveLength(0);
+					},
+				);
+			},
+		);
+
 		it.each([
 			{ name: "בראשית", additional: undefined, chapter: "יב" },
 			{ name: "מלכים", additional: "א", chapter: "א יב" },
@@ -990,7 +1152,7 @@ describe("Sefer component", () => {
 		});
 
 		it("toggles the tabs from the toolbar through the shared persisted state", () => {
-			saveSeferBookmarkSettings({ placement: "top", upcomingOnly: true });
+			saveSeferBookmarkSettings({ attachment: "pinned" });
 			render(
 				<Sefer
 					perekObj={minimalPerek}
@@ -1005,11 +1167,10 @@ describe("Sefer component", () => {
 
 			fireEvent.click(hide);
 			// One persisted state drives the preference, the toolbar control and
-			// the library flag — and the display options survive the toggle.
+			// the library flag — and the attachment choice survives the toggle.
 			expect(getSeferBookmarkSettings()).toMatchObject({
 				enabled: false,
-				placement: "top",
-				upcomingOnly: true,
+				attachment: "pinned",
 			});
 			expect(capturedFlipBookProps.enableBookmarks).toBe(false);
 
@@ -1041,14 +1202,8 @@ describe("Sefer component", () => {
 			expect(capturedFlipBookProps.enableBookmarks).toBe(false);
 		});
 
-		it("applies stored display preferences to the provider", () => {
-			saveSeferBookmarkSettings({
-				placement: "top",
-				orientation: "parallel",
-				attachment: "pinned",
-				order: "title",
-				upcomingOnly: true,
-			});
+		it("applies the stored attachment over the fixed presentation contract (#2974)", () => {
+			saveSeferBookmarkSettings({ attachment: "pinned" });
 			render(
 				<Sefer
 					perekObj={minimalPerek}
@@ -1058,16 +1213,18 @@ describe("Sefer component", () => {
 				/>,
 			);
 			const p = provider();
-			expect(p.placement).toBe("top");
-			expect(p.orientation).toBe("parallel");
+			// Placement/orientation/order are retired reader constants — only
+			// attachment still flows from the persisted preference.
+			expect(p.placement).toBe("sides");
+			expect(p.orientation).toBe("perpendicular");
+			expect(p.order).toBe("page");
 			expect(p.attachment).toBe("pinned");
-			expect(typeof p.order).toBe("function");
-			// upcomingOnly filters out tabs before the current page; the perek
-			// sits at page 3 so it is still listed from the book's front cover.
+			// The upcoming-only filter is retired too: a tab behind the current
+			// page stays listed (the perek sits at page 3, the reader at 4).
 			expect(
 				p.getBookmarks({
-					currentPageIndex: 3,
-					currentLeafIndex: 1,
+					currentPageIndex: 4,
+					currentLeafIndex: 2,
 					direction: "rtl",
 				}),
 			).toHaveLength(1);
@@ -1581,5 +1738,37 @@ describe("Sefer component", () => {
 
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
+	});
+
+	it("swaps a panel's article list for the Hebrew-date override (#3098)", () => {
+		const { useDailyArticleOverride } = jest.requireMock(
+			"@/app/929/[number]/components/use-daily-article-override",
+		) as { useDailyArticleOverride: jest.Mock };
+		const assigned = [{ id: 2199, name: "מאמר לתשעה באב" }];
+		useDailyArticleOverride.mockReturnValueOnce({
+			perekId: 2,
+			articles: assigned,
+		});
+		const original = getSeferByName(minimalPerek.sefer);
+		const chapter =
+			"perakim" in original
+				? original.perakim[0]
+				: original.additionals[0].perakim[0];
+		render(
+			<SeferContents
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1, 2]}
+				sefer={{ ...original, perakim: [chapter, chapter] }}
+			/>,
+		);
+		// Panel perakim are interleaved with blank pages — perekIds order maps
+		// to the SeferPanel instances in page order.
+		const articlesByPanel = capturedSeferPanelProps
+			.map((panel) => panel.articles)
+			.filter((a): a is unknown[] => a !== undefined);
+		expect(articlesByPanel).toContainEqual(assigned);
+		expect(articlesByPanel).toContainEqual([]);
 	});
 });

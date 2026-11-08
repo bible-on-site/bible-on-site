@@ -88,6 +88,15 @@ export type EntityChange =
 			refPerekIds?: number[];
 	  }
 	| {
+			kind: "moed";
+			/** tanah_moed.id — survives edits/deletes. */
+			id: number;
+			/** Current canonical slug (the deleted slug on deletes). */
+			slug: string;
+			/** The pre-rename slug — expires the old detail route. */
+			oldSlug?: string;
+	  }
+	| {
 			kind: "dedication";
 			/** tanah_dedication.id — survives edits/deletes. */
 			id: number;
@@ -154,9 +163,7 @@ async function postRevalidate(
 			method: "POST",
 			headers: {
 				"x-revalidate-secret": secret,
-				...(hasChanges
-					? { "content-type": "application/json" }
-					: {}),
+				...(hasChanges ? { "content-type": "application/json" } : {}),
 			},
 			...(hasChanges
 				? { body: JSON.stringify({ changes: request.changes }) }
@@ -266,6 +273,8 @@ function batchToPosts(batch: RevalidateRequest[]): RevalidateRequest[] {
 }
 
 async function drain(): Promise<void> {
+	/* istanbul ignore next -- the debounce timer only arms while idle, so a
+	   flush can never re-enter drain while one is already running */
 	if (draining) return;
 	draining = true;
 	// Retried posts ride the first batch only — re-queueing them into the
@@ -273,9 +282,7 @@ async function drain(): Promise<void> {
 	let includeRetry = true;
 	try {
 		while (queued.length > 0 || (includeRetry && pendingRetry.length > 0)) {
-			const batch = includeRetry
-				? [...pendingRetry, ...queued]
-				: [...queued];
+			const batch = includeRetry ? [...pendingRetry, ...queued] : [...queued];
 			includeRetry = false;
 			pendingRetry = [];
 			queued = [];
@@ -311,7 +318,10 @@ async function drain(): Promise<void> {
 			const applied = outcomes.every(
 				(outcome) => outcome.outcome === "applied",
 			);
-			for (const resolve of waiting?.resolvers ?? []) {
+			/* istanbul ignore next -- a drain iteration only runs for queued
+			   work, which always carries a live generation of callers */
+			const resolvers = waiting?.resolvers ?? [];
+			for (const resolve of resolvers) {
 				resolve(unapplied.length === 0 && applied);
 			}
 		}
@@ -460,9 +470,7 @@ export function articleChange(input: {
 				id: input.id,
 				perekIds: input.perekIds,
 				...(input.authorIds ? { authorIds: input.authorIds } : {}),
-				...(input.coveringSpans
-					? { coveringSpans: input.coveringSpans }
-					: {}),
+				...(input.coveringSpans ? { coveringSpans: input.coveringSpans } : {}),
 			},
 		],
 	};
@@ -495,6 +503,28 @@ export function authorChange(input: {
  * exists — after the delete they are unresolvable.
  */
 /**
+ * A moed create/update/delete or an article↔moed link-set change touching
+ * it (#3101). `oldSlug` carries the pre-rename slug so the website expires
+ * the old detail route too; deletes pass the deleted slug as both.
+ */
+export function moedChange(input: {
+	id: number;
+	slug: string;
+	oldSlug?: string;
+}): RevalidateRequest {
+	return {
+		changes: [
+			{
+				kind: "moed",
+				id: input.id,
+				slug: input.slug,
+				...(input.oldSlug ? { oldSlug: input.oldSlug } : {}),
+			},
+		],
+	};
+}
+
+/**
  * A dedication create/update/delete (#2731). The caller supplies the old ∪
  * new assignment set — gathered pre-commit on deletes, post-commit
  * otherwise — and the website's dependency resolver maps it to the scoped
@@ -515,7 +545,9 @@ export function dedicationChange(input: {
 			{
 				kind: "dedication",
 				id: input.id,
-				...(input.perekRanges?.length ? { perekRanges: input.perekRanges } : {}),
+				...(input.perekRanges?.length
+					? { perekRanges: input.perekRanges }
+					: {}),
 				...(input.seferIds?.length ? { seferIds: input.seferIds } : {}),
 				...(input.helekIds?.length ? { helekIds: input.helekIds } : {}),
 				...(input.parashaIds?.length ? { parashaIds: input.parashaIds } : {}),
@@ -539,18 +571,10 @@ export function pediaEntryChange(input: {
 			{
 				kind: "pedia-entry",
 				uniqueName: input.uniqueName,
-				...(input.oldUniqueName
-					? { oldUniqueName: input.oldUniqueName }
-					: {}),
-				...(input.entityTypes
-					? { entityTypes: input.entityTypes }
-					: {}),
-				...(input.synonymNames
-					? { synonymNames: input.synonymNames }
-					: {}),
-				...(input.refPerekIds
-					? { refPerekIds: input.refPerekIds }
-					: {}),
+				...(input.oldUniqueName ? { oldUniqueName: input.oldUniqueName } : {}),
+				...(input.entityTypes ? { entityTypes: input.entityTypes } : {}),
+				...(input.synonymNames ? { synonymNames: input.synonymNames } : {}),
+				...(input.refPerekIds ? { refPerekIds: input.refPerekIds } : {}),
 			},
 		],
 	};

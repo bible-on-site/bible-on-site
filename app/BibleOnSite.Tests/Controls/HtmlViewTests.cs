@@ -1,5 +1,7 @@
 using BibleOnSite.Controls;
 using FluentAssertions;
+using Microsoft.Maui.Controls;
+using Moq;
 
 namespace BibleOnSite.Tests.Controls;
 
@@ -449,6 +451,113 @@ public class HtmlViewTests
 
         htmlView.FontSize.Should().Be(12);
         styleChanges.Should().Be(1);
+    }
+
+    #endregion
+
+    #region Async ContentLoader Pipeline Tests
+
+    // On the plain net10.0 test host MainThread.BeginInvokeOnMainThread throws
+    // NotImplementedInReferenceAssemblyException, so the platform publish
+    // closures inside LoadCellContentAsync cannot run here — they are covered
+    // on device. These tests cover the whole pipeline up to that seam: the
+    // serial guard, handler attach/detach, content clearing and loader
+    // invocation. The loader runs on the thread pool, so tests synchronize on
+    // a signal the loader itself raises.
+
+    private static Mock<IViewHandler> AttachHandler(VisualElement view)
+    {
+        var handler = new Mock<IViewHandler>();
+        view.Handler = handler.Object;
+        return handler;
+    }
+
+    [Fact]
+    public async Task ContentLoader_ClearsContent_AndInvokesLoader_WhenHandlerAttached()
+    {
+        var view = new HtmlView { HtmlContent = "ישן" };
+        AttachHandler(view);
+        var loaderInvoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var loaderCalls = 0;
+        view.ContentLoader = () =>
+        {
+            loaderCalls++;
+            loaderInvoked.TrySetResult();
+            return Task.FromResult(new List<string> { "טקסט", "שני" });
+        };
+
+        // The load clears the stale content synchronously before the loader
+        // even runs — a recycled cell never shows the previous perush's text.
+        view.HtmlContent.Should().BeNull();
+
+        await loaderInvoked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        loaderCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ContentLoader_ThrowingLoader_IsContainedByTheLoadBoundary()
+    {
+        var view = new HtmlView();
+        AttachHandler(view);
+        var loaderInvoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        view.ContentLoader = () =>
+        {
+            loaderInvoked.TrySetResult();
+            throw new InvalidOperationException("boom");
+        };
+
+        await loaderInvoked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // The failure is contained inside LoadCellContentAsync's catch —
+        // the fire-and-forget task may fault at the platform publish seam,
+        // but the test host survives and the view keeps its cleared state.
+        view.HtmlContent.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DetachHandler_ClearsPublishedContent_AndStopsFutureLoads()
+    {
+        var view = new HtmlView();
+        AttachHandler(view);
+        var loaderInvoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var loaderCalls = 0;
+        view.ContentLoader = () =>
+        {
+            loaderCalls++;
+            loaderInvoked.TrySetResult();
+            return Task.FromResult(new List<string> { "טקסט" });
+        };
+        view.HtmlContent = "תוכן";
+        await loaderInvoked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        view.Handler = null;
+
+        // Detach bumps the serial and clears content so a recycled view can
+        // never display a stale load result.
+        view.HtmlContent.Should().BeNull();
+        loaderCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public void ContentLoader_WithoutHandler_NeverInvokesTheLoader()
+    {
+        var view = new HtmlView();
+        var loaderCalls = 0;
+        view.ContentLoader = () =>
+        {
+            loaderCalls++;
+            return Task.FromResult(new List<string> { "טקסט" });
+        };
+        // Replacing the loader restarts the load, which exits early without a handler.
+        view.ContentLoader = () =>
+        {
+            loaderCalls++;
+            return Task.FromResult(new List<string> { "אחר" });
+        };
+
+        // The guard returns before the first await, so this is synchronous.
+        loaderCalls.Should().Be(0);
+        view.IsContentReady.Should().BeFalse();
     }
 
     #endregion

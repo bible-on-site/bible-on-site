@@ -6,7 +6,7 @@ mod resolvers;
 mod services;
 mod startup;
 
-use crate::startup::{ActixApp, Telemetry};
+use crate::startup::{ActixApp, Profile, Telemetry};
 use std::fmt::{Debug, Display};
 use tokio::task::JoinError;
 
@@ -42,17 +42,10 @@ fn rebuild_requested(value: Option<&str>) -> bool {
 }
 
 /// Rebuilds the article-search index from `tanah_article` and exits.
-/// Mirrors `ActixApp`'s env loading so PROFILE-targeted env files apply.
+/// Shares `ActixApp`'s resolved environment so PROFILE-targeted env files
+/// and the exposure policy stay consistent.
 async fn rebuild_article_search_index() -> anyhow::Result<()> {
-    let profile: String = std::env::var("PROFILE").unwrap_or_else(|_| "prod".to_string());
-    let env_file = if profile == "prod" {
-        ".env".to_string()
-    } else {
-        format!(".{}.env", profile)
-    };
-    if let Err(e) = dotenvy::from_filename(&env_file) {
-        tracing::warn!("Failed to load {} file: {}", env_file, e);
-    }
+    Profile::resolve().load_env_file();
     let db = crate::providers::Database::new().await?;
     rebuild_article_search_on(db.get_connection()).await
 }

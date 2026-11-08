@@ -10,6 +10,14 @@ jest.mock("@/lib/web-push", () => {
 	};
 });
 jest.mock("server-only", () => ({}));
+// web-push 4 is ESM-only; the real service module must not reach the real
+// package through requireActual under Jest's CommonJS runtime.
+jest.mock("web-push", () => ({
+	__esModule: true,
+	sendNotification: jest.fn(),
+	setVapidDetails: jest.fn(),
+	WebPushError: class extends Error {},
+}));
 
 import { POST } from "@/app/api/push/daily/route";
 

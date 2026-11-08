@@ -545,9 +545,7 @@ describe("EntryEditPage", () => {
 			getEntryMock.mockRejectedValue(new Error("entry query failed"));
 			renderPage();
 
-			expect(
-				await screen.findByText("טעינת הערך נכשלה"),
-			).toBeInTheDocument();
+			expect(await screen.findByText("טעינת הערך נכשלה")).toBeInTheDocument();
 			expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
 		});
 
@@ -1369,9 +1367,7 @@ describe("EntryEditPage", () => {
 				window.dispatchEvent(
 					storageEvent(
 						DRAFT_KEY,
-						JSON.stringify(
-							storedDraft({ sessionId: "a-different-tab" }),
-						),
+						JSON.stringify(storedDraft({ sessionId: "a-different-tab" })),
 					),
 				);
 			});
@@ -1584,9 +1580,7 @@ describe("EntryEditPage", () => {
 
 			renderPage();
 
-			fireEvent.click(
-				await screen.findByRole("button", { name: "נסה שוב" }),
-			);
+			fireEvent.click(await screen.findByRole("button", { name: "נסה שוב" }));
 
 			expect(
 				await screen.findByText(/עריכת ערך: משה רבנו/),
@@ -1594,9 +1588,7 @@ describe("EntryEditPage", () => {
 		});
 
 		it("reports a rejected load with a missing entry as not found", async () => {
-			getEntryMock
-				.mockReset()
-				.mockRejectedValue(new Error("Entry not found"));
+			getEntryMock.mockReset().mockRejectedValue(new Error("Entry not found"));
 
 			renderPage();
 

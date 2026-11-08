@@ -28,14 +28,16 @@ function restore(t, changes = {}) {
 	const trace = join(dir, "trace");
 	const stopped = join(dir, "stopped");
 	const pid = join(dir, "pid");
+	const ready = join(dir, "ready");
 	const commands = {
 		chown: 'printf "chown %s\\n" "$*" >> "$MONGO_TRACE"',
 		sync: 'printf "sync\\n" >> "$MONGO_TRACE"',
 		gosu: 'printf "gosu %s\\n" "$1" >> "$MONGO_TRACE"; shift; exec "$@"',
 		mongod:
-			'printf "%s" "$$" > "$MONGO_PID"; trap \'touch "$MONGO_STOPPED"; exit 0\' TERM; if [ "$MONGO_EXIT_EARLY" = 1 ]; then exit 17; fi; while :; do /usr/bin/sleep 0.05; done',
+			'printf "%s" "$$" > "$MONGO_PID"; trap \'touch "$MONGO_STOPPED"; exit 0\' TERM; if [ "$MONGO_EXIT_EARLY" = 1 ]; then exit 17; fi; touch "$MONGO_READY"; while :; do /usr/bin/sleep 0.05; done',
+		// A live PID can precede an early exit; it is not a successful ping.
 		mongosh:
-			'if [ ! -f "$MONGO_PID" ] || ! kill -0 "$(cat "$MONGO_PID")" 2>/dev/null; then exit 1; fi; case "$*" in *countDocuments*) printf "%s\\n" "$MONGO_COUNT";; *) printf "{ok:1}\\n";; esac',
+			'if [ ! -f "$MONGO_READY" ] || ! kill -0 "$(cat "$MONGO_PID")" 2>/dev/null; then exit 1; fi; case "$*" in *countDocuments*) printf "%s\\n" "$MONGO_COUNT";; *) printf "{ok:1}\\n";; esac',
 		mongorestore:
 			'printf "restore %s\\n" "$*" >> "$MONGO_TRACE"; exit "$MONGO_RESTORE_EXIT"',
 		sleep: ":", // The child uses the real absolute sleep; only readiness polling is accelerated.
@@ -63,6 +65,7 @@ function restore(t, changes = {}) {
 				MONGO_TRACE: unix(trace),
 				MONGO_STOPPED: unix(stopped),
 				MONGO_PID: unix(pid),
+				MONGO_READY: unix(ready),
 				MONGO_COUNT: "3",
 				MONGO_RESTORE_EXIT: "0",
 				MONGO_EXIT_EARLY: "0",

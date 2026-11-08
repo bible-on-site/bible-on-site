@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { brotliCompressSync, constants } from "node:zlib";
 
 // Derive browser metadata and individual books from the existing canonical source.
 const source = new URL(
@@ -19,6 +20,12 @@ const output = new URL(
 	"../src/data/db/client-catalog.generated.json",
 	import.meta.url,
 );
+// The reader assets are precompressed Brotli bytes served as static files:
+// the catalog names the public URL /generated/sefarim/{name}, and the file on
+// disk is that same name holding Brotli bytes. next.config.mjs marks the path
+// Content-Encoding: br with immutable caching. Serving through public/ (rather
+// than a route handler) keeps Content-Encoding intact — the App Router response
+// pipeline can drop it while still sending the encoded body (#3095).
 const booksDirectory = fileURLToPath(
 	new URL("../public/generated/sefarim/", import.meta.url),
 );
@@ -60,10 +67,23 @@ function writeIfChanged(filePath, payload) {
 const books = sefarim.map((sefer) => {
 	const payload = `${JSON.stringify(sefer)}\n`;
 	const digest = createHash("sha256").update(payload).digest("hex");
+	const { name, helek, perekFrom, perekTo } = sefer;
 	const filename = `${sefer.perekFrom}.${digest}.json`;
 	files.add(filename);
-	writeIfChanged(join(booksDirectory, filename), payload);
-	const { name, helek, perekFrom, perekTo } = sefer;
+	const target = join(booksDirectory, filename);
+	// Earlier generators wrote raw JSON under this same payload hash. Upgrade
+	// those bytes to the Brotli representation promised by the static headers,
+	// while preserving already-compressed files and their modification times.
+	if (!existsSync(target) || readFileSync(target).equals(Buffer.from(payload)))
+		writeFileSync(
+			target,
+			brotliCompressSync(payload, {
+				params: {
+					[constants.BROTLI_PARAM_QUALITY]: 9,
+					[constants.BROTLI_PARAM_SIZE_HINT]: Buffer.byteLength(payload),
+				},
+			}),
+		);
 	return {
 		name,
 		helek,
@@ -72,9 +92,11 @@ const books = sefarim.map((sefer) => {
 		file: `/generated/sefarim/${filename}`,
 	};
 });
-// Remove only obsolete files produced by this generator, after replacements exist.
+// Remove only obsolete files produced by this generator, after replacements
+// exist. The optional .br suffix also sweeps assets left by the earlier
+// route-served layout, whose names were {name}.json.br.
 for (const filename of readdirSync(booksDirectory)) {
-	if (/^\d+\.[a-f0-9]{64}\.json$/.test(filename) && !files.has(filename))
+	if (/^\d+\.[a-f0-9]{64}\.json(\.br)?$/.test(filename) && !files.has(filename))
 		unlinkSync(join(booksDirectory, filename));
 }
 writeIfChanged(output, `${JSON.stringify({ books, volumes, schedule })}\n`);

@@ -84,9 +84,14 @@ source notes (or whole groups) no longer exist.
   content. `ReadingTime` renders the badge; `format.ts` formats Hebrew
   labels; JSON-LD adds `timeRequired` + `wordCount` only when a stored
   metric exists.
-- **Native app / GraphQL**: not yet consumed — the app needs DTO fields
-  for `wordCount`/`estimatedSeconds` (and block lists for progress) on
-  the GraphQL API. Tracked under the remainder of #2607.
+- **Native app / GraphQL**: the API exposes `readingMetric` and ordered
+  `progressUnits` on `articleById`, `perekByPerekId` and
+  `tanahpediaEntry` (`web/api`); the MAUI app consumes them — badges on
+  article cards/detail, perush rows and Tanahpedia entries — plus
+  word-weighted scroll progress on the perek (offline pasuk rows),
+  article and entry readers. Offline scripture/notes packs carry the
+  same metric tables via the tanah-view/perushim-view pipelines
+  (`data/reading-metrics`).
 
 ## Progress semantics
 
