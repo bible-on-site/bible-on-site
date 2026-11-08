@@ -12,15 +12,15 @@ import { sefarim } from "../../../src/data/db/sefarim";
 import {
 	ALIYAH_PROVENANCE,
 	ALIYAH_SCHEMES,
+	DEFAULT_ALIYAH_SCHEME,
 	aliyahContaining,
 	aliyahStartMarkers,
-	DEFAULT_ALIYAH_SCHEME,
 	getAliyot,
 	getJoinedReadingsForUnit,
 	getParashaReadingById,
 	getStandaloneReading,
 	getUnitAliyahMarkers,
-	getUnitShabbatAliyahMarkers,
+	getUnitAliyahMarkersForSefer,
 } from "../../../src/data/parasha/parasha-aliyot";
 import { getAllParashaUnits } from "../../../src/data/parasha/parasha-units";
 import { getPerekByPerekId } from "../../../src/data/perek-dto";
@@ -471,7 +471,10 @@ describe("variant layers — selectable alternative divisions", () => {
 	const markersForKey = (
 		layer: ReturnType<typeof getUnitAliyahMarkers>,
 		key: string,
-	) => Object.values(layer.markers).flat().filter((m) => m.key === key);
+	) =>
+		Object.values(layer.markers)
+			.flat()
+			.filter((m) => m.key === key);
 
 	it("substitutes the חב\"ד stretch inside ויגש's own key", () => {
 		const { layer, option } = schemeOption("ויגש", "shabbat");
@@ -509,9 +512,7 @@ describe("variant layers — selectable alternative divisions", () => {
 		expect(layer.markers["46:8"]).toContainEqual(
 			expect.objectContaining({ key, label: "חמישי" }),
 		);
-		expect(
-			layer.markers["45:19"].filter((m) => m.key === key),
-		).toHaveLength(0);
+		expect(layer.markers["45:19"].filter((m) => m.key === key)).toHaveLength(0);
 		// The substituted boundaries keep ordered contiguous coverage
 		// — validated at module load like the base scheme.
 		const variant = must(
@@ -596,18 +597,34 @@ describe("variant layers — selectable alternative divisions", () => {
 		}
 		// מטות's page conversely holds the variant's רביעי.
 		const matotLayer = getUnitAliyahMarkers(unitByName("מטות").unitId);
-		expect(
-			markersForKey(matotLayer, key).map((m) => m.label),
-		).toContain("רביעי");
+		expect(markersForKey(matotLayer, key).map((m) => m.label)).toContain(
+			"רביעי",
+		);
 	});
 
-	it("keeps the fixed book layer on the base split — no variant keys leak", () => {
-		const markers = getUnitShabbatAliyahMarkers(unitByName("ויגש").unitId);
-		for (const specs of Object.values(markers)) {
-			for (const spec of specs) {
-				expect(spec.key).toBe("Vayigash:shabbat");
-			}
-		}
+	it("carries the full marker contract into the book view — every layer renders", () => {
+		// Issue #3165: the Sefer must not silently keep a Shabbat-only
+		// layer — the book's marker map is the same merged contract the
+		// flat page renders, base, variant, and weekday keys together.
+		const markers = getUnitAliyahMarkersForSefer(unitByName("ויגש").unitId);
+		const keys = new Set(
+			Object.values(markers)
+				.flat()
+				.map((spec) => spec.key),
+		);
+		expect(keys).toEqual(
+			new Set([
+				"Vayigash:shabbat",
+				'Vayigash:shabbat:חב"ד',
+				"Vayigash:weekday",
+			]),
+		);
+		// The substituted variant's moved boundary sits at ITS canonical
+		// coordinate alongside the base marker it differs from.
+		expect(markers["45:28"]?.map((m) => m.key)).toEqual([
+			"Vayigash:shabbat",
+			'Vayigash:shabbat:חב"ד',
+		]);
 	});
 });
 
@@ -687,19 +704,74 @@ describe("marker layer", () => {
 		expect(joinedMarkers[0].label).not.toBe("ראשון");
 	});
 
-	it("exposes the fixed standalone Shabbat layer for the book view", () => {
-		const markers = getUnitShabbatAliyahMarkers(unitByName("בראשית").unitId);
+	it("exposes every applicable layer for the book view", () => {
+		// Issue #3165: the Sefer renders all layers inline — the
+		// standalone Shabbat markers plus the weekday split and the
+		// recorded alternative, at their own canonical coordinates.
+		const markers = getUnitAliyahMarkersForSefer(unitByName("בראשית").unitId);
 		expect(Object.keys(markers)).toContain("1:1");
 		expect(markers["2:4"]?.[0]).toMatchObject({
 			key: "Bereshit:shabbat",
 			label: "שני",
 		});
-		// No weekday or joined keys leak into the fixed book layer.
-		for (const specs of Object.values(markers)) {
-			for (const spec of specs) {
-				expect(spec.key).toBe("Bereshit:shabbat");
-			}
-		}
+		const keys = new Set(
+			Object.values(markers)
+				.flat()
+				.map((spec) => spec.key),
+		);
+		expect(keys).toEqual(
+			new Set([
+				"Bereshit:shabbat",
+				"Bereshit:shabbat:alt-hebcal",
+				"Bereshit:weekday",
+			]),
+		);
+	});
+
+	it("emits coincident markers in deterministic layer order", () => {
+		// בראשית א א carries all three layers — base scheme, its
+		// variant, then the next scheme — so coincident boundaries
+		// arrange predictably in the rendered cluster.
+		const layer = getUnitAliyahMarkers(unitByName("בראשית").unitId);
+		expect(layer.markers["1:1"]?.map((m) => m.key)).toEqual([
+			"Bereshit:shabbat",
+			"Bereshit:shabbat:alt-hebcal",
+			"Bereshit:weekday",
+		]);
+	});
+
+	it("tags and details every marker for the inline legend", () => {
+		// Issue #3165: tag distinguishes coincident markers, category
+		// drives non-color styling, detail is the hover/focus/touch text.
+		const layer = getUnitAliyahMarkers(unitByName("בראשית").unitId);
+		expect(layer.markers["2:4"]).toHaveLength(2);
+		expect(layer.markers["2:4"][0]).toMatchObject({
+			key: "Bereshit:shabbat",
+			tag: "שבת",
+			category: "shabbat",
+			detail: "פרשת בראשית · קריאת שבת · עלייה שנייה (בראשית ב ד-יט)",
+		});
+		expect(layer.markers["2:4"][1]).toMatchObject({
+			key: "Bereshit:shabbat:alt-hebcal",
+			tag: "חלוקה אחרת",
+			category: "variant",
+			detail:
+				"פרשת בראשית · קריאת שבת · חלוקה אחרת · עלייה שנייה (בראשית ב ד-יט)",
+		});
+	});
+
+	it("identifies joined markers by the joined reading's names and scope", () => {
+		const layer = getUnitAliyahMarkers(unitByName("מסעי").unitId);
+		const joined = Object.values(layer.markers)
+			.flat()
+			.find((m) => m.key === "Matot-Masei:shabbat");
+		expect(joined).toMatchObject({
+			tag: "מטות-מסעי",
+			category: "joined",
+		});
+		// The detail keeps the join's restricted applicability explicit.
+		expect(joined?.detail).toContain("מטות-מסעי (למעט מנהג תימן הבלדי)");
+		expect(joined?.detail).toContain("קריאת שבת");
 	});
 });
 

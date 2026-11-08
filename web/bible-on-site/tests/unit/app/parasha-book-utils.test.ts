@@ -4,10 +4,10 @@
  * #2519).
  */
 import {
-	buildParashaHistoryMapper,
 	PARASHA_CONTENT_OFFSET,
 	PARASHA_ROOT,
 	type ParashaBookUnit,
+	buildParashaHistoryMapper,
 	parashaBookExitPath,
 	parashaPerushDocumentTitle,
 	parashaUnitDocumentTitle,
@@ -61,9 +61,7 @@ describe("buildParashaHistoryMapper", () => {
 
 describe("parashaBookExitPath", () => {
 	it("lands on the canonical path for the unit a book-content path names", () => {
-		expect(parashaBookExitPath("/פרשה/מטות", 7)).toBe(
-			`${PARASHA_ROOT}/מטות`,
-		);
+		expect(parashaBookExitPath("/פרשה/מטות", 7)).toBe(`${PARASHA_ROOT}/מטות`);
 		// A legacy numeric segment canonicalizes on the way out.
 		expect(parashaBookExitPath("/פרשה/42", 7)).toBe(`${PARASHA_ROOT}/מטות`);
 	});
@@ -89,20 +87,45 @@ describe("document titles", () => {
 });
 
 describe("unitBoundaryMarkers", () => {
-	it("rebuilds the serialized marker map", () => {
+	it("rebuilds the serialized marker map with every layer", () => {
+		// Issue #3165: the book spread serializes all applicable layers —
+		// base, weekday, and custom markers share the same contract as
+		// the flat page.
 		const unit: ParashaBookUnit = {
 			...UNIT,
 			aliyahMarkers: {
-				"172:1": [{ key: "matot:shabbat", label: "ראשון", role: "aliyah" }],
+				"172:1": [
+					{
+						key: "matot:shabbat",
+						label: "ראשון",
+						role: "aliyah",
+						tag: "שבת",
+						category: "shabbat",
+						detail: "פרשת מטות · קריאת שבת · עלייה ראשונה (במדבר ל ב - לב מב)",
+					},
+					{
+						key: "matot-masei:shabbat",
+						label: "ראשון",
+						role: "aliyah",
+						tag: "מטות-מסעי",
+						category: "joined",
+						detail: "מטות-מסעי · קריאת שבת · עלייה ראשונה (במדבר ל ב - לה יג)",
+					},
+				],
 			},
-			aliyahMarkerKey: "matot:shabbat",
+			aliyahEmphasisKey: "matot:shabbat",
 		};
 
 		const map = unitBoundaryMarkers(unit);
 
-		expect(map?.get("172:1")).toEqual([
-			{ key: "matot:shabbat", label: "ראשון", role: "aliyah" },
+		expect(map?.get("172:1")?.map((marker) => marker.key)).toEqual([
+			"matot:shabbat",
+			"matot-masei:shabbat",
 		]);
+		expect(map?.get("172:1")?.[1]).toMatchObject({
+			tag: "מטות-מסעי",
+			category: "joined",
+		});
 	});
 
 	it("returns undefined for a unit without markers", () => {
