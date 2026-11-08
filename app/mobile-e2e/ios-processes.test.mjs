@@ -66,7 +66,9 @@ function diagnosticFixture(t) {
   const calls = [];
   const execute = async (command, args, options) => {
     calls.push({ command, args, options });
-    if (command === inspectorPath) return { stdout: OWNED, stderr: "" };
+    if (command === inspectorPath) return args[0] === "--threads"
+      ? { stdout: `${args[1]} 259 W 0 0 main-thread\n`, stderr: "" }
+      : { stdout: OWNED, stderr: "" };
     if (args.includes("screenshot")) writeFileSync(args.at(-1), "frame");
     return { stdout: "captured", stderr: "" };
   };
@@ -102,7 +104,8 @@ test("distinct stalled requests preserve unique frames and original identities w
   const preferences = pendingRequest(2);
   await diagnostics.capture(preferences.command, preferences);
   assert.deepEqual(f.calls.map(x => x.args.slice(0, 4)), [
-    ["simctl", "io", udid, "screenshot"], ["simctl", "io", udid, "screenshot"],
+    ["simctl", "io", udid, "screenshot"], ["--threads", "8421"],
+    ["simctl", "io", udid, "screenshot"], ["--threads", "9912"],
   ]);
   assert.ok(f.calls.every(x => x.options.timeout === 5000));
   const first = JSON.parse(readFileSync(join(f.directory, "native-interaction-0001.json"), "utf8"));
@@ -110,6 +113,9 @@ test("distinct stalled requests preserve unique frames and original identities w
   assert.equal(first.pid, 8421); assert.equal(second.pid, 9912);
   assert.notEqual(first.prefix, second.prefix);
   assert.equal(readdirSync(f.directory).filter(x => x.endsWith(".png")).length, 2);
+  // The in-flight kernel thread states land beside each frame attempt.
+  assert.equal(readFileSync(join(f.directory, "native-interaction-0001-threads.txt"), "utf8"), "8421 259 W 0 0 main-thread\n");
+  assert.equal(readFileSync(join(f.directory, "native-interaction-0002-threads.txt"), "utf8"), "9912 259 W 0 0 main-thread\n");
 });
 
 test("failure handoff samples the pinned process while all existing caps remain unchanged", async (t) => {
@@ -120,14 +126,17 @@ test("failure handoff samples the pinned process while all existing caps remain 
   request.pending = false; request.status = 500;
   f.calls.length = 0;
   assert.deepEqual(await diagnostics.failure(failureSignal()), { status: "captured", pid: 8421 });
-  assert.deepEqual(f.calls.map(x => x.command), [inspectorPath, "xcrun", "sudo"]);
-  assert.deepEqual(f.calls.map(x => x.options.timeout), [5000, 5000, 10000]);
+  assert.deepEqual(f.calls.map(x => x.command), [inspectorPath, "xcrun", inspectorPath, "sudo"]);
+  assert.deepEqual(f.calls.map(x => x.options.timeout), [5000, 5000, 5000, 10000]);
   assert.ok(f.calls.every(x => x.options.signal === f.calls[0].options.signal));
   assert.ok(f.calls.at(-1).args.includes("8421"));
   assert.ok(f.calls.at(-1).args.includes("settings set target.detach-on-error true"));
   const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failureSignal().id}.json`), "utf8"));
   assert.equal(evidence.request.test, "Preferences scenario");
   assert.equal(evidence.observation.request.status, 500);
+  // Kernel thread rows still land when host debugger channels cannot run.
+  assert.equal(readFileSync(join(f.directory, `native-failure-${failureSignal().id}-threads-8421.txt`), "utf8"),
+    "8421 259 W 0 0 main-thread\n");
 });
 
 for (const listing of ["", "9912 L " + appPath(udid), "8421 L " + appPath("B8D3DB6B-98FB-4E92-9ACE-9BC307F7FDE7"), "8421 Z " + appPath(udid)]) {
@@ -173,6 +182,8 @@ test("failed passive reads retain identity errors and cannot trigger a replaceme
   await diagnostics.capture(request.command, request);
   const evidence = JSON.parse(readFileSync(join(f.directory, "native-interaction-0001.json"), "utf8"));
   assert.equal(evidence.pid, null); assert.equal(evidence.identityError.message, "native log unavailable");
+  assert.equal(evidence.threadsError.message, "No pinned app identity is available for kernel thread enumeration.");
+  assert.ok(readdirSync(f.directory).includes("native-interaction-0001-threads-error.json"));
   f.calls.length = 0;
   assert.equal((await diagnostics.failure(failureSignal())).status, "unknown");
   assert.deepEqual(f.calls, []);
@@ -196,7 +207,7 @@ test("a stuck simulator frame cannot block the independently captured pinned sta
     prefix: join(f.directory, "stuck-frame"), deadlineUtc: failureSignal().deadlineUtc, now: f.now,
     execute: async (command, args, options) => {
       f.calls.push({ command, args, options });
-      if (command === inspectorPath) return { stdout: OWNED, stderr: "" };
+      if (command === inspectorPath) return { stdout: args[0] === "--threads" ? "8421 259 W 0 0 main-thread\n" : OWNED, stderr: "" };
       if (args.includes("screenshot")) return frame;
       assert.equal(command, "sudo");
       assert.ok(f.calls.some(call => call.args.includes("screenshot")));
@@ -206,9 +217,29 @@ test("a stuck simulator frame cannot block the independently captured pinned sta
   assert.equal(result.status, "error", "the failed frame remains an error");
   assert.equal(result.frameError.signal, "SIGTERM");
   assert.equal(readFileSync(join(f.directory, "stuck-frame-stack-8421.txt"), "utf8"), "pinned stack");
-  assert.deepEqual(f.calls.map(call => call.options.timeout), [5000, 5000, 10000]);
+  assert.equal(readFileSync(join(f.directory, "stuck-frame-threads-8421.txt"), "utf8"), "8421 259 W 0 0 main-thread\n");
+  assert.deepEqual(f.calls.map(call => call.options.timeout), [5000, 5000, 5000, 10000]);
   assert.ok(f.calls.every(call => call.options.signal === f.calls[0].options.signal));
   assert.ok(f.calls.every(call => !call.args.includes("spawn") && call.command !== "ps"));
+});
+
+test("a killed kernel thread capture retains its own error beside surviving evidence", async (t) => {
+  const f = diagnosticFixture(t);
+  const threadsKilled = Object.assign(new Error("thread enumeration killed"), { killed: true, signal: "SIGTERM" });
+  const result = await samplePinnedIosApp({ udid, pid: 8421,
+    prefix: join(f.directory, "dead-threads"), deadlineUtc: failureSignal().deadlineUtc, now: f.now,
+    execute: async (command, args, options) => {
+      f.calls.push({ command, args, options });
+      if (command === inspectorPath && args[0] === "--threads") throw threadsKilled;
+      if (command === inspectorPath) return { stdout: OWNED, stderr: "" };
+      if (args.includes("screenshot")) writeFileSync(args.at(-1), "frame");
+      return { stdout: "pinned stack", stderr: "" };
+    } });
+  assert.equal(result.status, "error", "a failed kernel capture keeps the error status");
+  assert.equal(result.threadsError.signal, "SIGTERM");
+  assert.equal(JSON.parse(readFileSync(join(f.directory, "dead-threads-threads-error.json"), "utf8")).signal, "SIGTERM");
+  assert.equal(readFileSync(join(f.directory, "dead-threads-stack-8421.txt"), "utf8"), "pinned stack");
+  assert.equal(readFileSync(join(f.directory, "dead-threads.png"), "utf8"), "frame");
 });
 
 test("a failed debugger still waits for frame capture before releasing the scenario handoff", async t => {
