@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PageShell } from "@/app/components/PageShell";
+import { NOT_FOUND_METADATA } from "@/lib/seo/missing-page";
 import styles from "./not-found.module.css";
 
 // A missing page is not a shareable resource — strip the root layout's
 // homepage OG block so a 404 never advertises the site's URL as its own.
-export const metadata: Metadata = {
-	title: "העמוד לא נמצא",
-	openGraph: null,
-};
+// The contract lives in a shared lib so route-level "entity missing"
+// metadata fallbacks emit the identical title/metadata (issue #2935).
+export const metadata: Metadata = NOT_FOUND_METADATA;
 
 export default function NotFound() {
 	return (
