@@ -43,6 +43,21 @@
   animation: spin 0.8s linear infinite;
 }
 
+.loadingError {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.loadingActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem 1.25rem;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
