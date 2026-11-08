@@ -83,7 +83,6 @@ public abstract class MobilePlatformAdapter
         return (element.Location, element.Size);
     }
     public abstract void GoBack(AppiumDriver driver);
-    public virtual void GoBackFromFocusedVerse(AppiumDriver driver) => GoBack(driver);
     public virtual void DismissSearchSheet(AppiumDriver driver) => GoBack(driver);
 
     public void RevealTrailingSearchChips(AppiumDriver driver)
@@ -415,7 +414,6 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     public override void DismissSearchSheet(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SearchSheetDismissButton")));
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("value") == "1";
     public override string? SemanticDescription(AppiumElement element) => element.GetAttribute("label");
-    public override void GoBackFromFocusedVerse(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SelectionBackButton")));
     protected override By LocateAutomationId(string id) => MobileBy.AccessibilityId(id);
     // WDA re-snapshots every match to build a findElements response, so a
     // lookup costs matches x tree size; filter natively to return only targets.
