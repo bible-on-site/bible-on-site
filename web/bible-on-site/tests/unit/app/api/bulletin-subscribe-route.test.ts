@@ -43,10 +43,26 @@ describe("/api/bulletin/subscribe", () => {
 	it.each([
 		["not json", "application/json"],
 		["{}", "application/json"],
-		[JSON.stringify({ email: "u@example.com", consent: true }), "application/json"],
-		[JSON.stringify({ email: "u@example.com", consent: true, source: "admin" }), "application/json"],
-		[JSON.stringify({ email: "bad", consent: true, source: "card" }), "application/json"],
-		[JSON.stringify({ email: "u@example.com", consent: true, source: "card" }), "text/plain"],
+		[
+			JSON.stringify({ email: "u@example.com", consent: true }),
+			"application/json",
+		],
+		[
+			JSON.stringify({
+				email: "u@example.com",
+				consent: true,
+				source: "admin",
+			}),
+			"application/json",
+		],
+		[
+			JSON.stringify({ email: "bad", consent: true, source: "card" }),
+			"application/json",
+		],
+		[
+			JSON.stringify({ email: "u@example.com", consent: true, source: "card" }),
+			"text/plain",
+		],
 		["x".repeat(5000), "application/json"],
 	])("rejects %s", async (body, contentType) => {
 		const response = await POST(request(body, contentType));
@@ -79,5 +95,41 @@ describe("/api/bulletin/subscribe", () => {
 			request({ email: "u@example.com", consent: true, source: "page" }),
 		);
 		expect(response.status).toBe(503);
+	});
+
+	it("rejects a missing content type", async () => {
+		const response = await POST(
+			new Request("http://localhost/api/bulletin/subscribe", {
+				method: "POST",
+			}),
+		);
+		expect(response.status).toBe(400);
+		expect(mockRequest).not.toHaveBeenCalled();
+	});
+
+	it("rejects an oversized declared length before consuming the body", async () => {
+		const response = await POST(
+			new Request("http://localhost/api/bulletin/subscribe", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"content-length": "4097",
+				},
+				body: "{}",
+			}),
+		);
+		expect(response.status).toBe(400);
+		expect(mockRequest).not.toHaveBeenCalled();
+	});
+
+	it("rejects a JSON request without a body stream", async () => {
+		const response = await POST(
+			new Request("http://localhost/api/bulletin/subscribe", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+			}),
+		);
+		expect(response.status).toBe(400);
+		expect(mockRequest).not.toHaveBeenCalled();
 	});
 });

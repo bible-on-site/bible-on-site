@@ -444,7 +444,7 @@ export class SesClient {
 	}
 
 	/**
-	 * Re-consent after a fresh mailbox proof (#2940): creates the contact when
+	 * Re-consent after an explicit public signup (#2940): creates the contact when
 	 * absent, and for an existing opted-out contact restores OPT_IN on the
 	 * topic and clears UnsubscribeAll. Other topics and account-level
 	 * suppression are untouched — the topic preference is merged rather than

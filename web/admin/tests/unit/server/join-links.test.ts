@@ -114,6 +114,23 @@ describe("readJoinLinkAudit", () => {
 		expect(mocks.query.mock.calls[0][0]).toContain("WHERE channel = ?");
 		expect(mocks.query.mock.calls[0][1]).toEqual(["telegram", 5]);
 	});
+
+	it("keeps an absent audit timestamp empty", async () => {
+		mocks.query.mockResolvedValue([
+			{
+				id: 10,
+				channel: "telegram",
+				enabled: false,
+				destination: null,
+				revision: 1,
+				changed_by: null,
+				changed_at: "",
+			},
+		]);
+		expect(await readJoinLinkAudit()).toEqual([
+			expect.objectContaining({ changedAt: "", changedBy: null }),
+		]);
+	});
 });
 
 describe("updateJoinLink", () => {
@@ -160,7 +177,9 @@ describe("updateJoinLink", () => {
 			"telegram",
 		]);
 		const [, auditSql, auditParams] = mocks.txExecute.mock.calls[1];
-		expect(auditSql).toContain("INSERT INTO tanah_daily_bulletin_join_link_audit");
+		expect(auditSql).toContain(
+			"INSERT INTO tanah_daily_bulletin_join_link_audit",
+		);
 		expect(auditParams).toEqual([
 			"telegram",
 			true,
@@ -179,6 +198,35 @@ describe("updateJoinLink", () => {
 		);
 	});
 
+	it("records a disabled channel with no destination in both state and audit", async () => {
+		mocks.txQueryOne.mockResolvedValue(null);
+		const state = await updateJoinLink({
+			...change,
+			enabled: false,
+			destination: null,
+			expectedRevision: 0,
+		});
+		expect(state).toMatchObject({
+			enabled: false,
+			destination: null,
+			revision: 1,
+		});
+		expect(mocks.txExecute.mock.calls[0][2]).toEqual([
+			"telegram",
+			false,
+			null,
+			1,
+			"editor@example.com",
+		]);
+		expect(mocks.txExecute.mock.calls[1][2]).toEqual([
+			"telegram",
+			false,
+			null,
+			1,
+			"editor@example.com",
+		]);
+	});
+
 	it("fails the compare-and-swap on a stale revision", async () => {
 		mocks.txQueryOne.mockResolvedValue({
 			channel: "telegram",
@@ -188,7 +236,9 @@ describe("updateJoinLink", () => {
 			updated_by: "other@example.com",
 			updated_at: null,
 		});
-		await expect(updateJoinLink(change)).rejects.toThrow(/השתנה על ידי עורך אחר/);
+		await expect(updateJoinLink(change)).rejects.toThrow(
+			/השתנה על ידי עורך אחר/,
+		);
 		expect(mocks.txExecute).not.toHaveBeenCalled();
 	});
 });

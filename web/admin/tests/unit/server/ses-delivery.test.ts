@@ -2122,6 +2122,51 @@ describe("optional Telegram dispatch in the existing worker", () => {
 		expect(mocks.destroy).toHaveBeenCalledOnce();
 	});
 
+	it("isolates signup outbox failure so a native email event still completes", async () => {
+		configureTelegram();
+		const row = seed("test", "accepted");
+		const controller = new AbortController();
+		mocks.parse.mockReturnValue(delivery());
+		mocks.signupSweep.mockRejectedValueOnce(new Error("private details"));
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		messages(controller, ['{"eventType":"Delivery"}']);
+		try {
+			await startEmailWorker(controller.signal);
+			expect(row.status).toBe("delivered");
+			expect(log).toHaveBeenCalledExactlyOnceWith(
+				"Signup outbox reconciliation failed",
+			);
+			expect(
+				mocks.sqs.mock.calls.some(([command]) => command.kind === "delete"),
+			).toBe(true);
+		} finally {
+			log.mockRestore();
+		}
+	});
+
+	it.each([false, true])(
+		"stops after signup reconciliation aborts (rejects=%s)",
+		async (rejects) => {
+			const controller = new AbortController();
+			mocks.signupSweep.mockImplementationOnce(async (signal) => {
+				expect(signal).toBe(controller.signal);
+				controller.abort();
+				if (rejects) throw new Error("shutdown interrupted signup work");
+			});
+			const log = vi.spyOn(console, "error").mockImplementation(() => {});
+			try {
+				await startEmailWorker(controller.signal);
+				expect(mocks.signupSweep).toHaveBeenCalledOnce();
+				expect(mocks.telegramSweep).not.toHaveBeenCalled();
+				expect(mocks.whatsappSweep).not.toHaveBeenCalled();
+				expect(mocks.destroy).toHaveBeenCalledOnce();
+				expect(log).not.toHaveBeenCalled();
+			} finally {
+				log.mockRestore();
+			}
+		},
+	);
+
 	it("isolates Telegram outbox failure so a native email event still completes", async () => {
 		configureTelegram();
 		const row = seed("test", "accepted");

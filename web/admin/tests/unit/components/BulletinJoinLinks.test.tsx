@@ -145,6 +145,40 @@ describe("BulletinJoinLinks", () => {
 		);
 	});
 
+	it("clears a disabled destination and shows an audit entry without a timestamp", async () => {
+		mocks.read.mockResolvedValue({
+			links: [link()],
+			audit: [
+				{
+					id: 6,
+					channel: "telegram",
+					enabled: false,
+					destination: null,
+					revision: 4,
+					changedBy: null,
+					changedAt: "",
+				},
+			],
+		});
+		view();
+		const input = await screen.findByDisplayValue("https://t.me/alhaperek");
+		expect(screen.getByRole("list")).toHaveTextContent("כבוי");
+		expect(screen.getByRole("list")).not.toHaveTextContent("Invalid Date");
+		fireEvent.click(screen.getByRole("checkbox"));
+		fireEvent.change(input, { target: { value: "  " } });
+		fireEvent.click(screen.getByRole("button", { name: "שמירה" }));
+		await waitFor(() =>
+			expect(mocks.update).toHaveBeenCalledWith({
+				data: {
+					channel: "telegram",
+					enabled: false,
+					destination: null,
+					expectedRevision: 3,
+				},
+			}),
+		);
+	});
+
 	it("shows a read failure without channel cards", async () => {
 		mocks.read.mockRejectedValue(new Error("שגיאת מסד נתונים"));
 		view();

@@ -2,13 +2,18 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ send: vi.fn(), config: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+	send: vi.fn(),
+	config: vi.fn(),
+	destroy: vi.fn(),
+}));
 vi.mock("@aws-sdk/client-sesv2", () => ({
 	SESv2Client: class {
 		constructor(config: unknown) {
 			mocks.config(config);
 		}
 		send = mocks.send;
+		destroy = mocks.destroy;
 	},
 	GetContactCommand: class {
 		kind = "get";
@@ -81,6 +86,7 @@ describe("SES managed-subscription transport", () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		mocks.send.mockReset();
 		mocks.config.mockReset();
+		mocks.destroy.mockReset();
 		mocks.send.mockImplementation(async (command) => {
 			if (command.kind === "get") return contact();
 			if (command.kind === "send") return { MessageId: "ses-message-123" };
@@ -766,4 +772,102 @@ describe("SES managed-subscription transport", () => {
 			expect(calls("send")).toHaveLength(1);
 		},
 	);
+	it("creates a missing contact after explicit signup consent", async () => {
+		mocks.send.mockImplementation(async (command) => {
+			if (command.kind === "get") throw sdkError(404, "NotFoundException");
+			return {};
+		});
+		await expect(
+			new SesClient(config).resubscribeContact("READER@example.com", "real"),
+		).resolves.toBe("subscribed");
+		expect(calls("create")[0][0].input).toMatchObject({
+			EmailAddress: "reader@example.com",
+			TopicPreferences: [{ TopicName: "real", SubscriptionStatus: "OPT_IN" }],
+		});
+		expect(calls("update")).toHaveLength(0);
+	});
+
+	it("keeps an already consenting contact unchanged", async () => {
+		await expect(
+			new SesClient(config).resubscribeContact(request.to, "test"),
+		).resolves.toBe("subscribed");
+		expect(calls("update")).toHaveLength(0);
+		expect(calls("create")).toHaveLength(0);
+	});
+
+	it("reconsents only the requested topic and verifies the stored result", async () => {
+		mocks.send
+			.mockResolvedValueOnce({
+				...contact(),
+				UnsubscribeAll: true,
+				TopicPreferences: [
+					{ TopicName: "test", SubscriptionStatus: "OPT_OUT" },
+					{ TopicName: "real", SubscriptionStatus: "OPT_OUT" },
+				],
+			})
+			.mockResolvedValueOnce({})
+			.mockResolvedValueOnce({
+				...contact(),
+				TopicPreferences: [
+					{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
+					{ TopicName: "real", SubscriptionStatus: "OPT_OUT" },
+				],
+			});
+		await expect(
+			new SesClient(config).resubscribeContact("READER@example.com", "test"),
+		).resolves.toBe("subscribed");
+		expect(calls("update")[0][0].input).toEqual({
+			ContactListName: config.contactListName,
+			EmailAddress: "reader@example.com",
+			UnsubscribeAll: false,
+			TopicPreferences: [
+				{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
+				{ TopicName: "real", SubscriptionStatus: "OPT_OUT" },
+			],
+		});
+		expect(calls("get")).toHaveLength(2);
+	});
+
+	it.each(["missing", "global opt-out", "topic opt-out"])(
+		"does not report success when verification finds %s",
+		async (verification) => {
+			mocks.send
+				.mockResolvedValueOnce({ ...contact(), UnsubscribeAll: true })
+				.mockResolvedValueOnce({});
+			if (verification === "missing") {
+				mocks.send.mockRejectedValueOnce(sdkError(404, "NotFoundException"));
+			} else {
+				mocks.send.mockResolvedValueOnce({
+					...contact(),
+					UnsubscribeAll: verification === "global opt-out",
+					TopicPreferences: [
+						{ TopicName: "test", SubscriptionStatus: "OPT_OUT" },
+					],
+				});
+			}
+			await expect(
+				new SesClient(config).resubscribeContact(request.to, "test"),
+			).resolves.toBe("opted_out");
+		},
+	);
+
+	it.each([403, 500, 408])(
+		"classifies a rejected reconsent update safely (HTTP %s)",
+		async (status) => {
+			mocks.send
+				.mockResolvedValueOnce({ ...contact(), UnsubscribeAll: true })
+				.mockRejectedValueOnce(sdkError(status));
+			await expect(
+				new SesClient(config).resubscribeContact(request.to, "test"),
+			).rejects.toMatchObject({
+				outcome: status === 403 ? "failed" : "uncertain",
+			});
+			expect(calls("get")).toHaveLength(1);
+		},
+	);
+
+	it("releases the SES client's resources on shutdown", () => {
+		new SesClient(config).destroy();
+		expect(mocks.destroy).toHaveBeenCalledTimes(1);
+	});
 });

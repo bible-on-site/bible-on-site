@@ -141,6 +141,13 @@ describe("bulletin-signup", () => {
 			expect(intentInsert()?.[1]).toContain("'confirmed'");
 		});
 
+		it("treats absent aggregate count rows as zero for a fresh signup", async () => {
+			mockTxQueryOne.mockResolvedValue(null);
+			await requestSignup(signup);
+			expect(subscriberUpsert()).toBeDefined();
+			expect(intentInsert()?.[1]).toContain("'confirmed'");
+		});
+
 		it("suppresses when the address already holds confirmed consent", async () => {
 			mockTxQueryOne
 				.mockResolvedValueOnce({ id: 3, consent_status: "confirmed" })

@@ -105,9 +105,7 @@ describe("bulletin join server-function adapters", () => {
 		});
 		await updateBulletinJoinLink({ data: change });
 		expect(mocks.verify).toHaveBeenCalledExactlyOnceWith("session-token");
-		expect(mocks.update.mock.calls[0][0].changedBy).toBe(
-			"editor@example.com",
-		);
+		expect(mocks.update.mock.calls[0][0].changedBy).toBe("editor@example.com");
 	});
 
 	it("degrades to the generic marker when the session cannot be read", async () => {
@@ -125,5 +123,21 @@ describe("bulletin join server-function adapters", () => {
 			}),
 		).rejects.toThrow();
 		expect(mocks.update).not.toHaveBeenCalled();
+	});
+
+	it("uses a bounded verified subject when the session has no email", async () => {
+		vi.stubEnv("SKIP_AUTH", "false");
+		mocks.cookie.mockReturnValue("session-token");
+		mocks.verify.mockResolvedValue({ sub: "s".repeat(150) });
+		await updateBulletinJoinLink({ data: change });
+		expect(mocks.update.mock.calls[0][0].changedBy).toBe("s".repeat(120));
+	});
+
+	it("keeps a legitimate save available when session-label lookup rejects", async () => {
+		vi.stubEnv("SKIP_AUTH", "false");
+		mocks.cookie.mockReturnValue("session-token");
+		mocks.verify.mockRejectedValue(new Error("private identity details"));
+		await updateBulletinJoinLink({ data: change });
+		expect(mocks.update.mock.calls[0][0].changedBy).toBe("admin");
 	});
 });

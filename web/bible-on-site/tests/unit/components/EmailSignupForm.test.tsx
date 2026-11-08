@@ -72,6 +72,11 @@ describe("EmailSignupForm", () => {
 		render(<EmailSignupForm source="card" />);
 		fillAndSubmit();
 		fireEvent.click(screen.getByRole("button", { name: "שולח…" }));
+		fireEvent.submit(
+			screen
+				.getByRole("button", { name: "שולח…" })
+				.closest("form") as HTMLFormElement,
+		);
 		expect(mockFetch).toHaveBeenCalledTimes(1);
 		resolveFetch({ ok: true } as Response);
 		expect(await screen.findByRole("status")).toBeInTheDocument();
