@@ -36,6 +36,8 @@ app/BibleOnSite/Resources/Raw/*
 **/.outputs/
 .artifacts/
 app/.artifacts/
+# Nested artifact-storage worktrees (artifacts/* branches holding PR evidence)
+/artifacts-*/
 app/BibleOnSite/Platforms/Android/AssetPacks/recitation_*/
 app/BibleOnSite/Platforms/iOS/AssetPacks/recitation-*/
 app/BibleOnSite/Platforms/Windows/ExtensionPacks/
