@@ -546,13 +546,21 @@ export async function assertAPIRepositoryPolicy(
 	client: ECRClient,
 	repositoryName: string,
 	mutableTags: readonly string[] = ["latest"],
+	registryId?: string,
 ): Promise<void> {
 	const result = await client.send(
-		new DescribeRepositoriesCommand({ repositoryNames: [repositoryName] }),
+		new DescribeRepositoriesCommand({
+			repositoryNames: [repositoryName],
+			...(registryId === undefined ? {} : { registryId }),
+		}),
 	);
 	const repository = result.repositories?.find(
 		(item) => item.repositoryName === repositoryName,
 	);
+	if (registryId !== undefined && repository?.registryId !== registryId)
+		throw new Error(
+			`Image repository ${repositoryName} is not in the expected registry`,
+		);
 	const exclusions = repository?.imageTagMutabilityExclusionFilters;
 	if (
 		repository?.imageTagMutability !== "IMMUTABLE_WITH_EXCLUSION" ||
