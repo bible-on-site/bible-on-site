@@ -28,12 +28,9 @@ except ImportError:  # Windows
 
 @contextmanager
 def database_lock(database):
-    """
-    Serialize copy-mutate-replace writers across processes via a lockfile.
-
-    Held from before the database snapshot until after the atomic replace so a
-    concurrent exporter or review overlay cannot overwrite committed rows.
-    """
+    """Serialize copy-mutate-replace writers across processes via a lockfile."""
+    # Held from before the database snapshot until after the atomic replace so a
+    # concurrent exporter or review overlay cannot overwrite committed rows.
     lock = database.parent / (database.name + ".lock")
     with lock.open("a+b") as handle:
         if fcntl is not None:
