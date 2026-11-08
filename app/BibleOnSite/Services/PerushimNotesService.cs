@@ -14,7 +14,7 @@ namespace BibleOnSite.Services;
 /// version and auto-upgrades if the store copy is newer.
 /// If the notes DB is not yet available, returns empty; download can be triggered separately.
 /// </summary>
-public class PerushimNotesService
+public class PerushimNotesService : IReaderNotesAvailability
 {
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
 #if IOS || MACCATALYST
@@ -62,6 +62,14 @@ public class PerushimNotesService
 
     private readonly object _operationCompletedSync = new();
     private Action? _operationCompleted;
+
+    // Explicit: the app-facing event stays internal while the reader
+    // display-sync consumes it through the narrow availability seam (#2573).
+    event Action? IReaderNotesAvailability.OperationCompleted
+    {
+        add => OperationCompleted += value;
+        remove => OperationCompleted -= value;
+    }
 
     private void ReleaseOperation()
     {

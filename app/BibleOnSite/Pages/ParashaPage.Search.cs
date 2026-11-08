@@ -233,7 +233,7 @@ public partial class ParashaPage
                 var unitId = await _viewModel.GetUnitIdForPerekAsync(perekId);
                 if (unitId is not null)
                 {
-                    await ShellAppNavigator.Instance.GoToAsync("ParashaPage", false, new ShellNavigationQueryParameters
+                    await ShellAppNavigator.Instance.GoToAsync(AppRoutes.Parasha, false, new ShellNavigationQueryParameters
                     {
                         ["searchResult"] = result
                     });

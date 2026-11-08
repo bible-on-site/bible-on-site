@@ -71,6 +71,13 @@ public sealed class ReaderPlatformChromeSurfaces
     /// capsule Back and the Android callback the same way (#2766).
     /// </summary>
     public required IReaderPerushimSheetSurface PerushimSheet { get; init; }
+
+    /// <summary>
+    /// The band whose color the system status bar mirrors on mobile shells
+    /// (the reader toolbar). Every reader declares it — the masora reader
+    /// previously skipped the behavior its siblings applied.
+    /// </summary>
+    public VisualElement? StatusBarColorSource { get; init; }
 }
 
 /// <summary>
@@ -134,6 +141,10 @@ public sealed class ReaderPlatformChrome
         // top/bottom container insets (#1308). Runs in the constructor because
         // the layout tree is already built — same slot the pages used.
         ConfigureSafeArea();
+
+        // The system status bar mirrors the reader band on mobile — attached
+        // once in the constructor, the same slot the pages used.
+        ConfigureStatusBar();
 
         // The capsule Back owns return affordances now (#2467): at a root
         // destination it stays enabled while a transient surface would
@@ -291,6 +302,30 @@ public sealed class ReaderPlatformChrome
         ReaderSafeArea.Configure(_ui.Root);
 #else
         // Only iOS pads layouts against the device safe area.
+#endif
+    }
+
+    /// <summary>
+    /// Attaches the status-bar behavior once — the same block every reader
+    /// carried inline: the system bar follows the reader band's color, bound
+    /// so a theme flip repaints it. A no-op on non-mobile targets.
+    /// </summary>
+    private void ConfigureStatusBar()
+    {
+#if ANDROID || IOS
+        if (_ui.StatusBarColorSource is { } colorSource &&
+            (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS()))
+        {
+            var statusBar = new CommunityToolkit.Maui.Behaviors.StatusBarBehavior
+            {
+                ApplyOn = CommunityToolkit.Maui.Behaviors.StatusBarApplyOn.OnPageNavigatedTo
+            };
+            statusBar.SetBinding(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarColorProperty,
+                new Binding(nameof(VisualElement.BackgroundColor), source: colorSource));
+            statusBar.SetAppTheme(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarStyleProperty,
+                CommunityToolkit.Maui.Core.StatusBarStyle.DarkContent, CommunityToolkit.Maui.Core.StatusBarStyle.LightContent);
+            _ui.Page.Behaviors.Add(statusBar);
+        }
 #endif
     }
 

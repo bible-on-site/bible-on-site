@@ -1376,7 +1376,7 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
     {
         try
         {
-            await _navigator.GoToAsync("AuthorsPage");
+            await _navigator.GoToAsync(AppRoutes.Authors);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: navigation failure alerts the user
         catch (Exception ex) //NOSONAR — navigation failure alerts the user.

@@ -211,7 +211,7 @@ public partial class TanahpediaEntryPage : ContentPage
             try
             {
                 var location = shell.CurrentState.Location.OriginalString;
-                await ShellAppNavigator.Instance.GoToAsync(AppRoutes.FlyoutPage("TanahpediaPage", location));
+                await ShellAppNavigator.Instance.GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Tanahpedia, location));
             }
             #pragma warning disable S2221 // Deliberate failure boundary: back navigation failure alerts the user
             catch (Exception ex) //NOSONAR — back navigation failure alerts the user.

@@ -19,10 +19,18 @@
 		     (AnalyticsScreens/AppShell, PerekPage). Automatic tracking only ever
 		     saw the single host MainActivity, which polluted GA screen reports. -->
 		<meta-data android:name="google_analytics_automatic_screen_reporting_enabled" android:value="false" />
+		<!-- #1097: FCM system-tray notifications (shown while the app is in the
+		     background) render with the app icon on the daily-perek channel that
+		     PushNotificationService creates at startup. Foreground receipts are
+		     posted by Plugin.Firebase.CloudMessaging on the same channel. -->
+		<meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@mipmap/appicon" />
+		<meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="daily_perek" />
 	</application>
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.INTERNET" />
 	<uses-permission android:name="android.permission.VIBRATE" />
+	<!-- Android 13+ runtime notification permission; requested on opt-in (#1097). -->
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 	<!-- Explicitly opt out of advertising ID - this app does not use ads -->
 	<uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
 </manifest>

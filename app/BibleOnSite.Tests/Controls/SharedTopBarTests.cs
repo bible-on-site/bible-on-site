@@ -253,6 +253,48 @@ public class SharedTopBarTests : IDisposable
         act.Should().NotThrow();
     }
 
+    /// <summary>A Shell implementing the #2766 adaptive-pane contract.</summary>
+    private sealed class AdaptiveShellStub : Shell, IAdaptiveNavPane
+    {
+        public int Toggles;
+
+        public void ToggleNavPane() => Toggles++;
+    }
+
+    [Fact]
+    public void SharedTopBar_RequestNavPane_AdaptiveShell_TogglesInsteadOfOpening()
+    {
+        // Windows locked-pane path (#2766): the hamburger collapses and
+        // re-expands the pinned pane — it must not also toggle the overlay.
+        var shell = new AdaptiveShellStub();
+
+        SharedTopBar.RequestNavPane(shell);
+        SharedTopBar.RequestNavPane(shell);
+
+        shell.Toggles.Should().Be(2, "every press toggles the adaptive pane");
+        shell.FlyoutIsPresented.Should().BeFalse(
+            "the overlay is not driven when the pane contract handles the press");
+    }
+
+    [Fact]
+    public void SharedTopBar_RequestNavPane_PlainShell_PresentsTheOverlay()
+    {
+        var shell = new Shell();
+
+        SharedTopBar.RequestNavPane(shell);
+
+        shell.FlyoutIsPresented.Should().BeTrue(
+            "a Shell without the adaptive contract keeps the open-only flyout");
+    }
+
+    [Fact]
+    public void SharedTopBar_RequestNavPane_NoShell_IsANoOp()
+    {
+        var act = () => SharedTopBar.RequestNavPane(null);
+
+        act.Should().NotThrow();
+    }
+
     [Fact]
     public void SharedTopBar_BackEnabled_FollowsTheStackDepthBoundary()
     {
