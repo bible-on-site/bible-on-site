@@ -22,8 +22,11 @@ describe("DailyBulletinSection", () => {
 		expect(telegram).toHaveAttribute("href", "/join/telegram");
 		const whatsapp = screen.getByRole("link", { name: "הצטרפות לקבוצה" });
 		expect(whatsapp).toHaveAttribute("href", "/join/whatsapp");
-		const email = screen.getByRole("link", { name: "עמוד הרשמה נפרד" });
-		expect(email).toHaveAttribute("href", "/join/email");
+		// The email card embeds the signup form itself; a separate-page link was
+		// removed per review.
+		expect(
+			screen.queryByRole("link", { name: /הרשמה/ }),
+		).not.toBeInTheDocument();
 	});
 
 	it("anchors the cards for the section scroll targets", () => {

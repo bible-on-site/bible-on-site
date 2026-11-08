@@ -106,7 +106,7 @@
 	display: flex;
 	gap: 0.5rem;
 	justify-content: center;
-	margin-top: 1rem;
+	margin: 1rem 0 0;
 	min-inline-size: 0;
 	padding: 0;
 }
@@ -186,16 +186,60 @@
 	}
 }
 
-.cardAction:focus-visible,
-.cardLink:focus-visible {
+.cardAction:focus-visible {
 	outline: 2px solid var(--accent-600, #1552ac);
 	outline-offset: 2px;
 }
 
-.cardLink {
-	color: var(--link-accent, #1552ac);
-	font-size: 0.8em;
-	margin-top: auto;
+/* Brand-evoking card backgrounds (review on #3083): each join card carries a
+   pastel wash of its channel's identity — Telegram sky blue, WhatsApp chat
+   green, and the four Gmail envelope colors — while the markup, text color
+   and navy icons stay on the site palette. */
+.cardTelegram {
+	background-color: #d9ecf9;
+	background-image:
+		radial-gradient(
+			circle at 85% 8%,
+			rgba(255, 255, 255, 0.85) 0,
+			rgba(255, 255, 255, 0) 45%
+		),
+		linear-gradient(155deg, #ecf6fd 0%, #cfe9f8 55%, #e0f1fb 100%);
+}
+
+.cardWhatsapp {
+	background-color: #ddf1cb;
+	background-image:
+		radial-gradient(
+			circle at 85% 8%,
+			rgba(255, 255, 255, 0.8) 0,
+			rgba(255, 255, 255, 0) 45%
+		),
+		linear-gradient(155deg, #f0fbe6 0%, #d7f0c0 55%, #e7f7d4 100%);
+}
+
+.cardEmail {
+	background-color: #fdfdfe;
+	background-image:
+		radial-gradient(
+			circle at 0% 0%,
+			rgba(234, 67, 53, 0.1) 0,
+			rgba(234, 67, 53, 0) 55%
+		),
+		radial-gradient(
+			circle at 100% 0%,
+			rgba(251, 188, 5, 0.12) 0,
+			rgba(251, 188, 5, 0) 55%
+		),
+		radial-gradient(
+			circle at 100% 100%,
+			rgba(66, 133, 244, 0.1) 0,
+			rgba(66, 133, 244, 0) 55%
+		),
+		radial-gradient(
+			circle at 0% 100%,
+			rgba(52, 168, 83, 0.1) 0,
+			rgba(52, 168, 83, 0) 55%
+		);
 }
 
 /* Wide screens: all three cards side by side, no carousel chrome. */

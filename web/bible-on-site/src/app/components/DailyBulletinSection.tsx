@@ -22,7 +22,10 @@ export function DailyBulletinSection() {
 				<h3>קבלו את הלימוד היומי ישירות אליכם</h3>
 			</header>
 			<BulletinJoinCarousel>
-				<article id="bulletin-telegram" className={styles.card}>
+				<article
+					id="bulletin-telegram"
+					className={`${styles.card} ${styles.cardTelegram}`}
+				>
 					<Image
 						className={styles.cardIcon}
 						src="/icons/telegram.svg"
@@ -38,7 +41,10 @@ export function DailyBulletinSection() {
 						הצטרפות לערוץ
 					</a>
 				</article>
-				<article id="bulletin-whatsapp" className={styles.card}>
+				<article
+					id="bulletin-whatsapp"
+					className={`${styles.card} ${styles.cardWhatsapp}`}
+				>
 					<Image
 						className={styles.cardIcon}
 						src="/icons/whatsapp.svg"
@@ -54,7 +60,10 @@ export function DailyBulletinSection() {
 						הצטרפות לקבוצה
 					</a>
 				</article>
-				<article id="bulletin-email" className={styles.card}>
+				<article
+					id="bulletin-email"
+					className={`${styles.card} ${styles.cardEmail}`}
+				>
 					<Image
 						className={styles.cardIcon}
 						src="/icons/envelope.svg"
@@ -67,9 +76,6 @@ export function DailyBulletinSection() {
 						העלון היומי בתיבת הדוא&quot;ל שלכם, כל בוקר.
 					</p>
 					<EmailSignupForm source="card" />
-					<a className={styles.cardLink} href="/join/email">
-						עמוד הרשמה נפרד
-					</a>
 				</article>
 			</BulletinJoinCarousel>
 		</section>
