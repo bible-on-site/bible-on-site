@@ -33,6 +33,26 @@
 		<DisableAnalytics Condition="'$(DisableAnalytics)' == '' AND '$(Configuration)' == 'Debug'">true</DisableAnalytics>
 		<DefineConstants Condition="'$(DisableAnalytics)' == 'true'">$(DefineConstants);DISABLE_ANALYTICS</DefineConstants>
 
+		<!-- Push gating (#1097): Debug builds and every mobile-e2e build (which sets
+		     DisableAnalytics explicitly) get DISABLE_PUSH — PushNotificationService
+		     becomes a no-op, the iOS CloudMessaging wiring is skipped (required:
+		     DISABLE_ANALYTICS builds never call CrossFirebase.Initialize, so the
+		     Messaging SDK would be unconfigured), and the suite cannot receive or
+		     render notifications. Release builds default to push on; a Debug build
+		     can opt in with -p:DisablePush=false, which also drives the iOS
+		     CrossFirebase.Initialize call the Messaging SDK depends on while the
+		     plist flag still keeps analytics collection off. -->
+		<DisablePush Condition="'$(DisablePush)' == ''">$(DisableAnalytics)</DisablePush>
+		<DefineConstants Condition="'$(DisablePush)' == 'true'">$(DefineConstants);DISABLE_PUSH</DefineConstants>
+
+		<!-- #1097: stays false until the App ID's Push Notifications capability is
+		     enabled and the provisioning profiles regenerated (operator checklist in
+		     docs/app/push-notifications.md). While false, iOS device signing selects
+		     Entitlements.Base.plist (app groups only); pass
+		     -p:IosPushProvisioned=true — or flip this default — once aps-environment
+		     is authorized. -->
+		<IosPushProvisioned Condition="'$(IosPushProvisioned)' == ''">false</IosPushProvisioned>
+
 		<!-- Treat C# compiler warnings as errors so iOS/Android-only issues are caught early -->
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 		<!-- Suppress XamlC warnings: XC0022 bindings without x:DataType; XC0045 Path in MultiBinding with Source=page validated against template DataType (Article) -->
@@ -229,13 +249,26 @@
 	       builds do not have. RuntimeIdentifier defaults are only resolved after
 	       csproj evaluation (a RID-less Debug build lands on iossimulator), so the
 	       assignment runs in a target where the SDK-computed _SdkIsSimulator flag —
-	       the same flag DetectSigningIdentity consumes — is already known. -->
+	       the same flag DetectSigningIdentity consumes — is already known.
+	     - #1097: aps-environment must literally match the provisioning profile.
+	       Debug device builds sign against development profiles; Release selects
+	       Entitlements.Dist.plist so App Store validation and
+	       ios_signing_requirements.py (evaluated with Configuration=Release)
+	       both see `production`.
+	     - #1097: the App ID's Push Notifications capability is not enabled yet,
+	       so no provisioning profile authorizes `aps-environment` — signing with
+	       it fails codesign and CI validation alike. Until the operator enables
+	       the capability and regenerates the profiles, builds sign with
+	       Entitlements.Base.plist (app groups only). Pass
+	       -p:IosPushProvisioned=true to switch to the aps-environment plists. -->
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 		<CodesignEntitlements>Platforms\MacCatalyst\Entitlements.plist</CodesignEntitlements>
 	</PropertyGroup>
 	<Target Name="_SetIosCodesignEntitlements" BeforeTargets="_DetectSigningIdentity" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' AND '$(_SdkIsSimulator)' != 'true' AND '$(EnableCodeSigning)' != 'false'">
 		<PropertyGroup>
-			<CodesignEntitlements>Platforms\iOS\Entitlements.App.plist</CodesignEntitlements>
+			<CodesignEntitlements Condition="'$(IosPushProvisioned)' == 'true' AND '$(Configuration)' == 'Release'">Platforms\iOS\Entitlements.Dist.plist</CodesignEntitlements>
+			<CodesignEntitlements Condition="'$(IosPushProvisioned)' == 'true' AND '$(Configuration)' != 'Release'">Platforms\iOS\Entitlements.App.plist</CodesignEntitlements>
+			<CodesignEntitlements Condition="'$(IosPushProvisioned)' != 'true'">Platforms\iOS\Entitlements.Base.plist</CodesignEntitlements>
 		</PropertyGroup>
 		<Message Importance="low" Text="=== iOS device/desktop build: CodesignEntitlements = $(CodesignEntitlements) ===" />
 	</Target>
@@ -402,6 +435,7 @@
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<PackageReference Include="Plugin.Firebase.Analytics" Version="4.0.0" />
 		<PackageReference Include="Plugin.Firebase.Auth" Version="5.0.1" />
+		<PackageReference Include="Plugin.Firebase.CloudMessaging" Version="4.0.1" />
 		<PackageReference Include="Plugin.Firebase.Core" Version="4.2.0" />
 		<PackageReference Include="Plugin.Firebase.Firestore" Version="4.0.0" />
 	</ItemGroup>

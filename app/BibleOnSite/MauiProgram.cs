@@ -6,8 +6,10 @@ using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using BibleOnSite.Controls;
 using BibleOnSite.Handlers;
-#if IOS && !DISABLE_ANALYTICS
+#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH)
 using Plugin.Firebase.Core.Platforms.iOS;
+#endif
+#if IOS && !DISABLE_ANALYTICS
 using Plugin.Firebase.Analytics;
 #endif
 
@@ -145,7 +147,10 @@ public static class MauiProgram
         //
         // #2120: DISABLE_ANALYTICS builds (Debug/e2e) skip Firebase entirely —
         // with no init call the SDK never configures, so no automatic or manual
-        // event can be emitted, queued or flushed on iOS.
+        // event can be emitted, queued or flushed on iOS. #1097: the same init
+        // also configures the Messaging SDK, so it additionally runs whenever
+        // push is enabled (-p:DisablePush=false) even on a DISABLE_ANALYTICS
+        // build; the plist flag still keeps analytics collection off there.
         // If initialization raises a managed exception, leave analytics disabled.
         // Native crashes require a device crash report and cannot be caught here.
         builder.ConfigureLifecycleEvents(events =>
@@ -159,13 +164,14 @@ public static class MauiProgram
                 return true;
             }));
 #endif
-#if IOS && !DISABLE_ANALYTICS
+#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH)
 			events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
 			{
 				try
 				{
 					CrossFirebase.Initialize();
 					IsFirebaseInitialized = true;
+#if !DISABLE_ANALYTICS
 					// Info.plist keeps collection off so nothing can emit before
 					// this point; e2e-marked processes keep it off so automatic
 					// and custom suite events never reach the production
@@ -174,9 +180,16 @@ public static class MauiProgram
 					var analyticsCollectionEnabled = !SearchIndexService.IsE2eMarkedProcess();
 					CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled = analyticsCollectionEnabled;
 					Console.WriteLine($"[Analytics] collection enabled={analyticsCollectionEnabled}");
+#endif
+#if !DISABLE_PUSH
+					// Cloud Messaging delegate wiring — queued notification taps
+					// replay once the service subscribes. The APNs device-token
+					// request is deferred to the opt-in flow.
+					Services.IosPushPlatformClient.PlatformInitialize();
+#endif
 				}
-				#pragma warning disable S2221 // Deliberate failure boundary: Firebase init failure disables analytics, not the app
-				catch (Exception ex) //NOSONAR — Firebase init failure disables analytics, not the app.
+				#pragma warning disable S2221 // Deliberate failure boundary: Firebase init failure disables analytics/push, not the app
+				catch (Exception ex) //NOSONAR — Firebase init failure disables analytics/push, not the app.
 				{
 				    #pragma warning restore S2221
 					System.Diagnostics.Debug.WriteLine($"[Firebase] Initialization failed (analytics disabled): {ex.Message}");

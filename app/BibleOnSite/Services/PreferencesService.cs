@@ -423,6 +423,30 @@ public class PreferencesService
         }
     }
 
+    private const string DailyPerekPushEnabledKey = "dailyPerekPushEnabled";
+    private bool _dailyPerekPushEnabled;
+
+    /// <summary>
+    /// Daily-perek push notification opt-in (#1097). Off by default; written
+    /// only after the platform subscription succeeds so the stored value never
+    /// claims a delivery that does not exist.
+    /// </summary>
+    public bool DailyPerekPushEnabled
+    {
+        get => _dailyPerekPushEnabled;
+        set
+        {
+            if (_dailyPerekPushEnabled == value)
+            {
+                return;
+            }
+
+            _dailyPerekPushEnabled = value;
+            _storage.Set(DailyPerekPushEnabledKey, value);
+            OnPreferencesChanged();
+        }
+    }
+
     private readonly IPreferencesStorage _storage;
     private double _fontFactor = 1.0;
     private double _pasukFontPercent = DefaultFontPercent;
@@ -571,6 +595,7 @@ public class PreferencesService
     public void Load()
     {
         _masoraMenuEnabled = _storage.Get(MasoraMenuEnabledKey, false);
+        _dailyPerekPushEnabled = _storage.Get(DailyPerekPushEnabledKey, false);
         _qriynotEnabled = _storage.Get(QriynotEnabledKey, true);
         var storedBackButton = _storage.Get(InAppBackButtonKey, (int)InAppBackButtonPreference.PlatformDefault);
         _inAppBackButton = Enum.IsDefined((InAppBackButtonPreference)storedBackButton)
