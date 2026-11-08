@@ -18,7 +18,13 @@ const layout = (unit: string) =>
 
 const swipeHrefs = async (unit: string) => {
 	const tree = await layout(unit);
-	const props = tree.props as { prevHref: string | null; nextHref: string | null };
+	// The PageShell wrapper carries the header contract (#3161); the swipe
+	// navigation with its hrefs is its child element.
+	const swipe = (tree.props as { children: { props: unknown } }).children;
+	const props = swipe.props as {
+		prevHref: string | null;
+		nextHref: string | null;
+	};
 	return { prev: props.prevHref, next: props.nextHref };
 };
 
