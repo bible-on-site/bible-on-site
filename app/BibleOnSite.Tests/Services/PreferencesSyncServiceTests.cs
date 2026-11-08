@@ -16,6 +16,7 @@ public class PreferencesSyncServiceTests : IDisposable
 
         public string? UserId { get; private set; }
         public int EnsureCalls { get; private set; }
+        public Exception? EnsureError { get; set; }
 
         public event EventHandler? UserChanged
         {
@@ -27,6 +28,10 @@ public class PreferencesSyncServiceTests : IDisposable
         {
             EnsureCalls++;
             cancellationToken.ThrowIfCancellationRequested();
+            if (EnsureError != null)
+            {
+                throw EnsureError;
+            }
             return Task.CompletedTask;
         }
 
@@ -482,6 +487,264 @@ public class PreferencesSyncServiceTests : IDisposable
         await _sync.PendingSync;
 
         _store.FetchCount.Should().Be(fetches);
+    }
+
+    [Fact]
+    public void Singleton_Initialize_ExposesInstance_UntilReset()
+    {
+        PreferencesSyncService.ResetForTesting();
+        try
+        {
+            Action read = () => _ = PreferencesSyncService.Instance;
+            read.Should().Throw<InvalidOperationException>();
+
+            PreferencesSyncService.Initialize(_storage, _preferences, _store, _identity);
+
+            var first = PreferencesSyncService.Instance;
+            first.Should().NotBeNull();
+            // A second Initialize is ignored — the singleton is created once.
+            PreferencesSyncService.Initialize(_storage, _preferences, _store, _identity);
+            PreferencesSyncService.Instance.Should().BeSameAs(first);
+        }
+        finally
+        {
+            PreferencesSyncService.ResetForTesting();
+        }
+
+        Action readAfterReset = () => _ = PreferencesSyncService.Instance;
+        readAfterReset.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void CreateForTesting_RejectsNullDependencies()
+    {
+        Action nullStorage = () => PreferencesSyncService.CreateForTesting(
+            null!, _preferences, _store, _identity, null, null);
+        Action nullPreferences = () => PreferencesSyncService.CreateForTesting(
+            _storage, null!, _store, _identity, null, null);
+        Action nullStore = () => PreferencesSyncService.CreateForTesting(
+            _storage, _preferences, null!, _identity, null, null);
+        Action nullIdentity = () => PreferencesSyncService.CreateForTesting(
+            _storage, _preferences, _store, null!, null, null);
+
+        nullStorage.Should().Throw<ArgumentNullException>().Which.ParamName.Should().Be("storage");
+        nullPreferences.Should().Throw<ArgumentNullException>().Which.ParamName.Should().Be("preferences");
+        nullStore.Should().Throw<ArgumentNullException>().Which.ParamName.Should().Be("cloudStore");
+        nullIdentity.Should().Throw<ArgumentNullException>().Which.ParamName.Should().Be("identity");
+    }
+
+    [Fact]
+    public async Task SignInFailure_StaysLocal_AndSyncsAfterRecovery()
+    {
+        _preferences.Load();
+        _identity.EnsureError = new InvalidOperationException("firebase unavailable");
+
+        await _sync.StartAsync();
+
+        // Identity failure is a deliberate local-only boundary — no fetch,
+        // no throw; the first merge simply sees no user.
+        _store.FetchCount.Should().Be(0);
+        _store.SaveCount.Should().Be(0);
+
+        _identity.EnsureError = null;
+        _identity.SignIn("u1"); // UserChanged schedules a sync on its own
+        await _sync.PendingSync;
+        _store.FetchCount.Should().Be(1);
+
+        _preferences.FontFactor = 1.5;
+        await _sync.PendingSync;
+
+        _store.FetchCount.Should().Be(2);
+        _store.Document!.Entries["fontFactor"].Value.Should().Be(1.5);
+    }
+
+    [Fact]
+    public async Task StartAsync_CancelledToken_Propagates()
+    {
+        _preferences.Load();
+
+        var act = () => _sync.StartAsync(new CancellationToken(canceled: true));
+
+        // OperationCanceledException is deliberately not swallowed by the
+        // sign-in failure boundary.
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task SyncNowAsync_CancelsAPendingDebouncedSync()
+    {
+        using var sync = PreferencesSyncService.CreateForTesting(
+            _storage, _preferences, _store, _identity,
+            timeProvider: null, pushDebounce: TimeSpan.FromSeconds(30));
+
+        _preferences.Load();
+        _identity.SignIn("u1");
+        await sync.StartAsync();
+
+        _preferences.FontFactor = 1.4; // schedules the long debounced push
+        var pendingDebounced = sync.PendingSync;
+
+        await sync.SyncNowAsync(); // supersedes it — the delay observes cancellation
+        await pendingDebounced;
+
+        _store.Document!.Entries["fontFactor"].Value.Should().Be(1.4);
+    }
+
+    [Fact]
+    public async Task Dispose_CancelsAPendingDebouncedSync()
+    {
+        var sync = PreferencesSyncService.CreateForTesting(
+            _storage, _preferences, _store, _identity,
+            timeProvider: null, pushDebounce: TimeSpan.FromSeconds(30));
+        _preferences.Load();
+        _identity.SignIn("u1");
+        await sync.StartAsync();
+
+        _preferences.FontFactor = 1.4;
+        var pendingDebounced = sync.PendingSync;
+
+        sync.Dispose();
+        await pendingDebounced; // completes via the cancellation boundary
+    }
+
+    [Fact]
+    public void Events_BeforeStart_AndAfterDispose_AreIgnored()
+    {
+        // A service that was never started must ignore preference/auth noise.
+        Raise("OnPreferencesChanged");
+        Raise("OnUserChanged");
+        InvokeScheduleSync();
+        _store.FetchCount.Should().Be(0);
+        _store.SaveCount.Should().Be(0);
+
+        _sync.Dispose();
+        Raise("OnPreferencesChanged");
+        Raise("OnUserChanged");
+        InvokeScheduleSync();
+        _store.FetchCount.Should().Be(0);
+        _store.SaveCount.Should().Be(0);
+
+        void Raise(string method) => typeof(PreferencesSyncService)
+            .GetMethod(method, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .Invoke(_sync, [null, EventArgs.Empty]);
+        void InvokeScheduleSync() => typeof(PreferencesSyncService)
+            .GetMethod("ScheduleSync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .Invoke(_sync, [TimeSpan.Zero]);
+    }
+
+    [Fact]
+    public async Task DeviceId_IsReused_WhenAlreadyStored()
+    {
+        _preferences.Load();
+        _inner.Set(PreferencesSyncService.DeviceIdStorageKey, "preset-device-id");
+
+        await StartSignedInAsync();
+
+        _store.Document!.DeviceId.Should().Be("preset-device-id");
+    }
+
+    [Fact]
+    public async Task StampedKeyWithNoLocalValue_IsNotClaimedInTheMerge()
+    {
+        // The raw store holds lastLearntPerek=-1 which PreferencesService
+        // parses as "unset" — the key is stamped by migration but has no
+        // value to claim, so it must not appear in the pushed document.
+        _inner.Set(PreferencesService.LastLearntPerekKey, -1);
+        _preferences.Load();
+        _preferences.LastLearntPerek.Should().BeNull();
+
+        await StartSignedInAsync();
+
+        _storage.GetStampsSnapshot().Should().ContainKey(PreferencesService.LastLearntPerekKey);
+        _store.Document!.Entries.Should().NotContainKey(PreferencesService.LastLearntPerekKey);
+    }
+
+    [Fact]
+    public async Task EmptyRemoteDocument_ConvergesWithoutRewriting()
+    {
+        _preferences.Load();
+        await SeedRemoteAsync(RemoteDoc()); // document exists but carries no entries
+
+        await StartSignedInAsync();
+
+        _store.FetchCount.Should().Be(1);
+        _store.SaveCount.Should().Be(1); // only the seed write
+    }
+
+    [Fact]
+    public async Task RemoteBookmarks_NonStringValue_IsIgnored()
+    {
+        _preferences.Load();
+        _preferences.AddBookmark(4);
+        await SeedRemoteAsync(RemoteDoc(("bookmarkedPerakim", 42, 20_000)));
+
+        await StartSignedInAsync();
+
+        _preferences.BookmarkedPerakim.Should().BeEquivalentTo([4]);
+    }
+
+    [Fact]
+    public async Task RemoteBookmarks_NullJson_KeepsTheLocalSet()
+    {
+        _preferences.Load();
+        _preferences.AddBookmark(4);
+        await SeedRemoteAsync(RemoteDoc(("bookmarkedPerakim", "null", 20_000)));
+
+        await StartSignedInAsync();
+
+        // "null" deserializes to no set — the apply is a no-op and the local
+        // bookmarks survive.
+        _preferences.BookmarkedPerakim.Should().BeEquivalentTo([4]);
+    }
+
+    [Fact]
+    public async Task RemoteBookmarks_InvalidJson_IsHealedWithTheLocalSet()
+    {
+        _preferences.Load();
+        _preferences.AddBookmark(4);
+        await SeedRemoteAsync(RemoteDoc(("bookmarkedPerakim", "{not-json", 20_000)));
+
+        await StartSignedInAsync();
+
+        // The unparseable remote value is rejected and healed with the local
+        // serialization at the remote's own timestamp.
+        var healed = _store.Document!.Entries["bookmarkedPerakim"];
+        healed.Value.Should().Be("[4]");
+        healed.UpdatedAtMs.Should().Be(20_000);
+        _preferences.BookmarkedPerakim.Should().BeEquivalentTo([4]);
+    }
+
+    [Fact]
+    public async Task RemoteMaskValues_WithUnexpectedShapes_AreIgnored()
+    {
+        _preferences.Load();
+        _preferences.DivineNameMaskElohimCustom = "המם";
+        var doc = RemoteDoc(
+            ("divineNameMaskElohim", "not-a-mask-name", 20_000), // unknown option name
+            ("divineNameMaskYhwh", 42, 20_000),                  // non-string value
+            ("divineNameMaskShaddaiCustom", 42, 20_000));        // non-string custom text
+        await SeedRemoteAsync(doc);
+
+        await StartSignedInAsync();
+
+        _preferences.DivineNameMaskElohim.Should().Be(DivineNameMaskOption.Hyphen);
+        _preferences.DivineNameMaskYhwh.Should().Be(DivineNameMaskOption.Heh);
+        _preferences.DivineNameMaskShaddaiCustom.Should().Be("");
+        _preferences.DivineNameMaskElohimCustom.Should().Be("המם");
+    }
+
+    [Fact]
+    public async Task RemoteLastLearntPerek_NegativeValue_IsNotApplied()
+    {
+        _preferences.Load();
+        _preferences.LastLearntPerek = 3;
+        await SeedRemoteAsync(RemoteDoc(("lastLearntPerek", -4L, 20_000)));
+
+        await StartSignedInAsync();
+
+        // The remote entry wins the merge but its negative value fails the
+        // >= 0 guard, so the local value is kept.
+        _preferences.LastLearntPerek.Should().Be(3);
     }
 
     [Fact]
