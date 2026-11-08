@@ -1,14 +1,14 @@
-import { toLetters } from "gematry";
 import { Ptuah } from "@/app/929/[number]/components/Ptuha";
-import { renderPasukSegmentsWithEntityRefs } from "@/app/929/[number]/components/pasuk-renderer";
 import { Stuma } from "@/app/929/[number]/components/Stuma";
 import { TanahpediaLink } from "@/app/929/[number]/components/TanahpediaLink";
+import { renderPasukSegmentsWithEntityRefs } from "@/app/929/[number]/components/pasuk-renderer";
 import perekStyles from "@/app/929/[number]/page.module.css";
 import type { Pasuk } from "@/data/db/tanah-view-types";
 import type { ScriptureRange } from "@/lib/reading/contract";
 import { type PerekSlice, rangesPerekSlices } from "@/lib/reading/ranges";
 import { buildEntityRefLookup } from "@/lib/tanahpedia/entity-ref-lookup";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
+import { toLetters } from "gematry";
 import styles from "./reading-unit-text.module.css";
 
 /** The slice of canonical perek data the renderer needs. */
@@ -23,16 +23,80 @@ export type UnitTextPerekResolver = (
 ) => UnitTextPerek | undefined;
 
 /**
+ * Coincident markers that agree on the boundary — same ordinal and
+ * role — merge into one pill (issue #3165 review): their tag lists the
+ * shared schemes/contexts (`שבת+חול`), while variant communities that
+ * agree with the common division fold silently into the joined detail.
+ * Only a genuinely divergent division — a community re-slicing the
+ * ordinal at another coordinate, or a different ordinal at this one —
+ * keeps its own tagged marker. `data-aliyah-key` carries every
+ * constituent layer key space-separated, so emphasis of any merged
+ * layer highlights the shared pill.
+ */
+function mergeBoundaryMarkers(
+	markers: readonly UnitBoundaryMarker[],
+): UnitBoundaryMarker[] {
+	const groups = new Map<string, UnitBoundaryMarker[]>();
+	for (const mark of markers) {
+		const groupKey = `${mark.label}${mark.role ?? "aliyah"}`;
+		const group = groups.get(groupKey) ?? [];
+		groups.set(groupKey, group);
+		group.push(mark);
+	}
+	return [...groups.values()].map((group) => {
+		if (group.length === 1) return group[0];
+		// Agreeing variant/custom layers keep the merged detail but add
+		// no tag of their own — only the shared schemes/contexts show.
+		const nonVariant = group.filter((mark) => mark.category !== "variant");
+		const tags = new Set(
+			(nonVariant.length > 0 ? nonVariant : group)
+				.map((mark) => mark.tag)
+				.filter((tag): tag is string => Boolean(tag)),
+		);
+		const category =
+			new Set(group.map((mark) => mark.category)).size === 1
+				? group[0].category
+				: "shared";
+		return {
+			key: group.map((mark) => mark.key).join(" "),
+			label: group[0].label,
+			role: group[0].role,
+			tag: [...tags].join("+"),
+			category,
+			detail: group
+				.map(
+					(mark) =>
+						mark.detail ?? [mark.tag, mark.label].filter(Boolean).join(" "),
+				)
+				.join("\n"),
+		};
+	});
+}
+
+/**
  * A boundary marker rendered inline before a pasuk — e.g. an aliyah
  * start (issue #2519). `key` identifies which reading/scheme layer
- * owns the marker: callers may embed several layers in one text and
- * reveal exactly one at a time, so scheme/context switching never
- * remounts scripture.
+ * owns the marker. Since issue #3165 every applicable layer renders
+ * together inline at its canonical coordinate — coincident boundaries
+ * cluster deterministically inside one scripture flow — and the key
+ * doubles as the emphasis hook for the legend's URL selection.
  */
 export interface UnitBoundaryMarker {
+	/** Owning layer's `"{reading}:{scheme}[:{variant}]"` key — a merged
+	 * coincident marker carries every constituent key space-separated,
+	 * and emphasis matches any of them. */
 	key: string;
+	/** Ordinal label shown as the marker's main text. */
 	label: string;
 	role?: "aliyah" | "maftir";
+	/** Short visible tag identifying the layer (e.g. scheme or custom
+	 * name), so coincident markers stay distinguishable. */
+	tag?: string;
+	/** Styling category (e.g. `shabbat`/`weekday`/`joined`/`variant`) —
+	 * distinguishes layers by border/typography, never color alone. */
+	category?: string;
+	/** Richer hover/focus/touch detail; also the accessible name. */
+	detail?: string;
 }
 
 /**
@@ -52,7 +116,7 @@ export function UnitTextBody({
 	anchorScope,
 	unitPositionMarkers,
 	boundaryMarkers,
-	defaultMarkerKey,
+	emphasisMarkerKey,
 	modestPerekLabels,
 }: {
 	ranges: ScriptureRange[];
@@ -70,12 +134,14 @@ export function UnitTextBody({
 	 * pesukim still count a position and carry a התחלה/סיום/קטע suffix. */
 	unitPositionMarkers?: boolean;
 	/** Boundary markers keyed `"{perekId}:{pasuk}"` — each coordinate may
-	 * hold several (one per reading context/scheme layer); only markers
-	 * matching `defaultMarkerKey` render visible. When provided, perek
-	 * breaks demote to the modest pasuk-like label so the boundary
+	 * hold several (one per reading context/scheme layer) and ALL render
+	 * inline together in their map order (issue #3165). When provided,
+	 * perek breaks demote to the modest pasuk-like label so the boundary
 	 * markers own the prominent separator treatment. */
 	boundaryMarkers?: ReadonlyMap<string, readonly UnitBoundaryMarker[]>;
-	defaultMarkerKey?: string;
+	/** Optional layer key rendered emphasized (the legend's URL-selected
+	 * `"{reading}:{scheme}[:{variant}]"`); every marker still shows. */
+	emphasisMarkerKey?: string;
 	/** Demotes perek-break labels to the modest pasuk-like style even
 	 * where no boundary markers exist — e.g. the parasha reader's
 	 * Haftarah text, which shares the page with an annotated Torah
@@ -116,7 +182,7 @@ export function UnitTextBody({
 					showPerekLabel={multiPerek && !unitPositionMarkers}
 					modestPerekLabel={modestPerekLabels || boundaryMarkers != null}
 					boundaryMarkers={boundaryMarkers}
-					defaultMarkerKey={defaultMarkerKey}
+					emphasisMarkerKey={emphasisMarkerKey}
 					firstPosition={
 						unitPositionMarkers ? firstPositions[sliceIndex] : undefined
 					}
@@ -136,7 +202,7 @@ function UnitPerekSlice({
 	showPerekLabel,
 	modestPerekLabel,
 	boundaryMarkers,
-	defaultMarkerKey,
+	emphasisMarkerKey,
 	firstPosition,
 }: {
 	slice: PerekSlice;
@@ -148,7 +214,7 @@ function UnitPerekSlice({
 	showPerekLabel: boolean;
 	modestPerekLabel?: boolean;
 	boundaryMarkers?: ReadonlyMap<string, readonly UnitBoundaryMarker[]>;
-	defaultMarkerKey?: string;
+	emphasisMarkerKey?: string;
 	firstPosition?: number;
 }) {
 	const perek = resolvePerek(slice.perekId);
@@ -204,8 +270,9 @@ function UnitPerekSlice({
 					const emitsAnchor =
 						firstSliceByCoord.get(`${slice.perekId}-${pasukNumber}`) ===
 						sliceIndex;
-					const boundary =
-						boundaryMarkers?.get(`${slice.perekId}:${pasukNumber}`) ?? [];
+					const boundary = mergeBoundaryMarkers(
+						boundaryMarkers?.get(`${slice.perekId}:${pasukNumber}`) ?? [],
+					);
 					return (
 						<span
 							key={pasukNumber}
@@ -215,18 +282,56 @@ function UnitPerekSlice({
 									: undefined
 							}
 						>
-							{boundary.map((mark) => (
-								<span
-									key={mark.key}
-									className={styles.aliyahBreakLabel}
-									data-aliyah-marker=""
-									data-aliyah-key={mark.key}
-									data-aliyah-role={mark.role}
-									hidden={mark.key !== defaultMarkerKey}
-								>
-									{mark.label}
+							{boundary.length > 0 && (
+								<span className={styles.aliyahMarkerCluster}>
+									{boundary.map((mark) => (
+										/* Coincident agreeing layers render as one merged
+										 * pill (issue #3165); the tag keeps divergent
+										 * ordinals distinguishable and the button's
+										 * focus/hover — and its touch tap — reveals the
+										 * full division detail. */
+										<button
+											key={mark.key}
+											type="button"
+											className={styles.aliyahBreakLabel}
+											data-aliyah-marker=""
+											data-aliyah-key={mark.key}
+											data-aliyah-role={mark.role}
+											data-aliyah-category={mark.category}
+											data-aliyah-selected={
+												emphasisMarkerKey != null &&
+												mark.key.split(" ").includes(emphasisMarkerKey)
+													? ""
+													: undefined
+											}
+											aria-label={
+												mark.detail ??
+												[mark.tag, mark.label].filter(Boolean).join(" ")
+											}
+										>
+											{mark.tag && (
+												<span
+													className={styles.aliyahMarkerTag}
+													aria-hidden="true"
+												>
+													{mark.tag}
+												</span>
+											)}{" "}
+											<span className={styles.aliyahMarkerOrdinal}>
+												{mark.label}
+											</span>
+											{mark.detail && (
+												<span
+													className={styles.aliyahMarkerDetail}
+													aria-hidden="true"
+												>
+													{mark.detail}
+												</span>
+											)}
+										</button>
+									))}
 								</span>
-							))}
+							)}
 							<span className={perekStyles.pasukNum} data-pasuk-num>
 								{marker}
 							</span>{" "}
