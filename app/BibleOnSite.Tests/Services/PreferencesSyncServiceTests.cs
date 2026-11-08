@@ -573,27 +573,21 @@ public class PreferencesSyncServiceTests : IDisposable
     [Fact]
     public async Task SyncNowAsync_CancelsAPendingDebouncedSync()
     {
-        var sync = PreferencesSyncService.CreateForTesting(
+        using var sync = PreferencesSyncService.CreateForTesting(
             _storage, _preferences, _store, _identity,
             timeProvider: null, pushDebounce: TimeSpan.FromSeconds(30));
-        try
-        {
-            _preferences.Load();
-            _identity.SignIn("u1");
-            await sync.StartAsync();
 
-            _preferences.FontFactor = 1.4; // schedules the long debounced push
-            var pendingDebounced = sync.PendingSync;
+        _preferences.Load();
+        _identity.SignIn("u1");
+        await sync.StartAsync();
 
-            await sync.SyncNowAsync(); // supersedes it — the delay observes cancellation
-            await pendingDebounced;
+        _preferences.FontFactor = 1.4; // schedules the long debounced push
+        var pendingDebounced = sync.PendingSync;
 
-            _store.Document!.Entries["fontFactor"].Value.Should().Be(1.4);
-        }
-        finally
-        {
-            sync.Dispose();
-        }
+        await sync.SyncNowAsync(); // supersedes it — the delay observes cancellation
+        await pendingDebounced;
+
+        _store.Document!.Entries["fontFactor"].Value.Should().Be(1.4);
     }
 
     [Fact]
