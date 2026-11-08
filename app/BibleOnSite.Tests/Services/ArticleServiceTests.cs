@@ -123,6 +123,67 @@ public class ArticleServiceTests
     }
 
     [Fact]
+    public async Task GetArticleByIdAsync_maps_the_ordered_progress_units()
+    {
+        await using var server = new GraphQLStubServer(_ => """
+            {
+              "data": {
+                "articleById": {
+                  "id": 42,
+                  "perekId": 7,
+                  "authorId": 3,
+                  "abstract": "<H1>t</H1>",
+                  "articleContent": "<p>body</p>",
+                  "name": null,
+                  "priority": 4,
+                  "progressUnits": [
+                    { "key": "0", "wordCount": 30, "cumulativeWords": 30 },
+                    { "key": "1", "wordCount": 70, "cumulativeWords": 100 }
+                  ]
+                }
+              }
+            }
+            """);
+        var service = CreateService(server.Url);
+
+        var article = await service.GetArticleByIdAsync(42);
+
+        article.Should().NotBeNull();
+        article!.ProgressUnits.Should().HaveCount(2);
+        article.ProgressUnits[0].Should().Be(new ReadingProgressUnit
+        {
+            Key = "0", WordCount = 30, CumulativeWords = 30
+        });
+        article.ProgressUnits[1].CumulativeWords.Should().Be(100);
+        server.RequestBody.Should().Contain("progressUnits");
+    }
+
+    [Fact]
+    public async Task GetArticleByIdAsync_defaults_progress_units_when_absent()
+    {
+        await using var server = new GraphQLStubServer(_ => """
+            {
+              "data": {
+                "articleById": {
+                  "id": 42,
+                  "perekId": 7,
+                  "authorId": 3,
+                  "abstract": null,
+                  "articleContent": "<p>body</p>",
+                  "name": null,
+                  "priority": 4
+                }
+              }
+            }
+            """);
+        var service = CreateService(server.Url);
+
+        var article = await service.GetArticleByIdAsync(42);
+
+        article!.ProgressUnits.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task GetArticleByIdAsync_returns_null_when_api_returns_no_article()
     {
         await using var server = new GraphQLStubServer(_ => """

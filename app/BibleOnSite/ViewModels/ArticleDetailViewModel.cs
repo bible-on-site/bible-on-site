@@ -28,7 +28,21 @@ public partial class ArticleDetailViewModel : ObservableObject
 
     [ObservableProperty]
     private string? _errorMessage;
+
+    /// <summary>0–1 word-weighted reading position over the article body
+    /// (issue #2607), bound to the page's progress bar.</summary>
+    [ObservableProperty]
+    private double _readingProgress;
 #pragma warning restore MVVMTK0045
+
+    /// <summary>Stored words attributed to each rendered content child —
+    /// set by the page once it builds the article body (issue #2607).</summary>
+    private IReadOnlyList<Helpers.CountedProgressRegion> _progressRegions = [];
+    private int? _progressTotalWords;
+
+    /// <summary>True when stored progress units cover the article body —
+    /// the bar stays hidden on unknown/empty metrics (issue #2607).</summary>
+    public bool HasReadingProgress => _progressRegions.Count > 0;
 
     /// <summary>
     /// Gets whether the article has content to display.
@@ -147,6 +161,44 @@ public partial class ArticleDetailViewModel : ObservableObject
         OnPropertyChanged(nameof(AuthorImageUrl));
         OnPropertyChanged(nameof(ShareUrl));
         OnPropertyChanged(nameof(ReadingTimeBadge));
+    }
+
+    /// <summary>
+    /// Registers the attributed progress regions after the page builds the
+    /// article body children (issue #2607). Resets the bar to the top —
+    /// a freshly opened article reads 0% even while the previous scroll
+    /// position still applies.
+    /// </summary>
+    public void SetReadingContent(
+        IReadOnlyList<Helpers.CountedProgressRegion> regions,
+        int? totalWords)
+    {
+        _progressRegions = regions;
+        _progressTotalWords = totalWords;
+        ReadingProgress = 0;
+        OnPropertyChanged(nameof(HasReadingProgress));
+    }
+
+    /// <summary>
+    /// Recomputes the reading position for a scroll state (issue #2607).
+    /// <paramref name="childExtents"/> carries each counted child's measured
+    /// (top, bottom) in scroll-content coordinates — the page reads them off
+    /// its rendered HtmlViews so layout, font-size and late media changes all
+    /// count without a re-attribution.
+    /// </summary>
+    public void UpdateReadingProgress(
+        double scrollY,
+        double viewportHeight,
+        double scrollContentHeight,
+        IReadOnlyList<(double Top, double Bottom)> childExtents)
+    {
+        ReadingProgress = Helpers.ReadingProgressEngine.Fraction(
+            _progressRegions,
+            _progressTotalWords,
+            scrollY,
+            viewportHeight,
+            scrollContentHeight,
+            childExtents);
     }
 
 #if MAUI
