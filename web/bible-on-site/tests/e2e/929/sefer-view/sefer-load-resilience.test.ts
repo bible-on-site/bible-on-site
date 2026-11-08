@@ -72,15 +72,15 @@ test.describe("929 sefer deep link resilience (#3095)", () => {
 		);
 		await page.goto(DEEP_LINK);
 		const response = await assetResponse;
-		// The fix: the reader payload travels compressed — a few hundred KB
-		// instead of the 2 MB raw transfer that failed in production — and
-		// content-addressed URLs are immutable-cached so repeat opens stay off
-		// the network. Chromium does not advertise br on http://localhost, so
-		// the wire here is the dev server's gzip of the same decoded payload.
+		// The fix: the reader payload travels as precompressed Brotli — a few
+		// hundred KB instead of the 2 MB raw transfer that failed in production —
+		// and content-addressed URLs are immutable-cached so repeat opens stay
+		// off the network. The asset is a static file under public/ whose
+		// Content-Encoding: br comes from next.config headers(), so the wire
+		// contract holds in dev and standalone alike (#3095).
 		expect(response.headers()["cache-control"]).toContain("immutable");
-		expect(response.headers()["content-encoding"]).toMatch(/^(br|gzip)$/);
-		// The Brotli contract itself is the production behavior: request the
-		// same asset like a real browser over HTTPS does.
+		expect(response.headers()["content-encoding"]).toBe("br");
+		// Re-request the same asset the way a real browser negotiates it.
 		const brotliResponse = await page.request.get(response.url(), {
 			headers: { "accept-encoding": "br" },
 		});

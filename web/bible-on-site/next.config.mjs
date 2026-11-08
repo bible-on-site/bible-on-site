@@ -66,7 +66,6 @@ const nextConfig = {
 	outputFileTracingIncludes: {
 		"/*": [
 			"./src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json.br",
-			"./src/data/db/sefer-books/*.br",
 			"./cache-handler.mjs",
 		],
 	},
@@ -174,6 +173,32 @@ const nextConfig = {
 	allowedDevOrigins: ["127.0.0.1"],
 	// Increasing this further may cause OOM kills on the 1024 MB Fargate task.
 	cacheMaxMemorySize: 256 * MB,
+
+	async headers() {
+		return [
+			{
+				// Reader book assets (#3095) are precompressed Brotli bytes the
+				// generator writes under public/generated/sefarim/. They are
+				// served as static files — NOT a route handler — because the App
+				// Router response pipeline can drop Content-Encoding while still
+				// sending the encoded body, leaving browsers unable to decode it.
+				// Content-addressed names make the immutable cache safe.
+				source: "/generated/sefarim/:path*",
+				headers: [
+					{
+						key: "Content-Type",
+						value: "application/json; charset=utf-8",
+					},
+					{ key: "Content-Encoding", value: "br" },
+					{
+						key: "Cache-Control",
+						value: "public, max-age=31536000, immutable",
+					},
+					{ key: "Vary", value: "Accept-Encoding" },
+				],
+			},
+		];
+	},
 
 	async rewrites() {
 		return {

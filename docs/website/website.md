@@ -62,18 +62,19 @@ The website communicates **directly** with the MySQL database rather than going 
 Keep the full canonical scripture JSON in server imports. The bookshelf, date
 lookup and citation parser use `client-catalog.generated.json`, a small projection
 of book ranges and learning dates. `scripts/generate-client-catalog.mjs` also writes
-each reader book as a Brotli file under `src/data/db/sefer-books/`, named by the
+each reader book as a Brotli file under `public/generated/sefarim/`, named by the
 raw payload's content hash. Installation, builds and unit tests regenerate both
 outputs from the same canonical source; generated files are ignored. Do not edit
 them or maintain a second content source. After an intentional source change
 during development, rerun the generator or restart `bun run dev`.
 
-The dynamic route `/generated/sefarim/[file]` serves those bytes as
-`Content-Encoding: br` — the payloads are multi-MB, so compression cuts the wire
-transfer by an order of magnitude — with `Cache-Control: immutable` and a
-content-hash ETag, since a content-addressed name can never change bytes. Clients
-that do not accept Brotli get a server-side decode fallback; malformed or unknown
-names answer a clean 404. `LoadedSefer` fetches the selected book when the reader
+The books are served as static files: `next.config.mjs` marks
+`/generated/sefarim/*` as `Content-Encoding: br` with `Cache-Control: immutable`,
+since a content-addressed name can never change bytes — the payloads are multi-MB,
+so compression cuts the wire transfer by an order of magnitude. They are static
+files rather than a route handler because the App Router response pipeline can
+drop `Content-Encoding` while still sending the encoded body, which leaves
+browsers unable to decode it. `LoadedSefer` fetches the selected book when the reader
 opens, with visible loading feedback. Uninitialized reader pages stay unpainted
 until FlipBook has applied their dimensions, preserving geometry and preventing a
 layout flash. A transient failure offers a manual retry; a missing asset offers a

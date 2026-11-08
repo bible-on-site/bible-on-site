@@ -72,9 +72,10 @@ test.describe("Build Size Benchmarks", () => {
 		) as { books: { file: string }[] };
 		expect(catalog.books).toHaveLength(35);
 		for (const { file } of catalog.books) {
-			// The public URL names the raw payload; the traced standalone image
-			// carries the matching Brotli file the reader route serves (#3095).
-			const asset = `src/data/db/sefer-books/${basename(file)}.br`;
+			// The public URL names the raw payload; the Brotli bytes live at the
+			// same path under public/, which postbuild copies into the standalone
+			// image for the reader's static asset route (#3095).
+			const asset = `public/generated/sefarim/${basename(file)}`;
 			const source = readFileSync(join(website, asset));
 			const deployed = readFileSync(join(STANDALONE_DIR, asset));
 			expect(

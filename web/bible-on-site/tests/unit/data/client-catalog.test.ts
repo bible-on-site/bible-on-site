@@ -46,12 +46,13 @@ it("retains citation volumes and their exact chapter ranges", () => {
 
 it("reader assets retain every canonical field, including approved timing precision", () => {
 	for (const [index, book] of catalog.books.entries()) {
-		// The public URL keeps the raw payload hash; the served Brotli file
-		// carries a .br sibling under src/data/db/sefer-books (#3095).
+		// The public URL keeps the raw payload hash; the served file is that
+		// same name under public/generated/sefarim holding Brotli bytes that
+		// next.config.mjs labels Content-Encoding: br (#3095).
 		const file = resolve(
 			__dirname,
-			"../../../src/data/db/sefer-books",
-			`${basename(book.file)}.br`,
+			"../../../public/generated/sefarim",
+			basename(book.file),
 		);
 		expect(
 			JSON.parse(brotliDecompressSync(readFileSync(file)).toString("utf8")),
