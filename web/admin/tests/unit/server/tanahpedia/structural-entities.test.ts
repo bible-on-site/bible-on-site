@@ -259,9 +259,7 @@ describe("linkExistingEntityToEntry", () => {
 			).resolves.toEqual({ linkId: "winner-link" });
 
 			expect(executeMock).toHaveBeenCalledWith(
-				expect.stringContaining(
-					"INSERT IGNORE INTO tanahpedia_entry_entity",
-				),
+				expect.stringContaining("INSERT IGNORE INTO tanahpedia_entry_entity"),
 				expect.any(Array),
 			);
 		});

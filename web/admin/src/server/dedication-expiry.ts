@@ -42,7 +42,9 @@ interface ExpiryState {
 }
 
 /** The `{changes}` payload members for one dedication's assignment set. */
-export function changeFromTargets(targets: AdminTarget[] | DedicationTargetInput[]) {
+export function changeFromTargets(
+	targets: AdminTarget[] | DedicationTargetInput[],
+) {
 	const raw = targets as (DedicationTargetInput & { label?: string })[];
 	return {
 		perekRanges: raw
@@ -50,15 +52,23 @@ export function changeFromTargets(targets: AdminTarget[] | DedicationTargetInput
 			.map((t) => ({ low: t.perekIdLow ?? 0, high: t.perekIdHigh ?? 0 })),
 		seferIds: raw.filter((t) => t.kind === "sefer").map((t) => t.seferId ?? 0),
 		helekIds: raw.filter((t) => t.kind === "helek").map((t) => t.helekId ?? 0),
-		parashaIds: raw.filter((t) => t.kind === "parasha").map((t) => t.parashaId ?? 0),
-		articleIds: raw.filter((t) => t.kind === "article").map((t) => t.articleId ?? 0),
+		parashaIds: raw
+			.filter((t) => t.kind === "parasha")
+			.map((t) => t.parashaId ?? 0),
+		articleIds: raw
+			.filter((t) => t.kind === "article")
+			.map((t) => t.articleId ?? 0),
 		entryIds: raw.filter((t) => t.kind === "entry").map((t) => t.entryId ?? ""),
 		masora: raw.some((t) => t.kind === "masora"),
 	};
 }
 
 /** Merge old ∪ new assignment sets — the invalidation covers both sides. */
-export function mergeChanges(id: number, oldTargets: DedicationTargetInput[], newTargets: DedicationTargetInput[]) {
+export function mergeChanges(
+	id: number,
+	oldTargets: DedicationTargetInput[],
+	newTargets: DedicationTargetInput[],
+) {
 	const oldChange = changeFromTargets(oldTargets);
 	const newChange = changeFromTargets(newTargets);
 	return {
@@ -66,53 +76,92 @@ export function mergeChanges(id: number, oldTargets: DedicationTargetInput[], ne
 		perekRanges: [...oldChange.perekRanges, ...newChange.perekRanges],
 		seferIds: [...new Set([...oldChange.seferIds, ...newChange.seferIds])],
 		helekIds: [...new Set([...oldChange.helekIds, ...newChange.helekIds])],
-		parashaIds: [...new Set([...oldChange.parashaIds, ...newChange.parashaIds])],
-		articleIds: [...new Set([...oldChange.articleIds, ...newChange.articleIds])],
+		parashaIds: [
+			...new Set([...oldChange.parashaIds, ...newChange.parashaIds]),
+		],
+		articleIds: [
+			...new Set([...oldChange.articleIds, ...newChange.articleIds]),
+		],
 		entryIds: [...new Set([...oldChange.entryIds, ...newChange.entryIds])],
 		masora: oldChange.masora || newChange.masora,
 	};
 }
 
 /** The raw assignment set of a dedication, pre-commit readable (delete path). */
-export async function currentTargets(id: number): Promise<DedicationTargetInput[]> {
-	const [perek, sefer, helek, parasha, article, entry, masora] = await Promise.all([
-		query<{ perek_id_low: number; perek_id_high: number; expires_at: string | null }>(
-			"SELECT perek_id_low, perek_id_high, CAST(expires_at AS CHAR) AS expires_at FROM tanah_perek_dedication WHERE dedication_id = ?",
-			[id],
-		),
-		query<{ sefer_id: number; expires_at: string | null }>(
-			"SELECT sefer_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_sefer_dedication WHERE dedication_id = ?",
-			[id],
-		),
-		query<{ helek_id: number; expires_at: string | null }>(
-			"SELECT helek_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_helek_dedication WHERE dedication_id = ?",
-			[id],
-		),
-		query<{ parasha_id: number; expires_at: string | null }>(
-			"SELECT parasha_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_parasha_dedication WHERE dedication_id = ?",
-			[id],
-		),
-		query<{ article_id: number; expires_at: string | null }>(
-			"SELECT article_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_article_dedication WHERE dedication_id = ?",
-			[id],
-		),
-		query<{ entry_id: string; expires_at: string | null }>(
-			"SELECT entry_id, CAST(expires_at AS CHAR) AS expires_at FROM tanahpedia_entry_dedication WHERE dedication_id = ?",
-			[id],
-		),
-		query<{ expires_at: string | null }>(
-			"SELECT CAST(expires_at AS CHAR) AS expires_at FROM tanah_masora_dedication WHERE dedication_id = ?",
-			[id],
-		),
-	]);
+export async function currentTargets(
+	id: number,
+): Promise<DedicationTargetInput[]> {
+	const [perek, sefer, helek, parasha, article, entry, masora] =
+		await Promise.all([
+			query<{
+				perek_id_low: number;
+				perek_id_high: number;
+				expires_at: string | null;
+			}>(
+				"SELECT perek_id_low, perek_id_high, CAST(expires_at AS CHAR) AS expires_at FROM tanah_perek_dedication WHERE dedication_id = ?",
+				[id],
+			),
+			query<{ sefer_id: number; expires_at: string | null }>(
+				"SELECT sefer_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_sefer_dedication WHERE dedication_id = ?",
+				[id],
+			),
+			query<{ helek_id: number; expires_at: string | null }>(
+				"SELECT helek_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_helek_dedication WHERE dedication_id = ?",
+				[id],
+			),
+			query<{ parasha_id: number; expires_at: string | null }>(
+				"SELECT parasha_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_parasha_dedication WHERE dedication_id = ?",
+				[id],
+			),
+			query<{ article_id: number; expires_at: string | null }>(
+				"SELECT article_id, CAST(expires_at AS CHAR) AS expires_at FROM tanah_article_dedication WHERE dedication_id = ?",
+				[id],
+			),
+			query<{ entry_id: string; expires_at: string | null }>(
+				"SELECT entry_id, CAST(expires_at AS CHAR) AS expires_at FROM tanahpedia_entry_dedication WHERE dedication_id = ?",
+				[id],
+			),
+			query<{ expires_at: string | null }>(
+				"SELECT CAST(expires_at AS CHAR) AS expires_at FROM tanah_masora_dedication WHERE dedication_id = ?",
+				[id],
+			),
+		]);
 	return [
-		...perek.map((r) => ({ kind: "perek" as const, perekIdLow: r.perek_id_low, perekIdHigh: r.perek_id_high, expiresAt: r.expires_at })),
-		...sefer.map((r) => ({ kind: "sefer" as const, seferId: r.sefer_id, expiresAt: r.expires_at })),
-		...helek.map((r) => ({ kind: "helek" as const, helekId: r.helek_id, expiresAt: r.expires_at })),
-		...parasha.map((r) => ({ kind: "parasha" as const, parashaId: r.parasha_id, expiresAt: r.expires_at })),
-		...article.map((r) => ({ kind: "article" as const, articleId: r.article_id, expiresAt: r.expires_at })),
-		...entry.map((r) => ({ kind: "entry" as const, entryId: r.entry_id, expiresAt: r.expires_at })),
-		...masora.map((r) => ({ kind: "masora" as const, expiresAt: r.expires_at })),
+		...perek.map((r) => ({
+			kind: "perek" as const,
+			perekIdLow: r.perek_id_low,
+			perekIdHigh: r.perek_id_high,
+			expiresAt: r.expires_at,
+		})),
+		...sefer.map((r) => ({
+			kind: "sefer" as const,
+			seferId: r.sefer_id,
+			expiresAt: r.expires_at,
+		})),
+		...helek.map((r) => ({
+			kind: "helek" as const,
+			helekId: r.helek_id,
+			expiresAt: r.expires_at,
+		})),
+		...parasha.map((r) => ({
+			kind: "parasha" as const,
+			parashaId: r.parasha_id,
+			expiresAt: r.expires_at,
+		})),
+		...article.map((r) => ({
+			kind: "article" as const,
+			articleId: r.article_id,
+			expiresAt: r.expires_at,
+		})),
+		...entry.map((r) => ({
+			kind: "entry" as const,
+			entryId: r.entry_id,
+			expiresAt: r.expires_at,
+		})),
+		...masora.map((r) => ({
+			kind: "masora" as const,
+			expiresAt: r.expires_at,
+		})),
 	];
 }
 

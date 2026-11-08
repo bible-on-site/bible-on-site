@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-	READING_METRICS_CALC_VERSION,
-	READING_WORDS_PER_MINUTE,
 	countHtmlBlocks,
 	countTextWords,
 	decodeEntities,
@@ -10,6 +8,8 @@ import {
 	htmlToReadableSegments,
 	normalizeForCount,
 	pasukCountedText,
+	READING_METRICS_CALC_VERSION,
+	READING_WORDS_PER_MINUTE,
 	stripScriptsAndStyles,
 } from "../../../../shared/reading-metrics/index";
 

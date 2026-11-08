@@ -31,6 +31,7 @@ import {
 	REVISION_SOURCE_ADMIN,
 	REVISION_SOURCE_LLM,
 } from "~/lib/tanahpedia/revisions-shared";
+import { WEBSITE_BASE } from "~/lib/website-base";
 import { getEditorIdentity } from "~/server/session";
 import {
 	createEntry,
@@ -39,7 +40,6 @@ import {
 	updateEntry,
 } from "~/server/tanahpedia/entries";
 import { getLlmAssistantStatus } from "~/server/tanahpedia/llm-assistant";
-import { WEBSITE_BASE } from "~/lib/website-base";
 
 interface EntryFormData {
 	unique_name: string;
@@ -64,7 +64,6 @@ type DispatchedSaveJob = SaveJob & { baseRevisionId: string | null };
 export const Route = createFileRoute("/tanahpedia/entries/$id")({
 	component: EntryEditPage,
 });
-
 
 function EntryEditPage() {
 	const { id } = Route.useParams();
@@ -672,8 +671,7 @@ function EntryEditPage() {
 	// fields over a saveable form look like a valid blank entry. Block with
 	// a readable state until the load succeeds (#2764).
 	if (!isNew && (entryError || !entry)) {
-		const notFound =
-			!entryError || /entry not found/i.test(String(entryError));
+		const notFound = !entryError || /entry not found/i.test(String(entryError));
 		return (
 			<div className="space-y-4">
 				<Link

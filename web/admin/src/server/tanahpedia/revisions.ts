@@ -13,10 +13,7 @@ import {
 } from "~/lib/tanahpedia/revisions-shared";
 import { execute, query, transaction, txExecute, txQueryOne } from "../db";
 import { recomputeEntryMetrics } from "../reading-metrics";
-import {
-	pediaEntryChange,
-	revalidateWebsite,
-} from "../website-revalidate";
+import { pediaEntryChange, revalidateWebsite } from "../website-revalidate";
 
 const REVISION_COLUMNS =
 	"id, entry_id, proposed_unique_name, proposed_title, proposed_content, source, notes, status, base_revision_id, created_at, updated_at";

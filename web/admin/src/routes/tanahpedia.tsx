@@ -14,12 +14,11 @@ import {
 	websiteSubcategoryPath,
 } from "~/lib/tanahpedia/category-hierarchy";
 import { CATEGORY_LABELS, type CategoryKey } from "~/lib/tanahpedia/labels";
+import { WEBSITE_BASE } from "~/lib/website-base";
 import {
 	getTanahpediaCategoryCounts,
 	listTanahpediaEntriesForAdmin,
 } from "~/server/tanahpedia/entries";
-import { WEBSITE_BASE } from "~/lib/website-base";
-
 
 type TanahpediaSearch = {
 	category?: CategoryKey;

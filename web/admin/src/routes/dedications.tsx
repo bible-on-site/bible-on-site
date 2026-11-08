@@ -1,19 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { previewDedicationLine } from "~/lib/dedication-line";
 import {
 	type AdminDedication,
+	createDedication,
 	type DedicationTargetInput,
 	type DedicationTargetKind,
 	type DedicationUpsert,
-	createDedication,
 	deleteDedication,
 	getDedicationTargetOptions,
 	getDedicationTypes,
 	listDedications,
 	updateDedication,
 } from "~/server/dedications";
-import { previewDedicationLine } from "~/lib/dedication-line";
 
 export const Route = createFileRoute("/dedications")({
 	component: DedicationsPage,
@@ -29,7 +29,15 @@ const KIND_LABELS: Record<DedicationTargetKind, string> = {
 	masora: "מסורה על הפרק",
 };
 
-const KIND_ORDER: DedicationTargetKind[] = ["perek", "sefer", "helek", "parasha", "article", "entry", "masora"];
+const KIND_ORDER: DedicationTargetKind[] = [
+	"perek",
+	"sefer",
+	"helek",
+	"parasha",
+	"article",
+	"entry",
+	"masora",
+];
 
 /** A target row in the form — `rowKey` keeps React keys stable across add/remove. */
 type TargetRow = DedicationTargetInput & { rowKey: number };
@@ -54,11 +62,19 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 	return debounced;
 }
 
-const emptyForm = (): FormState => ({ id: null, subject: "", purposeTypeIds: [], expiresAt: "", targets: [] });
+const emptyForm = (): FormState => ({
+	id: null,
+	subject: "",
+	purposeTypeIds: [],
+	expiresAt: "",
+	targets: [],
+});
 
 /** datetime-local input value <-> stored UTC "YYYY-MM-DD HH:mm:ss". */
-const toStoredExpiry = (value: string) => (value ? `${value.replace("T", " ")}:00` : null);
-const toInputExpiry = (value: string | null) => (value ? value.replace(" ", "T").slice(0, 16) : "");
+const toStoredExpiry = (value: string) =>
+	value ? `${value.replace("T", " ")}:00` : null;
+const toInputExpiry = (value: string | null) =>
+	value ? value.replace(" ", "T").slice(0, 16) : "";
 
 function DedicationsPage() {
 	const queryClient = useQueryClient();
@@ -71,13 +87,17 @@ function DedicationsPage() {
 		queryKey: ["dedications", debouncedSearch, show],
 		queryFn: () => listDedications({ data: { search: debouncedSearch, show } }),
 	});
-	const { data: types, isLoading: typesLoading } = useQuery({ queryKey: ["dedication-types"], queryFn: () => getDedicationTypes() });
+	const { data: types, isLoading: typesLoading } = useQuery({
+		queryKey: ["dedication-types"],
+		queryFn: () => getDedicationTypes(),
+	});
 	const { data: targetOptions } = useQuery({
 		queryKey: ["dedication-target-options"],
 		queryFn: () => getDedicationTargetOptions(),
 	});
 
-	const invalidate = () => queryClient.invalidateQueries({ queryKey: ["dedications"] });
+	const invalidate = () =>
+		queryClient.invalidateQueries({ queryKey: ["dedications"] });
 	const createMutation = useMutation({
 		mutationFn: (input: DedicationUpsert) => createDedication({ data: input }),
 		onSuccess: () => {
@@ -86,7 +106,8 @@ function DedicationsPage() {
 		},
 	});
 	const updateMutation = useMutation({
-		mutationFn: (input: { id: number } & DedicationUpsert) => updateDedication({ data: input }),
+		mutationFn: (input: { id: number } & DedicationUpsert) =>
+			updateDedication({ data: input }),
 		onSuccess: () => {
 			invalidate();
 			setForm(null);
@@ -96,7 +117,8 @@ function DedicationsPage() {
 		mutationFn: (id: number) => deleteDedication({ data: id }),
 		onSuccess: invalidate,
 	});
-	const error = createMutation.error ?? updateMutation.error ?? deleteMutation.error;
+	const error =
+		createMutation.error ?? updateMutation.error ?? deleteMutation.error;
 
 	// purposeTypeIds come from the record itself — mapping names through the
 	// still-loading types query used to open the editor with an empty
@@ -178,8 +200,13 @@ function DedicationsPage() {
 						</thead>
 						<tbody>
 							{(dedications ?? []).map((d) => (
-								<tr key={d.id} className={`border-t ${d.expired ? "opacity-60" : ""}`}>
-									<td className="px-4 py-2 font-medium">{previewDedicationLine(d.subject, d.purposes)}</td>
+								<tr
+									key={d.id}
+									className={`border-t ${d.expired ? "opacity-60" : ""}`}
+								>
+									<td className="px-4 py-2 font-medium">
+										{previewDedicationLine(d.subject, d.purposes)}
+									</td>
 									<td className="px-4 py-2">{d.purposes.join(", ")}</td>
 									<td className="px-4 py-2">
 										{d.targets.map((t, i) => (
@@ -207,7 +234,8 @@ function DedicationsPage() {
 										<button
 											type="button"
 											onClick={() => {
-												if (window.confirm(`למחוק את ההקדשה "${d.subject}"?`)) deleteMutation.mutate(d.id);
+												if (window.confirm(`למחוק את ההקדשה "${d.subject}"?`))
+													deleteMutation.mutate(d.id);
 											}}
 											className="text-red-600 hover:underline"
 										>
@@ -218,7 +246,10 @@ function DedicationsPage() {
 							))}
 							{(dedications ?? []).length === 0 && (
 								<tr>
-									<td colSpan={5} className="px-4 py-6 text-center text-gray-500">
+									<td
+										colSpan={5}
+										className="px-4 py-6 text-center text-gray-500"
+									>
 										אין הקדשות להצגה
 									</td>
 								</tr>
@@ -280,20 +311,32 @@ function DedicationForm({
 	onSubmit: () => void;
 }) {
 	const selectedPurposeNames = useMemo(
-		() => types.filter((t) => form.purposeTypeIds.includes(t.id)).map((t) => t.description),
+		() =>
+			types
+				.filter((t) => form.purposeTypeIds.includes(t.id))
+				.map((t) => t.description),
 		[types, form.purposeTypeIds],
 	);
 	const update = (patch: Partial<FormState>) => setForm({ ...form, ...patch });
 	const updateTarget = (index: number, patch: Partial<TargetRow>) =>
-		update({ targets: form.targets.map((t, i) => (i === index ? { ...t, ...patch } : t)) });
+		update({
+			targets: form.targets.map((t, i) =>
+				i === index ? { ...t, ...patch } : t,
+			),
+		});
 	const nextRowKey = Math.max(0, ...form.targets.map((t) => t.rowKey)) + 1;
 
 	return (
 		<div className="fixed inset-0 bg-black/40 flex items-start justify-center overflow-y-auto z-50 py-10">
 			<div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6">
-				<h2 className="text-lg font-bold mb-4">{form.id == null ? "הקדשה חדשה" : `עריכת הקדשה #${form.id}`}</h2>
+				<h2 className="text-lg font-bold mb-4">
+					{form.id == null ? "הקדשה חדשה" : `עריכת הקדשה #${form.id}`}
+				</h2>
 
-				<label htmlFor="dedication-subject" className="block text-sm font-medium mb-1">
+				<label
+					htmlFor="dedication-subject"
+					className="block text-sm font-medium mb-1"
+				>
 					מוקדש ל
 				</label>
 				<input
@@ -324,7 +367,10 @@ function DedicationForm({
 					))}
 				</div>
 
-				<label htmlFor="dedication-expiry" className="block text-sm font-medium mb-1">
+				<label
+					htmlFor="dedication-expiry"
+					className="block text-sm font-medium mb-1"
+				>
 					תוקף ההקדשה (UTC, ריק = מתמשך)
 				</label>
 				<input
@@ -339,18 +385,32 @@ function DedicationForm({
 					<span className="text-sm font-medium">יעדים</span>
 					<button
 						type="button"
-						onClick={() => update({ targets: [...form.targets, { rowKey: nextRowKey, kind: "sefer", seferId: 1 }] })}
+						onClick={() =>
+							update({
+								targets: [
+									...form.targets,
+									{ rowKey: nextRowKey, kind: "sefer", seferId: 1 },
+								],
+							})
+						}
 						className="text-blue-600 hover:underline text-sm"
 					>
 						+ הוסף יעד
 					</button>
 				</div>
 				{form.targets.map((target, index) => (
-					<div key={target.rowKey} className="border rounded-lg p-3 mb-2 flex flex-wrap items-center gap-2">
+					<div
+						key={target.rowKey}
+						className="border rounded-lg p-3 mb-2 flex flex-wrap items-center gap-2"
+					>
 						<select
 							value={target.kind}
 							onChange={(e) =>
-								updateTarget(index, { kind: e.target.value as DedicationTargetKind, seferId: e.target.value === "sefer" ? 1 : undefined, helekId: e.target.value === "helek" ? 1 : undefined })
+								updateTarget(index, {
+									kind: e.target.value as DedicationTargetKind,
+									seferId: e.target.value === "sefer" ? 1 : undefined,
+									helekId: e.target.value === "helek" ? 1 : undefined,
+								})
 							}
 							className="border rounded-lg px-2 py-1 text-sm"
 						>
@@ -367,14 +427,18 @@ function DedicationForm({
 									type="number"
 									placeholder="מפרק"
 									value={target.perekIdLow ?? ""}
-									onChange={(e) => updateTarget(index, { perekIdLow: Number(e.target.value) })}
+									onChange={(e) =>
+										updateTarget(index, { perekIdLow: Number(e.target.value) })
+									}
 									className="border rounded-lg px-2 py-1 text-sm w-24"
 								/>
 								<input
 									type="number"
 									placeholder="עד פרק"
 									value={target.perekIdHigh ?? ""}
-									onChange={(e) => updateTarget(index, { perekIdHigh: Number(e.target.value) })}
+									onChange={(e) =>
+										updateTarget(index, { perekIdHigh: Number(e.target.value) })
+									}
 									className="border rounded-lg px-2 py-1 text-sm w-24"
 								/>
 							</>
@@ -382,7 +446,9 @@ function DedicationForm({
 						{target.kind === "sefer" && (
 							<select
 								value={target.seferId ?? 1}
-								onChange={(e) => updateTarget(index, { seferId: Number(e.target.value) })}
+								onChange={(e) =>
+									updateTarget(index, { seferId: Number(e.target.value) })
+								}
 								className="border rounded-lg px-2 py-1 text-sm"
 							>
 								{sefarim.map((s) => (
@@ -395,7 +461,9 @@ function DedicationForm({
 						{target.kind === "helek" && (
 							<select
 								value={target.helekId ?? 1}
-								onChange={(e) => updateTarget(index, { helekId: Number(e.target.value) })}
+								onChange={(e) =>
+									updateTarget(index, { helekId: Number(e.target.value) })
+								}
 								className="border rounded-lg px-2 py-1 text-sm"
 							>
 								{heleks.map((h) => (
@@ -412,7 +480,9 @@ function DedicationForm({
 								max={parashaCount}
 								placeholder={`1-${parashaCount}`}
 								value={target.parashaId ?? ""}
-								onChange={(e) => updateTarget(index, { parashaId: Number(e.target.value) })}
+								onChange={(e) =>
+									updateTarget(index, { parashaId: Number(e.target.value) })
+								}
 								className="border rounded-lg px-2 py-1 text-sm w-24"
 							/>
 						)}
@@ -421,7 +491,9 @@ function DedicationForm({
 								type="number"
 								placeholder="מזהה מאמר"
 								value={target.articleId ?? ""}
-								onChange={(e) => updateTarget(index, { articleId: Number(e.target.value) })}
+								onChange={(e) =>
+									updateTarget(index, { articleId: Number(e.target.value) })
+								}
 								className="border rounded-lg px-2 py-1 text-sm w-32"
 							/>
 						)}
@@ -429,24 +501,34 @@ function DedicationForm({
 							<input
 								placeholder="מזהה ערך קנוני"
 								value={target.entryId ?? ""}
-								onChange={(e) => updateTarget(index, { entryId: e.target.value })}
+								onChange={(e) =>
+									updateTarget(index, { entryId: e.target.value })
+								}
 								className="border rounded-lg px-2 py-1 text-sm w-56"
 							/>
 						)}
-						{target.kind === "masora" && <span className="text-sm text-gray-500">כל יחידות המסורה</span>}
+						{target.kind === "masora" && (
+							<span className="text-sm text-gray-500">כל יחידות המסורה</span>
+						)}
 
 						<label className="text-xs text-gray-500 flex items-center gap-1">
 							תוקף יעד (UTC):
 							<input
 								type="datetime-local"
 								value={toInputExpiry(target.expiresAt ?? null)}
-								onChange={(e) => updateTarget(index, { expiresAt: toStoredExpiry(e.target.value) })}
+								onChange={(e) =>
+									updateTarget(index, {
+										expiresAt: toStoredExpiry(e.target.value),
+									})
+								}
 								className="border rounded-lg px-2 py-1 text-xs"
 							/>
 						</label>
 						<button
 							type="button"
-							onClick={() => update({ targets: form.targets.filter((_, i) => i !== index) })}
+							onClick={() =>
+								update({ targets: form.targets.filter((_, i) => i !== index) })
+							}
 							className="text-red-600 hover:underline text-xs"
 						>
 							הסר
@@ -460,7 +542,11 @@ function DedicationForm({
 				</div>
 
 				<div className="flex justify-end gap-3 mt-6">
-					<button type="button" onClick={() => setForm(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">
+					<button
+						type="button"
+						onClick={() => setForm(null)}
+						className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+					>
 						ביטול
 					</button>
 					<button

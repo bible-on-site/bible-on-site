@@ -11,10 +11,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-	ListObjectsV2Command,
-	S3Client,
-} from "@aws-sdk/client-s3";
+import { ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 
 const moduleDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const dataDir = resolve(moduleDir, "..", "..", "data");
