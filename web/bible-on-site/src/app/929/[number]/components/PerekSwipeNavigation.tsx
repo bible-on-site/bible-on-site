@@ -16,13 +16,12 @@ export default function PerekSwipeNavigation({
 	className,
 }: {
 	children: ReactNode;
-	className: string;
+	className?: string;
 }) {
 	const pathname = usePathname();
 	const perekId = Number(pathname.match(/^\/929\/([1-9]\d*)(?:\/|$)/)?.[1]);
 	const inRange = perekId >= 1 && perekId <= LAST_PEREK;
-	const prevHref =
-		inRange && perekId > 1 ? `/929/${perekId - 1}` : null;
+	const prevHref = inRange && perekId > 1 ? `/929/${perekId - 1}` : null;
 	const nextHref =
 		inRange && perekId < LAST_PEREK ? `/929/${perekId + 1}` : null;
 

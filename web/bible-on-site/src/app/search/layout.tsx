@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import "./layout.css";
+import { PageShell } from "@/app/components/PageShell";
 
 export default function SearchLayout({ children }: { children: ReactNode }) {
-	return <div className="search-layout">{children}</div>;
+	return <PageShell header="solid">{children}</PageShell>;
 }

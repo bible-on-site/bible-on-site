@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import "./layout.css";
+import { PageShell } from "@/app/components/PageShell";
 
 export default function AccessibilityLayout({
 	children,
 }: {
 	children: ReactNode;
 }) {
-	return <div className="accessibility-layout">{children}</div>;
+	return <PageShell header="solid">{children}</PageShell>;
 }
