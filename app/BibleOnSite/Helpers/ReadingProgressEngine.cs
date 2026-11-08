@@ -62,6 +62,84 @@ public static class ReadingProgressEngine
     }
 
     /// <summary>
+    /// ScrollView variant for counted-child readers (article bodies,
+    /// Tanahpedia entries — issue #2607): the reading anchor sweeps the
+    /// measured counted extent — first covered child's top to last covered
+    /// child's bottom — as the scroll ratio moves 0→1, so chrome above and
+    /// below the counted text never inflates or stalls the bar. A region
+    /// straddling the anchor contributes the fraction of its words whose
+    /// extent is passed; a gap between counted children (e.g. a media
+    /// element) reports the regions already passed without advancing.
+    /// <paramref name="childExtents"/> carries each counted child's (top,
+    /// bottom) in scroll-content coordinates, in the same order the
+    /// attribution received the children.
+    /// </summary>
+    public static double Fraction(
+        IReadOnlyList<CountedProgressRegion> regions,
+        int? totalWords,
+        double scrollY,
+        double viewportHeight,
+        double scrollContentHeight,
+        IReadOnlyList<(double Top, double Bottom)> childExtents)
+    {
+        var total = totalWords ??
+            (regions.Count > 0 ? regions[^1].WordsBefore + regions[^1].Words : 0);
+        if (regions.Count == 0 || childExtents.Count == 0 || total <= 0)
+        {
+            return 0;
+        }
+        var lastRegion = regions[^1];
+        var lastChild = lastRegion.FirstChild + lastRegion.ChildCount - 1;
+        if (lastChild >= childExtents.Count)
+        {
+            // Extents were measured before all counted children laid out —
+            // report nothing rather than a fabricated position.
+            return 0;
+        }
+        if (scrollContentHeight <= 0)
+        {
+            // The scroll content has not measured — regions exist but there
+            // is no honest extent to read yet.
+            return 0;
+        }
+        var scrollRange = scrollContentHeight - viewportHeight;
+        if (scrollRange <= 0)
+        {
+            // Non-scrollable content — everything readable is already in the
+            // viewport, matching the web engine's max-scroll case.
+            return 1;
+        }
+        var firstTop = childExtents[regions[0].FirstChild].Top;
+        var lastBottom = childExtents[lastChild].Bottom;
+        if (lastBottom <= firstTop)
+        {
+            return 1;
+        }
+        var anchor = firstTop + Math.Clamp(scrollY / scrollRange, 0, 1) * (lastBottom - firstTop);
+        var passed = 0.0;
+        foreach (var region in regions)
+        {
+            var top = childExtents[region.FirstChild].Top;
+            var bottom = childExtents[region.FirstChild + region.ChildCount - 1].Bottom;
+            if (bottom <= anchor)
+            {
+                passed = region.WordsBefore + region.Words;
+                continue;
+            }
+            if (top > anchor)
+            {
+                break;
+            }
+            var inside = bottom > top
+                ? Math.Clamp((anchor - top) / (bottom - top), 0, 1)
+                : 1;
+            passed = region.WordsBefore + inside * region.Words;
+            break;
+        }
+        return Math.Clamp(passed / total, 0, 1);
+    }
+
+    /// <summary>
     /// Index of the first unit whose key addresses <paramref name="pasukNum"/>,
     /// or -1. Pasuk units key "N"; note units key "N:idx" — the same lookup
     /// anchors a verse in either list.

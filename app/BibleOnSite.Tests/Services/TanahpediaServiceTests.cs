@@ -98,6 +98,49 @@ public class TanahpediaServiceTests
     }
 
     [Fact]
+    public async Task GetEntryDetailAsync_maps_reading_metric_and_progress_units()
+    {
+        var transport = new GraphQLTransport("""
+            {
+              "data": {
+                "tanahpediaEntry": {
+                  "id": "e1",
+                  "uniqueName": "משה",
+                  "title": "משה רבנו",
+                  "content": "<p>תוכן</p>",
+                  "updatedAt": "2026-07-01T10:00:00",
+                  "readingMetric": {
+                    "wordCount": 100,
+                    "estimatedSeconds": 28,
+                    "wordsPerMinute": 220,
+                    "calcVersion": 1,
+                    "sourceHash": "abc"
+                  },
+                  "progressUnits": [
+                    { "key": "0", "wordCount": 40, "cumulativeWords": 40 },
+                    { "key": "1", "wordCount": 60, "cumulativeWords": 100 }
+                  ]
+                }
+              }
+            }
+            """);
+        var service = CreateService(transport);
+
+        var detail = await service.GetEntryDetailAsync("משה", TestContext.Current.CancellationToken);
+
+        detail.Should().NotBeNull();
+        detail!.ReadingMetric.Should().NotBeNull();
+        detail.ReadingMetric!.WordCount.Should().Be(100);
+        detail.ProgressUnits.Should().HaveCount(2);
+        detail.ProgressUnits[0].Should().Be(new ReadingProgressUnit
+        {
+            Key = "0", WordCount = 40, CumulativeWords = 40
+        });
+        detail.ProgressUnits[1].CumulativeWords.Should().Be(100);
+        transport.Requests[0].Should().Contain("progressUnits");
+    }
+
+    [Fact]
     public async Task GetEntryDetailAsync_returns_null_for_unknown_name()
     {
         var transport = new GraphQLTransport("""
