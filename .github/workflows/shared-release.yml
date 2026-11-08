@@ -30,6 +30,14 @@ on:
         description: Event type for the CD workflow trigger (e.g., deploy-aws, deploy-app)
         required: true
         type: string
+      extra_module_paths:
+        description: |
+          JSON array of extra module paths (matching extraModulePaths in
+          devops/github/ci/determine-changes.ts) whose commits belong in the
+          module's release notes.
+        required: false
+        type: string
+        default: "[]"
     outputs:
       released:
         description: Whether the module was successfully released (for version bump coordination)
@@ -56,13 +64,24 @@ jobs:
     if: ${{ needs.release.outputs.released == 'true' && needs.release.outputs.cd_payload != '' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout dispatch automation
+        uses: actions/checkout@v7
+      - name: Setup dispatch Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - name: Prepare dispatch payload
+        id: dispatch_payload
+        env:
+          RELEASE_PAYLOAD: ${{ needs.release.outputs.cd_payload }}
+        run: node devops/github/release/dispatch-payload.mjs
       - name: Trigger CD Workflow
         uses: peter-evans/repository-dispatch@v4
         with:
           repository: ${{ github.repository }}
           token: ${{ secrets.BOT_PAT }}
           event-type: ${{ inputs.cd_event_type }}
-          client-payload: ${{ needs.release.outputs.cd_payload }}
+          client-payload: ${{ steps.dispatch_payload.outputs.client_payload }}
 
   release:
     name: Release
@@ -84,6 +103,8 @@ jobs:
         uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # Release notes need the previous module tag and its commit range.
+          fetch-depth: 0
 
       - name: Configure Git
         run: |
@@ -215,6 +236,22 @@ jobs:
           git remote set-url origin git@github.com:${{ github.repository }}
           git push origin ${{ steps.check_tag.outputs.TAG_NAME }}
 
+      - name: Generate Release Notes
+        if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
+        id: release_notes
+        run: |
+          node devops/github/release/release-notes.mjs --generate \
+            --module "${{ inputs.module_name }}" \
+            --tag "${{ steps.check_tag.outputs.TAG_NAME }}" \
+            --directory "${{ inputs.module_directory }}" \
+            --extras '${{ inputs.extra_module_paths }}' \
+            --out "$RUNNER_TEMP/release-notes.md"
+          {
+            echo "NOTES<<EOF"
+            cat "$RUNNER_TEMP/release-notes.md"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Download Artifacts
         if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
         run: |
@@ -230,6 +267,13 @@ jobs:
           gh api "repos/${{ github.repository }}/actions/runs/$SOURCE_RUN/artifacts" --paginate --jq '.artifacts[]' > "$RUNNER_TEMP/release-artifacts.jsonl"
 
           # Pin each archive before downloading; never follow a replaced artifact name.
+          # Release entries can share one archive under different globs (the iOS
+          # zip feeds the IPA, asset-pack, and payload attachments). Fetch and
+          # verify each artifact once per destination and extract it once —
+          # repeating the pass re-downloads the whole archive and makes unzip
+          # prompt to overwrite, which fails on a non-interactive runner.
+          declare -A FETCHED=()
+          declare -A EXTRACTED=()
           echo "$ARTIFACTS" | jq -c '.[]' | while read -r artifact; do
             NAME=$(echo "$artifact" | jq -r '.name // empty')
             PATH_DIR=$(echo "$artifact" | jq -r '.path')
@@ -243,21 +287,35 @@ jobs:
             echo "Downloading artifact '$NAME' to '$PATH_DIR'"
             mkdir -p "$PATH_DIR"
 
-            SOURCE=$(jq -s -e --arg name "$NAME" --arg run_id "$SOURCE_RUN" --arg ref "${{ github.sha }}" '
-              [.[] | select(.name == $name and .expired == false and (.workflow_run.id | tostring) == $run_id and .workflow_run.head_sha == $ref)]
-              | max_by(.id) | select(. != null and (.digest | test("^sha256:[a-f0-9]{64}$")))' "$RUNNER_TEMP/release-artifacts.jsonl")
-            ID=$(echo "$SOURCE" | jq -r .id)
-            DIGEST=$(echo "$SOURCE" | jq -r .digest)
-            ARCHIVE="$RUNNER_TEMP/release-$ID.zip"
-            gh api "repos/${{ github.repository }}/actions/artifacts/$ID/zip" > "$ARCHIVE"
-            printf '%s  %s\n' "${DIGEST#sha256:}" "$ARCHIVE" | sha256sum --check --status
-            unzip -q "$ARCHIVE" -d "$PATH_DIR"
+            KEY="$NAME|$PATH_DIR"
+            if [ -n "${FETCHED[$KEY]:-}" ]; then
+              ARCHIVE="${FETCHED[$KEY]}"
+            else
+              SOURCE=$(jq -s -e --arg name "$NAME" --arg run_id "$SOURCE_RUN" --arg ref "${{ github.sha }}" '
+                [.[] | select(.name == $name and .expired == false and (.workflow_run.id | tostring) == $run_id and .workflow_run.head_sha == $ref)]
+                | max_by(.id) | select(. != null and (.digest | test("^sha256:[a-f0-9]{64}$")))' "$RUNNER_TEMP/release-artifacts.jsonl")
+              ID=$(echo "$SOURCE" | jq -r .id)
+              DIGEST=$(echo "$SOURCE" | jq -r .digest)
+              ARCHIVE="$RUNNER_TEMP/release-$ID.zip"
+              gh api "repos/${{ github.repository }}/actions/artifacts/$ID/zip" > "$ARCHIVE"
+              printf '%s  %s\n' "${DIGEST#sha256:}" "$ARCHIVE" | sha256sum --check --status
+              FETCHED[$KEY]="$ARCHIVE"
+            fi
+
+            if [ -z "${EXTRACTED[$KEY]:-}" ]; then
+              unzip -q -o "$ARCHIVE" -d "$PATH_DIR" < /dev/null
+              EXTRACTED[$KEY]=1
+            fi
             ls -la "$PATH_DIR"
           done
 
       - name: Prepare Release
         if: steps.check_tag.outputs.SKIP_RELEASE != 'true'
         id: prepare_release
+        env:
+          # Notes are markdown built from PR titles; keep them out of the
+          # script text so quotes and `$` cannot alter the shell command.
+          RELEASE_NOTES: ${{ steps.release_notes.outputs.NOTES }}
         run: |
           set -e
 
@@ -292,6 +350,8 @@ jobs:
             # Simple single-artifact release
             BODY="Automated release for ${MODULE_NAME_CAP} version ${{ inputs.module_version }}."
           fi
+
+          BODY="${BODY}"$'\n\n'"$RELEASE_NOTES"
 
           DELIVERY_PAYLOAD='${{ steps.check_tag.outputs.CD_PAYLOAD || steps.build_payload.outputs.CD_PAYLOAD }}'
           BODY="${BODY}"$'\n\n'"<!-- release-delivery:${DELIVERY_PAYLOAD} -->"

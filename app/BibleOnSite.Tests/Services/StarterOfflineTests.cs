@@ -22,9 +22,9 @@ public class StarterOfflineTests
         online.IsFromCache.Should().BeFalse();
         online.Articles.Single().Author.Should().BeSameAs(online.Authors.Single());
         http.Requests.Single().Should().Contain("GetStarter");
-        var cache = Path.Combine(storage.Root, "starter_cache.json");
+        var cache = Path.Join(storage.Root, "starter_cache.json");
         File.Exists(cache).Should().BeTrue();
-        (await File.ReadAllTextAsync(cache)).Should().Contain("Article");
+        (await File.ReadAllTextAsync(cache, TestContext.Current.CancellationToken)).Should().Contain("Article");
 
         http.Respond = _ => throw new HttpRequestException("offline");
         var offline = new StarterService(http.Client, storage.FileSystem.Object);
@@ -64,7 +64,7 @@ public class StarterOfflineTests
         await using var storage = new TestStorage();
         if (cache != null)
         {
-            await File.WriteAllTextAsync(Path.Combine(storage.Root, "starter_cache.json"), cache);
+            await File.WriteAllTextAsync(Path.Join(storage.Root, "starter_cache.json"), cache, TestContext.Current.CancellationToken);
         }
         using var http = new GraphQLTransport();
         var service = new StarterService(http.Client, storage.FileSystem.Object);
@@ -97,7 +97,7 @@ public class StarterOfflineTests
     public async Task Load_WhenCacheCannotBeWritten_StillRetainsOnlineData()
     {
         await using var storage = new TestStorage();
-        Directory.CreateDirectory(Path.Combine(storage.Root, "starter_cache.json"));
+        Directory.CreateDirectory(Path.Join(storage.Root, "starter_cache.json"));
         using var http = new GraphQLTransport(Response);
         var service = new StarterService(http.Client, storage.FileSystem.Object);
         await service.LoadAsync(false);

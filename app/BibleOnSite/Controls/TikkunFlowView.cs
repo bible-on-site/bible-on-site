@@ -1,6 +1,5 @@
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
-using GraphicsFont = Microsoft.Maui.Graphics.Font;
 
 namespace BibleOnSite.Controls;
 
@@ -34,6 +33,16 @@ public class TikkunFlowView : GraphicsView
         nameof(HideMarks), typeof(bool), typeof(TikkunFlowView), false,
         propertyChanged: OnContentChanged);
 
+    /// <summary>
+    /// הסתר שם השם revision — a change-only input bound to
+    /// PerekViewModel.DivineNameMaskingRevision. Any change bumps the content
+    /// version so EnsureWords rebuilds with the new masking options (the
+    /// options themselves live in the static DivineNameMasking state).
+    /// </summary>
+    public static readonly BindableProperty MaskingRevisionProperty = BindableProperty.Create(
+        nameof(MaskingRevision), typeof(int), typeof(TikkunFlowView), 0,
+        propertyChanged: OnContentChanged);
+
     /// <summary>Base pasuk font size (bound to the app's scaled PasukFontSize resource).</summary>
     public static readonly BindableProperty TextFontSizeProperty = BindableProperty.Create(
         nameof(TextFontSize), typeof(double), typeof(TikkunFlowView), 18.0,
@@ -52,7 +61,24 @@ public class TikkunFlowView : GraphicsView
         // A starting estimate — the drawable corrects it to the exact flow
         // height once it can measure words on the real canvas.
         HeightRequest = TextFontSize * LineHeightFactor * 4;
+        // Word and marker colors resolve from the requested theme at build
+        // time, so a flip must re-derive them instead of repainting with the
+        // stale palette (#2601).
+        if (Application.Current is { } app)
+        {
+            // Loaded/Unloaded so a re-presented view re-subscribes and rebuilds
+            // under the theme that is active then.
+            Loaded += (_, _) =>
+            {
+                app.RequestedThemeChanged += OnAppRequestedThemeChanged;
+                Dispatcher.Dispatch(InvalidateContent);
+            };
+            Unloaded += (_, _) => app.RequestedThemeChanged -= OnAppRequestedThemeChanged;
+        }
     }
+
+    internal void OnAppRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e) =>
+        Dispatcher.Dispatch(InvalidateContent);
 
     public IReadOnlyList<Pasuk>? Pasukim
     {
@@ -70,6 +96,12 @@ public class TikkunFlowView : GraphicsView
     {
         get => (bool)GetValue(HideMarksProperty);
         set => SetValue(HideMarksProperty, value);
+    }
+
+    public int MaskingRevision
+    {
+        get => (int)GetValue(MaskingRevisionProperty);
+        set => SetValue(MaskingRevisionProperty, value);
     }
 
     public double TextFontSize
@@ -91,6 +123,13 @@ public class TikkunFlowView : GraphicsView
         private int _wordsVersion = -1;
         private TikkunFlowLayout.Result? _layout;
         private float _laidWidth = -1;
+        // Word widths repeat massively across a perek (את, ה׳…) — a layout
+        // re-run (marks/masking toggles, resize) otherwise re-measures every
+        // word through the native text stack. Keyed by the exact inputs.
+        private readonly Dictionary<(string Text, float FontSize, bool Bold), float> _widthCache = new();
+        private const string WidthProbeText = "אאא";
+        private const float FauxBoldOffset = 0.5f;
+        private float _widthProbe = -1;
 
         public TikkunFlowDrawable(TikkunFlowView view) => _view = view;
 
@@ -120,14 +159,41 @@ public class TikkunFlowView : GraphicsView
             var defaultColor = isDark ? Color.FromArgb("#e0e0e0") : Color.FromArgb("#1a1a1a");
             var padLeft = (float)ContentPadding.Left;
             var padTop = (float)ContentPadding.Top;
+            var lineHeight = (float)_view.TextFontSize * (float)LineHeightFactor;
             foreach (var word in _layout.Words)
             {
-                canvas.Font = word.IsBold ? GraphicsFont.DefaultBold : GraphicsFont.Default;
+                // Taamey D (#2623) — the same scripture face as the pasuk
+                // labels. The canvas resolves IFont.Name through the platform
+                // text stack, not the font registrar.
+                canvas.Font = word.IsBold ? ScriptureFonts.Bold : ScriptureFonts.Regular;
                 canvas.FontSize = word.FontSize;
                 canvas.FontColor = word.TextColor ?? defaultColor;
+                // The draw box must never be tighter than the word's drawn
+                // width: Android truncates it to int and hands it to a
+                // StaticLayout as the wrap constraint, so a snug box fragments
+                // the word into narrow vertical pieces that pile over the
+                // surrounding lines (#2069). Current MAUI forces an LTR text
+                // direction inside DrawString, so HorizontalAlignment.Left
+                // anchors the text at word.X no matter how wide the box is —
+                // give every word the whole column, and an overlong word its
+                // measured width plus slack.
+                var drawWidth = MathF.Max(word.Width + 1f, textWidth);
                 canvas.DrawString(word.Text, padLeft + word.X, padTop + word.Y,
-                    Math.Max(0, textWidth - word.X), (float)_view.TextFontSize * (float)LineHeightFactor,
+                    drawWidth, lineHeight,
                     HorizontalAlignment.Left, VerticalAlignment.Center, TextFlow.OverflowBounds);
+#if !WINDOWS
+                if (word.IsBold)
+                {
+                    // MAUI's canvas drops IFont.Weight once a bundled font
+                    // resolves to a real typeface (Android asset, iOS CTFont) —
+                    // only Windows honors it via CanvasTextFormat.FontWeight.
+                    // A sub-pixel double-strike keeps the pasuk-marker emphasis
+                    // the system font used to provide (#2623).
+                    canvas.DrawString(word.Text, padLeft + word.X + FauxBoldOffset, padTop + word.Y,
+                        drawWidth, lineHeight,
+                        HorizontalAlignment.Left, VerticalAlignment.Center, TextFlow.OverflowBounds);
+                }
+#endif
             }
 
             var needed = _layout.Height + padTop + (float)ContentPadding.Bottom;
@@ -149,8 +215,30 @@ public class TikkunFlowView : GraphicsView
             _layout = null;
         }
 
-        private static Func<string, float, bool, float> MeasureWord(ICanvas canvas) =>
-            (text, fontSize, bold) =>
-                canvas.GetStringSize(text, bold ? GraphicsFont.DefaultBold : GraphicsFont.Default, fontSize).Width;
+        private Func<string, float, bool, float> MeasureWord(ICanvas canvas)
+        {
+            // One probe per layout validates the cache context: a canvas with
+            // different font metrics or a font-size change (slider drags)
+            // shifts the probe width, so entries measured under another
+            // context are flushed instead of reused or accumulated.
+            var probe = canvas.GetStringSize(
+                WidthProbeText, ScriptureFonts.Regular, (float)_view.TextFontSize).Width;
+            if (Math.Abs(probe - _widthProbe) > 0.01f)
+            {
+                _widthCache.Clear();
+                _widthProbe = probe;
+            }
+            return (text, fontSize, bold) =>
+            {
+                if (_widthCache.TryGetValue((text, fontSize, bold), out var width))
+                {
+                    return width;
+                }
+                width = canvas.GetStringSize(text,
+                    bold ? ScriptureFonts.Bold : ScriptureFonts.Regular, fontSize).Width;
+                _widthCache[(text, fontSize, bold)] = width;
+                return width;
+            };
+        }
     }
 }

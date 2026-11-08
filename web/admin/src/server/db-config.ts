@@ -1,6 +1,6 @@
 /**
  * Default MySQL URL when `DB_URL` is unset.
- * Non-production → `tanah-dev` (populate via `npm run dev` / ensure-dev-db, prod-like copy).
+ * Non-production → `tanah-dev` (populate via `bun run dev` / ensure-dev-db, prod-like copy).
  * Production → `tanah`.
  */
 export function defaultMysqlDatabaseName(): string {

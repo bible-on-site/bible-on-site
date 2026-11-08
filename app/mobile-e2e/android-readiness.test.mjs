@@ -19,7 +19,8 @@ function deviceProbe(probe) {
 }
 
 const readyResponse = (_clock, command) => ({ "get-state": "device\n",
-  "shell getprop sys.boot_completed": "1\n", "shell pm path android": "package:/system/framework/framework-res.apk\n" })[command];
+  "shell getprop sys.boot_completed": "1\n", "shell pm path android": "package:/system/framework/framework-res.apk\n",
+  "shell dumpsys activity lastanr": "ACTIVITY MANAGER LAST ANR\n  <no ANR has occurred since boot>\n" })[command];
 
 test("requires a stable boot and responsive package manager before starting sessions", async () => {
   const { options, observations } = deviceProbe(readyResponse);
@@ -51,4 +52,15 @@ test("reports a missing adb executable immediately instead of treating it as boo
   const { options, observations } = deviceProbe(() => { throw Object.assign(new Error("missing adb"), { code: "ENOENT" }); });
   await assert.rejects(waitForAndroidDevice(options), { code: "ENOENT" });
   assert.equal(observations.length, 1);
+});
+
+test("fails immediately on the System UI ANR instead of spending every scenario's startup budget", async () => {
+  const { options, observations } = deviceProbe((clock, command) =>
+    command === "shell dumpsys activity lastanr"
+      ? "ACTIVITY MANAGER LAST ANR\n  ANR in com.android.systemui\nReason: Input dispatching timed out\n"
+      : readyResponse(clock, command));
+  await assert.rejects(waitForAndroidDevice(options), { code: "ANDROID_ANR" });
+  assert.equal(observations.length, 1);
+  assert.equal(observations[0].elapsedMs, 0);
+  assert.match(observations[0].error, /ANR in com.android.systemui/);
 });

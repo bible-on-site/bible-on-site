@@ -1,0 +1,13 @@
+<Project>
+  <ItemGroup>
+    <!-- SonarAnalyzer.CSharp is the same analyzer engine Codacy runs as
+         "SonarC#". Referencing it here makes the recurring Codacy findings
+         (braces, optional params, unused params, switch default clauses,
+         float equality, public const fields, commented-out code, loop stop
+         conditions) fail `dotnet build` locally instead of first surfacing
+         as post-push Codacy annotations. Enabled rules and severities live
+         in the repo-root .editorconfig ([*.cs] section). PrivateAssets keeps
+         the analyzer out of any produced package/dependency graph. -->
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.35.0.4138" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

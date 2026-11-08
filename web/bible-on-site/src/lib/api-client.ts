@@ -65,3 +65,29 @@ export async function query<T>(sql: string, params?: unknown[]): Promise<T[]> {
 	const [rows] = await connection.execute(sql, (params ?? []) as any);
 	return rows as T[];
 }
+
+/**
+ * Execute a parameterized SQL query over the text protocol, with the
+ * driver interpolating `?` params into the statement as escaped
+ * literals (same escaping `execute` relies on).
+ *
+ * Needed by the search providers: a prepared `REGEXP_LIKE(col, ?)`
+ * treats the pattern as a runtime value, and MySQL re-validates and
+ * recompiles the ICU pattern for *every row evaluated* — on a
+ * ~340k-row text scan that alone costs tens of seconds, dwarfing the
+ * match work itself. With the text protocol the server sees a
+ * constant pattern and compiles it once per statement, which is what
+ * makes the bounded candidate scan fit its time budget (#2140). Only
+ * use this where params are generated patterns — prefer `query` for
+ * ordinary predicates so prepared-statement type coercion and caching
+ * still apply there.
+ */
+export async function queryText<T>(
+	sql: string,
+	params?: unknown[],
+): Promise<T[]> {
+	const connection = getPool();
+	// nosemgrep: node-mysql-sqli -- sql is generated literals plus ? placeholders only; params are driver-escaped
+	const [rows] = await connection.query(sql, params ?? []);
+	return rows as T[];
+}

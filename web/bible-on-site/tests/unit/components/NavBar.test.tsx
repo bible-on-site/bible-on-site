@@ -8,12 +8,20 @@ jest.mock("next/navigation", () => ({
 	usePathname: () => mockPathname,
 }));
 
-jest.mock("next/image", () => ({
-	__esModule: true,
-	default: (props: Record<string, unknown>) => (
-		<span data-testid="mock-image" data-alt={props.alt as string} />
-	),
-}));
+// next/jest injects development's unoptimized setting; exercise the real
+// Next Image renderer with production optimization enabled instead.
+jest.mock("next/dist/client/use-image-config", () => {
+	const { imageConfigDefault, prepareImageConfig } = jest.requireActual<
+		typeof import("next/dist/shared/lib/image-config")
+	>("next/dist/shared/lib/image-config");
+	return {
+		useImageConfig: () =>
+			prepareImageConfig(undefined, {
+				...imageConfigDefault,
+				unoptimized: false,
+			}),
+	};
+});
 
 jest.mock("next/link", () => ({
 	__esModule: true,
@@ -31,9 +39,13 @@ import { NavBar } from "@/app/components/NavBar";
 describe("NavBar", () => {
 	it("renders menu with main nav links", () => {
 		render(<NavBar />);
-		expect(screen.getByRole("link", { name: /על הפרק/ })).toHaveAttribute(
+		expect(screen.getByRole("link", { name: "על הפרק" })).toHaveAttribute(
 			"href",
 			"/929",
+		);
+		expect(screen.getByRole("link", { name: "מסורה על הפרק" })).toHaveAttribute(
+			"href",
+			"/מסורה",
 		);
 		expect(screen.getByRole("link", { name: /הרבנים/ })).toHaveAttribute(
 			"href",
@@ -55,10 +67,21 @@ describe("NavBar", () => {
 
 	it("renders home link with correct href", () => {
 		render(<NavBar />);
-		// Home link has no accessible name (only mock image with alt); get by href
-		const homeLink = document.querySelector('a[href="/"]');
+		const homeLink = screen.getByRole("link", { name: "עמוד ראשי" });
 		expect(homeLink).toBeInTheDocument();
 		expect(homeLink).toHaveAttribute("href", "/");
+	});
+
+	it("serves the small sidebar logo directly while preserving its size and lazy loading", () => {
+		render(<NavBar />);
+
+		const logo = screen.getByRole("img", { name: "עמוד ראשי" });
+		expect(logo).toHaveAttribute("src", "/images/logos/logo192.webp");
+		expect(logo).not.toHaveAttribute("srcset");
+		expect(logo).toHaveAttribute("width", "72");
+		expect(logo).toHaveAttribute("height", "72");
+		expect(logo).toHaveAttribute("loading", "lazy");
+		expect(logo.closest("a")).toHaveAttribute("href", "/");
 	});
 
 	it("renders app and daily bulletin links", () => {
@@ -75,6 +98,15 @@ describe("NavBar", () => {
 			"href",
 			"/whatsappGroup",
 		);
+	});
+
+	it("keeps the accessibility statement out of the side nav (#2396)", () => {
+		render(<NavBar />);
+		// The entry point moved to the top-bar accessibility menu; the footer
+		// link (Footer.tsx) remains the secondary access route.
+		expect(
+			screen.queryByRole("link", { name: /הצהרת נגישות/ }),
+		).not.toBeInTheDocument();
 	});
 
 	describe("menu toggle", () => {

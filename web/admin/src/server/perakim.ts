@@ -9,10 +9,12 @@ export interface Perek {
 	perek: number | null;
 	perek_in_context: number | null;
 	additional_letter: string | null;
+	/** Canonical number of pesukim in the perek; null until the counts data runs. */
+	pasuk_count: number | null;
 }
 
 const PEREK_COLUMNS =
-	"id, perek_id, sefer_id, sefer_name, perek, perek_in_context, additional_letter";
+	"id, perek_id, sefer_id, sefer_name, perek, perek_in_context, additional_letter, pasuk_count";
 
 // Get all perakim
 export const getPerakim = createServerFn({ method: "GET" }).handler(

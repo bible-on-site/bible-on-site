@@ -1,19 +1,13 @@
-import { execFileSync } from "node:child_process";
 import { appendFileSync, copyFileSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { resolveSqlArtifact } from "./data-artifact.mjs";
 import { startDeployment } from "./deployment-state.mjs";
-import { releasePayload } from "./release-provenance.mjs";
+import { ghApi } from "./gh-api.mjs";
+import { nativeImageArtifacts, releasePayload } from "./release-provenance.mjs";
 
-const api = (endpoint) =>
-	JSON.parse(
-		execFileSync("gh", ["api", endpoint], {
-			encoding: "utf8",
-			maxBuffer: 16 * 1024 * 1024,
-		}),
-	);
+const api = (endpoint) => ghApi(endpoint);
 const directories = {
 	website: "web/bible-on-site",
 	api: "web/api",
@@ -72,6 +66,8 @@ export function checkDeployment(
 		runAttempt,
 		artifactId,
 		artifactDigest,
+		sourceRunId,
+		sourceRef,
 	},
 	request = api,
 ) {
@@ -192,7 +188,7 @@ export function checkDeployment(
 			);
 		checkQuality(root, runId, runAttempt, request);
 		const artifact = resolveSqlArtifact(
-			{ repo, runId, ref, artifactId, artifactDigest },
+			{ repo, runId, ref, artifactId, artifactDigest, sourceRunId, sourceRef },
 			request,
 		);
 		if (
@@ -244,8 +240,21 @@ export function checkDeployment(
 		if (runAttempt > currentAttempt)
 			throw new Error("Published CI attempt exceeds source CI");
 	}
+	const platformArtifacts = nativeImageArtifacts(provenance);
 	checkQuality(root, runId, runAttempt, request);
-	return { deploy: true, ref, version, runAttempt };
+	return {
+		deploy: true,
+		ref,
+		version,
+		runAttempt,
+		...(platformArtifacts
+			? moduleName === "api"
+				? { apiArm64: true }
+				: moduleName === "admin"
+					? { adminArm64: true }
+					: { websiteArm64: true }
+			: {}),
+	};
 }
 
 if (
@@ -268,6 +277,8 @@ if (
 		runAttempt: payload.ci_run_attempt,
 		artifactId: payload.sql_artifact_id,
 		artifactDigest: payload.sql_artifact_digest,
+		sourceRunId: payload.sql_source_run_id,
+		sourceRef: payload.sql_source_ref,
 	});
 	if (result.deploy) {
 		const state = startDeployment({
@@ -281,14 +292,23 @@ if (
 		});
 		result = { ...result, ...state };
 		if (state.deploy)
-			copyFileSync(
-				new URL("./deployment-state.mjs", import.meta.url),
-				path.join(process.env.RUNNER_TEMP, "deployment-state.mjs"),
-			);
+			for (const helper of [
+				"deployment-state.mjs",
+				"gh-api.mjs",
+				"ms-store-flights.mjs",
+				// Store-notes helpers run from RUNNER_TEMP so a redeploy of a
+				// tag that predates them still generates notes (#2972).
+				"store-release-notes.mjs",
+				"appstore-whatsnew.mjs",
+			])
+				copyFileSync(
+					new URL(`./${helper}`, import.meta.url),
+					path.join(process.env.RUNNER_TEMP, helper),
+				);
 	}
 	appendFileSync(
 		process.env.GITHUB_OUTPUT,
-		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\n`,
+		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\napi_arm64=${result.apiArm64 === true}\nwebsite_arm64=${result.websiteArm64 === true}\nadmin_arm64=${result.adminArm64 === true}\n`,
 	);
 	if (result.version)
 		appendFileSync(

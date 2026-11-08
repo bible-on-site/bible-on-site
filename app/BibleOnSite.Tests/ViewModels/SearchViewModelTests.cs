@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using BibleOnSite.Models;
 using BibleOnSite.ViewModels;
 using FluentAssertions;
@@ -57,6 +58,10 @@ public class SearchViewModelTests
         viewModel.IsFilterEnabled(SearchFilter.Pasuk).Should().BeTrue();
         viewModel.IsFilterEnabled(SearchFilter.Perush).Should().BeTrue();
         viewModel.IsFilterEnabled(SearchFilter.Perek).Should().BeTrue();
+        // Remote kinds are selected by default too (#2454); only actual
+        // offline availability skips them at search time.
+        viewModel.IsFilterEnabled(SearchFilter.Articles).Should().BeTrue();
+        viewModel.IsFilterEnabled(SearchFilter.Tanahpedia).Should().BeTrue();
     }
 
     [Fact]
@@ -81,6 +86,96 @@ public class SearchViewModelTests
         viewModel.IsFilterEnabled(SearchFilter.Pasuk).Should().BeTrue();
         viewModel.IsFilterEnabled(SearchFilter.Perush).Should().BeTrue();
         viewModel.IsFilterEnabled(SearchFilter.Perek).Should().BeTrue();
+    }
+
+    #endregion
+
+    #region Kind Availability Tests (#2454)
+
+    [Fact]
+    public void IsKindAvailable_OnlineWithPack_AllKindsAvailable()
+    {
+        var viewModel = new SearchViewModel { NetworkProbe = () => true, CommentaryPackProbe = () => true };
+
+        foreach (var filter in Enum.GetValues<SearchFilter>())
+        {
+            viewModel.IsKindAvailable(filter).Should().BeTrue($"{filter} should be available online with the pack");
+            viewModel.KindUnavailableReason(filter).Should().BeNull();
+        }
+    }
+
+    [Fact]
+    public void KindUnavailableReason_Offline_MarksOnlyRemoteKinds()
+    {
+        var viewModel = new SearchViewModel { NetworkProbe = () => false, CommentaryPackProbe = () => true };
+
+        viewModel.KindUnavailableReason(SearchFilter.Articles).Should().Be(SearchKindAvailability.NetworkReason);
+        viewModel.KindUnavailableReason(SearchFilter.Tanahpedia).Should().Be(SearchKindAvailability.NetworkReason);
+        viewModel.KindUnavailableReason(SearchFilter.Pasuk).Should().BeNull();
+        viewModel.KindUnavailableReason(SearchFilter.Perush).Should().BeNull();
+    }
+
+    [Fact]
+    public void KindUnavailableReason_NoPack_MarksOnlyPerush()
+    {
+        var viewModel = new SearchViewModel { NetworkProbe = () => true, CommentaryPackProbe = () => false };
+
+        viewModel.KindUnavailableReason(SearchFilter.Perush).Should().Be(SearchKindAvailability.CommentaryPackReason);
+        viewModel.KindUnavailableReason(SearchFilter.Articles).Should().BeNull();
+        viewModel.KindUnavailableReason(SearchFilter.Pasuk).Should().BeNull();
+    }
+
+    [Fact]
+    public void SetAvailableFiltersEnabled_Offline_SkipsRemoteKindsButKeepsTheirIntent()
+    {
+        var viewModel = new SearchViewModel { NetworkProbe = () => false, CommentaryPackProbe = () => true };
+
+        viewModel.SetAvailableFiltersEnabled(false);
+
+        viewModel.IsFilterEnabled(SearchFilter.Pasuk).Should().BeFalse();
+        viewModel.IsFilterEnabled(SearchFilter.Perush).Should().BeFalse();
+        // Unavailable kinds are not toggled, their intent survives (#2454).
+        viewModel.IsFilterEnabled(SearchFilter.Articles).Should().BeTrue();
+        viewModel.IsFilterEnabled(SearchFilter.Tanahpedia).Should().BeTrue();
+
+        viewModel.SetAvailableFiltersEnabled(true);
+
+        viewModel.IsFilterEnabled(SearchFilter.Pasuk).Should().BeTrue();
+        viewModel.IsFilterEnabled(SearchFilter.Perush).Should().BeTrue();
+    }
+
+    [Fact]
+    public void SetAvailableFiltersEnabled_Online_TogglesEveryKind()
+    {
+        var viewModel = new SearchViewModel { NetworkProbe = () => true, CommentaryPackProbe = () => true };
+
+        viewModel.SetAvailableFiltersEnabled(false);
+        Enum.GetValues<SearchFilter>().Should().OnlyContain(filter => !viewModel.IsFilterEnabled(filter));
+
+        viewModel.SetAvailableFiltersEnabled(true);
+        Enum.GetValues<SearchFilter>().Should().OnlyContain(filter => viewModel.IsFilterEnabled(filter));
+    }
+
+    [Fact]
+    public void SetAllSefarimEnabled_TogglesEverySeferAcrossAllGroups()
+    {
+        var viewModel = new SearchViewModel();
+
+        viewModel.SetAllSefarimEnabled(false);
+        for (var seferId = 1; seferId <= 35; seferId++)
+        {
+            viewModel.IsSeferFilterEnabled(seferId).Should().BeFalse();
+        }
+        for (var group = 0; group < 3; group++)
+        {
+            viewModel.IsSeferGroupFilterEnabled(group).Should().BeFalse();
+        }
+
+        viewModel.SetAllSefarimEnabled(true);
+        for (var seferId = 1; seferId <= 35; seferId++)
+        {
+            viewModel.IsSeferFilterEnabled(seferId).Should().BeTrue();
+        }
     }
 
     #endregion
@@ -193,6 +288,75 @@ public class SearchViewModelTests
     }
 
     #endregion
+
+    #region ReconcileVisibleResults Tests
+
+    [Fact]
+    public void ReconcileVisibleResults_WhenEmpty_InsertsAllAtPositions()
+    {
+        var target = new ObservableCollection<SearchResult>();
+        var first = CreatePerekResult(1);
+        var second = CreatePerekResult(2);
+
+        SearchViewModel.ReconcileVisibleResults(target, new[] { first, second });
+
+        target.Should().Equal(first, second);
+    }
+
+    [Fact]
+    public void ReconcileVisibleResults_WhenReordered_MovesExisting()
+    {
+        var first = CreatePerekResult(1);
+        var second = CreatePerekResult(2);
+        var third = CreatePerekResult(3);
+        var target = new ObservableCollection<SearchResult> { first, second, third };
+
+        SearchViewModel.ReconcileVisibleResults(target, new[] { third, first, second });
+
+        target.Should().Equal(third, first, second);
+    }
+
+    [Fact]
+    public void ReconcileVisibleResults_WhenListShrinks_RemovesTail()
+    {
+        var first = CreatePerekResult(1);
+        var second = CreatePerekResult(2);
+        var third = CreatePerekResult(3);
+        var target = new ObservableCollection<SearchResult> { first, second, third };
+
+        SearchViewModel.ReconcileVisibleResults(target, new[] { first });
+
+        target.Should().Equal(first);
+    }
+
+    [Fact]
+    public void ReconcileVisibleResults_MixedChange_InsertsMovesAndTrims()
+    {
+        var first = CreatePerekResult(1);
+        var second = CreatePerekResult(2);
+        var third = CreatePerekResult(3);
+        var fourth = CreatePerekResult(4);
+        var target = new ObservableCollection<SearchResult> { first, second, third };
+
+        SearchViewModel.ReconcileVisibleResults(target, new[] { fourth, third });
+
+        target.Should().Equal(fourth, third);
+    }
+
+    #endregion
+
+    private static PerekSearchResult CreatePerekResult(int perekId) =>
+        new(new Perek
+        {
+            PerekId = perekId,
+            SeferId = 1,
+            SeferName = "בראשית",
+            SeferTanahUsName = "Genesis",
+            PerekNumber = perekId,
+            Date = "2026-01-01",
+            HebDate = "כב שבט",
+            Tseit = "18:00"
+        }, "חיפוש");
 
     private static List<Author> CreateTestAuthors()
     {

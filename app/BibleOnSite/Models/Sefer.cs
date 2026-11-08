@@ -15,9 +15,14 @@ public class Sefer
     public object? TanahUsName { get; set; }
 
     /// <summary>
+    /// Gets the TanahUS name, or the simple name if no additionals exist.
+    /// </summary>
+    public string GetTanahUsName() => GetTanahUsName(null);
+
+    /// <summary>
     /// Gets the TanahUS name for a specific additional, or the simple name if no additionals exist.
     /// </summary>
-    public string GetTanahUsName(int? additional = null)
+    public string GetTanahUsName(int? additional)
     {
         if (TanahUsName is string simpleName)
         {

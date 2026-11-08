@@ -1,10 +1,6 @@
-using BibleOnSite.Tests.MobileE2E.Configuration;
-using BibleOnSite.Tests.MobileE2E.Pages;
 using BibleOnSite.Tests.MobileE2E.Platforms;
-using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace BibleOnSite.Tests.MobileE2E;
 
@@ -14,57 +10,66 @@ namespace BibleOnSite.Tests.MobileE2E;
 // removed the UICollectionView reentrancy — scroll churn during perushim cell
 // rendering still aborted the app. The fix replaces WebKit's import with the
 // managed HtmlRuns parser; this test exercises perushim HtmlView cells under
-// scroll stress. iOS simulator builds carry no ODR notes pack, so the app
+// scroll stress. iOS simulator builds carry no notes asset pack, so the app
 // launches with BIBLE_E2E_PERUSHIM=1 which fabricates perushim notes.
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "iOS")]
-public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, MobileDeviceSessionFactory sessions)
-    : IAsyncLifetime
+public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, MobileDeviceSession session)
+    : MobileDeviceTest(output, session)
 {
-    private readonly MobileTestConfiguration _configuration = MobileTestConfiguration.FromEnvironment();
-    private AppiumDriver? _driver;
-    private MobilePlatformAdapter _platform = null!;
-    private PerekPage _page = null!;
+    // The shared session relaunches the app with this environment so the
+    // synthetic commentary only applies to this scenario — sessions created
+    // for other tests no longer carry the flag in their capabilities.
+    protected override IReadOnlyDictionary<string, string> LaunchEnvironment =>
+        new Dictionary<string, string>
+        {
+            ["BIBLE_E2E_PERUSHIM"] = "1",
+            ["BIBLE_E2E_LONG_PERUSHIM"] = "1"
+        };
 
-    public Task InitializeAsync()
-    {
-        _platform = MobilePlatformAdapter.For(_configuration.Platform);
-        var options = _platform.CreateOptions(_configuration,
-            new Dictionary<string, string> { ["BIBLE_E2E_PERUSHIM"] = "1" });
-        _driver = sessions.Create(() => _platform.CreateDriver(_configuration.Server, options));
-        _page = new(_driver, _platform);
-        _page.WaitForStartup();
-        return Task.CompletedTask;
-    }
-
-    public Task DisposeAsync()
-    {
-        _driver?.Quit();
-        _driver?.Dispose();
-        return Task.CompletedTask;
-    }
-
+    // A 267 KB-scale HTML block matches the largest delivered commentary group
+    // and exercises the 2026-10-12 TextKit watchdog surface through lazy cells.
     [Fact]
-    public void PerushimCellsSurviveScrollStorm()
+    public void PerushimCellsSurviveScrollStorm() => Scenario(() =>
     {
         var checkedCount = CheckAllPerushim();
         Assert.True(checkedCount > 0,
             "Synthetic perushim must render checkboxes — otherwise HtmlView cells are never created");
 
-        var list = _page.WaitFor("PasukimCollection");
+        // Only sections near the viewport are exposed (AccessibleTextSectionsTests
+        // proves the split keeps every paragraph); the 2,200-line document must
+        // not put its ~147 sections into every WDA snapshot.
+        Page.WaitFor(Platform.DisplayedAutomationId("CommentaryTextSection"));
+        var sections = System.Xml.Linq.XDocument.Parse(Driver!.PageSource).Descendants()
+            .Where(element => (string?)element.Attribute("name") == "CommentaryTextSection")
+            .Select(element => (string?)element.Attribute("label") ?? string.Empty).ToArray();
+        Assert.InRange(sections.Length, 1, 20);
+        Assert.All(sections, text => Assert.InRange(text.Length, 1, 1024));
+        Assert.Contains("פירוש ארוך", string.Concat(sections));
+        var sourceBeforeStorm = Page.Source;
+        var verseBeforeStorm = Page.FirstPasuk;
+        SaveDiagnostics("LongPerushimBeforeScroll", "passed");
+
+        var list = Page.WaitFor("PasukimCollection");
         var centerX = list.Location.X + list.Size.Width / 2;
         var topY = list.Location.Y + list.Size.Height / 5;
         var bottomY = list.Location.Y + list.Size.Height * 4 / 5;
 
         // 40 flicks still force heavy cell prefetch/recycle churn while every
-        // pasuk cell renders HtmlView commentary blocks. Two corollaries of the
-        // shared-CPU simulator: each AX query serializes behind main-thread
-        // attributed-text layout (observed up to ~60s per query), so the gate
-        // between bursts must avoid element-resolution calls; and the whole
-        // test has to finish well inside the 10-minute blame-hang budget.
+        // pasuk cell renders HtmlView commentary blocks, and the whole test has
+        // to finish well inside the 10-minute blame-hang budget.
         Storm(bottomY, topY);
         Storm(topY, bottomY);
+
+        // The last flick's inertia keeps the collection decelerating and
+        // recycling cells on the main thread — that is the starvation that
+        // stretched every later WDA command past the 45s return budget. A
+        // short gutter drag takes scroll tracking and stops the momentum.
+        var readerFrame = MobilePlatformAdapter.ReadFrame(list);
+        Driver!.PerformActions([ReaderScrollActions.Brake(
+            new System.Drawing.Rectangle(readerFrame.Location, readerFrame.Size),
+            DriverTelemetry.WindowSize(Driver))]);
 
         // WDA resolves every pointerMove against the app element's AX snapshot
         // during synthesis, so keep each request short. queryAppState asks the
@@ -73,52 +78,56 @@ public sealed class PerushimHtmlScrollStabilityTests(ITestOutputHelper output, M
         // stalling for minutes if the app did crash.
         void Storm(int fromY, int toY)
         {
-            for (var burst = 0; burst < 2; burst++)
+            var burst = 0;
+            foreach (var sequence in PerekScrollStabilityTests.CreateFlickBursts(
+                centerX, fromY, centerX, toY, 20))
             {
-                var midState = Convert.ToInt64(_driver!.ExecuteScript("mobile: queryAppState",
-                    new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" }));
-                Assert.Equal(4L, midState);
-                _driver!.PerformActions([PerekScrollStabilityTests.CreateFlickSequence(
-                    centerX, fromY, centerX, toY, 10)]);
+                // Every health probe is a queued XCTest command; on a churning
+                // app it costs more than the burst it precedes. Every fourth
+                // burst still bounds a crash's stall to a handful of seconds
+                // while the final state assert below catches anything later.
+                if (burst % 4 == 0)
+                {
+                    var midState = Convert.ToInt64(Driver!.ExecuteScript("mobile: queryAppState",
+                        new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" }));
+                    Assert.Equal(4L, midState);
+                }
+                burst++;
+                Driver!.PerformActions([sequence]);
             }
         }
 
-        var appState = _driver!.ExecuteScript("mobile: queryAppState",
+        var appState = Driver!.ExecuteScript("mobile: queryAppState",
             new Dictionary<string, object> { ["bundleId"] = "com.tanah.daily929" });
-        output.WriteLine($"App state after perushim scroll storm: {appState}");
+        Output.WriteLine($"App state after perushim scroll storm: {appState}");
         // 4 = running in foreground. A crashed app reports 1 (not running).
         Assert.Equal(4L, Convert.ToInt64(appState));
-        Assert.NotEmpty(_page.Source);
-        Assert.NotEmpty(_page.FirstPasuk);
-    }
+        Assert.Equal(sourceBeforeStorm, Page.Source);
+        // Opposite flicks need not cancel their inertia. The reader can remain
+        // inside the huge note, with every verse outside the visible viewport.
+        Page.ScrollBackTo("PasukText", verseBeforeStorm);
+        Assert.Equal(verseBeforeStorm, Page.FirstPasuk);
+        SaveDiagnostics("LongPerushimAfterScroll", "passed");
+    });
 
-    // Opens the perushim panel and checks the first two synthetic commentaries
-    // so each pasuk cell renders HtmlView notes; returns how many were checked.
-    // Checking all three triples attributed-text layout cost without covering
-    // any additional code path — one HtmlView per commentary already exercises
-    // the parse/render pipeline that crashed.
+    // Add up to five visible sources sequentially, including the large first commentary.
     private int CheckAllPerushim()
     {
-        _page.Tap("PerushimChevronButton");
+        Page.Tap("PerushimChevronButton");
 
-        // The panel animates up (~250 ms); poll briefly for rendered checkboxes.
-        List<AppiumElement> checkboxes = [];
-        for (var attempt = 0; attempt < 10 && checkboxes.Count == 0; attempt++)
+        Page.WaitFor("PerushCheckBox", element => element.Displayed);
+        var checkboxes = Driver!
+            .FindElements(Platform.AutomationId("PerushCheckBox"))
+            .Where(element => element.Displayed)
+            .ToList();
+
+        foreach (var checkbox in checkboxes.Take(5))
         {
-            Thread.Sleep(300);
-            checkboxes = _driver!
-                .FindElements(_platform.AutomationId("PerushCheckBox"))
-                .Where(element => element.Displayed)
-                .ToList();
+            Platform.Tap(Driver!, checkbox);
         }
+        Output.WriteLine($"Checked {Math.Min(checkboxes.Count, 5)} synthetic perushim.");
 
-        foreach (var checkbox in checkboxes.Take(2))
-        {
-            _platform.Tap(_driver!, checkbox);
-        }
-        output.WriteLine($"Checked {Math.Min(checkboxes.Count, 2)} synthetic perushim.");
-
-        _page.Tap("PerushimChevronButton");
-        return Math.Min(checkboxes.Count, 2);
+        Page.Tap("PerushimChevronButton");
+        return Math.Min(checkboxes.Count, 5);
     }
 }

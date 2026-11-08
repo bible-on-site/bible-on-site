@@ -6,13 +6,18 @@ namespace BibleOnSite.Services;
 /// </summary>
 public interface IAnalyticsService
 {
-	/// <summary>
-	/// Logs the current screen (GA4 screen_view). Use route or legacy-style names e.g. "AlHaperek/42", "AuthorsPage".
-	/// </summary>
-	void SetScreen(string screenName, string? screenClassOverride = null);
+    /// <summary>
+    /// Logs the current screen (GA4 screen_view). Use route or legacy-style names e.g. "AlHaperek/42", "AuthorsPage".
+    /// </summary>
+    void SetScreen(string screenName);
 
-	/// <summary>
-	/// Logs a search event (GA4 search). Mirrors legacy analytics.logSearch(searchTerm).
-	/// </summary>
-	void LogSearch(string searchTerm);
+    /// <summary>
+    /// Logs the current screen with an explicit class override.
+    /// </summary>
+    void SetScreen(string screenName, string? screenClassOverride);
+
+    /// <summary>
+    /// Logs a search event (GA4 search). Mirrors legacy analytics.logSearch(searchTerm).
+    /// </summary>
+    void LogSearch(string searchTerm);
 }

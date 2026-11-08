@@ -1,16 +1,29 @@
 import DOMPurify from "isomorphic-dompurify";
 import Image from "next/image";
 import Link from "next/link";
+import { ReadingTime } from "@/app/components/ReadingTime";
+import { Skeleton, SkeletonLabel } from "@/app/components/Skeleton";
 import type { ArticleSummary } from "@/lib/articles";
+import { normalizeAbstractHtml } from "@/lib/authors/articles-grid";
 import styles from "./articles-section.module.css";
 import { Carousel } from "./Carousel";
 
+const SKELETON_KEYS = ["a", "b", "c"];
+
 interface ArticlesSectionProps {
 	articles?: ArticleSummary[] | null;
+	/** Section heading (defaults to the perek reader's title). */
+	title?: string;
+	/** Empty-state message (defaults to the perek reader's message). */
+	emptyMessage?: string;
 	/** When set, clicking an article calls this instead of navigating (e.g. open in-place in flipbook). */
 	onArticleClick?: (article: ArticleSummary) => void;
+	/** Overrides the canonical /929 href on each card (modifier-key/new-tab target) — e.g. an alternative-division book deep link. */
+	hrefForArticle?: (article: ArticleSummary) => string;
 	/** When true, show loading state (e.g. fetching article for in-place view). */
 	loading?: boolean;
+	/** Session-scoped key so the carousel keeps its position across unmounts. */
+	scrollStorageKey?: string;
 }
 
 /**
@@ -20,8 +33,12 @@ interface ArticlesSectionProps {
  */
 export function ArticlesSection({
 	articles = [],
+	title = "מאמרים על הפרק",
+	emptyMessage = "אין מאמרים לפרק זה",
 	onArticleClick,
+	hrefForArticle,
 	loading = false,
+	scrollStorageKey,
 }: ArticlesSectionProps) {
 	const safeArticles = articles ?? [];
 	return (
@@ -35,27 +52,47 @@ export function ArticlesSection({
 					src="/icons/book.svg"
 					alt=""
 					aria-hidden="true"
+					unoptimized
 					width={18}
 					height={18}
 					className={styles.sectionIcon}
 				/>
-				<h2 className={styles.sectionTitle}>מאמרים על הפרק</h2>
+				<h2 className={styles.sectionTitle}>{title}</h2>
 			</header>
 
 			<Carousel
 				className={styles.carousel}
 				prevLabel="מאמר קודם"
 				nextLabel="מאמר הבא"
+				scrollStorageKey={scrollStorageKey}
 			>
 				{safeArticles.length === 0 ? (
-					<p className={styles.emptyMessage}>אין מאמרים לפרק זה</p>
+					<p className={styles.emptyMessage}>{emptyMessage}</p>
 				) : loading ? (
-					<p className={styles.emptyMessage}>מתחבר למאמרים...</p>
+					SKELETON_KEYS.map((key, index) => (
+						<div
+							key={key}
+							className={`${styles.carouselItem} ${styles.skeletonItem}`}
+						>
+							{index === 0 && <SkeletonLabel>מתחבר למאמרים...</SkeletonLabel>}
+							<Skeleton variant="round" width="64px" height="64px" />
+							<Skeleton width="60%" height="1rem" />
+							<Skeleton width="35%" height="0.75rem" />
+							<div className={styles.skeletonAbstract}>
+								<Skeleton />
+								<Skeleton />
+								<Skeleton width="70%" />
+							</div>
+						</div>
+					))
 				) : (
 					safeArticles.map((article) => (
 						<Link
 							key={article.id}
-							href={`/929/${article.perekId}/${article.id}`}
+							href={
+								hrefForArticle?.(article) ??
+								`/929/${article.perekId}/${article.id}`
+							}
 							id={`article-${article.id}`}
 							className={styles.carouselItem}
 							onClick={
@@ -82,13 +119,20 @@ export function ArticlesSection({
 								/>
 							</div>
 							<span className={styles.authorName}>{article.authorName}</span>
+							{/* Pre-entry estimate over the FULL content (#2607). */}
+							<ReadingTime
+								estimatedSeconds={article.metric?.estimatedSeconds}
+								className={styles.readingTime}
+							/>
 							{article.abstract && (
 								<div
 									className={styles.articleAbstract}
 									// nosemgrep -- DOMPurify-sanitized abstract
 									// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 									dangerouslySetInnerHTML={{
-										__html: DOMPurify.sanitize(article.abstract),
+										__html: DOMPurify.sanitize(
+											normalizeAbstractHtml(article.abstract),
+										),
 									}}
 								/>
 							)}

@@ -4,8 +4,7 @@ jest.mock("@/data/sefer-colors", () => ({
 
 const mockPageRangesHandler = jest.fn();
 const mockGeneratePdfViaBulletin = jest.fn(
-	async (_perekIds: number[], _options?: unknown) =>
-		new Uint8Array([1, 2, 3]),
+	async (_perekIds: number[], _options?: unknown) => new Uint8Array([1, 2, 3]),
 );
 
 jest.mock("../../../src/lib/download/bulletin-client", () => ({
@@ -45,9 +44,11 @@ describe("register tanach downloads", () => {
 			seferHandler?.({ seferName: "Bereshit", perekIds: [] }),
 		).rejects.toThrow("Full sefer download requires at least one perek id");
 
+		const masking = { enabled: true } as never;
 		const result = await seferHandler?.({
 			seferName: "Bereshit",
 			perekIds: [1, 2],
+			divineNameMasking: masking,
 		});
 
 		expect(result).toEqual(["pdf", new Uint8Array([1, 2, 3])]);
@@ -57,6 +58,13 @@ describe("register tanach downloads", () => {
 			includeCover: true,
 			includeToc: true,
 			coverAccentHex: "123abc",
+			divineNameMasking: masking,
+			cover: {
+				branding: 'תנ"ך על הפרק',
+				title: "ספר Bereshit",
+				subtitle: "מקראות גדולות",
+				edition: "עם מאמרים מרבנים בני זמנינו",
+			},
 		});
 	});
 });

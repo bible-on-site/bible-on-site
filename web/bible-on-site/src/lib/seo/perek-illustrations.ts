@@ -1,3 +1,18 @@
+import { assetsUrl } from "../assets-url";
+
+export interface ImageVerseRange {
+	perekId: number;
+	pasukFrom: number;
+	pasukTo: number;
+}
+
+export interface ImageRangeRow {
+	image_id: number;
+	perek_id: number;
+	pasuk_from: number;
+	pasuk_to: number;
+}
+
 export interface PerekIllustration {
 	id: number;
 	src: string;
@@ -9,6 +24,8 @@ export interface PerekIllustration {
 	socialHeight: number;
 	alt: string;
 	caption: string;
+	captionMarkdown: string | null;
+	verseRanges: ImageVerseRange[];
 	description: string | null;
 	credit: string | null;
 }
@@ -18,6 +35,7 @@ export interface ImageRow {
 	perek_id: number;
 	alt_text: string;
 	caption: string;
+	caption_markdown: string | null;
 	description: string | null;
 	credit: string | null;
 	role: "display" | "social" | null;
@@ -35,21 +53,26 @@ interface Variant {
 	s3_key: string;
 }
 
-/** URLs use the same bucket and endpoint conventions as author images. */
+/** URLs use the same bucket/endpoint/CDN conventions as author images. */
 export function perekImageUrl(key: string): string {
-	const endpoint = process.env.S3_ENDPOINT;
-	const bucket = process.env.S3_BUCKET || "bible-on-site-assets";
-	const region =
-		process.env.S3_REGION || process.env.AWS_REGION || "il-central-1";
 	const encodedKey = key.split("/").map(encodeURIComponent).join("/");
-	return endpoint
-		? `${endpoint.replace(/\/$/, "")}/${bucket}/${encodedKey}`
-		: `https://${bucket}.s3.${region}.amazonaws.com/${encodedKey}`;
+	return assetsUrl(encodedKey);
 }
 
 export function imagesFromRows(
 	rows: ImageRow[],
+	rangeRows: ImageRangeRow[] = [],
 ): Record<number, PerekIllustration[]> {
+	const ranges = new Map<number, ImageVerseRange[]>();
+	for (const row of rangeRows) {
+		const imageRanges = ranges.get(row.image_id) ?? [];
+		imageRanges.push({
+			perekId: row.perek_id,
+			pasukFrom: row.pasuk_from,
+			pasukTo: row.pasuk_to,
+		});
+		ranges.set(row.image_id, imageRanges);
+	}
 	const grouped = new Map<
 		number,
 		{ perekId: number; row: ImageRow; variants: Variant[] }
@@ -98,11 +121,38 @@ export function imagesFromRows(
 			socialHeight: social?.height ?? display.height,
 			alt: row.alt_text,
 			caption: row.caption,
+			captionMarkdown: row.caption_markdown,
+			verseRanges: ranges.get(row.id) ?? [],
 			description: row.description,
 			credit: row.credit,
 		});
 	}
 	return result;
+}
+
+/** Match any reading division by inclusive canonical chapter/verse coordinates. */
+export function selectImagesForVerseRanges(
+	allImages: Record<number, PerekIllustration[]>,
+	readingRanges: ImageVerseRange[],
+): PerekIllustration[] {
+	const selected = new Map<number, PerekIllustration>();
+	for (const images of Object.values(allImages)) {
+		for (const image of images) {
+			if (
+				image.verseRanges.some((range) =>
+					readingRanges.some(
+						(reading) =>
+							reading.perekId === range.perekId &&
+							reading.pasukFrom <= range.pasukTo &&
+							reading.pasukTo >= range.pasukFrom,
+					),
+				)
+			) {
+				selected.set(image.id, image);
+			}
+		}
+	}
+	return [...selected.values()];
 }
 
 /** Keep client payloads scoped to the displayed sefer, not all 929 chapters. */

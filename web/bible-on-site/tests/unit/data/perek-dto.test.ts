@@ -3,6 +3,8 @@ jest.mock("../../../src/util/date", () => ({
 }));
 
 import {
+	countRecordedPerakim,
+	getAdjacentPereks,
 	getPerekByPerekId,
 	getPerekIdByDate,
 	getTodaysPerekId,
@@ -30,11 +32,26 @@ describe("getPerekIdByDate", () => {
 			expect(actual).toBe(1);
 		});
 	});
-	describe("after last cycle (I.E. year 5811)", () => {
-		it("returns last perek (929)", () => {
+	describe("inside the inter-cycle gap (1 Av 5778)", () => {
+		it("returns the upcoming cycle's first perek", () => {
+			const actual = getPerekIdByDate(parseKosherChristianDate("13/July/18"));
+			expect(actual).toBe(1);
+		});
+	});
+	describe("after last confirmed cycle (projected cycle 11)", () => {
+		it("returns the projected perek for the date", () => {
+			// 15 March 2051 falls 213 days into projected cycle 11
+			// (starts Sunday 14 August 2050): week 30 day 3 -> perek 154.
 			const actual = getPerekIdByDate(
 				parseKosherChristianDate("15/March/51"),
 			);
+			expect(actual).toBe(154);
+		});
+	});
+	describe("last day of a cycle", () => {
+		it("returns perek 929 instead of the next cycle's first perek", () => {
+			// כח תמוז תשע"ח (11 July 2018) is the last study day of cycle 1.
+			const actual = getPerekIdByDate(parseKosherChristianDate("11/July/18"));
 			expect(actual).toBe(929);
 		});
 	});
@@ -203,5 +220,144 @@ describe("getTodaysPerekId", () => {
 	it("returns correct perek for mocked date (27/June/24 = perek 625)", () => {
 		const actual = getTodaysPerekId();
 		expect(actual).toBe(625);
+	});
+});
+
+describe("countRecordedPerakim", () => {
+	const recitation = (audioUrl: string | undefined) =>
+		({
+			version: 1,
+			audioUrl,
+			audioSha256: "a".repeat(64),
+			textSha256: "b".repeat(64),
+			durationMs: 1000,
+			alignmentStatus: "pending",
+		}) as const;
+
+	const perek = (audioUrl?: string) => ({
+		header: "",
+		date: [],
+		star_rise: [],
+		pesukim: [],
+		...(audioUrl === undefined ? {} : { recitation: recitation(audioUrl) }),
+	});
+
+	const baseSefer = {
+		name: "בראשית",
+		helek: "תורה",
+		pesukimCount: 0,
+		perekFrom: 1,
+		perekTo: 50,
+		tanachUsName: "Genesis",
+	};
+
+	it("counts perakim with a published recording, once each", () => {
+		const data = [
+			{
+				...baseSefer,
+				perakim: [
+					perek("https://x/1.mp3"),
+					perek("https://x/2.mp3"),
+					perek(),
+					perek(""),
+				],
+			},
+		];
+		expect(countRecordedPerakim(data as never)).toBe(2);
+	});
+
+	it("counts additionals perakim and pending-alignment recordings", () => {
+		const additionals = [
+			{
+				helek: "תורה",
+				letter: "א",
+				name: "שמואל א",
+				tanachUsName: "1 Samuel",
+				pesukimCount: 0,
+				perakim: [
+					perek("https://x/3.mp3"),
+					{ ...perek("https://x/4.mp3") },
+				],
+				perekFrom: 1,
+				perekTo: 2,
+			},
+			{
+				helek: "תורה",
+				letter: "ב",
+				name: "שמואל ב",
+				tanachUsName: "2 Samuel",
+				pesukimCount: 0,
+				perakim: [perek()],
+				perekFrom: 3,
+				perekTo: 3,
+			},
+		];
+		const data = [
+			{
+				name: "שמואל",
+				helek: "תורה",
+				pesukimCount: 0,
+				perekFrom: 1,
+				perekTo: 3,
+				additionals,
+			},
+		];
+		expect(countRecordedPerakim(data as never)).toBe(2);
+	});
+
+	it("counts the canonical data's published recordings", () => {
+		expect(countRecordedPerakim()).toBeGreaterThan(400);
+	});
+});
+
+describe("getAdjacentPereks", () => {
+	it("returns canonical neighbors for a mid-sequence perek", () => {
+		const { prev, next } = getAdjacentPereks(500);
+		expect(prev?.perekId).toBe(499);
+		expect(next?.perekId).toBe(501);
+		expect(prev?.source).toBe(getPerekByPerekId(499).source);
+		expect(next?.source).toBe(getPerekByPerekId(501).source);
+	});
+
+	it("returns null prev at the corpus start", () => {
+		const { prev, next } = getAdjacentPereks(1);
+		expect(prev).toBeNull();
+		expect(next?.perekId).toBe(2);
+	});
+
+	it("returns null next at the corpus end", () => {
+		const { prev, next } = getAdjacentPereks(929);
+		expect(next).toBeNull();
+		expect(prev?.perekId).toBe(928);
+	});
+
+	it("crosses the עזרא ע/עזרא נ additional boundary by canonical id", () => {
+		const { prev, next } = getAdjacentPereks(852);
+		expect(prev?.source).toBe("עזרא ע י");
+		expect(next?.source).toBe("עזרא נ ב");
+	});
+
+	it("crosses the בראשית/שמות sefer boundary by canonical id", () => {
+		const { prev, next } = getAdjacentPereks(51);
+		expect(prev?.perekId).toBe(50);
+		expect(prev?.source).toBe("בראשית נ");
+		expect(next?.perekId).toBe(52);
+		expect(next?.source).toBe("שמות ב");
+	});
+
+	it("crosses the שמואל א/שמואל ב additional boundary by canonical id", () => {
+		const { prev, next } = getAdjacentPereks(264);
+		expect(prev?.perekId).toBe(263);
+		expect(prev?.source).toBe("שמואל א לא");
+		expect(next?.perekId).toBe(265);
+		expect(next?.source).toBe("שמואל ב ב");
+	});
+
+	it("crosses the מלכים א/מלכים ב additional boundary by canonical id", () => {
+		const { prev, next } = getAdjacentPereks(309);
+		expect(prev?.perekId).toBe(308);
+		expect(prev?.source).toBe("מלכים א כא");
+		expect(next?.perekId).toBe(310);
+		expect(next?.source).toBe("מלכים ב א");
 	});
 });

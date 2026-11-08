@@ -12,22 +12,23 @@
 *,
 ::before,
 ::after {
-  box-sizing: border-box;
-  border-width: 0;
-  border-style: solid;
+	box-sizing: border-box;
+	border-width: 0;
+	border-style: solid;
 }
 
 html {
-  line-height: 1.5;
-  -webkit-text-size-adjust: 100%;
-  tab-size: 4;
-  font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
-    "Noto Color Emoji";
+	line-height: 1.5;
+	-webkit-text-size-adjust: 100%;
+	tab-size: 4;
+	font-family:
+		ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+		"Segoe UI Symbol", "Noto Color Emoji";
 }
 
 body {
-  margin: 0;
-  line-height: inherit;
+	margin: 0;
+	line-height: inherit;
 }
 
 img,
@@ -38,76 +39,336 @@ audio,
 iframe,
 embed,
 object {
-  display: block;
+	display: block;
 }
 
 img,
 video {
-  max-width: 100%;
-  height: auto;
+	max-width: 100%;
+	height: auto;
+}
+
+/* Shared scales: one value per component size class, mode-independent.
+   Accent steps are fixed palette values; the role tokens below
+   (--link-accent, --link-accent-hover, --pasuk-num-color) pick a step
+   per color scheme and contrast mode. */
+:root {
+	--radius-sm: 4px;
+	--radius-md: 8px;
+	--radius-lg: 12px;
+	--radius-pill: 999px;
+	--accent-200: #a8b9ff;
+	--accent-300: #7eb0ff;
+	--accent-400: #4da3ff;
+	--accent-600: #1552ac;
+	--accent-700: #11469c;
+	--accent-800: #0d3a8c;
+	--accent-900: #1c2c5d;
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --surface-elevated: #ffffff;
-  --surface-muted: #f8fafc;
-  --border-subtle: #e2e8f0;
-  --link-accent: #1552ac;
-  --pasuk-num-color: #1c2c5d;
-  --muted-text: #666666;
+	--background: #ffffff;
+	--foreground: #171717;
+	--surface-elevated: #ffffff;
+	--surface-muted: #f8fafc;
+	--border-subtle: #e2e8f0;
+	--link-accent: var(--accent-600);
+	--link-accent-hover: var(--accent-700);
+	--pasuk-num-color: var(--accent-900);
+	--muted-text: #666666;
+	--press-scale: 0.97;
+	--skeleton-base: #e8ecf2;
+	--skeleton-highlight: #f8fafc;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0f1219;
-    --foreground: #e8eaed;
-    --surface-elevated: #1a1f2e;
-    --surface-muted: #12151c;
-    --border-subtle: #2d3548;
-    --link-accent: #7eb0ff;
-    --pasuk-num-color: #a8b9ff;
-    --muted-text: #9aa0a6;
-  }
+	:root {
+		--background: #0f1219;
+		--foreground: #e8eaed;
+		--surface-elevated: #1a1f2e;
+		--surface-muted: #12151c;
+		--border-subtle: #2d3548;
+		--link-accent: var(--accent-300);
+		--link-accent-hover: var(--accent-200);
+		--pasuk-num-color: var(--accent-200);
+		--muted-text: #9aa0a6;
+		--skeleton-base: #242a3a;
+		--skeleton-highlight: #2d3548;
+	}
 }
 
 html,
 body {
-  max-width: 100vw;
-  overflow-x: hidden;
-  direction: rtl;
+	max-width: 100vw;
+	overflow-x: hidden;
+	direction: rtl;
 }
 
 html {
-  scroll-behavior: smooth;
+	scroll-behavior: smooth;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
+	color: var(--foreground);
+	background: var(--background);
 }
 
 a {
-  color: inherit;
-  text-decoration: none;
+	color: inherit;
+	text-decoration: none;
+}
+
+/* ── Site accessibility preferences (issue #2767) ──────────────────────
+   Applied by the pre-paint bootstrap / accessibility menu as data
+   attributes on <html>; every surface that consumes the design tokens —
+   and every literal converted to an a11y fallback var — follows. */
+
+/* ניגודיות גבוהה: coordinated palette, not a page filter — the brand
+   surfaces keep their identity while text contrast targets the enhanced
+   WCAG 1.4.6-style band (≥7:1 ordinary text, ≥4.5:1 large text). The
+   --hc-* vars exist only under this attribute, so fallbacks elsewhere
+   keep the default rendering untouched:
+   --hc-muted       themed secondary text (perush browns, status green)
+   --hc-on-inverse  light text on hardcoded dark surfaces (footer)
+   --hc-accent      decorative accent headings (sefer h1 purple) */
+html[data-a11y-contrast="high"] {
+	--background: #ffffff;
+	--foreground: #000000;
+	--surface-elevated: #ffffff;
+	--surface-muted: #ffffff;
+	--border-subtle: #4d4d4d;
+	--link-accent: var(--accent-800);
+	--link-accent-hover: var(--accent-900);
+	--pasuk-num-color: #000000;
+	--muted-text: #4d4d4d;
+	--hc-muted: #4d4d4d;
+	--hc-on-inverse: #ffffff;
+	--hc-accent: #3d2f8f;
+	--danger-color: #8b0000;
+	--skeleton-base: #d6d6d6;
 }
 
 @media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
+	html[data-a11y-contrast="high"] {
+		--background: #000000;
+		--foreground: #ffffff;
+		--surface-elevated: #000000;
+		--surface-muted: #0d0d0d;
+		--border-subtle: #b3b3b3;
+		--link-accent: var(--accent-400);
+		--link-accent-hover: var(--accent-300);
+		--pasuk-num-color: #ffffff;
+		--muted-text: #b3b3b3;
+		--hc-muted: #b3b3b3;
+		--hc-on-inverse: #ffffff;
+		--hc-accent: #b7adf0;
+		--danger-color: #ff8080;
+		--skeleton-base: #333333;
+	}
+}
+
+/* Selection follows the same palette so highlighted text keeps the
+   enhanced contrast instead of the OS-default wash. */
+html[data-a11y-contrast="high"] ::selection {
+	background: #0d3a8c;
+	color: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+	html[data-a11y-contrast="high"] ::selection {
+		background: #4da3ff;
+		color: #000000;
+	}
+}
+
+/* קו תחתון לקישורים — and an implied baseline inside ניגודיות גבוהה:
+   the HC link accents stay below 3:1 against the surrounding text color,
+   so a persistent underline is the reliable non-color cue (1.4.1). The
+   selector deliberately outranks module-level `text-decoration: none`
+   rules, including portaled/dynamic content. Excluded: icon-only anchors
+   whose sole element child is an img/svg — a bare icon gains nothing
+   from underlining and keeps its existing hit-area styling. */
+:is(html[data-a11y-links="underlined"], html[data-a11y-contrast="high"])
+	a[href]:not(:has(> :is(img, svg):only-child)) {
+	text-decoration: underline;
+	text-underline-offset: 0.15em;
+}
+
+@media (forced-colors: active) {
+	/* Forced-colors mode (e.g. Windows High Contrast): the OS palette wins
+	   and the global `a { color: inherit }` would otherwise hide link
+	   identity — hand links back the system link color plus a persistent
+	   non-color cue. Neither preference overrides OS accessibility. */
+	a[href] {
+		color: LinkText;
+	}
+	a[href]:not(:has(> :is(img, svg):only-child)) {
+		text-decoration: underline;
+	}
+}
+
+@media (prefers-color-scheme: dark) {
+	html {
+		color-scheme: dark;
+	}
 }
 .icon-white {
-  filter: invert(100%) sepia(0%) saturate(0%) hue-rotate(180deg) brightness(100%) contrast(100%);
+	filter: invert(100%) sepia(0%) saturate(0%) hue-rotate(180deg)
+		brightness(100%) contrast(100%);
 }
 .top-nav {
-  height: 72px;
-  background-color: transparent;
-  text-align: center;
-  align-content: center;
-  display: grid;
-  justify-items: center;
-  width: 100%;
-  position: absolute;
-  z-index: 3;
+	height: 72px;
+	/* Page/header contract (#3161): the solid brand bar is the default so a
+	   route family that forgets to declare still renders a readable header.
+	   Families opt out through data-page-header on the outermost element
+	   they mount under <body> (components/PageShell.tsx); the declaration
+	   ships in the SSR HTML, so the treatment is correct at first paint and
+	   on client navigation — no hydration flash. */
+	background-color: var(--accent-600);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 1.25rem;
+	width: 100%;
+	position: absolute;
+	z-index: 3;
+}
+
+/* The shared page-shell wrapper every route family's outermost layout
+   renders (components/PageShell.tsx) — one full-width overflow container,
+   replacing the per-feature *-layout copies (issue #1270). */
+.page-shell {
+	overflow-x: hidden;
+	width: 100%;
+	max-width: 100%;
+}
+
+/* "overlay" families paint their own hero backdrop under the bar (the
+   homepage alHaperekSection) — keep it transparent there. */
+body:has(> [data-page-header="overlay"]) > .top-nav {
+	background-color: transparent;
+}
+
+/* "none" families are intentional header-less/fullscreen routes (the dev
+   Sefer host). */
+body:has(> [data-page-header="none"]) > .top-nav {
+	display: none;
+}
+
+/* Perek/unit readers stack the bar — and the accessibility popover it
+   contains — above .perekContainer (z-index: 6), which otherwise paints
+   over the open popover. Scoped to a direct child like the policy rules:
+   a descendant :has on <body> would re-evaluate on every subtree mutation
+   (the flip book mutates constantly during turns — see the Website
+   Performance gate, #3161). */
+body:has(> .perek-layout) > .top-nav {
+	z-index: 7;
+}
+
+/* While the book (Sefer) view is active, lift the bar above the fixed
+   overlay (z-index: 9999) so site navigation stays reachable. */
+html[data-book-view] .top-nav {
+	position: fixed;
+	z-index: 10000;
+}
+
+/* Icon-only search button pinned to the physical left edge of the nav
+   bar with the same edge padding as the hamburger at the opposite/right
+   end (issue #2154). Absolute inside the bar keeps the logo centered. */
+.top-nav-search {
+	position: absolute;
+	left: 1.25rem;
+	top: 50%;
+	transform: translateY(-50%);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.75rem;
+	height: 2.75rem;
+	padding: 0;
+	border: 1px solid rgba(255, 255, 255, 0.65);
+	border-radius: var(--radius-pill);
+	color: #fff;
+}
+
+.top-nav-search img {
+	filter: invert(1);
+}
+
+@media (hover: hover) {
+	.top-nav-search:hover {
+		background-color: rgba(255, 255, 255, 0.16);
+		border-color: #fff;
+	}
+}
+
+.top-nav-search:focus-visible {
+	outline: 2px solid #fff;
+	outline-offset: 2px;
+}
+
+/* Accessibility-adjustments trigger, same circular style as the search
+   button and pinned immediately to its physical right (issue #2396). */
+.top-nav-accessibility {
+	position: absolute;
+	left: 4.625rem;
+	top: 50%;
+	transform: translateY(-50%);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.75rem;
+	height: 2.75rem;
+	padding: 0;
+	border: 1px solid rgba(255, 255, 255, 0.65);
+	border-radius: var(--radius-pill);
+	color: #fff;
+	background: transparent;
+	cursor: pointer;
+}
+
+/* On reader routes the search button is omitted and the reader-settings
+   gear occupies the top-left corner instead (fixed at left:12px, 140px on
+   desktop) — the trigger docks next to that control instead. */
+.top-nav-accessibility--after-prefs {
+	left: 3.75rem;
+}
+
+@media (min-width: 768px) {
+	.top-nav-accessibility--after-prefs {
+		left: 11.75rem;
+	}
+}
+
+/* Reader-section routes that suppress the search button but mount no
+   preferences gear (e.g. /929/authors): the trigger takes the left-edge
+   slot the search button occupies elsewhere. */
+.top-nav-accessibility--edge {
+	left: 1.25rem;
+}
+
+.top-nav-accessibility img {
+	filter: invert(1);
+}
+
+.top-nav-accessibility:disabled {
+	cursor: wait;
+	opacity: 0.55;
+}
+
+@media (hover: hover) {
+	.top-nav-accessibility:enabled:hover {
+		background-color: rgba(255, 255, 255, 0.16);
+		border-color: #fff;
+	}
+}
+
+.top-nav-accessibility:focus-visible {
+	outline: 2px solid #fff;
+	outline-offset: 2px;
+}
+
+.top-nav-search:active,
+.top-nav-accessibility:enabled:active {
+	scale: var(--press-scale);
 }

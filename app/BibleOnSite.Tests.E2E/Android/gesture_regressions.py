@@ -107,7 +107,7 @@ def check_selection_layout():
         time.sleep(0.2)
 
     def menu_center(items):
-        menus = [n for n in items if n.get("text") == "☰"]
+        menus = [n for n in items if n.get("resource-id", "").endswith("/CircularMenuButton")]
         require(len(menus) == 1, "Expected one floating main menu")
         left, top, right, bottom = bounds(menus[0])
         return (left + right) // 2, (top + bottom) // 2

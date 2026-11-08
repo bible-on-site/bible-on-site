@@ -1,5 +1,14 @@
 # Router configuration validation
 
+For host disk cleanup, retention settings, and the completed November 2026
+maintenance, see [proxy disk housekeeping](../housekeeping/README.md).
+
+`404.html` ships beside `router.conf`: copy it to `/var/www/html/404.html`
+on the router host so the `error_page 404 /www/404.html` fallback inside
+each `location /www/` block can serve it. Place the file **before**
+reloading a config that references it — while it is absent a /www/ miss
+falls back to nginx's stock 404 page.
+
 Validate the complete installed Nginx configuration with `sudo nginx -t` before
 gracefully reloading it. Preserve the live worker user, includes, and temporary
 paths. A root-run configuration test can change temporary-directory ownership;

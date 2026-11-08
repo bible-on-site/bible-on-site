@@ -1,19 +1,35 @@
 import type { MetadataRoute } from "next";
-import { headers } from "next/headers";
+import {
+	getParashaUnitById,
+	getParashaUnitCount,
+	PARASHA_DIVISION,
+} from "../data/parasha/parasha-units";
 import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
+import {
+	getPublishedMoedSlugs,
+	MOADIM_ROOT,
+	moedHref,
+} from "../lib/moadim";
 import { getAllAuthorSlugs } from "../lib/authors";
 import { getAllPerushPerekNamePairs } from "../lib/perushim";
+import { SITE_ORIGIN } from "../lib/seo/jsonld";
 import type { PerekIllustration } from "../lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "../lib/seo/perek-images-data";
 import { CATEGORY_SLUGS, categoryHref } from "../lib/tanahpedia/category-slug";
 import { getAllEntryUniqueNames } from "../lib/tanahpedia/service";
 import type { CategoryKey } from "../lib/tanahpedia/types";
 
+// Serve the build-time snapshot until the next release. Content-driven refresh
+// is a separate improvement tracked in #2398; request APIs must not disable SSG.
+export const dynamic = "error";
+export const revalidate = false;
+
 /**
  * Static section paths for the sitemap
  */
 export const SITEMAP_SECTIONS = [
+	"לוח",
 	"dailyBulletin",
 	"whatsappGroup",
 	"tos",
@@ -81,6 +97,33 @@ export function generate929IndexEntry(
 		changeFrequency: "daily",
 		priority: 0.9,
 	};
+}
+
+/**
+ * Generates the פרשה landing entry. Unlike the noindex מסורה section,
+ * the weekly parasha hub and its 54 base readings are indexable.
+ */
+export function generateParashaIndexEntry(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap[0] {
+	return {
+		url: `${config.baseUrl}/פרשה`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly",
+		priority: 0.7,
+	};
+}
+
+/** One canonical base URL per parasha; presentation/content variants stay out. */
+export function generateParashaUnitEntries(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap {
+	return Array.from({ length: getParashaUnitCount() }, (_, index) => ({
+		url: `${config.baseUrl}${PARASHA_DIVISION.rootPath}/${getParashaUnitById(index + 1).slug}`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly" as const,
+		priority: 0.7,
+	}));
 }
 
 /**
@@ -206,6 +249,34 @@ export function generatePediaCategoryEntries(
 }
 
 /**
+ * Generates the מועדים על הפרק landing entry (#3101). The catalogue is
+ * indexable; unpublished moadim never reach the slug list.
+ */
+export function generateMoadimIndexEntry(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap[0] {
+	return {
+		url: `${config.baseUrl}${MOADIM_ROOT}`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly",
+		priority: 0.7,
+	};
+}
+
+/** One canonical Hebrew-slug URL per published moed. */
+export function generateMoedEntries(
+	config: SitemapConfig,
+	moedSlugs: string[],
+): MetadataRoute.Sitemap {
+	return moedSlugs.map((slug) => ({
+		url: `${config.baseUrl}${moedHref(slug)}`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly" as const,
+		priority: 0.7,
+	}));
+}
+
+/**
  * Generates the complete sitemap entries (pure function for testing)
  */
 export function generateSitemapEntries(
@@ -215,6 +286,7 @@ export function generateSitemapEntries(
 	perushim: PerushPerekPair[] = [],
 	pediaUniqueNames: string[] = [],
 	imagesByPerek: Record<number, PerekIllustration[]> = {},
+	moedSlugs: string[] = [],
 ): MetadataRoute.Sitemap {
 	return [
 		generateRootEntry(config),
@@ -228,16 +300,15 @@ export function generateSitemapEntries(
 		generatePediaIndexEntry(config),
 		...generatePediaCategoryEntries(config),
 		...generatePediaEntries(config, pediaUniqueNames),
+		generateMoadimIndexEntry(config),
+		...generateMoedEntries(config, moedSlugs),
+		generateParashaIndexEntry(config),
+		...generateParashaUnitEntries(config),
 	];
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-	const headersList = await headers();
-	/* istanbul ignore next: fallback for malformed requests without Host header */
-	const host = headersList.get("host") ?? "xn--febl3a.co.il";
-	const baseUrl = `https://${host}`;
-
-	// Fetch dynamic data for sitemap entries in parallel. Perushim load via a
+	// Fetch build-time data for sitemap entries in parallel. Perushim load via a
 	// single bulk query rather than one lookup per perek.
 	const [
 		authorSlugs,
@@ -245,22 +316,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 		pediaUniqueNames,
 		imagesByPerek,
 		perushPerekPairs,
+		moedSlugs,
 	] = await Promise.all([
 		getAllAuthorSlugs(),
 		getAllArticlePerekIdPairs(),
 		getAllEntryUniqueNames(),
 		getPerekImagesByChapter(),
 		getAllPerushPerekNamePairs(),
+		getPublishedMoedSlugs(),
 	]);
 
 	return generateSitemapEntries(
 		{
-			baseUrl,
+			baseUrl: SITE_ORIGIN,
 		},
 		authorSlugs,
 		articles,
 		perushPerekPairs,
 		pediaUniqueNames,
 		imagesByPerek,
+		moedSlugs,
 	);
 }

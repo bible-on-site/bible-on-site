@@ -1,3 +1,5 @@
+import type { ReadingMetric } from "../reading-metrics";
+
 /**
  * Summary of a perush available for a specific perek (for carousel display).
  */
@@ -7,6 +9,11 @@ export interface PerushSummary {
 	parshanName: string;
 	/** Number of notes this perush has for the current perek */
 	noteCount: number;
+	/**
+	 * Stored reading metric covering this perush's notes on the perek
+	 * (#2607). `null`/absent = not computed; zeros = verified empty.
+	 */
+	metric?: ReadingMetric | null;
 }
 
 /**
@@ -25,8 +32,11 @@ export interface PerushNote {
 export interface PerushDetail {
 	id: number;
 	name: string;
+	parshanId: number;
 	parshanName: string;
 	/** Parshan birth year when known (e.g. from Sefaria). */
 	parshanBirthYear?: number;
 	notes: PerushNote[];
+	/** Stored reading metric for the note set on this perek (#2607). */
+	metric?: ReadingMetric | null;
 }

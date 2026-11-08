@@ -14,14 +14,14 @@ public class XamlStaticResourceTests
         var dir = AppContext.BaseDirectory;
         while (dir != null)
         {
-            var candidate = Path.Combine(dir, "BibleOnSite");
-            if (Directory.Exists(candidate) && File.Exists(Path.Combine(candidate, "BibleOnSite.csproj")))
+            var candidate = Path.Join(dir, "BibleOnSite");
+            if (Directory.Exists(candidate) && File.Exists(Path.Join(candidate, "BibleOnSite.csproj")))
             {
                 return candidate;
             }
 
-            var siblingCandidate = Path.Combine(Path.GetDirectoryName(dir)!, "BibleOnSite");
-            if (Directory.Exists(siblingCandidate) && File.Exists(Path.Combine(siblingCandidate, "BibleOnSite.csproj")))
+            var siblingCandidate = Path.Join(Path.GetDirectoryName(dir)!, "BibleOnSite");
+            if (Directory.Exists(siblingCandidate) && File.Exists(Path.Join(siblingCandidate, "BibleOnSite.csproj")))
             {
                 return siblingCandidate;
             }
@@ -39,9 +39,9 @@ public class XamlStaticResourceTests
 
         var resourceFiles = new[]
         {
-            Path.Combine(AppRoot, "Resources", "Styles", "Colors.xaml"),
-            Path.Combine(AppRoot, "Resources", "Styles", "Styles.xaml"),
-            Path.Combine(AppRoot, "App.xaml"),
+            Path.Join(AppRoot, "Resources", "Styles", "Colors.xaml"),
+            Path.Join(AppRoot, "Resources", "Styles", "Styles.xaml"),
+            Path.Join(AppRoot, "App.xaml"),
         };
 
         XNamespace xNs = "http://schemas.microsoft.com/winfx/2009/xaml";
@@ -54,13 +54,9 @@ public class XamlStaticResourceTests
             }
 
             var doc = XDocument.Load(file);
-            foreach (var el in doc.Descendants())
+            foreach (var keyAttr in doc.Descendants().Select(el => el.Attribute(xNs + "Key")).OfType<XAttribute>())
             {
-                var keyAttr = el.Attribute(xNs + "Key");
-                if (keyAttr != null)
-                {
-                    keys.Add(keyAttr.Value);
-                }
+                keys.Add(keyAttr.Value);
             }
         }
 
@@ -77,13 +73,9 @@ public class XamlStaticResourceTests
         var keys = new HashSet<string>(StringComparer.Ordinal);
         XNamespace xNs = "http://schemas.microsoft.com/winfx/2009/xaml";
         var doc = XDocument.Load(filePath);
-        foreach (var el in doc.Descendants())
+        foreach (var keyAttr in doc.Descendants().Select(el => el.Attribute(xNs + "Key")).OfType<XAttribute>())
         {
-            var keyAttr = el.Attribute(xNs + "Key");
-            if (keyAttr != null)
-            {
-                keys.Add(keyAttr.Value);
-            }
+            keys.Add(keyAttr.Value);
         }
         return keys;
     }
@@ -99,9 +91,8 @@ public class XamlStaticResourceTests
             var lines = File.ReadAllLines(file);
             for (var i = 0; i < lines.Length; i++)
             {
-                foreach (System.Text.RegularExpressions.Match match in ResourceRegex.Matches(lines[i]))
+                foreach (var key in ResourceRegex.Matches(lines[i]).Cast<System.Text.RegularExpressions.Match>().Select(match => match.Groups[1].Value))
                 {
-                    var key = match.Groups[1].Value;
                     if (!globalKeys.Contains(key) && !localKeys.Contains(key))
                     {
                         unresolved.Add((File: Path.GetRelativePath(AppRoot, file), Line: i + 1, Key: key));

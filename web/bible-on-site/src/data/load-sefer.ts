@@ -1,4 +1,4 @@
-import type { SefarimItem } from "./db/tanah-view-types";
+import type { Perek, SefarimItem } from "./db/tanah-view-types";
 
 export class BookRequestError extends Error {
 	constructor(readonly status: number) {
@@ -11,6 +11,23 @@ export class BookRequestError extends Error {
 const cache = new Map<string, Promise<SefarimItem>>();
 const MAX_CACHED_BOOKS = 4;
 
+/** Map every perekId in a loaded sefer JSON to its Perek. */
+export function seferPerekMap(sefer: SefarimItem): Map<number, Perek> {
+	const map = new Map<number, Perek>();
+	if ("perakim" in sefer) {
+		sefer.perakim.forEach((perek, idx) => {
+			map.set(sefer.perekFrom + idx, perek);
+		});
+		return map;
+	}
+	for (const additional of sefer.additionals) {
+		additional.perakim.forEach((perek, idx) => {
+			map.set(additional.perekFrom + idx, perek);
+		});
+	}
+	return map;
+}
+
 export function loadSefer(file: string): Promise<SefarimItem> {
 	const existing = cache.get(file);
 	if (existing) {
@@ -20,7 +37,10 @@ export function loadSefer(file: string): Promise<SefarimItem> {
 	}
 	const request: Promise<SefarimItem> = Promise.resolve()
 		.then(async () => {
-			const response = await fetch(file, { cache: "no-cache" });
+			// The asset URL is content-addressed and served with immutable
+			// caching, so the browser cache may serve repeat opens — a forced
+			// revalidation would keep every book open on the network.
+			const response = await fetch(file);
 			if (!response.ok)
 				throw new BookRequestError(response.status);
 			return (await response.json()) as SefarimItem;

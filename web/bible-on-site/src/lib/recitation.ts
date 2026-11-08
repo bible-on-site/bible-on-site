@@ -40,6 +40,12 @@ export interface Recitation {
 	durationMs: number;
 	alignmentStatus: "pending" | "needs_review" | "ready";
 	words: AlignmentWord[];
+	playback?: {
+		format: "ogg-opus";
+		bitrate: number;
+		audioUrl: string;
+		audioSha256: string;
+	};
 }
 
 function validAudioUrl(value: string, perekId: number) {
@@ -67,6 +73,25 @@ export function parseRecitation(
 	pesukim: Pasuk[],
 ): Recitation {
 	const data = value as Recitation;
+	if (data?.playback) {
+		const playback = data.playback;
+		if (
+			playback.format !== "ogg-opus" ||
+			playback.bitrate !== 24000 ||
+			!/^[a-f0-9]{64}$/.test(playback.audioSha256) ||
+			!validAudioUrl(
+				playback.audioUrl.replace(
+					`/recordings/opus-24k/${playback.audioSha256}.ogg`,
+					`/recordings/${perekId}_record.mp3`,
+				),
+				perekId,
+			) ||
+			!playback.audioUrl.endsWith(
+				`/recordings/opus-24k/${playback.audioSha256}.ogg`,
+			)
+		)
+			throw new Error("Invalid derived playback metadata");
+	}
 	if (
 		data?.version !== 1 ||
 		typeof data.audioSha256 !== "string" ||
@@ -135,4 +160,28 @@ export function verseRange(words: RecitationWord[], pasuk: number) {
 	return verse.length
 		? { startMs: verse[0].startMs, endMs: verse[verse.length - 1].endMs }
 		: null;
+}
+
+/**
+ * Pasuk ranges covering the whole perek. A tapped-word resume point trims the
+ * containing pasuk's range so continuous playback starts at that word and runs
+ * through the rest of the perek.
+ */
+export function resumeRanges(
+	words: RecitationWord[],
+	fromMs: number | null,
+): { startMs: number; endMs: number }[] {
+	const ranges = [...new Set(words.map((word) => word.pasuk))].map(
+		(pasuk) => verseRange(words, pasuk) as { startMs: number; endMs: number },
+	);
+	if (fromMs === null) return ranges;
+	const index = ranges.findIndex(
+		(range) => fromMs >= range.startMs && fromMs < range.endMs,
+	);
+	return index < 0
+		? ranges
+		: [
+				{ startMs: fromMs, endMs: ranges[index].endMs },
+				...ranges.slice(index + 1),
+			];
 }

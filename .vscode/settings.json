@@ -13,7 +13,22 @@
 	},
 	"search.exclude": {
 		"**/*.tanah_view.json": true,
+		"**/*.tanah_view.sqlite": true,
 		"**/.output/**": true
+	},
+	// Keep the file watcher off build/output trees (node_modules and .git are
+	// excluded by VS Code defaults).
+	"files.watcherExclude": {
+		"**/target/**": true,
+		"**/.next/**": true,
+		"**/.output/**": true,
+		"**/artifacts-*/**": true,
+		"**/monocart-report/**": true,
+		"**/test-results/**": true,
+		"**/.coverage/**": true,
+		"**/__pycache__/**": true,
+		"app/**/bin/**": true,
+		"app/**/obj/**": true
 	},
 	// TODO: Re-enable GitHub Actions extension when modifying workflows
 	// See docs/practices/implementation.md for instructions

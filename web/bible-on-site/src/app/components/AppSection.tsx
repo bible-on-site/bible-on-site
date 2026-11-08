@@ -1,16 +1,17 @@
 import Image from "next/image";
 import styles from "./AppSection.module.css";
 import { appPlatforms } from "./appPlatforms";
+import { PushNotificationsToggle } from "./PushNotificationsToggle";
 
 export function AppSection() {
 	return (
 		<section id="app" className={styles.appSection}>
 			<header className={styles.appHeader}>
-				<h1>יישֹוּמוֹן תנ&quot;ך על הפרק</h1>
-				<h2>
+				<h2>יישֹוּמוֹן תנ&quot;ך על הפרק</h2>
+				<h3>
 					הורידו את האפליקציה של תנ&quot;ך על הפרק מחנות האפליקציות המתאימה
 					למכשירכם
-				</h2>
+				</h3>
 			</header>
 			<section className={styles.appLinks}>
 				{appPlatforms.map((platform) => {
@@ -27,8 +28,9 @@ export function AppSection() {
 								<Image
 									src={platform.icon}
 									alt={platform.description}
-									width={24}
-									height={24}
+									unoptimized
+									width={platform.iconWidth ?? 24}
+									height={platform.iconHeight ?? 24}
 								/>
 								<span>{platform.name}</span>
 							</a>
@@ -44,14 +46,16 @@ export function AppSection() {
 							<Image
 								src={platform.icon}
 								alt={platform.description}
-								width={24}
-								height={24}
+								unoptimized
+								width={platform.iconWidth ?? 24}
+								height={platform.iconHeight ?? 24}
 							/>
 							<span>{platform.name}</span>
 						</span>
 					);
 				})}
 			</section>
+			<PushNotificationsToggle />
 		</section>
 	);
 }

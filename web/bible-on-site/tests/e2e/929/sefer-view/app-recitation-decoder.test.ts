@@ -15,11 +15,22 @@ if (
 	decoderScript !==
 	execFileSync(
 		process.execPath,
-		["scripts/build-native-recitation-decoder.mjs", "--stdout"],
+		[
+			resolve(
+				root,
+				"app/devops/recitation-decoder/build-native-recitation-decoder.mjs",
+			),
+			"--stdout",
+		],
 		{ encoding: "utf8" },
 	)
 )
 	throw new Error("App and website MPEG decoder versions differ");
+// App-side trigger for the duplicated manifest rule (#2391): a decoder bump
+// in the app manifest must land in web/bible-on-site/package.json too.
+execFileSync(process.execPath, [
+	resolve(root, "app/devops/recitation-decoder/check-decoder-pins.mjs"),
+]);
 const html = readFileSync(
 	resolve(root, "app/BibleOnSite/Resources/Raw/recitation-audio.html"),
 	"utf8",
@@ -31,6 +42,12 @@ const reference = gunzipSync(
 	readFileSync(
 		resolve(root, "app/BibleOnSite.Tests/Fixtures/seek-reference.pcm.gz"),
 	),
+);
+const opusRecording = readFileSync(
+	resolve(root, "data/recitation/fixtures/seek.ogg"),
+);
+const opusReference = gunzipSync(
+	readFileSync(resolve(root, "data/recitation/fixtures/seek-opus.pcm.gz")),
 );
 
 const originalPath = resolve(root, "app/BibleOnSite.Tests/Fixtures");
@@ -62,19 +79,23 @@ async function nativeResult<T>(page: Page, expression: string): Promise<T> {
 	return JSON.parse(result) as T;
 }
 
+const clipRanges = [
+	[{ start: 0, end: 2000 }],
+	[{ start: 101, end: 599 }],
+	[
+		{ start: 0, end: 200 },
+		{ start: 1800, end: 2000 },
+	],
+];
 for (const fixture of [
 	{
 		name: "tagged gapless MP3",
 		recording,
 		frames: 88200,
-		selections: [
-			[{ start: 0, end: 2000 }],
-			[{ start: 101, end: 599 }],
-			[
-				{ start: 0, end: 200 },
-				{ start: 1800, end: 2000 },
-			],
-		].map((ranges) => ({
+		sampleRate: 44100,
+		channels: 2,
+		chapter: reference,
+		selections: clipRanges.map((ranges) => ({
 			ranges,
 			expected: Buffer.concat(
 				ranges.map(({ start, end }) =>
@@ -87,9 +108,31 @@ for (const fixture of [
 		})),
 	},
 	{
+		name: "24 kbps Ogg Opus playback copy",
+		recording: opusRecording,
+		frames: 96000,
+		sampleRate: 48000,
+		channels: 1,
+		chapter: opusReference,
+		selections: clipRanges.map((ranges) => ({
+			ranges,
+			expected: Buffer.concat(
+				ranges.map(({ start, end }) =>
+					opusReference.subarray(
+						Math.round(start * 48) * 2,
+						Math.round(end * 48) * 2,
+					),
+				),
+			),
+		})),
+	},
+	{
 		name: "original Esther 10 MP3",
 		recording: original,
 		frames: originalMetadata.frames,
+		sampleRate: originalMetadata.sampleRate,
+		channels: 2,
+		chapter: null,
 		selections: (() => {
 			let offset = 0;
 			const individual = originalMetadata.ranges.map((range) => {
@@ -140,24 +183,22 @@ for (const fixture of [
 			(await nativeResult<{ frames: number }>(page, "recitation.status()"))
 				.frames,
 		).toBe(fixture.frames);
-		for (const { ranges, expected } of fixture.selections) {
-			const result = await nativeResult<{ length: number }>(
-				page,
-				`recitation.clip(${JSON.stringify(ranges)})`,
-			);
+		const pullWave = async (length: number) => {
 			const parts: Buffer[] = [];
-			for (let offset = 0; offset < result.length; offset += 49152) {
+			for (let offset = 0; offset < length; offset += 262144) {
 				const chunk = await nativeResult<{ data: string }>(
 					page,
-					`recitation.chunk(${offset},49152)`,
+					`recitation.chunk(${offset},262144)`,
 				);
 				parts.push(Buffer.from(chunk.data, "base64"));
 			}
-			const wave = Buffer.concat(parts);
+			return Buffer.concat(parts);
+		};
+		const expectClose = (wave: Buffer, expected: Buffer) => {
 			expect(wave.toString("ascii", 0, 4)).toBe("RIFF");
-			expect(wave.readUInt32LE(24)).toBe(44100);
+			expect(wave.readUInt32LE(24)).toBe(fixture.sampleRate);
 			const channels = wave.readUInt16LE(22);
-			expect(channels).toBe(2);
+			expect(channels).toBe(fixture.channels);
 			expect(wave.length - 44).toBe(expected.length * channels);
 			let squaredError = 0;
 			let squaredSignal = 0;
@@ -171,13 +212,28 @@ for (const fixture of [
 			}
 			// Independent FFmpeg decoding: codec rounding is allowed; a timing shift is not.
 			expect(Math.sqrt(squaredError / squaredSignal)).toBeLessThan(0.001);
+		};
+		for (const { ranges, expected } of fixture.selections) {
+			const result = await nativeResult<{ length: number }>(
+				page,
+				`recitation.clip(${JSON.stringify(ranges)})`,
+			);
+			expectClose(await pullWave(result.length), expected);
+		}
+		if (fixture.chapter) {
+			// AVPlayer has no Ogg demuxer: iOS chapters ship as decoded PCM.
+			const result = await nativeResult<{ length: number }>(
+				page,
+				"recitation.chapter()",
+			);
+			expectClose(await pullWave(result.length), fixture.chapter);
 		}
 		for (const ranges of [
 			[{ start: -100, end: 200 }],
 			[
 				{
-					start: fixture.frames / 44.1 - 100,
-					end: fixture.frames / 44.1 + 100,
+					start: fixture.frames / (fixture.sampleRate / 1000) - 100,
+					end: fixture.frames / (fixture.sampleRate / 1000) + 100,
 				},
 			],
 			[],
@@ -187,6 +243,7 @@ for (const fixture of [
 			).rejects.toThrow();
 		}
 		await page.evaluate("recitation.reset()");
+		await expect(page.evaluate("recitation.chapter()")).rejects.toThrow();
 		expect(
 			(await nativeResult<{ state: string }>(page, "recitation.status()"))
 				.state,

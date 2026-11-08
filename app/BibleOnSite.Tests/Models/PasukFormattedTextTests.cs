@@ -1,4 +1,5 @@
 using BibleOnSite.Models;
+using BibleOnSite.Tests.Support;
 using FluentAssertions;
 using Microsoft.Maui.Controls;
 using Microsoft.Maui.Graphics;
@@ -11,6 +12,9 @@ public class PasukFormattedTextTests
     private static string Flatten(FormattedString formatted) =>
         string.Concat(formatted.Spans.Select(s => s.Text));
 
+    // Span colors resolve from Application.Current.RequestedTheme (#2601), so
+    // this class serializes with the theme-mutating tests.
+    [Collection("Application state")]
     public class Pasuk_FormattedText
     {
         [Theory]
@@ -107,6 +111,49 @@ public class PasukFormattedTextTests
         }
 
         [Fact]
+        public void selected_pasuk_renders_a_distinct_spoken_word_marker()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "", IsSelected = true,
+                Segments = [new() { Type = SegmentType.Qri, Value = "אור" },
+                    new() { Type = SegmentType.Qri, Value = "חֹשֶׁךְ" }]
+            };
+
+            pasuk.RecitingSegment = 2;
+
+            var active = pasuk.FormattedText.Spans.Single(s => s.BackgroundColor != null);
+            active.Text.Should().Be("חֹשֶׁךְ");
+            // The selection row background (#E3F2FD light / #9FB4E0 dark) swallows
+            // the plain recitation background #e9eff8 — a selected pasuk keeps the
+            // word marked with a stronger background and weight.
+            active.BackgroundColor.Should().NotBe(Color.FromArgb("#e9eff8"));
+            active.FontAttributes.Should().Be(FontAttributes.Bold);
+        }
+
+        [Fact]
+        public void toggling_selection_refreshes_the_spoken_word_marker()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "",
+                Segments = [new() { Type = SegmentType.Qri, Value = "אור" }]
+            };
+            pasuk.RecitingSegment = 1;
+            var unselected = pasuk.FormattedText;
+            var notifications = new List<string?>();
+            pasuk.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+
+            pasuk.IsSelected = true;
+            var selected = pasuk.FormattedText;
+
+            selected.Should().NotBeSameAs(unselected);
+            selected.Spans.Single(s => s.BackgroundColor != null)
+                .BackgroundColor.Should().NotBe(unselected.Spans.Single(s => s.BackgroundColor != null).BackgroundColor);
+            notifications.Should().Contain(nameof(Pasuk.FormattedText));
+        }
+
+        [Fact]
         public void does_not_root_an_unused_formatted_string_for_the_lifetime_of_a_perek()
         {
             var pasuk = new Pasuk
@@ -115,10 +162,11 @@ public class PasukFormattedTextTests
                 Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" }]
             };
             var weak = CreateFormattedWeakReference(pasuk);
+            // The bounded MRU keeps the freshest entries rooted (#2309); binding
+            // enough newer pesukim evicts this pasuk's entry again.
+            PushNewPesukimThroughFormattedMru(200);
 
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
+            GarbageCollection.CollectCycles();
 
             weak.TryGetTarget(out _).Should().BeFalse();
             GC.KeepAlive(pasuk);
@@ -127,6 +175,20 @@ public class PasukFormattedTextTests
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static WeakReference<FormattedString> CreateFormattedWeakReference(Pasuk pasuk)
             => new(pasuk.FormattedText);
+
+        // Binds `count` fresh pesukim so the FormattedText MRU evicts older
+        // entries; the loop's side effect is the point, not the built pesukim.
+        private static void PushNewPesukimThroughFormattedMru(int count)
+        {
+            foreach (var pasukNum in Enumerable.Range(2, count))
+            {
+                _ = new Pasuk
+                {
+                    PasukNum = pasukNum, Text = "",
+                    Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" }]
+                }.FormattedText;
+            }
+        }
 
         [Fact]
         public void returns_empty_string_when_segments_is_empty()
@@ -151,6 +213,42 @@ public class PasukFormattedTextTests
 
             second.Should().BeSameAs(first);
             Flatten(second).Should().Be("בְּרֵאשִׁית");
+        }
+
+        [Fact]
+        public void serves_a_rebound_verse_from_the_mru_across_gc_churn()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "",
+                Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "בְּרֵאשִׁית" }]
+            };
+            var weak = CreateFormattedWeakReference(pasuk);
+
+            GarbageCollection.CollectCycles();
+
+            // A cell unload followed by GC must not force a rebuild on rebind
+            // (#2309): the MRU keeps the FormattedString rooted for the
+            // freshest pesukim.
+            weak.TryGetTarget(out var formatted).Should().BeTrue();
+            pasuk.FormattedText.Should().BeSameAs(formatted);
+            GC.KeepAlive(pasuk);
+        }
+
+        [Fact]
+        public void formatted_text_mru_evicts_the_least_recently_built_pasuk()
+        {
+            var first = new Pasuk
+            {
+                PasukNum = 1, Text = "",
+                Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "א" }]
+            };
+            var firstFormatted = first.FormattedText;
+            // Push the first pasuk past the MRU capacity of 128 entries.
+            PushNewPesukimThroughFormattedMru(200);
+
+            first.FormattedText.Should().NotBeSameAs(firstFormatted);
+            first.FormattedText.Should().BeSameAs(first.FormattedText);
         }
 
         [Fact]

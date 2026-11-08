@@ -12,7 +12,8 @@
  * Windows support.
  *
  * Each run prefers the module's own locally-installed Biome (the version that
- * module pins). When the module isn't npm-installed — e.g. pre-commit.ci — it
+ * module pins). When the module's dependencies aren't installed — e.g.
+ * pre-commit.ci — it
  * falls back to the Biome that the hook's `additional_dependencies` install
  * into the hook environment (synced by sync-pre-commit-deps).
  */
@@ -39,7 +40,7 @@ function envBiomeJs() {
 	return null;
 }
 
-const stagedFiles = process.argv.slice(2).map((f) => f.replaceAll("\\", "/"));
+const stagedFiles = process.argv.slice(2).map((f) => f.replace(/\\/g, "/"));
 
 let failed = false;
 
@@ -56,21 +57,25 @@ for (const dir of MODULES) {
 	// checkout paths with spaces need no quoting.
 	const localBin = resolve(dir, "node_modules", "@biomejs", "biome", "bin", "biome");
 	const envBin = envBiomeJs();
+	// --no-errors-on-unmatched: a staged chunk may hold only ignored files
+	// (e.g. the generated routeTree.gen.ts); Biome exits 1 on "No files were
+	// processed" even though nothing lintable was asked of it.
+	const args = ["lint", "--no-errors-on-unmatched", ...moduleFiles];
 	const result = existsSync(localBin)
 		? spawnSync( // nosemgrep
 				process.execPath,
-				[localBin, "lint", ...moduleFiles],
+				[localBin, ...args],
 				{ cwd: resolve(dir), stdio: "inherit" },
 			)
 		: envBin
 			? spawnSync( // nosemgrep
 					process.execPath,
-					[envBin, "lint", ...moduleFiles],
+					[envBin, ...args],
 					{ cwd: resolve(dir), stdio: "inherit" },
 				)
 			: spawnSync( // nosemgrep — POSIX hook env exposes a shebang bin
 					"biome",
-					["lint", ...moduleFiles],
+					args,
 					{ cwd: resolve(dir), stdio: "inherit" },
 				);
 	if (result.error) {

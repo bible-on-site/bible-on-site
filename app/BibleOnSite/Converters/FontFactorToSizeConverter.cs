@@ -15,12 +15,19 @@ public class FontFactorToSizeConverter : IValueConverter
     {
         var baseSize = DefaultBaseSize;
         if (parameter is double d)
+        {
             baseSize = d;
+        }
         else if (parameter is string s && double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
+        {
             baseSize = parsed;
+        }
 
         if (value is double factor)
+        {
             return factor * baseSize;
+        }
+
         return baseSize;
     }
 

@@ -2,7 +2,7 @@
 
 import { toLetters } from "gematry";
 import Link from "next/link";
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import styles from "./qa-widget.module.css";
 
@@ -173,16 +173,10 @@ function QaWidgetContent({ perekId, seferPerekIds }: QaWidgetProps) {
 
 			{/* Slide-in panel */}
 			{open && (
-				<aside
-					ref={panelRef}
-					className={styles.panel}
-					data-flipbook-no-flip
-				>
+				<aside ref={panelRef} className={styles.panel} data-flipbook-no-flip>
 					<header className={styles.panelHeader}>
 						<h2 className={styles.panelTitle}>שאלה על הפרק</h2>
-						<p className={styles.panelSubtitle}>
-							חיפוש במפרשים ובמאמרים
-						</p>
+						<p className={styles.panelSubtitle}>חיפוש במפרשים ובמאמרים</p>
 					</header>
 
 					<fieldset className={styles.scopeGroup} disabled={loading}>
@@ -203,9 +197,7 @@ function QaWidgetContent({ perekId, seferPerekIds }: QaWidgetProps) {
 									checked={scope === value}
 									onChange={() => setScope(value)}
 								/>
-								<span className={styles.scopeText}>
-									{label}
-								</span>
+								<span className={styles.scopeText}>{label}</span>
 							</label>
 						))}
 					</fieldset>
@@ -217,9 +209,7 @@ function QaWidgetContent({ perekId, seferPerekIds }: QaWidgetProps) {
 							placeholder="הקלד שאלה בעברית..."
 							value={question}
 							onChange={(e) => setQuestion(e.target.value)}
-							onKeyDown={(e) =>
-								e.key === "Enter" && handleAsk()
-							}
+							onKeyDown={(e) => e.key === "Enter" && handleAsk()}
 							aria-label="שאלה על הפרק"
 							disabled={loading}
 						/>
@@ -236,9 +226,7 @@ function QaWidgetContent({ perekId, seferPerekIds }: QaWidgetProps) {
 					{response && (
 						<div className={styles.results}>
 							{!hasResults ? (
-								<p className={styles.noAnswer}>
-									לא נמצאו תשובות מתאימות.
-								</p>
+								<p className={styles.noAnswer}>לא נמצאו תשובות מתאימות.</p>
 							) : (
 								<ul className={styles.list}>
 									{response.answers.map((a) => (
@@ -246,48 +234,26 @@ function QaWidgetContent({ perekId, seferPerekIds }: QaWidgetProps) {
 											key={`${a.source.type}-${a.source.perekId}-${a.source.name}-${a.text.slice(0, 40)}`}
 											className={styles.card}
 										>
-											<p className={styles.text}>
-												{a.text}
-											</p>
-											<footer
-												className={styles.cardFooter}
-											>
+											<p className={styles.text}>{a.text}</p>
+											<footer className={styles.cardFooter}>
 												{inBookView ? (
 													<button
 														type="button"
-														className={
-															styles.citation
-														}
-														onClick={() =>
-															handleCitationClick(
-																a.source,
-															)
-														}
+														className={styles.citation}
+														onClick={() => handleCitationClick(a.source)}
 													>
-														{citationLabel(
-															a.source,
-														)}
+														{citationLabel(a.source)}
 													</button>
 												) : (
 													<Link
-														href={buildCitationHref(
-															a.source,
-														)}
+														href={buildCitationHref(a.source)}
 														target="_blank"
-														className={
-															styles.citation
-														}
+														className={styles.citation}
 													>
-														{citationLabel(
-															a.source,
-														)}
+														{citationLabel(a.source)}
 													</Link>
 												)}
-												<span
-													className={
-														styles.confidence
-													}
-												>
+												<span className={styles.confidence}>
 													{a.confidence.toFixed(2)}
 												</span>
 											</footer>

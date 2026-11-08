@@ -8,7 +8,7 @@ public class Author
     /// <summary>
     /// System author ID for system-generated content.
     /// </summary>
-    public const int SystemId = 99;
+    public static int SystemId => 99;
 
     /// <summary>
     /// S3 bucket base URL for author images.
@@ -28,7 +28,9 @@ public class Author
         get
         {
             if (string.IsNullOrEmpty(Name))
+            {
                 return string.Empty;
+            }
 
             var parts = Name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             return parts.Length >= 2

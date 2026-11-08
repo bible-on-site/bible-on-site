@@ -115,15 +115,7 @@ public static class GimatryHelper
     /// </summary>
     public static int ToNumber(string phrase)
     {
-        int sum = 0;
-        foreach (char c in phrase)
-        {
-            if (LettersValues.TryGetValue(c, out int value))
-            {
-                sum += value;
-            }
-        }
-        return sum;
+        return phrase.Sum(c => LettersValues.TryGetValue(c, out int value) ? value : 0);
     }
 
     /// <summary>
@@ -131,16 +123,23 @@ public static class GimatryHelper
     /// </summary>
     public static int ToNumberWithMantzpach(string phrase)
     {
-        int sum = 0;
-        foreach (char c in phrase)
-        {
-            if (LettersValuesWithMantzpach.TryGetValue(c, out int value))
-            {
-                sum += value;
-            }
-        }
-        return sum;
+        return phrase.Sum(c => LettersValuesWithMantzpach.TryGetValue(c, out int value) ? value : 0);
     }
+
+    /// <summary>
+    /// Converts a number to its Hebrew letter representation.
+    /// </summary>
+    /// <param name="number">The number to convert (1-999 without thousands support, or higher with thousands).</param>
+    /// <returns>The Hebrew letter representation.</returns>
+    public static string ToLetters(int number) => ToLetters(number, false, string.Empty);
+
+    /// <summary>
+    /// Converts a number to its Hebrew letter representation.
+    /// </summary>
+    /// <param name="number">The number to convert (1-999 without thousands support, or higher with thousands).</param>
+    /// <param name="includeThousands">Whether to include thousands representation.</param>
+    /// <returns>The Hebrew letter representation.</returns>
+    public static string ToLetters(int number, bool includeThousands) => ToLetters(number, includeThousands, string.Empty);
 
     /// <summary>
     /// Converts a number to its Hebrew letter representation.
@@ -149,7 +148,7 @@ public static class GimatryHelper
     /// <param name="includeThousands">Whether to include thousands representation.</param>
     /// <param name="thousandsSeparator">Separator character between thousands and the rest.</param>
     /// <returns>The Hebrew letter representation.</returns>
-    public static string ToLetters(int number, bool includeThousands = false, string thousandsSeparator = "")
+    public static string ToLetters(int number, bool includeThousands, string thousandsSeparator)
     {
         if (number <= 0)
         {
@@ -188,10 +187,7 @@ public static class GimatryHelper
             {
                 int tafCount = rest / 400;
                 int remainder = rest % 400;
-                for (int i = 0; i < tafCount; i++)
-                {
-                    result += 'ת';
-                }
+                result += new string('ת', tafCount);
                 if (remainder > 0 && ValuesToLetters.TryGetValue(remainder, out char remainderChar))
                 {
                     result += remainderChar;
@@ -216,6 +212,25 @@ public static class GimatryHelper
 
         return result;
     }
+
+    /// <summary>
+    /// Display numeral with ASCII punctuation for UI counters (#2725): a lone
+    /// letter takes a trailing geresh (ד'), longer values a gershayim before
+    /// the last letter (י"א, ט"ו). Canonical source references keep the plain
+    /// <see cref="ToLetters(int)"/> form — this is the cycle-label presentation.
+    /// </summary>
+    /// <param name="number">The number to convert.</param>
+    /// <returns>The punctuated Hebrew numeral; empty for non-positive input.</returns>
+    public static string ToDisplayLetters(int number)
+    {
+        var letters = ToLetters(number);
+        return letters.Length switch
+        {
+            0 => string.Empty,
+            1 => $"{letters}'",
+            _ => letters.Insert(letters.Length - 1, "\""),
+        };
+    }
 }
 
 /// <summary>
@@ -226,8 +241,5 @@ public static class GimatryExtensions
     /// <summary>
     /// Converts an integer to its Hebrew letter representation.
     /// </summary>
-    public static string ToHebrewLetters(this int number, bool includeThousands = false, string thousandsSeparator = "")
-    {
-        return GimatryHelper.ToLetters(number, includeThousands, thousandsSeparator);
-    }
+    public static string ToHebrewLetters(this int number) => GimatryHelper.ToLetters(number, false, string.Empty);
 }

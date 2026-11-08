@@ -80,6 +80,32 @@ public class GimatryHelperTests
         result.Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData(1000, "", "תתר")]  // 1000 is not > 1000, so no thousands prefix
+    [InlineData(1001, "", "אא")]
+    [InlineData(2001, "", "בא")]
+    [InlineData(5786, "'", "ה'תשפו")]
+    [InlineData(2001, " ", "ב א")]
+    public void ToLetters_WithThousands_ShouldPrefixAlafim(int number, string separator, string expected)
+    {
+        // Act
+        var result = GimatryHelper.ToLetters(number, includeThousands: true, separator);
+
+        // Assert
+        result.Should().Be(expected);
+    }
+
+    [Fact]
+    public void ToLetters_WithThousands_WhenAlafimIsZero_ShouldSkipPrefix()
+    {
+        // 10500 -> alafim = (10500 / 1000) % 10 = 0, which maps to '\0' in the
+        // lookup table, so the thousands prefix is skipped and the remainder
+        // renders as ת repetitions plus the ק hundreds.
+        var result = GimatryHelper.ToLetters(10500, includeThousands: true, "'");
+
+        result.Should().Be(new string('ת', 26) + "ק");
+    }
+
     #endregion
 
     #region ToNumber Tests
@@ -160,10 +186,10 @@ public class GimatryHelperTests
     [Fact]
     public void ToNumberWithMantzpach_WithMixedLetters_ShouldCalculateCorrectly()
     {
-        // אך = א(1) + ך(500) = 501
+        // חשבון: אך ← א(1) + ך(500) = 501
         GimatryHelper.ToNumberWithMantzpach("אך").Should().Be(501);
 
-        // שלום = ש(300) + ל(30) + ו(6) + ם(600) = 936
+        // חשבון: שלום ← ש(300) + ל(30) + ו(6) + ם(600) = 936
         GimatryHelper.ToNumberWithMantzpach("שלום").Should().Be(936);
     }
 
@@ -211,6 +237,39 @@ public class GimatryHelperTests
     public void IsHebrewLetter_WithNonHebrewCharacters_ShouldReturnFalse(char c, bool expected)
     {
         GimatryHelper.IsHebrewLetter(c).Should().Be(expected);
+    }
+
+    #endregion
+
+    #region ToDisplayLetters Tests
+
+    // The cycle-label numeral form (#2725): a lone letter takes an ASCII
+    // geresh, longer values an ASCII gershayim before the final letter, and
+    // the ט"ו/ט"ז substitutions still apply.
+    [Theory]
+    [InlineData(1, "א'")]
+    [InlineData(4, "ד'")]
+    [InlineData(10, "י'")]
+    [InlineData(11, "י\"א")]
+    [InlineData(15, "ט\"ו")]
+    [InlineData(16, "ט\"ז")]
+    [InlineData(20, "כ'")]
+    [InlineData(100, "ק'")]
+    [InlineData(115, "קט\"ו")]
+    [InlineData(116, "קט\"ז")]
+    [InlineData(929, "תתקכ\"ט")]
+    [InlineData(1000, "תת\"ר")]
+    [InlineData(1500, "תתת\"ש")]
+    public void ToDisplayLetters_ShouldPunctuateDisplayNumerals(int number, string expected)
+    {
+        GimatryHelper.ToDisplayLetters(number).Should().Be(expected);
+    }
+
+    [Fact]
+    public void ToDisplayLetters_WithNonPositiveInput_ShouldReturnEmpty()
+    {
+        GimatryHelper.ToDisplayLetters(0).Should().BeEmpty();
+        GimatryHelper.ToDisplayLetters(-4).Should().BeEmpty();
     }
 
     #endregion
@@ -272,4 +331,12 @@ public class GimatryHelperTests
     }
 
     #endregion
+
+    [Fact]
+    public void ToLetters_WithThousands_WhenAlafimRollsPastNine_SkipsPrefix()
+    {
+        // (10201 / 1000) % 10 == 0, so no thousands letter is emitted and the
+        // remaining 10200 hundreds collapse into 25 tafim plus the remainder.
+        GimatryHelper.ToLetters(10201, true, "'").Should().Be(new string('ת', 25) + "רא");
+    }
 }

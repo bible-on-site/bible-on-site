@@ -1,5 +1,7 @@
 using BibleOnSite.Controls;
 using FluentAssertions;
+using Microsoft.Maui.Controls;
+using Moq;
 
 namespace BibleOnSite.Tests.Controls;
 
@@ -294,6 +296,268 @@ public class HtmlViewTests
         htmlView.H1FontSizeMultiplier.Should().Be(1.3);
         htmlView.H2FontSizeMultiplier.Should().Be(1.15);
         htmlView.H3FontSizeMultiplier.Should().Be(1.0);
+    }
+
+    #endregion
+
+    #region IsContentReady Tests (#2451)
+
+    [Fact]
+    public void IsContentReady_WithoutLoader_IsTrueImmediately()
+    {
+        // Bound content (NoteContents/DisplayContent) needs no async load.
+        new HtmlView().IsContentReady.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsContentReady_WithLoader_StaysFalseUntilContentPublished()
+    {
+        var htmlView = new HtmlView();
+        // A realized cell without a handler cannot run its loader — the gate
+        // must keep the name hidden instead of showing a name-only flash.
+        htmlView.ContentLoader = () => Task.FromResult(new List<string> { "<p>טקסט</p>" });
+
+        htmlView.IsContentReady.Should().BeFalse();
+
+        htmlView.HtmlContent = "<p>טקסט</p>";
+        htmlView.IsContentReady.Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsContentReady_WhenLoaderReplaced_DropsReadinessWithClearedContent()
+    {
+        // Recycled cell: a new loader clears the stale content, so a new
+        // perush name can never appear beside the previous perush's text.
+        var htmlView = new HtmlView
+        {
+            ContentLoader = () => Task.FromResult(new List<string> { "a" }),
+            HtmlContent = "<p>ישן</p>"
+        };
+        htmlView.IsContentReady.Should().BeTrue();
+
+        htmlView.ContentLoader = () => Task.FromResult(new List<string> { "b" });
+        htmlView.HtmlContent = null; // LoadCellContentAsync clears before loading.
+
+        htmlView.IsContentReady.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsContentReady_RaisesPropertyChanged_WhenLoaderAssignedAndContentPublished()
+    {
+        var htmlView = new HtmlView();
+        var changes = new List<string?>();
+        htmlView.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+
+        htmlView.ContentLoader = () => Task.FromResult(new List<string> { "a" });
+        htmlView.HtmlContent = "<p>חדש</p>";
+
+        changes.Should().Contain(name => name == nameof(HtmlView.IsContentReady));
+        changes.Count(name => name == nameof(HtmlView.IsContentReady)).Should().BeGreaterThanOrEqualTo(2);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void IsContentReady_WithLoader_EmptyBindingIsNotReady(string bound)
+    {
+        // A lazy display's DisplayContent binds string.Empty before the
+        // loader publishes — the name must wait for real content (#2451).
+        var htmlView = new HtmlView
+        {
+            ContentLoader = () => Task.FromResult(new List<string> { "a" }),
+            HtmlContent = bound
+        };
+
+        htmlView.IsContentReady.Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsContentReady_ErrorContentStillMarksReady()
+    {
+        // A failed load publishes the error string — the name surfaces once
+        // with the failure text rather than flashing alone first.
+        var htmlView = new HtmlView
+        {
+            ContentLoader = () => Task.FromResult(new List<string> { "a" })
+        };
+        htmlView.HtmlContent = "לא ניתן לטעון את הפירוש";
+
+        htmlView.IsContentReady.Should().BeTrue();
+    }
+
+    #endregion
+
+    #region DynamicResource Propagation Tests
+
+    // The reader binds HtmlView.FontSize with {DynamicResource PerushContentFontSize}
+    // and the platform handlers re-render on StyleChanged, so a font change
+    // reaches every commentary without walking the carousel.
+    private const string FontKey = "PerushContentFontSize";
+
+    private static (ContentPage Page, VerticalStackLayout Cells) CreateReader(double fontSize)
+    {
+        var cells = new VerticalStackLayout();
+        var page = new ContentPage { Content = new Grid { Children = { new ContentView { Content = cells } } } };
+        page.Resources[FontKey] = fontSize;
+        return (page, cells);
+    }
+
+    private static HtmlView CreateCommentary()
+    {
+        var htmlView = new HtmlView();
+        htmlView.SetDynamicResource(HtmlView.FontSizeProperty, FontKey);
+        return htmlView;
+    }
+
+    [Fact]
+    public void DynamicFontSize_WhenResourceChanges_UpdatesNestedViewAndRaisesStyleChanged()
+    {
+        var (page, cells) = CreateReader(16);
+        var htmlView = CreateCommentary();
+        cells.Children.Add(new VerticalStackLayout { Children = { new Label(), htmlView } });
+        var styleChanges = 0;
+        htmlView.StyleChanged += (_, _) => styleChanges++;
+
+        page.Resources[FontKey] = 24.0;
+
+        htmlView.FontSize.Should().Be(24);
+        styleChanges.Should().Be(1);
+    }
+
+    [Fact]
+    public void DynamicFontSize_WhenViewRealizedAfterChange_UsesCurrentSize()
+    {
+        var (page, cells) = CreateReader(16);
+        page.Resources[FontKey] = 20.0;
+
+        var htmlView = CreateCommentary();
+        cells.Children.Add(htmlView);
+
+        htmlView.FontSize.Should().Be(20);
+    }
+
+    [Fact]
+    public void DynamicFontSize_WhenRecycledViewReattachedAfterChange_UpdatesAndRaisesStyleChanged()
+    {
+        var (page, cells) = CreateReader(16);
+        var htmlView = CreateCommentary();
+        cells.Children.Add(htmlView);
+        cells.Children.Remove(htmlView);
+        var styleChanges = 0;
+        htmlView.StyleChanged += (_, _) => styleChanges++;
+
+        page.Resources[FontKey] = 12.0;
+        cells.Children.Add(htmlView);
+
+        htmlView.FontSize.Should().Be(12);
+        styleChanges.Should().Be(1);
+    }
+
+    #endregion
+
+    #region Async ContentLoader Pipeline Tests
+
+    // On the plain net10.0 test host MainThread.BeginInvokeOnMainThread throws
+    // NotImplementedInReferenceAssemblyException, so the platform publish
+    // closures inside LoadCellContentAsync cannot run here — they are covered
+    // on device. These tests cover the whole pipeline up to that seam: the
+    // serial guard, handler attach/detach, content clearing and loader
+    // invocation. The loader runs on the thread pool, so tests synchronize on
+    // a signal the loader itself raises.
+
+    private static Mock<IViewHandler> AttachHandler(VisualElement view)
+    {
+        var handler = new Mock<IViewHandler>();
+        view.Handler = handler.Object;
+        return handler;
+    }
+
+    [Fact]
+    public async Task ContentLoader_ClearsContent_AndInvokesLoader_WhenHandlerAttached()
+    {
+        var view = new HtmlView { HtmlContent = "ישן" };
+        AttachHandler(view);
+        var loaderInvoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var loaderCalls = 0;
+        view.ContentLoader = () =>
+        {
+            loaderCalls++;
+            loaderInvoked.TrySetResult();
+            return Task.FromResult(new List<string> { "טקסט", "שני" });
+        };
+
+        // The load clears the stale content synchronously before the loader
+        // even runs — a recycled cell never shows the previous perush's text.
+        view.HtmlContent.Should().BeNull();
+
+        await loaderInvoked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        loaderCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ContentLoader_ThrowingLoader_IsContainedByTheLoadBoundary()
+    {
+        var view = new HtmlView();
+        AttachHandler(view);
+        var loaderInvoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        view.ContentLoader = () =>
+        {
+            loaderInvoked.TrySetResult();
+            throw new InvalidOperationException("boom");
+        };
+
+        await loaderInvoked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // The failure is contained inside LoadCellContentAsync's catch —
+        // the fire-and-forget task may fault at the platform publish seam,
+        // but the test host survives and the view keeps its cleared state.
+        view.HtmlContent.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task DetachHandler_ClearsPublishedContent_AndStopsFutureLoads()
+    {
+        var view = new HtmlView();
+        AttachHandler(view);
+        var loaderInvoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var loaderCalls = 0;
+        view.ContentLoader = () =>
+        {
+            loaderCalls++;
+            loaderInvoked.TrySetResult();
+            return Task.FromResult(new List<string> { "טקסט" });
+        };
+        view.HtmlContent = "תוכן";
+        await loaderInvoked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        view.Handler = null;
+
+        // Detach bumps the serial and clears content so a recycled view can
+        // never display a stale load result.
+        view.HtmlContent.Should().BeNull();
+        loaderCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public void ContentLoader_WithoutHandler_NeverInvokesTheLoader()
+    {
+        var view = new HtmlView();
+        var loaderCalls = 0;
+        view.ContentLoader = () =>
+        {
+            loaderCalls++;
+            return Task.FromResult(new List<string> { "טקסט" });
+        };
+        // Replacing the loader restarts the load, which exits early without a handler.
+        view.ContentLoader = () =>
+        {
+            loaderCalls++;
+            return Task.FromResult(new List<string> { "אחר" });
+        };
+
+        // The guard returns before the first await, so this is synchronous.
+        loaderCalls.Should().Be(0);
+        view.IsContentReady.Should().BeFalse();
     }
 
     #endregion

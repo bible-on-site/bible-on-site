@@ -8,12 +8,16 @@
  * Behavior:
  * - Reads DB_URL from the environment or the module's env file (--env-file).
  * - If none of the --tables has rows → runs `cargo make mysql-populate-dev`.
- * - With --sync-from-prod, first tries `npm run setup_dev_env -- sync-from-prod`
- *   (a failed download leaves local data untouched); populate is the fallback.
+ * - With --sync-from-prod, first probes `bun run setup_dev_env --
+ *   check-dev-db-freshness` — a cheap prod watermark read (per-table
+ *   information_schema UPDATE_TIME) compared to the checkpoint recorded in the
+ *   dev DB by the last sync. Fresh → skip; stale/unknown → run the full
+ *   sync-from-prod (a failed download leaves local data untouched); populate
+ *   is the fallback. `bun run setup_dev_env -- sync-from-prod` always syncs.
  * - Removes bundled demo authors/articles unless KEEP_BUNDLED_TEST_ARTICLES=1.
  *
  * Usage:
- *   node --import tsx <repo>/devops/ensure-dev-db.mts \
+ *   node <repo>/devops/ensure-dev-db.mts \
  *     [--env-file .dev.env] [--tables tanah_sefer,tanahpedia_entry] [--sync-from-prod]
  */
 import { spawnSync } from "node:child_process";
@@ -22,27 +26,40 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+interface CliFlags {
+	envFile: string;
+	syncFromProd: boolean;
+	requiredTables: string[];
+}
+
 // Zero-dependency arg parsing — this script runs from a module's cwd where
 // devops/node_modules may not be installed.
-const flags = new Map<string, string>();
-const boolFlags = new Set(["sync-from-prod"]);
-const args = process.argv.slice(2);
-for (let i = 0; i < args.length; i++) {
-	const raw = args[i];
-	if (!raw.startsWith("--")) {
-		console.error(`ensure-dev-db: unexpected argument "${raw}"`);
-		process.exit(1);
+function parseFlags(args: string[]): CliFlags {
+	const flags = new Map<string, string>();
+	const boolFlags = new Set(["sync-from-prod"]);
+	for (let i = 0; i < args.length; i++) {
+		const raw = args[i];
+		if (!raw.startsWith("--")) {
+			console.error(`ensure-dev-db: unexpected argument "${raw}"`);
+			process.exit(1);
+		}
+		const [name, inline] = raw.slice(2).split("=", 2);
+		const value = inline ?? (boolFlags.has(name) ? "true" : args[++i]);
+		if (value === undefined) {
+			console.error(`ensure-dev-db: missing value for --${name}`);
+			process.exit(1);
+		}
+		flags.set(name, value);
 	}
-	const [name, inline] = raw.slice(2).split("=", 2);
-	const value = inline ?? (boolFlags.has(name) ? "true" : args[++i]);
-	if (value === undefined) {
-		console.error(`ensure-dev-db: missing value for --${name}`);
-		process.exit(1);
-	}
-	flags.set(name, value);
+	return {
+		envFile: flags.get("env-file") ?? ".dev.env",
+		syncFromProd: flags.get("sync-from-prod") === "true",
+		requiredTables: (flags.get("tables") ?? "tanah_sefer")
+			.split(",")
+			.map((t) => t.trim())
+			.filter(Boolean),
+	};
 }
-const envFile = flags.get("env-file") ?? ".dev.env";
-const syncFromProd = flags.get("sync-from-prod") === "true";
 
 const moduleDir = process.cwd();
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -50,13 +67,13 @@ const dataDir = resolve(repoRoot, "data");
 const devopsDir = resolve(repoRoot, "devops");
 const label = readPackageName(moduleDir);
 
-const requiredTables = (flags.get("tables") ?? "tanah_sefer")
-	.split(",")
-	.map((t) => t.trim())
-	.filter(Boolean);
-
 const requireFromModule = createRequire(resolve(moduleDir, "package.json"));
-const mysql = requireFromModule("mysql2/promise") as typeof import("mysql2/promise");
+
+// Resolved lazily: mysql2 lives in the caller's package (web/*), not in devops,
+// so a top-level require would also break unit-test imports of this file.
+function mysql(): typeof import("mysql2/promise") {
+	return requireFromModule("mysql2/promise") as typeof import("mysql2/promise");
+}
 
 function readPackageName(dir: string): string {
 	try {
@@ -67,7 +84,7 @@ function readPackageName(dir: string): string {
 	}
 }
 
-function loadDbUrl(): string | null {
+function loadDbUrl(envFile: string): string | null {
 	if (process.env.DB_URL) return process.env.DB_URL;
 	const envPath = resolve(moduleDir, envFile);
 	if (existsSync(envPath)) {
@@ -96,10 +113,13 @@ function parseDbUrl(url: string) {
 /**
  * @returns {boolean|null} true = bootstrapped, false = need populate, null = unreachable
  */
-async function checkTanahBootstrapped(dbUrl: string): Promise<boolean | null> {
+async function checkTanahBootstrapped(
+	dbUrl: string,
+	requiredTables: string[],
+): Promise<boolean | null> {
 	const opts = parseDbUrl(dbUrl);
 	try {
-		const conn = await mysql.createConnection({
+		const conn = await mysql().createConnection({
 			...opts,
 			connectTimeout: 5000,
 		});
@@ -144,7 +164,7 @@ async function removeBundledTestArticleSeed(dbUrl: string): Promise<void> {
 	const opts = parseDbUrl(dbUrl);
 	let conn;
 	try {
-		conn = await mysql.createConnection({
+		conn = await mysql().createConnection({
 			...opts,
 			connectTimeout: 5000,
 		});
@@ -192,8 +212,24 @@ function runMysqlPopulate(): boolean {
 	const result = spawnSync("cargo", ["make", "mysql-populate-dev"], {
 		cwd: dataDir,
 		stdio: "inherit",
-		shell: true,
 	});
+	return result.status === 0;
+}
+
+/**
+ * The prod freshness probe (setup_dev_env check-dev-db-freshness) exits 0 only
+ * when the dev DB provably matches the recorded prod watermark; any other
+ * outcome (stale data, missing checkpoint, probe error) attempts the sync.
+ */
+function checkProdFreshness(): boolean {
+	const result = spawnSync(
+		process.execPath,
+		[
+			resolve(devopsDir, "setup-dev-env.mts"),
+			"check-dev-db-freshness",
+		],
+		{ cwd: devopsDir, stdio: "inherit" },
+	);
 	return result.status === 0;
 }
 
@@ -202,15 +238,21 @@ function runSyncFromProd(): boolean {
 	// The sync dumps to a file first and only restores after a successful dump,
 	// so a failed download leaves the existing local data intact.
 	const result = spawnSync(
-		"npm",
-		["run", "setup_dev_env", "--", "sync-from-prod"],
-		{ cwd: devopsDir, stdio: "inherit", shell: true },
+		process.execPath,
+		[
+			resolve(devopsDir, "setup-dev-env.mts"),
+			"sync-from-prod",
+		],
+		{ cwd: devopsDir, stdio: "inherit" },
 	);
 	return result.status === 0;
 }
 
 async function main(): Promise<void> {
-	const dbUrl = loadDbUrl();
+	const { envFile, syncFromProd, requiredTables } = parseFlags(
+		process.argv.slice(2),
+	);
+	const dbUrl = loadDbUrl(envFile);
 	if (!dbUrl) {
 		console.warn(
 			`  ensure-dev-db (${label}): ${envFile} not found or DB_URL missing — skipping DB check`,
@@ -218,7 +260,7 @@ async function main(): Promise<void> {
 		return;
 	}
 
-	const bootstrapped = await checkTanahBootstrapped(dbUrl);
+	const bootstrapped = await checkTanahBootstrapped(dbUrl, requiredTables);
 	if (bootstrapped === null) {
 		console.warn(
 			`  ensure-dev-db (${label}): MySQL not reachable. Start MySQL or run: cd data && cargo make mysql-populate-dev`,
@@ -228,16 +270,23 @@ async function main(): Promise<void> {
 
 	if (syncFromProd) {
 		const syncDisabled = process.env.DEV_DB_SYNC_FROM_PROD === "0";
-		const synced = syncDisabled ? false : runSyncFromProd();
-		if (!synced) {
-			if (!syncDisabled) {
-				console.warn(
-					`  ensure-dev-db (${label}): production not available — keeping the existing local tanah-dev data`,
-				);
-			}
-			if (!bootstrapped && !runMysqlPopulate()) {
-				console.error(`  ensure-dev-db (${label}): dev database bootstrap failed`);
-				process.exit(1);
+		const fresh = bootstrapped && !syncDisabled ? checkProdFreshness() : false;
+		if (fresh) {
+			console.info(
+				`  ensure-dev-db (${label}): dev DB matches the prod checkpoint — skipping sync`,
+			);
+		} else {
+			const synced = syncDisabled ? false : runSyncFromProd();
+			if (!synced) {
+				if (!syncDisabled) {
+					console.warn(
+						`  ensure-dev-db (${label}): production not available — keeping the existing local tanah-dev data`,
+					);
+				}
+				if (!bootstrapped && !runMysqlPopulate()) {
+					console.error(`  ensure-dev-db (${label}): dev database bootstrap failed`);
+					process.exit(1);
+				}
 			}
 		}
 	} else if (!bootstrapped) {
@@ -254,7 +303,13 @@ async function main(): Promise<void> {
 	await removeBundledTestArticleSeed(dbUrl);
 }
 
-main().catch((err) => {
-	console.error(`ensure-dev-db (${label}):`, err);
-	process.exit(1);
-});
+// Only run when invoked as a script — tests import the pure helpers above.
+const invokedAsScript =
+	process.argv[1] !== undefined &&
+	resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedAsScript) {
+	main().catch((err) => {
+		console.error(`ensure-dev-db (${label}):`, err);
+		process.exit(1);
+	});
+}

@@ -23,8 +23,8 @@ use entities::tanahpedia::{
 };
 use sea_orm::sea_query::OnConflict;
 use sea_orm::{
-    ColumnTrait, Condition, DatabaseBackend, EntityTrait, FromQueryResult, IntoActiveModel,
-    QueryFilter, QuerySelect, Statement, TransactionTrait, Value,
+    ColumnTrait, Condition, ConnectionTrait, DatabaseBackend, EntityTrait, FromQueryResult,
+    IntoActiveModel, QueryFilter, QuerySelect, Statement, TransactionTrait, Value,
 };
 
 #[derive(FromQueryResult)]
@@ -152,6 +152,7 @@ pub async fn put_entry_entity_link(
             ServiceError::bad_request("entryUniqueName does not reference an existing entry")
         })?;
     if entity::Entity::find_by_id(entity_id.clone())
+        .lock_exclusive()
         .one(&transaction)
         .await
         .map_err(db_error)?
@@ -261,11 +262,9 @@ pub async fn delete_entry_entity_link(
     })
 }
 
-async fn require_person(
-    conn: &sea_orm::DatabaseConnection,
-    person_id: &str,
-) -> Result<(), ServiceError> {
+async fn require_person(conn: &impl ConnectionTrait, person_id: &str) -> Result<(), ServiceError> {
     if person::Entity::find_by_id(person_id.to_string())
+        .lock_exclusive()
         .one(conn)
         .await
         .map_err(db_error)?
@@ -279,7 +278,7 @@ async fn require_person(
 }
 
 async fn parent_child_type_id(
-    conn: &sea_orm::DatabaseConnection,
+    conn: &impl ConnectionTrait,
     name: String,
 ) -> Result<String, ServiceError> {
     let name = required(name, "relationshipType", 50)?.to_uppercase();
@@ -292,10 +291,7 @@ async fn parent_child_type_id(
         .ok_or_else(|| ServiceError::bad_request(&format!("unknown relationshipType {name}")))
 }
 
-async fn parent_role_id(
-    conn: &sea_orm::DatabaseConnection,
-    name: String,
-) -> Result<String, ServiceError> {
+async fn parent_role_id(conn: &impl ConnectionTrait, name: String) -> Result<String, ServiceError> {
     let name = required(name, "parentRole", 50)?.to_uppercase();
     lookup_parent_role::Entity::find()
         .filter(lookup_parent_role::Column::Name.eq(name.clone()))
@@ -306,10 +302,7 @@ async fn parent_role_id(
         .ok_or_else(|| ServiceError::bad_request(&format!("unknown parentRole {name}")))
 }
 
-async fn union_type_id(
-    conn: &sea_orm::DatabaseConnection,
-    name: String,
-) -> Result<String, ServiceError> {
+async fn union_type_id(conn: &impl ConnectionTrait, name: String) -> Result<String, ServiceError> {
     let name = required(name, "unionType", 50)?.to_uppercase();
     lookup_union_type::Entity::find()
         .filter(lookup_union_type::Column::Name.eq(name.clone()))
@@ -321,7 +314,7 @@ async fn union_type_id(
 }
 
 async fn union_end_reason_id(
-    conn: &sea_orm::DatabaseConnection,
+    conn: &impl ConnectionTrait,
     name: Option<String>,
 ) -> Result<Option<String>, ServiceError> {
     let Some(name) = optional(name, "endReason", 50)?.map(|name| name.to_uppercase()) else {
@@ -349,6 +342,7 @@ pub async fn put_person_node(
 
     let transaction = db.get_connection().begin().await.map_err(db_error)?;
     let existing_entity = entity::Entity::find_by_id(entity_id.clone())
+        .lock_exclusive()
         .one(&transaction)
         .await
         .map_err(db_error)?;
@@ -584,7 +578,6 @@ pub async fn put_parent_child_link(
     db: &Database,
     input: PutTanahpediaParentChildInput,
 ) -> Result<TanahpediaFamilyLinkWriteResult, ServiceError> {
-    let conn = db.get_connection();
     let id = required(input.id, "id", 36)?;
     let parent_id = required(input.parent_person_id, "parentPersonId", 36)?;
     let child_id = required(input.child_person_id, "childPersonId", 36)?;
@@ -600,15 +593,22 @@ pub async fn put_parent_child_link(
             "a person cannot be their own parent",
         ));
     }
-    require_person(conn, &parent_id).await?;
-    require_person(conn, &child_id).await?;
+    let transaction = db.get_connection().begin().await.map_err(db_error)?;
+    // Lock both person rows in id order so concurrent sibling writers cannot
+    // attach a link to a person an orphan delete has already verified and is
+    // about to remove (the orphan delete holds this same row lock).
+    let mut person_ids = [parent_id.clone(), child_id.clone()];
+    person_ids.sort();
+    for person_id in person_ids {
+        require_person(&transaction, &person_id).await?;
+    }
 
     let model = person_parent_child::Model {
         id: id.clone(),
         parent_id,
         child_id,
-        relationship_type_id: parent_child_type_id(conn, relationship_type).await?,
-        parent_role_id: parent_role_id(conn, parent_role).await?,
+        relationship_type_id: parent_child_type_id(&transaction, relationship_type).await?,
+        parent_role_id: parent_role_id(&transaction, parent_role).await?,
         alt_group_id,
         source_citation,
         birth_order: input.birth_order,
@@ -628,9 +628,10 @@ pub async fn put_parent_child_link(
                 ])
                 .to_owned(),
         )
-        .exec(conn)
+        .exec(&transaction)
         .await
         .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
 
     Ok(TanahpediaFamilyLinkWriteResult { id })
 }
@@ -657,7 +658,6 @@ pub async fn put_person_union(
     db: &Database,
     input: PutTanahpediaPersonUnionInput,
 ) -> Result<TanahpediaFamilyLinkWriteResult, ServiceError> {
-    let conn = db.get_connection();
     let id = required(input.id, "id", 36)?;
     let person1_id = required(input.person1_id, "person1Id", 36)?;
     let person2_id = required(input.person2_id, "person2Id", 36)?;
@@ -672,18 +672,24 @@ pub async fn put_person_union(
             "a person cannot be united with themselves",
         ));
     }
-    require_person(conn, &person1_id).await?;
-    require_person(conn, &person2_id).await?;
+    let transaction = db.get_connection().begin().await.map_err(db_error)?;
+    // Same locking discipline as put_parent_child_link: lock both person rows
+    // in id order so the write serializes against delete_orphan_person_node.
+    let mut person_ids = [person1_id.clone(), person2_id.clone()];
+    person_ids.sort();
+    for person_id in person_ids {
+        require_person(&transaction, &person_id).await?;
+    }
 
     let model = person_union::Model {
         id: id.clone(),
         person1_id,
         person2_id,
-        union_type_id: union_type_id(conn, union_type).await?,
+        union_type_id: union_type_id(&transaction, union_type).await?,
         union_order: input.union_order,
         start_date: input.start_date,
         end_date: input.end_date,
-        end_reason_id: union_end_reason_id(conn, end_reason).await?,
+        end_reason_id: union_end_reason_id(&transaction, end_reason).await?,
         alt_group_id,
         source_citation,
         person_source_citation,
@@ -706,9 +712,10 @@ pub async fn put_person_union(
                 ])
                 .to_owned(),
         )
-        .exec(conn)
+        .exec(&transaction)
         .await
         .map_err(db_error)?;
+    transaction.commit().await.map_err(db_error)?;
 
     Ok(TanahpediaFamilyLinkWriteResult { id })
 }
@@ -769,45 +776,81 @@ pub async fn find_persons_by_name(
         .await
         .map_err(db_error)?;
 
-    let mut summaries = Vec::with_capacity(entities.len());
-    for e in entities {
-        let person = person::Entity::find()
-            .filter(person::Column::EntityId.eq(e.id.clone()))
-            .one(conn)
+    let entity_ids = entities
+        .iter()
+        .map(|e| e.id.clone())
+        .collect::<HashSet<_>>();
+    let persons_by_entity = if entity_ids.is_empty() {
+        HashMap::new()
+    } else {
+        person::Entity::find()
+            .filter(person::Column::EntityId.is_in(entity_ids))
+            .all(conn)
             .await
-            .map_err(db_error)?;
-        if let Some(person) = person {
-            summaries.push(TanahpediaPersonSummary {
-                entity_id: e.id,
-                person_id: person.id,
-                display_name: e.name,
-            });
-        }
-    }
+            .map_err(db_error)?
+            .into_iter()
+            .map(|person| (person.entity_id.clone(), person.id))
+            .collect::<HashMap<_, _>>()
+    };
+
+    let summaries = entities
+        .into_iter()
+        .filter_map(|e| {
+            persons_by_entity
+                .get(&e.id)
+                .map(|person_id| TanahpediaPersonSummary {
+                    entity_id: e.id,
+                    person_id: person_id.clone(),
+                    display_name: e.name,
+                })
+        })
+        .collect();
 
     Ok(summaries)
 }
 
-/// Looks up the display name of the `PERSON` entity linked to `person_id`, or
-/// `None` if the person row (or its linked entity) no longer exists.
-async fn display_name_for_person(
+/// Resolves the display names of the `PERSON` entities linked to `person_ids`
+/// in two batched queries (person rows, then entity rows). Persons whose row
+/// (or linked entity) no longer exists are absent from the map, matching the
+/// old per-row `None` behavior; callers fall back to an empty name.
+async fn display_names_for_persons(
     conn: &sea_orm::DatabaseConnection,
-    person_id: &str,
-) -> Result<Option<String>, ServiceError> {
-    let Some(person) = person::Entity::find_by_id(person_id.to_string())
-        .one(conn)
-        .await
-        .map_err(db_error)?
-    else {
-        return Ok(None);
-    };
+    person_ids: HashSet<String>,
+) -> Result<HashMap<String, String>, ServiceError> {
+    if person_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
 
-    let entity = entity::Entity::find_by_id(person.entity_id)
-        .one(conn)
+    let persons = person::Entity::find()
+        .filter(person::Column::Id.is_in(person_ids))
+        .all(conn)
         .await
         .map_err(db_error)?;
+    if persons.is_empty() {
+        return Ok(HashMap::new());
+    }
 
-    Ok(entity.map(|e| e.name))
+    let entity_ids = persons
+        .iter()
+        .map(|person| person.entity_id.clone())
+        .collect::<HashSet<_>>();
+    let entities = entity::Entity::find()
+        .filter(entity::Column::Id.is_in(entity_ids))
+        .all(conn)
+        .await
+        .map_err(db_error)?
+        .into_iter()
+        .map(|row| (row.id, row.name))
+        .collect::<HashMap<_, _>>();
+
+    Ok(persons
+        .into_iter()
+        .filter_map(|person| {
+            entities
+                .get(&person.entity_id)
+                .map(|name| (person.id, name.clone()))
+        })
+        .collect())
 }
 
 /// Lists every union (marriage/pilegesh/betrothal/etc.) link involving
@@ -864,6 +907,18 @@ pub async fn get_person_unions(
             .collect()
     };
 
+    let other_person_ids = unions
+        .iter()
+        .map(|union| {
+            if union.person1_id == person_id {
+                union.person2_id.clone()
+            } else {
+                union.person1_id.clone()
+            }
+        })
+        .collect::<HashSet<_>>();
+    let display_names = display_names_for_persons(conn, other_person_ids).await?;
+
     let mut summaries = Vec::with_capacity(unions.len());
     for u in unions {
         let union_type = union_types
@@ -881,8 +936,9 @@ pub async fn get_person_unions(
             u.person1_id.clone()
         };
 
-        let other_display_name = display_name_for_person(conn, &other_person_id)
-            .await?
+        let other_display_name = display_names
+            .get(&other_person_id)
+            .cloned()
             .unwrap_or_default();
 
         summaries.push(TanahpediaPersonUnionSummary {
@@ -961,25 +1017,37 @@ pub async fn get_entity_tanah_sources(
         .await
         .map_err(db_error)?;
 
-    let mut sources = Vec::with_capacity(rows.len());
-    for row in rows {
-        let perek_row = perek::Entity::find_by_id(row.perek_id)
-            .one(conn)
+    let perek_ids = rows.iter().map(|row| row.perek_id).collect::<HashSet<_>>();
+    let perakim = if perek_ids.is_empty() {
+        HashMap::new()
+    } else {
+        perek::Entity::find()
+            .filter(perek::Column::Id.is_in(perek_ids))
+            .all(conn)
             .await
-            .map_err(db_error)?;
-        let citation = perek_row
-            .as_ref()
-            .map(|p| format_citation(p, row.pasuk_number))
-            .unwrap_or_default();
+            .map_err(db_error)?
+            .into_iter()
+            .map(|row| (row.id, row))
+            .collect::<HashMap<_, _>>()
+    };
 
-        sources.push(TanahpediaEntityTanahSource {
-            perek_id: row.perek_id,
-            pasuk_number: row.pasuk_number,
-            segment_start: row.segment_start,
-            segment_end: row.segment_end,
-            citation,
-        });
-    }
+    let sources = rows
+        .into_iter()
+        .map(|row| {
+            let citation = perakim
+                .get(&row.perek_id)
+                .map(|p| format_citation(p, row.pasuk_number))
+                .unwrap_or_default();
+
+            TanahpediaEntityTanahSource {
+                perek_id: row.perek_id,
+                pasuk_number: row.pasuk_number,
+                segment_start: row.segment_start,
+                segment_end: row.segment_end,
+                citation,
+            }
+        })
+        .collect();
 
     Ok(sources)
 }
@@ -1008,21 +1076,54 @@ pub async fn get_person_parent_child(
         .await
         .map_err(db_error)?;
 
+    let relationship_type_ids = rows
+        .iter()
+        .map(|row| row.relationship_type_id.clone())
+        .collect::<HashSet<_>>();
+    let relationship_types = lookup_parent_child_type::Entity::find()
+        .filter(lookup_parent_child_type::Column::Id.is_in(relationship_type_ids))
+        .all(conn)
+        .await
+        .map_err(db_error)?
+        .into_iter()
+        .map(|row| (row.id, row.name))
+        .collect::<HashMap<_, _>>();
+
+    let parent_role_ids = rows
+        .iter()
+        .map(|row| row.parent_role_id.clone())
+        .collect::<HashSet<_>>();
+    let parent_roles = lookup_parent_role::Entity::find()
+        .filter(lookup_parent_role::Column::Id.is_in(parent_role_ids))
+        .all(conn)
+        .await
+        .map_err(db_error)?
+        .into_iter()
+        .map(|row| (row.id, row.name))
+        .collect::<HashMap<_, _>>();
+
+    let other_person_ids = rows
+        .iter()
+        .map(|row| {
+            if row.parent_id == person_id {
+                row.child_id.clone()
+            } else {
+                row.parent_id.clone()
+            }
+        })
+        .collect::<HashSet<_>>();
+    let display_names = display_names_for_persons(conn, other_person_ids).await?;
+
     let mut summaries = Vec::with_capacity(rows.len());
     for row in rows {
-        let relationship_type =
-            lookup_parent_child_type::Entity::find_by_id(row.relationship_type_id.clone())
-                .one(conn)
-                .await
-                .map_err(db_error)?
-                .map(|t| t.name)
-                .unwrap_or_default();
+        let relationship_type = relationship_types
+            .get(&row.relationship_type_id)
+            .cloned()
+            .unwrap_or_default();
 
-        let parent_role = lookup_parent_role::Entity::find_by_id(row.parent_role_id.clone())
-            .one(conn)
-            .await
-            .map_err(db_error)?
-            .map(|t| t.name)
+        let parent_role = parent_roles
+            .get(&row.parent_role_id)
+            .cloned()
             .unwrap_or_default();
 
         let queried_is_parent = row.parent_id == person_id;
@@ -1031,8 +1132,9 @@ pub async fn get_person_parent_child(
         } else {
             row.parent_id.clone()
         };
-        let other_display_name = display_name_for_person(conn, &other_person_id)
-            .await?
+        let other_display_name = display_names
+            .get(&other_person_id)
+            .cloned()
             .unwrap_or_default();
 
         summaries.push(TanahpediaPersonParentChildSummary {
@@ -1086,21 +1188,31 @@ pub async fn get_person_details(
         .all(conn)
         .await
         .map_err(db_error)?;
-    let mut names = Vec::with_capacity(name_rows.len());
-    for row in name_rows {
-        let name_type = lookup_name_type::Entity::find_by_id(row.name_type_id.clone())
-            .one(conn)
-            .await
-            .map_err(db_error)?
-            .map(|t| t.name)
-            .unwrap_or_default();
-        names.push(TanahpediaPersonName {
+    let name_type_ids = name_rows
+        .iter()
+        .map(|row| row.name_type_id.clone())
+        .collect::<HashSet<_>>();
+    let name_types = lookup_name_type::Entity::find()
+        .filter(lookup_name_type::Column::Id.is_in(name_type_ids))
+        .all(conn)
+        .await
+        .map_err(db_error)?
+        .into_iter()
+        .map(|row| (row.id, row.name))
+        .collect::<HashMap<_, _>>();
+
+    let names = name_rows
+        .into_iter()
+        .map(|row| TanahpediaPersonName {
             id: row.id,
             name: row.name,
-            name_type,
+            name_type: name_types
+                .get(&row.name_type_id)
+                .cloned()
+                .unwrap_or_default(),
             alt_group_id: row.alt_group_id,
-        });
-    }
+        })
+        .collect();
 
     let sex_models = person_sex::Entity::find()
         .filter(person_sex::Column::PersonId.eq(person_id.clone()))
@@ -2262,6 +2374,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn find_persons_by_name_skips_person_query_when_no_entities_match() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![]])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let results = find_persons_by_name(&db, "יעקב".to_string())
+            .await
+            .expect("should query");
+
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
     async fn get_person_unions_rejects_blank_person_id() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
@@ -2324,6 +2450,100 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn get_person_unions_returns_empty_when_no_unions_exist() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person_union::Model, Vec<person_union::Model>, _>([vec![]])
+            .append_query_results::<lookup_union_type::Model, Vec<lookup_union_type::Model>, _>([
+                vec![],
+            ])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let unions = get_person_unions(&db, "yaakov".to_string())
+            .await
+            .expect("should query");
+
+        assert!(unions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_person_unions_falls_back_to_empty_name_when_other_person_row_is_missing() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person_union::Model, Vec<person_union::Model>, _>([vec![
+                union_model(
+                    "union-1",
+                    "yaakov",
+                    "leah",
+                    Some(1),
+                    Some("בראשית כט"),
+                    Some("בראשית כט טז"),
+                ),
+            ]])
+            .append_query_results::<lookup_union_type::Model, Vec<lookup_union_type::Model>, _>([
+                vec![union_type_model("ut-marriage", "MARRIAGE")],
+            ])
+            .append_query_results::<lookup_union_end_reason::Model, Vec<lookup_union_end_reason::Model>, _>([
+                vec![lookup_union_end_reason::Model {
+                    id: "uer-death".to_string(),
+                    name: "DEATH".to_string(),
+                }],
+            ])
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![]])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let unions = get_person_unions(&db, "yaakov".to_string())
+            .await
+            .expect("should query");
+
+        assert_eq!(unions.len(), 1);
+        assert_eq!(unions[0].other_person_id, "leah");
+        assert_eq!(unions[0].other_display_name, "");
+    }
+
+    #[tokio::test]
+    async fn get_person_unions_resolves_display_name_when_queried_person_is_person2() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person_union::Model, Vec<person_union::Model>, _>([vec![
+                union_model(
+                    "union-1",
+                    "yaakov",
+                    "leah",
+                    Some(1),
+                    Some("בראשית כט"),
+                    Some("בראשית כט טז"),
+                ),
+            ]])
+            .append_query_results::<lookup_union_type::Model, Vec<lookup_union_type::Model>, _>([
+                vec![union_type_model("ut-marriage", "MARRIAGE")],
+            ])
+            .append_query_results::<lookup_union_end_reason::Model, Vec<lookup_union_end_reason::Model>, _>([
+                vec![lookup_union_end_reason::Model {
+                    id: "uer-death".to_string(),
+                    name: "DEATH".to_string(),
+                }],
+            ])
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "yaakov",
+                "entity-yaakov",
+            )]])
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                "entity-yaakov",
+                "יעקב",
+            )]])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let unions = get_person_unions(&db, "leah".to_string())
+            .await
+            .expect("should query");
+
+        assert_eq!(unions.len(), 1);
+        assert_eq!(unions[0].other_person_id, "yaakov");
+        assert_eq!(unions[0].other_display_name, "יעקב");
+    }
+
+    #[tokio::test]
     async fn get_person_unions_surfaces_db_errors() {
         let mock_db = MockDatabase::new(DatabaseBackend::MySql)
             .append_query_errors([sea_orm::DbErr::Custom("boom".to_string())])
@@ -2350,6 +2570,7 @@ mod tests {
             hebdate: None,
             tseit: None,
             header: None,
+            pasuk_count: None,
         }
     }
 
@@ -2472,6 +2693,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn get_entity_tanah_sources_skips_perek_query_when_no_sources_exist() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entity_tanah_source::Model, Vec<entity_tanah_source::Model>, _>(
+                [vec![]],
+            )
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let sources = get_entity_tanah_sources(&db, "entity-bilhah".to_string())
+            .await
+            .expect("should query");
+
+        assert!(sources.is_empty());
+    }
+
+    #[tokio::test]
     async fn get_person_parent_child_rejects_blank_person_id() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
@@ -2528,6 +2765,50 @@ mod tests {
         assert!(links[0].queried_is_parent);
         assert_eq!(links[0].other_person_id, "yosef");
         assert_eq!(links[0].other_display_name, "יוסף");
+    }
+
+    #[tokio::test]
+    async fn get_person_parent_child_marks_queried_side_when_person_is_child() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person_parent_child::Model, Vec<person_parent_child::Model>, _>(
+                [vec![parent_child_model(
+                    "pc-1",
+                    "yaakov",
+                    "yosef",
+                    Some("בראשית ל כד"),
+                )]],
+            )
+            .append_query_results::<lookup_parent_child_type::Model, Vec<lookup_parent_child_type::Model>, _>(
+                [vec![lookup_parent_child_type::Model {
+                    id: "pct-biological".to_string(),
+                    name: "BIOLOGICAL".to_string(),
+                }]],
+            )
+            .append_query_results::<lookup_parent_role::Model, Vec<lookup_parent_role::Model>, _>([
+                vec![lookup_parent_role::Model {
+                    id: "pr-father".to_string(),
+                    name: "FATHER".to_string(),
+                }],
+            ])
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "yaakov",
+                "entity-yaakov",
+            )]])
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                "entity-yaakov",
+                "יעקב",
+            )]])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let links = get_person_parent_child(&db, "yosef".to_string())
+            .await
+            .expect("should query");
+
+        assert_eq!(links.len(), 1);
+        assert!(!links[0].queried_is_parent);
+        assert_eq!(links[0].other_person_id, "yaakov");
+        assert_eq!(links[0].other_display_name, "יעקב");
     }
 
     #[tokio::test]
@@ -2623,5 +2904,119 @@ mod tests {
         assert!(detail.birth_dates.is_empty());
         assert_eq!(detail.tanah_sources.len(), 1);
         assert_eq!(detail.tanah_sources[0].citation, "בראשית ל' ד'");
+    }
+
+    #[tokio::test]
+    async fn find_persons_by_name_returns_empty_when_no_entities_match() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![]])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let results = find_persons_by_name(&db, "יעקב".to_string())
+            .await
+            .expect("should query");
+
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_person_unions_returns_empty_for_no_links() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person_union::Model, Vec<person_union::Model>, _>([vec![]])
+            .append_query_results::<lookup_union_type::Model, Vec<lookup_union_type::Model>, _>([
+                vec![],
+            ])
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let unions = get_person_unions(&db, "yaakov".to_string())
+            .await
+            .expect("should query");
+
+        assert!(unions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_entity_tanah_sources_returns_empty_for_no_rows() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entity_tanah_source::Model, Vec<entity_tanah_source::Model>, _>(
+                [vec![]],
+            )
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let sources = get_entity_tanah_sources(&db, "entity-bilhah".to_string())
+            .await
+            .expect("should query");
+
+        assert!(sources.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_person_parent_child_returns_empty_for_no_links() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person_parent_child::Model, Vec<person_parent_child::Model>, _>(
+                [vec![]],
+            )
+            .append_query_results::<
+                lookup_parent_child_type::Model,
+                Vec<lookup_parent_child_type::Model>,
+                _,
+            >([vec![]])
+            .append_query_results::<lookup_parent_role::Model, Vec<lookup_parent_role::Model>, _>(
+                [vec![]],
+            )
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let links = get_person_parent_child(&db, "yaakov".to_string())
+            .await
+            .expect("should query");
+
+        assert!(links.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_person_details_returns_empty_names_and_sources() {
+        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<person::Model, Vec<person::Model>, _>([vec![person_model(
+                "bilhah",
+                "entity-bilhah",
+            )]])
+            .append_query_results::<entity::Model, Vec<entity::Model>, _>([vec![entity_model(
+                "entity-bilhah",
+                "בלהה",
+            )]])
+            .append_query_results::<person_name::Model, Vec<person_name::Model>, _>([vec![]])
+            .append_query_results::<lookup_name_type::Model, Vec<lookup_name_type::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_sex::Model, Vec<person_sex::Model>, _>([vec![]])
+            .append_query_results::<person_birth_date::Model, Vec<person_birth_date::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_death_date::Model, Vec<person_death_date::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_death_cause::Model, Vec<person_death_cause::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<person_birth_place::Model, Vec<person_birth_place::Model>, _>([
+                vec![],
+            ])
+            .append_query_results::<entity_tanah_source::Model, Vec<entity_tanah_source::Model>, _>(
+                [vec![]],
+            )
+            .into_connection();
+        let db = Database::from_connection(mock_db);
+
+        let detail = get_person_details(&db, "bilhah".to_string())
+            .await
+            .expect("should query");
+
+        assert!(detail.names.is_empty());
+        assert!(detail.sexes.is_empty());
+        assert!(detail.tanah_sources.is_empty());
     }
 }

@@ -83,6 +83,24 @@ public class DatabaseLoadingTests
     }
 
     [Fact]
+    public async Task BibleDatabase_WithVersionMarker_SkipsPackageOnNextServiceInit()
+    {
+        await using var storage = new TestStorage();
+        await storage.BundleDatabaseAsync(BibleDb, "CREATE TABLE sample (value TEXT)", "INSERT INTO sample VALUES ('bundled')");
+        var app = new Mock<IAppInfo>();
+        app.SetupGet(a => a.VersionString).Returns("1.2.3");
+        app.SetupGet(a => a.BuildString).Returns("123");
+
+        // A new service instance simulates a later launch against the same copy.
+        (await new LocalDatabaseService(storage.FileSystem.Object, app.Object).GetDatabaseAsync())
+            .Should().NotBeNull();
+        (await new LocalDatabaseService(storage.FileSystem.Object, app.Object).GetDatabaseAsync())
+            .Should().NotBeNull();
+
+        storage.FileSystem.Verify(f => f.OpenAppPackageFileAsync(BibleDb), Times.Once);
+    }
+
+    [Fact]
     public async Task BibleDatabase_RefreshesExistingTextFromUpdatedPackage()
     {
         await using var storage = new TestStorage();

@@ -1,4 +1,5 @@
 #if IOS || MACCATALYST
+using System.Runtime.InteropServices;
 using Foundation;
 using UIKit;
 
@@ -14,20 +15,20 @@ internal static class HtmlAttributedStringFactory
 {
     /// <summary>
     /// Converts HTML to an attributed string using the managed HtmlRuns parser.
-    /// Returns null when the markup yields no text; callers fall back to plain
-    /// text. Never throws into native code.
+    /// Empty markup produces an empty attributed string. Returns null on a
+    /// conversion failure so callers can fall back to plain text.
+    /// Runs carry their own ForegroundColor: <paramref name="textColor"/> for
+    /// ordinary text, <paramref name="accentColor"/> for runs flagged
+    /// <see cref="HtmlRun.Accent"/> — the generated note-list markers share the
+    /// inline reference's link color without a link target (#2723).
     /// </summary>
     public static NSMutableAttributedString? FromHtml(
-        string html, double fontSize, double h1Scale, double h2Scale, double h3Scale)
+        string html, double fontSize, double h1Scale, double h2Scale, double h3Scale,
+        UIColor textColor, UIColor accentColor)
     {
         try
         {
             var runs = HtmlRuns.FromHtml(html);
-            if (runs.Count == 0)
-            {
-                return null;
-            }
-
             var attributed = new NSMutableAttributedString();
             foreach (var run in runs)
             {
@@ -38,11 +39,19 @@ internal static class HtmlAttributedStringFactory
                     >= 3 => h3Scale,
                     _ => 1.0
                 };
-                var size = (nfloat)(fontSize * run.FontScale * headingScale);
+                var size = (NFloat)(fontSize * run.FontScale * headingScale);
                 var font = ResolveFont(size, run.Bold, run.Italic);
 
-                var keys = new List<NSString> { UIStringAttributeKey.Font };
-                var values = new List<NSObject> { font };
+                var keys = new List<NSString>
+                {
+                    UIStringAttributeKey.Font,
+                    UIStringAttributeKey.ForegroundColor
+                };
+                var values = new List<NSObject>
+                {
+                    font,
+                    run.Accent ? accentColor : textColor
+                };
 
                 if (run.BaselineShift > 0)
                 {
@@ -77,14 +86,16 @@ internal static class HtmlAttributedStringFactory
             }
             return attributed;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: attributed-string parse failure falls back to plain text
+        catch (Exception ex) //NOSONAR — attributed-string parse failure falls back to plain text.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"HtmlAttributedStringFactory parse error: {ex.Message}");
             return null;
         }
     }
 
-    private static UIFont ResolveFont(nfloat size, bool bold, bool italic)
+    private static UIFont ResolveFont(NFloat size, bool bold, bool italic)
     {
         // SystemFontOfSize is annotated nullable but only fails on bad input.
         var font = UIFont.SystemFontOfSize(size)!;

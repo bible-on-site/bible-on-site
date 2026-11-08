@@ -25,6 +25,7 @@ public class FlyoutNavigationTests
 
     private sealed class AuthorsStub : ContentPage;
     private sealed class TosStub : ContentPage;
+    private sealed class SearchReaderStub : ContentPage;
 
     private static async Task<Shell> WithShellAsync(Func<Shell, Task> body)
     {
@@ -39,6 +40,7 @@ public class FlyoutNavigationTests
         {
             Routing.RegisterRoute("FlyoutTestAuthors", typeof(AuthorsStub));
             Routing.RegisterRoute("FlyoutTestTos", typeof(TosStub));
+            Routing.RegisterRoute(AppRoutes.SearchReader, typeof(SearchReaderStub));
             var shell = new Shell();
             shell.Items.Add(new ShellContent { Route = AppRoutes.Perek, Content = new ContentPage() });
             var application = new TestApplication(shell);
@@ -52,6 +54,7 @@ public class FlyoutNavigationTests
         {
             Routing.UnRegisterRoute("FlyoutTestAuthors");
             Routing.UnRegisterRoute("FlyoutTestTos");
+            Routing.UnRegisterRoute(AppRoutes.SearchReader);
             Application.Current = previous;
             DispatcherProvider.SetCurrent(null);
         }
@@ -98,5 +101,32 @@ public class FlyoutNavigationTests
             shell.Navigation.NavigationStack.Should().HaveCount(1);
             shell.CurrentState.Location.OriginalString.Should().Be($"//{AppRoutes.Perek}");
         });
+    }
+
+    [Fact]
+    public async Task FlyoutPage_AfterSearchJump_PreservesBothReaderAndSearchHistory()
+    {
+        await WithShellAsync(async shell =>
+        {
+            var original = shell.CurrentPage;
+            await shell.GoToAsync(AppRoutes.SearchReader);
+            var reader = shell.CurrentPage;
+            await shell.GoToAsync(AppRoutes.FlyoutPage("FlyoutTestAuthors", shell.CurrentState.Location.OriginalString));
+            await shell.GoToAsync(AppRoutes.FlyoutPage("FlyoutTestTos", shell.CurrentState.Location.OriginalString));
+            shell.Navigation.NavigationStack.Should().HaveCount(3);
+            shell.CurrentPage.Should().BeOfType<TosStub>();
+            await shell.GoToAsync("..");
+            shell.CurrentPage.Should().BeSameAs(reader);
+            await shell.GoToAsync("..");
+            shell.CurrentPage.Should().BeSameAs(original);
+        });
+    }
+
+    [Theory]
+    [InlineData("//PerekPage/searchReader/searchReader/PreferencesPage?source=x", "//PerekPage/searchReader/searchReader")]
+    [InlineData("//unknown/PreferencesPage", "//PerekPage")]
+    public void FlyoutPage_ForReader_PreservesTheLatestReaderPath(string location, string expected)
+    {
+        AppRoutes.FlyoutPage(AppRoutes.Perek, location).Should().Be(expected);
     }
 }

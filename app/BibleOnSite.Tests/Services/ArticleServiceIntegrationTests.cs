@@ -6,7 +6,7 @@ namespace BibleOnSite.Tests.Services;
 
 /// <summary>
 /// Integration tests for ArticleService that require the API server.
-/// These tests require the API server to be running on http://127.0.0.1:3003
+/// The ApiServer fixture provides an isolated server backed by the test database.
 /// </summary>
 [Trait("Category", "Integration")]
 [Collection("ApiServer")]

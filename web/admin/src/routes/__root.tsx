@@ -9,6 +9,7 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
+import { RevalidationWarning } from "~/components/RevalidationWarning";
 import appCss from "../styles/app.css?url";
 
 const queryClient = new QueryClient({
@@ -36,11 +37,11 @@ export const Route = createRootRoute({
 
 function RootComponent() {
 	return (
-		<RootDocument>
-			<QueryClientProvider client={queryClient}>
+		<QueryClientProvider client={queryClient}>
+			<RootDocument>
 				<Outlet />
-			</QueryClientProvider>
-		</RootDocument>
+			</RootDocument>
+		</QueryClientProvider>
 	);
 }
 
@@ -82,10 +83,38 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 										מאמרים
 									</Link>
 									<Link
+										to="/link-proposals"
+										search={{ articleId: undefined }}
+										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+										activeProps={{
+											className: "!text-blue-600 !bg-blue-50 font-semibold",
+										}}
+									>
+										הצעות קישור
+									</Link>
+									<Link
 										to="/bulletins"
 										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium"
 									>
 										עלון יומי
+									</Link>
+									<Link
+										to="/moadim"
+										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+										activeProps={{
+											className: "!text-blue-600 !bg-blue-50 font-semibold",
+										}}
+									>
+										מועדים
+									</Link>
+									<Link
+										to="/dedications"
+										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+										activeProps={{
+											className: "!text-blue-600 !bg-blue-50 font-semibold",
+										}}
+									>
+										הקדשות
 									</Link>
 									<Link
 										to="/rabbis"
@@ -116,6 +145,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 						</div>
 					</div>
 				</nav>
+				<RevalidationWarning />
 				<main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 					{children}
 				</main>

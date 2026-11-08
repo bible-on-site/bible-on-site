@@ -21,17 +21,33 @@ public class DoubleTapTrackerTests
     }
 
     [Fact]
-    public void RecitationPreferenceIsOffByDefault_AndPersistsIndependently()
+    public void AudioChannelPreferences_DefaultToFull_AndPersistIndependently()
     {
         var storage = new InMemoryPreferencesStorage();
         var preferences = PreferencesService.CreateForTesting(storage);
-        preferences.RecitationEnabled.Should().BeFalse();
-        preferences.RecitationEnabled = true;
+        preferences.Load();
+        preferences.RecitationVolume.Should().Be(1);
+        preferences.LessonsVolume.Should().Be(1);
+        preferences.EffectsVolume.Should().Be(1);
+        preferences.RecitationVolume = 0.2;
+        preferences.LessonsVolume = 0.5;
+        preferences.EffectsVolume = 0.8;
         var restored = PreferencesService.CreateForTesting(storage);
         restored.Load();
-        restored.RecitationEnabled.Should().BeTrue();
+        restored.RecitationVolume.Should().Be(0.2);
+        restored.LessonsVolume.Should().Be(0.5);
+        restored.EffectsVolume.Should().Be(0.8);
         restored.FontFactor.Should().Be(1);
-        restored.RecitationEnabled = false;
-        preferences.Load(); preferences.RecitationEnabled.Should().BeFalse();
+        restored.RecitationVolume = 1;
+        preferences.Load(); preferences.RecitationVolume.Should().Be(1);
+    }
+
+[Fact]
+    public void Tap_AfterDoubleTapWindow_IsNotARapidTap()
+    {
+        var tracker = new DoubleTapTracker();
+
+        tracker.Tap(203, 1, 0).Should().BeFalse();
+        tracker.Tap(203, 1, 351).Should().BeFalse("351ms exceeds the rapid-tap window");
     }
 }

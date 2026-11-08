@@ -22,7 +22,7 @@ jobs:
 
     env:
       DEVOPS_DIRECTORY: devops
-      DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
+      DEVOPS_NODE_CACHE_PATH: devops/bun.lock
       DEVOPS_NODE_VERSION_FILE: devops/package.json
 
     steps:
@@ -44,18 +44,19 @@ jobs:
         with:
           ref: ${{ steps.guard.outputs.ref }}
 
-      - name: Setup Node.js
+      - name: Setup devops bun, Node.js and dependencies
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        uses: actions/setup-node@v7
+        id: devops-bun-cache
+        uses: ./.github/actions/setup-js
         with:
-          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
-          cache: npm
+          module: devops
+          directory: ${{ env.DEVOPS_DIRECTORY }}
 
-      - name: Install npm Dependencies
-        if: ${{ steps.guard.outputs.deploy == 'true' }}
-        working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: npm ci --no-audit
+      - name: Save bun store cache
+        if: ${{ steps.guard.outputs.deploy == 'true' && github.ref == 'refs/heads/master' && steps.devops-bun-cache.outputs.cache-hit != 'true' }}
+        uses: ./.github/actions/save-bun-store
+        with:
+          key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
       # Verify the exact immutable archive before granting access to production.
       - name: Download Perushim SQL
@@ -84,7 +85,7 @@ jobs:
       - name: Deploy Data to Production RDS
         if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
-        run: npm run deploy:data
+        run: bun run deploy:data
 
       - name: Record deployment result
         if: ${{ always() && steps.guard.outputs.deployment_id != '' }}

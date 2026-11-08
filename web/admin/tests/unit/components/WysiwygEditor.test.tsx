@@ -134,7 +134,12 @@ const editorState = vi.hoisted(() => {
 vi.mock("@tiptap/extension-bullet-list", () => ({ default: {} }));
 vi.mock("@tiptap/extension-image", () => ({ default: {} }));
 vi.mock("@tiptap/extension-italic", () => ({
-	default: { extend: vi.fn(() => ({})) },
+	default: {
+		extend: vi.fn((extension: { addKeyboardShortcuts?: () => object }) => {
+			extension.addKeyboardShortcuts?.();
+			return {};
+		}),
+	},
 }));
 vi.mock("@tiptap/extension-list-item", () => ({ default: {} }));
 vi.mock("@tiptap/extension-placeholder", () => ({
@@ -355,6 +360,22 @@ describe("WysiwygEditor", () => {
 		).not.toBeDisabled();
 		fireEvent.click(screen.getByRole("button", { name: "הסר קישור" }));
 		expect(editorState.chain.unsetLink).toHaveBeenCalledTimes(1);
+	});
+
+	it("warns when applying a link while no text is selected", () => {
+		renderEditor();
+
+		editorState.setSelectionEmpty(false);
+		fireEvent.click(screen.getByRole("button", { name: "קישור חדש" }));
+
+		editorState.setSelectionEmpty(true);
+		fireEvent.click(screen.getByRole("button", { name: "עדכן קישור" }));
+
+		expect(alert).toHaveBeenLastCalledWith(
+			"סמן טקסט לפני הוספת קישור, או לחץ על קישור קיים.",
+		);
+		// Only the initial "new link" setLink ran; the apply path refused.
+		expect(editorState.chain.setLink).toHaveBeenCalledTimes(1);
 	});
 
 	it("adds images and delegates footnote insertion to the extension", () => {

@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, Outlet, useMatch } from "@tanstack/react-router";
-import { useState } from "react";
+import {
+	createFileRoute,
+	Link,
+	Outlet,
+	useMatch,
+} from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { getPerakim, type Perek } from "~/server/perakim";
 import { getSefarim, type Sefer } from "~/server/sefarim";
 import { formatPerekLabel } from "~/utils/hebrew";
@@ -30,6 +35,8 @@ function ArticlesLayout() {
 }
 
 function ArticlesNavPage() {
+	const [interactive, setInteractive] = useState(false);
+	useEffect(() => setInteractive(true), []);
 	const [perekInput, setPerekInput] = useState("");
 	const [expandedSefarim, setExpandedSefarim] = useState<number[]>([]);
 
@@ -106,6 +113,7 @@ function ArticlesNavPage() {
 							type="number"
 							min="1"
 							max="929"
+							disabled={!interactive}
 							value={perekInput}
 							onChange={(e) => setPerekInput(e.target.value)}
 							placeholder="מספר פרק (1-929)"
@@ -114,6 +122,7 @@ function ArticlesNavPage() {
 						/>
 						<button
 							type="button"
+							disabled={!interactive}
 							onClick={handleNavigateToPerek}
 							className="bg-gray-700 text-white px-6 py-3 rounded-lg hover:bg-gray-800 transition-all font-medium shadow-sm hover:shadow-md"
 						>

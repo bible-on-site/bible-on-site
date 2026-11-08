@@ -1,4 +1,23 @@
 import { get } from "node:http";
+import { performance } from "node:perf_hooks";
+import { setTimeout as delay } from "node:timers/promises";
+
+// A cold XCUITest server has taken over three minutes to load on CI. Keep
+// startup bounded independently of the one-second individual HTTP probes.
+export async function waitForAppiumReadiness({ timeout = 300000, observe = () => {},
+  exited = () => undefined, probe = probeAppiumReadiness, now = () => performance.now(), wait = delay } = {}) {
+  const deadline = now() + timeout;
+  while (now() < deadline) {
+    const remaining = deadline - now();
+    if (remaining <= 0) return false;
+    const exit = exited();
+    if (exit) throw new Error(`Appium exited (${exit}).`);
+    const ready = await probe({ timeout: Math.min(1000, remaining), observe });
+    if (ready) return now() < deadline;
+    await wait(Math.max(0, Math.min(250, deadline - now())));
+  }
+  return false;
+}
 
 // Keep the same readiness predicate and network deadline while preserving the
 // response/error that explains why an owned server could not become ready.

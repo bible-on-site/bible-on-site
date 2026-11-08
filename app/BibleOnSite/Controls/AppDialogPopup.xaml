@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<toolkit:Popup xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+               xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+               xmlns:system="clr-namespace:System;assembly=mscorlib"
+               xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+               xmlns:services="clr-namespace:BibleOnSite.Services"
+               x:Class="BibleOnSite.Controls.AppDialogPopup"
+               x:TypeArguments="services:AppDialogAction"
+               Padding="0" Margin="24" HorizontalOptions="Center">
+    <!--
+        The single surface for every app-controlled blocking dialog (#2630):
+        surface, radius, padding, title/body/action typography and action
+        colors come from AppDialogStyle tokens and the shared palette below.
+        The content is RTL like every app screen; the action row inherits that
+        flow direction, so the logical order (dismissal first, affirmative
+        last) renders mirrored the same way native Hebrew alerts do.
+    -->
+    <toolkit:Popup.Resources>
+        <Style x:Key="AppDialogAction" TargetType="Button">
+            <Setter Property="BackgroundColor" Value="Transparent"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="LineBreakMode" Value="WordWrap"/>
+            <Setter Property="Padding" Value="0,10"/>
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
+        </Style>
+        <Style x:Key="AppDialogDestructiveAction" TargetType="Button" BasedOn="{StaticResource AppDialogAction}">
+            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"/>
+        </Style>
+    </toolkit:Popup.Resources>
+    <Border x:Name="Card"
+            BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}"
+            Stroke="Transparent"
+            StrokeShape="RoundRectangle 12"
+            Padding="24">
+        <VerticalStackLayout Spacing="16" FlowDirection="RightToLeft">
+            <Label x:Name="TitleLabel"
+                   FontSize="20"
+                   FontAttributes="Bold"
+                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource White}}"/>
+            <ScrollView x:Name="MessageScroll">
+                <Label x:Name="MessageLabel"
+                       FontSize="16"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            </ScrollView>
+            <!-- No FlowDirection override: the row inherits the card's RTL flow. -->
+            <Grid x:Name="ActionsGrid" ColumnSpacing="8" HorizontalOptions="Fill"/>
+        </VerticalStackLayout>
+    </Border>
+</toolkit:Popup>

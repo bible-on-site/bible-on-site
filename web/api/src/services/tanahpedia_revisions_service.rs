@@ -5,10 +5,17 @@ use crate::{
 };
 use entities::tanahpedia::{entry, entry_revision};
 use sea_orm::sea_query::Expr;
-use sea_orm::{ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, QueryOrder};
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, EntityTrait, IntoActiveModel, QueryFilter, QueryOrder,
+    QuerySelect, TransactionTrait,
+};
 
 const REVISION_STATUS_PENDING: &str = "PENDING";
 const REVISION_STATUS_APPLIED: &str = "APPLIED";
+
+fn db_error(db_err: sea_orm::DbErr) -> ServiceError {
+    ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
+}
 
 /// Normalizes an optional, possibly-blank string into `Some(trimmed)` or `None`.
 fn normalize(value: Option<String>) -> Option<String> {
@@ -21,7 +28,7 @@ fn normalize(value: Option<String>) -> Option<String> {
 /// entry's current content. `None` when the entry has no revision history yet
 /// (e.g. seeded or legacy content).
 async fn latest_applied_revision(
-    conn: &sea_orm::DatabaseConnection,
+    conn: &impl ConnectionTrait,
     entry_id: &str,
 ) -> Result<Option<entry_revision::Model>, ServiceError> {
     entry_revision::Entity::find()
@@ -139,11 +146,14 @@ pub async fn create_revision(
 }
 
 /// Lists entry revisions, newest first, optionally filtered by status and/or the
-/// targeted entry. Intended for the admin triage view.
+/// targeted entry. Intended for the admin triage view. `limit`/`offset` page the
+/// result — the table is append-only, so the listing must stay bounded.
 pub async fn find_revisions(
     db: &Database,
     status: Option<String>,
     entry_id: Option<String>,
+    limit: u64,
+    offset: u64,
 ) -> Result<Vec<entry_revision::Model>, ServiceError> {
     tracing::info_span!("tanahpedia_revisions_service::find_revisions");
 
@@ -157,6 +167,9 @@ pub async fn find_revisions(
 
     let revisions = query
         .order_by_desc(entry_revision::Column::CreatedAt)
+        .order_by_desc(entry_revision::Column::Id)
+        .limit(limit)
+        .offset(offset)
         .all(db.get_connection())
         .await
         .map_err(|db_err| {
@@ -191,12 +204,18 @@ pub async fn apply_revision(
 ) -> Result<entry_revision::Model, ServiceError> {
     tracing::info_span!("tanahpedia_revisions_service::apply_revision");
 
-    let conn = db.get_connection();
+    // One transaction + row locks: the entry write and the revision status
+    // update commit together, the locked revision row makes the status check
+    // atomic, and the locked entry row serializes the head check against
+    // concurrent applies on the same entry.
+    let transaction = db.get_connection().begin().await.map_err(db_error)?;
+    let conn = &transaction;
 
     let revision = entry_revision::Entity::find_by_id(revision_id.clone())
+        .lock_exclusive()
         .one(conn)
         .await
-        .map_err(|db_err| ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err)))?
+        .map_err(db_error)?
         .ok_or_else(|| ServiceError::not_found("revision not found", Option::<String>::None))?;
 
     if revision.status == REVISION_STATUS_APPLIED {
@@ -211,6 +230,7 @@ pub async fn apply_revision(
     let target_entry_id = match revision.entry_id.clone() {
         Some(entry_id) => {
             entry::Entity::find_by_id(entry_id.clone())
+                .lock_exclusive()
                 .one(conn)
                 .await
                 .map_err(|db_err| {
@@ -303,6 +323,8 @@ pub async fn apply_revision(
         .map_err(|db_err| {
             ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
         })?;
+
+    transaction.commit().await.map_err(db_error)?;
 
     let mut applied = revision;
     applied.status = REVISION_STATUS_APPLIED.to_string();
@@ -466,11 +488,30 @@ mod tests {
             .into_connection();
         let db = Database::from_connection(mock_db);
 
-        let revisions = find_revisions(&db, Some("PENDING".to_string()), None)
+        let revisions = find_revisions(&db, Some("PENDING".to_string()), None, 50, 0)
             .await
             .expect("should query");
         assert_eq!(revisions.len(), 1);
         assert_eq!(revisions[0].id, "rev-1");
+    }
+
+    #[tokio::test]
+    async fn find_revisions_bounds_the_query() {
+        let conn = MockDatabase::new(DatabaseBackend::MySql)
+            .append_query_results::<entry_revision::Model, Vec<entry_revision::Model>, _>([vec![]])
+            .into_connection();
+        let db = Database::from_connection(conn.clone());
+
+        find_revisions(&db, None, None, 50, 100)
+            .await
+            .expect("should query");
+
+        let log = conn.into_transaction_log();
+        let sql = format!("{:?}", log[0]);
+        assert!(
+            sql.contains("LIMIT") && sql.contains("OFFSET"),
+            "the append-only history listing must stay bounded: {sql}"
+        );
     }
 
     #[tokio::test]
@@ -480,7 +521,7 @@ mod tests {
             .into_connection();
         let db = Database::from_connection(mock_db);
 
-        let err = find_revisions(&db, None, None).await.unwrap_err();
+        let err = find_revisions(&db, None, None, 50, 0).await.unwrap_err();
         assert!(matches!(err, ServiceError::InternalServerError(_)));
     }
 

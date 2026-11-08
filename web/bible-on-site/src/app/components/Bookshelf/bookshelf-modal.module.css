@@ -26,7 +26,7 @@
   max-width: 90vw;
   max-height: 90vh;
   overflow: auto;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
@@ -51,11 +51,17 @@
   transition: background 0.2s ease;
 }
 
-.closeButton:hover {
-  background: rgba(255, 255, 255, 0.3);
+@media (hover: hover) {
+  .closeButton:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
 }
 
 .closeButton:focus-visible {
   outline: 2px solid #f5deb3;
   outline-offset: 2px;
+}
+
+.closeButton:active {
+  scale: var(--press-scale);
 }

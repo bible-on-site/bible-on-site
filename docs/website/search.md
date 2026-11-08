@@ -1,0 +1,351 @@
+# Website Internal Search
+
+Implementation of [issue #2040](https://github.com/bible-on-site/bible-on-site/issues/2040):
+an internal search experience for the website, using the native app's
+floating-search work (PR #2032) as the functional reference. Tanahpedia
+entries were added by
+[issue #2103](https://github.com/bible-on-site/bible-on-site/issues/2103).
+
+## Scope and result contract
+
+Result types mirror the app's `SearchFilter` (`Author`, `Pasuk`, `Perush`,
+`Perek`) plus articles and Tanahpedia entries. The shared contract lives
+in `src/lib/search/types.ts`:
+
+| Type        | Hebrew label | Corpus                              | Result link                                                |
+| ----------- | ------------ | ----------------------------------- | ---------------------------------------------------------- |
+| `perek`     | פרקים        | Bundled sefarim JSON (in-memory)     | `/929/{perekId}`                                           |
+| `pasuk`     | פסוקים       | Bundled sefarim JSON (in-memory)     | `/929/{perekId}#pasuk-{n}`                                 |
+| `perush`    | פירושים      | MySQL `note` + `perush`              | `/929/{perekId}/{perushName}?pasuk={n}&note={idx}&q={phrase}` |
+| `author`    | רבנים        | MySQL `tanah_author`                 | `/929/authors/{slug}`                                       |
+| `article`   | מאמרים       | MySQL `tanah_article`                | `/929/{perekId}/{articleId}?q={phrase}`                    |
+| `tanahpedia`| תנכפדיה      | MySQL `tanahpedia_entry` + synonyms  | `/pedia/{uniqueName}`                                      |
+
+Every result is `{ type, title, snippetHtml, href, score }`. `snippetHtml`
+is built server-side with all source bytes HTML-escaped and only `<mark>`
+highlight tags emitted, so clients can render it via
+`dangerouslySetInnerHTML` with no XSS surface (`src/lib/search/snippet.ts`).
+`title` uses the site's plain-letter source convention (`רש"י בראשית א א`).
+
+Tanahpedia entries were initially out of scope and were added by #2103.
+Per-sefer filtering is still deferred: results already carry `perekId`,
+so a future `sefer` URL param maps cleanly onto the same contract.
+
+## Matching approach
+
+The matching core (`normalize.ts`, `score.ts`) is a deliberate TypeScript
+port of the app's `Helpers/SearchText.cs`, keeping cross-platform behavior
+identical:
+
+- **Normalization** — NFD decomposition strips Hebrew niqqud/taamim
+  (Unicode mark categories), plus geresh/gershayim and other quote-like
+  characters; punctuation collapses to spaces; letters/digits are kept and
+  lowercased. `בְּרֵאשִׁית` ≡ `בראשית`.
+- **Scoring** — whole-text equality 110; whole-word phrase containment 100;
+  otherwise every query term must match some word: exact 90, prefix 80,
+  fuzzy 60. Fuzzy matching is the app's conservative bounded edit distance
+  (0 edits under 4 chars, 1 under 8, 2 above), which catches common Hebrew
+  spelling slips (e.g. `בראשים` → `בראשית`) without flooding results.
+- **Reference resolution** — numeric words in the query are rewritten as
+  Hebrew letters before matching perek sources, so `בראשית 1` finds
+  `בראשית א` (same trick as the app).
+
+### Why no hosted search engine
+
+Alternatives assessed: Algolia/Typesense/Elasticsearch (managed or hosted),
+and MySQL `FULLTEXT`. The corpus is small (~23k pesukim already held in
+server memory, ~hundreds of articles/authors, a bounded commentary corpus),
+so a hosted engine's cost and ops surface buy nothing a few index scans
+don't deliver. MySQL FULLTEXT would require a schema change on a shared,
+DB-owned table and its default 4-char minimum word length hurts short
+Hebrew terms; it also still can't do niqqud-insensitive matching without a
+normalized shadow column. The ported normalizer + bounded `REGEXP_LIKE`
+candidate selection covers the requirement now and leaves the seam
+described below for the shared semantic backend.
+
+### Normalization-aware candidate selection
+
+SQL still sees the stored, unnormalized text, so the candidate patterns
+are built to mirror the JS pipeline instead of a raw `LIKE '%term%'`:
+each term's letters may be separated by runs of characters that
+normalization erases — combining marks (niqqud/taamim), quote-like
+characters (geresh/gershayim, typographic quotes), HTML tags, and
+entities — so `שליטא` reaches a stored `שליט"א`, `בְּרֵאשִׁית` reaches
+`בראשית`, and `שלי<b>טא` reaches `שליטא`. Anything the regex admits but
+normalization would split (e.g. a block tag inside a word) is a harmless
+extra candidate the JS scorer filters out.
+
+Candidates are ranked before the row cap, but the word-anchored rank
+patterns are the most expensive evals in the query — too expensive to
+run on every row a common term admits. So the providers run the scan
+in two stages with different cost profiles:
+
+- **WHERE — anchor-free gate only.** Each term is split into
+  `maxEdits(term) + 1` contiguous chunks and the gate is the union of
+  the chunks as bare ordered-letters patterns — the same cheap scan
+  shape the pre-#2140 WHERE ran on every row. Every fuzzy-eligible
+  word keeps at least one intact chunk (each edit corrupts at most one
+  chunk — the classic pigeonhole filter), so the union is a true
+  superset of everything the scorer can rate; mid-word chunk hits it
+  over-admits are cheap to shed later. It is deliberately *not*
+  word-anchored: an anchored alternation re-runs at every position,
+  and on a giant `note_content` row (base64-embedded images reach
+  ~260 KB) it can exhaust MySQL's per-match `regexp_time_limit` —
+  a hard statement error, not a slow row. Bare letter scans are the
+  only shape proven safe at any row size.
+- **Inner location-ordered LIMIT.** The WHERE runs in a derived table
+  ordered by the provider's location key (`perek_id, pasuk` for notes
+  — backed by `idx_note_perek_pasuk`), so a dense term stops scanning
+  as soon as `innerLimit` matches are found. The limit scales down
+  with the rank estimate's flag count (`6000 / fields×flags`) so the
+  per-row anchored evals stay bounded in total; for terms whose
+  candidate pool fits, nothing is dropped at all.
+- **ORDER BY — the tier estimate on bounded text.** Only the inner
+  rows pay the word-anchored flags, each evaluated on
+  `LEFT(field, 2048)`, so no single eval can hit `regexp_time_limit`
+  either. Per field: a word-bounded phrase `REGEXP_LIKE` flag
+  (skipped for single-term queries — the estimate's exact flag is the
+  same pattern), then `LEAST` over the terms' word-level estimates —
+  `10*exact + 20*prefix + 60*candidate` per term (single-term emits
+  the bare estimate: MySQL `LEAST` requires two arguments). The three
+  patterns nest (exact ⇒ prefix ⇒ fuzzy-eligible), so a term's
+  estimate lands on the scorer's own 90/80/60 tiers; `LEAST` mirrors
+  the scorer's minimum-term rule. The candidate flag is the only
+  place the length-windowed `termRegexp` runs — its job is to drop
+  chunk-bearing words outside `[term - edits, term + edits]` (dead
+  candidates) to estimate 0, below every real candidate the row cap
+  then keeps. Estimating per term, rather than counting chunk hits,
+  keeps chunks spread across different words of a column
+  (`ירוש לימ` for a `ירושלימ` query) from stacking into a stronger
+  rank than one real fuzzy word. Ranking reads the field's lead text:
+  a deeper candidate still reaches JS scoring via the row itself —
+  it just ranks as a weaker hit, which is the right bias anyway.
+  When a frequent term overflows the cap, the rows shed are the
+  weakest candidates — the strongest matches can no longer be
+  truncated arbitrarily.
+
+Typo tolerance (#2140): the JS scorer's fuzzy tier (bounded edit
+distance) used to be unreachable for DB-backed types, because the
+ordered-letters pattern can never select a misspelled row. The chunk
+gate is what admits the fuzzable rows now — `ירושלימ`'s chunks
+`ירוש`/`לימ` select stored `ירושלים` because its first chunk survives
+the missing `ם` — and the scorer's whole-word length window is
+deliberately *not* re-checked in WHERE: the gate is a pure superset
+and the windowed `termRegexp` runs once in the rank estimate, where
+it drops dead candidates below every real one for the row cap to
+shed. Scoring is unchanged in JS, so the fuzzy
+60/80/90/100/110 tiers apply uniformly across all four DB providers
+exactly as they do for the in-memory corpora. Articles score name,
+abstract, and content independently (name keeps
+its ×2 weight) and the snippet is taken from the best-scoring field, so
+an abstract-only match is no longer discarded when unrelated content is
+present. Tanahpedia entries score title and unique_name plus the alias
+names that resolve to the entry — both `tanahpedia_entry_synonym` rows
+and `tanahpedia_entry_synonym_disambiguation` targets, matching the
+`/pedia/[slug]` resolver — at name weight, and body content at the weak
+weight; an ambiguous name therefore produces one hit per target entry,
+each linked to its canonical `/pedia/{uniqueName}` page. The snippet is
+the highlighted body excerpt for content matches, the alias list when an
+alias drove the match, and the body lead-in (or nothing) for title-only
+matches. Entries without body content are still discoverable by title
+and aliases. Every `tanahpedia_entry` row is public — proposals live in
+`tanahpedia_entry_revision` until applied — so no publish filter is
+needed.
+
+## Architecture
+
+```
+/search (page, force-dynamic)
+   ├─ SSR: searchSite() directly for the URL's ?q=&type= → first paint
+   └─ <SearchExperience> (client)
+        typing ──debounce 300ms──▶ history.pushState (native) + fetch /api/search
+        filters/submit ─────────▶ settled history entries
+        Back/Forward ───────────▶ useSearchParams → client cache / refetch
+
+GET /api/search?q=&type=&limit=
+   └─ searchSite() → providers:
+        perakim/pesukim — in-memory corpus built once per process from the
+                          bundled tanah_view JSON (globalThis cache)
+        perushim        — MySQL REGEXP_LIKE candidate pull (AND-ed terms,
+                          inner location-ordered LIMIT, tier-estimate
+                          ranked, LIMIT 1000, MAX_EXECUTION_TIME 12000)
+                          then normalize+score in JS
+        authors         — MySQL REGEXP_LIKE on name/details, same ranking
+        articles        — MySQL REGEXP_LIKE on name/abstract/content
+                          (lexical; see #2039 seam below)
+        tanahpedia      — MySQL REGEXP_LIKE on title/unique_name/content
+                          plus an EXISTS over the synonym tables, then a
+                          follow-up name pull for scoring; same ranking
+```
+
+Providers degrade independently: a MySQL failure removes only its result
+type and adds an availability notice (`availability[]`) instead of failing
+the search.
+
+### URL-driven state and history
+
+Query and filters live in the URL: `/search?q=<phrase>&type=<csv>`
+(`type` omitted = all types). While typing, each *settled* query (300 ms
+debounce) becomes its own history entry via native `history.pushState` —
+keystrokes never spam history, and no RSC round-trip is needed. Because
+`useSearchParams` does not observe native `history.pushState`, the
+component owns its URL state explicitly: `settle()` pushes history and
+updates React state atomically, and a `popstate` listener adopts
+external Back/Forward navigations. Filter toggles, submit, and Escape
+settle immediately. Because `type` has no encoding for "zero types" (a
+present-but-empty `type=` parses as all types), the last checked filter
+checkbox renders disabled with an explanatory tooltip instead of
+snapping every filter back on; resubmitting a failed query bumps an
+explicit retry trigger so the same-URL fetch actually reruns.
+Back/Forward therefore walks meaningful states;
+results are restored from a small client cache (~30 entries) or
+refetched, and the browser's own scroll restoration preserves list
+position. Result links are plain `<Link>`s — ordinary crawlable anchors —
+so opening them in a new tab works normally. The form is a real
+`GET /search` form, so a no-JS submit lands on the SSR'd results page.
+
+### Deep-linking into content (#2078)
+
+Result links carry enough destination context to land on the exact match, not
+just the page:
+
+- `pasuk` results keep `#pasuk-{n}` — `ScrollToPasuk` scrolls and highlights
+  the verse.
+- `perush` results add `note={noteIdx}` (the note row's fragment index) and
+  `q` (the normalized phrase). `ScrollToPerushPasukNote` selects the specific
+  `[data-perush-pasuk][data-perush-note]` element — not the pasuk's first
+  note — and `dom-match.ts` re-locates the phrase inside the rendered note
+  with the index's normalization, wrapping the occurrence in
+  `<mark class="searchMatch">` before centering it.
+- `article` results add `q`. `ScrollToArticleMatch` re-locates and marks the
+  match inside `article-view`'s body; with no `q` the `article-view` anchor
+  scroll remains the landing.
+
+`q` is deliberately not a stable character offset: indexed/normalized offsets
+never equal DOM offsets (niqqud, entities, markup), so `dom-match.ts` maps
+normalized positions back onto DOM text nodes. A stale/absent target degrades
+to the anchor-level scroll — never to a wrong position.
+
+### Fetch discipline
+
+Queries are debounced (300 ms), raced with `AbortController`, and stale
+responses are dropped by a resolved-key guard — same "obsolete responses
+must not overwrite newer ones" rule as the app. `/api/search` answers
+`Cache-Control: no-store`: queries are user input and must not sit in
+shared caches. No query log is persisted — the only record is the
+transient request log (privacy choice documented per the issue).
+
+### #2039 article-content seam
+
+The website can already lexically search `tanah_article`
+name/abstract/content, so it does not *depend* on the Rust semantic-search
+API from issue #2039. When that endpoint lands, the intent is for a remote
+provider to replace `searchArticles` (`src/lib/search/db-content.ts`) — the
+only call site — returning the same `Scored<ArticleHit>[]` shape
+(`id`, `perekId`, `name`, `authorName`, plain-text `plain` for snippet
+building). The expected contract is: `GET {API}/articles/search?q=<phrase>&limit=<n>`
+→ `[{ articleId, perekId, title, authorName, score, excerptPlain }]`. The
+swap is isolated to one file; no caller or DTO changes needed.
+
+## Accessibility and RTL
+
+- A `<search>` landmark wraps the form; labelled `type="search"` input
+  (implicit `searchbox` role) plus a visible submit button.
+- A polite `aria-live` status region announces מחפש… / נמצאו N תוצאות /
+  לא נמצאו תוצאות / שגיאה בחיפוש; provider degradations are announced in a
+  separate status line.
+- Keyboard: `ArrowDown` from the input focuses the first result link and
+  then steps forward through results, wrapping from the last result back
+  to the first; `ArrowUp` steps back and, on the first result, returns
+  focus to the input (as does `Escape` on any result); `Escape` in the
+  input clears the query.
+- Result groups are `<section>`s with labelled `<h2>`s and count badges —
+  a predictable fixed order (פרקים, פסוקים, פירושים, רבנים, מאמרים,
+  תנכפדיה) rather than order-by-score, which is less disorienting for
+  screen readers.
+- RTL: `dir="rtl"` is inherited; styles use logical properties
+  (`margin-block`, `padding-inline`) where direction matters. The
+  `<mark>` highlights inherit color and use underline+weight so they read
+  in dark mode too.
+- Entry point: a persistent icon-only search button (`aria-label="חיפוש"`)
+  pinned to the physical left edge of the top navigation bar — opposite the
+  hamburger — on every page except reading-unit pages (על הפרק and the
+  מסורה/פרשה unit readers), where the settings button owns that corner
+  (#2274). The main menu leads with על הפרק and holds no search row.
+
+## SEO policy (researched and deliberate)
+
+Sources:
+
+- Google Search Central, *Control what you share* and robots-meta docs —
+  `noindex`/`X-Robots-Tag` are page-level directives; robots.txt only
+  controls *crawling*, and a disallowed page's `noindex` is never seen.
+- John Mueller (Search Off the Record, 2025): internal search-result pages
+  are no longer named in Search Essentials, but Google still recommends
+  keeping them out of the index — they are an unbounded, automatically
+  generated space that wastes crawl budget, can surface soft-404s, and can
+  get a site flagged as hacked if arbitrary off-topic queries get indexed.
+- Google deprecated the **sitelinks search box** on 2024-11-21 — the
+  `WebSite.potentialAction`/`SearchAction` markup no longer triggers any
+  feature (docs archived). We verified status instead of assuming; we do
+  *not* add it.
+- Google's faceted-URL guidance: avoid indexing filter/sort combinations;
+  keep the sitemap to canonical content.
+
+Chosen policy:
+
+- `/search` renders `<meta name="robots" content="noindex, follow">`
+  (Next `robots` metadata). `noindex` keeps every query URL out of the
+  index; `follow` lets crawlers reach the canonical content pages the
+  results link to. We deliberately do **not** `Disallow` `/search` in
+  robots.txt — that would hide the `noindex` from crawlers and forgo the
+  link discovery value.
+- No canonical is emitted for search URLs (they're not indexable
+  candidates anyway), and `/search` is kept out of `sitemap.ts` —
+  the sitemap stays limited to canonical content pages.
+- `/api/search` is already under the existing `Disallow: /api/` rule.
+- Underlying content pages (`/929/*`, `/929/authors/*`, `/pedia/*`) keep
+  their stable canonical URLs/metadata untouched — search discovery is
+  additive, on top of normal crawlable navigation.
+- Every result link points at a canonical content URL (with `#pasuk-` /
+  `?pasuk=` fragments where relevant), so search supplements rather than
+  duplicates crawlable paths.
+
+## Caching and query logging
+
+- `/api/search`: `Cache-Control: no-store` — user queries are never cached
+  by browsers or shared infrastructure.
+- Corpus index: built lazily per server process over the bundled JSON
+  (same `globalThis` cache pattern as `sefarim.ts`); perakim/pesukim
+  results are deterministic until the bundled text changes (deploys only).
+- DB providers run live queries; `MAX_EXECUTION_TIME(12000)` bounds the
+  worst case, an inner location-ordered LIMIT bounds how many rows the
+  rank estimate flags, and `LIMIT 1000` bounds transferred candidates.
+  The budget is sized for the fuzzy candidate path: the perushim
+  `note` column is an unindexed ~340k-row text column, and even the
+  bare letters gate scan costs a few seconds on it — the pre-#2140 3s
+  bound was already marginal for common terms and left no room for a
+  multi-term scan that pays the gate once per AND-ed term. MySQL's
+  per-match `regexp_time_limit` (default 32 steps) is global-only —
+  it cannot be raised per session or per statement — so instead the
+  patterns are kept inside the budget: WHERE runs only the anchor-free
+  chunk union, and the word-anchored rank flags evaluate on
+  `LEFT(field, 2048)` over the inner-limited rows, which bounds every
+  single match attempt well under the engine's step limit.
+- Queries are not persisted anywhere. Privacy note: query terms appear in
+  URLs by design (shareable search URLs are a requirement), so they may
+  appear in ordinary access logs — documented and accepted.
+
+## Testing
+
+- `tests/unit/lib/search-*.test.ts` — normalization, scoring, snippet
+  safety, corpus search, DB providers (mocked `query`), orchestrator
+  degradation/limits.
+- `tests/unit/app/api/search-route.test.ts` — validation, error paths,
+  `no-store`.
+- `tests/unit/app/search-page.test.tsx` — SSR results, metadata, states.
+- `tests/unit/components/SearchExperience.test.tsx` — debounce, settle-to-
+  URL, Back-restore via cache, filters, error state, arrow-key focus.
+- `tests/e2e/search.test.ts` — entry points, SSR results, shareable URLs,
+  Back restoration, filters, keyboard nav, `noindex`, sitemap hygiene,
+  API contract.

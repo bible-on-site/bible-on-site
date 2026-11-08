@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<!--
+  bible-on-site router branded 404 fallback (issue #2935)
+
+  Served by nginx for missing files under the supported /www/ static tree
+  (error_page 404 /www/404.html in router.conf). Kept router-local on
+  purpose: a /www/ miss stays on the www surface instead of being proxied
+  into the website backend, so bot scans of /www/ never cost app renders.
+
+  Self-contained by design — no hashed app-asset references, so the page
+  survives website redeploys that rotate static chunk names.
+
+  Visual contract mirrors web/bible-on-site/src/app/not-found.tsx and
+  not-found.module.css (same title, pasuk, recovery link, palette,
+  dark-scheme and narrow-viewport behavior); the static guards in
+  web/bible-on-site/scripts/verify-canonical-hosts.test.mjs pin that
+  contract so drift fails CI.
+-->
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>העמוד לא נמצא</title>
+<style>
+:root {
+	--radius-md: 8px;
+	--background: #ffffff;
+	--foreground: #171717;
+	--accent-200: #a8b9ff;
+	--accent-300: #7eb0ff;
+	--accent-600: #1552ac;
+	--accent-900: #1c2c5d;
+	--muted-text: #666666;
+}
+@media (prefers-color-scheme: dark) {
+	:root {
+		--background: #0f1219;
+		--foreground: #e8eaed;
+		--muted-text: #9aa0a6;
+	}
+}
+html {
+	line-height: 1.5;
+	-webkit-text-size-adjust: 100%;
+	font-family:
+		ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+		"Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+body {
+	margin: 0;
+	color: var(--foreground);
+	background: var(--background);
+}
+.not-found-page {
+	max-width: 800px;
+	margin: 0 auto;
+	padding: 88px 16px 24px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 70vh;
+	text-align: center;
+	box-sizing: border-box;
+}
+.error-code {
+	font-size: 6rem;
+	font-weight: 800;
+	color: var(--accent-600);
+	margin: 0;
+	line-height: 1;
+	opacity: 0.15;
+}
+.pasuk {
+	font-size: 1.75rem;
+	font-weight: 700;
+	color: var(--accent-900);
+	margin: 0 0 12px;
+	line-height: 1.6;
+}
+.source {
+	font-size: 1rem;
+	color: var(--muted-text);
+	margin: 0 0 40px;
+}
+.back-link-wrapper {
+	text-align: center;
+	padding: 24px 0 48px;
+}
+.back-link {
+	display: inline-block;
+	padding: 12px 32px;
+	background: var(--accent-900);
+	color: #ffffff;
+	text-decoration: none;
+	border-radius: var(--radius-md);
+	font-size: 0.95rem;
+	transition: all 0.2s ease;
+}
+@media (hover: hover) {
+	.back-link:hover {
+		background: #2a3d7a;
+		transform: translateY(-2px);
+	}
+}
+@media (max-width: 768px) {
+	.error-code {
+		font-size: 4rem;
+	}
+	.pasuk {
+		font-size: 1.35rem;
+	}
+}
+@media (prefers-color-scheme: dark) {
+	.error-code {
+		color: var(--accent-300);
+	}
+	.pasuk {
+		color: var(--accent-200);
+	}
+	.back-link {
+		background: var(--accent-200);
+		color: #16213d;
+	}
+	@media (hover: hover) {
+		.back-link:hover {
+			background: #c7d2fe;
+		}
+	}
+}
+</style>
+</head>
+<body>
+<div class="not-found-page">
+	<p class="error-code">404</p>
+	<h1 class="pasuk">הֲתָעִיף עֵינֶיךָ בּוֹ וְאֵינֶנּוּ</h1>
+	<p class="source">(משלי כג ה)</p>
+	<div class="back-link-wrapper">
+		<a href="/" class="back-link">חזרה לעמוד הראשי</a>
+	</div>
+</div>
+</body>
+</html>

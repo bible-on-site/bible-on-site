@@ -39,7 +39,7 @@ partial class Build
     /// </summary>
     void WriteApiConfigFile()
     {
-        var apiConfigPath = System.IO.Path.Combine(SourceDirectory, "Resources", "Raw", "api-config.txt");
+        var apiConfigPath = System.IO.Path.Join(SourceDirectory, "Resources", "Raw", "api-config.txt");
         System.IO.File.WriteAllText(apiConfigPath, IsProdApi ? ProdApiUrl : "");
         if (IsProdApi)
         {
@@ -61,7 +61,9 @@ partial class Build
     bool IsApiRunning()
     {
         if (IsPortOpen("127.0.0.1", 3003))
+        {
             return true;
+        }
 
         try
         {
@@ -69,8 +71,10 @@ partial class Build
             var response = client.GetAsync("http://localhost:3003").Result;
             return response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.BadRequest;
         }
-        catch
+        #pragma warning disable S2221 // Deliberate failure boundary: API probe: any failure counts as not-running
+        catch //NOSONAR — API probe: any failure counts as not-running.
         {
+            #pragma warning restore S2221
             return false;
         }
     }
@@ -83,8 +87,10 @@ partial class Build
             var connectTask = client.ConnectAsync(host, port);
             return connectTask.Wait(TimeSpan.FromSeconds(1)) && client.Connected;
         }
-        catch
+        #pragma warning disable S2221 // Deliberate failure boundary: TCP probe: any failure counts as closed
+        catch //NOSONAR — TCP probe: any failure counts as closed.
         {
+            #pragma warning restore S2221
             return false;
         }
     }
@@ -109,24 +115,19 @@ partial class Build
         // Start API as a fully detached process that survives parent exit.
         // We use UseShellExecute=true to create a completely independent process
         // that is NOT part of the parent's job object/process tree.
-        ProcessStartInfo startInfo;
-        if (OperatingSystem.IsWindows())
-        {
+        var startInfo = OperatingSystem.IsWindows()
             // UseShellExecute=true creates a truly independent process on Windows
             // WindowStyle=Hidden keeps it hidden but running independently
-            startInfo = new ProcessStartInfo
+            ? new ProcessStartInfo
             {
                 FileName = "cmd.exe",
                 Arguments = $"/c cargo make {ApiMakeTarget}",
                 WorkingDirectory = apiPath,
                 UseShellExecute = true,
                 WindowStyle = ProcessWindowStyle.Hidden,
-            };
-        }
-        else
-        {
+            }
             // On Unix-like systems, use setsid to create a new session (detached process)
-            startInfo = new ProcessStartInfo
+            : new ProcessStartInfo
             {
                 FileName = "/bin/bash",
                 Arguments = $"-c \"setsid cargo make {ApiMakeTarget} > /dev/null 2>&1 &\"",
@@ -134,7 +135,6 @@ partial class Build
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
-        }
 
         // Start the process - don't wait for it since it's meant to run independently
         Process.Start(startInfo);
@@ -170,17 +170,19 @@ partial class Build
         try
         {
             if (!System.IO.File.Exists(AppEnvFile))
-                return;
-
-            foreach (var rawLine in System.IO.File.ReadAllLines(AppEnvFile))
             {
-                var line = rawLine.Trim();
-                if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
-                    continue;
+                return;
+            }
 
+            foreach (var line in System.IO.File.ReadAllLines(AppEnvFile)
+                .Select(rawLine => rawLine.Trim())
+                .Where(line => !string.IsNullOrWhiteSpace(line) && !line.StartsWith('#')))
+            {
                 var separatorIndex = line.IndexOf('=');
                 if (separatorIndex <= 0)
+                {
                     continue;
+                }
 
                 var key = line.Substring(0, separatorIndex).Trim();
                 var value = line.Substring(separatorIndex + 1).Trim();
@@ -198,8 +200,10 @@ partial class Build
                 Environment.SetEnvironmentVariable("API_URL", ProdApiUrl);
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: env-file load failure warns and continues with defaults
+        catch (Exception ex) //NOSONAR — env-file load failure warns and continues with defaults.
         {
+            #pragma warning restore S2221
             Serilog.Log.Warning($"Failed to load app env file {AppEnvFile}: {ex.Message}");
         }
     }
@@ -244,11 +248,11 @@ partial class Build
 
     /// <summary>
     /// Dev target - one command to start everything for local development.
-    /// Similar to "npm run dev" or "next dev".
+    /// Similar to "bun run dev" or "next dev".
     /// </summary>
     Target Dev => _ => _
         .Description("Start local development environment (API + Windows app)")
-        .DependsOn(CompileWindows)
+        .DependsOn(PrepareWindowsRecitation, CompileWindows)
         .Executes(() =>
         {
             EnsureMinioRunning();
@@ -264,7 +268,7 @@ partial class Build
 
     Target RunWindows => _ => _
         .Description("Run app on Windows. Use --api-env prod for production API")
-        .DependsOn(PrepareApiConfig, Compile)
+        .DependsOn(PrepareApiConfig, PrepareWindowsRecitation, Compile)
         .Executes(() =>
         {
             EnsureMinioRunning();
@@ -285,7 +289,7 @@ partial class Build
 
     Target RunAndroid => _ => _
         .Description("Run app on Android emulator. Options: --full-apk, --fast-deploy, --watch, --api-env prod")
-        .DependsOn(PrepareApiConfig)  // Skip CompileAndroid - we do inline build to avoid file locks
+        .DependsOn(PrepareApiConfig, PrepareAndroidRecitation)  // Inline build avoids file locks.
         .Executes(() =>
         {
             // Ensure emulator is running
@@ -404,8 +408,10 @@ partial class Build
 
             return output.Contains("package:com.tanah.daily929");
         }
-        catch
+        #pragma warning disable S2221 // Deliberate failure boundary: adb package probe: any failure counts as not-installed
+        catch //NOSONAR — adb package probe: any failure counts as not-installed.
         {
+            #pragma warning restore S2221
             return false;
         }
     }
@@ -564,8 +570,10 @@ partial class Build
             var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             return lines.Length > 1 && lines.Any(l => l.Contains("device") && !l.StartsWith("List"));
         }
-        catch
+        #pragma warning disable S2221 // Deliberate failure boundary: adb device probe: any failure counts as no-device
+        catch //NOSONAR — adb device probe: any failure counts as no-device.
         {
+            #pragma warning restore S2221
             return false;
         }
     }
@@ -576,7 +584,7 @@ partial class Build
     string GetAdbPath()
     {
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return System.IO.Path.Combine(localAppData, "Android", "Sdk", "platform-tools", "adb.exe");
+        return System.IO.Path.Join(localAppData, "Android", "Sdk", "platform-tools", "adb.exe");
     }
 
     /// <summary>
@@ -602,18 +610,15 @@ partial class Build
 
             // Find emulator line (starts with "emulator-")
             var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var trimmed = line.Trim();
-                if (trimmed.StartsWith("emulator-") && trimmed.Contains("device"))
-                {
-                    return trimmed.Split('\t')[0].Trim();
-                }
-            }
-            return null;
+            return lines.Select(line => line.Trim())
+                .Where(trimmed => trimmed.StartsWith("emulator-") && trimmed.Contains("device"))
+                .Select(trimmed => trimmed.Split('\t')[0].Trim())
+                .FirstOrDefault();
         }
-        catch
+        #pragma warning disable S2221 // Deliberate failure boundary: adb id probe: any failure counts as absent
+        catch //NOSONAR — adb id probe: any failure counts as absent.
         {
+            #pragma warning restore S2221
             return null;
         }
     }
@@ -637,7 +642,7 @@ partial class Build
     string GetEmulatorPath()
     {
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        return System.IO.Path.Combine(localAppData, "Android", "Sdk", "emulator", "emulator.exe");
+        return System.IO.Path.Join(localAppData, "Android", "Sdk", "emulator", "emulator.exe");
     }
 
     /// <summary>
@@ -663,8 +668,10 @@ partial class Build
             var avds = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             return avds.FirstOrDefault()?.Trim();
         }
-        catch
+        #pragma warning disable S2221 // Deliberate failure boundary: avd probe: any failure counts as none
+        catch //NOSONAR — avd probe: any failure counts as none.
         {
+            #pragma warning restore S2221
             return null;
         }
     }
@@ -743,7 +750,9 @@ partial class Build
             process?.WaitForExit();
             return process?.ExitCode == 0;
         }
-        catch { return false; }
+        #pragma warning disable S2221 // Deliberate failure boundary: adb push probe: any failure counts as failed
+        catch { return false; } //NOSONAR — adb push probe: any failure counts as failed.
+        #pragma warning restore S2221
     }
 
     /// <summary>
@@ -822,7 +831,7 @@ partial class Build
     void EnsurePerushimOnDevice()
     {
         // Notes DB: lives in asset pack dir locally, push if missing from device
-        var notesLocalPath = System.IO.Path.Combine(
+        var notesLocalPath = System.IO.Path.Join(
             SourceDirectory, "Platforms", "Android", "AssetPacks", "perushim_notes", NotesDbName);
 
         if (System.IO.File.Exists(notesLocalPath) && !DeviceFileExists(NotesDbName))
@@ -886,7 +895,7 @@ partial class Build
 
     Target RunIos => _ => _
         .Description("Run app on iOS simulator (starts API if needed)")
-        .DependsOn(Compile)
+        .DependsOn(PrepareIosRecitation, Compile)
         .Executes(() =>
         {
             // iOS doesn't support dotnet run - use dotnet build -t:Run
@@ -908,7 +917,7 @@ partial class Build
 
     Target RunMac => _ => _
         .Description("Run app on Mac Catalyst (starts API if needed)")
-        .DependsOn(Compile)
+        .DependsOn(PrepareIosRecitation, Compile)
         .Executes(() =>
         {
             // Mac Catalyst doesn't support dotnet run - use dotnet build -t:Run

@@ -1,0 +1,135 @@
+.perekBreakLabel {
+	display: inline-block;
+	margin: 0 4px;
+	padding: 0 8px;
+	border-radius: var(--radius-sm);
+	background: rgba(21, 82, 172, 0.1);
+	color: var(--pasuk-num-color, #1c2c5d);
+	font-family: inherit;
+	font-size: 0.75em;
+	font-weight: 600;
+}
+
+/* Aliyah boundary markers (issue #3165): every applicable division
+   layer renders inline together at its canonical coordinate. A cluster
+   keeps coincident markers compact and lets them wrap naturally with
+   the text; each marker stays whole (no mid-pill breaks). */
+.aliyahMarkerCluster {
+	display: inline;
+}
+
+/* Aliyah boundary marker — the prominent separator treatment the perek
+   label used to have (issue #2519). Categories are distinguished by
+   border style/width, background weight, and tag typography — never
+   by color alone (issue #3165). The button shell carries the
+   hover/focus/touch detail without client JS. */
+.aliyahBreakLabel {
+	position: relative;
+	display: inline-block;
+	margin: 0 3px;
+	padding: 1px 9px;
+	border-radius: var(--radius-sm);
+	background: rgba(21, 82, 172, 0.14);
+	border: 1px solid rgba(21, 82, 172, 0.28);
+	color: var(--pasuk-num-color, #1c2c5d);
+	font-family: inherit;
+	font-size: 0.8em;
+	font-weight: 700;
+	white-space: nowrap;
+	cursor: help;
+}
+
+/* Layer tag ("שבת" / 'חב"ד' / "מטות-מסעי") — smaller and lighter than
+   the ordinal so several coincident markers stay readable. */
+.aliyahMarkerTag {
+	font-size: 0.75em;
+	font-weight: 500;
+	opacity: 0.8;
+}
+
+/* The ordinal is the marker's main label — explicit class so tests and
+   the weekday's lighter weight target it directly. */
+.aliyahMarkerOrdinal {
+	font-weight: inherit;
+}
+
+/* Weekday public reading — dashed outline, lighter fill, lighter
+   ordinal weight. */
+.aliyahBreakLabel[data-aliyah-category="weekday"] {
+	border-style: dashed;
+	background: rgba(21, 82, 172, 0.06);
+	font-weight: 600;
+}
+
+/* Joined reading — a doubled border carries the "two parashiot read as
+   one" distinction without a color change. */
+.aliyahBreakLabel[data-aliyah-category="joined"] {
+	border-width: 3px;
+	border-style: double;
+	background: rgba(21, 82, 172, 0.17);
+}
+
+/* Documented custom/variant split — dotted border plus an italicized
+   tag marks it as a named alternative, not the common division. */
+.aliyahBreakLabel[data-aliyah-category="variant"] {
+	border-style: dotted;
+	background: rgba(21, 82, 172, 0.1);
+}
+
+.aliyahBreakLabel[data-aliyah-category="variant"] .aliyahMarkerTag {
+	font-style: italic;
+}
+
+.aliyahBreakLabel[data-aliyah-role="maftir"] {
+	background: rgba(21, 82, 172, 0.24);
+	border-color: rgba(21, 82, 172, 0.42);
+}
+
+/* The legend's URL-selected layer — a solid ring around the marker
+   regardless of its category treatment. */
+.aliyahBreakLabel[data-aliyah-selected] {
+	box-shadow: 0 0 0 2px rgba(21, 82, 172, 0.55);
+}
+
+/* Richer division detail — revealed on hover and keyboard focus; a
+   touch tap focuses the button the same way. The essential meaning
+   (tag + ordinal) stays visible without it. */
+.aliyahMarkerDetail {
+	position: absolute;
+	display: none;
+	inset-block-start: calc(100% + 4px);
+	inset-inline-start: 0;
+	z-index: 40;
+	width: max-content;
+	max-width: min(70vw, 22em);
+	padding: 5px 10px;
+	border-radius: var(--radius-sm);
+	background: var(--pasuk-num-color, #1c2c5d);
+	color: #fff;
+	font-size: 0.85rem;
+	font-weight: 400;
+	font-style: normal;
+	line-height: 1.55;
+	/* A merged marker lists each agreeing layer's detail on its own
+	   line. */
+	white-space: pre-line;
+	text-align: start;
+	box-shadow: 0 3px 12px rgba(0, 0, 0, 0.28);
+	pointer-events: none;
+}
+
+.aliyahBreakLabel:hover > .aliyahMarkerDetail,
+.aliyahBreakLabel:focus > .aliyahMarkerDetail,
+.aliyahBreakLabel:focus-visible > .aliyahMarkerDetail {
+	display: block;
+}
+
+/* Chapter break inside an aliyah-annotated reading — demoted to the
+   pasuk-number visual language (same color/weight), only a touch
+   larger, so the prominent treatment belongs to the aliyah markers. */
+.perekBreakLabelModest {
+	color: var(--pasuk-num-color, #1c2c5d);
+	font-size: 1.05em;
+	font-weight: 600;
+	margin: 0 2px;
+}

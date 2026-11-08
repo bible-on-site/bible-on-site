@@ -79,11 +79,42 @@ args = [
     "--output-to-dependant-modules",
 ]
 
+[tasks.generate-tanah-view-sqlite-from-json]
+description = "Regenerate the app tanah view SQLite from the checked-in website JSON corpus (no MongoDB needed)"
+cwd = "./sefaria/pipelines/tanah-view"
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--format",
+    "sqlite",
+    "--output-to-dependant-modules",
+    "--from-json",
+    "../../../../web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+]
+
 [tasks.generate-compass-stages]
 description = "Generate MongoDB Compass stages for debugging tanah-view aggregation pipeline"
 cwd = "./sefaria/pipelines/tanah-view"
 command = "cargo"
 args = ["run", "--release", "--", "--format", "compass-stages"]
+
+[tasks.verify-masora-sedarim]
+description = "Verify the מסורה division against the Tanach Yomi sedarim reference; regenerates docs/data/masora-sedarim-verification.md and the expected snapshot fixture"
+cwd = "./sefaria/pipelines/tanah-view"
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--format",
+    "sedarim-report",
+    "--from-json",
+    "../../../../web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+    "--sedarim-reference",
+    "fixtures/masora-sedarim-tanachyomi.json",
+]
 
 # =============================================================================
 # Perusim Pipeline Tasks
@@ -96,7 +127,7 @@ command = "cargo"
 args = ["run", "--release", "--", "--format", "json"]
 
 [tasks.generate-perushim-view-sqlite]
-description = "Generate perushim SQLite: catalog (bundled) + notes (PAD/on-demand)"
+description = "Generate perushim SQLite: catalog (bundled) + notes + prebuilt search index (PAD/ODR)"
 cwd = "./sefaria/pipelines/perushim-view"
 command = "cargo"
 args = [
@@ -106,6 +137,36 @@ args = [
     "--format",
     "sqlite",
     "--output-to-dependant-modules",
+]
+
+[tasks.generate-search-index]
+description = "Rebuild only the prebuilt search index from an existing v2 notes DB (no MongoDB)"
+cwd = "./sefaria/pipelines/perushim-view"
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--format",
+    "search-index",
+    "--input",
+    "../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
+    "--output",
+    "../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.hebrew_search.sqlite",
+]
+
+[tasks.apply-note-metrics]
+description = "Add/refresh the shared reading-metrics tables inside the shipped v2 notes SQLite (no MongoDB)"
+cwd = "./sefaria/pipelines/perushim-view"
+command = "cargo"
+args = [
+    "run",
+    "--release",
+    "--",
+    "--format",
+    "note-metrics",
+    "--input",
+    "../../../../app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
 ]
 
 [tasks.generate-perushim-view-mysql]
@@ -345,68 +406,42 @@ description = "Create unit coverage output directory"
 command = "mkdir"
 args = ["-p", ".coverage/unit"]
 
-[tasks.coverage-unit-lcov]
-description = "Run unit tests with coverage and generate lcov.info"
-dependencies = ["coverage-unit-dir-create"]
+[tasks.coverage-unit]
+description = "Run unit tests once with lcov coverage and JUnit output"
+dependencies = ["coverage-unit-dir-create", "test-unit-dir-create"]
 command = "cargo"
 args = [
     "llvm-cov",
-    "test",
+    "nextest",
     "--workspace",
+    "--profile",
+    "ci",
     "--lcov",
     "--output-path",
     ".coverage/unit/lcov.info",
 ]
-
-[tasks.coverage-unit-junit]
-description = "Run unit tests with JUnit output for CI reporting"
-dependencies = ["test-unit-dir-create"]
-command = "cargo"
-args = ["nextest", "run", "--workspace", "--profile", "ci"]
-
-# TODO: run unit tests only once and report both lcov and junit
-[tasks.coverage-unit]
-description = "Run unit tests with both coverage (lcov) and JUnit output"
-dependencies = ["coverage-unit-lcov", "coverage-unit-junit"]
 
 [tasks.coverage-integration-dir-create]
 description = "Create integration coverage output directory"
 command = "mkdir"
 args = ["-p", ".coverage/integration"]
 
-[tasks.coverage-integration-lcov]
-description = "Run integration tests with coverage and generate lcov.info"
-dependencies = ["coverage-integration-dir-create"]
+[tasks.coverage-integration]
+description = "Run integration tests once with lcov coverage and JUnit output"
+dependencies = ["coverage-integration-dir-create", "test-integration-dir-create"]
 command = "cargo"
 args = [
     "llvm-cov",
-    "test",
-    "--workspace",
-    "--features",
-    "integration",
-    "--lcov",
-    "--output-path",
-    ".coverage/integration/lcov.info",
-]
-
-[tasks.coverage-integration-junit]
-description = "Run integration tests with JUnit output for CI reporting"
-dependencies = ["test-integration-dir-create"]
-command = "cargo"
-args = [
     "nextest",
-    "run",
     "--workspace",
     "--features",
     "integration",
     "--profile",
     "ci-integration",
+    "--lcov",
+    "--output-path",
+    ".coverage/integration/lcov.info",
 ]
-
-# TODO: run integration tests only once and report both lcov and junit
-[tasks.coverage-integration]
-description = "Run integration tests with both coverage (lcov) and JUnit output"
-dependencies = ["coverage-integration-lcov", "coverage-integration-junit"]
 
 [tasks.coverage-merged-dir-create]
 description = "Create merged coverage output directory"

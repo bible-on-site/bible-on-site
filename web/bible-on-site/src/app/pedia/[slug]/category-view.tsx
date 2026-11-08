@@ -1,6 +1,9 @@
+import DOMPurify from "isomorphic-dompurify";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { JsonLd } from "@/app/components/JsonLd";
+import { demoteHeadings } from "@/lib/html-headings";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { buildCategoryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import {
 	CATEGORY_HIERARCHY,
@@ -10,6 +13,7 @@ import {
 	categoryHref,
 	type ResolvedCategoryRoute,
 } from "@/lib/tanahpedia/category-slug";
+import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
 import {
 	CATEGORY_LABELS,
 	ENTITY_TYPE_LABELS,
@@ -41,11 +45,11 @@ export function categoryLabel(resolved: ResolvedCategoryRoute): string {
 
 export function categoryMetadata(resolved: ResolvedCategoryRoute): Metadata {
 	const label = categoryLabel(resolved);
-	return {
+	return pageMetadata({
 		title: `${label} | תנכפדיה`,
 		description: `רשימת ${label} בתנ"ך`,
-		alternates: { canonical: resolved.canonicalPath },
-	};
+		canonical: resolved.canonicalPath,
+	});
 }
 
 function loadEntities(
@@ -156,8 +160,13 @@ export async function CategoryView({
 
 			{homepage?.content && !sub && (
 				<div
-					// biome-ignore lint/security/noDangerouslySetInnerHtml: admin-authored content
-					dangerouslySetInnerHTML={{ __html: homepage.content }}
+					className={styles.homepageContent}
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+					dangerouslySetInnerHTML={{
+						__html: DOMPurify.sanitize(
+							normalizeFootnoteHtml(demoteHeadings(homepage.content)),
+						),
+					}}
 				/>
 			)}
 

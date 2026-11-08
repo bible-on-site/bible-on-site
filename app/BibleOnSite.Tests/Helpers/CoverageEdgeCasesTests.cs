@@ -72,4 +72,18 @@ public class CoverageEdgeCasesTests
     {
         new HtmlView { TextAlignment = (HtmlTextAlignment)99 }.GetCssTextAlign().Should().Be("start");
     }
+
+    [Fact]
+    public void NativeReaderTrace_Write_WhenEnabled_LogsWithoutThrowing()
+    {
+        Environment.SetEnvironmentVariable("BIBLE_E2E_LONG_PERUSHIM", "1");
+        try
+        {
+            NativeReaderTrace.Write("coverage probe");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("BIBLE_E2E_LONG_PERUSHIM", null);
+        }
+    }
 }

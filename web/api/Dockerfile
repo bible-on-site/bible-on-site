@@ -1,12 +1,12 @@
-# Note: Using classic docker build (DOCKER_BUILDKIT=0) for network:host support
-# Do not add BuildKit-specific syntax directives (e.g. --mount)
+# Built with BuildKit in shared-dockerize.yml: docker buildx build --network=host
+# on a docker-container builder with type=gha layer cache.
 
 ARG APP_NAME=api
 
 ################################################################################
 # Create a stage for building the application.
 
-FROM rust:1.99.0-alpine AS build
+FROM rust:1.99.1-alpine AS build
 ARG APP_NAME
 WORKDIR /app
 
@@ -22,6 +22,10 @@ COPY api/src ./src
 COPY api/Cargo.toml ./Cargo.toml
 COPY api/Cargo.lock ./Cargo.lock
 COPY api/entities ./entities
+# The shared article-relationship registry is compiled into the binary —
+# article_relationships_service.rs anchors it at CARGO_MANIFEST_DIR/../shared,
+# which is /shared inside this image.
+COPY shared/article-relationships /shared/article-relationships
 
 # Build the application in release mode.
 RUN cargo build --locked --release && \
@@ -32,7 +36,7 @@ RUN cargo build --locked --release && \
 # runtime dependencies for the application. This often uses a different base
 # image from the build stage where the necessary files are copied from the build
 # stage.
-FROM alpine:3.24.2 AS final
+FROM alpine:3.24.4 AS final
 
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/go/dockerfile-user-best-practices/

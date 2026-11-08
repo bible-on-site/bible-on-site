@@ -150,6 +150,7 @@ fn generate_notes_sql(sql: &mut String, notes: &[Note]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::fixtures::temp_dir;
 
     fn sample_extracted(note_count: usize) -> Extracted {
         Extracted {
@@ -236,8 +237,7 @@ mod tests {
 
     #[test]
     fn generate_sql_writes_complete_perushim_seed_file() {
-        let dir = std::env::temp_dir().join(format!("perushim_mysql_test_{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = temp_dir("mysql");
         let path = dir.join("perushim.sql");
 
         generate_sql(&path, &sample_extracted(2), "dump-name").unwrap();

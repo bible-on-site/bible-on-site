@@ -3,7 +3,7 @@ import TanahpediaLandingPage from "@/app/pedia/page";
 import {
 	CATEGORY_LABELS,
 	getCategoryCounts,
-	getRecentEntries,
+	getRecentEntrySummaries,
 	getTodayInTanahEntities,
 } from "@/lib/tanahpedia/service";
 import type { CategoryKey } from "@/lib/tanahpedia/types";
@@ -13,7 +13,7 @@ jest.mock("next/cache", () => ({ unstable_cache: (fn: unknown) => fn }));
 jest.mock("@/lib/tanahpedia/service", () => ({
 	...jest.requireActual("@/lib/tanahpedia/service"),
 	getCategoryCounts: jest.fn(),
-	getRecentEntries: jest.fn(),
+	getRecentEntrySummaries: jest.fn(),
 	getTodayInTanahEntities: jest.fn(),
 }));
 
@@ -24,7 +24,7 @@ const counts = Object.fromEntries(
 beforeEach(() => {
 	jest.useFakeTimers().setSystemTime(new Date("2026-10-02T12:00:00+03:00"));
 	jest.mocked(getCategoryCounts).mockResolvedValue(counts);
-	jest.mocked(getRecentEntries).mockResolvedValue([]);
+	jest.mocked(getRecentEntrySummaries).mockResolvedValue([]);
 	jest.mocked(getTodayInTanahEntities).mockResolvedValue([]);
 });
 
@@ -91,14 +91,11 @@ test("uses today's Hebrew date and renders events, sayings, people, and recent e
 			linkedEntries: [],
 		},
 	]);
-	jest.mocked(getRecentEntries).mockResolvedValue([
+	jest.mocked(getRecentEntrySummaries).mockResolvedValue([
 		{
 			id: "recent",
 			title: "ערך חדש",
 			uniqueName: "ערך-חדש",
-			content: "",
-			createdAt: "2026-10-01",
-			updatedAt: "2026-10-02",
 		},
 	]);
 	render(await TanahpediaLandingPage());
@@ -107,7 +104,7 @@ test("uses today's Hebrew date and renders events, sayings, people, and recent e
 		today.day,
 	);
 	expect(screen.getByText(today.toTraditionalHebrewString())).toBeVisible();
-	expect(getRecentEntries).toHaveBeenCalledWith(8);
+	expect(getRecentEntrySummaries).toHaveBeenCalledWith(8);
 	expect(screen.getByRole("link", { name: "כותרת האירוע" })).toHaveAttribute(
 		"href",
 		`/pedia/${encodeURIComponent("אירוע-ראשון")}`,
@@ -155,14 +152,14 @@ test("logs the original development failure and offers diagnostic details", asyn
 	jest.replaceProperty(process.env, "NODE_ENV", "development");
 	const failure = new Error("MySQL connection refused");
 	const log = jest.spyOn(console, "error").mockImplementation(() => {});
-	jest.mocked(getRecentEntries).mockRejectedValueOnce(failure);
+	jest.mocked(getRecentEntrySummaries).mockRejectedValueOnce(failure);
 	render(await TanahpediaLandingPage());
 	expect(log).toHaveBeenCalledWith(
 		"[tanahpedia] landing DB load failed:",
 		failure,
 	);
 	expect(screen.getByRole("alert")).toHaveTextContent(failure.message);
-	expect(screen.getByRole("alert")).toHaveTextContent("npm run dev");
+	expect(screen.getByRole("alert")).toHaveTextContent("bun run dev");
 });
 
 test.each([

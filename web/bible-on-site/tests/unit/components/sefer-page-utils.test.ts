@@ -5,8 +5,12 @@ import {
 	buildPageSemantics,
 	CONTENT_OFFSET,
 	computeInitialTurnedLeaves,
+	DOWNLOAD_FAILED_MESSAGE,
+	DownloadFailedError,
+	downloadErrorMessage,
+	runDownload,
+	seferBookExitPath,
 	toHebrewChapterNumber,
-	wrapDownloadResult,
 } from "@/app/929/[number]/components/sefer-page-utils";
 
 describe("sefer-page-utils", () => {
@@ -241,14 +245,136 @@ describe("sefer-page-utils", () => {
 		});
 	});
 
-	describe("wrapDownloadResult", () => {
-		it("returns null for error results", () => {
-			expect(wrapDownloadResult({ error: "something failed" })).toBeNull();
+	describe("seferBookExitPath", () => {
+		it("returns the perek the flipbook's history wrote to the location", () => {
+			expect(seferBookExitPath("/929/30", "בראשית", 10)).toBe("/929/30");
+			expect(seferBookExitPath("/929/30?book", "בראשית", 10)).toBe("/929/30");
 		});
 
-		it("returns ext and data for success results", () => {
-			const result = wrapDownloadResult({ ext: "pdf", data: "base64content" });
-			expect(result).toEqual({ ext: "pdf", data: "base64content" });
+		it("falls back to the entry perek on book-chrome exits", () => {
+			expect(seferBookExitPath("/929/בראשית/כריכה", "בראשית", 10)).toBe(
+				"/929/10",
+			);
+			expect(seferBookExitPath("/929/בראשית/תוכן", "בראשית", 10)).toBe(
+				"/929/10",
+			);
+			expect(seferBookExitPath("/929/בראשית/גב", "בראשית", 10)).toBe("/929/10");
+		});
+
+		it("falls back to the entry perek on non-perek paths", () => {
+			expect(seferBookExitPath("/929", "בראשית", 10)).toBe("/929/10");
+			expect(seferBookExitPath("/מסורה/8", "בראשית", 10)).toBe("/929/10");
+		});
+	});
+
+	describe("runDownload", () => {
+		it("resolves to the file payload on success", async () => {
+			const result = await runDownload(async () => ({
+				ext: "pdf",
+				data: "x",
+			}));
+			expect(result).toEqual({ ext: "pdf", data: "x" });
+		});
+
+		it("resolves to null when the export is unavailable, so the library treats it as cancellation", async () => {
+			const result = await runDownload(async () => ({
+				error: "not_implemented",
+			}));
+			expect(result).toBeNull();
+		});
+
+		it("rejects with the action's safe message on a structured failure", async () => {
+			const rejection = runDownload(async () => ({
+				error: "service_unavailable",
+				message: "לא ניתן היה לטעון את האיור של בראשית ב",
+			}));
+			await expect(rejection).rejects.toThrow(DownloadFailedError);
+			await expect(rejection).rejects.toThrow(
+				"לא ניתן היה לטעון את האיור של בראשית ב",
+			);
+		});
+
+		it("rejects with the generic message when the action supplies none", async () => {
+			const rejection = runDownload(async () => ({
+				error: "service_unavailable",
+			}));
+			await expect(rejection).rejects.toThrow(DOWNLOAD_FAILED_MESSAGE);
+		});
+
+		it("rejects a failed server action instead of swallowing it to null", async () => {
+			const consoleSpy = jest
+				.spyOn(console, "error")
+				.mockImplementation(() => {});
+			const rejection = runDownload(async () => {
+				throw new Error("network");
+			});
+			await expect(rejection).rejects.toThrow(DownloadFailedError);
+			await expect(rejection).rejects.toThrow(DOWNLOAD_FAILED_MESSAGE);
+			expect(consoleSpy).toHaveBeenCalledWith(
+				"Download action failed:",
+				expect.any(Error),
+			);
+			consoleSpy.mockRestore();
+		});
+
+		it.each([[null], [undefined], ["not-an-object"], [{}]])(
+			"rejects a malformed resolved outcome (%o) instead of leaking a TypeError",
+			async (malformed) => {
+				const consoleSpy = jest
+					.spyOn(console, "error")
+					.mockImplementation(() => {});
+				const rejection = runDownload(
+					async () =>
+						malformed as unknown as { ext: string; data: string },
+				);
+				await expect(rejection).rejects.toThrow(DownloadFailedError);
+				await expect(rejection).rejects.toThrow(DOWNLOAD_FAILED_MESSAGE);
+				expect(consoleSpy).toHaveBeenCalledWith(
+					"Download action returned malformed outcome:",
+					malformed,
+				);
+				consoleSpy.mockRestore();
+			},
+		);
+
+		it("succeeds on retry after a rejection", async () => {
+			const consoleSpy = jest
+				.spyOn(console, "error")
+				.mockImplementation(() => {});
+			const action = jest
+				.fn()
+				.mockRejectedValueOnce(new Error("down"))
+				.mockResolvedValueOnce({ ext: "pdf", data: "retry" });
+			await expect(runDownload(action)).rejects.toThrow(DownloadFailedError);
+			await expect(runDownload(action)).resolves.toEqual({
+				ext: "pdf",
+				data: "retry",
+			});
+			consoleSpy.mockRestore();
+		});
+	});
+
+	describe("downloadErrorMessage", () => {
+		it("returns the safe message a DownloadFailedError carries", () => {
+			expect(
+				downloadErrorMessage(new DownloadFailedError("שרת התמונות לא זמין")),
+			).toBe("שרת התמונות לא זמין");
+		});
+
+		it("falls back to the generic message for an empty DownloadFailedError", () => {
+			expect(downloadErrorMessage(new DownloadFailedError())).toBe(
+				DOWNLOAD_FAILED_MESSAGE,
+			);
+		});
+
+		it("does not leak messages of internal errors", () => {
+			expect(downloadErrorMessage(new Error("db credentials x"))).toBe(
+				DOWNLOAD_FAILED_MESSAGE,
+			);
+			expect(downloadErrorMessage("raw string failure")).toBe(
+				DOWNLOAD_FAILED_MESSAGE,
+			);
+			expect(downloadErrorMessage(undefined)).toBe(DOWNLOAD_FAILED_MESSAGE);
 		});
 	});
 });

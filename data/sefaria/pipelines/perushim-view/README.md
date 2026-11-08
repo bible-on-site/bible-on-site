@@ -47,9 +47,37 @@ cargo make generate-perushim-compass-stages
 - **`parshan`** — Commentator metadata: id, name (Hebrew)
 - **`perush`** — Commentary work: id, name, parshan reference, dates
 
-### Notes (`perushim_notes_structure.sql`) — large, PAD / on-demand
+### Notes (`perushim_notes_structure.sql`) — compressed, PAD / on-demand
 
-- **`note`** — One row per commentary phrase per pasuk: `(perush_id, perek_id, pasuk, note_idx, note_content)`. Matches the legacy `tanah_note` schema pattern.
+Schema v2 (`_metadata.schema_version = '2'`) stores notes as one zlib-compressed
+blob per perek — roughly a quarter of the v1 row-based size:
+
+- **`note_blob`** — One row per perek: `(perek_id, data)`. The `data` blob is the
+  PNB1 format in `src/commands/note_blob.rs`, decoded by the app in
+  `PerushNoteBlob.cs`. Records inside are ordered by (pasuk, perush_id, note_idx).
+- **`perek_perush`** — One row per (perek, perush) pair, for the picker's
+  "which perushim exist here" lookup.
+
+Re-generating the committed `.sqlite.gz` fallback without a MongoDB dump:
+`--format convert-notes --input <v1.sqlite> --output <v2.sqlite>` reads a v1
+row-based notes DB, emits v2, and verifies every decoded record against the source.
+
+### Search index (`hebrew_search.sqlite`) — prebuilt FTS5, same pack
+
+`--format sqlite` also emits a ready-to-query FTS5 search index next to the
+notes DB (verses + notes documents, `search_metadata` fingerprints binding it
+to the exact generation it was built from). The app adopts it instead of
+re-importing ~363K notes on-device. Its `.gz` is **not** committed — at ~121 MB
+it exceeds GitHub's push limit — so the index travels via CI artifacts into the
+same PAD/ODR pack.
+
+Rebuilding only the index without MongoDB:
+`--format search-index --input <v2 notes.sqlite> --output <index.sqlite>`
+(`--tanah-view` overrides the bundled verses source; `cargo make generate-search-index`).
+
+Text normalization lives in `search_text.rs` — a port of the app's
+`SearchText.PlainText`/`Normalize`. Bump `NORM_VERSION` together with
+`SearchText.NormalizationVersion` so pipeline and app fingerprints stay comparable.
 
 ## On-Demand Delivery for Mobile App
 

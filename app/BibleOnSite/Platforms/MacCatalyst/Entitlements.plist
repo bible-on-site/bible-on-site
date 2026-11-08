@@ -9,6 +9,11 @@
         <!-- When App Sandbox is enabled, this value is required to open outgoing network connections. -->
         <key>com.apple.security.network.client</key>
         <true/>
+        <!-- Shared with the AssetPackDownloader extension (managed Background Assets). -->
+        <key>com.apple.security.application-groups</key>
+        <array>
+            <string>group.com.tanah.daily929.assets</string>
+        </array>
     </dict>
 </plist>
 

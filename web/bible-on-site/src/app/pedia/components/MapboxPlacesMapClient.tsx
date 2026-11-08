@@ -6,8 +6,6 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import styles from "./PlacesMap.module.css";
 
 const JERUSALEM: [number, number] = [35.2351364, 31.7780132];
-const RTL_PLUGIN_URL =
-	"https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.4.0/mapbox-gl-rtl-text.js";
 
 export default function MapboxPlacesMapClient({
 	markers,
@@ -33,10 +31,6 @@ export default function MapboxPlacesMapClient({
 					setError(true);
 					return;
 				}
-				if (mapboxgl.getRTLTextPluginStatus() === "unavailable") {
-					mapboxgl.setRTLTextPlugin(RTL_PLUGIN_URL, null, true);
-				}
-
 				const activeMap = new mapboxgl.Map({
 					accessToken: token,
 					container,

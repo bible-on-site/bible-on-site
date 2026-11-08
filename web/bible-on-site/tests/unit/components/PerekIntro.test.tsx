@@ -42,3 +42,20 @@ it("renders multiple images with optional formats and credit", () => {
 	);
 	expect(screen.getByText(/מאייר/)).toBeInTheDocument();
 });
+
+it("renders caption emphasis while keeping HTML and other markup escaped", () => {
+	const captionMarkdown =
+		"**מילה -** הסבר **מילה שנייה -** <script>alert(1)</script>";
+	const { container } = render(
+		<PerekIntro images={[{ ...sampleImage, captionMarkdown }]} />,
+	);
+	expect(
+		[...container.querySelectorAll("figcaption strong")].map(
+			(e) => e.textContent,
+		),
+	).toEqual(["מילה -", "מילה שנייה -"]);
+	expect(container.querySelector("figcaption script")).toBeNull();
+	expect(container.querySelector("figcaption")?.textContent).toBe(
+		"מילה - הסבר מילה שנייה - <script>alert(1)</script>",
+	);
+});

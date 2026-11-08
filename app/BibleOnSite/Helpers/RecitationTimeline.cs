@@ -61,4 +61,34 @@ public sealed class RecitationTimeline
         }
         return low > 0 && milliseconds < _words[low - 1].End ? _words[low - 1].Word : null;
     }
+
+    /// <summary>The clip position where a recording timestamp plays, or null when this clip does not contain it.</summary>
+    public double? PositionOf(double sourceMs)
+    {
+        if (!double.IsFinite(sourceMs))
+        {
+            return null;
+        }
+
+        int low = 0, high = _words.Count;
+        while (low < high)
+        {
+            int middle = low + (high - low) / 2;
+            if (_words[middle].Word.StartMs <= sourceMs)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle;
+            }
+        }
+        if (low == 0)
+        {
+            return null;
+        }
+
+        var (word, start, _) = _words[low - 1];
+        return sourceMs < word.EndMs ? start + sourceMs - word.StartMs!.Value : null;
+    }
 }

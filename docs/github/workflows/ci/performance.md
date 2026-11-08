@@ -156,3 +156,62 @@ Also preserve explicit `false` in the Codecov status check: jq's `//` fallback
 previously converted both `false` and `null` into the unresolved state. The gate
 now distinguishes pass, fail and unresolved responses; null-handling policy is
 unchanged. Verified all three inputs with jq before and after the correction.
+
+## Native E2E round: 2026-10-15
+
+A second round targeted the `App Mobile E2E` path after the October 1 review.
+Changes (all merged): simulator/device-state caching and boot/build overlap
+(#2248, #2253), shared iOS build plus three-way iOS sharding (#2266, #2279),
+single shared Appium session per device-collection with per-test in-session
+reset, failure-only `PageSource` dumps, and per-iteration window-size caching
+(#2255). Runner deadlines and cleanup/recovery boundaries were hardened in the
+same window (#2276–#2279).
+
+Measured on master run
+[38776486285](https://github.com/bible-on-site/bible-on-site/actions/runs/38776486285)
+(single-run observation):
+
+| Leg | Duration | Notes |
+| --- | ---: | --- |
+| Build shared iOS app | 5m27s | one compile, artifact `app-mobile-e2e-build.<run>.ios` |
+| Appium Android | 13m07s | warm AVD snapshot, `build-and-run` |
+| iOS shard 1 / 2 / 3 | 18m57s / 13m02s / 14m35s | ~9–13m pilot inside each leg; rest is setup + coverage apply (~2m43s) |
+| Merge complete iOS suite | 21s | union validation + LCOV/tree/manifest merge |
+
+iOS end-to-end (build → last shard → merge) ≈ **33 minutes** wall clock.
+Before the round, a single iOS leg ran ≈ **50 minutes** with a ≈33m30s pilot;
+the pilot profile showed ≈30.4m of that inside Appium↔WDA device round-trips.
+Session reuse plus diagnostics trimming cut the same ten-test pilot to ≈21m
+measured before sharding; sharding then split the suite across three runners.
+Setup overhead per shard is now largely overlapped: the synchronous portion
+before `Run iOS runner shard` was ≈6m, and the selection/baseline download
+finishes in the background inside it.
+
+Remaining known costs: per-shard coverage-apply (~2–3m of `.coverage` dump
+processing), threefold per-leg setup duplication, and Appium/WDA transport
+latency itself (≈1.1s per `findElements`, ≈3.5s per action — the
+`xcode-mcpbridge-poc` probe exists to measure a possible replacement, #2004).
+
+Since this measurement, #2263 replaced the fixed three-way split with a
+`plan_ios` job that selects the affected cases and packs them into a
+runtime-planned number of shards each leg executes verbatim — leg count and
+setup duplication now scale with the plan instead of staying at three.
+
+## macOS runner-minutes round: 2026-11-01
+
+During peak PR creation the iOS legs queue for `xcode-27` runners, so the
+target is total macOS runner time, not one run's wall clock. Three days of
+jobs that actually held a macOS runner (≈13,900 min) split into iOS shards
+62%, `Validate iOS Distribution` 27% and the shared iOS build 11%. Impact
+selection rarely narrows the suite (CI, runner workflow and `bun.lock` changes
+are global triggers), so nearly every run planned the full 18-case, ≈25-minute
+suite across three shards of ≈16 minutes each, ≈6 minutes of which is per-leg
+setup.
+
+- The planner's per-shard target became a capacity (26 minutes): the full
+  suite now packs onto one shard, saving ≈14 macOS minutes per run at the cost
+  of a ≈15-minute longer iOS leg when runners are idle. The pilot deadline
+  scales with the planned estimate (1.5 × estimate + 5m, clamped to 15–45m)
+  so a single runner can carry the whole suite.
+- `Validate iOS Distribution` runs on pull requests only; the merge group no
+  longer repeats the ≈17-minute signed package for the same change.
