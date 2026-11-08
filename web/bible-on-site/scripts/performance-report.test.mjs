@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+	existsSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -10,6 +16,7 @@ import {
 	lighthouseBenchmarkEntry,
 	lighthouseBenchmarkName,
 	performanceMarkdown,
+	readPerformanceReports,
 	saveLighthouseArtifacts,
 	saveLighthouseReport,
 	summarizeLighthouse,
@@ -91,6 +98,35 @@ test("Lighthouse artifact files bind each original report and cannot overwrite e
 			JSON.parse(readFileSync(join(dir, "home-mobile.artifacts.json"))),
 			reports[0],
 		);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("readPerformanceReports returns indexed reports and surfaces unreadable indexes", () => {
+	const dir = mkdtempSync(join(tmpdir(), "perf-index-"));
+	try {
+		// No index yet is a normal first run for the caller to distinguish.
+		assert.throws(() => readPerformanceReports(dir), { code: "ENOENT" });
+		const reports = [
+			{
+				...summarizeLighthouse(fixture(), {
+					device: "desktop",
+					run: "111-abc123",
+				}),
+				rawReport: "attempt-1.json",
+			},
+		];
+		writePerformanceIndex(dir, reports);
+		// summary.json is JSON: compare against the round-tripped expectation.
+		assert.deepEqual(
+			readPerformanceReports(dir),
+			JSON.parse(JSON.stringify(reports)),
+		);
+		// A worker killed mid-write leaves a truncated index the caller must
+		// see rather than silently seeding from.
+		writeFileSync(join(dir, "summary.json"), "{truncated");
+		assert.throws(() => readPerformanceReports(dir), SyntaxError);
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
 	}

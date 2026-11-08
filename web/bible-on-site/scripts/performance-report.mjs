@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export function lighthouseBenchmarkName(path, device, name) {
@@ -314,6 +314,14 @@ export function performanceMarkdown(reports, field = [], assets = []) {
 			);
 	}
 	return `${lines.join("\n")}\n`;
+}
+
+/** Reports already indexed in this directory, e.g. by earlier worker attempts. */
+export function readPerformanceReports(directory) {
+	const index = JSON.parse(
+		readFileSync(join(directory, "summary.json"), "utf8"),
+	);
+	return Array.isArray(index?.reports) ? index.reports : [];
 }
 
 export function writePerformanceIndex(

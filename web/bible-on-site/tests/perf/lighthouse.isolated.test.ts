@@ -15,6 +15,7 @@ import { largestObservedTopLevelTask } from "../../scripts/lighthouse-observed-t
 import {
 	lighthouseBenchmarkEntry,
 	lighthouseBenchmarkName,
+	readPerformanceReports,
 	saveLighthouseArtifacts,
 	saveLighthouseReport,
 	writePerformanceIndex,
@@ -73,7 +74,18 @@ const test = base.extend<
 	lighthouseResults: [
 		async ({ lighthousePort }, use) => {
 			const results: LighthouseResultsMap = new Map();
-			const reports: ReturnType<typeof saveLighthouseReport>[] = [];
+			// A retried worker finds earlier attempts' namespaced reports on
+			// disk; seed the index with them so summary.json/markdown cover
+			// every attempt, not only this fixture lifetime's audits. The
+			// first run has no index yet, and a worker killed mid-write can
+			// leave a truncated one — degrade to this attempt's reports.
+			let reports: ReturnType<typeof saveLighthouseReport>[] = [];
+			try {
+				reports = readPerformanceReports(REPORTS_DIR);
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+					console.warn("Could not seed prior Lighthouse reports:", error);
+			}
 			const bufferedArtifacts: {
 				rawReport: string;
 				artifacts: RunnerResult["artifacts"];
