@@ -900,8 +900,9 @@ public class PerushimNotesService
 
     /// <summary>
     /// Copies the pack's delivered search index next to the notes DB when the
-    /// pack carries one. Optional: packs older than the delivered-index format
-    /// simply leave the app to build the index on-device.
+    /// pack carries one. The commentary index is never rebuilt on-device
+    /// (#2222), so a pack without it leaves commentary search unavailable —
+    /// the delivery contract requires it (<see cref="PadDeliveryService"/>).
     /// </summary>
     private async Task TryCopyPadIndexAsync(string padAssetsPath)
     {
@@ -973,7 +974,8 @@ public class PerushimNotesService
         }
         catch (FileNotFoundException)
         {
-            // Bundled package may not carry the index — the app builds it on-device.
+            // A bundled package may not carry the index — commentary search
+            // stays unavailable until a delivered pack provides it.
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {

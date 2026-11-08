@@ -237,7 +237,9 @@ def prepare_assets(app, platform, cache, recordings=None, intermediate=None, dat
         elif platform == "iOS":
             directory = app / "Platforms/iOS/AssetPacks" / pack
         else:
-            directory = app / "Platforms/Windows/Recitation"
+            # Per-pack directories mirror the mobile AssetPacks layout; the
+            # packaging target turns each into an MSIX optional package.
+            directory = app / "Platforms/Windows/ExtensionPacks" / pack
         directory.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, directory / path.name)
         if platform == "iOS":
