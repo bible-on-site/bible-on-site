@@ -47,6 +47,7 @@
         "Package",
         "PackageAndroidSymbols",
         "PackagePrepare",
+        "PackageWindowsExtensionPacks",
         "PrepareAndroidRecitation",
         "PrepareApiConfig",
         "PrepareIosRecitation",

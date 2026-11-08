@@ -84,7 +84,7 @@ public class ReleasePayloadDownloadTests
     }
 
     [Fact]
-    public async Task Download_NotesPack_AlsoFetchesTheOptionalSearchIndex()
+    public async Task Download_NotesPack_AlsoFetchesTheRequiredSearchIndex()
     {
         await using var storage = new TestStorage();
         var notes = new byte[] { 1, 2, 3 };
@@ -126,7 +126,7 @@ public class ReleasePayloadDownloadTests
     }
 
     [Fact]
-    public async Task Download_OptionalIndexMissing_StillSucceeds()
+    public async Task Download_MissingSearchIndex_FailsTheFetch_AndCachesNothingServable()
     {
         await using var storage = new TestStorage();
         var notes = new byte[] { 9, 8, 7 };
@@ -141,10 +141,16 @@ public class ReleasePayloadDownloadTests
             client, App().Object, "perushim_notes", cacheDir,
             progress: null, TestContext.Current.CancellationToken);
 
-        failure.Should().BeNull();
-        File.Exists(Path.Join(cacheDir, Notes)).Should().BeTrue();
+        // The commentary index is required: a notes-only cache is the exact
+        // unservable half-payload PackPayloadComplete rejects, so the failure
+        // must surface instead of reporting a silent success.
+        failure.Should().NotBeNull().And.Contain("404");
+        File.Exists(Path.Join(cacheDir, Notes)).Should().BeTrue(
+            "the landed primary payload stays for the next attempt to complete");
         File.Exists(Path.Join(cacheDir, Index)).Should().BeFalse();
         File.Exists(Path.Join(cacheDir, Index + ".download")).Should().BeFalse();
+        PadDeliveryService.PackPayloadComplete(cacheDir, "perushim_notes").Should().BeFalse(
+            "a missing index leaves the pack unservable");
     }
 
     [Fact]
