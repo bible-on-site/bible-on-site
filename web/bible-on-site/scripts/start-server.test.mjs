@@ -440,6 +440,7 @@ test("a held remote connection keeps the real measured drain open until it close
 test("readiness probe retries refused connections and logs the first response once", async () => {
 	let attempts = 0;
 	const lines = [];
+	const warnings = [];
 	let clock = 1_000;
 	const stop = startReadinessProbe({
 		port: 3000,
@@ -454,6 +455,7 @@ test("readiness probe retries refused connections and logs the first response on
 		sleep: async () => {},
 		now: () => clock,
 		log: (line) => lines.push(line),
+		warn: (...args) => warnings.push(args),
 	});
 	const deadline = Date.now() + 2_000;
 	while (lines.length === 0) {
@@ -463,11 +465,41 @@ test("readiness probe retries refused connections and logs the first response on
 	await new Promise((resolve) => setTimeout(resolve, 20));
 	assert.deepEqual(lines, ["Website readiness probe: HTTP 200 after 400ms"]);
 	assert.equal(attempts, 3);
+	// Identical boot-time refusals collapse into a single warning.
+	assert.equal(warnings.length, 1);
+	assert.match(String(warnings[0][0]), /attempt failed/);
+	stop();
+});
+
+test("readiness probe warns once per distinct failure", async () => {
+	const warnings = [];
+	let attempts = 0;
+	const stop = startReadinessProbe({
+		port: 3000,
+		request: async () => {
+			attempts += 1;
+			if (attempts === 1 || attempts === 2)
+				throw new Error("connect ECONNREFUSED");
+			if (attempts === 3) throw new Error("socket hang up");
+			return Response.json({ status: "ready" });
+		},
+		sleep: async () => {},
+		log: () => {},
+		warn: (...args) => warnings.push(args),
+	});
+	const deadline = Date.now() + 2_000;
+	while (attempts < 4) {
+		if (Date.now() > deadline) throw new Error("probe never finished");
+		await new Promise((resolve) => setTimeout(resolve, 5));
+	}
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	assert.equal(warnings.length, 2);
 	stop();
 });
 
 test("readiness probe stop aborts a pending request without logging", async () => {
 	const lines = [];
+	const warnings = [];
 	let requested = false;
 	const stop = startReadinessProbe({
 		port: 3000,
@@ -479,6 +511,7 @@ test("readiness probe stop aborts a pending request without logging", async () =
 		},
 		sleep: async () => {},
 		log: (line) => lines.push(line),
+		warn: (...args) => warnings.push(args),
 	});
 	const deadline = Date.now() + 2_000;
 	while (!requested) {
@@ -488,6 +521,7 @@ test("readiness probe stop aborts a pending request without logging", async () =
 	stop();
 	await new Promise((resolve) => setTimeout(resolve, 20));
 	assert.deepEqual(lines, []);
+	assert.deepEqual(warnings, []);
 	stop(); // idempotent
 });
 

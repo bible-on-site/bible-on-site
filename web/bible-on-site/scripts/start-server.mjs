@@ -145,13 +145,20 @@ export function startReadinessProbe({
 	request = fetch,
 	retryDelayMs = 250,
 	log = console.log,
+	warn = console.warn,
 	now = Date.now,
-	sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+	// unref keeps a pending retry from holding the wrapper open after the
+	// child has already exited.
+	sleep = (ms) =>
+		new Promise((resolve) => {
+			setTimeout(resolve, ms).unref();
+		}),
 } = {}) {
 	if (!Number.isSafeInteger(port) || port < 1 || port > 65_535)
 		throw new RangeError("Website port must be between 1 and 65535");
 	const controller = new AbortController();
 	const startedAt = now();
+	const reported = new Set();
 	let stopped = false;
 	const stop = () => {
 		stopped = true;
@@ -170,8 +177,16 @@ export function startReadinessProbe({
 					`Website readiness probe: HTTP ${response.status} after ${now() - startedAt}ms`,
 				);
 				return;
-			} catch {
+			} catch (error) {
 				if (stopped) return;
+				// Listener-boot refusals are the expected retry; report each
+				// distinct failure once so a stuck warm-up stays visible in the
+				// container log without flooding it every 250ms.
+				const signature = `${error} ${error?.cause ?? ""}`;
+				if (!reported.has(signature)) {
+					reported.add(signature);
+					warn("Website readiness probe attempt failed:", error);
+				}
 			}
 			await sleep(retryDelayMs);
 		}

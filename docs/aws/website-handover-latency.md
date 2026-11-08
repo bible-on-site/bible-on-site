@@ -67,10 +67,17 @@ seconds after the listener is already queueing requests, so the warm-up
 waited on a schedule instead of the socket. `start-server.mjs` now fires
 the same `GET /api/health/ready` as soon as `127.0.0.1:<port>` accepts a
 connection, retrying refused connections every 250 ms. The endpoint is
-single-flight and authoritative, so the probe is only an early client of
-the warm the health check already drives; any HTTP response ends it, and
-`stop()` on child exit aborts a pending request so the wrapper never
-outlives its child. The first response logs
+authoritative and shares one in-flight check between concurrent callers —
+canonical data, indexes, recitation package, sanitizer, content query and
+page renders all run once — so the probe is only an early client of the
+warm the health check already drives; sequential checks still re-verify
+the database. Any HTTP response ends the probe, and `stop()` on child exit
+aborts a pending request so the wrapper never outlives its child (retry
+timers are unref'd for the same reason). The probe is best-effort: each
+distinct transport failure warns once as
+`Website readiness probe attempt failed: …`, probe defects never change
+the launcher exit status, and the container `HEALTHCHECK` stays
+authoritative. The first response logs
 
 - `Website readiness probe: HTTP <status> after <elapsed>ms`
 
