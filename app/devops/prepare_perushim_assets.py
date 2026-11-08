@@ -16,11 +16,14 @@ NOTES_DIRECTORIES = {
     "Android": "Platforms/Android/AssetPacks/perushim_notes",
     # App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
     "iOS": "Platforms/iOS/AssetPacks/perushim-notes",
+    # MSIX optional package: one ExtensionPacks directory per deliverable pack.
+    "Windows": "Platforms/Windows/ExtensionPacks/perushim_notes",
 }
 # The prebuilt search index rides in the same asset pack as the notes payload.
 SEARCH_INDEX_DIRECTORIES = {
     "Android": "Platforms/Android/AssetPacks/perushim_notes",
     "iOS": "Platforms/iOS/AssetPacks/perushim-notes",
+    "Windows": "Platforms/Windows/ExtensionPacks/perushim_notes",
 }
 
 
