@@ -29,9 +29,13 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     // chrome coordinator (#2573).
     private ReaderPlatformChrome _platformChrome = null!;
 
-    // Guard: ignore CurrentItemChanged events fired by the CarouselView during
-    // initial collection assignment — the ViewModel already holds the unit.
-    private bool _carouselInitializing;
+    // Font/theme/notes availability sync is owned by the shared display-sync
+    // coordinator (#2573).
+    private ReaderDisplaySync _displaySync = null!;
+
+    // The programmatic-scroll guard, rotation resnap and Android swipe settle
+    // are owned by the shared carousel coordinator (#2573).
+    private ReaderCarousel _carousel = null!;
 
     // Unit requested via query attributes before the initial load finished.
     private int? _pendingUnitId;
@@ -60,11 +64,10 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     {
         SetupReaderChrome();
         SubscribeViewModelChanges();
-        SetupFontSizeResources();
+        SetupDisplaySync();
+        SetupCarousel();
         SetupCarouselNavigation();
         SetupUnitPickerEvents();
-        SubscribeNotesMaterialization();
-        SubscribeThemeChange();
         SetupPlatformChrome();
     }
 
@@ -127,6 +130,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 Carousel = MasoraCarousel,
                 BackSensitiveOverlays = [ExitFullScreenButton],
                 PerushimSheet = PerushimPanel,
+                StatusBarColorSource = ReaderToolbar,
             },
             new ReaderPlatformChromeActions
             {
@@ -136,96 +140,59 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     }
 
     /// <summary>
-    /// A reader opened while the first-launch notes pack still materializes
-    /// skips awaiting it (#2430) — when the copy completes the service raises
-    /// OperationCompleted off the UI thread, so re-check availability here.
+    /// Wires the shared display-sync coordinator (#2573) — font resources,
+    /// theme refresh of the realized pesukim and notes-materialization
+    /// re-check — through the one implementation every reader page uses. Only
+    /// the division plugs differ: which pasuk rows are loaded and the unit
+    /// notes reload. Masora has no focused-pasuk extras.
     /// </summary>
-    private void SubscribeNotesMaterialization()
+    private void SetupDisplaySync()
     {
-        PerushimNotesService.Instance.OperationCompleted += OnNotesOperationCompleted;
-        Unloaded += (_, _) => PerushimNotesService.Instance.OperationCompleted -= OnNotesOperationCompleted;
+        _displaySync = new ReaderDisplaySync(
+            new ReaderDisplaySyncSurfaces
+            {
+                Page = this,
+                Notes = PerushimNotesService.Instance,
+                Preferences = PreferencesService.Instance,
+            },
+            new ReaderDisplaySyncActions
+            {
+                LoadedPasukim = () => _viewModel.CarouselUnits
+                    .SelectMany(unit => unit.Rows)
+                    .Select(row => row.Pasuk)
+                    .OfType<Pasuk>(),
+                NotesAvailable = () => _viewModel.PerushimNotesAvailable,
+                NotesPending = () => _viewModel.PerushimNotesPending,
+                ReloadNotesAsync = () => _viewModel.Unit is { } unit
+                    ? _viewModel.LoadPerushimAsync(unit)
+                    : Task.CompletedTask,
+            });
     }
 
     /// <summary>
-    /// Span colors (qri brackets, recitation highlight, פ/ס marks) are baked into
-    /// each pasuk's cached FormattedString at build time — a theme flip while the
-    /// page is alive must refresh the realized rows so they don't keep the other
-    /// theme's colors (#2601).
+    /// Wires the shared carousel coordinator (#2573) — programmatic-scroll
+    /// guard, rotation resnap and the Android swipe settle — through the one
+    /// implementation every reader page uses. Masora rows carry no long-press
+    /// arming, so the dispatched-touch plug stays unwired; the articles view
+    /// still suppresses swipe tracking while it shows.
     /// </summary>
-    private void SubscribeThemeChange()
+    private void SetupCarousel()
     {
-        if (Microsoft.Maui.Controls.Application.Current is not { } app)
-        {
-            return;
-        }
-        // Pair with Loaded/Unloaded — a page kept on the Shell stack reloads
-        // when navigation returns, and must re-check the theme then.
-        Loaded += (_, _) =>
-        {
-            app.RequestedThemeChanged += OnRequestedThemeChanged;
-            OnRequestedThemeChanged(app, new AppThemeChangedEventArgs(app.RequestedTheme));
-        };
-        Unloaded += (_, _) => app.RequestedThemeChanged -= OnRequestedThemeChanged;
-    }
-
-    private void OnRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e)
-    {
-        Dispatcher.Dispatch(() =>
-        {
-            foreach (var unit in _viewModel.CarouselUnits)
+        _carousel = new ReaderCarousel(
+            new ReaderCarouselSurfaces
             {
-                foreach (var row in unit.Rows)
-                {
-                    row.Pasuk?.RefreshForThemeChange();
-                }
-            }
-        });
-    }
-
-    private bool _notesRefreshQueued;
-
-    private void OnNotesOperationCompleted()
-    {
-        // InitializeAsync releases the operation lock, which re-fires this
-        // event — and the refresh calls InitializeAsync itself. Without this
-        // guard every refresh queues another dispatcher turn forever, the UI
-        // thread never idles, and accessibility queries starve (#2430).
-        if (_notesRefreshQueued ||
-            (PerushimNotesService.Instance.IsAvailable == _viewModel.PerushimNotesAvailable
-                && !_viewModel.PerushimNotesPending))
-        {
-            return;
-        }
-        _notesRefreshQueued = true;
-        _ = Dispatcher.DispatchAsync(async () =>
-        {
-            try { await RefreshPerushimIfAvailabilityChangedAsync(); }
-            finally { _notesRefreshQueued = false; }
-        });
-    }
-
-    /// <summary>
-    /// Reloads perushim for the current unit when notes-availability changed
-    /// since the last load (e.g. the first-launch pack finished copying).
-    /// </summary>
-    private async Task RefreshPerushimIfAvailabilityChangedAsync()
-    {
-        try
-        {
-            await PerushimNotesService.Instance.InitializeAsync();
-            if ((PerushimNotesService.Instance.IsAvailable != _viewModel.PerushimNotesAvailable
-                    || _viewModel.PerushimNotesPending) &&
-                _viewModel.Unit is { } unit)
+                Carousel = MasoraCarousel,
+                LoadingOverlay = CarouselLoadingOverlay,
+                FanMenu = FanMenu,
+                SwipeExcluded = [BottomBar, PerushimPanel, ExitFullScreenButton, MasoraUnitPickerPopup],
+            },
+            new ReaderCarouselActions
             {
-                await _viewModel.LoadPerushimAsync(unit);
-            }
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: refresh is best-effort
-        catch (Exception ex) //NOSONAR — refresh is best-effort.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Refresh perushim on materialization failed: {ex}");
-        }
+                CurrentPosition = () => _viewModel.CarouselPosition,
+                ItemCount = () => _viewModel.CarouselUnits.Count,
+                IsLoading = () => _isLoading,
+                IsSwipeSuppressed = () => _chrome.IsShowingArticles,
+            });
     }
 
     /// <summary>
@@ -278,13 +245,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     /// <summary>Jumps the carousel to a programmatically requested unit index.</summary>
     private void OnViewModelNavigationRequested(int index)
     {
-        // Guard: suppress OnCarouselItemChanged while we reposition
-        _carouselInitializing = true;
-        MasoraCarousel.ScrollTo(index, animate: false);
-        // Do not push CarouselPosition back into the two-way Position
-        // binding here — it queues a second (animated) scroll that can
-        // overshoot the target and land on the following unit.
-        _carouselInitializing = false;
+        _carousel.ScrollToUnit(index);
 
         _chrome.RefreshPrevNext();
 
@@ -294,29 +255,6 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         {
             _ = ShowUnitArticlesAsync();
         }
-    }
-
-    /// <summary>
-    /// Populates page-level DynamicResource entries for perush font sizes and
-    /// keeps them in sync when the user changes the font-factor preference.
-    /// </summary>
-    private void SetupFontSizeResources()
-    {
-        var prefs = PreferencesService.Instance;
-        UpdateFontSizeResources(prefs);
-        WeakPreferencesSubscription.Subscribe(this, prefs, page =>
-            MainThread.BeginInvokeOnMainThread(() => page.UpdateFontSizeResources(prefs)));
-    }
-
-    // Same reading-text categories as PerekPage (#2461).
-    private void UpdateFontSizeResources(PreferencesService prefs)
-    {
-        var pasukFactor = prefs.PasukFontFactor;
-        var perushFactor = prefs.PerushFontFactor;
-        Resources["PasukFontSize"] = pasukFactor * 18;
-        Resources["PasukNumFontSize"] = pasukFactor * 16;
-        Resources["PerushNameFontSize"] = perushFactor * 14;
-        Resources["PerushContentFontSize"] = perushFactor * 18;
     }
 
     private void SubscribeViewModelChanges()
@@ -346,11 +284,18 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     {
         base.OnAppearing();
         _platformChrome.Appearing();
+        _carousel.Appearing();
 
         if (_viewModel.Unit == null && !_isLoading)
         {
             _isLoading = true;
             await LoadInitialUnitAsync();
+        }
+        else if (_viewModel.UnitId > 0 && !_isLoading)
+        {
+            // Perushim may have been installed (downloaded in Preferences) or cleared by the OS
+            // since this page last appeared. Re-check and reload so they show without an app restart.
+            await _displaySync.RefreshNotesIfAvailabilityChangedAsync();
         }
         // Cold-start main-thread work is done — release the deferred e2e
         // search-index warmup so it cannot starve the accessibility snapshot.
@@ -380,19 +325,24 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
             unitId ??= await _viewModel.GetInitialUnitIdAsync();
 
             // Guard: ignore OnCarouselItemChanged during initial load.
-            _carouselInitializing = true;
-            await _viewModel.LoadByUnitIdAsync(unitId.Value);
-
-            // CarouselView resets Position to 0 when ItemsSource changes.
-            // Force it to the correct position without animation.
-            var targetPos = UnitIndexOf(_viewModel.UnitId);
-            if (targetPos >= 0)
+            _carousel.IsInitializing = true;
+            try
             {
-                MasoraCarousel.ScrollTo(targetPos, animate: false);
-                _viewModel.CarouselPosition = targetPos;
-            }
+                await _viewModel.LoadByUnitIdAsync(unitId.Value);
 
-            _carouselInitializing = false;
+                // CarouselView resets Position to 0 when ItemsSource changes.
+                // Force it to the correct position without animation.
+                var targetPos = ReaderCarousel.IndexOf(_viewModel.CarouselUnits, u => u.UnitId, _viewModel.UnitId);
+                if (targetPos >= 0)
+                {
+                    MasoraCarousel.ScrollTo(targetPos, animate: false);
+                    _viewModel.CarouselPosition = targetPos;
+                }
+            }
+            finally
+            {
+                _carousel.IsInitializing = false;
+            }
 
             // Hide loading overlay — carousel is ready
             CarouselLoadingOverlay.Hide();
@@ -413,6 +363,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         finally
         {
             _isLoading = false;
+            _carousel.ConsumePendingResnap();
         }
     }
 
@@ -430,20 +381,8 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     protected override void OnDisappearing()
     {
         _platformChrome.Disappearing();
+        _carousel.Disappearing();
         base.OnDisappearing();
-    }
-
-    /// <summary>The unit's index inside the carousel collection (-1 when missing).</summary>
-    private int UnitIndexOf(int unitId)
-    {
-        for (var i = 0; i < _viewModel.CarouselUnits.Count; i++)
-        {
-            if (_viewModel.CarouselUnits[i].UnitId == unitId)
-            {
-                return i;
-            }
-        }
-        return -1;
     }
 
     /// <summary>
@@ -453,7 +392,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     /// </summary>
     private async void OnCarouselItemChanged(object? sender, CurrentItemChangedEventArgs e)
     {
-        if (_carouselInitializing)
+        if (_carousel.IsInitializing)
         {
             return;
         }

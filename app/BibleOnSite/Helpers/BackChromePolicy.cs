@@ -60,9 +60,11 @@ public static class BackChromePolicy
 	/// <summary>
 	/// Whether the Shell nav-bar Back/Up arrow is shown. Up is navigation
 	/// history only: at a root destination there is no in-app arrow at all,
-	/// so it can never become an app-exit button.
+	/// so it can never become an app-exit button. Same Windows carve-out as
+	/// <see cref="ShowCapsuleBack"/>: the title bar is the one Windows Back,
+	/// so a nav-bar arrow would be a second control (#2766).
 	/// </summary>
 	public static bool ShowNavBarBack(bool isPushed, BackChromePlatform platform,
 		InAppBackButtonPreference preference) =>
-		isPushed && ShowInAppBack(platform, preference);
+		isPushed && platform != BackChromePlatform.Windows && ShowInAppBack(platform, preference);
 }

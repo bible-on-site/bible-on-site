@@ -86,6 +86,62 @@ public class WindowsExtensionPackMapTests
     }
 
     [Fact]
+    public void FileName_IsTheBundledAssetName()
+    {
+        WindowsExtensionPackMap.FileName.Should().Be("windows-extension-packs.json");
+    }
+
+    [Theory]
+    [InlineData("""{ "version": 1 }""")]
+    [InlineData("""{ "version": 1, "addOns": [] }""")]
+    [InlineData("""{ "version": 1, "addOns": "none" }""")]
+    public void Map_WithoutAnAddOnsObject_YieldsAnEmptyMap(string json)
+    {
+        var map = new WindowsExtensionPackMap(json);
+
+        map.StoreIdFor("recitation_1").Should().BeNull();
+        map.PackageNameFor("Main.App-", "recitation_1").Should().Be("Main.App-.recitation-1");
+    }
+
+    [Theory]
+    [InlineData("""{ "version": 1, "addOns": { "": {} } }""", "blank")]
+    [InlineData("""{ "version": 1, "addOns": { "   ": {} } }""", "whitespace")]
+    public void Map_WithAnUnnamedAddOn_IsRejected(string json, string because)
+    {
+        var act = () => new WindowsExtensionPackMap(json);
+
+        act.Should().Throw<InvalidDataException>(because);
+    }
+
+    [Fact]
+    public void AddOn_WithNonStringStoreIdAndPackageName_FallsBackToDefaults()
+    {
+        var map = new WindowsExtensionPackMap("""
+            { "version": 1, "addOns": {
+                "recitation_1": { "storeId": 42, "packageName": null },
+                "recitation_2": { "storeId": "9ABC", "packageName": 7 }
+            } }
+            """);
+
+        map.StoreIdFor("recitation_1").Should().BeNull("a non-string storeId is not store-deliverable");
+        map.PackageNameFor("Main.App-", "recitation_1").Should().Be("Main.App-.recitation-1");
+        map.StoreIdFor("recitation_2").Should().Be("9ABC");
+        map.PackageNameFor("Main.App-", "recitation_2").Should().Be("Main.App-.recitation-2",
+            "a non-string packageName falls back to the related-set convention");
+    }
+
+    [Theory]
+    [InlineData("""{ "version": 1, "addOns": { "recitation_1": { "packageName": "ab" } } }""", "appx identities need 3+ chars")]
+    [InlineData("""{ "version": 1, "addOns": { "recitation_1": { "packageName": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } } }""", "appx identities cap at 50 chars")]
+    [InlineData("""{ "version": 1, "addOns": { "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": {} } }""", "pack ids cap at 64 chars")]
+    public void Map_WithOutOfBoundsIdentityNames_IsRejected(string json, string because)
+    {
+        var act = () => new WindowsExtensionPackMap(json);
+
+        act.Should().Throw<InvalidDataException>(because);
+    }
+
+    [Fact]
     public async Task PackPayloadComplete_RequiresThePrimaryPayload()
     {
         await using var storage = new TestStorage();

@@ -1,6 +1,5 @@
 "use client";
 import type {
-	BookmarkContext,
 	BookmarkProvider,
 	FlipBookHandle,
 	HistoryMapper,
@@ -58,8 +57,8 @@ import type {
 import {
 	getSeferBookmarkServerSnapshot,
 	getSeferBookmarkSnapshot,
+	SEFER_BOOKMARK_PRESENTATION,
 	saveSeferBookmarkSettings,
-	seferBookmarkProviderOrder,
 	subscribeSeferBookmarks,
 } from "@/lib/sefer-bookmark-settings";
 import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
@@ -84,11 +83,7 @@ import { SeferPasukSelectionBar } from "./SeferPasukSelectionBar";
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
 import { createSeferBookmarkContent } from "./sefer-bookmark-content";
-import {
-	buildSeferChapterBookmarks,
-	compareSeferBookmarkTitles,
-	filterUpcomingBookmarks,
-} from "./sefer-bookmarks";
+import { buildSeferChapterBookmarks } from "./sefer-bookmarks";
 import {
 	articleDocumentTitle,
 	buildSeferDocumentTitleResolver,
@@ -292,8 +287,8 @@ const Sefer = (props: {
 	// Toolbar show/hide (issue #2543): the toggle shares the one persisted
 	// visibility state with תצוגה -> סימניות and the flipbook's
 	// enableBookmarks flag — the save broadcasts to both. Merge over the
-	// live snapshot so placement/orientation/attachment/order choices are
-	// preserved; only the page-turn layer flips, position is untouched.
+	// live snapshot so the attachment choice is preserved; only the
+	// page-turn layer flips, position is untouched.
 	const toggleBookmarks = useCallback(
 		(enabled: boolean) =>
 			saveSeferBookmarkSettings({
@@ -304,25 +299,17 @@ const Sefer = (props: {
 	);
 	const bookmarkProvider = useMemo<BookmarkProvider>(
 		() => ({
-			getBookmarks: (context: BookmarkContext) =>
-				filterUpcomingBookmarks(
-					chapterBookmarks,
-					context,
-					bookmarkSettings.upcomingOnly,
-				),
+			// All chapters stay reachable — issue #2974 retired the
+			// upcoming-only filter.
+			getBookmarks: () => chapterBookmarks,
 			// The native provider refreshes every turn. Reuse immutable children
 			// so unchanged tab text does not reconcile throughout the portal tree.
 			...createSeferBookmarkContent(seferColor),
-			orientation: bookmarkSettings.orientation,
+			...SEFER_BOOKMARK_PRESENTATION,
 			attachment: bookmarkSettings.attachment,
-			placement: bookmarkSettings.placement,
-			order: seferBookmarkProviderOrder(
-				bookmarkSettings,
-				compareSeferBookmarkTitles,
-			),
 			className: "sefer-bookmarks",
 		}),
-		[chapterBookmarks, bookmarkSettings, seferColor],
+		[chapterBookmarks, bookmarkSettings.attachment, seferColor],
 	);
 
 	// Document-title sync (issue #2176): the library's onPageFlipped marks when
@@ -493,19 +480,49 @@ const Sefer = (props: {
 	const [batchSummaries, setBatchSummaries] = useState<
 		Record<string, PerekSummaries>
 	>({});
+	const summaryPerekIds =
+		perekIds?.filter((id) => id !== perekObj.perekId).join(",") ?? "";
+	const summaryRequest = useRef<{
+		ids: string;
+		sefer: string;
+		result: ReturnType<typeof getPerekSummariesBatch>;
+	} | null>(null);
 	useEffect(() => {
-		const idsToFetch = perekIds?.filter((id) => id !== perekObj.perekId) ?? [];
-		if (idsToFetch.length === 0) return;
-		getPerekSummariesBatch(idsToFetch)
-			.then(setBatchSummaries)
+		if (!summaryPerekIds) {
+			summaryRequest.current = null;
+			return;
+		}
+		const idsToFetch = summaryPerekIds.split(",").map(Number);
+		// Server Actions share a serial client queue. Reuse this book read
+		// across effect replay and equivalent array props so a settings change
+		// cannot enqueue another whole-book read ahead of selected commentary.
+		if (
+			summaryRequest.current?.ids !== summaryPerekIds ||
+			summaryRequest.current.sefer !== perekObj.sefer
+		) {
+			summaryRequest.current = {
+				ids: summaryPerekIds,
+				sefer: perekObj.sefer,
+				result: getPerekSummariesBatch(idsToFetch),
+			};
+		}
+		let current = true;
+		summaryRequest.current.result
+			.then((summaries) => {
+				if (current) setBatchSummaries(summaries);
+			})
 			.catch((error) => {
+				if (!current) return;
 				console.error("Failed to load book summaries", {
 					sefer: perekObj.sefer,
 					perekIds: idsToFetch,
 					error,
 				});
 			});
-	}, [perekIds, perekObj.perekId, perekObj.sefer]);
+		return () => {
+			current = false;
+		};
+	}, [summaryPerekIds, perekObj.sefer]);
 
 	// Keep scripture independent of async summaries and commentary selection.
 	// Those updates must not rebuild or reconcile every word in the book.
