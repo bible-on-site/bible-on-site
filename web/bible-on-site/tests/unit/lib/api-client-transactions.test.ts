@@ -1,4 +1,3 @@
-import mysql, { type PoolConnection } from "mysql2/promise";
 import {
 	execute,
 	lockedTransaction,
@@ -8,6 +7,7 @@ import {
 	txQuery,
 	txQueryOne,
 } from "@/lib/api-client";
+import mysql, { type PoolConnection } from "mysql2/promise";
 
 jest.mock("mysql2/promise", () => ({
 	createPool: jest.fn().mockReturnValue({
@@ -170,6 +170,7 @@ describe("lockedTransaction", () => {
 		commit: jest.Mock;
 		rollback: jest.Mock;
 		release: jest.Mock;
+		destroy: jest.Mock;
 	};
 	let driverConnection: PoolConnection;
 
@@ -180,6 +181,7 @@ describe("lockedTransaction", () => {
 			commit: jest.fn().mockResolvedValue(undefined),
 			rollback: jest.fn().mockResolvedValue(undefined),
 			release: jest.fn(),
+			destroy: jest.fn(),
 		};
 		driverConnection = connection as unknown as PoolConnection;
 		pool.getConnection.mockReset().mockResolvedValue(driverConnection);
@@ -230,6 +232,21 @@ describe("lockedTransaction", () => {
 			["bulletin-signup:abc"],
 		);
 		expect(connection.release).toHaveBeenCalledTimes(1);
+	});
+
+	it("destroys the session instead of pooling it when lock release fails", async () => {
+		connection.execute
+			.mockResolvedValueOnce([[{ acquired: 1 }]])
+			.mockRejectedValueOnce(new Error("connection lost"));
+		const log = jest.spyOn(console, "error").mockImplementation(() => {});
+
+		await expect(
+			lockedTransaction("bulletin-signup:abc", async () => "done"),
+		).resolves.toBe("done");
+		expect(connection.destroy).toHaveBeenCalledTimes(1);
+		expect(connection.release).not.toHaveBeenCalled();
+		expect(log).toHaveBeenCalled();
+		log.mockRestore();
 	});
 
 	it.each([[{ acquired: 0 }], [{ acquired: null }]])(

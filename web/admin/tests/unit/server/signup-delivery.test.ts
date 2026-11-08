@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
 	runtime: vi.fn(),
 	sesConfig: vi.fn(),
 	resubscribe: vi.fn(),
-	unsubscribe: vi.fn(),
+	optOut: vi.fn(),
 	sesDestroy: vi.fn(),
 }));
 vi.mock("@tanstack/react-start/server-only", () => ({}));
@@ -25,7 +25,7 @@ vi.mock("~/server/ses-client.server", () => ({
 			mocks.sesConfig(config);
 		}
 		resubscribeContact = mocks.resubscribe;
-		unsubscribeContact = mocks.unsubscribe;
+		optOutContact = mocks.optOut;
 		destroy = mocks.sesDestroy;
 	},
 }));
@@ -55,7 +55,7 @@ beforeEach(() => {
 	mocks.queryOne.mockResolvedValue({ consent_status: "confirmed" });
 	mocks.execute.mockResolvedValue({ affectedRows: 1 });
 	mocks.resubscribe.mockResolvedValue("subscribed");
-	mocks.unsubscribe.mockResolvedValue(undefined);
+	mocks.optOut.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -119,14 +119,29 @@ describe("reconcileSignupOutbox", () => {
 			"reader@example.com",
 			"real",
 		);
-		expect(mocks.unsubscribe).toHaveBeenCalledWith(
-			"reader@example.com",
-			"real",
-		);
+		expect(mocks.optOut).toHaveBeenCalledWith("reader@example.com", "real");
 		const settled = mocks.execute.mock.calls.find(([sql]) =>
 			(sql as string).includes("ses_status = ?"),
 		);
 		expect(settled?.[1]).toEqual(["opted_out", 7]);
+	});
+
+	it("retries instead of settling when the opt-out revert fails", async () => {
+		mocks.query.mockResolvedValue([intent()]);
+		mocks.queryOne
+			.mockResolvedValueOnce({ consent_status: "confirmed" })
+			.mockResolvedValueOnce({ consent_status: "unsubscribed" });
+		mocks.optOut.mockRejectedValue(new Error("SES unavailable"));
+		await reconcileSignupOutbox();
+		expect(mocks.optOut).toHaveBeenCalledWith("reader@example.com", "real");
+		const retry = mocks.execute.mock.calls.find(([sql]) =>
+			(sql as string).includes("ses_next_attempt_at"),
+		);
+		expect(retry).toBeDefined();
+		const settled = mocks.execute.mock.calls.find(([sql]) =>
+			(sql as string).includes("ses_status = ?"),
+		);
+		expect(settled).toBeUndefined();
 	});
 
 	it("persists the SES opt-out outcome without a consent re-check", async () => {

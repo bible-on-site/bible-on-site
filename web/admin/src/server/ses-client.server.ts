@@ -8,7 +8,7 @@ import {
 	type TopicPreference,
 	UpdateContactCommand,
 } from "@aws-sdk/client-sesv2";
-import { type CSSProperties, createElement, type ReactElement } from "react";
+import { type CSSProperties, type ReactElement, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 export type SesAudience = "test" | "real";
@@ -468,7 +468,6 @@ export class SesClient {
 				new UpdateContactCommand({
 					ContactListName: this.config.contactListName,
 					EmailAddress: normalized,
-					UnsubscribeAll: false,
 					TopicPreferences: Object.entries({
 						...contact.topics,
 						[topic]: "OPT_IN" as const,
@@ -486,6 +485,39 @@ export class SesClient {
 		return verified && isSesSubscribed(verified, topic)
 			? "subscribed"
 			: "opted_out";
+	}
+
+	/**
+	 * Reverts one topic to OPT_OUT — the inverse of resubscribeContact for
+	 * a consent change that lands mid-sync. Topic-scoped like the
+	 * resubscribe: other topics keep their preferences and UnsubscribeAll
+	 * is left untouched, so reverting a real-audience signup cannot
+	 * globally suppress a contact that also holds test subscriptions.
+	 */
+	async optOutContact(email: string, audience: SesAudience): Promise<void> {
+		const normalized = emailAddress(email);
+		const topic = audienceName(audience);
+		const contact = await this.getContact(normalized);
+		if (!contact || contact.unsubscribeAll) return;
+		if (contact.topics[topic] === "OPT_OUT") return;
+		try {
+			await this.client.send(
+				new UpdateContactCommand({
+					ContactListName: this.config.contactListName,
+					EmailAddress: normalized,
+					TopicPreferences: Object.entries({
+						...contact.topics,
+						[topic]: "OPT_OUT" as const,
+					}).map(([TopicName, SubscriptionStatus]) => ({
+						TopicName,
+						SubscriptionStatus,
+					})),
+				}),
+				{ abortSignal: AbortSignal.timeout(15_000) },
+			);
+		} catch (error) {
+			throw requestError(error, true, "update-contact");
+		}
 	}
 
 	/** Global suppression is monotonic and never replaces topic preferences. */

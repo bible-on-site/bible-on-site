@@ -139,6 +139,7 @@ export async function lockedTransaction<T>(
 	fn: (conn: mysql.PoolConnection) => Promise<T>,
 ): Promise<T> {
 	const conn = await getPool().getConnection();
+	let returnToPool = true;
 	try {
 		const [lockRows] = await conn.execute<RowDataPacket[]>(
 			"SELECT GET_LOCK(?, 10) AS acquired",
@@ -161,12 +162,19 @@ export async function lockedTransaction<T>(
 			await conn.rollback();
 			throw error;
 		} finally {
-			await conn
-				.execute("SELECT RELEASE_LOCK(?)", [lockName])
-				.catch(() => undefined);
+			try {
+				await conn.execute("SELECT RELEASE_LOCK(?)", [lockName]);
+			} catch (error) {
+				// A session that cannot release its lock must not re-enter the
+				// pool still holding it; destroying drops the session (and the
+				// lock server-side) so the pool replaces the connection.
+				console.error(`Failed to release lock ${lockName}:`, error);
+				returnToPool = false;
+				conn.destroy();
+			}
 		}
 	} finally {
-		conn.release();
+		if (returnToPool) conn.release();
 	}
 }
 

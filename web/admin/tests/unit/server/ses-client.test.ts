@@ -34,10 +34,10 @@ vi.mock("@aws-sdk/client-sesv2", () => ({
 }));
 
 import {
-	isSesSubscribed,
 	SesClient,
 	SesError,
 	SesSuppressedError,
+	isSesSubscribed,
 } from "~/server/ses-client.server";
 
 const config = {
@@ -818,7 +818,6 @@ describe("SES managed-subscription transport", () => {
 		expect(calls("update")[0][0].input).toEqual({
 			ContactListName: config.contactListName,
 			EmailAddress: "reader@example.com",
-			UnsubscribeAll: false,
 			TopicPreferences: [
 				{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
 				{ TopicName: "real", SubscriptionStatus: "OPT_OUT" },
@@ -880,6 +879,67 @@ describe("SES managed-subscription transport", () => {
 				outcome: status === 403 ? "failed" : "uncertain",
 			});
 			expect(calls("get")).toHaveLength(1);
+		},
+	);
+
+	it("opts out only the requested topic, preserving other topics and global state", async () => {
+		mocks.send.mockResolvedValueOnce({
+			...contact(),
+			TopicPreferences: [
+				{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
+				{ TopicName: "real", SubscriptionStatus: "OPT_IN" },
+			],
+		});
+		await new SesClient(config).optOutContact("READER@example.com", "real");
+		expect(calls("update")[0][0].input).toEqual({
+			ContactListName: config.contactListName,
+			EmailAddress: "reader@example.com",
+			TopicPreferences: [
+				{ TopicName: "test", SubscriptionStatus: "OPT_IN" },
+				{ TopicName: "real", SubscriptionStatus: "OPT_OUT" },
+			],
+		});
+		expect(calls("update")[0][0].input).not.toHaveProperty("UnsubscribeAll");
+	});
+
+	it.each(
+		[
+			{ ...contact(), UnsubscribeAll: true },
+			{
+				...contact(),
+				TopicPreferences: [
+					{ TopicName: "real", SubscriptionStatus: "OPT_OUT" },
+				],
+			},
+		].map((response) => ({ response })),
+	)(
+		"skips the topic opt-out when the contact is already suppressed (%j)",
+		async ({ response }) => {
+			mocks.send.mockResolvedValueOnce(response);
+			await new SesClient(config).optOutContact(request.to, "real");
+			expect(calls("update")).toHaveLength(0);
+			expect(calls("create")).toHaveLength(0);
+		},
+	);
+
+	it("does nothing for a missing contact on topic opt-out", async () => {
+		mocks.send.mockRejectedValueOnce(sdkError(404, "NotFoundException"));
+		await new SesClient(config).optOutContact(request.to, "real");
+		expect(calls("update")).toHaveLength(0);
+		expect(calls("create")).toHaveLength(0);
+	});
+
+	it.each([403, 500, 408])(
+		"classifies a rejected topic opt-out safely (HTTP %s)",
+		async (status) => {
+			mocks.send
+				.mockResolvedValueOnce(contact())
+				.mockRejectedValueOnce(sdkError(status));
+			await expect(
+				new SesClient(config).optOutContact(request.to, "real"),
+			).rejects.toMatchObject({
+				outcome: status === 403 ? "failed" : "uncertain",
+			});
 		},
 	);
 

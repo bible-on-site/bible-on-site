@@ -51,7 +51,11 @@ async function markIntentSynced(
  * unrelated topics; the outcome is re-verified and persisted on the intent.
  * Consent is re-read before and after the SES call: an opt-out landing
  * between the signup and this sync — or while it runs — must win, so the
- * contact is pushed back to suppressed and the intent settles opted_out.
+ * signup topic is pushed back to OPT_OUT and the intent settles
+ * opted_out. The revert is topic-scoped — a global unsubscribe would also
+ * cancel test-audience subscriptions on the same contact — and a failed
+ * revert propagates into the retry backoff: the intent must not settle
+ * opted_out while SES can still deliver.
  */
 async function syncSignupSubscriber(
 	client: SesClient,
@@ -67,9 +71,7 @@ async function syncSignupSubscriber(
 			result === "subscribed" &&
 			(await signupConsent(row.email)) !== "confirmed"
 		) {
-			await client
-				.unsubscribeContact(row.email, SIGNUP_AUDIENCE)
-				.catch(() => undefined);
+			await client.optOutContact(row.email, SIGNUP_AUDIENCE);
 			result = "opted_out";
 		}
 		await markIntentSynced(row, result);
