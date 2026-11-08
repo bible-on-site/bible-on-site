@@ -83,6 +83,16 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 										מאמרים
 									</Link>
 									<Link
+										to="/link-proposals"
+										search={{ articleId: undefined }}
+										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+										activeProps={{
+											className: "!text-blue-600 !bg-blue-50 font-semibold",
+										}}
+									>
+										הצעות קישור
+									</Link>
+									<Link
 										to="/bulletins"
 										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium"
 									>

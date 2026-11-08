@@ -87,9 +87,7 @@ export const createPlace = createServerFn({ method: "POST" })
 				[placeId, entityId],
 			);
 		});
-		await revalidateWebsite(
-			await pediaChangesForEntities([entityId]),
-		);
+		await revalidateWebsite(await pediaChangesForEntities([entityId]));
 		return { id: placeId, entity_id: entityId };
 	});
 

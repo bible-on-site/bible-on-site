@@ -622,8 +622,7 @@ function AliasEditor({
 								// for) the previous name can never leak into this save.
 								if (
 									prev.editingName === null &&
-									pediaNameFromInput(raw) !==
-										pediaNameFromInput(prev.nameInput)
+									pediaNameFromInput(raw) !== pediaNameFromInput(prev.nameInput)
 								) {
 									return {
 										...prev,

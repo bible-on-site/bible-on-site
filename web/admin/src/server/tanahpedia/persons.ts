@@ -67,9 +67,7 @@ export const createPerson = createServerFn({ method: "POST" })
 				[data.sex_id, data.id, data.sex],
 			);
 		}
-		await revalidateWebsite(
-			await pediaChangesForPersons([data.id]),
-		);
+		await revalidateWebsite(await pediaChangesForPersons([data.id]));
 		return { id: data.id };
 	});
 
