@@ -16,6 +16,13 @@ public partial class PerekPage
 
     /// <summary>Perek requested via the calendarReader?perekId= query route.</summary>
     private int? _pendingPerekId;
+
+    /// <summary>
+    /// Calendar-selected Hebrew date (YYYYMMDD) the reader was opened for.
+    /// When set, the daily article override (#3098) resolves against this
+    /// date; today stays an implicit context inside StarterService too.
+    /// </summary>
+    private int? _dailyDateNum;
     private View? _searchHeader;
     private double _searchHeaderHeight;
     private const string SearchExpansionAnimation = "ReaderSearchExpansion";
@@ -198,6 +205,15 @@ public partial class PerekPage
         {
             _pendingPerekId = perekId;
             _initialPerekId = null;
+        }
+
+        // …and carries the tapped Hebrew date so the daily article override
+        // (#3098) resolves against the selected day, not just today.
+        if (query.TryGetValue("dateNum", out var dateNumValue) &&
+            int.TryParse(dateNumValue?.ToString(), out var dateNum) &&
+            dateNum is >= 1000000 and <= 99999999)
+        {
+            _dailyDateNum = dateNum;
         }
     }
 
