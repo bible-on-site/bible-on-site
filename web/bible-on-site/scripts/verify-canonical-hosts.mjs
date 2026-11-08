@@ -127,12 +127,9 @@ export async function verifyCanonicalHosts(
 		// Check the document itself as well as HTTP status: a successful
 		// HTML error page or a truncated/non-sitemap XML response must fail.
 		// Browser E2E coverage also parses the complete XML document.
-		const sitemapBody = (await sitemapResult.response.text())
-			.replace(/<\?xml[\s\S]*?\?>/g, "")
-			.replace(/<!--[\s\S]*?-->/g, "")
-			.trim();
+		const sitemapBody = await sitemapResult.response.text();
 		if (
-			!/^<urlset\b[^>]*\sxmlns=["']http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9["'][^>]*>[\s\S]*<\/urlset>$/.test(
+			!/^\s*(?:<\?xml[^?]*\?>\s*)?<urlset\b[^>]*\sxmlns=["']http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9["'][^>]*>[\s\S]*<\/urlset>\s*$/.test(
 				sitemapBody,
 			)
 		) {
