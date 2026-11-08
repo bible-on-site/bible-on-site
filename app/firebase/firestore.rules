@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// Cloud preferences sync (#1095): every signed-in user (Firebase Auth,
+// including anonymous sessions) owns exactly one document at users/{uid}.
+// Nobody may read or write another user's document; unauthenticated access is
+// denied everywhere.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Reserve the per-user subtree for future user-scoped data under the
+      // same owner-only rule.
+      match /{sub=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}
