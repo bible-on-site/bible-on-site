@@ -52,6 +52,7 @@ import {
 	perushPath,
 } from "../../../../lib/seo/core-jsonld";
 import { absUrl, plainText, SITE_NAME } from "../../../../lib/seo/jsonld";
+import { NOT_FOUND_METADATA } from "../../../../lib/seo/missing-page";
 import { pageMetadata } from "../../../../lib/seo/opengraph";
 import { selectPerekImages } from "../../../../lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "../../../../lib/seo/perek-images-data";
@@ -217,13 +218,20 @@ export async function generateMetadata({
 	const perekId = Number.parseInt(number, 10);
 	const id = Number.parseInt(slug, 10);
 
+	// A malformed or out-of-range perek always renders the shared missing
+	// page — keep metadata on the same contract (issue #2935).
+	if (Number.isNaN(perekId) || perekId < 1 || perekId > 929) {
+		return NOT_FOUND_METADATA;
+	}
+
 	// Check if it's a numeric article ID
 	if (!Number.isNaN(id)) {
 		const article = await getCachedArticle(id);
-		if (!article) {
-			return {
-				title: `מאמר לא נמצא | ${SITE_NAME}`,
-			};
+		if (!article || article.perekId !== perekId) {
+			// The render calls notFound() for a missing or perek-mismatched
+			// article; the shared contract keeps the title/OG identical to
+			// app/not-found (issue #2935).
+			return NOT_FOUND_METADATA;
 		}
 
 		const descriptionSource = article.abstract || article.content;
@@ -232,12 +240,9 @@ export async function generateMetadata({
 			(descriptionSource ? plainText(descriptionSource, 160) : "") ||
 			`מאמר מאת ${article.authorName}`;
 		const url = articlePath(perekId, article.id);
-		// `article:section` is optional enrichment — an out-of-range perek
-		// segment must not fail metadata (the component still 404s mismatches).
-		const seferName =
-			perekId >= 1 && perekId <= 929
-				? getPerekByPerekId(perekId)?.sefer
-				: undefined;
+		// `article:section` enriches previews with the sefer name. The early
+		// range guard above guarantees perekId resolves to a real sefer.
+		const seferName = getPerekByPerekId(perekId)?.sefer;
 		const illustration = (await getPerekImagesByChapter())?.[perekId]?.[0];
 		return pageMetadata({
 			title,
@@ -270,9 +275,9 @@ export async function generateMetadata({
 	const perush = perushim.find((p) => p.name === slug);
 
 	if (!perush) {
-		return {
-			title: `פירוש לא נמצא | ${SITE_NAME}`,
-		};
+		// The render calls notFound(); the shared contract keeps the
+		// title/OG identical to app/not-found (issue #2935).
+		return NOT_FOUND_METADATA;
 	}
 
 	const perekObj = getPerekByPerekId(perekId);
@@ -319,7 +324,10 @@ export default async function ArticlePage({
 	const perekId = Number.parseInt(number, 10);
 	const id = Number.parseInt(slug, 10);
 
-	if (Number.isNaN(perekId)) {
+	// An out-of-range perek is a missing page, not a server fault — 404
+	// like the parent /929/[number] route does via dynamicParams=false
+	// (issue #2935).
+	if (Number.isNaN(perekId) || perekId < 1 || perekId > 929) {
 		notFound();
 	}
 

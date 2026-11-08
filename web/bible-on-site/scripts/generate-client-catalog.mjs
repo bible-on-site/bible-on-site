@@ -71,9 +71,10 @@ const books = sefarim.map((sefer) => {
 	const filename = `${sefer.perekFrom}.${digest}.json`;
 	files.add(filename);
 	const target = join(booksDirectory, filename);
-	// The name already commits to the raw payload's hash: an existing file is
-	// the compressed form of these exact bytes, so recompressing can be skipped.
-	if (!existsSync(target))
+	// Earlier generators wrote raw JSON under this same payload hash. Upgrade
+	// those bytes to the Brotli representation promised by the static headers,
+	// while preserving already-compressed files and their modification times.
+	if (!existsSync(target) || readFileSync(target).equals(Buffer.from(payload)))
 		writeFileSync(
 			target,
 			brotliCompressSync(payload, {
@@ -95,10 +96,7 @@ const books = sefarim.map((sefer) => {
 // exist. The optional .br suffix also sweeps assets left by the earlier
 // route-served layout, whose names were {name}.json.br.
 for (const filename of readdirSync(booksDirectory)) {
-	if (
-		/^\d+\.[a-f0-9]{64}\.json(\.br)?$/.test(filename) &&
-		!files.has(filename)
-	)
+	if (/^\d+\.[a-f0-9]{64}\.json(\.br)?$/.test(filename) && !files.has(filename))
 		unlinkSync(join(booksDirectory, filename));
 }
 writeIfChanged(output, `${JSON.stringify({ books, volumes, schedule })}\n`);

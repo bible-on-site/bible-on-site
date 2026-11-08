@@ -336,10 +336,6 @@ test.describe("Sefer temporary navigation highlights", () => {
 		page,
 		skipOnNotWideEnough,
 	}) => {
-		test.skip(
-			Boolean(process.env.CI),
-			"Intermittent Sefer panel content: https://github.com/bible-on-site/bible-on-site/issues/3081",
-		);
 		void skipOnNotWideEnough;
 		const book = new SeferPage(page);
 		await book.openSeferViewForPerek(1);
