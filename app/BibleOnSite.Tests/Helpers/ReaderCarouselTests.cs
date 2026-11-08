@@ -35,14 +35,14 @@ public class ReaderCarouselTests
         public readonly List<string> Invokes = new();
 
         public int Position;
-        public int Count = 5;
+        public readonly int Count = 5;
         public bool Loading;
 
         public Rig()
         {
             // ScrollTo bounds-checks against the item count — an empty source
             // swallows every request before it reaches the handler.
-            Carousel.ItemsSource = Enumerable.Range(0, Count).Select(i => i).ToList();
+            Carousel.ItemsSource = Enumerable.Range(0, Count).ToList();
             AttachDispatcher(Carousel);
             Carousel.ScrollToRequested += (_, e) => Scrolls.Add(e);
         }
