@@ -220,8 +220,18 @@ jest.mock("@/util/hebdates-util", () => ({
 	}),
 }));
 
+// The live date check has dedicated tests; here the Sefer renders its
+// static article lists unless a test returns an override.
+jest.mock("@/app/929/[number]/components/use-daily-article-override", () => ({
+	useDailyArticleOverride: jest.fn(() => null),
+}));
+
+let capturedSeferPanelProps: { articles?: unknown[] }[] = [];
 jest.mock("@/app/929/[number]/components/SeferPanel", () => ({
-	SeferPanel: () => <div data-testid="blank-page" />,
+	SeferPanel: (props: { articles?: unknown[] }) => {
+		capturedSeferPanelProps.push(props);
+		return <div data-testid="blank-page" />;
+	},
 }));
 
 jest.mock("@/app/929/[number]/components/Ptuha", () => ({
@@ -552,6 +562,7 @@ describe("Sefer component", () => {
 		mockVisiblePageIndices = undefined;
 		capturedFlipBookProps = {};
 		capturedTocProps = {};
+		capturedSeferPanelProps = [];
 		mockDownloadSefer.mockReset();
 		mockDownloadPageRanges.mockReset();
 		mockRestorePage.mockReset();
@@ -1633,5 +1644,37 @@ describe("Sefer component", () => {
 
 		render(<Sefer perekObj={minimalPerek} articles={[]} perushim={[]} />);
 		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
+	});
+
+	it("swaps a panel's article list for the Hebrew-date override (#3098)", () => {
+		const { useDailyArticleOverride } = jest.requireMock(
+			"@/app/929/[number]/components/use-daily-article-override",
+		) as { useDailyArticleOverride: jest.Mock };
+		const assigned = [{ id: 2199, name: "מאמר לתשעה באב" }];
+		useDailyArticleOverride.mockReturnValueOnce({
+			perekId: 2,
+			articles: assigned,
+		});
+		const original = getSeferByName(minimalPerek.sefer);
+		const chapter =
+			"perakim" in original
+				? original.perakim[0]
+				: original.additionals[0].perakim[0];
+		render(
+			<SeferContents
+				perekObj={minimalPerek}
+				articles={[]}
+				perushim={[]}
+				perekIds={[1, 2]}
+				sefer={{ ...original, perakim: [chapter, chapter] }}
+			/>,
+		);
+		// Panel perakim are interleaved with blank pages — perekIds order maps
+		// to the SeferPanel instances in page order.
+		const articlesByPanel = capturedSeferPanelProps
+			.map((panel) => panel.articles)
+			.filter((a): a is unknown[] => a !== undefined);
+		expect(articlesByPanel).toContainEqual(assigned);
+		expect(articlesByPanel).toContainEqual([]);
 	});
 });

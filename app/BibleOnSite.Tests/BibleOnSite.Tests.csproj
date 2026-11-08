@@ -77,10 +77,16 @@
     <Compile Include="..\BibleOnSite\Services\AnalyticsService.cs" Link="Services\AnalyticsService.cs" />
     <Compile Include="..\BibleOnSite\Services\AnalyticsScreens.cs" Link="Services\AnalyticsScreens.cs" />
     <Compile Include="..\BibleOnSite\Services\IPreferencesStorage.cs" Link="Services\IPreferencesStorage.cs" />
+    <Compile Include="..\BibleOnSite\Services\IPreferencesCloudStore.cs" Link="Services\IPreferencesCloudStore.cs" />
+    <Compile Include="..\BibleOnSite\Services\IUserIdentity.cs" Link="Services\IUserIdentity.cs" />
+    <Compile Include="..\BibleOnSite\Services\PreferencesCloudDocument.cs" Link="Services\PreferencesCloudDocument.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesService.cs" Link="Services\PreferencesService.cs" />
+    <Compile Include="..\BibleOnSite\Services\PreferencesSyncService.cs" Link="Services\PreferencesSyncService.cs" />
+    <Compile Include="..\BibleOnSite\Services\SyncStampingPreferencesStorage.cs" Link="Services\SyncStampingPreferencesStorage.cs" />
     <Compile Include="..\BibleOnSite\Services\PlaybackAudioOwnership.cs" Link="Services\PlaybackAudioOwnership.cs" />
     <Compile Include="..\BibleOnSite\Services\IPadDeliveryService.cs" Link="Services\IPadDeliveryService.cs" />
     <Compile Include="..\BibleOnSite\Services\PadDeliveryService.cs" Link="Services\PadDeliveryService.cs" />
+    <Compile Include="..\BibleOnSite\Services\WindowsExtensionPackMap.cs" Link="Services\WindowsExtensionPackMap.cs" />
     <Compile Include="..\BibleOnSite\Services\PerushimCatalogService.cs" Link="Services\PerushimCatalogService.cs" />
     <Compile Include="..\BibleOnSite\Services\PerushimNotesService.cs" Link="Services\PerushimNotesService.cs" />
     <Compile Include="..\BibleOnSite\Services\SyntheticPerushimProvider.cs" Link="Services\SyntheticPerushimProvider.cs" />

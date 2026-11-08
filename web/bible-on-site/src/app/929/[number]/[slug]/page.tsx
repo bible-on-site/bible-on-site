@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { getPerekByPerekId } from "../../../../data/perek-dto";
 import {
 	getPerekIdsForSefer,
@@ -22,7 +24,6 @@ import {
 } from "../../../../lib/dedications/loaders";
 import { seferIdByName } from "../../../../lib/dedications/service";
 import { demoteHeadings } from "../../../../lib/html-headings";
-import { decorateArticleContent } from "../../../../lib/tanahpedia/article-mention-refs";
 import {
 	getAllPerushPerekNamePairs,
 	getPerushDetail,
@@ -37,8 +38,8 @@ import {
 } from "../../../../lib/reading-metrics";
 import {
 	articleTag,
-	cachedPerKey,
 	COLLECTION_TAGS,
+	cachedPerKey,
 	perekArticlesTag,
 	perekPerushimTag,
 	perushDetailTag,
@@ -53,19 +54,18 @@ import {
 import { absUrl, plainText, SITE_NAME } from "../../../../lib/seo/jsonld";
 import { pageMetadata } from "../../../../lib/seo/opengraph";
 import { selectPerekImages } from "../../../../lib/seo/perek-illustrations";
-import { sameAsFor } from "../../../../lib/seo/same-as";
 import { getPerekImagesByChapter } from "../../../../lib/seo/perek-images-data";
+import { sameAsFor } from "../../../../lib/seo/same-as";
+import { decorateArticleContent } from "../../../../lib/tanahpedia/article-mention-refs";
 import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs";
 import {
 	DedicationLines,
 	dedicationLines,
 } from "../../../components/dedications/DedicationLines";
 import { JsonLd } from "../../../components/JsonLd";
-import { ReadingProgress } from "@/app/components/ReadingProgress";
-import { ReadingTime } from "@/app/components/ReadingTime";
 import { ArticleActions } from "../components/ArticleActions";
-import { ArticlesSection } from "../components/ArticlesSection";
 import Breadcrumb from "../components/Breadcrumb";
+import { DailyArticlesSection } from "../components/DailyArticlesSection";
 import { PerekHeading } from "../components/PerekHeading";
 import { PerekText } from "../components/PerekText";
 import { PerushimSection } from "../components/PerushimSection";
@@ -154,10 +154,7 @@ const getCachedPerushDetail = cachedPerKey(
 	(perushId: number, perekId: number) => `${perushId}:${perekId}`,
 	(key) => {
 		const [perushId, perekId] = key.split(":").map(Number);
-		return [
-			COLLECTION_TAGS.perushim,
-			perushDetailTag(perushId, perekId),
-		];
+		return [COLLECTION_TAGS.perushim, perushDetailTag(perushId, perekId)];
 	},
 	(perushId: number, perekId: number) => getPerushDetail(perushId, perekId),
 );
@@ -480,7 +477,8 @@ export default async function ArticlePage({
 					/>
 
 					{/* Articles carousel */}
-					<ArticlesSection
+					<DailyArticlesSection
+						perekId={perekId}
 						articles={articles}
 						scrollStorageKey={`articles-perek-${perekId}`}
 					/>
@@ -615,7 +613,8 @@ export default async function ArticlePage({
 				/>
 
 				{/* Articles carousel */}
-				<ArticlesSection
+				<DailyArticlesSection
+					perekId={perekId}
 					articles={articles}
 					scrollStorageKey={`articles-perek-${perekId}`}
 				/>
