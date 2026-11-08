@@ -1,10 +1,13 @@
 /**
  * @jest-environment jsdom
  *
- * Tests for the parasha Torah-text aliyah marker selector (issue
- * #2519): default selection, ?reading=/?scheme= URL mirroring, the
- * scheme-retention/fallback rule across context switches, and the
- * in-place marker visibility toggle that never remounts scripture.
+ * Tests for the parasha Torah-text aliyah marker legend (issue #3165):
+ * every applicable division layer renders inline at once, the legend
+ * lists each layer in its own marker style, clicking an entry
+ * emphasizes its markers without hiding the rest, and the
+ * ?reading=/?scheme=/?variant= params the replaced selector accepted
+ * keep working as emphasis inputs — mirrored back on selection and
+ * never remounting scripture.
  */
 
 const mockReplace = jest.fn();
@@ -19,7 +22,7 @@ jest.mock("next/navigation", () => ({
 import { fireEvent, render, screen } from "@testing-library/react";
 import { type ReactNode, useLayoutEffect } from "react";
 import { renderToString } from "react-dom/server";
-import { AliyahControls } from "../../../src/app/parasha/[unit]/components/AliyahControls";
+import { AliyahLegend } from "../../../src/app/parasha/[unit]/components/AliyahLegend";
 import type { UnitAliyahContextOption } from "../../../src/data/parasha/parasha-aliyot";
 
 /** A standalone context with both schemes plus a shabbat-only joined
@@ -49,7 +52,7 @@ const makeJsx = () => (
 			<span data-aliyah-marker="" data-aliyah-key="matot:weekday" />
 			<span data-aliyah-marker="" data-aliyah-key="matot-masei:shabbat" />
 		</div>
-		<AliyahControls contexts={CONTEXTS} defaultKey={DEFAULT_KEY} />
+		<AliyahLegend contexts={CONTEXTS} defaultKey={DEFAULT_KEY} />
 	</>
 );
 
@@ -86,9 +89,11 @@ function ChooseDuringHydration({
 
 const markers = () =>
 	Array.from(document.querySelectorAll<HTMLElement>("[data-aliyah-marker]"));
-const visibleKeys = () =>
+/** Every marker layer stays visible — emphasis never hides one. */
+const allVisible = () => markers().every((el) => !el.hidden);
+const emphasizedKeys = () =>
 	markers()
-		.filter((el) => !el.hidden)
+		.filter((el) => el.hasAttribute("data-aliyah-selected"))
 		.map((el) => el.dataset.aliyahKey);
 const pressed = (utils: { container: HTMLElement }, name: string) => {
 	const btn = Array.from(utils.container.querySelectorAll("button")).find(
@@ -98,34 +103,61 @@ const pressed = (utils: { container: HTMLElement }, name: string) => {
 	return btn;
 };
 
-describe("AliyahControls", () => {
+describe("AliyahLegend", () => {
 	beforeEach(() => {
 		mockReplace.mockClear();
 		currentParams = new URLSearchParams();
 	});
 
-	it("selects the default layer and shows only its markers", () => {
+	it("lists every rendered layer as a legend entry in its own style", () => {
 		const utils = renderLayer();
 
-		expect(pressed(utils, "פרשת מטות").getAttribute("aria-pressed")).toBe(
-			"true",
+		const legend = utils.container.querySelector(
+			'[role="group"], fieldset',
+		) as HTMLElement;
+		expect(legend).not.toBeNull();
+		const entries = Array.from(
+			legend.querySelectorAll("button"),
+		) as HTMLElement[];
+		// One entry per layer — standalone schemes then the joined
+		// context — each carrying its markers' category styling.
+		expect(entries.map((el) => el.textContent)).toEqual([
+			"שבת",
+			"שני וחמישי",
+			"מטות-מסעי",
+		]);
+		expect(entries.map((el) => el.dataset.aliyahCategory)).toEqual([
+			"shabbat",
+			"weekday",
+			"joined",
+		]);
+		expect(pressed(utils, "מטות-מסעי").getAttribute("title")).toBe(
+			"מטות-מסעי · שבת",
 		);
-		expect(pressed(utils, "מטות-מסעי").getAttribute("aria-pressed")).toBe(
+	});
+
+	it("emphasizes the default layer while every marker stays visible", () => {
+		const utils = renderLayer();
+
+		expect(pressed(utils, "שבת").getAttribute("aria-pressed")).toBe("true");
+		expect(pressed(utils, "שני וחמישי").getAttribute("aria-pressed")).toBe(
 			"false",
 		);
-		expect(visibleKeys()).toEqual(["matot:shabbat"]);
+		expect(emphasizedKeys()).toEqual(["matot:shabbat"]);
+		expect(allVisible()).toBe(true);
 	});
 
 	it("honors reading and scheme params from the URL", () => {
 		renderLayer("reading=matot&scheme=weekday");
 
-		expect(visibleKeys()).toEqual(["matot:weekday"]);
+		expect(emphasizedKeys()).toEqual(["matot:weekday"]);
+		expect(allVisible()).toBe(true);
 	});
 
 	it("falls back to the default layer on unknown params", () => {
 		renderLayer("reading=bogus&scheme=bogus");
 
-		expect(visibleKeys()).toEqual(["matot:shabbat"]);
+		expect(emphasizedKeys()).toEqual(["matot:shabbat"]);
 	});
 
 	it("mirrors a non-default selection into the URL", () => {
@@ -138,7 +170,8 @@ describe("AliyahControls", () => {
 			{ scroll: false },
 		);
 		utils.applyNavigation();
-		expect(visibleKeys()).toEqual(["matot:weekday"]);
+		expect(emphasizedKeys()).toEqual(["matot:weekday"]);
+		expect(allVisible()).toBe(true);
 	});
 
 	it("clears the params when the default layer is re-selected", () => {
@@ -149,17 +182,8 @@ describe("AliyahControls", () => {
 		expect(mockReplace).toHaveBeenCalledWith("/פרשה/42", { scroll: false });
 	});
 
-	it("keeps the current scheme when the new context offers it", () => {
-		const utils = renderLayer("reading=matot-masei&scheme=shabbat");
-
-		fireEvent.click(pressed(utils, "פרשת מטות"));
-
-		// matot:shabbat is the default layer — params cleared.
-		expect(mockReplace).toHaveBeenCalledWith("/פרשה/42", { scroll: false });
-	});
-
-	it("falls back to shabbat when the new context lacks the scheme", () => {
-		const utils = renderLayer("reading=matot&scheme=weekday");
+	it("emphasizes a joined-reading layer by its own entry", () => {
+		const utils = renderLayer();
 
 		fireEvent.click(pressed(utils, "מטות-מסעי"));
 
@@ -168,28 +192,51 @@ describe("AliyahControls", () => {
 			{ scroll: false },
 		);
 		utils.applyNavigation();
-		expect(visibleKeys()).toEqual(["matot-masei:shabbat"]);
+		expect(emphasizedKeys()).toEqual(["matot-masei:shabbat"]);
+		expect(allVisible()).toBe(true);
 	});
 
 	it("falls back to the first context when defaultKey is stale", () => {
 		currentParams = new URLSearchParams();
 		const utils = render(
-			<AliyahControls contexts={CONTEXTS} defaultKey="gone:shabbat" />,
+			<AliyahLegend contexts={CONTEXTS} defaultKey="gone:shabbat" />,
 		);
 
-		// contexts[0] is the standalone — its default layer shows.
-		expect(pressed(utils, "פרשת מטות").getAttribute("aria-pressed")).toBe(
-			"true",
-		);
+		// contexts[0] is the standalone — its default layer is emphasized.
+		expect(pressed(utils, "שבת").getAttribute("aria-pressed")).toBe("true");
 	});
 
 	it("falls back to the first scheme when defaultKey's scheme is stale", () => {
 		currentParams = new URLSearchParams();
 		const utils = render(
-			<AliyahControls contexts={CONTEXTS} defaultKey="matot:bogus" />,
+			<AliyahLegend contexts={CONTEXTS} defaultKey="matot:bogus" />,
 		);
 
 		expect(pressed(utils, "שבת").getAttribute("aria-pressed")).toBe("true");
+	});
+
+	it("emphasizes a merged marker for any of its constituent layers", () => {
+		// A coincident boundary renders one merged pill carrying every
+		// constituent key space-separated — selecting any of them
+		// emphasizes the shared marker.
+		const utils = render(
+			<>
+				<div data-unit-text="">
+					<span
+						data-aliyah-marker=""
+						data-aliyah-key="matot:shabbat matot:weekday"
+					/>
+					{/* A marker without a key is never emphasized. */}
+					<span data-aliyah-marker="" />
+				</div>
+				<AliyahLegend contexts={CONTEXTS} defaultKey={DEFAULT_KEY} />
+			</>,
+		);
+
+		expect(emphasizedKeys()).toEqual(["matot:shabbat matot:weekday"]);
+		fireEvent.click(pressed(utils, "שני וחמישי"));
+		expect(emphasizedKeys()).toEqual(["matot:shabbat matot:weekday"]);
+		expect(allVisible()).toBe(true);
 	});
 
 	it("falls back to the URL-resolved layer when the offered contexts narrow under the active selection", () => {
@@ -197,8 +244,8 @@ describe("AliyahControls", () => {
 		fireEvent.click(pressed(utils, "שני וחמישי")); // selection: matot:weekday
 
 		// The offered contexts shrink before the soft navigation commits —
-		// the buttons degrade to the URL-resolved context's schemes instead
-		// of dereferencing a selection the new options don't carry.
+		// the legend degrades to the URL-resolved layer instead of
+		// dereferencing a selection the new options don't carry.
 		const narrowed: UnitAliyahContextOption = {
 			contextId: "vayigash",
 			label: "פרשת ויגש",
@@ -210,40 +257,17 @@ describe("AliyahControls", () => {
 				<div data-unit-text="">
 					<span data-aliyah-marker="" data-aliyah-key="vayigash:shabbat" />
 				</div>
-				<AliyahControls contexts={[narrowed]} defaultKey="vayigash:shabbat" />
+				<AliyahLegend contexts={[narrowed]} defaultKey="vayigash:shabbat" />
 			</>,
 		);
 
-		expect(pressed(utils, "פרשת ויגש")).toBeDefined();
 		expect(pressed(utils, "שבת")).toBeDefined();
-		expect(visibleKeys()).toEqual(["vayigash:shabbat"]);
-	});
-
-	it("falls back to the new context's first scheme when it lacks both the current scheme and shabbat", () => {
-		const customOnly: UnitAliyahContextOption = {
-			contextId: "matot-special",
-			label: "מטות מיוחד",
-			kind: "joined",
-			schemes: [{ schemeId: "mincha", label: "מנחה", variants: [] }],
-		};
-		currentParams = new URLSearchParams("reading=matot&scheme=weekday");
-		const utils = render(
-			<AliyahControls
-				contexts={[...CONTEXTS, customOnly]}
-				defaultKey={DEFAULT_KEY}
-			/>,
-		);
-
-		fireEvent.click(pressed(utils, "מטות מיוחד"));
-
-		expect(mockReplace).toHaveBeenCalledWith(
-			"/פרשה/42?reading=matot-special&scheme=mincha",
-			{ scroll: false },
-		);
+		expect(emphasizedKeys()).toEqual(["vayigash:shabbat"]);
+		expect(allVisible()).toBe(true);
 	});
 });
 
-describe("AliyahControls — minhag variants", () => {
+describe("AliyahLegend — minhag variants", () => {
 	beforeEach(() => {
 		mockReplace.mockClear();
 		currentParams = new URLSearchParams();
@@ -272,7 +296,7 @@ describe("AliyahControls — minhag variants", () => {
 				<span data-aliyah-marker="" data-aliyah-key="vayigash:weekday" />
 				<span data-aliyah-marker="" data-aliyah-key={'vayigash:shabbat:חב"ד'} />
 			</div>
-			<AliyahControls contexts={[WITH_VARIANT]} defaultKey="vayigash:shabbat" />
+			<AliyahLegend contexts={[WITH_VARIANT]} defaultKey="vayigash:shabbat" />
 		</>
 	);
 
@@ -289,27 +313,33 @@ describe("AliyahControls — minhag variants", () => {
 		};
 	}
 
-	it("offers the מנהג group only when the selected scheme has variants", () => {
+	it("lists each variant as its own layer entry", () => {
 		const utils = renderVariantLayer();
 
-		expect(pressed(utils, "נפוץ")).toBeDefined();
-		expect(pressed(utils, 'חב"ד')).toBeDefined();
-
-		fireEvent.click(pressed(utils, "חול"));
-		utils.applyNavigation();
-		// The weekday scheme carries no variant — the group disappears.
-		expect(utils.container.textContent).not.toContain("נפוץ");
+		const entries = Array.from(
+			utils.container.querySelectorAll("fieldset button"),
+		) as HTMLElement[];
+		expect(entries.map((el) => el.textContent)).toEqual(["שבת", 'חב"ד', "חול"]);
+		expect(entries.map((el) => el.dataset.aliyahCategory)).toEqual([
+			"shabbat",
+			"variant",
+			"weekday",
+		]);
+		expect(pressed(utils, 'חב"ד').getAttribute("title")).toBe(
+			'פרשת ויגש · שבת · חב"ד',
+		);
 	});
 
-	it("marks the base split pressed by default and shows base markers", () => {
+	it("marks the base split pressed by default alongside all markers", () => {
 		const utils = renderVariantLayer();
 
-		expect(pressed(utils, "נפוץ").getAttribute("aria-pressed")).toBe("true");
+		expect(pressed(utils, "שבת").getAttribute("aria-pressed")).toBe("true");
 		expect(pressed(utils, 'חב"ד').getAttribute("aria-pressed")).toBe("false");
-		expect(visibleKeys()).toEqual(["vayigash:shabbat"]);
+		expect(emphasizedKeys()).toEqual(["vayigash:shabbat"]);
+		expect(allVisible()).toBe(true);
 	});
 
-	it("swaps to the variant layer and mirrors ?variant= into the URL", () => {
+	it("emphasizes the variant layer and mirrors ?variant= into the URL", () => {
 		const utils = renderVariantLayer();
 
 		fireEvent.click(pressed(utils, 'חב"ד'));
@@ -319,8 +349,10 @@ describe("AliyahControls — minhag variants", () => {
 			{ scroll: false },
 		);
 		utils.applyNavigation();
-		expect(visibleKeys()).toEqual(['vayigash:shabbat:חב"ד']);
+		expect(emphasizedKeys()).toEqual(['vayigash:shabbat:חב"ד']);
 		expect(pressed(utils, 'חב"ד').getAttribute("aria-pressed")).toBe("true");
+		// The variant's emphasis leaves base and weekday markers visible.
+		expect(allVisible()).toBe(true);
 	});
 
 	it("keeps the first variant click before the initial passive effects", () => {
@@ -336,7 +368,7 @@ describe("AliyahControls — minhag variants", () => {
 			{ scroll: false },
 		);
 		expect(pressed(utils, 'חב"ד').getAttribute("aria-pressed")).toBe("true");
-		expect(visibleKeys()).toEqual(['vayigash:shabbat:חב"ד']);
+		expect(emphasizedKeys()).toEqual(['vayigash:shabbat:חב"ד']);
 	});
 
 	it("disables server-rendered controls until the first click can be handled", () => {
@@ -347,53 +379,54 @@ describe("AliyahControls — minhag variants", () => {
 		);
 		container.replaceChildren(...serverDocument.body.childNodes);
 		document.body.append(container);
-		const controls = container.querySelector("fieldset");
-		expect(controls).toBeDisabled();
+		const legend = container.querySelector("fieldset");
+		expect(legend).toBeDisabled();
 		for (const button of container.querySelectorAll("button")) {
 			expect(button).toBeDisabled();
 		}
 
 		const utils = render(makeVariantJsx(), { container, hydrate: true });
-		expect(controls).not.toBeDisabled();
+		expect(legend).not.toBeDisabled();
 		fireEvent.click(pressed(utils, 'חב"ד'));
 		expect(mockReplace).toHaveBeenCalledTimes(1);
 		expect(pressed(utils, 'חב"ד').getAttribute("aria-pressed")).toBe("true");
-		expect(visibleKeys()).toEqual(['vayigash:shabbat:חב"ד']);
+		expect(emphasizedKeys()).toEqual(['vayigash:shabbat:חב"ד']);
 	});
 
-	it("resyncs variant markers when back and forward commit URL changes", () => {
+	it("resyncs variant emphasis when back and forward commit URL changes", () => {
 		const utils = renderVariantLayer(`variant=${encodeURIComponent('חב"ד')}`);
-		expect(visibleKeys()).toEqual(['vayigash:shabbat:חב"ד']);
+		expect(emphasizedKeys()).toEqual(['vayigash:shabbat:חב"ד']);
 
 		currentParams = new URLSearchParams();
 		utils.rerender(makeVariantJsx());
-		expect(visibleKeys()).toEqual(["vayigash:shabbat"]);
-		expect(pressed(utils, "נפוץ").getAttribute("aria-pressed")).toBe("true");
+		expect(emphasizedKeys()).toEqual(["vayigash:shabbat"]);
+		expect(pressed(utils, "שבת").getAttribute("aria-pressed")).toBe("true");
 
 		currentParams = new URLSearchParams(
 			`variant=${encodeURIComponent('חב"ד')}`,
 		);
 		utils.rerender(makeVariantJsx());
-		expect(visibleKeys()).toEqual(['vayigash:shabbat:חב"ד']);
+		expect(emphasizedKeys()).toEqual(['vayigash:shabbat:חב"ד']);
 		expect(pressed(utils, 'חב"ד').getAttribute("aria-pressed")).toBe("true");
+		expect(allVisible()).toBe(true);
 	});
 
 	it("honors a ?variant= param from the URL", () => {
 		renderVariantLayer(`variant=${encodeURIComponent('חב"ד')}`);
 
-		expect(visibleKeys()).toEqual(['vayigash:shabbat:חב"ד']);
+		expect(emphasizedKeys()).toEqual(['vayigash:shabbat:חב"ד']);
 	});
 
 	it("ignores a ?variant= the selected scheme never offered", () => {
 		renderVariantLayer("scheme=weekday&variant=bogus");
 
-		expect(visibleKeys()).toEqual(["vayigash:weekday"]);
+		expect(emphasizedKeys()).toEqual(["vayigash:weekday"]);
 	});
 
 	it("drops the variant when the base split is re-selected", () => {
 		const utils = renderVariantLayer(`variant=${encodeURIComponent('חב"ד')}`);
 
-		fireEvent.click(pressed(utils, "נפוץ"));
+		fireEvent.click(pressed(utils, "שבת"));
 
 		expect(mockReplace).toHaveBeenCalledWith("/פרשה/42", { scroll: false });
 	});
