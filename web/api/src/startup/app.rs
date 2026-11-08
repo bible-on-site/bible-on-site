@@ -101,7 +101,12 @@ impl ActixApp {
         let article_index = article_index.clone();
         let dev_tools = profile.dev_tools_enabled();
         move |cfg: &mut web::ServiceConfig| {
-            cfg.app_data(web::Data::new(build_schema(&db, &article_index)))
+            // Keep unmatched requests on a uniform non-disclosing 404:
+            // actix-web's built-in default answers 405 + Allow when a path
+            // matches but its method guard rejects, which would reveal that
+            // a resource exists at the path (e.g. POST-only GraphQL root).
+            cfg.default_service(web::to(|| async { HttpResponse::NotFound().finish() }))
+                .app_data(web::Data::new(build_schema(&db, &article_index)))
                 .app_data(web::Data::new(article_index.clone()))
                 .service(web::resource("/").guard(guard::Post()).to(graphql_request))
                 .service(
