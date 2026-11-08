@@ -63,4 +63,5 @@ tests/unit/components/err.txt
 /src/data/db/store-metadata-snapshot.generated.json
 
 # Generated, content-addressed reader books
+/src/data/db/sefer-books/
 /public/generated/sefarim/
