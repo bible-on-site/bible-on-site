@@ -17,16 +17,6 @@ export function releasePayload(release) {
 	return payload;
 }
 
-/** Bind both API platform artifacts to the CI run recorded in the published release. */
-export function apiImageArtifacts(payload) {
-	if (payload?.released_arm64_artifact_name === undefined) return undefined;
-	if (payload.module_name !== "api")
-		throw new Error(
-			"API platform artifacts do not match published CI provenance",
-		);
-	return nativeImageArtifacts(payload);
-}
-
 /** Select native archives only from the original module and source CI run. */
 export function nativeImageArtifacts(payload) {
 	if (payload?.released_arm64_artifact_name === undefined) return undefined;
