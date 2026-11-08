@@ -194,6 +194,16 @@ for (const file of [
 					"Check deployment source and freshness",
 					"Record deployment result",
 					"Record distribution result",
+					// #2972: publish_app_store_notes is a separate metadata
+					// phase, not binary delivery — it is needs-gated on the
+					// deploy job instead of the deployment guard so reruns
+					// can retry notes after the binary is already delivered.
+					"Preserve notes publication automation",
+					"Checkout the released source",
+					"Setup App Store Connect API Key",
+					"Publish Hebrew What's New on the editable version record",
+					// Credential cleanup is not a production write.
+					"Cleanup",
 				].includes(name)
 			)
 				continue;

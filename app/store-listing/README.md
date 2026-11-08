@@ -41,6 +41,14 @@ for the next submission (App Store Connect > app > version > Localization `he`):
 Not yet covered: the iPad 13" screenshot set and additional localizations — both
 need console work or real device captures at submission time.
 
+## Release notes
+
+Per-version "What's new" text is a different artifact from this listing copy:
+curated Hebrew entries live in `app/store-release-notes/` and are published to
+Google Play (`TrackRelease.ReleaseNotes`), TestFlight, the editable App Store
+version's `whatsNew` and the Microsoft flight submission's `releaseNotes` by the
+CD pipeline — see `app/store-release-notes/README.md`.
+
 ## Screenshots
 
 Current captures come from the app's own mobile e2e artifacts (Appium device
