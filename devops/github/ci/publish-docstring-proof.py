@@ -8,7 +8,7 @@ import sys
 
 # publish.py reads __doc__ only as ArgumentParser help. Pin the audited remaining
 # bytes so future code/consumers conservatively retain delivery until re-audited.
-AUDITED_BODY_SHA256 = "e07b4815c5a65803b40f3ac59aed8de90faef497a38a33bd10663dc49efd0750"
+AUDITED_BODY_SHA256 = "5501f7b400931ef2ddd959a0ce4e49184e66c90e60c80604ec230266aca9b107"
 
 
 def non_doc_bytes(source):

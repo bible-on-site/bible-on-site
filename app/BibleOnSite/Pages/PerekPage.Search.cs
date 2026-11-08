@@ -255,7 +255,7 @@ public partial class PerekPage
                 // UniqueName is the canonical slug — alias hits already resolve
                 // server-side, so this always opens the right entry (#2104).
                 await ShellAppNavigator.Instance.GoToAsync(
-                    $"tanahpediaEntry?uniqueName={Uri.EscapeDataString(entry.UniqueName)}");
+                    AppRoutes.TanahpediaEntry(entry.UniqueName));
             }
             else if (GetSearchPerekId(result) > 0)
             {

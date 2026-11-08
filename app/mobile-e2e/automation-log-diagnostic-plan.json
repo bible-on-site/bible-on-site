@@ -1,0 +1,40 @@
+{
+  "issue": 3145,
+  "classification": "Passive automation-side evidence collection, not an application, calendar, startup, visibility or reader repair",
+  "evidence": {
+    "workflow": 42277352009,
+    "head": "a77bc72777f8db970f1c8d01cc98c5a1d7898a27",
+    "actualCheckout": "185383d376ea304a28f3ce19ee825a797e7f6675",
+    "originalRequest": "MiniMonthDaySource /elements,126948ms request observation before HTTP408/session loss; original appPID42818. Existing recovery and final10passes do not erase it.",
+    "missingEvidence": "The existing device-live.log captures only BibleOnSite. Original appium.log has zero Xcode or XCTest phase lines. App-side213AXattribute returns and239remote-view forwarding events do not locate the delay. Post-failure masterLLDB and prior OS sampler failed to produce a native thread graph within their existing caps.",
+    "preservation": "app1701 complete15diagnostic/report/coverageZIPs9joblogs;530decoded-entry hashes;373880414decoded bytes;164verified selected files. All earlier failed allocations retained, not repeated."
+  },
+  "sourceFacts": {
+    "versions": "Original logs identify Appium3.9.0, XCUITest12.22.8 and the normal prebuilt WebDriverAgent16.17.7.",
+    "wdaCommit": "c00c18e3e6b9d15069e97b1670065549bef07488",
+    "find": "https://github.com/appium/appium-ios/blob/c00c18e3e6b9d15069e97b1670065549bef07488/packages/webdriveragent/WebDriverAgentLib/Commands/FBFindElementCommands.m",
+    "response": "https://github.com/appium/appium-ios/blob/c00c18e3e6b9d15069e97b1670065549bef07488/packages/webdriveragent/WebDriverAgentLib/Routing/FBResponsePayload.m",
+    "visibility": "https://github.com/appium/appium-ios/blob/c00c18e3e6b9d15069e97b1670065549bef07488/packages/webdriveragent/WebDriverAgentLib/Categories/XCUIElement+FBIsVisible.m",
+    "interpretation": "Finding descendants and enriching each response with precise displayed/frame/text/enabled are separate native operations. That source fact is a reason to observe automation-side activity; it does not establish which operation caused the original timeout."
+  },
+  "question": "During an original long accessibility-ID lookup, do the same-device WebDriverAgent/testmanagerd logs identify the active query, response-attribute or remote accessibility stage, correlated with Appium request/session and the app's original process?",
+  "method": "Keep the app-only identity stream intact. Start a separate read-only simctl log stream scoped to the exactMOBILE_UDID, selecting only WebDriverAgent-prefixed processes and testmanagerd, before the existing test launch. Retain raw timestamped process/thread events and source/UDID metadata. No debugger, sampler, extra WebDriver query or process inspection is started. Stop both existing/new readers concurrently inside the existing native-log shutdown phase; each existing5000ms stop cap and shared pilot deadline remain.",
+  "controls": "Real disposable processes demonstrate both streams must finish and preserve their bytes before shutdown returns, including when the first reader failed. The original single-reader behavior fails those controls. Explicit simulator arguments keep the automation log separate from the app identity tail.",
+  "allocations": 1,
+  "allocation": "One automatic normal workflow on this independent master-based diagnostic head after local controls/hooks. This is not a rerun of exhausted3146/3147. Application source, originalC#queries and native response settings are unchanged. No reader acceptance credit.",
+  "qualification": "Preserve every complete diagnostic/report/coverage archive, job log, archive/entry digest, actual checkout and every failed/recovered original attempt. Inspect actual automation rows/PIDs/timestamps and correlate their process with the original session's app-side client-connection evidence. Do not call an empty file, a later session, a duplicated artifact or a passing scenario critical-path evidence. Activity logs are not CPU samples or native call stacks.",
+  "stop": "Stop after this one workflow, green or red, with all outcomes retained. A nonrecurrence or missing/unhelpful automation trace is inconclusive: no unchanged second allocation, manual rerun or merge merely to obtain another measurement. No adoption bypass of failed diagnostics, module coverage or review findings. Original3145/Store3143/reader startup/public physical/Windows2881 criteria remain open.",
+  "completedAllocation": {
+    "run": 42293424176,
+    "head": "1a580380e106e6c9aab3545e14e80ac39414a19e",
+    "actualCheckout": "187fb182be046f3821d524f1687923d5f265f074",
+    "conclusion": "success",
+    "exhausted": true,
+    "outcome": "Both iOS shards executed10cases with10impact skips, zero original failures/recoveries. Both actual Mac logs contain WebDriverAgent and testmanagerd events; WDA PIDs9737/38308 match the respective app-side client observations on distinct runners1000247253/1000247254. Activity logging works, but the original stall did not recur and remains unexplained.",
+    "preservation": "All17complete diagnostic/report/coverageZIPs and all17non-skipped joblogs preserved with archive digests; all547decoded-entry hashes/603775965bytes retained.148selected files/210079252bytes extracted and verified. Both large app binaries are metadata/digest-only. Actual187fb complete tree equals1a580. All75checks and all6module gates pass; Codacy0issues/NoCoverableLines gate satisfied. One separate unused-import review finding must still be corrected."
+  },
+  "reviewCorrection": "After full original allocation preservation, remove the confirmed unused captureNativeFrame import. Normal new-head CI is required to validate this real review correction; no additional diagnostic experiment or manual rerun is requested. It does not increase the single diagnostic allocation limit or provide root-cause/reader acceptance credit. Retain every subsequent normal validation outcome as well; later greens never erase the original failures.",
+  "unchanged": "App/UI/accessible content/dependencies/visibility precision/rect/displayed/text/enabled response attributes; startup45s/Appium120000ms/failure handoff15s/native stack10000ms/screenshot5000ms/pilot limits/recovery counts;12reader scenarios/3controls/restored legacy drag/seven panel quarantines;AWS/Store workflows/resources/publication. No warmup/prelaunch/retries/cache/protection changes.",
+  "rootCauseCredit": 0,
+  "readerAcceptanceCredit": 0
+}

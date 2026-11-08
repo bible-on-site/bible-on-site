@@ -5,7 +5,7 @@ description = "Bible on Site API"
 license-file = "../../license"
 repository = "https://github.com/bible-on-site/bible-on-site"
 publish = false
-version = "0.1.108"
+version = "0.1.119"
 edition = "2024"
 
 [dependencies]
@@ -21,6 +21,7 @@ async-graphql = { version = "7.2.1", default-features = false, features = [
 async-graphql-actix-web = "7.2.1"
 dotenvy = "0.15.7"
 serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.149"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
 anyhow = "1.0.104"
 tracing = "0.1.44"

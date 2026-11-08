@@ -54,6 +54,23 @@ def fingerprint(value):
     return hashlib.sha256(json_bytes(value)).hexdigest()
 
 
+def diagnostics(phase, stderr):
+    """Return a phase-labeled error carrying only the numeric client error code."""
+    # Raw client stderr may contain credentials, SQL or data fragments; only
+    # the standard ``ERROR <code>`` number is propagated into the job log.
+    match = re.search(rb"ERROR (\d+)", stderr or b"", re.IGNORECASE)
+    if match:
+        return BackupError(
+            f"{phase} failed (MySQL error {match.group(1).decode('ascii')})"
+        )
+    return BackupError(f"{phase} failed")
+
+
+def error_path(directory, name):
+    """Reserve a private stderr capture path inside the working directory."""
+    return Path(directory) / f"{name}-{uuid.uuid4().hex}.stderr"
+
+
 @dataclass(repr=False)
 class Database:
     host: str
@@ -132,13 +149,17 @@ class Database:
         if self.ca:
             args += ["--ssl-mode=VERIFY_IDENTITY", f"--ssl-ca={self.ca}"]
         else:
-            # Only the disposable loopback restore server may omit TLS.
+            # Only the disposable loopback restore server may omit TLS. Its
+            # first caching_sha2_password login has no warm cache and no TLS
+            # channel, so the RSA public-key exchange is required (otherwise
+            # the client fails cold with MySQL error 2061). This option stays
+            # confined to this loopback-only branch.
             if self.host != "127.0.0.1":
                 raise BackupError("TLS verification is required for remote databases")
-            args += ["--ssl-mode=DISABLED"]
+            args += ["--ssl-mode=DISABLED", "--get-server-public-key"]
         return args
 
-    def query(self, sql, directory):
+    def query(self, sql, directory, phase):
         config = self.defaults(directory)
         try:
             # Absolute allowlisted CLI; SQL is stdin and credentials are private options.
@@ -148,28 +169,29 @@ class Database:
                 + ["--batch", "--raw", "--skip-column-names"],
                 input=sql.encode(),
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
                 check=False,
                 shell=False,
             )
             if result.returncode:
-                raise BackupError("Database metadata query failed")
+                raise diagnostics(phase, result.stderr)
             return result.stdout.decode("utf-8").splitlines()
         finally:
             config.unlink()
 
 
-def server_identity(database, directory):
+def server_identity(database, directory, phase):
     rows = database.query(
         "SELECT JSON_OBJECT('uuid',@@server_uuid,'version',@@version,'events',@@event_scheduler);",
         directory,
+        phase,
     )
     if len(rows) != 1:
         raise BackupError("Missing server identity")
     return json.loads(rows[0])
 
 
-def catalog(database, directory):
+def catalog(database, directory, phase):
     """Capture stable schema metadata, excluding changing row counts and auto-increments."""
     name = database.name
     identifier(name)
@@ -268,6 +290,7 @@ def catalog(database, directory):
                 # Fragments are fixed above; name passed identifier() before this loop.
                 f"SELECT JSON_OBJECT({fields}) FROM information_schema.{table} WHERE {schema}='{name}' ORDER BY {order};",  # nosec B608
                 directory,
+                phase,
             )
         ]
     tables = [row for row in result["TABLES"] if row["type"] == "BASE TABLE"]
@@ -281,6 +304,7 @@ def catalog(database, directory):
 def dump_archive(database, path, directory):
     identifier(database.name)
     config = database.defaults(directory)
+    errors = error_path(directory, "mysqldump")
     try:
         args = database.command("mysqldump", config) + [
             "--single-transaction",
@@ -296,27 +320,30 @@ def dump_archive(database, path, directory):
             "--databases",
             database.name,
         ]
-        # Absolute allowlisted CLI, fixed flags, validated schema and private options.
-        # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
-        with subprocess.Popen(  # nosec B603 # Argv only; no shell interpretation.
-            args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, shell=False
-        ) as process:
-            with gzip.open(path, "wb", compresslevel=6) as output:
-                while block := process.stdout.read(BLOCK_BYTES):
-                    output.write(block)
-            if process.wait():
-                raise BackupError("mysqldump failed; no backup will be published")
+        with open(
+            errors, "xb", opener=lambda p, flags: os.open(p, flags, 0o600)
+        ) as log:
+            # Absolute allowlisted CLI, fixed flags, validated schema and private options.
+            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
+            with subprocess.Popen(  # nosec B603 # Argv only; no shell interpretation.
+                args, stdout=subprocess.PIPE, stderr=log, shell=False
+            ) as process:
+                with gzip.open(path, "wb", compresslevel=6) as output:
+                    while block := process.stdout.read(BLOCK_BYTES):
+                        output.write(block)
+                failed = bool(process.wait())
+        if failed:
+            raise diagnostics("Source export", errors.read_bytes())
     finally:
         config.unlink()
+        errors.unlink(missing_ok=True)
 
 
-def restore_archive(database, path, directory, source_uuid, sha256):
-    """Import only into a fresh loopback database with its event scheduler disabled."""
+def validate_scratch(database, directory, source_uuid):
+    """Prove a fresh loopback scratch target authenticates and is safe and empty."""
     if database.host != "127.0.0.1" or database.name != DATABASE:
         raise BackupError("Restore target must be a fresh loopback tanah database")
-    if digest(path) != sha256:
-        raise BackupError("Archive SHA-256 mismatch")
-    identity = server_identity(database, directory)
+    identity = server_identity(database, directory, "Scratch identity query")
     if identity["uuid"] == source_uuid or identity["events"] != "OFF":
         raise BackupError("Unsafe restore server identity or event scheduler")
     if not identity["version"].startswith("8.4."):
@@ -324,34 +351,48 @@ def restore_archive(database, path, directory, source_uuid, sha256):
     if database.query(
         "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME='tanah';",
         directory,
+        "Scratch emptiness query",
     ):
         raise BackupError("Refusing to overwrite an existing database")
+
+
+def restore_archive(database, path, directory, source_uuid, sha256):
+    """Import only into a fresh loopback database with its event scheduler disabled."""
+    if digest(path) != sha256:
+        raise BackupError("Archive SHA-256 mismatch")
+    validate_scratch(database, directory, source_uuid)
     config = database.defaults(directory)
+    errors = error_path(directory, "mysql-import")
     try:
-        # Absolute allowlisted CLI; the archived SQL flows through stdin only.
-        # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
-        with subprocess.Popen(  # nosec B603 # Fixed CLI, private options, no shell.
-            # Fixed executable/flags, private defaults file; dump is stdin, never argv.
-            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
-            database.command("mysql", config) + ["--binary-mode"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            shell=False,
-        ) as process:
-            try:
-                with gzip.open(path, "rb") as source:
-                    while block := source.read(BLOCK_BYTES):
-                        process.stdin.write(block)
-            except BrokenPipeError:
-                raise BackupError("Scratch import rejected the dump") from None
-            finally:
-                process.stdin.close()
-            if process.wait():
-                raise BackupError("Scratch import failed")
+        with open(
+            errors, "xb", opener=lambda p, flags: os.open(p, flags, 0o600)
+        ) as log:
+            # Absolute allowlisted CLI; the archived SQL flows through stdin only.
+            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit.dangerous-subprocess-use-audit
+            with subprocess.Popen(  # nosec B603 # Fixed CLI, private options, no shell.
+                # Fixed executable/flags, private defaults file; dump is stdin, never argv.
+                # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args
+                database.command("mysql", config) + ["--binary-mode"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
+                stderr=log,
+                shell=False,
+            ) as process:
+                try:
+                    with gzip.open(path, "rb") as source:
+                        while block := source.read(BLOCK_BYTES):
+                            process.stdin.write(block)
+                except BrokenPipeError:
+                    raise BackupError("Scratch import rejected the dump") from None
+                finally:
+                    process.stdin.close()
+                failed = bool(process.wait())
+        if failed:
+            raise diagnostics("Scratch import", errors.read_bytes())
     finally:
         config.unlink()
-    schema = catalog(database, directory)
+        errors.unlink(missing_ok=True)
+    schema = catalog(database, directory, "Restored catalog query")
     counts = {}
     for row in schema["TABLES"]:
         if row["type"] == "BASE TABLE":
@@ -360,9 +401,12 @@ def restore_archive(database, path, directory, source_uuid, sha256):
                 # Both identifiers strictly allowlisted and quoted by identifier().
                 f"SELECT COUNT(*) FROM {identifier(DATABASE)}.{table};",  # nosec B608
                 directory,
+                "Restored table query",
             )
             checksum = database.query(
-                f"CHECKSUM TABLE {identifier(DATABASE)}.{table} EXTENDED;", directory
+                f"CHECKSUM TABLE {identifier(DATABASE)}.{table} EXTENDED;",
+                directory,
+                "Restored table query",
             )
             value = checksum[0].split("\t")[1]
             if not value.isdecimal():
@@ -426,11 +470,15 @@ def backup(source, scratch, s3, kind, directory, *, now=None, run=None):
     if kind not in RETENTION:
         raise BackupError("Unsupported backup retention tier")
     now = now or datetime.now(UTC)
-    identity = server_identity(source, directory)
-    before = catalog(source, directory)
+    identity = server_identity(source, directory, "Source identity query")
+    before = catalog(source, directory, "Source catalog query")
+    # Prove the scratch target authenticates and is a safe empty restore server
+    # before the complete production export runs; a cold-cache credential or
+    # isolation failure must abort here, not after reading the whole database.
+    validate_scratch(scratch, directory, identity["uuid"])
     path = Path(directory) / "application.sql.gz"
     dump_archive(source, path, directory)
-    if before != catalog(source, directory):
+    if before != catalog(source, directory, "Source catalog query"):
         raise BackupError("Schema changed during export; discard this backup")
     sha256 = digest(path)
     restored = restore_archive(scratch, path, directory, identity["uuid"], sha256)

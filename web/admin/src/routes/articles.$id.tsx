@@ -6,6 +6,7 @@ import {
 	useSearch,
 } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
+import { ArticleRelationshipsPanel } from "~/components/ArticleRelationshipsPanel";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
 import { CoveringSourcesEditor } from "~/components/CoveringSourcesEditor";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
@@ -24,6 +25,7 @@ import {
 	updateArticle,
 } from "~/server/articles";
 import { type Author, getAuthors } from "~/server/authors";
+import { listMoadim } from "~/server/moadim";
 import { getPerakim } from "~/server/perakim";
 
 type ArticleSearch = {
@@ -65,6 +67,10 @@ function ArticleEditPage() {
 		coveringSources: isNew ? [] : undefined,
 		coverageVerified: false,
 		hebrewDates: isNew ? [] : undefined,
+		// New articles keep moedIds undefined until the catalogue query
+		// proves the moed schema exists — an eager [] would still hit the
+		// link table on save and roll the create back pre-migration.
+		moedIds: undefined,
 	});
 
 	const [hasChanges, setHasChanges] = useState(false);
@@ -89,8 +95,29 @@ function ArticleEditPage() {
 		queryFn: () => getPerakim(),
 	});
 
+	// The moed catalogue is small — one checkbox per moed; `undefined`
+	// keeps the control hidden while the moed schema is not deployed.
+	const { data: moadim } = useQuery({
+		queryKey: ["moadim"],
+		queryFn: () => listMoadim(),
+	});
+
+	// Once the catalogue answers (even as an empty list) the moed schema
+	// exists, so a new article may carry an explicit empty link set —
+	// `undefined` stays the "schema unknown, omit on save" state.
+	useEffect(() => {
+		if (isNew && moadim !== undefined) {
+			setFormData((prev) =>
+				prev.moedIds === undefined ? { ...prev, moedIds: [] } : prev,
+			);
+		}
+	}, [isNew, moadim]);
+
 	const selectedPerek = perakim?.find(
 		(perek) => perek.id === formData.perek_id,
+	);
+	const selectedAuthor = authors?.find(
+		(author) => author.id === formData.author_id,
 	);
 
 	// Initialize form with article data
@@ -107,6 +134,7 @@ function ArticleEditPage() {
 				coveringSources: article.coveringSources,
 				coverageVerified: article.coverage_verified,
 				hebrewDates: article.hebrewDates,
+				moedIds: article.moedIds,
 			});
 		}
 	}, [article]);
@@ -359,6 +387,45 @@ function ArticleEditPage() {
 						/>
 					</div>
 
+					{formData.moedIds !== undefined && moadim && moadim.length > 0 && (
+						<div className="border-t border-gray-100 pt-6">
+							<div className="block text-sm font-semibold text-gray-700 mb-2">
+								🗓️ מועדים על הפרק
+							</div>
+							<div className="flex flex-wrap gap-3">
+								{moadim.map((moed) => (
+									<label
+										key={moed.id}
+										className="flex items-center gap-1.5 text-sm"
+									>
+										<input
+											type="checkbox"
+											checked={formData.moedIds?.includes(moed.id) ?? false}
+											onChange={(e) =>
+												handleFieldChange(
+													"moedIds",
+													e.target.checked
+														? [...(formData.moedIds ?? []), moed.id]
+														: (formData.moedIds ?? []).filter(
+																(id) => id !== moed.id,
+															),
+												)
+											}
+										/>
+										{moed.name}
+										{!moed.published && (
+											<span className="text-xs text-gray-400">(טיוטה)</span>
+										)}
+									</label>
+								))}
+							</div>
+							<p className="mt-1 text-xs text-gray-400">
+								קישור מפורש של המאמר למועד — נוסף לאיחוד ההתאמות לפי טווחי
+								המקרא של המועד
+							</p>
+						</div>
+					)}
+
 					{formData.coveringSources !== undefined && (
 						<div className="border-t border-gray-100 pt-6">
 							<CoveringSourcesEditor
@@ -424,6 +491,19 @@ function ArticleEditPage() {
 					</button>
 				</div>
 			</form>
+
+			{/* Full relationship picture (#3102) — every registry entry, each
+			    managed through its owning workflow. Only for persisted articles. */}
+			{articleId !== null && (
+				<ArticleRelationshipsPanel
+					articleId={articleId}
+					perekId={formData.perek_id}
+					authorId={formData.author_id}
+					authorName={selectedAuthor?.name}
+					coveringCount={formData.coveringSources?.length}
+					coverageVerified={formData.coverageVerified === true}
+				/>
+			)}
 		</div>
 	);
 }

@@ -1,6 +1,5 @@
 "use client";
 import type {
-	Bookmark,
 	BookmarkContext,
 	BookmarkProvider,
 	FlipBookHandle,
@@ -84,11 +83,11 @@ import { SeferPasukNumber } from "./SeferPasukNumber";
 import { SeferPasukSelectionBar } from "./SeferPasukSelectionBar";
 import { Stuma } from "./Stuma";
 import styles from "./sefer.module.css";
+import { createSeferBookmarkContent } from "./sefer-bookmark-content";
 import {
 	buildSeferChapterBookmarks,
 	compareSeferBookmarkTitles,
 	filterUpcomingBookmarks,
-	type SeferBookmarkData,
 } from "./sefer-bookmarks";
 import {
 	articleDocumentTitle,
@@ -115,6 +114,11 @@ import { useDailyArticleOverride } from "./use-daily-article-override";
 import { useSeferContentNavigation } from "./useSeferContentNavigation";
 import "html-flip-book-react/styles.css";
 import "./sefer.css";
+
+// Memoized so a per-navigation rebuild of panelPages re-renders only the
+// panel whose props actually changed (isActive / initialSlug), not every
+// mounted panel in the book.
+const MemoSeferPanel = React.memo(SeferPanel);
 
 // A page element is cheap to create. Its verse tree is built only when the
 // FlipBook mounts that page inside its buffer, including pages revealed later.
@@ -306,29 +310,9 @@ const Sefer = (props: {
 					context,
 					bookmarkSettings.upcomingOnly,
 				),
-			renderBookmark: (bookmark: Bookmark) => (
-				<span className="sefer-bookmark-label">
-					{(bookmark.data as SeferBookmarkData).compact}
-				</span>
-			),
-			renderExpandedBookmark: (bookmark: Bookmark) => {
-				const data = bookmark.data as SeferBookmarkData;
-				return (
-					<span
-						className="sefer-bookmark-expanded"
-						style={{ "--cover-color": seferColor } as React.CSSProperties}
-					>
-						<span className="sefer-bookmark-expanded-perek">
-							פרק {data.compact}
-						</span>
-						{data.title && (
-							<span className="sefer-bookmark-expanded-title">
-								{data.title}
-							</span>
-						)}
-					</span>
-				);
-			},
+			// The native provider refreshes every turn. Reuse immutable children
+			// so unchanged tab text does not reconcile throughout the portal tree.
+			...createSeferBookmarkContent(seferColor),
 			orientation: bookmarkSettings.orientation,
 			attachment: bookmarkSettings.attachment,
 			placement: bookmarkSettings.placement,
@@ -657,7 +641,7 @@ const Sefer = (props: {
 				const blankKey = `blank-${perekKeyBase}`;
 				return (
 					<React.Fragment key={blankKey}>
-						<SeferPanel
+						<MemoSeferPanel
 							isActive={
 								isVisible &&
 								pagePerekId != null &&

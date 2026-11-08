@@ -244,7 +244,7 @@ test("AWS release replays retain current automation and isolate immutable artifa
 	);
 	const deploy = steps.find((block) => block.startsWith("Deploy to ECR\n"));
 	assert.match(deploy, /working-directory: \$\{\{ env.DEVOPS_DIRECTORY \}\}/);
-	assert.match(deploy, /--source-ref "\$API_RELEASE_SOURCE"/);
+	assert.match(deploy, /--source-ref "\$RELEASE_SOURCE"/);
 	assert.match(
 		workflow,
 		/run-name: Deploy \$\{\{ github.event.client_payload.module_name \}\}/,
@@ -852,6 +852,59 @@ test("website platform selection requires its own immutable published artifact p
 		assert.throws(
 			() => checkDeployment(input, request({ releases: [wrong] })),
 			/published CI provenance/,
+		);
+	}
+});
+
+test("admin platform selection requires its own immutable published artifact pair", () => {
+	const payload = {
+		ref: sha,
+		ci_run_id: 10,
+		module_name: "admin",
+		module_version: "1.0.10",
+		released_artifact_name: "bible-on-site-admin-docker-10",
+		released_arm64_artifact_name: "bible-on-site-admin-docker-10-arm64",
+	};
+	const release = {
+		tag_name: "admin-v1.0.10",
+		draft: false,
+		prerelease: false,
+		body: `<!-- release-delivery:${JSON.stringify(payload)} -->`,
+	};
+	const admin = {
+		...input,
+		moduleName: "admin",
+		moduleDirectory: "web/admin",
+	};
+	assert.equal(
+		checkDeployment(admin, request({ releases: [release] })).adminArm64,
+		true,
+	);
+	assert.equal(
+		checkDeployment(admin, request({ releases: [release] })).apiArm64,
+		undefined,
+	);
+	assert.equal(
+		checkDeployment(admin, request({ releases: [release] })).websiteArm64,
+		undefined,
+	);
+	const legacy = { ...release, body: "legacy single-platform release" };
+	assert.equal(
+		checkDeployment(admin, request({ releases: [legacy] })).adminArm64,
+		undefined,
+	);
+	for (const changed of [
+		{ released_arm64_artifact_name: "bible-on-site-api-docker-10-arm64" },
+		{ released_artifact_name: "bible-on-site-admin-docker-9" },
+		{ module_name: "website" },
+	]) {
+		const wrong = {
+			...release,
+			body: `<!-- release-delivery:${JSON.stringify({ ...payload, ...changed })} -->`,
+		};
+		assert.throws(
+			() => checkDeployment(admin, request({ releases: [wrong] })),
+			/published CI provenance|tag\/source/,
 		);
 	}
 });
