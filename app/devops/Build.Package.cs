@@ -208,8 +208,9 @@ partial class Build
         var packageOverrides = WindowsExtensionPack.LoadPackageNameOverrides(
             SourceDirectory / "Platforms" / "Windows" / "extension-packs.json5");
         var version = $"{GetCurrentVersion()}.0";
-        // Signed sideload publish emits {AppxPackageDir}/{name}_{ver}_Test/*.msix;
-        // other toolchains drop it flat — never look under extension-packs/.
+        // A signed sideload publish nests the MSIX one directory deep under a
+        // name_version_Test folder; unsigned pipelines may drop it flat. The
+        // extension-packs output directory is never searched.
         var baseMsix = ArtifactsDirectory.GlobFiles("*.msix", "*_Test/*.msix")
             .OrderByDescending(f => File.GetLastWriteTimeUtc(f))
             .FirstOrDefault()
