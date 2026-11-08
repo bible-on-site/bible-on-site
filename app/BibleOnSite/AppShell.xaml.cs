@@ -40,7 +40,7 @@ public partial class AppShell : Shell, Helpers.IAdaptiveNavPane
 		Routing.RegisterRoute(AppRoutes.Preferences, typeof(PreferencesPage));
 		Routing.RegisterRoute(AppRoutes.Tanahpedia, typeof(TanahpediaPage));
 		Routing.RegisterRoute(AppRoutes.TanahpediaCategory, typeof(TanahpediaEntityTypePage));
-		Routing.RegisterRoute(AppRoutes.TanahpediaEntry, typeof(TanahpediaEntryPage));
+		Routing.RegisterRoute(AppRoutes.TanahpediaEntryRoute, typeof(TanahpediaEntryPage));
 		Routing.RegisterRoute(AppRoutes.RecitationPreferences, typeof(RecitationPreferencesPage));
 		Routing.RegisterRoute(AppRoutes.DisplayPreferences, typeof(DisplayPreferencesPage));
 		Routing.RegisterRoute(AppRoutes.PerekPreferences, typeof(PerekPreferencesPage));

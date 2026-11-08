@@ -114,7 +114,7 @@ public class FlyoutMenuState : ObservableObject
             [AppRoutes.CalendarReader] = FlyoutDestination.AlHaperek,
             [AppRoutes.Tanahpedia] = FlyoutDestination.Tanahpedia,
             [AppRoutes.TanahpediaCategory] = FlyoutDestination.Tanahpedia,
-            [AppRoutes.TanahpediaEntry] = FlyoutDestination.Tanahpedia,
+            [AppRoutes.TanahpediaEntryRoute] = FlyoutDestination.Tanahpedia,
             [AppRoutes.LearningCalendar] = FlyoutDestination.LearningCalendar,
             [AppRoutes.Masora] = FlyoutDestination.Masora,
             [AppRoutes.ParashaList] = FlyoutDestination.Parasha,

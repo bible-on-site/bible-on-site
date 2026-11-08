@@ -130,7 +130,7 @@ public static class AppRoutes
 
     public static string Tanahpedia => "TanahpediaPage";
     public static string TanahpediaCategory => "tanahpediaCategory";
-    public static string TanahpediaEntry => "tanahpediaEntry";
+    public static string TanahpediaEntryRoute => "tanahpediaEntry";
     public static string Articles => "ArticlesPage";
     public static string ArticleDetail => "articleDetail";
     public static string Authors => "AuthorsPage";
@@ -148,7 +148,7 @@ public static class AppRoutes
     /// synonyms and ambiguous names itself.
     /// </summary>
     public static string TanahpediaEntry(string uniqueName) =>
-        $"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}";
+        $"{TanahpediaEntryRoute}?uniqueName={Uri.EscapeDataString(uniqueName)}";
 
     /// <summary>
     /// Flyout pages replace another menu page above the most recent reader.
