@@ -114,6 +114,25 @@ public class PushNotificationServiceTests
 #pragma warning restore S1172
     }
 
+    private sealed class FaultingStateStore : IPushStateStore
+    {
+        public InMemoryPushStateStore Inner { get; } = new();
+        public string? FailSetKey { get; set; }
+        public string? FailGetKey { get; set; }
+
+        public Task<string?> GetAsync(string key, CancellationToken ct) =>
+            key == FailGetKey
+                ? Task.FromException<string?>(new IOException("state read failed"))
+                : Inner.GetAsync(key, ct);
+
+        public Task SetAsync(string key, string value, CancellationToken ct) =>
+            key == FailSetKey
+                ? Task.FromException(new IOException("state write failed"))
+                : Inner.SetAsync(key, value, ct);
+
+        public Task RemoveAsync(string key, CancellationToken ct) => Inner.RemoveAsync(key, ct);
+    }
+
     private static (PushNotificationService service, FakePlatformClient platform,
         PreferencesService prefs, InMemoryPushStateStore store, FakeRegistry registry) CreateService() =>
         CreateService(true, PushPermissionState.Granted);
@@ -476,6 +495,7 @@ public class PushNotificationServiceTests
 
         await service.EnsureInitializedAsync(CancellationToken.None);
         await service.EnsureInitializedAsync(CancellationToken.None);
+        await service.ApplyEnabledPreferenceAsync(CancellationToken.None);
 
         platform.InitializeCalls.Should().Be(0);
     }
@@ -600,5 +620,137 @@ public class PushNotificationServiceTests
         var reloaded = PreferencesService.CreateForTesting(storage);
         reloaded.Load();
         reloaded.DailyPerekPushEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UnsupportedPermission_DoesNotSubscribeOrPersistOptIn()
+    {
+        var (service, platform, prefs, _, registry) = CreateService(true, PushPermissionState.Unsupported);
+
+        (await service.SetEnabledAsync(true, CancellationToken.None)).Should().Be(PushEnableResult.Unsupported);
+
+        platform.Subscribed.Should().BeEmpty();
+        prefs.DailyPerekPushEnabled.Should().BeFalse();
+        registry.Registrations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Disable_WhenRegistryFails_StillPersistsOptOutAndUnsubscribes()
+    {
+        var (service, platform, prefs, store, registry) = CreateService();
+        await service.SetEnabledAsync(true, CancellationToken.None);
+        registry.FailNext = true;
+
+        (await service.SetEnabledAsync(false, CancellationToken.None)).Should().Be(PushEnableResult.Disabled);
+
+        prefs.DailyPerekPushEnabled.Should().BeFalse();
+        platform.Unsubscribed.Should().Equal(PushNotificationService.DailyPerekTopic);
+        (await store.GetAsync("push.registration_fingerprint", CancellationToken.None)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Disable_WhenUnsubscribeMarkerCannotBeSaved_StillUnregistersDevice()
+    {
+        var platform = new FakePlatformClient();
+        var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        var store = new FaultingStateStore { FailSetKey = "push.pending_unsubscribe" };
+        var registry = new FakeRegistry();
+        using var service = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "1");
+        await service.SetEnabledAsync(true, CancellationToken.None);
+        platform.FailUnsubscribe = true;
+
+        (await service.SetEnabledAsync(false, CancellationToken.None)).Should().Be(PushEnableResult.Disabled);
+
+        prefs.DailyPerekPushEnabled.Should().BeFalse();
+        registry.Unregistrations.Should().Equal("fid-123");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Startup_WhenPermissionOrSubscriptionFails_PreservesIntentForNextLaunch(bool subscribeFailure)
+    {
+        var (service, platform, prefs, store, registry) = CreateService();
+        prefs.DailyPerekPushEnabled = true;
+        platform.Permission = subscribeFailure ? PushPermissionState.Granted : PushPermissionState.Denied;
+        platform.FailSubscribe = subscribeFailure;
+
+        await service.ApplyEnabledPreferenceAsync(CancellationToken.None);
+
+        prefs.DailyPerekPushEnabled.Should().BeTrue();
+        registry.Registrations.Should().BeEmpty();
+        platform.Permission = PushPermissionState.Granted;
+        platform.FailSubscribe = false;
+        using var relaunch = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "1");
+        await relaunch.ApplyEnabledPreferenceAsync(CancellationToken.None);
+        registry.Registrations.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task DeferredUnsubscribe_WhenRetryFails_KeepsMarkerUntilSuccessfulLaunch()
+    {
+        var (service, platform, prefs, store, registry) = CreateService();
+        platform.FailUnsubscribe = true;
+        await service.SetEnabledAsync(false, CancellationToken.None);
+
+        await service.ApplyEnabledPreferenceAsync(CancellationToken.None);
+
+        (await store.GetAsync("push.pending_unsubscribe", CancellationToken.None))
+            .Should().Be(PushNotificationService.DailyPerekTopic);
+        prefs.DailyPerekPushEnabled.Should().BeFalse();
+        platform.FailUnsubscribe = false;
+        using var relaunch = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "1");
+        await relaunch.ApplyEnabledPreferenceAsync(CancellationToken.None);
+        (await store.GetAsync("push.pending_unsubscribe", CancellationToken.None)).Should().BeNull();
+        registry.Registrations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task TokenRefresh_WhenStateReadFails_DoesNotEscapeAndCanRecover()
+    {
+        var platform = new FakePlatformClient();
+        var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        var store = new FaultingStateStore();
+        var registry = new FakeRegistry();
+        using var service = PushNotificationService.CreateForTesting(platform, prefs, store, registry, () => "1");
+        await service.SetEnabledAsync(true, CancellationToken.None);
+        store.FailGetKey = "push.registration_fingerprint";
+
+        platform.RaiseTokenRefreshed("rotated-token");
+        await service.LastTokenResync!;
+
+        prefs.DailyPerekPushEnabled.Should().BeTrue();
+        registry.Registrations.Should().ContainSingle();
+        store.FailGetKey = null;
+        platform.RaiseTokenRefreshed("rotated-token");
+        await service.LastTokenResync!;
+        registry.Registrations.Should().HaveCount(2);
+        registry.Registrations[1].Token.Should().Be("rotated-token");
+    }
+
+    [Fact]
+    public void NullPlatformEvents_CanBeUnsubscribed()
+    {
+        var platform = NullPushPlatformClient.Instance;
+        var taps = 0;
+        var tokens = 0;
+        EventHandler<IReadOnlyDictionary<string, string>> onTap = (_, _) => taps++;
+        EventHandler<string> onToken = (_, _) => tokens++;
+        platform.NotificationTapped += onTap;
+        platform.TokenRefreshed += onToken;
+        try
+        {
+            platform.RaiseTapped(new Dictionary<string, string>());
+            platform.RaiseTokenRefreshed("token");
+        }
+        finally
+        {
+            platform.NotificationTapped -= onTap;
+            platform.TokenRefreshed -= onToken;
+        }
+        platform.RaiseTapped(new Dictionary<string, string>());
+        platform.RaiseTokenRefreshed("token");
+        taps.Should().Be(1);
+        tokens.Should().Be(1);
     }
 }

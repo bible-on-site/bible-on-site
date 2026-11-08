@@ -136,6 +136,8 @@ public class PerekPreferencesViewModelPushTests
     {
         public PushEnableResult NextResult = PushEnableResult.Enabled;
         public bool Supported = true;
+        public Task<PushEnableResult>? PendingResult { get; set; }
+        public bool Fail { get; set; }
         public List<bool> SetCalls { get; } = [];
 
         public bool IsSupported => Supported;
@@ -145,7 +147,9 @@ public class PerekPreferencesViewModelPushTests
         public Task<PushEnableResult> SetEnabledAsync(bool enabled, CancellationToken ct)
         {
             SetCalls.Add(enabled);
-            return Task.FromResult(NextResult);
+            return Fail
+                ? Task.FromException<PushEnableResult>(new IOException("push unavailable"))
+                : PendingResult ?? Task.FromResult(NextResult);
         }
         public Task ApplyEnabledPreferenceAsync(CancellationToken ct) => Task.CompletedTask;
         public void DispatchNotificationTap(IReadOnlyDictionary<string, string>? data)
@@ -231,5 +235,72 @@ public class PerekPreferencesViewModelPushTests
             .NotificationsSupported.Should().BeTrue();
         new PerekPreferencesViewModel(prefs, new FakePush { Supported = false }, new FakeNavigator(false))
             .NotificationsSupported.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DailyPerekPushEnabled_WhenUnchanged_DoesNotCallPlatform(bool enabled)
+    {
+        var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        prefs.DailyPerekPushEnabled = enabled;
+        var push = new FakePush();
+        var vm = new PerekPreferencesViewModel(prefs, push, new FakeNavigator(false));
+
+        vm.DailyPerekPushEnabled = enabled;
+        prefs.DailyPerekPushEnabled = enabled;
+
+        vm.DailyPerekPushEnabled.Should().Be(enabled);
+        push.SetCalls.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DailyPerekPushEnabled_DoesNotStartOverlappingChanges_AndAllowsRetry()
+    {
+        var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        var completion = new TaskCompletionSource<PushEnableResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var push = new FakePush { PendingResult = completion.Task };
+        var vm = new PerekPreferencesViewModel(prefs, push, new FakeNavigator(false));
+        var change = vm.SetDailyPerekPushAsync(true);
+
+        vm.DailyPerekPushEnabled = true;
+        push.SetCalls.Should().Equal(true);
+        completion.SetResult(PushEnableResult.Enabled);
+        await change;
+        vm.DailyPerekPushEnabled = true;
+
+        push.SetCalls.Should().Equal(true, true);
+    }
+
+    [Fact]
+    public async Task DailyPerekPushEnabled_WhenDenied_CanAcceptOpeningSystemSettings()
+    {
+        var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        var push = new FakePush { NextResult = PushEnableResult.PermissionDenied };
+        var navigator = new FakeNavigator(true);
+        var vm = new PerekPreferencesViewModel(prefs, push, navigator);
+
+        await vm.SetDailyPerekPushAsync(true);
+
+        navigator.ChoiceCalls.Should().Be(1);
+        vm.DailyPerekPushEnabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task DailyPerekPushEnabled_WhenPlatformThrows_NotifiesAndAllowsRetry()
+    {
+        var prefs = PreferencesService.CreateForTesting(new InMemoryPreferencesStorage());
+        var push = new FakePush { Fail = true };
+        var vm = new PerekPreferencesViewModel(prefs, push, new FakeNavigator(false));
+        var properties = new List<string?>();
+        vm.PropertyChanged += (_, e) => properties.Add(e.PropertyName);
+
+        await vm.SetDailyPerekPushAsync(true);
+
+        properties.Should().Contain(nameof(PerekPreferencesViewModel.DailyPerekPushEnabled));
+        vm.DailyPerekPushEnabled.Should().BeFalse();
+        push.Fail = false;
+        vm.DailyPerekPushEnabled = true;
+        push.SetCalls.Should().Equal(true, true);
     }
 }
