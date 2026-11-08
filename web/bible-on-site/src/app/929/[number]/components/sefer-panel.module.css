@@ -152,7 +152,9 @@
 }
 
 .panel[data-active="true"] {
-	visibility: visible;
+	/* Covered book panes retain layout while hiding their content. Respect that
+	   ancestor mask instead of making an active panel visible through it. */
+	visibility: inherit;
 	z-index: 1;
 }
 

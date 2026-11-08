@@ -125,6 +125,7 @@ env:
   APP_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: app-integration-junit-report-${{ github.run_id }}
   ADMIN_DIRECTORY: web/admin
   ADMIN_DOCKER_ARTIFACT_NAME: bible-on-site-admin-docker-${{ github.run_id }}
+  ADMIN_DOCKER_ARM64_ARTIFACT_NAME: bible-on-site-admin-docker-${{ github.run_id }}-arm64
   ADMIN_DOCKER_IMAGE_NAME: bible-on-site-admin
   ADMIN_NODE_CACHE_PATH: web/admin/bun.lock
   ADMIN_NODE_VERSION_FILE: web/admin/package.json
@@ -192,7 +193,7 @@ jobs:
         run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_OUTPUT
 
   determine_baseline_availability:
-    name: Determine Baseline Availability
+    name: Coverage / Baseline availability detection
     permissions:
       contents: read
       actions: read
@@ -265,7 +266,7 @@ jobs:
           echo "is_app_e2e_ios_coverage_available=$IS_APP_E2E_IOS_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
 
   determine_docker_image_availability:
-    name: Determine Docker Image Availability
+    name: Docker / Image availability detection
     permissions:
       contents: read
       packages: read
@@ -298,7 +299,7 @@ jobs:
           fi
 
   determine_changes:
-    name: Determine Changes
+    name: Modules / Changes detection
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -679,12 +680,29 @@ jobs:
       - name: Dockerize Admin
         run: |
           docker buildx build --load \
+            --platform linux/amd64 \
             --cache-from type=gha,scope=admin \
             --cache-to type=gha,mode=max,scope=admin \
             --progress=plain \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.version=${{ steps.get_version.outputs.MODULE_VERSION }}" \
             -f ${{ env.ADMIN_DIRECTORY }}/Dockerfile \
             -t ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
+
+      - name: Pull the isolated admin fixture image
+        run: docker pull mysql:8.4
+
+      - name: Setup devops Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+
+      - name: Verify the packaged admin against its own disposable database
+        run: >-
+          node devops/github/ci/verify-native-image.mjs --service admin
+          --image "${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }}"
+          --arch amd64
 
       - name: Export Docker Image
         run: |
@@ -700,6 +718,92 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_DOCKER_ARTIFACT_NAME }}
+          path: ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
+          retention-days: 1
+
+  # Same release/pre-merge split and source binding as package_admin, on the
+  # native ARM64 runner with its own cache scope — the paired release contract.
+  package_admin_arm64:
+    name: Package Admin ARM64
+    needs: [setup_env, determine_changes]
+    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.admin_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.admin_module_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true')) }}
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-24.04-arm
+    outputs:
+      module_version: ${{ steps.get_version.outputs.MODULE_VERSION }}
+      docker_artifact_name: ${{ env.ADMIN_DOCKER_ARM64_ARTIFACT_NAME }}
+    env:
+      SHARED_ROOT_DIR: web
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Get Module Version
+        id: get_version
+        working-directory: ${{ env.ADMIN_DIRECTORY }}
+        run: |
+          MODULE_VERSION=$(node -e "console.log(require('./package.json').version)")
+          echo "MODULE_VERSION=${MODULE_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Prepare Dockerizing
+        id: prepare
+        run: |
+          mkdir -p ${{ env.ADMIN_DIRECTORY }}/.release
+          DOCKER_IMAGE_TAR_NAME="${{ env.ADMIN_DOCKER_IMAGE_NAME }}-v${{ steps.get_version.outputs.MODULE_VERSION }}-arm64.tar"
+          DOCKER_IMAGE_TAR_GZ_PATH="${{ env.ADMIN_DIRECTORY }}/.release/${DOCKER_IMAGE_TAR_NAME}.gz"
+          echo "DOCKER_IMAGE_TAR_NAME=${DOCKER_IMAGE_TAR_NAME}" >> $GITHUB_OUTPUT
+          echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: |
+            network=host
+            image=moby/buildkit:v0.22.0
+
+      - name: Dockerize Admin
+        run: |
+          docker buildx build --load \
+            --platform linux/arm64 \
+            --cache-from type=gha,scope=admin-arm64 \
+            --cache-to type=gha,mode=max,scope=admin-arm64 \
+            --progress=plain \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.version=${{ steps.get_version.outputs.MODULE_VERSION }}" \
+            -f ${{ env.ADMIN_DIRECTORY }}/Dockerfile \
+            -t ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
+            ${{ env.SHARED_ROOT_DIR }}
+
+      - name: Pull the isolated admin fixture image
+        run: docker pull mysql:8.4
+
+      - name: Setup devops Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+
+      - name: Verify the packaged admin against its own disposable database
+        run: >-
+          node devops/github/ci/verify-native-image.mjs --service admin
+          --image "${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }}"
+          --arch arm64
+
+      - name: Export Docker Image
+        run: |
+          docker save ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
+            -o ${{ env.ADMIN_DIRECTORY }}/.release/${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}
+
+      - name: GZip Docker Image
+        working-directory: ${{ env.ADMIN_DIRECTORY }}/.release
+        run: gzip -c -f ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}.gz
+
+      - name: Store Docker Image
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ADMIN_DOCKER_ARM64_ARTIFACT_NAME }}
           path: ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
           retention-days: 1
 
@@ -3159,6 +3263,7 @@ jobs:
         package_website_arm64,
         package_bulletin,
         package_admin,
+        package_admin_arm64,
         app_mobile_e2e,
         bulletin_ci,
         data_ci,
@@ -3372,9 +3477,16 @@ jobs:
               exit 1
             fi
           fi
-          if [ "${{ github.event_name }}" != "push" ] && { [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$ADMIN_CI_CHANGED" = "true" ]; }; then
-            if [ "${{ needs.package_admin.result }}" != "success" ]; then
-              echo "Admin release Docker build failed or did not run"
+          # Match both native admin package jobs. A triggered build that failed,
+          # was skipped or was cancelled still blocks the merge or release.
+          if { [ "${{ github.event_name }}" = "push" ] && [ "${{ needs.setup_env.outputs.is_master_branch }}" = "true" ] && [ "$ADMIN_MODULE_CHANGED" = "true" ]; } ||
+            { [ "${{ github.event_name }}" != "push" ] && { [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$ADMIN_CI_CHANGED" = "true" ]; }; }; then
+            if [ "${{ needs.package_admin.result }}" != "success" ] || [ "${{ needs.package_admin_arm64.result }}" != "success" ]; then
+              echo "Both native admin release images must pass or the build did not run"
+              exit 1
+            fi
+            if [ -z "${{ needs.package_admin.outputs.module_version }}" ] || [ "${{ needs.package_admin.outputs.module_version }}" != "${{ needs.package_admin_arm64.outputs.module_version }}" ]; then
+              echo "Both admin images must have the same nonempty release version"
               exit 1
             fi
           fi
@@ -3609,7 +3721,7 @@ jobs:
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           bun run test:version
-          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs github/ci/free-large-packages.test.mjs
+          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs github/ci/admin-image-gates.test.mjs github/ci/free-large-packages.test.mjs
           bun run test:review-audit
           node --test edge-compat-check.test.mjs latency-baseline.test.mjs
           bun run test:coverage-gaps
@@ -3810,10 +3922,10 @@ jobs:
 
   release_website:
     name: Release Website
-    needs: [setup_env, determine_changes, cross_module_ci, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_bulletin, package_admin]
+    needs: [setup_env, determine_changes, cross_module_ci, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_bulletin, package_admin, package_admin_arm64]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_website passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && needs.package_website_arm64.result == 'success' && needs.package_website.outputs.module_version == needs.package_website_arm64.outputs.module_version && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_website.outputs.module_version != '' && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && needs.package_website_arm64.result == 'success' && needs.package_website.outputs.module_version == needs.package_website_arm64.outputs.module_version && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && (needs.package_admin_arm64.result == 'success' || needs.package_admin_arm64.result == 'skipped') && needs.package_website.outputs.module_version != '' && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3830,10 +3942,10 @@ jobs:
 
   release_api:
     name: Release API
-    needs: [setup_env, determine_changes, cross_module_ci, package_api, package_api_arm64, package_website, package_website_arm64, package_app, package_bulletin, package_admin]
+    needs: [setup_env, determine_changes, cross_module_ci, package_api, package_api_arm64, package_website, package_website_arm64, package_app, package_bulletin, package_admin, package_admin_arm64]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_api passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api_arm64.result == 'success' && needs.package_api.outputs.module_version == needs.package_api_arm64.outputs.module_version && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_api.outputs.module_version != '' && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api_arm64.result == 'success' && needs.package_api.outputs.module_version == needs.package_api_arm64.outputs.module_version && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && (needs.package_admin_arm64.result == 'success' || needs.package_admin_arm64.result == 'skipped') && needs.package_api.outputs.module_version != '' && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3848,10 +3960,10 @@ jobs:
 
   release_app:
     name: Release App
-    needs: [setup_env, determine_changes, cross_module_ci, package_app, package_website, package_website_arm64, package_api, package_api_arm64, package_bulletin, package_admin]
+    needs: [setup_env, determine_changes, cross_module_ci, package_app, package_website, package_website_arm64, package_api, package_api_arm64, package_bulletin, package_admin, package_admin_arm64]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_app passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_app.outputs.module_version != '' && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && (needs.package_admin_arm64.result == 'success' || needs.package_admin_arm64.result == 'skipped') && needs.package_app.outputs.module_version != '' && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3877,10 +3989,10 @@ jobs:
 
   release_bulletin:
     name: Release Bulletin
-    needs: [setup_env, determine_changes, cross_module_ci, package_bulletin, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_admin]
+    needs: [setup_env, determine_changes, cross_module_ci, package_bulletin, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_admin, package_admin_arm64]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_bulletin passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && (needs.package_admin_arm64.result == 'success' || needs.package_admin_arm64.result == 'skipped') && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3895,8 +4007,8 @@ jobs:
 
   release_admin:
     name: Release Admin
-    needs: [setup_env, determine_changes, cross_module_ci, package_admin, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_bulletin]
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes, cross_module_ci, package_admin, package_admin_arm64, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_bulletin]
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && needs.package_admin_arm64.result == 'success' && needs.package_admin.outputs.module_version == needs.package_admin_arm64.outputs.module_version && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3906,7 +4018,7 @@ jobs:
       module_name: admin
       module_directory: web/admin
       module_version: ${{ needs.package_admin.outputs.module_version }}
-      artifacts_json: '[{"name": "${{ needs.package_admin.outputs.docker_artifact_name }}", "path": "web/admin/.release", "glob": "*.tar.gz"}]'
+      artifacts_json: '[{"name": "${{ needs.package_admin.outputs.docker_artifact_name }}", "path": "web/admin/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_admin_arm64.outputs.docker_artifact_name }}", "path": "web/admin/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
 
   release_data:

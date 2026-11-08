@@ -1,4 +1,6 @@
 using System.Collections;
+using BibleOnSite.Helpers;
+using BibleOnSite.Services;
 
 namespace BibleOnSite.Controls;
 
@@ -74,4 +76,25 @@ public partial class FocusedPasukOverlay : Grid
 
     private void OnPlayClicked(object? sender, EventArgs e) =>
         PlayRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// Links inside rendered note content: /929/ targets navigate natively,
+    /// /pedia/ slugs open the Tanahpedia entry page, the rest open in the
+    /// browser (#1227).
+    /// </summary>
+    private async void OnContentLinkTapped(object? sender, LinkTappedEventArgs e)
+    {
+        e.Handled = true;
+        try
+        {
+            await AppLinkHelper.FollowHtmlLinkAsync(e.Url, Launcher.Default, ShellAppNavigator.Instance);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: link navigation/launcher failure must not crash the reader
+        catch (Exception ex) //NOSONAR — link navigation/launcher failure must not crash the reader.
+        {
+            #pragma warning restore S2221
+            // async void - an unhandled navigation/launcher exception is a crash.
+            Console.Error.WriteLine($"Content link navigation failed for {e.Url}: {ex}");
+        }
+    }
 }

@@ -1,3 +1,4 @@
+using BibleOnSite.Config;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
@@ -8,8 +9,9 @@ using Moq;
 namespace BibleOnSite.Tests.ViewModels;
 
 /// <summary>
-/// עלון יומי join cards (#2806): exactly the website's three public
-/// channels — Telegram, WhatsApp and email — launching through ILauncher and
+/// עלון יומי join cards (#2806, links #2942): exactly the website's three
+/// public channels — Telegram, WhatsApp and email — bound to the stable
+/// first-party /bulletin/{channel}/join routes, launching through ILauncher and
 /// surfacing failures visibly.
 /// </summary>
 public class DailyBulletinViewModelTests
@@ -63,56 +65,87 @@ public class DailyBulletinViewModelTests
     }
 
     [Fact]
-    public void Cards_ExposeOnlyPublicDestinations()
+    public void Cards_ExposeOnlyTheStableFirstPartyJoinRoutes()
     {
         var (vm, _, _) = Subject();
 
-        // Joining must surface only public channels — never private test
-        // groups, test destination IDs or provider credentials (#2806).
-        vm.Cards.Should().OnlyContain(card => card.JoinUri.IsAbsoluteUri);
-        vm.Cards.Should().OnlyContain(card =>
-            card.JoinUri.Scheme == "https" || card.JoinUri.Scheme == "mailto");
-        vm.Cards.Select(card => card.JoinUri.AbsoluteUri).Should().SatisfyRespectively(
-            uri => uri.Should().StartWith("https://t.me/alhaperek"),
-            uri => uri.Should().StartWith("https://wa.me/37257078640"),
-            uri => uri.Should().StartWith("mailto:tanah.site@gmail.com"));
+        // Joining surfaces only the website's stable first-party routes —
+        // the admin-managed destinations resolve behind them server-side
+        // (#2942). Never raw provider invitations, private test destinations
+        // or credentials.
+        var site = AppConfig.Instance.WebsiteUrl;
+        site.Should().Be("https://xn--febl3a.com");
+        vm.Cards.Select(card => card.JoinUri.AbsoluteUri).Should().Equal(
+            $"{site}/bulletin/telegram/join",
+            $"{site}/bulletin/whatsapp/join",
+            $"{site}/bulletin/email/join");
     }
 
     [Fact]
-    public async Task JoinTelegram_OpensTheVerifiedPublicChannel()
+    public void Cards_JoinRoutesAreCleanAbsoluteHttpsUris()
+    {
+        var (vm, _, _) = Subject();
+
+        // No query, fragment or credentials may ride along on the stable
+        // route — parameters belong to the server-side destination, which
+        // must stay changeable without an app release.
+        vm.Cards.Should().OnlyContain(card =>
+            card.JoinUri.IsAbsoluteUri
+            && card.JoinUri.Scheme == "https"
+            && card.JoinUri.Host == new Uri(AppConfig.Instance.WebsiteUrl).Host
+            && string.IsNullOrEmpty(card.JoinUri.UserInfo)
+            && string.IsNullOrEmpty(card.JoinUri.Query)
+            && string.IsNullOrEmpty(card.JoinUri.Fragment));
+    }
+
+    [Fact]
+    public void Cards_MirrorTheWebsiteJoinCardCopy()
+    {
+        var (vm, _, _) = Subject();
+
+        // Titles, join labels and order match the website carousel (#2941).
+        vm.Cards.Select(card => card.Title).Should().Equal(
+            "טלגרם", "ווטסאפ", "דוא\"ל");
+        vm.Cards.Select(card => card.JoinLabel).Should().Equal(
+            "הצטרפות לערוץ", "הצטרפות לקבוצה", "הרשמה");
+    }
+
+    [Fact]
+    public async Task JoinTelegram_OpensTheStableJoinRoute()
     {
         var launcher = LauncherCapturing(out var opened);
         var vm = new DailyBulletinViewModel(launcher.Object, new Mock<IAppNavigator>().Object);
 
         await vm.JoinCommand.ExecuteAsync(vm.Cards[0]);
 
-        opened().Should().Be(new Uri("https://t.me/alhaperek"));
+        opened().Should().Be(new Uri($"{AppConfig.Instance.WebsiteUrl}/bulletin/telegram/join"));
     }
 
     [Fact]
-    public async Task JoinWhatsApp_OpensThePublicJoinNumber_WithJoinText()
+    public async Task JoinWhatsApp_OpensTheStableJoinRoute_NotARawInvitation()
     {
         var launcher = LauncherCapturing(out var opened);
         var vm = new DailyBulletinViewModel(launcher.Object, new Mock<IAppNavigator>().Object);
 
         await vm.JoinCommand.ExecuteAsync(vm.Cards[1]);
 
-        opened()!.Scheme.Should().Be("https");
-        opened()!.Host.Should().Be("wa.me");
-        opened()!.AbsoluteUri.Should().Contain(Uri.EscapeDataString("הצטרפות לעלון היומי"));
+        opened().Should().Be(new Uri($"{AppConfig.Instance.WebsiteUrl}/bulletin/whatsapp/join"));
+        // The rotating chat.whatsapp.com invitation must never ship in the
+        // app — only the admin-managed destination behind
+        // /bulletin/whatsapp/join.
+        opened()!.Host.Should().Be(new Uri(AppConfig.Instance.WebsiteUrl).Host);
     }
 
     [Fact]
-    public async Task JoinEmail_OpensMailTo_WithJoinSubject()
+    public async Task JoinEmail_OpensTheSharedSignupPage_NotMailto()
     {
         var launcher = LauncherCapturing(out var opened);
         var vm = new DailyBulletinViewModel(launcher.Object, new Mock<IAppNavigator>().Object);
 
         await vm.JoinCommand.ExecuteAsync(vm.Cards[2]);
 
-        opened()!.Scheme.Should().Be("mailto");
-        opened()!.AbsoluteUri.Should().Contain("tanah.site@gmail.com");
-        opened()!.AbsoluteUri.Should().Contain(Uri.EscapeDataString("הצטרפות לעלון היומי"));
+        opened()!.Scheme.Should().Be("https");
+        opened().Should().Be(new Uri($"{AppConfig.Instance.WebsiteUrl}/bulletin/email/join"));
     }
 
     [Fact]
@@ -138,7 +171,7 @@ public class DailyBulletinViewModelTests
         await vm.JoinCommand.ExecuteAsync(vm.Cards[0]);
 
         navigator.Verify(n => n.DisplayAlertAsync(
-            "שגיאה", "לא ניתן לפתוח את טלגרם. נסו שוב", "אישור"), Times.Once);
+            "שגיאה", "לא ניתן לפתוח את קישור הטלגרם. נסו שוב", "אישור"), Times.Once);
     }
 
     [Fact]
@@ -149,7 +182,7 @@ public class DailyBulletinViewModelTests
         await vm.JoinCommand.ExecuteAsync(vm.Cards[2]);
 
         navigator.Verify(n => n.DisplayAlertAsync(
-            "שגיאה", "לא ניתן לפתוח את אפליקציית הדואר. נסו שוב", "אישור"), Times.Once);
+            "שגיאה", "לא ניתן לפתוח את דף ההרשמה. נסו שוב", "אישור"), Times.Once);
     }
 
     [Theory]

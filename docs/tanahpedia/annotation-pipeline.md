@@ -242,6 +242,17 @@ Shipped increments on `feat/2516-tanahpedia-annotation`:
   `auto` rows rendering beside the new ones at the same spans;
   supersede deletes the old revision's `auto`+`held` rows within the
   imported domains while `manual`/`rejected` decisions survive.
+- Resumable publish checkpoints (`--checkpoint-dir`): each perek/article
+  is a bounded work unit cached under `<dir>/<domain>/<unit>.json`,
+  keyed by source hash plus the inference configuration (emitted
+  `model_revision` + lexicon digest; article units also cover the
+  canonical digest because their gazetteer is corpus-derived). A resumed
+  or repeated run replays unchanged units without re-running detection
+  or a single model call; an edited source invalidates only its own
+  unit, and a deliberate model/config change invalidates every unit.
+  Cached rows are the exact emitted rows, so warm output is
+  byte-identical to a cold run — verified by unit tests plus a
+  full-corpus `--no-retype` resume test (929 units).
 
 Remaining sequence: gated production import of the published pasuk +
 article rows (exact commands below) → BEREL fine-tune / LLM
@@ -264,11 +275,15 @@ node devops/export-tanahpedia-articles.mts \
     --out /tmp/tanahpedia-articles.json --env-file <module>/.dev.env
 
 # 3. Publish rows — detection + dictabert-ner re-type. Pasuk domain is
-#    the full canonical corpus (~30-40 min CPU for the encoder pass).
+#    the full canonical corpus (~30-40 min CPU for the encoder pass);
+#    --checkpoint-dir makes the run resumable — an interrupted run
+#    restarts where it stopped, and unchanged units never re-call the
+#    model (.cache/ is gitignored).
 data/annotations/.venv/bin/python data/annotations/publish.py \
     --pasuk-out /tmp/mentions-pasuk.json \
     --articles /tmp/tanahpedia-articles.json \
-    --article-out /tmp/mentions-article.json
+    --article-out /tmp/mentions-article.json \
+    --checkpoint-dir .cache/mentions-publish
 
 # 4. Dry-run, then import. First production import needs no supersede;
 #    if a preview import of the lexical tier ever ran against the
