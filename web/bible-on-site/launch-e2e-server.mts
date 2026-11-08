@@ -228,15 +228,25 @@ async function main() {
 	// flip-book to local and runs docker compose — both break in CI)
 	// Always use `next dev` for e2e so tests pass: standalone can throw NoFallbackError
 	// on some routes; coverage also requires dev (instrumentation). No pre-build needed.
+	//
+	// The Playwright config passes the suite's port as WEB_PORT so parallel
+	// local sessions never share :3001 (issue #2881); manual runs keep :3001.
+	const webPort = process.env.WEB_PORT?.trim();
+	const port = webPort ? Number(webPort) : 3001;
+	if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+		throw new Error(
+			`WEB_PORT must be an integer between 1 and 65535, got "${webPort}"`,
+		);
+	}
 	const nextCli = require.resolve("next/dist/bin/next");
-	log("[Server] Starting Next.js server: node next dev -p 3001");
+	log(`[Server] Starting Next.js server: node next dev -p ${port}`);
 
 	// Tee the dev server's stdout/stderr into the artifact so CI failures keep
 	// the `⨯` lines Playwright's webServer pipe would otherwise discard (#2005).
 	const serverLogPath = path.resolve(logDir, "server.log");
 	const serverLog = createWriteStream(serverLogPath, { flags: "w" });
 
-	const server = spawn(process.execPath, [nextCli, "dev", "-p", "3001"], {
+	const server = spawn(process.execPath, [nextCli, "dev", "-p", String(port)], {
 		cwd: __dirname,
 		stdio: ["inherit", "pipe", "pipe"],
 		env: process.env,

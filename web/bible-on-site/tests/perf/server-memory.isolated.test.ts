@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { APIRequestContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { reportBenchmark } from "../util/benchmark";
 
@@ -19,7 +19,9 @@ const BENCHMARK_ROUTES = [
 ];
 
 const BYTES_PER_MB = 1024 * 1024;
-const MEMORY_API_URL = "http://127.0.0.1:3001/api/dev/memory";
+// Path resolved against the configured baseURL — the suite's per-worktree
+// port (issue #2881).
+const MEMORY_API_PATH = "/api/dev/memory";
 
 /**
  * Server memory response from the /api/dev/memory endpoint.
@@ -34,12 +36,16 @@ interface ServerMemoryResponse {
 
 /**
  * Get Next.js server process memory usage via the /api/dev/memory endpoint.
+ * The request context resolves the path against the configured baseURL —
+ * the suite's per-worktree port (issue #2881).
  */
-async function getServerMemoryBytes(): Promise<ServerMemoryResponse | null> {
+async function getServerMemoryBytes(
+	request: APIRequestContext,
+): Promise<ServerMemoryResponse | null> {
 	try {
-		const response = await fetch(MEMORY_API_URL);
-		if (!response.ok) {
-			console.warn(`Memory API returned ${response.status}`);
+		const response = await request.get(MEMORY_API_PATH);
+		if (!response.ok()) {
+			console.warn(`Memory API returned ${response.status()}`);
 			return null;
 		}
 		return (await response.json()) as ServerMemoryResponse;
@@ -82,6 +88,7 @@ test.describe("Server Memory", () => {
 
 	test("Remains below 1024MB (RSS), 512MB (Heap) during general interaction", async ({
 		page,
+		request,
 	}) => {
 		let peakServerRssBytes = 0;
 		let peakServerHeapBytes = 0;
@@ -95,7 +102,7 @@ test.describe("Server Memory", () => {
 			await exercisePage(page);
 
 			// Measure Next.js server memory
-			const serverMemory = await getServerMemoryBytes();
+			const serverMemory = await getServerMemoryBytes(request);
 			const serverRss = serverMemory?.rss ?? 0;
 			const serverHeap = serverMemory?.heapUsed ?? 0;
 

@@ -10,7 +10,7 @@ alwaysApply: false
 
 MySQL must be running locally (Windows service, port 3306). The launcher (`launch-e2e-server.mts`) handles DB population via `cargo make mysql-populate` and starts the server automatically.
 
-**Stale server pitfall**: Playwright uses `reuseExistingServer: true`. If a previous server (dev or prod) is still running on port 3001, Playwright will silently reuse it instead of starting fresh. Before re-running e2e, check for and kill any leftover process on port 3001.
+**Stale server pitfall**: Playwright uses `reuseExistingServer: true`. If a previous server (dev or prod) is still running on the suite's port, Playwright will silently reuse it instead of starting fresh. Locally each worktree+suite derives its own port via `web/bible-on-site/tests/util/playwright/server-endpoint.ts` (print it with `WEB_PORT` override or check `use.baseURL` in the config); on CI it is :3001. Before re-running e2e, check for and kill any leftover process on that port.
 
 **Standalone mode**: `next start` does NOT work with `output: "standalone"` in `next.config.mjs`. The launcher uses `node .next/standalone/server.js` for production and `next dev` for coverage.
 

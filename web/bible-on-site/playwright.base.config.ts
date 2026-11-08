@@ -7,10 +7,17 @@ import {
 import type { CoverageReportOptions } from "monocart-reporter";
 import { isCI, shouldMeasureCov } from "../shared/tests-util/environment.mjs";
 import { monocartAllFilter } from "./.covignore.mjs";
+import {
+	webServerPort,
+	webServerUrl,
+} from "./tests/util/playwright/server-endpoint";
 import type { TestType } from "./tests/util/playwright/types";
 
 export function getBaseConfig(testType: TestType) {
-	const WEB_SERVER_URL = "http://127.0.0.1:3001";
+	// Per-worktree/per-suite port locally so parallel sessions cannot share a
+	// listener (issue #2881); :3001 on CI; WEB_PORT overrides both.
+	const webServerPortNumber = webServerPort(testType);
+	const WEB_SERVER_URL = webServerUrl(webServerPortNumber);
 	const baseTimeout = isCI || shouldMeasureCov ? 60000 : 20000;
 	const timeout = baseTimeout;
 	const config = defineConfig({
@@ -63,6 +70,8 @@ export function getBaseConfig(testType: TestType) {
 			command:
 				"echo 'Error: A derived playwright config must set the web server command' && exit 1",
 			url: WEB_SERVER_URL,
+			// The e2e launcher is a separate process: hand it the port explicitly.
+			env: { WEB_PORT: String(webServerPortNumber) },
 			reuseExistingServer: true, // consider that for some tests, such as for admin pages, restart the server before running each test
 		},
 		reporter: [
