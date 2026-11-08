@@ -14,12 +14,6 @@ pub struct GeneratePdfRequest {
     /// Ordered list of perek IDs (1-929) to include.
     pub perakim_ids: Vec<i32>,
 
-    /// When true, fetch and include perushim for each perek.
-    /// (Currently unused — reserved for future perushim feature.)
-    #[serde(default)]
-    #[allow(dead_code)]
-    pub include_perushim: bool,
-
     /// When true, fetch and include articles for each perek.
     #[serde(default = "default_true")]
     pub include_articles: bool,
@@ -129,7 +123,6 @@ mod tests {
 
         assert_eq!(req.perakim_ids, vec![1, 2]);
         assert!(req.include_articles);
-        assert!(!req.include_perushim);
         assert!(!req.include_cover);
         assert!(!req.include_toc);
         assert!(req.article_ids.is_empty());
@@ -140,12 +133,11 @@ mod tests {
     #[test]
     fn generate_pdf_request_allows_filter_and_layout_options() {
         let req: GeneratePdfRequest = serde_json::from_str(
-            r#"{"perakimIds":[3],"includeArticles":false,"includePerushim":true,"articleIds":[8],"authorIds":[5],"includeCover":true,"includeToc":true}"#,
+            r#"{"perakimIds":[3],"includeArticles":false,"includePerushim":true,"articleIds":[8],"authorIds":[5],"includeCover":true,"includeToc":true}"#, // legacy includePerushim must be ignored
         )
         .expect("request should deserialize");
 
         assert!(!req.include_articles);
-        assert!(req.include_perushim);
         assert_eq!(req.article_ids, vec![8]);
         assert_eq!(req.author_ids, vec![5]);
         assert!(req.include_cover);
