@@ -33,11 +33,12 @@ identity, the `StoreLogo.png` recovered from the just-built base MSIX, and the
 payload files at the package root — packed by `makeappx` into
 `.artifacts/extension-packs/{pack}.msix` and signed with the same certificate
 thumbprint as the base package when `--certificate-thumbprint` is provided.
-The raw `.zip` payloads are additionally staged flat under
-`.artifacts/payloads` and published as `app-v*` release assets — the HTTPS
-fallback bytes for sideloaded or Store-unconfigured installs (the perushim
-`.sqlite` payloads already ride the iOS staging under identical names and
-bytes, so Windows does not duplicate them). `extension-packs.json5` ships in the
+Every raw payload — the recitation `.zip` archives and the perushim `.sqlite`
+pair — is additionally staged flat under `.artifacts/payloads` and published
+as `app-v*` release assets — the HTTPS fallback bytes for sideloaded or
+Store-unconfigured installs (a Windows-only release has no iOS leg to carry
+the `.sqlite` pair; when both legs publish, the iOS staging carries identical
+bytes under identical asset names). `extension-packs.json5` ships in the
 base MSIX and binds each pack name to a Partner Center StoreId (plus an
 optional `packageName` override) once the durable add-ons are created — until
 then the runtime never attempts a Store install for that pack.
@@ -112,8 +113,10 @@ the `.aar` files) into the same generation-scoped extraction cache, so
 `TryGetAssetPathAsync` and the install paths are identical on either leg. Each
 payload is streamed through a `.download` temp file with atomic rename — an
 interrupted fetch never leaves a partial file the next probe would serve —
-and the optional search-index companion is best-effort: if it is absent the
-index rebuilds on device, as with an older pack that never carried it.
+and every listed payload is required: the perushim pack pairs its notes DB
+with the prebuilt search index, which the device never rebuilds (#2222), so a
+release missing either file fails the fetch instead of caching a half-payload
+the completeness probe would refuse to serve.
 
 - App update → store delivers updated packs (PAD packs and Apple-hosted asset
   packs both re-download changed packs automatically; on iOS only the packs

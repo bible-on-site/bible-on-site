@@ -241,13 +241,11 @@ partial class Build
             foreach (var payload in pack.PayloadFiles)
             {
                 payload.CopyToDirectory(stage, ExistsPolicy.FileOverwrite);
-                // Release-payload fallback: only Windows-unique payload names
-                // need staging — the iOS leg already publishes the perushim
-                // .sqlite files under identical names/bytes on app-v*.
-                if (payload.Extension == ".zip")
-                {
-                    payload.CopyToDirectory(payloadsDirectory, ExistsPolicy.FileOverwrite);
-                }
+                // Release-payload fallback: every payload stages for HTTPS
+                // delivery — a Windows-only release has no iOS leg to publish
+                // the perushim .sqlite pair under. When both legs run they
+                // carry identical bytes under identical app-v* asset names.
+                payload.CopyToDirectory(payloadsDirectory, ExistsPolicy.FileOverwrite);
             }
 
             var msix = outputDirectory / $"{pack.Name}.msix";
@@ -281,7 +279,7 @@ partial class Build
             .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault()
             ?? throw new InvalidDataException($"{baseMsix} contains no *Logo*.png asset to reuse for optional packages");
-        var extracted = (AbsolutePath)Path.Combine(Path.GetTempPath(), $"bos-extpack-{Guid.NewGuid():N}", entry.Name);
+        var extracted = (AbsolutePath)Path.Join(Path.GetTempPath(), $"bos-extpack-{Guid.NewGuid():N}", entry.Name);
         extracted.Parent.CreateDirectory();
         entry.ExtractToFile(extracted);
         return extracted;

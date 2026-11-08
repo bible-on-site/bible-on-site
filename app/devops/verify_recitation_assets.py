@@ -308,8 +308,11 @@ def verify_windows(archive, catalog, names, extension_pack_dir, archive_dir, pay
             source = extension_pack_dir / "perushim_notes" / payload_name
             if not source.is_file() or hashlib.sha256(contents[payload_name]).hexdigest() != digest(source):
                 raise ValueError(f"Missing or mismatched perushim payload: {payload_name}")
-            # The .sqlite release payloads ride the iOS staging — the app-v*
-            # asset names and bytes are identical, so Windows reuses them.
+            # A Windows-only release has no iOS leg to publish these under —
+            # the HTTPS fallback must stage the .sqlite pair here too.
+            staged = payload_dir / payload_name
+            if not staged.is_file() or digest(staged) != digest(source):
+                raise ValueError(f"Missing or mismatched Windows release payload: {staged}")
 
 
 def verify_book_audio(payload, catalog, book):

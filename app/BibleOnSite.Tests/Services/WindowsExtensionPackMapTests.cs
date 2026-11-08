@@ -13,10 +13,8 @@ public class WindowsExtensionPackMapTests
     [Fact]
     public void NullOrEmptyMap_YieldsEmptyMap_SoEveryPackFallsBackToReleasePayload()
     {
-        foreach (var json in new[] { null, "", "   " })
+        foreach (var map in new string?[] { null, "", "   " }.Select(json => new WindowsExtensionPackMap(json)))
         {
-            var map = new WindowsExtensionPackMap(json);
-
             map.StoreIdFor("recitation_1").Should().BeNull();
             map.PackageNameFor("Main.App-", "recitation_1").Should().Be("Main.App-.recitation-1");
         }

@@ -40,9 +40,11 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     /// <summary>
     /// Pack payload files published on the app-v* GitHub release — the delivery
     /// path for runtimes where managed asset packs cannot exist (iOS/MacCatalyst
-    /// below 26, or builds without the app-group entitlement). The first entry
-    /// is the required payload; later entries are best-effort companions (the
-    /// prebuilt search index — the app rebuilds it on-device when absent).
+    /// below 26, or builds without the app-group entitlement). Every entry is
+    /// required: the perushim pack pairs its notes DB with the prebuilt search
+    /// index — the device never rebuilds the commentary index (#2222), so a
+    /// release missing either file must fail the fetch rather than cache the
+    /// unservable half-payload <see cref="PackPayloadComplete"/> rejects.
     /// </summary>
     internal static IReadOnlyList<string> ReleasePayloadFiles(string packName)
     {
@@ -65,8 +67,8 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     /// Streams each release-published payload file into the pack's cache dir
     /// through a ".download" temp + rename, so an interrupted fetch never leaves
     /// a partial file that <see cref="TryGetAssetPathAsync"/> would then serve.
-    /// Returns the failure reason, or null once the required payload landed;
-    /// optional companions are skipped best-effort.
+    /// Returns the failure reason, or null once every listed payload landed —
+    /// the pack is unservable until all of them are on disk.
     /// </summary>
     internal static async Task<string?> DownloadReleasePayloadsAsync(
         HttpClient client, IAppInfo appInfo, string packName, string cacheDir,
@@ -84,16 +86,11 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
                     new ScaledProgress(index, files.Count, progress),
                     cancellationToken);
             }
-            #pragma warning disable S2221 // Deliberate failure boundary: optional-payload absence is diagnostic output, not fatal
-            catch (Exception ex) when (ex is not OperationCanceledException) //NOSONAR — optional-payload absence is diagnostic output, not fatal.
+            #pragma warning disable S2221 // Deliberate failure boundary: a failed payload is reported as an error string
+            catch (Exception ex) when (ex is not OperationCanceledException) //NOSONAR — a failed payload is reported as an error string.
             {
                 #pragma warning restore S2221
-                if (index == 0)
-                {
-                    return $"{ex.GetType().Name}: {ex.Message}";
-                }
-                System.Diagnostics.Debug.WriteLine(
-                    $"Optional release payload '{fileName}' unavailable: {ex.Message}");
+                return $"{fileName}: {ex.GetType().Name}: {ex.Message}";
             }
         }
         return null;

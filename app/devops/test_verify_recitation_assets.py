@@ -77,6 +77,9 @@ class ReleaseArtifactTests(unittest.TestCase):
             index = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"
             (notes_dir / notes).write_bytes(b"notes bytes")
             (notes_dir / index).write_bytes(b"index bytes")
+            if "perushim-unstaged" not in problems:
+                (payload_dir / notes).write_bytes(b"notes bytes")
+                (payload_dir / index).write_bytes(b"index bytes")
             with zipfile.ZipFile(archive_dir / "perushim_notes.msix", "w") as archive:
                 archive.writestr("AppxManifest.xml", self.windows_manifest(
                     "54181DoradSoft.929-.perushim-notes", main_name, publisher))
@@ -87,7 +90,8 @@ class ReleaseArtifactTests(unittest.TestCase):
     def test_windows_requires_a_clean_base_msix_and_matching_optional_packages(self):
         for problem in [None, "bundled-audio", "bundled-notes", "no-msix", "corrupt-payload",
                         "wrong-package-name", "no-main-dependency", "publisher-mismatch",
-                        "no-payload", "staged-mismatch", "perushim", "perushim-mismatch"]:
+                        "no-payload", "staged-mismatch", "perushim", "perushim-mismatch",
+                        "perushim-unstaged"]:
             with self.subTest(problem=problem), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 audio, catalog = self.book()

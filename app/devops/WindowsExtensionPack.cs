@@ -82,17 +82,21 @@ static class WindowsExtensionPack
             return overrides;
         }
 
-        foreach (var addOn in addOns.EnumerateObject())
+        foreach (var candidate in addOns.EnumerateObject()
+            .Select(addOn => (addOn.Name, PackageName: TryPackageName(addOn.Value)))
+            .Where(candidate => candidate.PackageName != null))
         {
-            if (addOn.Value.ValueKind == JsonValueKind.Object &&
-                addOn.Value.TryGetProperty("packageName", out var packageName) &&
-                packageName.ValueKind == JsonValueKind.String &&
-                !string.IsNullOrWhiteSpace(packageName.GetString()))
-            {
-                overrides[addOn.Name] = packageName.GetString()!;
-            }
+            overrides[candidate.Name] = candidate.PackageName!;
         }
         return overrides;
+
+        static string? TryPackageName(JsonElement addOn) =>
+            addOn.ValueKind == JsonValueKind.Object &&
+            addOn.TryGetProperty("packageName", out var packageName) &&
+            packageName.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(packageName.GetString())
+                ? packageName.GetString()
+                : null;
     }
 
     /// <summary>Main package identity fields the optional package manifest must mirror.</summary>
@@ -172,40 +176,29 @@ static class WindowsExtensionPack
         var roots = new[]
         {
             Environment.GetEnvironmentVariable("WindowsSdkDir"),
-            Environment.GetEnvironmentVariable("ProgramFiles(x86)") is { } pf ? Path.Combine(pf, @"Windows Kits\10\") : null,
+            Environment.GetEnvironmentVariable("ProgramFiles(x86)") is { } pf ? Path.Join(pf, @"Windows Kits\10\") : null,
             @"C:\Program Files (x86)\Windows Kits\10\",
         }.Where(root => !string.IsNullOrEmpty(root)).Distinct().ToList();
 
-        var candidates = new List<(Version Version, AbsolutePath Path)>();
-        foreach (var root in roots)
-        {
-            var binDir = (AbsolutePath)Path.Combine(root!, "bin");
-            if (!Directory.Exists(binDir))
-            {
-                continue;
-            }
-            foreach (var dir in binDir.GlobDirectories("10.0.*"))
-            {
-                if (Version.TryParse(dir.Name, out var version))
-                {
-                    var tool = dir / "x64" / fileName;
-                    if (File.Exists(tool))
-                    {
-                        candidates.Add((version, tool));
-                    }
-                }
-            }
-        }
+        var candidates = roots
+            .Select(root => (AbsolutePath)Path.Join(root, "bin"))
+            .Where(binDir => binDir.DirectoryExists())
+            .SelectMany(binDir => binDir.GlobDirectories("10.0.*")
+                .Select(dir => (Version: Version.TryParse(dir.Name, out var version) ? version : null,
+                                Tool: dir / "x64" / fileName)))
+            .Where(candidate => candidate.Version != null && File.Exists(candidate.Tool))
+            .Select(candidate => (Version: candidate.Version!, candidate.Tool))
+            .ToList();
 
         if (candidates.Count > 0)
         {
-            return candidates.OrderByDescending(c => c.Version).First().Path;
+            return candidates.OrderByDescending(c => c.Version).First().Tool;
         }
         // Last resort: the tool may simply be on PATH (build agents with the
         // packaging tools installed outside the kits directory).
         var onPath = Environment.GetEnvironmentVariable("PATH")?
             .Split(Path.PathSeparator)
-            .Select(dir => (AbsolutePath)Path.Combine(dir, fileName))
+            .Select(dir => (AbsolutePath)Path.Join(dir, fileName))
             .FirstOrDefault(candidate => File.Exists(candidate));
         return onPath;
     }

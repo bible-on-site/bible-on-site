@@ -10,7 +10,7 @@ using Xunit;
 public sealed class WindowsExtensionPackTests : IDisposable
 {
     private readonly AbsolutePath _root = AbsolutePath.Create(
-        Path.Combine(Path.GetTempPath(), $"wep-tests-{Guid.NewGuid():N}"));
+        Path.Join(Path.GetTempPath(), $"wep-tests-{Guid.NewGuid():N}"));
 
     public void Dispose() => _root.DeleteDirectory();
 
