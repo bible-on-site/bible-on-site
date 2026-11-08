@@ -4,10 +4,11 @@ import { query } from "@/lib/api-client";
 /**
  * Stable public join routes (#2939).
  *
- * `/join/whatsapp` and `/join/telegram` are first-party URLs whose
- * destinations an admin edits in the bulletin console — rotating a WhatsApp
- * invitation never requires a deploy. The website only resolves the saved
- * destination; it never accepts a destination from the request.
+ * `/dailyBulletin/join/whatsapp` and `/dailyBulletin/join/telegram` are
+ * first-party URLs whose destinations an admin edits in the bulletin
+ * console — rotating a WhatsApp invitation never requires a deploy. The
+ * website only resolves the saved destination; it never accepts a
+ * destination from the request.
  */
 export type JoinChannel = "whatsapp" | "telegram";
 
@@ -58,7 +59,10 @@ export function validateJoinDestination(
 	if (channel === "telegram") {
 		// Public channel: https://t.me/<name>
 		if (url.hostname !== "t.me") return null;
-		if (segments.length !== 1 || !/^[A-Za-z][A-Za-z0-9_]{3,31}$/.test(segments[0]))
+		if (
+			segments.length !== 1 ||
+			!/^[A-Za-z][A-Za-z0-9_]{3,31}$/.test(segments[0])
+		)
 			return null;
 	}
 	return `https://${url.hostname}/${segments.join("/")}`;
@@ -67,7 +71,7 @@ export function validateJoinDestination(
 /**
  * The saved, enabled destination for a join channel, re-validated on read
  * so a hand-edited or corrupt row can never emit an open redirect.
- * `null` means the route renders its unavailable state.
+ * `null` means no usable destination is configured.
  */
 export async function resolveJoinDestination(
 	channel: JoinChannel,

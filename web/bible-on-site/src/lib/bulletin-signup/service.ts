@@ -1,10 +1,9 @@
 import "server-only";
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { transaction, txExecute, txQueryOne } from "@/lib/api-client";
 import {
 	CONSENT_TEXT,
 	CONSENT_VERSION,
-	type ConfirmOutcome,
 	isSignupSource,
 	type SignupSource,
 } from "./shared";
@@ -12,27 +11,18 @@ import {
 /**
  * Public daily-bulletin email signup (#2940).
  *
- * A signup writes a durable outbox row. The confirmation challenge is minted
- * only when the admin mail worker sends the confirmation mail, so this module
- * never stores a usable challenge — only its SHA-256 hash. The subscription
- * becomes real when the mailbox owner explicitly confirms, never earlier.
+ * A signup is a direct subscription: the explicit consent checkbox on the
+ * form is the consent basis, so the subscriber row is confirmed inside the
+ * same transaction that records the durable intent. The admin outbox worker
+ * then synchronizes confirmed intents into the SES contact list — the
+ * intent row doubles as the retry record (`ses_status`/`ses_attempts`).
  */
 
-/** How long a mailed confirmation link stays consumable. */
-const CHALLENGE_TTL_HOURS = 48;
-/** Confirmation-mail abuse caps; the answer stays generic either way. */
+/** Confirmation-mail abuse caps are gone; these bound repeat signups. */
 const MAX_INTENTS_PER_ADDRESS_24H = 3;
 const MAX_INTENTS_GLOBAL_HOURLY = 500;
 /** The public signup always joins the real audience; visitors choose nothing. */
 const REAL_AUDIENCE = "real";
-
-interface IntentRow {
-	id: number;
-	email: string;
-	status: string;
-	expired: number;
-	consent_source: string;
-}
 
 const sha256 = (value: string) =>
 	createHash("sha256").update(value).digest("hex");
@@ -48,15 +38,6 @@ export function normalizeEmail(value: unknown): string | null {
 	)
 		return null;
 	return value.toLowerCase();
-}
-
-export function isChallengeToken(value: unknown): value is string {
-	return typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value);
-}
-
-/** The token itself is emitted only inside the confirmation mail. */
-export function newChallengeToken(): string {
-	return randomBytes(32).toString("base64url");
 }
 
 export interface SignupRequest {
@@ -78,14 +59,17 @@ export function parseSignupBody(body: unknown): SignupRequest | null {
 }
 
 /**
- * Records the signup intent. Always resolves the same way so callers answer
- * identically for fresh, existing, throttled or opted-out addresses — the
- * response must not enumerate subscriptions.
+ * Records the signup and confirms the subscription in one transaction.
+ * Always resolves the same way so callers answer identically for fresh,
+ * existing, throttled or opted-out addresses — the response must not
+ * enumerate subscriptions.
  *
- * Superseding live intents keeps only the newest mailed challenge usable,
- * and happens only when a replacement will actually be mailed — suppressed
- * requests leave earlier links untouched. Rows are never deleted (audit +
- * persistent throttling).
+ * Rows are never deleted (audit + persistent throttling). A repeat signup
+ * for an already-confirmed address, or one past the abuse caps, is recorded
+ * as `suppressed` and changes nothing else; re-consent after an unsubscribe
+ * or provider suppression is deliberate — the visitor ticked the consent
+ * box — so `unsubscribed`/`bounced`/`complained`/`pending` rows are upgraded
+ * to `confirmed`. SES-side suppression still gates real sends.
  */
 export async function requestSignup(input: SignupRequest): Promise<void> {
 	const emailHash = sha256(input.email);
@@ -107,80 +91,20 @@ export async function requestSignup(input: SignupRequest): Promise<void> {
 			`SELECT COUNT(*) AS n FROM tanah_daily_bulletin_signup_intent
 			 WHERE created_at > UTC_TIMESTAMP(3) - INTERVAL 1 HOUR`,
 		);
-		// Already-confirmed or throttled addresses are acknowledged without a
-		// new challenge; the row keeps an auditable, unsendable record. Live
-		// intents are only superseded once a replacement is actually queued —
-		// a suppressed request must not invalidate a link already mailed.
 		const suppress =
 			subscriber?.consent_status === "confirmed" ||
 			Number(recent?.n ?? 0) >= MAX_INTENTS_PER_ADDRESS_24H ||
 			Number(global?.n ?? 0) >= MAX_INTENTS_GLOBAL_HOURLY;
-		if (!suppress) {
-			// A new signup replaces any earlier live intent for the address.
+		if (suppress) {
 			await txExecute(
 				connection,
-				`UPDATE tanah_daily_bulletin_signup_intent SET status = 'superseded'
-				 WHERE email_hash = ? AND status IN ('pending','sending','sent','uncertain')`,
-				[emailHash],
+				`INSERT INTO tanah_daily_bulletin_signup_intent
+				 (email, email_hash, status, consent_text, consent_version, consent_source)
+				 VALUES (?, ?, 'suppressed', ?, ?, ?)`,
+				[input.email, emailHash, CONSENT_TEXT, CONSENT_VERSION, consentSource],
 			);
+			return;
 		}
-		await txExecute(
-			connection,
-			`INSERT INTO tanah_daily_bulletin_signup_intent
-			 (email, email_hash, challenge_hash, status, consent_text, consent_version, consent_source, expires_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3) + INTERVAL ${CHALLENGE_TTL_HOURS} HOUR)`,
-			[
-				input.email,
-				emailHash,
-				sha256(`${randomUUID()}:${emailHash}`),
-				suppress ? "suppressed" : "pending",
-				CONSENT_TEXT,
-				CONSENT_VERSION,
-				consentSource,
-			],
-		);
-	});
-}
-
-/**
- * Statuses whose challenge may still be consumed. `pending`/`sending`
- * cover the window between claim and mail acceptance; `uncertain` means
- * the mail's fate is unknown, so its link must keep working.
- */
-const LIVE_STATUSES = new Set(["pending", "sending", "sent", "uncertain"]);
-
-/**
- * Consumes a mailed challenge. The UPDATE inside the transaction is the only
- * path that creates the confirmed subscription — it is atomic, so replayed or
- * concurrent confirms cannot double-confirm, and a re-confirm of the same link
- * stays a successful no-op for truthful UX.
- */
-export async function confirmSignup(token: string): Promise<ConfirmOutcome> {
-	if (!isChallengeToken(token)) return "invalid";
-	const challengeHash = sha256(token);
-	return transaction(async (connection) => {
-		const intent = await txQueryOne<IntentRow>(
-			connection,
-			`SELECT id, email, status, consent_source,
-			        expires_at <= UTC_TIMESTAMP(3) AS expired
-			 FROM tanah_daily_bulletin_signup_intent
-			 WHERE challenge_hash = ? FOR UPDATE`,
-			[challengeHash],
-		);
-		if (!intent) return "invalid";
-		if (intent.status === "confirmed") return "confirmed";
-		if (!LIVE_STATUSES.has(intent.status)) return "invalid";
-		if (Number(intent.expired)) {
-			await txExecute(
-				connection,
-				"UPDATE tanah_daily_bulletin_signup_intent SET status = 'expired' WHERE id = ?",
-				[intent.id],
-			);
-			return "expired";
-		}
-		// Re-consent is only ever reached through a fresh mailed challenge, so
-		// upgrading unsubscribed/bounced/complained rows is deliberate, not a
-		// blind suppression clear. SES-side suppression still gates real sends.
 		const saved = await txExecute(
 			connection,
 			`INSERT INTO tanah_daily_bulletin_subscriber
@@ -192,22 +116,21 @@ export async function confirmSignup(token: string): Promise<ConfirmOutcome> {
 			 consented_at = UTC_TIMESTAMP(3),
 			 last_event_at = UTC_TIMESTAMP(3),
 			 id = LAST_INSERT_ID(id)`,
-			[intent.email, REAL_AUDIENCE, intent.consent_source],
+			[input.email, REAL_AUDIENCE, consentSource],
 		);
-		const updated = await txExecute(
+		await txExecute(
 			connection,
-			`UPDATE tanah_daily_bulletin_signup_intent
-			 SET status = 'confirmed', confirmed_at = UTC_TIMESTAMP(3),
-			     subscriber_id = ?, ses_status = 'pending',
-			     ses_attempts = 0, ses_next_attempt_at = NULL
-			 WHERE id = ?`,
-			[saved.insertId, intent.id],
+			`INSERT INTO tanah_daily_bulletin_signup_intent
+			 (email, email_hash, status, consent_text, consent_version, consent_source, ses_status, subscriber_id)
+			 VALUES (?, ?, 'confirmed', ?, ?, ?, 'pending', ?)`,
+			[
+				input.email,
+				emailHash,
+				CONSENT_TEXT,
+				CONSENT_VERSION,
+				consentSource,
+				saved.insertId,
+			],
 		);
-		return updated.affectedRows === 1 ? "confirmed" : "invalid";
 	});
-}
-
-/** Challenge tokens are compared by hash only; this is the lookup key. */
-export function challengeHashOf(token: string): string {
-	return sha256(token);
 }

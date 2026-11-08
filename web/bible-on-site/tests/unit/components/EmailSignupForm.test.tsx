@@ -35,7 +35,9 @@ describe("EmailSignupForm", () => {
 				source: "card",
 			}),
 		});
-		expect(await screen.findByRole("status")).toHaveTextContent(/מייל אימות/);
+		expect(await screen.findByRole("status")).toHaveTextContent(
+			/ההרשמה התקבלה/,
+		);
 	});
 
 	it("shows the recorded consent text on the checkbox", () => {

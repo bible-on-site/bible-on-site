@@ -33,109 +33,25 @@
 	margin: 0.3em 0;
 }
 
-/* Carousel */
-.carousel {
+/* Cards: a single vertical stack on small screens (review on #3083 — no
+   carousel), three columns on wide screens. */
+.cards {
+	display: grid;
+	gap: 1.25rem;
+	grid-template-columns: 1fr;
 	margin: 0 auto;
 	max-width: 72rem;
 	min-width: 0;
 	padding: 0 0.5rem;
-	position: relative;
-}
-
-.track {
-	display: flex;
-	gap: 1.25rem;
-	list-style: none;
-	margin: 0 auto;
-	overflow-x: auto;
-	padding: 0.5rem;
-	scrollbar-width: none;
-	scroll-padding-inline: 1rem;
-	scroll-snap-type: x mandatory;
-}
-
-.track::-webkit-scrollbar {
-	display: none;
-}
-
-.slide {
-	display: flex;
-	flex: 0 0 min(78vw, 20rem);
-	min-width: 0;
-	scroll-snap-align: center;
-	scroll-margin-top: 4.5rem;
-}
-
-.slide > article {
-	flex: 1;
-	min-width: 0;
-}
-
-.navButton {
-	align-items: center;
-	background-color: rgba(255, 255, 255, 0.9);
-	border: 1px solid var(--border-subtle, #e2e8f0);
-	border-radius: 50%;
-	color: var(--accent-600, #1552ac);
-	cursor: pointer;
-	display: flex;
-	font-size: 1.1rem;
-	height: 2.5rem;
-	justify-content: center;
-	position: absolute;
-	top: calc(50% - 1.75rem);
-	width: 2.5rem;
-	z-index: 3;
-}
-
-.prevButton {
-	right: 0.25rem;
-}
-
-.nextButton {
-	left: 0.25rem;
-}
-
-.navButton:focus-visible {
-	outline: 2px solid var(--accent-600, #1552ac);
-	outline-offset: 2px;
-}
-
-.dots {
-	border: none;
-	display: flex;
-	gap: 0.5rem;
-	justify-content: center;
-	margin: 1rem 0 0;
-	min-inline-size: 0;
-	padding: 0;
-}
-
-.dot {
-	background-color: rgba(21, 82, 172, 0.3);
-	/* The visible dot stays 0.7rem; padding grows the tap target to the
-	   48px floor (Lighthouse target-size) without enlarging the glyph. */
-	background-clip: content-box;
-	border: none;
-	border-radius: 50%;
-	box-sizing: border-box;
-	cursor: pointer;
-	height: 3rem;
-	padding: 1.15rem;
-	width: 3rem;
-}
-
-.dotActive {
-	background-color: var(--accent-600, #1552ac);
-}
-
-.dot:focus-visible {
-	outline: 2px solid var(--accent-600, #1552ac);
-	outline-offset: 2px;
 }
 
 /* Cards */
 .card {
+	/* Stacked cards stay readable-width; the three-column grid is narrower
+	   than this cap, so it only applies to the single-column layout. */
+	margin-inline: auto;
+	max-width: 26rem;
+	width: 100%;
 	background-color: var(--surface-elevated, #fff);
 	border-radius: var(--radius-lg, 12px);
 	box-shadow: 0 2px 8px rgba(13, 58, 140, 0.12);
@@ -242,22 +158,10 @@
 		);
 }
 
-/* Wide screens: all three cards side by side, no carousel chrome. */
+/* Wide screens: all three cards side by side. */
 @media screen and (min-width: 960px) {
-	.track {
-		display: grid;
+	.cards {
 		grid-template-columns: repeat(3, 1fr);
-		overflow: visible;
-		scroll-snap-type: none;
-	}
-
-	.slide {
-		flex: none;
-	}
-
-	.navButton,
-	.dots {
-		display: none;
 	}
 }
 

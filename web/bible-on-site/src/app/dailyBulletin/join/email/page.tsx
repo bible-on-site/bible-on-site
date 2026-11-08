@@ -9,7 +9,7 @@ export const metadata: Metadata = pageMetadata({
 	title: `הרשמה לעלון היומי בדוא"ל | ${SITE_NAME}`,
 	description:
 		'הרשמה לעלון היומי של תנ"ך על הפרק בדוא"ל - הפרק היומי ישירות לתיבה, כל בוקר.',
-	canonical: "/join/email",
+	canonical: "/dailyBulletin/join/email",
 });
 
 /**
@@ -23,8 +23,8 @@ export default function JoinEmailPage() {
 			<section className={styles.card}>
 				<h1>הרשמה לעלון היומי בדוא&quot;ל</h1>
 				<p>
-					הזינו את כתובת הדוא&quot;ל שלכם ואשרו את ההרשמה. נשלח אליכם מייל
-					אימות - לחיצה על הקישור במייל משלימה את ההרשמה.
+					הזינו את כתובת הדוא&quot;ל ואשרו את ההרשמה - העלון היומי יישלח אליכם
+					כל בוקר.
 				</p>
 				<EmailSignupForm source="page" />
 				<p className={styles.note}>

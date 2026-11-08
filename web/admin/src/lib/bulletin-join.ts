@@ -1,7 +1,7 @@
 /**
  * Admin-managed public join-link destinations (#2939).
  *
- * `/join/whatsapp` and `/join/telegram` on the website resolve to whatever a
+ * `/dailyBulletin/join/whatsapp` and `/dailyBulletin/join/telegram` on the website resolve to whatever a
  * bulletin admin saves here — rotating a WhatsApp invitation needs no
  * redeploy and no code change. The validator is deliberately narrower than
  * what the providers technically accept: a destination must be a plain
@@ -81,7 +81,10 @@ export function validateJoinDestination(
 	if (channel === "telegram") {
 		// Public channel: https://t.me/<name>
 		if (url.hostname !== "t.me") return null;
-		if (segments.length !== 1 || !/^[A-Za-z][A-Za-z0-9_]{3,31}$/.test(segments[0]))
+		if (
+			segments.length !== 1 ||
+			!/^[A-Za-z][A-Za-z0-9_]{3,31}$/.test(segments[0])
+		)
 			return null;
 	}
 	return `https://${url.hostname}/${segments.join("/")}`;

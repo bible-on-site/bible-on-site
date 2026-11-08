@@ -12,7 +12,10 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * Content-Length cannot make the server buffer an unbounded body.
  */
 async function readBody(request: Request): Promise<unknown> {
-	if ((request.headers.get("content-type") ?? "").split(";")[0] !== "application/json")
+	if (
+		(request.headers.get("content-type") ?? "").split(";")[0] !==
+		"application/json"
+	)
 		return null;
 	const declared = Number(request.headers.get("content-length") ?? "0");
 	if (declared > MAX_BODY_BYTES) return null;
@@ -46,7 +49,7 @@ async function readBody(request: Request): Promise<unknown> {
  *
  * Always answers 202 with the same generic acknowledgement so the endpoint
  * cannot enumerate subscriptions or expose throttling; the durable intent
- * decides whether a confirmation mail is actually sent.
+ * decides whether the address is actually subscribed.
  */
 export async function POST(request: Request) {
 	const parsed = parseSignupBody(await readBody(request));
@@ -66,5 +69,8 @@ export async function POST(request: Request) {
 			{ status: 503, headers: NO_STORE },
 		);
 	}
-	return NextResponse.json({ status: "received" }, { status: 202, headers: NO_STORE });
+	return NextResponse.json(
+		{ status: "received" },
+		{ status: 202, headers: NO_STORE },
+	);
 }

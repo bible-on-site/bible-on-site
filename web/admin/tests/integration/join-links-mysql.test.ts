@@ -2,14 +2,7 @@ import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import mysql, { type Connection, type RowDataPacket } from "mysql2/promise";
-import {
-	afterAll,
-	beforeAll,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tanstack/react-start/server-only", () => ({}));
 
@@ -168,8 +161,8 @@ describe("join-link migration", () => {
 		await expect(
 			db.execute(
 				`INSERT INTO tanah_daily_bulletin_signup_intent
-				 (email, email_hash, challenge_hash, consent_text, consent_version, consent_source, expires_at, subscriber_id)
-				 VALUES ('f@example.invalid', REPEAT('a', 64), REPEAT('b', 64), 'consent', 'v1', 'fixture', UTC_TIMESTAMP(3), 999999)`,
+				 (email, email_hash, consent_text, consent_version, consent_source, subscriber_id)
+				 VALUES ('f@example.invalid', REPEAT('a', 64), 'consent', 'v1', 'fixture', 999999)`,
 			),
 		).rejects.toThrow();
 	});
@@ -178,10 +171,7 @@ describe("join-link migration", () => {
 describe("join-link reads and CAS updates", () => {
 	it("returns both channels in canonical order through the server reader", async () => {
 		const links = await joinLinks.readJoinLinks();
-		expect(links.map((link) => link.channel)).toEqual([
-			"telegram",
-			"whatsapp",
-		]);
+		expect(links.map((link) => link.channel)).toEqual(["telegram", "whatsapp"]);
 		expect(links[0]).toMatchObject({
 			enabled: true,
 			destination: "https://t.me/alhaperek",
@@ -233,13 +223,12 @@ describe("signup intent constraints", () => {
 	const row = {
 		email: "reader@example.invalid",
 		email_hash: "a".repeat(64),
-		challenge_hash: "b".repeat(64),
 		consent_text: "consent fixture",
 		consent_version: "2026-10",
 		consent_source: "native-fixture",
 	};
 
-	it("enforces the unique challenge hash and the subscriber FK", async () => {
+	it("enforces the subscriber FK on the SES-sync link", async () => {
 		await db.execute(
 			"INSERT INTO tanah_daily_bulletin_subscriber (email,audience,consent_status) VALUES ('reader@example.invalid','real','confirmed')",
 		);
@@ -248,12 +237,11 @@ describe("signup intent constraints", () => {
 		);
 		await db.execute(
 			`INSERT INTO tanah_daily_bulletin_signup_intent
-			 (email, email_hash, challenge_hash, consent_text, consent_version, consent_source, expires_at, subscriber_id)
-			 VALUES (?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(3), ?)`,
+			 (email, email_hash, consent_text, consent_version, consent_source, subscriber_id)
+			 VALUES (?, ?, ?, ?, ?, ?)`,
 			[
 				row.email,
 				row.email_hash,
-				row.challenge_hash,
 				row.consent_text,
 				row.consent_version,
 				row.consent_source,
@@ -263,11 +251,10 @@ describe("signup intent constraints", () => {
 		await expect(
 			db.execute(
 				`INSERT INTO tanah_daily_bulletin_signup_intent
-				 (email, email_hash, challenge_hash, consent_text, consent_version, consent_source, expires_at)
-				 VALUES ('other@example.invalid', ?, ?, ?, ?, ?, UTC_TIMESTAMP(3))`,
+				 (email, email_hash, consent_text, consent_version, consent_source, subscriber_id)
+				 VALUES ('other@example.invalid', ?, ?, ?, ?, 999999)`,
 				[
 					"c".repeat(64),
-					row.challenge_hash,
 					row.consent_text,
 					row.consent_version,
 					row.consent_source,
@@ -276,91 +263,13 @@ describe("signup intent constraints", () => {
 		).rejects.toThrow();
 	});
 
-	it("defaults a fresh intent to pending with the email index populated", async () => {
+	it("defaults a fresh intent to confirmed with SES sync counters at zero", async () => {
 		const intent = await db.queryOne<RowDataPacket>(
-			"SELECT status, ses_attempts, send_token, challenge_hash FROM tanah_daily_bulletin_signup_intent WHERE email = 'reader@example.invalid'",
+			"SELECT status, ses_attempts, ses_status FROM tanah_daily_bulletin_signup_intent WHERE email = 'reader@example.invalid'",
 		);
 		expect(intent).toMatchObject({
-			status: "pending",
+			status: "confirmed",
 			ses_attempts: 0,
-			send_token: null,
-			challenge_hash: row.challenge_hash,
 		});
-	});
-});
-
-describe("signup SES event ordering", () => {
-	const email = "event-order@example.invalid";
-
-	async function sentIntent(sendToken: string): Promise<number> {
-		const result = await db.execute(
-			`INSERT INTO tanah_daily_bulletin_signup_intent
-			 (email, email_hash, challenge_hash, status, consent_text, consent_version, consent_source, send_token, expires_at)
-			 VALUES (?, ?, ?, 'sent', 'consent fixture', 'v1', 'native-fixture', ?, UTC_TIMESTAMP(3))`,
-			[
-				email,
-				randomBytes(32).toString("hex"),
-				randomBytes(32).toString("hex"),
-				sendToken,
-			],
-		);
-		return Number(result.insertId);
-	}
-
-	function bounce(intentId: number, sendToken: string, timestamp: string) {
-		return {
-			messageId: `ses-${sendToken}`,
-			attemptId: `${intentId}_${sendToken}`,
-			signupIntentId: intentId,
-			email,
-			type: "bounce" as const,
-			timestamp,
-			permanent: true,
-		};
-	}
-
-	function subscriber(email_: string) {
-		return db.queryOne<RowDataPacket>(
-			"SELECT consent_status, last_event_at FROM tanah_daily_bulletin_subscriber WHERE email = ? AND audience = 'real'",
-			[email_],
-		);
-	}
-
-	it("keeps fresh consent when an older mail's bounce arrives late", async () => {
-		const { applySignupSesEvent } = await import(
-			"~/server/signup-delivery.server"
-		);
-		// Fresh consent recorded at 12:00; the bounce is stamped 11:00 — a
-		// late event about an older send, not about the new confirmation.
-		await db.execute(
-			`INSERT INTO tanah_daily_bulletin_subscriber
-			 (email, audience, consent_status, consent_source, consented_at, last_event_at)
-			 VALUES (?, 'real', 'confirmed', 'native-fixture', '2026-10-28 12:00:00', '2026-10-28 12:00:00')`,
-			[email],
-		);
-		const intentId = await sentIntent("stale-token");
-		await applySignupSesEvent(
-			bounce(intentId, "stale-token", "2026-10-28T11:00:00.000Z"),
-		);
-		expect(await subscriber(email)).toMatchObject({
-			consent_status: "confirmed",
-		});
-		// The intent itself still records the provider's truthful outcome.
-		const intent = await db.queryOne<RowDataPacket>(
-			"SELECT status FROM tanah_daily_bulletin_signup_intent WHERE id = ?",
-			[intentId],
-		);
-		expect(intent?.status).toBe("failed");
-	});
-
-	it("applies a newer event on the current consent attempt", async () => {
-		const { applySignupSesEvent } = await import(
-			"~/server/signup-delivery.server"
-		);
-		const intentId = await sentIntent("fresh-token");
-		await applySignupSesEvent(
-			bounce(intentId, "fresh-token", "2026-10-28T13:00:00.000Z"),
-		);
-		expect((await subscriber(email))?.consent_status).toBe("bounced");
 	});
 });

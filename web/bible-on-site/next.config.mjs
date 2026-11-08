@@ -177,20 +177,14 @@ const nextConfig = {
 	async headers() {
 		return [
 			// Stable join routes (#2939) resolve admin-managed destinations at
-			// request time; neither the redirect nor the unavailable page may
-			// be cached by browsers or the CDN.
+			// request time; the redirect may never be cached by browsers or
+			// the CDN.
 			{
-				source: "/join/telegram",
+				source: "/dailyBulletin/join/telegram",
 				headers: [{ key: "Cache-Control", value: "no-store" }],
 			},
 			{
-				source: "/join/whatsapp",
-				headers: [{ key: "Cache-Control", value: "no-store" }],
-			},
-			// The email confirmation page varies on the staged challenge
-			// cookie — it must never sit in a browser or CDN cache.
-			{
-				source: "/join/email/confirm",
+				source: "/dailyBulletin/join/whatsapp",
 				headers: [{ key: "Cache-Control", value: "no-store" }],
 			},
 		];

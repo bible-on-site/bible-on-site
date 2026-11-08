@@ -5,7 +5,7 @@ const SITEMAP_SECTIONS = [
 	"לוח",
 	"dailyBulletin",
 	"whatsappGroup",
-	"join/email",
+	"dailyBulletin/join/email",
 	"tos",
 	"app",
 	"contact",

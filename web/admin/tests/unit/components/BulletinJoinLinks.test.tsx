@@ -80,18 +80,23 @@ describe("BulletinJoinLinks", () => {
 			"https://t.me/alhaperek",
 		);
 		expect(
-			screen.getByRole("link", { name: "http://localhost:3001/join/telegram" }),
+			screen.getByRole("link", {
+				name: "http://localhost:3001/dailyBulletin/join/telegram",
+			}),
 		).toBeInTheDocument();
 		expect(
-			screen.getByRole("link", { name: "http://localhost:3001/join/whatsapp" }),
+			screen.getByRole("link", {
+				name: "http://localhost:3001/dailyBulletin/join/whatsapp",
+			}),
 		).toBeInTheDocument();
 		expect(screen.getByText("יומן שינויים אחרונים")).toBeInTheDocument();
 	});
 
 	it("keeps saving disabled until a field actually changes", async () => {
 		view();
-		const fieldset = (await screen.findByDisplayValue("https://t.me/alhaperek"))
-			.closest("fieldset") as HTMLElement;
+		const fieldset = (
+			await screen.findByDisplayValue("https://t.me/alhaperek")
+		).closest("fieldset") as HTMLElement;
 		const save = screen.getAllByRole("button", { name: "שמירה" })[0];
 		expect(save).toBeDisabled();
 		fireEvent.click(within(fieldset).getByRole("checkbox"));

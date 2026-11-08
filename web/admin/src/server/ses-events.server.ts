@@ -13,10 +13,6 @@ export interface SesDeliveryEvent {
 		| "renderingFailure";
 	messageId: string;
 	attemptId: string;
-	/** Set when the event belongs to a signup-confirmation send (#2940)
-	 * instead of a bulletin recipient. The worker routes it to the signup
-	 * outbox; bulletin event handling ignores it. */
-	signupIntentId: number | null;
 	email: string;
 	timestamp: string;
 	permanent?: boolean;
@@ -117,19 +113,6 @@ function attemptId(value: string | null): string | null {
 	return value;
 }
 
-/** Same `{id}_{token}` grammar as `attemptId`, but the id must be returned
- * so the worker can route the event to the signup outbox (#2940). */
-function signupAttemptId(
-	value: string | null,
-): { id: number; attempt: string } | null {
-	if (!value) return null;
-	const match = /^([1-9]\d*)_([A-Za-z0-9_-]+)$/.exec(value);
-	if (!match) return null;
-	const id = Number(match[1]);
-	if (!Number.isSafeInteger(id)) return null;
-	return { id, attempt: value };
-}
-
 function topicPreferences(
 	value: unknown,
 ): Partial<Record<Topic, Preference>> | null {
@@ -216,15 +199,10 @@ export function parseSesEvent(
 		}
 
 		const attempt = attemptId(singleTag(mail.tags, "bulletin_attempt"));
-		const signup =
-			attempt === null
-				? signupAttemptId(singleTag(mail.tags, "bulletin_signup_attempt"))
-				: null;
-		if (!attempt && !signup) return null;
+		if (!attempt) return null;
 		const common = {
 			messageId: mail.messageId,
-			attemptId: attempt ?? signup?.attempt ?? "",
-			signupIntentId: signup?.id ?? null,
+			attemptId: attempt,
 			email,
 		};
 		switch (payload.eventType) {

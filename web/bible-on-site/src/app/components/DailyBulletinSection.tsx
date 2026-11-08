@@ -1,18 +1,17 @@
 import Image from "next/image";
-import { BulletinJoinCarousel } from "./BulletinJoinCarousel";
 import styles from "./DailyBulletinSection.module.css";
 import { EmailSignupForm } from "./EmailSignupForm";
 
 /**
  * The daily-bulletin join section (#2941): exactly three cards — Telegram,
- * WhatsApp, and email — shown side by side on wide screens and as an RTL
- * scroll-snap carousel on small screens.
+ * WhatsApp, and email — stacked vertically on small screens and side by side
+ * on wide screens.
  *
  * The Telegram and WhatsApp actions point at the stable first-party routes
- * `/join/telegram` and `/join/whatsapp` (#2939): the rotating provider
- * destinations are resolved server-side and never appear in this markup.
- * Provider links are plain anchors because the routes redirect off-site —
- * there is no client-side navigation to preserve.
+ * `/dailyBulletin/join/telegram` and `/dailyBulletin/join/whatsapp` (#2939):
+ * the rotating provider destinations are resolved server-side and never
+ * appear in this markup. Provider links are plain anchors because the routes
+ * redirect off-site — there is no client-side navigation to preserve.
  */
 export function DailyBulletinSection() {
 	return (
@@ -21,7 +20,7 @@ export function DailyBulletinSection() {
 				<h2>עלון יומי</h2>
 				<h3>קבלו את הלימוד היומי ישירות אליכם</h3>
 			</header>
-			<BulletinJoinCarousel>
+			<div className={styles.cards}>
 				<article
 					id="bulletin-telegram"
 					className={`${styles.card} ${styles.cardTelegram}`}
@@ -37,7 +36,7 @@ export function DailyBulletinSection() {
 					<p className={styles.cardText}>
 						ערוץ הטלגרם של העלון - פרק יומי ומבזקים קצרים.
 					</p>
-					<a className={styles.cardAction} href="/join/telegram">
+					<a className={styles.cardAction} href="/dailyBulletin/join/telegram">
 						הצטרפות לערוץ
 					</a>
 				</article>
@@ -56,7 +55,7 @@ export function DailyBulletinSection() {
 					<p className={styles.cardText}>
 						קבוצת הווטסאפ של העלון - פרק יומי ישירות לטלפון.
 					</p>
-					<a className={styles.cardAction} href="/join/whatsapp">
+					<a className={styles.cardAction} href="/dailyBulletin/join/whatsapp">
 						הצטרפות לקבוצה
 					</a>
 				</article>
@@ -77,7 +76,7 @@ export function DailyBulletinSection() {
 					</p>
 					<EmailSignupForm source="card" />
 				</article>
-			</BulletinJoinCarousel>
+			</div>
 		</section>
 	);
 }

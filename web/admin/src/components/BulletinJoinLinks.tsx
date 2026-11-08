@@ -40,7 +40,7 @@ function JoinLinkCard({
 	const [destination, setDestination] = useState(link.destination ?? "");
 	const dirty =
 		enabled !== link.enabled || destination.trim() !== (link.destination ?? "");
-	const stableUrl = `${WEBSITE_BASE}/join/${link.channel}`;
+	const stableUrl = `${WEBSITE_BASE}/dailyBulletin/join/${link.channel}`;
 	return (
 		<fieldset className="space-y-3 rounded-lg border border-gray-200 p-4">
 			<legend className="px-2 font-semibold">
@@ -108,7 +108,7 @@ function JoinLinkCard({
 }
 
 /**
- * Admin screen for the public `/join/{channel}` destinations (#2939).
+ * Admin screen for the public `/dailyBulletin/join/{channel}` destinations (#2939).
  * Lives on the daily-bulletin page and is always visible — managing join
  * links does not depend on preparing a bulletin.
  */

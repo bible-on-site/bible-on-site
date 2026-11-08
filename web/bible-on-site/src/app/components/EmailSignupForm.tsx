@@ -1,10 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-	CONSENT_TEXT,
-	type SignupSource,
-} from "@/lib/bulletin-signup/shared";
+import { CONSENT_TEXT, type SignupSource } from "@/lib/bulletin-signup/shared";
 import styles from "./EmailSignupForm.module.css";
 
 interface EmailSignupFormProps {
@@ -16,9 +13,10 @@ type FormState = "idle" | "pending" | "sent" | "error";
 
 /**
  * Public daily-bulletin email signup (#2940). Submits the address and the
- * explicit consent to `/api/bulletin/subscribe` and reports only the generic
- * outcome — the API deliberately never reveals whether the address was
- * already subscribed, throttled, or sent a challenge.
+ * explicit consent to `/api/bulletin/subscribe` — a direct subscription, no
+ * confirmation mail — and reports only the generic outcome: the API
+ * deliberately never reveals whether the address was already subscribed or
+ * throttled.
  */
 export function EmailSignupForm({ source }: EmailSignupFormProps) {
 	const [state, setState] = useState<FormState>("idle");
@@ -44,8 +42,8 @@ export function EmailSignupForm({ source }: EmailSignupFormProps) {
 	if (state === "sent") {
 		return (
 			<p className={styles.status} role="status">
-				אם הכתובת תקינה וטרם אומתה, יישלח אליה מייל אימות בקרוב. יש ללחוץ על
-				הקישור במייל כדי להשלים את ההרשמה.
+				ההרשמה התקבלה. העלון היומי יישלח אליכם כל בוקר, ואפשר להסיר את ההרשמה
+				בכל עת.
 			</p>
 		);
 	}

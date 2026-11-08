@@ -19,9 +19,9 @@ describe("DailyBulletinSection", () => {
 			screen.getByRole("heading", { name: "עלון יומי" }),
 		).toBeInTheDocument();
 		const telegram = screen.getByRole("link", { name: "הצטרפות לערוץ" });
-		expect(telegram).toHaveAttribute("href", "/join/telegram");
+		expect(telegram).toHaveAttribute("href", "/dailyBulletin/join/telegram");
 		const whatsapp = screen.getByRole("link", { name: "הצטרפות לקבוצה" });
-		expect(whatsapp).toHaveAttribute("href", "/join/whatsapp");
+		expect(whatsapp).toHaveAttribute("href", "/dailyBulletin/join/whatsapp");
 		// The email card embeds the signup form itself; a separate-page link was
 		// removed per review.
 		expect(
