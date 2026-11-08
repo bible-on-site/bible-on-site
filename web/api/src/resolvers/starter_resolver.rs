@@ -11,7 +11,7 @@ pub struct StarterQuery;
 
 #[Object]
 impl StarterQuery {
-    /// Get starter data including all authors, all articles, and article counts per perek
+    /// Get starter data including authors (up to the service safety cap), all articles, and article counts per perek
     async fn starter(&self, ctx: &Context<'_>) -> Result<Starter> {
         let db = ctx.data::<Database>()?;
 
