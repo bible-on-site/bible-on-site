@@ -27,14 +27,15 @@ public class HttpPushDeviceRegistryTests
         }
     }
 
-    private static HttpPushDeviceRegistry CreateRegistry(CaptureHandler handler) =>
-        new(new HttpClient(handler), () => "https://site.example");
+    private static HttpPushDeviceRegistry CreateRegistry(HttpClient http) =>
+        new(http, () => "https://site.example");
 
     [Fact]
     public async Task RegisterAsync_PostsContractPayloadToDeviceRoute()
     {
         var handler = new CaptureHandler(HttpStatusCode.OK);
-        var registry = CreateRegistry(handler);
+        using var http = new HttpClient(handler);
+        var registry = CreateRegistry(http);
         var registration = new PushDeviceRegistration(
             "user-1", "fid-1", "token-1", "android", ["daily_perek"], "5.1.8");
 
@@ -57,7 +58,8 @@ public class HttpPushDeviceRegistryTests
     public async Task UnregisterAsync_DeletesWithUserIdBody()
     {
         var handler = new CaptureHandler(HttpStatusCode.OK);
-        var registry = CreateRegistry(handler);
+        using var http = new HttpClient(handler);
+        var registry = CreateRegistry(http);
 
         await registry.UnregisterAsync("user-1", CancellationToken.None);
 
@@ -71,7 +73,8 @@ public class HttpPushDeviceRegistryTests
     public async Task RegisterAsync_OnNonSuccess_ThrowsForCallerToLog()
     {
         var handler = new CaptureHandler(HttpStatusCode.NotFound);
-        var registry = CreateRegistry(handler);
+        using var http = new HttpClient(handler);
+        var registry = CreateRegistry(http);
 
         await registry
             .Invoking(r => r.RegisterAsync(
