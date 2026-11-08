@@ -41,6 +41,7 @@ import { CategoryView } from "../../../src/app/pedia/[slug]/category-view";
 import PediaSlugPage, {
 	generateMetadata,
 } from "../../../src/app/pedia/[slug]/page";
+import { NOT_FOUND_METADATA } from "../../../src/lib/seo/missing-page";
 import {
 	CATEGORY_SLUGS,
 	resolveCategoryRoute,
@@ -129,7 +130,7 @@ describe("pedia/[slug] category route", () => {
 				params: Promise.resolve({ slug: "משה-רבנו" }),
 			});
 
-			expect(result.title).toBe("לא נמצא");
+			expect(result).toEqual(NOT_FOUND_METADATA);
 		});
 	});
 
