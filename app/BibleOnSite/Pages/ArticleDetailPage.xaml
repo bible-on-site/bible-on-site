@@ -40,10 +40,26 @@
             </controls:SharedTopBar.TrailingContent>
         </controls:SharedTopBar>
 
+        <!-- Word-weighted reading position over the stored block metrics
+             (issue #2607): a hairline at the top of the reader viewport. -->
+        <ProgressBar x:Name="ReadingProgressBar"
+                     AutomationId="ArticleReadingProgressBar"
+                     Grid.Row="1"
+                     ZIndex="50"
+                     HeightRequest="3"
+                     Margin="0"
+                     VerticalOptions="Start"
+                     IsVisible="{Binding HasReadingProgress}"
+                     Progress="{Binding ReadingProgress}"
+                     ProgressColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                     BackgroundColor="Transparent"/>
+
         <!-- Content -->
         <ScrollView x:Name="ArticleScroll"
                     Grid.Row="1"
-                    Padding="16,0">
+                    Padding="16,0"
+                    Scrolled="OnArticleScrolled"
+                    SizeChanged="OnArticleContentSizeChanged">
             <VerticalStackLayout Spacing="16">
                 <VerticalStackLayout.MaximumWidthRequest>
                     <!-- +∞ = uncapped; an explicit -1 collapses the element on mobile. -->
@@ -114,7 +130,8 @@
                 <VerticalStackLayout x:Name="ArticleContentContainer"
                                      IsVisible="{Binding HasContent}"
                                      Spacing="8"
-                                     Margin="0,0,0,32"/>
+                                     Margin="0,0,0,32"
+                                     SizeChanged="OnArticleContentSizeChanged"/>
 
                 <!-- No content message -->
                 <Label Text="אין תוכן זמין"

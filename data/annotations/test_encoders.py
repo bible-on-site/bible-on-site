@@ -410,5 +410,32 @@ class TestCandidateRegistry(unittest.TestCase):
         self.assertEqual(tag, "dictabert-ner@05ed61bc+contract1")
 
 
+class TestLazyEntitiesFn(unittest.TestCase):
+    """The publish wrapper defers weight loading to first inference."""
+
+    def test_load_is_deferred_until_first_call(self):
+        spec = encoders.CANDIDATES[0]
+        with mock.patch.object(
+            encoders, "load_entities_fn"
+        ) as load_mock:
+            load_mock.return_value = fake_entities(("PER", 0, 4, 0.9))
+            entities_fn = encoders.lazy_entities_fn(spec)
+            load_mock.assert_not_called()
+            out = entities_fn("אברם הלך")
+            load_mock.assert_called_once_with(spec)
+            self.assertEqual(out[0]["entity_group"], "PER")
+
+    def test_load_is_memoized_across_calls(self):
+        spec = encoders.CANDIDATES[0]
+        with mock.patch.object(
+            encoders, "load_entities_fn"
+        ) as load_mock:
+            load_mock.return_value = fake_entities()
+            entities_fn = encoders.lazy_entities_fn(spec)
+            entities_fn("א")
+            entities_fn("ב")
+            load_mock.assert_called_once_with(spec)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,10 +1,10 @@
 /**
  * @jest-environment jsdom
  *
- * UnitBreadcrumb falls back to a plain sefer name when the division has
- * no first unit for that sefer. Real data covers all five Torah
- * sefarim, so the mock returns only בראשית — the other names render
- * unlinked.
+ * UnitBreadcrumb's sefer picker falls back to a plain sefer name when
+ * the division has no first unit for that sefer. Real data covers all
+ * five Torah sefarim, so the mock returns only בראשית — the other
+ * names render unlinked.
  */
 import { render, screen } from "@testing-library/react";
 
@@ -40,7 +40,7 @@ import { getParashaUnitById } from "@/data/parasha/parasha-units";
 describe("UnitBreadcrumb — sefer without a first unit", () => {
 	it("renders the name unlinked when the division lacks that sefer", () => {
 		render(<UnitBreadcrumb unit={getParashaUnitById(1)} />);
-		// בראשית still links to its first unit in both pickers.
+		// בראשית still links to its first unit in the sefer picker.
 		const bereshitLinks = screen.getAllByRole("link", { name: "בראשית" });
 		expect(bereshitLinks.length).toBeGreaterThan(0);
 		for (const name of ["שמות", "ויקרא", "במדבר", "דברים"]) {

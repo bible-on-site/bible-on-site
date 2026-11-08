@@ -867,14 +867,16 @@ describe("Telegram durable attempt and recovery", () => {
 	it("passes exact immutable PDF bytes and frozen caption to the client", async () => {
 		state.jobs.push(fixture());
 		await processTelegramJob(key);
-		expect(mocks.send.mock.calls[0][0]).toMatchObject({
+		const input = mocks.send.mock.calls[0][0];
+		expect(input).toMatchObject({
 			pdf,
 			caption: "frozen caption",
-			bulletinDate: date,
 			botId: 123456,
 			chatId: -100111,
 			filename: "daily.pdf",
 		});
+		// #3069: no admin download URL may be derivable from the send input.
+		expect(input).not.toHaveProperty("bulletinDate");
 	});
 	it.each(["sent", "failed", "uncertain", "suppressed"] as const)(
 		"never repeats terminal %s jobs",

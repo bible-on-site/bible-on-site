@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
+import { PageShell } from "@/app/components/PageShell";
 import { geistSans } from "./family-tree-font";
-import "./layout.css";
 
 export default function TanahpediaLayout({
 	children,
@@ -8,6 +8,11 @@ export default function TanahpediaLayout({
 	children: ReactNode;
 }) {
 	return (
-		<div className={`tanahpedia-layout ${geistSans.variable}`}>{children}</div>
+		<PageShell
+			header="solid"
+			className={`tanahpedia-layout ${geistSans.variable}`}
+		>
+			{children}
+		</PageShell>
 	);
 }

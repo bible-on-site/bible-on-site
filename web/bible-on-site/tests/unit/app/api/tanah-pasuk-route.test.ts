@@ -2,17 +2,15 @@
  * @jest-environment node
  */
 jest.mock("@/lib/perushim", () => ({
-	getPerushimByPerekId: jest.fn(),
-	getPerushNotes: jest.fn(),
+	getPerushNotesForPasuk: jest.fn(),
 }));
 
 import { GET } from "@/app/api/tanah/pasuk/[perekId]/[pasuk]/route";
-import { getPerushimByPerekId, getPerushNotes } from "@/lib/perushim";
+import { getPerushNotesForPasuk } from "@/lib/perushim";
 
-const mockPerushim = getPerushimByPerekId as jest.MockedFunction<
-	typeof getPerushimByPerekId
+const mockNotes = getPerushNotesForPasuk as jest.MockedFunction<
+	typeof getPerushNotesForPasuk
 >;
-const mockNotes = getPerushNotes as jest.MockedFunction<typeof getPerushNotes>;
 
 function requestFor(perekId: string, pasuk: string, query = "") {
 	return GET(
@@ -45,12 +43,9 @@ describe("GET /api/tanah/pasuk/[perekId]/[pasuk]", () => {
 	});
 
 	it("includes the perush note when a perush is given and has a note", async () => {
-		mockPerushim.mockResolvedValue([
-			{ id: 23, name: "הכתב והקבלה", parshanName: "רימ", noteCount: 1 },
-		]);
 		mockNotes.mockResolvedValue([
 			{ pasuk: 23, noteIdx: 1, noteContent: "<p>דברי הפירוש</p>" },
-			{ pasuk: 24, noteIdx: 1, noteContent: "<p>אחר</p>" },
+			{ pasuk: 23, noteIdx: 2, noteContent: "<p>עוד</p>" },
 		]);
 		const res = await requestFor(
 			"32",
@@ -62,12 +57,12 @@ describe("GET /api/tanah/pasuk/[perekId]/[pasuk]", () => {
 		expect(body.reference).toContain("הכתב והקבלה");
 		expect(body.reference).not.toMatch(/["״׳']/u);
 		expect(body.noteHtml).toContain("דברי הפירוש");
-		expect(body.noteHtml).not.toContain("אחר");
-		expect(mockNotes).toHaveBeenCalledWith(23, 32);
+		expect(body.noteHtml).toContain("עוד");
+		expect(mockNotes).toHaveBeenCalledWith("הכתב והקבלה", 32, 23);
 	});
 
-	it("falls back to the plain pasuk preview when the perush has no note", async () => {
-		mockPerushim.mockResolvedValue([]);
+	it("falls back to the plain pasuk preview when the perush is unknown", async () => {
+		mockNotes.mockResolvedValue([]);
 		const res = await requestFor(
 			"32",
 			"23",
@@ -80,12 +75,7 @@ describe("GET /api/tanah/pasuk/[perekId]/[pasuk]", () => {
 	});
 
 	it("falls back when the perush exists but has no note for the pasuk", async () => {
-		mockPerushim.mockResolvedValue([
-			{ id: 23, name: "הכתב והקבלה", parshanName: "רימ", noteCount: 1 },
-		]);
-		mockNotes.mockResolvedValue([
-			{ pasuk: 5, noteIdx: 1, noteContent: "<p>אחר</p>" },
-		]);
+		mockNotes.mockResolvedValue([]);
 		const res = await requestFor(
 			"32",
 			"23",

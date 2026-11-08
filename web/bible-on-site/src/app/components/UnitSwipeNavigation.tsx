@@ -49,7 +49,7 @@ export default function UnitSwipeNavigation({
 	prevHref: string | null;
 	nextHref: string | null;
 	children: ReactNode;
-	className: string;
+	className?: string;
 }) {
 	const ref = useRef<HTMLDivElement>(null);
 	const router = useRouter();

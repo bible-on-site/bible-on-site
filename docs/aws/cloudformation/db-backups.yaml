@@ -157,13 +157,19 @@ Resources:
                   StringEquals:
                     aws:RequestedRegion: !Ref AWS::Region
               - Sid: LeaseOnlyTheDatabaseGroup
+                # Request tags are absent when authorizing ingress against an
+                # existing group — TagSpecifications describe the new rule, not
+                # the group resource — so the group authorization is scoped by
+                # the deployed stack's region and VPC instead. New-rule tag
+                # restrictions stay on the security-group-rule and CreateTags
+                # authorizations below. Mirrors the approved deployed template.
                 Effect: Allow
                 Action: ec2:AuthorizeSecurityGroupIngress
                 Resource: !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${RdsSecurityGroupId}
                 Condition:
                   StringEquals:
-                    aws:RequestTag/Source: github-actions-build
-                    aws:RequestTag/Job: backup
+                    ec2:Region: il-central-1
+                    ec2:Vpc: arn:aws:ec2:il-central-1:250598594267:vpc/vpc-0d6af72e472db138c
               - Sid: RevokeFromDatabaseGroupOnly
                 # EC2 authorizes revocation on the group, not tagged rule ARNs.
                 # The existing helper verifies the complete owned lease before revoke.

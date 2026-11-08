@@ -243,11 +243,18 @@ for (const [label, probe, succeeds] of [
     } });
     if (succeeds) assert.equal(await preparation, outputPath);
     else await assert.rejects(preparation, /did not inspect its preparer/);
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, succeeds ? 3 : 2);
     assert.equal(calls[1].command, outputPath);
     assert.deepEqual(calls[1].args, [String(process.pid)]);
     assert.equal(calls[0].options.signal, calls[1].options.signal);
     assert.equal(calls[0].options.timeout, 300000);
+    if (succeeds) {
+      // The kernel thread fallback is exercised during preparation too, so a
+      // broken enumerator cannot surface first inside the failure handoff.
+      assert.equal(calls[2].command, outputPath);
+      assert.deepEqual(calls[2].args, ["--threads", String(process.pid)]);
+      assert.equal(calls[2].options.signal, calls[0].options.signal);
+    }
   });
 }
 

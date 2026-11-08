@@ -28,5 +28,14 @@ export async function prepareIosProcessInspector({
   if (stderr.trim() || !stdout.startsWith(`${process.pid} L /`)) {
     throw new Error("The native iOS process inspector did not inspect its preparer.");
   }
+  // The thread enumerator is the fallback evidence path when debugger-based
+  // captures cannot run; verify its kernel flavor before tests depend on it.
+  const threads = await execute(outputPath, ["--threads", String(process.pid)],
+    { signal: preparation, windowsHide: true });
+  const threadRows = threads.stdout.split("\n")
+    .filter(line => line.startsWith(`${process.pid} `));
+  if (threads.stderr?.trim() || !threadRows.length) {
+    throw new Error("The native iOS process inspector did not enumerate its preparer's threads.");
+  }
   return outputPath;
 }

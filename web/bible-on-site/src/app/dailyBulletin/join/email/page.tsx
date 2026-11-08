@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { pageHeader } from "@/app/components/PageShell";
 import { EmailSignupForm } from "@/app/components/EmailSignupForm";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
@@ -19,7 +20,7 @@ export const metadata: Metadata = pageMetadata({
  */
 export default function JoinEmailPage() {
 	return (
-		<main className={styles.page}>
+		<main {...pageHeader("solid")} className={styles.page}>
 			<section className={styles.card}>
 				<h1>הרשמה לעלון היומי בדוא&quot;ל</h1>
 				<p>

@@ -52,6 +52,7 @@ export function ArticlesSection({
 					src="/icons/book.svg"
 					alt=""
 					aria-hidden="true"
+					unoptimized
 					width={18}
 					height={18}
 					className={styles.sectionIcon}

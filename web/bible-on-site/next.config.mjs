@@ -187,6 +187,27 @@ const nextConfig = {
 				source: "/dailyBulletin/join/whatsapp",
 				headers: [{ key: "Cache-Control", value: "no-store" }],
 			},
+			{
+				// Reader book assets (#3095) are precompressed Brotli bytes the
+				// generator writes under public/generated/sefarim/. They are
+				// served as static files — NOT a route handler — because the App
+				// Router response pipeline can drop Content-Encoding while still
+				// sending the encoded body, leaving browsers unable to decode it.
+				// Content-addressed names make the immutable cache safe.
+				source: "/generated/sefarim/:path*",
+				headers: [
+					{
+						key: "Content-Type",
+						value: "application/json; charset=utf-8",
+					},
+					{ key: "Content-Encoding", value: "br" },
+					{
+						key: "Cache-Control",
+						value: "public, max-age=31536000, immutable",
+					},
+					{ key: "Vary", value: "Accept-Encoding" },
+				],
+			},
 		];
 	},
 
@@ -244,6 +265,16 @@ const nextConfig = {
 					source: `/${encodeURIComponent("מסורה")}/:path*`,
 					destination: "/masora/:path*",
 				},
+				// /מועדים — the DB-backed מועדים על הפרק section (#3101) lives
+				// in the ASCII /moadim route dir; slugs are canonical Hebrew
+				// and pass through the :path* wildcard like מסורה does.
+				{ source: "/מועדים", destination: "/moadim" },
+				{ source: `/${encodeURIComponent("מועדים")}`, destination: "/moadim" },
+				{ source: "/מועדים/:path*", destination: "/moadim/:path*" },
+				{
+					source: `/${encodeURIComponent("מועדים")}/:path*`,
+					destination: "/moadim/:path*",
+				},
 				// /פרשה — the parasha reading division's public Hebrew root.
 				// Book-chrome URLs (/פרשה/{sefer}/{cover-slug}) land on the
 				// sefer's first parasha in book mode; unit URLs resolve through
@@ -282,6 +313,18 @@ const nextConfig = {
 				destination: "/לוח",
 				permanent: true,
 			},
+			// Same convention for /moadim — the public canonical URLs are
+			// the Hebrew /מועדים ones (#3101).
+			{
+				source: "/moadim",
+				destination: "/מועדים",
+				permanent: true,
+			},
+			{
+				source: "/moadim/:path*",
+				destination: "/מועדים/:path*",
+				permanent: true,
+			},
 			// Legacy /authors → /929/authors permanent redirect
 			{
 				source: "/authors",
@@ -297,6 +340,16 @@ const nextConfig = {
 			{
 				source: "/tanahpedia/entry/:uniqueName",
 				destination: "/pedia/:uniqueName",
+				permanent: true,
+			},
+			// /sitemap_www.xml is a public sitemap URL external consumers
+			// still fetch — e.g. past Search Console submissions on the
+			// supported www host. Keep it pointing at the single canonical
+			// document instead of letting it hit the missing-page 404
+			// (issue #2935).
+			{
+				source: "/sitemap_www.xml",
+				destination: "/sitemap.xml",
 				permanent: true,
 			},
 		];

@@ -34,14 +34,20 @@ administrator. No cross-account protection is claimed.
 
 The existing owned-rule helper grants this job's runner IPv4 `/32` access to
 port 3306 and removes only its tagged rule in an `always()` cleanup step. The
-role's network permissions are scoped to the RDS security group. EC2 authorizes
-revocation on that group and cannot enforce rule-tag ownership in IAM: the
-trusted cleanup helper validates account, group, exact rule ID, TCP port 3306,
-runner `/32` and all lease tags before removing its rule. The role could revoke
-other rules in that one group if its credentials or trusted workflow were
-compromised; it has no revocation grant for other groups. Initial
-preflight checks the account, RDS engine, source credential, attached security
-group and S3 protection before that grant. A changed security group fails closed
+role's network permissions are scoped to the RDS security group. EC2 does not
+evaluate new-rule request tags when authorizing ingress against an existing
+group — `TagSpecifications` describe the created rule, not the group resource —
+so the deployed `LeaseOnlyTheDatabaseGroup` statement scopes that authorization
+to the stack's region (`ec2:Region=il-central-1`) and the database VPC
+(`ec2:Vpc`). New-rule tag restrictions remain on the `security-group-rule` and
+`CreateTags` authorizations. EC2 authorizes revocation on that group and cannot
+enforce rule-tag ownership in IAM: the trusted cleanup helper validates account,
+group, exact rule ID, TCP port 3306, runner `/32` and all lease tags before
+removing its rule. The role could revoke other rules in that one group if its
+credentials or trusted workflow were compromised; it has no revocation grant
+for other groups. Initial preflight checks the account, RDS engine, source
+credential, attached security group and S3 protection before that grant. A
+changed security group fails closed
 and requires the workflow/role parameters to be updated together.
 
 Normal data deployments and backups share the repository's `-cd-data`
@@ -59,10 +65,22 @@ GTID state and tablespace administration are excluded.
 
 Before upload, it imports the compressed archive into a fresh, disposable
 MySQL 8.4 server on `127.0.0.1`, with the event scheduler and local infile
-disabled. It rejects an existing database or the source server's UUID. Schema
-metadata must match, including constraints and stored-object definitions. The
+disabled. The setup action launches that server bound to all interfaces
+(`--bind-address=*` overrides the loopback `my-cnf` setting), so the workflow
+constrains port 3306 to the runner's loopback at the host firewall before the
+server starts and then proves non-loopback connections are refused. The
+loopback-only client requests the server's RSA public key for its first
+`caching_sha2_password` login, which would otherwise fail cold without a secure
+channel; the verified-TLS source path keeps `VERIFY_IDENTITY`. Scratch identity,
+version, event scheduler and emptiness are validated before the complete
+production export runs, so a cold-cache credential or isolation failure aborts
+the run early. It rejects an existing database or the source server's UUID.
+Schema metadata must match, including constraints and stored-object
+definitions. The
 manifest records per-table row counts and extended table checksums from that
 restoration, plus archive SHA-256, byte size and exact S3 object version.
+Failures report only the failed phase and the numeric MySQL error code; SQL,
+client stderr, credentials and content stay out of logs and artifacts.
 
 S3 validates each multipart SHA-256 checksum. The immutable version-pinned
 manifest is written last; an export, restore, checksum, upload or manifest error
@@ -85,7 +103,11 @@ changes. Use existing SSO profile `AdministratorAccess-250598594267` and verify
    with `RdsSecurityGroupId` and `SsmKeyArn` set to those verified values and
    `CAPABILITY_NAMED_IAM`. This stack creates the private retained bucket, its
    policy and the new OIDC writer role; it does not manage the existing DB,
-   security group, application roles or asset buckets.
+   security group, application roles or asset buckets. The deployed stack
+   `bible-on-site-db-backups` is UPDATE_COMPLETE with the corrected
+   `LeaseOnlyTheDatabaseGroup` condition (region/VPC, not `aws:RequestTag` on
+   the group); do not redeploy an older template revision that conditioned the
+   security-group authorization on request tags.
 2. Through a short-lived, task-owned `/32` MySQL access rule, connect to the
    verified RDS endpoint with the regional CA and `VERIFY_IDENTITY`. Inspect
    non-system schemas and confirm the application's entire content is in
@@ -106,7 +128,8 @@ changes. Use existing SSO profile `AdministratorAccess-250598594267` and verify
    in a `finally` cleanup. If credential storage fails, remove only the newly
    created backup user; application credentials are preserved.
 3. Verify that the writer's policies restrict SSM to that one parameter, S3 to
-   the new bucket/prefixes and network changes to the verified database group.
+   the new bucket/prefixes and network changes to the verified database group
+   within its region and VPC.
    Recheck the helper's complete lease ownership validation before cleanup;
    per-rule revocation ownership is enforced by that code, not IAM.
    Set repository variable `PRODUCTION_BACKUPS_ENABLED=true` only after the

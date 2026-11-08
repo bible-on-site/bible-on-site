@@ -723,7 +723,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         try
         {
             BottomBar.ArticlesBadgeCount =
-                StarterService.Instance.GetPerekArticlesCount(_viewModel.PerekId);
+                StarterService.Instance.GetDailyPerekArticlesCount(_viewModel.PerekId, _dailyDateNum);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: articles-count badge degrades to hidden
         catch (Exception ex) //NOSONAR — articles-count badge degrades to hidden.
@@ -869,6 +869,15 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 {
                     await ShellAppNavigator.Instance.GoToQueuedAsync($"articleDetail?articleId={articleId}");
                 }
+                else if (target.PasukNumber is int pasukNum)
+                {
+                    // The link names a pasuk (?pasuk=N / #pasuk-N) — land on it
+                    // the way a pasuk search result does (#1227).
+                    _searchReaderResult = new PasukSearchResult(
+                        new Pasuk { PasukNum = pasukNum, Text = string.Empty },
+                        target.PerekId, string.Empty);
+                    await ApplySearchReaderLocationAsync();
+                }
             }
             #pragma warning disable S2221 // Deliberate failure boundary: app-link navigation failure is log-only
             catch (Exception ex) //NOSONAR — app-link navigation failure is log-only.
@@ -897,6 +906,14 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         {
             AppLinkHelper.PendingTarget = null;
             _pendingArticleId = pendingTarget.ArticleId;
+            if (pendingTarget.ArticleId is null && pendingTarget.PasukNumber is int coldPasuk)
+            {
+                // A pasuk-anchored link lands on the pasuk like a pasuk search
+                // result once the initial load settles (#1227).
+                _searchReaderResult = new PasukSearchResult(
+                    new Pasuk { PasukNum = coldPasuk, Text = string.Empty },
+                    pendingTarget.PerekId, string.Empty);
+            }
             return pendingTarget.PerekId;
         }
 
@@ -1443,7 +1460,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         try
         {
-            ArticlesCollection.ItemsSource = StarterService.Instance.GetArticlesByPerekId(_viewModel.PerekId);
+            ArticlesCollection.ItemsSource = StarterService.Instance.GetDailyArticles(_viewModel.PerekId, _dailyDateNum);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: articles list degrades to empty
         catch (Exception ex) //NOSONAR — articles list degrades to empty.
@@ -1519,6 +1536,27 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         if (_chrome.IsShowingArticles)
         {
             LoadArticles();
+        }
+    }
+
+    /// <summary>
+    /// Links inside rendered note content: /929/ targets navigate natively,
+    /// /pedia/ slugs open the Tanahpedia entry page, the rest open in the
+    /// browser (#1227).
+    /// </summary>
+    private async void OnContentLinkTapped(object? sender, LinkTappedEventArgs e)
+    {
+        e.Handled = true;
+        try
+        {
+            await AppLinkHelper.FollowHtmlLinkAsync(e.Url, Launcher.Default, ShellAppNavigator.Instance);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: link navigation/launcher failure must not crash the reader
+        catch (Exception ex) //NOSONAR — link navigation/launcher failure must not crash the reader.
+        {
+            #pragma warning restore S2221
+            // async void - an unhandled navigation/launcher exception is a crash.
+            Console.Error.WriteLine($"Content link navigation failed for {e.Url}: {ex}");
         }
     }
 
