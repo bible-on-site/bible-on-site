@@ -36,29 +36,31 @@ describe("getMentionReferencesForPerek", () => {
 		const [sql] = mockQuery.mock.calls[0];
 		expect(sql).toContain("tanahpedia_entry e");
 		expect(sql).toContain("tanahpedia_entry_synonym");
-		// Name matching normalizes the entry-side hyphens to the pipeline's
-		// space-separated intended_name contract.
-		expect(sql).toContain("REPLACE(names.resolvedName, '-', ' ')");
+		// Name matching uses the indexed generated normalized_name column
+		// (entry-side hyphens as the pipeline's space-separated
+		// intended_name), never a per-row REPLACE() over the namespace.
+		expect(sql).toContain("e.normalized_name = d.intended_name");
+		expect(sql).toContain("s.normalized_name = d.intended_name");
+		expect(sql).not.toContain("REPLACE(");
 	});
 
 	it("drops name collisions so ambiguous mentions stay plain text", async () => {
 		mockQuery.mockResolvedValueOnce([]);
 		await getMentionReferencesForPerek(7);
 		const [sql] = mockQuery.mock.calls[0];
-		expect(sql).toContain("HAVING COUNT(DISTINCT names.entryId) <= 1");
+		expect(sql).toContain("HAVING COUNT(DISTINCT m.entry_id) <= 1");
 	});
 
-	it("wraps non-grouped entry columns so the query is only_full_group_by safe", async () => {
+	it("emits one row per decoration with bare entry columns", async () => {
 		mockQuery.mockResolvedValueOnce([]);
 		await getMentionReferencesForPerek(9);
 		const [sql] = mockQuery.mock.calls[0];
-		// GROUP BY d.id cannot prove functional dependence for ent.* (the join
-		// goes through the derived names table); MySQL's default sql_mode
-		// rejects bare ent columns. ANY_VALUE is deterministic here: kept
-		// groups have at most one distinct entryId.
-		expect(sql).toContain("ANY_VALUE(ent.id) AS entityId");
-		expect(sql).toContain("ANY_VALUE(ent.title) AS entityName");
-		expect(sql).not.toMatch(/SELECT\s+ent\.id/);
+		// Resolution happens inside a scalar subquery, so each decoration
+		// yields exactly one row and no GROUP BY/ANY_VALUE is needed.
+		expect(sql).toContain("ent.id AS entityId");
+		expect(sql).toContain("ent.title AS entityName");
+		expect(sql).not.toContain("GROUP BY");
+		expect(sql).not.toContain("ANY_VALUE");
 	});
 
 	it("orders human-accepted rows ahead of pipeline rows sharing a span", async () => {
@@ -135,22 +137,25 @@ describe("getMentionReferencesForArticle", () => {
 		const [sql] = mockQuery.mock.calls[0];
 		expect(sql).toContain("tanahpedia_entry e");
 		expect(sql).toContain("tanahpedia_entry_synonym");
-		expect(sql).toContain("REPLACE(names.resolvedName, '-', ' ')");
+		expect(sql).toContain("e.normalized_name = d.intended_name");
+		expect(sql).toContain("s.normalized_name = d.intended_name");
+		expect(sql).not.toContain("REPLACE(");
 	});
 
 	it("drops name collisions so ambiguous mentions stay plain text", async () => {
 		mockQuery.mockResolvedValueOnce([]);
 		await getMentionReferencesForArticle(1, "h");
 		const [sql] = mockQuery.mock.calls[0];
-		expect(sql).toContain("HAVING COUNT(DISTINCT names.entryId) <= 1");
+		expect(sql).toContain("HAVING COUNT(DISTINCT m.entry_id) <= 1");
 	});
 
-	it("wraps non-grouped entry columns so the query is only_full_group_by safe", async () => {
+	it("emits one row per decoration with bare entry columns", async () => {
 		mockQuery.mockResolvedValueOnce([]);
 		await getMentionReferencesForArticle(1, "h");
 		const [sql] = mockQuery.mock.calls[0];
-		expect(sql).toContain("ANY_VALUE(ent.unique_name) AS entryUniqueName");
-		expect(sql).not.toMatch(/SELECT\s+ent\./);
+		expect(sql).toContain("ent.unique_name AS entryUniqueName");
+		expect(sql).not.toContain("GROUP BY");
+		expect(sql).not.toContain("ANY_VALUE");
 	});
 
 	it("orders human-accepted rows ahead of pipeline rows sharing a span", async () => {

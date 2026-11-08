@@ -109,7 +109,12 @@ Deliberately **no `entity_id`/`entry_id` FK** — the decoration must
 survive the target not existing (the issue's core requirement). The live
 resolver maps `intended_name` → `tanahpedia_entry.unique_name` (plus
 synonym aliases and disambiguation labels) at presentation time and only
-then derives the link target.
+then derives the link target. The join key is the indexed generated
+`normalized_name` column (`REPLACE(name, '-', ' ')`) on
+`tanahpedia_entry` and `tanahpedia_entry_synonym`
+(`data/mysql/tanahpedia_alter_normalized_name.sql`), so each decoration
+costs index lookups instead of a `REPLACE()` scan of the whole
+namespace.
 
 ### Live resolver sketch
 

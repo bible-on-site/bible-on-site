@@ -1004,6 +1004,11 @@ export async function getEntryOccurrences(
  * (ambiguous names stay unresolved). Callers treat unresolved rows as
  * plain text: `buildEntityRefLookup` drops null `entryUniqueName`, so
  * entry create/delete flips presentation without any re-inference.
+ *
+ * Name resolution joins on the indexed generated `normalized_name` column
+ * (REPLACE(name, '-', ' ')) of entry and synonym via a correlated scalar
+ * subquery, so each decoration costs two index lookups instead of a scan
+ * of the whole namespace on a REPLACE() expression.
  */
 export function getMentionReferencesForPerek(
 	perekId: number,
@@ -1039,24 +1044,27 @@ async function queryPerekMentionReferences(
 		return await query<PerekEntityReference>(
 			`SELECT
 			   ${scoped ? "d.perek_id AS perekId," : ""}
-			   ANY_VALUE(ent.id) AS entityId,
-			   ANY_VALUE(ent.title) AS entityName,
+			   ent.id AS entityId,
+			   ent.title AS entityName,
 			   d.entity_type AS entityType,
-			   ANY_VALUE(ent.unique_name) AS entryUniqueName,
+			   ent.unique_name AS entryUniqueName,
 			   d.pasuk_number AS pasukNumber,
 			   d.segment_start AS segmentStart,
 			   d.segment_end AS segmentEnd
 			 FROM tanahpedia_mention_decoration d
-			 LEFT JOIN (
-			   SELECT e.id AS entryId, e.unique_name AS resolvedName FROM tanahpedia_entry e
-			   UNION ALL
-			   SELECT s.entry_id AS entryId, s.name AS resolvedName FROM tanahpedia_entry_synonym s
-			 ) names ON REPLACE(names.resolvedName, '-', ' ') = d.intended_name
-			 LEFT JOIN tanahpedia_entry ent ON ent.id = names.entryId
+			 LEFT JOIN tanahpedia_entry ent ON ent.id = (
+			   SELECT MIN(m.entry_id)
+			   FROM (
+			     SELECT e.id AS entry_id FROM tanahpedia_entry e
+			     WHERE e.normalized_name = d.intended_name
+			     UNION ALL
+			     SELECT s.entry_id FROM tanahpedia_entry_synonym s
+			     WHERE s.normalized_name = d.intended_name
+			   ) m
+			   HAVING COUNT(DISTINCT m.entry_id) <= 1
+			 )
 			 WHERE d.source_kind = 'pasuk' AND d.perek_id ${predicate}
 			   AND d.acceptance IN ('auto', 'manual')
-			 GROUP BY d.id
-			 HAVING COUNT(DISTINCT names.entryId) <= 1
 			 ORDER BY ${scoped ? "d.perek_id," : ""} pasukNumber, segmentStart, (d.acceptance = 'manual') DESC`,
 			perekIds.map(String),
 		);
@@ -1095,21 +1103,24 @@ export async function getMentionReferencesForArticle(
 	try {
 		return await query<ArticleMentionReference>(
 			`SELECT
-			   ANY_VALUE(ent.unique_name) AS entryUniqueName,
+			   ent.unique_name AS entryUniqueName,
 			   d.span_start AS spanStart,
 			   d.span_end AS spanEnd,
 			   d.surface AS surface
 			 FROM tanahpedia_mention_decoration d
-			 LEFT JOIN (
-			   SELECT e.id AS entryId, e.unique_name AS resolvedName FROM tanahpedia_entry e
-			   UNION ALL
-			   SELECT s.entry_id AS entryId, s.name AS resolvedName FROM tanahpedia_entry_synonym s
-			 ) names ON REPLACE(names.resolvedName, '-', ' ') = d.intended_name
-			 LEFT JOIN tanahpedia_entry ent ON ent.id = names.entryId
+			 LEFT JOIN tanahpedia_entry ent ON ent.id = (
+			   SELECT MIN(m.entry_id)
+			   FROM (
+			     SELECT e.id AS entry_id FROM tanahpedia_entry e
+			     WHERE e.normalized_name = d.intended_name
+			     UNION ALL
+			     SELECT s.entry_id FROM tanahpedia_entry_synonym s
+			     WHERE s.normalized_name = d.intended_name
+			   ) m
+			   HAVING COUNT(DISTINCT m.entry_id) <= 1
+			 )
 			 WHERE d.source_kind = 'article' AND d.article_id = ? AND d.content_hash = ?
 			   AND d.acceptance IN ('auto', 'manual')
-			 GROUP BY d.id
-			 HAVING COUNT(DISTINCT names.entryId) <= 1
 			 ORDER BY spanStart, (d.acceptance = 'manual') DESC`,
 			[String(articleId), contentHash],
 		);
