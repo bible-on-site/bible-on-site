@@ -13,7 +13,7 @@
 -- lookups also order by priority, so idx_article_perek carries both columns
 -- and resolves the filter and the sort inside one index range scan.
 -- Databases that already carry the earlier single-column idx_article_perek
--- are widened in place; each index is guarded independently so a partially
+-- are widened in place. Each index is guarded independently so a partially
 -- migrated database still converges.
 SET @articleIndexSql = (
     SELECT CASE
