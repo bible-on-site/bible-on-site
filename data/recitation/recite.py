@@ -2,7 +2,7 @@
 
 import argparse
 import gc
-from contextlib import closing
+from contextlib import closing, contextmanager
 import hashlib
 import json
 import math
@@ -17,6 +17,35 @@ import tempfile
 from alignment import load_chapters, normalize, reconcile, text_hash, validate_timings, words_for
 
 from model_versions import ALIGN_MODEL, ALIGN_REVISION, ASR_MODEL, ASR_REVISION
+
+try:
+    import fcntl
+except ImportError:  # Windows
+    fcntl = None
+    import msvcrt
+
+
+@contextmanager
+def database_lock(database):
+    """Serialize copy-mutate-replace writers across processes via a lockfile.
+
+    Held from before the database snapshot until after the atomic replace so a
+    concurrent exporter or review overlay cannot overwrite committed rows.
+    """
+    lock = database.parent / (database.name + ".lock")
+    with lock.open("a+b") as handle:
+        if fcntl is not None:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+        else:
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        try:
+            yield
+        finally:
+            if fcntl is not None:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+            else:
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
 
 ROOT = Path(__file__).resolve().parents[2]
 PIPELINE_VERSION = 3
@@ -239,10 +268,11 @@ def export_database(output, database):
         handle.flush()
     temporary = Path(handle.name)
     try:
-        if database.exists():
-            shutil.copy2(database, temporary)
-        _export_database(output, temporary)
-        temporary.replace(database)
+        with database_lock(database):
+            if database.exists():
+                shutil.copy2(database, temporary)
+            _export_database(output, temporary)
+            temporary.replace(database)
     finally:
         temporary.unlink(missing_ok=True)
 
