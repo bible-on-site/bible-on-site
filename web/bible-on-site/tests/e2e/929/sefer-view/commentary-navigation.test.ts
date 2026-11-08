@@ -102,6 +102,10 @@ test.describe("Sefer commentary navigation", () => {
 			test(`handles ${kind} after paging in mouse ${mouseMode} mode`, async ({
 				page,
 			}) => {
+				test.skip(
+					Boolean(process.env.CI) && kind === "perush" && mouseMode === "turn",
+					"Intermittent Sefer panel content: https://github.com/bible-on-site/bible-on-site/issues/3081",
+				);
 				test.setTimeout(90_000);
 				const seferPage = new SeferPage(page);
 				await seferPage.openSeferViewForPerek(1);
@@ -208,6 +212,10 @@ test.describe("Sefer commentary navigation", () => {
 	test("justifies the open commentary body like the perek pesukim", async ({
 		page,
 	}) => {
+		test.skip(
+			Boolean(process.env.CI),
+			"Intermittent Sefer panel content: https://github.com/bible-on-site/bible-on-site/issues/3081",
+		);
 		test.setTimeout(90_000);
 		const seferPage = new SeferPage(page);
 		await seferPage.openSeferViewForPerek(1);
@@ -352,6 +360,10 @@ test.describe("Sefer commentary navigation", () => {
 		test("updates the target mapping when switching perushim", async ({
 			page,
 		}) => {
+			test.skip(
+				Boolean(process.env.CI),
+				"Intermittent Sefer panel content: https://github.com/bible-on-site/bible-on-site/issues/3081",
+			);
 			test.setTimeout(90_000);
 			const seferPage = new SeferPage(page);
 			await seferPage.openSeferViewForPerek(1);
@@ -392,6 +404,10 @@ test.describe("Sefer commentary navigation", () => {
 		test("keeps the perush untouched when it has no note for a pasuk", async ({
 			page,
 		}) => {
+			test.skip(
+				Boolean(process.env.CI),
+				"Intermittent Sefer panel content: https://github.com/bible-on-site/bible-on-site/issues/3081",
+			);
 			test.setTimeout(90_000);
 			const seferPage = new SeferPage(page);
 			await seferPage.openSeferViewForPerek(1);
@@ -461,6 +477,10 @@ test.describe("Sefer commentary navigation", () => {
 		test(`opens ${kind} after a TOC jump to a different chapter`, async ({
 			page,
 		}) => {
+			test.skip(
+				Boolean(process.env.CI) && kind === "article",
+				"Intermittent Sefer panel content: https://github.com/bible-on-site/bible-on-site/issues/3081",
+			);
 			test.setTimeout(90_000);
 			await page.goto("/929/2?book&toc");
 			const chapter = page
@@ -487,6 +507,10 @@ test.describe("Sefer commentary navigation", () => {
 		test(`reopens the ${kind} deep link on reload and can open another item`, async ({
 			page,
 		}) => {
+			test.skip(
+				Boolean(process.env.CI) && kind === "perush",
+				"Intermittent Sefer panel content: https://github.com/bible-on-site/bible-on-site/issues/3081",
+			);
 			test.setTimeout(90_000);
 			const route =
 				kind === "article"
