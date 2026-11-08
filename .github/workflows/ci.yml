@@ -545,23 +545,26 @@ jobs:
 
   # Windows-only source (#if WINDOWS) compiled nowhere before merge: package_app
   # is master-only and App CI builds Android/iOS only — a Windows-only compile
-  # regression shipped in #2496 undetected (#2526). A compile-only Release build
-  # gates the real Windows target without signing secrets or store upload.
+  # regression shipped in #2496 undetected (#2526). The release-path gate
+  # (#2292) runs the real packaging leg before merge — signed MSIX publish,
+  # recitation/perushim prep, extension-pack optional packages and payload
+  # verification — with publication skipped, like package_ios_pr. Same-repo PR
+  # and merge-queue runs carry the signing secrets via inherit.
   package_windows_pr:
-    name: Validate Windows Compile
-    needs: [setup_env, determine_changes]
+    name: Validate Windows Package
+    needs: [setup_env, determine_changes, perushim_data]
     if: ${{ always() && !cancelled() && !failure() && github.event_name != 'push' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
     # The caller's permissions ceiling is validated at workflow-compile time
     # (before `if:` evaluation): app-package.yml declares `actions: read` for its
-    # master-baseline artifact fetches, so the ceiling must cover it even though
-    # compile_only never runs them — otherwise the whole run dies at startup_failure.
+    # master-baseline artifact fetches, so the ceiling must cover them.
     permissions:
       contents: read
       actions: read
+    secrets: inherit
     uses: ./.github/workflows/app-package.yml
     with:
       platform: Windows
-      compile_only: true
+      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
   # Same release/pre-merge split as package_api (#2292).
   package_bulletin:
@@ -2322,6 +2325,9 @@ jobs:
         with:
           python-version: "3.15"
 
+      - name: Install Python verifier dependencies
+        run: python3 -m pip install --disable-pip-version-check --no-input -r devops/requirements-signing.txt
+
       - name: Resolve immutable recitation audio cache key
         id: recitation_audio_identity
         run: python3 devops/prepare_recitation_assets.py --platform Android --cache-key
@@ -3422,7 +3428,7 @@ jobs:
               exit 1
             fi
             if [ "${{ needs.package_windows_pr.result }}" != "success" ]; then
-              echo "Windows compile validation failed or did not run"
+              echo "Windows packaging validation failed or did not run"
               exit 1
             fi
           fi
@@ -3978,6 +3984,8 @@ jobs:
       artifacts_json: |
         [
           {"name": "${{ needs.package_app.outputs.windows_artifact_name }}", "path": "app/.artifacts/windows", "glob": "**/BibleOnSite*.msix", "label": "Windows (MSIX)", "cd_key": "windows_artifact_name"},
+          {"name": "${{ needs.package_app.outputs.windows_artifact_name }}", "path": "app/.artifacts/windows", "glob": "extension-packs/*.msix", "label": "Windows extension packs (MSIX optional packages — Store DLC)", "cd_key": "windows_extpacks_artifact_name"},
+          {"name": "${{ needs.package_app.outputs.windows_artifact_name }}", "path": "app/.artifacts/windows", "glob": "payloads/*", "label": "Windows pack payloads (HTTPS delivery for sideloaded installs)", "cd_key": "windows_payloads_artifact_name"},
           {"name": "${{ needs.package_app.outputs.android_artifact_name }}", "path": "app/.artifacts/android", "glob": "**/*.aab", "label": "Android (AAB)", "cd_key": "android_artifact_name"},
           {"name": "${{ needs.package_app.outputs.android_artifact_name }}", "path": "app/.artifacts/android", "glob": "**/*-native-symbols.zip", "label": "Android native debug symbols", "cd_key": "android_symbols_artifact_name"},
           {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/*.ipa", "label": "iOS (IPA)", "cd_key": "ios_artifact_name"},
