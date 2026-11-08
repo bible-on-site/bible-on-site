@@ -1,6 +1,10 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { transaction, txExecute, txQueryOne } from "@/lib/api-client";
+import {
+	lockedTransaction,
+	txExecute,
+	txQueryOne,
+} from "@/lib/api-client";
 import {
 	CONSENT_TEXT,
 	CONSENT_VERSION,
@@ -66,71 +70,83 @@ export function parseSignupBody(body: unknown): SignupRequest | null {
  *
  * Rows are never deleted (audit + persistent throttling). A repeat signup
  * for an already-confirmed address, or one past the abuse caps, is recorded
- * as `suppressed` and changes nothing else; re-consent after an unsubscribe
- * or provider suppression is deliberate — the visitor ticked the consent
- * box — so `unsubscribed`/`bounced`/`complained`/`pending` rows are upgraded
- * to `confirmed`. SES-side suppression still gates real sends.
+ * as `suppressed` and changes nothing else. An address whose subscriber
+ * recorded an opt-out or provider suppression (`unsubscribed`/`bounced`/
+ * `complained`) is likewise only recorded: an anonymous form tick is not
+ * mailbox proof, so re-consent after an opt-out stays with the recipient —
+ * the SES preference page reports it back as a subscription event.
+ * `pending` rows have never confirmed or opted out, so the explicit consent
+ * box still confirms them; SES-side suppression gates real sends either way.
  */
 export async function requestSignup(input: SignupRequest): Promise<void> {
 	const emailHash = sha256(input.email);
 	const consentSource = `website-signup:${input.source}`;
-	await transaction(async (connection) => {
-		const subscriber = await txQueryOne<{ consent_status: string }>(
-			connection,
-			"SELECT consent_status FROM tanah_daily_bulletin_subscriber WHERE email = ? AND audience = ?",
-			[input.email, REAL_AUDIENCE],
-		);
-		const recent = await txQueryOne<{ n: number | string }>(
-			connection,
-			`SELECT COUNT(*) AS n FROM tanah_daily_bulletin_signup_intent
-			 WHERE email_hash = ? AND created_at > UTC_TIMESTAMP(3) - INTERVAL 1 DAY`,
-			[emailHash],
-		);
-		const global = await txQueryOne<{ n: number | string }>(
-			connection,
-			`SELECT COUNT(*) AS n FROM tanah_daily_bulletin_signup_intent
-			 WHERE created_at > UTC_TIMESTAMP(3) - INTERVAL 1 HOUR`,
-		);
-		const suppress =
-			subscriber?.consent_status === "confirmed" ||
-			Number(recent?.n ?? 0) >= MAX_INTENTS_PER_ADDRESS_24H ||
-			Number(global?.n ?? 0) >= MAX_INTENTS_GLOBAL_HOURLY;
-		if (suppress) {
+	// Serialize per normalized address: without the lock two concurrent
+	// signups can both read "no subscriber" and each record a confirmed
+	// intent, duplicating the SES sync and consent audit for one address.
+	await lockedTransaction(
+		`bulletin-signup:${emailHash.slice(0, 40)}`,
+		async (connection) => {
+			const subscriber = await txQueryOne<{ consent_status: string }>(
+				connection,
+				"SELECT consent_status FROM tanah_daily_bulletin_subscriber WHERE email = ? AND audience = ?",
+				[input.email, REAL_AUDIENCE],
+			);
+			const recent = await txQueryOne<{ n: number | string }>(
+				connection,
+				`SELECT COUNT(*) AS n FROM tanah_daily_bulletin_signup_intent
+				 WHERE email_hash = ? AND created_at > UTC_TIMESTAMP(3) - INTERVAL 1 DAY`,
+				[emailHash],
+			);
+			const global = await txQueryOne<{ n: number | string }>(
+				connection,
+				`SELECT COUNT(*) AS n FROM tanah_daily_bulletin_signup_intent
+				 WHERE created_at > UTC_TIMESTAMP(3) - INTERVAL 1 HOUR`,
+			);
+			const suppress =
+				subscriber?.consent_status === "confirmed" ||
+				["unsubscribed", "bounced", "complained"].includes(
+					subscriber?.consent_status ?? "",
+				) ||
+				Number(recent?.n ?? 0) >= MAX_INTENTS_PER_ADDRESS_24H ||
+				Number(global?.n ?? 0) >= MAX_INTENTS_GLOBAL_HOURLY;
+			if (suppress) {
+				await txExecute(
+					connection,
+					`INSERT INTO tanah_daily_bulletin_signup_intent
+					 (email, email_hash, status, consent_text, consent_version, consent_source)
+					 VALUES (?, ?, 'suppressed', ?, ?, ?)`,
+					[input.email, emailHash, CONSENT_TEXT, CONSENT_VERSION, consentSource],
+				);
+				return;
+			}
+			const saved = await txExecute(
+				connection,
+				`INSERT INTO tanah_daily_bulletin_subscriber
+				 (email, audience, consent_status, consent_source, consented_at, last_event_at)
+				 VALUES (?, ?, 'confirmed', ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
+				 ON DUPLICATE KEY UPDATE
+				 consent_status = 'confirmed',
+				 consent_source = VALUES(consent_source),
+				 consented_at = UTC_TIMESTAMP(3),
+				 last_event_at = UTC_TIMESTAMP(3),
+				 id = LAST_INSERT_ID(id)`,
+				[input.email, REAL_AUDIENCE, consentSource],
+			);
 			await txExecute(
 				connection,
 				`INSERT INTO tanah_daily_bulletin_signup_intent
-				 (email, email_hash, status, consent_text, consent_version, consent_source)
-				 VALUES (?, ?, 'suppressed', ?, ?, ?)`,
-				[input.email, emailHash, CONSENT_TEXT, CONSENT_VERSION, consentSource],
+				 (email, email_hash, status, consent_text, consent_version, consent_source, ses_status, subscriber_id)
+				 VALUES (?, ?, 'confirmed', ?, ?, ?, 'pending', ?)`,
+				[
+					input.email,
+					emailHash,
+					CONSENT_TEXT,
+					CONSENT_VERSION,
+					consentSource,
+					saved.insertId,
+				],
 			);
-			return;
-		}
-		const saved = await txExecute(
-			connection,
-			`INSERT INTO tanah_daily_bulletin_subscriber
-			 (email, audience, consent_status, consent_source, consented_at, last_event_at)
-			 VALUES (?, ?, 'confirmed', ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
-			 ON DUPLICATE KEY UPDATE
-			 consent_status = 'confirmed',
-			 consent_source = VALUES(consent_source),
-			 consented_at = UTC_TIMESTAMP(3),
-			 last_event_at = UTC_TIMESTAMP(3),
-			 id = LAST_INSERT_ID(id)`,
-			[input.email, REAL_AUDIENCE, consentSource],
-		);
-		await txExecute(
-			connection,
-			`INSERT INTO tanah_daily_bulletin_signup_intent
-			 (email, email_hash, status, consent_text, consent_version, consent_source, ses_status, subscriber_id)
-			 VALUES (?, ?, 'confirmed', ?, ?, ?, 'pending', ?)`,
-			[
-				input.email,
-				emailHash,
-				CONSENT_TEXT,
-				CONSENT_VERSION,
-				consentSource,
-				saved.insertId,
-			],
-		);
-	});
+		},
+	);
 }

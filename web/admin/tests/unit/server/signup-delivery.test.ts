@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
 	query: vi.fn(),
+	queryOne: vi.fn(),
 	execute: vi.fn(),
 	sweep: vi.fn(),
 	runtime: vi.fn(),
 	sesConfig: vi.fn(),
 	resubscribe: vi.fn(),
+	unsubscribe: vi.fn(),
 	sesDestroy: vi.fn(),
 }));
 vi.mock("@tanstack/react-start/server-only", () => ({}));
@@ -23,6 +25,7 @@ vi.mock("~/server/ses-client.server", () => ({
 			mocks.sesConfig(config);
 		}
 		resubscribeContact = mocks.resubscribe;
+		unsubscribeContact = mocks.unsubscribe;
 		destroy = mocks.sesDestroy;
 	},
 }));
@@ -49,8 +52,10 @@ beforeEach(() => {
 	);
 	mocks.runtime.mockReturnValue({ fromAddress: "sender@example.com" });
 	mocks.query.mockResolvedValue([]);
+	mocks.queryOne.mockResolvedValue({ consent_status: "confirmed" });
 	mocks.execute.mockResolvedValue({ affectedRows: 1 });
 	mocks.resubscribe.mockResolvedValue("subscribed");
+	mocks.unsubscribe.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -91,6 +96,48 @@ describe("reconcileSignupOutbox", () => {
 			(sql as string).includes("ses_status = ?"),
 		);
 		expect(syncUpdate?.[1]).toEqual(["subscribed", 7]);
+	});
+
+	it("skips the SES sync when consent is no longer confirmed", async () => {
+		mocks.query.mockResolvedValue([intent()]);
+		mocks.queryOne.mockResolvedValue({ consent_status: "unsubscribed" });
+		await reconcileSignupOutbox();
+		expect(mocks.resubscribe).not.toHaveBeenCalled();
+		const settled = mocks.execute.mock.calls.find(([sql]) =>
+			(sql as string).includes("ses_status = ?"),
+		);
+		expect(settled?.[1]).toEqual(["opted_out", 7]);
+	});
+
+	it("restores suppression when an opt-out lands during the SES sync", async () => {
+		mocks.query.mockResolvedValue([intent()]);
+		mocks.queryOne
+			.mockResolvedValueOnce({ consent_status: "confirmed" })
+			.mockResolvedValueOnce({ consent_status: "unsubscribed" });
+		await reconcileSignupOutbox();
+		expect(mocks.resubscribe).toHaveBeenCalledWith(
+			"reader@example.com",
+			"real",
+		);
+		expect(mocks.unsubscribe).toHaveBeenCalledWith(
+			"reader@example.com",
+			"real",
+		);
+		const settled = mocks.execute.mock.calls.find(([sql]) =>
+			(sql as string).includes("ses_status = ?"),
+		);
+		expect(settled?.[1]).toEqual(["opted_out", 7]);
+	});
+
+	it("persists the SES opt-out outcome without a consent re-check", async () => {
+		mocks.query.mockResolvedValue([intent()]);
+		mocks.resubscribe.mockResolvedValue("opted_out");
+		await reconcileSignupOutbox();
+		expect(mocks.queryOne).toHaveBeenCalledTimes(1);
+		const settled = mocks.execute.mock.calls.find(([sql]) =>
+			(sql as string).includes("ses_status = ?"),
+		);
+		expect(settled?.[1]).toEqual(["opted_out", 7]);
 	});
 
 	it("backs off SES sync retries and fails permanently at the cap", async () => {

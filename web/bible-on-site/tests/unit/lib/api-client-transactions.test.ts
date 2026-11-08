@@ -1,6 +1,7 @@
 import mysql, { type PoolConnection } from "mysql2/promise";
 import {
 	execute,
+	lockedTransaction,
 	queryText,
 	transaction,
 	txExecute,
@@ -160,4 +161,88 @@ describe("database writes and transaction connections", () => {
 		await expect(queryText("SELECT id FROM entries")).resolves.toBe(rows);
 		expect(pool.query).toHaveBeenCalledWith("SELECT id FROM entries", []);
 	});
+});
+
+describe("lockedTransaction", () => {
+	let connection: {
+		execute: jest.Mock;
+		beginTransaction: jest.Mock;
+		commit: jest.Mock;
+		rollback: jest.Mock;
+		release: jest.Mock;
+	};
+	let driverConnection: PoolConnection;
+
+	beforeEach(() => {
+		connection = {
+			execute: jest.fn(),
+			beginTransaction: jest.fn().mockResolvedValue(undefined),
+			commit: jest.fn().mockResolvedValue(undefined),
+			rollback: jest.fn().mockResolvedValue(undefined),
+			release: jest.fn(),
+		};
+		driverConnection = connection as unknown as PoolConnection;
+		pool.getConnection.mockReset().mockResolvedValue(driverConnection);
+	});
+
+	it("holds the named lock until after commit, then releases the connection", async () => {
+		connection.execute
+			.mockResolvedValueOnce([[{ acquired: 1 }]]) // GET_LOCK
+			.mockResolvedValueOnce([[{ id: 42 }]]) // work read
+			.mockResolvedValueOnce([{}]); // RELEASE_LOCK
+		const work = jest.fn(async (conn: PoolConnection) =>
+			txQueryOne(conn, "SELECT id FROM entries WHERE id = ?", [42]),
+		);
+
+		await expect(
+			lockedTransaction("bulletin-signup:abc", work),
+		).resolves.toEqual({ id: 42 });
+		expect(connection.execute).toHaveBeenNthCalledWith(
+			1,
+			"SELECT GET_LOCK(?, 10) AS acquired",
+			["bulletin-signup:abc"],
+		);
+		expect(connection.execute).toHaveBeenNthCalledWith(
+			3,
+			"SELECT RELEASE_LOCK(?)",
+			["bulletin-signup:abc"],
+		);
+		expect(connection.commit.mock.invocationCallOrder[0]).toBeLessThan(
+			connection.execute.mock.invocationCallOrder[2],
+		);
+		expect(connection.release).toHaveBeenCalledTimes(1);
+		expect(connection.rollback).not.toHaveBeenCalled();
+	});
+
+	it("releases the lock and rolls back when the work fails", async () => {
+		const failure = new Error("write failed");
+		connection.execute
+			.mockResolvedValueOnce([[{ acquired: 1 }]])
+			.mockResolvedValueOnce([{}]);
+		await expect(
+			lockedTransaction("bulletin-signup:abc", async () => {
+				throw failure;
+			}),
+		).rejects.toBe(failure);
+		expect(connection.rollback).toHaveBeenCalledTimes(1);
+		expect(connection.execute).toHaveBeenLastCalledWith(
+			"SELECT RELEASE_LOCK(?)",
+			["bulletin-signup:abc"],
+		);
+		expect(connection.release).toHaveBeenCalledTimes(1);
+	});
+
+	it.each([[{ acquired: 0 }], [{ acquired: null }]])(
+		"refuses to start the transaction when the lock is unavailable (%j)",
+		async (row) => {
+			connection.execute.mockResolvedValueOnce([[row]]);
+			const work = jest.fn();
+			await expect(
+				lockedTransaction("bulletin-signup:abc", work),
+			).rejects.toThrow("bulletin-signup:abc");
+			expect(work).not.toHaveBeenCalled();
+			expect(connection.beginTransaction).not.toHaveBeenCalled();
+			expect(connection.release).toHaveBeenCalledTimes(1);
+		},
+	);
 });

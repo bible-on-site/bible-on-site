@@ -3,7 +3,7 @@
  * Direct database access for lower latency and reduced billing costs
  */
 
-import mysql from "mysql2/promise";
+import mysql, { type RowDataPacket } from "mysql2/promise";
 
 /**
  * Parse database URL in format: mysql://user:password@host:port/database
@@ -126,6 +126,48 @@ export async function txExecute(
 	// biome-ignore lint/suspicious/noExplicitAny: mysql2 v3.17 narrowed QueryValues; safe cast from caller-provided params
 	const [result] = await conn.execute(sql, (params ?? []) as any); // nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- sql is always a parameterized literal from callers
 	return result as mysql.ResultSetHeader;
+}
+
+/**
+ * Runs `fn` inside a transaction holding a MySQL named lock on `lockName`.
+ * The lock is released only after the transaction ends — releasing earlier
+ * would let a waiter observe pre-commit state — and a dead session drops it
+ * server-side, so a pooled connection can never leak it to the next borrower.
+ */
+export async function lockedTransaction<T>(
+	lockName: string,
+	fn: (conn: mysql.PoolConnection) => Promise<T>,
+): Promise<T> {
+	const conn = await getPool().getConnection();
+	try {
+		const [lockRows] = await conn.execute<RowDataPacket[]>(
+			"SELECT GET_LOCK(?, 10) AS acquired",
+			[lockName],
+		);
+		const raw = lockRows[0]?.acquired as number | string | null | undefined;
+		const acquired = raw === null || raw === undefined ? null : Number(raw);
+		if (acquired !== 1)
+			throw new Error(
+				acquired === 0
+					? `Timed out acquiring lock ${lockName}`
+					: `Failed to acquire lock ${lockName}`,
+			);
+		try {
+			await conn.beginTransaction();
+			const result = await fn(conn);
+			await conn.commit();
+			return result;
+		} catch (error) {
+			await conn.rollback();
+			throw error;
+		} finally {
+			await conn
+				.execute("SELECT RELEASE_LOCK(?)", [lockName])
+				.catch(() => undefined);
+		}
+	} finally {
+		conn.release();
+	}
 }
 
 /**

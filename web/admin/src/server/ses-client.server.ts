@@ -446,10 +446,12 @@ export class SesClient {
 	/**
 	 * Re-consent after an explicit public signup (#2940): creates the contact when
 	 * absent, and for an existing opted-out contact restores OPT_IN on the
-	 * topic and clears UnsubscribeAll. Other topics and account-level
-	 * suppression are untouched — the topic preference is merged rather than
-	 * replaced. The update is verified with a re-read so the caller persists
-	 * the truthful outcome.
+	 * topic. Other topics and account-level suppression are untouched — the
+	 * topic preference is merged rather than replaced — and a contact carrying
+	 * UnsubscribeAll is never re-enabled here: a global opt-out is reversed
+	 * only by the recipient's own preference-page action, which reports back
+	 * as a subscription event. The update is verified with a re-read so the
+	 * caller persists the truthful outcome.
 	 */
 	async resubscribeContact(
 		email: string,
@@ -459,6 +461,7 @@ export class SesClient {
 		const topic = audienceName(audience);
 		const contact = await this.getContact(normalized);
 		if (!contact) return this.ensureSubscribedContact(normalized, topic);
+		if (contact.unsubscribeAll) return "opted_out";
 		if (isSesSubscribed(contact, topic)) return "subscribed";
 		try {
 			await this.client.send(

@@ -1,5 +1,5 @@
 import "@tanstack/react-start/server-only";
-import { execute, query } from "./db";
+import { execute, query, queryOne } from "./db";
 import { runOutboxSweep } from "./outbox-deadline.server";
 import { SesClient } from "./ses-client.server";
 import { loadEmailRuntime } from "./ses-settings.server";
@@ -25,22 +25,54 @@ interface IntentRow {
 	email: string;
 }
 
+/** Current consent for the synced audience; anything but confirmed stops the sync. */
+async function signupConsent(email: string): Promise<string | null> {
+	const row = await queryOne<{ consent_status: string }>(
+		"SELECT consent_status FROM tanah_daily_bulletin_subscriber WHERE email = ? AND audience = ?",
+		[email, SIGNUP_AUDIENCE],
+	);
+	return row?.consent_status ?? null;
+}
+
+async function markIntentSynced(
+	row: IntentRow,
+	sesStatus: string,
+): Promise<void> {
+	await execute(
+		`UPDATE tanah_daily_bulletin_signup_intent
+		 SET ses_status = ?, ses_attempts = ses_attempts + 1, ses_next_attempt_at = NULL
+		 WHERE id = ? AND status = 'confirmed'`,
+		[sesStatus, row.id],
+	);
+}
+
 /**
  * Synchronizes one confirmed signup into the SES contact list. Preserves
  * unrelated topics; the outcome is re-verified and persisted on the intent.
+ * Consent is re-read before and after the SES call: an opt-out landing
+ * between the signup and this sync — or while it runs — must win, so the
+ * contact is pushed back to suppressed and the intent settles opted_out.
  */
 async function syncSignupSubscriber(
 	client: SesClient,
 	row: IntentRow,
 ): Promise<void> {
 	try {
-		const result = await client.resubscribeContact(row.email, SIGNUP_AUDIENCE);
-		await execute(
-			`UPDATE tanah_daily_bulletin_signup_intent
-			 SET ses_status = ?, ses_attempts = ses_attempts + 1, ses_next_attempt_at = NULL
-			 WHERE id = ? AND status = 'confirmed'`,
-			[result, row.id],
-		);
+		if ((await signupConsent(row.email)) !== "confirmed") {
+			await markIntentSynced(row, "opted_out");
+			return;
+		}
+		let result = await client.resubscribeContact(row.email, SIGNUP_AUDIENCE);
+		if (
+			result === "subscribed" &&
+			(await signupConsent(row.email)) !== "confirmed"
+		) {
+			await client
+				.unsubscribeContact(row.email, SIGNUP_AUDIENCE)
+				.catch(() => undefined);
+			result = "opted_out";
+		}
+		await markIntentSynced(row, result);
 	} catch {
 		await execute(
 			`UPDATE tanah_daily_bulletin_signup_intent

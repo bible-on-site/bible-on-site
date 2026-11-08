@@ -273,3 +273,90 @@ describe("signup intent constraints", () => {
 		});
 	});
 });
+
+describe("legacy confirmation-mail schema reconciliation", () => {
+	// The confirmation-mail revision of this migration created the intent
+	// table with challenge/expires columns and a wider status enum; databases
+	// that applied it must converge when the direct-subscribe revision runs.
+	const LEGACY_SIGNUP_INTENT_DDL = `CREATE TABLE tanah_daily_bulletin_signup_intent (
+		id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+		email VARCHAR(254) NOT NULL,
+		email_hash CHAR(64) NOT NULL,
+		challenge_hash CHAR(64) NOT NULL,
+		status ENUM('pending', 'sending', 'sent', 'confirmed', 'failed', 'uncertain', 'superseded', 'suppressed', 'expired') NOT NULL DEFAULT 'pending',
+		consent_text VARCHAR(500) NOT NULL,
+		consent_version VARCHAR(40) NOT NULL,
+		consent_source VARCHAR(120) NOT NULL,
+		send_token CHAR(36) NULL,
+		send_started_at DATETIME(3) NULL,
+		message_id VARCHAR(255) NULL,
+		ses_status ENUM('pending', 'subscribed', 'opted_out', 'failed') NULL,
+		ses_attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+		ses_next_attempt_at DATETIME(3) NULL,
+		subscriber_id BIGINT UNSIGNED NULL,
+		expires_at DATETIME(3) NOT NULL,
+		confirmed_at DATETIME(3) NULL,
+		last_error VARCHAR(255) NULL,
+		created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+		updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+		UNIQUE KEY uq_bulletin_signup_challenge (challenge_hash),
+		KEY ix_bulletin_signup_email (email_hash, created_at),
+		KEY ix_bulletin_signup_send (status, id),
+		KEY ix_bulletin_signup_ses (status, ses_status, id),
+		CONSTRAINT fk_bulletin_signup_subscriber FOREIGN KEY (subscriber_id)
+			REFERENCES tanah_daily_bulletin_subscriber(id)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`;
+
+	it("converges a legacy table so direct signups insert cleanly", async () => {
+		await db.execute("DROP TABLE tanah_daily_bulletin_signup_intent");
+		await db.execute(LEGACY_SIGNUP_INTENT_DDL);
+		await db.execute(
+			`INSERT INTO tanah_daily_bulletin_signup_intent
+			 (email, email_hash, challenge_hash, status, consent_text, consent_version, consent_source, expires_at)
+			 VALUES ('legacy@example.invalid', ?, ?, 'sent', 'consent', 'v1', 'fixture', UTC_TIMESTAMP(3))`,
+			["d".repeat(64), "e".repeat(64)],
+		);
+		await migrate(parseMigration("tanah_daily_bulletin_join_upgrade.sql"));
+
+		const columns = await db.query<RowDataPacket>(
+			`SELECT COLUMN_NAME name FROM information_schema.COLUMNS
+			 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tanah_daily_bulletin_signup_intent'`,
+			[schema],
+		);
+		const names = columns.map((column) => column.name);
+		for (const dropped of [
+			"challenge_hash",
+			"send_token",
+			"send_started_at",
+			"message_id",
+			"expires_at",
+			"confirmed_at",
+		])
+			expect(names).not.toContain(dropped);
+
+		const statusColumn = await db.queryOne<RowDataPacket>(
+			`SELECT COLUMN_TYPE column_type, COLUMN_DEFAULT column_default
+			 FROM information_schema.COLUMNS
+			 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'tanah_daily_bulletin_signup_intent'
+			   AND COLUMN_NAME = 'status'`,
+			[schema],
+		);
+		expect(statusColumn?.column_type).toBe(
+			"enum('confirmed','suppressed','failed')",
+		);
+		expect(statusColumn?.column_default).toBe("confirmed");
+
+		const legacy = await db.queryOne<RowDataPacket>(
+			"SELECT status FROM tanah_daily_bulletin_signup_intent WHERE email = 'legacy@example.invalid'",
+		);
+		expect(legacy?.status).toBe("failed");
+
+		// The direct-subscribe insert shape used by requestSignup must succeed.
+		await db.execute(
+			`INSERT INTO tanah_daily_bulletin_signup_intent
+			 (email, email_hash, status, consent_text, consent_version, consent_source, ses_status)
+			 VALUES ('direct@example.invalid', ?, 'confirmed', 'consent', 'v1', 'fixture', 'pending')`,
+			["f".repeat(64)],
+		);
+	});
+});

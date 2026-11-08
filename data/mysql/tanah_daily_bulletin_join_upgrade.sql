@@ -66,3 +66,42 @@ SET @joinSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanah_daily_bulletin_signu
 PREPARE joinUpgrade FROM @joinSql;
 EXECUTE joinUpgrade;
 DEALLOCATE PREPARE joinUpgrade;
+
+-- Databases that applied the earlier confirmation-mail revision of this
+-- migration keep the legacy table: IF NOT EXISTS does not reconcile columns,
+-- so challenge_hash and expires_at stay NOT NULL and reject every direct
+-- signup. challenge_hash is the legacy marker — when present, retire the
+-- leftover statuses first (the narrowed enum cannot hold them), then drop
+-- the dead columns and index and converge status to the direct-subscribe
+-- definition. Fresh databases skip every step.
+SET @joinSql = (
+    SELECT IF(COUNT(*) > 0,
+        'UPDATE tanah_daily_bulletin_signup_intent SET status = ''failed'' WHERE status NOT IN (''confirmed'', ''suppressed'', ''failed'')',
+        'SELECT 1')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_daily_bulletin_signup_intent'
+        AND COLUMN_NAME = 'challenge_hash'
+);
+PREPARE joinUpgrade FROM @joinSql;
+EXECUTE joinUpgrade;
+DEALLOCATE PREPARE joinUpgrade;
+
+SET @joinSql = (
+    SELECT IF(COUNT(*) > 0,
+        'ALTER TABLE tanah_daily_bulletin_signup_intent
+            DROP COLUMN challenge_hash,
+            DROP COLUMN send_token,
+            DROP COLUMN send_started_at,
+            DROP COLUMN message_id,
+            DROP COLUMN expires_at,
+            DROP COLUMN confirmed_at,
+            DROP INDEX ix_bulletin_signup_send,
+            MODIFY COLUMN status ENUM(''confirmed'', ''suppressed'', ''failed'') NOT NULL DEFAULT ''confirmed''',
+        'SELECT 1')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_daily_bulletin_signup_intent'
+        AND COLUMN_NAME = 'challenge_hash'
+);
+PREPARE joinUpgrade FROM @joinSql;
+EXECUTE joinUpgrade;
+DEALLOCATE PREPARE joinUpgrade;

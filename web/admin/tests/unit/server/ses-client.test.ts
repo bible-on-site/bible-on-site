@@ -799,7 +799,6 @@ describe("SES managed-subscription transport", () => {
 		mocks.send
 			.mockResolvedValueOnce({
 				...contact(),
-				UnsubscribeAll: true,
 				TopicPreferences: [
 					{ TopicName: "test", SubscriptionStatus: "OPT_OUT" },
 					{ TopicName: "real", SubscriptionStatus: "OPT_OUT" },
@@ -828,18 +827,31 @@ describe("SES managed-subscription transport", () => {
 		expect(calls("get")).toHaveLength(2);
 	});
 
-	it.each(["missing", "global opt-out", "topic opt-out"])(
+	it("never re-enables a contact that carries a global opt-out", async () => {
+		mocks.send.mockResolvedValue({ ...contact(), UnsubscribeAll: true });
+		await expect(
+			new SesClient(config).resubscribeContact(request.to, "test"),
+		).resolves.toBe("opted_out");
+		expect(calls("update")).toHaveLength(0);
+		expect(calls("create")).toHaveLength(0);
+	});
+
+	it.each(["missing", "topic opt-out"])(
 		"does not report success when verification finds %s",
 		async (verification) => {
 			mocks.send
-				.mockResolvedValueOnce({ ...contact(), UnsubscribeAll: true })
+				.mockResolvedValueOnce({
+					...contact(),
+					TopicPreferences: [
+						{ TopicName: "test", SubscriptionStatus: "OPT_OUT" },
+					],
+				})
 				.mockResolvedValueOnce({});
 			if (verification === "missing") {
 				mocks.send.mockRejectedValueOnce(sdkError(404, "NotFoundException"));
 			} else {
 				mocks.send.mockResolvedValueOnce({
 					...contact(),
-					UnsubscribeAll: verification === "global opt-out",
 					TopicPreferences: [
 						{ TopicName: "test", SubscriptionStatus: "OPT_OUT" },
 					],
@@ -855,7 +867,12 @@ describe("SES managed-subscription transport", () => {
 		"classifies a rejected reconsent update safely (HTTP %s)",
 		async (status) => {
 			mocks.send
-				.mockResolvedValueOnce({ ...contact(), UnsubscribeAll: true })
+				.mockResolvedValueOnce({
+					...contact(),
+					TopicPreferences: [
+						{ TopicName: "test", SubscriptionStatus: "OPT_OUT" },
+					],
+				})
 				.mockRejectedValueOnce(sdkError(status));
 			await expect(
 				new SesClient(config).resubscribeContact(request.to, "test"),

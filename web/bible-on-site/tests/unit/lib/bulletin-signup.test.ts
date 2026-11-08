@@ -3,9 +3,10 @@ jest.mock("server-only", () => ({}));
 
 const mockTxExecute = jest.fn();
 const mockTxQueryOne = jest.fn();
-const mockTransaction = jest.fn();
+const mockLockedTransaction = jest.fn();
 jest.mock("@/lib/api-client", () => ({
-	transaction: (fn: (conn: object) => unknown) => mockTransaction(fn),
+	lockedTransaction: (name: string, fn: (conn: object) => unknown) =>
+		mockLockedTransaction(name, fn),
 	txExecute: (...args: unknown[]) => mockTxExecute(...args),
 	txQueryOne: (...args: unknown[]) => mockTxQueryOne(...args),
 }));
@@ -21,7 +22,9 @@ const CONN = { connection: true };
 
 describe("bulletin-signup", () => {
 	beforeEach(() => {
-		mockTransaction.mockImplementation((fn) => fn(CONN));
+		mockLockedTransaction
+			.mockReset()
+			.mockImplementation((_name, fn) => fn(CONN));
 		mockTxExecute
 			.mockReset()
 			.mockResolvedValue({ affectedRows: 1, insertId: 7 });
@@ -128,11 +131,24 @@ describe("bulletin-signup", () => {
 			]);
 		});
 
-		it("re-confirms an unsubscribed address on explicit consent", async () => {
+		it("serializes the decision under a per-address lock", async () => {
+			freshReads();
+			await requestSignup(signup);
+			const [name] = mockLockedTransaction.mock.calls[0];
+			expect(name).toMatch(/^bulletin-signup:[0-9a-f]{40}$/);
+		});
+
+		it("propagates a lock acquisition failure", async () => {
+			mockLockedTransaction.mockRejectedValueOnce(new Error("lock timeout"));
+			await expect(requestSignup(signup)).rejects.toThrow("lock timeout");
+			expect(mockTxExecute).not.toHaveBeenCalled();
+		});
+
+		it("confirms a pending subscriber on explicit consent", async () => {
 			mockTxQueryOne
 				.mockResolvedValueOnce({
 					id: 3,
-					consent_status: "unsubscribed",
+					consent_status: "pending",
 				})
 				.mockResolvedValueOnce({ n: 0 })
 				.mockResolvedValueOnce({ n: 0 });
@@ -140,6 +156,24 @@ describe("bulletin-signup", () => {
 			expect(subscriberUpsert()).toBeDefined();
 			expect(intentInsert()?.[1]).toContain("'confirmed'");
 		});
+
+		it.each(["unsubscribed", "bounced", "complained"])(
+			"never reverses a recorded %s opt-out",
+			async (consentStatus) => {
+				mockTxQueryOne
+					.mockResolvedValueOnce({
+						id: 3,
+						consent_status: consentStatus,
+					})
+					.mockResolvedValueOnce({ n: 0 })
+					.mockResolvedValueOnce({ n: 0 });
+				await requestSignup(signup);
+				expect(subscriberUpsert()).toBeUndefined();
+				const insert = intentInsert();
+				expect(insert?.[1]).toContain("'suppressed'");
+				expect(insert?.[2]?.at(-1)).toBe("website-signup:card");
+			},
+		);
 
 		it("treats absent aggregate count rows as zero for a fresh signup", async () => {
 			mockTxQueryOne.mockResolvedValue(null);
