@@ -102,6 +102,7 @@ public class ExtensionPacksViewTests : IAsyncDisposable
         try
         {
             await reached.Task.WaitAsync(TestContext.Current.CancellationToken);
+            _viewModel.Packs.Status.Should().Be(expected);
         }
         finally
         {
