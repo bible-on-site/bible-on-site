@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
@@ -50,13 +51,6 @@ const REPORTS_DIR = resolve(
 	"../../.playwright-report/perf/diagnostics/lighthouse",
 );
 
-// Each worker-fixture lifetime audits the same four page/device pairs, but a
-// failed test stops the worker and Playwright retries in a fresh process.
-// Namespace reports by worker pid + per-process sequence so a retry's raw
-// reports and bound *.artifacts.json never collide with or overwrite a
-// previous attempt's retained evidence.
-let lighthouseReportSequence = 0;
-
 function getResultKey(path: string, strategy: DeviceStrategy): ResultKey {
 	return `${path}-${strategy}`;
 }
@@ -84,7 +78,12 @@ const test = base.extend<
 				rawReport: string;
 				artifacts: RunnerResult["artifacts"];
 			}[] = [];
-			const reportRun = `${process.pid}-${++lighthouseReportSequence}`;
+			// Each worker-fixture lifetime audits the same four page/device
+			// pairs, but a failed test stops the worker and Playwright retries
+			// in a fresh process. Namespace reports by worker pid + a random
+			// attempt id so a retry's raw reports and bound *.artifacts.json
+			// never collide with or overwrite a previous attempt's evidence.
+			const reportRun = `${process.pid}-${randomBytes(6).toString("hex")}`;
 
 			// Launch browser once for all audits
 			const context = await chromium.launchPersistentContext(
