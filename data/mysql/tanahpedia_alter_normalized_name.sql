@@ -1,5 +1,5 @@
 -- Sargable mention-decoration name resolution: a generated normalized_name
--- column (REPLACE(name, '-', ' '), matching the pipeline's space-separated
+-- column (REPLACE(name, dash, space), matching the pipeline space-separated
 -- intended_name contract) on tanahpedia_entry.unique_name and
 -- tanahpedia_entry_synonym.name, each with a secondary index. The website
 -- mention queries then join on the plain indexed column instead of

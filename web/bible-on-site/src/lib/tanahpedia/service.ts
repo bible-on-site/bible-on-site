@@ -50,10 +50,7 @@ export const CATEGORY_LABELS: Record<CategoryKey, string> = {
 
 export const ENTITY_TYPES = Object.keys(ENTITY_TYPE_LABELS) as EntityType[];
 
-export async function getEntries(
-	limit = 50,
-	offset = 0,
-): Promise<EntryStub[]> {
+export async function getEntries(limit = 50, offset = 0): Promise<EntryStub[]> {
 	return query<EntryStub>(
 		"SELECT id, unique_name AS uniqueName, title FROM tanahpedia_entry ORDER BY title LIMIT ? OFFSET ?",
 		[String(limit), String(offset)],
@@ -74,9 +71,7 @@ export async function getEntryByUniqueName(
 	// deployed yet, and a failed metric read must not take down the entry.
 	// The metric and entity lookups are independent — issue them together.
 	const [metric, entities] = await Promise.all([
-		metricOrFallback(`entry ${entry.id}`, null, () =>
-			getEntryMetric(entry.id),
-		),
+		metricOrFallback(`entry ${entry.id}`, null, () => getEntryMetric(entry.id)),
 		query<{
 			id: string;
 			entryId: string;
@@ -1023,6 +1018,55 @@ export function getMentionReferencesForPereks(
 	return queryPerekMentionReferences(perekIds, true);
 }
 
+// Mention name resolution: the indexed generated normalized_name columns on
+// entry and synonym (REPLACE(name, '-', ' '), see
+// data/mysql/tanahpedia_alter_normalized_name.sql) resolve each decoration to
+// its single matching entry in two index lookups.
+const MENTION_RESOLUTION_INDEXED = `LEFT JOIN tanahpedia_entry ent ON ent.id = (
+			   SELECT MIN(m.entry_id)
+			   FROM (
+			     SELECT e.id AS entry_id FROM tanahpedia_entry e
+			     WHERE e.normalized_name = d.intended_name
+			     UNION ALL
+			     SELECT s.entry_id FROM tanahpedia_entry_synonym s
+			     WHERE s.normalized_name = d.intended_name
+			   ) m
+			   HAVING COUNT(DISTINCT m.entry_id) <= 1
+			 )`;
+
+// Ambiguous names (>= 2 distinct candidate entries) resolve to nothing: the
+// decoration is excluded, matching the pre-migration GROUP BY/HAVING row set.
+const MENTION_AMBIGUITY_GUARD = `(
+			   SELECT COUNT(DISTINCT m2.entry_id)
+			   FROM (
+			     SELECT e2.id AS entry_id FROM tanahpedia_entry e2
+			     WHERE e2.normalized_name = d.intended_name
+			     UNION ALL
+			     SELECT s2.entry_id FROM tanahpedia_entry_synonym s2
+			     WHERE s2.normalized_name = d.intended_name
+			   ) m2
+			 ) <= 1`;
+
+// Pre-migration shape kept for the window before Data CD applies the
+// normalized_name alter: identical rows via the non-sargable REPLACE() join.
+const MENTION_RESOLUTION_LEGACY = `LEFT JOIN (
+			   SELECT e.id AS entryId, e.unique_name AS resolvedName FROM tanahpedia_entry e
+			   UNION ALL
+			   SELECT s.entry_id AS entryId, s.name AS resolvedName FROM tanahpedia_entry_synonym s
+			 ) names ON REPLACE(names.resolvedName, '-', ' ') = d.intended_name
+			 LEFT JOIN tanahpedia_entry ent ON ent.id = names.entryId`;
+
+function isMissingNormalizedNameColumn(error: unknown): boolean {
+	if (error instanceof Error && error.message.includes("normalized_name"))
+		return true;
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"code" in error &&
+		(error as { code?: unknown }).code === "ER_BAD_FIELD_ERROR"
+	);
+}
+
 function queryPerekMentionReferences(
 	perekIds: number[],
 	scoped: false,
@@ -1052,22 +1096,37 @@ async function queryPerekMentionReferences(
 			   d.segment_start AS segmentStart,
 			   d.segment_end AS segmentEnd
 			 FROM tanahpedia_mention_decoration d
-			 LEFT JOIN tanahpedia_entry ent ON ent.id = (
-			   SELECT MIN(m.entry_id)
-			   FROM (
-			     SELECT e.id AS entry_id FROM tanahpedia_entry e
-			     WHERE e.normalized_name = d.intended_name
-			     UNION ALL
-			     SELECT s.entry_id FROM tanahpedia_entry_synonym s
-			     WHERE s.normalized_name = d.intended_name
-			   ) m
-			   HAVING COUNT(DISTINCT m.entry_id) <= 1
-			 )
+			 ${MENTION_RESOLUTION_INDEXED}
 			 WHERE d.source_kind = 'pasuk' AND d.perek_id ${predicate}
 			   AND d.acceptance IN ('auto', 'manual')
+			   AND ${MENTION_AMBIGUITY_GUARD}
 			 ORDER BY ${scoped ? "d.perek_id," : ""} pasukNumber, segmentStart, (d.acceptance = 'manual') DESC`,
 			perekIds.map(String),
-		);
+		).catch((error) => {
+			if (!isMissingNormalizedNameColumn(error)) throw error;
+			// The columns only land when Data CD applies the alter; until
+			// then resolve through the pre-migration REPLACE() join so a
+			// website released ahead of it keeps working.
+			return query<PerekEntityReference>(
+				`SELECT
+				   ${scoped ? "d.perek_id AS perekId," : ""}
+				   ANY_VALUE(ent.id) AS entityId,
+				   ANY_VALUE(ent.title) AS entityName,
+				   d.entity_type AS entityType,
+				   ANY_VALUE(ent.unique_name) AS entryUniqueName,
+				   d.pasuk_number AS pasukNumber,
+				   d.segment_start AS segmentStart,
+				   d.segment_end AS segmentEnd
+				 FROM tanahpedia_mention_decoration d
+				 ${MENTION_RESOLUTION_LEGACY}
+				 WHERE d.source_kind = 'pasuk' AND d.perek_id ${predicate}
+				   AND d.acceptance IN ('auto', 'manual')
+				 GROUP BY d.id
+				 HAVING COUNT(DISTINCT names.entryId) <= 1
+				 ORDER BY ${scoped ? "d.perek_id," : ""} pasukNumber, segmentStart, (d.acceptance = 'manual') DESC`,
+				perekIds.map(String),
+			);
+		});
 	} catch (error) {
 		const scope = scoped
 			? `pereks ${perekIds.join(", ")}`
@@ -1108,22 +1167,30 @@ export async function getMentionReferencesForArticle(
 			   d.span_end AS spanEnd,
 			   d.surface AS surface
 			 FROM tanahpedia_mention_decoration d
-			 LEFT JOIN tanahpedia_entry ent ON ent.id = (
-			   SELECT MIN(m.entry_id)
-			   FROM (
-			     SELECT e.id AS entry_id FROM tanahpedia_entry e
-			     WHERE e.normalized_name = d.intended_name
-			     UNION ALL
-			     SELECT s.entry_id FROM tanahpedia_entry_synonym s
-			     WHERE s.normalized_name = d.intended_name
-			   ) m
-			   HAVING COUNT(DISTINCT m.entry_id) <= 1
-			 )
+			 ${MENTION_RESOLUTION_INDEXED}
 			 WHERE d.source_kind = 'article' AND d.article_id = ? AND d.content_hash = ?
 			   AND d.acceptance IN ('auto', 'manual')
+			   AND ${MENTION_AMBIGUITY_GUARD}
 			 ORDER BY spanStart, (d.acceptance = 'manual') DESC`,
 			[String(articleId), contentHash],
-		);
+		).catch((error) => {
+			if (!isMissingNormalizedNameColumn(error)) throw error;
+			return query<ArticleMentionReference>(
+				`SELECT
+				   ANY_VALUE(ent.unique_name) AS entryUniqueName,
+				   d.span_start AS spanStart,
+				   d.span_end AS spanEnd,
+				   d.surface AS surface
+				 FROM tanahpedia_mention_decoration d
+				 ${MENTION_RESOLUTION_LEGACY}
+				 WHERE d.source_kind = 'article' AND d.article_id = ? AND d.content_hash = ?
+				   AND d.acceptance IN ('auto', 'manual')
+				 GROUP BY d.id
+				 HAVING COUNT(DISTINCT names.entryId) <= 1
+				 ORDER BY spanStart, (d.acceptance = 'manual') DESC`,
+				[String(articleId), contentHash],
+			);
+		});
 	} catch (error) {
 		console.error(
 			`Failed to fetch mention references for article ${articleId}:`,

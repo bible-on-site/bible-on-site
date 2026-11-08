@@ -49,6 +49,33 @@ describe("getMentionReferencesForPerek", () => {
 		await getMentionReferencesForPerek(7);
 		const [sql] = mockQuery.mock.calls[0];
 		expect(sql).toContain("HAVING COUNT(DISTINCT m.entry_id) <= 1");
+		// A WHERE guard excludes multi-entry decorations outright — the
+		// pre-migration query dropped the row, not just the join columns.
+		expect(sql).toContain("COUNT(DISTINCT m2.entry_id)");
+	});
+
+	it("falls back to the pre-migration REPLACE() join while normalized_name is absent", async () => {
+		const missingColumn = Object.assign(
+			new Error("Unknown column 'e.normalized_name' in 'where clause'"),
+			{ code: "ER_BAD_FIELD_ERROR" },
+		);
+		mockQuery.mockRejectedValueOnce(missingColumn).mockResolvedValueOnce([]);
+		await expect(getMentionReferencesForPerek(12)).resolves.toEqual([]);
+		expect(mockQuery).toHaveBeenCalledTimes(2);
+		const [fallbackSql, fallbackParams] = mockQuery.mock.calls[1];
+		expect(fallbackParams).toEqual(["12"]);
+		expect(fallbackSql).toContain(
+			"REPLACE(names.resolvedName, '-', ' ') = d.intended_name",
+		);
+		expect(fallbackSql).toContain("HAVING COUNT(DISTINCT names.entryId) <= 1");
+	});
+
+	it("falls back on a bare ER_BAD_FIELD_ERROR code too", async () => {
+		mockQuery
+			.mockRejectedValueOnce({ code: "ER_BAD_FIELD_ERROR" })
+			.mockResolvedValueOnce([]);
+		await expect(getMentionReferencesForPerek(12)).resolves.toEqual([]);
+		expect(mockQuery).toHaveBeenCalledTimes(2);
 	});
 
 	it("emits one row per decoration with bare entry columns", async () => {
@@ -147,6 +174,23 @@ describe("getMentionReferencesForArticle", () => {
 		await getMentionReferencesForArticle(1, "h");
 		const [sql] = mockQuery.mock.calls[0];
 		expect(sql).toContain("HAVING COUNT(DISTINCT m.entry_id) <= 1");
+		expect(sql).toContain("COUNT(DISTINCT m2.entry_id)");
+	});
+
+	it("falls back to the pre-migration REPLACE() join while normalized_name is absent", async () => {
+		const missingColumn = Object.assign(
+			new Error("Unknown column 's.normalized_name' in 'on clause'"),
+			{ code: "ER_BAD_FIELD_ERROR" },
+		);
+		mockQuery.mockRejectedValueOnce(missingColumn).mockResolvedValueOnce([]);
+		await expect(getMentionReferencesForArticle(42, "h")).resolves.toEqual([]);
+		expect(mockQuery).toHaveBeenCalledTimes(2);
+		const [fallbackSql, fallbackParams] = mockQuery.mock.calls[1];
+		expect(fallbackParams).toEqual(["42", "h"]);
+		expect(fallbackSql).toContain(
+			"REPLACE(names.resolvedName, '-', ' ') = d.intended_name",
+		);
+		expect(fallbackSql).toContain("HAVING COUNT(DISTINCT names.entryId) <= 1");
 	});
 
 	it("emits one row per decoration with bare entry columns", async () => {
