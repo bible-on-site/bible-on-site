@@ -5,6 +5,7 @@ import path from "node:path";
 import type { ECRClient } from "@aws-sdk/client-ecr";
 import * as semver from "semver";
 import { DeployerBase } from "../deployer-base.mts";
+import { publishAdminImages } from "./admin-images.mts";
 import {
 	assertAPILatestMode,
 	prepareAPIArchives,
@@ -19,7 +20,10 @@ import {
 	withRetry,
 } from "./ecr-client.mts";
 import { resumePublishedImage } from "./resume-image.mts";
-import { publishWebsiteImages } from "./website-images.mts";
+import {
+	WEBSITE_MUTABLE_TAGS,
+	publishWebsiteImages,
+} from "./website-images.mts";
 
 export const Diff = {
 	LocalNewer: "LocalNewer",
@@ -83,19 +87,7 @@ export abstract class ECRDeployerBase extends DeployerBase {
 			throw new Error(
 				"Dual archives and publish-index are supported only for API releases",
 			);
-		if (
-			!options.arm64ArchivePath ||
-			!options.sourceRef ||
-			!this.dockerImagePath
-		)
-			throw new Error(
-				"API dual publication requires docker-image, docker-image-arm64 and source-ref",
-			);
-		this.nativeImageOptions = {
-			arm64ArchivePath: options.arm64ArchivePath,
-			sourceRef: options.sourceRef,
-			publishIndex: options.publishIndex ?? false,
-		};
+		this.setDualImageOptions("API", options);
 	}
 	public setWebsiteImageOptions(options: {
 		arm64ArchivePath?: string;
@@ -104,13 +96,32 @@ export abstract class ECRDeployerBase extends DeployerBase {
 	}): void {
 		if (this.moduleName !== "website")
 			throw new Error("Website image options require the website deployer");
+		this.setDualImageOptions("Website", options);
+	}
+	public setAdminImageOptions(options: {
+		arm64ArchivePath?: string;
+		sourceRef?: string;
+		publishIndex?: boolean;
+	}): void {
+		if (this.moduleName !== "admin")
+			throw new Error("Admin image options require the admin deployer");
+		this.setDualImageOptions("Admin", options);
+	}
+	private setDualImageOptions(
+		moduleLabel: string,
+		options: {
+			arm64ArchivePath?: string;
+			sourceRef?: string;
+			publishIndex?: boolean;
+		},
+	): void {
 		if (
 			!options.arm64ArchivePath ||
 			!options.sourceRef ||
 			!this.dockerImagePath
 		)
 			throw new Error(
-				"Website dual publication requires docker-image, docker-image-arm64 and source-ref",
+				`${moduleLabel} dual publication requires docker-image, docker-image-arm64 and source-ref`,
 			);
 		this.nativeImageOptions = {
 			arm64ArchivePath: options.arm64ArchivePath,
@@ -230,7 +241,7 @@ export abstract class ECRDeployerBase extends DeployerBase {
 				"A newer canonical version exists; refusing a latest downgrade",
 			);
 		}
-		if (this.moduleName === "api" || this.moduleName === "website") {
+		if (["api", "website", "admin"].includes(this.moduleName)) {
 			await assertAPILatestMode(this.client, this.ecrRepositoryName, false);
 		}
 	}
@@ -251,7 +262,9 @@ export abstract class ECRDeployerBase extends DeployerBase {
 				const publish =
 					this.moduleName === "website"
 						? publishWebsiteImages
-						: publishAPIImages;
+						: this.moduleName === "admin"
+							? publishAdminImages
+							: publishAPIImages;
 				const result = await publish(prepared, {
 					client: this.client,
 					repositoryName: this.ecrRepositoryName,
@@ -270,12 +283,14 @@ export abstract class ECRDeployerBase extends DeployerBase {
 			}
 			return;
 		}
-		if (this.moduleName === "api" || this.moduleName === "website")
+		if (["api", "website", "admin"].includes(this.moduleName))
 			await assertAPILatestMode(this.client, this.ecrRepositoryName, false);
-		// Ensure repository exists
+		// Ensure repository exists; a newly created repository must satisfy the
+		// same tag policy the immutable publication path asserts.
 		const repositoryUri = await ensureRepositoryExists(
 			this.client,
 			this.ecrRepositoryName,
+			this.moduleName === "website" ? WEBSITE_MUTABLE_TAGS : ["latest"],
 		);
 		this.info(`Using ECR repository: ${repositoryUri}`);
 

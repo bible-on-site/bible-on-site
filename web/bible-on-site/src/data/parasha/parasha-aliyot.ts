@@ -8,7 +8,11 @@ import {
 	rangeContainsCoordinate,
 } from "@/lib/reading/ranges";
 import aliyotData from "./parasha-aliyot.json";
-import { getAllParashaUnits, getParashaUnitById } from "./parasha-units";
+import {
+	getAllParashaUnits,
+	getParashaUnitById,
+	rangesRefSpans,
+} from "./parasha-units";
 
 /**
  * Aliyah boundaries for the פרשה division (issue #2519).
@@ -542,15 +546,39 @@ export function aliyahContaining(
 /* ---- Marker layer for the reading renderer ---- */
 
 /**
- * A boundary marker to render at a pasuk's start. `key` identifies the
- * owning `"{readingId}:{schemeId}"` combination so several schemes or
- * contexts can share one text and the control layer swaps visibility
- * without remounting scripture.
+ * Marker category driving its inline styling (issue #3165): the scheme
+ * id for standalone layers (`"shabbat"`/`"weekday"`, open to future
+ * scheme ids), `"joined"` for joined-reading layers, or `"variant"`
+ * for documented custom splits. Categories are distinguished by
+ * typography/border/background — never by color alone.
+ */
+export type AliyahMarkerCategory =
+	| "shabbat"
+	| "weekday"
+	| "joined"
+	| "variant"
+	| (string & {});
+
+/**
+ * A boundary marker rendered inline at a pasuk's start (issue #3165).
+ * `key` identifies the owning `"{readingId}:{schemeId}[:{variantId}]"`
+ * combination — all layers render together at their canonical
+ * positions, and the key doubles as the emphasis hook for the legend's
+ * `?reading=`/`?scheme=`/`?variant=` selection.
  */
 export interface AliyahMarker {
 	key: string;
+	/** Ordinal label — ראשון…שביעי, מפטיר (joined keeps its numbering). */
 	label: string;
 	role: AliyahRole;
+	/** Short visible tag identifying the layer — the scheme label for
+	 * standalone contexts, the joined reading's names, or the custom's
+	 * label for variants — so coincident markers stay distinguishable. */
+	tag: string;
+	category: AliyahMarkerCategory;
+	/** Richer hover/focus/touch detail and accessible name — context,
+	 * scheme or custom, ordinal, and the aliyah's verse span. */
+	detail: string;
 }
 
 /** One selectable alternative division inside a scheme — a documented
@@ -565,8 +593,9 @@ export interface UnitAliyahSchemeOption {
 	schemeId: string;
 	label: string;
 	/** Named alternative divisions of this scheme that move a marker —
-	 * selecting one swaps to its full substituted layer
-	 * (`{reading}:{scheme}:{variant}`). Empty for most schemes. */
+	 * each renders its full substituted layer
+	 * (`{reading}:{scheme}:{variant}`) inline beside the base markers.
+	 * Empty for most schemes. */
 	variants: UnitAliyahVariantOption[];
 }
 
@@ -582,15 +611,19 @@ export interface UnitAliyahContextOption {
 }
 
 /**
- * Everything a unit page needs to render and switch boundary markers:
- * the coord-keyed marker map (all contexts/schemes merged — callers
- * show one `key` at a time), the context/scheme options for the
- * selector, and the default selection key.
+ * Everything a unit page needs to render all boundary markers inline
+ * (issue #3165): the coord-keyed marker map — every applicable layer
+ * merged, all displayed together — the context/scheme options for the
+ * legend, and the default emphasis key.
  */
 export interface UnitAliyahMarkers {
-	/** `"{perekId}:{pasuk}"` → marker specs at that boundary start. */
+	/** `"{perekId}:{pasuk}"` → marker specs at that boundary start, in
+	 * deterministic order (standalone schemes then variants, then
+	 * joined contexts) so coincident boundaries arrange predictably. */
 	markers: Record<string, AliyahMarker[]>;
 	contexts: UnitAliyahContextOption[];
+	/** `"{readingId}:{schemeId}"` emphasized when the URL carries no
+	 * selection — the standalone Shabbat layer. */
 	defaultKey: string;
 }
 
@@ -598,6 +631,44 @@ function contextLabel(reading: ParashaAliyahReading): string {
 	return reading.kind === "standalone"
 		? `פרשת ${reading.unitNames[0]}`
 		: reading.unitNames.join("-");
+}
+
+/** Feminine ordinals for `עלייה N` inside marker detail text. */
+const ALIYAH_ORDINAL_DETAIL = [
+	"ראשונה",
+	"שנייה",
+	"שלישית",
+	"רביעית",
+	"חמישית",
+	"שישית",
+	"שביעית",
+] as const;
+
+/**
+ * Marker detail text (issue #3165): `{context} · קריאת {scheme}
+ * [· מנהג {custom} | · {unattributed}] · {ordinal} ({span})` — e.g.
+ * `פרשת ויגש · קריאת שבת · מנהג חב"ד · עלייה רביעית (בראשית מה כח - מו ז)`.
+ */
+function markerDetail(
+	reading: ParashaAliyahReading,
+	scheme: AliyahScheme,
+	variant: AliyahVariant | null,
+	boundary: AliyahBoundary,
+): string {
+	const context = reading.applicability
+		? `${contextLabel(reading)} (${reading.applicability})`
+		: contextLabel(reading);
+	const custom = variant
+		? variant.id.startsWith("alt-")
+			? ` · ${variant.label}`
+			: ` · מנהג ${variant.label}`
+		: "";
+	const ordinal =
+		boundary.role === "maftir"
+			? "מפטיר"
+			: `עלייה ${ALIYAH_ORDINAL_DETAIL[boundary.ordinal - 1] ?? boundary.label}`;
+	const span = rangesRefSpans([boundary.range]).join(", ");
+	return `${context} · קריאת ${scheme.label}${custom} · ${ordinal} (${span})`;
 }
 
 /**
@@ -617,7 +688,11 @@ export function getUnitAliyahMarkers(unitId: number): UnitAliyahMarkers {
 		const schemes: UnitAliyahSchemeOption[] = [];
 		const emitLayer = (
 			layerKey: string,
+			scheme: AliyahScheme,
+			variant: AliyahVariant | null,
 			boundaries: AliyahBoundary[],
+			tag: string,
+			category: AliyahMarkerCategory,
 		): void => {
 			for (const boundary of boundaries) {
 				if (
@@ -635,6 +710,9 @@ export function getUnitAliyahMarkers(unitId: number): UnitAliyahMarkers {
 					key: layerKey,
 					label: boundary.label,
 					role: boundary.role,
+					tag,
+					category,
+					detail: markerDetail(reading, scheme, variant, boundary),
 				});
 			}
 		};
@@ -645,14 +723,32 @@ export function getUnitAliyahMarkers(unitId: number): UnitAliyahMarkers {
 				(variant) => ({ variantId: variant.id, label: variant.label }),
 			);
 			schemes.push({ schemeId: scheme.id, label: scheme.label, variants });
-			emitLayer(`${reading.id}:${scheme.id}`, boundaries);
+			// Standalone markers tag with the scheme label (שבת/חול);
+			// joined markers tag with the joined reading's names so a
+			// coincident מטות-מסעי marker is distinguishable from מטות's own.
+			const tag =
+				reading.kind === "joined" ? contextLabel(reading) : scheme.label;
+			const category: AliyahMarkerCategory =
+				reading.kind === "joined" ? "joined" : scheme.id;
+			emitLayer(
+				`${reading.id}:${scheme.id}`,
+				scheme,
+				null,
+				boundaries,
+				tag,
+				category,
+			);
 			// Each variant is a complete substituted layer under its own
 			// three-part key — the same clip rules apply (joined contexts
 			// keep only variant boundaries starting inside this unit).
 			for (const variant of reading.schemeVariants[scheme.id] ?? []) {
 				emitLayer(
 					`${reading.id}:${scheme.id}:${variant.id}`,
+					scheme,
+					variant,
 					variant.boundaries,
+					variant.label,
+					"variant",
 				);
 			}
 		}
@@ -678,26 +774,13 @@ export function getUnitAliyahMarkers(unitId: number): UnitAliyahMarkers {
 }
 
 /**
- * The book view's fixed marker layer — each parasha spread renders its
- * own standalone Shabbat scheme (the book has no context selector), so
- * only that single key's markers serialize.
+ * The book view's marker layers (issue #3165): every applicable
+ * division renders inline — the standalone schemes and customs plus
+ * joined readings clipped to the unit — so the Sefer no longer
+ * silently shows only the standalone Shabbat split.
  */
-export function getUnitShabbatAliyahMarkers(
+export function getUnitAliyahMarkersForSefer(
 	unitId: number,
 ): Record<string, AliyahMarker[]> {
-	const standalone = getStandaloneReading(unitId);
-	/* istanbul ignore next -- defensive: every vendored reading ships the shabbat scheme */
-	const boundaries = standalone.schemes[DEFAULT_ALIYAH_SCHEME] ?? [];
-	const markers: Record<string, AliyahMarker[]> = {};
-	for (const boundary of boundaries) {
-		const coordKey = `${boundary.range.start.perekId}:${boundary.range.start.pasuk}`;
-		markers[coordKey] = [
-			{
-				key: `${standalone.id}:${DEFAULT_ALIYAH_SCHEME}`,
-				label: boundary.label,
-				role: boundary.role,
-			},
-		];
-	}
-	return markers;
+	return getUnitAliyahMarkers(unitId).markers;
 }

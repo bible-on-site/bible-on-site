@@ -1,0 +1,193 @@
+# ============================================================================
+# ⚠️ DISCLAIMER: This CloudFormation template has NEVER been tested or deployed.
+# It is maintained as Infrastructure as Code DOCUMENTATION ONLY to reflect the
+# proposed cost-observability configuration. Do not assume it will work without
+# thorough testing. Applying it creates real AWS resources and is a gated
+# #2576 change requiring Dorad's explicit approval.
+# ============================================================================
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Cost observability for Bible On Site: monthly AWS Budget alerts, Cost Explorer service anomaly detection and an EstimatedCharges billing alarm. Reference documentation only; not a deployed stack."
+
+Metadata:
+  Documentation: |
+    Cost observability proposal for #2576, closing the attribution gap recorded
+    in ../s3-delivery-cost-2026-11-01.md ("service-level billing does not
+    identify individual keys, buckets, callers or CI"). The recurring read-only
+    baseline check is devops/cost-audit.mjs; this template documents the
+    alerting half.
+
+    PREREQUISITES (verified or required before applying):
+    - Cost Explorer API is enabled in account 250598594267; it was read
+      successfully for the November 1 spend report. Budgets and anomaly
+      monitors need no further opt-in.
+    - The EstimatedCharges alarm only produces data after "Receive Billing
+      Alerts" is enabled in the Billing console (a console preference with no
+      CloudFormation/API control). Enable it before or alongside this stack,
+      or the alarm stays INSUFFICIENT_DATA.
+    - AWS/Billing metrics exist only in us-east-1. Apply this template with
+      --region us-east-1; Budgets and Cost Explorer are global APIs and the
+      billing alarm needs the us-east-1 SNS topic defined below.
+    - The email subscription requires confirmation from the mailbox, same as
+      the existing ecs-deployment-alerts subscription.
+    - Required permissions to apply: budgets:CreateBudget,
+      ce:CreateAnomalyMonitor, ce:CreateAnomalySubscription,
+      cloudwatch:PutMetricAlarm, sns:CreateTopic, sns:Subscribe.
+
+    THRESHOLDS:
+    Defaults are starting points, not measured baselines. October's observed
+    S3 spike alone was about $65.72; review current actuals with
+    `node devops/cost-audit.mjs` before applying and tune the parameters.
+    | Control | Default | Fires when |
+    |---------|---------|------------|
+    | MonthlyBudgetUsd | 150 | Forecasted spend exceeds 80% ($120) or actual exceeds 100% |
+    | AnomalyImpactUsd | 25 | A service's spend deviates from expected by $25+ |
+    | BillingAlarmUsd | 150 | EstimatedCharges (6h cadence) exceeds $150 |
+
+    APPLY (gated on specific Dorad approval; auto-merge stays off):
+      aws cloudformation validate-template --template-body file://cost-monitoring.yaml --region us-east-1
+      aws cloudformation deploy --template-file cost-monitoring.yaml \
+        --stack-name bible-on-site-cost-monitoring --region us-east-1 \
+        --profile AdministratorAccess-250598594267
+
+    VERIFY:
+      aws budgets describe-budgets --region us-east-1
+      aws ce get-anomaly-monitors --region us-east-1
+      aws cloudwatch describe-alarms --alarm-names bible-on-site-estimated-charges --region us-east-1
+      node devops/cost-audit.mjs --skip-spend   # observability rows turn enabled
+
+    ROLLBACK (alerts stop; no production resource is touched):
+      aws cloudformation delete-stack --stack-name bible-on-site-cost-monitoring \
+        --region us-east-1 --profile AdministratorAccess-250598594267
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Default: doradsoft@gmail.com
+    Description: Alert destination; same mailbox as ecs-deployment-alerts. SNS topic subscribers are an alternative to email.
+
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 150
+    Description: Monthly cost budget in USD; alerts at 80% forecasted and 100% actual.
+
+  AnomalyImpactUsd:
+    Type: Number
+    Default: 25
+    Description: Minimum absolute USD impact that triggers an anomaly notification.
+
+  BillingAlarmUsd:
+    Type: Number
+    Default: 150
+    Description: EstimatedCharges threshold in USD for the billing alarm.
+
+Resources:
+  # =============================================================================
+  # Monthly cost budget with forecast and actual alerts
+  # =============================================================================
+  MonthlyCostBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: bible-on-site-monthly
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref AlertEmail
+
+  # =============================================================================
+  # Cost Explorer anomaly detection - per-service dimensional monitor
+  # =============================================================================
+  ServiceAnomalyMonitor:
+    Type: AWS::CE::AnomalyMonitor
+    Properties:
+      MonitorName: bible-on-site-services
+      MonitorType: DIMENSIONAL
+      MonitorDimension: SERVICE
+
+  AnomalySubscription:
+    Type: AWS::CE::AnomalySubscription
+    Properties:
+      SubscriptionName: bible-on-site-anomaly-alerts
+      MonitorArnList:
+        - !Ref ServiceAnomalyMonitor
+      Frequency: DAILY
+      Threshold: !Ref AnomalyImpactUsd
+      Subscribers:
+        - Type: EMAIL
+          Address: !Ref AlertEmail
+
+  # =============================================================================
+  # Billing alarm on total estimated charges (us-east-1 only metric)
+  # =============================================================================
+  BillingAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: bible-on-site-billing-alerts
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
+  BillingAlertsEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref BillingAlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  EstimatedChargesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: bible-on-site-estimated-charges
+      AlarmDescription: Alert when total estimated charges exceed the monthly budget threshold
+      Namespace: AWS/Billing
+      MetricName: EstimatedCharges
+      Dimensions:
+        - Name: Currency
+          Value: USD
+      Statistic: Maximum
+      Period: 21600
+      EvaluationPeriods: 1
+      Threshold: !Ref BillingAlarmUsd
+      ComparisonOperator: GreaterThanThreshold
+      # Billing metrics publish roughly every 6 hours; missing data is normal,
+      # not a spend signal.
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref BillingAlertsTopic
+      OKActions:
+        - !Ref BillingAlertsTopic
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+
+Outputs:
+  MonthlyBudgetName:
+    Description: Monthly cost budget name
+    Value: bible-on-site-monthly
+
+  AnomalyMonitorArn:
+    Description: Service anomaly monitor ARN
+    Value: !Ref ServiceAnomalyMonitor
+
+  BillingAlertsTopicArn:
+    Description: us-east-1 SNS topic carrying billing alarm notifications
+    Value: !Ref BillingAlertsTopic

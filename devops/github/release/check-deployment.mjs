@@ -250,7 +250,9 @@ export function checkDeployment(
 		...(platformArtifacts
 			? moduleName === "api"
 				? { apiArm64: true }
-				: { websiteArm64: true }
+				: moduleName === "admin"
+					? { adminArm64: true }
+					: { websiteArm64: true }
 			: {}),
 	};
 }
@@ -306,7 +308,7 @@ if (
 	}
 	appendFileSync(
 		process.env.GITHUB_OUTPUT,
-		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\napi_arm64=${result.apiArm64 === true}\nwebsite_arm64=${result.websiteArm64 === true}\n`,
+		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\napi_arm64=${result.apiArm64 === true}\nwebsite_arm64=${result.websiteArm64 === true}\nadmin_arm64=${result.adminArm64 === true}\n`,
 	);
 	if (result.version)
 		appendFileSync(

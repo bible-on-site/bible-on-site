@@ -62,6 +62,55 @@ describe("next.config.mjs", () => {
 		expect(cssChunking("")).toBe(true);
 	});
 
+	it("keeps legacy public URLs permanently redirected to their canonical targets", async () => {
+		// #2935: /sitemap_www.xml was a public sitemap URL external consumers
+		// still fetch. It must stay a permanent redirect into the canonical
+		// document, not fall through to the missing-page 404 — and no other
+		// *.xml path may be claimed by the alias.
+		const redirects = await nativeJson(
+			`const { default: configure } = await import(${JSON.stringify(configUrl)});
+			 const { PHASE_DEVELOPMENT_SERVER } = await import("next/constants.js");
+			 const config = configure(PHASE_DEVELOPMENT_SERVER, { defaultConfig: { experimental: { cpus: 1 } } });
+			 console.log(JSON.stringify(await config.redirects()));`,
+		);
+		expect(redirects).toContainEqual({
+			source: "/sitemap_www.xml",
+			destination: "/sitemap.xml",
+			permanent: true,
+		});
+		expect(
+			redirects.filter(({ source }: { source: string }) =>
+				source.includes(".xml"),
+			),
+		).toEqual([expect.objectContaining({ source: "/sitemap_www.xml" })]);
+	});
+
+	it("serves reader book assets as immutable Brotli via static headers", async () => {
+		// #3095: the precompressed assets live under public/generated/sefarim/
+		// and rely on this headers() rule for Content-Encoding: br + immutable
+		// caching. Serving them through a route handler instead let the App
+		// Router pipeline drop Content-Encoding while still sending the encoded
+		// body, which broke the reader in CI. Guard the contract here.
+		const rule = nativeJson(
+			`const { default: configure } = await import(${JSON.stringify(configUrl)});
+			 const { PHASE_DEVELOPMENT_SERVER } = await import("next/constants.js");
+			 const config = configure(PHASE_DEVELOPMENT_SERVER, { defaultConfig: {} });
+			 const rules = await config.headers();
+			 const sefarim = rules.find((r) => r.source.includes("sefarim"));
+			 console.log(JSON.stringify(sefarim ?? null));`,
+		);
+		expect(rule).not.toBeNull();
+		expect(rule.source).toBe("/generated/sefarim/:path*");
+		const headerValue = (key: string) =>
+			rule.headers.find(
+				(h: { key: string }) => h.key.toLowerCase() === key.toLowerCase(),
+			)?.value;
+		expect(headerValue("Content-Encoding")).toBe("br");
+		expect(headerValue("Cache-Control")).toContain("immutable");
+		expect(headerValue("Vary")).toBe("Accept-Encoding");
+		expect(headerValue("Content-Type")).toContain("application/json");
+	});
+
 	it.each(["linux", "darwin", "win32"])(
 		"budgets only production builds on %s and preserves other options",
 		(platform) => {

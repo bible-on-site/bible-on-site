@@ -14,15 +14,18 @@ import { getEntryDedications } from "@/lib/dedications/loaders";
 import { demoteHeadings } from "@/lib/html-headings";
 import { getEntryProgressUnits, metricOrFallback } from "@/lib/reading-metrics";
 import { plainText } from "@/lib/seo/jsonld";
+import { NOT_FOUND_METADATA } from "@/lib/seo/missing-page";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import { sameAsFor } from "@/lib/seo/same-as";
 import { buildEntryGraph } from "@/lib/seo/tanahpedia-jsonld";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
+import {
+	getCachedEntityTypeEntrySummaries,
+} from "@/lib/tanahpedia/loaders";
 import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
 import {
 	ENTITY_TYPE_LABELS,
-	getEntries,
-	getEntriesByEntityType,
+	getAllEntrySummaries,
 	getEntryByUniqueName,
 	getEntryOccurrences,
 	getPersonFamilySummary,
@@ -60,10 +63,11 @@ export async function entryMetadata(slug: string): Promise<Metadata> {
 		if (resolution.kind === "disambiguation") {
 			return disambiguationMetadata(name);
 		}
-		// "Not found" metadata only for a confirmed-missing slug: a lookup
+		// Missing-page metadata only for a confirmed-missing slug: a lookup
 		// failure propagates so the stale page (or a failed render) is kept
-		// instead of caching a false negative.
-		return { title: "לא נמצא" };
+		// instead of caching a false negative. The shared contract keeps
+		// every 404's title/OG identical to app/not-found (issue #2935).
+		return NOT_FOUND_METADATA;
 	}
 	/* Stored footnote markers are decorative — normalized HTML keeps them
 	   out of the extracted description (#2615). */
@@ -100,27 +104,32 @@ export async function EntryView({ slug }: { slug: string }) {
 	// A load failure rejects the render rather than caching a page missing
 	// its breadcrumb/family/map/occurrence sections — the last good page
 	// keeps serving and the next request retries against a recovered DB.
-	const siblingEntries = primaryEntityType
-		? await getEntriesByEntityType(primaryEntityType as EntityType)
-		: await getEntries(500, 0);
-
+	// All five loaders are independent once the entry row is loaded, so
+	// issue them in one batch instead of serial round-trips.
 	const personEntity = entry.entities.find((e) => e.entityType === "PERSON");
-	const personFamily = personEntity
-		? await getPersonFamilySummary(
-				personEntity.entityId,
-				personEntity.entityName,
-			)
-		: null;
-
-	const placeMapMarkers = await getPlaceMapMarkersForEntry(entry.id);
-
 	const primaryEntity = entry.entities[0] ?? null;
-	const occurrences = await getEntryOccurrences(entry.id);
-	// Entry-scoped dedications (#2731): targeted by the canonical entry id,
-	// never inferred from prose mentions.
-	const entryDedications = dedicationLines(
-		await getEntryDedications(entry.id),
-	);
+	const [siblingEntries, personFamily, placeMapMarkers, occurrences, entryDedications] =
+		await Promise.all([
+			primaryEntityType
+				? getCachedEntityTypeEntrySummaries(primaryEntityType as EntityType)
+				: getAllEntrySummaries(500, 0),
+			personEntity
+				? getPersonFamilySummary(
+						personEntity.entityId,
+						personEntity.entityName,
+					)
+				: Promise.resolve(null),
+			getPlaceMapMarkersForEntry(entry.id),
+			getEntryOccurrences(entry.id),
+			// Entry-scoped dedications (#2731): targeted by the canonical
+			// entry id, never inferred from prose mentions.
+			getEntryDedications(entry.id),
+		]);
+	const siblingNav = siblingEntries.map((e) => ({
+		uniqueName: e.uniqueName,
+		title: e.title,
+	}));
+	const dedicationLinesResult = dedicationLines(entryDedications);
 	const sameAsByEntityId = Object.fromEntries(
 		await Promise.all(
 			entry.entities.map(
@@ -164,10 +173,10 @@ export async function EntryView({ slug }: { slug: string }) {
 				currentCategory={primaryEntityType}
 				currentEntryTitle={entry.title}
 				currentEntryUniqueName={entry.uniqueName}
-				siblingEntries={siblingEntries}
+				siblingEntries={siblingNav}
 			/>
 			<h1 className={styles.pageTitle}>{entry.title}</h1>
-			<DedicationLines lines={entryDedications} />
+			<DedicationLines lines={dedicationLinesResult} />
 			<ReadingTime
 				estimatedSeconds={entry.metric?.estimatedSeconds}
 				className={styles.readingTime}

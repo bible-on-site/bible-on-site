@@ -52,6 +52,38 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
         AssertDayCellsFillWeekdayColumns();
     });
 
+    // #2975: a mini cell's source must be a rendered label — the day's semantic
+    // description already carried it, which never helped a sighted reader. The
+    // old 24px date-only template has no MiniMonthDaySource element at all, so
+    // these checks fail there by timeout rather than by a weak text match.
+    [Fact]
+    public void YearViewDayCellsShowPerekSources() => Scenario(() =>
+    {
+        OpenCalendarIn("CalendarViewYear");
+        AssertMiniCellsShowSources();
+    });
+
+    [Fact]
+    public void CycleViewDayCellsShowPerekSources() => Scenario(() =>
+    {
+        OpenCalendarIn("CalendarViewCycle");
+        AssertMiniCellsShowSources();
+    });
+
+    private void AssertMiniCellsShowSources()
+    {
+        var source = Page.WaitFor("MiniMonthDaySource", element => element.Displayed);
+        Assert.False(
+            string.IsNullOrWhiteSpace(source.Text),
+            "A mini-cell source label rendered but carried no text.");
+
+        var badge = Page.WaitFor("MiniMonthReviewBadge", element => element.Displayed);
+        Assert.Equal("חזרה", badge.Text);
+
+        // The taller cells must still land centered under their weekday columns.
+        AssertDayCellsFillWeekdayColumns();
+    }
+
     private void OpenCalendarIn(string viewButton)
     {
         Assert.NotEmpty(Page.FirstPasuk);

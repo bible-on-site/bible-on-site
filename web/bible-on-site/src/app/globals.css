@@ -218,7 +218,13 @@ html[data-a11y-contrast="high"] ::selection {
 }
 .top-nav {
 	height: 72px;
-	background-color: transparent;
+	/* Page/header contract (#3161): the solid brand bar is the default so a
+	   route family that forgets to declare still renders a readable header.
+	   Families opt out through data-page-header on the outermost element
+	   they mount under <body> (components/PageShell.tsx); the declaration
+	   ships in the SSR HTML, so the treatment is correct at first paint and
+	   on client navigation — no hydration flash. */
+	background-color: var(--accent-600);
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -226,6 +232,44 @@ html[data-a11y-contrast="high"] ::selection {
 	width: 100%;
 	position: absolute;
 	z-index: 3;
+}
+
+/* The shared page-shell wrapper every route family's outermost layout
+   renders (components/PageShell.tsx) — one full-width overflow container,
+   replacing the per-feature *-layout copies (issue #1270). */
+.page-shell {
+	overflow-x: hidden;
+	width: 100%;
+	max-width: 100%;
+}
+
+/* "overlay" families paint their own hero backdrop under the bar (the
+   homepage alHaperekSection) — keep it transparent there. */
+body:has(> [data-page-header="overlay"]) > .top-nav {
+	background-color: transparent;
+}
+
+/* "none" families are intentional header-less/fullscreen routes (the dev
+   Sefer host). */
+body:has(> [data-page-header="none"]) > .top-nav {
+	display: none;
+}
+
+/* Perek/unit readers stack the bar — and the accessibility popover it
+   contains — above .perekContainer (z-index: 6), which otherwise paints
+   over the open popover. Scoped to a direct child like the policy rules:
+   a descendant :has on <body> would re-evaluate on every subtree mutation
+   (the flip book mutates constantly during turns — see the Website
+   Performance gate, #3161). */
+body:has(> .perek-layout) > .top-nav {
+	z-index: 7;
+}
+
+/* While the book (Sefer) view is active, lift the bar above the fixed
+   overlay (z-index: 9999) so site navigation stays reachable. */
+html[data-book-view] .top-nav {
+	position: fixed;
+	z-index: 10000;
 }
 
 /* Icon-only search button pinned to the physical left edge of the nav

@@ -140,11 +140,9 @@ export function WysiwygEditor({
 			extensions,
 			content: toEditorFootnoteHtml(content),
 			onUpdate: ({ editor: ed }: { editor: Editor }) => {
-				const html = toStoredFootnoteHtml(ed.getHTML());
-				setPreviewHtml(html);
-
 				if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 				saveTimeoutRef.current = setTimeout(() => {
+					const html = toStoredFootnoteHtml(ed.getHTML());
 					if (html !== lastSavedContent.current) {
 						lastSavedContent.current = html;
 						onChange(html);
@@ -224,6 +222,9 @@ export function WysiwygEditor({
 			}
 			if (next === "source" && editor) {
 				setSourceDraft(editor.getHTML());
+			}
+			if (next === "preview" && editor) {
+				setPreviewHtml(toStoredFootnoteHtml(editor.getHTML()));
 			}
 			setMode(next);
 		},

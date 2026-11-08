@@ -94,6 +94,11 @@ public partial class TanahpediaEntryViewModel : ObservableObject
     [ObservableProperty]
     private string? _readingTimeBadge;
 
+    /// <summary>0–1 word-weighted reading position over the entry body
+    /// (issue #2607), bound to the page's progress bar.</summary>
+    [ObservableProperty]
+    private double _readingProgress;
+
     [ObservableProperty]
     private ObservableCollection<TanahpediaLinkedEntity> _entities = new();
 
@@ -134,6 +139,36 @@ public partial class TanahpediaEntryViewModel : ObservableObject
 
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
     public bool HasContent => !string.IsNullOrEmpty(Content);
+
+    /// <summary>The entry body renders as a single HtmlView — one counted
+    /// child owns every stored block (issue #2607).</summary>
+    private IReadOnlyList<CountedProgressRegion> _progressRegions = [];
+    private int? _progressTotalWords;
+
+    /// <summary>True when stored progress units cover the entry body — the
+    /// bar stays hidden on unknown/empty metrics (issue #2607).</summary>
+    public bool HasReadingProgress => _progressRegions.Count > 0;
+
+    /// <summary>
+    /// Recomputes the reading position for a scroll state (issue #2607).
+    /// <paramref name="childExtents"/> carries the entry body's measured
+    /// (top, bottom) in scroll-content coordinates so title/map/family-tree
+    /// chrome above it never advances the bar.
+    /// </summary>
+    public void UpdateReadingProgress(
+        double scrollY,
+        double viewportHeight,
+        double scrollContentHeight,
+        IReadOnlyList<(double Top, double Bottom)> childExtents)
+    {
+        ReadingProgress = ReadingProgressEngine.Fraction(
+            _progressRegions,
+            _progressTotalWords,
+            scrollY,
+            viewportHeight,
+            scrollContentHeight,
+            childExtents);
+    }
     public bool HasEntities => Entities.Count > 0;
     public bool HasOccurrences => Occurrences.Count > 0;
     public bool HasFamily => FamilyTree is not null;
@@ -270,6 +305,10 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         Title = UniqueName;
         Content = null;
         ReadingTimeBadge = null;
+        _progressRegions = [];
+        _progressTotalWords = null;
+        ReadingProgress = 0;
+        OnPropertyChanged(nameof(HasReadingProgress));
         Entities = new ObservableCollection<TanahpediaLinkedEntity>();
         FamilyTree = null;
         PlaceMarkers = [];
@@ -295,6 +334,12 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         Title = detail.Title;
         Content = TanahpediaFootnotes.Normalize(detail.Content);
         ReadingTimeBadge = detail.ReadingTimeBadge;
+        // The entry body renders as a single HtmlView — that one counted
+        // child owns every stored block unit (issue #2607).
+        _progressRegions = CountedContentUnits.Attribute([1], detail.ProgressUnits);
+        _progressTotalWords = detail.ReadingMetric?.WordCount;
+        ReadingProgress = 0;
+        OnPropertyChanged(nameof(HasReadingProgress));
         Entities = new ObservableCollection<TanahpediaLinkedEntity>(detail.Entities);
         IsLoaded = true;
         OnPropertyChanged(nameof(HasContent));
@@ -469,7 +514,7 @@ public partial class TanahpediaEntryViewModel : ObservableObject
         try
         {
             await _navigationGate.RunAsync(() =>
-                _navigator.GoToAsync($"tanahpediaEntry?uniqueName={Uri.EscapeDataString(uniqueName)}"));
+                _navigator.GoToAsync(AppRoutes.TanahpediaEntry(uniqueName)));
         }
         #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
         catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
