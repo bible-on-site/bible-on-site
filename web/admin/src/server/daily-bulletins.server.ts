@@ -69,8 +69,12 @@ function isMissingMysqlSchema(error: unknown): boolean {
  * (#3098). Returns null when no assignment exists — the caller then keeps
  * ordinary candidate selection. An assignment row whose article is missing,
  * non-distributable or body-less is an operational error, never a silent
- * fallback to a random chapter article. Before the migration is deployed
- * the missing table reads as "no assignments" so preparation keeps working.
+ * fallback to a random chapter article: the article save path validates
+ * eligibility whenever a save leaves assignments behind, so this state is
+ * only reachable through out-of-band data corruption — and a thrown prepare
+ * persists nothing, letting the next scheduled prepare recover once the
+ * data is fixed. Before the migration is deployed the missing table reads
+ * as "no assignments" so preparation keeps working.
  */
 async function bulletinHebrewDateArticle(date: string): Promise<{
 	id: number;

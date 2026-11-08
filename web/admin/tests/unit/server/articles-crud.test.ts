@@ -1091,6 +1091,78 @@ describe("article Hebrew dates (#3098)", () => {
 		).rejects.toThrow(/already assigned to article 2199/);
 	});
 
+	it("rejects a create assigning dates to a non-distributable article", async () => {
+		mocks.txExecute.mockResolvedValue({ insertId: 7 });
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		await expect(
+			createArticle({
+				data: {
+					...article,
+					distributable: false,
+					hebrewDates: [{ hebrew_month: 11, hebrew_day: 9 }],
+				},
+			}),
+		).rejects.toThrow(/must stay distributable/);
+	});
+
+	it("rejects a create assigning dates to a body-less article", async () => {
+		mocks.txExecute.mockResolvedValue({ insertId: 7 });
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		await expect(
+			createArticle({
+				data: {
+					...article,
+					content: "",
+					hebrewDates: [{ hebrew_month: 11, hebrew_day: 9 }],
+				},
+			}),
+		).rejects.toThrow(/non-empty body/);
+	});
+
+	it("rejects an update that un-distributes an article already owning dates", async () => {
+		// hebrewDates is omitted — the persisted assignment (mocked read-back)
+		// must still block an update that drops distribution eligibility.
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		await expect(
+			updateArticle({
+				data: { ...article, id: 7, distributable: false },
+			}),
+		).rejects.toThrow(/must stay distributable/);
+	});
+
+	it("rejects an update that empties the body of an article already owning dates", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		await expect(
+			updateArticle({
+				data: { ...article, id: 7, content: "   " },
+			}),
+		).rejects.toThrow(/non-empty body/);
+	});
+
+	it("allows clearing dates while making the article ineligible", async () => {
+		// Clearing the assignment is the documented escape: with no dates
+		// left behind, an ineligible article saves fine.
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+		mocks.txQuery.mockImplementation((_: unknown, sql: string) => {
+			if (String(sql).includes("tanah_article_hebrew_date")) {
+				return Promise.resolve([]);
+			}
+			return Promise.resolve([]);
+		});
+
+		const saved = await updateArticle({
+			data: { ...article, id: 7, distributable: false, hebrewDates: [] },
+		});
+		expect(saved.id).toBe(7);
+	});
+
 	it("getArticle returns the persisted date assignments", async () => {
 		mocks.queryOne.mockResolvedValue({ id: 7, name: "מאמר" });
 		mocks.query.mockImplementation((sql: string) => {

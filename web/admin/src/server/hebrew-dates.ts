@@ -122,6 +122,30 @@ export async function assertHebrewDatesAvailable(
 }
 
 /**
+ * Post-write eligibility for a Hebrew-date assignment owner (#3098): an
+ * article that still holds recurring dates must stay distribution-eligible
+ * with a non-empty body — the daily bulletin's assigned-article lookup
+ * treats an ineligible owner as broken data and aborts preparation, so an
+ * assignment must never be left on such an article. Run inside the save
+ * transaction (the article INSERT/UPDATE already holds its row lock), so a
+ * violation rolls the whole save back. `article` is the just-written state —
+ * the same values the INSERT/UPDATE persisted — and `dates` is the effective
+ * assignment set after the save (new set on replace, persisted set when the
+ * field was omitted, undefined when the schema is absent).
+ */
+export function assertHebrewDateArticleEligible(
+	article: { id: number; distributable: boolean; content?: string | null },
+	dates: HebrewDateAssignment[] | undefined,
+): void {
+	if (!dates || dates.length === 0) return;
+	if (!article.distributable || !article.content?.trim()) {
+		throw new Error(
+			`Article ${article.id} holds recurring Hebrew-date assignments and must stay distributable with a non-empty body — clear the dates or restore eligibility first`,
+		);
+	}
+}
+
+/**
  * Replaces the article's date assignments inside the save transaction:
  * clears existing rows and inserts the validated set. The shared
  * (hebrew_month, hebrew_day) PK makes a same-transaction replace safe.

@@ -57,15 +57,18 @@ describe("getArticleHebrewDateOverride", () => {
 		expect(mockQuery).toHaveBeenCalledTimes(1);
 	});
 
-	it("degrades to null while the Hebrew-date schema is not deployed", async () => {
+	it("rejects while the Hebrew-date schema is not deployed so nothing caches the miss", async () => {
+		// The caller wraps this lookup in an unbounded cache: a resolved null
+		// would keep hiding overrides after the migration lands, so the
+		// rollout state must reject — thrown loader errors are never cached.
 		const missing = Object.assign(new Error("no such table"), {
 			code: "ER_NO_SUCH_TABLE",
 		});
 		mockQuery.mockRejectedValueOnce(missing);
 
-		const result = await getArticleHebrewDateOverride(8, 5);
-
-		expect(result).toBeNull();
+		await expect(getArticleHebrewDateOverride(8, 5)).rejects.toThrow(
+			"no such table",
+		);
 		expect(console.warn).toHaveBeenCalled();
 	});
 

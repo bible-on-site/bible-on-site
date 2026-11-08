@@ -482,7 +482,10 @@ export async function getArticleById(
  * 14=Adar II in leap years). The assignment is a complete override — the
  * returned summary is the day's sole article, never an extra candidate.
  * Before the migration is deployed the table is absent and the lookup
- * degrades to null so unassigned dates keep ordinary behavior.
+ * rejects rather than resolving null: the caller caches loader results
+ * without expiry (`revalidate: false`), so a cached null would keep hiding
+ * the assignment after the migration lands — a thrown loader error is never
+ * cached, and the client hook degrades the rejection to the ordinary list.
  */
 export async function getArticleHebrewDateOverride(
 	hebrewMonth: number,
@@ -512,14 +515,17 @@ export async function getArticleHebrewDateOverride(
 				"Article Hebrew-date override schema is not deployed yet; " +
 					"dates keep ordinary article lists until the migration runs.",
 			);
-			return null;
+		} else {
+			console.warn(
+				"Failed to fetch Hebrew-date article override %d-%d:",
+				hebrewMonth,
+				hebrewDay,
+				error instanceof Error ? error.message : error,
+			);
 		}
-		console.warn(
-			"Failed to fetch Hebrew-date article override %d-%d:",
-			hebrewMonth,
-			hebrewDay,
-			error instanceof Error ? error.message : error,
-		);
+		// Never resolve a missing schema to null — see the doc comment: a
+		// thrown loader error is never cached, so the rollout window retries
+		// until the table exists instead of pinning a false "no assignment".
 		throw error;
 	}
 }

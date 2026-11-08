@@ -149,9 +149,10 @@ impl ArticlesQuery {
         articles_service::validate_hebrew_month_day(hebrew_month, hebrew_day)
             .map_err(|e| e.extend())?;
         let db = ctx.data::<Database>()?;
-        let Some(model) = articles_service::find_article_by_hebrew_date(db, hebrew_month, hebrew_day)
-            .await
-            .map_err(|e| e.extend())?
+        let Some(model) =
+            articles_service::find_article_by_hebrew_date(db, hebrew_month, hebrew_day)
+                .await
+                .map_err(|e| e.extend())?
         else {
             return Ok(None);
         };
@@ -330,7 +331,10 @@ mod tests {
             .await;
 
         assert!(res.errors.is_empty(), "{:?}", res.errors);
-        assert_eq!(res.data.into_json().unwrap()["articleByHebrewDate"]["id"].as_i64(), Some(2199));
+        assert_eq!(
+            res.data.into_json().unwrap()["articleByHebrewDate"]["id"].as_i64(),
+            Some(2199)
+        );
     }
 
     /// A recurring date with no assignment resolves to null so callers keep
@@ -436,9 +440,7 @@ mod tests {
                 .execute(format!("{{ articleByHebrewDate{args} {{ id }} }}"))
                 .await;
             assert!(
-                res.errors
-                    .iter()
-                    .any(|e| e.message.contains("Hebrew")),
+                res.errors.iter().any(|e| e.message.contains("Hebrew")),
                 "{args}: {:?}",
                 res.errors
             );
@@ -452,10 +454,16 @@ mod tests {
     fn hebrew_month_day_bounds_match_the_uniform_calendar() {
         use articles_service::validate_hebrew_month_day;
         for (month, day) in [(2, 30), (3, 30), (13, 30), (13, 29), (14, 29), (6, 29)] {
-            assert!(validate_hebrew_month_day(month, day).is_ok(), "{month}/{day}");
+            assert!(
+                validate_hebrew_month_day(month, day).is_ok(),
+                "{month}/{day}"
+            );
         }
         for (month, day) in [(6, 30), (14, 30), (12, 30), (0, 1), (15, 1), (1, 31)] {
-            assert!(validate_hebrew_month_day(month, day).is_err(), "{month}/{day}");
+            assert!(
+                validate_hebrew_month_day(month, day).is_err(),
+                "{month}/{day}"
+            );
         }
     }
 }

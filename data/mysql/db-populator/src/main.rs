@@ -341,6 +341,12 @@ async fn run(cli: Cli) -> Result<()> {
         // upgrades databases whose structure predates the column.
         apply_perek_pasuk_count_data(&mut conn, base_path).await?;
 
+        // tanah_test_data.sql inserts Hebrew-date override fixtures
+        // (#3098): re-apply the idempotent table upgrade here so
+        // `mysql-populate-data-only` creates it on databases whose
+        // structure predates the table, before any fixture references it.
+        apply_article_hebrew_date_upgrade(&mut conn, base_path).await?;
+
         if !cli.skip_tanah_test_data {
             let data_path = base_path.join(&cli.data_script);
             execute_script(&mut conn, &data_path, "data").await?;

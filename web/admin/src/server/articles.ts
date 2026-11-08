@@ -18,6 +18,7 @@ import {
 	txQueryOne,
 } from "./db";
 import {
+	assertHebrewDateArticleEligible,
 	assertHebrewDatesAvailable,
 	type HebrewDateAssignment,
 	invalidateUnsentBulletinsForHebrewDates,
@@ -389,10 +390,23 @@ export const createArticle = createServerFn({ method: "POST" })
 			// Same-transaction enqueue: the index update request commits atomically
 			// with the article row.
 			await txExecute(conn, ENQUEUE_SEARCH_SQL, [newArticle.id]);
+			const hebrewDates = await txLoadHebrewDates(conn, newArticle.id);
+			// Post-write eligibility (#3098): an article left holding recurring
+			// dates must stay distributable with a body — the bulletin treats
+			// an ineligible owner as broken data. Runs inside the transaction
+			// whose write already locks the row, so a violation rolls back.
+			assertHebrewDateArticleEligible(
+				{
+					id: newArticle.id,
+					distributable: data.distributable === true,
+					content: data.content,
+				},
+				hebrewDates,
+			);
 			return {
 				...newArticle,
 				coveringSources: await txLoadCoveringSources(conn, newArticle.id),
-				hebrewDates: await txLoadHebrewDates(conn, newArticle.id),
+				hebrewDates,
 			};
 		});
 		// Post-commit: expire the website's article caches so the new article
@@ -493,10 +507,24 @@ export const updateArticle = createServerFn({ method: "POST" })
 			}
 			await recomputeArticleMetrics(conn, updated.id, updated.content ?? null);
 			await txExecute(conn, ENQUEUE_SEARCH_SQL, [data.id]);
+			const hebrewDates = await txLoadHebrewDates(conn, data.id);
+			// Post-write eligibility (#3098): whether the assignments were just
+			// replaced or pre-existed, an article left holding recurring dates
+			// must stay distributable with a body — the bulletin treats an
+			// ineligible owner as broken data. Runs inside the transaction
+			// whose write already locks the row, so a violation rolls back.
+			assertHebrewDateArticleEligible(
+				{
+					id: data.id,
+					distributable: data.distributable === true,
+					content: data.content,
+				},
+				hebrewDates,
+			);
 			return {
 				...updated,
 				coveringSources: await txLoadCoveringSources(conn, data.id),
-				hebrewDates: await txLoadHebrewDates(conn, data.id),
+				hebrewDates,
 			};
 		});
 		// Old ∪ new associations: a perek/author move or a coverage replace
