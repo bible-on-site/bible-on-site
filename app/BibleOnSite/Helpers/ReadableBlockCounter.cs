@@ -316,19 +316,15 @@ public static class ReadableBlockCounter
     /// <summary>A segment counts only when it carries at least one letter or
     /// digit (any script) — the shared counter's word-char class
     /// <c>[\p{L}\p{N}]</c>.</summary>
-    private static bool HasWordChar(string text)
-    {
-        foreach (var c in text)
-        {
-            var category = CharUnicodeInfo.GetUnicodeCategory(c);
-            if (category is >= UnicodeCategory.UppercaseLetter and <= UnicodeCategory.OtherLetter
-                or >= UnicodeCategory.DecimalDigitNumber and <= UnicodeCategory.OtherNumber)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
+    private static bool HasWordChar(string text) =>
+        text.Select(CharUnicodeInfo.GetUnicodeCategory).Any(IsWordCategory);
+
+    /// <summary>Letter (any script) or number — <c>\p{L}</c> spans
+    /// UppercaseLetter through OtherLetter, <c>\p{N}</c> DecimalDigitNumber
+    /// through OtherNumber.</summary>
+    private static bool IsWordCategory(UnicodeCategory category) =>
+        category is >= UnicodeCategory.UppercaseLetter and <= UnicodeCategory.OtherLetter
+            or >= UnicodeCategory.DecimalDigitNumber and <= UnicodeCategory.OtherNumber;
 
     /// <summary>ASCII letter — a char-code range beats a regex scan.</summary>
     private static bool IsAsciiLetter(char c) => c is >= 'a' and <= 'z' or >= 'A' and <= 'Z';
