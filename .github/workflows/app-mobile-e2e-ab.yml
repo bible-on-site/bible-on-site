@@ -233,7 +233,7 @@ jobs:
     steps:
       - name: Collect per-leg shard jobs
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           ITERATION: ${{ inputs.iteration }}
           RUN_ID: ${{ github.run_id }}
         run: |
