@@ -348,46 +348,49 @@ test("הסתר שם השם is one group whose sub-options are disabled while it 
 		}),
 	);
 });
-test("סימניות controls persist chapter-tab preferences and gate option edits on the toggle (#2543)", () => {
+test("סימניות keeps only the visibility toggle and the קיבוע choice (#2974)", () => {
 	render(<ReaderSettings />);
 	fireEvent.click(screen.getByRole("button", { name: "הגדרות קריאה" }));
 	const group = screen.getByRole("group", { name: "סימניות פרקים" });
 	const toggle = within(group).getByRole("checkbox", {
 		name: "סימניות פרקים",
 	});
-	expand("אפשרויות סימניות");
-	const placement = within(group).getByRole("combobox", {
-		name: "מיקום סימניות",
+	// The attachment select renders directly — no disclosure to expand,
+	// and the retired placement/orientation/order/upcoming-only controls
+	// are gone from the accessibility tree.
+	const attachment = within(group).getByRole("combobox", {
+		name: "קיבוע סימניות",
 	});
 	expect(toggle).toBeChecked();
-	expect(placement).toHaveValue("sides");
+	expect(attachment).toHaveValue("leaf");
+	expect(
+		within(group).queryByRole("combobox", { name: "מיקום סימניות" }),
+	).toBeNull();
+	expect(
+		within(group).queryByRole("combobox", { name: "כיוון סימניות" }),
+	).toBeNull();
+	expect(
+		within(group).queryByRole("combobox", { name: "סדר סימניות" }),
+	).toBeNull();
+	expect(
+		within(group).queryByRole("checkbox", { name: "הצג רק פרקים הבאים" }),
+	).toBeNull();
 
-	fireEvent.change(placement, { target: { value: "top" } });
-	fireEvent.change(
-		within(group).getByRole("combobox", { name: "סדר סימניות" }),
-		{ target: { value: "title" } },
-	);
-	fireEvent.click(
-		within(group).getByRole("checkbox", { name: "הצג רק פרקים הבאים" }),
-	);
-	expect(getSeferBookmarkSettings()).toEqual(
-		expect.objectContaining({
-			enabled: true,
-			placement: "top",
-			order: "title",
-			upcomingOnly: true,
-		}),
-	);
+	fireEvent.change(attachment, { target: { value: "pinned" } });
+	expect(getSeferBookmarkSettings()).toEqual({
+		enabled: true,
+		attachment: "pinned",
+	});
 
 	fireEvent.click(toggle);
 	expect(getSeferBookmarkSettings().enabled).toBe(false);
-	expect(placement).toBeDisabled();
+	expect(attachment).toBeDisabled();
 	// A disabled fieldset also guards the write path — matching the masking
 	// group convention, programmatic edits while hidden must not persist.
-	fireEvent.change(placement, { target: { value: "left" } });
-	expect(getSeferBookmarkSettings().placement).toBe("top");
+	fireEvent.change(attachment, { target: { value: "leaf" } });
+	expect(getSeferBookmarkSettings().attachment).toBe("pinned");
 	fireEvent.click(toggle);
-	expect(placement).toBeEnabled();
+	expect(attachment).toBeEnabled();
 });
 test("secondary display settings stay collapsed behind groups that keep their state across reopening", () => {
 	render(<ReaderSettings />);
@@ -398,11 +401,12 @@ test("secondary display settings stay collapsed behind groups that keep their st
 	expect(screen.getByRole("combobox", { name: "גופן פסוקים" })).toBeVisible();
 	expect(screen.getByRole("checkbox", { name: "הסתר שם השם" })).toBeVisible();
 	expect(screen.getByRole("checkbox", { name: "סימניות פרקים" })).toBeVisible();
+	// קיבוע is a primary bookmark control now (#2974) — visible without
+	// expanding any group.
+	expect(screen.getByRole("combobox", { name: "קיבוע סימניות" })).toBeVisible();
 	const groups = {
 		ריווח: () => screen.queryByRole("slider", { name: "ריווח אופקי" }),
 		"כתיב השמות": () => screen.queryByRole("radio", { name: "א-ל" }),
-		"אפשרויות סימניות": () =>
-			screen.queryByRole("combobox", { name: "מיקום סימניות" }),
 	};
 	for (const [name, control] of Object.entries(groups)) {
 		const header = screen.getByRole("button", { name });

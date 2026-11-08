@@ -27,13 +27,21 @@ test.describe("Sefer commentary navigation", () => {
 					.getByRole("region", { name: "פירושים ומאמרים" })
 					.evaluate((contentPage) => {
 						const rect = contentPage.getBoundingClientRect();
-						// Carousels may fill the page in the full dataset. Start in its
-						// padding, where dragging is allowed regardless of their height.
-						const padding = Number.parseFloat(
-							getComputedStyle(contentPage).paddingRight,
-						);
+						// Start inside the leaf's page-turn grab strip (#2994):
+						// the panel keeps its margin on the free outer edge —
+						// paddingLeft on a left leaf, paddingRight on a right
+						// leaf — so pick whichever side carries it. Carousels
+						// may fill the rest of the page, where dragging is never
+						// allowed regardless of their height.
+						const style = getComputedStyle(contentPage);
+						const padLeft = Number.parseFloat(style.paddingLeft);
+						const padRight = Number.parseFloat(style.paddingRight);
 						return {
-							x: Math.round(rect.right - padding / 2),
+							x: Math.round(
+								padLeft > padRight
+									? rect.left + padLeft / 2
+									: rect.right - padRight / 2,
+							),
 							y: Math.round(rect.top + rect.height * 0.7),
 						};
 					});

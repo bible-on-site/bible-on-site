@@ -176,7 +176,16 @@
   gap: 16px;
   max-height: 70vh;
   overflow-y: auto;
+  /* Spine-side scrollbar inside a book leaf (#2994): the flipbook leaf
+     supplies --flipbook-page-scroll-direction; outside a leaf the var
+     is absent and RTL keeps the bar where it was. Note groups restore
+     their own reading direction below. */
+  direction: var(--flipbook-page-scroll-direction, rtl);
   padding: 4px 0;
+}
+
+.notesContainer > * {
+  direction: rtl;
 }
 
 .pasukGroup {

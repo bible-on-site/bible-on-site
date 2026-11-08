@@ -88,7 +88,7 @@ const MASK_NAMES: Record<DivineNameKey, string> = {
 	shaddai: "שדי",
 };
 
-type DisclosureKey = "spacing" | "masking" | "bookmarks";
+type DisclosureKey = "spacing" | "masking";
 
 /** Header button that reveals a group of secondary settings on demand. */
 function Disclosure({
@@ -148,7 +148,6 @@ export default function ReaderSettings() {
 	const [expanded, setExpanded] = useState<Record<DisclosureKey, boolean>>({
 		spacing: false,
 		masking: false,
-		bookmarks: false,
 	});
 	const toggleExpanded = (key: DisclosureKey) =>
 		setExpanded((current) => ({ ...current, [key]: !current[key] }));
@@ -505,100 +504,31 @@ export default function ReaderSettings() {
 										</label>
 									</legend>
 									<small>לשוניות פרקים בשולי הספר לניווט מהיר</small>
-									<Disclosure
-										label="אפשרויות סימניות"
-										open={expanded.bookmarks}
-										onToggle={() => toggleExpanded("bookmarks")}
+									{/* קיבוע is the only remaining chapter-tab choice
+									   (#2974): placement, orientation, order and the
+									   upcoming-only filter are fixed reader constants, so
+									   the option group no longer needs its own disclosure. */}
+									<fieldset
+										className={styles.choices}
+										disabled={!bookmarks.enabled}
 									>
-										<fieldset
-											className={styles.choices}
-											disabled={!bookmarks.enabled}
-										>
-											<label>
-												מיקום
-												<select
-													aria-label="מיקום סימניות"
-													value={bookmarks.placement}
-													onChange={(e) =>
-														updateBookmarksChoice({
-															placement: e.target
-																.value as SeferBookmarkSettings["placement"],
-														})
-													}
-												>
-													<option value="sides">שני הצדדים</option>
-													<option value="right">ימין</option>
-													<option value="left">שמאל</option>
-													<option value="top">עליון</option>
-													<option value="bottom">תחתון</option>
-													<option value="top-bottom">עליון ותחתון</option>
-												</select>
-											</label>
-											<label>
-												כיוון
-												<select
-													aria-label="כיוון סימניות"
-													value={bookmarks.orientation}
-													onChange={(e) =>
-														updateBookmarksChoice({
-															orientation: e.target
-																.value as SeferBookmarkSettings["orientation"],
-														})
-													}
-												>
-													<option value="perpendicular">
-														מאונך לשולי הספר
-													</option>
-													<option value="parallel">מקביל לשולי הספר</option>
-												</select>
-											</label>
-											<label>
-												קיבוע
-												<select
-													aria-label="קיבוע סימניות"
-													value={bookmarks.attachment}
-													onChange={(e) =>
-														updateBookmarksChoice({
-															attachment: e.target
-																.value as SeferBookmarkSettings["attachment"],
-														})
-													}
-												>
-													<option value="leaf">מסתובב עם הדף</option>
-													<option value="pinned">קבוע לספר</option>
-												</select>
-											</label>
-											<label>
-												סדר
-												<select
-													aria-label="סדר סימניות"
-													value={bookmarks.order}
-													onChange={(e) =>
-														updateBookmarksChoice({
-															order: e.target
-																.value as SeferBookmarkSettings["order"],
-														})
-													}
-												>
-													<option value="page">לפי סדר הפרקים</option>
-													<option value="reverse-page">סדר הפוך</option>
-													<option value="title">לפי שם הפרק</option>
-												</select>
-											</label>
-											<label>
-												<input
-													type="checkbox"
-													checked={bookmarks.upcomingOnly}
-													onChange={(e) =>
-														updateBookmarksChoice({
-															upcomingOnly: e.target.checked,
-														})
-													}
-												/>
-												הצג רק פרקים הבאים
-											</label>
-										</fieldset>
-									</Disclosure>
+										<label>
+											קיבוע
+											<select
+												aria-label="קיבוע סימניות"
+												value={bookmarks.attachment}
+												onChange={(e) =>
+													updateBookmarksChoice({
+														attachment: e.target
+															.value as SeferBookmarkSettings["attachment"],
+													})
+												}
+											>
+												<option value="leaf">מסתובב עם הדף</option>
+												<option value="pinned">קבוע לספר</option>
+											</select>
+										</label>
+									</fieldset>
 								</fieldset>
 							</section>
 						) : (

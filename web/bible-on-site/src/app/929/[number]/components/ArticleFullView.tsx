@@ -49,8 +49,12 @@ export function ArticleFullView({
 	onToggleFullscreen,
 	progressUnits = [],
 }: ArticleFullViewProps) {
+	// In-book mode must not inherit the standalone route's .expandedArticle
+	// card (#2994): its margin band, border, radius and shadow are the
+	// doubled container the leaf renders around the article. The article
+	// body already fills the leaf through .articleFullViewInBook.
 	const rootClass = fullPage
-		? `${articleStyles.expandedArticle} ${styles.articleFullViewInBook}`
+		? styles.articleFullViewInBook
 		: articleStyles.expandedArticle;
 
 	// Book-mode modifiers compact the metadata so the body gets more of the
