@@ -1,7 +1,5 @@
 import {
 	buildSeferChapterBookmarks,
-	compareSeferBookmarkTitles,
-	filterUpcomingBookmarks,
 	type SeferBookmarkData,
 } from "@/app/929/[number]/components/sefer-bookmarks";
 import { CONTENT_OFFSET } from "@/app/929/[number]/components/sefer-page-utils";
@@ -125,49 +123,5 @@ describe("buildSeferChapterBookmarks", () => {
 		expect(bookmarks).toHaveLength(150);
 		expect(bookmarks[149].pageIndex).toBe(CONTENT_OFFSET + 149 * 2);
 		expect(bookmarks[149].data.compact).toBe("קנ");
-	});
-});
-
-describe("filterUpcomingBookmarks", () => {
-	const sefer = simpleSefer("בראשית", ["h1", "h2", "h3"]);
-	const bookmarks = buildSeferChapterBookmarks(sefer, [1, 2, 3]);
-	const context = {
-		currentPageIndex: CONTENT_OFFSET + 2,
-		currentLeafIndex: 2,
-		direction: "rtl" as const,
-	};
-
-	it("returns all bookmarks when upcomingOnly is off (past, current, future)", () => {
-		expect(filterUpcomingBookmarks(bookmarks, context, false)).toBe(bookmarks);
-	});
-
-	it("keeps only tabs at or after the current page when upcomingOnly is on", () => {
-		const filtered = filterUpcomingBookmarks(bookmarks, context, true);
-		expect(filtered.map((b) => b.pageIndex)).toEqual([
-			CONTENT_OFFSET + 2,
-			CONTENT_OFFSET + 4,
-		]);
-	});
-});
-
-describe("compareSeferBookmarkTitles", () => {
-	const sefer = simpleSefer("בראשית", ["ויבא", "אחרי הדברים", undefined]);
-	const [vayavo, acharei, untitled] = buildSeferChapterBookmarks(
-		sefer,
-		[1, 2, 3],
-	);
-
-	it("orders by perek title in Hebrew collation, with the canonical label as fallback", () => {
-		// אחרי < בראשית ג (fallback label) < ויבא — the untitled perek's
-		// canonical label collates between the two titled ones.
-		expect(
-			[vayavo, acharei, untitled]
-				.sort(compareSeferBookmarkTitles)
-				.map((b) => b.data.title),
-		).toEqual(["אחרי הדברים", undefined, "ויבא"]);
-	});
-
-	it("falls back to the canonical label for untitled perakim", () => {
-		expect(compareSeferBookmarkTitles(untitled, acharei)).toBeGreaterThan(0);
 	});
 });

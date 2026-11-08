@@ -4,63 +4,50 @@
  * Stored under its own localStorage key — separate from READER_SETTINGS —
  * because the values configure the flipbook's bookmark provider rather
  * than text rendering, and changes are pushed to the open reader through
- * SEFER_BOOKMARKS_EVENT instead of a page reload. The stored shape stays
- * serializable: function-valued provider options (the title-order
- * comparator) are mapped back from the stored enum at use time.
+ * SEFER_BOOKMARKS_EVENT instead of a page reload.
+ *
+ * Issue #2974 narrowed the configurable surface to tab visibility and
+ * קיבוע (attachment). The provider's remaining presentation fields are
+ * the fixed SEFER_BOOKMARK_PRESENTATION contract: legacy stored objects
+ * carrying retired placement/orientation/order/upcomingOnly keys read as
+ * the fixed defaults, and writes persist only the two live fields.
  */
-import type {
-	Bookmark,
-	BookmarkPlacement,
-	BookmarkProvider,
-} from "html-flip-book-react";
+import type { BookmarkProvider } from "html-flip-book-react";
 
 export const SEFER_BOOKMARKS_KEY = "seferBookmarks";
 export const SEFER_BOOKMARKS_EVENT = "sefer-bookmarks-changed";
 
-/** Chapter-tab ordering; "title" maps to a Hebrew-aware comparator at use time. */
-export type SeferBookmarkOrder = "page" | "reverse-page" | "title";
-
 export type SeferBookmarkSettings = {
 	/** Whether chapter tabs are shown at all. */
 	enabled: boolean;
-	/** Which book edge(s) the tabs protrude from. */
-	placement: BookmarkPlacement;
-	/** Tab runs perpendicular to its edge (physical-book look) or along it. */
-	orientation: "perpendicular" | "parallel";
 	/** Tab turns with its target leaf or stays pinned to the book. */
 	attachment: "leaf" | "pinned";
-	/** Canonical perek order, reversed, or ordered by title. */
-	order: SeferBookmarkOrder;
-	/** Show only chapters at/after the current position. */
-	upcomingOnly: boolean;
 };
 
 export const DEFAULT_SEFER_BOOKMARK_SETTINGS: SeferBookmarkSettings = {
 	enabled: true,
-	placement: "sides",
-	orientation: "perpendicular",
 	attachment: "leaf",
-	order: "page",
-	upcomingOnly: false,
 };
 
-const PLACEMENTS: readonly BookmarkPlacement[] = [
-	"top",
-	"bottom",
-	"sides",
-	"left",
-	"right",
-	"top-bottom",
-];
-const ORIENTATIONS: readonly SeferBookmarkSettings["orientation"][] = [
-	"perpendicular",
-	"parallel",
-];
+/**
+ * Fixed provider presentation (#2974): tabs protrude from both page
+ * edges, run perpendicular to them, and follow canonical perek order.
+ * Legacy stored values for these keys are ignored on read and omitted on
+ * write — the reader applies this contract unconditionally.
+ */
+export const SEFER_BOOKMARK_PRESENTATION = {
+	placement: "sides",
+	orientation: "perpendicular",
+	order: "page",
+} as const satisfies Pick<
+	BookmarkProvider,
+	"placement" | "orientation" | "order"
+>;
+
 const ATTACHMENTS: readonly SeferBookmarkSettings["attachment"][] = [
 	"leaf",
 	"pinned",
 ];
-const ORDERS: readonly SeferBookmarkOrder[] = ["page", "reverse-page", "title"];
 
 const pick = <T extends string>(
 	value: unknown,
@@ -79,26 +66,11 @@ export function normalizeSeferBookmarkSettings(
 			typeof s.enabled === "boolean"
 				? s.enabled
 				: DEFAULT_SEFER_BOOKMARK_SETTINGS.enabled,
-		placement: pick(
-			s.placement,
-			PLACEMENTS,
-			DEFAULT_SEFER_BOOKMARK_SETTINGS.placement,
-		),
-		orientation: pick(
-			s.orientation,
-			ORIENTATIONS,
-			DEFAULT_SEFER_BOOKMARK_SETTINGS.orientation,
-		),
 		attachment: pick(
 			s.attachment,
 			ATTACHMENTS,
 			DEFAULT_SEFER_BOOKMARK_SETTINGS.attachment,
 		),
-		order: pick(s.order, ORDERS, DEFAULT_SEFER_BOOKMARK_SETTINGS.order),
-		upcomingOnly:
-			typeof s.upcomingOnly === "boolean"
-				? s.upcomingOnly
-				: DEFAULT_SEFER_BOOKMARK_SETTINGS.upcomingOnly,
 	};
 }
 
@@ -190,14 +162,4 @@ export function subscribeSeferBookmarks(onChange: () => void): () => void {
 		window.removeEventListener(SEFER_BOOKMARKS_EVENT, handler);
 		window.removeEventListener("storage", onStorage);
 	};
-}
-
-/** Provider `order` field derived from the serializable setting. The "title"
- * enum maps to the Hebrew-aware comparator at the call site, keeping the
- * persisted shape free of functions. */
-export function seferBookmarkProviderOrder(
-	settings: SeferBookmarkSettings,
-	titleOrder: (a: Bookmark, b: Bookmark) => number,
-): BookmarkProvider["order"] {
-	return settings.order === "title" ? titleOrder : settings.order;
 }
