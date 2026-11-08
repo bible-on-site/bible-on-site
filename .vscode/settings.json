@@ -13,6 +13,7 @@
 	},
 	"search.exclude": {
 		"**/*.tanah_view.json": true,
+		"**/*.tanah_view.sqlite": true,
 		"**/.output/**": true
 	},
 	// Keep the file watcher off build/output trees (node_modules and .git are

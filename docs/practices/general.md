@@ -54,7 +54,7 @@ gh api repos/<owner>/<repo>/commits/<sha>
 | SQLite / archives | `sqlite3` / `7z` | ad-hoc scripts |
 | Rust rebuilds | `RUSTC_WRAPPER=sccache` | uncached builds |
 
-`.gitignore` + root `.ignore` keep searches off build output, nested `artifacts-*/` evidence worktrees, and the 42 MB single-line corpus dump; `-u`/`--no-ignore` includes ignored paths. Filters: `-t` file types (`rg --type-list`), `-g` globs, `-F` literal text.
+`.gitignore` + root `.ignore` keep searches off build output, nested `artifacts-*/` evidence worktrees, and the generated corpus dumps (42 MB single-line `*.tanah_view.json`, 36 MB bundled `*.tanah_view.sqlite`); `-u`/`--no-ignore` includes ignored paths. Filters: `-t` file types (`rg --type-list`), `-g` globs, `-F` literal text.
 
 # Performance Failures
 

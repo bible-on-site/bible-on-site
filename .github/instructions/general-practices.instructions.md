@@ -50,7 +50,7 @@ gh api repos/<owner>/<repo>/commits/<sha>
 
 `rg` specifics:
 
-- `.gitignore` + root `.ignore` already exclude build output, nested `artifacts-*/` evidence worktrees, and the 42 MB single-line corpus dump (`*.tanah_view.json`). Bypass only when needed: `-u`/`--no-ignore`, `--hidden` for dotfiles.
+- `.gitignore` + root `.ignore` already exclude build output, nested `artifacts-*/` evidence worktrees, and the generated corpus dumps (42 MB single-line `*.tanah_view.json`, 36 MB bundled `*.tanah_view.sqlite`). Bypass only when needed: `-u`/`--no-ignore`, `--hidden` for dotfiles.
 - Filter: `-t ts -t rust -t py` (`rg --type-list`), `-g '*.csproj'`; `-l` paths only, `-c` counts, `-U` multiline, `-F` literal (Hebrew text, no regex escapes).
 - Windows output uses `\` separators — `tr '\\' '/'` before `cut -d/`-style pipelines.
 
