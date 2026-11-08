@@ -207,6 +207,26 @@ describe("ArticleFullView", () => {
 		expect(root?.className).toBeTruthy();
 	});
 
+	it("drops the standalone card frame in book mode — no doubled container (#2994)", () => {
+		const { container } = render(
+			<ArticleFullView article={baseArticle} onBack={jest.fn()} fullPage />,
+		);
+		const root = container.firstElementChild;
+		expect(root?.className).toContain("articleFullViewInBook");
+		// .expandedArticle carries the route's margin band, border, radius
+		// and shadow — it must not wrap the embedded/fullscreen surface.
+		expect(root?.className).not.toContain("expandedArticle");
+	});
+
+	it("keeps the standalone card frame on the article route", () => {
+		const { container } = render(
+			<ArticleFullView article={baseArticle} onBack={jest.fn()} />,
+		);
+		expect(container.firstElementChild?.className).toContain(
+			"expandedArticle",
+		);
+	});
+
 	it("compacts header metadata in book mode to enlarge the body (#2406)", () => {
 		const { container } = render(
 			<ArticleFullView article={baseArticle} onBack={jest.fn()} fullPage />,

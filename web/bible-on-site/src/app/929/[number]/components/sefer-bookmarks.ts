@@ -1,4 +1,4 @@
-import type { Bookmark, BookmarkContext } from "html-flip-book-react";
+import type { Bookmark } from "html-flip-book-react";
 import type { SefarimItem } from "@/data/db/tanah-view-types";
 import { CONTENT_OFFSET, toHebrewChapterNumber } from "./sefer-page-utils";
 
@@ -72,34 +72,4 @@ export function buildSeferChapterBookmarks(
 		}
 	}
 	return bookmarks;
-}
-
-const heCollator = new Intl.Collator("he");
-
-/**
- * Hebrew-aware comparator for the "by title" ordering preference — compares
- * the perek title when present, falling back to the canonical label. Typed
- * on the base Bookmark so it slots straight into the provider's order field.
- */
-export const compareSeferBookmarkTitles = (
-	a: Bookmark,
-	b: Bookmark,
-): number => {
-	const title = (bookmark: Bookmark) =>
-		(bookmark.data as SeferBookmarkData | undefined)?.title ?? bookmark.label;
-	return heCollator.compare(title(a), title(b));
-};
-
-/**
- * "Upcoming chapters only" preference: keep tabs whose target page is at or
- * after the current position. Disabled (the default) keeps past, current and
- * future chapters all reachable.
- */
-export function filterUpcomingBookmarks(
-	bookmarks: readonly SeferChapterBookmark[],
-	context: BookmarkContext,
-	upcomingOnly: boolean,
-): readonly SeferChapterBookmark[] {
-	if (!upcomingOnly) return bookmarks;
-	return bookmarks.filter((b) => b.pageIndex >= context.currentPageIndex);
 }

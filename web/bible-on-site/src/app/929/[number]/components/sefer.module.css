@@ -2,6 +2,11 @@
 	display: flex;
 	flex-direction: column;
 	height: 100%;
+	/* Paired-header contract (#2994): the facing leaves' header texts —
+	   the scripture page's sefer/perek source (.pageHeaderRight) and the
+	   panel page's date (.panelDate) — start this far below each leaf's
+	   top edge, so both baselines sit on one line across the spine. */
+	--sefer-leaf-header-offset: 17px;
 }
 
 .bookArea {
@@ -31,7 +36,9 @@
 /* Right page (content): flex column so header stays on top, scroller outside text */
 .pageContentPage {
 	background-color: var(--surface-elevated, white);
-	padding: 15px;
+	/* The top inset lives on the header itself so it can share the
+	   paired-header contract with the facing panel date (#2994). */
+	padding: 0 15px 15px;
 	position: relative;
 	box-sizing: border-box;
 	display: flex;
@@ -43,21 +50,50 @@
 /* Header in flow (no overlap); sefer + perek on opposite edges */
 .pageHeaderRight {
 	flex-shrink: 0;
-	padding-top: 2px;
+	/* Shared leaf-top header offset (#2994): the facing .panelDate uses
+	   the same token, pinning both header texts to one baseline. */
+	padding-top: var(--sefer-leaf-header-offset, 17px);
 	padding-bottom: 4px;
 	direction: rtl;
 	max-width: 100%;
 }
 
-/* Scroll wrapper outside the text only; scrollbar on outer edge (RTL = left) */
+/* The scroll panes reach the leaf's inner (spine-facing) edge so their
+   scrollbars sit beside the spine (#2994): zero the page padding on
+   that side and hand the inset to the non-scrolling children. */
+:global(.page[data-scrollbar-side="left"]) .pageContentPage {
+	padding-left: 0;
+}
+:global(.page[data-scrollbar-side="right"]) .pageContentPage {
+	padding-right: 0;
+}
+:global(.page[data-scrollbar-side="left"]) .pageHeaderRight,
+:global(.page[data-scrollbar-side="left"]) .pageHeaderLeft {
+	padding-left: 15px;
+}
+:global(.page[data-scrollbar-side="right"]) .pageHeaderRight,
+:global(.page[data-scrollbar-side="right"]) .pageHeaderLeft {
+	padding-right: 15px;
+}
+
+/* Scroll wrapper outside the text only. The native scrollbar faces the
+   spine: --flipbook-page-scroll-direction is the library's per-leaf
+   scrollbar direction (data-scrollbar-side), so a right-hand leaf's
+   bar sits on its left edge and a left-hand leaf's on its right
+   (#2994). Reading direction is restored on the content children. */
 .perekTextScrollWrapper {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	direction: rtl;
+	overscroll-behavior: contain;
+	direction: var(--flipbook-page-scroll-direction, rtl);
 	scrollbar-width: thin;
 	scrollbar-color: var(--scrollbarBG) var(--scrollbarBG);
 	--scrollbarBG: #cfd8dc;
+}
+
+.perekTextScrollWrapper > * {
+	direction: rtl;
 }
 
 /* Lay out covered chapters at their scrollable width in one pass. The reader
@@ -140,7 +176,9 @@
 /* Left page (blank): flex column, Hebrew date at top, then articles carousel */
 .pageBlank {
 	background-color: var(--surface-elevated, white);
-	padding: 15px;
+	/* Same paired-header contract as .pageContentPage (#2994): the top
+	   inset lives on the date itself. */
+	padding: 0 15px 15px;
 	position: relative;
 	box-sizing: border-box;
 	display: flex;
@@ -149,20 +187,48 @@
 	min-height: 0;
 }
 
+/* Paired-header contract (#2994): same offset below the leaf's top edge
+   and same size/weight/color as the facing .pageHeaderRow, so the date
+   and the perek source share one baseline. */
 .blankPageDate {
-	font-size: 1rem;
-	color: var(--muted-text, #637598);
+	font-size: 0.95rem;
+	font-weight: 600;
+	line-height: normal;
+	color: var(--pasuk-num-color, #1c2c5d);
 	text-align: center;
-	padding-top: 6px;
+	padding-top: var(--sefer-leaf-header-offset, 17px);
 	direction: rtl;
 	flex-shrink: 0;
+}
+
+/* The bounded article/perush pane reaches the leaf's inner edge for a
+   spine-side scrollbar (#2994); the date keeps the inset itself. */
+:global(.page[data-scrollbar-side="left"]) .pageBlank {
+	padding-left: 0;
+}
+:global(.page[data-scrollbar-side="right"]) .pageBlank {
+	padding-right: 0;
+}
+:global(.page[data-scrollbar-side="left"]) .blankPageDate {
+	padding-left: 15px;
+}
+:global(.page[data-scrollbar-side="right"]) .blankPageDate {
+	padding-right: 15px;
 }
 
 .blankPageArticles {
 	flex: 1;
 	min-height: 120px;
 	overflow: auto;
+	overscroll-behavior: contain;
 	margin-top: 8px;
+	/* Spine-side scrollbar (#2994) — same library per-leaf contract the
+	   scripture wrapper uses; children keep RTL reading order. */
+	direction: var(--flipbook-page-scroll-direction, rtl);
+}
+
+.blankPageArticles > * {
+	direction: rtl;
 }
 
 /* When showing full article/perush, container clips; child handles scroll */
@@ -181,7 +247,10 @@
 	height: 100%;
 }
 
-/* Article full view in book: fill container, title fixed, body scrolls */
+/* Article full view in book: fill container, title fixed, body scrolls.
+   This is the ONLY in-book root class — the standalone .expandedArticle
+   card (margin/border/shadow) must not leak in regardless of stylesheet
+   order (#2994). */
 .articleFullViewInBook {
 	flex: 1;
 	min-height: 0;
@@ -195,14 +264,25 @@
 	background: transparent;
 	height: 100%;
 	overflow: hidden;
+	/* The article command row sizes against this box, not the viewport
+	   (#2786) — the standalone card carries the same container. */
+	container-type: inline-size;
 }
 
 .articleFullViewInBook .articleBodyWrapper {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	overscroll-behavior: contain;
+	/* Spine-side scrollbar (#2994): inner edge on whichever leaf hosts
+	   the article; the prose below keeps its own direction:rtl. */
+	direction: var(--flipbook-page-scroll-direction, rtl);
 	scrollbar-width: thin;
 	scrollbar-color: #c4b896 transparent;
+}
+
+.articleFullViewInBook .articleBodyWrapper > * {
+	direction: rtl;
 }
 
 /* Compact article metadata in book mode (#2406) so the body gets more of the
@@ -257,13 +337,20 @@
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 	max-height: none;
+	/* Spine-side scrollbar (#2994) on the hosting leaf's inner edge. */
+	direction: var(--flipbook-page-scroll-direction, rtl);
 	scrollbar-width: thin;
 	scrollbar-color: #c4b896 transparent;
 	/* Justified like .perekText even if the notes' own module style has not
 	   applied yet (inherited by .noteContent descendants). */
 	text-align: justify;
 	text-align-last: right;
+}
+
+.perushNotesInBook.perushNotesInBook > * {
+	direction: rtl;
 }
 
 /* Cover: genuine book cover look using the sefer spectrum color */
@@ -568,10 +655,11 @@
 
 	.perekHeader,
 	.perekIllustrationFigure figcaption,
-	.blankPageDate,
 	.qri span:where([data-qri-label])::before {
 		color: var(--muted-text, #9aa0a6);
 	}
+	/* .blankPageDate needs no dark override (#2994): it now reads
+	   --pasuk-num-color, the same token .pageHeaderRow uses. */
 
 	.perekTextHeader h1 {
 		color: var(--hc-accent, #b7adf0);
