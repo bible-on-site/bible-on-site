@@ -6,6 +6,13 @@ ECS `api:3003`) is consumed today, what it must defend against, and which
 access-key / abuse-control options fit — **without ever requiring native-app
 users to sign in, register, pay, or hold a personal key**, and without breaking
 already-installed app releases on Android, iOS, Mac Catalyst and Windows.
+Compatibility contract, reconciled with the Phase 2 cutoff below: anonymous
+reads stay free and keyless, but only for *current* builds — releases
+predating the signing key get a bounded ~2-week grace window to update through
+the stores, after which unsigned calls are rejected. "Don't break installed
+apps" means every shipped release keeps a working update path (stores +
+env-reversible enforcement flag), not indefinite API access for builds that
+never upgrade.
 
 Inspected: `master` at `ab4fe9cc6` (supersedes the issue baseline `70d08d6d`;
 behavior noted below is from the newer tree unless marked otherwise).
@@ -161,6 +168,15 @@ signed-traffic share approaching ~100%. When the window closes,
 `API_REQUIRE_SIGNATURE=enforce` rejects unsigned calls (401); old builds that
 never upgraded lose API access — accepted, since stores propagate updates and
 the gate stays env-reversible (rollback = observe mode, not a redeploy).
+**External manager clients are exempt.** The Tanahpedia revision and
+dedication bearer tokens are server-held credentials strictly stronger than
+the extractable app signing key, and they already authenticate their own
+scopes. Signature enforcement applies only to requests that would otherwise
+be anonymous: the check honors a *valid* manager bearer first (the existing
+fail-closed `ApiAuth` comparison), and only unsigned, uncredentialed calls
+get 401 after the grace window. Manager clients need no signing migration and
+keep working unchanged in both modes; an invalid or absent bearer never earns
+the exemption.
 Optional on top: differential treatment for the signed lane (e.g. higher
 budgets for verified signatures — the signature informs limits, it never
 bypasses them); or prototype D or E on Android+iOS with a bounded anonymous
@@ -221,7 +237,9 @@ write key material or signatures to logs; use UA/Origin as authorization.
   builds). `API_REQUIRE_SIGNATURE=observe|enforce` is the rollout control:
   observe counts signed vs unsigned; enforce — the planned end state once the
   ~2-week grace period closes — rejects unsigned calls. Enforce is
-  env-reversible: rollback is a config change, not a redeploy.
+  env-reversible: rollback is a config change, not a redeploy. Requests with
+  a valid `*_manager` bearer are exempt from this gate entirely (see Phase 2)
+  — the signature requirement governs only the anonymous read lane.
 - **Rotation & compromise response.** Rotate by shipping builds with a new
   `key-id` and adding it server-side; keep N-1 accepted during adoption, then
   retire. Compromise: remove the `key-id` server-side → affected builds fall
@@ -267,7 +285,10 @@ write key material or signatures to logs; use UA/Origin as authorization.
   observe mode; a **valid** signature still fails `*_manager` scopes;
   rotation overlap accepts N-1 then drops it to anonymous; unsigned → anonymous
   during the grace window and 401 under `API_REQUIRE_SIGNATURE=enforce` (the
-  planned post-grace state) — both modes covered.
+  planned post-grace state) — both modes covered. Under `enforce`, requests
+  carrying a valid `*_manager` bearer pass signature enforcement unmodified
+  and reach their resolvers; a missing or invalid bearer does not earn the
+  exemption (invalid bearer + no signature → 401, same as unsigned).
 - Compatibility: app client without new headers works; both api domains; HEAD/GET
   `/health` + `/health/ready` unchanged; compression unchanged.
 - NGINX (staging): burst tolerance ≥ app cold-start pattern; shared-NAT
@@ -299,7 +320,10 @@ write key material or signatures to logs; use UA/Origin as authorization.
    verified by signed-traffic share; at the end of the window
    `API_REQUIRE_SIGNATURE=enforce` rejects unsigned calls (401). Old builds
    that never upgraded lose API access at cutoff — accepted; the flag stays
-   env-reversible so rollback is observe mode. Optional on top: differential
+   env-reversible so rollback is observe mode. Manager-scope bearer clients
+   (Tanahpedia revision, dedication) are exempt from signature enforcement in
+   every stage — they authenticate under their own server-held keys. Optional
+   on top: differential
    treatment for the signed lane (higher budgets for verified signatures —
    the signature informs limits, it never bypasses them).
 4. **Rollback** — each control independently reversible: NGINX `reload`,
