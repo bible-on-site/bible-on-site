@@ -1,6 +1,6 @@
 # Web push activation runbook (#1096)
 
-The daily perek web-push feature is merged and disabled by default. This runbook is the operator-side activation: it lists every AWS-impacting and GitHub-side change, the exact order to apply them, the verification checks and the rollback. **Nothing here is applied by the repository** — every step below is a deliberate operator action after Dorad's approval of the specific pull request that introduced this document.
+The daily perek web-push feature is merged and disabled by default. This runbook is the operator-side activation: it lists every AWS-impacting and GitHub-side change, the exact order to apply them, the verification checks and the rollback. **Nothing here is applied by the repository** — every step below is a deliberate operator action requiring Dorad's explicit authorization for live activation, in addition to approval of the specific pull request and its current AWS-impacting changes. The CloudFormation templates are reference documentation only; do not deploy them.
 
 ## What already exists
 
@@ -22,7 +22,7 @@ Documented target state in `cloudformation/ecs-services.yaml` (`WebsiteTaskDefin
 | `VAPID_SUBJECT` | Plain `Environment`: `https://xn--febl3a.co.il` | VAPID contact URI (mailto: or https:); not secret |
 | `PUSH_SEND_SECRET` | SSM SecureString `bible-on-site-push-send-secret` | Bearer token authorizing `POST /api/push/daily`; must equal the GitHub secret of the same name |
 
-The task execution role's `SSMParameterReadAccess` policy must additionally allow `bible-on-site-vapid-*` and `bible-on-site-push-send-secret` (documented in `ecs-services.yaml`).
+The task execution role's `SSMParameterReadAccess` policy must additionally allow the exact parameter ARNs for `bible-on-site-vapid-public-key`, `bible-on-site-vapid-private-key` and `bible-on-site-push-send-secret` (documented in `ecs-services.yaml`), preserving all existing resources.
 
 ### GitHub repository settings
 
@@ -34,12 +34,12 @@ The task execution role's `SSMParameterReadAccess` policy must additionally allo
 
 ## Activation order
 
-1. **Preflight — confirm identity and targets.** `aws sts get-caller-identity` (prod account), region `il-central-1`. Confirm the live website service is `bible-on-site-website` on cluster `bible-on-site-cluster` and note the currently running task-definition revision for rollback.
-2. **Generate the VAPID keypair** with `bunx web-push generate-vapid-keys` (or `npx web-push generate-vapid-keys`) and a random send secret `openssl rand -hex 32`.
+1. **Preflight — confirm identity and targets.** `aws sts get-caller-identity` must report production account `250598594267`; use region `il-central-1` and profile `AdministratorAccess-250598594267` for every AWS command. Confirm the live website service is `bible-on-site-website` on cluster `bible-on-site-cluster` and record the running task-definition revision and resolved image digest for rollback. Confirm `WEB_PUSH_ENABLED` is absent or not `true` before changing configuration.
+2. **Generate the VAPID keypair** with `bunx web-push generate-vapid-keys` (or `npx web-push generate-vapid-keys`), keeping the private key out of logs and source files. Generate the send secret once into a short-lived shell variable without printing it: `PUSH_SEND_SECRET="$(openssl rand -hex 32)"`. Reuse that value for both SSM and GitHub in steps 3 and 5.
 3. **Create the three SSM SecureStrings** (`bible-on-site-vapid-public-key`, `bible-on-site-vapid-private-key`, `bible-on-site-push-send-secret`) — commands in the prerequisites block at the bottom of `cloudformation/ecs-services.yaml`. Verify each exists with `aws ssm get-parameter --name <name> --region il-central-1 --query 'Parameter.Name'`.
 4. **Extend the execution role policy** so `ecsTaskExecutionRole` may `ssm:GetParameter(s)` on the three new parameters (per the documented `SSMParameterReadAccess` resource list).
-5. **Set the GitHub secret** `PUSH_SEND_SECRET` to the same value as step 3 (`gh secret set PUSH_SEND_SECRET`). Do not set `WEB_PUSH_ENABLED` yet.
-6. **Register a new website task-definition revision** adding the three `Secrets:` entries and the `VAPID_SUBJECT` environment entry exactly as documented in `ecs-services.yaml`; keep every other field and the current `:latest` image contract unchanged. Update the service and wait for a stable deployment (`aws ecs wait services-stable --cluster bible-on-site-cluster --services bible-on-site-website --region il-central-1`). A missing SSM parameter fails the task at start — order steps 3-4 before this.
+5. **Set the GitHub secret** from the same shell variable used in step 3: `printf '%s' "$PUSH_SEND_SECRET" | gh secret set PUSH_SEND_SECRET --repo bible-on-site/bible-on-site`, then immediately `unset PUSH_SEND_SECRET`. Do not set `WEB_PUSH_ENABLED` yet.
+6. **Register a new website task-definition revision** by cloning the live task-definition JSON and stripping only AWS response metadata. Add the three `Secrets:` entries and the `VAPID_SUBJECT` environment entry exactly as documented in `ecs-services.yaml`; preserve every existing field, role, resource setting, secret mapping and image reference. Update the service and wait (`aws ecs wait services-stable --cluster bible-on-site-cluster --services bible-on-site-website --region il-central-1`). Then re-query until there is one primary deployment, desired/running counts match, pending is zero and `rolloutState` is `COMPLETED`; verify the running revision, container health, logs and public website health. Check the application version separately to confirm the merged targeted-send route is deployed before any delivery check. Stop and roll back if verification fails. A missing SSM parameter fails the task at start — order steps 3-4 before this.
 7. **DB-access verification.** The website connects as the RDS user in `bible-on-site-tanah-db-url` (master `admin`, which already holds all grants on `tanah.*`; no new grant or migration is required). Confirm: `GET https://xn--febl3a.co.il/api/push/subscription` returns `{"publicKey": "<key>"}` — the same public key as step 3 — and a real opt-in in step 8 exercises INSERT/DELETE on the live table end to end.
 8. **Opt in exactly one browser** (the operator's own) via the daily-notification toggle on the home page. Confirm one row: `SELECT COUNT(*) FROM tanah_web_push_subscription`.
 9. **Controlled delivery check.** Send only to that one subscription — never broadcast. Get the test browser's endpoint URL first (DevTools console on the site: `(await (await navigator.serviceWorker.ready).pushManager.getSubscription()).endpoint`), then:

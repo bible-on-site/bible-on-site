@@ -17,9 +17,9 @@ const notConfigured = () =>
 	NextResponse.json({ error: "Web push is not configured" }, { status: 404 });
 
 async function readJson(request: Request): Promise<unknown> {
-	const text = await request.text();
-	if (text.length > MAX_BODY_BYTES) return null;
 	try {
+		const text = await request.text();
+		if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) return null;
 		return JSON.parse(text);
 	} catch {
 		return null;

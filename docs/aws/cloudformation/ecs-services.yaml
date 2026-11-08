@@ -203,7 +203,8 @@ Resources:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-indexnow-key"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanahpedia-revision-api-key"
-                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-vapid-*"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-vapid-public-key"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-vapid-private-key"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-push-send-secret"
       Tags:
         - Key: Project
@@ -740,7 +741,9 @@ Outputs:
 #   # GET /api/push/subscription to every browser, so keep it server-side
 #   # consistent — browsers unsubscribe and resubscribe if it rotates.
 #   # The send secret must equal the PUSH_SEND_SECRET GitHub repository
-#   # secret exactly. Full activation order: docs/aws/web-push-activation.md
+#   # secret exactly. Generate PUSH_SEND_SECRET once into a shell variable
+#   # without printing it, as in docs/aws/web-push-activation.md step 2.
+#   # Full activation order: docs/aws/web-push-activation.md
 #   aws ssm put-parameter --name bible-on-site-vapid-public-key \
 #     --type SecureString --value "<vapid-public-key>" \
 #     --region il-central-1
@@ -748,7 +751,7 @@ Outputs:
 #     --type SecureString --value "<vapid-private-key>" \
 #     --region il-central-1
 #   aws ssm put-parameter --name bible-on-site-push-send-secret \
-#     --type SecureString --value "$(openssl rand -hex 32)" \
+#     --type SecureString --value "$PUSH_SEND_SECRET" \
 #     --region il-central-1
 #
 #   # Database URL (mysql://admin:<password>@<host>:3306/tanah)

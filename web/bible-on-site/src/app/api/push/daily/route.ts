@@ -22,10 +22,11 @@ const MAX_BODY_BYTES = 4 * 1024;
 async function readBody(
 	request: Request,
 ): Promise<{ ok: boolean; body: unknown }> {
-	const text = await request.text();
-	if (text.length === 0) return { ok: true, body: null };
-	if (text.length > MAX_BODY_BYTES) return { ok: false, body: null };
 	try {
+		const text = await request.text();
+		if (text.length === 0) return { ok: true, body: undefined };
+		if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES)
+			return { ok: false, body: null };
 		return { ok: true, body: JSON.parse(text) };
 	} catch {
 		return { ok: false, body: null };
@@ -70,14 +71,15 @@ export async function POST(request: Request) {
 	const body = parsed.body;
 	if (
 		!parsed.ok ||
-		(body !== null && (typeof body !== "object" || Array.isArray(body)))
+		(body !== undefined &&
+			(body === null || typeof body !== "object" || Array.isArray(body)))
 	) {
 		return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 	}
 	// Only the absent-body broadcast may omit `endpoint`: a supplied body is a
 	// targeting request, so a missing or mistyped key fails closed as 400.
 	let endpoint: string | undefined;
-	if (body !== null) {
+	if (body !== undefined) {
 		const candidate = (body as { endpoint?: unknown }).endpoint;
 		if (!isPushServiceEndpoint(candidate)) {
 			return NextResponse.json({ error: "Invalid endpoint" }, { status: 400 });

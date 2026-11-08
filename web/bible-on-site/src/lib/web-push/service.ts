@@ -157,7 +157,11 @@ export async function sendDailyPerek(
 						result.removed++;
 						return;
 					}
-					console.warn("Web push delivery failed", error);
+					// Provider errors contain the subscription endpoint and response
+					// details. Keep those private while retaining the failure status.
+					console.warn("Web push delivery failed", {
+						statusCode: error instanceof WebPushError ? error.statusCode : null,
+					});
 					result.failed++;
 				}
 			}),

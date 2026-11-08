@@ -52,6 +52,31 @@ describe("/api/push/subscription", () => {
 		expect(await response.json()).toEqual({ publicKey: "public-key" });
 	});
 
+	it.each(["POST", "DELETE"])(
+		"%s rejects bodies over the UTF-8 byte limit",
+		async (method) => {
+			const handler = method === "POST" ? POST : DELETE;
+			const response = await handler(
+				request(method, { ...subscription, pad: "א".repeat(2100) }),
+			);
+			expect(response.status).toBe(400);
+			expect(mockSave).not.toHaveBeenCalled();
+			expect(mockDelete).not.toHaveBeenCalled();
+		},
+	);
+
+	it.each(["POST", "DELETE"])(
+		"%s rejects an unreadable body",
+		async (method) => {
+			const handler = method === "POST" ? POST : DELETE;
+			const req = request(method, subscription);
+			jest.spyOn(req, "text").mockRejectedValue(new Error("read failed"));
+			expect((await handler(req)).status).toBe(400);
+			expect(mockSave).not.toHaveBeenCalled();
+			expect(mockDelete).not.toHaveBeenCalled();
+		},
+	);
+
 	describe("POST", () => {
 		it("stores a valid subscription", async () => {
 			const response = await POST(request("POST", subscription));

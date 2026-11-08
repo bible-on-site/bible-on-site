@@ -214,5 +214,32 @@ describe("web-push service", () => {
 			expect(mockSend).toHaveBeenCalledTimes(1);
 			expect(result).toEqual({ sent: 1, removed: 0, failed: 0 });
 		});
+
+		it.each([500, null])(
+			"keeps subscription details out of delivery warnings (%s)",
+			async (statusCode) => {
+				mockQuery.mockResolvedValueOnce([row(7)]);
+				const error =
+					statusCode === null
+						? new Error(`Network failure for ${FCM}`)
+						: Object.assign(new MockWebPushError(statusCode), {
+								endpoint: FCM,
+								headers: { authorization: "private" },
+								body: "provider details",
+							});
+				mockSend.mockRejectedValue(error);
+				const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+				expect(await sendDailyPerek(1, FCM)).toEqual({
+					sent: 0,
+					removed: 0,
+					failed: 1,
+				});
+				expect(warn).toHaveBeenCalledWith("Web push delivery failed", {
+					statusCode,
+				});
+				warn.mockRestore();
+			},
+		);
 	});
 });

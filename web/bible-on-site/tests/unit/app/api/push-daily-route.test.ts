@@ -84,6 +84,13 @@ describe("POST /api/push/daily", () => {
 			expect(mockSend).toHaveBeenCalledWith(body.perekId, FCM);
 		});
 
+		it("broadcasts when the supplied body is empty", async () => {
+			const response = await callRaw("Bearer s3cret", "");
+			const body = await response.json();
+			expect(response.status).toBe(200);
+			expect(mockSend).toHaveBeenCalledWith(body.perekId, undefined);
+		});
+
 		it.each([
 			{ endpoint: "https://evil.example/fcm" },
 			{ endpoint: "http://fcm.googleapis.com/fcm/send/x" },
@@ -97,7 +104,7 @@ describe("POST /api/push/daily", () => {
 			expect(mockSend).not.toHaveBeenCalled();
 		});
 
-		it.each(["not json", "42", '["https://fcm.googleapis.com/x"]'])(
+		it.each(["not json", "null", "42", '["https://fcm.googleapis.com/x"]'])(
 			"rejects a malformed or non-object body %s",
 			async (body) => {
 				expect((await callRaw("Bearer s3cret", body)).status).toBe(400);
@@ -110,6 +117,25 @@ describe("POST /api/push/daily", () => {
 				pad: "x".repeat(5000),
 			});
 			expect(response.status).toBe(400);
+			expect(mockSend).not.toHaveBeenCalled();
+		});
+
+		it("measures the targeting body limit in UTF-8 bytes", async () => {
+			const response = await call("Bearer s3cret", {
+				endpoint: FCM,
+				pad: "א".repeat(2100),
+			});
+			expect(response.status).toBe(400);
+			expect(mockSend).not.toHaveBeenCalled();
+		});
+
+		it("rejects an unreadable body without sending", async () => {
+			const request = new Request("http://localhost/api/push/daily", {
+				method: "POST",
+				headers: { authorization: "Bearer s3cret" },
+			});
+			jest.spyOn(request, "text").mockRejectedValue(new Error("read failed"));
+			expect((await POST(request)).status).toBe(400);
 			expect(mockSend).not.toHaveBeenCalled();
 		});
 
