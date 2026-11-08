@@ -437,4 +437,64 @@ public class ArticleSearchServiceTests
         vm.ErrorMessage.Should().BeEmpty();
         vm.IsLoading.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task SearchViewModel_PerushWithoutPack_SurfacesTheDownloadLink()
+    {
+        await using var storage = new TestStorage();
+        var vm = new SearchViewModel(
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)),
+            null,
+            null)
+        {
+            SearchPhrase = "בראשית",
+            CommentaryPackProbe = () => false,
+        };
+        // Only Perush stays selected — the pack probe reports it unavailable,
+        // so the search skips it and explains the missing prerequisite (#2454).
+        foreach (var filter in new[]
+        {
+            SearchFilter.Author, SearchFilter.Pasuk, SearchFilter.Perek,
+            SearchFilter.Articles, SearchFilter.Tanahpedia,
+        })
+        {
+            vm.SetFilterEnabled(filter, false);
+        }
+
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
+
+        vm.AvailabilityMessage.Should().Be("לחיפוש בפירושים, הורידו את הפירושים בהגדרות");
+        vm.ShowPerushimDownloadLink.Should().BeTrue();
+        vm.IsLoading.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SearchViewModel_ArticlesDataMissing_SurfacesTheOfflineNote()
+    {
+        // A GraphQL response whose data payload lacks searchArticles maps to a
+        // null page — the remote kind degrades to an availability note.
+        using var http = new GraphQLTransport("""{"data":{}}""");
+        var service = new ArticleService(http.Client);
+        await using var storage = new TestStorage();
+        var vm = new SearchViewModel(
+            new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object)),
+            null,
+            service)
+        { SearchPhrase = "בראשית" };
+        foreach (var filter in new[]
+        {
+            SearchFilter.Author, SearchFilter.Pasuk, SearchFilter.Perush,
+            SearchFilter.Perek, SearchFilter.Tanahpedia,
+        })
+        {
+            vm.SetFilterEnabled(filter, false);
+        }
+        vm.SetFilterEnabled(SearchFilter.Articles, true);
+
+        await vm.SearchAsync(TestContext.Current.CancellationToken);
+
+        vm.AvailabilityMessage.Should().Contain("זמין רק עם חיבור רשת");
+        vm.ErrorMessage.Should().BeEmpty();
+        vm.IsLoading.Should().BeFalse();
+    }
 }

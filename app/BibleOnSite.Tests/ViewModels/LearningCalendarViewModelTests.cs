@@ -976,6 +976,71 @@ public class LearningCalendarViewModelTests
         vm.CanExportPdf.Should().BeTrue();
     }
 
+    [Fact]
+    public void CellComputedProperties_ReflectTheirInputs()
+    {
+        var empty = new CalendarCellViewModel();
+        empty.HasMergedDay.Should().BeFalse();
+        empty.HasVisibleSource.Should().BeFalse();
+        empty.ShowsReviewBadge.Should().BeFalse();
+        empty.IsTappable.Should().BeFalse();
+
+        var study = new CalendarCellViewModel
+        {
+            PerekSource = "בראשית א",
+            IsReview = true,
+            PerekId = 1,
+            MergedDayText = "ה'",
+        };
+        study.HasMergedDay.Should().BeTrue();
+        study.HasVisibleSource.Should().BeTrue();
+        study.ShowsReviewBadge.Should().BeTrue();
+        study.IsTappable.Should().BeTrue();
+
+        // Dimmed out-of-cycle cells keep their merged label but hide the
+        // source line and the review badge — the PDF rule mirrored in XAML.
+        var dimmed = new CalendarCellViewModel
+        {
+            PerekSource = "בראשית א",
+            IsReview = true,
+            IsDimmed = true,
+            MergedDayText = "ה'",
+        };
+        dimmed.HasMergedDay.Should().BeTrue();
+        dimmed.HasVisibleSource.Should().BeFalse();
+        dimmed.ShowsReviewBadge.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CellTapped_WithPerekId_NavigatesToTheReader()
+    {
+        await using var fixture = await CreateFixtureAsync(CyclesOneToFour);
+        var vm = fixture.ViewModel;
+        await vm.InitializeAsync();
+        var navigations = new List<string>();
+        var navigated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var navigator = new Mock<IAppNavigator>();
+        navigator.Setup(n => n.GoToAsync(It.IsAny<string>()))
+            .Callback<string>(route => { navigations.Add(route); navigated.TrySetResult(); })
+            .Returns(Task.CompletedTask);
+        var tappedVm = new LearningCalendarViewModel(fixture.Schedule, fixture.PerekData, navigator.Object,
+            today: () => 57870217);
+        await tappedVm.InitializeAsync();
+        var page = new CalendarPageUnderTest(tappedVm);
+        var onCellTapped = typeof(LearningCalendarPage)
+            .GetMethod("OnCellTapped", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+
+        var cell = new CalendarCellViewModel { PerekId = 1, DateNumber = 57870101 };
+        onCellTapped.Invoke(page, [page, new TappedEventArgs(cell)]);
+        await navigated.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        navigations.Should().Contain(route => route.Contains("perekId=1") && route.Contains("dateNum=57870101"));
+
+        // A non-cell parameter is ignored.
+        onCellTapped.Invoke(page, [page, new TappedEventArgs("לא תא")]);
+        navigations.Should().HaveCount(1);
+    }
+
     private sealed class CalendarPageUnderTest(LearningCalendarViewModel vm) : LearningCalendarPage(vm)
     {
         public void Show() => OnAppearing();
