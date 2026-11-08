@@ -210,6 +210,7 @@ export function TopNavAccessibility() {
 				<Image
 					src="/icons/accessibility.svg"
 					alt=""
+					unoptimized
 					width={22}
 					height={22}
 					loading="eager"
