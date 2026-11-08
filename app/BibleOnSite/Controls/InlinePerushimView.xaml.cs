@@ -20,7 +20,11 @@ public partial class InlinePerushimView : VerticalStackLayout
 
     private void OnContentLinkTapped(object? sender, LinkTappedEventArgs e)
     {
-        LinkTapped?.Invoke(this, e);
+        var handler = LinkTapped;
+        if (handler != null)
+        {
+            handler(this, e);
+        }
     }
 
     public InlinePerushimView()
