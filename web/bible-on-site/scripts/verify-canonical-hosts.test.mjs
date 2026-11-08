@@ -415,11 +415,31 @@ test("router/404.html is a deployable router-local page", () => {
 		/name="robots" content="noindex"/.test(html),
 		"router/404.html must be noindex like the app's 404",
 	);
-	// Split the tag literal so static analysis does not read this check as
-	// injected markup.
-	const scriptTag = "<" + "script";
-	assert.ok(
-		!html.includes("/_next/") && !html.includes(scriptTag),
+	// Every element must be inline markup — any external-loading tag
+	// (script, link, img, iframe, …) breaks self-containment on redeploys.
+	const tags = [...html.matchAll(/<\s*\/?\s*([a-zA-Z][a-zA-Z0-9]*)/g)].map(
+		(match) => match[1].toLowerCase(),
+	);
+	const allowed = new Set([
+		"html",
+		"head",
+		"meta",
+		"title",
+		"style",
+		"body",
+		"div",
+		"p",
+		"h1",
+		"a",
+	]);
+	const unexpected = tags.filter((tag) => !allowed.has(tag));
+	assert.deepEqual(
+		unexpected,
+		[],
 		"router/404.html must be self-contained — app-asset references break on redeploys",
+	);
+	assert.ok(
+		!html.includes("/_next/"),
+		"router/404.html must not reference hashed app assets — they rotate on redeploys",
 	);
 });
