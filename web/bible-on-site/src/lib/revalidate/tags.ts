@@ -31,7 +31,12 @@ export const COLLECTION_TAGS = {
 	 * carries `dedicationsBookshelf` since it aggregates every scope.
 	 */
 	dedications: "dedications",
+	/** Every cached moed read — catalogue and per-slug detail (#3101). */
+	moadim: "moadim",
 } as const;
+
+/** One moed detail read + the `/מועדים/{slug}` page that collected it. */
+export const moedTag = (slug: string) => `moed:${slug}`;
 
 /** The bookshelf's aggregate helek/sefer dedication view (homepage). */
 export const bookshelfDedicationsTag = "dedications:bookshelf";
@@ -69,6 +74,15 @@ export const masoraDedicationsTag = "masora:dedications";
 
 /** Article row `id` — `/929/{perek}/{article}` and anywhere it is embedded. */
 export const articleTag = (articleId: number) => `article:${articleId}`;
+
+/**
+ * Every recurring Hebrew-month/day article assignment (#3098) — one small
+ * collection tag covering all cached date-override reads. The admin
+ * assignment editor emits it directly; `resolveArticle` also emits it for
+ * any article change because an edit can alter the assigned article's
+ * rendered summary.
+ */
+export const articleDateOverridesTag = "article-date-overrides";
 
 /** Article summaries listed on `/929/{perek}` and in its sefer view. */
 export const perekArticlesTag = (perekId: number) =>

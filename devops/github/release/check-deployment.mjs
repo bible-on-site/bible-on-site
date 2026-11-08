@@ -250,7 +250,9 @@ export function checkDeployment(
 		...(platformArtifacts
 			? moduleName === "api"
 				? { apiArm64: true }
-				: { websiteArm64: true }
+				: moduleName === "admin"
+					? { adminArm64: true }
+					: { websiteArm64: true }
 			: {}),
 	};
 }
@@ -294,6 +296,10 @@ if (
 				"deployment-state.mjs",
 				"gh-api.mjs",
 				"ms-store-flights.mjs",
+				// Store-notes helpers run from RUNNER_TEMP so a redeploy of a
+				// tag that predates them still generates notes (#2972).
+				"store-release-notes.mjs",
+				"appstore-whatsnew.mjs",
 			])
 				copyFileSync(
 					new URL(`./${helper}`, import.meta.url),
@@ -302,7 +308,7 @@ if (
 	}
 	appendFileSync(
 		process.env.GITHUB_OUTPUT,
-		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\napi_arm64=${result.apiArm64 === true}\nwebsite_arm64=${result.websiteArm64 === true}\n`,
+		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\napi_arm64=${result.apiArm64 === true}\nwebsite_arm64=${result.websiteArm64 === true}\nadmin_arm64=${result.adminArm64 === true}\n`,
 	);
 	if (result.version)
 		appendFileSync(

@@ -6,8 +6,8 @@ import {
 import { getArticleSummariesForRanges } from "@/lib/articles/service";
 import { getPerushimForRanges } from "@/lib/perushim";
 import {
-	cachedPerKey,
 	COLLECTION_TAGS,
+	cachedPerKey,
 	masoraArticlesTag,
 	masoraPerushimTag,
 	parashaArticlesTag,
@@ -73,4 +73,3 @@ export const getMasoraRangeArticles = cachedPerKey(
 	async (unitId: number) =>
 		getArticleSummariesForRanges(getMasoraUnitById(unitId).ranges),
 );
-

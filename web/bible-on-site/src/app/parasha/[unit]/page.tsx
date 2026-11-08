@@ -4,15 +4,24 @@ import { Suspense } from "react";
 import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
 import { PerushimSection } from "@/app/929/[number]/components/PerushimSection";
 import perekStyles from "@/app/929/[number]/page.module.css";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "@/app/components/dedications/DedicationLines";
 import { UnitPerushimSection } from "@/app/components/reading/UnitPerushimSection";
 import { SharedUnitText } from "@/app/components/reading/UnitText";
 import { unitPerushHref } from "@/app/components/reading/unit-perush";
 import {
+	getParashaRangeArticles,
+	getParashaRangePerushim,
+} from "@/app/components/reading/unit-range-summaries";
+import {
 	DEFAULT_ALIYAH_SCHEME,
 	getStandaloneReading,
 	getUnitAliyahMarkers,
-	getUnitShabbatAliyahMarkers,
+	getUnitAliyahMarkersForSefer,
 } from "@/data/parasha/parasha-aliyot";
+import { resolveParashaSegment } from "@/data/parasha/parasha-slugs";
 import {
 	getAdjacentParashaUnits,
 	getAllParashaUnits,
@@ -24,23 +33,14 @@ import {
 	parashaRefSpan,
 	rangesRefSpans,
 } from "@/data/parasha/parasha-units";
-import { resolveParashaSegment } from "@/data/parasha/parasha-slugs";
 import { getPerekByPerekId } from "@/data/perek-dto";
+import { getParashaDedications } from "@/lib/dedications/loaders";
 import { canonicalPasukCount, rangePerekSources } from "@/lib/reading/queries";
 import { unitPerekIds } from "@/lib/reading/ranges";
-import {
-	getParashaRangeArticles,
-	getParashaRangePerushim,
-} from "@/app/components/reading/unit-range-summaries";
-import { getParashaDedications } from "@/lib/dedications/loaders";
-import {
-	DedicationLines,
-	dedicationLines,
-} from "@/app/components/dedications/DedicationLines";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
-import { AliyahControls } from "./components/AliyahControls";
+import { AliyahLegend } from "./components/AliyahLegend";
 import { HaftaraSection } from "./components/HaftaraSection";
 import { ParashaSeferComposite } from "./components/ParashaSeferComposite";
 import { UnitBreadcrumb } from "./components/UnitBreadcrumb";
@@ -134,10 +134,11 @@ export default async function ParashaUnitPage({
 		fetchAllEntityRefs(seferUnitsPerekIds(unit.seferName)),
 	]);
 	const { prev, next } = getAdjacentParashaUnits(unitId);
-	// Aliyah boundary layer (issue #2519): every context/scheme marker
-	// embeds in the text; AliyahControls swaps the visible key without
-	// remounting scripture. The book spreads get the fixed standalone
-	// Shabbat layer per unit.
+	// Aliyah boundary layers (issues #2519/#3165): every applicable
+	// context/scheme/custom marker embeds in the text and ALL render
+	// inline together; AliyahLegend emphasizes the URL-selected layer
+	// without remounting scripture. The book spreads share the same
+	// full marker contract — no Shabbat-only layer.
 	const aliyahLayer = getUnitAliyahMarkers(unitId);
 	const bookUnits = getParashaUnitsForSefer(unit.seferName).map((bookUnit) => {
 		const bookEntry = getParashaEntry(bookUnit.unitId);
@@ -148,8 +149,8 @@ export default async function ParashaUnitPage({
 			order: bookUnit.order,
 			refSpan: parashaRefSpan(bookUnit),
 			ranges: bookUnit.ranges,
-			aliyahMarkers: getUnitShabbatAliyahMarkers(bookUnit.unitId),
-			aliyahMarkerKey: `${getStandaloneReading(bookUnit.unitId).id}:${DEFAULT_ALIYAH_SCHEME}`,
+			aliyahMarkers: getUnitAliyahMarkersForSefer(bookUnit.unitId),
+			aliyahEmphasisKey: `${getStandaloneReading(bookUnit.unitId).id}:${DEFAULT_ALIYAH_SCHEME}`,
 			haftarot: bookEntry.haftarot.map((haftara) => ({
 				...haftara,
 				refSpan: rangesRefSpans(haftara.ranges).join(", "),
@@ -207,7 +208,7 @@ export default async function ParashaUnitPage({
 				<DedicationLines lines={dedicationsByUnit[unitId] ?? []} />
 				<h2 className={styles.readingLabel}>קריאת התורה</h2>
 				<Suspense>
-					<AliyahControls
+					<AliyahLegend
 						contexts={aliyahLayer.contexts}
 						defaultKey={aliyahLayer.defaultKey}
 					/>
@@ -218,7 +219,7 @@ export default async function ParashaUnitPage({
 					pasukCount={canonicalPasukCount}
 					scrollScope="torah"
 					boundaryMarkers={new Map(Object.entries(aliyahLayer.markers))}
-					defaultMarkerKey={aliyahLayer.defaultKey}
+					emphasisMarkerKey={aliyahLayer.defaultKey}
 				/>
 				<HaftaraSection unit={unit} entityRefsByPerek={entityRefsByPerek} />
 				<UnitNav prev={prev} next={next} />

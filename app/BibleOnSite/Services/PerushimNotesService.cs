@@ -14,7 +14,7 @@ namespace BibleOnSite.Services;
 /// version and auto-upgrades if the store copy is newer.
 /// If the notes DB is not yet available, returns empty; download can be triggered separately.
 /// </summary>
-public class PerushimNotesService
+public class PerushimNotesService : IReaderNotesAvailability
 {
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
 #if IOS || MACCATALYST
@@ -62,6 +62,14 @@ public class PerushimNotesService
 
     private readonly object _operationCompletedSync = new();
     private Action? _operationCompleted;
+
+    // Explicit: the app-facing event stays internal while the reader
+    // display-sync consumes it through the narrow availability seam (#2573).
+    event Action? IReaderNotesAvailability.OperationCompleted
+    {
+        add => OperationCompleted += value;
+        remove => OperationCompleted -= value;
+    }
 
     private void ReleaseOperation()
     {
@@ -900,8 +908,9 @@ public class PerushimNotesService
 
     /// <summary>
     /// Copies the pack's delivered search index next to the notes DB when the
-    /// pack carries one. Optional: packs older than the delivered-index format
-    /// simply leave the app to build the index on-device.
+    /// pack carries one. The commentary index is never rebuilt on-device
+    /// (#2222), so a pack without it leaves commentary search unavailable —
+    /// the delivery contract requires it (<see cref="PadDeliveryService"/>).
     /// </summary>
     private async Task TryCopyPadIndexAsync(string padAssetsPath)
     {
@@ -973,7 +982,8 @@ public class PerushimNotesService
         }
         catch (FileNotFoundException)
         {
-            // Bundled package may not carry the index — the app builds it on-device.
+            // A bundled package may not carry the index — commentary search
+            // stays unavailable until a delivered pack provides it.
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {

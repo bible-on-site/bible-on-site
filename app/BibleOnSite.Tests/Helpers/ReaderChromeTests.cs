@@ -240,7 +240,7 @@ public class ReaderChromeTests
             Toolbar.Arrange(new Rect(0, 0, 400, 56));
         }
 
-        public ReaderChrome CreateChrome()
+        public ReaderChrome CreateChrome(bool withFullscreenHandler = true)
         {
             return new ReaderChrome(
                 new ReaderChromeSurfaces
@@ -267,7 +267,9 @@ public class ReaderChromeTests
                     IsSelectableUnit = id => IsSelectable(id),
                     CurrentUnitId = () => CurrentId,
                     NavigateToUnitAsync = id => { Navigations.Add(id); return Task.CompletedTask; },
-                    FullscreenStateChanged = isFullScreen => FullscreenChanges.Add(isFullScreen),
+                    FullscreenStateChanged = withFullscreenHandler
+                        ? isFullScreen => FullscreenChanges.Add(isFullScreen)
+                        : null,
                 });
         }
 
@@ -614,6 +616,51 @@ public class ReaderChromeTests
 
         rig.Selections.Should().Equal(77);
         navigated.Should().Be(77);
+    }
+
+    [Fact]
+    public void ToggleFullScreen_EntersThenExitsRestoringTheChrome()
+    {
+        using var _ = new AppResources();
+        var rig = new Rig();
+        var chrome = rig.CreateChrome();
+
+        chrome.ToggleFullScreen();
+
+        rig.Toolbar.IsVisible.Should().BeFalse();
+        rig.BottomBar.IsVisible.Should().BeFalse();
+        rig.Fan.IsVisible.Should().BeFalse();
+        rig.ExitButton.IsVisible.Should().BeTrue();
+        rig.FullscreenChanges.Should().Equal(true);
+        chrome.IsFullScreen.Should().BeTrue();
+
+        chrome.ToggleFullScreen();
+
+        rig.ExitButton.IsVisible.Should().BeFalse();
+        rig.Toolbar.IsVisible.Should().BeTrue();
+        rig.BottomBar.IsVisible.Should().BeTrue();
+        rig.Fan.IsVisible.Should().BeTrue();
+        rig.FullscreenChanges.Should().Equal(true, false);
+        chrome.IsFullScreen.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FullScreen_WithoutStateHandler_StillTogglesCleanly()
+    {
+        using var _ = new AppResources();
+        var rig = new Rig();
+        var chrome = rig.CreateChrome(withFullscreenHandler: false);
+
+        rig.BottomBar.RaiseFullScreen();
+        rig.ExitButton.IsVisible.Should().BeTrue();
+        chrome.IsFullScreen.Should().BeTrue();
+        rig.FullscreenChanges.Should().BeEmpty("no handler was wired");
+
+        TapExit(rig.ExitButton);
+
+        rig.ExitButton.IsVisible.Should().BeFalse();
+        rig.Toolbar.IsVisible.Should().BeTrue();
+        chrome.IsFullScreen.Should().BeFalse();
     }
 
     [Fact]

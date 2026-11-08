@@ -94,4 +94,22 @@ public class FlyoutMenuRowTests
 
         subtitle.IsVisible.Should().BeFalse();
     }
+
+    [Fact]
+    public void IsSelected_TogglesWithoutResources()
+    {
+        // The selected indicator is a Windows-only repaint fed by the app
+        // palette; with no application resources it must degrade to a no-op
+        // rather than throw, on every platform (#2766).
+        var row = new FlyoutMenuRow { Title = "כותרת" };
+
+        var act = () =>
+        {
+            row.IsSelected = true;
+            row.IsSelected = false;
+        };
+
+        act.Should().NotThrow();
+        row.IsSelected.Should().BeFalse();
+    }
 }

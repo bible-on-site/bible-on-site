@@ -1,19 +1,16 @@
 "use client";
 
-import { toLetters } from "gematry";
-import type { PageSemantics } from "html-flip-book-react";
-import React, { useEffect, useMemo, useState } from "react";
-import seferStyles from "@/app/929/[number]/components/sefer.module.css";
 import {
 	releaseSeferDocumentTitle,
 	setSeferDocumentTitle,
 } from "@/app/929/[number]/components/sefer-document-title";
+import seferStyles from "@/app/929/[number]/components/sefer.module.css";
 import { UnitBlankPageContent } from "@/app/components/reading/UnitBlankPageContent";
 import { UnitSeferBook } from "@/app/components/reading/UnitSeferBook";
 import { UnitTextBody } from "@/app/components/reading/UnitTextBody";
 import {
-	getUnitScopeSummariesBatch,
 	type UnitBookSummaries,
+	getUnitScopeSummariesBatch,
 } from "@/app/components/reading/unit-book-actions";
 import type {
 	UnitBookContentKind,
@@ -34,17 +31,20 @@ import type { ArticleSummary } from "@/lib/articles";
 import type { RangePerushSummary } from "@/lib/perushim";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
+import { toLetters } from "gematry";
+import type { PageSemantics } from "html-flip-book-react";
+import React, { useEffect, useMemo, useState } from "react";
 import unitPageStyles from "../page.module.css";
 import {
 	type BookPage,
-	buildParashaDocumentTitleResolver,
-	buildParashaHistoryMapper,
-	buildParashaPageSemantics,
-	computeParashaInitialTurnedLeaves,
 	PARASHA_CONTENT_OFFSET,
 	PARASHA_ROOT,
 	PARASHA_ROOT_ALIASES,
 	type ParashaBookUnit,
+	buildParashaDocumentTitleResolver,
+	buildParashaHistoryMapper,
+	buildParashaPageSemantics,
+	computeParashaInitialTurnedLeaves,
 	parashaBookPageRoute,
 	parashaPerushDocumentTitle,
 	parashaUnitDocumentTitle,
@@ -281,7 +281,7 @@ const ParashaSefer = (props: {
 										 * pasuk-{perek}-{pasuk} ids. */
 										anchorScope={`book-${unit.unitId}`}
 										boundaryMarkers={unitBoundaryMarkers(unit)}
-										defaultMarkerKey={unit.aliyahMarkerKey}
+										emphasisMarkerKey={unit.aliyahEmphasisKey}
 										modestPerekLabels
 									/>
 								</article>

@@ -1,20 +1,20 @@
 "use server";
 
+import type { Pasuk } from "@/data/db/tanah-view-types";
 import { getMasoraUnitById } from "@/data/masora/masora-units";
 import {
 	getParashaUnitById,
 	parashaAuxiliaryRanges,
 } from "@/data/parasha/parasha-units";
+import { getPerekByPerekId, LAST_PEREK_ID } from "@/data/perek-dto";
+import type { ArticleSummary } from "@/lib/articles";
 import { getArticleSummariesForRangeGroups } from "@/lib/articles/service";
 import {
 	getPerushimForRangeGroups,
 	getPerushNotesForRanges,
-	type RangePerushSummary,
 	type RangedPerushNote,
+	type RangePerushSummary,
 } from "@/lib/perushim";
-import type { ArticleSummary } from "@/lib/articles";
-import type { Pasuk } from "@/data/db/tanah-view-types";
-import { getPerekByPerekId, LAST_PEREK_ID } from "@/data/perek-dto";
 import type { DivisionId, ScriptureRange } from "@/lib/reading/contract";
 import type { UnitBookScope } from "./unit-book-content";
 

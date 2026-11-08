@@ -57,6 +57,7 @@ import {
 	generateMetadata,
 	generateStaticParams,
 } from "../../../src/app/pedia/[slug]/page";
+import { NOT_FOUND_METADATA } from "../../../src/lib/seo/missing-page";
 import {
 	getAllEntrySummaries,
 	getAllEntryUniqueNames,
@@ -198,9 +199,7 @@ describe("pedia/[uniqueName] page", () => {
 				params: Promise.resolve({ slug: "nonexistent" }),
 			});
 
-			expect(result).toEqual({
-				title: "לא נמצא",
-			});
+			expect(result).toEqual(NOT_FOUND_METADATA);
 		});
 
 		it("returns disambiguation metadata for an ambiguous synonym", async () => {

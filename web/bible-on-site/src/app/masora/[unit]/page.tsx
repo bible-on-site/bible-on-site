@@ -4,8 +4,16 @@ import { Suspense } from "react";
 import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
 import { PerushimSection } from "@/app/929/[number]/components/PerushimSection";
 import perekStyles from "@/app/929/[number]/page.module.css";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "@/app/components/dedications/DedicationLines";
 import { UnitPerushimSection } from "@/app/components/reading/UnitPerushimSection";
 import { unitPerushHref } from "@/app/components/reading/unit-perush";
+import {
+	getMasoraRangeArticles,
+	getMasoraRangePerushim,
+} from "@/app/components/reading/unit-range-summaries";
 import {
 	getAdjacentMasoraUnits,
 	getMasoraUnitById,
@@ -15,17 +23,9 @@ import {
 	masoraPasukCount,
 } from "@/data/masora/masora-units";
 import { getPerekByPerekId } from "@/data/perek-dto";
-import {
-	DedicationLines,
-	dedicationLines,
-} from "@/app/components/dedications/DedicationLines";
 import { getMasoraDedications } from "@/lib/dedications/loaders";
 import { rangePerekSources } from "@/lib/reading/queries";
 import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
-import {
-	getMasoraRangeArticles,
-	getMasoraRangePerushim,
-} from "@/app/components/reading/unit-range-summaries";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";

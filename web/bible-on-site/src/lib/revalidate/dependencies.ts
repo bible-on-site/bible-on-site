@@ -19,6 +19,7 @@ import type {
 	EntityChange,
 } from "@/lib/revalidate/contract";
 import {
+	articleDateOverridesTag,
 	articleDedicationsTag,
 	articleTag,
 	authorArticlesTag,
@@ -30,6 +31,7 @@ import {
 	helekDedicationsTag,
 	masoraArticlesTag,
 	masoraDedicationsTag,
+	moedTag,
 	parashaArticlesTag,
 	parashaDedicationsTag,
 	perekArticlesTag,
@@ -69,6 +71,13 @@ export interface ResolvedInvalidation {
  * still correct, no longer surgical, and bounded work per request.
  */
 const MAX_RESOLVED = 2000;
+
+/**
+ * `src/app/sitemap.ts` is prerendered once and lists every article, author
+ * and pedia entry from uncached DB reads, so only an explicit path
+ * revalidation picks up a created, deleted or renamed one (#1124).
+ */
+const SITEMAP_PATH = "/sitemap.xml";
 
 interface Sink {
 	tags: Set<string>;
@@ -112,6 +121,10 @@ function applyOverflowFallback(sink: Sink) {
 		COLLECTION_TAGS.pediaLanding,
 		COLLECTION_TAGS.pediaEntries,
 		COLLECTION_TAGS.dedications,
+		// The moed collection tag expires every cached moed read — without
+		// it an overflowing batch leaves catalogue/detail data stale behind
+		// its path-only invalidation.
+		COLLECTION_TAGS.moadim,
 	]);
 	sink.patterns.add("/pedia/[slug]");
 	sink.paths.add("/pedia");
@@ -296,6 +309,145 @@ async function coveringSpansForAuthor(
 	}
 }
 
+// --- moed resolution (#3101) -------------------------------------------------
+//
+// The moed detail page renders the union of explicit links and range
+// matches, so an article/author change expires it whenever the article's
+// coverage (verified spans OR primary-perek fallback — the same dual
+// granularity the reader's match query applies) intersects a stored moed
+// range. Ranges load whole and filter in-process: the catalogue is small
+// and closed per change, so the read is one bounded query.
+
+interface MoedRangeRef {
+	moedId: number;
+	slug: string;
+	perekIdStart: number;
+	pasukStart: number;
+	perekIdEnd: number;
+	pasukEnd: number;
+}
+
+/** The published moeds whose stored ranges intersect the given coverage. */
+async function moadimMatchingCoverage(
+	perekIds: number[],
+	spans: ArticleCoveringSpan[],
+): Promise<MoedRangeRef[]> {
+	const perekSet = new Set(perekIds);
+	let rows: {
+		moed_id: number;
+		slug: string;
+		perek_id_start: number;
+		pasuk_start: number;
+		perek_id_end: number;
+		pasuk_end: number;
+	}[];
+	try {
+		rows = await query<{
+			moed_id: number;
+			slug: string;
+			perek_id_start: number;
+			pasuk_start: number;
+			perek_id_end: number;
+			pasuk_end: number;
+		}>(
+			`SELECT m.id AS moed_id, m.slug, r.perek_id_start, r.pasuk_start,
+			        r.perek_id_end, r.pasuk_end
+			 FROM tanah_moed m
+			 JOIN tanah_moed_section s ON s.moed_id = m.id
+			 JOIN tanah_moed_range r ON r.section_id = s.id
+			 WHERE m.published = TRUE`,
+		);
+	} catch (error) {
+		// Moed schema not deployed yet — nothing to expire.
+		if (isMissingMysqlSchema(error)) {
+			console.warn(
+				"Moed schema is not deployed yet; skipping moed invalidation for this change until the migration runs.",
+			);
+			return [];
+		}
+		throw error;
+	}
+	const matches = new Map<number, MoedRangeRef>();
+	for (const row of rows) {
+		const rangeSpansOnePerek = (
+			perekId: number,
+			from: number,
+			to: number,
+		) =>
+			spans.some(
+				(span) =>
+					span.perekId === perekId &&
+					span.pasukFrom <= to &&
+					span.pasukTo >= from,
+			);
+		// A stored range decomposes into whole-perek windows: every interior
+		// perek is fully covered, the edges carry the stored pasuk bounds.
+		// Checking every covered perek id directly would expand long ranges;
+		// instead test each candidate perek once.
+		let hit = false;
+		for (
+			let perekId = row.perek_id_start;
+			perekId <= row.perek_id_end && !hit;
+			perekId++
+		) {
+			const low = perekId === row.perek_id_start ? row.pasuk_start : 1;
+			const high =
+				perekId === row.perek_id_end
+					? row.pasuk_end
+					: Number.MAX_SAFE_INTEGER;
+			hit =
+				perekSet.has(perekId) || rangeSpansOnePerek(perekId, low, high);
+		}
+		if (hit && !matches.has(row.moed_id)) {
+			matches.set(row.moed_id, {
+				moedId: row.moed_id,
+				slug: row.slug,
+				perekIdStart: row.perek_id_start,
+				pasukStart: row.pasuk_start,
+				perekIdEnd: row.perek_id_end,
+				pasukEnd: row.pasuk_end,
+			});
+		}
+	}
+	return [...matches.values()];
+}
+
+/** The published moeds explicitly linked to any of the given articles. */
+async function moadimLinkedToArticles(
+	articleIds: number[],
+): Promise<{ slug: string }[]> {
+	if (articleIds.length === 0) return [];
+	try {
+		return await query<{ slug: string }>(
+			`SELECT DISTINCT m.slug
+			 FROM tanah_article_moed am
+			 JOIN tanah_moed m ON m.id = am.moed_id
+			 WHERE m.published = TRUE AND am.article_id IN (${placeholders(articleIds.length)})`,
+			articleIds,
+		);
+	} catch (error) {
+		if (isMissingMysqlSchema(error)) return [];
+		throw error;
+	}
+}
+
+/** Expire the detail tag/route of every moed the change's coverage touches. */
+async function addMoedDepsForArticleCoverage(
+	sink: Sink,
+	perekIds: number[],
+	spans: ArticleCoveringSpan[],
+	articleIds: number[] = [],
+) {
+	const slugs = new Set([
+		...(await moadimMatchingCoverage(perekIds, spans)).map((m) => m.slug),
+		...(await moadimLinkedToArticles(articleIds)).map((m) => m.slug),
+	]);
+	for (const slug of slugs) {
+		addTag(sink, moedTag(slug));
+		addPath(sink, `/מועדים/${slug}`);
+	}
+}
+
 function addUnitDeps(sink: Sink, unit: UnitRef) {
 	if (unit.division === "parasha") {
 		/* istanbul ignore next -- every parasha index entry sets scope explicitly */
@@ -428,6 +580,7 @@ function addPediaEntryDeps(
 	// entry-page sibling/category summaries. Category tags are per entity
 	// type so an entry change expires only the categories it belongs to.
 	addPath(sink, "/pedia");
+	addPath(sink, SITEMAP_PATH);
 	addTag(sink, COLLECTION_TAGS.pediaLanding);
 	addTag(sink, COLLECTION_TAGS.pediaEntries);
 	for (const entityType of entityTypes) {
@@ -448,6 +601,10 @@ async function resolveArticle(
 	change: Extract<EntityChange, { kind: "article" }>,
 ) {
 	addTag(sink, articleTag(change.id));
+	// Any article change can alter a date-assigned article's rendered summary —
+	// the override reads carry this one collection tag (#3098).
+	addTag(sink, articleDateOverridesTag);
+	addPath(sink, SITEMAP_PATH);
 	for (const perekId of change.perekIds) {
 		addTag(sink, perekArticlesTag(perekId));
 		addPath(sink, `/929/${perekId}`);
@@ -480,6 +637,9 @@ async function resolveArticle(
 	for (const unit of unitsForArticle(change.perekIds, spans)) {
 		addUnitDeps(sink, unit);
 	}
+	await addMoedDepsForArticleCoverage(sink, change.perekIds, spans, [
+		change.id,
+	]);
 }
 
 async function resolveAuthor(
@@ -489,6 +649,7 @@ async function resolveAuthor(
 	// The index lists every author.
 	addTag(sink, COLLECTION_TAGS.authors);
 	addPath(sink, "/929/authors");
+	addPath(sink, SITEMAP_PATH);
 	for (const name of [change.name, change.oldName]) {
 		if (!name) continue;
 		addTag(sink, authorTag(normalizeAuthorName(name)));
@@ -514,6 +675,12 @@ async function resolveAuthor(
 	for (const unit of unitsForArticle(perekIds, spans)) {
 		addUnitDeps(sink, unit);
 	}
+	await addMoedDepsForArticleCoverage(
+		sink,
+		perekIds,
+		spans,
+		articles.map((a) => a.id),
+	);
 }
 
 async function resolvePediaEntry(
@@ -703,6 +870,27 @@ async function resolveDedication(
 }
 
 /**
+ * A moed create/update/delete or an article↔moed link-set change (#3101):
+ * the moed's own detail tag/route expire by slug (the pre-rename slug too,
+ * so the old route stops serving the moved page), and the published
+ * catalogue's collection tag + wheel page always expire — publication
+ * flips, renames and annual-order edits all move the wheel.
+ */
+function resolveMoed(
+	sink: Sink,
+	change: Extract<EntityChange, { kind: "moed" }>,
+) {
+	addTag(sink, COLLECTION_TAGS.moadim);
+	addPath(sink, "/מועדים");
+	const slugs = new Set<string>([change.slug]);
+	if (change.oldSlug) slugs.add(change.oldSlug);
+	for (const slug of slugs) {
+		addTag(sink, moedTag(slug));
+		addPath(sink, `/מועדים/${slug}`);
+	}
+}
+
+/**
  * Resolves the union dependency set of a batch of committed entity
  * changes. Coalescing happens naturally: repeated events collapse into
  * the same tags/paths, and the union of old+new relationships across a
@@ -728,6 +916,9 @@ export async function resolveEntityChanges(
 				break;
 			case "pedia-entries":
 				resolvePediaEntries(sink, change);
+				break;
+			case "moed":
+				resolveMoed(sink, change);
 				break;
 			case "dedication":
 				await resolveDedication(sink, change);
