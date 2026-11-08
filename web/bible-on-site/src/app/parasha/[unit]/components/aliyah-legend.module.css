@@ -1,0 +1,79 @@
+/* Legend + emphasis control for the inline aliyah boundary markers
+   (issue #3165): one entry per rendered layer, styled like its text
+   markers so the legend doubles as the markers' key. */
+.legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 8px;
+	align-items: center;
+	margin: 0 0 10px;
+	padding: 0;
+	border: 0;
+	font-size: 0.85rem;
+}
+
+.srOnly {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.groupLabel {
+	color: var(--pasuk-num-color, #1c2c5d);
+	font-weight: 600;
+}
+
+/* An entry mirrors its markers' category treatment — border
+   style/width, background weight, and typography, never color alone. */
+.entry {
+	padding: 1px 9px;
+	border: 1px solid rgba(21, 82, 172, 0.28);
+	border-radius: var(--radius-sm);
+	background: rgba(21, 82, 172, 0.14);
+	color: var(--pasuk-num-color, #1c2c5d);
+	font-family: inherit;
+	font-size: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.entry[data-aliyah-category="weekday"] {
+	border-style: dashed;
+	background: rgba(21, 82, 172, 0.06);
+}
+
+.entry[data-aliyah-category="joined"] {
+	border-width: 3px;
+	border-style: double;
+	background: rgba(21, 82, 172, 0.17);
+}
+
+.entry[data-aliyah-category="variant"] {
+	border-style: dotted;
+	background: rgba(21, 82, 172, 0.1);
+	font-style: italic;
+}
+
+/* The emphasized layer — the same ring its text markers carry. */
+.entry[aria-pressed="true"] {
+	box-shadow: 0 0 0 2px rgba(21, 82, 172, 0.55);
+	font-weight: 700;
+}
+
+.legend:disabled {
+	opacity: 0.65;
+}
+
+.legend:disabled .entry {
+	cursor: default;
+}
+
+.legend:not(:disabled) .entry:active {
+	scale: var(--press-scale);
+}

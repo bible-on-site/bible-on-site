@@ -168,6 +168,7 @@ export default async function AuthorPage({
 							src="/icons/book.svg"
 							alt=""
 							aria-hidden="true"
+							unoptimized
 							width={24}
 							height={24}
 							className={styles.sectionIcon}

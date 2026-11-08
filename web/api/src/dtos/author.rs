@@ -1,29 +1,15 @@
-use async_graphql::{ComplexObject, Context, Result, SimpleObject};
+use async_graphql::SimpleObject;
 
-use crate::{providers::Database, services::articles_service};
 use entities::author::Model;
 
 #[derive(SimpleObject, Debug, Clone)]
-#[graphql(complex)]
 pub struct Author {
     pub id: i32,
     pub name: String,
     pub details: String,
-    /// Pre-computed articles count (used by starter query to avoid N+1)
-    /// When None, the count will be computed on-demand via the computed field
-    #[graphql(skip)]
-    pub precomputed_articles_count: Option<i64>,
-}
-
-impl From<Model> for Author {
-    fn from(value: Model) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            details: value.details,
-            precomputed_articles_count: None,
-        }
-    }
+    /// Count of articles written by this author — always pre-computed by the
+    /// producer (the starter query batches it to avoid N+1).
+    pub articles_count: i64,
 }
 
 impl Author {
@@ -33,24 +19,8 @@ impl Author {
             id: model.id,
             name: model.name,
             details: model.details,
-            precomputed_articles_count: Some(count),
+            articles_count: count,
         }
-    }
-}
-
-#[ComplexObject]
-impl Author {
-    /// Returns the count of articles written by this author
-    #[graphql(name = "articlesCount")]
-    async fn articles_count(&self, ctx: &Context<'_>) -> Result<i64> {
-        // Use pre-computed count if available (from starter query)
-        if let Some(count) = self.precomputed_articles_count {
-            return Ok(count);
-        }
-        // Otherwise compute on-demand (for individual author queries)
-        let db = ctx.data::<Database>()?;
-        let count = articles_service::count_by_author_id(db, self.id).await?;
-        Ok(count)
     }
 }
 
@@ -67,20 +37,12 @@ mod tests {
     }
 
     #[test]
-    fn author_from_model_has_no_precomputed_count() {
-        let author = Author::from(author_model());
+    fn with_articles_count_sets_the_count() {
+        let author = Author::with_articles_count(author_model(), 12);
 
         assert_eq!(author.id, 7);
         assert_eq!(author.name, "Author");
         assert_eq!(author.details, "Details");
-        assert_eq!(author.precomputed_articles_count, None);
-    }
-
-    #[test]
-    fn with_articles_count_sets_precomputed_count() {
-        let author = Author::with_articles_count(author_model(), 12);
-
-        assert_eq!(author.id, 7);
-        assert_eq!(author.precomputed_articles_count, Some(12));
+        assert_eq!(author.articles_count, 12);
     }
 }

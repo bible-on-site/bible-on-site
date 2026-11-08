@@ -76,6 +76,13 @@ struct Cli {
     #[arg(long, default_value = "../tanahpedia_alter_entry_synonym.sql")]
     tanahpedia_entry_synonym_upgrade_script: String,
 
+    /// Path to Tanahpedia today-anniversary month_day upgrade SQL file
+    #[arg(
+        long,
+        default_value = "../tanahpedia_alter_today_anniversary_month_day.sql"
+    )]
+    tanahpedia_today_anniversary_month_day_upgrade_script: String,
+
     /// Path to Tanahpedia lookup seed SQL file
     #[arg(long, default_value = "../tanahpedia_seed_data.sql")]
     tanahpedia_seed_script: String,
@@ -293,6 +300,10 @@ async fn run(cli: Cli) -> Result<()> {
 
         apply_article_covering_source_upgrade(&mut conn, base_path).await?;
 
+        // Recurring Hebrew-date article overrides (#3098); standalone
+        // idempotent table keyed by (hebrew_month, hebrew_day).
+        apply_article_hebrew_date_upgrade(&mut conn, base_path).await?;
+
         apply_perek_pasuk_count_upgrade(&mut conn, base_path).await?;
 
         apply_article_content_hash_upgrade(&mut conn, base_path).await?;
@@ -318,6 +329,10 @@ async fn run(cli: Cli) -> Result<()> {
 
         // Website push subscriptions (#1096); standalone, idempotent table.
         apply_web_push_upgrade(&mut conn, base_path).await?;
+
+        // מועדים על הפרק (#3101): the catalogue/section/range/link tables;
+        // needs tanah_perek (static) and tanah_article (dynamic) to exist.
+        apply_moed_upgrade(&mut conn, base_path).await?;
     }
 
     if !cli.skip_data {
@@ -329,6 +344,19 @@ async fn run(cli: Cli) -> Result<()> {
         // The upgrade is re-applied here so `mysql-populate-data-only`
         // upgrades databases whose structure predates the column.
         apply_perek_pasuk_count_data(&mut conn, base_path).await?;
+
+        // Re-applied here so `mysql-populate-data-only` creates the moed
+        // tables on databases populated before this schema, then the
+        // initial catalogue. Runs BEFORE tanah_test_data.sql: the test
+        // fixtures link test articles into seeded moed rows (#3101).
+        apply_moed_upgrade(&mut conn, base_path).await?;
+        apply_moed_seed(&mut conn, base_path).await?;
+
+        // tanah_test_data.sql inserts Hebrew-date override fixtures
+        // (#3098): re-apply the idempotent table upgrade here so
+        // `mysql-populate-data-only` creates it on databases whose
+        // structure predates the table, before any fixture references it.
+        apply_article_hebrew_date_upgrade(&mut conn, base_path).await?;
 
         if !cli.skip_tanah_test_data {
             let data_path = base_path.join(&cli.data_script);
@@ -386,6 +414,7 @@ struct TanahpediaScripts {
     entry_revision_history_upgrade: std::path::PathBuf,
     entry_entity_unique_upgrade: std::path::PathBuf,
     entry_synonym_upgrade: std::path::PathBuf,
+    today_anniversary_month_day_upgrade: std::path::PathBuf,
     seed: std::path::PathBuf,
     incremental_lookups: std::path::PathBuf,
     legacy: std::path::PathBuf,
@@ -411,6 +440,8 @@ impl TanahpediaScripts {
             entry_entity_unique_upgrade: base_path
                 .join(&cli.tanahpedia_entry_entity_unique_upgrade_script),
             entry_synonym_upgrade: base_path.join(&cli.tanahpedia_entry_synonym_upgrade_script),
+            today_anniversary_month_day_upgrade: base_path
+                .join(&cli.tanahpedia_today_anniversary_month_day_upgrade_script),
             seed: base_path.join(&cli.tanahpedia_seed_script),
             incremental_lookups: base_path.join(&cli.tanahpedia_incremental_lookups_script),
             legacy: base_path.join(&cli.tanahpedia_legacy_script),
@@ -479,7 +510,9 @@ async fn apply_tanahpedia_safe_upgrades(
     apply_child_birth_order_upgrade(conn, &scripts.child_birth_order_upgrade).await?;
     apply_entry_revision_history_upgrade(conn, &scripts.entry_revision_history_upgrade).await?;
     apply_entry_entity_unique_upgrade(conn, &scripts.entry_entity_unique_upgrade).await?;
-    apply_entry_synonym_upgrade(conn, &scripts.entry_synonym_upgrade).await
+    apply_entry_synonym_upgrade(conn, &scripts.entry_synonym_upgrade).await?;
+    apply_today_anniversary_month_day_upgrade(conn, &scripts.today_anniversary_month_day_upgrade)
+        .await
 }
 
 async fn apply_tanahpedia_incremental_lookups(
@@ -586,6 +619,18 @@ async fn apply_article_covering_source_upgrade(
     apply_article_index_upgrade(conn, base_path).await
 }
 
+async fn apply_article_hebrew_date_upgrade(
+    conn: &mut MySqlConnection,
+    base_path: &Path,
+) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_article_hebrew_date_upgrade.sql"),
+        "article-hebrew-date-upgrade",
+    )
+    .await
+}
+
 async fn apply_article_index_upgrade(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
     execute_script(
         conn,
@@ -682,6 +727,25 @@ async fn apply_web_push_upgrade(conn: &mut MySqlConnection, base_path: &Path) ->
     .await
 }
 
+/// Creates the מועדים על הפרק tables (#3101): the moed catalogue, ordered
+/// reading sections/ranges and the article<->moed junction. Idempotent and
+/// non-destructive, so it runs in both phases.
+async fn apply_moed_upgrade(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
+    execute_script(
+        conn,
+        &base_path.join("../tanah_moed_upgrade.sql"),
+        "moed-upgrade",
+    )
+    .await
+}
+
+/// Seeds the initial moed catalogue (moadim, sections, ranges and the two
+/// issue-named article links). Every statement is existence-guarded so
+/// re-running and editor-authored content are preserved.
+async fn apply_moed_seed(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
+    execute_script(conn, &base_path.join("../tanah_moed_data.sql"), "moed-seed").await
+}
+
 /// Re-applies the idempotent pasuk_count upgrade and loads the generated
 /// canonical counts; requires tanah_perek rows to already exist.
 async fn apply_perek_pasuk_count_data(conn: &mut MySqlConnection, base_path: &Path) -> Result<()> {
@@ -736,6 +800,107 @@ async fn apply_entry_revision_history_upgrade(
     .await
 }
 
+/// Applies the generated `month_day` anniversary columns (and their
+/// secondary indexes) that make the "today in Tanah" EXISTS predicates
+/// sargable. Existing databases upgraded before this change get the
+/// columns here; fresh databases already have them from the structure
+/// script, so every step is guarded by an existence check.
+async fn apply_today_anniversary_month_day_upgrade(
+    conn: &mut MySqlConnection,
+    script_path: &Path,
+) -> Result<()> {
+    if !script_path.exists() {
+        println!(
+            "Skipping missing Tanahpedia month_day upgrade script at {:?}",
+            script_path
+        );
+        return Ok(());
+    }
+
+    const MONTH_DAY_COLUMNS: &[(&str, &str, &str, &str)] = &[
+        // (table, base date column, generated column, index name)
+        (
+            "tanahpedia_event_date_range",
+            "start_date",
+            "start_month_day",
+            "idx_event_date_range_start_month_day",
+        ),
+        (
+            "tanahpedia_event_date_range",
+            "end_date",
+            "end_month_day",
+            "idx_event_date_range_end_month_day",
+        ),
+        (
+            "tanahpedia_saying",
+            "saying_date",
+            "month_day",
+            "idx_saying_month_day",
+        ),
+        (
+            "tanahpedia_person_birth_date",
+            "birth_date",
+            "month_day",
+            "idx_person_birth_date_month_day",
+        ),
+        (
+            "tanahpedia_person_death_date",
+            "death_date",
+            "month_day",
+            "idx_person_death_date_month_day",
+        ),
+        (
+            "tanahpedia_person_union",
+            "start_date",
+            "start_month_day",
+            "idx_person_union_start_month_day",
+        ),
+        (
+            "tanahpedia_person_union",
+            "end_date",
+            "end_month_day",
+            "idx_person_union_end_month_day",
+        ),
+    ];
+
+    for (table, base_column, generated_column, index_name) in MONTH_DAY_COLUMNS {
+        if !column_exists(conn, table, generated_column).await? {
+            let sql = format!(
+                "ALTER TABLE `{}` ADD COLUMN `{}` INT GENERATED ALWAYS AS (IF(`{}` > 0 AND `{}` <> 99991229, `{}` % 10000, NULL)) VIRTUAL",
+                quote_mysql_identifier_part(table),
+                quote_mysql_identifier_part(generated_column),
+                quote_mysql_identifier_part(base_column),
+                quote_mysql_identifier_part(base_column),
+                quote_mysql_identifier_part(base_column),
+            );
+            raw_sql(AssertSqlSafe(sql))
+                .execute(&mut *conn)
+                .await
+                .with_context(|| {
+                    format!("Failed to add column '{}.{}'", table, generated_column)
+                })?;
+            println!("Column '{}.{}' added successfully", table, generated_column);
+        } else {
+            println!("Column '{}.{}' already exists", table, generated_column);
+        }
+
+        if !index_exists(conn, table, index_name).await? {
+            let sql = format!(
+                "ALTER TABLE `{}` ADD INDEX `{}` (`{}`)",
+                quote_mysql_identifier_part(table),
+                quote_mysql_identifier_part(index_name),
+                quote_mysql_identifier_part(generated_column),
+            );
+            raw_sql(AssertSqlSafe(sql))
+                .execute(&mut *conn)
+                .await
+                .with_context(|| format!("Failed to add index '{}.{}'", table, index_name))?;
+            println!("Index '{}.{}' added successfully", table, index_name);
+        }
+    }
+    Ok(())
+}
+
 /// Collapse duplicate entry-entity link rows and add UNIQUE(entry_id, entity_id).
 async fn apply_entry_entity_unique_upgrade(
     conn: &mut MySqlConnection,
@@ -784,27 +949,6 @@ async fn apply_entry_entity_unique_upgrade(
 
     println!("Index '{}.{}' added successfully", TABLE, INDEX);
     Ok(())
-}
-
-async fn index_exists(
-    conn: &mut MySqlConnection,
-    table_name: &str,
-    index_name: &str,
-) -> Result<bool> {
-    let count: i64 = query_scalar::<MySql, i64>(
-        "SELECT COUNT(*) \
-         FROM information_schema.STATISTICS \
-         WHERE TABLE_SCHEMA = DATABASE() \
-           AND TABLE_NAME = ? \
-           AND INDEX_NAME = ?",
-    )
-    .bind(table_name)
-    .bind(index_name)
-    .fetch_one(&mut *conn)
-    .await
-    .with_context(|| format!("Failed to check index '{}.{}'", table_name, index_name))?;
-
-    Ok(count > 0)
 }
 
 async fn apply_entry_synonym_upgrade(conn: &mut MySqlConnection, script_path: &Path) -> Result<()> {
@@ -863,6 +1007,27 @@ async fn column_exists(
     .fetch_one(&mut *conn)
     .await
     .with_context(|| format!("Failed to check column '{}.{}'", table_name, column_name))?;
+
+    Ok(count > 0)
+}
+
+async fn index_exists(
+    conn: &mut MySqlConnection,
+    table_name: &str,
+    index_name: &str,
+) -> Result<bool> {
+    let count: i64 = query_scalar::<MySql, i64>(
+        "SELECT COUNT(*) \
+         FROM information_schema.STATISTICS \
+         WHERE TABLE_SCHEMA = DATABASE() \
+           AND TABLE_NAME = ? \
+           AND INDEX_NAME = ?",
+    )
+    .bind(table_name)
+    .bind(index_name)
+    .fetch_one(&mut *conn)
+    .await
+    .with_context(|| format!("Failed to check index '{}.{}'", table_name, index_name))?;
 
     Ok(count > 0)
 }
@@ -1504,6 +1669,86 @@ SELECT 1";
             apply_tanahpedia_safe_baseline(&mut conn, &scripts, true).await?;
             apply_tanahpedia_safe_baseline(&mut conn, &scripts, true).await?;
 
+            // Simulate a database created before the month_day anniversary
+            // upgrade: drop the generated columns and their indexes, then
+            // verify the upgrade recreates them and stays idempotent.
+            const MONTH_DAY_UPGRADE_COLUMNS: &[(&str, &str, &str)] = &[
+                (
+                    "tanahpedia_event_date_range",
+                    "start_month_day",
+                    "idx_event_date_range_start_month_day",
+                ),
+                (
+                    "tanahpedia_event_date_range",
+                    "end_month_day",
+                    "idx_event_date_range_end_month_day",
+                ),
+                ("tanahpedia_saying", "month_day", "idx_saying_month_day"),
+                (
+                    "tanahpedia_person_birth_date",
+                    "month_day",
+                    "idx_person_birth_date_month_day",
+                ),
+                (
+                    "tanahpedia_person_death_date",
+                    "month_day",
+                    "idx_person_death_date_month_day",
+                ),
+                (
+                    "tanahpedia_person_union",
+                    "start_month_day",
+                    "idx_person_union_start_month_day",
+                ),
+                (
+                    "tanahpedia_person_union",
+                    "end_month_day",
+                    "idx_person_union_end_month_day",
+                ),
+            ];
+            for (table, column, index) in MONTH_DAY_UPGRADE_COLUMNS {
+                raw_sql(AssertSqlSafe(format!(
+                    "ALTER TABLE `{}` DROP INDEX `{}`",
+                    quote_mysql_identifier_part(table),
+                    quote_mysql_identifier_part(index)
+                )))
+                .execute(&mut conn)
+                .await?;
+                raw_sql(AssertSqlSafe(format!(
+                    "ALTER TABLE `{}` DROP COLUMN `{}`",
+                    quote_mysql_identifier_part(table),
+                    quote_mysql_identifier_part(column)
+                )))
+                .execute(&mut conn)
+                .await?;
+            }
+            apply_today_anniversary_month_day_upgrade(
+                &mut conn,
+                &scripts.today_anniversary_month_day_upgrade,
+            )
+            .await?;
+            apply_today_anniversary_month_day_upgrade(
+                &mut conn,
+                &scripts.today_anniversary_month_day_upgrade,
+            )
+            .await?;
+            for (table, column, index) in MONTH_DAY_UPGRADE_COLUMNS {
+                assert!(
+                    column_exists(&mut conn, table, column).await?,
+                    "{table}.{column}"
+                );
+                assert!(index_exists(&mut conn, table, index).await?, "{table}.{index}");
+            }
+            assert_eq!(
+                query_scalar::<MySql, i64>(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS \
+                     WHERE TABLE_SCHEMA = DATABASE() AND EXTRA LIKE '%GENERATED%' \
+                       AND COLUMN_NAME IN ('start_month_day', 'end_month_day', 'month_day')",
+                )
+                .fetch_one(&mut conn)
+                .await?,
+                7
+            );
+
             assert!(column_exists(&mut conn, "tanahpedia_person_union", "source_citation").await?);
             assert!(
                 column_exists(
@@ -1678,6 +1923,32 @@ SELECT 1";
             apply_external_reference_structure(&mut conn, &scripts.external_reference_structure).await?;
             apply_external_reference_structure(&mut conn, &scripts.external_reference_structure).await?;
             assert_eq!(table_count(&mut conn, "external_reference").await?, 0);
+
+            // A missing upgrade script is skipped without touching the DB.
+            apply_today_anniversary_month_day_upgrade(
+                &mut conn,
+                Path::new("nonexistent/month-day-upgrade.sql"),
+            )
+            .await?;
+
+            // A database missing one of the target tables must fail loudly.
+            raw_sql("SET FOREIGN_KEY_CHECKS = 0")
+                .execute(&mut conn)
+                .await?;
+            raw_sql("DROP TABLE tanahpedia_saying")
+                .execute(&mut conn)
+                .await?;
+            raw_sql("SET FOREIGN_KEY_CHECKS = 1")
+                .execute(&mut conn)
+                .await?;
+            assert!(
+                apply_today_anniversary_month_day_upgrade(
+                    &mut conn,
+                    &scripts.today_anniversary_month_day_upgrade,
+                )
+                .await
+                .is_err()
+            );
 
             // The real entrypoint must populate a database end-to-end,
             // including on a schema that already ran every upgrade.

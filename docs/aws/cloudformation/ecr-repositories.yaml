@@ -124,7 +124,13 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: bible-on-site-admin
-      ImageTagMutability: MUTABLE
+      # Prerequisite for the admin multi-architecture publisher; verify live before merge.
+      # The live repository is still MUTABLE; Codex applies this target policy
+      # under Dorad's approval before the first dual-platform admin release.
+      ImageTagMutability: IMMUTABLE_WITH_EXCLUSION
+      ImageTagMutabilityExclusionFilters:
+        - ImageTagMutabilityExclusionFilterType: WILDCARD
+          ImageTagMutabilityExclusionFilterValue: latest
       ImageScanningConfiguration:
         ScanOnPush: true
       EncryptionConfiguration:

@@ -10,7 +10,7 @@ import { iosInteractionDiagnostics, readLoggedIosAppPid, sampleIosFallback, samp
 import { listenScenarioFailures } from "./scenario-failure-monitor.mjs";
 import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
-import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
+import { exportNativeLog, iosAutomationLogArguments, startNativeLog, stopNativeLogStreams } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
 import { installAppUnderTest } from "./android-install.mjs";
 import { collectAndroidCrashDiagnostics } from "./android-crash-diagnostics.mjs";
@@ -115,6 +115,7 @@ let test;
 let diagnosticsFailed = false;
 const androidEmulator = platform === "android" && /^emulator-\d+$/.test(process.env.MOBILE_UDID);
 let nativeStream;
+let automationStream;
 if (platform === "ios") {
   nativeStream = startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
     "log", "stream", "--style", "compact", "--level", "info", "--predicate", 'process == "BibleOnSite"'],
@@ -144,7 +145,7 @@ async function sampleIosApp(phase) {
     writeFileSync(`${prefix}.json`, JSON.stringify(result, null, 2));
     if (result.status === "error") {
       diagnosticsFailed = true;
-      console.error("Could not sample the iOS app:", result.error ?? result.frameError);
+      console.error("Could not sample the iOS app:", result.error ?? result.frameError ?? result.threadsError);
     }
   } catch (error) {
     diagnosticsFailed = true;
@@ -159,11 +160,20 @@ let failureObserverConfirmed = false;
 const failureDirectory = resolve(hostDiagnostics, "scenario-failures");
 if (platform === "ios") mkdirSync(failureDirectory, { recursive: true });
 let failureMonitor;
-const stop = () => { test?.kill(); server.kill(); nativeStream?.kill(); };
+const stop = () => { test?.kill(); server.kill(); nativeStream?.kill(); automationStream?.kill(); };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
 try {
+  if (platform === "ios") {
+    const args = iosAutomationLogArguments(process.env.MOBILE_UDID);
+    writeFileSync(resolve(artifacts, "automation-log-start.json"), JSON.stringify({
+      time: new Date().toISOString(), source: process.env.GITHUB_SHA ?? null,
+      udid: process.env.MOBILE_UDID, command: "xcrun", args,
+      artifact: "automation-live.log", observationOnly: true,
+    }, null, 2), { flag: "wx" });
+    automationStream = startNativeLog("xcrun", args, resolve(artifacts, "automation-live.log"));
+  }
   failureMonitor = interactions ? await listenScenarioFailures(failureDirectory, async (request, { signal } = {}) => {
     const result = await interactions.failure(request, { signal });
     if (result.status === "error") diagnosticsFailed = true;
@@ -220,7 +230,8 @@ try {
     console.error("Could not finish native hang capture:", error);
   }
   try {
-    await phase("native-log-stream", () => nativeStream?.stop());
+    await phase("native-log-stream", () => platform === "ios"
+      ? stopNativeLogStreams([nativeStream, automationStream]) : nativeStream?.stop());
   } catch (error) {
     if (platform === "ios") diagnosticsFailed = true;
     else writeFileSync(resolve(artifacts, "android-native-log-stop-error.txt"), String(error));
