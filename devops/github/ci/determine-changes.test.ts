@@ -583,6 +583,8 @@ describe("detectChanges", () => {
 			"devops/deploy/ecr-deploy/ecr-client.test.mts",
 			"devops/deploy/ecr-deploy/resume-image.mts",
 			"devops/deploy/ecr-deploy/resume-image.test.mts",
+			"devops/deploy/ecr-deploy/admin-repository-policy.mts",
+			"devops/deploy/ecr-deploy/admin-repository-policy.test.mts",
 		]) {
 			const changes = detectChanges([file]);
 			for (const [key, flags] of Object.entries(changes)) {

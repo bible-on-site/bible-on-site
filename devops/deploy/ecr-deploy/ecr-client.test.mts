@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { type TestContext, test } from "node:test";
 import {
+	CreateRepositoryCommand,
 	DescribeImagesCommand,
 	type DescribeImagesCommandOutput,
+	DescribeRepositoriesCommand,
 	type ECRClient,
 } from "@aws-sdk/client-ecr";
 import {
@@ -10,7 +12,11 @@ import {
 	type GetCallerIdentityCommandOutput,
 	STSClient,
 } from "@aws-sdk/client-sts";
-import { getECRConfig, getRemoteImageTags } from "./ecr-client.mts";
+import {
+	ensureRepositoryExists,
+	getECRConfig,
+	getRemoteImageTags,
+} from "./ecr-client.mts";
 import { ECRDeployerBase } from "./ecr-deployer-base.mts";
 
 function paginatedClient(pages: DescribeImagesCommandOutput[]) {
@@ -317,4 +323,77 @@ test("getECRConfig propagates non-retryable STS identity failures", async (t) =>
 	});
 
 	await assert.rejects(getECRConfig(), /SSO token expired/);
+});
+
+function repositoryClient(existing: { repositoryUri?: string } | undefined) {
+	const creates: CreateRepositoryCommand[] = [];
+	const client = {
+		send: async (command: unknown) => {
+			if (command instanceof DescribeRepositoriesCommand) {
+				if (!existing)
+					throw Object.assign(new Error("missing"), {
+						name: "RepositoryNotFoundException",
+					});
+				return { repositories: [existing] };
+			}
+			if (command instanceof CreateRepositoryCommand) {
+				creates.push(command);
+				return {
+					repository: {
+						repositoryUri:
+							"example.test/bible-on-site-admin",
+					},
+				};
+			}
+			throw new Error("Unexpected ECR command");
+		},
+	} as unknown as ECRClient;
+	return { client, creates };
+}
+
+test("an existing repository is reused without creation", async () => {
+	const { client, creates } = repositoryClient({
+		repositoryUri: "example.test/bible-on-site-admin",
+	});
+	assert.equal(
+		await ensureRepositoryExists(client, "bible-on-site-admin"),
+		"example.test/bible-on-site-admin",
+	);
+	assert.equal(creates.length, 0);
+});
+
+test("a created repository satisfies the publication guard by default", async () => {
+	const { client, creates } = repositoryClient(undefined);
+	assert.equal(
+		await ensureRepositoryExists(client, "bible-on-site-admin"),
+		"example.test/bible-on-site-admin",
+	);
+	assert.equal(creates.length, 1);
+	assert.deepEqual(creates[0].input, {
+		repositoryName: "bible-on-site-admin",
+		imageScanningConfiguration: { scanOnPush: true },
+		imageTagMutability: "IMMUTABLE_WITH_EXCLUSION",
+		imageTagMutabilityExclusionFilters: [
+			{ filterType: "WILDCARD", filter: "latest" },
+		],
+	});
+});
+
+test("a created repository keeps each requested mutable tag excluded", async () => {
+	const { client, creates } = repositoryClient(undefined);
+	await ensureRepositoryExists(client, "bible-on-site", [
+		"latest",
+		"deps-cache",
+		"deps-cache-arm64",
+	]);
+	assert.equal(creates.length, 1);
+	assert.equal(
+		creates[0].input.imageTagMutability,
+		"IMMUTABLE_WITH_EXCLUSION",
+	);
+	assert.deepEqual(creates[0].input.imageTagMutabilityExclusionFilters, [
+		{ filterType: "WILDCARD", filter: "latest" },
+		{ filterType: "WILDCARD", filter: "deps-cache" },
+		{ filterType: "WILDCARD", filter: "deps-cache-arm64" },
+	]);
 });

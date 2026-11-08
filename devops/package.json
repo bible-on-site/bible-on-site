@@ -23,6 +23,7 @@
 		"bump:module-versions": "node ./github/ci/bump-module-versions.ts",
 		"deploy": "echo 'Use deploy:ecr, deploy:data, or deploy:bulletin' && exit 1",
 		"deploy:ecr": "node ./deploy/ecr-deploy/index.mts",
+		"deploy:admin-ecr-policy": "node ./deploy/ecr-deploy/admin-repository-policy.mts",
 		"deploy:data": "node ./deploy/data-deploy/index.mts",
 		"test:deploy-data": "node --test deploy/data-deploy/lambda-invocation.test.mts deploy/data-deploy/deploy-payload.test.mts",
 		"deploy:bulletin": "node ./deploy/bulletin-deploy/index.mts",
