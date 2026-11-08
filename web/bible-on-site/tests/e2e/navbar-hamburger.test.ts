@@ -10,7 +10,6 @@ const MENU_ITEMS = [
 	["עלון יומי", "/dailyBulletin"],
 	["קבוצת ווטסאפ", "/whatsappGroup"],
 	["תנאי שימוש", "/tos"],
-	["הצהרת נגישות", "/accessibility"],
 	["יישומון", "/app"],
 	["צור קשר", "/contact"],
 	["תרומות", "/donation"],
@@ -85,4 +84,31 @@ test.describe("NavBar hamburger menu", () => {
 			await expect(homeHeading).toBeVisible();
 		});
 	}
+
+	test("after visiting /accessibility from the accessibility menu, Back and the logo return home", async ({
+		page,
+	}) => {
+		// The statement lives in the top-nav accessibility menu — the side
+		// navigation deliberately no longer carries it.
+		await page.goto("/");
+		await page.getByRole("button", { name: "התאמות נגישות" }).click();
+		await page
+			.getByTestId("accessibility-menu")
+			.getByRole("link", { name: "הצהרת נגישות" })
+			.click();
+		await page.waitForURL((url) => url.pathname === "/accessibility");
+
+		await page.locator("nav.top-nav a[href='/']").click();
+		await page.waitForURL((url) => url.pathname === "/");
+		const homeHeading = page
+			.getByRole("heading", { name: 'תנ"ך על הפרק' })
+			.first();
+		await expect(homeHeading).toBeInViewport();
+
+		await page.goBack();
+		await page.waitForURL((url) => url.pathname === "/accessibility");
+		await page.goBack();
+		await page.waitForURL((url) => url.pathname === "/");
+		await expect(homeHeading).toBeVisible();
+	});
 });

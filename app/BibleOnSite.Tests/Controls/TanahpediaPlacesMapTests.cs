@@ -3,6 +3,8 @@ using BibleOnSite.Models;
 
 namespace BibleOnSite.Tests.Controls;
 
+// Console.Error is process-wide; its temporary writer must not race other tests.
+[Collection("Console redirection")]
 public class TanahpediaPlacesMapTests
 {
     [Fact]

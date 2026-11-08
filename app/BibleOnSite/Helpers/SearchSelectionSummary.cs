@@ -23,12 +23,11 @@ public static class SearchSelectionSummary
         if (explicitSelection)
         {
             var ids = selected.Select(book => book.Id).ToHashSet();
-            foreach (var group in SefarimData.SefarimGroups.Values)
+            var match = SefarimData.SefarimGroups.Values.FirstOrDefault(group =>
+                ids.SetEquals(Enumerable.Range(group.From, group.To - group.From + 1)));
+            if (match != null)
             {
-                if (ids.SetEquals(Enumerable.Range(group.From, group.To - group.From + 1)))
-                {
-                    return group.Header;
-                }
+                return match.Header;
             }
         }
         return Describe(selected.Select(book => book.Name).ToArray(), "היכן לחפש", explicitSelection);

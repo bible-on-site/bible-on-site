@@ -77,19 +77,56 @@ jobs:
       # or restore semantics change so a differently-captured dir cannot load.
       IOS_SIM_STATE_RECIPE: r1
       # Single source for the .NET SDK and workload-set pins (see #1871):
-      # setup-dotnet, the toolchain cache id and the workload install all read
-      # from here so a bump cannot skew the cache keys.
-      DOTNET_SDK_VERSION: "10.0.401"
+      # the toolchain cache id and the workload install read from here, and the
+      # Verify step asserts the resolved SDK matches. SDK installation itself
+      # is pinned by the root global.json, which must stay identical to this.
+      DOTNET_SDK_VERSION: "10.0.403"
+      # Workload sets are band-scoped (10.0.4xx), not SDK-locked: 10.0.401.1 is
+      # the last set selecting iOS 27.0, which the xcode-27 image's Xcode 27.0
+      # supports. 10.0.402.1 selects iOS 27.1 requiring Xcode 27.1 — deferred
+      # until the runner image ships it; see #2566.
       MAUI_WORKLOAD_SET: "10.0.401.1"
+      # The Android legs are not Xcode-bound: 10.0.402.1 pins Android SDK
+      # 36.1.118, the first servicing release honoring AndroidR8ObfuscationMode
+      # and emitting the r8.json metadata Play scores — the Release smoke APK is
+      # the pre-merge guard that obfuscated builds still launch (#2708, #2373).
+      MAUI_WORKLOAD_SET_ANDROID: "10.0.402.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      # Restoring the emulator SDK after the Release APK build exhausted a
+      # hosted runner's disk, killing its worker before tests or logs uploaded.
+      # Reclaim unrelated SDKs before installing the pinned .NET toolchain.
+      # The image's Android SDK supplies sdkmanager and APK build prerequisites;
+      # keep it, browser/graphics packages and swap available for device tests.
+      - name: Free unused hosted Android runner SDKs
+        if: inputs.platform == 'Android' && runner.os == 'Linux' && runner.environment == 'github-hosted'
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          preinstalled-runtimes: false
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
           # Keep aligned with Xcode 27 and the iOS packaging workload; see #1871.
-          dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
+          global-json-file: global.json
+
+      # Regression check (#2542): the muxer must resolve the pinned SDK, not a
+      # newer image-baked one. global.json (rollForward: disable) enforces this
+      # at resolution time; this assertion makes a selection skew fail loudly
+      # here instead of surfacing as an ios-build manifest mismatch on a retry.
+      - name: Verify .NET SDK selection
+        run: |
+          resolved=$(dotnet --version)
+          echo "Resolved .NET SDK: $resolved (pinned: $DOTNET_SDK_VERSION)"
+          test "$resolved" = "$DOTNET_SDK_VERSION"
 
       - name: Prepare managed test-host stack capture
         env:
@@ -107,12 +144,12 @@ jobs:
 
       # hashFiles() in step templates dies on a hard 120s budget on loaded
       # runners (#2184); a run step computes the same input without the clock.
-      - name: Hash npm dependency inputs
+      - name: Hash dependency inputs
         if: inputs.mode != 'build'
-        id: npm-key
+        id: deps-key
         # package.json is hashed too: a manifest edit (e.g. an install script)
         # without a lockfile change must still rotate the node_modules key.
-        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs devops/package.json devops/package-lock.json app/mobile-e2e/package.json app/mobile-e2e/package-lock.json
+        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs devops/package.json devops/bun.lock app/mobile-e2e/package.json app/mobile-e2e/bun.lock
 
       - name: Hash AVD readiness script inputs
         id: readiness-key
@@ -128,6 +165,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-mobile-e2e-${{ inputs.platform }}-
             ${{ runner.os }}-nuget-
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -155,7 +195,7 @@ jobs:
       - name: Resolve iOS simulator device
         if: inputs.mode != 'build' && (inputs.platform == 'iOS')
         id: ios-device
-        run: npm run ios:boot:resolve --prefix app/mobile-e2e
+        run: bun run --cwd app/mobile-e2e ios:boot:resolve
 
       # The image bakes a fixed UDID per version, so the key self-invalidates on
       # every image update; the toolchain stamp covers updates that keep the
@@ -176,7 +216,7 @@ jobs:
 
 
       # node_modules keyed on the lockfile hash is the exact install result —
-      # a hit lets npm ci skip entirely. The ~/.npm cacache this replaces kept
+      # a hit lets bun install --frozen-lockfile skip entirely. The bun cache cacache this replaces kept
       # every tarball under a rolling prefix and took ~4.5 min to restore.
       - name: Restore node_modules
         if: inputs.mode != 'build'
@@ -186,11 +226,11 @@ jobs:
           path: |
             devops/node_modules
             app/mobile-e2e/node_modules
-          key: ${{ runner.os }}-node-modules-e2e-${{ steps.npm-key.outputs.hash }}
+          key: ${{ runner.os }}-node-modules-e2e-${{ steps.deps-key.outputs.hash }}
 
       # The coverage tree baseline is published only by successful master push
       # runs; its REST download sees 1s–2m20s transfer variance, so the whole
-      # resolve+select runs in the background and never stalls npm ci, the boot
+      # resolve+select runs in the background and never stalls bun install --frozen-lockfile, the boot
       # or the build. Missing or unreadable baselines are not an error — the
       # selector falls back to the full applicable suite (#2085). Shadow mode
       # computes the deterministic subset for evidence while the suite still
@@ -229,9 +269,9 @@ jobs:
       - name: Install build and Appium dependencies
         if: inputs.mode != 'build' && (steps.node-modules-cache.outputs.cache-hit != 'true')
         run: |
-          npm ci --prefix devops --no-audit
+          bun install --cwd devops --frozen-lockfile
           if [ "${{ inputs.mode }}" != "release-smoke" ]; then
-            npm ci --prefix app/mobile-e2e --no-audit
+            bun install --cwd app/mobile-e2e --frozen-lockfile
           fi
 
       # .NET's DerivedData equivalent: obj intermediates from the last master
@@ -277,9 +317,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
-          npm run test:unit --prefix app/mobile-e2e 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
+          bun run --cwd app/mobile-e2e test:unit 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
 
-      # The full helper suite needs npm ci (Appium driver resolution); the
+      # The full helper suite needs bun install --frozen-lockfile (Appium driver resolution); the
       # smoke leg is dependency-free, so it validates only its own script.
       - name: Validate Release smoke script
         if: inputs.mode == 'release-smoke'
@@ -289,8 +329,10 @@ jobs:
           node --test app/mobile-e2e/release-smoke.test.mjs 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
 
       - name: Start iPhone simulator boot
+        id: ios-boot
         if: inputs.mode != 'build' && (inputs.platform == 'iOS')
-        run: npm run ios:boot:start --prefix app/mobile-e2e
+        shell: bash
+        run: bun run --cwd app/mobile-e2e ios:boot:start 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/ios-boot-start.log"
 
       # The boot kicked above is still in flight; the wait also warms Appium's
       # CoreSimulator bridge and exports MOBILE_UDID plus MOBILE_OS_VERSION —
@@ -302,7 +344,13 @@ jobs:
         id: simulator
         if: inputs.mode != 'build' && (inputs.platform == 'iOS')
         background: true
-        run: npm run ios:boot:wait --prefix app/mobile-e2e
+        env:
+          # Keep the exact device selected by start; listing all devices again
+          # can stall CoreSimulator while that device is already booting.
+          MOBILE_UDID: ${{ steps.ios-boot.outputs.udid }}
+          MOBILE_OS_VERSION: ${{ steps.ios-boot.outputs.version }}
+        shell: bash
+        run: bun run --cwd app/mobile-e2e ios:boot:wait 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/ios-boot-wait.log"
 
       # WebDriverAgent preparation only needs node_modules and the selected
       # Xcode, so it runs in the background too, overlapping
@@ -312,7 +360,7 @@ jobs:
         id: wda
         if: inputs.mode != 'build' && (inputs.platform == 'iOS')
         background: true
-        run: npm run ios:wda --prefix app/mobile-e2e
+        run: bun run --cwd app/mobile-e2e ios:wda
 
       # Dynamic iOS shards (#2263): the plan job decided this leg's cases once
       # for the whole matrix, so the leg stages its assigned manifest verbatim
@@ -372,7 +420,7 @@ jobs:
           dotnet BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll --filter-query '/[(Category=Unit)]' --progress off
           echo "NUGET_PACKAGES=$NUGET_PACKAGES" >> "$GITHUB_ENV"
 
-      # npm ci is done, so node_modules is frozen. Background cache publication
+      # bun install --frozen-lockfile is done, so node_modules is frozen. Background cache publication
       # finishes at the wait-all gate before device tests.
       - name: Save node_modules
         if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && (github.ref == 'refs/heads/master' && steps.node-modules-cache.outputs.cache-hit != 'true')
@@ -382,7 +430,7 @@ jobs:
           path: |
             devops/node_modules
             app/mobile-e2e/node_modules
-          key: ${{ runner.os }}-node-modules-e2e-${{ steps.npm-key.outputs.hash }}
+          key: ${{ runner.os }}-node-modules-e2e-${{ steps.deps-key.outputs.hash }}
 
       - name: Setup Java
         if: inputs.platform == 'Android'
@@ -390,6 +438,32 @@ jobs:
         with:
           distribution: microsoft
           java-version: "21"
+          verify-signature: true
+
+      # iOS legs stay on the Xcode-27-compatible set; Android legs take the
+      # newer set carrying Android SDK 36.1.118 (#2708). Resolve once so the
+      # cache key and the install can never disagree.
+      - name: Resolve workload set pin
+        if: inputs.mode != 'prebuilt-run'
+        id: workload-set
+        run: |
+          if [ "${{ inputs.workload }}" = "maui-android" ]; then
+            echo "version=${{ env.MAUI_WORKLOAD_SET_ANDROID }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ env.MAUI_WORKLOAD_SET }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Linux images include root-owned SDK directories; tar must be able to
+      # restore their metadata as the runner, just like the Android SDK below.
+      - name: Make cached MAUI workload packs writable by the runner
+        if: inputs.mode != 'prebuilt-run' && runner.os == 'Linux'
+        run: |
+          : "${DOTNET_ROOT:?DOTNET_ROOT is required}"
+          sdk_owner="$(id -u):$(id -g)"
+          for component in packs metadata sdk-manifests template-packs; do
+            sudo mkdir -p "$DOTNET_ROOT/$component"
+            sudo chown -R "$sdk_owner" "$DOTNET_ROOT/$component"
+          done
 
       # The workload set is a multi-GB silent NuGet download (~6 min cold in
       # run 38438842693); restored packs turn the install into a verify no-op.
@@ -404,12 +478,14 @@ jobs:
             ${{ env.DOTNET_ROOT }}/metadata
             ${{ env.DOTNET_ROOT }}/sdk-manifests
             ${{ env.DOTNET_ROOT }}/template-packs
-          key: ${{ runner.os }}-${{ runner.arch }}-dotnet-${{ env.DOTNET_SDK_VERSION }}-${{ inputs.workload }}-${{ env.MAUI_WORKLOAD_SET }}
+          key: ${{ runner.os }}-${{ runner.arch }}-dotnet-${{ env.DOTNET_SDK_VERSION }}-${{ inputs.workload }}-${{ steps.workload-set.outputs.version }}
 
       - name: Install MAUI workload
         if: inputs.mode != 'prebuilt-run'
-        # 10.0.401.1 selects the iOS 27 SDK, which requires Xcode 27; see #1871.
-        run: dotnet workload install ${{ inputs.workload }} --version ${{ env.MAUI_WORKLOAD_SET }}
+        # 10.0.401.1 selects the iOS 27.0 SDK, which requires Xcode 27.0; see #1871.
+        # maui-android resolves to 10.0.402.1 (Android SDK 36.1.118) for #2708's
+        # obfuscation support; iOS stays pinned until #2566 ships Xcode 27.1.
+        run: dotnet workload install ${{ inputs.workload }} --version ${{ steps.workload-set.outputs.version }}
 
       # Background like the other cache saves: compression and upload stay off
       # the build's critical path; the wait-all gate still bounds it.
@@ -433,11 +509,25 @@ jobs:
       # Shared commentary-search pilot builds the notes FTS index, so a missing
       # or mismatched pair must fail here — before the build, not mid-suite.
       - name: Download perushim SQLite pair
-        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke' && inputs.perushim_notes_sqlite_artifact != '' && inputs.perushim_notes_sqlite_artifact != env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER
         uses: actions/download-artifact@v8
         with:
-          name: ${{ inputs.perushim_notes_sqlite_artifact || env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+          name: ${{ inputs.perushim_notes_sqlite_artifact }}
           path: ${{ runner.temp }}/perushim-sqlite
+
+      # Master baseline lives outside this run's artifact namespace: fetch it
+      # through the REST API (no gh binary dependency on the xcode-27 legs).
+      - name: Download perushim SQLite pair (master baseline)
+        if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke' && (inputs.perushim_notes_sqlite_artifact == '' || inputs.perushim_notes_sqlite_artifact == env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+            --name "${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}" \
+            --out "${{ runner.temp }}/perushim-sqlite"
+          # baseline-download is nonfatal on a missing artifact, but this pair
+          # is required: assert the extraction produced files.
+          test -n "$(ls -A "${{ runner.temp }}/perushim-sqlite" 2>/dev/null)"
 
       - name: Install matching perushim catalog and notes
         if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'
@@ -446,11 +536,11 @@ jobs:
       - name: Build complete simulator app
         if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'
         id: build-app
-        # Explicit bash enables pipefail, preserving npm failures through tee.
+        # Explicit bash enables pipefail, preserving bun failures through tee.
         shell: bash
         run: |
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
-          npm run build:app --prefix app/mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build.log"
+          bun run --cwd app/mobile-e2e build:app 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build.log"
 
       # Release-configuration startup guard (#2373): only a packaged Release
       # build executes the analytics initialization that killed #2247 store
@@ -463,13 +553,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
-          npm run build:release-smoke --prefix app/mobile-e2e 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build-release-smoke.log"
+          bun run --cwd app/mobile-e2e build:release-smoke 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/build-release-smoke.log"
 
       # Cached native outputs can retain stale code-signing pages. Sign the
       # final simulator payload inside out and verify it before any launch.
       - name: Sign and verify iOS simulator app
         if: inputs.mode != 'prebuilt-run' && (inputs.platform == 'iOS')
-        run: npm run ios:sign --prefix app/mobile-e2e
+        run: bun run --cwd app/mobile-e2e ios:sign
 
       - name: Package shared iOS build with coverage and harness
         if: inputs.mode == 'build'
@@ -571,6 +661,8 @@ jobs:
       - name: Validate restored AVD snapshot
         if: inputs.platform == 'Android' && steps.avd-cache.outputs.cache-hit == 'true'
         id: avd-check
+        env:
+          MOBILE_UDID: emulator-5554
         run: node app/mobile-e2e/android-snapshot-check.mjs validate-restored
 
       # Two-stage snapshot pattern: on a cache miss the action creates the AVD,
@@ -592,7 +684,7 @@ jobs:
           pre-emulator-launch-script: node app/mobile-e2e/configure-avd-display.mjs
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-metrics -memory 4096
-          script: npm run android:ready --prefix app/mobile-e2e
+          script: bun run --cwd app/mobile-e2e android:ready
 
       # `emu kill` is graceful but asynchronous; the snapshot payload must reach
       # the AVD directory before the save step may capture it.
@@ -663,7 +755,7 @@ jobs:
           pre-emulator-launch-script: node app/mobile-e2e/configure-avd-display.mjs
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-snapshot-save -no-metrics -memory 4096
-          script: npm run release-smoke --prefix app/mobile-e2e
+          script: bun run --cwd app/mobile-e2e release-smoke
 
       # The SDK save waits for a genuinely booted device (any stage's readiness
       # log) rather than trusting installed packages, and stays disabled for
@@ -701,15 +793,16 @@ jobs:
       - name: Run iOS runner shard
         if: inputs.mode != 'build' && (inputs.platform == 'iOS')
         id: pilot-ios
-        # The independent supervisor stops the full process tree at 15 minutes;
+        # The independent supervisor stops the full process tree at its deadline
+        # (15 minutes, scaled with a planned shard's estimate up to 45 minutes);
         # this outer limit also bounds a blocked supervisor or runner step.
-        timeout-minutes: 20
+        timeout-minutes: 50
         env:
           # A planned leg always enforces its shard manifest — the partition is
           # the assignment, not a narrowing hint. Android legs keep shadow-mode
           # reporting: empty unless enforce passes the selection manifest.
           MOBILE_E2E_SELECTION: ${{ inputs.ios_plan_artifact != '' && steps.shard_manifest.outputs.manifest || (inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '') }}
-        run: npm test --prefix app/mobile-e2e
+        run: bun run --cwd app/mobile-e2e test
 
       # Coverage resets, dump pulls and device-diagnostics captures are
       # diagnostic-only by design — a failure writes to the trx and never

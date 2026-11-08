@@ -1,3 +1,7 @@
+using System;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using System.Text.RegularExpressions;
 using Nuke.Common;
 using Nuke.Common.IO;
@@ -166,7 +170,122 @@ partial class Build
             .SetProperties(msbuildProperties)
             .EnableNoRestore());
 
+        GenerateWindowsExtensionPacks();
+
         Serilog.Log.Information($"Windows MSIX package created in {ArtifactsDirectory}");
+    }
+
+    /// <summary>
+    /// Standalone entry point for the extension-pack pass — the Package target
+    /// runs it after publish; invoking it directly enables local validation
+    /// against a staged ExtensionPacks dir and an existing base MSIX without a
+    /// full rebuild.
+    /// </summary>
+    Target PackageWindowsExtensionPacks => _ => _
+        .Description("Pack staged Windows extension packs as MSIX optional packages (.artifacts/extension-packs)")
+        .Executes(GenerateWindowsExtensionPacks);
+
+    /// <summary>
+    /// Packs every staged Windows extension pack (Platforms/Windows/ExtensionPacks/*)
+    /// as an MSIX optional package bound to the main package via
+    /// uap3:MainPackageDependency — the Microsoft Store durable-DLC model the
+    /// app enumerates through Package.Current.Dependencies (#2923). The raw
+    /// payloads are also staged under .artifacts/payloads so the GitHub
+    /// release keeps the HTTPS fallback bytes for sideloaded/Store-unavailable
+    /// installs. Output: .artifacts/extension-packs/{pack}.msix, signed with
+    /// the same thumbprint as the base package when provided.
+    /// </summary>
+    void GenerateWindowsExtensionPacks()
+    {
+        var extensionPacksDirectory = SourceDirectory / "Platforms" / "Windows" / "ExtensionPacks";
+        var packs = WindowsExtensionPack.Discover(extensionPacksDirectory);
+        Assert.True(packs.Count > 0,
+            $"No Windows extension packs staged under {extensionPacksDirectory} — " +
+            "prepare_recitation_assets.py --platform Windows and prepare_perushim_assets.py --platform Windows must run before packaging");
+
+        var (mainName, publisher, publisherDisplayName) =
+            WindowsExtensionPack.MainPackageIdentity(SourceDirectory / "Platforms" / "Windows" / "Package.appxmanifest");
+        var packageOverrides = WindowsExtensionPack.LoadPackageNameOverrides(
+            SourceDirectory / "Platforms" / "Windows" / "extension-packs.json5");
+        var version = $"{GetCurrentVersion()}.0";
+        // A signed sideload publish nests the MSIX one directory deep under a
+        // name_version_Test folder; unsigned pipelines may drop it flat. The
+        // extension-packs output directory is never searched.
+        var baseMsix = ArtifactsDirectory.GlobFiles("*.msix", "*_Test/*.msix")
+            .OrderByDescending(f => File.GetLastWriteTimeUtc(f))
+            .FirstOrDefault()
+            ?? throw new InvalidOperationException($"No base MSIX found in {ArtifactsDirectory}");
+        var storeLogo = ExtractWindowsStoreLogo(baseMsix);
+
+        var makeappx = WindowsExtensionPack.FindSdkTool("makeappx.exe")
+            ?? throw new InvalidOperationException("makeappx.exe not found — install the Windows SDK packaging tools");
+        var signtool = string.IsNullOrEmpty(CertificateThumbprint) ? null
+            : WindowsExtensionPack.FindSdkTool("signtool.exe")
+            ?? throw new InvalidOperationException("signtool.exe not found — required when --certificate-thumbprint is set");
+
+        var outputDirectory = ArtifactsDirectory / "extension-packs";
+        outputDirectory.CreateDirectory();
+        var payloadsDirectory = ArtifactsDirectory / "payloads";
+        payloadsDirectory.CreateDirectory();
+
+        var stagedDirectory = ArtifactsDirectory / "extension-packs-staging";
+        foreach (var pack in packs)
+        {
+            var packageName = packageOverrides.TryGetValue(pack.Name, out var configured)
+                ? configured
+                : WindowsExtensionPack.OptionalPackageName(mainName, pack.Name);
+            var stage = stagedDirectory / pack.Name;
+            stage.CreateOrCleanDirectory();
+            (stage / "AppxManifest.xml").WriteAllText(WindowsExtensionPack.ManifestXml(
+                packageName, publisher, publisherDisplayName, version,
+                $"929 {pack.Name.Replace('_', ' ')}", mainName));
+            (stage / "Assets").CreateDirectory();
+            storeLogo.Copy(stage / "Assets" / "StoreLogo.png", ExistsPolicy.FileOverwrite);
+            foreach (var payload in pack.PayloadFiles)
+            {
+                payload.CopyToDirectory(stage, ExistsPolicy.FileOverwrite);
+                // Release-payload fallback: every payload stages for HTTPS
+                // delivery — a Windows-only release has no iOS leg to publish
+                // the perushim .sqlite pair under. When both legs run they
+                // carry identical bytes under identical app-v* asset names.
+                payload.CopyToDirectory(payloadsDirectory, ExistsPolicy.FileOverwrite);
+            }
+
+            var msix = outputDirectory / $"{pack.Name}.msix";
+            // AbsolutePath interpolations render shell-quoted already.
+            ProcessTasks.StartProcess(makeappx, $"pack /d {stage} /p {msix} /o")
+                .AssertZeroExitCode();
+            if (signtool is not null)
+            {
+                ProcessTasks.StartProcess(signtool,
+                    $"sign /fd SHA256 /td SHA256 /sha1 {CertificateThumbprint} {msix}")
+                    .AssertZeroExitCode();
+            }
+            Serilog.Log.Information($"extension pack {pack.Name} -> {msix} ({packageName})");
+        }
+        stagedDirectory.DeleteDirectory();
+    }
+
+    /// <summary>
+    /// Pulls a StoreLogo PNG out of the just-built base MSIX so optional
+    /// packages satisfy the manifest Logo requirement without a second copy of
+    /// the asset in the repo.
+    /// </summary>
+    internal static AbsolutePath ExtractWindowsStoreLogo(AbsolutePath baseMsix)
+    {
+        using var archive = ZipFile.OpenRead(baseMsix);
+        var entry = archive.Entries
+            .Where(e => e.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase) &&
+                        e.Name.Contains("Logo", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(e => e.Name.StartsWith("StoreLogo", StringComparison.OrdinalIgnoreCase) ? 0
+                        : e.Name.StartsWith("Square44x44Logo", StringComparison.OrdinalIgnoreCase) ? 1 : 2)
+            .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault()
+            ?? throw new InvalidDataException($"{baseMsix} contains no *Logo*.png asset to reuse for optional packages");
+        var extracted = (AbsolutePath)Path.Join(Path.GetTempPath(), $"bos-extpack-{Guid.NewGuid():N}", entry.Name);
+        extracted.Parent.CreateDirectory();
+        entry.ExtractToFile(extracted);
+        return extracted;
     }
 
     void PackageAndroid()
@@ -213,6 +332,14 @@ partial class Build
                 aab.CopyToDirectory(ArtifactsDirectory, ExistsPolicy.FileOverwrite);
                 Serilog.Log.Information($"Copied {aab.Name} to {ArtifactsDirectory}");
             }
+
+            // Select the published framework/RID, never a stale sibling build.
+            var sharedLibsDir = MainProject.Parent / "obj" / Configuration /
+                "net10.0-android" / "android-arm64" / "app_shared_libraries";
+            var symbolsZip = ArtifactsDirectory /
+                $"{aabFiles.First().Name.Replace("-Signed.aab", "")}-native-symbols.zip";
+            CreateAndValidateAndroidSymbols(sharedLibsDir, ArtifactsDirectory / aabFiles.First().Name, symbolsZip);
+            Serilog.Log.Information($"Created native symbols zip {symbolsZip.Name}");
         }
         else
         {
@@ -220,6 +347,71 @@ partial class Build
         }
 
         Serilog.Log.Information($"Android AAB package created in {ArtifactsDirectory}");
+    }
+
+    /// <summary>
+    /// Packages the native debug symbols for an already-built AAB and validates
+    /// the archive. The full Package job is master-only; the app_ci Release
+    /// build runs this target on the pull request so a symbols regression fails
+    /// before merge instead of first at release time (#2970).
+    /// </summary>
+    Target PackageAndroidSymbols => _ => _
+        .Description("Package Android native debug symbols for an already-built AAB and validate the archive")
+        .Requires(() => AabPath)
+        .Requires(() => AndroidSymbolsPath)
+        .Executes(() =>
+        {
+            var aabFile = (AbsolutePath)AabPath!;
+            var symbolsFile = (AbsolutePath)AndroidSymbolsPath!;
+            Assert.FileExists(aabFile, $"AAB file not found: {aabFile}");
+            // Select the published framework/RID, never a stale sibling build.
+            var sharedLibsDir = MainProject.Parent / "obj" / Configuration /
+                "net10.0-android" / "android-arm64" / "app_shared_libraries";
+            Assert.True(sharedLibsDir.DirectoryExists(),
+                $"Android shared libraries not found at {sharedLibsDir} — build the Android release first");
+            CreateAndValidateAndroidSymbols(sharedLibsDir, aabFile, symbolsFile);
+            Serilog.Log.Information($"Native symbols archive {symbolsFile.Name} is valid for {aabFile.Name}");
+        });
+
+    Target VerifyAndroidSymbols => _ => _
+        .Description("Validate a packaged native-symbols archive against the AAB it ships beside")
+        .Requires(() => AabPath)
+        .Requires(() => AndroidSymbolsPath)
+        .Executes(() =>
+        {
+            var aabFile = (AbsolutePath)AabPath!;
+            var symbolsFile = (AbsolutePath)AndroidSymbolsPath!;
+            Assert.FileExists(aabFile, $"AAB file not found: {aabFile}");
+            Assert.FileExists(symbolsFile, $"Native symbols file not found: {symbolsFile}");
+            LogSymbolCoverage(AndroidNativeSymbols.Validate(symbolsFile, aabFile));
+            Serilog.Log.Information($"Native symbols archive {symbolsFile.Name} is valid for {aabFile.Name}");
+        });
+
+    /// <summary>
+    /// Produces the Play symbols archive beside a built AAB, then proves the
+    /// file on disk — not just the intermediates — meets the contract the
+    /// deploy target re-checks before any store write (#2970).
+    /// </summary>
+    static void CreateAndValidateAndroidSymbols(AbsolutePath sharedLibsDir, AbsolutePath aab, AbsolutePath symbolsZip)
+    {
+        AndroidNativeSymbols.Create(sharedLibsDir, aab, symbolsZip);
+        LogSymbolCoverage(AndroidNativeSymbols.Validate(symbolsZip, aab));
+    }
+
+    /// <summary>
+    /// Documents which bundled arm64 libraries ship without debug symbols —
+    /// .NET/Android runtime libraries are stripped-only upstream, and Play
+    /// accepts partial coverage. Reported honestly instead of claiming
+    /// complete symbol coverage (#2970).
+    /// </summary>
+    static void LogSymbolCoverage(IReadOnlyList<string> uncovered)
+    {
+        if (uncovered.Count > 0)
+        {
+            Serilog.Log.Warning(
+                $"No debug symbols for {uncovered.Count} bundled arm64 libraries shipped stripped-only " +
+                $"by the .NET/Android runtime: {string.Join(", ", uncovered)}");
+        }
     }
 
     void PackageIos()

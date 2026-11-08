@@ -19,9 +19,4 @@ public partial class ParashaListPage : ContentPage //NOSONAR
         base.OnAppearing();
         _ = _viewModel.LoadAsync();
     }
-
-    private void OnMenuButtonClicked(object? sender, EventArgs e)
-    {
-        Shell.Current.FlyoutIsPresented = true;
-    }
 }

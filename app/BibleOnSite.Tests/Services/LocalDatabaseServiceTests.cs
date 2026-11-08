@@ -26,7 +26,7 @@ public class LocalDatabaseServiceTests
                 return null;
             }
 
-            return Path.Combine(projectRoot, "BibleOnSite", "Resources", "Raw");
+            return Path.Join(projectRoot, "BibleOnSite", "Resources", "Raw");
         }
         catch
         {
@@ -42,7 +42,7 @@ public class LocalDatabaseServiceTests
             return false;
         }
 
-        var dbPath = Path.Combine(rawPath, ExpectedDbName);
+        var dbPath = Path.Join(rawPath, ExpectedDbName);
         return File.Exists(dbPath);
     }
 
@@ -60,7 +60,7 @@ public class LocalDatabaseServiceTests
 
         // We can't directly access LocalDatabaseService.DbName since it's private,
         // so we verify the raw resource file exists with the expected name.
-        var resourcePath = Path.Combine(
+        var resourcePath = Path.Join(
             GetProjectRoot()!,
             "BibleOnSite",
             "Resources",
@@ -78,7 +78,7 @@ public class LocalDatabaseServiceTests
         // Skip in CI - database file is not tracked in git
         Assert.SkipUnless(DatabaseFileExists(), "Database file not present (expected in CI)");
 
-        var resourcePath = Path.Combine(
+        var resourcePath = Path.Join(
             GetProjectRoot()!,
             "BibleOnSite",
             "Resources",
@@ -136,7 +136,7 @@ public class LocalDatabaseServiceTests
         var dir = new DirectoryInfo(currentDir);
 
         // Walk up until we find the app directory (contains bible-on-site.slnx or the app folder structure)
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "BibleOnSite")))
+        while (dir != null && !Directory.Exists(Path.Join(dir.FullName, "BibleOnSite")))
         {
             dir = dir.Parent;
         }

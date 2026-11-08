@@ -1,8 +1,8 @@
-#!/usr/bin/env npx tsx
+#!/usr/bin/env node
 /**
  * Get the latest released version of a module from git tags.
  *
- * Usage: npx tsx get-version.ts --module <app|web/api|web/bible-on-site>
+ * Usage: node get-version.ts --module <app|web/api|web/bible-on-site>
  *        Also accepts short names: app, api, website
  */
 

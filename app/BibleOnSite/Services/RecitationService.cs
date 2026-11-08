@@ -50,7 +50,7 @@ public sealed class RecitationService
     public int AvailableCount => _tracks.Count;
 
     /// <summary>Recordings whose catalogued audio file exists locally.</summary>
-    public int InstalledCount => _tracks.Values.Count(track => File.Exists(AudioPath(track)));
+    public int InstalledCount => _tracks.Values.Count(track => InstalledFiles.Contains(track.PlaybackFileName));
 
     /// <summary>Three-state summary of locally usable audio (none / partial / complete).</summary>
     public RecitationInstallState InstallState
@@ -66,8 +66,35 @@ public sealed class RecitationService
             return installed == AvailableCount ? RecitationInstallState.Installed : RecitationInstallState.Partial;
         }
     }
-    private string DirectoryPath => Path.Combine(_files.AppDataDirectory, "extensions", "recitation");
-    private string AudioPath(RecitationTrack track) => Path.Combine(DirectoryPath, track.PlaybackFileName);
+    private string DirectoryPath => Path.Join(_files.AppDataDirectory, "extensions", "recitation");
+    private string AudioPath(RecitationTrack track) => Path.Join(DirectoryPath, track.PlaybackFileName);
+
+    // UI-bound getters evaluate install state several times per refresh; one directory
+    // listing serves them all. Files only change through this service's own gated
+    // operations, so the snapshot is rebuilt after every mutation (see OnChanged).
+    private readonly Lock _installedSync = new();
+    private HashSet<string>? _installedFiles;
+    private HashSet<string> InstalledFiles
+    {
+        get
+        {
+            lock (_installedSync)
+            {
+                return _installedFiles ??= Directory.Exists(DirectoryPath)
+                    ? Directory.EnumerateFiles(DirectoryPath).Select(Path.GetFileName).OfType<string>().ToHashSet()
+                    : [];
+            }
+        }
+    }
+
+    private void OnChanged()
+    {
+        lock (_installedSync)
+        {
+            _installedFiles = null;
+        }
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
 
     public RecitationService(IFileSystem files, IPadDeliveryService delivery)
         : this(files, delivery, null)
@@ -91,7 +118,7 @@ public sealed class RecitationService
     }
 
     public RecitationTrack? GetTrack(int perekId) => _tracks.GetValueOrDefault(perekId);
-    public bool HasAudio(int perekId) => GetTrack(perekId) is { } track && File.Exists(AudioPath(track));
+    public bool HasAudio(int perekId) => GetTrack(perekId) is { } track && InstalledFiles.Contains(track.PlaybackFileName);
 
     // Timings are coupled to the installed app release, just like the Perushim catalog.
     public Task RefreshIfStaleAsync() => InitializeAsync();
@@ -115,7 +142,7 @@ public sealed class RecitationService
         }
         finally { _gate.Release(); }
         SweepOrphanedAudioFiles();
-        Changed?.Invoke(this, EventArgs.Empty);
+        OnChanged();
     }
 
     /// <summary>
@@ -142,7 +169,7 @@ public sealed class RecitationService
         finally
         {
             _downloadGate.Release();
-            Changed?.Invoke(this, EventArgs.Empty);
+            OnChanged();
         }
     }
 
@@ -170,7 +197,7 @@ public sealed class RecitationService
         finally
         {
             _downloadGate.Release();
-            Changed?.Invoke(this, EventArgs.Empty);
+            OnChanged();
         }
     }
 
@@ -245,7 +272,8 @@ public sealed class RecitationService
                 var missing = new List<RecitationTrack>();
                 foreach (var track in tracks)
                 {
-                    if (!await MatchesHashAsync(AudioPath(track), track.PlaybackSha256, cancellationToken))
+                    var matches = await MatchesHashAsync(AudioPath(track), track.PlaybackSha256, cancellationToken);
+                    if (!matches)
                     {
                         missing.Add(track);
                     }
@@ -265,7 +293,7 @@ public sealed class RecitationService
                     {
                         // Only obsolete app downloads, after verified replacement.
                         // The archival/pipeline recordings are outside this directory.
-                        try { File.Delete(Path.Combine(DirectoryPath, oldName)); } catch (IOException) { /* A player can still be releasing the old download. */ }
+                        try { File.Delete(Path.Join(DirectoryPath, oldName)); } catch (IOException) { /* A player can still be releasing the old download. */ }
                     }
                 }
                 completed += book.SizeBytes;
@@ -275,7 +303,7 @@ public sealed class RecitationService
         finally
         {
             _downloadGate.Release();
-            Changed?.Invoke(this, EventArgs.Empty);
+            OnChanged();
         }
     }
 
@@ -287,14 +315,16 @@ public sealed class RecitationService
         {
             directory = await _delivery.TryGetAssetPathAsync(book.PackName, cancellationToken);
         }
-        var path = directory == null ? null : new[] { Path.Combine(directory, book.FileName),
-            Path.Combine(directory, "assets", book.FileName) }.FirstOrDefault(File.Exists);
-        var bundledCopy = Path.Combine(DirectoryPath, book.FileName + ".download");
+        var path = directory == null ? null : new[] { Path.Join(directory, book.FileName),
+            Path.Join(directory, "assets", book.FileName) }.FirstOrDefault(File.Exists);
+        var bundledCopy = Path.Join(DirectoryPath, book.FileName + ".download");
         try
         {
             if (path == null)
             {
-                // Windows and sideloaded Debug builds use the same payload as a package asset.
+                // Debug builds bundle the same payload as a package asset for
+                // offline/dev installs; Release builds never bundle it — packs
+                // arrive through the store or release-payload delivery.
                 // Store mobile builds never bundle this fallback and never contact S3.
                 await using var bundled = await _files.OpenAppPackageFileAsync(book.FileName);
                 await using (var file = File.Create(bundledCopy))
@@ -396,17 +426,14 @@ public sealed class RecitationService
                 throw new InvalidDataException("Download this book's recordings again in preferences.");
             }
 
-            var cache = Path.Combine(_files.CacheDirectory, "recitation");
+            var cache = Path.Join(_files.CacheDirectory, "recitation");
             Directory.CreateDirectory(cache);
-            var chapter = Path.Combine(cache, "chapter-" + track.PlaybackSha256 + ".wav");
-            foreach (var old in Directory.EnumerateFiles(cache, "*.wav"))
+            var chapter = Path.Join(cache, "chapter-" + track.PlaybackSha256 + ".wav");
+            // A decoded chapter survives for instant replay; native players may
+            // still finish releasing a previous file asynchronously.
+            foreach (var old in Directory.EnumerateFiles(cache, "*.wav").Where(old => old != chapter))
             {
-                // A decoded chapter survives for instant replay; native players may
-                // still finish releasing a previous file asynchronously.
-                if (old != chapter)
-                {
-                    try { File.Delete(old); File.Delete(old + ".sha256"); } catch (IOException) { /* The native player can retain its last file until asynchronous release. */ }
-                }
+                try { File.Delete(old); File.Delete(old + ".sha256"); } catch (IOException) { /* The native player can retain its last file until asynchronous release. */ }
             }
             cancellationToken.ThrowIfCancellationRequested();
             if (intervals == null)
@@ -445,7 +472,7 @@ public sealed class RecitationService
                 return chapter;
             }
 
-            var clip = Path.Combine(cache, "clip-" + Guid.NewGuid().ToString("N") + ".wav");
+            var clip = Path.Join(cache, "clip-" + Guid.NewGuid().ToString("N") + ".wav");
             if (decoder == null)
             {
                 throw new InvalidOperationException("A precise audio decoder is required.");

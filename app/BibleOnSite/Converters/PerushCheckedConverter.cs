@@ -18,24 +18,24 @@ public class PerushCheckedConverter : IMultiValueConverter
         }
 
         var id = values[0] is int i ? i : (values[0] is long l && l is >= int.MinValue and <= int.MaxValue ? (int)l : (int?)null);
-        if (!id.HasValue)
+        if (id is not { } perushId)
         {
             return false;
         }
 
         if (values[1] is IList<int> intList)
         {
-            return intList.Contains(id.Value);
+            return intList.Contains(perushId);
         }
 
         if (values[1] is IEnumerable<int> intEnum)
         {
-            return intEnum.Contains(id.Value);
+            return intEnum.Contains(perushId);
         }
 
         if (values[1] is IEnumerable en)
         {
-            return en.Cast<object>().Any(x => x is int k && k == id.Value);
+            return en.Cast<object>().Any(x => x is int k && k == perushId);
         }
 
         return false;

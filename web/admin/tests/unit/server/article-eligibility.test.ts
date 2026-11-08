@@ -66,7 +66,11 @@ describe("article distribution eligibility", () => {
 		expect(created.distributable).toBe(true);
 		// First tx write is the INSERT; approval flag travels in its params.
 		expect(mocks.txExecute.mock.calls[0][2]).toContain(true);
-		expect(await getArticle({ data: 7 })).toEqual({ ...article, id: 7 });
+		expect(await getArticle({ data: 7 })).toEqual({
+			...article,
+			id: 7,
+			moedIds: [],
+		});
 		expect(mocks.queryOne.mock.calls[0][0]).toContain("distributable");
 	});
 	it("persists revocation and requires a boolean approval for old clients", async () => {
@@ -85,8 +89,10 @@ describe("article distribution eligibility", () => {
 			data: { ...article, distributable: undefined as unknown as boolean },
 		});
 		// The second create's INSERT params carry the coerced false.
+		// (`tanah_article (` — the reading-metrics upsert targets
+		// `tanah_article_metric`, which shares the prefix.)
 		const createCalls = mocks.txExecute.mock.calls.filter((c) =>
-			(c[1] as string).startsWith("INSERT INTO tanah_article"),
+			(c[1] as string).startsWith("INSERT INTO tanah_article ("),
 		);
 		expect(createCalls.at(-1)?.[2]).toContain(false);
 	});

@@ -192,8 +192,8 @@ public sealed class FloatingSearchBarTests(OfflineSearchFixture fixture)
 
     private void CapturePreview(string name)
     {
-        var artifacts = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".artifacts"));
+        var artifacts = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".artifacts"));
         Directory.CreateDirectory(artifacts);
-        Capture.Element(fixture.MainWindow).ToFile(Path.Combine(artifacts, name));
+        Capture.Element(fixture.MainWindow).ToFile(Path.Join(artifacts, name));
     }
 }

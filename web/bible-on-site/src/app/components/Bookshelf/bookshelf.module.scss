@@ -132,26 +132,6 @@ button.block {
   transform: rotateX(-90deg) translateZ($sqSize);
 }
 
-.blockInner > div {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  position: absolute;
-  width: $sqSize;
-  height: $sqSize;
-
-  // Shadow overlay for 3D effect
-  &::before {
-    content: "";
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    background-color: #000;
-    opacity: 0.2;
-    pointer-events: none;
-  }
-}
-
 .back {
   transform: translateZ(-$sqSize) rotateY(180deg);
 
@@ -189,23 +169,34 @@ button.block {
   transform-origin: top center;
 }
 
-// Spine text - vertical, rotated 90 degrees
+// Spine title line - the sefer name and its dedication share one line,
+// rotated 90 degrees as a unit. Its box is the spine turned on its side
+// (width/height set inline from sqSize), so in the line's own RTL frame the
+// name sits centered in the free space and the dedication is pinned to the
+// line's end (its left before rotation, the spine top after it).
+.spineLine {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(90deg);
+  // Equal side tracks keep the name centered; the dedication sits in the end track.
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  direction: rtl;
+  white-space: nowrap;
+}
+
 .spineText {
   font-family: inherit; // Use website font, avoid mixing font families
   font-weight: bold;
   -webkit-font-smoothing: antialiased;
-  position: absolute;
+  grid-column: 2;
   background: transparent;
   color: #fff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   font-size: $fFontSize;
   line-height: $fFontSize;
-  top: 50%;
-  left: 50%;
-  transform-origin: 0 50%;
-  transform: rotate(90deg) translateX(-50%);
-  white-space: nowrap;
-  width: max-content;
 }
 
 // Cover content container - positioned at 25% from top
@@ -244,6 +235,82 @@ button.block {
   margin-top: 4px;
 }
 
+// Dedication caption at the end of the spine title line (#2849). Long or
+// multiple dedications stay on the line and end in an ellipsis; the full
+// wording stays in the button's accessible name and the hover title.
+.spineDedication {
+  font-family: inherit;
+  grid-column: 3;
+  justify-self: end;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
+  line-height: 1.3;
+}
+
+// Helek dedication caption beside a shelf's helek heading (#2731),
+// tucked under the 3D scene in multi-shelf mode.
+.helekDedications {
+  margin-top: 4px;
+  text-align: center;
+  direction: rtl;
+  font-size: 0.75rem;
+  color: #4c3a28;
+  line-height: 1.35;
+
+  p {
+    margin: 0;
+  }
+}
+
+// Single-shelf mode: one strip under the scene, groups width-aligned to
+// their helek's shelf span so each caption sits by its heading (#2731).
+.helekDedicationStrip {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  direction: rtl;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.helekDedicationGroup {
+  flex: 0 1 auto;
+  min-width: 0;
+  text-align: center;
+  direction: rtl;
+  font-size: 0.72rem;
+  color: #4c3a28;
+  line-height: 1.3;
+
+  p {
+    margin: 0;
+  }
+}
+
+// #2849 §1a — no bookshelf dedication captions on small screens: sefer-spine
+// captions, per-shelf helek captions and the single-shelf strip all hide
+// below the website's tablet boundary (767.98px ≈ TABLET_MIN_WIDTH in
+// src/hooks/useIsWideEnough.ts — keep in sync). A media query, not a JS
+// gate, so a phone-sized first paint never flashes the desktop-layout
+// dedication copy the SSR/first render emits at the default 1200px width.
+// The 768–899px tablet multi-shelf still shows them; only the 900px
+// shelf-layout switch is a separate boundary. `display: none` leaves no
+// reserved strip, margin or focusable offscreen caption.
+@media (max-width: 767.98px) {
+  .spineDedication,
+  .helekDedications,
+  .helekDedicationStrip {
+    display: none;
+  }
+}
+
 // Bookmark ribbon on today's sefer — hangs from top of spine.
 // Uses two pseudo-layers: white outline (::before, slightly larger) behind
 // the red ribbon (::after), both V-notched via clip-path.
@@ -272,6 +339,26 @@ button.block {
     inset: 0;
     background: linear-gradient(180deg, #c0392b 85%, #a93226 100%);
     clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 70%, 0 100%);
+  }
+}
+
+.blockInner > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  position: absolute;
+  width: $sqSize;
+  height: $sqSize;
+
+  // Shadow overlay for 3D effect
+  &::before {
+    content: "";
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    opacity: 0.2;
+    pointer-events: none;
   }
 }
 

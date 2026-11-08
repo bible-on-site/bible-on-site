@@ -1,6 +1,10 @@
-use async_graphql::{ComplexObject, Context, Result, SimpleObject};
+use async_graphql::{ComplexObject, Context, ErrorExtensions, Result, SimpleObject};
 
-use crate::{providers::Database, services::articles_service};
+use crate::{
+    dtos::reading_metric::{ReadingMetric, ReadingProgressUnit},
+    providers::Database,
+    services::{articles_service, reading_metrics_service},
+};
 use entities::article::Model;
 
 /// One canonical {perek_id, pasuk} coordinate an article covers
@@ -33,6 +37,15 @@ pub struct Article {
     /// consumers use the primary perek association without claiming pasuk
     /// precision (legacy articles whose coverage was never mapped).
     pub coverage_verified: bool,
+    /// Shared persisted reading metrics over the full article body — not the
+    /// abstract (issue #2607). `null` = unknown/not computed; a populated
+    /// metric with wordCount 0 = verified empty body.
+    pub reading_metric: Option<ReadingMetric>,
+    /// Covering sources preloaded by list resolvers in one batched query —
+    /// `None` means they were not preloaded and resolve on demand
+    /// (single-article fields), `Some` is authoritative (possibly empty).
+    #[graphql(skip)]
+    pub covering_sources: Option<Vec<ArticleCoveringSource>>,
 }
 
 impl From<Model> for Article {
@@ -46,6 +59,26 @@ impl From<Model> for Article {
             name: value.name,
             priority: value.priority as i32,
             coverage_verified: value.coverage_verified,
+            reading_metric: None,
+            covering_sources: None,
+        }
+    }
+}
+
+impl From<articles_service::ArticleSummary> for Article {
+    fn from(value: articles_service::ArticleSummary) -> Self {
+        Self {
+            id: value.id,
+            perek_id: value.perek_id as i32,
+            author_id: value.author_id as i32,
+            article_abstract: value.article_abstract,
+            // Starter rows project out `content`; bodies load via `article(id)`.
+            article_content: None,
+            name: value.name,
+            priority: value.priority as i32,
+            coverage_verified: value.coverage_verified,
+            reading_metric: None,
+            covering_sources: None,
         }
     }
 }
@@ -57,6 +90,9 @@ impl Article {
     /// mapped — interpret it through coverage_verified (verified-empty is
     /// rejected on write, so empty + verified does not occur in practice).
     async fn covering_sources(&self, ctx: &Context<'_>) -> Result<Vec<ArticleCoveringSource>> {
+        if let Some(sources) = &self.covering_sources {
+            return Ok(sources.clone());
+        }
         let sources =
             articles_service::find_covering_sources_by_article_id(ctx.data::<Database>()?, self.id)
                 .await?;
@@ -67,6 +103,17 @@ impl Article {
                 pasuk: model.pasuk as i32,
             })
             .collect())
+    }
+
+    /// Ordered readable-block units over the article body for word-weighted
+    /// reading-position progress (issue #2607). Resolved only when selected —
+    /// list queries never pay for it. Empty when uncomputed.
+    async fn progress_units(&self, ctx: &Context<'_>) -> Result<Vec<ReadingProgressUnit>> {
+        let units =
+            reading_metrics_service::block_units_by_article_id(ctx.data::<Database>()?, self.id)
+                .await
+                .map_err(|e| e.extend())?;
+        Ok(units.into_iter().map(Into::into).collect())
     }
 }
 
@@ -97,6 +144,9 @@ pub struct ArticleSearchHit {
     pub semantic_score: f32,
     /// Lexical (term-frequency) component of `score`.
     pub lexical_score: f32,
+    /// Shared persisted reading metrics over the full article body — filled
+    /// by the resolver via one batched lookup (issue #2607).
+    pub reading_metric: Option<ReadingMetric>,
 }
 
 /// Paginated article-search response: `total` counts all matching articles
@@ -105,4 +155,109 @@ pub struct ArticleSearchHit {
 pub struct ArticleSearchResults {
     pub total: i32,
     pub hits: Vec<ArticleSearchHit>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use entities::article_covering_source;
+    use sea_orm::{DatabaseBackend, MockDatabase};
+
+    fn article() -> Article {
+        Article {
+            id: 1,
+            perek_id: 1,
+            author_id: 1,
+            article_abstract: None,
+            article_content: None,
+            name: "Article".to_string(),
+            priority: 1,
+            coverage_verified: false,
+            reading_metric: None,
+            covering_sources: None,
+        }
+    }
+
+    /// An article with preloaded sources answers `coveringSources` without
+    /// touching the database — the list path batch-loads them in one query.
+    #[tokio::test]
+    async fn covering_sources_returns_the_preloaded_sources_without_a_db_query() {
+        struct Query;
+        #[async_graphql::Object]
+        impl Query {
+            async fn article(&self) -> Article {
+                Article {
+                    covering_sources: Some(vec![ArticleCoveringSource {
+                        perek_id: 3,
+                        pasuk: 1,
+                    }]),
+                    ..article()
+                }
+            }
+        }
+        let schema = async_graphql::Schema::build(
+            Query,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .finish();
+
+        let res = schema
+            .execute("{ article { coveringSources { perekId pasuk } } }")
+            .await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let sources = res.data.into_json().unwrap()["article"]["coveringSources"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0]["perekId"].as_i64(), Some(3));
+        assert_eq!(sources[0]["pasuk"].as_i64(), Some(1));
+    }
+
+    /// An article without preloaded sources falls back to the per-article
+    /// query — the single-article path (`articleById`).
+    #[tokio::test]
+    async fn covering_sources_falls_back_to_a_db_query_when_not_preloaded() {
+        struct Query;
+        #[async_graphql::Object]
+        impl Query {
+            async fn article(&self) -> Article {
+                article()
+            }
+        }
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<article_covering_source::Model, Vec<_>, _>([vec![
+                    article_covering_source::Model {
+                        article_id: 1,
+                        perek_id: 3,
+                        pasuk: 1,
+                        created_at: chrono::Utc::now(),
+                    },
+                ]])
+                .into_connection(),
+        );
+        let schema = async_graphql::Schema::build(
+            Query,
+            async_graphql::EmptyMutation,
+            async_graphql::EmptySubscription,
+        )
+        .data(db)
+        .finish();
+
+        let res = schema
+            .execute("{ article { coveringSources { perekId pasuk } } }")
+            .await;
+
+        assert!(res.errors.is_empty(), "{:?}", res.errors);
+        let sources = res.data.into_json().unwrap()["article"]["coveringSources"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0]["perekId"].as_i64(), Some(3));
+        assert_eq!(sources[0]["pasuk"].as_i64(), Some(1));
+    }
 }

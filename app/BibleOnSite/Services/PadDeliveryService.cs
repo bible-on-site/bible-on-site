@@ -6,6 +6,12 @@ using Xamarin.Google.Android.Play.Core.AssetPacks.Model;
 using BackgroundAssets;
 using Foundation;
 using System.Runtime.Versioning;
+#elif WINDOWS
+using Windows.Foundation.Metadata;
+using Windows.Storage;
+using Windows.Services.Store;
+using WinRT.Interop;
+using Package = Windows.ApplicationModel.Package;
 #endif
 using System.Net.Http;
 
@@ -15,6 +21,8 @@ namespace BibleOnSite.Services;
 /// On-demand asset delivery service.
 /// Android: Play Asset Delivery via AssetPackManager.
 /// iOS: Apple Background Assets via BAAssetPackManager (managed asset packs).
+/// Windows: MSIX optional packages via Store DLC, or the release-payload
+/// fallback when Store add-ons are not configured or the app runs unpackaged.
 /// Other platforms: no-op.
 /// </summary>
 public sealed partial class PadDeliveryService : IPadDeliveryService
@@ -32,9 +40,11 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     /// <summary>
     /// Pack payload files published on the app-v* GitHub release — the delivery
     /// path for runtimes where managed asset packs cannot exist (iOS/MacCatalyst
-    /// below 26, or builds without the app-group entitlement). The first entry
-    /// is the required payload; later entries are best-effort companions (the
-    /// prebuilt search index — the app rebuilds it on-device when absent).
+    /// below 26, or builds without the app-group entitlement). Every entry is
+    /// required: the perushim pack pairs its notes DB with the prebuilt search
+    /// index — the device never rebuilds the commentary index (#2222), so a
+    /// release missing either file must fail the fetch rather than cache the
+    /// unservable half-payload <see cref="PackPayloadComplete"/> rejects.
     /// </summary>
     internal static IReadOnlyList<string> ReleasePayloadFiles(string packName)
     {
@@ -57,8 +67,8 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     /// Streams each release-published payload file into the pack's cache dir
     /// through a ".download" temp + rename, so an interrupted fetch never leaves
     /// a partial file that <see cref="TryGetAssetPathAsync"/> would then serve.
-    /// Returns the failure reason, or null once the required payload landed;
-    /// optional companions are skipped best-effort.
+    /// Returns the failure reason, or null once every listed payload landed —
+    /// the pack is unservable until all of them are on disk.
     /// </summary>
     internal static async Task<string?> DownloadReleasePayloadsAsync(
         HttpClient client, IAppInfo appInfo, string packName, string cacheDir,
@@ -76,14 +86,11 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
                     new ScaledProgress(index, files.Count, progress),
                     cancellationToken);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            #pragma warning disable S2221 // Deliberate failure boundary: a failed payload is reported as an error string
+            catch (Exception ex) when (ex is not OperationCanceledException) //NOSONAR — a failed payload is reported as an error string.
             {
-                if (index == 0)
-                {
-                    return $"{ex.GetType().Name}: {ex.Message}";
-                }
-                System.Diagnostics.Debug.WriteLine(
-                    $"Optional release payload '{fileName}' unavailable: {ex.Message}");
+                #pragma warning restore S2221
+                return $"{fileName}: {ex.GetType().Name}: {ex.Message}";
             }
         }
         return null;
@@ -181,6 +188,16 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     private static void LogAssetPackSweepFailure(Exception ex) =>
         System.Diagnostics.Debug.WriteLine($"Asset-pack stale generation cleanup: {ex.Message}");
 
+    /// <summary>
+    /// The pack's complete payload contract inside a delivery directory: the
+    /// required payload plus the search-index companion the perushim pack
+    /// carries. A partial extraction must not hide a missing index.
+    /// </summary>
+    internal static bool PackPayloadComplete(string directory, string packName) =>
+        File.Exists(Path.Join(directory, PayloadFileName(packName))) &&
+        (packName != PerushimNotesPackName ||
+            File.Exists(Path.Join(directory, PerushimNotesService.SearchIndexDbName)));
+
     /// <inheritdoc />
     public Task<string?> TryGetAssetPathAsync(string packName, CancellationToken cancellationToken = default)
     {
@@ -188,6 +205,8 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
         return TryGetAssetPathAndroidAsync(packName);
 #elif IOS || MACCATALYST
         return TryGetAssetPathIosAsync(packName, cancellationToken);
+#elif WINDOWS
+        return TryGetAssetPathWindowsAsync(packName, cancellationToken);
 #else
         return Task.FromResult<string?>(null);
 #endif
@@ -203,6 +222,8 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
         return FetchAndroidAsync(packName, progress, cancellationToken);
 #elif IOS || MACCATALYST
         return FetchIosAsync(packName, progress, cancellationToken);
+#elif WINDOWS
+        return FetchWindowsAsync(packName, progress, cancellationToken);
 #else
         return Task.FromResult(false);
 #endif
@@ -215,6 +236,8 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
         return GetDeliveryDiagnosticsAndroidAsync(packName);
 #elif IOS || MACCATALYST
         return GetDeliveryDiagnosticsIosAsync(packName);
+#elif WINDOWS
+        return GetDeliveryDiagnosticsWindowsAsync(packName);
 #else
         return Task.FromResult(new List<string> { "Platform: no on-demand delivery support" });
 #endif
@@ -248,8 +271,10 @@ partial class PadDeliveryService
             var location = manager.GetPackLocation(packName);
             return Task.FromResult(location?.AssetsPath());
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: pack-location probe: any failure counts as unavailable
+        catch (Exception ex) //NOSONAR — pack-location probe: any failure counts as unavailable.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"PAD GetPackLocation failed: {ex.Message}");
             return Task.FromResult<string?>(null);
         }
@@ -350,8 +375,10 @@ partial class PadDeliveryService
             manager.Cancel(new[] { packName });
             throw;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: pack fetch failure is surfaced via LastAndroidPadError and a false result
+        catch (Exception ex) //NOSONAR — pack fetch failure is surfaced via LastAndroidPadError and a false result.
         {
+            #pragma warning restore S2221
             LastAndroidPadError = $"{ex.GetType().Name}: {ex.Message}";
             System.Diagnostics.Debug.WriteLine($"PAD Fetch failed: {ex.Message}");
             return false;
@@ -388,8 +415,10 @@ partial class PadDeliveryService
                     "If (null) after install from Play: the AAB may have been built without the perushim_notes asset pack (missing .sqlite at CI package time), or the app was not installed from Play.");
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: pack-location failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: pack-location failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"GetPackLocation error: {ex.Message}");
         }
 
@@ -429,8 +458,10 @@ partial class PadDeliveryService
                 lines.Add($"Installer package: {legacy ?? "(null)"}");
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: installer-source failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: installer-source failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"Install source error: {ex.Message}");
         }
     }
@@ -517,9 +548,7 @@ partial class PadDeliveryService
     {
         ct.ThrowIfCancellationRequested();
         var cacheDir = AssetPackCacheDir(packName);
-        // A partial extraction must not hide a missing prebuilt index.
-        if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))) &&
-            (packName != PerushimNotesPackName || File.Exists(Path.Join(cacheDir, PerushimNotesService.SearchIndexDbName))))
+        if (PackPayloadComplete(cacheDir, packName))
         {
             return cacheDir;
         }
@@ -540,8 +569,10 @@ partial class PadDeliveryService
             ct.ThrowIfCancellationRequested();
             return await SaveAssetPackPayloadAsync(cacheDir, packName);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: asset-path lookup failure counts as unavailable
+        catch (Exception ex) //NOSONAR — asset-path lookup failure counts as unavailable.
         {
+            #pragma warning restore S2221
             ct.ThrowIfCancellationRequested();
             System.Diagnostics.Debug.WriteLine($"BA TryGetAssetPath failed: {ex.Message}");
             return null;
@@ -559,8 +590,7 @@ partial class PadDeliveryService
         {
             // An extracted payload remains usable even if the OS evicts its
             // pack — but a partial extraction must not hide a missing index.
-            if (File.Exists(Path.Join(cacheDir, PayloadFileName(packName))) &&
-                (packName != PerushimNotesPackName || File.Exists(Path.Join(cacheDir, PerushimNotesService.SearchIndexDbName))))
+            if (PackPayloadComplete(cacheDir, packName))
             {
                 return true;
             }
@@ -609,8 +639,10 @@ partial class PadDeliveryService
             System.Diagnostics.Debug.WriteLine($"BA: {LastIosDeliveryError}");
             return false;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: delivery fetch failure is surfaced via LastIosDeliveryError and a false result
+        catch (Exception ex) //NOSONAR — delivery fetch failure is surfaced via LastIosDeliveryError and a false result.
         {
+            #pragma warning restore S2221
             ct.ThrowIfCancellationRequested();
             LastIosDeliveryError = $"{ex.GetType().Name}: {ex.Message}";
             System.Diagnostics.Debug.WriteLine($"BA Fetch failed: {ex.Message}");
@@ -800,8 +832,10 @@ partial class PadDeliveryService
             System.Diagnostics.Debug.WriteLine($"BA: saved to {destPath}");
             return true;
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: payload save failure returns a false result
+        catch (Exception ex) //NOSONAR — payload save failure returns a false result.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"BA: save failed: {ex.Message}");
             return false;
         }
@@ -825,8 +859,10 @@ partial class PadDeliveryService
                     $"BA: cancel for '{pack.Identifier}' did not apply: {error?.LocalizedDescription ?? "not scheduled"}");
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: download cancel is best-effort
+        catch (Exception ex) //NOSONAR — download cancel is best-effort.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"BA: cancel failed: {ex.Message}");
         }
     }
@@ -846,8 +882,10 @@ partial class PadDeliveryService
                 var fi = new FileInfo(cachedFile);
                 lines.Add($"Cached file size: {fi.Length} bytes");
             }
-            catch (Exception ex)
+            #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: cached-file info failure becomes a report line
+            catch (Exception ex) //NOSONAR — diagnostics collection: cached-file info failure becomes a report line.
             {
+                #pragma warning restore S2221
                 lines.Add($"Cached file info error: {ex.Message}");
             }
         }
@@ -862,8 +900,10 @@ partial class PadDeliveryService
             lines.Add($"BAUsesAppleHosting: {info.ObjectForInfoDictionary("BAUsesAppleHosting")?.ToString() ?? "(unset)"}");
             lines.Add($"BAAppGroupID: {info.ObjectForInfoDictionary("BAAppGroupID")?.ToString() ?? "(unset)"}");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: Info.plist probe failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: Info.plist probe failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"Info.plist probe error: {ex.Message}");
         }
 
@@ -875,8 +915,10 @@ partial class PadDeliveryService
                 : NSFileManager.DefaultManager.GetContainerUrl(groupId);
             lines.Add($"App-group container: {(container == null ? "inaccessible" : "accessible")}");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: app-group probe failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: app-group probe failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"App-group container probe error: {ex.Message}");
         }
 
@@ -912,8 +954,10 @@ partial class PadDeliveryService
                     var status = await BAAssetPackManager.SharedManager.GetLocalStatusAsync(packName).WaitAsync(TimeSpan.FromMinutes(2));
                     lines.Add($"Local status: {status}");
                 }
-                catch (Exception ex)
+                #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: local-status probe failure becomes a report line
+                catch (Exception ex) //NOSONAR — diagnostics collection: local-status probe failure becomes a report line.
                 {
+                    #pragma warning restore S2221
                     lines.Add($"Local status error: {ex.GetType().Name}: {ex.Message}");
                 }
             }
@@ -922,8 +966,10 @@ partial class PadDeliveryService
                 lines.Add("Local status probe requires iOS 26.4 or later.");
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: availability probe failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: availability probe failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"Availability probe error: {ex.GetType().Name}: {ex.Message}");
         }
 
@@ -933,8 +979,10 @@ partial class PadDeliveryService
                 .Cast<BAAssetPack>().Select(p => p.Identifier).OrderBy(id => id).ToList();
             lines.Add($"Store packs ({packs.Count}): {string.Join(", ", packs)}");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: store-pack list failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: store-pack list failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"GetAllAssetPacks error: {ex.GetType().Name}: {ex.Message}");
         }
 
@@ -945,8 +993,10 @@ partial class PadDeliveryService
             var driveInfo = new DriveInfo(Path.GetPathRoot(cacheRoot) ?? "/");
             lines.Add($"Available disk space: {driveInfo.AvailableFreeSpace / (1024 * 1024)} MB");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: disk-space probe failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: disk-space probe failure becomes a report line.
         {
+            #pragma warning restore S2221
             lines.Add($"Disk space check error: {ex.Message}");
         }
 
@@ -1024,6 +1074,328 @@ partial class PadDeliveryService
         {
             public void Dispose() => owner.Unsubscribe(key);
         }
+    }
+}
+#endif
+
+#if WINDOWS
+// Windows on-demand delivery: MSIX optional packages form a related set with
+// the main package and install from the Microsoft Store as durable DLC
+// add-ons (StoreContext.RequestDownloadAndInstallStorePackagesAsync, keyed by
+// the StoreIds recorded in the bundled windows-extension-packs.json map).
+// Store add-on registration is a Partner Center step; builds without it — and
+// every unpackaged/sideloaded install — deliver the identical payload bytes
+// from the app-v* GitHub release into the same generation-scoped cache.
+partial class PadDeliveryService
+{
+    /// <summary>Last Windows delivery error or reason (for support diagnostics).</summary>
+    internal static string? LastWindowsDeliveryError { get; private set; }
+
+    private static readonly Lazy<HttpClient> _releasePayloadClient =
+        new(() => new HttpClient { Timeout = Timeout.InfiniteTimeSpan });
+
+    private static WindowsExtensionPackMap? _storeMap;
+
+    private static string AssetPackCacheDir(string packName) =>
+        AssetPackCacheDirectory(FileSystem.Current, AppInfo.Current, packName);
+
+    /// <summary>Null when the app has no package identity (WindowsPackageType=None).</summary>
+    internal static string? MainPackageName
+    {
+        get
+        {
+            try { return Package.Current.Id.Name; }
+            #pragma warning disable S2221 // Deliberate failure boundary: any identity probe failure means unpackaged
+            catch (Exception) //NOSONAR — any identity probe failure means unpackaged.
+            {
+                #pragma warning restore S2221
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The bundled pack→add-on map. Parsed once; a missing or malformed asset
+    /// yields an empty map so the release-payload fallback still delivers.
+    /// </summary>
+    private static async Task<WindowsExtensionPackMap> GetStoreMapAsync()
+    {
+        if (_storeMap != null)
+        {
+            return _storeMap;
+        }
+        try
+        {
+            await using var stream = await FileSystem.OpenAppPackageFileAsync(WindowsExtensionPackMap.FileName);
+            using var reader = new StreamReader(stream);
+            _storeMap = new WindowsExtensionPackMap(await reader.ReadToEndAsync());
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: map load failure degrades to no store leg
+        catch (Exception ex) //NOSONAR — map load failure degrades to no store leg.
+        {
+            #pragma warning restore S2221
+            System.Diagnostics.Debug.WriteLine($"Extension-pack Store map unavailable: {ex.Message}");
+            _storeMap = new WindowsExtensionPackMap(null);
+        }
+        return _storeMap;
+    }
+
+    /// <summary>
+    /// The installed optional package for this pack, or null. The app's own
+    /// <see cref="Package.Dependencies"/> enumeration covers its installed
+    /// optional packages — no packageQuery capability or PackageManager call
+    /// is needed.
+    /// </summary>
+    private static async Task<Package?> FindInstalledOptionalPackageAsync(string packName)
+    {
+        var mainName = MainPackageName;
+        if (mainName == null)
+        {
+            return null;
+        }
+        var expected = (await GetStoreMapAsync()).PackageNameFor(mainName, packName);
+        try
+        {
+            return Package.Current.Dependencies.FirstOrDefault(
+                p => p.IsOptional && p.Id.Name == expected);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: optional-package probe failure counts as not installed
+        catch (Exception ex) //NOSONAR — optional-package probe failure counts as not installed.
+        {
+            #pragma warning restore S2221
+            System.Diagnostics.Debug.WriteLine($"Optional-package lookup failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static async Task<string?> TryGetAssetPathWindowsAsync(string packName, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var cacheDir = AssetPackCacheDir(packName);
+        if (PackPayloadComplete(cacheDir, packName))
+        {
+            return cacheDir;
+        }
+
+        var package = await FindInstalledOptionalPackageAsync(packName);
+        if (package == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            // Optional packages run inside the main app's container, so a
+            // related-set install dir is readable through plain file IO —
+            // prefer that zero-copy view over extracting a copy. EffectivePath
+            // (the moved-to volume view) only exists on 19041+; older OSes
+            // down to the 17763 floor answer InstalledPath.
+            var installedPath = ApiInformation.IsPropertyPresent(
+                    "Windows.ApplicationModel.Package", "EffectivePath")
+                ? package.EffectivePath ?? package.InstalledPath
+                : package.InstalledPath;
+            if (!string.IsNullOrEmpty(installedPath) &&
+                File.Exists(Path.Join(installedPath, PayloadFileName(packName))))
+            {
+                return installedPath;
+            }
+            ct.ThrowIfCancellationRequested();
+            return await SaveOptionalPackagePayloadAsync(cacheDir, package, packName);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: installed-package read failure counts as unavailable
+        catch (Exception ex) //NOSONAR — installed-package read failure counts as unavailable.
+        {
+            #pragma warning restore S2221
+            ct.ThrowIfCancellationRequested();
+            System.Diagnostics.Debug.WriteLine($"Optional-package asset path failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Copies the pack payloads out of the optional package's install location
+    /// through the StorageFile view — reachable even when the package was
+    /// staged or moved to a volume plain IO cannot see. Each file lands in the
+    /// same generation-scoped extraction cache via temp + rename.
+    /// </summary>
+    private static async Task<string?> SaveOptionalPackagePayloadAsync(
+        string cacheDir, Package package, string packName)
+    {
+        var required = PayloadFileName(packName);
+        var folder = await StorageFolder.GetFolderFromPathAsync(cacheDir);
+        foreach (var name in ReleasePayloadFiles(packName))
+        {
+            if (await package.InstalledLocation.TryGetItemAsync(name) is not StorageFile file)
+            {
+                if (name == required)
+                {
+                    return null;
+                }
+                continue;
+            }
+            var temporary = name + ".download";
+            try
+            {
+                await file.CopyAsync(folder, temporary, NameCollisionOption.ReplaceExisting);
+                File.Move(Path.Join(cacheDir, temporary), Path.Join(cacheDir, name), true);
+            }
+            finally { File.Delete(Path.Join(cacheDir, temporary)); }
+        }
+        return PackPayloadComplete(cacheDir, packName) ? cacheDir : null;
+    }
+
+    private static async Task<bool> FetchWindowsAsync(
+        string packName, IProgress<double>? progress, CancellationToken ct)
+    {
+        LastWindowsDeliveryError = null;
+        var cacheDir = AssetPackCacheDir(packName);
+        try
+        {
+            // An extracted payload remains usable even if the OS removes the
+            // optional package — the same contract the iOS cache keeps.
+            if (PackPayloadComplete(cacheDir, packName) ||
+                await FindInstalledOptionalPackageAsync(packName) != null)
+            {
+                return true;
+            }
+
+            string? storeFailure = null;
+            var storeId = (await GetStoreMapAsync()).StoreIdFor(packName);
+            if (storeId != null && MainPackageName != null)
+            {
+                storeFailure = await TryFetchStorePackageAsync(storeId, progress, ct);
+                if (storeFailure == null &&
+                    await FindInstalledOptionalPackageAsync(packName) != null)
+                {
+                    return true;
+                }
+            }
+
+            // Debug/dev builds bundle the payloads as package assets — the
+            // caller's bundled-asset fallback serves them instantly, so skip
+            // a pointless network round-trip.
+            if (await FileSystem.AppPackageFileExistsAsync(PayloadFileName(packName)))
+            {
+                return false;
+            }
+
+            // Store optional packages need Partner Center add-on products that
+            // a build may not have registered; every other Windows install —
+            // unpackaged, sideloaded, or not yet mapped — downloads identical
+            // release-published payload bytes into the same cache.
+            var releaseFailure = await DownloadReleasePayloadsAsync(
+                _releasePayloadClient.Value, AppInfo.Current, packName, cacheDir, progress, ct);
+            if (releaseFailure == null)
+            {
+                return true;
+            }
+            LastWindowsDeliveryError = storeFailure == null
+                ? $"Release-payload download failed: {releaseFailure}"
+                : $"Store install: {storeFailure}; release fallback: {releaseFailure}";
+            System.Diagnostics.Debug.WriteLine($"Windows delivery: {LastWindowsDeliveryError}");
+            return false;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: delivery fetch failure is surfaced via LastWindowsDeliveryError and a false result
+        catch (Exception ex) //NOSONAR — delivery fetch failure is surfaced via LastWindowsDeliveryError and a false result.
+        {
+            #pragma warning restore S2221
+            ct.ThrowIfCancellationRequested();
+            LastWindowsDeliveryError = $"{ex.GetType().Name}: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"Windows Fetch failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The Store install leg: requests the pack's durable add-on package.
+    /// The OS shows its own confirmation dialog on the UI thread, so the call
+    /// is marshalled through the main thread and the context is anchored to
+    /// the app window like every full-trust desktop caller must.
+    /// </summary>
+    private static async Task<string?> TryFetchStorePackageAsync(
+        string storeId, IProgress<double>? progress, CancellationToken ct)
+    {
+        try
+        {
+            return await MainThread.InvokeOnMainThreadAsync(async () =>
+            {
+                var context = CreateStoreContext();
+                if (context == null)
+                {
+                    return "Store context unavailable (no app window for the install dialog).";
+                }
+                var operation = context.RequestDownloadAndInstallStorePackagesAsync([storeId]);
+                // PackageDownloadProgress spans download (0→0.8) and install
+                // (0.8→1.0) for this API — a single metric is the whole story.
+                var result = await operation.AsTask(ct, new Progress<StorePackageUpdateStatus>(
+                    status => progress?.Report(status.PackageDownloadProgress)));
+                return result.OverallState == StorePackageUpdateState.Completed
+                    ? null
+                    : $"Store package install ended with state {result.OverallState}.";
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: store install failure is reported as an error string
+        catch (Exception ex) //NOSONAR — store install failure is reported as an error string.
+        {
+            #pragma warning restore S2221
+            ct.ThrowIfCancellationRequested();
+            return $"{ex.GetType().Name}: {ex.Message}";
+        }
+    }
+
+    private static StoreContext? CreateStoreContext()
+    {
+        var context = StoreContext.GetDefault();
+        // A full-trust desktop app anchors Store dialogs to its window handle.
+        if (Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView
+                is not Microsoft.UI.Xaml.Window window)
+        {
+            return null;
+        }
+        InitializeWithWindow.Initialize(context, WindowNative.GetWindowHandle(window));
+        return context;
+    }
+
+    private static async Task<List<string>> GetDeliveryDiagnosticsWindowsAsync(string packName)
+    {
+        var lines = new List<string> { "--- Windows optional-package delivery diagnostics ---" };
+        var cacheDir = AssetPackCacheDir(packName);
+        var cachedFile = Path.Join(cacheDir, PayloadFileName(packName));
+        lines.Add($"Cache dir: {cacheDir}");
+        lines.Add($"Cached file exists: {File.Exists(cachedFile)}");
+        lines.Add($"Package identity: {MainPackageName ?? "(unpackaged — no package identity)"}");
+        try
+        {
+            var map = await GetStoreMapAsync();
+            lines.Add($"StoreId for '{packName}': {map.StoreIdFor(packName) ?? "(unconfigured — release-payload delivery)"}");
+            var package = await FindInstalledOptionalPackageAsync(packName);
+            lines.Add(package == null
+                ? $"Optional package '{WindowsExtensionPackMap.OptionalPackageName(MainPackageName ?? "?", packName)}': not installed"
+                : $"Optional package: {package.Id.FullName}");
+            if (package != null)
+            {
+                lines.Add($"Install location: {package.InstalledPath}");
+            }
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: diagnostics collection: probe failure becomes a report line
+        catch (Exception ex) //NOSONAR — diagnostics collection: probe failure becomes a report line.
+        {
+            #pragma warning restore S2221
+            lines.Add($"Optional-package probe error: {ex.Message}");
+        }
+        if (!string.IsNullOrEmpty(LastWindowsDeliveryError))
+        {
+            lines.Add($"Last delivery error: {LastWindowsDeliveryError}");
+        }
+        return lines;
     }
 }
 #endif

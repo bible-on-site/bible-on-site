@@ -535,7 +535,7 @@ public class ExtensionPackLifecycleTests
         store.Wire();
         var notes = Notes(storage, store.Delivery.Object);
         var navigator = new Mock<IAppNavigator>();
-        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(false);
+        navigator.Setup(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(false);
         var packs = Packs(storage, notes,
             new RecitationService(storage.FileSystem.Object, store.Delivery.Object), navigator);
         await notes.InitializeAsync();
@@ -559,7 +559,7 @@ public class ExtensionPackLifecycleTests
         store.Wire();
         var notes = Notes(storage, store.Delivery.Object);
         var navigator = new Mock<IAppNavigator>();
-        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
+        navigator.Setup(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
         var packs = Packs(storage, notes,
             new RecitationService(storage.FileSystem.Object, store.Delivery.Object), navigator);
         await notes.InitializeAsync();
@@ -595,7 +595,7 @@ public class ExtensionPackLifecycleTests
 
         await packs.RemovePerushimCommand.ExecuteAsync(null);
 
-        navigator.Verify(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        navigator.Verify(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
@@ -646,7 +646,7 @@ public class ExtensionPackLifecycleTests
         store.Wire();
         var notes = Notes(storage, store.Delivery.Object);
         var navigator = new Mock<IAppNavigator>();
-        navigator.Setup(n => n.DisplayChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
+        navigator.Setup(n => n.DisplayDestructiveChoiceAsync(It.IsAny<string>(), It.IsAny<string>(), "הסרה", "ביטול")).ReturnsAsync(true);
         var packs = Packs(storage, notes,
             new RecitationService(storage.FileSystem.Object, store.Delivery.Object), navigator);
         await notes.InitializeAsync();

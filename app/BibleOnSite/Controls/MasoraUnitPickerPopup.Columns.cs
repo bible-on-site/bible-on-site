@@ -29,6 +29,7 @@ public partial class MasoraUnitPickerPopup //NOSONAR
         };
 
         SeferGroupList.ItemsSource = groups;
+        _scrollColumns.RefreshDeferred(SeferGroupList);
     }
 
     private void PreSelectUnit(int unitId)
@@ -100,6 +101,8 @@ public partial class MasoraUnitPickerPopup //NOSONAR
 
         LoadSefarimForGroup(_selectedGroup.Id);
         UnitList.ItemsSource = null;
+        _scrollColumns.RefreshDeferred(SeferList);
+        _scrollColumns.RefreshDeferred(UnitList);
 
         // Auto-select first sefer
         var sefarim = SeferList.ItemsSource as List<SeferItem>;
@@ -117,6 +120,7 @@ public partial class MasoraUnitPickerPopup //NOSONAR
         if (units == null)
         {
             SeferList.ItemsSource = new List<SeferItem>();
+            _scrollColumns.RefreshDeferred(SeferList);
             return;
         }
 
@@ -133,6 +137,7 @@ public partial class MasoraUnitPickerPopup //NOSONAR
         }
 
         SeferList.ItemsSource = sefarim;
+        _scrollColumns.RefreshDeferred(SeferList);
     }
 
     private void OnSeferSelected(object? sender, SelectionChangedEventArgs e)
@@ -168,6 +173,7 @@ public partial class MasoraUnitPickerPopup //NOSONAR
             .Where(u => u.SeferId == seferId)
             .ToList() ?? new List<MasoraUnit>();
         UnitList.ItemsSource = units;
+        _scrollColumns.RefreshDeferred(UnitList);
     }
 
     private void OnUnitSelected(object? sender, SelectionChangedEventArgs e)

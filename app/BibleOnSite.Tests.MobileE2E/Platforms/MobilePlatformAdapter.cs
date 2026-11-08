@@ -201,10 +201,22 @@ public abstract class MobilePlatformAdapter
         {
             options.PlatformVersion = configuration.PlatformVersion;
         }
-        options.AddAdditionalAppiumOption("noReset", configuration.KeepAppForReview);
+        // The harness installs the Android package itself (see run.mjs)
+        // with --no-incremental before the session starts, so UiAutomator2
+        // must reuse it under noReset — a driver-initiated reinstall has
+        // no incremental opt-out and would reintroduce the libmonodroid
+        // open_from_bundles SIGSEGV (#2773).
+        var reuseInstalledApp = configuration.KeepAppForReview || (android && configuration.AppPreinstalled);
+        options.AddAdditionalAppiumOption("noReset", reuseInstalledApp);
         // Android fully uninstalls the app. iOS resets and reinstalls it through
         // noReset=false and enforceAppInstall=true while the device stays booted.
-        options.AddAdditionalAppiumOption("fullReset", android && !configuration.KeepAppForReview);
+        options.AddAdditionalAppiumOption("fullReset", android && !reuseInstalledApp);
+        // noReset keeps a leftover app process alive across sessions, and
+        // UiAutomator2's session-start short-circuits the launch when the
+        // package already runs — a prior class's mid-navigation screen would
+        // then leak into the next session. forceAppLaunch keeps every session
+        // start on the deterministic fresh launch the suite relies on.
+        options.AddAdditionalAppiumOption("forceAppLaunch", android && reuseInstalledApp);
         options.AddAdditionalAppiumOption("newCommandTimeout", 120);
         if (android)
         {
@@ -278,9 +290,10 @@ public abstract class MobilePlatformAdapter
                 ["pageSourceExcludedAttributes"] = "visible,accessible",
                 // Return each candidate's real visibility and frame in its lookup.
                 ["shouldUseCompactResponses"] = false,
-                // hittable rides the same response so CanTap's per-poll read
-                // stays local instead of a second /attribute round-trip.
-                ["elementResponseAttributes"] = "rect,displayed,text,enabled,hittable"
+                // Read-only geometry/text queries must not trigger XCTest's
+                // hit testing during a UI transition. CanTap still requests
+                // hittable explicitly when an interaction needs that check.
+                ["elementResponseAttributes"] = "rect,displayed,text,enabled"
             });
             // The instrumented e2e build never goes quiescent at launch: the
             // coverage recorder and the search-index warmup keep worker threads
@@ -432,16 +445,37 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         CreateTapAtSequence(location.X + size.Width / 2, location.Y + size.Height / 2);
     public override void GoBack(AppiumDriver driver)
     {
-        var button = driver.FindElements(By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]"))
-            .FirstOrDefault(element => element.Displayed && CanTap(element));
-        if (button != null)
+        // WDA can report success while the touch never became a navigation —
+        // a tap landing mid-layout or an edge swipe the recognizer dropped.
+        // Confirm the tree changed and reissue the gesture once, the same
+        // one-retry idiom Relaunch uses for transient launch errors.
+        var before = driver.PageSource;
+        for (var attempt = 0; attempt < 2; attempt++)
         {
-            Tap(driver, button);
-            return;
+            // The shared capsule back is the app's visible back control on the
+            // custom top-bar pages (preferences, readers) — all outside UIKit's
+            // navigation bar (#2467).
+            var button = driver.FindElements(AutomationId("TopBarBackButton"))
+                .FirstOrDefault(element => element.Displayed && CanTap(element))
+                ?? driver.FindElements(By.XPath("//XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]"))
+                    .FirstOrDefault(element => element.Displayed && CanTap(element));
+            if (button != null)
+            {
+                Tap(driver, button);
+            }
+            else
+            {
+                // Reader jumps keep the hamburger. Use iOS's standard RTL edge-back gesture.
+                driver.PerformActions([CreateEdgeSwipeSequence(DriverTelemetry.WindowSize(driver))]);
+            }
+            if (PageChanged(driver, before))
+            {
+                return;
+            }
         }
-        // Reader jumps keep the hamburger. Use iOS's standard RTL edge-back gesture.
-        driver.PerformActions([CreateEdgeSwipeSequence(DriverTelemetry.WindowSize(driver))]);
     }
+    private static bool PageChanged(AppiumDriver driver, string before) =>
+        !string.Equals(driver.PageSource, before, StringComparison.Ordinal);
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // The five-minute client budget fits inside the ten-minute per-test hang
         // guard, together with the scenario.

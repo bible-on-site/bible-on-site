@@ -12,7 +12,6 @@
     }
   ],
   "platforms": [
-    "iOS",
-    "macOS"
+    "iOS"
   ]
 }

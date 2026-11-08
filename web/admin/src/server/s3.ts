@@ -16,6 +16,8 @@ const S3_ACCESS_KEY =
 	process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
 const S3_SECRET_KEY =
 	process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+// CDN distribution domain in production (see docs/aws/cloudformation/cloudfront-assets.yaml)
+const ASSETS_BASE_URL = process.env.ASSETS_BASE_URL;
 
 const s3Client = new S3Client({
 	region: S3_REGION,
@@ -32,6 +34,10 @@ const s3Client = new S3Client({
 
 // Build the public URL based on configuration
 function getPublicUrl(key: string): string {
+	if (ASSETS_BASE_URL) {
+		// CDN domain (CloudFront) — bucket path is implicit
+		return `${ASSETS_BASE_URL.replace(/\/+$/, "")}/${key}`;
+	}
 	if (S3_ENDPOINT) {
 		// Local path-style S3 URL
 		return `${S3_ENDPOINT}/${S3_BUCKET}/${key}`;

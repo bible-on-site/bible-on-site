@@ -3,10 +3,14 @@
 The shared C# suite in `../BibleOnSite.Tests.MobileE2E` runs on Android and iOS.
 CI creates one independent runner per matrix entry (`app-mobile-e2e.yml`), with
 `fail-fast: false`, and requires every applicable result through the main CI gate. Tests
-on an individual device run sequentially. The first session installs and resets
-the app; later scenarios restart its process with their launch environment.
-The install and built search index survive these restarts. Appium operates
-the simulator headlessly.
+on an individual device run sequentially. On Android the pilot installs the
+app itself with a deterministic `adb install --no-incremental` — IncFS
+incremental installs can crash Xamarin in libmonodroid's open_from_bundles
+(#2773) — and sessions reuse that install under noReset; a driver-initiated
+install has no incremental opt-out. On iOS the first session installs and
+resets the app. Later scenarios restart the app's process with their launch
+environment. The install and built search index survive these restarts.
+Appium operates the simulator headlessly.
 
 WDA releases its session without terminating the app through XCTest. That
 termination path can stall `DELETE /session` after all assertions pass and
@@ -20,7 +24,7 @@ threads or mutable command arguments; even a PID-limited `ps` stalled past five
 seconds on a loaded Mac. The native ownership regression also rejects an argv
 prefix impersonating the app. This avoids expensive process snapshots. Confirmed already-stopped apps are accepted; transport
 and timeout failures fail the run. `MOBILE_KEEP_APP=1` retains the review app.
-The existing 15-second session-delete and 15-minute pilot limits remain intact.
+The existing 15-second session-delete limit and the pilot deadline (below) remain intact.
 
 CI runs the iOS suite across a dynamically planned set of independent
 `xcode-27` runners, each with one simulator and one shared Appium session
@@ -29,11 +33,13 @@ statically, resolves the diff against the published coverage baseline, and
 partitions the selected cases with a deterministic longest-processing-time
 assignment balanced by the baseline's rolling per-case runtimes — unmeasured
 cases take a fixed fallback weight and never narrow membership. The shard
-count follows the selected work (case-time budget, bounded by runner
-capacity), so a small selection stays on one runner and a legitimately empty
-selection starts no simulator at all. Each runner executes exactly the case
-manifest it was assigned — it never re-selects — and each pilot keeps its
-15-minute deadline. A final merge requires each shard's executed manifest to
+count is the fewest runners whose estimated work fits a 26-minute per-runner
+capacity (bounded by four): macOS runners are the queued, scarce resource and
+each extra shard repeats about six minutes of setup, so today's full suite runs
+on one runner and a legitimately empty selection starts no simulator at all.
+Each runner executes exactly the case manifest it was assigned — it never
+re-selects — under a deadline of 1.5 × its planned estimate + 5 minutes,
+clamped to 15–45 minutes. A final merge requires each shard's executed manifest to
 match its assignment, requires successful evidence for the whole planned run
 set exactly once, rejects duplicates, and combines native line coverage and
 execution/automation evidence. Only a full successful union can replace a
@@ -63,7 +69,7 @@ each shard is its own matrix job, so ports, devices and artifact roots are
 isolated by the runner itself rather than by env offsets.
 Before iOS tests, Appium downloads the official simulator WebDriverAgent matching
 the locked driver dependency and launches it directly. This keeps cold Xcode
-compilation outside session startup; `npm test` also prepares the agent locally.
+compilation outside session startup; `bun run test` also prepares the agent locally.
 See the [Appium prebuilt-agent guide](https://appium.github.io/appium-xcuitest-driver/latest/guides/run-prebuilt-wda/).
 
 The pilot covers packaged scripture and bottom navigation, adjacent perek
@@ -73,7 +79,8 @@ endpoint for this pilot, so startup exercises offline behavior without relying
 on production or an external API. The build restores any local API override
 after packaging. Canonical content comes from the existing packaged database.
 
-The pilot runs under an independent 15-minute wall-clock supervisor, including
+The pilot runs under an independent wall-clock supervisor (15 minutes, or the
+planned shard deadline above), including
 local harness builds and Appium setup. Cancellation stops the owned process
 group and escalates after three seconds, including child processes left behind
 by a terminated wrapper. Windows uses the in-box `taskkill /T` tree kill as
@@ -90,10 +97,10 @@ The Appium legs build Debug, which defines `DISABLE_ANALYTICS` — so the suite
 can never execute the `MainActivity.OnCreate` analytics initialization whose
 missing `FirebaseAnalyticsImplementation.Initialize` crashed every #2247
 store launch while all tests stayed green. The `android_release_smoke` leg
-closes that gap: `npm run build:release-smoke` builds the **Release** pipeline
+closes that gap: `bun run build:release-smoke` builds the **Release** pipeline
 (profiled AOT, R8, embedded assemblies, merged manifest, analytics branch
 compiled in) as an x86_64 APK — the ABI the CI emulator can run — and
-`npm run release-smoke` installs and launches it on the same cached AVD.
+`bun run release-smoke` installs and launches it on the same cached AVD.
 
 Each launch must reach a genuinely usable reader (the same `PerekSource`
 readiness the Appium `WaitForStartup` uses), keep the process and foreground
@@ -118,8 +125,8 @@ coverage remains open in #2371.
 Run it locally against a booted emulator with `MOBILE_UDID=emulator-5554`:
 
 ```bash
-npm run build:release-smoke --prefix app/mobile-e2e
-MOBILE_RELEASE_APK=<staged-apk> npm run release-smoke --prefix app/mobile-e2e
+bun run --cwd app/mobile-e2e build:release-smoke
+MOBILE_RELEASE_APK=<staged-apk> bun run --cwd app/mobile-e2e release-smoke
 ```
 
 ## Adding scenarios and platform differences
@@ -204,8 +211,15 @@ deleted locally and rebuilt cold, then heals after natural eviction or a recipe
 bump. `android-sdk-install.mjs` removes corrupt package directories before
 bounded sdkmanager retries and forces a clean reinstall when `emulator
 -version` fails despite installed metadata; `android-snapshot-check.mjs`
-validates restored AVD structure and confirms the emulator process exited
-before any snapshot save. When manifest resolution fails, both keys degrade to
+validates restored AVD structure. Before reuse and cache publication it requires
+successful process-table and ADB device-list inspections proving the selected
+AVD is stopped. Only then does it log and remove that AVD's root-level `*.lock`
+entries, including `snapshot.lock.lock`; snapshot payload and configuration stay
+intact. These locks contain host-local ownership state, so importing a PID from
+another runner can prevent a valid snapshot from booting. Active or unknown
+ownership blocks cleanup and cache publication. Shutdown keeps its existing
+deadlines and signals only validated emulator PIDs. When manifest resolution
+fails, both keys degrade to
 `unresolved`, which always misses and never saves — the run falls back to the
 original download path. Maintenance: bump `AVD_SNAPSHOT_RECIPE` when boot
 options, device profile, readiness flow or the runner-action version change;
@@ -250,23 +264,28 @@ change.
 ## Running locally
 
 Install the platform's .NET MAUI workload, Android SDK/JDK or compatible Xcode,
-then run `npm ci` in this directory. Set `MOBILE_PLATFORM` to `Android` or `iOS`
-and run `npm run build:app`. The build embeds assemblies in the Android x64
+then run `bun install --frozen-lockfile` in this directory. Set `MOBILE_PLATFORM` to `Android` or `iOS`
+and run `bun run build:app`. The build embeds assemblies in the Android x64
 APK and completes the iOS arm64 simulator `.app` build.
 
-Set `MOBILE_UDID` to a running device's identifier, then run `npm test` here.
-On macOS, `npm run ios:boot` selects an available iPhone runtime no newer than
+Set `MOBILE_UDID` to a running device's identifier, then run `bun run test` here.
+On macOS, `bun run ios:boot` selects an available iPhone runtime no newer than
 the selected Xcode SDK, boots it, and prints the identifier and `MOBILE_OS_VERSION`.
 Set both for local iOS runs; CI exports them automatically. In CI,
-`ios:boot:start` kicks the asynchronous boot right after Xcode selection —
-it touches no `node_modules`, so it can run before `npm ci` — and
-`ios:boot:wait` then runs as a `background: true` step once dependencies are
-installed, overlapping the readiness monitor and Appium bridge preflight with
-the MAUI workload install and the app build. A `wait` step before the tests is
-the gate that surfaces the finished boot and the exported variables. The
+`ios:boot:start` runs after helper validation and kicks the asynchronous boot,
+then emits the selected device's `udid` and runtime `version` as step outputs.
+`ios:boot:wait` receives that exact identity through `MOBILE_UDID` and
+`MOBILE_OS_VERSION`, validates the handoff against the selected Xcode SDK, and
+monitors that device without listing or selecting simulators again. Its
+`background: true` step overlaps readiness and Appium bridge preflight with
+remaining build transfer and setup. A `wait` step before the tests surfaces the
+finished boot and exported variables. Standalone wait without a handoff still
+selects a real available device; a partial or invalid handoff fails. Both boot
+steps retain their output in `ios-boot-start.log` and `ios-boot-wait.log` so
+setup failures are included in the diagnostic artifact. The
 coverage-tree baseline download and test selection also run as one background
 step — the baseline REST fetch sees 1s–2m20s transfer variance, so it never
-stalls `npm ci`, the boot or the build; each pilot waits on the manifest
+stalls `bun install --frozen-lockfile`, the boot or the build; each pilot waits on the manifest
 through `wait`/`wait-all`.
 `MOBILE_APP_PATH` can select another compatible build. Each local
 run owns an Appium server on `127.0.0.1:4723` (override with
@@ -275,14 +294,14 @@ locally, download the run's `app-mobile-e2e-plan.<run-id>.ios` artifact and
 set `MOBILE_E2E_SELECTION` to the shard's `shards/shard-N.json`.
 
 Set `MOBILE_KEEP_APP=1` to keep the installed app and its data for manual review
-after a local run. The runner installs the current build while preserving that
-data; normal runs still reset the app. The floating search scenarios cover a
+after a local run. The runner reinstalls the current build while preserving
+that data; normal runs replace the package entirely. The floating search scenarios cover a
 misspelled chapter reference, unpointed verse text, and inline commentary jumps.
 Android system Back and the iOS edge-back gesture restore the original query,
 filters, results, and list position. Verse results remain usable while the first
 commentary index continues preparing.
 
-`npm run test:unit` checks simulator selection and the locked driver module's
+`bun run test:unit` checks simulator selection and the locked driver module's
 ESM loading without a device.
 From `app/`, `dotnet run --project devops -- TestMobileE2EUnit` checks platform
 configuration and device capabilities without a device or mobile workload.

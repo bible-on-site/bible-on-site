@@ -19,7 +19,7 @@ if (shouldMeasureCov) {
 
 // Use launcher script that handles DB population then starts the server
 // Uses next dev in both modes; production behavior is checked by the performance suite.
-const webServerCommand = `node --import tsx ./launch-e2e-server.mts ${shouldMeasureCov ? "--coverage" : ""}`;
+const webServerCommand = `node ./launch-e2e-server.mts ${shouldMeasureCov ? "--coverage" : ""}`;
 
 export default defineConfig({
 	...baseConfig,
@@ -41,8 +41,8 @@ export default defineConfig({
 	// Locally we keep 0 retries to surface flakes during development.
 	retries: isCI ? 2 : 0,
 	// Coverage mode ran fully serialized (workers: 1) since #1784 for caution;
-	// coverage is captured per-test via CDP, so workers do not share collection
-	// state. Two workers halves the ~12min suite on the 4-vCPU runner; the
+	// coverage is captured per-test via __coverage__ drains (browser + server),
+	// so workers do not share collection state. Two workers halves the ~12min suite on the 4-vCPU runner; the
 	// cross-module coverage gate loudly catches any collection break.
 	workers: shouldMeasureCov ? 2 : 4,
 });

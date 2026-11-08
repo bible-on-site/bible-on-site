@@ -23,7 +23,7 @@ packaging invokes this preparation before evaluating the app project.
 
 ## Local development
 
-Run `npm run setup_dev_env --prefix devops` from the repository root. During app
+Run `bun run --cwd devops setup_dev_env` from the repository root. During app
 setup it prompts for the recordings directory, defaulting to
 `~/git/tanah-s3/recordings` under the current user's home directory. Press Enter to
 accept, or enter a directory containing the original `<perekId>_record.mp3` files.
@@ -60,10 +60,17 @@ downloads from the previous service are reused when their hashes still match.
 After import, audio lives in persistent application storage and works offline;
 the operating system may independently purge its temporary delivery cache.
 
-Windows ships the same archives as application assets because the existing
-delivery service has no Windows on-demand provider. Sideloaded Android Debug
-builds also embed the archives for testing without Play. Mobile store Release
-builds keep the audio out of the base installation.
+Windows keeps the audio out of the base MSIX in Release: each book directory
+under `Platforms/Windows/ExtensionPacks/` (and `perushim_notes` for the
+commentary databases) becomes an MSIX **optional package**
+`.artifacts/extension-packs/{pack}.msix` — a Store durable add-on when its
+StoreId is configured in `Platforms/Windows/extension-packs.json5`, otherwise
+the same bytes arrive over HTTPS from the `app-v*` release assets
+(`.artifacts/payloads`). Debug builds still embed the packs as application
+assets so a sideloaded run installs books without the Store; sideloaded
+Release installs follow the release-payload leg automatically. Sideloaded
+Android Debug builds also embed the archives for testing without Play. Mobile
+store Release builds keep the audio out of the base installation.
 
 CI generates real book packages, builds an Android release bundle, and checks
 every module and archive hash. Store packaging also rejects an IPA without the

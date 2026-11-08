@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+<controls:PreferencesPageBase xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.SoundPreferencesPage"
              x:DataType="viewmodels:SoundPreferencesViewModel"
+             Shell.NavBarIsVisible="False"
+             ControlTemplate="{StaticResource PreferencesPageTemplate}"
              Title="שמע"
              FlowDirection="RightToLeft"
              BackgroundColor="{AppThemeBinding Light={StaticResource Gray50}, Dark={StaticResource SurfaceDark}}">
@@ -43,7 +46,6 @@
                             Value="{Binding RecitationVolume}"
                             AutomationId="RecitationVolumeSlider"
                             SemanticProperties.Description="עוצמת קריינות"
-                            MinimumTrackColor="{StaticResource Primary}"
                             MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
                 </VerticalStackLayout>
             </Border>
@@ -79,7 +81,6 @@
                             Value="{Binding LessonsVolume}"
                             AutomationId="LessonsVolumeSlider"
                             SemanticProperties.Description="עוצמת שיעורים מוקלטים"
-                            MinimumTrackColor="{StaticResource Primary}"
                             MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
                 </VerticalStackLayout>
             </Border>
@@ -115,7 +116,6 @@
                             Value="{Binding EffectsVolume}"
                             AutomationId="EffectsVolumeSlider"
                             SemanticProperties.Description="עוצמת אפקטים"
-                            MinimumTrackColor="{StaticResource Primary}"
                             MaximumTrackColor="{AppThemeBinding Light={StaticResource Gray250}, Dark={StaticResource Gray600}}"/>
                     <Label Text="אין כרגע צלילי אפקטים באפליקציה; ההעדפה נשמרת ותיושם כשיתווספו"
                            FontSize="12"
@@ -125,4 +125,4 @@
             </Border>
         </VerticalStackLayout>
     </ScrollView>
-</ContentPage>
+</controls:PreferencesPageBase>

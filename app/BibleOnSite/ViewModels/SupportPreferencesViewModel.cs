@@ -42,7 +42,7 @@ public partial class SupportPreferencesViewModel : ObservableObject
         {
             var report = await _perushimNotesService.GetDiagnosticsAsync();
             var fileName = $"perushim_diagnostics_{DateTime.UtcNow:yyyyMMdd_HHmmss}.txt";
-            var path = Path.Combine(_fileSystem.CacheDirectory, fileName);
+            var path = Path.Join(_fileSystem.CacheDirectory, fileName);
             await File.WriteAllTextAsync(path, report);
             await _share.RequestAsync(new ShareFileRequest
             {
@@ -50,8 +50,10 @@ public partial class SupportPreferencesViewModel : ObservableObject
                 File = new ShareFile(path),
             });
         }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) //NOSONAR — export spans IO/share platform errors; failure is reported to the user.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"Export logs failed: {ex.Message}");
             await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
         }

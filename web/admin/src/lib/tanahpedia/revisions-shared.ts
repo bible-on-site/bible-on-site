@@ -11,13 +11,6 @@ export type RevisionSource =
 	| typeof REVISION_SOURCE_LLM
 	| (string & {});
 
-/**
- * Consecutive autosaves from the same source within this window squash into
- * the head revision instead of creating a new row — the wiki history should
- * capture edit bursts, not every 2-second debounce.
- */
-export const REVISION_SQUASH_WINDOW_SECONDS = 10 * 60;
-
 /** Stable message prefix the UI uses to detect optimistic-concurrency errors. */
 export const REVISION_CONFLICT_PREFIX = "REVISION_CONFLICT:";
 
@@ -50,19 +43,4 @@ export interface EntryRevisionRow {
 	base_revision_id: string | null;
 	created_at: string;
 	updated_at: string;
-}
-
-/**
- * Decides whether a new save from `source` should squash into `head` (the
- * entry's latest APPLIED revision) instead of opening a new revision.
- * `ageSeconds` is the head's age measured on the database clock.
- */
-export function shouldSquashIntoHead(
-	head: { source: string; ageSeconds: number } | null,
-	source: string,
-	windowSeconds = REVISION_SQUASH_WINDOW_SECONDS,
-): boolean {
-	return (
-		head !== null && head.source === source && head.ageSeconds < windowSeconds
-	);
 }

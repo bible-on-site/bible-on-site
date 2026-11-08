@@ -1,6 +1,8 @@
 # Delivery Rule
 
-For repository change, build, or fix tasks, local-only work is not a completed delivery. Commit and push the finished, validated changes at minimum. When authorization and repository policy permit, carry the pull request through CI and merge it. Stop short only when the user explicitly requests review before publication or a hard blocker prevents pushing or merging; report that blocker and the exact remaining action.
+For repository change, build, or fix tasks, local-only work is not a completed delivery. Commit and push the finished, validated changes at minimum. When authorization and repository policy permit, carry the pull request through CI and review feedback, then merge it. Stop short only when the user explicitly requests review before publication or a hard blocker prevents pushing or merging; report that blocker and the exact remaining action.
+
+Following a pull request through CI includes checking its complete review state: workflow results and check annotations, coverage and quality reports, bot and issue comments (including Codacy), submitted reviews, and every review thread. Check feedback against the current head, investigate and fix each actionable finding, record evidence for findings that do not apply, and resolve addressed threads. Recheck these channels after each push, before merging, and when verifying delivery. Do not declare delivery complete while actionable review or quality findings remain unresolved, even when workflow runs are green.
 
 Take responsibility for the overall quality of this project and every flaw encountered while working on it. Investigate and fix flaws whether they are related to the current request, predate the task, appear in another module, or are found by tests, CI, review, or direct inspection. Do not leave a known flaw merely because it does not block the pull request or was caused elsewhere. Validate and deliver each fix through the repository's normal commit, push, CI, and merge process. Stop with a known flaw unresolved only if the user explicitly defers it or a hard blocker prevents a fix; report the evidence and exact remaining action.
 
@@ -45,3 +47,11 @@ Do not increase timeouts, retries, sleeps, polling budgets, or hang-watchdog lim
 # Visual Change Evidence
 
 When a change affects user-visible UI, show before/after evidence in the pull request description and when reporting the result to the user: screenshots, screen recordings, or captured device/emulator frames. Prefer real captures from the app's own e2e artifacts over mockups.
+
+# AWS Change Approval
+
+Never merge an AWS-related pull request without Dorad's explicit approval of that specific pull request and its current AWS-impacting changes. This includes infrastructure/IaC, IAM and networking, DNS/CDN/cache behavior, S3 access and public asset URLs, deployment workflows, production resource settings, and cost optimizations.
+
+An investigation/optimization request, approval of another change, green CI, a bot recommendation, or auto-merge is not merge approval. Prepare, validate and push the change, present its production and backward-compatibility impact with rollback, and wait for explicit approval. Do not enable auto-merge or bypass this requirement. Material AWS-impacting changes after approval require renewed approval.
+
+Production stability and backward compatibility of existing public and crawled URLs take priority over cost savings. Apply live AWS changes only within the user's explicit authorization, after verifying the target account, current state, validation and rollback.

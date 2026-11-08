@@ -1,12 +1,30 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              x:Class="BibleOnSite.Pages.TosPage"
              Title="תנאי שימוש"
              FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False"
              BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}">
 
-    <ScrollView Padding="16">
+    <!-- The shared navigation capsule (#2467): hamburger far right, Back
+         beside it (disabled at this root destination), title pill. -->
+    <Grid RowDefinitions="Auto,*">
+        <controls:SharedTopBar Grid.Row="0" NavigationAutomationId="TosMenuButton">
+            <controls:SharedTopBar.CenterContent>
+                <controls:ToolbarPill>
+                    <Label Text="תנאי שימוש"
+                           FontSize="16"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"
+                           LineBreakMode="TailTruncation"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                </controls:ToolbarPill>
+            </controls:SharedTopBar.CenterContent>
+        </controls:SharedTopBar>
+
+    <ScrollView Grid.Row="1" Padding="16">
         <VerticalStackLayout Spacing="16">
 
             <!-- Main Title -->
@@ -14,7 +32,7 @@
                    FontSize="24"
                    FontAttributes="Bold"
                    HorizontalOptions="Center"
-                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryLight}}"/>
+                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
 
             <!-- Privacy Policy Section -->
             <VerticalStackLayout Spacing="8">
@@ -22,18 +40,30 @@
                        FontSize="18"
                        FontAttributes="Bold"
                        TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                <Label Text="בעת שימוש באתר ו/או בישומון תנ&quot;ך על הפרק אנו עשויים לאסוף נתונים שסופקו על ידיכם באופן ידני (כגון פניות ששלחתם אלינו) ונתוני שימוש טכניים המתקבלים מהמכשיר דרכו התחברתם. הישומון אינו אוסף מזהי פרסום כגון Android Advertising ID."
+                <Label Text="בתנ&quot;ך על הפרק אין הרשמה או חשבונות משתמשים. עם זאת, שימוש באתר או בישומון עשוי למסור נתונים טכניים, ובהם כתובת IP, פרטי מכשיר ומזהי מדידה, וכן מידע שתשלחו בפנייה אלינו. היעדר חשבון אינו הופך את כל הנתונים לאנונימיים. בישומון איסוף מזהי פרסום והתאמה אישית של פרסום מושבתים."
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                <Label Text="לצורכי סטטיסטיקת שימוש ושיפור חוויית הלימוד היומי אנו משתמשים בשירותי אנליטיקה חיצוניים: Google Analytics באתר ו-Firebase Analytics בישומון (שניהם מסופקים על ידי Google), וכן Ahrefs באתר (מדידה ללא עוגיות). שירותים אלה עשויים לקבל מזהים טכניים ונתוני שימוש בהתאם למדיניות הפרטיות שלהם."
+                <Label Text="לצורכי סטטיסטיקת שימוש ושיפור חוויית הלימוד היומי אנו משתמשים בשירותי אנליטיקה חיצוניים: Google Analytics באתר ו-Firebase Analytics בישומון (שניהם מסופקים על ידי Google), וכן Ahrefs באתר (מדידה ללא עוגיות). שירותים אלה עשויים לקבל מזהים טכניים ונתוני שימוש בהתאם למדיניות הפרטיות שלהם. המפות עשויות לטעון תוכן של Mapbox או OpenStreetMap; מוצגים בהן מקומות מקראיים ולא נאסף מיקום המכשיר."
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                <Label Text="המדידה של Google Analytics ו-Firebase Analytics פועלת רק לאחר הסכמה מפורשת: באתר ניתן לאשר או לדחות בבאנר ההסכמה, ובישומון במסך ההסכמה שמופיע בהפעלה הראשונה או בהעדפות, וניתן לשנות את הבחירה בכל עת. בחירתכם נשמרת במכשיר ואינה נדרשת לשימוש באתר או בישומון. יתר הנתונים נשמרים באופן מאובטח בשרתי תנ&quot;ך על הפרק ואינם מועברים לגורמים נוספים."
+                <Label Text="השירות מיועד לציבור בישראל. השירות פועל ללא מטרת רווח ואינו מציג פרסומות. נתוני שימוש נמדדים לשיפור הלימוד כחלק מפעילות השירות. העדפות הלימוד נשמרות במכשיר. פרטי יצירת קשר לבקשות הנוגעות לפרטיות מופיעים במדיניות הפרטיות המלאה."
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="תשתית AWS של הפרויקט נמצאת באזור ישראל. שירותים חיצוניים, ובהם Google ו-Ahrefs, עשויים לעבד נתונים גם מחוץ לישראל בהתאם למדיניות שלהם. אין התחייבות שכל נתוני המדידה נשמרים בישראל."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="למדיניות הפרטיות המלאה: יצירת קשר, זכויות עיון ותיקון, תקופות שמירה וקישורים למדיניות ספקי השירותים"
+                       FontSize="14" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}" TextDecorations="Underline"
+                       SemanticProperties.Description="פתיחת מדיניות הפרטיות המלאה באתר התכנית"
+                       AutomationId="PrivacyPolicyLink">
+                    <Label.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnPrivacyPolicyTapped"/>
+                    </Label.GestureRecognizers>
+                </Label>
             </VerticalStackLayout>
 
             <!-- Accessibility Statement Section -->
@@ -48,7 +78,7 @@
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                 <Label Text="לצפייה בהצהרת הנגישות"
                        FontSize="14"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        TextDecorations="Underline"
                        SemanticProperties.Description="פתיחת הצהרת הנגישות באתר התכנית"
                        AutomationId="AccessibilityStatementLink">
@@ -137,7 +167,7 @@
                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                     <Label Text="ספאריה"
                            FontSize="14"
-                           TextColor="{StaticResource Primary}"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                            TextDecorations="Underline">
                         <Label.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnSefariaTapped"/>
@@ -154,7 +184,7 @@
                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                     <Label Text="הרב דן בארי"
                            FontSize="14"
-                           TextColor="{StaticResource Primary}"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                            TextDecorations="Underline">
                         <Label.GestureRecognizers>
                             <TapGestureRecognizer Tapped="OnDanBarryTapped"/>
@@ -172,4 +202,5 @@
 
         </VerticalStackLayout>
     </ScrollView>
+    </Grid>
 </ContentPage>

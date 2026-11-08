@@ -102,13 +102,13 @@ Performance tests measure application behavior under load and track metrics over
 
 | Task | Command |
 | ---- | ------- |
-| Unit Tests | `npm run test:unit` |
-| E2E Tests (Desktop only, faster) | `npm run test:e2e` |
-| E2E Tests (Desktop + Mobile) | `npm run test:e2e:all` |
-| Performance Tests | `npm run test:perf` |
-| Unit Coverage | `npm run coverage:unit` |
-| E2E Coverage | `npm run coverage:e2e` |
-| Merge Coverage | `npm run coverage:merge` |
+| Unit Tests | `bun run test:unit` |
+| E2E Tests (Desktop only, faster) | `bun run test:e2e` |
+| E2E Tests (Desktop + Mobile) | `bun run test:e2e:all` |
+| Performance Tests | `bun run test:perf` |
+| Unit Coverage | `bun run coverage:unit` |
+| E2E Coverage | `bun run coverage:e2e` |
+| Merge Coverage | `bun run coverage:merge` |
 
 ### API (web/api)
 
@@ -126,7 +126,7 @@ Performance tests measure application behavior under load and track metrics over
 | Integration Tests | `dotnet run --project devops -- TestIntegration` |
 | E2E Tests (Windows) | `dotnet run --project devops -- TestE2E` |
 | Mobile E2E (build) | `MOBILE_PLATFORM=Android MOBILE_E2E_COVERAGE=1 dotnet run --project devops -- CompileMobileE2E` |
-| Mobile E2E (run) | `npm test --prefix mobile-e2e` |
+| Mobile E2E (run) | `bun run --cwd app/mobile-e2e test` |
 | Mobile E2E Coverage | `MOBILE_PLATFORM=Android dotnet run --project devops -- CoverageMobileE2E` |
 | Unit Coverage | `dotnet run --project devops -- CoverageUnit` |
 | Integration Coverage | `dotnet run --project devops -- CoverageIntegration` |
@@ -161,7 +161,7 @@ if (!data) {
 }
 ```
 
-**Important**: The SWC coverage instrumentation plugin used by Next.js doesn't natively respect `/* istanbul ignore next */` comments. We implement custom handling in `tests/util/coverage/sanitize-coverage.js` that:
+**Important**: The SWC coverage instrumentation plugin used by Next.js doesn't natively respect `/* istanbul ignore next */` comments. We implement custom handling in `tests/util/coverage/sanitize-coverage.mjs` that:
 
 1. Parses source files for `/* istanbul ignore next */` comments
 2. Marks statements, branches, and functions on the following line as covered
@@ -182,8 +182,7 @@ Codecov uses flags to separate coverage by module:
 - `website` - Coverage from web/bible-on-site
 - `api` - Coverage from web/api
 - `app` - Coverage from app/BibleOnSite — unit + integration + mobile E2E merged hits-only (see [App coverage](../tests/app/coverage/coverage.md))
-- `admin` - Coverage from web/admin
-- `admin_e2e` - Admin E2E layer reported separately
+- `admin` - Coverage from web/admin — unit (canonical universe) + E2E hits merged hits-only into one report
 - `bulletin` - Coverage from web/bulletin
 - `data` - Coverage from data/
 

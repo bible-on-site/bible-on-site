@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { executeMock, queryMock, queryOneMock } = vi.hoisted(() => ({
-	executeMock: vi.fn(),
-	queryMock: vi.fn(),
-	queryOneMock: vi.fn(),
-}));
+const { executeMock, queryMock, queryOneMock, transactionMock } = vi.hoisted(
+	() => ({
+		executeMock: vi.fn(),
+		queryMock: vi.fn(),
+		queryOneMock: vi.fn(),
+		transactionMock: vi.fn(),
+	}),
+);
 
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: () => ({
@@ -22,15 +25,27 @@ vi.mock("~/server/db", () => ({
 	execute: executeMock,
 	query: queryMock,
 	queryOne: queryOneMock,
+	transaction: (fn: (conn: unknown) => unknown) => {
+		transactionMock();
+		return fn({});
+	},
+	txExecute: (_conn: unknown, sql: string, params?: unknown[]) =>
+		executeMock(sql, params),
+	txQuery: (_conn: unknown, sql: string, params?: unknown[]) =>
+		queryMock(sql, params),
+	txQueryOne: (_conn: unknown, sql: string, params?: unknown[]) =>
+		queryOneMock(sql, params),
 }));
 
 import { createPlace, deletePlace } from "~/server/tanahpedia/places";
+import { __resetRevalidateForTests } from "~/server/website-revalidate";
 
 describe("tanahpedia places api", () => {
 	beforeEach(() => {
 		executeMock.mockReset().mockResolvedValue(undefined);
 		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
+		transactionMock.mockReset();
 	});
 
 	it("creates the entity and place rows", async () => {
@@ -40,6 +55,12 @@ describe("tanahpedia places api", () => {
 		expect(result.entity_id).toBeTruthy();
 		expect(executeMock).toHaveBeenCalledTimes(2);
 		expect(executeMock.mock.calls[0]?.[1]?.[1]).toBe("ירושלים");
+	});
+
+	it("creates the entity and place rows in one transaction", async () => {
+		await createPlace({ data: { name: "ירושלים" } });
+
+		expect(transactionMock).toHaveBeenCalledTimes(1);
 	});
 
 	it("deletes the entity row behind the place", async () => {
@@ -76,6 +97,7 @@ describe("place saves invalidate the website", () => {
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
 		process.env.VITE_WEBSITE_URL = "https://site.test";
 		process.env.REVALIDATE_SECRET = "s3cr3t";
+		__resetRevalidateForTests();
 		fetchSpy = vi
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValue(new Response("{}", { status: 200 }));
@@ -89,12 +111,16 @@ describe("place saves invalidate the website", () => {
 		fetchSpy.mockRestore();
 	});
 
-	it("expires pedia surfaces after a place create", async () => {
+	it("sends the created entity's change after a place create", async () => {
 		await createPlace({ data: { name: "ירושלים" } });
 
-		const calls = fetchSpy.mock.calls.map((call: unknown[]) =>
-			new URL(String(call[0])).searchParams.get("tag"),
-		);
-		expect(calls).toContain("tanahpedia-entity-refs");
+		expect(fetchSpy).toHaveBeenCalled();
+		const changes = fetchSpy.mock.calls.flatMap((call: unknown[]) => {
+			const body = (call[1] as RequestInit | undefined)?.body;
+			return body ? (JSON.parse(String(body)).changes ?? []) : [];
+		});
+		expect(changes).toHaveLength(1);
+		expect(changes[0]).toMatchObject({ kind: "pedia-entity" });
+		expect(typeof changes[0].entityId).toBe("string");
 	});
 });

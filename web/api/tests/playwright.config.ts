@@ -75,7 +75,7 @@ export default defineConfig({
 
 	webServer: {
 		// Wait until WEB_SERVER_URL returns a successful response
-		command: `node --import tsx ./launch-api-for-tests.mts ${shouldMeasureCov ? "--measure-cov" : ""}`,
+		command: `node ./launch-api-for-tests.mts ${shouldMeasureCov ? "--measure-cov" : ""}`,
 		timeout: 240000,
 		url: WEB_SERVER_URL,
 		reuseExistingServer: true, // consider that for some tests, such as for admin pages, restart the server before running each test

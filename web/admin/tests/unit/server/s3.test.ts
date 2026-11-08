@@ -100,6 +100,41 @@ describe("s3 image helpers", () => {
 		});
 	});
 
+	describe("when a CDN base URL is configured", () => {
+		it("builds CDN public URLs without the bucket segment", async () => {
+			vi.stubEnv("ASSETS_BASE_URL", "https://assets.xn--febl3a.co.il/");
+			vi.stubEnv("S3_ENDPOINT", "http://localhost:4566");
+			vi.stubEnv("S3_BUCKET", "bucket-x");
+			const { getAuthorImageUrl, getPresignedUploadUrl } = await loadS3();
+
+			expect(getAuthorImageUrl(7)).toBe(
+				"https://assets.xn--febl3a.co.il/authors/high-res/7.jpg",
+			);
+			const { publicUrl } = await getPresignedUploadUrl(8);
+			expect(publicUrl).toBe(
+				"https://assets.xn--febl3a.co.il/authors/high-res/8.jpg",
+			);
+		});
+
+		it("deletes an image by deriving the key from a CDN URL", async () => {
+			vi.stubEnv("ASSETS_BASE_URL", "https://assets.xn--febl3a.co.il");
+			vi.stubEnv("S3_BUCKET", "bucket-x");
+			const { deleteImage } = await loadS3();
+
+			await deleteImage(
+				"https://assets.xn--febl3a.co.il/authors/high-res/5.jpg",
+			);
+
+			const command = sendMock.mock.calls[0]?.[0] as {
+				input: Record<string, unknown>;
+			};
+			expect(command.input).toEqual({
+				Bucket: "bucket-x",
+				Key: "authors/high-res/5.jpg",
+			});
+		});
+	});
+
 	describe("when a custom endpoint is configured (local S3)", () => {
 		it("builds path-style public URLs", async () => {
 			vi.stubEnv("S3_ENDPOINT", "http://localhost:4566");

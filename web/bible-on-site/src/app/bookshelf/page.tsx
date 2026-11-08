@@ -1,32 +1,12 @@
-"use client";
+import { getBookshelfDedicationLines } from "@/lib/dedications/loaders";
+import { BookshelfPageClient } from "./BookshelfPageClient";
 
-import { useRouter } from "next/navigation";
-import { useCallback } from "react";
-import { Bookshelf } from "@/app/components/Bookshelf";
-import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
-import styles from "./page.module.css";
-
-const BookshelfPage = () => {
-	const router = useRouter();
-	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
-
-	// The Bookshelf component passes today's perekId for the bookmarked sefer,
-	// or perekFrom for all other sefarim.
-	const handleSeferClick = useCallback(
-		(_seferName: string, targetPerek: number) => {
-			const path = `/929/${targetPerek}`;
-			const query = isWideEnough ? "?book" : "";
-			router.push(`${path}${query}`);
-		},
-		[router, isWideEnough],
-	);
-
-	return (
-		<div className={styles.page}>
-			<h1 className={styles.srOnly}>ספרי התנ&quot;ך</h1>
-			<Bookshelf onSeferClick={handleSeferClick} />
-		</div>
-	);
-};
-
-export default BookshelfPage;
+/**
+ * /bookshelf — the sefarim picker. The dedication read is tag-cached
+ * (`dedications:bookshelf`), so a dedication change expires this page
+ * through the normal dependency resolution (#2731).
+ */
+export default async function BookshelfPage() {
+	const dedications = await getBookshelfDedicationLines();
+	return <BookshelfPageClient dedications={dedications} />;
+}

@@ -1,3 +1,5 @@
+import { assetsUrl } from "../assets-url";
+
 export interface ImageVerseRange {
 	perekId: number;
 	pasukFrom: number;
@@ -51,16 +53,10 @@ interface Variant {
 	s3_key: string;
 }
 
-/** URLs use the same bucket and endpoint conventions as author images. */
+/** URLs use the same bucket/endpoint/CDN conventions as author images. */
 export function perekImageUrl(key: string): string {
-	const endpoint = process.env.S3_ENDPOINT;
-	const bucket = process.env.S3_BUCKET || "bible-on-site-assets";
-	const region =
-		process.env.S3_REGION || process.env.AWS_REGION || "il-central-1";
 	const encodedKey = key.split("/").map(encodeURIComponent).join("/");
-	return endpoint
-		? `${endpoint.replace(/\/$/, "")}/${bucket}/${encodedKey}`
-		: `https://${bucket}.s3.${region}.amazonaws.com/${encodedKey}`;
+	return assetsUrl(encodedKey);
 }
 
 export function imagesFromRows(

@@ -41,12 +41,14 @@ class WhisperMemoryTests(unittest.TestCase):
             self.assertTrue(observed[0])
             self.assertFalse(observed[-1])
         recorder.remove()
-        with self.assertRaisesRegex(RuntimeError, "interrupted"):
-            with bounded_whisper_memory(model):
-                raise RuntimeError("interrupted")
-        self.assertEqual(model._extract_token_timestamps, original)
-        self.assertNotIn("_extract_token_timestamps", model.__dict__)
-        self.assertEqual(len(model.model.encoder._forward_pre_hooks), 0)
+        try:
+            with self.assertRaisesRegex(RuntimeError, "interrupted"):
+                with bounded_whisper_memory(model):
+                    raise RuntimeError("interrupted")
+        finally:
+            self.assertEqual(model._extract_token_timestamps, original)
+            self.assertNotIn("_extract_token_timestamps", model.__dict__)
+            self.assertEqual(len(model.model.encoder._forward_pre_hooks), 0)
 
     def test_cpu_tokens_and_word_timestamps_are_identical(self):
         self.compare("cpu")

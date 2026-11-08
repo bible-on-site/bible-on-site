@@ -1,3 +1,4 @@
+using BibleOnSite.Controls;
 using BibleOnSite.ViewModels;
 
 namespace BibleOnSite.Pages;
@@ -7,7 +8,7 @@ namespace BibleOnSite.Pages;
 /// plus per-book קריינות recordings with download-all/remove-all.
 /// </summary>
 #pragma warning disable S2333 // MAUI XAML supplies the other partial declaration.
-public partial class ExtensionPacksPage : ContentPage
+public partial class ExtensionPacksPage : PreferencesPageBase
 #pragma warning restore S2333
 {
     private readonly ExtensionPacksViewModel _viewModel;
@@ -32,21 +33,4 @@ public partial class ExtensionPacksPage : ContentPage
         await _viewModel.LoadAsync();
     }
 
-    /// <summary>Per-book download/complete: the button's CommandParameter carries the row's book choice.</summary>
-    private async void OnDownloadBookClicked(object? sender, EventArgs e)
-    {
-        if (sender is Button { CommandParameter: RecitationBookChoice book })
-        {
-            await _viewModel.Packs.DownloadBookAsync(book);
-        }
-    }
-
-    /// <summary>Per-book removal: the button's CommandParameter carries the row's book choice.</summary>
-    private async void OnRemoveBookClicked(object? sender, EventArgs e)
-    {
-        if (sender is Button { CommandParameter: RecitationBookChoice book })
-        {
-            await _viewModel.Packs.RemoveBookAsync(book);
-        }
-    }
 }

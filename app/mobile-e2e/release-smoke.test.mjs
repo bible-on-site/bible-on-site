@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, test } from "node:test";
 import {
   analyticsStatus,
@@ -7,7 +10,37 @@ import {
   launchPlan,
   launcherComponent,
   readerReady,
+  startReleaseLog,
+  waitForProcessTeardown,
 } from "./release-smoke.mjs";
+
+test("retains startup analytics and crash evidence after the device's rolling log loses it", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "release-startup-log-"));
+  const destination = join(directory, "live.txt");
+  const startup = "I mono-stdout: [Analytics] collection enabled=False\n";
+  const crash = "E ActivityManager: ANR in com.tanah.daily929\n";
+  const script = `process.stdout.write(${JSON.stringify(startup + crash)});
+    process.stdout.write('unrelated emulator output\\n'.repeat(100000));
+    process.stdout.write('capture complete'); setInterval(() => {}, 1000);`;
+  const capture = startReleaseLog(process.execPath, ["-e", script], destination);
+  try {
+    const deadline = Date.now() + 5000;
+    while (!capture.read().includes("capture complete") && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    await capture.stop();
+    const retained = capture.read();
+    const rolling = retained.slice(-1024);
+    assert.deepEqual(analyticsStatus(rolling), { state: "absent" });
+    assert.deepEqual(analyticsStatus(retained), { state: "isolated" });
+    assert.deepEqual(crashSignatures(rolling, "com.tanah.daily929"), []);
+    assert.deepEqual(crashSignatures(retained, "com.tanah.daily929"), ["ANR in com.tanah.daily929"]);
+    assert.ok(retained.endsWith("capture complete"));
+  } finally {
+    await capture.stop();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 // The verbatim signature of #2247, captured from the crashing store build on
 // the API 36 emulator: the managed setter NRE'd because nothing called
@@ -89,15 +122,12 @@ describe("analyticsStatus", () => {
 
 describe("readerReady", () => {
   const node = (id, text) =>
-    `<node index="0" text="${text}" resource-id="com.tanah.daily929:id/${id}" class="android.widget.TextView" package="com.tanah.daily929" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[0,0][1080,100]" />`; // nosemgrep -- uiautomator dump fixture, never rendered as HTML
+    `<node index="0" text="${text}" resource-id="com.tanah.daily929:id/${id}" class="android.widget.TextView" package="com.tanah.daily929" content-desc="" checkable="false" checked="false" clickable="false" enabled="true" focusable="false" focused="false" scrollable="false" long-clickable="false" password="false" selected="false" bounds="[0,0][1080,100]" />`;
   test("requires the PerekSource label with real text", () => {
-    // nosemgrep -- uiautomator dump fixture, never rendered as HTML
     assert.equal(readerReady(`<hierarchy>${node("PerekSource", "בראשית א")}</hierarchy>`), true);
   });
   test("rejects an empty source label and a missing reader", () => {
-    // nosemgrep -- uiautomator dump fixture, never rendered as HTML
     assert.equal(readerReady(`<hierarchy>${node("PerekSource", "   ")}</hierarchy>`), false);
-    // nosemgrep -- uiautomator dump fixture, never rendered as HTML
     assert.equal(readerReady(`<hierarchy>${node("OtherView", "בראשית א")}</hierarchy>`), false);
     assert.equal(readerReady("UI hierchary dumped to: /dev/tty"), false);
   });
@@ -132,6 +162,41 @@ describe("appComponentFocused", () => {
     assert.equal(appComponentFocused(
       "  mCurrentFocus=Window{222 u0 Application Error: com.tanah.daily929}",
       "com.tanah.daily929"), false);
+  });
+});
+
+describe("waitForProcessTeardown", () => {
+  // Mirrors the script's POLL_MS cadence: each poll gap and the trailing
+  // window-teardown grace use the same interval.
+  const POLL_MS = 750;
+  const recorder = () => {
+    const sleeps = [];
+    return { sleeps, sleep: async (ms) => { sleeps.push(ms); } };
+  };
+
+  test("graces once when the process is already gone", async () => {
+    const { sleeps, sleep } = recorder();
+    let probes = 0;
+    await waitForProcessTeardown(async () => (++probes, false), sleep);
+    assert.equal(probes, 1, "nothing to wait for when the kill already landed");
+    assert.deepEqual(sleeps, [POLL_MS], "one grace poll for the WIN DEATH post");
+  });
+
+  test("polls until the process dies, then graces for the WIN DEATH post", async () => {
+    const { sleeps, sleep } = recorder();
+    const alive = [true, true, false];
+    let probes = 0;
+    await waitForProcessTeardown(async () => alive[probes++], sleep);
+    assert.equal(probes, 3);
+    assert.deepEqual(sleeps, [POLL_MS, POLL_MS, POLL_MS]);
+  });
+
+  test("gives up polling at the deadline but still graces", async () => {
+    const { sleeps, sleep } = recorder();
+    let probes = 0;
+    await waitForProcessTeardown(async () => (++probes, true), sleep, 0);
+    assert.equal(probes, 1, "an elapsed deadline must not hang the smoke");
+    assert.deepEqual(sleeps, [POLL_MS]);
   });
 });
 

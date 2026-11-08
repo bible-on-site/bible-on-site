@@ -1,0 +1,4 @@
+[install]
+linker = "hoisted"
+# Supply-chain freshness gate (was pnpm minimumReleaseAge=1440min):
+minimumReleaseAge = 86400

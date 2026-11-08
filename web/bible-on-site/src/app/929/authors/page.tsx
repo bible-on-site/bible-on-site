@@ -4,6 +4,7 @@ import Link from "next/link";
 import { query } from "../../../lib/api-client";
 import { authorNameToSlug, getAuthorImageUrl } from "../../../lib/authors";
 import { buildAuthorsListGraph } from "../../../lib/seo/core-jsonld";
+import { pageMetadata } from "../../../lib/seo/opengraph";
 import { JsonLd } from "../../components/JsonLd";
 import styles from "./page.module.css";
 
@@ -60,10 +61,11 @@ const getCachedAuthors = unstable_cache(
 	},
 );
 
-export const metadata = {
+export const metadata = pageMetadata({
 	title: 'הרבנים | תנ"ך באתר',
 	description: 'רשימת הרבנים וכותבי המאמרים באתר תנ"ך על הפרק',
-};
+	canonical: "/929/authors",
+});
 
 export default async function AuthorsPage() {
 	const authors = await getCachedAuthors();

@@ -25,7 +25,12 @@ struct Cli {
     dump_name: String,
 
     /// Output to dependent modules (web/bible-on-site for JSON, app/BibleOnSite for SQLite)
-    #[arg(long)]
+    // Field name keeps the legacy spelling so the flag's primary name is the
+    // explicit `long` below; the misspelled flag stays accepted via `alias`.
+    #[arg(
+        long = "output-to-dependent-modules",
+        alias = "output-to-dependant-modules"
+    )]
     output_to_dependant_modules: bool,
 
     /// Read the canonical corpus from a tanah_view JSON export instead of
@@ -218,10 +223,14 @@ mod tests {
     }
 
     #[test]
-    fn cli_accepts_all_output_formats_and_dependant_output_flag() {
-        let json = cli_from(&["--format", "json", "--output-to-dependant-modules"]);
+    fn cli_accepts_all_output_formats_and_dependent_output_flag() {
+        let json = cli_from(&["--format", "json", "--output-to-dependent-modules"]);
         assert!(matches!(json.format, Some(OutputFormat::Json)));
         assert!(json.output_to_dependant_modules);
+
+        // Backward compatibility: the pre-rename misspelled flag stays accepted.
+        let aliased = cli_from(&["--format", "json", "--output-to-dependant-modules"]);
+        assert!(aliased.output_to_dependant_modules);
 
         let mysql = cli_from(&["--format", "mysql"]);
         assert!(matches!(mysql.format, Some(OutputFormat::Mysql)));

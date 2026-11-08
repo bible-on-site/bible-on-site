@@ -18,6 +18,10 @@ public partial class TanahpediaEntryPage : ContentPage
 {
     private readonly TanahpediaEntryViewModel _viewModel;
 
+    /// <summary>A second tap during the in-flight transition must not stack
+    /// another absolute-route navigation on top of it (#2640).</summary>
+    private readonly NavigationGate _backToPediaGate = new();
+
     public string UniqueName { get; set; } = string.Empty;
 
     public TanahpediaEntryPage()
@@ -27,6 +31,9 @@ public partial class TanahpediaEntryPage : ContentPage
         BindingContext = _viewModel;
         SetupFontSizeResources();
         EntryHtml.LinkTapped += OnEntryLinkTapped;
+        // The in-place person trail is a page-owned Back surface: it keeps
+        // the capsule Back enabled even at root stack depth (#2467).
+        TopBar.BackStateProvider = () => _viewModel.HasEntryHistory;
         // Person hops rebind this page in place - return to the top of the
         // destination entry instead of keeping the scrolled family section.
         _viewModel.PropertyChanged += (_, e) =>
@@ -35,22 +42,75 @@ public partial class TanahpediaEntryPage : ContentPage
             {
                 MainThread.BeginInvokeOnMainThread(() => EntryScroll.ScrollToAsync(0, 0, false));
             }
+            else if (e.PropertyName == nameof(TanahpediaEntryViewModel.HasEntryHistory))
+            {
+                MainThread.BeginInvokeOnMainThread(() => TopBar.RefreshBackState());
+            }
         };
     }
 
     private void SetupFontSizeResources()
     {
         var prefs = PreferencesService.Instance;
-        UpdateFontSizeResources(prefs.FontFactor);
-        prefs.PreferencesChanged += (_, _) =>
+        UpdateFontSizeResources(prefs.ArticleFontFactor);
+        // The singleton must not retain a pushed entry page - repeated entry
+        // navigation would accumulate pages and native views forever (#2640).
+        WeakPreferencesSubscription.Subscribe(this, prefs, page =>
             MainThread.BeginInvokeOnMainThread(() =>
-                UpdateFontSizeResources(prefs.FontFactor));
+                page.UpdateFontSizeResources(prefs.ArticleFontFactor)));
     }
 
     private void UpdateFontSizeResources(double factor)
     {
         Resources["TanahpediaFontSize"] = factor * 16;
         EntryHtml.SetDynamicResource(HtmlView.FontSizeProperty, "TanahpediaFontSize");
+    }
+
+    /// <summary>
+    /// Maps the scroll offset onto the entry body (issue #2607): the anchor
+    /// sweeps the measured HtmlView extent, so the title, map and family
+    /// tree above and the occurrence rows below stay off the counted axis.
+    /// Fresh extents each scroll keep font-size and late-layout changes
+    /// honest.
+    /// </summary>
+    private void OnEntryScrolled(object? sender, ScrolledEventArgs e) =>
+        RefreshReadingProgress(e.ScrollY);
+
+    /// <summary>
+    /// Font-size changes and relayouts of the chrome above the body shift
+    /// the counted extent without scrolling — re-measure at the current
+    /// offset so the bar stays honest (issue #2607).
+    /// </summary>
+    private void OnEntryContentSizeChanged(object? sender, EventArgs e) =>
+        RefreshReadingProgress(EntryScroll.ScrollY);
+
+    private void RefreshReadingProgress(double scrollY)
+    {
+        if (!_viewModel.HasReadingProgress || EntryHtml.Height < 0)
+        {
+            // No stored units — or the body has not measured yet and any
+            // extent read off it would be fabricated (issue #2607).
+            return;
+        }
+        var top = ContentYOffset(EntryHtml);
+        _viewModel.UpdateReadingProgress(
+            scrollY,
+            EntryScroll.Height,
+            EntryScroll.ContentSize.Height,
+            [(top, top + EntryHtml.Height)]);
+    }
+
+    /// <summary>Accumulated Y of an element within the ScrollView's content.</summary>
+    private double ContentYOffset(VisualElement element)
+    {
+        double y = 0;
+        VisualElement? current = element;
+        while (current != null && !ReferenceEquals(current, EntryScroll.Content))
+        {
+            y += current.Y;
+            current = current.Parent as VisualElement;
+        }
+        return y;
     }
 
     /// <summary>
@@ -83,20 +143,28 @@ public partial class TanahpediaEntryPage : ContentPage
     /// <summary>
     /// Links inside the entry body: <c>/pedia/{slug}</c> routes in-app through
     /// the entry route (synonyms and ambiguous names resolve on that page);
+    /// <c>/929/...</c> links ride the app-link channel into the reader (#1227);
     /// everything else opens in the external browser.
     /// </summary>
     private async void OnEntryLinkTapped(object? sender, LinkTappedEventArgs e)
     {
         e.Handled = true;
-        if (TanahpediaLinks.TryGetEntryUniqueName(e.Url, out var uniqueName))
+        try
         {
-            await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
-            return;
-        }
+            if (TanahpediaLinks.TryGetEntryUniqueName(e.Url, out var uniqueName))
+            {
+                await _viewModel.OpenEntryCommand.ExecuteAsync(uniqueName);
+                return;
+            }
 
-        if (Uri.TryCreate(e.Url, UriKind.Absolute, out var uri))
+            await AppLinkHelper.FollowHtmlLinkAsync(e.Url, Launcher.Default, ShellAppNavigator.Instance);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: link navigation/launcher failure must not crash the page
+        catch (Exception ex) //NOSONAR — link navigation/launcher failure must not crash the page.
         {
-            await Launcher.OpenAsync(uri);
+            #pragma warning restore S2221
+            // async void - an unhandled navigation/launcher exception is a crash.
+            Console.Error.WriteLine($"Tanahpedia link navigation failed for {e.Url}: {ex}");
         }
     }
 
@@ -116,25 +184,42 @@ public partial class TanahpediaEntryPage : ContentPage
         {
             var pasuk = new Pasuk { PasukNum = item.PasukNumber, Text = item.VerseText };
             var result = new PasukSearchResult(pasuk, item.PerekId, string.Empty);
-            await Shell.Current.GoToAsync(AppRoutes.SearchReader, false, new ShellNavigationQueryParameters
+            await ShellAppNavigator.Instance.GoToAsync(AppRoutes.SearchReader, false, new ShellNavigationQueryParameters
             {
                 ["searchResult"] = result
             });
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: occurrence navigation failure alerts the user
+        catch (Exception ex) //NOSONAR — occurrence navigation failure alerts the user.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Tanahpedia occurrence navigation failed: {ex}");
-            await DisplayAlertAsync("תנכפדיה", "לא ניתן לפתוח את המקור. נסו שוב", "אישור");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("תנכפדיה", "לא ניתן לפתוח את המקור. נסו שוב", "אישור");
         }
     }
 
     private async void OnBackToPediaClicked(object? sender, EventArgs e)
     {
+        // async void + Shell navigation: an unobserved GoToAsync exception is a
+        // crash, so the route runs inside a failure boundary (#2640).
         if (Shell.Current is not { } shell)
         {
             return;
         }
-        var location = shell.CurrentState.Location.OriginalString;
-        await shell.GoToAsync(AppRoutes.FlyoutPage("TanahpediaPage", location));
+        await _backToPediaGate.RunAsync(async () =>
+        {
+            try
+            {
+                var location = shell.CurrentState.Location.OriginalString;
+                await ShellAppNavigator.Instance.GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Tanahpedia, location));
+            }
+            #pragma warning disable S2221 // Deliberate failure boundary: back navigation failure alerts the user
+            catch (Exception ex) //NOSONAR — back navigation failure alerts the user.
+            {
+                #pragma warning restore S2221
+                Console.Error.WriteLine($"Tanahpedia back navigation failed: {ex}");
+                await ShellAppNavigator.Instance.DisplayAlertAsync("תנכפדיה", "לא ניתן לחזור כרגע. נסו שוב", "אישור");
+            }
+        });
     }
 }

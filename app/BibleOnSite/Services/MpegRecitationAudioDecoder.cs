@@ -6,8 +6,10 @@ namespace BibleOnSite.Services;
 /// <summary>Use the website's pinned MPEG/Opus decoders; native playback receives exact PCM ranges.</summary>
 public sealed class MpegRecitationAudioDecoder : IRecitationAudioDecoder
 {
-    private const int UploadChunk = 32768;
-    private const int DownloadChunk = 262144;
+    // Bridge roundtrips dominate transfer time; the payload per eval is cheap.
+    private const int UploadChunk = 8388608;
+    private const int DownloadChunk = 8388608;
+    private const string NotifyPrefix = "recitation-status:";
     private readonly WebView view;
     public MpegRecitationAudioDecoder(WebView view)
     {
@@ -29,7 +31,9 @@ public sealed class MpegRecitationAudioDecoder : IRecitationAudioDecoder
                 await view.EvaluateJavaScriptAsync("recitation.reset()");
             }
         }
-        catch (Exception) { _initialized = false; }
+        #pragma warning disable S2221 // Deliberate failure boundary: JS reset failure marks the decoder uninitialized so the next use retries
+        catch (Exception) { _initialized = false; } //NOSONAR — JS reset failure marks the decoder uninitialized so the next use retries.
+        #pragma warning restore S2221
         finally { _gate.Release(); }
     }
 
@@ -110,21 +114,37 @@ public sealed class MpegRecitationAudioDecoder : IRecitationAudioDecoder
 
     private async Task WaitReadyAsync(CancellationToken cancellationToken)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(60);
-        while (true)
+        // The decoder reports ready or error through a recitation-status
+        // navigation that the Navigating handler cancels into a completed wait.
+        var finished = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Navigating(object? sender, WebNavigatingEventArgs e)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if (e.Url.StartsWith(NotifyPrefix, StringComparison.Ordinal))
+            {
+                e.Cancel = true;
+                finished.TrySetResult(e.Url[NotifyPrefix.Length..]);
+            }
+        }
+        view.Navigating += Navigating;
+        try
+        {
             using var state = ParseResult(await view.EvaluateJavaScriptAsync("recitation.status()"));
             var status = state.RootElement.GetProperty("state").GetString();
-            if (status == "ready")
+            if (status != "ready" && status != "error")
             {
-                return;
+                try
+                {
+                    status = await finished.Task.WaitAsync(TimeSpan.FromSeconds(60), cancellationToken);
+                }
+                catch (TimeoutException)
+                {
+                    status = null;
+                }
             }
-
-            if (status == "error" || DateTime.UtcNow > deadline)
+            if (status != "ready")
             { _source = null; throw new InvalidDataException("Recording could not be decoded."); }
-            await Task.Delay(50, cancellationToken);
         }
+        finally { view.Navigating -= Navigating; }
     }
 
     private async Task<byte[]> ReadWaveAsync(string expression, CancellationToken cancellationToken)
@@ -132,19 +152,20 @@ public sealed class MpegRecitationAudioDecoder : IRecitationAudioDecoder
         cancellationToken.ThrowIfCancellationRequested();
         using var result = ParseResult(await view.EvaluateJavaScriptAsync(expression));
         var length = result.RootElement.GetProperty("length").GetInt32();
-        using var wave = new MemoryStream(length);
-        for (var offset = 0; offset < length; offset += DownloadChunk)
+        var wave = new byte[length];
+        var offset = 0;
+        while (offset < length)
         {
             cancellationToken.ThrowIfCancellationRequested();
             using var chunk = ParseResult(await view.EvaluateJavaScriptAsync($"recitation.chunk({offset},{DownloadChunk})"));
-            wave.Write(Convert.FromBase64String(chunk.RootElement.GetProperty("data").GetString()!));
+            var data = chunk.RootElement.GetProperty("data").GetString()!;
+            if (!Convert.TryFromBase64String(data, wave.AsSpan(offset), out var written) || written == 0)
+            {
+                throw new InvalidDataException("Truncated decoded recording.");
+            }
+            offset += written;
         }
-        if (wave.Length != length)
-        {
-            throw new InvalidDataException("Truncated decoded recording.");
-        }
-
-        return wave.ToArray();
+        return wave;
     }
 
     private static JsonDocument ParseResult(string value)

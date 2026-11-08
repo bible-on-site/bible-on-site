@@ -64,6 +64,7 @@ fn create_db(path: &Path, sefarim: &[Sefer], dump_name: &str) -> Result<()> {
     insert_sefarim(&tx, sefarim)?;
     crate::reading_units::insert_masora_reading_units(&tx, sefarim)?;
     crate::reading_units::insert_parasha_reading_units(&tx, sefarim)?;
+    crate::reading_units::insert_parasha_aliyot(&tx, sefarim)?;
 
     // Commit transaction
     tx.commit()?;
@@ -164,6 +165,7 @@ fn insert_sefarim(tx: &rusqlite::Transaction, sefarim: &[Sefer]) -> Result<()> {
         // Insert perakim directly under sefer
         if let Some(perakim) = &sefer.perakim {
             insert_perakim(tx, sefer_id, perakim)?;
+            insert_perek_metrics(tx, perakim)?;
         }
 
         // Insert additionals
@@ -182,6 +184,7 @@ fn insert_sefarim(tx: &rusqlite::Transaction, sefarim: &[Sefer]) -> Result<()> {
                 )?;
 
                 insert_perakim(tx, sefer_id, &additional.perakim)?;
+                insert_perek_metrics(tx, &additional.perakim)?;
             }
         }
     }
@@ -190,12 +193,29 @@ fn insert_sefarim(tx: &rusqlite::Transaction, sefarim: &[Sefer]) -> Result<()> {
 }
 
 fn insert_perakim(tx: &rusqlite::Transaction, sefer_id: i64, perakim: &[Perek]) -> Result<()> {
+    let mut perek_stmt =
+        tx.prepare("INSERT INTO tanah_perek (id, perek, header) VALUES (?1, ?2, ?3)")?;
+    let mut perek_date_stmt = tx.prepare(
+        "INSERT OR IGNORE INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+    )?;
+    let mut segment_stmt = tx.prepare(
+        "INSERT INTO tanah_pasuk_segment (sefer_id, perek_id, pasuk_id, segment_type)
+         VALUES (?1, ?2, ?3, ?4)",
+    )?;
+    let mut segment_value_stmt =
+        tx.prepare("INSERT INTO tanah_pasuk_segment_value (id, value) VALUES (?1, ?2)")?;
+    let mut offset_stmt = tx.prepare(
+        "INSERT INTO tanah_pasuk_segment_qri_ktiv_offset (id, qri_ktiv_offset) VALUES (?1, ?2)",
+    )?;
+    let mut time_frame_stmt = tx.prepare(
+        "INSERT INTO tanah_pasuk_segment_recording_time_frame (id, recording_time_frame_from, recording_time_frame_to)
+             VALUES (?1, ?2, ?3)",
+    )?;
+
     for perek in perakim {
         // Insert perek
-        tx.execute(
-            "INSERT INTO tanah_perek (id, perek, header) VALUES (?1, ?2, ?3)",
-            (perek.perek_id, perek.perek_id, &perek.header),
-        )?;
+        perek_stmt.execute((perek.perek_id, perek.perek_id, &perek.header))?;
 
         // Insert perek dates (one per cycle)
         for (cycle_idx, date_val) in perek.date.iter().enumerate() {
@@ -207,17 +227,13 @@ fn insert_perakim(tx: &rusqlite::Transaction, sefer_id: i64, perakim: &[Perek]) 
                 .get(cycle_idx)
                 .map(|s| s.as_str())
                 .unwrap_or("");
-            tx.execute(
-                "INSERT OR IGNORE INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                (
-                    perek.perek_id,
-                    cycle,
-                    date_val.to_string(),
-                    date_val.to_string(),
-                    star_rise,
-                ),
-            )?;
+            perek_date_stmt.execute((
+                perek.perek_id,
+                cycle,
+                date_val.to_string(),
+                date_val.to_string(),
+                star_rise,
+            ))?;
         }
 
         for (pasuk_idx, pasuk) in perek.pesukim.iter().enumerate() {
@@ -227,11 +243,7 @@ fn insert_perakim(tx: &rusqlite::Transaction, sefer_id: i64, perakim: &[Perek]) 
                 let seg_type = &segment.segment_type;
 
                 // Insert into base segment table (no offset here - it goes to subtable)
-                tx.execute(
-                    "INSERT INTO tanah_pasuk_segment (sefer_id, perek_id, pasuk_id, segment_type)
-                     VALUES (?1, ?2, ?3, ?4)",
-                    (sefer_id, perek.perek_id, pasuk_id, seg_type),
-                )?;
+                segment_stmt.execute((sefer_id, perek.perek_id, pasuk_id, seg_type))?;
 
                 let segment_id = tx.last_insert_rowid();
 
@@ -239,29 +251,19 @@ fn insert_perakim(tx: &rusqlite::Transaction, sefer_id: i64, perakim: &[Perek]) 
                 if (seg_type == "ktiv" || seg_type == "qri")
                     && let Some(value) = &segment.value
                 {
-                    tx.execute(
-                        "INSERT INTO tanah_pasuk_segment_value (id, value) VALUES (?1, ?2)",
-                        (segment_id, value),
-                    )?;
+                    segment_value_stmt.execute((segment_id, value))?;
                 }
 
                 // ktiv and qri segments may have offset to paired segment
                 if let Some(offset) = segment.qri_ktiv_offset() {
-                    tx.execute(
-                        "INSERT INTO tanah_pasuk_segment_qri_ktiv_offset (id, qri_ktiv_offset) VALUES (?1, ?2)",
-                        (segment_id, offset),
-                    )?;
+                    offset_stmt.execute((segment_id, offset))?;
                 }
 
                 // qri segments have recording time frame
                 if seg_type == "qri"
                     && let Some(tf) = &segment.recording_time_frame
                 {
-                    tx.execute(
-                        "INSERT INTO tanah_pasuk_segment_recording_time_frame (id, recording_time_frame_from, recording_time_frame_to)
-                             VALUES (?1, ?2, ?3)",
-                        (segment_id, &tf.from, &tf.to),
-                    )?;
+                    time_frame_stmt.execute((segment_id, &tf.from, &tf.to))?;
                 }
 
                 // ptuha and stuma have no subtables - only the base segment
@@ -269,6 +271,60 @@ fn insert_perakim(tx: &rusqlite::Transaction, sefer_id: i64, perakim: &[Perek]) 
         }
     }
 
+    Ok(())
+}
+
+/// Write the shared reading-metrics rows (#2607) for one perakim list —
+/// the identical contract the MySQL backfill produces from the same corpus:
+/// per-pasuk counted text, sha256 over the "\n"-joined stream, pasuk rows
+/// with cumulative_words in canonical order, and the whole-perek metric row.
+fn insert_perek_metrics(tx: &rusqlite::Transaction, perakim: &[Perek]) -> Result<()> {
+    let mut metric_stmt = tx.prepare(
+        "INSERT INTO tanah_perek_metric
+         (perek_id, word_count, estimated_seconds, words_per_minute, calc_version, source_hash)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+    )?;
+    let mut pasuk_stmt = tx.prepare(
+        "INSERT INTO tanah_perek_pasuk_metric
+         (perek_id, pasuk, word_count, cumulative_words, calc_version)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+    )?;
+    for perek in perakim {
+        let texts: Vec<String> = perek
+            .pesukim
+            .iter()
+            .map(|pasuk| {
+                reading_metrics::pasuk_counted_text(pasuk.segments.iter().map(|segment| {
+                    reading_metrics::CorpusSegment {
+                        segment_type: &segment.segment_type,
+                        value: segment.value.as_deref(),
+                        qri_offset: segment.qri_offset,
+                    }
+                }))
+            })
+            .collect();
+        let hash = reading_metrics::metric_source_hash(&texts.join("\n"));
+        let mut cumulative: i64 = 0;
+        for (pasuk_idx, text) in texts.iter().enumerate() {
+            let word_count = reading_metrics::count_text_words(text);
+            cumulative += word_count;
+            pasuk_stmt.execute(rusqlite::params![
+                perek.perek_id,
+                (pasuk_idx + 1) as i64,
+                word_count,
+                cumulative,
+                reading_metrics::READING_METRICS_CALC_VERSION,
+            ])?;
+        }
+        metric_stmt.execute(rusqlite::params![
+            perek.perek_id,
+            cumulative,
+            reading_metrics::estimate_reading_seconds(cumulative),
+            reading_metrics::READING_WORDS_PER_MINUTE,
+            reading_metrics::READING_METRICS_CALC_VERSION,
+            hash,
+        ])?;
+    }
     Ok(())
 }
 
@@ -531,6 +587,49 @@ mod tests {
             .unwrap();
         assert_eq!(reading_range_count, 4);
 
+        // Shared reading-metrics rows (#2607): each fixture perek holds one
+        // pasuk whose counted text is "read tail" (the paired ktiv is read by
+        // its qri) → 2 words, ceil(120/220) = 1 estimated second.
+        let metric_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM tanah_perek_metric", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(metric_count, 2);
+
+        let (word_count, estimated_seconds, wpm, calc_version, hash): (i64, i64, i64, i64, String) =
+            conn.query_row(
+                "SELECT word_count, estimated_seconds, words_per_minute, calc_version, source_hash
+                 FROM tanah_perek_metric WHERE perek_id = 1",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(word_count, 2);
+        assert_eq!(estimated_seconds, 1);
+        assert_eq!(wpm, reading_metrics::READING_WORDS_PER_MINUTE);
+        assert_eq!(calc_version, reading_metrics::READING_METRICS_CALC_VERSION);
+        assert_eq!(hash, reading_metrics::metric_source_hash("read tail"));
+
+        // Pasuk rows carry the word-weighted progress mapping.
+        let pasuk_row: (i64, i64, i64) = conn
+            .query_row(
+                "SELECT pasuk, word_count, cumulative_words
+                 FROM tanah_perek_pasuk_metric WHERE perek_id = 2",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(pasuk_row, (1, 2, 2));
+
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -599,5 +698,65 @@ mod tests {
         assert_eq!(source, "dump-v1");
 
         fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The metric-table DDL the tanah_view schema ships — needed by the
+    /// constraint-collision tests that reach `insert_perek_metrics`'s `?`
+    /// propagations.
+    const PEREK_METRICS_DDL: &str = r#"
+CREATE TABLE tanah_perek_metric (
+  perek_id INTEGER NOT NULL,
+  word_count INTEGER,
+  estimated_seconds INTEGER,
+  words_per_minute INTEGER NOT NULL,
+  calc_version INTEGER NOT NULL,
+  source_hash TEXT NOT NULL,
+  computed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (perek_id)
+);
+CREATE TABLE tanah_perek_pasuk_metric (
+  perek_id INTEGER NOT NULL,
+  pasuk INTEGER NOT NULL,
+  word_count INTEGER NOT NULL,
+  cumulative_words INTEGER NOT NULL,
+  calc_version INTEGER NOT NULL,
+  PRIMARY KEY (perek_id, pasuk)
+);
+"#;
+
+    #[test]
+    fn insert_perek_metrics_propagates_a_pasuk_row_insert_failure() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(PEREK_METRICS_DDL).unwrap();
+        // A row the computed pasuk insert collides with on (perek_id, pasuk).
+        conn.execute(
+            "INSERT INTO tanah_perek_pasuk_metric VALUES (7, 1, 1, 1, 1)",
+            [],
+        )
+        .unwrap();
+
+        let tx = conn.transaction().unwrap();
+        let err = insert_perek_metrics(&tx, &[perek(7, vec!["05:30"])]).unwrap_err();
+
+        assert!(err.to_string().contains("UNIQUE"), "{err}");
+    }
+
+    #[test]
+    fn insert_perek_metrics_propagates_a_perek_row_insert_failure() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(PEREK_METRICS_DDL).unwrap();
+        // The pasuk rows land cleanly; only the whole-perek row collides.
+        conn.execute(
+            "INSERT INTO tanah_perek_metric
+             (perek_id, words_per_minute, calc_version, source_hash)
+             VALUES (7, 220, 1, 'preexisting')",
+            [],
+        )
+        .unwrap();
+
+        let tx = conn.transaction().unwrap();
+        let err = insert_perek_metrics(&tx, &[perek(7, vec!["05:30"])]).unwrap_err();
+
+        assert!(err.to_string().contains("UNIQUE"), "{err}");
     }
 }

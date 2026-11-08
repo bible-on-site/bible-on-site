@@ -164,7 +164,7 @@ export async function prepareImage({
 	return { outputDirectory, manifest };
 }
 
-const usage = `Usage: npm run images:prepare -- <master.png> [--perek 1] [--output <directory>] [--position centre]
+const usage = `Usage: bun run images:prepare -- <master.png> [--perek 1] [--output <directory>] [--position centre]
 
 One image is enough. Prefer a 1600x900 or larger PNG; other aspect ratios are cropped.
 Creates responsive AVIF, WebP fallback, social JPEG, and manifest.json locally.

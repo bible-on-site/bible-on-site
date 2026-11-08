@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+<controls:PreferencesPageBase xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.RecitationPreferencesPage"
              x:DataType="viewmodels:RecitationPreferencesViewModel"
+             Shell.NavBarIsVisible="False"
+             ControlTemplate="{StaticResource PreferencesPageTemplate}"
              Title="קריינות"
              FlowDirection="RightToLeft"
              BackgroundColor="{AppThemeBinding Light={StaticResource Gray50}, Dark={StaticResource SurfaceDark}}">
@@ -17,7 +20,7 @@
                 <Label Text="השמעה"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <Border Padding="16"
@@ -81,7 +84,7 @@
                 <Label Text="הקלטות"
                        FontSize="14"
                        FontAttributes="Bold"
-                       TextColor="{StaticResource Primary}"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                        Padding="4,0,0,0"/>
 
                 <Border Padding="16"
@@ -121,4 +124,4 @@
             </VerticalStackLayout>
         </VerticalStackLayout>
     </ScrollView>
-</ContentPage>
+</controls:PreferencesPageBase>

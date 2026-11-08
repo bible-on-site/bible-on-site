@@ -106,8 +106,10 @@ public partial class AuthorsViewModel : ObservableObject
 
             SetAuthors(_starterService.Authors);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: authors load failure surfaces as a user message
+        catch (Exception ex) //NOSONAR — authors load failure surfaces as a user message.
         {
+            #pragma warning restore S2221
             ErrorMessage = $"שגיאה בטעינת הרבנים: {ex.Message}";
             Console.Error.WriteLine($"Error loading authors: {ex}");
         }

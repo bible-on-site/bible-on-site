@@ -10,10 +10,11 @@ use bulletin::pdf;
 use bulletin::tanach;
 
 use crate::db::Database;
+use crate::services;
+
 use base64::{Engine, engine::general_purpose::STANDARD};
 
 use crate::models::{GeneratePdfRequest, ImageExt, PerekContentInput, SegmentKindInput};
-use crate::services;
 
 // ──────────────────── Shared core logic ────────────────────────
 
@@ -34,18 +35,25 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
         None
     };
 
+    // Fetch all articles for every perek up front in one batch (not one query per perek).
+    let articles_by_perek = services::get_articles_and_authors(
+        db.as_ref(),
+        &req.perakim_ids,
+        &req.article_ids,
+        &req.author_ids,
+    )
+    .await
+    .map_err(|e| format!("Failed to fetch articles: {}", e))?;
+
     // Resolve perek data from embedded Tanach text and attach articles per-perek
     let mut perakim: Vec<pdf::PdfPerekInput> = Vec::with_capacity(req.perakim_ids.len());
     for &id in &req.perakim_ids {
         let data = tanach::get_perek(id).ok_or_else(|| format!("Unknown perekId: {}", id))?;
 
-        let articles = if let Some(ref db) = db {
-            fetch_articles_for_perek(db, id, &req)
-                .await
-                .map_err(|e| format!("Failed to fetch articles: {}", e))?
-        } else {
-            vec![]
-        };
+        let articles = articles_by_perek
+            .get(&(id as i16))
+            .cloned()
+            .unwrap_or_default();
 
         let content = req.perakim_content.iter().find(|c| c.perek_id == id);
         let (pesukim, images) = match content {
@@ -152,34 +160,6 @@ fn content_images(content: &PerekContentInput) -> Result<Vec<pdf::PdfImage>, Str
         .collect()
 }
 
-/// Fetch articles for a single perek, applying optional filters.
-async fn fetch_articles_for_perek(
-    db: &Database,
-    perek_id: i32,
-    req: &GeneratePdfRequest,
-) -> anyhow::Result<Vec<(String, String, String)>> {
-    let mut perek_articles = services::get_articles_by_perek(db, perek_id).await?;
-
-    if !req.article_ids.is_empty() {
-        perek_articles.retain(|a| req.article_ids.contains(&a.id));
-    }
-    if !req.author_ids.is_empty() {
-        perek_articles.retain(|a| req.author_ids.contains(&(a.author_id as i32)));
-    }
-
-    let mut articles = Vec::new();
-    for article in perek_articles {
-        let author = services::get_author(db, article.author_id as i32).await?;
-        articles.push((
-            article.name.clone(),
-            author.name.clone(),
-            article.content.clone().unwrap_or_default(),
-        ));
-    }
-
-    Ok(articles)
-}
-
 fn build_filename(sefer_name: &str, perakim_ids: &[i32]) -> String {
     if perakim_ids.is_empty() {
         return format!("{}.pdf", sefer_name);
@@ -255,13 +235,11 @@ pub async fn lambda_handler(
         "/health" => Ok(LambdaResponse::builder()
             .status(200)
             .header("content-type", "application/json")
-            .body(Body::Text(r#"{"status":"ok","service":"bulletin"}"#.into()))
-            .unwrap()),
+            .body(Body::Text(r#"{"status":"ok","service":"bulletin"}"#.into()))?),
         _ => Ok(LambdaResponse::builder()
             .status(404)
             .header("content-type", "application/json")
-            .body(Body::Text(r#"{"error":"not_found"}"#.into()))
-            .unwrap()),
+            .body(Body::Text(r#"{"error":"not_found"}"#.into()))?),
     }
 }
 
@@ -301,20 +279,16 @@ async fn lambda_generate_pdf(
         Body::Empty | _ => {
             return Ok(LambdaResponse::builder()
                 .status(400)
-                .body(Body::Text(r#"{"error":"Missing request body"}"#.into()))
-                .unwrap());
+                .body(Body::Text(r#"{"error":"Missing request body"}"#.into()))?);
         }
     };
 
     let req: GeneratePdfRequest = match serde_json::from_str(&body_str) {
         Ok(r) => r,
         Err(e) => {
-            return Ok(LambdaResponse::builder()
-                .status(400)
-                .body(Body::Text(
-                    serde_json::json!({"error": e.to_string()}).to_string(),
-                ))
-                .unwrap());
+            return Ok(LambdaResponse::builder().status(400).body(Body::Text(
+                serde_json::json!({"error": e.to_string()}).to_string(),
+            ))?);
         }
     };
 
@@ -326,12 +300,10 @@ async fn lambda_generate_pdf(
                 "content-disposition",
                 format!("attachment; filename=\"{}\"", filename),
             )
-            .body(Body::Binary(buf))
-            .unwrap()),
+            .body(Body::Binary(buf))?),
         Err(e) => Ok(LambdaResponse::builder()
             .status(500)
-            .body(Body::Text(serde_json::json!({"error": e}).to_string()))
-            .unwrap()),
+            .body(Body::Text(serde_json::json!({"error": e}).to_string()))?),
     }
 }
 

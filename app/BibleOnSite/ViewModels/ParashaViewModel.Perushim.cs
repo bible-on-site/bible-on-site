@@ -30,10 +30,25 @@ public partial class ParashaViewModel //NOSONAR
     public async Task LoadPerushimAsync(ParashaUnit unit)
     {
         await _catalogService.InitializeAsync();
-        await _notesService.InitializeAsync();
+
+        // With no local notes DB, InitializeAsync materializes the delivered
+        // pack first — a copy of hundreds of MB inside the service lock.
+        // Awaiting it on the reader path starved the UI thread past the e2e
+        // startup deadline (#2430), so kick it instead; the page's
+        // operation-completed hook reloads perushim once the copy lands.
+        var notesMaterializing = !_notesService.IsInitialized && !_notesService.HasLocalNotesFile;
+        if (notesMaterializing)
+        {
+            _notesService.BeginInitialize();
+        }
+        else
+        {
+            await _notesService.InitializeAsync();
+        }
 
         PerushimCatalogAvailable = _catalogService.IsAvailable;
         PerushimNotesAvailable = _notesService.IsAvailable;
+        PerushimNotesPending = notesMaterializing && !PerushimNotesAvailable;
         OnPropertyChanged(nameof(PerushimEmptyMessage));
         OnPropertyChanged(nameof(ShowDownloadPerushimButton));
 
@@ -56,9 +71,9 @@ public partial class ParashaViewModel //NOSONAR
             var chapter = await _notesService.LoadChapterAsync(slice.PerekId);
             if (chapter == null) { continue; }
             chapters[slice.PerekId] = chapter;
-            foreach (var id in chapter.AvailablePerushIds(slice.StartPasuk, slice.EndPasuk))
+            foreach (var id in chapter.AvailablePerushIds(slice.StartPasuk, slice.EndPasuk).Where(seenIds.Add))
             {
-                if (seenIds.Add(id)) { allPerushIds.Add(id); }
+                allPerushIds.Add(id);
             }
         }
 
@@ -102,6 +117,12 @@ public partial class ParashaViewModel //NOSONAR
     /// <summary>Max perushim shown inline — unchecked rows render disabled at the cap.</summary>
     public int InlineCommentaryLimit => _preferencesService.InlineCommentaryLimit;
 
+    /// <summary>Live "נבחרו N מתוך M" counter for the perushim selector header.</summary>
+    public string PerushimSelectionStatus => $"נבחרו {CheckedPerushim.Count} מתוך {InlineCommentaryLimit}";
+
+    /// <summary>Whether the configured perushim limit is fully used (drives subtle max-reached emphasis).</summary>
+    public bool PerushimLimitReached => CheckedPerushim.Count >= InlineCommentaryLimit;
+
     /// <summary>A search result must remain visible even when all inline slots are occupied.</summary>
     public void ShowPerushForSearch(int perushId)
     {
@@ -133,6 +154,33 @@ public partial class ParashaViewModel //NOSONAR
 
     /// <summary>Returns whether a perush is currently checked.</summary>
     public bool IsPerushChecked(int perushId) => CheckedPerushim.Contains(perushId);
+
+    /// <summary>
+    /// Exports perushim diagnostics to a file and opens the share sheet for support.
+    /// </summary>
+    [RelayCommand]
+    public async Task ExportPerushimLogsAsync()
+    {
+        try
+        {
+            var report = await _notesService.GetDiagnosticsAsync();
+            var fileName = $"perushim_diagnostics_{DateTime.UtcNow:yyyyMMdd_HHmmss}.txt";
+            var path = Path.Join(_fileSystem.CacheDirectory, fileName);
+            await File.WriteAllTextAsync(path, report);
+            await _share.RequestAsync(new ShareFileRequest
+            {
+                Title = "ייצוא לוגים - פירושים",
+                File = new ShareFile(path),
+            });
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: log export failure alerts the user
+        catch (Exception ex) //NOSONAR — log export failure alerts the user.
+        {
+            #pragma warning restore S2221
+            System.Diagnostics.Debug.WriteLine($"Export perushim logs failed: {ex.Message}");
+            await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
+        }
+    }
 
     /// <summary>
     /// All available commentary for a row, independent of inline filters —

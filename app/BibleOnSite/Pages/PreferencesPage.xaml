@@ -1,20 +1,36 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+<controls:PreferencesPageBase xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:fonts="clr-namespace:Fonts"
+             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
              x:Class="BibleOnSite.Pages.PreferencesPage"
              x:DataType="viewmodels:PreferencesViewModel"
+             Shell.NavBarIsVisible="False"
+             ControlTemplate="{StaticResource PreferencesPageTemplate}"
              Title="העדפות"
              FlowDirection="RightToLeft"
              BackgroundColor="{AppThemeBinding Light={StaticResource Gray50}, Dark={StaticResource SurfaceDark}}">
 
     <ScrollView Padding="16,12">
+        <!-- Windows: preference rows at monitor width are unscanable (#2766) -->
         <Border Padding="0"
                 StrokeShape="RoundRectangle 12"
                 Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
                 StrokeThickness="1"
                 BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+            <Border.MaximumWidthRequest>
+                <!-- +∞ = uncapped; an explicit -1 collapses the element on mobile. -->
+                <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
+                    <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ContentColumnMaxWidth}"/>
+                </OnPlatform>
+            </Border.MaximumWidthRequest>
+            <Border.HorizontalOptions>
+                <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+                    <On Platform="Windows" Value="Center"/>
+                </OnPlatform>
+            </Border.HorizontalOptions>
             <VerticalStackLayout Spacing="0">
 
                 <!-- תצוגה -->
@@ -193,36 +209,6 @@
                          Margin="0,0,52,0"
                          BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"/>
 
-                <!-- אנליטיקה -->
-                <Grid ColumnDefinitions="Auto,*,Auto"
-                      Padding="16,14"
-                      AutomationId="SettingsAnalyticsRow"
-                      SemanticProperties.Description="אנליטיקה">
-                    <Label Text="{x:Static fonts:FluentUI.chart_multiple_24_regular}"
-                           FontFamily="FluentIcons"
-                           FontSize="24"
-                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
-                           VerticalOptions="Center"
-                           Margin="0,0,12,0"/>
-                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
-                        <Label Text="אנליטיקה"
-                               FontSize="16"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                        <Label Text="שיתוף נתוני שימוש לשיפור הישומון"
-                               FontSize="13"
-                               LineBreakMode="WordWrap"
-                               TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                    </VerticalStackLayout>
-                    <Switch Grid.Column="2"
-                            IsToggled="{Binding AnalyticsConsentEnabled}"
-                            AutomationId="AnalyticsConsentSwitch"
-                            VerticalOptions="Center"/>
-                </Grid>
-
-                <BoxView HeightRequest="1"
-                         Margin="0,0,52,0"
-                         BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"/>
-
                 <!-- תמיכה -->
                 <Grid ColumnDefinitions="Auto,*,Auto"
                       Padding="16,14"
@@ -257,4 +243,4 @@
             </VerticalStackLayout>
         </Border>
     </ScrollView>
-</ContentPage>
+</controls:PreferencesPageBase>

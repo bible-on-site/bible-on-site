@@ -11,7 +11,7 @@ namespace BibleOnSite.ViewModels;
 /// ViewModel for perek display and navigation.
 /// Uses CommunityToolkit.Mvvm for observable properties and commands.
 /// </summary>
-public partial class PerekViewModel : ObservableObject
+public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
 {
     private readonly PreferencesService _preferencesService;
     private readonly Func<int, Perek?> _perekLoader;
@@ -21,7 +21,12 @@ public partial class PerekViewModel : ObservableObject
     private readonly IAppNavigator _navigator;
     private readonly IFileSystem _fileSystem;
     private readonly IShare _share;
+    private readonly IDedicationService _dedicationService;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, Perek> _readerPerakim = new();
+
+    /// <summary>Serializes dedication loads so a fast perek flip cannot show a
+    /// stale perek's lines — the latest perek always wins (#2731).</summary>
+    private int _dedicationVersion;
 
     /// <summary>Reports whether a perek has downloaded recitation audio (production: RecitationService).</summary>
     private readonly Func<int, bool>? _hasPerekAudio;
@@ -165,6 +170,14 @@ public partial class PerekViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ShowHeaderPlayButton))]
     private bool _hasCurrentPerekRecitation;
 
+    /// <summary>
+    /// Word-weighted fraction (0–1) of the displayed perek already scrolled
+    /// past — the current reading position from the stored pasuk metrics
+    /// (issue #2607). 0 also means "no metric" so the indicator hides.
+    /// </summary>
+    [ObservableProperty]
+    private double _readingProgress;
+
     /// <summary>The header play button shows only while קריינות is checked and audio exists.</summary>
     public bool ShowHeaderPlayButton => IsQriynotEnabled && HasCurrentPerekRecitation;
 #pragma warning restore MVVMTK0045
@@ -178,12 +191,125 @@ public partial class PerekViewModel : ObservableObject
         }
     }
 
-    partial void OnPerekChanged(Perek? value) => RefreshRecitationAvailability(value);
-
-    partial void OnCurrentCarouselPerekChanged(Perek? oldValue, Perek? newValue)
+    partial void OnPerekChanged(Perek? oldValue, Perek? newValue)
     {
+        // Only the displayed carousel page belongs in the accessibility tree.
+        // Perek always tracks the displayed page — unlike the carousel's
+        // CurrentItem, which does not update on programmatic ScrollTo and can
+        // leave the exclusion flag on a page that is actually on screen.
         if (oldValue is not null) { oldValue.IsOffscreenCarouselPage = true; }
         if (newValue is not null) { newValue.IsOffscreenCarouselPage = false; }
+        RefreshRecitationAvailability(newValue);
+        ReadingProgress = 0;
+        _ = AttachReadingMetricsAsync(newValue);
+        if (newValue is null)
+        {
+            // Invalidate any in-flight dedication load for the previous perek.
+            ++_dedicationVersion;
+            DedicationLines = [];
+        }
+        else if (newValue.PerekId != oldValue?.PerekId)
+        {
+            _ = LoadDedicationsAsync(newValue.PerekId);
+        }
+    }
+
+    /// <summary>
+    /// Attaches the stored reading metric + ordered pasuk units to the
+    /// displayed perek (issue #2607), read from the packaged sqlite. Best
+    /// effort: a pack predating the metric tables leaves everything null —
+    /// badge and progress hide, reading is never blocked by metrics.
+    /// </summary>
+    private async Task AttachReadingMetricsAsync(Perek? perek)
+    {
+        if (perek is null || perek.ReadingMetric is not null)
+        {
+            return;
+        }
+        try
+        {
+            perek.ReadingMetric = await _perekDataService.GetReadingMetricAsync(perek.PerekId);
+            perek.ProgressUnits = await _perekDataService.GetPasukProgressUnitsAsync(perek.PerekId);
+            // Scrolls that arrived while the read was pending computed a zero
+            // anchor — replay the last known anchor now that units exist.
+            if (perek == Perek && _lastAnchorPerekId == perek.PerekId)
+            {
+                UpdateReadingProgress(_lastAnchorPasukNum, _lastContentEndVisible);
+            }
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: metric read failure degrades to no badge/progress
+        catch (Exception ex) //NOSONAR — metric read failure degrades to no badge/progress.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Reading metrics unavailable for perek {perek.PerekId}: {ex.Message}");
+        }
+    }
+
+    /// <summary>Anchor captured for replay once async metric reads land.</summary>
+    private int? _lastAnchorPerekId;
+    private int _lastAnchorPasukNum;
+    private bool _lastContentEndVisible;
+
+    /// <summary>
+    /// Updates the reading-position fraction for the displayed perek from the
+    /// pasuk currently anchored at the viewport top (issue #2607). The last
+    /// visible display item flag carries the web engine's "content tail in
+    /// view → fully read" rule so a chapter that fits the screen reads 100%.
+    /// </summary>
+    public void UpdateReadingProgress(int anchorPasukNum, bool contentEndVisible)
+    {
+        var perek = Perek;
+        _lastAnchorPerekId = perek?.PerekId;
+        _lastAnchorPasukNum = anchorPasukNum;
+        _lastContentEndVisible = contentEndVisible;
+        var units = perek?.ProgressUnits;
+        if (perek is null || units is null || units.Count == 0 ||
+            perek.ReadingMetric?.WordCount is not > 0)
+        {
+            ReadingProgress = 0;
+            return;
+        }
+        var anchorIndex = ReadingProgressEngine.IndexOfPasuk(units, anchorPasukNum);
+        if (anchorIndex < 0)
+        {
+            ReadingProgress = 0;
+            return;
+        }
+        ReadingProgress = ReadingProgressEngine.Fraction(
+            units, perek.ReadingMetric.WordCount, anchorIndex,
+            insideUnitFraction: 0, contentEndVisible: contentEndVisible);
+    }
+
+    /// <summary>
+    /// The perek's dedication lines (#2731) — direct perek ranges plus
+    /// sefer/helek ancestors, resolved server-side. Best-effort secondary
+    /// content: a load failure shows no lines rather than failing the page.
+    /// </summary>
+    private async Task LoadDedicationsAsync(int perekId)
+    {
+        var version = ++_dedicationVersion;
+        // Clear eagerly — a swiped perek must never inherit its neighbour's lines.
+        DedicationLines = [];
+        try
+        {
+            var dedications = await _dedicationService.GetDedicationsAsync(
+                new DedicationContext { PerekIds = [perekId] }, CancellationToken.None);
+            if (version != _dedicationVersion || Perek?.PerekId != perekId)
+            {
+                return;
+            }
+            DedicationLines = DedicationFormatter.FormatAll(dedications);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: dedication lines are best-effort
+        catch (Exception ex) //NOSONAR — dedication lines are best-effort.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Dedication load failed for perek {perekId}: {ex}");
+            if (version == _dedicationVersion)
+            {
+                DedicationLines = [];
+            }
+        }
     }
 
     /// <summary>
@@ -228,6 +354,16 @@ public partial class PerekViewModel : ObservableObject
         PerekDataService? perekDataService, PerushimCatalogService? catalogService,
         PerushimNotesService? notesService, IAppNavigator? navigator,
         IFileSystem? fileSystem, IShare? share, Func<int, bool>? hasPerekAudio)
+        : this(preferencesService, perekLoader, perekDataService, catalogService, notesService,
+            navigator, fileSystem, share, hasPerekAudio, null)
+    {
+    }
+
+    public PerekViewModel(PreferencesService preferencesService, Func<int, Perek?>? perekLoader,
+        PerekDataService? perekDataService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, IAppNavigator? navigator,
+        IFileSystem? fileSystem, IShare? share, Func<int, bool>? hasPerekAudio,
+        IDedicationService? dedicationService)
     {
         _preferencesService = preferencesService;
         _perekLoader = perekLoader ?? (_ => null);
@@ -238,15 +374,16 @@ public partial class PerekViewModel : ObservableObject
         _fileSystem = fileSystem ?? FileSystem.Current;
         _share = share ?? Share.Default;
         _hasPerekAudio = hasPerekAudio;
+        _dedicationService = dedicationService ?? DedicationService.Instance;
         _perushChapter = null;
 
         // Sync FontFactor from preferences and listen for changes
-        _fontFactor = _preferencesService.FontFactor;
+        _fontFactor = _preferencesService.PasukFontFactor;
         _divineNameMaskingRevision = DivineNameMasking.Revision;
         WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.RefreshPreferences());
     }
 
-    /// <summary>Font scaling factor from user preferences (0.5–2.0).</summary>
+    /// <summary>Effective pasuk scaling factor: master × pasuk percent (#2461).</summary>
     [ObservableProperty]
     private double _fontFactor = 1.0;
 
@@ -268,6 +405,15 @@ public partial class PerekViewModel : ObservableObject
     // The default loader returns null — perek content is loaded asynchronously
     // through PerekDataService.LoadByPerekIdAsync() instead.
     #region Perek Properties
+
+#pragma warning disable MVVMTK0045
+    /// <summary>Formatted dedication lines applying to the displayed perek (#2731).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDedications))]
+    private List<string> _dedicationLines = [];
+#pragma warning restore MVVMTK0045
+
+    public bool HasDedications => DedicationLines.Count > 0;
 
     public int PerekId => Perek?.PerekId ?? 0;
 
@@ -505,8 +651,10 @@ public partial class PerekViewModel : ObservableObject
             await stale;
             DebugLog.Write($"[PerekLoad] stale attempt {attempt} eventually completed (perekId={perekId})");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: a superseded load attempt's late failure is log-only
+        catch (Exception ex) //NOSONAR — a superseded load attempt's late failure is log-only.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"[PerekLoad] stale attempt {attempt} failed late (perekId={perekId}): {ex.Message}");
         }
     }
@@ -665,6 +813,27 @@ public partial class PerekViewModel : ObservableObject
         // sees the correct checked state when it re-renders items.
         var availableIds = new HashSet<int>(perushIds);
         CheckedPerushim = CheckedPerushim.Where(id => availableIds.Contains(id)).Take(_preferencesService.InlineCommentaryLimit).ToList();
+        // Stored per-perush reading metrics for the sheet badges (issue #2607)
+        // — one batched read, decorated before the non-observable list is
+        // published so the badge binds once; a stale swipe skips decorating.
+        if (!IsStalePerushimLoad(perekId))
+        {
+            var metrics = await _notesService.GetPerushMetricsForPerekAsync(perekId);
+            // The metric await added a second suspension — a swipe during it
+            // must still discard this load's results before publication.
+            if (IsStalePerushimLoad(perekId))
+            {
+                return;
+            }
+            foreach (var perush in orderedPerushim)
+            {
+                if (metrics.TryGetValue(perush.Id, out var metric))
+                {
+                    perush.ReadingMetric = metric;
+                }
+            }
+        }
+
         Perushim = orderedPerushim;
 
         FillFilteredPerushContents();
@@ -1139,8 +1308,10 @@ public partial class PerekViewModel : ObservableObject
                     _perushimPreloadCache[id] = new PreloadedPerushimData(perushIds, perushById, chapter);
                 }
             }
-            catch (Exception ex)
+            #pragma warning disable S2221 // Deliberate failure boundary: carousel preload is best-effort
+            catch (Exception ex) //NOSONAR — carousel preload is best-effort.
             {
+                #pragma warning restore S2221
                 Console.Error.WriteLine($"[Carousel] PreloadPerushim perekId={id} failed: {ex.Message}");
             }
         }
@@ -1188,8 +1359,10 @@ public partial class PerekViewModel : ObservableObject
             var encodedTitle = Uri.EscapeDataString(Source);
             await _navigator.GoToAsync($"ArticlesPage?perekId={PerekId}&perekTitle={encodedTitle}");
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure alerts the user
+        catch (Exception ex) //NOSONAR — navigation failure alerts the user.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Navigation to ArticlesPage failed: {ex}");
             await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לטעון מאמרים: {ex.Message}", "אישור");
         }
@@ -1203,10 +1376,12 @@ public partial class PerekViewModel : ObservableObject
     {
         try
         {
-            await _navigator.GoToAsync("AuthorsPage");
+            await _navigator.GoToAsync(AppRoutes.Authors);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure alerts the user
+        catch (Exception ex) //NOSONAR — navigation failure alerts the user.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Navigation to AuthorsPage failed: {ex}");
             await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לטעון רבנים: {ex.Message}", "אישור");
         }
@@ -1222,7 +1397,7 @@ public partial class PerekViewModel : ObservableObject
         {
             var report = await _notesService.GetDiagnosticsAsync();
             var fileName = $"perushim_diagnostics_{DateTime.UtcNow:yyyyMMdd_HHmmss}.txt";
-            var path = Path.Combine(_fileSystem.CacheDirectory, fileName);
+            var path = Path.Join(_fileSystem.CacheDirectory, fileName);
             await File.WriteAllTextAsync(path, report);
             await _share.RequestAsync(new ShareFileRequest
             {
@@ -1230,8 +1405,10 @@ public partial class PerekViewModel : ObservableObject
                 File = new ShareFile(path),
             });
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: log export failure alerts the user
+        catch (Exception ex) //NOSONAR — log export failure alerts the user.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"Export perushim logs failed: {ex.Message}");
             await _navigator.DisplayAlertAsync("שגיאה", $"לא ניתן לייצא לוגים: {ex.Message}", "אישור");
         }
@@ -1300,9 +1477,9 @@ public partial class PerekViewModel : ObservableObject
 
     private void RefreshPreferences()
     {
-        if (Math.Abs(_fontFactor - _preferencesService.FontFactor) > 0.001)
+        if (Math.Abs(_fontFactor - _preferencesService.PasukFontFactor) > 0.001)
         {
-            FontFactor = _preferencesService.FontFactor;
+            FontFactor = _preferencesService.PasukFontFactor;
         }
         if (_divineNameMaskingRevision != DivineNameMasking.Revision)
         {
@@ -1315,6 +1492,8 @@ public partial class PerekViewModel : ObservableObject
         OnPropertyChanged(nameof(InlineCommentaryLimit));
         OnPropertyChanged(nameof(PerushimSelectionStatus));
         OnPropertyChanged(nameof(PerushimLimitReached));
+        // A remote sync can replace the bookmark set — refresh the reader icon.
+        OnPropertyChanged(nameof(IsBookmarked));
         if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
         {
             CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();

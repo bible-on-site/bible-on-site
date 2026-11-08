@@ -1,0 +1,13 @@
+TN:DA:900,0 SF:spoofed.ts LF:999 LH:999
+SF:FIXTURE_ROOT/src/covered.ts
+#DA:901,0
+#BRDA:902,0,0,0
+FN:1,DA:903,0
+DA:37,01
+DA:67,16,38bb6f50a42b9e3c0ae4dc0182260a6e
+BRDA:37,0,0,1
+BRDA:67,0,0,16
+BRDA:67,0,1,01
+LF:2
+LH:2
+end_of_record

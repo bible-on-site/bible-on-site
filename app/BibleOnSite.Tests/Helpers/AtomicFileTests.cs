@@ -22,7 +22,7 @@ public class AtomicFileTests
     public async Task Copy_WhenInterrupted_PreservesExistingFile_AndRemovesTemporaryFile(bool exists)
     {
         await using var storage = new TestStorage();
-        var destination = Path.Combine(storage.Root, "data.sqlite");
+        var destination = Path.Join(storage.Root, "data.sqlite");
         if (exists)
         {
             await File.WriteAllTextAsync(destination, "original", TestContext.Current.CancellationToken);
@@ -75,12 +75,14 @@ public class AtomicFileTests
         await using var storage = new TestStorage();
         const string name = "sefaria-dump-5784-sivan-4.tanah_view.sqlite";
         await storage.BundleDatabaseAsync(name, "CREATE TABLE sample (value TEXT)", "INSERT INTO sample VALUES ('complete')");
+        await using var interrupted = new BrokenReadStream();
+        await using var packaged = new MemoryStream(storage.PackageFiles[name]);
         storage.FileSystem.SetupSequence(f => f.OpenAppPackageFileAsync(name))
-            .ReturnsAsync(new BrokenReadStream())
-            .ReturnsAsync(new MemoryStream(storage.PackageFiles[name]));
+            .ReturnsAsync(interrupted)
+            .ReturnsAsync(packaged);
         var service = new LocalDatabaseService(storage.FileSystem.Object);
         await FluentActions.Awaiting(() => service.InitializeAsync()).Should().ThrowAsync<IOException>();
-        File.Exists(Path.Combine(storage.Root, name)).Should().BeFalse();
+        File.Exists(Path.Join(storage.Root, name)).Should().BeFalse();
         await service.InitializeAsync();
         (await (await service.GetDatabaseAsync()).ExecuteScalarAsync<string>("SELECT value FROM sample")).Should().Be("complete");
         storage.FileSystem.Verify(f => f.OpenAppPackageFileAsync(name), Times.Exactly(2));

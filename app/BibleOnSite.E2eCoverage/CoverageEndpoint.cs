@@ -67,20 +67,7 @@ namespace AltCover.Recorder
 				listener = new TcpListener(IPAddress.Loopback, Port);
 				listener.Start();
 				Console.Error.WriteLine($"E2E coverage endpoint listening on 127.0.0.1:{Port}");
-				while (true)
-				{
-					TcpClient client;
-					try
-					{
-						client = listener.AcceptTcpClient();
-					}
-					catch (Exception exception) when (exception is SocketException
-						or InvalidOperationException or ObjectDisposedException)
-					{
-						return;
-					}
-					ThreadPool.QueueUserWorkItem(_ => Serve(client));
-				}
+				ServeConnections(listener);
 			}
 			catch (Exception exception) when (exception is SocketException or IOException)
 			{
@@ -90,17 +77,35 @@ namespace AltCover.Recorder
 			finally
 			{
 				// Modern runtimes implement IDisposable, but the recorder's
-				// netstandard2.0 reference contract does not expose it.
-				if (listener is IDisposable disposable)
-				{
-					disposable.Dispose();
-				}
-				else if (listener != null)
+				// netstandard2.0 reference contract does not expose it — the
+				// `as` cast reaches it dynamically and `using var` accepts null.
+				using var disposable = listener as IDisposable;
+				if (disposable == null && listener != null)
 				{
 					listener.Stop();
 					// Stop creates a replacement socket even when the bind failed.
 					listener.Server.Dispose();
 				}
+			}
+		}
+
+		internal static void ServeConnections(TcpListener listener)
+		{
+			while (true)
+			{
+				TcpClient client;
+				try
+				{
+					client = listener.AcceptTcpClient();
+				}
+				catch (Exception exception) when (exception is SocketException
+					or InvalidOperationException or ObjectDisposedException)
+				{
+					return;
+				}
+				// The listener already owns a dedicated background thread. Sending
+				// requests back to the app pool can starve coverage during startup.
+				Serve(client);
 			}
 		}
 

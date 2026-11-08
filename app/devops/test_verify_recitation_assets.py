@@ -28,22 +28,91 @@ class ReleaseArtifactTests(unittest.TestCase):
                    "perekIds": [1], "sha256": hashlib.sha256(audio).hexdigest()}]}
         return audio, catalog
 
-    def test_windows_requires_root_catalog_and_exact_packaged_archives(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            audio, metadata = self.book()
-            catalog = root / "catalog.json"
-            catalog.write_text(json.dumps(metadata))
-            for content in [audio, b"corrupt"]:
-                package = root / "app.msix"
-                with zipfile.ZipFile(package, "w") as archive:
-                    archive.writestr("recitation-catalog.json", catalog.read_bytes())
-                    archive.writestr("recitation_1.zip", content)
-                if content == audio:
-                    verify_module.verify(package, catalog, "Windows")
+    @staticmethod
+    def windows_manifest(package_name, main_name, publisher, dependency=True):
+        related = (f'<uap3:MainPackageDependency Name="{main_name}" />' if dependency else "")
+        return f"""<?xml version="1.0" encoding="utf-8"?>
+            <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+                     xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3">
+              <Identity Name="{package_name}" Publisher="{publisher}" Version="5.1.8.0" />
+              <Dependencies>{related}</Dependencies>
+            </Package>"""
+
+    def _write_windows_fixture(self, root, audio, catalog_path, catalog, problems=()):
+        catalog_path.write_text(json.dumps(catalog))
+        main_name, publisher = "54181DoradSoft.929-", "CN=DoradSoft"
+        package = root / "app.msix"
+        with zipfile.ZipFile(package, "w") as archive:
+            archive.writestr("recitation-catalog.json", catalog_path.read_bytes())
+            archive.writestr("AppxManifest.xml", self.windows_manifest(
+                main_name, main_name, publisher, dependency=False))
+            if "bundled-audio" in problems:
+                archive.writestr("recitation_1.zip", audio)
+            if "bundled-notes" in problems:
+                archive.writestr("sefaria-dump-5784-sivan-4.perushim_notes.sqlite", b"notes")
+        pack_dir = root / "ExtensionPacks" / "recitation_1"
+        pack_dir.mkdir(parents=True)
+        archive_dir = root / "extension-packs"
+        archive_dir.mkdir()
+        payload_dir = root / "payloads"
+        payload_dir.mkdir()
+        package_name = ("Other.Name.recitation-1" if "wrong-package-name" in problems
+                        else "54181DoradSoft.929-.recitation-1")
+        manifest = self.windows_manifest(
+            package_name, main_name,
+            "CN=Other" if "publisher-mismatch" in problems else publisher,
+            dependency="no-main-dependency" not in problems)
+        if "no-msix" not in problems:
+            with zipfile.ZipFile(archive_dir / "recitation_1.msix", "w") as archive:
+                archive.writestr("AppxManifest.xml", manifest)
+                archive.writestr("recitation_1.zip",
+                                 b"corrupt" if "corrupt-payload" in problems else audio)
+        if "no-payload" not in problems:
+            (payload_dir / "recitation_1.zip").write_bytes(
+                b"corrupt" if "staged-mismatch" in problems else audio)
+        if any(p.startswith("perushim") for p in problems):
+            notes_dir = root / "ExtensionPacks" / "perushim_notes"
+            notes_dir.mkdir()
+            notes = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
+            index = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"
+            (notes_dir / notes).write_bytes(b"notes bytes")
+            (notes_dir / index).write_bytes(b"index bytes")
+            if "perushim-unstaged" not in problems:
+                (payload_dir / notes).write_bytes(b"notes bytes")
+                (payload_dir / index).write_bytes(b"index bytes")
+            with zipfile.ZipFile(archive_dir / "perushim_notes.msix", "w") as archive:
+                archive.writestr("AppxManifest.xml", self.windows_manifest(
+                    "54181DoradSoft.929-.perushim-notes", main_name, publisher))
+                archive.writestr(notes, b"notes bytes")
+                archive.writestr(index, b"corrupt" if "perushim-mismatch" in problems else b"index bytes")
+        return package, pack_dir.parent, archive_dir, payload_dir
+
+    def test_windows_requires_a_clean_base_msix_and_matching_optional_packages(self):
+        for problem in [None, "bundled-audio", "bundled-notes", "no-msix", "corrupt-payload",
+                        "wrong-package-name", "no-main-dependency", "publisher-mismatch",
+                        "no-payload", "staged-mismatch", "perushim", "perushim-mismatch",
+                        "perushim-unstaged"]:
+            with self.subTest(problem=problem), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                audio, catalog = self.book()
+                package, packs, archives, payloads = self._write_windows_fixture(
+                    root, audio, root / "catalog.json", catalog, {problem} - {None})
+                if problem in (None, "perushim"):
+                    verify_module.verify(package, root / "catalog.json", "Windows",
+                                         packs, archives, payloads)
                 else:
                     with self.assertRaises(ValueError):
-                        verify_module.verify(package, catalog, "Windows")
+                        verify_module.verify(package, root / "catalog.json", "Windows",
+                                             packs, archives, payloads)
+
+    def test_windows_requires_the_extension_pack_arguments(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            audio, catalog = self.book()
+            package, _, _, _ = self._write_windows_fixture(
+                root, audio, root / "catalog.json", catalog)
+            with self.assertRaisesRegex(ValueError, "asset-pack-dir"):
+                verify_module.verify(package, root / "catalog.json", "Windows")
 
     def test_aab_requires_every_matching_module_and_excludes_base_audio(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -65,12 +134,11 @@ class ReleaseArtifactTests(unittest.TestCase):
                     with self.assertRaises(ValueError): verify_module.verify(package, path, "Android")
 
     def test_matching_outer_hash_cannot_hide_corrupt_audio_or_wrong_source(self):
-        from verify_recitation_assets import verify_book_audio
         audio, catalog = self.book(opus=True, corrupt=True)
-        with self.assertRaises(ValueError): verify_book_audio(audio, catalog, catalog["books"][0])
+        with self.assertRaises(ValueError): verify_module.verify_book_audio(audio, catalog, catalog["books"][0])
         audio, catalog = self.book(opus=True)
         catalog["package"]["tracks"][0]["playback"]["sourceSha256"] = "b" * 64
-        with self.assertRaises(ValueError): verify_book_audio(audio, catalog, catalog["books"][0])
+        with self.assertRaises(ValueError): verify_module.verify_book_audio(audio, catalog, catalog["books"][0])
 
     def _write_ios_fixture(self, root, audio, catalog_path, catalog, problems=()):
         catalog_path.write_text(json.dumps(catalog))
@@ -93,7 +161,8 @@ class ReleaseArtifactTests(unittest.TestCase):
         if "no-manifest" not in problems:
             manifest = {"assetPackID": "recitation-1", "downloadPolicy": {"onDemand": {}},
                         "fileSelectors": [{"file": "recitation-1.zip"}],
-                        "platforms": ["macOS"] if "missing-ios-platform" in problems else ["iOS", "macOS"]}
+                        "platforms": ["macOS"] if "missing-ios-platform" in problems
+                        else ["iOS", "macOS"] if "extra-macos-platform" in problems else ["iOS"]}
             (pack_dir / "Manifest.json").write_text(json.dumps(manifest))
             (pack_dir / "recitation-1.zip").write_bytes(
                 b"corrupt" if "stale-payload" in problems else audio)
@@ -112,7 +181,7 @@ class ReleaseArtifactTests(unittest.TestCase):
             if "nested-perushim-selector" in problems:
                 selectors.append({"file": f"nested/{index}"})
             manifest = {"assetPackID": "perushim-notes", "downloadPolicy": {"onDemand": {}},
-                        "fileSelectors": selectors, "platforms": ["iOS", "macOS"]}
+                        "fileSelectors": selectors, "platforms": ["iOS"]}
             (perushim_dir / "Manifest.json").write_text(json.dumps(manifest))
         for name, data in perushim_payloads.items():
             if "no-perushim-payload" in problems and name == index:
@@ -142,6 +211,7 @@ class ReleaseArtifactTests(unittest.TestCase):
         audio, catalog = self.book(opus=True)
         for problem in [None, "odr-manifest", "base-audio", "no-extension",
                         "no-manifest", "stale-payload", "no-aar", "missing-ios-platform",
+                        "extra-macos-platform",
                         "corrupt-archive", "no-payload", "staged-mismatch",
                         "no-perushim-manifest", "perushim-missing-index",
                         "nested-perushim-selector", "no-perushim-payload",
@@ -203,6 +273,42 @@ class ReleaseArtifactTests(unittest.TestCase):
                 root, audio, root / "catalog.json", catalog)
             with self.assertRaisesRegex(ValueError, "checksum or format mismatch"):
                 verify_module.verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
+
+    def test_ios_verification_emits_the_verified_pack_plan(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            audio, catalog = self.book(opus=True)
+            package, packs, aars, payloads, extract = self._write_ios_fixture(
+                root, audio, root / "catalog.json", catalog)
+            verify_module.verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
+            plan = json.loads((aars / verify_module.PACK_MANIFEST).read_text(encoding="utf-8"))
+            self.assertEqual(plan["version"], 1)
+            self.assertEqual({pack["id"] for pack in plan["packs"]},
+                             {"recitation-1", "perushim-notes"})
+            for pack in plan["packs"]:
+                pack_dir = packs / pack["id"]
+                manifest_bytes = (pack_dir / "Manifest.json").read_bytes()
+                expected_files = [(item.name, hashlib.sha256(item.read_bytes()).hexdigest(),
+                                   item.stat().st_size)
+                                  for item in pack_dir.iterdir()
+                                  if item.is_file() and item.name != "Manifest.json"]
+                self.assertEqual(pack["files"],
+                                 [{"name": name, "sha256": sha, "bytes": size}
+                                  for name, sha, size in sorted(expected_files)])
+                self.assertEqual(pack["contentSha256"],
+                                 verify_module.content_fingerprint(manifest_bytes, expected_files))
+                self.assertEqual(pack["archive"], f'{pack["id"]}.aar')
+                self.assertEqual(pack["archiveSha256"],
+                                 hashlib.sha256((aars / pack["archive"]).read_bytes()).hexdigest())
+                self.assertEqual(pack["manifest"]["assetPackID"], pack["id"])
+            self.assertTrue(all(pack["archiveBytes"] > 0 for pack in plan["packs"]))
+
+    def test_content_fingerprint_changes_on_manifest_or_payload_bytes_only(self):
+        payloads = [("a.zip", "f" * 64, 10), ("b.zip", "e" * 64, 20)]
+        base = verify_module.content_fingerprint(b'{"assetPackID":"p"}', payloads)
+        self.assertEqual(base, verify_module.content_fingerprint(b'{"assetPackID":"p"}', payloads[::-1]))
+        self.assertNotEqual(base, verify_module.content_fingerprint(b'{"assetPackID":"q"}', payloads))
+        self.assertNotEqual(base, verify_module.content_fingerprint(b'{"assetPackID":"p"}', payloads[1:]))
 
 
 if __name__ == "__main__":

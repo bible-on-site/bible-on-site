@@ -41,7 +41,14 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: bible-on-site
-      ImageTagMutability: MUTABLE
+      ImageTagMutability: IMMUTABLE_WITH_EXCLUSION
+      ImageTagMutabilityExclusionFilters:
+        - ImageTagMutabilityExclusionFilterType: WILDCARD
+          ImageTagMutabilityExclusionFilterValue: latest
+        - ImageTagMutabilityExclusionFilterType: WILDCARD
+          ImageTagMutabilityExclusionFilterValue: deps-cache
+        - ImageTagMutabilityExclusionFilterType: WILDCARD
+          ImageTagMutabilityExclusionFilterValue: deps-cache-arm64
       ImageScanningConfiguration:
         ScanOnPush: true
       EncryptionConfiguration:
@@ -52,6 +59,19 @@ Resources:
             "rules": [
               {
                 "rulePriority": 1,
+                "description": "Retain the newest website ARM migration x86 fallback",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPrefixList": ["rollback-website-arm64-x86-"],
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 1
+                },
+                "action": {
+                  "type": "expire"
+                }
+              },
+              {
+                "rulePriority": 2,
                 "description": "Keep last 15 images",
                 "selection": {
                   "tagStatus": "any",
@@ -79,29 +99,16 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: bible-on-site-api
-      ImageTagMutability: MUTABLE
+      # Prerequisite for the API multi-architecture publisher; verify live before merge.
+      ImageTagMutability: IMMUTABLE_WITH_EXCLUSION
+      ImageTagMutabilityExclusionFilters:
+        - ImageTagMutabilityExclusionFilterType: WILDCARD
+          ImageTagMutabilityExclusionFilterValue: latest
       ImageScanningConfiguration:
         ScanOnPush: true
       EncryptionConfiguration:
         EncryptionType: AES256
-      LifecyclePolicy:
-        LifecyclePolicyText: |
-          {
-            "rules": [
-              {
-                "rulePriority": 1,
-                "description": "Keep last 15 images",
-                "selection": {
-                  "tagStatus": "any",
-                  "countType": "imageCountMoreThan",
-                  "countNumber": 15
-                },
-                "action": {
-                  "type": "expire"
-                }
-              }
-            ]
-          }
+      # No API lifecycle policy: authenticated inspection found none.
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -117,7 +124,13 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: bible-on-site-admin
-      ImageTagMutability: MUTABLE
+      # Prerequisite for the admin multi-architecture publisher; verify live before merge.
+      # The live repository is still MUTABLE; Codex applies this target policy
+      # under Dorad's approval before the first dual-platform admin release.
+      ImageTagMutability: IMMUTABLE_WITH_EXCLUSION
+      ImageTagMutabilityExclusionFilters:
+        - ImageTagMutabilityExclusionFilterType: WILDCARD
+          ImageTagMutabilityExclusionFilterValue: latest
       ImageScanningConfiguration:
         ScanOnPush: true
       EncryptionConfiguration:

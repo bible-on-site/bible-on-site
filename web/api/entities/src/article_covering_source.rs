@@ -14,7 +14,8 @@ pub struct Model {
     pub perek_id: i32,
     #[sea_orm(primary_key, auto_increment = false)]
     pub pasuk: i16,
-    pub created_at: DateTime,
+    /// MySQL TIMESTAMP, decoded in the connection's UTC time zone.
+    pub created_at: DateTimeUtc,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

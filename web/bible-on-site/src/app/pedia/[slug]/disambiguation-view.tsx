@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import type { SynonymTarget } from "@/lib/tanahpedia/types";
 import styles from "../page.module.css";
 
@@ -9,10 +10,11 @@ interface DisambiguationViewProps {
 }
 
 export function disambiguationMetadata(name: string): Metadata {
-	return {
+	return pageMetadata({
 		title: `${name} (פירושונים) | תנכפדיה`,
 		description: `לשם «${name}» יש יותר מערך אחד בתנכפדיה.`,
-	};
+		canonical: `/pedia/${encodeURIComponent(name)}`,
+	});
 }
 
 export function DisambiguationView({ name, targets }: DisambiguationViewProps) {

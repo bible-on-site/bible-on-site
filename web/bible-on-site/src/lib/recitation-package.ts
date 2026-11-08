@@ -1,14 +1,9 @@
 import { getPerekByPerekId } from "@/data/perek-dto";
+import { assetsUrl } from "./assets-url";
 import { loadRecitation } from "./recitation-loader";
 
 export function recordingUrl(perekId: number) {
-	const bucket = process.env.S3_BUCKET || "bible-on-site-assets";
-	const region = process.env.S3_REGION || "il-central-1";
-	const endpoint = process.env.S3_ENDPOINT;
-	const base = endpoint
-		? `${endpoint.replace(/\/$/, "")}/${bucket}`
-		: `https://${bucket}.s3.${region}.amazonaws.com`;
-	return `${base}/recordings/${perekId}_record.mp3`;
+	return assetsUrl(`recordings/${perekId}_record.mp3`);
 }
 
 /** Independent app extension: only approved intervals leave the canonical DB. */

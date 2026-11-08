@@ -50,6 +50,35 @@ dotnet_diagnostic.S2339.severity = error
 # S125 "Sections of code should not be commented out"
 dotnet_diagnostic.S125.severity = error
 
+# — #2114 second-wave parity: github-code-quality (Qodana) findings the audit
+# showed are accepted in review. Deliberate failure boundaries carry the dual
+# convention — `//NOSONAR` for Codacy/Qodana plus `#pragma warning` for the
+# Roslyn analyzer — so documented boundaries keep passing while new unannotated
+# generic catches fail the build. S2221 does not fire inside test methods.
+# S2221 "'Exception' should not be caught when not required by unit tests" —
+# the generic-catch finding (#2465/#2506 regression seed).
+dotnet_diagnostic.S2221.severity = error
+# S2933 "Fields that are only assigned in the constructor should be readonly"
+dotnet_diagnostic.S2933.severity = error
+# S2930 "IDisposables should be disposed" (local IDisposable left undisposed)
+dotnet_diagnostic.S2930.severity = error
+# S1215 "'GC.Collect' should not be called"
+dotnet_diagnostic.S1215.severity = error
+# S3267 "Loops should be simplified using the LINQ 'Where'/'Select' methods"
+dotnet_diagnostic.S3267.severity = error
+# S2583 "Conditionally executed code should be reachable" (constant conditions)
+dotnet_diagnostic.S2583.severity = error
+# S1764 "Identical expressions should not be used on both sides of a binary"
+dotnet_diagnostic.S1764.severity = error
+# S2696 "Instance members should not write to 'static' fields"
+dotnet_diagnostic.S2696.severity = error
+# IDE0045 "Use conditional expression for assignment" (missed ternary)
+dotnet_style_prefer_conditional_expression_over_assignment = true:error
+dotnet_diagnostic.IDE0045.severity = error
+# IDE0063 "Use simple 'using' statement" (missed using-declaration)
+csharp_prefer_simple_using_statement = true:error
+dotnet_diagnostic.IDE0063.severity = error
+
 # FluentUI.cs is a generated font-glyph catalog: ~7,900 generated public const
 # fields. Regenerating the file would undo any manual conversion, so analyzers
 # treat it (and any sibling generated glyphs) as generated code and skip it.

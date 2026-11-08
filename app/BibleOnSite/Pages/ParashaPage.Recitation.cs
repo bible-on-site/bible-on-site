@@ -46,7 +46,16 @@ public partial class ParashaPage
     // Remaining perek clips of an in-flight unit plan; an empty queue means
     // MediaEnded finishes the playback instead of chaining the next perek.
     private readonly Queue<RecitationSegment> _recitationQueue = new();
+    private PlaybackAudioOwnership.Lease? _audioLease;
     private MediaElement? RecitationPlayer => RecitationPlayerHost.Content as MediaElement;
+
+    /// <summary>
+    /// This page's claim on exclusive device audio (#2642). Creating the
+    /// MediaElement handler already activates iOS's audio session, so the
+    /// lease only marks when playback is actually audible, releases it once
+    /// the player goes quiet, and re-claims before an explicit resume.
+    /// </summary>
+    private PlaybackAudioOwnership.Lease AudioLease => _audioLease ??= PlaybackAudioOwnership.Shared.Track(this);
 
     private MediaElement GetOrCreateRecitationPlayer() => (MediaElement)RecitationPlayerHost.GetOrCreatePlayer(() =>
     {
@@ -63,11 +72,12 @@ public partial class ParashaPage
         return player;
     });
     /// <summary>
-    /// Whether the recitation catalog is available on this device. There is no
-    /// global on/off preference — the reader's play controls and the קריינות
-    /// menu mode start and stop playback directly.
+    /// Whether recitation playback is allowed on this device: the catalog is
+    /// installed AND the global קריינות preference (העדפות → על הפרק, default
+    /// on) is enabled. Off hides every headphones action and suppresses
+    /// tap/focus-triggered playback consistently (#2472).
     /// </summary>
-    private bool RecitationAvailable => RecitationService.Instance.IsInstalled;
+    private bool RecitationAvailable => RecitationService.Instance.IsInstalled && _viewModel.IsQriynotEnabled;
 
     private void SubscribeRecitation()
     {
@@ -79,7 +89,9 @@ public partial class ParashaPage
     private async Task InitializeRecitationAsync()
     {
         try { await RecitationService.Instance.InitializeAsync(); _viewModel.RefreshRecitationAvailability(); UpdateSelectionBar(); _ = RecitationService.Instance.RefreshIfStaleAsync(); }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Recitation extension: {ex.Message}"); }
+        #pragma warning disable S2221 // Deliberate failure boundary: recitation-pack init is best-effort; availability simply stays off
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Recitation extension: {ex.Message}"); } //NOSONAR — recitation-pack init is best-effort; availability simply stays off.
+        #pragma warning restore S2221
     }
 
     private void OnRecitationPreferencesChanged(object? sender, EventArgs e)
@@ -133,6 +145,18 @@ public partial class ParashaPage
             if (player.Source != null) { player.Stop(); }
             player.Source = null;
         }
+        _audioLease?.Idle();
+    }
+
+    /// <summary>
+    /// Re-claims device audio before the platform player resumes — a pause may
+    /// already have released the session, and the toolkit only activates it at
+    /// handler creation (#2642).
+    /// </summary>
+    private void ResumeRecitationPlayback(MediaElement player)
+    {
+        AudioLease.Playing();
+        player.Play();
     }
 
     private void ClearRecitationHighlight()
@@ -164,7 +188,7 @@ public partial class ParashaPage
             _focusedWordSpans.TryGetValue(_recitingWord.Segment, out var previous))
         {
             previous.BackgroundColor = null;
-            previous.TextColor = Color.FromArgb("#637598");
+            previous.TextColor = Pasuk.QriTextColor;
         }
 
         _recitingWord = word;
@@ -176,8 +200,8 @@ public partial class ParashaPage
         if (word != null && _focusedPasuk?.PasukNum == word.Pasuk && _focusedPerekId == _recitationTimelinePerekId &&
             _focusedWordSpans.TryGetValue(word.Segment, out var current))
         {
-            current.BackgroundColor = Color.FromArgb("#e9eff8");
-            current.TextColor = Color.FromArgb("#1c427b");
+            current.BackgroundColor = Pasuk.RecitingBackgroundDefault;
+            current.TextColor = Pasuk.RecitingText;
         }
     }
 
@@ -208,7 +232,7 @@ public partial class ParashaPage
         _focusedPerekId = 0;
         _focusedWordSpans.Clear();
         FocusedPasukOverlay.IsVisible = false;
-        FocusedPerushim.ItemsSource = null;
+        FocusedPasukOverlay.PerushimSource = null;
         ParashaCarousel.InputTransparent = false;
         AutomationProperties.SetExcludedWithChildren(ParashaCarousel, false);
         if (_audioDecoder != null)
@@ -225,13 +249,10 @@ public partial class ParashaPage
     {
         ResetRecitationContext();
         _recitationCursor.Reset();
-    }
-
-    private async void OnQriynotTapped(object? sender, TappedEventArgs e)
-    {
-        _viewModel.IsQriynotEnabled = !_viewModel.IsQriynotEnabled;
-        ReaderMenuOverlay.IsVisible = false;
-        await Task.CompletedTask;
+        // Leaving the reader or switching units drops the audio claim at once
+        // — a hidden player must not keep external music paused (#2642).
+        _audioLease?.Dispose();
+        _audioLease = null;
     }
 
     /// <summary>Header play button — קריינות mode plays the whole unit.</summary>
@@ -294,7 +315,8 @@ public partial class ParashaPage
     {
         if (_viewModel.SelectedPasukCount > 0)
         {
-            StopRecitation();
+            // Toggling a pasuk in selection mode must not stop playback or the
+            // moving word marker (#2473); the selection bar stays the pause surface.
             _doubleTap.Reset();
             _viewModel.ToggleSelectedPasuk(row.PerekId, row.PasukNum);
             UpdatePasukSelection();
@@ -332,19 +354,23 @@ public partial class ParashaPage
         var track = RecitationService.Instance.GetTrack(perekId);
         if (track?.AlignmentStatus != "ready")
         {
-            // The reader asked for one pasuk — say why it cannot play instead of
-            // ignoring the tap: either nothing was recorded or word timings are
-            // still being validated (the full recording stays on the header).
-            await DisplayAlertAsync("הקראה", track == null
-                ? "אין הקלטה לפרק זה"
-                : "הקראת מילים ופסוקים לפרק זה עדיין בהכנה. ההקלטה המלאה זמינה בלחיצה ארוכה על כותרת הפרשה.", "אישור");
+            // Without aligned word timings a pasuk has no playback boundary —
+            // the controls already show word/verse recitation unavailable, so
+            // the tap does nothing. A missing track is real missing audio and
+            // still reports.
+            if (track == null)
+            {
+                await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "אין הקלטה לפרק זה", "אישור");
+            }
             return;
         }
 
-        var words = track.Words.Where(w => w.Pasuk == pasuk.PasukNum).ToList();
+        var words = track.GetWords(pasuk.PasukNum);
         if (words.Count == 0 || words[0].StartMs == null || words[^1].EndMs == null)
         {
-            await DisplayAlertAsync("הקראה", "הקראת מילים ופסוקים לפרק זה עדיין בהכנה.", "אישור");
+            // A "ready" track missing this pasuk's timings is corrupt pack
+            // data — a real failure, reported like other playback failures.
+            await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
             return;
         }
 
@@ -394,14 +420,25 @@ public partial class ParashaPage
             _recitationCursor.ResumesOnPasukFocus(row.PerekId, pasuk.PasukNum,
                 focusedPlayer.CurrentState == MediaElementState.Playing))
         {
-            focusedPlayer.Play();
+            ResumeRecitationPlayback(focusedPlayer);
         }
-        FocusedSourceLabel.Text = $"{PerekDataService.Instance.GetPerekSource(row.PerekId) ?? string.Empty} {pasuk.PasukNumHeb}";
+        // The full pasuk source lives in the shared toolbar title, set by
+        // UpdateSelectionBar below (#2466).
+        // Opening the focused pasuk plays it (#2472). An in-flight clip for
+        // this same pasuk continues/resumes untouched — one deliberate open
+        // issues at most one playback request.
+        else if (RecitationAvailable &&
+            _recitationCursor.PlayingKey != $"pasuk:{row.PerekId}:{pasuk.PasukNum}" &&
+            CanPlayFocusedPasuk)
+        {
+            _ = PlayPasukRecitationAsync(row.PerekId, pasuk);
+        }
+        FocusedPasukOverlay.SourceText = $"{PerekDataService.Instance.GetPerekSource(row.PerekId) ?? string.Empty} {pasuk.PasukNumHeb}";
         FocusedPasukOverlay.IsVisible = true;
         ParashaCarousel.InputTransparent = true;
         AutomationProperties.SetExcludedWithChildren(ParashaCarousel, true);
         RefreshFocusedRecitation();
-        FocusedPerushim.ItemsSource = _viewModel.GetPerushimForRow(row.PerekId, pasuk.PasukNum);
+        FocusedPasukOverlay.PerushimSource = _viewModel.GetPerushimForRow(row.PerekId, pasuk.PasukNum);
         UpdateSelectionBar();
         try
         {
@@ -412,10 +449,12 @@ public partial class ParashaPage
             }
             if (_focusedPasuk == pasuk && _focusedPerekId == row.PerekId)
             {
-                FocusedPerushim.ItemsSource = _viewModel.GetPerushimForRow(row.PerekId, pasuk.PasukNum);
+                FocusedPasukOverlay.PerushimSource = _viewModel.GetPerushimForRow(row.PerekId, pasuk.PasukNum);
             }
         }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Focused commentaries: {ex.Message}"); }
+        #pragma warning disable S2221 // Deliberate failure boundary: focused-commentary refresh is best-effort
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Focused commentaries: {ex.Message}"); } //NOSONAR — focused-commentary refresh is best-effort.
+        #pragma warning restore S2221
     }
 
     private void RefreshFocusedRecitation()
@@ -423,25 +462,25 @@ public partial class ParashaPage
         _focusedWordSpans.Clear();
         if (_focusedPasuk is not { } pasuk || _viewModel.Unit == null || _focusedPerekId <= 0)
         {
+            FocusedPasukOverlay.PlayButtonVisible = false;
             return;
         }
 
+        FocusedPasukOverlay.PlayButtonVisible = RecitationAvailable;
+        FocusedPasukOverlay.PlayButtonEnabled = CanPlayFocusedPasuk;
         var perekPasukim = PerekDataService.Instance.GetPerek(_focusedPerekId)?.Pasukim;
         var track = RecitationService.Instance.GetTrack(_focusedPerekId);
         var canPlayWords = RecitationAvailable && RecitationService.Instance.HasAudio(_focusedPerekId) &&
             track?.AlignmentStatus == "ready" && perekPasukim != null && track.Matches(perekPasukim);
-        FocusedRecitationHint.Text = canPlayWords ? "הקישו על מילה כדי לשמוע אותה." :
-            RecitationAvailable && track != null && track.AlignmentStatus != "ready"
-                ? "הקראת מילים ופסוקים לפרק זה עדיין בהכנה. ההקלטה המלאה זמינה בלחיצה ארוכה על כותרת הפרשה." : "";
-        FocusedRecitationHint.IsVisible = FocusedRecitationHint.Text.Length > 0;
-        if (!canPlayWords) { FocusedPasukText.FormattedText = pasuk.FormattedText; return; }
+        FocusedPasukOverlay.HintText = canPlayWords ? "הקישו על מילה כדי לשמוע אותה." : "";
+        if (!canPlayWords) { FocusedPasukOverlay.PasukText.FormattedText = pasuk.FormattedText; return; }
         var formatted = new FormattedString();
         for (var i = 0; i < pasuk.Segments.Count; i++)
         {
             var segment = pasuk.Segments[i];
             if (segment.IsQriDifferentThanKtiv)
             {
-                formatted.Spans.Add(new Span { Text = "(קְרִי: ", TextColor = Color.FromArgb("#637598") });
+                formatted.Spans.Add(new Span { Text = "(קְרִי: ", TextColor = Pasuk.QriTextColor });
             }
 
             var span = new Span
@@ -456,12 +495,13 @@ public partial class ParashaPage
                     _ => DivineNameMasking.MaskText(segment.Value)
                 }
             };
-            var word = track!.Words.FirstOrDefault(w => w.Pasuk == pasuk.PasukNum && w.Segment == i + 1);
+            var word = track!.GetWord(pasuk.PasukNum, i + 1);
             if (word != null)
             {
                 _focusedWordSpans[word.Segment] = span;
-                span.TextColor = Color.FromArgb(_recitingWord == word ? "#1c427b" : "#637598");
-                span.BackgroundColor = _recitingWord == word ? Color.FromArgb("#e9eff8") : null;
+                var reciting = _recitingWord == word;
+                span.TextColor = reciting ? Pasuk.RecitingText : Pasuk.QriTextColor;
+                span.BackgroundColor = reciting ? Pasuk.RecitingBackgroundDefault : null;
                 var tap = new TapGestureRecognizer();
                 var perekId = _focusedPerekId;
                 tap.Tapped += async (_, _) => await PlayRecitationAsync($"word:{perekId}:{word.Pasuk}:{word.Segment}",
@@ -472,7 +512,7 @@ public partial class ParashaPage
             formatted.Spans.Add(span);
             if (segment.IsQriDifferentThanKtiv)
             {
-                formatted.Spans.Add(new Span { Text = ")", TextColor = Color.FromArgb("#637598") });
+                formatted.Spans.Add(new Span { Text = ")", TextColor = Pasuk.QriTextColor });
             }
 
             if (i < pasuk.Segments.Count - 1 && segment.Type is not (SegmentType.Ptuha or SegmentType.Stuma) && !segment.EndsWithMaqaf)
@@ -480,14 +520,27 @@ public partial class ParashaPage
                 formatted.Spans.Add(new Span { Text = " " });
             }
         }
-        FocusedPasukText.FormattedText = formatted;
+        FocusedPasukOverlay.PasukText.FormattedText = formatted;
     }
 
-    /// <summary>Whether the focused pasuk's own perek track can bound a pasuk clip.</summary>
+    /// <summary>
+    /// The focused-view headphones action plays the whole pasuk — offered while
+    /// the pasuk's own perek track can bound a pasuk clip (timings ready).
+    /// </summary>
     private bool CanPlayFocusedPasuk => _focusedPasuk != null && _focusedPerekId > 0 &&
+        RecitationAvailable &&
         RecitationService.Instance.GetTrack(_focusedPerekId) is { AlignmentStatus: "ready" } focusedTrack &&
         PerekDataService.Instance.GetPerek(_focusedPerekId)?.Pasukim is { } focusedPasukim &&
-        focusedTrack.Matches(focusedPasukim);
+        focusedTrack.Matches(focusedPasukim) &&
+        focusedTrack.GetWords(_focusedPasuk.PasukNum).Any(w => w.StartMs != null && w.EndMs != null);
+
+    private async void OnFocusedPlayClicked(object? sender, EventArgs e)
+    {
+        if (_focusedPasuk is { } pasuk && _focusedPerekId > 0)
+        {
+            await PlayPasukRecitationAsync(_focusedPerekId, pasuk);
+        }
+    }
 
     /// <summary>Whether every selected pesukim's perek track can bound a verses clip.</summary>
     private bool CanPlaySelectedPasukim()
@@ -520,7 +573,7 @@ public partial class ParashaPage
             }
             else
             {
-                player.Play();
+                ResumeRecitationPlayback(player);
             }
 
             return;
@@ -558,7 +611,7 @@ public partial class ParashaPage
             }
 
             var ranges = group.OrderBy(s => s.PasukNum)
-                .Select(s => track.Words.Where(w => w.Pasuk == s.PasukNum).ToList()).ToList();
+                .Select(s => track.GetWords(s.PasukNum)).ToList();
             if (ranges.Any(r => r.Count == 0))
             {
                 continue;
@@ -608,7 +661,7 @@ public partial class ParashaPage
             var wholePerek = startPasuk <= 1 && endPasuk >= pasukim.Count;
             if (track.AlignmentStatus == "ready" && track.Matches(pasukim))
             {
-                var sliceWords = track.Words.Where(w => w.Pasuk >= startPasuk && w.Pasuk <= endPasuk).ToList();
+                var sliceWords = track.GetWordsBetweenPasukim(startPasuk, endPasuk);
                 if (sliceWords.Count == 0)
                 {
                     continue;
@@ -669,7 +722,7 @@ public partial class ParashaPage
             }
             else
             {
-                existing.Play();
+                ResumeRecitationPlayback(existing);
             }
 
             return;
@@ -691,6 +744,10 @@ public partial class ParashaPage
             return;
         }
 
+        // Keep the claim across the deliberate gap — stopping the old clip,
+        // decoding and opening the next segment run through silent player
+        // states on the way back to Playing (#2642).
+        using var audioHold = AudioLease.Hold();
         using var request = new CancellationTokenSource();
         _recitationRequest = request;
         _recitationBusy = true;
@@ -702,8 +759,7 @@ public partial class ParashaPage
             var ranges = segment.Ranges;
             if (ranges == null && segment.Start == null && preferences.RecitationVersePauseMs >= 0 && track?.AlignmentStatus == "ready")
             {
-                ranges = track.Words.GroupBy(w => w.Pasuk).OrderBy(g => g.Key)
-                    .Select(g => (g.First().StartMs!.Value, g.Last().EndMs!.Value)).ToList();
+                ranges = track.GetPasukRanges();
             }
             // MediaElement's position is in source time; scale generated silence so
             // the user's pause retains its wall-clock length at every speed.
@@ -723,6 +779,10 @@ public partial class ParashaPage
                 ? new RecitationTimeline(track, ranges ?? (segment.Start.HasValue && segment.End.HasValue ? [(segment.Start.Value, segment.End.Value)] : null), pauseMs) : null;
             // The timeline maps the tapped-word resume point into this clip's position.
             _pendingSeekMs = _recitationCursor.PendingSeekFor(segment.PerekId, _recitationCursor.PlayingContinuous, _recitationTimeline);
+            // Claim before the handler attaches: creating it already activates
+            // the session, so a source that fails to open must still release it
+            // — MediaFailed can fire without the player ever reaching Playing.
+            AudioLease.Playing();
             var player = GetOrCreateRecitationPlayer();
             player.Speed = preferences.RecitationSpeed;
             player.Volume = preferences.RecitationVolume;
@@ -730,12 +790,15 @@ public partial class ParashaPage
             player.Source = MediaSource.FromFile(path);
         }
         catch (OperationCanceledException) { /* Navigation or another selection cancels the old request. */ }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: playback failure shows the user alert unless the request was canceled
+        catch (Exception ex) //NOSONAR — playback failure shows the user alert unless the request was canceled.
         {
+            #pragma warning restore S2221
+            _audioLease?.Idle();
             System.Diagnostics.Debug.WriteLine($"Recitation playback: {ex}");
             if (!request.IsCancellationRequested)
             {
-                await DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
+                await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
             }
         }
         finally
@@ -772,11 +835,15 @@ public partial class ParashaPage
             // StopRecitation ran during the seek — do not revive the old source.
             return;
         }
-        player.Play();
+        ResumeRecitationPlayback(player);
         await Task.CompletedTask;
     }
     private void OnRecitationMediaEnded(object? sender, EventArgs e)
     {
+        // iOS can keep CurrentState at Playing once an item finishes, so the
+        // end event releases the audio claim itself — a chained next clip
+        // holds it before the release lands (#2642).
+        _audioLease?.Idle();
         // A unit plan chains its next perek clip before the playback is done.
         if (_recitationQueue.Count > 0 && _recitationCursor.PlayingKey != null)
         {
@@ -791,6 +858,17 @@ public partial class ParashaPage
     }
     private void OnRecitationStateChanged(object? sender, MediaStateChangedEventArgs e)
     {
+        // The lease follows audible states only — buffering/opening keep the
+        // claim so intentional gaps don't churn the session (#2642).
+        if (e.NewState == MediaElementState.Playing)
+        {
+            AudioLease.Playing();
+        }
+        else if (e.NewState is MediaElementState.Paused or MediaElementState.Stopped or
+            MediaElementState.None or MediaElementState.Failed)
+        {
+            _audioLease?.Idle();
+        }
         _recitationFrameTimer?.Stop();
         if (_recitationCursor.PlayingKey != null && _recitationTimeline != null && RecitationPlayer?.CurrentState == MediaElementState.Playing)
         {
@@ -817,7 +895,7 @@ public partial class ParashaPage
         }
 
         StopRecitation(); UpdateSelectionBar();
-        await DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה במכשיר זה.", "אישור");
+        await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה במכשיר זה.", "אישור");
     }
 
     protected override bool OnBackButtonPressed()
@@ -827,10 +905,19 @@ public partial class ParashaPage
 
     private bool TryHandleReaderBack()
     {
+        // Topmost transient surfaces own Back first (#2766): fullscreen,
+        // then the unit picker and the open fan menu previously fell
+        // through to page navigation while still visible.
         if (ExitFullScreenButton.IsVisible)
-        { ExitFullScreen(); return true; }
-        if (ReaderMenuOverlay.IsVisible)
-        { ReaderMenuOverlay.IsVisible = false; return true; }
+        { _chrome.ExitFullScreen(); return true; }
+        if (ParashaUnitPickerPopup.IsVisible)
+        { ParashaUnitPickerPopup.Hide(); return true; }
+        if (FanMenu.IsOpen)
+        { _ = FanMenu.CloseAsync(); return true; }
+        if (ReaderMenuOverlay.IsOpen)
+        { ReaderMenuOverlay.Close(); return true; }
+        if (PerushimPanel.IsOpen)
+        { PerushimPanel.CloseImmediate(); return true; }
         if (ChapterSearch.IsSearchOpen) { ChapterSearch.HandleBack(); return true; }
         // Whatever keeps the selection bar up also owns Back — including a clip
         // playing with nothing selected, which stops instead of navigating.

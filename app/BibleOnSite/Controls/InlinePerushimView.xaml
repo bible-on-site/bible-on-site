@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<VerticalStackLayout xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:models="clr-namespace:BibleOnSite.Models"
+    xmlns:controls="clr-namespace:BibleOnSite.Controls"
+    xmlns:converters="clr-namespace:BibleOnSite.Converters"
+    x:Class="BibleOnSite.Controls.InlinePerushimView"
+    x:Name="Root"
+    x:DataType="controls:InlinePerushimView"
+    Spacing="2"
+    Margin="0,4,0,0"
+    BindableLayout.ItemsSource="{Binding ItemsSource, Source={x:Reference Root}}">
+    <VerticalStackLayout.Resources>
+        <converters:InvertedBoolConverter x:Key="InvertedBoolConverter"/>
+    </VerticalStackLayout.Resources>
+    <BindableLayout.ItemTemplate>
+        <DataTemplate x:DataType="models:PerushNoteDisplay">
+            <!-- The whole perush surfaces as one update: a
+                 fixed-height loading slot holds the row until
+                 the HtmlView publishes its contents, so the
+                 name never flashes alone and recycled cells
+                 never pair a new name with stale contents (#2451). -->
+            <VerticalStackLayout Spacing="2">
+                <Grid HeightRequest="36"
+                      IsVisible="{Binding IsContentReady, Source={x:Reference PerushContentView}, Converter={StaticResource InvertedBoolConverter}}">
+                    <ActivityIndicator IsRunning="True" WidthRequest="20" HeightRequest="20"
+                                       HorizontalOptions="Center" VerticalOptions="Center"/>
+                </Grid>
+                <VerticalStackLayout Spacing="2"
+                                     IsVisible="{Binding IsContentReady, Source={x:Reference PerushContentView}}">
+                    <Label Text="{Binding PerushName}"
+                           AutomationId="InlinePerushName"
+                           FontSize="{DynamicResource PerushNameFontSize}"
+                           FontAttributes="Bold"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
+                    <controls:HtmlView x:Name="PerushContentView" ContentLoader="{Binding ContentLoader}" HtmlContent="{Binding DisplayContent}"
+                                       FontSize="{DynamicResource PerushContentFontSize}"
+                                       TextAlignment="Justify"
+                                       TextDirection="Rtl"
+                                       LineHeight="1.4"
+                                       LinkTapped="OnContentLinkTapped"/>
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </DataTemplate>
+    </BindableLayout.ItemTemplate>
+</VerticalStackLayout>

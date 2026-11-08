@@ -65,7 +65,11 @@ export interface ReadingUnit {
 	division: DivisionId;
 	/** Stable unit id, unique and contiguous within the division. */
 	unitId: number;
-	/** URL slug under the division root (today the decimal unitId). */
+	/**
+	 * Canonical URL slug under the division root — the parasha division
+	 * uses its Hebrew parasha name (issue #2738); מסורה keeps the
+	 * decimal unitId.
+	 */
 	slug: string;
 	/** Parent sefer canonical name (e.g. "שמואל" for both שמואל א and ב). */
 	seferName: string;

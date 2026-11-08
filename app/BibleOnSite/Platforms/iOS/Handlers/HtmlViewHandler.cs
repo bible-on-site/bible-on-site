@@ -66,6 +66,7 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
     {
         if (VirtualView?.DispatchLinkTapped(url).Handled == true) { return true; }
         using var nativeUrl = new NSUrl(url);
+        if (nativeUrl is null) { return false; }
         var options = new UIApplicationOpenUrlOptions();
         UIApplication.SharedApplication.OpenUrl(nativeUrl, options, null);
         return true;
@@ -77,7 +78,12 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
         public override bool ShouldInteractWithUrl(UITextView textView, NSUrl URL, NSRange characterRange, UITextItemInteraction interaction)
 #pragma warning restore S1172
         {
-            var url = URL.AbsoluteString ?? URL.Description;
+            // The Link attribute stores an NSString (non-ASCII slugs fail NSUrl
+            // parsing), so the object UIKit hands here can be an NSString in an
+            // NSUrl-typed parameter — AbsoluteString is an unrecognized
+            // selector on it and crashes. `description` returns the string
+            // itself for NSString and the absolute URL for NSUrl.
+            var url = URL.Description;
             if (interaction == UITextItemInteraction.InvokeDefaultAction &&
                 viewProvider()?.DispatchLinkTapped(url).Handled == true)
             {
@@ -199,6 +205,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
             }
         };
         var textColor = GetTextColor();
+        /* The marker accent is the tint UITextView paints links with — the
+           reference color the note-list letters must match. Read on the main
+           thread: UIKit views must not be touched from the parse task. */
+        var accentColor = platformView.TintColor ?? UIColor.SystemBlue;
 
         // Clear recycled content before the parsed result arrives. Skipping the
         // assignment on an already-empty storage avoids a textStorage edit +
@@ -217,13 +227,13 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
                 textColor.Dispose();
                 return;
             }
-            var attributedString = HtmlAttributedStringFactory.FromHtml(html, fontSize, h1Scale, h2Scale, h3Scale);
+            var attributedString = HtmlAttributedStringFactory.FromHtml(html, fontSize, h1Scale, h2Scale, h3Scale,
+                textColor, accentColor);
             var measuredHeight = -1.0;
             if (attributedString != null)
             {
                 var range = new NSRange(0, attributedString.Length);
                 attributedString.AddAttribute(UIStringAttributeKey.ParagraphStyle, paragraphStyle, range);
-                attributedString.AddAttribute(UIStringAttributeKey.ForegroundColor, textColor, range);
                 if (widthHint > 0)
                 {
                     var rect = attributedString.GetBoundingRect(new CGSize(widthHint, NFloat.MaxValue),

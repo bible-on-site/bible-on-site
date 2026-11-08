@@ -87,7 +87,9 @@ public partial class ExtensionPacksViewModel : ObservableObject
     public async Task LoadAsync()
     {
         try { await _perushimNotesService.InitializeAsync(); }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Perushim init: {ex.Message}"); } //NOSONAR
+        #pragma warning restore S2221
         await Packs.LoadAsync();
         NotifyPerushimState();
         OnPropertyChanged(nameof(RecitationStateText));
@@ -106,7 +108,7 @@ public partial class ExtensionPacksViewModel : ObservableObject
             return;
         }
 
-        var confirmed = await _navigator.DisplayChoiceAsync("הסרת חבילת הפירושים",
+        var confirmed = await _navigator.DisplayDestructiveChoiceAsync("הסרת חבילת הפירושים",
             "הפירושים יוסרו מהמכשיר. ניתן להתקין את החבילה שוב בכל עת.", "הסרה", "ביטול");
         if (!confirmed)
         {
@@ -117,8 +119,10 @@ public partial class ExtensionPacksViewModel : ObservableObject
         {
             await _perushimNotesService.RemoveNotesAsync();
         }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
         catch (Exception ex) //NOSONAR — removal spans IO/platform errors; failure is reported to the user.
         {
+            #pragma warning restore S2221
             System.Diagnostics.Debug.WriteLine($"Perushim removal failed: {ex.Message}");
             await _navigator.DisplayAlertAsync("שגיאה", "לא ניתן להסיר את חבילת הפירושים. נסו שוב.", "אישור");
         }

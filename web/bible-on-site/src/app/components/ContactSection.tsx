@@ -17,6 +17,7 @@ export function ContactSection() {
 								className="icon-white"
 								src="/icons/whatsapp.svg"
 								alt="ווטסאפ"
+								unoptimized
 								width={24}
 								height={24}
 							/>
@@ -35,6 +36,7 @@ export function ContactSection() {
 								className="icon-white"
 								src="/icons/phone.svg"
 								alt="טלפון"
+								unoptimized
 								width={24}
 								height={24}
 							/>
@@ -49,6 +51,7 @@ export function ContactSection() {
 								className="icon-white"
 								src="/icons/envelope.svg"
 								alt='דוא"ל'
+								unoptimized
 								width={24}
 								height={24}
 							/>
@@ -61,6 +64,7 @@ export function ContactSection() {
 								className="icon-white"
 								src="/icons/telegram.svg"
 								alt="טלגרם"
+								unoptimized
 								width={24}
 								height={24}
 							/>

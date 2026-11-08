@@ -58,14 +58,35 @@ export function findSeferPasuk(
 	);
 }
 
-/** Marks the destination and clears the previous marker within its pane. */
+const highlightCleanup = new WeakMap<Element, () => void>();
+
+/** Marks the destination, then fades after four seconds or clears on click. */
 function movePasukHighlight(scope: Element, target: Element): void {
 	for (const el of scope.querySelectorAll(`[${PASUK_HIGHLIGHT_ATTR}]`)) {
-		el.removeAttribute(PASUK_HIGHLIGHT_ATTR);
-		el.removeAttribute("aria-current");
+		const clear = highlightCleanup.get(el);
+		if (clear) clear();
+		else {
+			el.removeAttribute(PASUK_HIGHLIGHT_ATTR);
+			el.removeAttribute("aria-current");
+		}
 	}
 	target.setAttribute(PASUK_HIGHLIGHT_ATTR, "");
 	target.setAttribute("aria-current", "location");
+	let fadeTimer: ReturnType<typeof setTimeout>;
+	const clear = () => {
+		clearTimeout(holdTimer);
+		clearTimeout(fadeTimer);
+		target.removeAttribute(PASUK_HIGHLIGHT_ATTR);
+		target.removeAttribute("aria-current");
+		target.removeEventListener("click", clear);
+		highlightCleanup.delete(target);
+	};
+	const holdTimer = setTimeout(() => {
+		target.setAttribute(PASUK_HIGHLIGHT_ATTR, "fading");
+		fadeTimer = setTimeout(clear, 600);
+	}, 4000);
+	highlightCleanup.set(target, clear);
+	target.addEventListener("click", clear, { once: true });
 }
 
 /**
@@ -125,15 +146,27 @@ export interface SeferOpenPerush {
 const openPerushByPerek = new Map<number, SeferOpenPerush>();
 const openPerushListeners = new Set<() => void>();
 
+function samePasukSet(a: ReadonlySet<number>, b: ReadonlySet<number>): boolean {
+	return a.size === b.size && [...a].every((pasuk) => b.has(pasuk));
+}
+
 /** Publishes the perush open on a perek's blank page (null when closed). */
 export function setSeferOpenPerush(
 	perekId: number,
 	perush: SeferOpenPerush | null,
 ): void {
 	const existing = openPerushByPerek.get(perekId) ?? null;
-	// Same perush republished (or still closed): keep the stored entry so
+	// Same commentary republished (or still closed): keep the stored entry so
 	// subscribed snapshots stay referentially stable and nothing re-renders.
-	if (existing?.name === perush?.name) return;
+	// The pesukim set participates too — the commentary panel can republish
+	// under the same label with a different coverage set (#2544).
+	if (
+		existing?.name === perush?.name &&
+		(existing == null ||
+			perush == null ||
+			samePasukSet(existing.pesukim, perush.pesukim))
+	)
+		return;
 	if (perush == null) openPerushByPerek.delete(perekId);
 	else openPerushByPerek.set(perekId, perush);
 	for (const listener of openPerushListeners) listener();
