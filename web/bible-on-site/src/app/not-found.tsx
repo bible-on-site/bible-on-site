@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import "./not-found.css";
+import { PageShell } from "@/app/components/PageShell";
 import styles from "./not-found.module.css";
 
 // A missing page is not a shareable resource — strip the root layout's
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function NotFound() {
 	return (
-		<div className="not-found-layout">
+		<PageShell header="solid">
 			<div className={styles.notFoundPage}>
 				<p className={styles.errorCode}>404</p>
 				<h1 className={styles.pasuk}>הֲתָעִיף עֵינֶיךָ בּוֹ וְאֵינֶנּוּ</h1>
@@ -24,6 +24,6 @@ export default function NotFound() {
 					</Link>
 				</div>
 			</div>
-		</div>
+		</PageShell>
 	);
 }

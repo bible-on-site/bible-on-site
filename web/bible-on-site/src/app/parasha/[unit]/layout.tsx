@@ -1,14 +1,15 @@
 import "@/lib/download/register-tanach";
 import type React from "react";
-import UnitSwipeNavigation from "@/app/components/UnitSwipeNavigation";
 import ReaderSettings from "@/app/929/[number]/components/ReaderSettings";
 import { hebrewSerif, taameyD } from "@/app/929/[number]/hebrew-font";
+import { PageShell } from "@/app/components/PageShell";
+import UnitSwipeNavigation from "@/app/components/UnitSwipeNavigation";
 import "@/app/929/[number]/layout.css";
+import { resolveParashaSegment } from "@/data/parasha/parasha-slugs";
 import {
 	getAdjacentParashaUnits,
 	PARASHA_DIVISION,
 } from "@/data/parasha/parasha-units";
-import { resolveParashaSegment } from "@/data/parasha/parasha-slugs";
 
 /**
  * פרשה unit pages share the /929 reader chrome: the same swipe
@@ -38,13 +39,17 @@ export default async function ParashaUnitLayout({
 			: { prev: null, next: null };
 
 	return (
-		<UnitSwipeNavigation
-			prevHref={prev ? `${PARASHA_DIVISION.rootPath}/${prev.slug}` : null}
-			nextHref={next ? `${PARASHA_DIVISION.rootPath}/${next.slug}` : null}
+		<PageShell
+			header="solid"
 			className={`perek-layout ${hebrewSerif.variable} ${taameyD.variable}`}
 		>
-			<ReaderSettings />
-			{children}
-		</UnitSwipeNavigation>
+			<UnitSwipeNavigation
+				prevHref={prev ? `${PARASHA_DIVISION.rootPath}/${prev.slug}` : null}
+				nextHref={next ? `${PARASHA_DIVISION.rootPath}/${next.slug}` : null}
+			>
+				<ReaderSettings />
+				{children}
+			</UnitSwipeNavigation>
+		</PageShell>
 	);
 }
