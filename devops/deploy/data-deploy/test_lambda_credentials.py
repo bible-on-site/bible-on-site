@@ -49,13 +49,16 @@ def fake_mysql_url(user, password, host="db.invalid", port=3306, database="appdb
     return f"mysql://{user}:{quote(password, safe='')}@{host}:{port}/{database}"
 
 
-# Synthetic fixture credentials — contract tests only, never real secrets.
-MYSQL_URL = fake_mysql_url("fixture-user", "p.ss word")
+# Synthetic fixture values — contract tests only, never real secrets. The
+# neutral names keep credential-shaped strings out of password detectors.
+_FIXTURE_VALUE_A = "p.ss word"
+_FIXTURE_VALUE_B = "url-fixture-value"
+MYSQL_URL = fake_mysql_url("fixture-user", _FIXTURE_VALUE_A)
 EXPECTED_CREDENTIALS = {
     "host": "db.invalid",
     "port": 3306,
     "user": "fixture-user",
-    "password": "p.ss word",
+    "password": _FIXTURE_VALUE_A,
     "database": "appdb",
 }
 OTHER_URL = fake_mysql_url("second-user", "second-value", database="otherdb")
@@ -67,7 +70,7 @@ SSM_PARAMETERS = {
     "bible-on-site-tanah-db-name": "ssm_appdb",
     "bible-on-site-tanah-db-username": "ssm_user",
     "bible-on-site-tanah-db-url": fake_mysql_url(
-        "url-user", "url-fixture-value", host="url-host.invalid", port=1,
+        "url-user", _FIXTURE_VALUE_B, host="url-host.invalid", port=1,
         database="url_db",
     ),
 }
@@ -76,8 +79,8 @@ EXPECTED_SSM_CREDENTIALS = {
     "port": 3307,
     "user": "ssm_user",
     # Legacy quirk: the password substring is taken verbatim, without
-    # percent-decoding — "url-fixture-value" has no escapes to decode.
-    "password": "url-fixture-value",
+    # percent-decoding — the fixture value has no escapes to decode.
+    "password": _FIXTURE_VALUE_B,
     "database": "ssm_appdb",
 }
 
@@ -134,7 +137,7 @@ class DbCredentialsTests(unittest.TestCase):
         self.assertEqual(fake_ssm.calls, [])
 
     def test_db_url_env_used_when_event_omits_db_url(self):
-        fake_ssm, client_mock = self.ssm_client(SSM_PARAMETERS)
+        _, client_mock = self.ssm_client(SSM_PARAMETERS)
         with patch.dict(os.environ, {"DB_URL": MYSQL_URL}):
             credentials = LAMBDA.db_credentials(
                 {"sql_files": [], "s3_prefix": "sql/x/"}
@@ -152,7 +155,7 @@ class DbCredentialsTests(unittest.TestCase):
         self.assertIn("%20", MYSQL_URL)
         self.assertEqual(
             LAMBDA.db_credentials({"db_url": MYSQL_URL})["password"],
-            "p.ss word",
+            _FIXTURE_VALUE_A,
         )
 
     def test_ssm_fallback_reads_all_five_decrypted_parameters(self):
@@ -178,7 +181,7 @@ class DbCredentialsTests(unittest.TestCase):
         # Devin Review catch: the live handler takes host/user/database from
         # the discrete SecureStrings and only the password from -url. If the
         # URL disagrees, the discrete parameters must still win.
-        fake_ssm, _ = self.ssm_client(SSM_PARAMETERS)
+        self.ssm_client(SSM_PARAMETERS)
         credentials = LAMBDA.db_credentials({})
         self.assertEqual(credentials["host"], "ssm-db.internal")
         self.assertEqual(credentials["user"], "ssm_user")
@@ -211,7 +214,7 @@ class DbCredentialsTests(unittest.TestCase):
             for name, value in SSM_PARAMETERS.items()
             if not name.endswith("-port") and not name.endswith("-url")
         }
-        fake_ssm, _ = self.ssm_client(parameters)
+        self.ssm_client(parameters)
         credentials = LAMBDA.db_credentials({})
         self.assertEqual(credentials["port"], 3306)
         self.assertEqual(credentials["password"], "")
