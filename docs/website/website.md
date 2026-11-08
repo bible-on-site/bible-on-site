@@ -62,25 +62,29 @@ The website communicates **directly** with the MySQL database rather than going 
 Keep the full canonical scripture JSON in server imports. The bookshelf, date
 lookup and citation parser use `client-catalog.generated.json`, a small projection
 of book ranges and learning dates. `scripts/generate-client-catalog.mjs` also writes
-individual reader books under `public/generated/sefarim/`, named by their content
-hash. Installation, builds and unit tests regenerate both outputs from the same
-canonical source; generated files are ignored. Do not edit them or maintain a
-second content source. After an intentional source change during development,
-rerun the generator or restart `bun run dev`.
+each reader book as a Brotli file under `src/data/db/sefer-books/`, named by the
+raw payload's content hash. Installation, builds and unit tests regenerate both
+outputs from the same canonical source; generated files are ignored. Do not edit
+them or maintain a second content source. After an intentional source change
+during development, rerun the generator or restart `bun run dev`.
 
-`LoadedSefer` fetches the selected book when the reader opens, with visible loading
-and retry feedback. Uninitialized reader pages stay unpainted until FlipBook
-has applied their dimensions, preserving geometry and preventing a layout flash.
-Network requests revalidate HTTP cache entries so an older
-server's cached 404 cannot prevent recovery during a rolling deployment. A missing
-asset offers a full page refresh, preserving the reader route and query while
-loading the current asset catalog. The browser cache retains at most four recent
-books. Avoid
-passing whole books through every static page: that repeats scripture in HTML/RSC
-and increases server memory and deployment size. Chapter navigation within the
-same book reuses its data; late requests cannot replace another selected book.
-Download helpers load only when requested, so metadata requests do not initialize
-the PDF generator's corpus.
+The dynamic route `/generated/sefarim/[file]` serves those bytes as
+`Content-Encoding: br` — the payloads are multi-MB, so compression cuts the wire
+transfer by an order of magnitude — with `Cache-Control: immutable` and a
+content-hash ETag, since a content-addressed name can never change bytes. Clients
+that do not accept Brotli get a server-side decode fallback; malformed or unknown
+names answer a clean 404. `LoadedSefer` fetches the selected book when the reader
+opens, with visible loading feedback. Uninitialized reader pages stay unpainted
+until FlipBook has applied their dimensions, preserving geometry and preventing a
+layout flash. A transient failure offers a manual retry; a missing asset offers a
+full page refresh — the 404 itself is `no-store`, and only a fresh page load can
+pick up a consistent bundle/deployment pair — while a flat-view escape keeps the
+chapter/article reachable. The browser cache retains at most four recent books.
+Avoid passing whole books through every static page: that repeats scripture in
+HTML/RSC and increases server memory and deployment size. Chapter navigation
+within the same book reuses its data; late requests cannot replace another
+selected book. Download helpers load only when requested, so metadata requests do
+not initialize the PDF generator's corpus.
 
 The source text, reading order and recitation fields remain unchanged, including
 canonical JSON precision handling in `next.config.mjs`. Tests compare every
