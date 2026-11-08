@@ -117,6 +117,7 @@ export default async function Home({ params }: Props) {
 										className="icon-white"
 										src="/icons/calendar-today.svg"
 										alt="עלון יומי"
+										unoptimized
 										width={48}
 										height={48}
 									/>
@@ -134,6 +135,7 @@ export default async function Home({ params }: Props) {
 									className="icon-white"
 									src="/icons/smartphone.svg"
 									alt="עלון יומי"
+									unoptimized
 									width={48}
 									height={48}
 								/>
