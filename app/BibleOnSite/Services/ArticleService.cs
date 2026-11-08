@@ -114,6 +114,11 @@ public class ArticleService : BaseGraphQLService
                             calcVersion
                             sourceHash
                         }
+                        progressUnits {
+                            key
+                            wordCount
+                            cumulativeWords
+                        }
                     }
                 }",
             Variables = new Dictionary<string, object?> { ["id"] = articleId }
@@ -148,6 +153,7 @@ public class ArticleService : BaseGraphQLService
             Name = dto.Name ?? string.Empty,
             Priority = dto.Priority,
             ReadingMetric = dto.ReadingMetric?.ToModel(),
+            ProgressUnits = dto.ProgressUnits?.Select(unit => unit.ToModel()).ToList() ?? [],
             Author = author
         };
     }
@@ -408,6 +414,7 @@ public class ArticleService : BaseGraphQLService
         public string? Name { get; set; }
         public int Priority { get; set; }
         public ReadingMetricDto? ReadingMetric { get; set; }
+        public List<ReadingProgressUnitDto>? ProgressUnits { get; set; }
     }
 
     /// <summary>Persisted reading metric as the API returns it (issue #2607).</summary>
@@ -426,6 +433,21 @@ public class ArticleService : BaseGraphQLService
             WordsPerMinute = WordsPerMinute,
             CalcVersion = CalcVersion,
             SourceHash = SourceHash ?? string.Empty
+        };
+    }
+
+    /// <summary>Ordered progress unit as the API returns it (issue #2607).</summary>
+    internal class ReadingProgressUnitDto
+    {
+        public string? Key { get; set; }
+        public int WordCount { get; set; }
+        public int CumulativeWords { get; set; }
+
+        public ReadingProgressUnit ToModel() => new()
+        {
+            Key = Key ?? string.Empty,
+            WordCount = WordCount,
+            CumulativeWords = CumulativeWords
         };
     }
 
