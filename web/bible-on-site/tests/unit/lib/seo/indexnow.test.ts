@@ -10,8 +10,6 @@
 import {
 	collectSubmissionPaths,
 	indexNowKey,
-	indexNowKeyFileName,
-	pendingIndexNowUrls,
 	submitIndexNow,
 } from "@/lib/seo/indexnow";
 
@@ -46,7 +44,6 @@ describe("indexNowKey", () => {
 	it("is null when INDEXNOW_KEY is unset", () => {
 		delete process.env.INDEXNOW_KEY;
 		expect(indexNowKey()).toBeNull();
-		expect(indexNowKeyFileName()).toBeNull();
 	});
 
 	it.each(["", "   ", "short", "key with space", "key/slash"])(
@@ -57,15 +54,13 @@ describe("indexNowKey", () => {
 				.spyOn(console, "warn")
 				.mockImplementation(() => {});
 			expect(indexNowKey()).toBeNull();
-			expect(indexNowKeyFileName()).toBeNull();
 			warnSpy.mockRestore();
 		},
 	);
 
-	it("returns the configured key and its file name", () => {
+	it("returns the configured key", () => {
 		process.env.INDEXNOW_KEY = TEST_KEY;
 		expect(indexNowKey()).toBe(TEST_KEY);
-		expect(indexNowKeyFileName()).toBe(`${TEST_KEY}.txt`);
 	});
 });
 
@@ -194,10 +189,6 @@ describe("submitIndexNow", () => {
 
 		await expect(submitIndexNow(["/929/5"])).resolves.toBe("failed");
 		expect(errorSpy).toHaveBeenCalled();
-		expect(pendingIndexNowUrls()).toEqual([
-			"https://xn--febl3a.co.il/929/5",
-			"https://xn--febl3a.co.il/sitemap.xml",
-		]);
 		errorSpy.mockRestore();
 	});
 
@@ -208,11 +199,6 @@ describe("submitIndexNow", () => {
 			.mockImplementation(() => {});
 
 		await expect(submitIndexNow(["/pedia/א"])).resolves.toBe("failed");
-		expect(pendingIndexNowUrls()).toEqual([
-			`https://xn--febl3a.co.il/pedia/${encodeURIComponent("א")}`,
-			"https://xn--febl3a.co.il/pedia",
-			"https://xn--febl3a.co.il/sitemap.xml",
-		]);
 		errorSpy.mockRestore();
 	});
 
@@ -227,7 +213,6 @@ describe("submitIndexNow", () => {
 			"https://xn--febl3a.co.il/sitemap.xml",
 			"https://xn--febl3a.co.il/929/2",
 		]);
-		expect(pendingIndexNowUrls()).toEqual([]);
 	});
 
 	it("retries pending URLs even when the next call adds none", async () => {
