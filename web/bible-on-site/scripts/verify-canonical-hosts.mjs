@@ -29,7 +29,7 @@ async function chain(startUrl, fetchPage, userAgent) {
 		});
 		const location = response.headers.get("location");
 		if (!REDIRECT_STATUSES.has(response.status) || !location) {
-			return { hops, url: current, status: response.status };
+			return { hops, url: current, status: response.status, response };
 		}
 		hops.push({ status: response.status, location });
 		current = new URL(location, current).href;
@@ -109,18 +109,34 @@ export async function verifyCanonicalHosts(
 		`${www}/sitemap_www.xml`,
 	]) {
 		const sitemapResult = await chain(sitemapStart, fetchPage, BROWSER_UA);
-		assertEndsAt(
-			sitemapStart,
-			sitemapResult,
-			`${bare}/sitemap.xml`,
-			200,
-		);
+		assertEndsAt(sitemapStart, sitemapResult, `${bare}/sitemap.xml`, 200);
 		for (const hop of sitemapResult.hops) {
 			if (hop.status !== 301 && hop.status !== 308) {
 				throw new Error(
 					`${sitemapStart}: redirect to ${hop.location} used non-permanent HTTP ${hop.status}`,
 				);
 			}
+		}
+		const contentType =
+			sitemapResult.response.headers.get("content-type") ?? "";
+		if (!/^(?:application|text)\/xml(?:\s*;|$)/i.test(contentType)) {
+			throw new Error(
+				`${sitemapStart}: expected an XML content type, got ${contentType || "none"}`,
+			);
+		}
+		// Check the document itself as well as HTTP status: a successful
+		// HTML error page or a truncated/non-sitemap XML response must fail.
+		// Browser E2E coverage also parses the complete XML document.
+		const sitemapBody = (await sitemapResult.response.text())
+			.replace(/<\?xml[\s\S]*?\?>/g, "")
+			.replace(/<!--[\s\S]*?-->/g, "")
+			.trim();
+		if (
+			!/^<urlset\b[^>]*\sxmlns=["']http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9["'][^>]*>[\s\S]*<\/urlset>$/.test(
+				sitemapBody,
+			)
+		) {
+			throw new Error(`${sitemapStart}: expected a sitemap urlset document`);
 		}
 	}
 

@@ -37,6 +37,7 @@ const fetchFrom =
 		const body = pages[path];
 		return new Response(body ?? missingBody(path), {
 			status: body === undefined ? 404 : 200,
+			headers: pageHeaders(path),
 		});
 	};
 
@@ -59,6 +60,9 @@ const healthyPages = {
 	// The branded router fallback deployed into the /www/ tree (#2935).
 	"/www/404.html": ROUTER_BRANDED_404,
 };
+const pageHeaders = (path) => ({
+	"content-type": path === "/sitemap.xml" ? "application/xml" : "text/html",
+});
 
 test("all scheme/host combinations reach the canonical bare host", async () => {
 	await verifyCanonicalHosts(DOMAIN, {
@@ -104,6 +108,7 @@ const pageAt = (url) => {
 	const path = new URL(url).pathname;
 	return new Response(healthyPages[path] ?? missingBody(path), {
 		status: healthyPages[path] === undefined ? 404 : 200,
+		headers: pageHeaders(path),
 	});
 };
 
@@ -160,6 +165,7 @@ test("the seed crawler UA is used for its own request", async () => {
 			const path = new URL(url).pathname;
 			return new Response(healthyPages[path] ?? missingBody(path), {
 				status: healthyPages[path] === undefined ? 404 : 200,
+				headers: pageHeaders(path),
 			});
 		},
 	});
@@ -206,6 +212,44 @@ test("a non-permanent sitemap alias redirect fails", async () => {
 		}),
 		/non-permanent HTTP 302/,
 	);
+});
+
+test("an HTML response at the canonical sitemap fails even with HTTP 200", async () => {
+	await assert.rejects(
+		verifyCanonicalHosts(DOMAIN, {
+			fetchPage: healthyWith((_url, path) =>
+				path === "/sitemap.xml"
+					? new Response(BRANDED_404, {
+							status: 200,
+							headers: { "content-type": "text/html" },
+						})
+					: undefined,
+			),
+		}),
+		/expected an XML content type/,
+	);
+});
+
+test("an XML content type cannot disguise a missing sitemap document", async () => {
+	for (const body of [
+		BRANDED_404,
+		'<urlset xmlns="https://wrong.example/"></urlset>',
+		'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+	]) {
+		await assert.rejects(
+			verifyCanonicalHosts(DOMAIN, {
+				fetchPage: healthyWith((_url, path) =>
+					path === "/sitemap.xml"
+						? new Response(body, {
+								status: 200,
+								headers: { "content-type": "application/xml; charset=utf-8" },
+							})
+						: undefined,
+				),
+			}),
+			/expected a sitemap urlset document/,
+		);
+	}
 });
 
 test("the router fallback file missing from the /www/ tree fails — the deploy gap (#2935)", async () => {

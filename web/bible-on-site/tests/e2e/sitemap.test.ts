@@ -205,6 +205,7 @@ test.describe("sitemap_www.xml compatibility", () => {
 
 	test("following the chain serves valid sitemap XML, not an HTML error page", async ({
 		request,
+		page,
 	}) => {
 		const response = await request.get("/sitemap_www.xml");
 
@@ -216,5 +217,23 @@ test.describe("sitemap_www.xml compatibility", () => {
 		expect(body).toContain("<urlset");
 		expect(body).toContain("<loc>");
 		expect(body).not.toMatch(/<!doctype html|<html[\s>]/i);
+		const parsed = await page.evaluate((xml) => {
+			const document = new DOMParser().parseFromString(xml, "application/xml");
+			return {
+				errors: document.getElementsByTagName("parsererror").length,
+				root: document.documentElement.localName,
+				namespace: document.documentElement.namespaceURI,
+				locations: document.getElementsByTagNameNS(
+					"http://www.sitemaps.org/schemas/sitemap/0.9",
+					"loc",
+				).length,
+			};
+		}, body);
+		expect(parsed.errors).toBe(0);
+		expect(parsed.root).toBe("urlset");
+		expect(parsed.namespace).toBe(
+			"http://www.sitemaps.org/schemas/sitemap/0.9",
+		);
+		expect(parsed.locations).toBeGreaterThan(0);
 	});
 });
