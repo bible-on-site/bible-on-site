@@ -1,0 +1,60 @@
+name: Clean completed CI database access
+
+on:
+  workflow_run:
+    workflows: [Continuous Integration]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Completed CI run ID
+        type: string
+        required: true
+      run_attempt:
+        description: Exact completed CI attempt number
+        type: string
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.repository }}-rds-cleanup-${{ github.event.workflow_run.id || inputs.run_id }}-${{ github.event.workflow_run.run_attempt || inputs.run_attempt }}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  cleanup:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RDS_BUILD_TARGET_RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+      RDS_BUILD_TARGET_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.run_attempt }}
+    steps:
+      # Never execute code or download artifacts from the triggering PR.
+      - name: Checkout trusted default branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - name: Require a completed repository CI attempt
+        run: node devops/github/ci/rds-build-access.mjs check-run
+      - name: Configure existing RDS build role
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      - name: Remove only access owned by the completed attempt
+        env:
+          RDS_BUILD_ACCESS_ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: node devops/github/ci/rds-build-access.mjs cleanup-run

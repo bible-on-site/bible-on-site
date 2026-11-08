@@ -2,12 +2,15 @@ using OpenQA.Selenium;
 
 namespace BibleOnSite.Tests.MobileE2E;
 
-// Appium reports a dead session through its HTTP proxy, not a typed status: a
-// dropped adb transport ("device offline") kills the instrumentation and logcat
-// streams together (exit 255), and a crashed WebDriverAgent stops answering
-// while the session id stays allocated. Recognizing these signatures lets a
-// scenario rebuild the session once instead of failing on infrastructure loss.
-// Assertion and timeout failures never match.
+// Appium reports a dead session through its HTTP proxy, not a typed status:
+// the instrumentation and logcat streams die together (exit 255) when the
+// device drops mid-scenario, and a crashed WebDriverAgent stops answering
+// while the session id stays allocated. Every signature here means Appium
+// already lost the session server-side, so a replacement has nothing to race.
+// A dropped adb transport is deliberately NOT death — the server-side session
+// may still be tearing down, so DeviceTransportLoss keeps it ambiguous.
+// Ordinary element-wait timeouts never match. XCUITest's proxy-command timeout
+// is different: Appium ends and removes that session before returning it.
 internal static class DeviceSessionDeath
 {
     private static readonly string[] Signatures =
@@ -21,6 +24,7 @@ internal static class DeviceSessionDeath
         "econnrefused",
         "connection refused",
         "to webdriveragent",
+        "The driver did not receive any response from the '",
     ];
 
     public static bool Matches(Exception exception) =>

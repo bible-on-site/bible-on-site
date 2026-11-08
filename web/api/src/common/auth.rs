@@ -7,6 +7,14 @@ use crate::common::error_handling::ServiceError;
 /// Tanahpedia entry revisions.
 pub const REVISION_API_KEY_ENV: &str = "TANAHPEDIA_REVISION_API_KEY";
 
+/// Name of the environment variable holding the shared secret authorizing
+/// dedication-management mutations (#2731).
+pub const DEDICATION_API_KEY_ENV: &str = "DEDICATION_API_KEY";
+
+/// Name of the environment variable holding the shared secret authorizing
+/// article-relationship management (#3102).
+pub const ARTICLE_API_KEY_ENV: &str = "ARTICLE_API_KEY";
+
 /// Bearer token extracted from the incoming HTTP request and injected into the
 /// GraphQL context. `None` means no usable `Authorization: Bearer` header was
 /// present on the request.
@@ -14,6 +22,8 @@ pub const REVISION_API_KEY_ENV: &str = "TANAHPEDIA_REVISION_API_KEY";
 pub struct ApiAuth {
     bearer: Option<String>,
     revision_api_key: Option<String>,
+    dedication_api_key: Option<String>,
+    article_api_key: Option<String>,
 }
 
 impl ApiAuth {
@@ -21,9 +31,17 @@ impl ApiAuth {
         let revision_api_key = env::var(REVISION_API_KEY_ENV)
             .ok()
             .filter(|key| !key.is_empty());
+        let dedication_api_key = env::var(DEDICATION_API_KEY_ENV)
+            .ok()
+            .filter(|key| !key.is_empty());
+        let article_api_key = env::var(ARTICLE_API_KEY_ENV)
+            .ok()
+            .filter(|key| !key.is_empty());
         Self {
             bearer,
             revision_api_key,
+            dedication_api_key,
+            article_api_key,
         }
     }
 
@@ -35,6 +53,34 @@ impl ApiAuth {
         Self {
             bearer,
             revision_api_key,
+            dedication_api_key: None,
+            article_api_key: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_dedication_api_key(
+        bearer: Option<String>,
+        dedication_api_key: Option<String>,
+    ) -> Self {
+        Self {
+            bearer,
+            revision_api_key: None,
+            dedication_api_key,
+            article_api_key: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_article_api_key(
+        bearer: Option<String>,
+        article_api_key: Option<String>,
+    ) -> Self {
+        Self {
+            bearer,
+            revision_api_key: None,
+            dedication_api_key: None,
+            article_api_key,
         }
     }
 
@@ -47,6 +93,28 @@ impl ApiAuth {
         match (self.revision_api_key.as_deref(), self.bearer.as_deref()) {
             (Some(expected), Some(presented)) if constant_time_eq(expected, presented) => Ok(()),
             (None, _) => Err(ServiceError::unauthorized("Revision API is not configured")),
+            _ => Err(ServiceError::unauthorized("Invalid or missing API key")),
+        }
+    }
+
+    /// Authorizes dedication create/update/delete. Fails closed when
+    /// `DEDICATION_API_KEY` is unset/empty.
+    pub fn authorize_dedication_manager(&self) -> Result<(), ServiceError> {
+        match (self.dedication_api_key.as_deref(), self.bearer.as_deref()) {
+            (Some(expected), Some(presented)) if constant_time_eq(expected, presented) => Ok(()),
+            (None, _) => Err(ServiceError::unauthorized(
+                "Dedication API is not configured",
+            )),
+            _ => Err(ServiceError::unauthorized("Invalid or missing API key")),
+        }
+    }
+
+    /// Authorizes article-relationship management reads/writes (#3102).
+    /// Fails closed when `ARTICLE_API_KEY` is unset/empty.
+    pub fn authorize_article_manager(&self) -> Result<(), ServiceError> {
+        match (self.article_api_key.as_deref(), self.bearer.as_deref()) {
+            (Some(expected), Some(presented)) if constant_time_eq(expected, presented) => Ok(()),
+            (None, _) => Err(ServiceError::unauthorized("Article API is not configured")),
             _ => Err(ServiceError::unauthorized("Invalid or missing API key")),
         }
     }
@@ -118,6 +186,38 @@ mod tests {
                 Some("correct-horse".to_string()),
             )
             .authorize_revision_manager()
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn article_manager_fails_closed_when_the_key_is_not_configured() {
+        let err = ApiAuth::with_article_api_key(Some("anything".to_string()), None)
+            .authorize_article_manager()
+            .unwrap_err();
+        assert_eq!(err.to_string(), "Article API is not configured");
+    }
+
+    #[test]
+    fn article_manager_rejects_wrong_or_missing_bearer() {
+        let expected = Some("correct-horse".to_string());
+        for bearer in [Some("wrong".to_string()), None] {
+            assert!(
+                ApiAuth::with_article_api_key(bearer, expected.clone())
+                    .authorize_article_manager()
+                    .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn article_manager_accepts_the_configured_token() {
+        assert!(
+            ApiAuth::with_article_api_key(
+                Some("correct-horse".to_string()),
+                Some("correct-horse".to_string()),
+            )
+            .authorize_article_manager()
             .is_ok()
         );
     }

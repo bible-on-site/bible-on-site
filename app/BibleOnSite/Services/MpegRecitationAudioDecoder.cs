@@ -3,9 +3,13 @@ using BibleOnSite.Models;
 
 namespace BibleOnSite.Services;
 
-/// <summary>Use the same pinned MPEG decoder as the website; native playback receives exact PCM ranges.</summary>
+/// <summary>Use the website's pinned MPEG/Opus decoders; native playback receives exact PCM ranges.</summary>
 public sealed class MpegRecitationAudioDecoder : IRecitationAudioDecoder
 {
+    // Bridge roundtrips dominate transfer time; the payload per eval is cheap.
+    private const int UploadChunk = 8388608;
+    private const int DownloadChunk = 8388608;
+    private const string NotifyPrefix = "recitation-status:";
     private readonly WebView view;
     public MpegRecitationAudioDecoder(WebView view)
     {
@@ -27,88 +31,141 @@ public sealed class MpegRecitationAudioDecoder : IRecitationAudioDecoder
                 await view.EvaluateJavaScriptAsync("recitation.reset()");
             }
         }
-        catch (Exception) { _initialized = false; }
+        #pragma warning disable S2221 // Deliberate failure boundary: JS reset failure marks the decoder uninitialized so the next use retries
+        catch (Exception) { _initialized = false; } //NOSONAR — JS reset failure marks the decoder uninitialized so the next use retries.
+        #pragma warning restore S2221
         finally { _gate.Release(); }
     }
 
-    public Task<byte[]> CreateClipAsync(string mp3, IReadOnlyList<(double Start, double End)> ranges,
-        CancellationToken cancellationToken) => CreateClipAsync(mp3, ranges, cancellationToken, 0);
+    public Task<byte[]> CreateClipAsync(string audio, IReadOnlyList<(double Start, double End)> ranges,
+        CancellationToken cancellationToken) => CreateClipAsync(audio, ranges, cancellationToken, 0);
 
-    public async Task<byte[]> CreateClipAsync(string mp3, IReadOnlyList<(double Start, double End)> ranges,
+    public Task<byte[]> CreateClipAsync(string audio, IReadOnlyList<(double Start, double End)> ranges,
         CancellationToken cancellationToken, double pauseMs)
+    {
+        var json = JsonSerializer.Serialize(ranges.Select(r => new RecitationClipRange(r.Start, r.End)).ToList(),
+            RecitationJsonContext.Default.ClipRanges);
+        var pause = pauseMs.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return DecodeAsync(audio, $"recitation.clip({json},{pause})", cancellationToken);
+    }
+
+    public Task<byte[]> CreateChapterAsync(string audio, CancellationToken cancellationToken) =>
+        DecodeAsync(audio, "recitation.chapter()", cancellationToken);
+
+    private async Task<byte[]> DecodeAsync(string audio, string expression, CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            if (!_initialized)
+            await EnsureInitializedAsync(cancellationToken);
+            await EnsureSourceAsync(audio, cancellationToken);
+            await WaitReadyAsync(cancellationToken);
+            return await ReadWaveAsync(expression, cancellationToken);
+        }
+        finally { _gate.Release(); }
+    }
+
+    private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
+    {
+        if (_initialized)
+        {
+            return;
+        }
+
+        using var input = await FileSystem.Current.OpenAppPackageFileAsync("recitation-audio.html");
+        using var reader = new StreamReader(input);
+        using var decoderInput = await FileSystem.Current.OpenAppPackageFileAsync("recitation-mpeg.min.js");
+        using var decoderReader = new StreamReader(decoderInput);
+        var decoderScript = await decoderReader.ReadToEndAsync(cancellationToken);
+        var loaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Navigated(object? sender, WebNavigatedEventArgs e) => loaded.TrySetResult();
+        view.Navigated += Navigated;
+        try
+        {
+            var html = await reader.ReadToEndAsync(cancellationToken);
+            view.Source = new HtmlWebViewSource { Html = html };
+            await loaded.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+            // Evaluate the trusted local asset directly. Its compressed WASM
+            // string contains characters that HTML script parsing would alter.
+            await view.EvaluateJavaScriptAsync(decoderScript);
+            _initialized = true;
+        }
+        finally { view.Navigated -= Navigated; }
+    }
+
+    private async Task EnsureSourceAsync(string audio, CancellationToken cancellationToken)
+    {
+        if (_source == audio)
+        {
+            return;
+        }
+
+        var bytes = await File.ReadAllBytesAsync(audio, cancellationToken);
+        var encoded = Convert.ToBase64String(bytes);
+        await view.EvaluateJavaScriptAsync("recitation.begin()");
+        for (var offset = 0; offset < encoded.Length; offset += UploadChunk)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await view.EvaluateJavaScriptAsync($"recitation.append({JsonSerializer.Serialize(encoded.Substring(offset, Math.Min(UploadChunk, encoded.Length - offset)), RecitationJsonContext.Default.String)})");
+        }
+        await view.EvaluateJavaScriptAsync("recitation.finish()");
+        _source = audio;
+    }
+
+    private async Task WaitReadyAsync(CancellationToken cancellationToken)
+    {
+        // The decoder reports ready or error through a recitation-status
+        // navigation that the Navigating handler cancels into a completed wait.
+        var finished = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void Navigating(object? sender, WebNavigatingEventArgs e)
+        {
+            if (e.Url.StartsWith(NotifyPrefix, StringComparison.Ordinal))
             {
-                using var input = await FileSystem.Current.OpenAppPackageFileAsync("recitation-audio.html");
-                using var reader = new StreamReader(input);
-                using var decoderInput = await FileSystem.Current.OpenAppPackageFileAsync("recitation-mpeg.min.js");
-                using var decoderReader = new StreamReader(decoderInput);
-                var decoderScript = await decoderReader.ReadToEndAsync(cancellationToken);
-                var loaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                void Navigated(object? sender, WebNavigatedEventArgs e) => loaded.TrySetResult();
-                view.Navigated += Navigated;
+                e.Cancel = true;
+                finished.TrySetResult(e.Url[NotifyPrefix.Length..]);
+            }
+        }
+        view.Navigating += Navigating;
+        try
+        {
+            using var state = ParseResult(await view.EvaluateJavaScriptAsync("recitation.status()"));
+            var status = state.RootElement.GetProperty("state").GetString();
+            if (status != "ready" && status != "error")
+            {
                 try
                 {
-                    var html = await reader.ReadToEndAsync(cancellationToken);
-                    view.Source = new HtmlWebViewSource { Html = html };
-                    await loaded.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
-                    // Evaluate the trusted local asset directly. Its compressed WASM
-                    // string contains characters that HTML script parsing would alter.
-                    await view.EvaluateJavaScriptAsync(decoderScript);
-                    _initialized = true;
+                    status = await finished.Task.WaitAsync(TimeSpan.FromSeconds(60), cancellationToken);
                 }
-                finally { view.Navigated -= Navigated; }
-            }
-            if (_source != mp3)
-            {
-                var bytes = await File.ReadAllBytesAsync(mp3, cancellationToken);
-                var encoded = Convert.ToBase64String(bytes);
-                await view.EvaluateJavaScriptAsync("recitation.begin()");
-                for (var offset = 0; offset < encoded.Length; offset += 32768)
+                catch (TimeoutException)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    await view.EvaluateJavaScriptAsync($"recitation.append({JsonSerializer.Serialize(encoded.Substring(offset, Math.Min(32768, encoded.Length - offset)), RecitationJsonContext.Default.String)})");
+                    status = null;
                 }
-                await view.EvaluateJavaScriptAsync("recitation.finish()");
-                _source = mp3;
             }
-            var deadline = DateTime.UtcNow.AddSeconds(60);
-            while (true)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                using var state = ParseResult(await view.EvaluateJavaScriptAsync("recitation.status()"));
-                var status = state.RootElement.GetProperty("state").GetString();
-                if (status == "ready")
-                {
-                    break;
-                }
+            if (status != "ready")
+            { _source = null; throw new InvalidDataException("Recording could not be decoded."); }
+        }
+        finally { view.Navigating -= Navigating; }
+    }
 
-                if (status == "error" || DateTime.UtcNow > deadline)
-                { _source = null; throw new InvalidDataException("Recording could not be decoded."); }
-                await Task.Delay(50, cancellationToken);
-            }
+    private async Task<byte[]> ReadWaveAsync(string expression, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var result = ParseResult(await view.EvaluateJavaScriptAsync(expression));
+        var length = result.RootElement.GetProperty("length").GetInt32();
+        var wave = new byte[length];
+        var offset = 0;
+        while (offset < length)
+        {
             cancellationToken.ThrowIfCancellationRequested();
-            var json = JsonSerializer.Serialize(ranges.Select(r => new RecitationClipRange(r.Start, r.End)).ToList(), RecitationJsonContext.Default.ClipRanges);
-            using var result = ParseResult(await view.EvaluateJavaScriptAsync($"recitation.clip({json},{pauseMs.ToString(System.Globalization.CultureInfo.InvariantCulture)})"));
-            var length = result.RootElement.GetProperty("length").GetInt32();
-            using var wave = new MemoryStream(length);
-            for (var offset = 0; offset < length; offset += 49152)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                using var chunk = ParseResult(await view.EvaluateJavaScriptAsync($"recitation.chunk({offset},49152)"));
-                wave.Write(Convert.FromBase64String(chunk.RootElement.GetProperty("data").GetString()!));
-            }
-            if (wave.Length != length)
+            using var chunk = ParseResult(await view.EvaluateJavaScriptAsync($"recitation.chunk({offset},{DownloadChunk})"));
+            var data = chunk.RootElement.GetProperty("data").GetString()!;
+            if (!Convert.TryFromBase64String(data, wave.AsSpan(offset), out var written) || written == 0)
             {
                 throw new InvalidDataException("Truncated decoded recording.");
             }
-
-            return wave.ToArray();
+            offset += written;
         }
-        finally { _gate.Release(); }
+        return wave;
     }
 
     private static JsonDocument ParseResult(string value)

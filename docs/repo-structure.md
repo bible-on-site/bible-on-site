@@ -5,18 +5,27 @@ bible-on-site/
 ├── .github/
 │   └── workflows/ <-- GitHub Actions CI/CD Workflows
 ├── .pre-commit-config.yaml <-- git hook checks (installed via pre-commit)
-├── app/ <-- Mobile Application
+├── app/ <-- Mobile/Desktop Application (.NET MAUI)
+│   ├── BibleOnSite/ <-- App source
+│   ├── BibleOnSite.E2eCoverage/ <-- In-app E2E coverage recorder (AltCover)
+│   ├── BibleOnSite.Tests*/ <-- xUnit suites (unit, desktop E2E/FlaUI, MobileE2E/Appium)
+│   ├── devops/ <-- NUKE build/test targets
+│   └── mobile-e2e/ <-- Appium harness + scripts + e2e-impact.json contract
 ├── data/ <-- Data Generation Scripts and pipelines as code
 ├── devops/ <-- cross-module DevOps related scripts
-│   ├── coverage/ <-- Coverage related scripts
+│   ├── github/ci/ <-- CI tooling: determine-changes, e2e-impact selector, codecov gates
+│   ├── e2e-coverage-trees/ <-- Executable-coverage tree extraction (Appium evidence)
+│   ├── android-emulator/ <-- Android runner scripts
+│   ├── rustfs/ <-- Local S3-compatible store for tests
 │   └── deploy/ <-- Deployment related scripts
 ├── docs/ <-- Documentation
 │   ├── aws/ <-- AWS IaC and Architecture Docs
-│   │   ├── architecture/ <-- Architecture Docs
-│   │   └── cloudformation/ <-- CloudFormation IaC Docs
+│   ├── devops/ <-- DevOps docs (incl. e2e-test-selection.md)
+│   ├── github/ <-- GitHub related Docs (workflows/ci, workflows/cd, version-verification)
+│   ├── practices/ <-- Engineering practices (testing.md, implementation.md)
+│   ├── tests/ <-- Test architecture + per-module coverage docs
 │   ├── daily-bulletin/ <-- Daily Bulletin Service Docs
-│   ├── github/ <-- GitHub related Docs
-│   ├── repo-structure/ <-- This Documentation
+│   ├── incidents/, performance/, plans/, tanahpedia/, api/, app/, data/ <-- module docs
 │   └── website/ <-- Website Architecture Docs
 └── web/ <-- Services
     ├── admin/ <-- Admin Panel (React + Vite)

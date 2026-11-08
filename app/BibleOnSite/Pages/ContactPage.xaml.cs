@@ -1,3 +1,5 @@
+using BibleOnSite.Services;
+
 namespace BibleOnSite.Pages;
 
 public partial class ContactPage : ContentPage
@@ -13,9 +15,12 @@ public partial class ContactPage : ContentPage
         {
             await Launcher.OpenAsync(new Uri("https://wa.me/37257078640"));
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: launcher failure alerts the user
+        catch (Exception ex) //NOSONAR — launcher failure alerts the user.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Error opening WhatsApp: {ex.Message}");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את וואטסאפ. נסו שוב", "אישור");
         }
     }
 
@@ -25,9 +30,12 @@ public partial class ContactPage : ContentPage
         {
             await Launcher.OpenAsync(new Uri("https://t.me/BibleOnSite"));
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: launcher failure alerts the user
+        catch (Exception ex) //NOSONAR — launcher failure alerts the user.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Error opening Telegram: {ex.Message}");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את טלגרם. נסו שוב", "אישור");
         }
     }
 
@@ -38,9 +46,12 @@ public partial class ContactPage : ContentPage
             var emailUri = new Uri("mailto:tanah.site@gmail.com?subject=" + Uri.EscapeDataString("פניה מלומד"));
             await Launcher.OpenAsync(emailUri);
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: launcher failure alerts the user
+        catch (Exception ex) //NOSONAR — launcher failure alerts the user.
         {
+            #pragma warning restore S2221
             Console.Error.WriteLine($"Error opening email: {ex.Message}");
+            await ShellAppNavigator.Instance.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את אפליקציית הדואר. נסו שוב", "אישור");
         }
     }
 }

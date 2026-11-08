@@ -27,8 +27,33 @@ test.describe("Articles Management", () => {
 		await expect(page.getByLabel("עדיפות")).toBeVisible();
 	});
 
-	test.skip("quick navigation to perek works", async ({ page }) => {
-		// TODO: Fix - navigation with window.location.href not working reliably in tests
+	test("article edit page shows every relationship-registry section (#3102)", async ({
+		page,
+	}) => {
+		await page.goto("/articles/1");
+		await expect(page.locator("h1")).toContainText("עריכת מאמר");
+
+		// One section per registry entry: managed single-valued fields,
+		// verified coverage, dedication assignments, read-only mention
+		// annotations and the pending-schema entries.
+		await expect(
+			page.getByRole("heading", { name: /קשרי המאמר/ }),
+		).toBeVisible();
+		await expect(page.getByText("פרק ראשי")).toBeVisible();
+		await expect(page.getByText("כיסוי פסוקים מאומת")).toBeVisible();
+		await expect(
+			page.getByRole("heading", { name: "הקדשות", exact: true }),
+		).toBeVisible();
+		await expect(page.getByText("אנוטציות תנכפדיה")).toBeVisible();
+		await expect(page.getByText("תאריך עברי חוזר")).toBeVisible();
+		// The panel section heading — the bare text also matches the nav
+		// link and the form's checkbox group label.
+		await expect(
+			page.getByRole("heading", { name: "מועדים", exact: true }),
+		).toBeVisible();
+	});
+
+	test("quick navigation to perek works", async ({ page }) => {
 		await page.goto("/articles");
 
 		// Wait for page to load
@@ -41,10 +66,14 @@ test.describe("Articles Management", () => {
 		await perekInput.fill("1");
 
 		// Click the navigation button - this uses window.location so we need to wait for navigation
+		const navigationStarted = performance.now();
 		await Promise.all([
 			page.waitForURL(/\/articles\/perek\/1/, { timeout: 15000 }),
 			page.getByRole("button", { name: /עבור לפרק/ }).click(),
 		]);
+		await expect(page.getByRole("heading", { name: /פרק 1/ })).toBeVisible({
+			timeout: Math.max(1, 15000 - (performance.now() - navigationStarted)),
+		});
 	});
 
 	test("sefarim accordion shows Hebrew perek labels", async ({ page }) => {

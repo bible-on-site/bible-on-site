@@ -1,6 +1,10 @@
 import { expect, test } from "../util/playwright/test-fixture";
 
+// Hebrew roots arrive percent-encoded in the URL; the navigation wait below
+// decodes the pathname before comparing it to each item's semantic href.
 const MENU_ITEMS = [
+	["מסורה על הפרק", "/מסורה"],
+	["לוח לימוד יומי", "/לוח"],
 	["הרבנים", "/929/authors"],
 	["תנכפדיה", "/pedia"],
 	["עלון יומי", "/dailyBulletin"],
@@ -60,7 +64,9 @@ test.describe("NavBar hamburger menu", () => {
 				.locator("#main-menu")
 				.getByRole("link", { name, exact: true })
 				.click();
-			await page.waitForURL(`**${href}`);
+			// Non-ASCII paths (e.g. /לוח) arrive percent-encoded in the URL.
+			const reached = (url: URL) => decodeURIComponent(url.pathname) === href;
+			await page.waitForURL(reached);
 			await expect(trigger).toHaveAttribute("aria-expanded", "false");
 
 			await page.locator("nav.top-nav a[href='/']").click();
@@ -71,11 +77,38 @@ test.describe("NavBar hamburger menu", () => {
 			await expect(homeHeading).toBeInViewport();
 
 			await page.goBack();
-			await page.waitForURL(`**${href}`);
+			await page.waitForURL(reached);
 			await page.goBack();
 			await page.waitForURL((url) => url.pathname === "/");
 			await expect(trigger).toHaveAttribute("aria-expanded", "false");
 			await expect(homeHeading).toBeVisible();
 		});
 	}
+
+	test("after visiting /accessibility from the accessibility menu, Back and the logo return home", async ({
+		page,
+	}) => {
+		// The statement lives in the top-nav accessibility menu — the side
+		// navigation deliberately no longer carries it.
+		await page.goto("/");
+		await page.getByRole("button", { name: "התאמות נגישות" }).click();
+		await page
+			.getByTestId("accessibility-menu")
+			.getByRole("link", { name: "הצהרת נגישות" })
+			.click();
+		await page.waitForURL((url) => url.pathname === "/accessibility");
+
+		await page.locator("nav.top-nav a[href='/']").click();
+		await page.waitForURL((url) => url.pathname === "/");
+		const homeHeading = page
+			.getByRole("heading", { name: 'תנ"ך על הפרק' })
+			.first();
+		await expect(homeHeading).toBeInViewport();
+
+		await page.goBack();
+		await page.waitForURL((url) => url.pathname === "/accessibility");
+		await page.goBack();
+		await page.waitForURL((url) => url.pathname === "/");
+		await expect(homeHeading).toBeVisible();
+	});
 });

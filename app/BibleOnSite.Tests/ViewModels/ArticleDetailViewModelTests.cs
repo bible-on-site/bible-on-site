@@ -1,3 +1,4 @@
+using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.ViewModels;
 using FluentAssertions;
@@ -446,6 +447,132 @@ public class ArticleDetailViewModelTests
         viewModel.ErrorMessage = "שגיאה בטעינת המאמר";
 
         viewModel.ErrorMessage.Should().Be("שגיאה בטעינת המאמר");
+    }
+
+    #endregion
+
+    #region ReadingTimeBadge Tests (issue #2607)
+
+    [Fact]
+    public void ReadingTimeBadge_WithMetric_FormatsTheStoredEstimate()
+    {
+        var viewModel = new ArticleDetailViewModel();
+        var article = new Article
+        {
+            Id = 1,
+            Name = "Test",
+            Abstract = "Test",
+            ArticleContent = "<p>Content</p>",
+            AuthorId = 1,
+            PerekId = 123,
+            ReadingMetric = new ReadingMetric
+            {
+                WordCount = 880,
+                EstimatedSeconds = 240,
+                WordsPerMinute = 220,
+                CalcVersion = 1,
+                SourceHash = "hash",
+            },
+        };
+
+        viewModel.SetArticle(article);
+
+        viewModel.ReadingTimeBadge.Should().Be("זמן קריאה משוער: 4 דקות");
+    }
+
+    [Fact]
+    public void ReadingTimeBadge_WithoutMetric_Hides()
+    {
+        var viewModel = new ArticleDetailViewModel();
+        var article = new Article
+        {
+            Id = 1,
+            Name = "Test",
+            Abstract = "Test",
+            ArticleContent = "<p>Content</p>",
+            AuthorId = 1,
+            PerekId = 123,
+        };
+
+        viewModel.SetArticle(article);
+
+        viewModel.ReadingTimeBadge.Should().BeNull();
+    }
+
+    [Fact]
+    public void ReadingTimeBadge_WithNoArticle_Hides()
+    {
+        var viewModel = new ArticleDetailViewModel();
+
+        viewModel.ReadingTimeBadge.Should().BeNull();
+    }
+
+    #endregion
+
+    #region Reading Progress Tests (issue #2607)
+
+    private static List<CountedProgressRegion> TwoRegions() =>
+        [new(0, 1, 0, 30), new(1, 1, 30, 70)];
+
+    private static List<(double Top, double Bottom)> TwoExtents() => [(0, 400), (400, 1000)];
+
+    [Fact]
+    public void HasReadingProgress_WithoutRegions_StaysFalse()
+    {
+        var viewModel = new ArticleDetailViewModel();
+
+        viewModel.HasReadingProgress.Should().BeFalse();
+        viewModel.ReadingProgress.Should().Be(0);
+    }
+
+    [Fact]
+    public void SetReadingContent_EnablesProgress_AndResetsToTop()
+    {
+        var viewModel = new ArticleDetailViewModel();
+        viewModel.SetReadingContent(TwoRegions(), totalWords: 100);
+
+        viewModel.HasReadingProgress.Should().BeTrue();
+        viewModel.ReadingProgress.Should().Be(0);
+    }
+
+    [Fact]
+    public void UpdateReadingProgress_TracksTheScrollAnchor()
+    {
+        var viewModel = new ArticleDetailViewModel();
+        viewModel.SetReadingContent(TwoRegions(), totalWords: 100);
+
+        // scrollY 900/1800 → anchor at the middle of the counted extent.
+        viewModel.UpdateReadingProgress(scrollY: 900, viewportHeight: 200,
+            scrollContentHeight: 2000, childExtents: TwoExtents());
+
+        viewModel.ReadingProgress.Should().BeApproximately(30.0 / 100 + 100.0 / 600 * 70 / 100, 1e-9);
+    }
+
+    [Fact]
+    public void UpdateReadingProgress_WithoutRegions_StaysZero()
+    {
+        var viewModel = new ArticleDetailViewModel();
+
+        viewModel.UpdateReadingProgress(scrollY: 900, viewportHeight: 200,
+            scrollContentHeight: 2000, childExtents: TwoExtents());
+
+        viewModel.ReadingProgress.Should().Be(0);
+    }
+
+    [Fact]
+    public void SetReadingContent_Again_ResetsProgress()
+    {
+        var viewModel = new ArticleDetailViewModel();
+        viewModel.SetReadingContent(TwoRegions(), totalWords: 100);
+        viewModel.UpdateReadingProgress(scrollY: 1800, viewportHeight: 200,
+            scrollContentHeight: 2000, childExtents: TwoExtents());
+        viewModel.ReadingProgress.Should().Be(1);
+
+        // A rebuilt body (new article or media relayout) reads from the top.
+        viewModel.SetReadingContent([], totalWords: null);
+
+        viewModel.ReadingProgress.Should().Be(0);
+        viewModel.HasReadingProgress.Should().BeFalse();
     }
 
     #endregion

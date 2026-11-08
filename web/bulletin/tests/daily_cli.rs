@@ -47,7 +47,7 @@ fn local_preview_returns_complete_artifacts_and_rejects_invalid_dates() {
             .unwrap()
             .starts_with(b"%PDF-")
     );
-    assert!(artifacts.filename.starts_with("2026-10-08-"));
+    assert_eq!(artifacts.filename, "1_בראשית א - 1 - בריאת העולם.pdf");
 
     input["date"] = "2026-02-30".into();
     let invalid = preview(&input);

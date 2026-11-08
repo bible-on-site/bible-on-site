@@ -42,6 +42,25 @@ export function bookPageFromPath(
 	);
 }
 
+/**
+ * Flat route to land on when the user leaves the sefer book. While the
+ * book is open the flipbook owns browser history — window.location
+ * names the perek the user actually reached, which the router's stale
+ * pathname cannot see. Book-chrome exits and paths without a perek id
+ * fall back to the perek the book was opened from.
+ */
+export function seferBookExitPath(
+	pathname: string,
+	seferName: string,
+	fallbackPerekId: number,
+): string {
+	if (bookPageFromPath(pathname, seferName)) {
+		return `/929/${fallbackPerekId}`;
+	}
+	const match = pathname.match(/\/929\/(\d+)/);
+	return match ? `/929/${match[1]}` : `/929/${fallbackPerekId}`;
+}
+
 export function toHebrewChapterNumber(num: number): string {
 	return toLetters(num);
 }
@@ -146,10 +165,70 @@ export function computeInitialTurnedLeaves(
 	return Array.from({ length: turnedCount }, (_, i) => i);
 }
 
-export function wrapDownloadResult(
-	r: { ext: string; data: string } | { error: string },
-): { ext: string; data: string } | null {
-	return "error" in r ? null : { ext: r.ext, data: r.data };
+type DownloadActionOutcome =
+	| { ext: string; data: string }
+	| { error: string; message?: string };
+
+export const DOWNLOAD_FAILED_MESSAGE =
+	"יצירת קובץ ה-PDF נכשלה. נסו להוריד שוב בעוד רגע.";
+
+/**
+ * Failure handed to the flip-book download lifecycle: the library catches the
+ * rejection and keeps the menu open with an accessible error and a working
+ * retry path. Only this error's message is reader-facing safe text; internal
+ * errors must not leak their message into the UI.
+ */
+export class DownloadFailedError extends Error {
+	override name = "DownloadFailedError";
+}
+
+/**
+ * DownloadConfig.onDownloadError for the sefer reader — keeps the app's
+ * Hebrew/domain error mapping inside the library's error surface. A
+ * DownloadFailedError already carries the safe action text; anything else
+ * (library internals, malformed payloads, unexpected rejections) falls back
+ * to the generic failure message rather than leaking an unsafe message.
+ */
+export function downloadErrorMessage(error: unknown): string {
+	return error instanceof DownloadFailedError && error.message
+		? error.message
+		: DOWNLOAD_FAILED_MESSAGE;
+}
+
+/**
+ * Runs a download server action for the flip-book menu.
+ * - resolves to the file payload so the library saves it and closes the menu;
+ * - resolves to null when the export is intentionally unavailable
+ *   (`not_implemented`), which the library treats as cancellation;
+ * - rejects with a DownloadFailedError carrying the action's safe message on
+ *   an actual failure, so the menu surfaces an accessible, retryable error
+ *   instead of silently closing.
+ */
+export async function runDownload(
+	action: () => Promise<DownloadActionOutcome>,
+): Promise<{ ext: string; data: string } | null> {
+	let outcome: DownloadActionOutcome | null;
+	try {
+		outcome = await action();
+	} catch (e) {
+		console.error("Download action failed:", e);
+		throw new DownloadFailedError(DOWNLOAD_FAILED_MESSAGE);
+	}
+	// A resolved outcome outside the two documented shapes is a failure too —
+	// `"error" in null` would otherwise leak a raw TypeError to the menu.
+	if (outcome === null || typeof outcome !== "object") {
+		console.error("Download action returned malformed outcome:", outcome);
+		throw new DownloadFailedError(DOWNLOAD_FAILED_MESSAGE);
+	}
+	if ("error" in outcome) {
+		if (outcome.error === "not_implemented") return null;
+		throw new DownloadFailedError(outcome.message ?? DOWNLOAD_FAILED_MESSAGE);
+	}
+	if (!("ext" in outcome) || !("data" in outcome)) {
+		console.error("Download action returned malformed outcome:", outcome);
+		throw new DownloadFailedError(DOWNLOAD_FAILED_MESSAGE);
+	}
+	return { ext: outcome.ext, data: outcome.data };
 }
 
 export { CONTENT_OFFSET };

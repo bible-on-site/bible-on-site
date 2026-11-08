@@ -2,6 +2,11 @@
 	display: flex;
 	flex-direction: column;
 	height: 100%;
+	/* Paired-header contract (#2994): the facing leaves' header texts —
+	   the scripture page's sefer/perek source (.pageHeaderRight) and the
+	   panel page's date (.panelDate) — start this far below each leaf's
+	   top edge, so both baselines sit on one line across the spine. */
+	--sefer-leaf-header-offset: 17px;
 }
 
 .bookArea {
@@ -11,13 +16,18 @@
 }
 
 /* Keep React's unfinished page slots unpainted until FlipBook has applied
-   dimensions. Visibility preserves the geometry needed for initialization. */
+   dimensions. display:none (not visibility:hidden) removes the page boxes
+   entirely: hidden elements keep layout geometry and Chrome still counts
+   their unsized→sized transition as a layout shift. The library adds
+   .flipbook in the same synchronous pass that runs recalculateSizes(), so
+   the first painted frame already has final geometry — and nothing that
+   a layout-shift observer can attribute. */
 .bookArea > :global(.he-book:not(.flipbook)) {
-	visibility: hidden;
+	display: none;
 }
 
 .page {
-	background-color: white;
+	background-color: var(--surface-elevated, white);
 	padding: 15px;
 	position: relative;
 	box-sizing: border-box;
@@ -25,8 +35,10 @@
 
 /* Right page (content): flex column so header stays on top, scroller outside text */
 .pageContentPage {
-	background-color: white;
-	padding: 15px;
+	background-color: var(--surface-elevated, white);
+	/* The top inset lives on the header itself so it can share the
+	   paired-header contract with the facing panel date (#2994). */
+	padding: 0 15px 15px;
 	position: relative;
 	box-sizing: border-box;
 	display: flex;
@@ -38,21 +50,57 @@
 /* Header in flow (no overlap); sefer + perek on opposite edges */
 .pageHeaderRight {
 	flex-shrink: 0;
-	padding-top: 2px;
+	/* Shared leaf-top header offset (#2994): the facing .panelDate uses
+	   the same token, pinning both header texts to one baseline. */
+	padding-top: var(--sefer-leaf-header-offset, 17px);
 	padding-bottom: 4px;
 	direction: rtl;
 	max-width: 100%;
 }
 
-/* Scroll wrapper outside the text only; scrollbar on outer edge (RTL = left) */
+/* The scroll panes reach the leaf's inner (spine-facing) edge so their
+   scrollbars sit beside the spine (#2994): zero the page padding on
+   that side and hand the inset to the non-scrolling children. */
+:global(.page[data-scrollbar-side="left"]) .pageContentPage {
+	padding-left: 0;
+}
+:global(.page[data-scrollbar-side="right"]) .pageContentPage {
+	padding-right: 0;
+}
+:global(.page[data-scrollbar-side="left"]) .pageHeaderRight,
+:global(.page[data-scrollbar-side="left"]) .pageHeaderLeft {
+	padding-left: 15px;
+}
+:global(.page[data-scrollbar-side="right"]) .pageHeaderRight,
+:global(.page[data-scrollbar-side="right"]) .pageHeaderLeft {
+	padding-right: 15px;
+}
+
+/* Scroll wrapper outside the text only. The native scrollbar faces the
+   spine: --flipbook-page-scroll-direction is the library's per-leaf
+   scrollbar direction (data-scrollbar-side), so a right-hand leaf's
+   bar sits on its left edge and a left-hand leaf's on its right
+   (#2994). Reading direction is restored on the content children. */
 .perekTextScrollWrapper {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	direction: rtl;
+	overscroll-behavior: contain;
+	direction: var(--flipbook-page-scroll-direction, rtl);
 	scrollbar-width: thin;
 	scrollbar-color: var(--scrollbarBG) var(--scrollbarBG);
 	--scrollbarBG: #cfd8dc;
+}
+
+.perekTextScrollWrapper > * {
+	direction: rtl;
+}
+
+/* Lay out covered chapters at their scrollable width in one pass. The reader
+   restores auto overflow before revealing a page, so short chapters keep their
+   original full width and long chapters keep the same visible scrollbar. */
+:global(.flipbook-layout-dormant) .perekTextScrollWrapper {
+	overflow-y: scroll;
 }
 
 .perekTextScrollWrapper::-webkit-scrollbar {
@@ -65,7 +113,7 @@
 
 .perekTextScrollWrapper::-webkit-scrollbar-thumb {
 	background-color: #90a4ae;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	border: 3px solid var(--scrollbarBG);
 }
 
@@ -75,7 +123,7 @@
 	align-items: baseline;
 	gap: 8px;
 	font-size: 0.95rem;
-	color: #1c2c5d;
+	color: var(--pasuk-num-color, #1c2c5d);
 	font-weight: 600;
 }
 
@@ -87,10 +135,18 @@
 	flex-shrink: 0;
 }
 
+/* Perek reading-time estimate inside the book page header (#2607). */
+.pageHeaderMetric {
+	flex-shrink: 0;
+	font-size: 0.7rem;
+	font-weight: 400;
+	color: #8b7355;
+}
+
 .perekHeader {
 	font-size: 0.9rem;
 	font-weight: 600;
-	color: #637598;
+	color: var(--muted-text, #637598);
 	margin-top: 2px;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -106,12 +162,12 @@
 	display: block;
 	width: 100%;
 	height: auto;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 }
 
 .perekIllustrationFigure figcaption {
 	margin-top: 4px;
-	color: #637598;
+	color: var(--muted-text, #637598);
 	font-size: 0.75rem;
 	line-height: 1.35;
 	text-align: right;
@@ -119,8 +175,10 @@
 
 /* Left page (blank): flex column, Hebrew date at top, then articles carousel */
 .pageBlank {
-	background-color: white;
-	padding: 15px;
+	background-color: var(--surface-elevated, white);
+	/* Same paired-header contract as .pageContentPage (#2994): the top
+	   inset lives on the date itself. */
+	padding: 0 15px 15px;
 	position: relative;
 	box-sizing: border-box;
 	display: flex;
@@ -129,20 +187,48 @@
 	min-height: 0;
 }
 
+/* Paired-header contract (#2994): same offset below the leaf's top edge
+   and same size/weight/color as the facing .pageHeaderRow, so the date
+   and the perek source share one baseline. */
 .blankPageDate {
-	font-size: 1rem;
-	color: #637598;
+	font-size: 0.95rem;
+	font-weight: 600;
+	line-height: normal;
+	color: var(--pasuk-num-color, #1c2c5d);
 	text-align: center;
-	padding-top: 6px;
+	padding-top: var(--sefer-leaf-header-offset, 17px);
 	direction: rtl;
 	flex-shrink: 0;
+}
+
+/* The bounded article/perush pane reaches the leaf's inner edge for a
+   spine-side scrollbar (#2994); the date keeps the inset itself. */
+:global(.page[data-scrollbar-side="left"]) .pageBlank {
+	padding-left: 0;
+}
+:global(.page[data-scrollbar-side="right"]) .pageBlank {
+	padding-right: 0;
+}
+:global(.page[data-scrollbar-side="left"]) .blankPageDate {
+	padding-left: 15px;
+}
+:global(.page[data-scrollbar-side="right"]) .blankPageDate {
+	padding-right: 15px;
 }
 
 .blankPageArticles {
 	flex: 1;
 	min-height: 120px;
 	overflow: auto;
+	overscroll-behavior: contain;
 	margin-top: 8px;
+	/* Spine-side scrollbar (#2994) — same library per-leaf contract the
+	   scripture wrapper uses; children keep RTL reading order. */
+	direction: var(--flipbook-page-scroll-direction, rtl);
+}
+
+.blankPageArticles > * {
+	direction: rtl;
 }
 
 /* When showing full article/perush, container clips; child handles scroll */
@@ -161,7 +247,10 @@
 	height: 100%;
 }
 
-/* Article full view in book: fill container, title fixed, body scrolls */
+/* Article full view in book: fill container, title fixed, body scrolls.
+   This is the ONLY in-book root class — the standalone .expandedArticle
+   card (margin/border/shadow) must not leak in regardless of stylesheet
+   order (#2994). */
 .articleFullViewInBook {
 	flex: 1;
 	min-height: 0;
@@ -175,15 +264,55 @@
 	background: transparent;
 	height: 100%;
 	overflow: hidden;
+	/* The article command row sizes against this box, not the viewport
+	   (#2786) — the standalone card carries the same container. */
+	container-type: inline-size;
 }
 
 .articleFullViewInBook .articleBodyWrapper {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	overscroll-behavior: contain;
+	/* Spine-side scrollbar (#2994): inner edge on whichever leaf hosts
+	   the article; the prose below keeps its own direction:rtl. */
+	direction: var(--flipbook-page-scroll-direction, rtl);
 	scrollbar-width: thin;
 	scrollbar-color: #c4b896 transparent;
 }
+
+.articleFullViewInBook .articleBodyWrapper > * {
+	direction: rtl;
+}
+
+/* Compact article metadata in book mode (#2406) so the body gets more of the
+   page height. Doubled class selectors outrank the standalone article-page
+   rules in [slug]/page.module.css regardless of bundle order. */
+.articleHeaderInBook.articleHeaderInBook {
+	margin-bottom: 8px;
+	padding-bottom: 8px;
+}
+
+.authorLinkInBook.authorLinkInBook {
+	flex-direction: row;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+
+.authorImageInBook.authorImageInBook {
+	width: 40px;
+	height: 40px;
+	border-width: 1px;
+}
+
+/* A long title still wraps, but at a smaller size it stops eating the page. */
+.articleTitleInBook.articleTitleInBook {
+	font-size: 1.15rem;
+	line-height: 1.3;
+}
+
+/* The bottom-only back row was removed in #2786 — return now lives in the
+   unified article command row at the top of the article. */
 
 /* Perush full view in book: fill container, header fixed, notes scroll.
    Doubled selector for specificity over .perushimSection from perushim-section.module.css */
@@ -208,9 +337,20 @@
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 	max-height: none;
+	/* Spine-side scrollbar (#2994) on the hosting leaf's inner edge. */
+	direction: var(--flipbook-page-scroll-direction, rtl);
 	scrollbar-width: thin;
 	scrollbar-color: #c4b896 transparent;
+	/* Justified like .perekText even if the notes' own module style has not
+	   applied yet (inherited by .noteContent descendants). */
+	text-align: justify;
+	text-align-last: right;
+}
+
+.perushNotesInBook.perushNotesInBook > * {
+	direction: rtl;
 }
 
 /* Cover: genuine book cover look using the sefer spectrum color */
@@ -227,6 +367,8 @@
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
+	/* Size cover text to the cover, not the viewport, so small covers don't clip */
+	container-type: inline-size;
 	/* Inset border to simulate a real hardcover frame */
 	border: 3px solid rgb(255 255 255 / 0.15);
 	border-radius: 2px;
@@ -251,21 +393,21 @@
 	align-items: center;
 	justify-content: center;
 	text-align: center;
-	padding: 2rem;
+	padding: clamp(0.75rem, 7cqi, 2rem);
 	box-sizing: border-box;
 	gap: 0.3em;
 }
 
 .coverOrnament {
 	color: rgb(255 255 255 / 0.5);
-	font-size: clamp(1rem, 2.5vw, 1.5rem);
+	font-size: clamp(0.75rem, 5cqi, 1.5rem);
 	letter-spacing: 0.3em;
 	margin-bottom: 0.5em;
 }
 
 .coverTitle {
 	color: #fff;
-	font-size: clamp(1.5rem, 4vw, 2.5rem);
+	font-size: clamp(1rem, 8cqi, 2.5rem);
 	font-weight: 700;
 	margin: 0;
 	letter-spacing: 0.05em;
@@ -286,7 +428,7 @@
 
 .coverSubtitle {
 	color: rgb(255 255 255 / 0.85);
-	font-size: clamp(0.85rem, 2vw, 1.1rem);
+	font-size: clamp(0.65rem, 4cqi, 1.1rem);
 	font-weight: 400;
 	margin: 0;
 	letter-spacing: 0.08em;
@@ -294,10 +436,30 @@
 
 .coverEdition {
 	color: rgb(255 255 255 / 0.55);
-	font-size: clamp(0.7rem, 1.5vw, 0.85rem);
+	font-size: clamp(0.55rem, 3cqi, 0.85rem);
 	font-weight: 300;
 	margin: 0.3em 0 0;
 	letter-spacing: 0.04em;
+}
+
+/* Sefer dedication on the front cover (#2731) — a quiet memorial block
+   below the edition line, sized to the cover like the rest. */
+.coverDedication {
+	color: rgb(255 255 255 / 0.8);
+	font-size: clamp(0.55rem, 3.2cqi, 0.95rem);
+	font-weight: 400;
+	margin: 0.9em 0 0;
+	letter-spacing: 0.03em;
+	line-height: 1.4;
+	max-width: 85%;
+}
+
+/* The chapter dedication under the in-book perek header (#2731). */
+.perekDedication {
+	font-size: 0.78rem;
+	color: #6b5232;
+	margin-top: 1px;
+	line-height: 1.4;
 }
 
 .perekText {
@@ -308,8 +470,8 @@
 		var(--font-tanakh-taamey), var(--font-tanakh), "Times New Roman", serif;
 	font-size: calc(1em * var(--perek-font-scale, 1));
 	letter-spacing: 0.04em;
-	word-spacing: var(--perek-word-spacing, 0.12em);
-	line-height: var(--perek-line-height, 1.5);
+	word-spacing: var(--perek-word-spacing, 0.28em);
+	line-height: var(--perek-line-height, 2);
 	padding: 8px 10px 10px;
 	text-align: justify;
 	-moz-text-align-last: right;
@@ -325,20 +487,96 @@
 	font-family: var(--font-tanakh), "Times New Roman", serif;
 }
 .pasukNum {
-	color: #1c2c5d;
+	color: var(--pasuk-num-color, #1c2c5d);
 	cursor: pointer;
 	font-weight: 700;
 	text-decoration: underline;
 }
+/* Pasuk-selection mode (#2544 item 3): picked letters invert, matching the
+   verse-highlight accent so the two states stay visually distinct. */
+.pasukNum[data-pasuk-selected] {
+	background: var(--pasuk-num-color, #1c2c5d);
+	border-radius: var(--radius-sm);
+	box-shadow: 0 0 0 2px
+		color-mix(in srgb, var(--pasuk-num-color, #1c2c5d) 30%, transparent);
+	color: var(--surface-elevated, #fff);
+	padding: 0 2px;
+}
+.pasukSelectionBar {
+	align-items: center;
+	background: color-mix(
+		in srgb,
+		var(--surface-elevated, #fff) 94%,
+		transparent
+	);
+	border: 1px solid var(--hc-muted, #d4d7e3);
+	border-radius: var(--radius-md);
+	bottom: 10px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+	display: flex;
+	font-size: 0.85em;
+	gap: 8px;
+	inset-inline: 12%;
+	justify-content: center;
+	padding: 4px 10px;
+	position: absolute;
+	z-index: 5;
+}
+.pasukSelectionStatus {
+	font-weight: 600;
+}
+.pasukSelectionButton {
+	background: none;
+	border: 1px solid var(--pasuk-num-color, #1c2c5d);
+	border-radius: var(--radius-sm);
+	color: var(--pasuk-num-color, #1c2c5d);
+	cursor: pointer;
+	font: inherit;
+	padding: 2px 8px;
+	position: relative;
+}
+/* Compact chip, 44px-tall hit area. */
+.pasukSelectionButton::before {
+	content: "";
+	position: absolute;
+	inset-inline: 0;
+	top: 50%;
+	height: 44px;
+	transform: translateY(-50%);
+}
+@media (hover: hover) {
+	.pasukSelectionButton:hover {
+		background: color-mix(
+			in srgb,
+			var(--pasuk-num-color, #1c2c5d) 8%,
+			transparent
+		);
+	}
+}
+/* Destination verse after perush→perek pasuk navigation (same look as the
+   reader's hash-selected verse). Division book pages anchor pesukim by id
+   (`pasuk-{perekId}-{pasuk}`) instead of data-sefer-pasuk. */
+.perekText [data-sefer-pasuk],
+.perekText [id^="pasuk-"] {
+	scroll-margin-block-start: 8px;
+}
+.perekText [data-sefer-pasuk][data-pasuk-highlight],
+.perekText [id^="pasuk-"][data-pasuk-highlight] {
+	background: rgba(254, 243, 199, 0.95);
+	box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
+	border-radius: var(--radius-sm);
+}
 .perekTextHeader h1 {
-	color: #9a92d1;
+	/* The original #9a92d1 measured 2.84:1 — the deeper indigo passes the
+	   large-text 3:1 threshold; --hc-accent takes it further (#2767). */
+	color: var(--hc-accent, #6f63b8);
 	font-size: 1.2em;
 	font-weight: 700;
 	margin: 0.1em 0 1em;
 	text-align: justify;
 }
-.qri label::before {
-	color: #637598;
+.qri span:where([data-qri-label])::before {
+	color: var(--muted-text, #637598);
 	content: "קְרִי:";
 	cursor: text;
 	display: inherit;
@@ -351,42 +589,118 @@
 .tanahpediaLink {
 	color: inherit;
 	text-decoration: none;
-	border-bottom: 1px dashed #1a73e8;
+	border-bottom: 1px dashed var(--link-accent, #1a73e8);
 	transition: border-color 0.2s ease;
 }
-.tanahpediaLink:hover {
-	border-bottom-style: solid;
-	border-bottom-color: #1552ac;
+@media (hover: hover) {
+	.tanahpediaLink:hover {
+		border-bottom-style: solid;
+		border-bottom-color: var(--link-accent-hover);
+	}
 }
 
 @media (prefers-color-scheme: dark) {
 	.page,
 	.pageContentPage,
 	.pageBlank {
-		background-color: #1a1f2e;
+		background-color: var(--surface-elevated, #1a1f2e);
 	}
 
 	.perekTextScrollWrapper {
-		--scrollbarBG: #2d3548;
+		--scrollbarBG: var(--border-subtle, #2d3548);
 	}
 
 	.pageHeaderRow,
 	.pasukNum {
-		color: #a8b9ff;
+		color: var(--pasuk-num-color, #a8b9ff);
+	}
+
+	.pasukNum[data-pasuk-selected] {
+		background: var(--pasuk-num-color, #a8b9ff);
+		box-shadow: 0 0 0 2px
+			color-mix(in srgb, var(--pasuk-num-color, #a8b9ff) 35%, transparent);
+		color: var(--surface-elevated, #1a1f2e);
+	}
+
+	.pasukSelectionBar {
+		background: color-mix(
+			in srgb,
+			var(--surface-elevated, #1a1f2e) 94%,
+			transparent
+		);
+		border-color: var(--hc-muted, #4a5578);
+		color: var(--foreground, #e8eaf2);
+	}
+
+	.pasukSelectionButton {
+		border-color: var(--pasuk-num-color, #a8b9ff);
+		color: var(--pasuk-num-color, #a8b9ff);
+	}
+
+	@media (hover: hover) {
+		.pasukSelectionButton:hover {
+			background: color-mix(
+				in srgb,
+				var(--pasuk-num-color, #a8b9ff) 12%,
+				transparent
+			);
+		}
+	}
+
+	.perekText [data-sefer-pasuk][data-pasuk-highlight],
+	.perekText [id^="pasuk-"][data-pasuk-highlight] {
+		background: rgba(58, 47, 16, 0.95);
+		box-shadow: 0 0 0 2px rgba(146, 96, 11, 0.55);
 	}
 
 	.perekHeader,
 	.perekIllustrationFigure figcaption,
-	.blankPageDate,
-	.qri label::before {
-		color: #9aa0a6;
+	.qri span:where([data-qri-label])::before {
+		color: var(--muted-text, #9aa0a6);
 	}
+	/* .blankPageDate needs no dark override (#2994): it now reads
+	   --pasuk-num-color, the same token .pageHeaderRow uses. */
 
 	.perekTextHeader h1 {
-		color: #b7adf0;
+		color: var(--hc-accent, #b7adf0);
 	}
 
-	.tanahpediaLink:hover {
-		border-bottom-color: #7eb0ff;
+	@media (hover: hover) {
+		.tanahpediaLink:hover {
+			border-bottom-color: var(--link-accent-hover);
+		}
+	}
+}
+
+.downloadHint {
+	margin: 4px 16px 0;
+	color: rgb(255 255 255 / 75%);
+	font-size: 13px;
+}
+
+.downloadHintLink {
+	padding: 0;
+	border: none;
+	background: none;
+	color: #6ea8fe;
+	font: inherit;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.perekText [data-sefer-pasuk][data-pasuk-highlight="fading"],
+.perekText [id^="pasuk-"][data-pasuk-highlight="fading"] {
+	background: transparent;
+	box-shadow: 0 0 0 2px transparent;
+	transition:
+		background-color 0.6s ease-out,
+		box-shadow 0.6s ease-out,
+		border-color 0.6s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.perekText [data-sefer-pasuk][data-pasuk-highlight="fading"],
+	.perekText [id^="pasuk-"][data-pasuk-highlight="fading"] {
+		transition: none;
 	}
 }

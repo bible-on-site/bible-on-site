@@ -25,13 +25,13 @@ test.describe("PerakimService", () => {
 						seferId: 1,
 						additional: null,
 						perek: 1,
-						// date and hebdate come from current valid cycle (cycle 4 as of 2026)
-						date: "2024-12-07",
+						// Cycle 4 starts on 7 Elul 5785, exactly 31 August 2025.
+						date: "2025-08-31",
 						hebdate: "57851207",
 						// 57851207 = Year 5785, Month 12 (Elul), Day 07
 						compiledHebdate: "ז' אלול תשפ\"ה",
 						header: "בריאת העולם",
-						compiledSource: "בראשית א'",
+						compiledSource: "בראשית א",
 					},
 				},
 			});
@@ -48,7 +48,7 @@ test.describe("PerakimService", () => {
 					operationName: null,
 					variables: {},
 					query:
-						"{\n  perekByPerekId(perekId: 233) {\n    id\n    perekId\n    seferId\n    additional\n    perek\n    header\n  }\n}\n",
+						"{\n  perekByPerekId(perekId: 233) {\n    id\n    perekId\n    seferId\n    additional\n    perek\n    header\n    compiledSource\n  }\n}\n",
 				},
 			});
 			const responseBody = await response.json();
@@ -59,6 +59,7 @@ test.describe("PerakimService", () => {
 						seferId: 8,
 						additional: 1,
 						perek: 233, // Global perek number, not chapter within sefer
+						compiledSource: "שמואל א א",
 					},
 				},
 			});

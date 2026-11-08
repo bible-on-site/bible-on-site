@@ -1,4 +1,6 @@
 import * as fs from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	defineConfig,
 	devices,
@@ -6,9 +8,22 @@ import {
 } from "@playwright/test";
 import type { CoverageReportOptions } from "monocart-reporter";
 import { shouldMeasureCov } from "../shared/tests-util/environment.mjs";
+import { normalizeE2eLcov } from "./tests/util/lcov-normalize.mts";
 
 // Use launcher script that handles DB and S3 population then starts the server
-const webServerCommand = "node --import tsx ./tests/util/launch-e2e-server.mts";
+const webServerCommand = "node ./tests/util/launch-e2e-server.mts";
+
+// Deterministic e2e-impact evidence (#2085): under coverage runs the shared
+// reporter writes discovered/test-results JSON here and the test fixture
+// drops per-test istanbul dumps alongside it. Nothing is written otherwise.
+const E2E_IMPACT_DIR = join(
+	dirname(fileURLToPath(import.meta.url)),
+	".coverage",
+	"e2e-impact",
+);
+if (shouldMeasureCov) {
+	process.env.E2E_IMPACT_DIR = E2E_IMPACT_DIR;
+}
 
 export default defineConfig({
 	testDir: "./tests/e2e",
@@ -19,6 +34,9 @@ export default defineConfig({
 	reporter: [
 		["html", { outputFolder: ".playwright-report" }],
 		...(shouldMeasureCov ? [getMonocartReporter()] : []),
+		...(shouldMeasureCov
+			? [["../shared/tests-util/e2e-impact"] as ReporterDescription]
+			: []),
 	],
 	outputDir: ".playwright-results",
 	use: {
@@ -60,24 +78,11 @@ function getCoverageReportOptions(): CoverageReportOptions {
 			);
 		},
 		onEnd: async () => {
-			// Normalize SF paths to forward slashes and prefix with web/admin/ so
-			// Codecov flag matching maps them to the admin module.
+			// Rewrite SF paths into the repo-relative layout and fold TanStack
+			// split chunks onto their source file — see lcov-normalize.mts.
 			const lcovPath = ".coverage/e2e/lcov.info";
 			const content = fs.readFileSync(lcovPath, "utf8");
-			const fixed = content.replace(/^SF:.+$/gm, (line) => {
-				let p = line.slice(3).replace(/\\/g, "/");
-				// Vite virtual-module queries (e.g. ?tsr-split=component) must not
-				// split a source file into distinct coverage paths.
-				p = p.split("?")[0];
-				const srcIdx = p.indexOf("web/admin/src/");
-				if (srcIdx !== -1) {
-					p = p.slice(srcIdx);
-				} else if (p.startsWith("src/")) {
-					p = `web/admin/${p}`;
-				}
-				return `SF:${p}`;
-			});
-			fs.writeFileSync(lcovPath, fixed);
+			fs.writeFileSync(lcovPath, normalizeE2eLcov(content));
 		},
 	};
 }

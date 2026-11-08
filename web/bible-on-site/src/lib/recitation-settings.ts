@@ -46,13 +46,20 @@ export function saveRecitationSettings(settings: RecitationSettings): void {
 	);
 }
 export type SettingsSection = "display" | "recitation";
+export type OpenReaderSettingsDetail = {
+	section: SettingsSection;
+	opener: HTMLElement;
+	/** Show only `section`, without the category tabs. */
+	scoped: boolean;
+};
 export function openReaderSettings(
 	section: SettingsSection,
 	opener: HTMLElement,
+	scoped = false,
 ) {
 	window.dispatchEvent(
-		new CustomEvent(OPEN_READER_SETTINGS_EVENT, {
-			detail: { section, opener },
+		new CustomEvent<OpenReaderSettingsDetail>(OPEN_READER_SETTINGS_EVENT, {
+			detail: { section, opener, scoped },
 		}),
 	);
 }

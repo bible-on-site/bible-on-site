@@ -1,5 +1,14 @@
 /** @jest-environment node */
 jest.mock("@/data/perek-dto", () => ({ getPerekByPerekId: jest.fn() }));
+// These fixtures contain recitation metadata, not the full search corpus.
+// Search readiness and its failures have their own health-route tests.
+jest.mock("@/lib/search/corpus", () => ({
+	getPerekIndex: jest.fn(),
+	getPasukIndex: jest.fn(),
+}));
+jest.mock("@/lib/api-client", () => ({
+	query: jest.fn().mockResolvedValue([{ authorCount: 64, articleCount: 2681 }]),
+}));
 
 import { createHash } from "node:crypto";
 import packageJson from "../../../../package.json";
@@ -35,9 +44,14 @@ const chapter = (id: number, status = "ready") => ({
 const environment = process.env;
 beforeEach(() => {
 	jest.resetModules();
+	Reflect.deleteProperty(
+		globalThis,
+		Symbol.for("bible-on-site.recitation-response"),
+	);
 	GET = jest.requireActual("@/app/api/recitation/route").GET;
 	getPerekByPerekId = jest.requireMock("@/data/perek-dto").getPerekByPerekId;
 	process.env = { ...environment };
+	delete process.env.ASSETS_BASE_URL;
 	delete process.env.S3_ENDPOINT;
 	delete process.env.S3_BUCKET;
 	delete process.env.S3_REGION;
@@ -46,8 +60,51 @@ beforeEach(() => {
 	);
 });
 afterEach(() => {
+	Reflect.deleteProperty(
+		globalThis,
+		Symbol.for("bible-on-site.recitation-response"),
+	);
 	process.env = environment;
 	jest.restoreAllMocks();
+});
+
+test("readiness prepares the complete body reused by a separately loaded public route", async () => {
+	const ready = jest.requireActual("@/app/api/health/ready/route").GET;
+	expect((await ready()).status).toBe(200);
+	expect(getPerekByPerekId).toHaveBeenCalledTimes(931);
+	const prepared = jest
+		.requireActual("@/lib/recitation-response")
+		.recitationResponse();
+	jest.resetModules();
+	const publicGet = jest.requireActual("@/app/api/recitation/route").GET;
+	const coldLookup = jest.requireMock("@/data/perek-dto").getPerekByPerekId;
+	coldLookup.mockImplementation(() => {
+		throw new Error("Public traffic must reuse readiness's validated body");
+	});
+	const response = await publicGet(
+		new Request("http://localhost/api/recitation"),
+	);
+	expect(response.status).toBe(200);
+	expect(await response.text()).toBe(prepared.body);
+	expect(response.headers.get("ETag")).toBe(prepared.etag);
+	expect(coldLookup).not.toHaveBeenCalled();
+});
+
+test("initial readiness rejects invalid recitations and retries the complete package", async () => {
+	jest.spyOn(console, "error").mockImplementation(() => {});
+	const invalid = chapter(1);
+	invalid.recitation.textSha256 = "b".repeat(64);
+	getPerekByPerekId.mockReturnValue(invalid);
+	const ready = jest.requireActual("@/app/api/health/ready/route").GET;
+	expect((await ready()).status).toBe(503);
+	getPerekByPerekId.mockImplementation((id: number) =>
+		id === 1 ? chapter(1) : { perekId: id },
+	);
+	expect((await ready()).status).toBe(200);
+	expect(
+		(await (await GET(new Request("http://localhost/api/recitation"))).json())
+			.tracks,
+	).toHaveLength(1);
 });
 
 test("extension covers recordings independently and exports only approved word intervals", async () => {
@@ -116,24 +173,46 @@ test("repeated requests and ETag checks reuse the fully validated immutable body
 });
 
 test.each([
-	["S3_ENDPOINT", "http://localhost:4566", "http://localhost:4566/bible-on-site-assets/recordings/1_record.mp3"],
-	["S3_BUCKET", "changed-assets", "https://changed-assets.s3.il-central-1.amazonaws.com/recordings/1_record.mp3"],
-	["S3_REGION", "us-east-1", "https://bible-on-site-assets.s3.us-east-1.amazonaws.com/recordings/1_record.mp3"],
-])("a changed %s refreshes the cached URLs and ETag", async (variable, value, url) => {
-	const first = await GET(new Request("http://localhost/api/recitation"));
-	process.env[variable] = value;
-	const changed = await GET(new Request("http://localhost/api/recitation"));
-	expect(changed.headers.get("ETag")).not.toBe(first.headers.get("ETag"));
-	expect((await changed.json()).tracks[0].audioUrl).toBe(url);
-	expect(getPerekByPerekId).toHaveBeenCalledTimes(1858);
-});
+	[
+		"ASSETS_BASE_URL",
+		"https://assets.xn--febl3a.co.il",
+		"https://assets.xn--febl3a.co.il/recordings/1_record.mp3",
+	],
+	[
+		"S3_ENDPOINT",
+		"http://localhost:4566",
+		"http://localhost:4566/bible-on-site-assets/recordings/1_record.mp3",
+	],
+	[
+		"S3_BUCKET",
+		"changed-assets",
+		"https://changed-assets.s3.il-central-1.amazonaws.com/recordings/1_record.mp3",
+	],
+	[
+		"S3_REGION",
+		"us-east-1",
+		"https://bible-on-site-assets.s3.us-east-1.amazonaws.com/recordings/1_record.mp3",
+	],
+])(
+	"a changed %s refreshes the cached URLs and ETag",
+	async (variable, value, url) => {
+		const first = await GET(new Request("http://localhost/api/recitation"));
+		process.env[variable] = value;
+		const changed = await GET(new Request("http://localhost/api/recitation"));
+		expect(changed.headers.get("ETag")).not.toBe(first.headers.get("ETag"));
+		expect((await changed.json()).tracks[0].audioUrl).toBe(url);
+		expect(getPerekByPerekId).toHaveBeenCalledTimes(1858);
+	},
+);
 
 test("a failed validation leaves no partial cache and a later valid request can recover", async () => {
 	jest.spyOn(console, "error").mockImplementation(() => {});
 	getPerekByPerekId.mockImplementationOnce(() => {
 		throw new Error("Canonical data unavailable");
 	});
-	expect((await GET(new Request("http://localhost/api/recitation"))).status).toBe(500);
+	expect(
+		(await GET(new Request("http://localhost/api/recitation"))).status,
+	).toBe(500);
 	const recovered = await GET(new Request("http://localhost/api/recitation"));
 	expect(recovered.status).toBe(200);
 	expect((await recovered.json()).tracks).toHaveLength(2);

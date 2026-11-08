@@ -7,8 +7,8 @@ Give the image model this technical instruction alongside the chapter brief:
 The master is the only required input. Install the tool once, then run it from the repository root:
 
 ```sh
-npm ci --prefix devops/perek-images
-npm run images:prepare -- ./master.png
+bun install --cwd devops/perek-images --frozen-lockfile
+bun run images:prepare -- ./master.png
 ```
 
 Add `--perek 1` to include a chapter ID in the manifest and S3 keys. Use `--output ./my-output` to choose a destination. The default is the ignored `.outputs/perek-images/<source-hash>` directory. Inputs can be PNG, JPEG, WebP, or AVIF.
@@ -30,5 +30,5 @@ Images with a different aspect ratio use a centre crop. Review the JPEG before p
 Run the encoding and CLI checks with:
 
 ```sh
-npm test --prefix devops/perek-images
+bun run --cwd devops/perek-images test
 ```

@@ -2,10 +2,14 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { pageHeader } from "@/app/components/PageShell";
+import { getBookshelfDedicationLines } from "@/lib/dedications/loaders";
 import { SITE_NAME } from "@/lib/seo/jsonld";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { AppSection } from "../components/AppSection";
 import { ContactSection } from "../components/ContactSection";
 import { Footer } from "../components/Footer";
+import { NumbersSection } from "../components/NumbersSection";
 import { ScrollToSection } from "../components/ScrollToSection";
 import { TanahSefarimSection } from "../components/TanahSefarimSection";
 import { TosSection } from "../components/TosSection";
@@ -80,11 +84,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 	const { section } = await params;
 	const meta = getSection(section);
 	if (!meta) notFound();
-	return {
+	return pageMetadata({
 		title: `${meta.title} | ${SITE_NAME}`,
 		description: meta.description,
-		alternates: { canonical: `/${section}` },
-	};
+		canonical: `/${section}`,
+	});
 }
 
 export default async function Home({ params }: Props) {
@@ -92,59 +96,70 @@ export default async function Home({ params }: Props) {
 	const meta = getSection(section);
 	if (section !== undefined && !meta) notFound();
 	const scrollTarget = meta?.scrollTarget;
+	// Shelf dedications (#2731) — tag-cached, so a dedication change expires
+	// this render through `dedications:bookshelf`.
+	const dedications = await getBookshelfDedicationLines();
 	return (
-		<div className={styles.page}>
-			{scrollTarget && <ScrollToSection sectionId={scrollTarget} />}
-			<section className={styles.alHaperekSection}>
-				<header className={styles.sectionHeader}>
-					<h1 className={styles.sectionTitle}>תנ&quot;ך על הפרק</h1>
-					<h2 className={styles.sectionSubtitle}>לימוד תנ&quot;ך יומי</h2>
-				</header>
-				<section
-					className={`${styles.alHaperekHeadlines} ${styles.headlinesGrid}`}
-				>
-					<article className={styles.headlineArticle}>
-						<h1 className={styles.headlineTitle}>
-							<Link href="/929/">
+		<>
+			{/* The alHaperek hero paints the brand backdrop under the bar, so
+			    this family opts out of the solid bar — the declared overlay
+			    policy keeps it intentionally transparent (issue #3161). */}
+			<main {...pageHeader("overlay")} className={styles.page}>
+				{scrollTarget && <ScrollToSection sectionId={scrollTarget} />}
+				<section className={styles.alHaperekSection}>
+					<header className={styles.sectionHeader}>
+						<h1 className={styles.sectionTitle}>תנ&quot;ך על הפרק</h1>
+						<h2 className={styles.sectionSubtitle}>לימוד תנ&quot;ך יומי</h2>
+					</header>
+					<section
+						className={`${styles.alHaperekHeadlines} ${styles.headlinesGrid}`}
+					>
+						<article className={styles.headlineArticle}>
+							<h2 className={styles.headlineTitle}>
+								<Link href="/929/">
+									<Image
+										className="icon-white"
+										src="/icons/calendar-today.svg"
+										alt="עלון יומי"
+										unoptimized
+										width={48}
+										height={48}
+									/>
+									<span>לימוד יומי על הפרק</span>
+								</Link>
+							</h2>
+							<p>
+								בתנ&quot;ך על הפרק לומדים במקביל ללימוד של 929 - פרק ליום.
+								הלימוד נעים, מעמיק ומחכים.
+							</p>
+						</article>
+						<article className={styles.headlineArticle}>
+							<h2 className={styles.headlineTitle}>
 								<Image
 									className="icon-white"
-									src="/icons/calendar-today.svg"
+									src="/icons/smartphone.svg"
 									alt="עלון יומי"
+									unoptimized
 									width={48}
 									height={48}
 								/>
-								<span>לימוד יומי על הפרק</span>
-							</Link>
-						</h1>
-						<p>
-							בתנ&quot;ך על הפרק לומדים במקביל ללימוד של 929 - פרק ליום. הלימוד
-							נעים, מעמיק ומחכים.
-						</p>
-					</article>
-					<article className={styles.headlineArticle}>
-						<h1 className={styles.headlineTitle}>
-							<Image
-								className="icon-white"
-								src="/icons/smartphone.svg"
-								alt="עלון יומי"
-								width={34}
-								height={34}
-							/>
-							<span>ישומון תנ&quot;ך על הפרק</span>
-						</h1>
-						<p>
-							לתנ&quot;ך על הפרק ישנה אפליקציה לכל סוגי הסמארטפונים העיקריים.
-							באפליקציה תוכלו ללמוד תנ&quot;ך בנוחות.
-						</p>
-					</article>
+								<span>ישומון תנ&quot;ך על הפרק</span>
+							</h2>
+							<p>
+								לתנ&quot;ך על הפרק ישנה אפליקציה לכל סוגי הסמארטפונים העיקריים.
+								באפליקציה תוכלו ללמוד תנ&quot;ך בנוחות.
+							</p>
+						</article>
+					</section>
+					<div className={styles.alHaperekDivider} />
 				</section>
-				<div className={styles.alHaperekDivider} />
-			</section>
-			<TanahSefarimSection />
-			<AppSection />
-			<TosSection />
-			<ContactSection />
+				<TanahSefarimSection dedications={dedications} />
+				<NumbersSection />
+				<AppSection />
+				<TosSection />
+				<ContactSection />
+			</main>
 			<Footer />
-		</div>
+		</>
 	);
 }

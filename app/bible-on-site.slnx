@@ -1,8 +1,11 @@
 <Solution>
   <Folder Name="/devops/">
     <Project Path="devops/_build.csproj" />
+    <Project Path="devops.Tests/devops.Tests.csproj" />
   </Folder>
-  <Project Path="BibleOnSite.Core/BibleOnSite.Core.csproj" />
+  <!-- AltCover.Recorder.g substitute for E2E-instrumented builds (#1232);
+       referenced by path only under -p:E2ECoverage=true. -->
+  <Project Path="BibleOnSite.E2eCoverage/BibleOnSite.E2eCoverage.csproj" />
   <Project Path="BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj" />
   <Project Path="BibleOnSite.Tests.MobileE2E/BibleOnSite.Tests.MobileE2E.csproj" />
   <Project Path="BibleOnSite.Tests/BibleOnSite.Tests.csproj" />

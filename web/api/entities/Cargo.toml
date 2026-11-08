@@ -8,7 +8,6 @@ name = "entities"
 path = "src/lib.rs"
 
 [dependencies]
-serde = { version = "1.0.229", features = ["derive"] }
 sea-orm = { version = "2.0.4", default-features = false, features = [
     "macros",
     "sqlx-mysql",
@@ -18,5 +17,3 @@ sea-orm = { version = "2.0.4", default-features = false, features = [
     "with-rust_decimal",
 ] }
 
-[dev-dependencies]
-sea-orm = { version = "2.0.4", default-features = false, features = ["mock"] }

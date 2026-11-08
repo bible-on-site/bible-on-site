@@ -1,10 +1,10 @@
 import type React from "react";
-import "./layout.css";
+import { PageShell } from "@/app/components/PageShell";
 
 export default function AuthorsLayout({
 	children,
 }: {
 	children: React.ReactNode;
 }) {
-	return <div className="authors-layout">{children}</div>;
+	return <PageShell header="solid">{children}</PageShell>;
 }

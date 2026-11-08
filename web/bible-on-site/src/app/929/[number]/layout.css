@@ -1,21 +1,24 @@
-/* Set the nav background color for perek pages */
-body:has(.perek-layout) .top-nav {
-  background-color: #1552ac;
-}
+/* Reader chrome for perek-family routes: .perek-layout marks the route
+   (top-bar stacking lives in globals.css; shared full-width containment
+   comes from .page-shell). The rules below own the transient book-view
+   state only — they must apply from the moment the overlay appears,
+   including while the Sefer chunk is still loading, which is why they stay
+   in this eagerly loaded route stylesheet. */
 
-/* Contain horizontal overflow (issue #1270) so the page does not scroll horizontally */
-.perek-layout {
-  overflow-x: hidden;
-  width: 100%;
-  max-width: 100%;
-}
-
-/* When the book view is active, lift the top nav bar and hamburger menu
-   above the fixed overlay (z-index: 9999) so the user can still navigate
-   the site and access the sidebar menu. */
-html[data-book-view] .top-nav {
-  position: fixed;
-  z-index: 10000;
+/* While the book (Sefer) view is active, lock the outer document so wheel,
+   touch, and keyboard input cannot scroll the page behind the fixed overlay
+   (issue #2178). The mounted reader keeps the same lock via
+   data-sefer-view in sefer.css, which covers non-overlay consumers of Sefer.
+   The existing document scroll offset is preserved. Scrolling inside the
+   book's content panes is unaffected.
+   Deliberately no scrollbar-gutter here: the reader scrolls inside
+   .perekContainer, so the root viewport never shows a scrollbar on perek
+   pages — reserving a gutter only while locked would itself add/remove
+   ~15px of usable width per toggle, which is the layout shift the CLS
+   probe scores. sefer.css keeps its lock-time gutter for hosts that do
+   scroll at the root (e.g. /dev/sefer). */
+html[data-book-view] {
+	overflow: hidden;
 }
 
 /* When the book (Sefer) view is active, remove the heavy SEO content
@@ -31,118 +34,6 @@ html[data-book-view] .top-nav {
      recalculation for the entire subtree, which display:none alone
      does not always guarantee for deep DOM trees.  */
 html[data-book-view] .seo-content {
-  display: none;
-  content-visibility: hidden;
-}
-
-/* ───── Table of Contents page styling ─────
-   The FlipBook library's TocPage component uses plain (non-module) class
-   names.  Next.js / Turbopack may not reliably inject CSS imported inside
-   node_modules, so we duplicate the essential rules here as global CSS.
-   These also serve as the bible-on-site-specific overrides.              */
-
-.toc-page {
-  background-color: #fffef8;
-  font-family: inherit;
-  line-height: 1.6;
-  height: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  padding: 8% 6%;
-}
-
-.toc-page__scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-.toc-heading {
-  text-align: center;
-  margin-bottom: 24px;
-  color: #2c1810;
-  font-size: 1.4rem;
-  border-bottom: none;
-}
-
-.toc-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.toc-list li {
-  margin-bottom: 8px;
-}
-
-.toc-link {
-  display: flex;
-  flex-direction: row;
-  align-items: baseline;
-  width: 100%;
-  padding: 8px 4px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 0.75em;
-  text-align: inherit;
-  color: inherit;
-  transition: background-color 0.15s ease;
-}
-
-.toc-link:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-}
-
-.toc-link:focus {
-  outline: 2px solid #1a3a5c;
-  outline-offset: 2px;
-}
-
-.toc-title {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 85%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.toc-dots {
-  flex-grow: 1;
-  border-bottom: 1px dotted #999;
-  margin: 0 8px;
-  min-width: 20px;
-}
-
-.toc-page-num {
-  flex-shrink: 0;
-  font-weight: 600;
-  color: #1a3a5c;
-}
-
-@media (prefers-color-scheme: dark) {
-  .toc-page {
-    background-color: #1c1915;
-  }
-
-  .toc-heading {
-    color: #f0ebe3;
-  }
-
-  .toc-link:hover {
-    background-color: rgba(255, 255, 255, 0.06);
-  }
-
-  .toc-dots {
-    border-bottom-color: #555;
-  }
-
-  .toc-page-num {
-    color: #8ab4f8;
-  }
+	display: none;
+	content-visibility: hidden;
 }

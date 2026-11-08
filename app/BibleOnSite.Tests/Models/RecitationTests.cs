@@ -7,6 +7,32 @@ namespace BibleOnSite.Tests.Models;
 
 public class RecitationTests
 {
+    [Fact]
+    public void DerivedPlaybackIsBoundToOriginalSource_AndRejectsUnknownFormats()
+    {
+        var source = Valid();
+        var track = source with { Playback = new("ogg-opus", new string('b', 64), 500, 24000, source.AudioSha256) };
+        track.Validate();
+        var json = JsonSerializer.Serialize(track, RecitationJsonContext.Default.RecitationTrack);
+        JsonSerializer.Deserialize(json, RecitationJsonContext.Default.RecitationTrack)!.Playback.Should().Be(track.Playback);
+        foreach (var invalid in new[] { track.Playback with { SourceSha256 = new string('c', 64) },
+                 track.Playback with { Format = "unknown" }, track.Playback with { Bitrate = 12000 },
+                 track.Playback with { Sha256 = "../../escape" }, track.Playback with { SizeBytes = 0 } })
+        {
+            var validate = () => (track with { Playback = invalid }).Validate();
+            validate.Should().Throw<InvalidDataException>();
+        }
+    }
+    [Fact]
+    public void PlainHttpAudioUrl_IsAccepted()
+    {
+        // The manifest validator permits http alongside https — only non-web
+        // schemes are rejected.
+        var track = Valid() with { AudioUrl = "http://example.com/recordings/1_record.mp3" };
+
+        track.Invoking(t => t.Validate()).Should().NotThrow();
+    }
+
     private static RecitationTrack Valid() => new(1, "https://example.com/recordings/1_record.mp3", new string('a', 64),
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("1:1:ברא\n1:2:אור"))),
         3000, "ready", [new(1, 1, "ברא", 100, 800), new(1, 2, "אור", 900, 1800)]);
@@ -71,7 +97,8 @@ public class RecitationTests
         track.Matches(canonical).Should().BeTrue();
         (track with { Words = [track.Words[0]] }).Matches(canonical).Should().BeFalse();
         canonical[0].Segments.Insert(1, new() { Type = SegmentType.Stuma, Value = "" });
-        track.Matches(canonical).Should().BeFalse("word ordinals cannot be shifted past a nonspoken segment");
+        // Matches memoizes per pasukim list instance: mutated content needs a new list.
+        track.Matches(new List<Pasuk>(canonical)).Should().BeFalse("word ordinals cannot be shifted past a nonspoken segment");
     }
 
     [Fact]
@@ -116,5 +143,32 @@ public class RecitationTests
             _ => catalog with { Books = [book with { PerekIds = [2] }] }
         };
         catalog.Invoking(c => c.Validate()).Should().Throw<InvalidDataException>();
+    }
+
+    [Fact]
+    public void WordLookupIndexesPasukAndSegment()
+    {
+        var track = new RecitationTrack(1, "", "", "", 10000, "ready",
+            [new(1, 1, "א", 100, 800), new(1, 2, "ב", 900, 1800),
+             new(2, 1, "ג", 2000, 2600), new(2, 2, "ד", 2700, 2900)]);
+
+        track.GetWord(1, 2).Should().BeSameAs(track.Words[1]);
+        track.GetWord(3, 1).Should().BeNull();
+        track.GetWords(2).Should().Equal(track.Words.Skip(2));
+        track.GetWords(3).Should().BeEmpty();
+        track.GetWordsBetweenPasukim(1, 2).Should().Equal(track.Words);
+        track.GetWordsBetweenPasukim(2, 2).Should().Equal(track.Words.Skip(2).Take(2));
+        track.GetWordsBetweenPasukim(1, 1).Should().Equal(track.Words.Take(2));
+        track.GetWordsBetweenPasukim(2, 1).Should().BeEmpty();
+        (double Start, double End)[] ranges = [(100, 1800), (2000, 2900)];
+        track.GetPasukRanges().Should().Equal(ranges);
+
+        var duplicate = new RecitationTrack(1, "", "", "", 10000, "ready",
+            [.. track.Words, new(1, 1, "כפול", 5000, 6000)]);
+        duplicate.GetWord(1, 1).Should().BeSameAs(duplicate.Words[0]);
+
+        var changed = track with { Words = [new(1, 1, "ה", 100, 800)] };
+        changed.GetWords(1).Should().Equal(changed.Words);
+        track.GetWords(1).Should().Equal(track.Words.Take(2));
     }
 }

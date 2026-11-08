@@ -1,7 +1,7 @@
 /**
  * E2E Test Server Launcher for Admin App
  *
- * Environment comes from the npm script wrapper
+ * Environment comes from the package.json script wrapper
  * (`dotenv -e .test.env -- playwright test`) or from CI env vars directly.
  *
  * This script:
@@ -13,7 +13,7 @@
  * collected via the test fixture and /api/dev/coverage — no launcher plumbing
  * needed beyond env propagation.
  *
- * Usage: node --import tsx ./tests/util/launch-e2e-server.mts
+ * Usage: node ./tests/util/launch-e2e-server.mts
  */
 
 import { execSync, spawn } from "node:child_process";
@@ -56,13 +56,13 @@ try {
 }
 
 /**
- * Runs a population npm script (`db:populate:test` / `s3:populate:test`),
+ * Runs a population script (`db:populate:test` / `s3:populate:test`),
  * which delegates to the matching `cargo make` task in data/.
  */
 function runPopulate(script: string, label: string, fatal: boolean): void {
-	log(`[${label} Setup] Running: npm run ${script}`);
+	log(`[${label} Setup] Running: bun run ${script}`);
 	try {
-		execSync(`npm run ${script}`, {
+		execSync(`bun run ${script}`, {
 			cwd: projectRoot,
 			stdio: "inherit",
 			env: process.env,
@@ -98,8 +98,8 @@ async function main(): Promise<void> {
 	}
 
 	// Inherits env so MEASURE_COV reaches vite.config.ts (istanbul instrumentation).
-	log("[Server] Starting Vite dev server: npm run dev:app");
-	const server = spawn("npm", ["run", "dev:app"], {
+	log("[Server] Starting Vite dev server: bun run dev:app");
+	const server = spawn("bun", ["run", "dev:app"], {
 		cwd: projectRoot,
 		stdio: "inherit",
 		env: process.env,

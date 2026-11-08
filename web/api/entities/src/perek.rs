@@ -17,6 +17,8 @@ pub struct Model {
     pub hebdate: Option<String>,
     pub tseit: Option<Time>,
     pub header: Option<String>,
+    /// Canonical pesukim in the perek (corpus-derived); NULL = bound unknown.
+    pub pasuk_count: Option<i16>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

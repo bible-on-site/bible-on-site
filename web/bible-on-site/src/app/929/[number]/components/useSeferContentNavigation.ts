@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 
 export function seferContentFromRoute(
 	route: string,
@@ -25,7 +31,10 @@ export function writeSeferContentHistory(
 	return route;
 }
 
-export function useSeferContentNavigation(perekId: number, initialSlug?: string) {
+export function useSeferContentNavigation(
+	perekId: number,
+	initialSlug?: string,
+) {
 	const [content, setContent] = useState(() =>
 		initialSlug ? { perekId, slug: initialSlug } : null,
 	);
@@ -56,13 +65,22 @@ export function useSeferContentNavigation(perekId: number, initialSlug?: string)
 	const onPageFlipped = useCallback(() => {
 		// FlipBook calls onPageFlipped immediately before writing its URL. Read
 		// that URL after the synchronous write, including on history restoration.
-		const deepLink = initialContent.current;
+		const deepLink =
+			seferContentFromRoute(location.pathname + location.search) ??
+			initialContent.current;
 		initialContent.current = null;
 		queueMicrotask(() => {
 			if (!mounted.current) return;
-			// Initialization normalizes the spread's URL to its chapter. Retain
-			// the article/perush deep link on that first initialization only.
-			if (deepLink) writeSeferContentHistory(deepLink.perekId, deepLink.slug, true);
+			// A TOC turn may finish after an item on the visible page was chosen.
+			// Keep that choice when the book commits the same chapter. A turn to
+			// another chapter/TOC, or a newer deep link, owns its resulting URL.
+			if (
+				deepLink &&
+				location.pathname === `/929/${deepLink.perekId}` &&
+				new URLSearchParams(location.search).has("book")
+			) {
+				writeSeferContentHistory(deepLink.perekId, deepLink.slug, true);
+			}
 			setContent(seferContentFromRoute(location.pathname + location.search));
 		});
 	}, []);

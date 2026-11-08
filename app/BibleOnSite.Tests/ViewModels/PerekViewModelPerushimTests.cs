@@ -230,6 +230,85 @@ public class PerekViewModelPerushimTests
 
     #endregion
 
+    #region Perushim Selection Counter (#2471)
+
+    [Fact]
+    public void PerushimSelectionStatus_ReflectsCheckedCountOutOfConfiguredLimit()
+    {
+        var vm = CreateViewModelWithPerushim();
+
+        vm.PerushimSelectionStatus.Should().Be("נבחרו 0 מתוך 5");
+
+        vm.ToggleCheckedPerush(1);
+        vm.ToggleCheckedPerush(2);
+
+        vm.PerushimSelectionStatus.Should().Be("נבחרו 2 מתוך 5");
+    }
+
+    [Fact]
+    public void PerushimSelectionStatus_UsesConfiguredLimit_NotHardcodedFive()
+    {
+        var vm = CreateViewModelWithPerushim();
+        vm.InlineCommentaryLimit.Should().Be(5);
+
+        var preferences = GetPreferences(vm);
+        preferences.InlineCommentaryLimit = 3;
+
+        vm.PerushimSelectionStatus.Should().Be("נבחרו 0 מתוך 3");
+    }
+
+    [Fact]
+    public void PerushimLimitReached_FalseBelowLimit_TrueAtLimit()
+    {
+        var vm = CreateViewModelWithPerushim();
+        GetPreferences(vm).InlineCommentaryLimit = 2;
+
+        vm.PerushimLimitReached.Should().BeFalse();
+
+        vm.ToggleCheckedPerush(1);
+        vm.PerushimLimitReached.Should().BeFalse();
+
+        vm.ToggleCheckedPerush(2);
+        vm.PerushimLimitReached.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PerushimLimitReached_ClearsImmediatelyOnDeselect()
+    {
+        var vm = CreateViewModelWithPerushim();
+        GetPreferences(vm).InlineCommentaryLimit = 2;
+        vm.ToggleCheckedPerush(1);
+        vm.ToggleCheckedPerush(2);
+        vm.PerushimLimitReached.Should().BeTrue();
+
+        vm.ToggleCheckedPerush(2);
+
+        vm.PerushimLimitReached.Should().BeFalse();
+        vm.PerushimSelectionStatus.Should().Be("נבחרו 1 מתוך 2");
+    }
+
+    [Fact]
+    public void ToggleCheckedPerush_RaisesPropertyChangedForSelectionStatus()
+    {
+        var vm = CreateViewModelWithPerushim();
+        var changed = new List<string>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName ?? string.Empty);
+
+        vm.ToggleCheckedPerush(1);
+
+        changed.Should().Contain(nameof(PerekViewModel.PerushimSelectionStatus));
+        changed.Should().Contain(nameof(PerekViewModel.PerushimLimitReached));
+    }
+
+    private static PreferencesService GetPreferences(PerekViewModel vm)
+    {
+        var field = typeof(PerekViewModel).GetField("_preferencesService",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        return (PreferencesService)field.GetValue(vm)!;
+    }
+
+    #endregion
+
     #region Helpers
 
     private static PerekViewModel CreateViewModel(Func<int, Perek?> loader)

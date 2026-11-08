@@ -5,48 +5,61 @@
 # ============================================================================
 
 AWSTemplateFormatVersion: "2010-09-09"
-Description: |
-  CloudWatch Log Groups and Auto Scaling for Bible On Site project.
+Description: "CloudWatch Log Groups and Auto Scaling for Bible On Site project. Reference documentation only; not a deployed stack."
 
-  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
+Metadata:
+  Documentation: |
+    CloudWatch Log Groups and Auto Scaling for Bible On Site project.
 
-  This template documents the CloudWatch Logs configuration for ECS container logs,
-  Application Auto Scaling, Container Insights, SNS alerting, and deployment alarms.
+    ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
 
-  CONTAINER INSIGHTS:
-  Enabled on bible-on-site-cluster. Publishes ECS/ContainerInsights metrics:
-  RunningTaskCount, DesiredTaskCount, TaskSetFailedTaskCount, CPU/MemoryUtilization, etc.
+    This template documents the CloudWatch Logs configuration for ECS container logs,
+    Application Auto Scaling, Container Insights, SNS alerting, and deployment alarms.
 
-  LOG GROUPS:
-  | Log Group Name | Retention | Purpose |
-  |----------------|-----------|---------|
-  | /ecs/bible-on-site-website | 180 days | ECS Website container logs |
+    CONTAINER INSIGHTS:
+    Enabled on bible-on-site-cluster. Publishes ECS/ContainerInsights metrics:
+    RunningTaskCount, DesiredTaskCount, TaskSetFailedTaskCount, CPU/MemoryUtilization, etc.
 
-  Log streams are created automatically by ECS with the pattern:
-  ecs/<container-name>/<task-id>
+    LOG GROUPS:
+    | Log Group Name | Retention | Purpose |
+    |----------------|-----------|---------|
+    | /ecs/bible-on-site-website | 180 days | ECS Website container logs |
+    | /ecs/bible-on-site-api | 365 days | ECS API container logs |
+    | /ecs/bible-on-site-admin | 365 days | ECS Admin container logs |
 
-  AUTO SCALING (bible-on-site-website): Min 1, Max 3 tasks.
-  Two target-tracking policies (scale-out if either triggers; scale-in when both allow):
-  | Policy | Metric | Target | Scale Out Cooldown | Scale In Cooldown |
-  |--------|--------|--------|-------------------|-------------------|
-  | cpu-target-tracking | ECSServiceAverageCPUUtilization | 70% | 300s | 600s |
-  | memory-target-tracking | ECSServiceAverageMemoryUtilization | 80% | 300s | 600s |
+    API/admin retention was verified and set to 365 days on 2026-10-23.
+    All 323 existing streams were checked: their oldest events are 2026-01-09
+    (API) and 2026-02-25 (admin), so this change expires no existing history.
+    The proposed 90-day setting was rejected because it would delete history.
+    Future reductions require archival/restore verification or explicit approval
+    of the history loss. Removing retention cannot recover deleted events.
+    See ../cost-risk-audit-2026-10-23.md for evidence and rollback.
 
-  SNS TOPIC:
-  | Topic | ARN | Purpose |
-  |-------|-----|---------|
-  | ecs-deployment-alerts | arn:aws:sns:il-central-1:250598594267:ecs-deployment-alerts | ECS deployment/health alerts |
-  Subscriptions: doradsoft@gmail.com (email)
+    Log streams are created automatically by ECS with the pattern:
+    ecs/<container-name>/<task-id>
 
-  CLOUDWATCH ALARMS:
-  Auto-created by Target Tracking:
-  - CPU: AlarmHigh (scale-out when CPU > 70%), AlarmLow (scale-in when CPU < 70%)
-  - Memory: AlarmHigh (scale-out when memory > 80%), AlarmLow (scale-in when memory < 80%)
-  Custom deployment/health alarms:
-  | Alarm | Metric | Condition | Period | Eval Periods | Action |
-  |-------|--------|-----------|--------|-------------|--------|
-  | ecs-website-deployment-failures | TaskSetFailedTaskCount | > 3 | 10 min | 1 | SNS: ecs-deployment-alerts |
-  | ecs-website-no-running-tasks | RunningTaskCount | < 1 | 1 min | 3 | SNS: ecs-deployment-alerts |
+    AUTO SCALING (bible-on-site-website): Min 1, Max 3 tasks.
+    Two target-tracking policies (scale-out if either triggers; scale-in when both allow):
+    | Policy | Metric | Target | Scale Out Cooldown | Scale In Cooldown |
+    |--------|--------|--------|-------------------|-------------------|
+    | cpu-target-tracking | ECSServiceAverageCPUUtilization | 70% | 300s | 600s |
+    | memory-target-tracking | ECSServiceAverageMemoryUtilization | 80% | 300s | 600s |
+
+    SNS TOPIC:
+    | Topic | ARN | Purpose |
+    |-------|-----|---------|
+    | ecs-deployment-alerts | arn:aws:sns:il-central-1:250598594267:ecs-deployment-alerts | ECS deployment/health alerts |
+    Subscriptions: doradsoft@gmail.com (email)
+
+    CLOUDWATCH ALARMS:
+    Auto-created by Target Tracking:
+    - CPU: AlarmHigh (scale-out when CPU > 70%), AlarmLow (scale-in when CPU < 70%)
+    - Memory: AlarmHigh (scale-out when memory > 80%), AlarmLow (scale-in when memory < 80%)
+    Custom deployment/health alarms:
+    | Alarm | Metric | Condition | Period | Eval Periods | Action |
+    |-------|--------|-----------|--------|-------------|--------|
+    | ecs-website-deployment-failures | TaskSetFailedTaskCount | > 3 | 10 min | 1 | SNS: ecs-deployment-alerts |
+    | ecs-website-no-running-tasks | RunningTaskCount | < 1 | 1 min | 3 | SNS: ecs-deployment-alerts |
 
 Resources:
   # =============================================================================
@@ -65,19 +78,34 @@ Resources:
           Value: website
 
   # =============================================================================
-  # ECS API Log Group (for future use)
+  # ECS API Log Group
   # =============================================================================
-  # ECSAPILogGroup:
-  #   Type: AWS::Logs::LogGroup
-  #   Properties:
-  #     LogGroupName: /ecs/bible-on-site-api
-  #     RetentionInDays: 180
-  #     LogGroupClass: STANDARD
-  #     Tags:
-  #       - Key: Project
-  #         Value: bible-on-site
-  #       - Key: Service
-  #         Value: api
+  ECSAPILogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/bible-on-site-api
+      RetentionInDays: 365
+      LogGroupClass: STANDARD
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Service
+          Value: api
+
+  # =============================================================================
+  # ECS Admin Log Group
+  # =============================================================================
+  ECSAdminLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/bible-on-site-admin
+      RetentionInDays: 365
+      LogGroupClass: STANDARD
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Service
+          Value: admin
 
   # =============================================================================
   # Application Auto Scaling - Scalable Target

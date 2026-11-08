@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { brotliDecompressSync } from "node:zlib";
 import type { Sefarim } from "./tanah-view-types";
 
 const canonicalCache = Symbol.for("bible-on-site.canonical-sefarim");
@@ -9,13 +10,16 @@ const server = globalThis as typeof globalThis & {
 
 function canonicalSefarim(): Sefarim {
 	if (server[canonicalCache]) return server[canonicalCache];
-	// Read the original number literals directly. Embedding this 77 MB text in
-	// route JavaScript adds compilation work and separate runtime copies at startup.
+	// Read the original number literals directly. Embedding this text in route
+	// JavaScript adds compilation work and separate runtime copies at startup.
+	// The prebuild Brotli copy is a tenth of the size, so a cold file cache does
+	// not stall the first request on a 40 MB read (issue #2881).
 	const data = JSON.parse(
-		readFileSync(
-			resolve(process.cwd(), "src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json"),
-			"utf8",
-		),
+		brotliDecompressSync(
+			readFileSync(
+				resolve(process.cwd(), "src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json.br"),
+			),
+		).toString("utf8"),
 	) as Sefarim;
 	server[canonicalCache] = data;
 	return data;

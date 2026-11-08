@@ -1,0 +1,194 @@
+import { expect, test } from "../util/playwright/test-fixture";
+import { TOP_NAV_BLUE, topNavBackground } from "../util/playwright/top-nav";
+
+const MASORA_ROOT = `/${encodeURIComponent("מסורה")}`;
+
+/**
+ * מסורה reader e2e — the shared reading-unit contract rendered under
+ * its own root. Covers the derivation shapes the contract supports: a
+ * regular unit ending mid-pasuk, a cross-perek unit, a single-pasuk
+ * unit, and the section-wide noindex policy (equivalent whole-perek
+ * units retain their /929 canonical).
+ */
+test.describe("מסורה reading root", () => {
+	test("landing lists sefarim with links into their first units", async ({
+		page,
+	}) => {
+		await page.goto(MASORA_ROOT);
+		await expect(
+			page.getByRole("heading", { name: "מסורה על הפרק" }),
+		).toBeVisible();
+		await expect(page).toHaveTitle(/מסורה על הפרק/);
+
+		// בראשית is the first sefer; its first unit is 1.
+		const bereshit = page.getByRole("link", { name: "בראשית" }).first();
+		await expect(bereshit).toBeVisible();
+		await bereshit.click();
+		// First visit compiles the unit route — allow for cold dev servers.
+		await page.waitForURL(`**${MASORA_ROOT}/1`, { timeout: 60_000 });
+		await expect(
+			page.getByRole("heading", { level: 1, name: "בראשית פרשה א" }),
+		).toBeVisible();
+	});
+
+	test("renders the shared blue top bar on direct load", async ({ page }) => {
+		await page.goto(MASORA_ROOT);
+		await expect(
+			page.getByRole("heading", { name: "מסורה על הפרק" }),
+		).toBeVisible();
+
+		expect(await topNavBackground(page)).toBe(TOP_NAV_BLUE);
+	});
+
+	test("keeps the shared blue top bar when navigating from another page", async ({
+		page,
+	}) => {
+		await page.goto("/");
+		await page.getByRole("button", { name: "תפריט ראשי" }).click();
+		await page
+			.locator("#main-menu")
+			.getByRole("link", { name: "מסורה על הפרק", exact: true })
+			.click();
+		await page.waitForURL(
+			(url) => decodeURIComponent(url.pathname) === "/מסורה",
+		);
+		await expect(
+			page.getByRole("heading", { name: "מסורה על הפרק" }),
+		).toBeVisible();
+
+		expect(await topNavBackground(page)).toBe(TOP_NAV_BLUE);
+	});
+
+	test("unit page renders text, closing break, nav, and sections", async ({
+		page,
+	}) => {
+		await page.goto(`${MASORA_ROOT}/1`);
+		// Article/perush cards render h1s too — address the unit heading by name.
+		const heading = page.getByRole("heading", {
+			level: 1,
+			name: "בראשית פרשה א",
+		});
+		await expect(heading).toBeVisible();
+		// Unit 1 closes on a פתוחה marker.
+		await expect(heading).toContainText("פרשה פתוחה");
+
+		// Canonical pasuk anchors carry perek coordinates.
+		await expect(page.locator("#pasuk-1-5")).toBeAttached();
+
+		// Range-scoped commentary/article sections render.
+		await expect(
+			page.getByRole("heading", { name: "פרשנים על הפרשה" }),
+		).toBeVisible();
+		await expect(
+			page.getByRole("heading", { name: "מאמרים על הפרשה" }),
+		).toBeVisible();
+
+		// Adjacent-unit navigation.
+		await page.getByRole("link", { name: /פרשה הבאה/ }).click();
+		await page.waitForURL(`**${MASORA_ROOT}/2`);
+		await page.getByRole("link", { name: /פרשה קודמת/ }).click();
+		await page.waitForURL(`**${MASORA_ROOT}/1`);
+
+		// Breadcrumb exposes the division label.
+		await expect(
+			page
+				.getByRole("navigation", { name: "Breadcrumb" })
+				.getByRole("link", { name: "מסורה על הפרק" }),
+		).toBeVisible();
+	});
+
+	test("cross-perek unit keeps canonical pasuk anchors", async ({ page }) => {
+		// Unit 8 spans בראשית ב ד - ג טו.
+		await page.goto(`${MASORA_ROOT}/8`);
+		await expect(
+			page.getByRole("heading", { level: 1, name: "בראשית פרשה ח" }),
+		).toBeVisible();
+		await expect(page.locator("#pasuk-2-4")).toBeAttached();
+		await expect(page.locator("#pasuk-3-15")).toBeAttached();
+	});
+
+	test("single-pasuk unit with intra-pasuk boundary renders", async ({
+		page,
+	}) => {
+		// Unit 2826 is דברי הימים א ה כט — one pasuk cut mid-verse.
+		await page.goto(`${MASORA_ROOT}/2826`);
+		await expect(
+			page.getByRole("heading", { level: 1, name: "דברי הימים פרשה נח" }),
+		).toBeVisible();
+		await expect(page.locator("#pasuk-869-29")).toBeAttached();
+	});
+
+	test("seo policy: every Masora view is noindex with its existing canonical", async ({
+		page,
+	}) => {
+		// Unit 1 is not a whole perek → self canonical + noindex,follow.
+		await page.goto(`${MASORA_ROOT}/1`, { waitUntil: "domcontentloaded" });
+		await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+			"content",
+			/noindex/,
+		);
+		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+			"href",
+			/%D7%9E%D7%A1%D7%95%D7%A8%D7%94\/1|מסורה\/1/,
+		);
+
+		// Unit 523 covers exactly במדבר לו (perek 153) → canonical /929/153.
+		await page.goto(`${MASORA_ROOT}/523`, { waitUntil: "domcontentloaded" });
+		await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+			"content",
+			/noindex/,
+		);
+		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+			"href",
+			/\/929\/153$/,
+		);
+	});
+
+	test("seo policy: initial HTML excludes landing, aliases and book variants", async ({
+		request,
+	}) => {
+		for (const path of [
+			MASORA_ROOT,
+			`${MASORA_ROOT}/1?book`,
+			`${MASORA_ROOT}/523?perush=Rashi`,
+			"/masora",
+			"/masora/523?book",
+			`${MASORA_ROOT}/1/${encodeURIComponent("כריכה")}?book`,
+		]) {
+			const response = await request.get(path, {
+				headers: { "user-agent": "Googlebot/2.1" },
+			});
+			expect(response.status(), path).toBe(200);
+			const html = await response.text();
+			expect(html, path).toMatch(
+				/<meta name="robots" content="[^"]*noindex[^"]*"/,
+			);
+		}
+	});
+
+	test("book view opens on ?book and shows the sefer book", async ({
+		page,
+	}) => {
+		await page.goto(`${MASORA_ROOT}/1?book`);
+		const overlay = page.locator('[class*="seferOverlay"]');
+		await expect(overlay).toBeVisible({ timeout: 15_000 });
+	});
+
+	test("book-chrome routes land on the sefer's first unit", async ({
+		page,
+	}) => {
+		// /מסורה/{firstUnitId}/{slug}?book rewrites to the unit in book
+		// mode with the chrome page in its bookPage query.
+		const response = await page.goto(
+			`${MASORA_ROOT}/1/${encodeURIComponent("כריכה")}?book`,
+		);
+		expect(response?.status()).toBe(200);
+		const overlay = page.locator('[class*="seferOverlay"]');
+		await expect(overlay).toBeVisible({ timeout: 15_000 });
+	});
+
+	test("unknown unit ids return 404", async ({ page }) => {
+		const response = await page.goto(`${MASORA_ROOT}/99999`);
+		expect(response?.status()).toBe(404);
+	});
+});

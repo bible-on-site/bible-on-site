@@ -1,0 +1,813 @@
+/* Sefer blank-page panel (#2544): פרשנים/מאמרים tabs flanking the date,
+   diagonal inner tab edges, the wrapping
+   perush tag list, pasuk-grouped commentary, and the articles masonry. */
+
+/* The component replaces BlankPageContent's .pageBlank section: a flex
+   column filling the book page. The panel stretches to the leaf's usable
+   borders (#2994) — no .pageBlank inset around the tabbed view; text and
+   controls keep their own deliberate padding. */
+.panelRoot {
+	background-color: var(--surface-elevated, white);
+	box-sizing: border-box;
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+}
+
+/* The leaf's free outer edge stays a page-turn surface (#2994): the same
+   grab margin .pageContentPage and .pageBlank keep opposite the spine,
+   while the panel hugs the leaf's other borders. The inner scrollers
+   carry data-flipbook-no-flip, so without this strip a swipe can only
+   start on the header row. */
+:global(.page[data-scrollbar-side="left"]) .panelRoot {
+	padding-right: 15px;
+}
+:global(.page[data-scrollbar-side="right"]) .panelRoot {
+	padding-left: 15px;
+}
+
+/* Header: tab - date - tab; the date stays centered and visible. */
+.panelHeader {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
+	align-items: stretch;
+	gap: 4px;
+	flex-shrink: 0;
+}
+
+.panelTab {
+	--tab-fill: #f0ead8;
+	--tab-border: #d4c9a8;
+	--tab-active-fill: #fffdf5;
+	appearance: none;
+	font: inherit;
+	min-width: 0;
+	position: relative;
+	isolation: isolate;
+	border: none;
+	background: var(--tab-border);
+	color: #5a4a2e;
+	font-size: 0.9rem;
+	font-weight: 600;
+	padding: 8px 6px;
+	cursor: pointer;
+}
+
+/* Only the edge facing the date is diagonal. The date has its own column,
+   so neither tab's shape can cover it, including on a narrow book page. */
+.panelTab:first-child {
+	--tab-closed-clip: polygon(18px 0, 18px 0, 0 100%, 0 100%);
+	clip-path: polygon(18px 0, 100% 0, 100% 100%, 0 100%);
+	padding-inline-end: 22px;
+}
+
+.panelTab:last-child {
+	--tab-closed-clip: polygon(
+		calc(100% - 18px) 0,
+		calc(100% - 18px) 0,
+		100% 100%,
+		100% 100%
+	);
+	clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 100%, 0 100%);
+	padding-inline-start: 22px;
+}
+
+.panelTab::before {
+	content: "";
+	position: absolute;
+	inset: 1px 1px 0;
+	z-index: -1;
+	clip-path: inherit;
+	background: var(--tab-fill);
+}
+
+/* Each clipped fill travels toward the other tab. The date column remains
+   outside both clips, and no reading panel participates in this motion. */
+.panelTab::after {
+	content: "";
+	position: absolute;
+	inset: 1px 1px 0;
+	z-index: -1;
+	clip-path: var(--tab-closed-clip);
+	background: var(--tab-active-fill);
+	transition: clip-path 0.24s ease;
+}
+.panelTab[aria-selected="true"]::after {
+	clip-path: inherit;
+}
+@media (prefers-reduced-motion: reduce) {
+	.panelTab::after {
+		transition: none;
+	}
+}
+
+@media (hover: hover) {
+	.panelTab:hover {
+		--tab-fill: #e8e0cc;
+	}
+}
+
+.panelTab:focus-visible {
+	--tab-border: #1a73e8;
+	text-decoration: underline;
+	text-underline-offset: 4px;
+}
+
+.panelTab[aria-selected="true"] {
+	--tab-border: #8b7355;
+	color: #3d3220;
+	font-weight: 700;
+}
+
+/* Paired-header contract (#2994): the date sits on the same baseline as
+   the facing leaf's sefer/perek source — same offset below the leaf's
+   top edge (--sefer-leaf-header-offset, shared with .pageHeaderRight)
+   and the same font size/weight/line-height/color as .pageHeaderRow.
+   The cell stretches with the taller tab row while the text pins to the
+   shared offset. */
+.panelDate {
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	padding: var(--sefer-leaf-header-offset, 17px) 4px 0;
+	font-size: 0.95rem;
+	font-weight: 600;
+	line-height: normal;
+	color: var(--pasuk-num-color, #1c2c5d);
+	text-align: center;
+	white-space: nowrap;
+	direction: rtl;
+}
+
+/* Panels stay mounted in one cell to preserve their scroll positions.
+   The diagonal belongs to the tabs; switching content is immediate. */
+.panelStage {
+	flex: 1;
+	min-height: 0;
+	margin-top: 0;
+	display: grid;
+	border: 1px solid #d4c9a8;
+	border-radius: 0 0 var(--radius-md) var(--radius-md);
+	background: #fffdf5;
+	overflow: hidden;
+}
+
+.panel {
+	grid-area: 1 / 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	background: #fffdf5;
+	position: relative;
+}
+
+/* An opened article covers the masonry (same cell) so the grid keeps its
+   scroll position and DOM order while it is away (#2544 item 6). */
+.panelArticleOverlay {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	background: #fffdf5;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.panel[data-active="true"] {
+	/* Covered book panes retain layout while hiding their content. Respect that
+	   ancestor mask instead of making an active panel visible through it. */
+	visibility: inherit;
+	z-index: 1;
+}
+
+.panel[data-active="false"] {
+	visibility: hidden;
+	pointer-events: none;
+}
+
+/* ─── פרשנים panel ─────────────────────────────────── */
+
+.tagArea {
+	display: flex;
+	flex-direction: column;
+	flex-shrink: 0;
+	min-height: 0;
+	max-height: 45%;
+	padding: 10px 12px 6px;
+	border-bottom: 1px dashed #e0d8c0;
+}
+
+.tagList {
+	list-style: none;
+	display: flex;
+	flex-wrap: wrap;
+	/* Spine-side scrollbar (#2994): the leaf's scroll direction places the
+	   native bar at the inner edge; --sefer-spine-row supplies the
+	   matching main axis so the chips keep Hebrew first-item-at-right
+	   order whichever way the scroller's direction resolves. */
+	direction: var(--flipbook-page-scroll-direction, rtl);
+	flex-direction: var(--sefer-spine-row, row);
+	gap: 6px;
+	margin: 0;
+	padding: 0;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
+	scrollbar-color: #c4b896 transparent;
+}
+
+.perushTagItem {
+	display: inline-flex;
+	align-items: center;
+}
+
+/* Commentary chip (#2994): the name carries equal inline padding — no
+   checkmark slot or icon reserve; selection shows through the filled
+   surface plus aria-pressed. */
+.perushTag {
+	appearance: none;
+	font: inherit;
+	display: inline-flex;
+	align-items: center;
+	border: 1px solid #d4c9a8;
+	border-radius: var(--radius-pill);
+	background: #fffdf5;
+	color: #5a4a2e;
+	font-size: 0.85rem;
+	padding: 3px 10px;
+	cursor: pointer;
+	text-decoration: none;
+	transition:
+		background 0.15s,
+		border-color 0.15s,
+		color 0.15s;
+}
+
+.perushTagItem[data-selected] .perushTag {
+	background: #5a4a2e;
+	border-color: #5a4a2e;
+	color: #fffdf5;
+}
+
+@media (hover: hover) {
+	.perushTag:hover {
+		border-color: var(--hc-muted, #8b7355);
+	}
+}
+
+.perushTag:focus-visible {
+	outline: 2px solid var(--link-accent, #1a73e8);
+	outline-offset: 2px;
+}
+
+/* Scope control: selection follows the reader across the Tanach unless a
+   sefer carries its own list. */
+.scopeRow {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 8px;
+	margin-top: 8px;
+	font-size: 0.78rem;
+	color: var(--hc-muted, #6b5835);
+}
+
+/* Reading-time estimate for a single displayed perush (#2607). */
+.scopeMetric {
+	font-size: 0.72rem;
+	color: #8b7355;
+}
+
+.scopeToggle {
+	appearance: none;
+	font: inherit;
+	font-size: 0.78rem;
+	border: 1px solid #d4c9a8;
+	border-radius: var(--radius-pill);
+	background: #f0ead8;
+	color: #5a4a2e;
+	padding: 1px 10px;
+	cursor: pointer;
+}
+
+@media (hover: hover) {
+	.scopeToggle:hover {
+		background: #e8e0cc;
+	}
+}
+
+.scopeToggle:focus-visible {
+	outline: 2px solid var(--link-accent, #1a73e8);
+	outline-offset: 2px;
+}
+
+/* Deep-linked single perush: compact header replacing the tag list. */
+.deepHeader {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+	padding: 8px 12px;
+	border-bottom: 1px dashed #e0d8c0;
+}
+
+.deepTitle {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.deepName {
+	font-size: 0.95rem;
+	font-weight: 700;
+	color: #5a4a2e;
+	margin: 0;
+}
+
+.deepParshan {
+	font-size: 0.75rem;
+	color: var(--hc-muted, #6b5835);
+}
+
+/* Reading-time estimate on the deep-linked perush header (#2607). */
+.deepMetric {
+	display: block;
+	font-size: 0.72rem;
+	font-weight: 400;
+	color: #8b7355;
+}
+
+.deepBack {
+	appearance: none;
+	font: inherit;
+	font-size: 0.8rem;
+	border: 1px solid #d4c9a8;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: #5a4a2e;
+	padding: 3px 10px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+@media (hover: hover) {
+	.deepBack:hover {
+		background: #f0ead8;
+	}
+}
+
+/* Grouped commentary: pasuk groups in canonical order; inside each, the
+   selected perushim's notes under their names. */
+.commentaryScroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-gutter: stable;
+	padding: 8px 12px 12px;
+	/* Spine-side scrollbar (#2994); each block child keeps RTL. */
+	direction: var(--flipbook-page-scroll-direction, rtl);
+	scrollbar-width: thin;
+	scrollbar-color: #c4b896 transparent;
+}
+
+.commentaryScroll > * {
+	direction: rtl;
+}
+
+.commentaryGroup {
+	--highlight-rest-border: #d4c9a8;
+	border-right: 3px solid #d4c9a8;
+	padding-right: 12px;
+	margin-bottom: 14px;
+	scroll-margin-block-start: 8px;
+}
+
+.commentaryGroup[data-pasuk-highlight] {
+	background: rgba(254, 243, 199, 0.95);
+	border-right-color: #f59e0b;
+	box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
+	border-radius: var(--radius-sm);
+}
+
+.commentaryPasuk {
+	appearance: none;
+	font: inherit;
+	background: none;
+	border: none;
+	padding: 0;
+	cursor: pointer;
+	display: inline-block;
+	font-size: 0.85rem;
+	font-weight: 700;
+	color: var(--hc-muted, #6b5835);
+	margin-bottom: 6px;
+}
+
+@media (hover: hover) {
+	.commentaryPasuk:hover {
+		color: #5a4a2e;
+		text-decoration: underline;
+	}
+}
+
+.commentaryPasuk:focus-visible {
+	outline: 2px solid var(--link-accent, #1a73e8);
+	outline-offset: 2px;
+}
+
+.commentaryPerush {
+	margin-bottom: 10px;
+}
+
+.skeletonPasuk {
+	margin-bottom: 6px;
+}
+
+/* One skeleton bar per .noteContent line box (line-height 1.7). */
+.skeletonLine {
+	margin-block: calc((1lh - 0.8em) / 2);
+}
+
+.commentaryPerush + .commentaryPerush {
+	border-top: 1px dashed #e0d8c0;
+	padding-top: 8px;
+}
+
+.commentaryPerushName {
+	font-size: 0.8rem;
+	font-weight: 700;
+	color: var(--hc-muted, #8b7355);
+	margin-bottom: 4px;
+}
+
+/* Per-perush reading-time estimate in the multi-perush commentary view
+   (#2607). */
+.commentaryPerushMetric {
+	margin-inline-start: 8px;
+	font-size: 0.72rem;
+	font-weight: 400;
+}
+
+.noteContent {
+	font-size: 0.95rem;
+	line-height: 1.7;
+	color: #333;
+	direction: rtl;
+	text-align: justify;
+	text-align-last: right;
+}
+
+.noteContent h2 {
+	font-size: 2em;
+	margin-block: 0.67em;
+}
+.noteContent h3 {
+	font-size: 1.5em;
+	margin-block: 0.83em;
+}
+.noteContent h4 {
+	font-size: 1.17em;
+	margin-block: 1em;
+}
+.noteContent h5 {
+	font-size: 1em;
+	margin-block: 1.33em;
+}
+.noteContent h6 {
+	font-size: 0.83em;
+	margin-block: 1.67em;
+}
+
+/* Same baseline cue as the flat commentary view: links inside DB-authored
+   notes need a persistent non-color marker (WCAG 1.4.1, #2767). */
+.noteContent a {
+	color: var(--link-accent, #1552ac);
+	text-decoration: underline;
+	text-underline-offset: 0.1em;
+}
+
+.noteContent + .noteContent {
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px dashed #e0d8c0;
+}
+
+.noteError {
+	font-size: 0.85rem;
+	color: #8a2b2b;
+}
+
+.noteRetry {
+	appearance: none;
+	font: inherit;
+	font-size: 0.8rem;
+	border: 1px solid #d4c9a8;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: #5a4a2e;
+	padding: 2px 10px;
+	cursor: pointer;
+	margin-inline-start: 8px;
+}
+
+.emptyState {
+	margin: 0;
+	padding: 16px;
+	color: var(--hc-muted, #6b5835);
+	font-size: 0.9rem;
+	text-align: center;
+}
+
+/* ─── מאמרים panel: vertical masonry ───────────────── */
+
+.articlesScroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-gutter: stable;
+	padding: 10px 12px 12px;
+	/* Spine-side scrollbar (#2994); the masonry keeps RTL column order. */
+	direction: var(--flipbook-page-scroll-direction, rtl);
+	scrollbar-width: thin;
+	scrollbar-color: #c4b896 transparent;
+}
+
+.articlesScroll > * {
+	direction: rtl;
+}
+
+.articlesMasonry {
+	column-width: 170px;
+	column-gap: 10px;
+}
+
+.articleCard {
+	display: inline-block;
+	width: 100%;
+	break-inside: avoid;
+	margin: 0 0 10px;
+	background: #fffdf5;
+	border: 1px solid #d4c9a8;
+	border-radius: var(--radius-md);
+	padding: 10px;
+	text-decoration: none;
+	color: inherit;
+	transition:
+		border-color 0.15s,
+		box-shadow 0.15s;
+}
+
+@media (hover: hover) {
+	.articleCard:hover {
+		border-color: var(--hc-muted, #8b7355);
+		box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
+	}
+}
+
+.articleCard:focus-visible {
+	outline: 2px solid var(--link-accent, #1a73e8);
+	outline-offset: 2px;
+}
+
+.articleCardAuthor {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-bottom: 6px;
+}
+
+.articleCardImg {
+	border-radius: 50%;
+	object-fit: cover;
+}
+
+.articleCardAuthorName {
+	font-size: 0.75rem;
+	color: var(--hc-muted, #6b5835);
+}
+
+.articleCardTitle {
+	font-size: 0.95rem;
+	font-weight: 700;
+	color: #5a4a2e;
+	line-height: 1.3;
+	margin-bottom: 4px;
+}
+
+.articleCardAbstract {
+	font-size: 0.8rem;
+	line-height: 1.55;
+	color: #555;
+	display: -webkit-box;
+	-webkit-line-clamp: 4;
+	line-clamp: 4;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.articleCardAbstract p {
+	margin: 0;
+}
+
+/* Full-article reading-time estimate under the card abstract (#2607). */
+.articleCardMetric {
+	display: block;
+	margin-top: 4px;
+	font-size: 0.72rem;
+	color: #8b7355;
+}
+
+/* ─── Article fullscreen (item 7) ───────────────────── */
+
+.articleFullscreen {
+	position: fixed;
+	inset: 0;
+	/* Above the flipbook composite (9999), top nav (10000) and the
+	   tanahpedia tooltip (10001) — a fullscreen dialog is the topmost
+	   layer; at 200 the in-panel article overlay painted over it and
+	   intercepted its clicks. */
+	z-index: 10002;
+	background: #fffdf5;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+/* One active vertical scroller in article fullscreen (#2994): this box
+   only lays out the ArticleFullView — its own .articleBodyWrapper is
+   the single scrolling surface, so no scrolling wrapper wraps another
+   scroller here. */
+.articleFullscreenBody {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	padding: 16px max(16px, 10vw);
+}
+
+@media (prefers-color-scheme: dark) {
+	.panelTab {
+		--tab-fill: #2a241a;
+		--tab-active-fill: #1f1a12;
+		--tab-border: #4a4030;
+		color: var(--hc-muted, #cbb98c);
+	}
+
+	@media (hover: hover) {
+		.panelTab:hover {
+			--tab-fill: #342c1e;
+		}
+	}
+
+	.panelTab[aria-selected="true"] {
+		--tab-border: #8b7355;
+		color: #e0d0a8;
+	}
+
+	/* .panelDate needs no dark override (#2994): it now reads
+	   --pasuk-num-color, the same token .pageHeaderRow uses, so it
+	   tracks the facing header color in every scheme. */
+
+	.panelStage {
+		border-color: #4a4030;
+		background: #1f1a12;
+	}
+
+	.panel {
+		background: #1f1a12;
+	}
+
+	.tagArea,
+	.deepHeader {
+		border-color: #3a3226;
+	}
+
+	.noteContent {
+		color: #e8eaed;
+	}
+
+	.commentaryPerush + .commentaryPerush,
+	.noteContent + .noteContent {
+		border-color: #3a3226;
+	}
+
+	.perushTag {
+		background: #1f1a12;
+		border-color: #4a4030;
+		color: var(--hc-muted, #cbb98c);
+	}
+
+	@media (hover: hover) {
+		.perushTag:hover {
+			border-color: var(--hc-muted, #8b7355);
+		}
+	}
+
+	.perushTagItem[data-selected] .perushTag {
+		background: #cbb98c;
+		border-color: var(--hc-muted, #cbb98c);
+		color: #1f1a12;
+	}
+
+	.scopeRow,
+	.commentaryPerushName,
+	.deepParshan,
+	.articleCardAuthorName,
+	.articleCardAbstract,
+	.emptyState {
+		color: var(--hc-muted, #b8a578);
+	}
+
+	.scopeToggle,
+	.deepBack,
+	.noteRetry {
+		border-color: #4a4030;
+		background: #2a241a;
+		color: var(--hc-muted, #cbb98c);
+	}
+
+	@media (hover: hover) {
+		.scopeToggle:hover,
+		.deepBack:hover,
+		.noteRetry:hover {
+			background: #342c1e;
+		}
+	}
+
+	.deepName,
+	.articleCardTitle {
+		color: var(--hc-muted, #cbb98c);
+	}
+
+	.commentaryGroup {
+		--highlight-rest-border: #4a4030;
+		border-right-color: #4a4030;
+	}
+
+	.commentaryGroup[data-pasuk-highlight] {
+		background: rgba(58, 47, 16, 0.95);
+		border-right-color: #92600b;
+		box-shadow: 0 0 0 2px rgba(146, 96, 11, 0.45);
+	}
+
+	.commentaryPasuk {
+		color: var(--hc-muted, #b8a578);
+	}
+
+	@media (hover: hover) {
+		.commentaryPasuk:hover {
+			color: var(--hc-muted, #cbb98c);
+		}
+	}
+
+	.articleCard {
+		background: #1f1a12;
+		border-color: #4a4030;
+	}
+
+	@media (hover: hover) {
+		.articleCard:hover {
+			border-color: var(--hc-muted, #8b7355);
+		}
+	}
+
+	.panelArticleOverlay {
+		background: #1f1a12;
+	}
+
+	.articleFullscreen {
+		background: #1f1a12;
+	}
+}
+
+.commentaryGroup[data-pasuk-highlight="fading"] {
+	background: transparent;
+	box-shadow: 0 0 0 2px transparent;
+	border-right-color: var(--highlight-rest-border);
+	transition:
+		background-color 0.6s ease-out,
+		box-shadow 0.6s ease-out,
+		border-color 0.6s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.commentaryGroup[data-pasuk-highlight="fading"] {
+		transition: none;
+	}
+}
+
+.panelTab:active,
+.perushTag:active,
+.scopeToggle:active,
+.deepBack:active,
+.noteRetry:active,
+.articleCard:active {
+	scale: var(--press-scale);
+}

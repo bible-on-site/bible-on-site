@@ -132,7 +132,7 @@ Resources:
   # Lambda Function: ECR to ECS Deploy Trigger
   # =============================================================================
   #
-  # Lambda code (Python 3.12) - stored in: docs/aws/cloudformation/ecr-ecs-auto-deploy/ecr-to-ecs-deploy-lambda.py
+  # Lambda code (Python 3.14) - stored in: docs/aws/cloudformation/ecr-ecs-auto-deploy/ecr-to-ecs-deploy-lambda.py
   #
   # The undeployed proposal attempts the following sequence:
   # 1. Receives ECR push events from EventBridge
@@ -149,7 +149,7 @@ Resources:
     Properties:
       FunctionName: ecr-to-ecs-deploy
       Description: Undeployed proposal to scale up during an ECS rollout
-      Runtime: python3.12
+      Runtime: python3.14
       Handler: index.handler
       Timeout: 240 # Increased from 30 to allow waiting for new task stabilisation
       Role: !GetAtt ECRDeployLambdaRole.Arn

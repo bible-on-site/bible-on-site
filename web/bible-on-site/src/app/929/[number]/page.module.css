@@ -25,6 +25,18 @@
 	text-align: right;
 }
 
+/* Shared reading-metrics badge (#2607): same column, subdued meta style. */
+.readingTime {
+	display: block;
+	max-width: 960px;
+	margin: -4px auto 16px;
+	padding: 0 16px;
+	color: var(--muted-text, #666);
+	font-size: 0.85rem;
+	line-height: 1.4;
+	text-align: right;
+}
+
 .perekIntro {
 	max-width: 960px;
 	margin: 0 auto 24px;
@@ -36,7 +48,7 @@
 	display: block;
 	width: 100%;
 	height: auto;
-	border-radius: 12px;
+	border-radius: var(--radius-lg);
 }
 
 .perekIntro figcaption {
@@ -53,8 +65,8 @@
 		var(--font-tanakh-taamey), var(--font-tanakh), "Times New Roman", serif;
 	font-size: calc(1em * var(--perek-font-scale, 1));
 	letter-spacing: 0.04em;
-	word-spacing: var(--perek-word-spacing, 0.12em);
-	line-height: var(--perek-line-height, 1.5);
+	word-spacing: var(--perek-word-spacing, 0.28em);
+	line-height: var(--perek-line-height, 2);
 	padding: 0;
 	margin: 16px;
 	text-align: justify;
@@ -80,10 +92,10 @@
 .perekText > [data-pasuk-highlight] {
 	background: rgba(254, 243, 199, 0.95);
 	box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 }
-.qri label::before {
-	color: #637598;
+.qri span:where([data-qri-label])::before {
+	color: var(--muted-text, #637598);
 	content: "קְרִי:";
 	cursor: text;
 	display: inherit;
@@ -96,16 +108,61 @@
 .tanahpediaLink {
 	color: inherit;
 	text-decoration: none;
-	border-bottom: 1px dashed #1a73e8;
+	border-bottom: 1px dashed var(--link-accent, #1a73e8);
 	transition: border-color 0.2s ease;
 }
-.tanahpediaLink:hover {
-	border-bottom-style: solid;
-	border-bottom-color: var(--link-accent, #1552ac);
+@media (hover: hover) {
+	.tanahpediaLink:hover {
+		border-bottom-style: solid;
+		border-bottom-color: var(--link-accent-hover);
+	}
 }
 
 @media (prefers-color-scheme: dark) {
 	.tanahpediaLink {
 		border-bottom-color: var(--link-accent, #7eb0ff);
 	}
+}
+
+.unitNav {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	max-width: 960px;
+	margin: 24px auto;
+	padding: 0 16px;
+	font-family: inherit;
+}
+
+.unitNavLink {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 10px 16px;
+	border: 1px solid rgba(21, 82, 172, 0.25);
+	border-radius: var(--radius-md);
+	text-decoration: none;
+	color: var(--pasuk-num-color, #1c2c5d);
+	transition: background-color 0.2s ease;
+	max-width: 48%;
+}
+
+@media (hover: hover) {
+	.unitNavLink:hover {
+		background-color: rgba(21, 82, 172, 0.06);
+	}
+}
+
+.unitNavNext {
+	text-align: left;
+	align-items: flex-start;
+}
+
+.unitNavDir {
+	font-size: 0.8rem;
+	color: var(--muted-text, #666);
+}
+
+.unitNavRef {
+	font-weight: 600;
 }
