@@ -63,6 +63,19 @@ describe("POST /api/qa/ask", () => {
 		expect(global.fetch).not.toHaveBeenCalled();
 	});
 
+	it("sends an empty question and ignores non-array perekIds", async () => {
+		(global.fetch as jest.Mock).mockResolvedValue({
+			status: 200,
+			json: async () => ({ answers: [], noAnswer: true }),
+		});
+
+		await POST(request({ perekIds: "5" }));
+		const sent = JSON.parse(
+			(global.fetch as jest.Mock).mock.calls[0][1].body as string,
+		) as Record<string, unknown>;
+		expect(sent).toEqual({ question: "" });
+	});
+
 	it("returns noAnswer when the QA service is unreachable", async () => {
 		(global.fetch as jest.Mock).mockRejectedValue(new Error("ECONNREFUSED"));
 		const res = await POST(request({ question: "q" }));

@@ -166,6 +166,54 @@ describe("QaWidget", () => {
 		]);
 	});
 
+	it("links a perush answer without a pasuk to the perush page", async () => {
+		mockFetchJson({
+			answers: [
+				{
+					text: "תשובה",
+					confidence: 0.7,
+					source: {
+						type: "perush",
+						name: "רמב\"ן",
+						author: "רמב\"ן",
+						perekId: 5,
+						perushSlug: "ramban",
+					},
+				},
+			],
+			noAnswer: false,
+		});
+		await renderAndOpen();
+		await ask();
+		expect(screen.getByRole("link")).toHaveAttribute(
+			"href",
+			"/929/5/ramban",
+		);
+	});
+
+	it("falls back to the perek page for unknown source types", async () => {
+		mockFetchJson({
+			answers: [
+				{
+					text: "תשובה",
+					confidence: 0.4,
+					source: {
+						type: "unknown-kind",
+						name: "מקור",
+						author: "מחבר",
+						perekId: 8,
+					},
+				},
+			],
+			noAnswer: false,
+		});
+		await renderAndOpen();
+		await ask();
+		const link = screen.getByRole("link");
+		expect(link).toHaveAttribute("href", "/929/8");
+		expect(link.textContent).toContain("unknown-kind: מקור");
+	});
+
 	it("shows the empty state when noAnswer is true", async () => {
 		mockFetchJson({ answers: [], noAnswer: true });
 		await renderAndOpen();
