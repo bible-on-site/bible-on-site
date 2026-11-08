@@ -118,3 +118,12 @@ export function takeUnitSummaryPrefetch<T>(
 	}
 	return value;
 }
+
+/**
+ * Drops every primed entry. The revalidate route calls this on each
+ * invalidation so a post-edit read can never consume a pre-edit prime
+ * into the persistent cache — the TTL alone cannot see tag expiry.
+ */
+export function clearUnitSummaryPrefetch(): void {
+	server[storeKey]?.clear();
+}

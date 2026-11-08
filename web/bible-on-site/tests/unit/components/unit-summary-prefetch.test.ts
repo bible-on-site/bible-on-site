@@ -23,29 +23,31 @@ jest.mock("../../../src/lib/articles/service", () => ({
 	getArticleSummariesForRangeGroups: jest.fn(),
 }));
 
+import { getUnitScopeSummariesBatch } from "../../../src/app/components/reading/unit-book-actions";
 import {
 	getMasoraRangeArticles,
 	getMasoraRangePerushim,
 	getParashaRangeArticles,
 	getParashaRangePerushim,
 } from "../../../src/app/components/reading/unit-range-summaries";
-import { getUnitScopeSummariesBatch } from "../../../src/app/components/reading/unit-book-actions";
 import {
-	getArticleSummariesForRanges,
-	getArticleSummariesForRangeGroups,
-} from "../../../src/lib/articles/service";
-import {
-	getPerushimForRanges,
-	getPerushimForRangeGroups,
-} from "../../../src/lib/perushim";
-import {
+	type UnitSummaryPair,
+	clearUnitSummaryPrefetch,
 	primeUnitSummaries,
 	takeUnitSummaryPrefetch,
-	type UnitSummaryPair,
 } from "../../../src/app/components/reading/unit-summary-prefetch";
+import {
+	getArticleSummariesForRangeGroups,
+	getArticleSummariesForRanges,
+} from "../../../src/lib/articles/service";
+import {
+	getPerushimForRangeGroups,
+	getPerushimForRanges,
+} from "../../../src/lib/perushim";
 
-const mockGetPerushimForRanges =
-	getPerushimForRanges as jest.MockedFunction<typeof getPerushimForRanges>;
+const mockGetPerushimForRanges = getPerushimForRanges as jest.MockedFunction<
+	typeof getPerushimForRanges
+>;
 const mockGetPerushimForRangeGroups =
 	getPerushimForRangeGroups as jest.MockedFunction<
 		typeof getPerushimForRangeGroups
@@ -73,8 +75,8 @@ describe("unit summary prefetch", () => {
 		jest.clearAllMocks();
 		jest.spyOn(console, "warn").mockImplementation(() => {});
 		Reflect.deleteProperty(globalThis, storeKey);
-		mockGetArticleSummariesForRangeGroups.mockImplementation(
-			async (groups) => groups.map(() => []),
+		mockGetArticleSummariesForRangeGroups.mockImplementation(async (groups) =>
+			groups.map(() => []),
 		);
 		mockGetPerushimForRangeGroups.mockImplementation(async (groups) =>
 			groups.map(() => []),
@@ -108,9 +110,7 @@ describe("unit summary prefetch", () => {
 			expect(takeUnitSummaryPrefetch("masora:8", "articles")).toEqual([
 				article,
 			]);
-			expect(takeUnitSummaryPrefetch("masora:8", "perushim")).toEqual([
-				perush,
-			]);
+			expect(takeUnitSummaryPrefetch("masora:8", "perushim")).toEqual([perush]);
 		});
 
 		it("returns undefined for unprimed keys and other scopes", () => {
@@ -119,26 +119,50 @@ describe("unit summary prefetch", () => {
 			expect(
 				takeUnitSummaryPrefetch("parasha:1:torah", "articles"),
 			).toBeUndefined();
-			expect(takeUnitSummaryPrefetch("parasha:2:haftara", "articles")).toBeUndefined();
+			expect(
+				takeUnitSummaryPrefetch("parasha:2:haftara", "articles"),
+			).toBeUndefined();
 			expect(takeUnitSummaryPrefetch("masora:1", "articles")).toBeUndefined();
+		});
+
+		it("clearUnitSummaryPrefetch drops every primed entry", () => {
+			primeUnitSummaries("parasha", "torah", [5], { "5": pair });
+			primeUnitSummaries("masora", "torah", [8], { "8": pair });
+
+			clearUnitSummaryPrefetch();
+
+			expect(
+				takeUnitSummaryPrefetch("parasha:5:torah", "articles"),
+			).toBeUndefined();
+			expect(takeUnitSummaryPrefetch("masora:8", "perushim")).toBeUndefined();
 		});
 
 		it("expires entries after the TTL", () => {
 			primeUnitSummaries("parasha", "torah", [5], { "5": pair });
-			const now = jest.spyOn(Date, "now").mockReturnValue(Date.now() + 3 * 60 * 1000);
+			const now = jest
+				.spyOn(Date, "now")
+				.mockReturnValue(Date.now() + 3 * 60 * 1000);
 
-			expect(takeUnitSummaryPrefetch("parasha:5:torah", "articles")).toBeUndefined();
-			expect(takeUnitSummaryPrefetch("parasha:5:torah", "perushim")).toBeUndefined();
+			expect(
+				takeUnitSummaryPrefetch("parasha:5:torah", "articles"),
+			).toBeUndefined();
+			expect(
+				takeUnitSummaryPrefetch("parasha:5:torah", "perushim"),
+			).toBeUndefined();
 			now.mockRestore();
 		});
 
 		it("sweeps expired entries on the next prime", () => {
 			primeUnitSummaries("parasha", "torah", [5], { "5": pair });
-			const now = jest.spyOn(Date, "now").mockReturnValue(Date.now() + 3 * 60 * 1000);
+			const now = jest
+				.spyOn(Date, "now")
+				.mockReturnValue(Date.now() + 3 * 60 * 1000);
 			primeUnitSummaries("parasha", "torah", [6], { "6": pair });
 			now.mockRestore();
 
-			expect(takeUnitSummaryPrefetch("parasha:5:torah", "articles")).toBeUndefined();
+			expect(
+				takeUnitSummaryPrefetch("parasha:5:torah", "articles"),
+			).toBeUndefined();
 			expect(takeUnitSummaryPrefetch("parasha:6:torah", "articles")).toEqual([
 				article,
 			]);
@@ -149,7 +173,9 @@ describe("unit summary prefetch", () => {
 			primeUnitSummaries("masora", "haftara", [8], { "8": pair });
 
 			expect(takeUnitSummaryPrefetch("masora:8", "articles")).toBeUndefined();
-			expect(takeUnitSummaryPrefetch("parasha:1:torah", "articles")).toBeUndefined();
+			expect(
+				takeUnitSummaryPrefetch("parasha:1:torah", "articles"),
+			).toBeUndefined();
 		});
 
 		it("skips units missing from the summaries record", () => {
@@ -158,13 +184,17 @@ describe("unit summary prefetch", () => {
 			expect(takeUnitSummaryPrefetch("parasha:5:torah", "articles")).toEqual([
 				article,
 			]);
-			expect(takeUnitSummaryPrefetch("parasha:6:torah", "articles")).toBeUndefined();
+			expect(
+				takeUnitSummaryPrefetch("parasha:6:torah", "articles"),
+			).toBeUndefined();
 		});
 	});
 
 	describe("book fetch warms flat-page loaders", () => {
 		it("a masora batch serves both flat loaders without re-querying", async () => {
-			mockGetArticleSummariesForRangeGroups.mockResolvedValue([[article]] as never);
+			mockGetArticleSummariesForRangeGroups.mockResolvedValue([
+				[article],
+			] as never);
 			mockGetPerushimForRangeGroups.mockResolvedValue([[perush]] as never);
 
 			await getUnitScopeSummariesBatch("masora", [8], "torah");
@@ -176,10 +206,14 @@ describe("unit summary prefetch", () => {
 		});
 
 		it("a parasha haftara batch warms only the haftara scope", async () => {
-			mockGetArticleSummariesForRangeGroups.mockResolvedValue([[article]] as never);
+			mockGetArticleSummariesForRangeGroups.mockResolvedValue([
+				[article],
+			] as never);
 			mockGetPerushimForRangeGroups.mockResolvedValue([[perush]] as never);
 			const torahArticles = [{ id: 9, name: "תורה" }];
-			mockGetArticleSummariesForRanges.mockResolvedValue(torahArticles as never);
+			mockGetArticleSummariesForRanges.mockResolvedValue(
+				torahArticles as never,
+			);
 
 			await getUnitScopeSummariesBatch("parasha", [1], "haftara");
 
@@ -192,7 +226,9 @@ describe("unit summary prefetch", () => {
 		});
 
 		it("a failed batch primes nothing — flat loaders still query", async () => {
-			mockGetArticleSummariesForRangeGroups.mockRejectedValue(new Error("DB down"));
+			mockGetArticleSummariesForRangeGroups.mockRejectedValue(
+				new Error("DB down"),
+			);
 
 			const result = await getUnitScopeSummariesBatch("masora", [8], "torah");
 			expect(result["8"]).toEqual({ articles: [], perushim: [] });
@@ -203,7 +239,9 @@ describe("unit summary prefetch", () => {
 		});
 
 		it("primed entries are single-use — a second flat render re-queries", async () => {
-			mockGetArticleSummariesForRangeGroups.mockResolvedValue([[article]] as never);
+			mockGetArticleSummariesForRangeGroups.mockResolvedValue([
+				[article],
+			] as never);
 			mockGetPerushimForRangeGroups.mockResolvedValue([[perush]] as never);
 			const fresh = [{ id: 10, name: "טרי" }];
 			mockGetArticleSummariesForRanges.mockResolvedValue(fresh as never);
