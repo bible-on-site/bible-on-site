@@ -147,6 +147,7 @@ describe("resolveEntityChanges", () => {
 				"/929/authors/slug:רשי",
 				"/parasha/בראשית",
 				"/masora/1",
+				"/sitemap.xml",
 			]),
 		);
 		expect(out.urls).toEqual(out.paths);
@@ -458,6 +459,7 @@ describe("resolveEntityChanges", () => {
 				"/929/5/12",
 				"/parasha/בראשית",
 				"/masora/1",
+				"/sitemap.xml",
 			]),
 		);
 	});
@@ -502,6 +504,7 @@ describe("resolveEntityChanges", () => {
 				"/pedia/משה רבנו",
 				"/pedia/מושה",
 				"/pedia",
+				"/sitemap.xml",
 				"/pedia/אישים",
 				"/pedia/מקומות",
 			]),

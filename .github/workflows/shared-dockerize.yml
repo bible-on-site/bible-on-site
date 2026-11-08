@@ -75,7 +75,10 @@ jobs:
           esac
 
       # Free disk space before build - the Website SSG build generates 1000+ static pages
-      # and retains sizeable build/dependency layers on disk
+      # and retains sizeable build/dependency layers on disk. The action's
+      # large-packages apt sweep aborts the whole removal when one package is
+      # absent from the image (powershell on ubuntu-24.04+, Chrome on ARM), so
+      # the installed-package sweep below handles apt removals.
       - name: Free Disk Space
         uses: jlumbroso/free-disk-space@v2.0.0
         with:
@@ -127,10 +130,23 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - uses: taiki-e/install-action@v2
-        if: ${{ env.IS_CARGO == 'true' }}
+        if: ${{ env.IS_CARGO == 'true' && (runner.os != 'Linux' || runner.arch != 'ARM64') }}
         with:
           # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
           tool: cargo-make@0.37.24, tomato-toml, semver-bump
+
+      # cargo-make's latest release (0.37.24) publishes no aarch64-linux
+      # prebuilt, so on ARM64 Linux install-action can only fall back to a
+      # third-party QuickInstall rebuild. Compile the pinned release from
+      # crates.io there instead: first-party source, locked dependency graph.
+      - uses: taiki-e/install-action@v2
+        if: ${{ env.IS_CARGO == 'true' && runner.os == 'Linux' && runner.arch == 'ARM64' }}
+        with:
+          tool: tomato-toml, semver-bump
+
+      - name: Install cargo-make (aarch64-linux)
+        if: ${{ env.IS_CARGO == 'true' && runner.os == 'Linux' && runner.arch == 'ARM64' }}
+        run: cargo install --locked cargo-make@0.37.24
 
       - name: Get Module Version
         id: get_module_version

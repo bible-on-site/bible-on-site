@@ -64,9 +64,7 @@ export const updateEntityDisplayName = createServerFn({ method: "POST" })
 			name,
 			data.entityId,
 		]);
-		await revalidateWebsite(
-			await pediaChangesForEntities([data.entityId]),
-		);
+		await revalidateWebsite(await pediaChangesForEntities([data.entityId]));
 		return { success: true };
 	});
 
@@ -139,16 +137,15 @@ export const updatePersonMainName = createServerFn({ method: "POST" })
 				[data.personId],
 			);
 			if (entity) {
-				await txExecute(conn, "UPDATE tanahpedia_entity SET name = ? WHERE id = ?", [
-					name,
-					entity.entity_id,
-				]);
+				await txExecute(
+					conn,
+					"UPDATE tanahpedia_entity SET name = ? WHERE id = ?",
+					[name, entity.entity_id],
+				);
 			}
 		});
 
-		await revalidateWebsite(
-			await pediaChangesForPersons([data.personId]),
-		);
+		await revalidateWebsite(await pediaChangesForPersons([data.personId]));
 		return { success: true };
 	});
 
@@ -179,9 +176,7 @@ export const updatePersonSex = createServerFn({ method: "POST" })
 				);
 			}
 		});
-		await revalidateWebsite(
-			await pediaChangesForPersons([data.personId]),
-		);
+		await revalidateWebsite(await pediaChangesForPersons([data.personId]));
 		return { success: true };
 	});
 
@@ -367,9 +362,7 @@ export const createEntityAndLinkToEntry = createServerFn({ method: "POST" })
 			);
 		});
 
-		await revalidateWebsite(
-			await pediaChangesForEntryIds([data.entryId]),
-		);
+		await revalidateWebsite(await pediaChangesForEntryIds([data.entryId]));
 		return { entityId, linkId };
 	});
 
@@ -428,8 +421,6 @@ export const linkExistingEntityToEntry = createServerFn({ method: "POST" })
 			);
 			return { linkId: winner?.id ?? linkId };
 		}
-		await revalidateWebsite(
-			await pediaChangesForEntryIds([data.entryId]),
-		);
+		await revalidateWebsite(await pediaChangesForEntryIds([data.entryId]));
 		return { linkId };
 	});

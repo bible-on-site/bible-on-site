@@ -135,6 +135,9 @@ entry CRUD and entity links, entry-revision approval/restore, and entity /
 person / place / family structural edits. Each mutation reports the exact
 public URLs it changed — including the old URL after a rename/move and the
 removed URL after a delete — so notification covers stale URLs too.
+Article, author and Tanahpedia entry changes also expire the prerendered
+`/sitemap.xml`, which lists those entities from uncached DB reads and would
+otherwise keep build-time URLs until the next deploy.
 
 **Limits**: invalidation is local to the website instance that receives the
 call — the service normally runs a single task (`DesiredCount: 1`), but
@@ -249,6 +252,47 @@ User clicks "Download" → Server Action (actions.ts)
 ```
 
 **Why AWS SDK instead of HTTP?** Lambda Function URLs are not supported in `il-central-1`. The ECS task role (`bible-on-site-website-task-role`) grants `lambda:InvokeFunction` permission, and the `BULLETIN_LAMBDA_NAME` environment variable tells the website which Lambda to invoke.
+
+## Server Event-Loop Diagnostics (#2991)
+
+`src/instrumentation.ts` can start a bounded, per-process diagnostic that
+explains stalls the minute-scale ECS metrics cannot see (for example a
+`/api/health` upstream wait where the handler itself ran instantly). It is
+**disabled by default and fully inert when disabled**: nothing is constructed,
+no timers or observers exist, and there is no public endpoint — output is a
+single JSON line per interval on stdout, visible only in the container logs.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ENABLE_EVENT_LOOP_DIAGNOSTICS` | unset (off) | `1` enables emission; any other value keeps it inert |
+| `EVENT_LOOP_DIAGNOSTICS_INTERVAL_MS` | `60000` | Summary interval; clamped to 1000–900000 ms |
+
+Emissions align to UTC wall-clock boundaries so `intervalStart`/`intervalEnd`
+correlate directly with nginx upstream logs. Each line carries `version`
+(package version), `uptimeSeconds`, `eventLoopDelay` (sample count plus
+min/mean/max/p50/p90/p95/p99 in ms, sampled once per event-loop iteration so
+queueing delay ahead of a request handler is recorded), `eventLoopUtilization`
+(idle/active ms and the delta ratio), `cpu` (user/system ms deltas) and `gc`
+(count, total/max ms, per-kind counts). Accumulators reset every interval; the
+timer is unref'd so drain behavior is unchanged. Enabling in production is a
+separate deployment decision — the instrumentation PR does not turn it on.
+
+Local verification against the real compiled server:
+
+```bash
+bun run build                      # produces .next/standalone via postbuild
+cd .next/standalone
+# --import the helper by absolute file URL, so it resolves from this cwd
+NODE_OPTIONS="--import <absolute-file-url-to scripts/test-support/block-event-loop.mjs>" \
+BLOCK_EVENT_LOOP_AFTER_MS=8000 BLOCK_EVENT_LOOP_MS=3000 \
+ENABLE_EVENT_LOOP_DIAGNOSTICS=1 EVENT_LOOP_DIAGNOSTICS_INTERVAL_MS=5000 \
+node server.js
+```
+
+The 3 s block lands inside one 5 s interval: its `eventLoopDelay.maxMs` shows
+~3000 while a health request queued during the block still returns instantly
+once the loop turns, reproducing the production signature. An interval without
+the block shows only baseline delay — the asynchronous-wait control.
 
 ## Layers
 
