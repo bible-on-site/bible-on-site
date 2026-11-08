@@ -297,10 +297,10 @@ public class PerekDataService
 
     /// <summary>
     /// Loads pasukim for several perakim in one round-trip (e.g. the
-    /// Tanahpedia occurrences table, which cites verses across many perakim).
+    /// Tanahpedia occurrences table, which cites pesukim across many perakim).
     /// <paramref name="pasukIds"/> optionally narrows the read to the cited
     /// pasuk numbers; it is a union across all requested perakim, so a perek
-    /// may get back a few uncited verses - callers look verses up by number.
+    /// may get back a few uncited pesukim - callers look pesukim up by number.
     /// </summary>
     public virtual async Task<Dictionary<int, List<Pasuk>>> LoadPasukimAsync(
         IReadOnlyCollection<int> perekIds, IReadOnlyCollection<int>? pasukIds)
