@@ -17,6 +17,10 @@ import {
 } from "@/lib/perushim";
 import type { DivisionId, ScriptureRange } from "@/lib/reading/contract";
 import type { UnitBookScope } from "./unit-book-content";
+import {
+	primeUnitSummaries,
+	type UnitSummaryPair,
+} from "./unit-summary-prefetch";
 
 function unitScopeRanges(
 	division: DivisionId,
@@ -73,12 +77,13 @@ export async function getUnitScopeSummariesBatch(
 	// One grouped query per service for the whole sefer — a per-unit
 	// fan-out over a 5-connection pool turned a large sefer's book open
 	// into hundreds of serialized round-trips.
+	let summaries: Record<string, UnitSummaryPair>;
 	try {
 		const [articleGroups, perushGroups] = await Promise.all([
 			getArticleSummariesForRangeGroups(rangeGroups),
 			getPerushimForRangeGroups(rangeGroups),
 		]);
-		return Object.fromEntries(
+		summaries = Object.fromEntries(
 			validIds.map((unitId, index) => [
 				String(unitId),
 				{
@@ -101,6 +106,11 @@ export async function getUnitScopeSummariesBatch(
 			]),
 		);
 	}
+	// Warm the flat unit pages' per-unit cache entries from the same
+	// grouped results, so a later unit render reuses them instead of
+	// re-querying (unit-summary-prefetch).
+	primeUnitSummaries(division, scope, validIds, summaries);
+	return summaries;
 }
 
 /**

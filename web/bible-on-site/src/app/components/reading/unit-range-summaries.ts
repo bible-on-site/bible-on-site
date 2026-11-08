@@ -3,8 +3,12 @@ import {
 	getParashaUnitById,
 	parashaAuxiliaryRanges,
 } from "@/data/parasha/parasha-units";
+import type { ArticleSummary } from "@/lib/articles";
 import { getArticleSummariesForRanges } from "@/lib/articles/service";
-import { getPerushimForRanges } from "@/lib/perushim";
+import {
+	getPerushimForRanges,
+	type RangePerushSummary,
+} from "@/lib/perushim";
 import {
 	COLLECTION_TAGS,
 	cachedPerKey,
@@ -13,6 +17,7 @@ import {
 	parashaArticlesTag,
 	parashaPerushimTag,
 } from "@/lib/revalidate/tags";
+import { takeUnitSummaryPrefetch } from "./unit-summary-prefetch";
 
 type UnitSummaryScope = "torah" | "haftara";
 
@@ -33,6 +38,11 @@ export const getParashaRangePerushim = cachedPerKey(
 		];
 	},
 	async (unitId: number, scope: UnitSummaryScope) => {
+		const prefetched = takeUnitSummaryPrefetch<RangePerushSummary>(
+			`parasha:${unitId}:${scope}`,
+			"perushim",
+		);
+		if (prefetched !== undefined) return prefetched;
 		const unit = getParashaUnitById(unitId);
 		const ranges =
 			scope === "haftara" ? parashaAuxiliaryRanges(unit) : unit.ranges;
@@ -51,6 +61,11 @@ export const getParashaRangeArticles = cachedPerKey(
 		];
 	},
 	async (unitId: number, scope: UnitSummaryScope) => {
+		const prefetched = takeUnitSummaryPrefetch<ArticleSummary>(
+			`parasha:${unitId}:${scope}`,
+			"articles",
+		);
+		if (prefetched !== undefined) return prefetched;
 		const unit = getParashaUnitById(unitId);
 		const ranges =
 			scope === "haftara" ? parashaAuxiliaryRanges(unit) : unit.ranges;
@@ -62,14 +77,26 @@ export const getMasoraRangePerushim = cachedPerKey(
 	"range-perushim",
 	(unitId: number) => String(unitId),
 	(key) => [COLLECTION_TAGS.perushim, masoraPerushimTag(Number(key))],
-	async (unitId: number) =>
-		getPerushimForRanges(getMasoraUnitById(unitId).ranges),
+	async (unitId: number) => {
+		const prefetched = takeUnitSummaryPrefetch<RangePerushSummary>(
+			`masora:${unitId}`,
+			"perushim",
+		);
+		if (prefetched !== undefined) return prefetched;
+		return getPerushimForRanges(getMasoraUnitById(unitId).ranges);
+	},
 );
 
 export const getMasoraRangeArticles = cachedPerKey(
 	"range-article-summaries",
 	(unitId: number) => String(unitId),
 	(key) => [COLLECTION_TAGS.articles, masoraArticlesTag(Number(key))],
-	async (unitId: number) =>
-		getArticleSummariesForRanges(getMasoraUnitById(unitId).ranges),
+	async (unitId: number) => {
+		const prefetched = takeUnitSummaryPrefetch<ArticleSummary>(
+			`masora:${unitId}`,
+			"articles",
+		);
+		if (prefetched !== undefined) return prefetched;
+		return getArticleSummariesForRanges(getMasoraUnitById(unitId).ranges);
+	},
 );
