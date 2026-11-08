@@ -643,6 +643,10 @@ mod tests {
                 .append_query_results::<entities::author::Model, Vec<entities::author::Model>, _>([
                     vec![author_model(3), author_model(4)],
                 ])
+                // No Hebrew-date override result is queued (#3098): this
+                // selection does not ask for articleHebrewDateOverrides, so
+                // the gated lookup must not run — a regression would consume
+                // the summaries rows into the wrong shape and fail.
                 // Starter fetches article summaries only (no content column); author
                 // and perek counts are derived from these rows in memory.
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([

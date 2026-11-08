@@ -124,6 +124,146 @@ pub async fn find_covering_sources_by_article_id(
     Ok(sources)
 }
 
+/// Maximum day a uniform Hebrew month can reach in some year (#3098).
+/// Cheshvan and Kislev vary 29/30 by year so 30 is a valid *input* for them
+/// (a 30th that a given year lacks simply matches no real date). Months that
+/// can never reach 30 (Tevet, Adar of a non-leap year, Iyar, Tammuz, Elul,
+/// Adar II) reject 30. Returns `None` for out-of-range months.
+pub fn max_day_for_hebrew_month(hebrew_month: i32) -> Option<i32> {
+    match hebrew_month {
+        1 | 2 | 3 | 5 | 7 | 9 | 11 | 13 => Some(30),
+        4 | 6 | 8 | 10 | 12 | 14 => Some(29),
+        _ => None,
+    }
+}
+
+/// Validates a recurring Hebrew {month, day} against the uniform numbering and
+/// each month's real maximum. The message names the offending bound so callers
+/// see a clear 400 rather than a silently empty lookup (#3098).
+pub fn validate_hebrew_month_day(hebrew_month: i32, hebrew_day: i32) -> Result<(), ServiceError> {
+    let Some(max_day) = max_day_for_hebrew_month(hebrew_month) else {
+        return Err(ServiceError::bad_request(
+            "Hebrew month must be between 1 and 14 (uniform numbering: 1=Tishrei, 13=Adar I, 14=Adar II)",
+        ));
+    };
+    if !(1..=max_day).contains(&hebrew_day) {
+        return Err(ServiceError::bad_request(&format!(
+            "Hebrew day {} is invalid for month {} (allowed: 1-{})",
+            hebrew_day, hebrew_month, max_day
+        )));
+    }
+    Ok(())
+}
+
+/// TRUE when the error means the Hebrew-date override schema (#3098) is
+/// absent — missing table or column — as opposed to a genuine failure.
+/// Databases that predate `tanah_article_hebrew_date_upgrade.sql` (a staggered
+/// rollout deploys the API before the migration) surface ER_NO_SUCH_TABLE /
+/// ER_BAD_FIELD_ERROR, which the override reads degrade to "no assignments";
+/// any other database error stays fatal. Matches on the rendered message so
+/// mock-backed tests and different sea-orm/sqlx plumbing behave the same —
+/// the same idiom the reading-metrics service uses.
+fn is_missing_hebrew_date_schema(err: &DbErr) -> bool {
+    let message = err.to_string();
+    message.contains("1146")
+        || message.contains("1054")
+        || message.contains("doesn't exist")
+        || message.contains("Unknown table")
+        || message.contains("Unknown column")
+}
+
+/// Every recurring Hebrew-date article override (#3098), for the starter
+/// payload: native clients cache the whole map so daily-override resolution
+/// works offline without a per-day network call. Before the migration is
+/// deployed the table is absent and the lookup degrades to an empty list —
+/// "no overrides" is the honest answer that keeps every starter field
+/// serving during the rollout window.
+pub async fn find_all_hebrew_date_overrides(
+    db: &Database,
+) -> Result<Vec<entities::article_hebrew_date::Model>, ServiceError> {
+    tracing::info_span!("articles_service::find_all_hebrew_date_overrides");
+    let overrides = match entities::article_hebrew_date::Entity::find()
+        .all(db.get_connection())
+        .await
+    {
+        Ok(overrides) => overrides,
+        Err(err) if is_missing_hebrew_date_schema(&err) => {
+            tracing::warn!(
+                "Hebrew-date override schema is not deployed yet; returning no overrides"
+            );
+            Vec::new()
+        }
+        Err(err) => {
+            return Err(ServiceError::internal_server_error(
+                INTERNAL_SERVER_ERROR,
+                Some(err),
+            ));
+        }
+    };
+    tracing::info!(
+        "Found {} recurring Hebrew-date article overrides",
+        overrides.len()
+    );
+    Ok(overrides)
+}
+
+/// The article assigned to one recurring Hebrew {month, day} (#3098).
+/// `None` means the date has no assignment and callers keep the ordinary
+/// per-perek selection. The returned article is the day's sole article —
+/// never one candidate among many.
+pub async fn find_article_by_hebrew_date(
+    db: &Database,
+    hebrew_month: i32,
+    hebrew_day: i32,
+) -> Result<Option<Model>, ServiceError> {
+    tracing::info_span!(
+        "articles_service::find_article_by_hebrew_date",
+        %hebrew_month,
+        %hebrew_day
+    );
+    use entities::article_hebrew_date::{Column as DateColumn, Entity as DateEntity};
+
+    let article = match DateEntity::find()
+        .filter(DateColumn::HebrewMonth.eq(hebrew_month as u8))
+        .filter(DateColumn::HebrewDay.eq(hebrew_day as u8))
+        .find_also_related(Entity)
+        .one(db.get_connection())
+        .await
+    {
+        Ok(found) => found.and_then(|(_, article)| article),
+        // Missing schema = pre-migration database: no date can hold an
+        // assignment yet, so the lookup reads as "no override".
+        Err(err) if is_missing_hebrew_date_schema(&err) => {
+            tracing::warn!(
+                "Hebrew-date override schema is not deployed yet; returning no override"
+            );
+            None
+        }
+        Err(err) => {
+            return Err(ServiceError::internal_server_error(
+                INTERNAL_SERVER_ERROR,
+                Some(err),
+            ));
+        }
+    };
+    match &article {
+        Some(value) => {
+            tracing::info!(
+                "Hebrew date {}-{} overrides to article {}",
+                hebrew_month,
+                hebrew_day,
+                value.id
+            );
+        }
+        None => tracing::info!(
+            "No Hebrew-date override for {}-{}",
+            hebrew_month,
+            hebrew_day
+        ),
+    }
+    Ok(article)
+}
+
 /// Batch variant of `find_covering_sources_by_article_id`: one IN query for
 /// many articles, grouped by article_id with the same per-article ordering
 /// (perek_id, pasuk). Articles without rows are absent from the map.
@@ -1081,6 +1221,120 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
+            ServiceError::InternalServerError(_)
+        ));
+    }
+
+    /// Happy path and failure mode for the recurring-date override list
+    /// (#3098) — the starter payload ships every assignment to native clients.
+    #[tokio::test]
+    async fn find_all_hebrew_date_overrides_returns_rows_and_maps_db_errors() {
+        use entities::article_hebrew_date;
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<article_hebrew_date::Model, Vec<_>, _>([vec![
+                    article_hebrew_date::Model {
+                        hebrew_month: 11,
+                        hebrew_day: 9,
+                        article_id: 2199,
+                        created_at: chrono::Utc::now(),
+                    },
+                ]])
+                .into_connection(),
+        );
+
+        let overrides = find_all_hebrew_date_overrides(&db)
+            .await
+            .expect("overrides should load");
+        assert_eq!(overrides.len(), 1);
+        assert_eq!(overrides[0].article_id, 2199);
+
+        let failing = create_mock_db_with_query_error("date table missing");
+        assert!(matches!(
+            find_all_hebrew_date_overrides(&failing).await.unwrap_err(),
+            ServiceError::InternalServerError(_)
+        ));
+    }
+
+    /// Before the migration is deployed the override table is absent: the
+    /// starter-facing list degrades to empty (a staggered rollout must not
+    /// break the whole starter), while a genuine failure still errors.
+    #[tokio::test]
+    async fn find_all_hebrew_date_overrides_degrades_before_migration() {
+        let missing = create_mock_db_with_query_error(
+            "Query Error: Table 'tanah.tanah_article_hebrew_date' doesn't exist (1146)",
+        );
+        let overrides = find_all_hebrew_date_overrides(&missing)
+            .await
+            .expect("missing schema should degrade to an empty list");
+        assert!(overrides.is_empty());
+    }
+
+    /// The single-date lookup degrades the same way: a pre-migration
+    /// database reads as "no override" rather than failing the field.
+    #[tokio::test]
+    async fn find_article_by_hebrew_date_degrades_before_migration() {
+        let missing = create_mock_db_with_query_error(
+            "Query Error: Table 'tanah.tanah_article_hebrew_date' doesn't exist (1146)",
+        );
+        assert!(
+            find_article_by_hebrew_date(&missing, 11, 9)
+                .await
+                .expect("missing schema should degrade to no override")
+                .is_none()
+        );
+    }
+
+    /// The single assigned article resolves through the date join (#3098):
+    /// a row with its related article, a bare row, an empty result, and the
+    /// DB-failure arm all map onto the service contract.
+    #[tokio::test]
+    async fn find_article_by_hebrew_date_resolves_assignment_and_errors() {
+        type Pair = (entities::article_hebrew_date::Model, Option<Model>);
+        let assigned = |article: Option<Model>| {
+            Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<Pair, Vec<Pair>, _>([vec![(
+                        entities::article_hebrew_date::Model {
+                            hebrew_month: 11,
+                            hebrew_day: 9,
+                            article_id: 2199,
+                            created_at: chrono::Utc::now(),
+                        },
+                        article,
+                    )]])
+                    .into_connection(),
+            )
+        };
+
+        let found = find_article_by_hebrew_date(&assigned(Some(article_model(2199, 1, 1))), 11, 9)
+            .await
+            .expect("lookup should succeed");
+        assert_eq!(found.map(|m| m.id), Some(2199));
+
+        // An assignment row without its article resolves to no override.
+        let orphan = find_article_by_hebrew_date(&assigned(None), 11, 9)
+            .await
+            .expect("lookup should succeed");
+        assert!(orphan.is_none());
+
+        let empty = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<Pair, Vec<Pair>, _>([Vec::new()])
+                .into_connection(),
+        );
+        assert!(
+            find_article_by_hebrew_date(&empty, 8, 5)
+                .await
+                .expect("empty result")
+                .is_none()
+        );
+
+        let failing = create_mock_db_with_query_error("date join failed");
+        assert!(matches!(
+            find_article_by_hebrew_date(&failing, 11, 9)
+                .await
+                .unwrap_err(),
             ServiceError::InternalServerError(_)
         ));
     }

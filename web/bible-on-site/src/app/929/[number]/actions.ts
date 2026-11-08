@@ -3,17 +3,18 @@
 import type { Article, ArticleSummary } from "@/lib/articles";
 import {
 	getArticleById,
+	getArticleHebrewDateOverride,
 	getArticleSummariesByPerekId,
 	getArticleSummariesByPerekIds,
 } from "@/lib/articles";
+import type { BookshelfDedicationLines } from "@/lib/dedications/loaders";
+import { formatDedication } from "@/lib/dedications/types";
 import { ExportError } from "@/lib/download/export-error";
 import type {
 	PageRangesDownloadContext,
 	SeferDownloadContext,
 	SemanticPageInfo,
 } from "@/lib/download/types";
-import type { BookshelfDedicationLines } from "@/lib/dedications/loaders";
-import { formatDedication } from "@/lib/dedications/types";
 import type { PerushNote, PerushSummary } from "@/lib/perushim";
 import {
 	getPerushimByPerekId,
@@ -30,7 +31,66 @@ import {
 	type ReadingMetric,
 } from "@/lib/reading-metrics";
 import type { ReadingProgressUnit } from "@/lib/reading-metrics/types";
+import {
+	articleDateOverridesTag,
+	COLLECTION_TAGS,
+	cachedPerKey,
+} from "@/lib/revalidate/tags";
 import { decorateArticleContent } from "@/lib/tanahpedia/article-mention-refs";
+
+/**
+ * The article assigned to one recurring Hebrew month/day (server action,
+ * #3098) — the day's sole article on its resolved daily perek, or null when
+ * the date has no assignment. Cached per month/day under the
+ * `article-date-overrides` + `articles` tags so admin edits and assignment
+ * changes expire it; `false` revalidate keeps it out of ISR clocks.
+ */
+const getCachedDateOverride = cachedPerKey(
+	"article-date-override",
+	(month: number, day: number) => `${month}:${day}`,
+	() => [COLLECTION_TAGS.articles, articleDateOverridesTag],
+	(month: number, day: number) => getArticleHebrewDateOverride(month, day),
+);
+
+/**
+ * Client-facing override lookup for the daily article slot (#3098). Validates
+ * the uniform month/day before querying — an out-of-range date is a client
+ * bug and must surface as an error, not a silent empty result.
+ */
+export async function getDailyArticleOverride(
+	hebrewMonth: number,
+	hebrewDay: number,
+): Promise<ArticleSummary | null> {
+	const maxDay = MAX_DAY_FOR_HEBREW_MONTH[hebrewMonth];
+	if (!maxDay || hebrewDay < 1 || hebrewDay > maxDay) {
+		throw new Error(
+			`Invalid Hebrew date ${hebrewMonth}/${hebrewDay} — month 1-14, day within the month's real maximum`,
+		);
+	}
+	return getCachedDateOverride(hebrewMonth, hebrewDay);
+}
+
+/**
+ * Maximum day each uniform Hebrew month can reach in some year: Cheshvan and
+ * Kislev vary 29/30 so 30 stays valid input for them; Tevet, non-leap Adar,
+ * Iyar, Tammuz, Elul and Adar II never reach 30 (#3098).
+ */
+const MAX_DAY_FOR_HEBREW_MONTH: Record<number, number> = {
+	1: 30,
+	2: 30,
+	3: 30,
+	4: 29,
+	5: 30,
+	6: 29,
+	7: 30,
+	8: 29,
+	9: 30,
+	10: 29,
+	11: 30,
+	12: 29,
+	13: 30,
+	14: 29,
+};
 
 /**
  * Fetch a single article by ID for in-book display (e.g. flipbook blank page).

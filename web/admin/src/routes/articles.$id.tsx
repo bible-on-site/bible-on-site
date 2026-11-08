@@ -10,6 +10,7 @@ import { ArticleRelationshipsPanel } from "~/components/ArticleRelationshipsPane
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
 import { CoveringSourcesEditor } from "~/components/CoveringSourcesEditor";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
+import { HebrewDatesEditor } from "~/components/HebrewDatesEditor";
 import { WysiwygEditor } from "~/components/WysiwygEditor";
 import {
 	coverageFieldsForSave,
@@ -65,6 +66,7 @@ function ArticleEditPage() {
 		content: "",
 		coveringSources: isNew ? [] : undefined,
 		coverageVerified: false,
+		hebrewDates: isNew ? [] : undefined,
 		// New articles keep moedIds undefined until the catalogue query
 		// proves the moed schema exists — an eager [] would still hit the
 		// link table on save and roll the create back pre-migration.
@@ -131,6 +133,7 @@ function ArticleEditPage() {
 				content: article.content ?? "",
 				coveringSources: article.coveringSources,
 				coverageVerified: article.coverage_verified,
+				hebrewDates: article.hebrewDates,
 				moedIds: article.moedIds,
 			});
 		}
@@ -436,6 +439,15 @@ function ArticleEditPage() {
 								onVerifiedChange={(coverageVerified) =>
 									handleFieldChange("coverageVerified", coverageVerified)
 								}
+							/>
+						</div>
+					)}
+
+					{formData.hebrewDates !== undefined && (
+						<div className="border-t border-gray-100 pt-6">
+							<HebrewDatesEditor
+								dates={formData.hebrewDates}
+								onChange={(dates) => handleFieldChange("hebrewDates", dates)}
 							/>
 						</div>
 					)}

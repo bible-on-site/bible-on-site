@@ -1,42 +1,42 @@
 import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 import { Suspense } from "react";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { loadRecitation } from "@/lib/recitation-loader";
 import { getAdjacentPereks, getPerekByPerekId } from "../../../data/perek-dto";
 import { getPerekIdsForSefer, getSeferByName } from "../../../data/sefer-dto";
 import { getArticleSummariesByPerekId } from "../../../lib/articles";
-import { getPerushimByPerekId } from "../../../lib/perushim";
-import {
-	cachedPerKey,
-	COLLECTION_TAGS,
-	perekArticlesTag,
-	perekPerushimTag,
-} from "../../../lib/revalidate/tags";
 import {
 	getPerekDedications,
 	getSeferDedications,
 	getSeferPerekDedicationLines,
 } from "../../../lib/dedications/loaders";
 import { seferIdByName } from "../../../lib/dedications/service";
-import {
-	DedicationLines,
-	dedicationLines,
-} from "../../components/dedications/DedicationLines";
+import { getPerushimByPerekId } from "../../../lib/perushim";
 import {
 	getPerekMetric,
 	getPerekProgressUnits,
 	metricOrFallback,
 } from "../../../lib/reading-metrics";
-import { ReadingProgress } from "@/app/components/ReadingProgress";
-import { ReadingTime } from "@/app/components/ReadingTime";
+import {
+	COLLECTION_TAGS,
+	cachedPerKey,
+	perekArticlesTag,
+	perekPerushimTag,
+} from "../../../lib/revalidate/tags";
 import { buildPerekGraph } from "../../../lib/seo/core-jsonld";
 import { pageMetadata } from "../../../lib/seo/opengraph";
 import { selectPerekImages } from "../../../lib/seo/perek-illustrations";
 import { getPerekImagesByChapter } from "../../../lib/seo/perek-images-data";
 import { fetchAllEntityRefs } from "../../../lib/tanahpedia/perek-entity-refs";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "../../components/dedications/DedicationLines";
 import { JsonLd } from "../../components/JsonLd";
-import { ArticlesSection } from "./components/ArticlesSection";
 import Breadcrumb from "./components/Breadcrumb";
+import { DailyArticlesSection } from "./components/DailyArticlesSection";
 import { PerekHeading } from "./components/PerekHeading";
 import { PerekIntro } from "./components/PerekIntro";
 import { PerekNav } from "./components/PerekNav";
@@ -234,8 +234,11 @@ export default async function Perek({
 					scrollStorageKey={`perushim-perek-${perekId}`}
 				/>
 
-				{/* Articles section - fetched directly from database for lower latency */}
-				<ArticlesSection
+				{/* Articles section - fetched directly from database for lower
+				    latency; the client swaps in the daily Hebrew-date override
+				    (#3098) only when this perek is today's resolved daily perek. */}
+				<DailyArticlesSection
+					perekId={perekId}
 					articles={articles}
 					scrollStorageKey={`articles-perek-${perekId}`}
 				/>

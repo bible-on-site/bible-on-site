@@ -336,7 +336,8 @@ public class LearningCalendarViewModelTests
         await vm.OpenPerekCommand.ExecuteAsync(tappable);
 
         fixture.Navigator.Verify(
-            n => n.GoToAsync($"{AppRoutes.CalendarReader}?perekId={tappable.PerekId}"),
+            n => n.GoToAsync(
+                $"{AppRoutes.CalendarReader}?perekId={tappable.PerekId}&dateNum={tappable.DateNumber}"),
             Times.Once);
 
         // Blank and perek-less cells are not tappable and navigate nowhere.

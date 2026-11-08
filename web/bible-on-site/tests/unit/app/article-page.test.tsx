@@ -80,9 +80,12 @@ jest.mock("../../../src/data/db/tanah-view-types", () => ({
 	),
 }));
 
-jest.mock("../../../src/app/929/[number]/components/ArticlesSection", () => ({
-	ArticlesSection: () => <div data-testid="articles-section" />,
-}));
+jest.mock(
+	"../../../src/app/929/[number]/components/DailyArticlesSection",
+	() => ({
+		DailyArticlesSection: () => <div data-testid="articles-section" />,
+	}),
+);
 
 jest.mock("../../../src/app/929/[number]/components/Breadcrumb", () => ({
 	__esModule: true,
