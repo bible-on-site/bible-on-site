@@ -1,6 +1,7 @@
 """Inter-process serialization for recitation.sqlite copy-mutate-replace writers."""
 
 from contextlib import contextmanager
+import errno
 from pathlib import Path
 import time
 
@@ -31,7 +32,9 @@ def database_lock(database):
                 try:
                     msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
                     break
-                except OSError:
+                except OSError as error:
+                    if error.errno not in (errno.EACCES, errno.EAGAIN):
+                        raise
                     time.sleep(0.05)
         try:
             yield
