@@ -14,6 +14,7 @@ vi.mock("~/server/db", () => ({
 }));
 
 import {
+	assertHebrewDateArticleEligible,
 	assertHebrewDatesAvailable,
 	invalidateUnsentBulletinsForHebrewDates,
 	isHebrewDateSchemaMissing,
@@ -22,6 +23,20 @@ import {
 } from "~/server/hebrew-dates";
 
 const conn = { marker: "conn" } as never;
+
+describe("recurring-date article eligibility", () => {
+	it.each([undefined, null, ""])(
+		"rejects a distributable assignment owner without a body: %s",
+		(content) => {
+			expect(() =>
+				assertHebrewDateArticleEligible(
+					{ id: 7, distributable: true, content },
+					[{ hebrew_month: 11, hebrew_day: 9 }],
+				),
+			).toThrow(/non-empty body of written content/);
+		},
+	);
+});
 
 describe("normalizeHebrewDates", () => {
 	it("passes valid rows through", () => {
@@ -62,9 +77,9 @@ describe("normalizeHebrewDates", () => {
 		[8, 30], // Iyar is always 29
 		[1, 31], // beyond any month
 		[11, 0], // below any month
-	])("rejects day %s of month %s", (hebrew_day, expected) => {
+	])("rejects invalid month/day pair %s/%s", (hebrew_month, hebrew_day) => {
 		expect(() =>
-			normalizeHebrewDates([{ hebrew_month: expected, hebrew_day }]),
+			normalizeHebrewDates([{ hebrew_month, hebrew_day }]),
 		).toThrow();
 	});
 
