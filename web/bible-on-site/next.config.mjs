@@ -214,6 +214,12 @@ const nextConfig = {
 	async rewrites() {
 		return {
 			beforeFiles: [
+				// Installed native apps use these public join URLs. Resolve them
+				// through the same live destinations and signup page as the website.
+				...["telegram", "whatsapp", "email"].map((channel) => ({
+					source: `/bulletin/${channel}/join`,
+					destination: `/dailyBulletin/join/${channel}`,
+				})),
 				// Requests for /לוח arrive percent-encoded and never match the
 				// decoded filesystem route; serve the page from /calendar instead.
 				{ source: "/לוח", destination: "/calendar" },
