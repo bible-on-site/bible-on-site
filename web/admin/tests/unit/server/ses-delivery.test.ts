@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 	prepared: vi.fn(),
 	sendOne: vi.fn(),
 	sesConfig: vi.fn(),
+	sesDestroy: vi.fn(),
 	sqs: vi.fn(),
 	sqsConfig: vi.fn(),
 	destroy: vi.fn(),
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 	telegramProcess: vi.fn(),
 	telegramSweep: vi.fn(),
 	whatsappSweep: vi.fn(),
+	signupSweep: vi.fn(),
 	scheduledProcess: vi.fn(),
 }));
 vi.mock("~/server/db", () => mocks);
@@ -53,6 +55,7 @@ vi.mock("~/server/ses-client.server", () => {
 				mocks.sesConfig(config);
 			}
 			sendOne = mocks.sendOne;
+			destroy = mocks.sesDestroy;
 		},
 	};
 });
@@ -76,6 +79,9 @@ vi.mock("~/server/telegram-delivery.server", () => ({
 }));
 vi.mock("~/server/scheduled-bulletin.server", () => ({
 	processScheduledBulletin: mocks.scheduledProcess,
+}));
+vi.mock("~/server/signup-delivery.server", () => ({
+	reconcileSignupOutbox: mocks.signupSweep,
 }));
 vi.mock("node:timers/promises", () => ({ setTimeout: mocks.delay }));
 vi.mock("@aws-sdk/client-sqs", () => ({
@@ -528,6 +534,7 @@ beforeEach(() => {
 		vi.stubEnv(name, "");
 	mocks.whatsappProcess.mockReset().mockResolvedValue(true);
 	mocks.whatsappSweep.mockReset().mockResolvedValue(undefined);
+	mocks.signupSweep.mockReset().mockResolvedValue(undefined);
 	state = {
 		jobs: [],
 		subscribers: [subscriber(), subscriber(2)],
@@ -1338,6 +1345,61 @@ describe("SES events", () => {
 		);
 		expect(state.subscribers[0].consent_status).toBe("unsubscribed");
 	});
+	it("keeps real delivery suppressed after a test-topic event carries unchanged real OPT_IN", async () => {
+		const row = seed("real");
+		state.subscribers[0].consent_status = "unsubscribed";
+		state.subscribers[0].last_event_at = "2026-10-28T12:00:00.000Z";
+		state.subscribers.push({
+			...subscriber(2, "test"),
+			email: "reader1@example.com",
+		});
+		const { parseSesEvent: parseActual } = await vi.importActual<
+			typeof import("~/server/ses-events.server")
+		>("~/server/ses-events.server");
+		const unchangedReal = { topicName: "real", subscriptionStatus: "OptIn" };
+		const event = parseActual(
+			{
+				eventType: "Subscription",
+				mail: {
+					sendingAccountId: config.accountId,
+					messageId: "test-mail",
+					timestamp: "2026-10-28T11:00:00.000Z",
+					destination: [row.email],
+					tags: { "ses:configuration-set": [config.configurationSetName] },
+				},
+				subscription: {
+					contactList: config.contactListName,
+					timestamp: "2026-10-28T12:01:00.000Z",
+					oldTopicPreferences: {
+						unsubscribeAll: false,
+						topicSubscriptionStatus: [
+							{ topicName: "test", subscriptionStatus: "OptIn" },
+							unchangedReal,
+						],
+					},
+					newTopicPreferences: {
+						unsubscribeAll: false,
+						topicSubscriptionStatus: [
+							{ topicName: "test", subscriptionStatus: "OptOut" },
+							unchangedReal,
+						],
+					},
+				},
+			},
+			config,
+		);
+		expect(event?.type).toBe("subscription");
+		if (!event) throw new Error("Expected a valid subscription event");
+		await applySesEvent(event);
+		expect(state.subscribers.map((s) => s.consent_status)).toEqual([
+			"unsubscribed",
+			"unsubscribed",
+		]);
+		expect(state.subscribers[0].last_event_at).toBe("2026-10-28T12:00:00.000Z");
+		await processEmailRecipient(row.id);
+		expect(row.status).toBe("suppressed");
+		expect(mocks.sendOne).not.toHaveBeenCalled();
+	});
 });
 
 describe("summary and queue loop", () => {
@@ -2114,6 +2176,51 @@ describe("optional Telegram dispatch in the existing worker", () => {
 		).toBe(false);
 		expect(mocks.destroy).toHaveBeenCalledOnce();
 	});
+
+	it("isolates signup outbox failure so a native email event still completes", async () => {
+		configureTelegram();
+		const row = seed("test", "accepted");
+		const controller = new AbortController();
+		mocks.parse.mockReturnValue(delivery());
+		mocks.signupSweep.mockRejectedValueOnce(new Error("private details"));
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		messages(controller, ['{"eventType":"Delivery"}']);
+		try {
+			await startEmailWorker(controller.signal);
+			expect(row.status).toBe("delivered");
+			expect(log).toHaveBeenCalledExactlyOnceWith(
+				"Signup outbox reconciliation failed",
+			);
+			expect(
+				mocks.sqs.mock.calls.some(([command]) => command.kind === "delete"),
+			).toBe(true);
+		} finally {
+			log.mockRestore();
+		}
+	});
+
+	it.each([false, true])(
+		"stops after signup reconciliation aborts (rejects=%s)",
+		async (rejects) => {
+			const controller = new AbortController();
+			mocks.signupSweep.mockImplementationOnce(async (signal) => {
+				expect(signal).toBe(controller.signal);
+				controller.abort();
+				if (rejects) throw new Error("shutdown interrupted signup work");
+			});
+			const log = vi.spyOn(console, "error").mockImplementation(() => {});
+			try {
+				await startEmailWorker(controller.signal);
+				expect(mocks.signupSweep).toHaveBeenCalledOnce();
+				expect(mocks.telegramSweep).not.toHaveBeenCalled();
+				expect(mocks.whatsappSweep).not.toHaveBeenCalled();
+				expect(mocks.destroy).toHaveBeenCalledOnce();
+				expect(log).not.toHaveBeenCalled();
+			} finally {
+				log.mockRestore();
+			}
+		},
+	);
 
 	it("isolates Telegram outbox failure so a native email event still completes", async () => {
 		configureTelegram();

@@ -1,0 +1,40 @@
+.page {
+	background-color: var(--surface-muted, #f8fafc);
+	box-sizing: border-box;
+	display: flex;
+	justify-content: center;
+	min-height: 60vh;
+	padding: 6rem 1rem 4rem;
+}
+
+.card {
+	align-self: flex-start;
+	background-color: var(--surface-elevated, #fff);
+	border-radius: var(--radius-lg, 12px);
+	box-shadow: 0 2px 8px rgba(13, 58, 140, 0.12);
+	box-sizing: border-box;
+	max-width: 30rem;
+	padding: 2rem;
+	width: 100%;
+}
+
+.card h1 {
+	font-size: 1.5em;
+	letter-spacing: 0.05em;
+	margin: 0 0 0.5em;
+}
+
+.card p {
+	color: var(--muted-text, #666);
+	line-height: 1.7;
+	margin: 0 0 1.25em;
+}
+
+.note {
+	font-size: 0.85em;
+	margin-top: 1.25em;
+}
+
+.note a {
+	color: var(--link-accent, #1552ac);
+}

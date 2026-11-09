@@ -37,22 +37,42 @@ describe("getMentionReferencesForArticle", () => {
 		const [sql] = mockQuery.mock.calls[0];
 		expect(sql).toContain("tanahpedia_entry e");
 		expect(sql).toContain("tanahpedia_entry_synonym");
-		expect(sql).toContain("REPLACE(names.resolvedName, '-', ' ')");
+		expect(sql).toContain("e.normalized_name = d.intended_name");
+		expect(sql).toContain("s.normalized_name = d.intended_name");
+		expect(sql).not.toContain("REPLACE(");
 	});
 
 	it("drops name collisions so ambiguous mentions stay plain text", async () => {
 		mockQuery.mockResolvedValueOnce([]);
 		await getMentionReferencesForArticle(1, "h");
 		const [sql] = mockQuery.mock.calls[0];
-		expect(sql).toContain("HAVING COUNT(DISTINCT names.entryId) <= 1");
+		expect(sql).toContain("HAVING COUNT(DISTINCT m.entry_id) <= 1");
+		expect(sql).toContain("COUNT(DISTINCT m2.entry_id)");
 	});
 
-	it("wraps non-grouped entry columns so the query is only_full_group_by safe", async () => {
+	it("falls back to the pre-migration REPLACE() join while normalized_name is absent", async () => {
+		const missingColumn = Object.assign(
+			new Error("Unknown column 's.normalized_name' in 'on clause'"),
+			{ code: "ER_BAD_FIELD_ERROR" },
+		);
+		mockQuery.mockRejectedValueOnce(missingColumn).mockResolvedValueOnce([]);
+		await expect(getMentionReferencesForArticle(42, "h")).resolves.toEqual([]);
+		expect(mockQuery).toHaveBeenCalledTimes(2);
+		const [fallbackSql, fallbackParams] = mockQuery.mock.calls[1];
+		expect(fallbackParams).toEqual(["42", "h"]);
+		expect(fallbackSql).toContain(
+			"REPLACE(names.resolvedName, '-', ' ') = d.intended_name",
+		);
+		expect(fallbackSql).toContain("HAVING COUNT(DISTINCT names.entryId) <= 1");
+	});
+
+	it("emits one row per decoration with bare entry columns", async () => {
 		mockQuery.mockResolvedValueOnce([]);
 		await getMentionReferencesForArticle(1, "h");
 		const [sql] = mockQuery.mock.calls[0];
-		expect(sql).toContain("ANY_VALUE(ent.unique_name) AS entryUniqueName");
-		expect(sql).not.toMatch(/SELECT\s+ent\./);
+		expect(sql).toContain("ent.unique_name AS entryUniqueName");
+		expect(sql).not.toContain("GROUP BY");
+		expect(sql).not.toContain("ANY_VALUE");
 	});
 
 	it("orders human-accepted rows ahead of pipeline rows sharing a span", async () => {
