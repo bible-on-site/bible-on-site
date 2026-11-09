@@ -1076,4 +1076,22 @@ describe("validateReferenceTargets", () => {
 			["[0]"],
 		);
 	});
+
+	it("treats absent perek/article/entry id fields as missing rows", async () => {
+		stubQueries({
+			missing: { perek: [0], article: [0], entry: [""] },
+		});
+		await expect(validateReferenceTargets([{ kind: "perek" }])).rejects.toThrow(
+			"פרק",
+		);
+		await expect(
+			validateReferenceTargets([{ kind: "perek", perekIdLow: 5 }]),
+		).rejects.toThrow("פרק undefined");
+		await expect(
+			validateReferenceTargets([{ kind: "article" }]),
+		).rejects.toThrow("מאמר");
+		await expect(validateReferenceTargets([{ kind: "entry" }])).rejects.toThrow(
+			"ערך תנכפדיה",
+		);
+	});
 });
