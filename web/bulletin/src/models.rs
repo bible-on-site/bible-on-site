@@ -1,6 +1,6 @@
 //! Request/response types for the PDF generation endpoint.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 /// Top-level request for PDF generation.
 /// The service resolves all perek data (text, headers) from embedded Tanach data.
@@ -106,15 +106,6 @@ pub enum ImageExt {
 
 fn default_true() -> bool {
     true
-}
-
-/// Metadata returned alongside the PDF (optional, for logging/debugging).
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
-pub struct GeneratePdfResponse {
-    pub filename: String,
-    pub page_count: usize,
 }
 
 #[cfg(test)]
