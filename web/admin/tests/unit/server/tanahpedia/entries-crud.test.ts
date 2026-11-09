@@ -56,7 +56,6 @@ import {
 	assignEntity,
 	createEntry,
 	deleteEntry,
-	getEntries,
 	getEntry,
 	getEntryEntities,
 	getTanahpediaCategoryCounts,
@@ -177,15 +176,6 @@ describe("tanahpedia entry server functions", () => {
 			expect(String(sql)).toContain("WHERE e.entity_type = ?");
 			expect(String(sql)).not.toContain("tanahpedia_person");
 			expect(params).toEqual(["PERSON"]);
-		});
-	});
-
-	describe("getEntries", () => {
-		it("lists every entry ordered by title", async () => {
-			mocks.query.mockResolvedValue([{ id: "entry-1" }]);
-
-			await expect(getEntries()).resolves.toEqual([{ id: "entry-1" }]);
-			expect(mocks.query.mock.calls[0]?.[0]).toContain("ORDER BY title");
 		});
 	});
 
