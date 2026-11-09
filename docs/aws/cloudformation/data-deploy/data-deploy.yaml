@@ -17,10 +17,12 @@ Metadata:
     It is invoked by GitHub Actions CD workflow to populate the database.
 
     Transition status, verified 2026-10-23: #2579's deployer sends db_url in
-    the invoke payload, but the LIVE Lambda (last modified 2026-02-15) still
-    reads SSM at runtime. The checked-in handler accepts the payload/DB_URL;
-    it has NOT replaced that live code. Keep the SSM role grant, SSM_PREFIX
-    and interface endpoint until an approved, backward-compatible handler
+    the invoke payload, but the LIVE Lambda (last modified 2026-02-15, parser
+    patched 2026-10-25) still reads SSM at runtime. The checked-in handler
+    accepts the payload, a DB_URL env fallback, AND the legacy SSM
+    {SSM_PREFIX}-{host,port,name,username,url} lookup for callers that
+    omit db_url, so it supports both caller contracts. It has NOT replaced that live code. Keep the SSM
+    role grant, SSM_PREFIX and interface endpoint until an approved handler
     rollout and VPC-wide consumer audit have both succeeded. Public IPs on
     ECS tasks do not bypass an interface endpoint with private DNS enabled.
 
@@ -164,9 +166,14 @@ Resources:
       Environment:
         Variables:
           S3_BUCKET: !Ref DataDeployBucket
-          SSM_PREFIX: bible-on-site-tanah-db # Required by the live old handler
-          # The proposed handler accepts db_url in the invoke payload and an
-          # optional DB_URL env fallback. Never commit/deploy a secret here.
+          # Legacy-caller credential fallback ({prefix}-{host,port,name,
+          # username,url} SecureStrings), used only when the invoke payload
+          # omits db_url. Keep until the approved SSM endpoint migration
+          # proves no consumer remains.
+          SSM_PREFIX: bible-on-site-tanah-db
+          # The proposed handler accepts db_url in the invoke payload, a
+          # DB_URL env fallback, and the SSM lookup above. Never commit or
+          # deploy a secret here.
       Code:
         # Deploy using: See data-deploy-lambda.py docstring for instructions
         S3Bucket: bible-on-site-data-deploy
