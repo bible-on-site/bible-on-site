@@ -79,7 +79,13 @@ function subscription() {
 					{ topicName: "real", subscriptionStatus: "OptIn" },
 				],
 			},
-			oldTopicPreferences: { unsubscribeAll: false },
+			oldTopicPreferences: {
+				unsubscribeAll: false,
+				topicSubscriptionStatus: [
+					{ topicName: "test", subscriptionStatus: "OptIn" },
+					{ topicName: "real", subscriptionStatus: "OptOut" },
+				],
+			},
 		},
 	};
 }
@@ -459,13 +465,84 @@ describe("SES event normalization", () => {
 });
 
 describe("SES native subscription events", () => {
-	it("normalizes native statuses and ignores old preferences", () => {
+	it("normalizes opt-outs and genuine opt-in transitions", () => {
 		expect(parseSesEvent(subscription(), expected)).toEqual({
 			type: "subscription",
 			email,
 			timestamp: changedAt,
 			unsubscribeAll: false,
 			topics: { test: "OPT_OUT", real: "OPT_IN" },
+		});
+	});
+
+	it("never treats an unchanged real opt-in in a test-topic event as new consent", () => {
+		const event = subscription();
+		event.subscription.oldTopicPreferences.topicSubscriptionStatus[1].subscriptionStatus =
+			"OptIn";
+		expect(parseSesEvent(event, expected)).toMatchObject({
+			topics: { test: "OPT_OUT" },
+		});
+	});
+
+	it.each([
+		undefined,
+		null,
+		[],
+		{ unsubscribeAll: "false" },
+		{ unsubscribeAll: false },
+		{ unsubscribeAll: false, topicSubscriptionStatus: {} },
+		{ unsubscribeAll: false, topicDefaultSubscriptionStatus: {} },
+	])(
+		"keeps suppression without inferring re-consent from an unknown old snapshot %j",
+		(old) => {
+			const event = subscription();
+			Object.assign(event.subscription, { oldTopicPreferences: old });
+			expect(parseSesEvent(event, expected)).toMatchObject({
+				topics: { test: "OPT_OUT" },
+			});
+		},
+	);
+
+	it("accepts explicit opt-in from a previous default opt-out", () => {
+		const event = subscription();
+		Object.assign(event.subscription.oldTopicPreferences, {
+			topicSubscriptionStatus: [],
+			topicDefaultSubscriptionStatus: [
+				{ topicName: "real", subscriptionStatus: "OptOut" },
+			],
+		});
+		expect(parseSesEvent(event, expected)).toMatchObject({
+			topics: { test: "OPT_OUT", real: "OPT_IN" },
+		});
+	});
+
+	it("does not infer recipient consent from default preferences alone", () => {
+		const event = subscription();
+		Object.assign(event.subscription.newTopicPreferences, {
+			topicSubscriptionStatus: [],
+			topicDefaultSubscriptionStatus: [
+				{ topicName: "real", subscriptionStatus: "OptIn" },
+			],
+		});
+		expect(parseSesEvent(event, expected)).toMatchObject({ topics: {} });
+	});
+
+	it("allows an explicit recipient action to clear global suppression", () => {
+		const event = subscription();
+		event.subscription.oldTopicPreferences.unsubscribeAll = true;
+		event.subscription.oldTopicPreferences.topicSubscriptionStatus[1].subscriptionStatus =
+			"OptIn";
+		expect(parseSesEvent(event, expected)).toMatchObject({
+			topics: { test: "OPT_OUT", real: "OPT_IN" },
+		});
+	});
+
+	it("does not emit positive consent while global suppression is active", () => {
+		const event = subscription();
+		event.subscription.newTopicPreferences.unsubscribeAll = true;
+		expect(parseSesEvent(event, expected)).toMatchObject({
+			unsubscribeAll: true,
+			topics: { test: "OPT_OUT" },
 		});
 	});
 

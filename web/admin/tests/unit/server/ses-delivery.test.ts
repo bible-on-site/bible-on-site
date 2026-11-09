@@ -1345,6 +1345,61 @@ describe("SES events", () => {
 		);
 		expect(state.subscribers[0].consent_status).toBe("unsubscribed");
 	});
+	it("keeps real delivery suppressed after a test-topic event carries unchanged real OPT_IN", async () => {
+		const row = seed("real");
+		state.subscribers[0].consent_status = "unsubscribed";
+		state.subscribers[0].last_event_at = "2026-10-28T12:00:00.000Z";
+		state.subscribers.push({
+			...subscriber(2, "test"),
+			email: "reader1@example.com",
+		});
+		const { parseSesEvent: parseActual } = await vi.importActual<
+			typeof import("~/server/ses-events.server")
+		>("~/server/ses-events.server");
+		const unchangedReal = { topicName: "real", subscriptionStatus: "OptIn" };
+		const event = parseActual(
+			{
+				eventType: "Subscription",
+				mail: {
+					sendingAccountId: config.accountId,
+					messageId: "test-mail",
+					timestamp: "2026-10-28T11:00:00.000Z",
+					destination: [row.email],
+					tags: { "ses:configuration-set": [config.configurationSetName] },
+				},
+				subscription: {
+					contactList: config.contactListName,
+					timestamp: "2026-10-28T12:01:00.000Z",
+					oldTopicPreferences: {
+						unsubscribeAll: false,
+						topicSubscriptionStatus: [
+							{ topicName: "test", subscriptionStatus: "OptIn" },
+							unchangedReal,
+						],
+					},
+					newTopicPreferences: {
+						unsubscribeAll: false,
+						topicSubscriptionStatus: [
+							{ topicName: "test", subscriptionStatus: "OptOut" },
+							unchangedReal,
+						],
+					},
+				},
+			},
+			config,
+		);
+		expect(event?.type).toBe("subscription");
+		if (!event) throw new Error("Expected a valid subscription event");
+		await applySesEvent(event);
+		expect(state.subscribers.map((s) => s.consent_status)).toEqual([
+			"unsubscribed",
+			"unsubscribed",
+		]);
+		expect(state.subscribers[0].last_event_at).toBe("2026-10-28T12:00:00.000Z");
+		await processEmailRecipient(row.id);
+		expect(row.status).toBe("suppressed");
+		expect(mocks.sendOne).not.toHaveBeenCalled();
+	});
 });
 
 describe("summary and queue loop", () => {
