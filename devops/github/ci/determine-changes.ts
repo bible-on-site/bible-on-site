@@ -14,6 +14,7 @@ import {
 	isPublishDocstringOnlyChange,
 	PUBLISH_SOURCE_PATH,
 } from "./publish-docstring.mts";
+import { parseRecoveryRequest } from "../release/recovery-request.mjs";
 
 interface ModuleRule {
 	directory: string;
@@ -163,6 +164,8 @@ export const MODULES = {
 	admin: {
 		directory: "web/admin",
 		ciPaths: [
+			"devops/github/release/recovery-request.mjs",
+			"devops/github/release/recovery-request.test.mjs",
 			...NATIVE_IMAGE_CI_PATHS,
 			...RELEASE_CI_PATHS,
 			...E2E_IMPACT_CI_PATHS,
@@ -192,6 +195,8 @@ export const MODULES = {
 		directory: "web/bulletin",
 		// The release image also compiles the API's shared entities crate.
 		ciPaths: [
+			"devops/github/release/recovery-request.mjs",
+			"devops/github/release/recovery-request.test.mjs",
 			...RELEASE_CI_PATHS,
 			...DOCKER_BUILD_CI_PATHS,
 			"web/api/entities",
@@ -336,6 +341,26 @@ export function detectChanges(changedFiles: string[]): ModuleChanges {
 	) as ModuleChanges;
 }
 
+/** Recovery selects ordinary checks/packages for only the explicitly named services. */
+export function applyReleaseRecovery(
+	changes: ModuleChanges,
+	modules: readonly string[],
+): ModuleChanges {
+	if (
+		new Set(modules).size !== modules.length ||
+		modules.some((module) => module !== "admin" && module !== "bulletin")
+	)
+		throw new Error("Release recovery is limited to admin and bulletin");
+	return Object.fromEntries(
+		Object.entries(changes).map(([key, flags]) => [
+			key,
+			modules.includes(key)
+				? { module_changed: true, ci_changed: true }
+				: { ...flags },
+		]),
+	) as ModuleChanges;
+}
+
 export type BaseRevision =
 	| { kind: "sha"; sha: string }
 	| { kind: "parent" }
@@ -437,6 +462,12 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		);
 	}
 	const event = JSON.parse(readFileSync(GITHUB_EVENT_PATH, "utf8"));
+	const recoveryModules = parseRecoveryRequest({
+		eventName: GITHUB_EVENT_NAME,
+		ref: env.GITHUB_REF,
+		sha: env.GITHUB_SHA,
+		requested: event.inputs?.release_recovery ?? "none",
+	});
 	const context = changedFilesContext(
 		baseRevision(GITHUB_EVENT_NAME, event),
 		cwd,
@@ -449,7 +480,10 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 	const deliveryFiles = docOnly
 		? files.filter((file) => file !== PUBLISH_SOURCE_PATH)
 		: files;
-	const changes = detectChanges(deliveryFiles);
+	const changes = applyReleaseRecovery(
+		detectChanges(deliveryFiles),
+		recoveryModules,
+	);
 	if (docOnly) {
 		changes.data.ci_changed = true;
 		console.log(
@@ -473,6 +507,10 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		`data_schema_only_changed=${!mergeGroup && isSchemaOnlyDataChange(deliveryFiles)}`,
 	);
 	lines.push(`data_deploy_changed=${!mergeGroup && isDataDeployChange(files)}`);
+	lines.push(`admin_release_recovery=${recoveryModules.includes("admin")}`);
+	lines.push(
+		`bulletin_release_recovery=${recoveryModules.includes("bulletin")}`,
+	);
 	console.log(lines.join("\n"));
 	appendFileSync(GITHUB_OUTPUT, `${lines.join("\n")}\n`);
 	return changes;

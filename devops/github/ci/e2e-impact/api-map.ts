@@ -24,7 +24,6 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { globMatcher } from "./glob.ts";
 import { listFiles } from "./xunit-discovery.ts";
 
 export interface ApiSourceMap {
@@ -685,10 +684,4 @@ export function graphqlOperationsInSource(source: string): string[] {
 		for (const field of graphqlTopLevelFields(doc)) ops.add(field);
 	}
 	return [...ops];
-}
-
-export const API_GLOBS = ["src/**/*.rs", "entities/src/**/*.rs"];
-
-export function apiSourceMatcher(): (path: string) => boolean {
-	return globMatcher(API_GLOBS);
 }

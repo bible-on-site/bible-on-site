@@ -26,6 +26,43 @@ concurrency group `ci-<event>-<pr-or-run-id>` cancels superseded runs of the
 same pull request only; `master`, dispatched and merge-queue runs are unique
 groups and are never cancelled by this rule.
 
+### Explicit service release recovery
+
+The manual `release_recovery` choice defaults to `none`, which retains the
+ordinary dispatch/check behavior. `admin`, `bulletin`, or `admin-and-bulletin`
+may rebuild and release only the selected services. This is available only
+on protected `master` at its current exact commit, after the latest normal
+master **push** CI run for that same commit and its Cross Module CI gate
+have succeeded. A failed, pending, PR, queue or earlier-commit run cannot
+supply that approval.
+
+Recovery selects the services' existing checks, native package validation
+and current-run packaging. Admin always runs its full E2E suite regardless
+of impact-selection defaults. The existing Cross Module CI and successful
+package conditions still gate release. Website, API, native app, data and
+perushim releases remain push-only; selecting recovery does not force their
+module flags or native test suites.
+
+The shared release flow rechecks current master before tag publication and
+before exposing a verified draft. It downloads the selected **current-run**
+artifact by numeric ID and verifies its Actions ZIP digest. It then hashes
+the extracted canonical package separately and publishes
+`release-recovery-admin.json` or `release-recovery-bulletin.json` alongside
+that package. The receipt binds the source commit, selected modules, normal
+green CI proof, recovery run/attempt/workflow, Actions archive ID/name/ZIP
+digest, and contained package name/size/digest. CD receives one nested
+`recovery` field, preserving the repository-dispatch key limit; no package
+from a failed run is reused.
+
+Published releases retain their original artifact/provenance on reruns;
+drafts resume through the existing serialized module release path. Normal
+collision handling and successful-release version bumps also apply to the
+selected recovered services. A version bump can legitimately advance
+master after publication, so CD retains the existing version/source and
+deployment-ledger freshness checks rather than requiring source SHA to
+remain the exact current master forever. Recovery additionally verifies
+the published receipt and the actual selected package bytes.
+
 `ci-data-deploy.yml` is separate: it validates the data-deployment tooling and
 triggers on its own path filter (`devops/deploy/data-deploy/**`,
 `devops/package.json`, itself) for PRs, master pushes and merge-queue checks.
