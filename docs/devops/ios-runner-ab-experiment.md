@@ -38,8 +38,9 @@ untouched. Each dispatch ("iteration") runs:
    retention, outlives the 14-day diagnostics artifacts).
 
 A workflow-level concurrency group serializes iterations
-(`cancel-in-progress: false`), so accidental parallel dispatches queue instead
-of interleaving.
+(`cancel-in-progress: false` + `queue: max`), so every dispatch is kept and
+queued runs execute one at a time instead of interleaving — a third
+dispatch can no longer silently replace a still-pending iteration.
 
 ## Protocol (from the issue)
 
@@ -60,6 +61,16 @@ of interleaving.
 - **Freeze the experiment ref**: do not push commits to the dispatched branch
   while collecting — every iteration must test the same SHA or the artifact
   and manifest are no longer comparable.
+- **Pinned planning baseline**: `force_full_suite` fixes case selection, but
+  the planner's timing-based shard count and membership still follow
+  `--history`. The first iteration therefore republishes the latest master
+  `app-mobile-e2e-coverage.master.ios` artifact under the SHA-scoped name
+  `ios-ab-baseline.<experiment-sha>`; every later iteration on the same
+  frozen ref downloads that pin instead of master's rolling baseline, so all
+  iterations plan identical shards. Pushing a new commit starts a new pin —
+  keep the ref frozen. To verify, compare `fingerprint` inside
+  `ios-shard-plan.json` across iterations' `app-mobile-e2e-ab-plan.*`
+  artifacts; identical pins yield identical fingerprints.
 
 ## Running an iteration
 

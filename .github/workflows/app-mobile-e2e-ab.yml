@@ -27,10 +27,13 @@ permissions:
 
 # One iteration at a time: leg B of an iteration always starts only after leg
 # A fully completes, and iterations queue behind each other so host load and
-# time-of-day effects stay balanced across the pair set.
+# time-of-day effects stay balanced across the pair set. queue: max keeps
+# every dispatch — without it a third submission would silently replace a
+# still-pending iteration and its shard pairs would never run.
 concurrency:
   group: ios-runner-ab
   cancel-in-progress: false
+  queue: max
 
 jobs:
   plan_ios:
@@ -65,15 +68,39 @@ jobs:
           fi
       # Identical to app-mobile-e2e.yml's plan_ios: the published baseline
       # carries the impact map and rolling per-case timings used for shard
-      # balancing. force_full_suite makes the selection deterministic across
-      # iterations regardless of baseline drift.
+      # balancing. force_full_suite fixes case SELECTION, but the planner's
+      # timing-based shard count and membership still follow --history — so
+      # the experiment pins ONE baseline: the first iteration on a given
+      # (frozen) ref republishes whatever master had under
+      # ios-ab-baseline.<sha>, and every later iteration reuses that pin
+      # instead of chasing master's rolling coverage tree.
       - name: Download iOS coverage and timing baseline
+        id: baseline
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
-            --name "app-mobile-e2e-coverage.master.ios" \
+            --name "ios-ab-baseline.${{ github.sha }}" \
             --out "$RUNNER_TEMP/ios-baseline"
+          if [ ! -f "$RUNNER_TEMP/ios-baseline/coverage-tree.json" ]; then
+            node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+              --name "app-mobile-e2e-coverage.master.ios" \
+              --out "$RUNNER_TEMP/ios-baseline"
+            # Pin only real evidence: with no master baseline at all there is
+            # nothing to freeze, and later steps already tolerate its absence.
+            if [ -f "$RUNNER_TEMP/ios-baseline/coverage-tree.json" ]; then
+              echo "publish_pin=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+      - name: Publish pinned iOS baseline
+        if: steps.baseline.outputs.publish_pin == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-ab-baseline.${{ github.sha }}
+          path: ${{ runner.temp }}/ios-baseline/coverage-tree.json
+          retention-days: 90
+          if-no-files-found: error
       - name: Select affected iOS tests
         env:
           GH_TOKEN: ${{ github.token }}
@@ -221,10 +248,12 @@ jobs:
       force_full_suite: ${{ inputs.force_full_suite }}
       publish_caches: false
 
-  # Per-iteration evidence table: one CSV row per executed shard leg with the
-  # runner label, first-attempt conclusion and wall-clock bounds. Failure
-  # classification stays manual per the #2635 taxonomy — this job only makes
-  # the raw per-leg dataset trivial to collect across iterations.
+  # Per-iteration evidence table: one CSV row per executed shard leg per
+  # attempt — filter=all keeps first-attempt jobs that a rerun would
+  # otherwise hide — with the runner label, conclusion and wall-clock
+  # bounds. Failure classification stays manual per the #2635 taxonomy —
+  # this job only makes the raw per-leg dataset trivial to collect across
+  # iterations.
   report:
     name: Collect A/B iteration results
     needs: [leg_a, leg_b]
@@ -240,7 +269,11 @@ jobs:
           set -euo pipefail
           mkdir -p ab-report
           RUN_CREATED=$(gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}" --jq .created_at)
-          gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}/jobs?per_page=100" --paginate --slurp > ab-report/jobs-pages.json
+          # filter=all: the jobs endpoint defaults to the latest attempt, so
+          # without it a rerun would erase the first-attempt rows that carry
+          # the experiment's primary failure metric. --paginate covers runs
+          # whose job list spans multiple pages.
+          gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}/jobs?per_page=100&filter=all" --paginate --slurp > ab-report/jobs-pages.json
           RUN_CREATED_AT="$RUN_CREATED" node --input-type=module -e '
             import { readFileSync, writeFileSync } from "node:fs";
             const pages = JSON.parse(readFileSync("ab-report/jobs-pages.json", "utf8"));
