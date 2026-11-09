@@ -275,9 +275,9 @@ public class SearchIndexServiceTests
     public void Snippet_PreservesVowelsAndSafeMarkup_AndHighlightsTheActualTypoMatch()
     {
         SearchText.Snippet("<b>בְּרֵאשִׁית</b> &lt;script&gt;", "בראשיט").Should().Contain("<b>בְּרֵאשִׁית</b>").And.NotContain("<script>");
-        SearchText.Score("בראשית", "בראשית").Should().BeGreaterThan(SearchText.Score("בראשית", "בראשיט"));
-        SearchText.Score("משה", "דוד").Should().Be(0);
-        SearchText.Score("ברא אלהים", "ברא").Should().BeGreaterThan(SearchText.Score("בראשית", "ברא"));
+        SearchText.ScoreNormalized("בראשית", SearchText.Normalize("בראשית")).Should().BeGreaterThan(SearchText.ScoreNormalized("בראשית", SearchText.Normalize("בראשיט")));
+        SearchText.ScoreNormalized("משה", SearchText.Normalize("דוד")).Should().Be(0);
+        SearchText.ScoreNormalized("ברא אלהים", SearchText.Normalize("ברא")).Should().BeGreaterThan(SearchText.ScoreNormalized("בראשית", SearchText.Normalize("ברא")));
         SearchText.PlainText("<p>בריאת</p><p>העולם</p>").Should().Contain("בריאת העולם");
         SearchText.PlainText("בריאה &amp; אור").Should().Be("בריאה & אור");
     }
@@ -287,8 +287,8 @@ public class SearchIndexServiceTests
     {
         SearchText.PlainText("<script>hidden</script><style>hidden</style><p>בריאה</p>")
             .Should().Contain("בריאה").And.NotContain("hidden");
-        SearchText.Score("בריאה", " * ").Should().Be(0);
-        SearchText.Score("", "בריאה").Should().Be(0);
+        SearchText.ScoreNormalized("בריאה", SearchText.Normalize(" * ")).Should().Be(0);
+        SearchText.ScoreNormalized("", SearchText.Normalize("בריאה")).Should().Be(0);
         SearchText.Normalize("का").Should().Be("क", "spacing combining marks are removed along with Hebrew vowel marks");
     }
 
