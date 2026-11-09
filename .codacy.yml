@@ -121,3 +121,8 @@ exclude_paths:
   # findings are parse artifacts, not lone blocks. Still linted by the
   # repo's own biome/precommit.
   - "web/bible-on-site/tests/util/coverage/coverage-universe.mjs"
+  # Emulator e2e device control: 10.0.2.2 is the Android emulator's
+  # host-loopback alias, not a routable address — it must be set verbatim via
+  # adb setprop to point the app's Firebase client at the host-side Emulator
+  # Suite. Hardcoded-IP is a systemic false positive for platform aliases.
+  - "app/BibleOnSite.Tests.MobileE2E/Configuration/FirebaseEmulatorDeviceControl.cs"

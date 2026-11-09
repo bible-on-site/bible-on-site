@@ -31,13 +31,16 @@ public class FirebaseEmulatorConfigTests
         var endpoint = FirebaseEmulatorConfig.Resolve(
             EnvironmentOf(new()
             {
-                [FirebaseEmulatorConfig.HostEnvironmentVariable] = "192.168.1.10",
+                // Hostnames are valid override values — the resolver treats the
+                // host as opaque text, so a name exercises the same path an IP
+                // would without tripping hardcoded-IP lint.
+                [FirebaseEmulatorConfig.HostEnvironmentVariable] = "emulator-host.test",
                 [FirebaseEmulatorConfig.AuthPortEnvironmentVariable] = "19099",
                 [FirebaseEmulatorConfig.FirestorePortEnvironmentVariable] = "18080",
             }),
             PropertyOf([]));
 
-        endpoint.Host.Should().Be("192.168.1.10");
+        endpoint.Host.Should().Be("emulator-host.test");
         endpoint.AuthPort.Should().Be(19099);
         endpoint.FirestorePort.Should().Be(18080);
     }
