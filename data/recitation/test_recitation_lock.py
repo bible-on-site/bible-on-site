@@ -16,8 +16,10 @@ from recite import export_database, write_json
 
 try:
     import fcntl
+    HAS_FLOCK = True
 except ImportError:  # Windows
     fcntl = None
+    HAS_FLOCK = False
 
 
 def manifest(perek_id, status="ready", **extra):
@@ -41,7 +43,7 @@ class DatabaseLockTests(unittest.TestCase):
         self.output.mkdir()
 
     def lock_held(self):
-        if fcntl is None:
+        if not HAS_FLOCK:
             self.skipTest("flock probing requires a POSIX host")
         lock = self.database.parent / (self.database.name + ".lock")
         with lock.open("a+b") as handle:

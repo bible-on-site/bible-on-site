@@ -3,7 +3,6 @@
 from contextlib import contextmanager
 import errno
 from pathlib import Path
-import time
 
 try:
     import fcntl
@@ -27,15 +26,15 @@ def database_lock(database):
         if fcntl is not None:
             fcntl.flock(handle, fcntl.LOCK_EX)
         else:
-            # LK_LOCK gives up after ~10s; retry non-blocking so a held lock waits.
+            # LK_LOCK blocks ~10s then raises; retry it so a held lock waits
+            # like flock while permanent errors still surface.
             while True:
                 try:
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
                     break
                 except OSError as error:
                     if error.errno not in (errno.EACCES, errno.EAGAIN):
                         raise
-                    time.sleep(0.05)
         try:
             yield
         finally:
