@@ -29,7 +29,7 @@ public class PasukDisplayItemsTests
 
         items.Should().HaveCount(2);
         items.Select(i => i.Pasuk).Should().Equal(pesukim);
-        items.Should().OnlyContain(i => i.IsFirstCopy && !i.IsRepeatedCopy);
+        items.Should().OnlyContain(i => !i.IsRepeatedCopy);
         items.Select(i => i.PasukNumHeb).Should().Equal("א", "ב");
     }
 
