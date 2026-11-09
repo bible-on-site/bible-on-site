@@ -281,7 +281,7 @@ public static class SearchMatch
         {
             return null;
         }
-        // Whole-word phrase — the hit SearchText.Score ranks at 100.
+        // Whole-word phrase — the hit SearchText.ScoreNormalized ranks at 100.
         var phraseIndex = (" " + normalized + " ").IndexOf(" " + needle + " ", StringComparison.Ordinal);
         if (phraseIndex >= 0)
         {
