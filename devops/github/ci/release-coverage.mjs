@@ -56,6 +56,8 @@ const result = spawnSync(
 		"devops/rds-sync-access.test.mts",
 		"web/api/tests/coverage-file.test.mjs",
 		"web/bible-on-site/scripts/start-server.test.mjs",
+		"web/bible-on-site/scripts/start-server-launcher.test.mjs",
+		"web/bible-on-site/scripts/start-server-probe.test.mjs",
 	],
 	{ cwd: root, stdio: "inherit" },
 );
