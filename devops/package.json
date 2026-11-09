@@ -47,7 +47,7 @@
 		"@smithy/types": "4.20.0",
 		"dotenv": "18.0.9",
 		"fast-json-stable-stringify": "2.1.0",
-		"parse5": "8.1.0",
+		"parse5": "8.1.1",
 		"semver": "7.8.6",
 		"yargs": "18.2.0"
 	},
