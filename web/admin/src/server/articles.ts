@@ -432,6 +432,7 @@ export const createArticle = createServerFn({ method: "POST" })
 			assertHebrewDateArticleEligible(
 				{
 					id: newArticle.id,
+					name: data.name,
 					distributable: data.distributable === true,
 					content: data.content,
 				},
@@ -563,6 +564,7 @@ export const updateArticle = createServerFn({ method: "POST" })
 			assertHebrewDateArticleEligible(
 				{
 					id: data.id,
+					name: data.name,
 					distributable: data.distributable === true,
 					content: data.content,
 				},

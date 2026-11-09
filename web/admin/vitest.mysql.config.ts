@@ -6,7 +6,10 @@ export default defineConfig({
 	resolve: { alias: { "~": fileURLToPath(new URL("./src", import.meta.url)) } },
 	test: {
 		environment: "node",
-		include: ["tests/integration/whatsapp-mysql.test.ts"],
+		include: [
+			"tests/integration/whatsapp-mysql.test.ts",
+			"tests/integration/bulletin-approval-mysql.test.ts",
+		],
 		fileParallelism: false,
 	},
 });

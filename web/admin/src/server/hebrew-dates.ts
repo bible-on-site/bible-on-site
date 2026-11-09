@@ -1,4 +1,5 @@
 import type mysql from "mysql2/promise";
+import { hasBulletinArticleText } from "~/lib/bulletin-article";
 import { hebrewBulletinMonthDay } from "~/lib/daily-bulletin";
 import { execute, query, txExecute, txQuery } from "./db";
 
@@ -134,13 +135,21 @@ export async function assertHebrewDatesAvailable(
  * field was omitted, undefined when the schema is absent).
  */
 export function assertHebrewDateArticleEligible(
-	article: { id: number; distributable: boolean; content?: string | null },
+	article: {
+		id: number;
+		name?: string;
+		distributable: boolean;
+		content?: string | null;
+	},
 	dates: HebrewDateAssignment[] | undefined,
 ): void {
 	if (!dates || dates.length === 0) return;
-	if (!article.distributable || !article.content?.trim()) {
+	if (
+		!article.distributable ||
+		!hasBulletinArticleText(article.content ?? null, article.name)
+	) {
 		throw new Error(
-			`Article ${article.id} holds recurring Hebrew-date assignments and must stay distributable with a non-empty body — clear the dates or restore eligibility first`,
+			`Article ${article.id} holds recurring Hebrew-date assignments and must stay distributable with a non-empty body of written content - clear the dates or restore eligibility first`,
 		);
 	}
 }

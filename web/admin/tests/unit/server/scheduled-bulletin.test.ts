@@ -71,9 +71,7 @@ describe("scheduled bulletin orchestration", () => {
 			expect(m.prepare).toHaveResolved();
 		});
 		expect(await run()).toBe(true);
-		expect(m.prepare).toHaveBeenCalledExactlyOnceWith("2026-10-29", {
-			requireArticle: true,
-		});
+		expect(m.prepare).toHaveBeenCalledExactlyOnceWith("2026-10-29");
 		expect(m.email).toHaveBeenCalledExactlyOnceWith(
 			"2026-10-29",
 			scheduledBulletinRequestKey("2026-10-29", "email"),
@@ -194,24 +192,6 @@ describe("scheduled bulletin orchestration", () => {
 		expect(await running).toBe(false);
 		expect(m.telegram).not.toHaveBeenCalled();
 	});
-	it("enqueues no channel when preparation reports a missing approved article", async () => {
-		m.prepare.mockRejectedValueOnce(new Error("No approved article"));
-		await expect(run()).rejects.toThrow("No approved article");
-		for (const fn of [m.email, m.telegram, m.whatsapp])
-			expect(fn).not.toHaveBeenCalled();
-	});
-	it("recovers on a same-day retry after article approval with the original channel keys", async () => {
-		m.prepare.mockRejectedValueOnce(new Error("No approved article"));
-		await expect(run()).rejects.toThrow("No approved article");
-		expect(await run()).toBe(true);
-		expect(m.email).toHaveBeenCalledExactlyOnceWith(
-			payload.date,
-			scheduledBulletinRequestKey(payload.date, "email"),
-			{ audience: "test", revision: 2 },
-		);
-		for (const fn of [m.telegram, m.whatsapp])
-			expect(fn).toHaveBeenCalledOnce();
-	});
 	it.each(["email", "telegram", "whatsapp"] as const)(
 		"continues the other two channels if %s enqueue fails, and retains the SQS receipt",
 		async (name) => {
@@ -256,9 +236,9 @@ describe("scheduled bulletin orchestration", () => {
 				),
 			).toBe(true);
 		expect(m.prepare.mock.calls).toEqual([
-			["2025-09-22", { requireArticle: true }],
-			["2025-09-23", { requireArticle: true }],
-			["2025-09-24", { requireArticle: true }],
+			["2025-09-22"],
+			["2025-09-23"],
+			["2025-09-24"],
 		]);
 		expect(new Set(m.email.mock.calls.map((args) => args[1])).size).toBe(3);
 	});

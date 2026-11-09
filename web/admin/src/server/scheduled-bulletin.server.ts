@@ -93,7 +93,7 @@ export async function processScheduledBulletin(
 	)
 		throw new Error("Scheduled bulletin audience policy mismatch");
 	if (signal.aborted) return false;
-	await prepareBulletin(targetDate, { requireArticle: true });
+	await prepareBulletin(targetDate);
 	if (signal.aborted) return false;
 	// Each channel retains its durable claim, frozen target and consent checks.
 	// One enqueue failure must not prevent the other two channels from being queued.
