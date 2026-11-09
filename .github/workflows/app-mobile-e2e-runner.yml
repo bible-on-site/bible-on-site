@@ -285,10 +285,12 @@ jobs:
             bun install --cwd app/mobile-e2e --frozen-lockfile
           fi
 
-      # #3185: the Firestore emulator is a JVM process; the Android leg already
-      # installs Java 21 unconditionally below, the iOS leg needs it here.
+      # #3185: the Firestore emulator is a JVM process, so Java 21 must be on
+      # PATH before the suite starts — the Android leg's own "Setup Java" runs
+      # later (line ~493), too late for emulators:start. setup-java is
+      # idempotent, so running it here for both platforms is harmless.
       - name: Setup Java for Firebase emulators
-        if: inputs.firebase_emulator && inputs.platform == 'iOS'
+        if: inputs.firebase_emulator
         uses: actions/setup-java@v6
         with:
           distribution: microsoft
@@ -304,6 +306,9 @@ jobs:
       # the iOS simulator) while the test process probes 127.0.0.1 directly.
       # Data is in-memory and discarded when the job ends; firestore.rules is
       # loaded so the security-rule scenarios exercise real enforcement.
+      # Readiness requires BOTH emulators: the Auth config endpoint answers
+      # 200, and the Firestore port returns any HTTP response at all (its
+      # REST root legitimately 404s — a dead JVM refuses the connection).
       - name: Start Firebase Emulator Suite
         if: inputs.firebase_emulator
         working-directory: app/firebase
@@ -312,22 +317,29 @@ jobs:
           firebase emulators:start --only auth,firestore --project tanah-al-haperek \
             > "$MOBILE_E2E_ARTIFACTS/firebase-emulators.log" 2>&1 &
           echo $! > "$MOBILE_E2E_ARTIFACTS/firebase-emulators.pid"
-          # Blocking readiness — poll the Auth emulator's config endpoint
-          # until it answers or the bounded deadline fails the leg.
+          # Blocking readiness — poll until Auth answers 200 AND Firestore
+          # responds (any status), or the bounded deadline fails the leg.
           node -e '
             const deadline = Date.now() + 120000;
-            const url = "http://127.0.0.1:9099/emulator/v1/projects/tanah-al-haperek/config";
+            const authUrl = "http://127.0.0.1:9099/emulator/v1/projects/tanah-al-haperek/config";
+            const firestoreUrl = "http://127.0.0.1:8080/";
+            const firestoreAlive = async () => {
+              try { await fetch(firestoreUrl); return true; } catch { return false; }
+            };
             (async () => {
               let lastError = "";
               while (Date.now() < deadline) {
                 try {
-                  const response = await fetch(url);
-                  if (response.ok) { console.log("Firebase Auth emulator ready."); return; }
-                  lastError = `HTTP ${response.status}`;
+                  const auth = await fetch(authUrl);
+                  if (auth.ok && await firestoreAlive()) {
+                    console.log("Firebase Auth and Firestore emulators ready.");
+                    return;
+                  }
+                  lastError = `auth HTTP ${auth.status}, firestore ${await firestoreAlive() ? "responding" : "down"}`;
                 } catch (error) { lastError = String(error); }
                 await new Promise(resolve => setTimeout(resolve, 1000));
               }
-              console.error(`Firebase Auth emulator not ready after 120s (${lastError}); see firebase-emulators.log`);
+              console.error(`Firebase emulators not ready after 120s (${lastError}); see firebase-emulators.log`);
               process.exit(1);
             })();
           '

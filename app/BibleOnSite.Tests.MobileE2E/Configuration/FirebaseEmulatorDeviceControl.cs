@@ -45,16 +45,24 @@ internal static class FirebaseEmulatorDeviceControl
     {
         if (configuration.Platform == MobilePlatform.IOS)
         {
-            // simctl uninstall removes the data container; a non-zero exit
-            // just means the app was never installed on this simulator.
-            try
+            // simctl uninstall removes the data container. A non-zero exit is
+            // tolerable only when the app is genuinely absent — a failed
+            // uninstall that leaves the app (and its Firebase session)
+            // installed would silently corrupt the suite reset, so verify the
+            // container is actually gone before continuing.
+            var uninstall = Run("xcrun", "simctl", "uninstall", configuration.DeviceId, "com.tanah.daily929");
+            if (uninstall.ExitCode == 0)
             {
-                Run("xcrun", "simctl", "uninstall", configuration.DeviceId, "com.tanah.daily929");
+                return;
             }
-            catch (Exception exception) when (exception is InvalidOperationException or TimeoutException)
+            var probe = Run("xcrun", "simctl", "get_app_container",
+                configuration.DeviceId, "com.tanah.daily929", "app");
+            if (probe.ExitCode == 0)
             {
-                Console.WriteLine($"simctl uninstall: {exception.Message}");
+                throw new InvalidOperationException(
+                    $"simctl uninstall exited {uninstall.ExitCode} and the app remains installed: {uninstall.StandardError.Trim()}");
             }
+            Console.WriteLine($"simctl uninstall: app already absent ({uninstall.StandardError.Trim()})");
             return;
         }
         var pmPathArguments = new[] { "shell", "pm", "path", "com.tanah.daily929" };

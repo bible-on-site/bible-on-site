@@ -18,20 +18,27 @@ internal static class FirebaseEmulatorRouting
 
     internal static void ApplyToAuth(IFirebaseAuth auth)
     {
-        if (Interlocked.Exchange(ref _authApplied, 1) == 0)
+        if (Volatile.Read(ref _authApplied) != 0)
         {
-            var endpoint = FirebaseEmulatorConfig.Current;
-            auth.UseEmulator(endpoint.Host, endpoint.AuthPort);
+            return;
         }
+        var endpoint = FirebaseEmulatorConfig.Current;
+        // Mark applied only after UseEmulator succeeds: a throw must leave the
+        // flag clear so the next call retries routing — recording success
+        // first would let a failed route fall through to production Firebase.
+        auth.UseEmulator(endpoint.Host, endpoint.AuthPort);
+        Interlocked.Exchange(ref _authApplied, 1);
     }
 
     internal static void ApplyToFirestore(IFirebaseFirestore firestore)
     {
-        if (Interlocked.Exchange(ref _firestoreApplied, 1) == 0)
+        if (Volatile.Read(ref _firestoreApplied) != 0)
         {
-            var endpoint = FirebaseEmulatorConfig.Current;
-            firestore.UseEmulator(endpoint.Host, endpoint.FirestorePort);
+            return;
         }
+        var endpoint = FirebaseEmulatorConfig.Current;
+        firestore.UseEmulator(endpoint.Host, endpoint.FirestorePort);
+        Interlocked.Exchange(ref _firestoreApplied, 1);
     }
 }
 #endif

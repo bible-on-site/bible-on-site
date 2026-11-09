@@ -103,6 +103,13 @@ public sealed class FirebasePreferencesSyncTests(ITestOutputHelper output, Mobil
         OpenPerekPreferences();
         Assert.True(WaitForQriynotState(remoteValue, TimeSpan.FromSeconds(45)),
             $"qriynotEnabled did not converge to the remote value {remoteValue} after relaunch.");
+        // Identity kept — checked after sync settles: AppUserIdAsync resolves
+        // the OLDEST account holding a document, so a re-minted identity would
+        // still report the original uid while the app silently switched
+        // accounts. Exactly one Auth account and one users/{uid} document must
+        // remain for the equality above to mean "same identity".
+        Assert.Equal(new[] { uid }, FirebaseEmulatorProbe.ListUserIdsAsync().GetAwaiter().GetResult());
+        Assert.Single(FirebaseEmulatorProbe.ListAccountsAsync().GetAwaiter().GetResult());
         Assert.Empty(Driver!.FindElements(Platform.AutomationId("AppDialogCard")));
     });
 
