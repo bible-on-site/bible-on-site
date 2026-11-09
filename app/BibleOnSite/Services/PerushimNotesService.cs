@@ -1097,40 +1097,6 @@ public class PerushimNotesService : IReaderNotesAvailability
     }
 
     /// <summary>
-    /// Ordered note progress units for a perush on a perek (issue #2607),
-    /// cumulative across the perush's notes in (pasuk, note_idx) order.
-    /// Empty when the metric table is absent.
-    /// </summary>
-    public async Task<IReadOnlyList<ReadingProgressUnit>> GetNoteProgressUnitsAsync(int perushId, int perekId)
-    {
-        await InitializeAsync();
-        if (_connection == null)
-        {
-            return Array.Empty<ReadingProgressUnit>();
-        }
-
-        try
-        {
-            var rows = await _connection.QueryAsync<NoteMetricRow>(
-                "SELECT pasuk, note_idx, word_count, cumulative_words " +
-                "FROM tanah_note_metric WHERE perush_id = ? AND perek_id = ? ORDER BY pasuk, note_idx",
-                perushId, perekId);
-            return rows
-                .Select(r => new ReadingProgressUnit
-                {
-                    Key = $"{r.Pasuk}:{r.NoteIdx}",
-                    WordCount = r.WordCount,
-                    CumulativeWords = r.CumulativeWords
-                })
-                .ToList();
-        }
-        catch (SQLiteException)
-        {
-            return Array.Empty<ReadingProgressUnit>();
-        }
-    }
-
-    /// <summary>
     /// All stored perush reading metrics for a perek in one query (issue
     /// #2607) — the sheet's badge source. Empty when the pack predates the
     /// metric tables.
@@ -1191,21 +1157,6 @@ public class PerushimNotesService : IReaderNotesAvailability
 
         [Column("source_hash")]
         public string? SourceHash { get; set; }
-    }
-
-    private class NoteMetricRow
-    {
-        [Column("pasuk")]
-        public int Pasuk { get; set; }
-
-        [Column("note_idx")]
-        public int NoteIdx { get; set; }
-
-        [Column("word_count")]
-        public int WordCount { get; set; }
-
-        [Column("cumulative_words")]
-        public int CumulativeWords { get; set; }
     }
 
     private class IdRow
