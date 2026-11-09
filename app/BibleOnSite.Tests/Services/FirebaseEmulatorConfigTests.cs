@@ -114,4 +114,18 @@ public class FirebaseEmulatorConfigTests
         endpoint.AuthPort.Should().Be(FirebaseEmulatorConfig.DefaultAuthPort);
         endpoint.FirestorePort.Should().Be(FirebaseEmulatorConfig.DefaultFirestorePort);
     }
+
+    [Fact]
+    public void Current_ResolvesLazily_AndStaysWithinValidRanges()
+    {
+        // The lazy singleton is what FirebaseEmulatorRouting actually consumes:
+        // the real environment lookup on this host plus the system-property
+        // reader (null off-Android). Assert shape rather than exact values —
+        // a developer environment may legitimately carry overrides.
+        var endpoint = FirebaseEmulatorConfig.Current;
+
+        endpoint.Host.Should().NotBeNullOrWhiteSpace();
+        endpoint.AuthPort.Should().BeInRange(1, 65535);
+        endpoint.FirestorePort.Should().BeInRange(1, 65535);
+    }
 }
