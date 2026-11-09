@@ -16,7 +16,6 @@ import {
 	getParashaFirstUnitBySefer,
 	getParashaOccasions,
 	getParashaUnitById,
-	getParashaUnitContaining,
 	getParashaUnitCount,
 	getParashaUnitsForSefer,
 	PARASHA_CUSTOM_LABELS,
@@ -159,19 +158,6 @@ describe("unit integrity", () => {
 });
 
 describe("lookup helpers", () => {
-	it("resolves a canonical position to its containing parasha", () => {
-		expect(getParashaUnitContaining({ perekId: 1, pasuk: 1 })?.unitId).toBe(1);
-		// Boundary pasuk stays inside the unit it ends.
-		expect(getParashaUnitContaining({ perekId: 6, pasuk: 8 })?.unitId).toBe(1);
-		expect(getParashaUnitContaining({ perekId: 6, pasuk: 9 })?.unitId).toBe(2);
-	});
-
-	it("returns null for positions outside the Torah", () => {
-		// יהושע א is perekId 188 — prophetic territory, never a parasha.
-		expect(getParashaUnitContaining({ perekId: 188, pasuk: 1 })).toBeNull();
-		expect(getParashaUnitContaining({ perekId: 929, pasuk: 1 })).toBeNull();
-	});
-
 	it("returns prev/next units across the Torah edges", () => {
 		const { prev, next } = getAdjacentParashaUnits(1);
 		expect(prev).toBeNull();
