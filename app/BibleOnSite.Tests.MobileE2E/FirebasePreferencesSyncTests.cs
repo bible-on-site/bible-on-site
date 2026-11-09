@@ -189,8 +189,10 @@ public sealed class FirebasePreferencesSyncTests(ITestOutputHelper output, Mobil
                 {
                     FirebaseEmulatorDeviceControl.RestartRecovered(Driver!, Platform, Configuration);
                 }
+                #pragma warning disable S2221 // Deliberate failure boundary: endpoint restore is best-effort; a failure is logged, never masks the scenario result
                 catch (Exception exception) //NOSONAR — endpoint restore is best-effort; a failure is logged, never masks the scenario result.
                 {
+                    #pragma warning restore S2221
                     Output.WriteLine($"endpoint restore after offline scenario failed: {exception.Message}");
                 }
             }
@@ -267,9 +269,13 @@ public sealed class FirebasePreferencesSyncTests(ITestOutputHelper output, Mobil
             // Disposable identities/documents: the emulator is in-memory, but
             // cleaning up keeps a long-lived local suite deterministic too.
             try { FirebaseEmulatorProbe.DeleteUserDocumentAsync(otherUid).GetAwaiter().GetResult(); }
+            #pragma warning disable S2221 // Deliberate failure boundary: disposable probe cleanup is best-effort
             catch (Exception exception) { Output.WriteLine($"probe doc cleanup: {exception.Message}"); } //NOSONAR — disposable probe state; cleanup failure must not fail the decided scenario.
+            #pragma warning restore S2221
             try { FirebaseEmulatorProbe.DeleteAccountAsync(otherToken).GetAwaiter().GetResult(); }
+            #pragma warning disable S2221 // Deliberate failure boundary: disposable probe cleanup is best-effort
             catch (Exception exception) { Output.WriteLine($"probe account cleanup: {exception.Message}"); } //NOSONAR — disposable probe state; cleanup failure must not fail the decided scenario.
+            #pragma warning restore S2221
         }
     });
 
