@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 from pathlib import Path
+import time
 
 try:
     import fcntl
@@ -18,12 +19,20 @@ def database_lock(database):
     # concurrent exporter or review overlay cannot overwrite committed rows.
     # recite.py itself cannot host this helper: it is one of the hashed baseline
     # files, and editing it invalidates the preserved GPU evidence.
-    lock = Path(database).parent / (Path(database).name + ".lock")
+    database = Path(database)
+    database.parent.mkdir(parents=True, exist_ok=True)
+    lock = database.parent / (database.name + ".lock")
     with lock.open("a+b") as handle:
         if fcntl is not None:
             fcntl.flock(handle, fcntl.LOCK_EX)
         else:
-            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            # LK_LOCK gives up after ~10s; retry non-blocking so a held lock waits.
+            while True:
+                try:
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError:
+                    time.sleep(0.05)
         try:
             yield
         finally:

@@ -1,6 +1,5 @@
 """The recitation database lockfile serializes copy-mutate-replace writers."""
 
-import fcntl
 import json
 from pathlib import Path
 import sqlite3
@@ -14,6 +13,11 @@ from checkpoint_handoff import recover_checkpoint
 from db_lock import database_lock
 from listening_accept import overlay_reviews
 from recite import export_database, write_json
+
+try:
+    import fcntl
+except ImportError:  # Windows
+    fcntl = None
 
 
 def manifest(perek_id, status="ready", **extra):
@@ -37,6 +41,8 @@ class DatabaseLockTests(unittest.TestCase):
         self.output.mkdir()
 
     def lock_held(self):
+        if fcntl is None:
+            self.skipTest("flock probing requires a POSIX host")
         lock = self.database.parent / (self.database.name + ".lock")
         with lock.open("a+b") as handle:
             try:
@@ -99,10 +105,11 @@ class DatabaseLockTests(unittest.TestCase):
 
         worker = threading.Thread(target=overlay_reviews,
                                   args=(self.output, self.database, [1]))
-        with patch.object(Path, "replace", probe), database_lock(self.database):
-            worker.start()
-            self.assertFalse(entered.wait(1.5))
-        worker.join(10)
+        with patch.object(Path, "replace", probe):
+            with database_lock(self.database):
+                worker.start()
+                self.assertFalse(entered.wait(1.5))
+            worker.join(10)
         self.assertTrue(entered.is_set())
 
 
