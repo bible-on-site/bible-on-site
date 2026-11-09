@@ -8,6 +8,10 @@
  * with Haftarah scopes reaching the auxiliary-reading union.
  */
 
+jest.mock("next/cache", () => ({
+	unstable_cache: (fn: unknown) => fn,
+}));
+
 jest.mock("../../../src/lib/perushim", () => ({
 	getPerushimForRangeGroups: jest.fn(),
 	getPerushNotesForRanges: jest.fn(),
@@ -18,9 +22,11 @@ jest.mock("../../../src/lib/articles/service", () => ({
 }));
 
 import {
+	getPerakimText,
 	getUnitBookPerushNotes,
 	getUnitScopeSummariesBatch,
 } from "../../../src/app/components/reading/unit-book-actions";
+import { getPerekByPerekId } from "../../../src/data/perek-dto";
 import { getMasoraUnitById } from "../../../src/data/masora/masora-units";
 import {
 	getParashaUnitById,
@@ -253,5 +259,21 @@ describe("getUnitBookPerushNotes", () => {
 		expect(await getUnitBookPerushNotes("masora", 8, "torah", 38)).toEqual(
 			[],
 		);
+	});
+});
+
+describe("getPerakimText", () => {
+	it("returns only the requested perakim with their pesukim", async () => {
+		const result = await getPerakimText([335, 336]);
+
+		expect(Object.keys(result).sort()).toEqual(["335", "336"]);
+		expect(result[335].pesukim).toEqual(getPerekByPerekId(335).pesukim);
+		expect(result[336].pesukim).toEqual(getPerekByPerekId(336).pesukim);
+	});
+
+	it("dedupes ids and skips out-of-corpus ids without throwing", async () => {
+		const result = await getPerakimText([1, 1, 0, -4, 930, 1.5, Number.NaN]);
+
+		expect(Object.keys(result)).toEqual(["1"]);
 	});
 });
