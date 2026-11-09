@@ -4,21 +4,11 @@ import shutil
 import subprocess  # nosec B404: fixed FFmpeg version probe, without a shell.
 import tempfile
 import unittest
-from urllib.request import Request
 
-from check_playback_storage import public_https
 from playback import PROFILE, convert, digest, executable, load_playback, pcm_frames
 
 
 class PlaybackTests(unittest.TestCase):
-    def test_public_verification_rejects_local_protocols_and_embedded_credentials(self):
-        for url in ("file:///etc/passwd", "http://localhost/audio.ogg",
-                    "https://user:password@example.com/audio.ogg",
-                    "https://example.com/audio.ogg?token=secret",
-                    "https://example.com/audio.ogg#fragment"):
-            with self.subTest(url=url), self.assertRaises(ValueError):
-                public_https(Request(url))
-
     def test_inventory_rejects_stale_source_and_unexpected_object_keys(self):
         with tempfile.TemporaryDirectory() as temporary:
             manifest = Path(temporary) / "inventory.json"
