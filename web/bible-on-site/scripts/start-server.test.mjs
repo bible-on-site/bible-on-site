@@ -164,6 +164,7 @@ const options = {
 	quietMs: Number(process.argv[5]),
 	pollMs: Number(process.argv[6]),
 	minDrainMs: Number(process.argv[7]),
+	port: Number(process.argv[8]),
 };
 if (process.env.MEASURE_FILE) {
 	const metric = process.env.MEASURE_FILE;
@@ -182,6 +183,9 @@ startServer(options);
 			String(options.quietMs ?? 30_000),
 			String(options.pollMs ?? 500),
 			String(options.minDrainMs ?? 0),
+			// Port 0 keeps the readiness probe off: drain and signal fixtures
+			// must not fire real HTTP at whatever happens to hold :3000.
+			String(options.port ?? 0),
 		],
 		{
 			stdio: ["ignore", "pipe", "pipe"],
@@ -418,6 +422,7 @@ test("a held remote connection keeps the real measured drain open until it close
 		quietMs: 500,
 		pollMs: 100,
 		measure: false, // real /proc/net/tcp counting
+		port,
 		env: { PORT: String(port) },
 	});
 	await server.waitFor("READY ");
@@ -538,6 +543,7 @@ test("the launcher probes readiness as soon as the listener accepts", {
 	const server = await fixture(t, boundServer, {
 		drainMs: 500,
 		measure: "0",
+		port,
 		env: { PORT: String(port) },
 	});
 	await server.waitFor("READY ");

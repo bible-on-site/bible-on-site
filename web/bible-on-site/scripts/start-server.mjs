@@ -168,7 +168,12 @@ export function startReadinessProbe({
 		const url = `http://127.0.0.1:${port}${READINESS_PATH}`;
 		while (!stopped) {
 			try {
-				const response = await request(url, { signal: controller.signal });
+				const response = await request(url, {
+					signal: controller.signal,
+					// One-shot trigger: a pooled keep-alive socket would linger
+					// past the child's exit and delay the wrapper's own exit.
+					headers: { connection: "close" },
+				});
 				// Consume the small readiness JSON so the logged duration covers
 				// the complete handler, warm-up included.
 				await response.text();
