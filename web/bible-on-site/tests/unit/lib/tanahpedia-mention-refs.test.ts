@@ -78,6 +78,18 @@ describe("getMentionReferencesForPerek", () => {
 		expect(mockQuery).toHaveBeenCalledTimes(2);
 	});
 
+	it("rethrows errors that are not the missing-column failure", async () => {
+		const consoleError = jest
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		for (const error of [null, { code: "ER_PARSE_ERROR" }]) {
+			mockQuery.mockRejectedValueOnce(error);
+			await expect(getMentionReferencesForPerek(12)).rejects.toBe(error);
+		}
+		expect(mockQuery).toHaveBeenCalledTimes(2);
+		consoleError.mockRestore();
+	});
+
 	it("emits one row per decoration with bare entry columns", async () => {
 		mockQuery.mockResolvedValueOnce([]);
 		await getMentionReferencesForPerek(9);
