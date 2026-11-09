@@ -29,7 +29,7 @@ internal static class FirebaseEmulatorDeviceControl
     public static IReadOnlyDictionary<string, string> OfflineLaunchEnvironment =>
         new Dictionary<string, string>
         {
-            ["FIREBASE_EMULATOR_HOST"] = "127.0.0.1",
+            ["FIREBASE_EMULATOR_HOST"] = "127.0.0.1", //NOSONAR — loopback literal for the dead-endpoint override.
             ["FIREBASE_EMULATOR_AUTH_PORT"] = DeadPort.ToString(CultureInfo.InvariantCulture),
             ["FIREBASE_EMULATOR_FIRESTORE_PORT"] = DeadPort.ToString(CultureInfo.InvariantCulture),
         };
@@ -86,7 +86,7 @@ internal static class FirebaseEmulatorDeviceControl
             platform.RestartApp(driver, OfflineLaunchEnvironment);
             return;
         }
-        SetAndroidEndpoint(configuration.DeviceId, "127.0.0.1", DeadPort, DeadPort);
+        SetAndroidEndpoint(configuration.DeviceId, "127.0.0.1", DeadPort, DeadPort); //NOSONAR — loopback literal for the dead-endpoint override.
         platform.RestartApp(driver, null);
     }
 
@@ -105,7 +105,7 @@ internal static class FirebaseEmulatorDeviceControl
         {
             // 10.0.2.2 is the Android-emulator host alias; the standard
             // emulator ports complete the default endpoint.
-            SetAndroidEndpoint(configuration.DeviceId, "10.0.2.2", 9099, 8080);
+            SetAndroidEndpoint(configuration.DeviceId, "10.0.2.2", 9099, 8080); //NOSONAR — platform loopback alias, not a routable endpoint.
         }
         finally
         {
