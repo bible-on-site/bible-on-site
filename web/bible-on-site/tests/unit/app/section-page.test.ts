@@ -137,10 +137,10 @@ describe("[section]/page", () => {
 			return scroll?.props.sectionId;
 		};
 
-		it("scrolls sections without their own block to contact", async () => {
+		it("scrolls sections to their homepage block or contact", async () => {
 			expect(await scrollTargetOf("donation")).toBe("contact");
-			expect(await scrollTargetOf("dailyBulletin")).toBe("contact");
-			expect(await scrollTargetOf("whatsappGroup")).toBe("contact");
+			expect(await scrollTargetOf("dailyBulletin")).toBe("bulletin");
+			expect(await scrollTargetOf("whatsappGroup")).toBe("bulletin-whatsapp");
 			expect(await scrollTargetOf("tos")).toBe("tos");
 		});
 
