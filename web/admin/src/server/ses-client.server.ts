@@ -8,7 +8,7 @@ import {
 	type TopicPreference,
 	UpdateContactCommand,
 } from "@aws-sdk/client-sesv2";
-import { type CSSProperties, type ReactElement, createElement } from "react";
+import { type CSSProperties, createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 export type SesAudience = "test" | "real";
@@ -441,83 +441,6 @@ export class SesClient {
 			throw requestError(error, true, "create-contact");
 		}
 		return "subscribed";
-	}
-
-	/**
-	 * Re-consent after an explicit public signup (#2940): creates the contact when
-	 * absent, and for an existing opted-out contact restores OPT_IN on the
-	 * topic. Other topics and account-level suppression are untouched — the
-	 * topic preference is merged rather than replaced — and a contact carrying
-	 * UnsubscribeAll is never re-enabled here: a global opt-out is reversed
-	 * only by the recipient's own preference-page action, which reports back
-	 * as a subscription event. The update is verified with a re-read so the
-	 * caller persists the truthful outcome.
-	 */
-	async resubscribeContact(
-		email: string,
-		audience: SesAudience,
-	): Promise<"subscribed" | "opted_out"> {
-		const normalized = emailAddress(email);
-		const topic = audienceName(audience);
-		const contact = await this.getContact(normalized);
-		if (!contact) return this.ensureSubscribedContact(normalized, topic);
-		if (contact.unsubscribeAll) return "opted_out";
-		if (isSesSubscribed(contact, topic)) return "subscribed";
-		try {
-			await this.client.send(
-				new UpdateContactCommand({
-					ContactListName: this.config.contactListName,
-					EmailAddress: normalized,
-					TopicPreferences: Object.entries({
-						...contact.topics,
-						[topic]: "OPT_IN" as const,
-					}).map(([TopicName, SubscriptionStatus]) => ({
-						TopicName,
-						SubscriptionStatus,
-					})),
-				}),
-				{ abortSignal: AbortSignal.timeout(15_000) },
-			);
-		} catch (error) {
-			throw requestError(error, true, "update-contact");
-		}
-		const verified = await this.getContact(normalized);
-		return verified && isSesSubscribed(verified, topic)
-			? "subscribed"
-			: "opted_out";
-	}
-
-	/**
-	 * Reverts one topic to OPT_OUT — the inverse of resubscribeContact for
-	 * a consent change that lands mid-sync. Topic-scoped like the
-	 * resubscribe: other topics keep their preferences and UnsubscribeAll
-	 * is left untouched, so reverting a real-audience signup cannot
-	 * globally suppress a contact that also holds test subscriptions.
-	 */
-	async optOutContact(email: string, audience: SesAudience): Promise<void> {
-		const normalized = emailAddress(email);
-		const topic = audienceName(audience);
-		const contact = await this.getContact(normalized);
-		if (!contact || contact.unsubscribeAll) return;
-		if (contact.topics[topic] === "OPT_OUT") return;
-		try {
-			await this.client.send(
-				new UpdateContactCommand({
-					ContactListName: this.config.contactListName,
-					EmailAddress: normalized,
-					TopicPreferences: Object.entries({
-						...contact.topics,
-						[topic]: "OPT_OUT" as const,
-					}).map(([TopicName, SubscriptionStatus]) => ({
-						TopicName,
-						SubscriptionStatus,
-					})),
-				}),
-				{ abortSignal: AbortSignal.timeout(15_000) },
-			);
-		} catch (error) {
-			throw requestError(error, true, "update-contact");
-		}
 	}
 
 	/** Global suppression is monotonic and never replaces topic preferences. */

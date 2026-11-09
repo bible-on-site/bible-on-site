@@ -7,8 +7,7 @@ const mocks = vi.hoisted(() => ({
 	sweep: vi.fn(),
 	runtime: vi.fn(),
 	sesConfig: vi.fn(),
-	resubscribe: vi.fn(),
-	optOut: vi.fn(),
+	ensureSubscribed: vi.fn(),
 	sesDestroy: vi.fn(),
 }));
 vi.mock("@tanstack/react-start/server-only", () => ({}));
@@ -24,8 +23,7 @@ vi.mock("~/server/ses-client.server", () => ({
 		constructor(config: unknown) {
 			mocks.sesConfig(config);
 		}
-		resubscribeContact = mocks.resubscribe;
-		optOutContact = mocks.optOut;
+		ensureSubscribedContact = mocks.ensureSubscribed;
 		destroy = mocks.sesDestroy;
 	},
 }));
@@ -54,8 +52,7 @@ beforeEach(() => {
 	mocks.query.mockResolvedValue([]);
 	mocks.queryOne.mockResolvedValue({ consent_status: "confirmed" });
 	mocks.execute.mockResolvedValue({ affectedRows: 1 });
-	mocks.resubscribe.mockResolvedValue("subscribed");
-	mocks.optOut.mockResolvedValue(undefined);
+	mocks.ensureSubscribed.mockResolvedValue("subscribed");
 });
 
 afterEach(() => {
@@ -88,7 +85,7 @@ describe("reconcileSignupOutbox", () => {
 		const select = mocks.query.mock.calls[0]?.[0] as string;
 		expect(select).toContain("status = 'confirmed'");
 		expect(select).toContain("ses_status = 'pending'");
-		expect(mocks.resubscribe).toHaveBeenCalledWith(
+		expect(mocks.ensureSubscribed).toHaveBeenCalledWith(
 			"reader@example.com",
 			"real",
 		);
@@ -102,51 +99,32 @@ describe("reconcileSignupOutbox", () => {
 		mocks.query.mockResolvedValue([intent()]);
 		mocks.queryOne.mockResolvedValue({ consent_status: "unsubscribed" });
 		await reconcileSignupOutbox();
-		expect(mocks.resubscribe).not.toHaveBeenCalled();
+		expect(mocks.ensureSubscribed).not.toHaveBeenCalled();
 		const settled = mocks.execute.mock.calls.find(([sql]) =>
 			(sql as string).includes("ses_status = ?"),
 		);
 		expect(settled?.[1]).toEqual(["opted_out", 7]);
 	});
 
-	it("restores suppression when an opt-out lands during the SES sync", async () => {
+	it("keeps local suppression without rewriting SES when an opt-out lands during sync", async () => {
 		mocks.query.mockResolvedValue([intent()]);
 		mocks.queryOne
 			.mockResolvedValueOnce({ consent_status: "confirmed" })
 			.mockResolvedValueOnce({ consent_status: "unsubscribed" });
 		await reconcileSignupOutbox();
-		expect(mocks.resubscribe).toHaveBeenCalledWith(
+		expect(mocks.ensureSubscribed).toHaveBeenCalledWith(
 			"reader@example.com",
 			"real",
 		);
-		expect(mocks.optOut).toHaveBeenCalledWith("reader@example.com", "real");
 		const settled = mocks.execute.mock.calls.find(([sql]) =>
 			(sql as string).includes("ses_status = ?"),
 		);
 		expect(settled?.[1]).toEqual(["opted_out", 7]);
-	});
-
-	it("retries instead of settling when the opt-out revert fails", async () => {
-		mocks.query.mockResolvedValue([intent()]);
-		mocks.queryOne
-			.mockResolvedValueOnce({ consent_status: "confirmed" })
-			.mockResolvedValueOnce({ consent_status: "unsubscribed" });
-		mocks.optOut.mockRejectedValue(new Error("SES unavailable"));
-		await reconcileSignupOutbox();
-		expect(mocks.optOut).toHaveBeenCalledWith("reader@example.com", "real");
-		const retry = mocks.execute.mock.calls.find(([sql]) =>
-			(sql as string).includes("ses_next_attempt_at"),
-		);
-		expect(retry).toBeDefined();
-		const settled = mocks.execute.mock.calls.find(([sql]) =>
-			(sql as string).includes("ses_status = ?"),
-		);
-		expect(settled).toBeUndefined();
 	});
 
 	it("persists the SES opt-out outcome without a consent re-check", async () => {
 		mocks.query.mockResolvedValue([intent()]);
-		mocks.resubscribe.mockResolvedValue("opted_out");
+		mocks.ensureSubscribed.mockResolvedValue("opted_out");
 		await reconcileSignupOutbox();
 		expect(mocks.queryOne).toHaveBeenCalledTimes(1);
 		const settled = mocks.execute.mock.calls.find(([sql]) =>
@@ -156,7 +134,7 @@ describe("reconcileSignupOutbox", () => {
 	});
 
 	it("backs off SES sync retries and fails permanently at the cap", async () => {
-		mocks.resubscribe.mockRejectedValue(new Error("SES unavailable"));
+		mocks.ensureSubscribed.mockRejectedValue(new Error("SES unavailable"));
 		mocks.query.mockResolvedValue([intent({ ses_attempts: 4 })]);
 		await reconcileSignupOutbox();
 		const retry = mocks.execute.mock.calls.find(([sql]) =>

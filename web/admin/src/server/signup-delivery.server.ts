@@ -47,15 +47,13 @@ async function markIntentSynced(
 }
 
 /**
- * Synchronizes one confirmed signup into the SES contact list. Preserves
- * unrelated topics; the outcome is re-verified and persisted on the intent.
- * Consent is re-read before and after the SES call: an opt-out landing
- * between the signup and this sync — or while it runs — must win, so the
- * signup topic is pushed back to OPT_OUT and the intent settles
- * opted_out. The revert is topic-scoped — a global unsubscribe would also
- * cancel test-audience subscriptions on the same contact — and a failed
- * revert propagates into the retry backoff: the intent must not settle
- * opted_out while SES can still deliver.
+ * Synchronizes one confirmed signup without rewriting existing SES preferences.
+ * SES replaces the full topic list and has no compare-and-swap, so even an
+ * opt-out revert could restore another topic's concurrently withdrawn consent.
+ * Only missing contacts are created; existing opt-outs require the recipient's
+ * native preference-page action. If local consent changes during creation,
+ * settle the intent opted_out without another SES write. The database remains
+ * authoritative and is checked again by the delivery worker before sending.
  */
 async function syncSignupSubscriber(
 	client: SesClient,
@@ -66,12 +64,14 @@ async function syncSignupSubscriber(
 			await markIntentSynced(row, "opted_out");
 			return;
 		}
-		let result = await client.resubscribeContact(row.email, SIGNUP_AUDIENCE);
+		let result = await client.ensureSubscribedContact(
+			row.email,
+			SIGNUP_AUDIENCE,
+		);
 		if (
 			result === "subscribed" &&
 			(await signupConsent(row.email)) !== "confirmed"
 		) {
-			await client.optOutContact(row.email, SIGNUP_AUDIENCE);
 			result = "opted_out";
 		}
 		await markIntentSynced(row, result);
