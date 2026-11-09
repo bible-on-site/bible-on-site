@@ -73,7 +73,7 @@ const ParashaSefer = (props: {
 	currentUnitId: number;
 	entityRefsByPerek: Record<number, PerekEntityReference[]>;
 	perekSources: Record<number, string>;
-	perekById: Map<number, Perek>;
+	perekById: Map<number, Pick<Perek, "pesukim">>;
 	/** Current unit's SSG carousel data, per scope (other units load lazily). */
 	articles: ArticleSummary[];
 	perushim: RangePerushSummary[];
