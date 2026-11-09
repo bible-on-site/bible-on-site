@@ -117,7 +117,13 @@ partial class Build
     {
         // Every predicate stays parenthesized — the filter-query grammar treats
         // a bare "A=B|C=D" group as one malformed predicate and runs zero tests.
-        var baseFilter = $"(Category=MobileE2E)&((Platform=Shared)|(Platform={(MobileIsAndroid ? "Android" : "iOS")}))";
+        // #3185: Platform=Emulator cases are invisible to ordinary runs — the
+        // static suite planner only routes Shared + the leg's platform, so they
+        // could only ever skip (and break the iOS shard union check). Emulator
+        // legs opt them back in; the selection manifest still narrows the run.
+        var platforms = $"(Platform=Shared)|(Platform={(MobileIsAndroid ? "Android" : "iOS")})"
+            + (FirebaseEmulator ? "|(Platform=Emulator)" : string.Empty);
+        var baseFilter = $"(Category=MobileE2E)&({platforms})";
         var selectionPath = Environment.GetEnvironmentVariable("MOBILE_E2E_SELECTION");
         if (string.IsNullOrEmpty(selectionPath))
         {

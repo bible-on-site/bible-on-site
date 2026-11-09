@@ -18,7 +18,12 @@ namespace BibleOnSite.Tests.MobileE2E;
 // account-selection or permission prompt may ever appear.
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
-[Trait("Platform", "Shared")]
+// Platform=Emulator is a routing key, not a device OS: the static suite
+// planner only ever assigns Shared + the leg's own platform, so these cases
+// can never enter an ordinary iOS/Android selection — they would just skip
+// without a suite and break the iOS shard union check. Emulator legs opt
+// them in through the filter-query extension in Build.Test.cs.
+[Trait("Platform", "Emulator")]
 public sealed class FirebasePreferencesSyncTests(ITestOutputHelper output, MobileDeviceSession session)
     : MobileDeviceTest(output, session)
 {
