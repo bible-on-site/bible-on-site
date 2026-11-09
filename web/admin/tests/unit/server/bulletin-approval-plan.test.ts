@@ -22,7 +22,8 @@ describe("owner-authorized article approval plan", () => {
 				...article,
 				id: 2,
 				name: "שיעור",
-				content: `${caption}<p>הסבר כתוב על הפרק.</p>`,
+				content:
+					'<p>להאזנה לשיעור המלא</p><audio src="lesson.opus"></audio><p>הסבר כתוב על הפרק.</p>',
 			},
 		]);
 		expect(plan.written).toBe(1);
