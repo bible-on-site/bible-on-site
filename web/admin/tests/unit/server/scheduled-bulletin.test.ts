@@ -200,6 +200,18 @@ describe("scheduled bulletin orchestration", () => {
 		for (const fn of [m.email, m.telegram, m.whatsapp])
 			expect(fn).not.toHaveBeenCalled();
 	});
+	it("recovers on a same-day retry after article approval with the original channel keys", async () => {
+		m.prepare.mockRejectedValueOnce(new Error("No approved article"));
+		await expect(run()).rejects.toThrow("No approved article");
+		expect(await run()).toBe(true);
+		expect(m.email).toHaveBeenCalledExactlyOnceWith(
+			payload.date,
+			scheduledBulletinRequestKey(payload.date, "email"),
+			{ audience: "test", revision: 2 },
+		);
+		for (const fn of [m.telegram, m.whatsapp])
+			expect(fn).toHaveBeenCalledOnce();
+	});
 	it.each(["email", "telegram", "whatsapp"] as const)(
 		"continues the other two channels if %s enqueue fails, and retains the SQS receipt",
 		async (name) => {

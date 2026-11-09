@@ -141,6 +141,38 @@ describe("prepared bulletins", () => {
 		).toEqual(input.article);
 		expect(mocks.render).not.toHaveBeenCalled();
 	});
+	it("can prepare the same date after approval because the failed attempt saved nothing", async () => {
+		const date = "2026-11-08";
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 311 })
+			.mockResolvedValueOnce(null);
+		mocks.query.mockResolvedValueOnce([]);
+		await expect(
+			prepareBulletin(date, { requireArticle: true }),
+		).rejects.toThrow("No approved article");
+		expect(mocks.getConnection).not.toHaveBeenCalled();
+		const ready = {
+			...row,
+			input_json: { ...input, date, perekId: 311 },
+		};
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 311 })
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(ready);
+		mocks.query
+			.mockResolvedValueOnce([
+				{ id: 7, name: "מאמר", author: "מחבר", content: "<p>תוכן</p>" },
+			])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce(deliveries);
+		expect(
+			(await prepareBulletin(date, { requireArticle: true })).input.article,
+		).toEqual(input.article);
+		expect(mocks.render).toHaveBeenCalledOnce();
+		expect(mocks.getConnection).toHaveBeenCalledOnce();
+	});
 	it("keeps scripture-only manual previews available", async () => {
 		mocks.queryOne.mockResolvedValue({
 			...row,
