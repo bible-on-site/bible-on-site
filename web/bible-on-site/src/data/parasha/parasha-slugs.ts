@@ -24,8 +24,6 @@ import divisionData from "./parasha-division.json";
  */
 
 const HEBREW_ROOT = divisionData.rootPath;
-/** The division's ASCII route dir — public requests on it consolidate. */
-export const PARASHA_ASCII_ROOT = "/parasha";
 
 const PREFIX = "פרשת";
 
