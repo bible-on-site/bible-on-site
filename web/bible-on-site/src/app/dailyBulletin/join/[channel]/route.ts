@@ -7,18 +7,16 @@ const NO_STORE = { "Cache-Control": "no-store" };
 /** Fallback join hub when a channel has no configured destination. */
 const JOIN_HUB = "/dailyBulletin";
 
-function redirectTo(request: Request, location: string): NextResponse {
-	const url = new URL(location, request.url);
+function redirectTo(location: string): NextResponse {
+	// Keep the local fallback relative: behind a reverse proxy, request.url
+	// can contain the container's internal host instead of the public origin.
 	return new NextResponse(null, {
 		status: 307,
-		headers: { ...NO_STORE, location: url.toString() },
+		headers: { ...NO_STORE, location },
 	});
 }
 
-async function respond(
-	request: Request,
-	channel: string,
-): Promise<NextResponse> {
+async function respond(channel: string): Promise<NextResponse> {
 	if (!isJoinChannel(channel)) {
 		return new NextResponse("Not found", {
 			status: 404,
@@ -37,16 +35,16 @@ async function respond(
 	// The channel destinations are expected to always be configured; when one
 	// is not, send the visitor to the bulletin join hub instead of a dead-end
 	// error page (review on #3083).
-	if (destination === null) return redirectTo(request, JOIN_HUB);
-	return redirectTo(request, destination);
+	if (destination === null) return redirectTo(JOIN_HUB);
+	return redirectTo(destination);
 }
 
 type Props = { params: Promise<{ channel: string }> };
 
-export async function GET(request: Request, { params }: Props) {
-	return respond(request, (await params).channel);
+export async function GET(_request: Request, { params }: Props) {
+	return respond((await params).channel);
 }
 
-export async function HEAD(request: Request, { params }: Props) {
-	return respond(request, (await params).channel);
+export async function HEAD(_request: Request, { params }: Props) {
+	return respond((await params).channel);
 }
