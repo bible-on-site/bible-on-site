@@ -119,7 +119,10 @@ function stubQueries(rows: FixtureRows) {
 		if (sql.includes("FROM tanah_article WHERE id"))
 			return found(rows.missing?.article);
 		if (sql.includes("FROM tanahpedia_entry WHERE id"))
-			return found(rows.missing?.entry);
+			// Stored ids are lowercase UUIDs matched under a *_ci collation.
+			return found(rows.missing?.entry).map((row) => ({
+				id: String(row.id).toLowerCase(),
+			}));
 		if (sql.startsWith("SELECT DISTINCT")) return rows.ids ?? [];
 		if (sql.includes("MIN(CASE")) return rows.state ?? [];
 		if (sql.includes("FROM tanah_dedication ")) return rows.dedication ?? [];
@@ -1093,5 +1096,12 @@ describe("validateReferenceTargets", () => {
 		await expect(validateReferenceTargets([{ kind: "entry" }])).rejects.toThrow(
 			"ערך תנכפדיה",
 		);
+	});
+
+	it("accepts an entry id whose case differs from the stored uuid", async () => {
+		stubQueries({});
+		await expect(
+			validateReferenceTargets([{ kind: "entry", entryId: "UPPER-UUID" }]),
+		).resolves.toBeUndefined();
 	});
 });

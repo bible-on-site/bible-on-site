@@ -89,7 +89,7 @@ export async function validateReferenceTargets(
 				? query<{ id: string }>(
 						`SELECT id FROM tanahpedia_entry WHERE id ${IN_TEXT_IDS}`,
 						[JSON.stringify([...new Set(entryIds)])],
-					).then((rows) => new Set(rows.map((r) => r.id)))
+					).then((rows) => new Set(rows.map((r) => r.id.toLowerCase())))
 				: new Set<string>(),
 		]);
 	for (const id of seferIds) {
@@ -109,7 +109,9 @@ export async function validateReferenceTargets(
 			throw new Error(`מאמר ${t.articleId} לא קיים`);
 	}
 	for (const t of entryTargets) {
-		if (!entryFound.has(t.entryId?.trim() ?? "")) {
+		// tanahpedia_entry.id is *_ci: SQL matches case-insensitively, so
+		// the returned-id diff must fold case the same way.
+		if (!entryFound.has((t.entryId?.trim() ?? "").toLowerCase())) {
 			throw new Error(`ערך תנכפדיה ${t.entryId} לא קיים`);
 		}
 	}
