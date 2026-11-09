@@ -547,20 +547,25 @@ export async function processEmailRecipient(id: number): Promise<void> {
 				providerStarted = true;
 			},
 		});
-		// Pace the contact read separately from SendEmail and recheck again at send.
-		await reserveSendSlot(
-			row.audience,
-			Number(row.settings_revision),
-			Number(row.subscriber_id),
-		);
-		const messageId = await client.sendOne({
-			to: row.email,
-			subject: bulletin.subject,
-			html: bulletin.emailHtml,
-			audience: row.audience,
-			externalId: `${id}_${token}`,
-		});
-		providerStarted = true;
+		let messageId: string;
+		try {
+			// Pace the contact read separately from SendEmail and recheck again at send.
+			await reserveSendSlot(
+				row.audience,
+				Number(row.settings_revision),
+				Number(row.subscriber_id),
+			);
+			messageId = await client.sendOne({
+				to: row.email,
+				subject: bulletin.subject,
+				html: bulletin.emailHtml,
+				audience: row.audience,
+				externalId: `${id}_${token}`,
+			});
+			providerStarted = true;
+		} finally {
+			client.destroy();
+		}
 		const persisted = await transaction(async (connection) => {
 			const current = await txQueryOne<RecipientRow>(
 				connection,
@@ -767,6 +772,17 @@ export async function startEmailWorker(signal: AbortSignal): Promise<void> {
 				if (Date.now() >= nextSweep) {
 					nextSweep = Date.now() + 30_000;
 					await reconcileEmailOutbox(client, runtime.queueUrl, signal);
+					if (signal.aborted) break;
+					try {
+						const { reconcileSignupOutbox } = await import(
+							"./signup-delivery.server"
+						);
+						await reconcileSignupOutbox(signal);
+					} catch {
+						// A missing migration must not block the existing email consumer.
+						if (!signal.aborted)
+							console.error("Signup outbox reconciliation failed");
+					}
 					if (signal.aborted) break;
 					try {
 						const telegram = await optionalTelegramDelivery();

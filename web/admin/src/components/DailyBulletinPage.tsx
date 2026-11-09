@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
+import { BulletinJoinLinks } from "~/components/BulletinJoinLinks";
 import { BulletinTelegramControls } from "~/components/BulletinTelegramControls";
 import type {
 	BulletinEmailState,
@@ -226,6 +227,7 @@ export function DailyBulletinPage() {
 				</p>
 			)}
 			{bulletin.isLoading && <p role="status">טוען עלון...</p>}
+			<BulletinJoinLinks />
 			{!saved && whatsappControls}
 			{saved && (
 				<>
