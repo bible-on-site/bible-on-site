@@ -26,16 +26,14 @@ describe("pedia change resolution", () => {
 	describe("pediaChangesForEntryIds", () => {
 		it("emits one pedia-entry change per resolvable entry", async () => {
 			queryMock
-				// entry 1: unique_name + 3 relation queries
-				.mockResolvedValueOnce([{ unique_name: "משה" }])
-				.mockResolvedValueOnce([{ entity_type: "PERSON" }])
-				.mockResolvedValueOnce([{ name: "משה רבנו" }])
-				.mockResolvedValueOnce([{ perek_id: 12 }])
-				// entry 2: unique_name + 3 relation queries
-				.mockResolvedValueOnce([{ unique_name: "אהרן" }])
-				.mockResolvedValueOnce([])
-				.mockResolvedValueOnce([])
-				.mockResolvedValueOnce([]);
+				// Batched: entry names, then the 3 relation queries.
+				.mockResolvedValueOnce([
+					{ id: "e1", unique_name: "משה" },
+					{ id: "e2", unique_name: "אהרן" },
+				])
+				.mockResolvedValueOnce([{ entry_id: "e1", entity_type: "PERSON" }])
+				.mockResolvedValueOnce([{ entry_id: "e1", name: "משה רבנו" }])
+				.mockResolvedValueOnce([{ entry_id: "e1", perek_id: 12 }]);
 
 			const requests = await pediaChangesForEntryIds(["e1", "e2"]);
 
