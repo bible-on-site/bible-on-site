@@ -3027,23 +3027,34 @@ mod tests {
         let conn = mock_conn()
             .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                 vec![mock_row([("acquired", 0_i64.into())])],
-                vec![], // load_state → nothing persisted yet
+                vec![mock_row([
+                    ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("doc_count", 1_i32.into()),
+                    ("model_epoch", 1_i32.into()),
+                    ("model", serialize_model(&toy_model()).into()),
+                ])], // load_state
+                vec![mock_row([
+                    ("article_id", 7_i32.into()),
+                    ("model_epoch", 1_i32.into()),
+                    ("plain_len", 10_i32.into()),
+                    ("vector", serialize_vector(&[1.0]).into()),
+                    ("terms", serialize_terms(&[(0, 4)]).into()),
+                ])], // load_docs — written by the lock holder
             ])
             .into_connection();
         let index = index_on(conn);
         worker_tick(&index, 1).await;
+        assert_eq!(
+            index.doc_count().await,
+            1,
+            "the contender's same-epoch doc write must fold into our snapshot"
+        );
         let log = index.conn().clone().into_transaction_log();
         let sql: Vec<String> = log
             .iter()
             .flat_map(|entry| entry.statements().iter().map(|s| s.sql.clone()))
             .collect();
-        assert_eq!(
-            sql.len(),
-            2,
-            "acquisition probe, then the reload's state read"
-        );
         assert!(sql[0].contains("GET_LOCK"));
-        assert!(sql[1].contains("article_search_state"));
         assert!(
             sql.iter().all(|s| !s.contains("article_search_queue")),
             "a contended tick must not touch the queue"
