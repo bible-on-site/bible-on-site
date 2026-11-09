@@ -121,9 +121,10 @@ public class FirebaseEmulatorConfigTests
         // The lazy singleton is what FirebaseEmulatorRouting actually consumes.
         // It must equal a fresh Resolve over the live environment — the
         // system-property reader returns null on this non-Android host, so a
-        // null reader is equivalent. This catches wiring regressions (a
-        // hardcoded endpoint, swapped delegates, an early-evaluated snapshot);
-        // per-value override precedence itself is covered by the Resolve tests.
+        // null reader is equivalent. This catches wiring regressions such as a
+        // hardcoded endpoint, swapped delegates, or an eagerly captured
+        // snapshot. Per-value override precedence itself is covered by the
+        // Resolve tests.
         var expected = FirebaseEmulatorConfig.Resolve(Environment.GetEnvironmentVariable, _ => null);
 
         FirebaseEmulatorConfig.Current.Should().Be(expected);
