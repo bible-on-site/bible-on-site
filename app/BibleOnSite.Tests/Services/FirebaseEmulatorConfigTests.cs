@@ -116,16 +116,19 @@ public class FirebaseEmulatorConfigTests
     }
 
     [Fact]
-    public void Current_ResolvesLazily_AndStaysWithinValidRanges()
+    public void Current_ReturnsEndpointResolvedFromCurrentEnvironment()
     {
-        // The lazy singleton is what FirebaseEmulatorRouting actually consumes:
-        // the real environment lookup on this host plus the system-property
-        // reader (null off-Android). Assert shape rather than exact values —
-        // a developer environment may legitimately carry overrides.
-        var endpoint = FirebaseEmulatorConfig.Current;
+        // The lazy singleton is what FirebaseEmulatorRouting actually consumes.
+        // It must equal a fresh Resolve over the live environment — the
+        // system-property reader returns null on this non-Android host, so a
+        // null reader is equivalent. This catches wiring regressions (a
+        // hardcoded endpoint, swapped delegates, an early-evaluated snapshot);
+        // per-value override precedence itself is covered by the Resolve tests.
+        var expected = FirebaseEmulatorConfig.Resolve(Environment.GetEnvironmentVariable, _ => null);
 
-        endpoint.Host.Should().NotBeNullOrWhiteSpace();
-        endpoint.AuthPort.Should().BeInRange(1, 65535);
-        endpoint.FirestorePort.Should().BeInRange(1, 65535);
+        FirebaseEmulatorConfig.Current.Should().Be(expected);
+        FirebaseEmulatorConfig.Current.Host.Should().NotBeNullOrWhiteSpace();
+        FirebaseEmulatorConfig.Current.AuthPort.Should().BeInRange(1, 65535);
+        FirebaseEmulatorConfig.Current.FirestorePort.Should().BeInRange(1, 65535);
     }
 }
