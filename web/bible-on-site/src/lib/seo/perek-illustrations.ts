@@ -130,31 +130,6 @@ export function imagesFromRows(
 	return result;
 }
 
-/** Match any reading division by inclusive canonical chapter/verse coordinates. */
-export function selectImagesForVerseRanges(
-	allImages: Record<number, PerekIllustration[]>,
-	readingRanges: ImageVerseRange[],
-): PerekIllustration[] {
-	const selected = new Map<number, PerekIllustration>();
-	for (const images of Object.values(allImages)) {
-		for (const image of images) {
-			if (
-				image.verseRanges.some((range) =>
-					readingRanges.some(
-						(reading) =>
-							reading.perekId === range.perekId &&
-							reading.pasukFrom <= range.pasukTo &&
-							reading.pasukTo >= range.pasukFrom,
-					),
-				)
-			) {
-				selected.set(image.id, image);
-			}
-		}
-	}
-	return [...selected.values()];
-}
-
 /** Keep client payloads scoped to the displayed sefer, not all 929 chapters. */
 export function selectPerekImages(
 	allImages: Record<number, PerekIllustration[]>,
