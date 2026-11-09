@@ -105,7 +105,9 @@ internal static class FirebaseEmulatorDeviceControl
         {
             // 10.0.2.2 is the Android-emulator host alias; the standard
             // emulator ports complete the default endpoint.
-            SetAndroidEndpoint(configuration.DeviceId, "10.0.2.2", 9099, 8080); //NOSONAR — platform loopback alias, not a routable endpoint.
+#pragma warning disable S1313 // Platform loopback alias the app must receive verbatim via adb setprop — not a routable endpoint.
+            SetAndroidEndpoint(configuration.DeviceId, "10.0.2.2", 9099, 8080);
+#pragma warning restore S1313
         }
         finally
         {

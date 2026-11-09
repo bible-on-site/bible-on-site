@@ -35,7 +35,9 @@ internal static class FirebaseEmulatorConfig
 #if ANDROID
     // The Android emulator reaches the host machine's loopback through the
     // special 10.0.2.2 alias; a physical device needs an explicit override.
-    internal const string DefaultHost = "10.0.2.2"; //NOSONAR — platform loopback alias, not a routable endpoint.
+#pragma warning disable S1313 // Platform loopback alias, not a routable endpoint.
+    internal const string DefaultHost = "10.0.2.2";
+#pragma warning restore S1313
 #else
     // The iOS simulator shares the host network stack, so the suite's
     // loopback address is directly reachable.
