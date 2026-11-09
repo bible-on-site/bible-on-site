@@ -7,8 +7,19 @@ using AltCover.Recorder;
 // Standalone disposable process: starvation cannot affect the unit runner.
 internal static class Program
 {
-    private static void Main()
+    private static void Main(string[] args)
     {
+        if (args is ["msstore-output", var code])
+        {
+            // Match the UTF-8 stream contract used by NUKE's CLI reader.
+            Console.OutputEncoding = Encoding.UTF8;
+            Console.WriteLine("Command status on stdout");
+            Console.Error.WriteLine("Deleting Flight");
+            Console.Error.WriteLine("✅ \u001b[1;38;5;2mDeleted Flight\u001b[0m");
+            Environment.ExitCode = int.Parse(code, System.Globalization.CultureInfo.InvariantCulture);
+            return;
+        }
+
         using var released = new ManualResetEventSlim();
         using var blocked = new ManualResetEventSlim();
         using var listener = new TcpListener(IPAddress.Loopback, 0);
