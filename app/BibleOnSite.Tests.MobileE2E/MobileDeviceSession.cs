@@ -41,7 +41,20 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
         Adapter = MobilePlatformAdapter.For(configuration.Platform);
     }
 
-    public ValueTask InitializeAsync() => default;
+    // #3185: emulator-gated runs start from a pristine suite — leftover Auth
+    // accounts and users/* documents from earlier runs would make the probe
+    // resolve a stale app identity, and a persisted Firebase session on the
+    // device would keep signing in as it. This runs before the first Acquire
+    // creates the session and launches the app, so the wipe always precedes
+    // the app's first sign-in of the run. Unset FIREBASE_EMULATOR skips it.
+    public async ValueTask InitializeAsync()
+    {
+        if (FirebaseEmulatorProbe.Enabled)
+        {
+            FirebaseEmulatorDeviceControl.ClearAppData(Configuration);
+            await FirebaseEmulatorProbe.ResetSuiteAsync();
+        }
+    }
 
     public ValueTask DisposeAsync()
     {

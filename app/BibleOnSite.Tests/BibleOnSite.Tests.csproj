@@ -11,7 +11,7 @@
     <!-- Run the test exe through Microsoft.Testing.Platform (app/global.json sets dotnet test's runner). -->
     <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
     <!-- Exercise the same view-model commands as the application build. -->
-    <DefineConstants>$(DefineConstants);MAUI</DefineConstants>
+    <DefineConstants>$(DefineConstants);MAUI;FIREBASE_EMULATOR</DefineConstants>
     <!-- Catch JSON failures that otherwise appear only in trimmed native releases. -->
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
@@ -77,6 +77,9 @@
     <Compile Include="..\BibleOnSite\Services\AnalyticsService.cs" Link="Services\AnalyticsService.cs" />
     <Compile Include="..\BibleOnSite\Services\AnalyticsScreens.cs" Link="Services\AnalyticsScreens.cs" />
     <Compile Include="..\BibleOnSite\Services\IPreferencesStorage.cs" Link="Services\IPreferencesStorage.cs" />
+    <!-- #3185: pure emulator-endpoint resolution, unit-tested on the host;
+         the FIREBASE_EMULATOR constant above activates its body here. -->
+    <Compile Include="..\BibleOnSite\Services\FirebaseEmulatorConfig.cs" Link="Services\FirebaseEmulatorConfig.cs" />
     <Compile Include="..\BibleOnSite\Services\IPreferencesCloudStore.cs" Link="Services\IPreferencesCloudStore.cs" />
     <Compile Include="..\BibleOnSite\Services\IUserIdentity.cs" Link="Services\IUserIdentity.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesCloudDocument.cs" Link="Services\PreferencesCloudDocument.cs" />

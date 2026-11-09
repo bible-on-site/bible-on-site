@@ -14,7 +14,11 @@ namespace BibleOnSite.Services;
 /// Availability mirrors <see cref="AnalyticsService"/>: DISABLE_ANALYTICS
 /// builds (Debug/e2e) never emit to Firebase, e2e-marked processes stay
 /// signed out, and on iOS a failed Firebase init keeps the identity
-/// anonymous — in every such case the app remains local-only.
+/// anonymous — in every such case the app remains local-only. The one
+/// exception is emulator-gated e2e builds (#3185, FIREBASE_EMULATOR), which
+/// stay signed in deliberately: every call is routed to the local Emulator
+/// Suite, so no user data can leave the device — an unreachable suite still
+/// degrades to local-only through the same failure boundaries.
 /// </summary>
 public sealed class FirebaseUserIdentity : IUserIdentity, IDisposable
 {
@@ -38,6 +42,11 @@ public sealed class FirebaseUserIdentity : IUserIdentity, IDisposable
                     try
                     {
                         _auth = CrossFirebaseAuth.Current;
+#if FIREBASE_EMULATOR
+                        // Emulator-gated builds (#3185): UseEmulator must run
+                        // before the first real call on the Auth singleton.
+                        FirebaseEmulatorRouting.ApplyToAuth(_auth);
+#endif
                         _authStateListener = _auth.AddAuthStateListener(
                             _ => UserChanged?.Invoke(this, EventArgs.Empty));
                     }
@@ -54,7 +63,18 @@ public sealed class FirebaseUserIdentity : IUserIdentity, IDisposable
     }
 
     private static bool FirebaseUsable =>
-#if DISABLE_ANALYTICS
+#if FIREBASE_EMULATOR
+        // Emulator-gated e2e builds (#3185): every adapter call is routed to
+        // the local Emulator Suite before first use, so the sync path stays
+        // live even though DISABLE_ANALYTICS keeps analytics and push off —
+        // the flag exists only in test builds, and an unreachable suite
+        // degrades to local-only through the same failure boundaries.
+#if IOS
+        MauiProgram.IsFirebaseInitialized;
+#else
+        true;
+#endif
+#elif DISABLE_ANALYTICS
         // Same build flag as analytics: test builds must not emit user data.
         false;
 #elif IOS

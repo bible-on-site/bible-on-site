@@ -1,0 +1,57 @@
+name: App Firebase Emulator E2E
+
+# #3185: opt-in leg that proves the native Firestore preference-sync path
+# end to end against the local Firebase Emulator Suite — silent anonymous
+# sign-in, users/{uid} creation, real adapter writes, relaunch persistence,
+# offline save + recovery, unrelated-entry preservation, and per-user rule
+# isolation — without touching the production project or real user data.
+#
+# It is deliberately manual/callable only: every app PR already runs the full
+# MobileE2E suite, and this leg adds two emulator-backed device jobs. Run it
+# from the Actions tab (or call it from another workflow) when the sync path
+# changes. See app/firebase/README.md for local reproduction.
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Device platform to verify"
+        type: choice
+        options: [android, ios, both]
+        default: both
+  workflow_call:
+    inputs:
+      platform:
+        description: "Device platform to verify (android, ios, or both)"
+        type: string
+        default: both
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Firebase emulator Android
+    if: ${{ inputs.platform != 'ios' }}
+    uses: ./.github/workflows/app-mobile-e2e-runner.yml
+    with:
+      platform: Android
+      platform_id: android
+      artifact: android-firebase-emulator
+      runner: ubuntu-latest
+      workload: maui-android
+      mode: build-and-run
+      firebase_emulator: true
+
+  ios:
+    name: Firebase emulator iOS
+    if: ${{ inputs.platform != 'android' }}
+    uses: ./.github/workflows/app-mobile-e2e-runner.yml
+    with:
+      platform: iOS
+      platform_id: ios
+      artifact: ios-firebase-emulator
+      runner: xcode-27
+      workload: maui-ios
+      mode: build-and-run
+      firebase_emulator: true

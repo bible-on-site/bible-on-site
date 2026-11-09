@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "suite": "app-mobile-e2e",
+  "selectAll": false,
+  "note": "#3185: the Firebase Emulator Suite scenarios. Used only by app-firebase-emulator-e2e.yml via MOBILE_E2E_SELECTION; regenerate ids if FirebasePreferencesSyncTests changes.",
+  "selected": [
+    { "id": "BibleOnSite.Tests.MobileE2E.FirebasePreferencesSyncTests.SilentAnonymousSignIn_CreatesUserDocument_WithoutPrompts", "reasons": ["firebase-emulator"] },
+    { "id": "BibleOnSite.Tests.MobileE2E.FirebasePreferencesSyncTests.PreferenceEdit_WritesSyncedEntryThroughNativeAdapter", "reasons": ["firebase-emulator"] },
+    { "id": "BibleOnSite.Tests.MobileE2E.FirebasePreferencesSyncTests.Relaunch_AppliesRemoteWinner_AndKeepsIdentity", "reasons": ["firebase-emulator"] },
+    { "id": "BibleOnSite.Tests.MobileE2E.FirebasePreferencesSyncTests.OfflineSave_RemainsLocal_AndSyncsAfterRecovery", "reasons": ["firebase-emulator"] },
+    { "id": "BibleOnSite.Tests.MobileE2E.FirebasePreferencesSyncTests.Sync_PreservesUnrelatedDocumentEntries", "reasons": ["firebase-emulator"] },
+    { "id": "BibleOnSite.Tests.MobileE2E.FirebasePreferencesSyncTests.SecurityRules_ScopeDocumentsToTheirOwner", "reasons": ["firebase-emulator"] }
+  ]
+}

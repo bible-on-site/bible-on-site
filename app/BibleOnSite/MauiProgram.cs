@@ -6,7 +6,7 @@ using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using BibleOnSite.Controls;
 using BibleOnSite.Handlers;
-#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH)
+#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH || FIREBASE_EMULATOR)
 using Plugin.Firebase.Core.Platforms.iOS;
 #endif
 #if IOS && !DISABLE_ANALYTICS
@@ -151,6 +151,9 @@ public static class MauiProgram
         // also configures the Messaging SDK, so it additionally runs whenever
         // push is enabled (-p:DisablePush=false) even on a DISABLE_ANALYTICS
         // build; the plist flag still keeps analytics collection off there.
+        // #3185: emulator-gated e2e builds (FIREBASE_EMULATOR) initialize
+        // Firebase too — Auth/Firestore route to the local Emulator Suite,
+        // while analytics collection stays off below.
         // If initialization raises a managed exception, leave analytics disabled.
         // Native crashes require a device crash report and cannot be caught here.
         builder.ConfigureLifecycleEvents(events =>
@@ -164,7 +167,7 @@ public static class MauiProgram
                 return true;
             }));
 #endif
-#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH)
+#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH || FIREBASE_EMULATOR)
 			events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
 			{
 				try
