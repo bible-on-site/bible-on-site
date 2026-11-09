@@ -184,7 +184,7 @@ public sealed class FirebasePreferencesSyncTests(ITestOutputHelper output, Mobil
                 {
                     FirebaseEmulatorDeviceControl.RestartRecovered(Driver!, Platform, Configuration);
                 }
-                catch (Exception exception)
+                catch (Exception exception) //NOSONAR — endpoint restore is best-effort; a failure is logged, never masks the scenario result.
                 {
                     Output.WriteLine($"endpoint restore after offline scenario failed: {exception.Message}");
                 }
@@ -262,9 +262,9 @@ public sealed class FirebasePreferencesSyncTests(ITestOutputHelper output, Mobil
             // Disposable identities/documents: the emulator is in-memory, but
             // cleaning up keeps a long-lived local suite deterministic too.
             try { FirebaseEmulatorProbe.DeleteUserDocumentAsync(otherUid).GetAwaiter().GetResult(); }
-            catch (Exception exception) { Output.WriteLine($"probe doc cleanup: {exception.Message}"); }
+            catch (Exception exception) { Output.WriteLine($"probe doc cleanup: {exception.Message}"); } //NOSONAR — disposable probe state; cleanup failure must not fail the decided scenario.
             try { FirebaseEmulatorProbe.DeleteAccountAsync(otherToken).GetAwaiter().GetResult(); }
-            catch (Exception exception) { Output.WriteLine($"probe account cleanup: {exception.Message}"); }
+            catch (Exception exception) { Output.WriteLine($"probe account cleanup: {exception.Message}"); } //NOSONAR — disposable probe state; cleanup failure must not fail the decided scenario.
         }
     });
 

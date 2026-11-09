@@ -150,9 +150,10 @@ internal static class FirebaseEmulatorProbe
     /// <summary>Creates a second anonymous account for isolation checks; returns (localId, idToken).</summary>
     public static async Task<(string LocalId, string IdToken)> SignUpAnonymousAsync(CancellationToken cancellationToken = default)
     {
+        using var content = new StringContent("{}", Encoding.UTF8, "application/json");
         using var response = await Client.PostAsync(
             $"{AuthBase}identitytoolkit.googleapis.com/v1/accounts:signUp?key=fake-api-key",
-            new StringContent("{}", Encoding.UTF8, "application/json"), cancellationToken);
+            content, cancellationToken);
         response.EnsureSuccessStatusCode();
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
         var root = document.RootElement;
@@ -168,10 +169,11 @@ internal static class FirebaseEmulatorProbe
     /// </summary>
     public static async Task DeleteAccountAsync(string idToken, CancellationToken cancellationToken = default)
     {
+        using var content = new StringContent(
+            JsonSerializer.Serialize(new { idToken }), Encoding.UTF8, "application/json");
         using var response = await Client.PostAsync(
             $"{AuthBase}identitytoolkit.googleapis.com/v1/accounts:delete?key=fake-api-key",
-            new StringContent(JsonSerializer.Serialize(new { idToken }), Encoding.UTF8, "application/json"),
-            cancellationToken);
+            content, cancellationToken);
         response.EnsureSuccessStatusCode();
     }
 
@@ -220,23 +222,22 @@ internal static class FirebaseEmulatorProbe
         using var response = await Client.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
-        var ids = new List<string>();
-        if (document.RootElement.TryGetProperty("documents", out var documents))
-        {
-            foreach (var entry in documents.EnumerateArray())
-            {
-                if (entry.TryGetProperty("name", out var name))
-                {
-                    var text = name.GetString() ?? string.Empty;
-                    var index = text.LastIndexOf('/');
-                    if (index >= 0 && index + 1 < text.Length)
-                    {
-                        ids.Add(text[(index + 1)..]);
-                    }
-                }
-            }
-        }
+        var ids = document.RootElement.TryGetProperty("documents", out var documents)
+            ? documents.EnumerateArray().Select(UserIdFromDocumentName).OfType<string>().ToList()
+            : new List<string>();
         return ids;
+    }
+
+    /// <summary>Last path segment of a users/* document name; null when malformed.</summary>
+    private static string? UserIdFromDocumentName(JsonElement entry)
+    {
+        if (!entry.TryGetProperty("name", out var name))
+        {
+            return null;
+        }
+        var text = name.GetString() ?? string.Empty;
+        var index = text.LastIndexOf('/');
+        return index >= 0 && index + 1 < text.Length ? text[(index + 1)..] : null;
     }
 
     /// <summary>Snapshot of one entries.* value decoded from Firestore REST types.</summary>
