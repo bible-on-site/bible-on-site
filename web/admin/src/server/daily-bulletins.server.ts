@@ -165,9 +165,32 @@ async function bulletinDedications(
 	}
 }
 
-export async function prepareBulletin(date: string): Promise<PreparedBulletin> {
+function assertBulletinArticle(
+	date: string,
+	perekId: number,
+	article: { id: number } | null,
+): void {
+	if (!article)
+		throw new Error(
+			`No approved article for bulletin ${date} (perek ${perekId})`,
+		);
+}
+
+/** Manual previews may omit an article; scheduled delivery requires one. */
+export async function prepareBulletin(
+	date: string,
+	options: { requireArticle?: boolean } = {},
+): Promise<PreparedBulletin> {
 	const existing = await readPreparedBulletin(date);
-	if (existing) return existing;
+	if (existing) {
+		if (options.requireArticle)
+			assertBulletinArticle(
+				date,
+				existing.input.perekId,
+				existing.input.article,
+			);
+		return existing;
+	}
 	// The persisted 929 date mapping covers every study day in every known cycle.
 	// Friday and Saturday resolve to Thursday. Holiday advance sends use their own
 	// target date, rather than the date on which the worker is running.
@@ -203,6 +226,10 @@ export async function prepareBulletin(date: string): Promise<PreparedBulletin> {
 			);
 			return articles.length ? articles[randomInt(articles.length)] : null;
 		})());
+	// Do not freeze a missing approval into the shared snapshot. A later
+	// scheduled attempt can recover after an article is approved in the admin.
+	if (options.requireArticle)
+		assertBulletinArticle(date, perek.perek_id, chosen);
 	// Dedications for the day's perek (#2731): direct perek ranges plus the
 	// perek's sefer and helek ancestors, with dedication- and assignment-level
 	// expiry honoured (expires_at is a UTC wall-clock). During rollout, when
@@ -260,5 +287,8 @@ export async function prepareBulletin(date: string): Promise<PreparedBulletin> {
 	}
 	const saved = await readPreparedBulletin(date);
 	if (!saved) throw new Error("שמירת העלון נכשלה");
+	// Another request may have saved a scripture-only manual preview first.
+	if (options.requireArticle)
+		assertBulletinArticle(date, saved.input.perekId, saved.input.article);
 	return saved;
 }

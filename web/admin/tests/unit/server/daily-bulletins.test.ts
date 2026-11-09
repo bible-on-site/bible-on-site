@@ -80,13 +80,96 @@ describe("prepared bulletins", () => {
 			])
 			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce(deliveries);
-		const result = await prepareBulletin(input.date);
+		const result = await prepareBulletin(input.date, { requireArticle: true });
 		expect(mocks.render).toHaveBeenCalledWith(input);
 		expect(mocks.execute).toHaveBeenCalledTimes(4);
 		expect(mocks.beginTransaction).toHaveBeenCalledOnce();
 		expect(mocks.commit).toHaveBeenCalledOnce();
 		expect(mocks.release).toHaveBeenCalledOnce();
 		expect(result.delivery).toEqual(deliveries);
+	});
+	it.each([
+		["2026-11-08", 311],
+		["2026-11-09", 312],
+	] as const)(
+		"refuses to freeze an article-free scheduled bulletin for %s (perek %i)",
+		async (date, perekId) => {
+			// Production had articles for both chapters, but none approved. The
+			// candidate query therefore returns no rows, not a rendering failure.
+			mocks.queryOne
+				.mockResolvedValueOnce(null)
+				.mockResolvedValueOnce({ perek_id: perekId })
+				.mockResolvedValueOnce(null)
+				.mockResolvedValueOnce({
+					...row,
+					input_json: { ...input, date, perekId, article: null },
+				});
+			mocks.query.mockResolvedValue([]);
+			await expect(
+				prepareBulletin(date, { requireArticle: true }),
+			).rejects.toThrow(
+				`No approved article for bulletin ${date} (perek ${perekId})`,
+			);
+			expect(mocks.render).not.toHaveBeenCalled();
+			expect(mocks.getConnection).not.toHaveBeenCalled();
+		},
+	);
+	it.each(["pending", "sent", "uncertain"])(
+		"rejects a stored article-free bulletin with %s deliveries without changing its snapshot",
+		async (status) => {
+			mocks.queryOne.mockResolvedValue({
+				...row,
+				input_json: { ...input, perekId: 311, article: null },
+			});
+			mocks.query.mockResolvedValue(
+				deliveries.map((delivery) => ({ ...delivery, status })),
+			);
+			await expect(
+				prepareBulletin(input.date, { requireArticle: true }),
+			).rejects.toThrow("No approved article");
+			expect(mocks.queryOne).toHaveBeenCalledTimes(1);
+			expect(mocks.render).not.toHaveBeenCalled();
+			expect(mocks.getConnection).not.toHaveBeenCalled();
+		},
+	);
+	it("allows a saved approved article for scheduled delivery", async () => {
+		mocks.queryOne.mockResolvedValue(row);
+		mocks.query.mockResolvedValue(deliveries);
+		expect(
+			(await prepareBulletin(input.date, { requireArticle: true })).input
+				.article,
+		).toEqual(input.article);
+		expect(mocks.render).not.toHaveBeenCalled();
+	});
+	it("keeps scripture-only manual previews available", async () => {
+		mocks.queryOne.mockResolvedValue({
+			...row,
+			input_json: { ...input, article: null },
+		});
+		mocks.query.mockResolvedValue(deliveries);
+		expect((await prepareBulletin(input.date)).input.article).toBeNull();
+		expect(mocks.render).not.toHaveBeenCalled();
+	});
+	it("rejects an article-free concurrent winner before scheduled delivery", async () => {
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 1 })
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({
+				...row,
+				input_json: { ...input, article: null },
+			});
+		mocks.query
+			.mockResolvedValueOnce([
+				{ id: 7, name: "מאמר", author: "מחבר", content: "<p>תוכן</p>" },
+			])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce(deliveries);
+		await expect(
+			prepareBulletin(input.date, { requireArticle: true }),
+		).rejects.toThrow("No approved article");
+		expect(mocks.render).toHaveBeenCalledWith(input);
+		expect(mocks.commit).toHaveBeenCalledOnce();
 	});
 	it("returns the stored winner when another request prepared the date first", async () => {
 		const winner = {

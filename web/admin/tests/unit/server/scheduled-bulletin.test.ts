@@ -71,7 +71,9 @@ describe("scheduled bulletin orchestration", () => {
 			expect(m.prepare).toHaveResolved();
 		});
 		expect(await run()).toBe(true);
-		expect(m.prepare).toHaveBeenCalledExactlyOnceWith("2026-10-29");
+		expect(m.prepare).toHaveBeenCalledExactlyOnceWith("2026-10-29", {
+			requireArticle: true,
+		});
 		expect(m.email).toHaveBeenCalledExactlyOnceWith(
 			"2026-10-29",
 			scheduledBulletinRequestKey("2026-10-29", "email"),
@@ -192,6 +194,12 @@ describe("scheduled bulletin orchestration", () => {
 		expect(await running).toBe(false);
 		expect(m.telegram).not.toHaveBeenCalled();
 	});
+	it("enqueues no channel when preparation reports a missing approved article", async () => {
+		m.prepare.mockRejectedValueOnce(new Error("No approved article"));
+		await expect(run()).rejects.toThrow("No approved article");
+		for (const fn of [m.email, m.telegram, m.whatsapp])
+			expect(fn).not.toHaveBeenCalled();
+	});
 	it.each(["email", "telegram", "whatsapp"] as const)(
 		"continues the other two channels if %s enqueue fails, and retains the SQS receipt",
 		async (name) => {
@@ -236,9 +244,9 @@ describe("scheduled bulletin orchestration", () => {
 				),
 			).toBe(true);
 		expect(m.prepare.mock.calls).toEqual([
-			["2025-09-22"],
-			["2025-09-23"],
-			["2025-09-24"],
+			["2025-09-22", { requireArticle: true }],
+			["2025-09-23", { requireArticle: true }],
+			["2025-09-24", { requireArticle: true }],
 		]);
 		expect(new Set(m.email.mock.calls.map((args) => args[1])).size).toBe(3);
 	});
