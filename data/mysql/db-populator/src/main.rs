@@ -83,6 +83,10 @@ struct Cli {
     )]
     tanahpedia_today_anniversary_month_day_upgrade_script: String,
 
+    /// Path to Tanahpedia normalized-name resolution key upgrade SQL file
+    #[arg(long, default_value = "../tanahpedia_alter_normalized_name.sql")]
+    tanahpedia_normalized_name_upgrade_script: String,
+
     /// Path to Tanahpedia lookup seed SQL file
     #[arg(long, default_value = "../tanahpedia_seed_data.sql")]
     tanahpedia_seed_script: String,
@@ -415,6 +419,7 @@ struct TanahpediaScripts {
     entry_entity_unique_upgrade: std::path::PathBuf,
     entry_synonym_upgrade: std::path::PathBuf,
     today_anniversary_month_day_upgrade: std::path::PathBuf,
+    normalized_name_upgrade: std::path::PathBuf,
     seed: std::path::PathBuf,
     incremental_lookups: std::path::PathBuf,
     legacy: std::path::PathBuf,
@@ -442,6 +447,7 @@ impl TanahpediaScripts {
             entry_synonym_upgrade: base_path.join(&cli.tanahpedia_entry_synonym_upgrade_script),
             today_anniversary_month_day_upgrade: base_path
                 .join(&cli.tanahpedia_today_anniversary_month_day_upgrade_script),
+            normalized_name_upgrade: base_path.join(&cli.tanahpedia_normalized_name_upgrade_script),
             seed: base_path.join(&cli.tanahpedia_seed_script),
             incremental_lookups: base_path.join(&cli.tanahpedia_incremental_lookups_script),
             legacy: base_path.join(&cli.tanahpedia_legacy_script),
@@ -512,7 +518,8 @@ async fn apply_tanahpedia_safe_upgrades(
     apply_entry_entity_unique_upgrade(conn, &scripts.entry_entity_unique_upgrade).await?;
     apply_entry_synonym_upgrade(conn, &scripts.entry_synonym_upgrade).await?;
     apply_today_anniversary_month_day_upgrade(conn, &scripts.today_anniversary_month_day_upgrade)
-        .await
+        .await?;
+    apply_normalized_name_upgrade(conn, &scripts.normalized_name_upgrade).await
 }
 
 async fn apply_tanahpedia_incremental_lookups(
@@ -959,6 +966,13 @@ async fn apply_entry_synonym_upgrade(conn: &mut MySqlConnection, script_path: &P
     execute_script(conn, script_path, "entry-synonym-upgrade").await
 }
 
+async fn apply_normalized_name_upgrade(
+    conn: &mut MySqlConnection,
+    script_path: &Path,
+) -> Result<()> {
+    execute_script(conn, script_path, "normalized-name-upgrade").await
+}
+
 async fn apply_column_add_if_missing(
     conn: &mut MySqlConnection,
     script_path: &Path,
@@ -1392,6 +1406,10 @@ SELECT 1";
             PathBuf::from(
                 "/repo/data/mysql/db-populator/../tanahpedia_alter_entry_entity_unique.sql"
             ),
+        );
+        assert_eq!(
+            scripts.normalized_name_upgrade,
+            PathBuf::from("/repo/data/mysql/db-populator/../tanahpedia_alter_normalized_name.sql"),
         );
         assert_eq!(
             scripts.incremental_lookups,
