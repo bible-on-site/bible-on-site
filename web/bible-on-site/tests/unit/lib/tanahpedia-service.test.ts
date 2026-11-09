@@ -14,7 +14,6 @@ import {
 	getCategoryHomepage,
 	getEntitiesWithEntries,
 	getEntitiesWithEntriesByRole,
-	getEntityReferencesForPerek,
 	getEntries,
 	getEntriesByEntityType,
 	getEntriesBySynonym,
@@ -696,65 +695,6 @@ describe("tanahpedia service", () => {
 		);
 		expect(mockQuery.mock.calls[0][0]).toContain("SELECT DISTINCT");
 		expect(mockQuery.mock.calls[0][0]).not.toContain("entity_type");
-	});
-
-	it("returns entity references for a perek", async () => {
-		mockQuery.mockResolvedValueOnce([
-			{
-				entityId: "entity-1",
-				entityName: "משה",
-				entityType: "PERSON",
-				entryUniqueName: "משה",
-				pasukNumber: 1,
-				segmentStart: 0,
-				segmentEnd: 3,
-			},
-		]);
-
-		await expect(getEntityReferencesForPerek(12)).resolves.toEqual([
-			{
-				entityId: "entity-1",
-				entityName: "משה",
-				entityType: "PERSON",
-				entryUniqueName: "משה",
-				pasukNumber: 1,
-				segmentStart: 0,
-				segmentEnd: 3,
-			},
-		]);
-		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), ["12"]);
-	});
-
-	it("logs and rethrows when the perek query fails so a false empty is never cached", async () => {
-		const consoleErrorSpy = jest
-			.spyOn(console, "error")
-			.mockImplementation(() => undefined);
-		mockQuery.mockRejectedValueOnce(new Error("database unavailable"));
-
-		await expect(getEntityReferencesForPerek(99)).rejects.toThrow(
-			"database unavailable",
-		);
-		expect(consoleErrorSpy).toHaveBeenCalledWith(
-			"Failed to fetch entity references for perek 99:",
-			"database unavailable",
-		);
-
-		consoleErrorSpy.mockRestore();
-	});
-
-	it("logs a non-Error rejection verbatim and still rethrows", async () => {
-		const consoleErrorSpy = jest
-			.spyOn(console, "error")
-			.mockImplementation(() => undefined);
-		mockQuery.mockRejectedValueOnce("raw failure");
-
-		await expect(getEntityReferencesForPerek(99)).rejects.toBe("raw failure");
-		expect(consoleErrorSpy).toHaveBeenCalledWith(
-			"Failed to fetch entity references for perek 99:",
-			"raw failure",
-		);
-
-		consoleErrorSpy.mockRestore();
 	});
 
 	it("returns null when a person has no family rows", async () => {
