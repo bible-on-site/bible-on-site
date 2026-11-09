@@ -176,6 +176,17 @@ const nextConfig = {
 
 	async headers() {
 		return [
+			// Stable join routes (#2939) resolve admin-managed destinations at
+			// request time; the redirect may never be cached by browsers or
+			// the CDN.
+			{
+				source: "/dailyBulletin/join/telegram",
+				headers: [{ key: "Cache-Control", value: "no-store" }],
+			},
+			{
+				source: "/dailyBulletin/join/whatsapp",
+				headers: [{ key: "Cache-Control", value: "no-store" }],
+			},
 			{
 				// Reader book assets (#3095) are precompressed Brotli bytes the
 				// generator writes under public/generated/sefarim/. They are
