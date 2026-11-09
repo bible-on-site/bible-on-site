@@ -4,7 +4,9 @@
 
 The admin `/bulletins` page prepares a bulletin for a selected civil date in Jerusalem. It resolves the chapter from the database 929 calendar, chooses one approved article, and includes chapter dedications from the database. Friday and Saturday previews use Thursday's study chapter. Dates outside the persisted calendar are rejected rather than silently choosing another chapter.
 
-Articles have a `distributable` flag, editable as **מאושר לפרסום בעלון היומי** in the article editor. Existing and new articles default to unapproved. Preparing a date with no approved article produces a scripture-only bulletin.
+Articles have a `distributable` flag, editable as **מאושר לפרסום בעלון היומי** in the article editor. New articles default to unapproved. Preparation uniformly randomizes over approved articles with written body content. Titles, playback labels, player fallback text, media/download links and empty markup do not make an entry a written article. An article with written content alongside a recording remains eligible, regardless of author. Unchecking the approval box excludes the article. A chapter without an eligible written article retains the existing scripture-only bulletin behavior.
+
+On 2026-11-09 the owner authorized approving all existing written articles and excluding recording-only entries. This is a one-time database operation, not a backfill repeated on deployment. Prepare a private snapshot containing `id`, `name`, `content` and `distributable`, then run `bun run scripts/plan-bulletin-approvals.mts --snapshot private-snapshot.json --output private-output-directory` from `web/admin`. The generated approval and rollback SQL run through the existing database deployment path. They lock the affected rows, check the original title/body hashes and flags, and change only `distributable`. A stale or repeated operation aborts. Store the private plan and rollback outside source control; existing saved bulletins and delivery records are retained.
 
 This flag controls inclusion in the daily bulletin only. It must not filter public website articles, author listings, sitemaps, or public search. Public articles belong to canonical chapters 1-929; invalid chapter references are excluded independently of bulletin approval.
 
@@ -12,7 +14,7 @@ The Rust `web/bulletin` service renders email HTML and PDF from the same article
 
 The daily email uses the original native/PDF wordmark, a compact chapter/date subheader, justified scripture with small verse labels, and a justified article section with its final line aligned right. Its contact/footer slot keeps the website's published email, phone, WhatsApp and Telegram channels, with their original contact icons, inside the same card as the reading content. Only the SES transport fills the unsubscribe slot. Existing saved snapshots retain their original HTML; newly prepared bulletins use the current design. Duplicate article headings are removed only when they repeat the supplied article title.
 
-Preparation stores the input snapshot, email HTML, PDF bytes, subject, source, and filename in `tanah_daily_bulletin`, with one record per date. Repeated or concurrent preparation returns the first saved result. Later article edits do not change a prepared bulletin. All three production channel records are created in the same transaction in `tanah_daily_bulletin_delivery`. Email has a separate audience setting and per-recipient audit. There is no scheduled trigger.
+Preparation stores the input snapshot, email HTML, PDF bytes, subject, source, and filename in `tanah_daily_bulletin`, with one record per date. Repeated or concurrent preparation returns the first saved result. Later article edits do not change a prepared bulletin. All three production channel records are created in the same transaction in `tanah_daily_bulletin_delivery`. Email has a separate audience setting and per-recipient audit. Scheduled preparation and delivery use the existing worker; see the [schedule runbook](../aws/daily-bulletin-schedule.md).
 
 ## SES email delivery
 
@@ -28,7 +30,7 @@ The additive migration creates settings, subscribers, jobs and per-recipient his
 
 ## WhatsApp group delivery
 
-The [GREEN-API runbook](../aws/daily-bulletin-whatsapp.md) covers the additive schema, cached connection checks, secret injection and private validation. The admin has an authenticated revision-checked test/real selector; test is the default and the real group remains unconfigured. Saved PDF bytes are posted once, with a durable job and immutable target/membership/hash. Accepted uploads remain visibly distinct from journal-confirmed sending. Uncertain outcomes never trigger another upload. Ordinary admin reads make no provider calls, and one existing SQS worker handles email and WhatsApp.
+The [GREEN-API runbook](../aws/daily-bulletin-whatsapp.md) covers the additive schema, cached connection checks, secret injection and private validation. The admin has an authenticated revision-checked test/real selector. Fresh installations default to test; real delivery requires configuring and explicitly confirming the intended group. Saved PDF bytes are posted once, with a durable job and immutable target/membership/hash. Accepted uploads remain visibly distinct from journal-confirmed sending. Uncertain outcomes never trigger another upload. Ordinary admin reads make no provider calls, and one existing SQS worker handles email and WhatsApp.
 
 The new controls have actual desktop/mobile [before and after captures](screenshots/README.md). Local implementation and native database validation do not establish production deployment or successful provider delivery. The public join carousel and native-app counterpart ([issue #2806](https://github.com/bible-on-site/bible-on-site/issues/2806)) follow channel validation and must expose only public join links.
 
@@ -72,10 +74,6 @@ Its state table stored a date, Smoove campaign ID, Telegram success flag, and Wh
 ## Remaining delivery work
 
 - Complete final native unsubscribe and deployed-worker validation. SES production access is granted. Keep the audience set to test until the owner explicitly activates real sending and consent has been established.
-- Restore Telegram document posting and verify bot access to the channel.
-- Complete the GREEN-API deployment and owner-only WhatsApp group-delivery validation.
-- Extend durable claims, provider IDs and ambiguous-outcome handling to Telegram and WhatsApp.
-- Add EventBridge scheduling in `Asia/Jerusalem`, holiday advance sends, and calendar regression tests.
 - Add failure monitoring and admin controls for reviewing/rebuilding unsent bulletins and retrying failed delivery.
 - ~~Restore public email signup and channel/group join links~~ — delivered: stable `/dailyBulletin/join/{telegram,whatsapp,email}` routes, admin-managed destinations, and direct (no-confirmation) email signup.
 
