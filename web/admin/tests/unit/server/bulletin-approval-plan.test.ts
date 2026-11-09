@@ -13,6 +13,22 @@ const article: ApprovalArticle = {
 };
 
 describe("owner-authorized article approval plan", () => {
+	it("leaves full-lesson playback captions unapproved without excluding explanatory prose alongside a recording", () => {
+		const caption =
+			'<p>להאזנה לשיעור המלא</p><audio src="lesson.opus"></audio>';
+		const plan = planBulletinApprovals([
+			{ ...article, name: "שיעור", content: caption },
+			{
+				...article,
+				id: 2,
+				name: "שיעור",
+				content: `${caption}<p>הסבר כתוב על הפרק.</p>`,
+			},
+		]);
+		expect(plan.written).toBe(1);
+		expect(plan.excluded).toBe(1);
+		expect(plan.changes.map((change) => change.id)).toEqual([2]);
+	});
 	it("approves written articles, revokes media-only approvals and leaves matching flags alone", () => {
 		const plan = planBulletinApprovals([
 			article,
