@@ -303,7 +303,7 @@ jobs:
 
       - name: Setup Microsoft Store Developer CLI
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        uses: microsoft/setup-msstore-cli@v1
+        uses: microsoft/microsoft-store-apppublisher@v1.4
         with:
           # Pin the last-validated release instead of tracking 'latest' so an
           # untested upstream CLI release cannot silently break deployments.
