@@ -16,10 +16,10 @@ from recite import export_database, write_json
 
 try:
     import fcntl
-    HAS_FLOCK = True
+    msvcrt = None
 except ImportError:  # Windows
     fcntl = None
-    HAS_FLOCK = False
+    import msvcrt
 
 
 def manifest(perek_id, status="ready", **extra):
@@ -43,16 +43,22 @@ class DatabaseLockTests(unittest.TestCase):
         self.output.mkdir()
 
     def lock_held(self):
-        if not HAS_FLOCK:
-            self.skipTest("flock probing requires a POSIX host")
         lock = self.database.parent / (self.database.name + ".lock")
         with lock.open("a+b") as handle:
+            if fcntl is not None:
+                try:
+                    fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    return True
+                fcntl.flock(handle, fcntl.LOCK_UN)
+                return False
             try:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError:
                 return True
-            fcntl.flock(handle, fcntl.LOCK_UN)
-        return False
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            return False
 
     def replace_probe(self):
         held = []
