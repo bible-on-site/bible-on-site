@@ -45,6 +45,18 @@
 		<DisablePush Condition="'$(DisablePush)' == ''">$(DisableAnalytics)</DisablePush>
 		<DefineConstants Condition="'$(DisablePush)' == 'true'">$(DefineConstants);DISABLE_PUSH</DefineConstants>
 
+		<!-- Firebase Emulator opt-in (#3185): only emulator-gated e2e builds
+		     pass -p:FirebaseEmulator=true (CompileMobileE2E forwards
+		     FIREBASE_EMULATOR=1). Defines FIREBASE_EMULATOR so
+		     FirebaseUserIdentity/FirestorePreferencesStore route Auth and
+		     Firestore to the local Emulator Suite via UseEmulator before first
+		     use — the sync path then runs against disposable emulator data even
+		     though DISABLE_ANALYTICS keeps analytics and push off. Store
+		     Debug/Release builds never set the flag and keep the production
+		     Firebase endpoints untouched. -->
+		<FirebaseEmulator Condition="'$(FirebaseEmulator)' == ''">false</FirebaseEmulator>
+		<DefineConstants Condition="'$(FirebaseEmulator)' == 'true'">$(DefineConstants);FIREBASE_EMULATOR</DefineConstants>
+
 		<!-- #1097: stays false until the App ID's Push Notifications capability is
 		     enabled and the provisioning profiles regenerated (operator checklist in
 		     docs/app/push-notifications.md). While false, iOS device signing selects

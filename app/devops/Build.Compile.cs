@@ -213,6 +213,14 @@ partial class Build
                     BuildE2ECoverageRecorder("Debug");
                     properties["E2ECoverage"] = "true";
                 }
+                // #3185: FIREBASE_EMULATOR=1 (env) → -p:FirebaseEmulator=true so
+                // the app compiles the emulator-routing path and points Auth and
+                // Firestore at the local Emulator Suite. Ordinary e2e builds
+                // omit it and keep the production Firebase posture.
+                if (FirebaseEmulator)
+                {
+                    properties["FirebaseEmulator"] = "true";
+                }
                 DotNetBuild(s => s
                     .SetProjectFile(MainProject)
                     .SetConfiguration("Debug")

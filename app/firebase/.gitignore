@@ -1,0 +1,3 @@
+# Firebase Emulator Suite writes per-run debug logs next to firebase.json.
+*.log
+firebase-export-*/

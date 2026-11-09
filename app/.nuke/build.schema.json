@@ -236,6 +236,10 @@
           "type": "boolean",
           "description": "Deploy to production instead of flight/internal (requires store review)"
         },
+        "ReleaseNotesFile": {
+          "type": "string",
+          "description": "Path to the Hebrew store release-notes text file for this version"
+        },
         "Solution": {
           "type": "string",
           "description": "Path to a solution file that is automatically loaded. Default is bible-on-site.slnx"

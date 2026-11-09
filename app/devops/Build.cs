@@ -48,6 +48,15 @@ partial class Build : NukeBuild
         (flag.Equals("1", StringComparison.OrdinalIgnoreCase) ||
          flag.Equals("true", StringComparison.OrdinalIgnoreCase));
 
+    // #3185: emulator-gated mobile e2e builds point Firebase Auth/Firestore
+    // at the local Emulator Suite. FIREBASE_EMULATOR=1 travels with
+    // CompileMobileE2E as -p:FirebaseEmulator=true; without it the build is a
+    // normal Debug e2e build and keeps the production Firebase posture.
+    bool FirebaseEmulator =>
+        Environment.GetEnvironmentVariable("FIREBASE_EMULATOR") is { } flag &&
+        (flag.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+         flag.Equals("true", StringComparison.OrdinalIgnoreCase));
+
     // The harness drops per-test coverage dumps into the artifacts
     // app-coverage directory; build coverage artifacts (OpenCover template,
     // manifest, merged reports) live in artifacts/coverage-app so

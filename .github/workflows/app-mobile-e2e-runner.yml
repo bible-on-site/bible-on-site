@@ -40,6 +40,13 @@ on:
       perushim_notes_sqlite_artifact:
         type: string
         default: ""
+      firebase_emulator:
+        # #3185: build the app with -p:FirebaseEmulator=true, start the local
+        # Auth+Firestore Emulator Suite, and run only the sync scenarios in
+        # app/mobile-e2e/firebase-emulator-selection.json.
+        description: "Emulator-gated Firebase sync e2e leg"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -62,6 +69,10 @@ jobs:
       MOBILE_E2E_COVERAGE: "1"
       # The builder preflight compiles the Debug harness and build tool once.
       MOBILE_E2E_PREBUILT: "1"
+      # #3185: reaches CompileMobileE2E as -p:FirebaseEmulator=true and the
+      # test process as the suite-enable flag. Empty on every other leg, so
+      # production and ordinary e2e builds keep the Firebase posture.
+      FIREBASE_EMULATOR: ${{ inputs.firebase_emulator && '1' || '' }}
       # Android emulator coordinates shared by the sdkmanager install, the
       # cache keys and the runner action, so any bump invalidates the caches.
       ANDROID_API_LEVEL: "36"
@@ -273,6 +284,53 @@ jobs:
           if [ "${{ inputs.mode }}" != "release-smoke" ]; then
             bun install --cwd app/mobile-e2e --frozen-lockfile
           fi
+
+      # #3185: the Firestore emulator is a JVM process; the Android leg already
+      # installs Java 21 unconditionally below, the iOS leg needs it here.
+      - name: Setup Java for Firebase emulators
+        if: inputs.firebase_emulator && inputs.platform == 'iOS'
+        uses: actions/setup-java@v6
+        with:
+          distribution: microsoft
+          java-version: "21"
+          verify-signature: true
+
+      - name: Install Firebase CLI
+        if: inputs.firebase_emulator
+        run: npm install -g firebase-tools@15.35.0
+
+      # The suite is a host-side process: the app reaches it through the
+      # platform's host alias (10.0.2.2 on the Android emulator, localhost on
+      # the iOS simulator) while the test process probes 127.0.0.1 directly.
+      # Data is in-memory and discarded when the job ends; firestore.rules is
+      # loaded so the security-rule scenarios exercise real enforcement.
+      - name: Start Firebase Emulator Suite
+        if: inputs.firebase_emulator
+        working-directory: app/firebase
+        run: |
+          mkdir -p "$MOBILE_E2E_ARTIFACTS"
+          firebase emulators:start --only auth,firestore --project tanah-al-haperek \
+            > "$MOBILE_E2E_ARTIFACTS/firebase-emulators.log" 2>&1 &
+          echo $! > "$MOBILE_E2E_ARTIFACTS/firebase-emulators.pid"
+          # Blocking readiness — poll the Auth emulator's config endpoint
+          # until it answers or the bounded deadline fails the leg.
+          node -e '
+            const deadline = Date.now() + 120000;
+            const url = "http://127.0.0.1:9099/emulator/v1/projects/tanah-al-haperek/config";
+            (async () => {
+              let lastError = "";
+              while (Date.now() < deadline) {
+                try {
+                  const response = await fetch(url);
+                  if (response.ok) { console.log("Firebase Auth emulator ready."); return; }
+                  lastError = `HTTP ${response.status}`;
+                } catch (error) { lastError = String(error); }
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+              console.error(`Firebase Auth emulator not ready after 120s (${lastError}); see firebase-emulators.log`);
+              process.exit(1);
+            })();
+          '
 
       # .NET's DerivedData equivalent: obj intermediates from the last master
       # build turn the harness compile incremental. Restored before the
@@ -717,8 +775,9 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2.38.0
         env:
           MOBILE_UDID: emulator-5554
-          # Empty in shadow mode: the manifest is reported, not enforced.
-          MOBILE_E2E_SELECTION: ${{ inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '' }}
+          # #3185: the emulator leg runs exactly its own manifest; every other
+          # leg keeps shadow-mode reporting (empty unless enforce passes one).
+          MOBILE_E2E_SELECTION: ${{ inputs.firebase_emulator && format('{0}/app/mobile-e2e/firebase-emulator-selection.json', github.workspace) || (inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '') }}
         with:
           api-level: ${{ env.ANDROID_API_LEVEL }}
           arch: ${{ env.ANDROID_ABI }}
@@ -800,8 +859,9 @@ jobs:
         env:
           # A planned leg always enforces its shard manifest — the partition is
           # the assignment, not a narrowing hint. Android legs keep shadow-mode
-          # reporting: empty unless enforce passes the selection manifest.
-          MOBILE_E2E_SELECTION: ${{ inputs.ios_plan_artifact != '' && steps.shard_manifest.outputs.manifest || (inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '') }}
+          # reporting: empty unless enforce passes the selection manifest. The
+          # #3185 emulator leg runs exactly its own manifest on both platforms.
+          MOBILE_E2E_SELECTION: ${{ inputs.firebase_emulator && format('{0}/app/mobile-e2e/firebase-emulator-selection.json', github.workspace) || (inputs.ios_plan_artifact != '' && steps.shard_manifest.outputs.manifest || (inputs.e2e_selection_mode == 'enforce' && steps.selection.outputs.manifest || '')) }}
         run: bun run --cwd app/mobile-e2e test
 
       # Coverage resets, dump pulls and device-diagnostics captures are
@@ -980,6 +1040,26 @@ jobs:
           retention-days: 14
           include-hidden-files: true
           if-no-files-found: error
+
+      # #3185: the Emulator Suite is in-memory only, so stopping it is the
+      # whole cleanup — Auth accounts and Firestore documents die with it.
+      - name: Stop Firebase Emulator Suite
+        if: always() && inputs.firebase_emulator
+        run: |
+          if [ -f "$MOBILE_E2E_ARTIFACTS/firebase-emulators.pid" ]; then
+            PID=$(cat "$MOBILE_E2E_ARTIFACTS/firebase-emulators.pid")
+            if kill "$PID" 2>/dev/null; then
+              echo "Stopped firebase CLI (pid $PID)."
+            else
+              echo "firebase CLI pid $PID already exited."
+            fi
+          fi
+          # The Firestore emulator is a JVM child of the CLI — stop it too.
+          if pkill -f "cloud-firestore-emulator"; then
+            echo "Stopped Firestore emulator JVM."
+          else
+            echo "Firestore emulator JVM already exited."
+          fi
 
       - name: Upload platform results and diagnostics
         if: always()
