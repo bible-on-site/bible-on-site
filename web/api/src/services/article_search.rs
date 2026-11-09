@@ -1090,7 +1090,13 @@ async fn worker_tick(index: &ArticleSearchIndex, tick: u32) {
             }
         }
         Ok(None) => {
+            // The lock holder drains (or retrains) this tick — but its doc
+            // writes keep the same model epoch, so refresh_if_stale would
+            // never see them. Fold them into our snapshot before skipping.
             debug!("another instance holds the article-search lock; skipping drain");
+            if let Err(err) = index.load().await {
+                warn!(error = %err, "article search reload failed");
+            }
             return;
         }
         Err(err) => {
@@ -3015,10 +3021,13 @@ mod tests {
 
     #[tokio::test]
     async fn worker_tick_skips_the_drain_when_another_instance_holds_the_lock() {
-        // GET_LOCK denied → the tick ends without touching the queue.
+        // GET_LOCK denied → the queue is never read, but the tick still
+        // folds in whatever the lock holder synced (same-epoch doc writes
+        // are invisible to the epoch probe).
         let conn = mock_conn()
             .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                 vec![mock_row([("acquired", 0_i64.into())])],
+                vec![], // load_state → nothing persisted yet
             ])
             .into_connection();
         let index = index_on(conn);
@@ -3028,8 +3037,17 @@ mod tests {
             .iter()
             .flat_map(|entry| entry.statements().iter().map(|s| s.sql.clone()))
             .collect();
-        assert_eq!(sql.len(), 1, "only the acquisition probe ran");
+        assert_eq!(
+            sql.len(),
+            2,
+            "acquisition probe, then the reload's state read"
+        );
         assert!(sql[0].contains("GET_LOCK"));
+        assert!(sql[1].contains("article_search_state"));
+        assert!(
+            sql.iter().all(|s| !s.contains("article_search_queue")),
+            "a contended tick must not touch the queue"
+        );
     }
 
     #[tokio::test]
@@ -3051,6 +3069,16 @@ mod tests {
             .into_connection();
         let index = index_on(conn);
         worker_tick(&index, 2).await;
+
+        // Contended tick whose fold-in reload fails → warn and return.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("acquired", 0_i64.into())])],
+            ])
+            .append_query_errors([DbErr::Custom("reload lost".to_string())])
+            .into_connection();
+        let index = index_on(conn);
+        worker_tick(&index, 3).await;
     }
 
     #[tokio::test]
