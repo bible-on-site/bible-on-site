@@ -21,7 +21,6 @@ import type { PageRangesDownloadContext, SemanticPageInfo } from "./types";
 export interface BulletinRequest {
 	perakimIds: number[];
 	seferName?: string;
-	includePerushim: boolean;
 	includeArticles: boolean;
 	articleIds: number[];
 	authorIds: number[];
@@ -135,7 +134,6 @@ export async function generatePdfViaBulletin(
 	const { buildPerakimContent } = await import("./perek-export-content");
 	const request: BulletinRequest = {
 		perakimIds: perekIds,
-		includePerushim: false,
 		includeArticles: true,
 		articleIds: [],
 		authorIds: [],
