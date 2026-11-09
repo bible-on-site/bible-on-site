@@ -151,9 +151,6 @@ public sealed class ReaderChrome
     /// <summary>Whether the articles view currently replaces the reading content.</summary>
     public bool IsShowingArticles { get; private set; }
 
-    /// <summary>Whether the reader is in fullscreen (the exit button shows).</summary>
-    public bool IsFullScreen => _ui.ExitFullscreenButton.IsVisible;
-
     // Seam so tests observe the article navigation target without Shell
     // (same pattern as ReaderScrollTop.AnimateScroll).
     internal static Func<int, Task> OpenArticle { get; set; } =

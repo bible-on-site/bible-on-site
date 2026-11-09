@@ -154,7 +154,7 @@ public static class MasoraUnitText
 
 /// <summary>
 /// Shared pasuk text-join rules extracted from
-/// <see cref="Services.PerekDataService.LoadPasukimAsync"/> so clipped
+/// <see cref="Services.PerekDataService.LoadPasukimAsync(int)"/> so clipped
 /// pesukim rebuild identical plain text.
 /// </summary>
 public static class PerekDataServiceText
