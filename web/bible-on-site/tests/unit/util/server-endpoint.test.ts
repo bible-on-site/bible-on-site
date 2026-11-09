@@ -1,6 +1,8 @@
 /** @jest-environment node */
 import {
 	DEFAULT_WEB_SERVER_PORT,
+	isDerivedEndpoint,
+	isolatedDatabaseUrl,
 	webServerPort,
 	webServerUrl,
 } from "../../util/playwright/server-endpoint";
@@ -85,9 +87,102 @@ describe("webServerPort", () => {
 	});
 });
 
+describe("isDerivedEndpoint", () => {
+	it("is true for a plain local run", () => {
+		expect(isDerivedEndpoint({ env: {} })).toBe(true);
+	});
+
+	it("is false on CI", () => {
+		expect(isDerivedEndpoint({ env: { CI: "true" } })).toBe(false);
+		expect(isDerivedEndpoint({ env: { CI: "1" } })).toBe(false);
+	});
+
+	it("is false when WEB_PORT overrides the port", () => {
+		expect(isDerivedEndpoint({ env: { WEB_PORT: "43210" } })).toBe(false);
+	});
+
+	it("is false when WEB_PORT is set even on CI", () => {
+		expect(
+			isDerivedEndpoint({ env: { WEB_PORT: "43210", CI: "true" } }),
+		).toBe(false);
+	});
+
+	it("treats blank CI and WEB_PORT as unset", () => {
+		expect(isDerivedEndpoint({ env: { CI: "", WEB_PORT: "  " } })).toBe(true);
+	});
+});
+
 describe("webServerUrl", () => {
 	it("builds the loopback URL for the port", () => {
 		expect(webServerUrl(43210)).toBe("http://127.0.0.1:43210");
 		expect(webServerUrl(DEFAULT_WEB_SERVER_PORT)).toBe("http://127.0.0.1:3001");
+	});
+});
+
+describe("isolatedDatabaseUrl", () => {
+	const DB_URL =
+		"mysql://root:test_123@localhost:3306/tanah_test?ssl-mode=DISABLED";
+
+	it("returns the URL unchanged on CI", () => {
+		expect(
+			isolatedDatabaseUrl(DB_URL, { env: { CI: "true" }, seedDir: "/repo" }),
+		).toBe(DB_URL);
+	});
+
+	it("returns the URL unchanged when WEB_PORT overrides the port", () => {
+		expect(
+			isolatedDatabaseUrl(DB_URL, {
+				env: { WEB_PORT: "43210" },
+				seedDir: "/repo",
+			}),
+		).toBe(DB_URL);
+	});
+
+	it("rewrites only the database path, keeping credentials and query", () => {
+		const result = isolatedDatabaseUrl(DB_URL, {
+			env: {},
+			seedDir: "/repo",
+		});
+		const url = new URL(result);
+		expect(url.protocol).toBe("mysql:");
+		expect(url.hostname).toBe("localhost");
+		expect(url.port).toBe("3306");
+		expect(url.username).toBe("root");
+		expect(url.password).toBe("test_123");
+		expect(url.search).toBe("?ssl-mode=DISABLED");
+		expect(url.pathname).toMatch(/^\/tanah_test_[0-9a-f]{12}$/);
+	});
+
+	it("is deterministic per checkout and differs between checkouts", () => {
+		const first = isolatedDatabaseUrl(DB_URL, {
+			env: {},
+			seedDir: "/worktrees/a",
+		});
+		const again = isolatedDatabaseUrl(DB_URL, {
+			env: {},
+			seedDir: "/worktrees/a",
+		});
+		const other = isolatedDatabaseUrl(DB_URL, {
+			env: {},
+			seedDir: "/worktrees/b",
+		});
+		expect(first).toBe(again);
+		expect(first).not.toBe(other);
+	});
+
+	it("keeps a non-default database base name", () => {
+		const result = isolatedDatabaseUrl("mysql://u:p@h:3306/custom_db", {
+			env: {},
+			seedDir: "/repo",
+		});
+		expect(new URL(result).pathname).toMatch(/^\/custom_db_[0-9a-f]{12}$/);
+	});
+
+	it("defaults the base name when the URL has no database", () => {
+		const result = isolatedDatabaseUrl("mysql://u:p@h:3306", {
+			env: {},
+			seedDir: "/repo",
+		});
+		expect(new URL(result).pathname).toMatch(/^\/tanah_test_[0-9a-f]{12}$/);
 	});
 });

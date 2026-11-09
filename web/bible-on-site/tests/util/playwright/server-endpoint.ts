@@ -40,6 +40,24 @@ export interface WebServerEndpointOptions {
 	seedDir?: string;
 }
 
+/** This package's directory — unique per git worktree. */
+function defaultSeedDir(): string {
+	return path.resolve(__dirname, "../../..");
+}
+
+/**
+ * True when this run derives per-checkout resources — the listener port and
+ * the MySQL test database — instead of sharing the CI/manual defaults.
+ * Mirrors `webServerPort`'s gating exactly: `WEB_PORT` is the manual escape
+ * hatch and opts out of derivation entirely, and CI stays on the shared
+ * defaults because runners are single-tenant.
+ */
+export function isDerivedEndpoint(
+	{ env = process.env }: WebServerEndpointOptions = {},
+): boolean {
+	return !env.CI && !env.WEB_PORT?.trim();
+}
+
 /**
  * Port the Playwright webServer and every test-side URL must agree on.
  * Callers in one run share the result through `use.baseURL` and
@@ -61,7 +79,7 @@ export function webServerPort(
 		return port;
 	}
 	if (env.CI) return DEFAULT_WEB_SERVER_PORT;
-	const seed = `${seedDir ?? path.resolve(__dirname, "../../..")}:${suite}`;
+	const seed = `${seedDir ?? defaultSeedDir()}:${suite}`;
 	const digest = createHash("sha256").update(seed).digest();
 	return PORT_RANGE_START + (digest.readUInt32BE(0) % PORT_RANGE_SPAN);
 }
@@ -69,4 +87,40 @@ export function webServerPort(
 /** `http://127.0.0.1:<port>` — the loopback URL tests and the server share. */
 export function webServerUrl(port: number): string {
 	return `http://127.0.0.1:${port}`;
+}
+
+/**
+ * MySQL test-database isolation, the database-side counterpart of
+ * `webServerPort`.
+ *
+ * `.test.env` gives every local checkout the same `tanah_test` database, and
+ * the e2e launcher's `cargo make mysql-populate` drops and rebuilds its
+ * tables — so two worktrees running suites at once could rebuild the schema
+ * under each other's feet even with separate ports. When the endpoint is
+ * derived, the database name therefore gets a per-checkout suffix from the
+ * same seed, keeping host, credentials, port, and query intact.
+ *
+ * The name is per-checkout rather than per-suite on purpose: the perf suite's
+ * webServer is the standalone production server with no populate step, so it
+ * must keep reading the database the e2e launcher populated in this
+ * worktree — exactly what both suites shared as `tanah_test` before.
+ *
+ * Returns `dbUrl` unchanged when the endpoint is not derived (CI, or a
+ * manual `WEB_PORT` run, which owns its isolation like before).
+ */
+export function isolatedDatabaseUrl(
+	dbUrl: string,
+	{ env = process.env, seedDir }: WebServerEndpointOptions = {},
+): string {
+	if (!isDerivedEndpoint({ env })) return dbUrl;
+	const url = new URL(dbUrl);
+	const baseName = url.pathname.replace(/^\//, "") || "tanah_test";
+	// 48 bits of checkout hash: wide enough that two worktrees colliding on
+	// the database name is not a practical concern.
+	const suffix = createHash("sha256")
+		.update(seedDir ?? defaultSeedDir())
+		.digest("hex")
+		.slice(0, 12);
+	url.pathname = `/${baseName}_${suffix}`;
+	return url.toString();
 }
