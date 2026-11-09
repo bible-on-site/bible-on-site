@@ -33,7 +33,8 @@ def database_lock(database):
                     msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
                     break
                 except OSError as error:
-                    if error.errno not in (errno.EACCES, errno.EAGAIN):
+                    # EDEADLK is LK_LOCK's exhausted-retry signal, not a deadlock.
+                    if error.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
                         raise
         try:
             yield
