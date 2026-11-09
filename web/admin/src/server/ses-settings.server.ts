@@ -144,23 +144,26 @@ export async function subscriberSummary(): Promise<{
 	realRecipients: number;
 	unverifiedRecipients: number;
 }> {
-	const rows = await query<{
-		email: string;
-		audience: EmailAudience;
-		consent_status: string;
-	}>(
-		"SELECT email, audience, consent_status FROM tanah_daily_bulletin_subscriber ORDER BY email",
-	);
+	const [counts, testRows] = await Promise.all([
+		query<{ audience: EmailAudience; consent_status: string; n: number }>(
+			"SELECT audience, consent_status, COUNT(*) AS n FROM tanah_daily_bulletin_subscriber GROUP BY audience, consent_status",
+		),
+		query<{ email: string }>(
+			"SELECT email FROM tanah_daily_bulletin_subscriber WHERE audience = 'test' AND consent_status = 'confirmed' ORDER BY email",
+		),
+	]);
+	let realRecipients = 0;
+	let unverifiedRecipients = 0;
+	for (const row of counts) {
+		if (row.audience !== "real") continue;
+		if (row.consent_status === "confirmed") realRecipients = Number(row.n);
+		else if (row.consent_status === "pending")
+			unverifiedRecipients = Number(row.n);
+	}
 	return {
-		testRecipients: rows
-			.filter((r) => r.audience === "test" && r.consent_status === "confirmed")
-			.map((r) => r.email),
-		realRecipients: rows.filter(
-			(r) => r.audience === "real" && r.consent_status === "confirmed",
-		).length,
-		unverifiedRecipients: rows.filter(
-			(r) => r.audience === "real" && r.consent_status === "pending",
-		).length,
+		testRecipients: testRows.map((r) => r.email),
+		realRecipients,
+		unverifiedRecipients,
 	};
 }
 

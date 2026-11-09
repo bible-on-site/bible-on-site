@@ -94,6 +94,28 @@ function slot(overrides: Record<string, unknown> = {}) {
 	};
 }
 
+function mockSubscribers(
+	rows: { email: string; audience: string; consent_status: string }[],
+) {
+	mocks.query.mockImplementation(async (sql: string) => {
+		if (sql.includes("GROUP BY")) {
+			const counts = new Map<string, number>();
+			for (const r of rows)
+				counts.set(
+					`${r.audience}|${r.consent_status}`,
+					(counts.get(`${r.audience}|${r.consent_status}`) ?? 0) + 1,
+				);
+			return [...counts].map(([key, n]) => {
+				const [audience, consent_status] = key.split("|");
+				return { audience, consent_status, n };
+			});
+		}
+		return rows
+			.filter((r) => r.audience === "test" && r.consent_status === "confirmed")
+			.map((r) => ({ email: r.email }));
+	});
+}
+
 function mockSlot(value = slot()) {
 	mocks.txQueryOne.mockImplementation(async (_conn, sql: string) =>
 		sql.includes("email_settings")
@@ -131,7 +153,7 @@ beforeEach(async () => {
 		command.kind === "account" ? account : identity,
 	);
 	mocks.transaction.mockImplementation(async (fn) => fn(connection));
-	mocks.query.mockResolvedValue([]);
+	mockSubscribers([]);
 	mocks.execute.mockResolvedValue({ affectedRows: 1 });
 	mocks.txExecute.mockResolvedValue({ affectedRows: 1 });
 	mocks.wait.mockResolvedValue(undefined);
@@ -334,7 +356,7 @@ describe("audience settings and subscriber overview", () => {
 
 	it("combines the persisted audience, consent counts and latest job", async () => {
 		mocks.queryOne.mockResolvedValue({ audience: "test", revision: 3 });
-		mocks.query.mockResolvedValue([
+		mockSubscribers([
 			{
 				email: "reader@example.com",
 				audience: "test",
@@ -365,7 +387,7 @@ describe("audience settings and subscriber overview", () => {
 	});
 
 	it("exposes confirmed recipients separately from pending and suppressed contacts", async () => {
-		mocks.query.mockResolvedValue([
+		mockSubscribers([
 			{
 				email: "test@example.com",
 				audience: "test",
@@ -470,7 +492,7 @@ describe("audience settings and subscriber overview", () => {
 	});
 
 	it("requires production approval and confirmed subscribers before selecting real delivery", async () => {
-		mocks.query.mockResolvedValue([
+		mockSubscribers([
 			{
 				audience: "real",
 				consent_status: "confirmed",
@@ -489,7 +511,7 @@ describe("audience settings and subscriber overview", () => {
 
 	it("does not select the real audience when all imported contacts are pending", async () => {
 		account.ProductionAccessEnabled = true;
-		mocks.query.mockResolvedValue([
+		mockSubscribers([
 			{
 				audience: "real",
 				consent_status: "pending",
@@ -508,7 +530,7 @@ describe("audience settings and subscriber overview", () => {
 
 	it("permits an explicitly approved real audience only after all gates pass", async () => {
 		account.ProductionAccessEnabled = true;
-		mocks.query.mockResolvedValue([
+		mockSubscribers([
 			{
 				audience: "real",
 				consent_status: "confirmed",
