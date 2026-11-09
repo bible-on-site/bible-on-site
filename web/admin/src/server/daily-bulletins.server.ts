@@ -1,5 +1,6 @@
 import "@tanstack/react-start/server-only";
 import { randomInt } from "node:crypto";
+import { hasBulletinArticleText } from "~/lib/bulletin-article";
 import type {
 	BulletinArtifacts,
 	BulletinInput,
@@ -102,7 +103,7 @@ async function bulletinHebrewDateArticle(date: string): Promise<{
 		if (
 			!assigned.distributable ||
 			assigned.content === null ||
-			assigned.content.trim() === ""
+			!hasBulletinArticleText(assigned.content, assigned.name)
 		) {
 			throw new Error(
 				`המאמר המשויך לתאריך העברי אינו זמין להפצה (מאמר ${assigned.id})`,
@@ -201,7 +202,10 @@ export async function prepareBulletin(date: string): Promise<PreparedBulletin> {
 				 ORDER BY a.priority, a.id`,
 				[perek.perek_id],
 			);
-			return articles.length ? articles[randomInt(articles.length)] : null;
+			const written = articles.filter((article) =>
+				hasBulletinArticleText(article.content, article.name),
+			);
+			return written.length ? written[randomInt(written.length)] : null;
 		})());
 	// Dedications for the day's perek (#2731): direct perek ranges plus the
 	// perek's sefer and helek ancestors, with dedication- and assignment-level
