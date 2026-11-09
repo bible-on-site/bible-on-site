@@ -242,10 +242,12 @@ export async function changeSubscriber(value: SubscriberChange): Promise<void> {
 			"UPDATE tanah_daily_bulletin_subscriber SET consent_status = IF(consent_status IN ('bounced','complained'), consent_status, 'unsubscribed'), last_event_at = UTC_TIMESTAMP(3) WHERE email = ?",
 			[value.email],
 		);
-		await new SesClient(runtime).unsubscribeContact(
-			value.email,
-			value.audience,
-		);
+		const client = new SesClient(runtime);
+		try {
+			await client.unsubscribeContact(value.email, value.audience);
+		} finally {
+			client.destroy();
+		}
 		return;
 	}
 	const current = await queryOne<{ consent_status: string }>(
@@ -257,10 +259,16 @@ export async function changeSubscriber(value: SubscriberChange): Promise<void> {
 		["unsubscribed", "bounced", "complained"].includes(current.consent_status)
 	)
 		throw new Error("המנוי חסום לדיוור. נדרשת הרשמה מחודשת של הנמען.");
-	const result = await new SesClient(runtime).ensureSubscribedContact(
-		value.email,
-		value.audience,
-	);
+	const client = new SesClient(runtime);
+	let result: "subscribed" | "opted_out";
+	try {
+		result = await client.ensureSubscribedContact(
+			value.email,
+			value.audience,
+		);
+	} finally {
+		client.destroy();
+	}
 	if (result !== "subscribed")
 		throw new Error(
 			"המנוי הסיר את הסכמתו. אין להחזירו לרשימה ללא הרשמה מחודשת.",

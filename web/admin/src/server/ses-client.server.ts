@@ -545,4 +545,9 @@ export class SesClient {
 		}
 		return result.MessageId;
 	}
+
+	/** Closes the underlying SDK client's connection pool. */
+	destroy(): void {
+		this.client.destroy();
+	}
 }
