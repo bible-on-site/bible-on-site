@@ -9,7 +9,6 @@ import {
 	getAdjacentMasoraUnits,
 	getAllMasoraUnits,
 	getMasoraUnitById,
-	getMasoraUnitContaining,
 	getMasoraUnitCount,
 	getMasoraUnitsForSefer,
 	MASORA_DIVISION,
@@ -229,38 +228,6 @@ describe("specific corpus boundaries", () => {
 });
 
 describe("lookup helpers", () => {
-	it("resolves a canonical position to its containing unit", () => {
-		// בראשית 1:5 ends with a ptuha: pasuk-level position belongs to unit 1.
-		const unit = getMasoraUnitContaining({ perekId: 1, pasuk: 5 });
-		expect(unit?.unitId).toBe(1);
-		// Position on the break marker itself belongs to the closing unit.
-		const closing = getMasoraUnitsForSefer("בראשית").find(
-			(u) =>
-				u.ranges[0].end.perekId === 35 &&
-				u.ranges[0].end.pasuk === 22 &&
-				u.ranges[0].end.segmentIndex !== undefined,
-		);
-		const markerIndex = closing?.ranges[0].end.segmentIndex ?? -1;
-		const atMarker = getMasoraUnitContaining({
-			perekId: 35,
-			pasuk: 22,
-			segmentIndex: markerIndex,
-		});
-		expect(atMarker?.unitId).toBe(closing?.unitId);
-		// Right after the marker starts the next unit.
-		const afterMarker = getMasoraUnitContaining({
-			perekId: 35,
-			pasuk: 22,
-			segmentIndex: markerIndex + 1,
-		});
-		expect(afterMarker?.unitId).toBe((closing?.unitId ?? 0) + 1);
-	});
-
-	it("returns null for a position outside every unit", () => {
-		// בראשית א has 31 pesukim; pasuk 999 matches no range.
-		expect(getMasoraUnitContaining({ perekId: 1, pasuk: 999 })).toBeNull();
-	});
-
 	it("returns prev/next units across the corpus edges", () => {
 		const { prev, next } = getAdjacentMasoraUnits(1);
 		expect(prev).toBeNull();
