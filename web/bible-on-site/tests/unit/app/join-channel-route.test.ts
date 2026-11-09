@@ -53,9 +53,7 @@ describe("/dailyBulletin/join/[channel]", () => {
 		mockResolve.mockResolvedValue(null);
 		const response = await GET(REQ, context("whatsapp"));
 		expect(response.status).toBe(307);
-		expect(response.headers.get("location")).toBe(
-			"https://example.com/dailyBulletin",
-		);
+		expect(response.headers.get("location")).toBe("/dailyBulletin");
 		expect(response.headers.get("cache-control")).toBe("no-store");
 	});
 
@@ -63,8 +61,21 @@ describe("/dailyBulletin/join/[channel]", () => {
 		mockResolve.mockRejectedValue(new Error("db down"));
 		const response = await GET(REQ, context("telegram"));
 		expect(response.status).toBe(307);
-		expect(response.headers.get("location")).toBe(
-			"https://example.com/dailyBulletin",
-		);
+		expect(response.headers.get("location")).toBe("/dailyBulletin");
 	});
+
+	it.each([GET, HEAD])(
+		"keeps the fallback on the public origin behind a reverse proxy",
+		async (handler) => {
+			mockResolve.mockResolvedValue(null);
+			const response = await handler(
+				new Request("http://0.0.0.0:3000/dailyBulletin/join/whatsapp"),
+				context("whatsapp"),
+			);
+			expect(response.status).toBe(307);
+			expect(response.headers.get("location")).toBe("/dailyBulletin");
+			expect(response.headers.get("cache-control")).toBe("no-store");
+			expect(await response.text()).toBe("");
+		},
+	);
 });
