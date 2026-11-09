@@ -3033,6 +3033,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn worker_tick_survives_lock_acquisition_and_release_errors() {
+        // Acquisition error → warn and return before the queue is read.
+        let conn = mock_conn()
+            .append_query_errors([DbErr::Custom("lock probe lost".to_string())])
+            .into_connection();
+        let index = index_on(conn);
+        worker_tick(&index, 1).await;
+
+        // Release error → only a warn; the drained rows stay processed.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("acquired", 1_i64.into())])],
+                vec![],
+            ])
+            .append_exec_errors([DbErr::Custom("release lost".to_string())])
+            .into_connection();
+        let index = index_on(conn);
+        worker_tick(&index, 2).await;
+    }
+
+    #[tokio::test]
     #[ignore = "requires isolated MySQL and ARTICLE_SEARCH_LOCK_TEST_DB_URL; API coverage CI runs it"]
     async fn mysql_full_retrain_prunes_removed_and_out_of_scope_documents() {
         use sea_orm::{
