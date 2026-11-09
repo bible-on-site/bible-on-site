@@ -315,8 +315,12 @@
             </VerticalStackLayout>
 
             <!-- ═══ תצוגת חלון (Windows only) ═══ -->
-            <VerticalStackLayout Spacing="8"
-                                 IsVisible="{OnPlatform Windows=true, Default=false}">
+            <VerticalStackLayout Spacing="8">
+                <VerticalStackLayout.IsVisible>
+                    <OnPlatform x:TypeArguments="x:Boolean" Default="False">
+                        <On Platform="Windows" Value="true"/>
+                    </OnPlatform>
+                </VerticalStackLayout.IsVisible>
                 <Label Text="תצוגת חלון"
                        FontSize="14"
                        FontAttributes="Bold"
