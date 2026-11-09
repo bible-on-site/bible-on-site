@@ -66,6 +66,23 @@ describe("owner-authorized article approval plan", () => {
 		expect(forward).not.toContain(article.content);
 		expect(forward).toContain("SET a.distributable=p.next_flag");
 	});
+	it("revokes an approved null-body entry with a rollback bound to the empty body hash", () => {
+		const plan = planBulletinApprovals([
+			{ ...article, content: null, distributable: 1 },
+		]);
+		const empty = planBulletinApprovals([
+			{ ...article, content: "", distributable: 1 },
+		]);
+		expect(plan).toMatchObject({
+			written: 0,
+			excluded: 1,
+			changes: [{ id: article.id, before: 1, after: 0 }],
+		});
+		expect(plan.changes[0].sourceHash).toBe(empty.changes[0].sourceHash);
+		expect(bulletinApprovalSql(plan.changes, true)).toContain(
+			`(1,0,1,'${plan.changes[0].sourceHash}')`,
+		);
+	});
 	it.each([
 		{ id: 0 },
 		{ id: 8_388_608 },
