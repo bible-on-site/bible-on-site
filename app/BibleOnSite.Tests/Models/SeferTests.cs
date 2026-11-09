@@ -17,7 +17,7 @@ public class SeferTests
         };
 
         // Act
-        var result = sefer.GetTanahUsName();
+        var result = sefer.GetTanahUsName(null);
 
         // Assert
         result.Should().Be("Genesis");
@@ -59,7 +59,7 @@ public class SeferTests
         };
 
         // Act
-        var result = sefer.GetTanahUsName();
+        var result = sefer.GetTanahUsName(null);
 
         // Assert
         result.Should().BeEmpty();
