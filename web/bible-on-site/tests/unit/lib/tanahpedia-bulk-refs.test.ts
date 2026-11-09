@@ -119,3 +119,22 @@ it("keeps live synonym resolution, row ambiguity isolation, and manual precedenc
 		/ORDER BY d\.perek_id,\s*pasukNumber, segmentStart, \(d\.acceptance = 'manual'\) DESC/,
 	);
 });
+
+it("falls back to the pre-migration REPLACE() join while normalized_name is absent", async () => {
+	const missingColumn = Object.assign(
+		new Error("Unknown column 'e.normalized_name' in 'where clause'"),
+		{ code: "ER_BAD_FIELD_ERROR" },
+	);
+	mockQuery.mockRejectedValueOnce(missingColumn).mockResolvedValueOnce([]);
+	await expect(getMentionReferencesForPereks([12, 927])).resolves.toEqual(
+		[],
+	);
+	expect(mockQuery).toHaveBeenCalledTimes(2);
+	const [fallbackSql, fallbackParams] = mockQuery.mock.calls[1];
+	expect(fallbackParams).toEqual(["12", "927"]);
+	expect(fallbackSql).toContain("d.perek_id AS perekId");
+	expect(fallbackSql).toContain(
+		"REPLACE(names.resolvedName, '-', ' ') = d.intended_name",
+	);
+	expect(fallbackSql).toContain("HAVING COUNT(DISTINCT names.entryId) <= 1");
+});
