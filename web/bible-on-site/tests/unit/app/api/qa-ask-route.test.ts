@@ -82,4 +82,32 @@ describe("POST /api/qa/ask", () => {
 		expect(res.status).toBe(200);
 		expect(await res.json()).toEqual({ answers: [], noAnswer: true });
 	});
+
+	it("aborts the upstream request when the QA service stalls past the timeout", async () => {
+		jest.useFakeTimers();
+		try {
+			(global.fetch as jest.Mock).mockImplementation(
+				(_url: string, init?: RequestInit) =>
+					new Promise((_resolve, reject) => {
+						init?.signal?.addEventListener("abort", () =>
+							reject(
+								new DOMException(
+									"The operation was aborted.",
+									"AbortError",
+								),
+							),
+						);
+					}),
+			);
+
+			const pending = POST(request({ question: "מה?" }));
+			await jest.advanceTimersByTimeAsync(8000);
+			const res = await pending;
+
+			expect(res.status).toBe(200);
+			expect(await res.json()).toEqual({ answers: [], noAnswer: true });
+		} finally {
+			jest.useRealTimers();
+		}
+	});
 });
