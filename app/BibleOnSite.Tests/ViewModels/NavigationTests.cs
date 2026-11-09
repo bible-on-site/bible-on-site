@@ -99,7 +99,7 @@ public class NavigationTests
     [Fact]
     public void ArticlesViewModel_ByPerek_ShouldHaveCorrectRoute()
     {
-        var viewModel = new ArticlesViewModel(123, "בראשית ה");
+        var viewModel = new ArticlesViewModel { PerekId = 123, PerekTitle = "בראשית ה" };
 
         viewModel.IsFilterByPerek.Should().BeTrue();
         viewModel.PerekId.Should().Be(123);
@@ -111,7 +111,7 @@ public class NavigationTests
     [Fact]
     public void ArticlesViewModel_ByAuthor_ShouldHaveCorrectRoute()
     {
-        var viewModel = ArticlesViewModel.ForAuthor(5, "הרב משה לוי");
+        var viewModel = new ArticlesViewModel { AuthorId = 5, AuthorName = "הרב משה לוי" };
 
         viewModel.IsFilterByAuthor.Should().BeTrue();
         viewModel.AuthorId.Should().Be(5);
@@ -200,7 +200,7 @@ public class NavigationTests
     public void ArticlesViewModel_BackNavigation_ShouldNotLoseState()
     {
         // When navigating back, the filter state should be preserved
-        var viewModel = new ArticlesViewModel(123, "בראשית ה");
+        var viewModel = new ArticlesViewModel { PerekId = 123, PerekTitle = "בראשית ה" };
 
         // Simulate adding articles
         viewModel.SetArticles(new List<Article>
