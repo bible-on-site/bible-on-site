@@ -1004,41 +1004,25 @@ export async function getEntryOccurrences(
  * (ambiguous names stay unresolved). Callers treat unresolved rows as
  * plain text: `buildEntityRefLookup` drops null `entryUniqueName`, so
  * entry create/delete flips presentation without any re-inference.
+ *
+ * Resolves mentions for exactly these chapters in one parameterized query.
  */
-export function getMentionReferencesForPerek(
-	perekId: number,
-): Promise<PerekEntityReference[]> {
-	return queryPerekMentionReferences([perekId], false);
-}
-
-/** Resolve mentions for exactly these chapters in one parameterized query. */
 export function getMentionReferencesForPereks(
 	perekIds: number[],
 ): Promise<PerekScopedEntityReference[]> {
-	return queryPerekMentionReferences(perekIds, true);
+	return queryPerekMentionReferences(perekIds);
 }
 
-function queryPerekMentionReferences(
-	perekIds: number[],
-	scoped: false,
-): Promise<PerekEntityReference[]>;
-function queryPerekMentionReferences(
-	perekIds: number[],
-	scoped: true,
-): Promise<PerekScopedEntityReference[]>;
 async function queryPerekMentionReferences(
 	perekIds: number[],
-	scoped: boolean,
-): Promise<PerekEntityReference[]> {
+): Promise<PerekScopedEntityReference[]> {
 	if (perekIds.length === 0) return [];
 	// Only placeholder count and fixed SQL fragments vary; IDs stay bound values.
-	const predicate = scoped
-		? `IN (${perekIds.map(() => "?").join(", ")})`
-		: "= ?";
+	const predicate = `IN (${perekIds.map(() => "?").join(", ")})`;
 	try {
-		return await query<PerekEntityReference>(
+		return await query<PerekScopedEntityReference>(
 			`SELECT
-			   ${scoped ? "d.perek_id AS perekId," : ""}
+			   d.perek_id AS perekId,
 			   ANY_VALUE(ent.id) AS entityId,
 			   ANY_VALUE(ent.title) AS entityName,
 			   d.entity_type AS entityType,
@@ -1057,15 +1041,12 @@ async function queryPerekMentionReferences(
 			   AND d.acceptance IN ('auto', 'manual')
 			 GROUP BY d.id
 			 HAVING COUNT(DISTINCT names.entryId) <= 1
-			 ORDER BY ${scoped ? "d.perek_id," : ""} pasukNumber, segmentStart, (d.acceptance = 'manual') DESC`,
+			 ORDER BY d.perek_id, pasukNumber, segmentStart, (d.acceptance = 'manual') DESC`,
 			perekIds.map(String),
 		);
 	} catch (error) {
-		const scope = scoped
-			? `pereks ${perekIds.join(", ")}`
-			: `perek ${perekIds[0]}`;
 		console.error(
-			`Failed to fetch mention references for ${scope}:`,
+			`Failed to fetch mention references for pereks ${perekIds.join(", ")}:`,
 			error instanceof Error ? error.message : error,
 		);
 		throw error;
@@ -1082,7 +1063,7 @@ export interface ArticleMentionReference {
 
 /**
  * Article mention decorations (#2516) resolved against the CURRENT entry
- * table — the same live name join as getMentionReferencesForPerek, keyed
+ * table — the same live name join as getMentionReferencesForPereks, keyed
  * by character offsets into `tanah_article.content`. `contentHash` is the
  * staleness key: decorations computed for an older revision simply match
  * nothing, so article edits degrade to plain text rather than landing
@@ -1122,40 +1103,23 @@ export async function getMentionReferencesForArticle(
 	}
 }
 
-export function getEntityReferencesForPerek(
-	perekId: number,
-): Promise<PerekEntityReference[]> {
-	return queryPerekEntityReferences([perekId], false);
-}
-
 /** Load curated references for exactly these chapters, preserving row order. */
 export function getEntityReferencesForPereks(
 	perekIds: number[],
 ): Promise<PerekScopedEntityReference[]> {
-	return queryPerekEntityReferences(perekIds, true);
+	return queryPerekEntityReferences(perekIds);
 }
 
-function queryPerekEntityReferences(
-	perekIds: number[],
-	scoped: false,
-): Promise<PerekEntityReference[]>;
-function queryPerekEntityReferences(
-	perekIds: number[],
-	scoped: true,
-): Promise<PerekScopedEntityReference[]>;
 async function queryPerekEntityReferences(
 	perekIds: number[],
-	scoped: boolean,
-): Promise<PerekEntityReference[]> {
+): Promise<PerekScopedEntityReference[]> {
 	if (perekIds.length === 0) return [];
 	// Only placeholder count and fixed SQL fragments vary; IDs stay bound values.
-	const predicate = scoped
-		? `IN (${perekIds.map(() => "?").join(", ")})`
-		: "= ?";
+	const predicate = `IN (${perekIds.map(() => "?").join(", ")})`;
 	try {
-		return await query<PerekEntityReference>(
+		return await query<PerekScopedEntityReference>(
 			`SELECT
-			   ${scoped ? "ets.perek_id AS perekId," : ""}
+			   ets.perek_id AS perekId,
 			   ets.entity_id AS entityId,
 			   e.name AS entityName,
 			   e.entity_type AS entityType,
@@ -1168,15 +1132,12 @@ async function queryPerekEntityReferences(
 			 LEFT JOIN tanahpedia_entry_entity ee ON ee.entity_id = e.id
 			 LEFT JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
 			 WHERE ets.perek_id ${predicate}
-			 ORDER BY ${scoped ? "ets.perek_id," : ""} ets.pasuk_number, ets.segment_start`,
+			 ORDER BY ets.perek_id, ets.pasuk_number, ets.segment_start`,
 			perekIds.map(String),
 		);
 	} catch (error) {
-		const scope = scoped
-			? `pereks ${perekIds.join(", ")}`
-			: `perek ${perekIds[0]}`;
 		console.error(
-			`Failed to fetch entity references for ${scope}:`,
+			`Failed to fetch entity references for pereks ${perekIds.join(", ")}:`,
 			error instanceof Error ? error.message : error,
 		);
 		// Reject so a transient failure cannot become a permanently cached
