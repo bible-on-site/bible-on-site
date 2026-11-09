@@ -185,7 +185,10 @@ public sealed class FirestorePreferencesStore : IPreferencesCloudStore
         NSString text => text.ToString(),
         NSNumber number => ConvertIosNumber(number),
         NSDate date => new DateTimeOffset(DateTime.SpecifyKind((DateTime)date, DateTimeKind.Utc)),
-        global::Firebase.CloudFirestore.Timestamp timestamp => timestamp.ToDateTimeOffset(),
+        // AdamE's iOS bindings place FIRTimestamp in Firebase.Core, not
+        // Firebase.CloudFirestore; ToDateTimeOffset comes from the
+        // Plugin.Firebase.Firestore iOS extensions imported above.
+        global::Firebase.Core.Timestamp timestamp => timestamp.ToDateTimeOffset(),
         NSDictionary dictionary => ConvertIosMap(dictionary),
         NSArray array => ConvertIosList(array),
         _ => node,
@@ -211,14 +214,15 @@ public sealed class FirestorePreferencesStore : IPreferencesCloudStore
     private static Dictionary<string, object?> ConvertIosMap(NSDictionary dictionary)
     {
         var result = new Dictionary<string, object?>();
-        var keys = dictionary.AllKeys;
-        for (nuint i = 0; i < keys.Count; i++)
+        // .NET iOS binds NSDictionary as IEnumerable<KeyValuePair<NSObject,
+        // NSObject>> — the same shape Plugin.Firebase's own ToDictionary
+        // iterates (there is no AllKeys member on the modern bindings).
+        foreach (var pair in dictionary)
         {
-            if (keys.GetItem<NSString>(i) is not { } key)
+            if (pair.Key?.ToString() is { } key)
             {
-                continue;
+                result[key] = ConvertIosNode(pair.Value);
             }
-            result[key.ToString()] = ConvertIosNode(dictionary.ObjectForKey(key));
         }
         return result;
     }
