@@ -10,12 +10,24 @@ namespace BibleOnSite.Tests.Helpers;
 /// </summary>
 public class SearchMatchTests
 {
+    // The tests drive the internal normalized workers directly; these helpers
+    // apply the same PlainText→Normalize pipeline the resolvers use.
+    private static string NormalizeContent(string? content) =>
+        SearchText.Normalize(SearchText.PlainText(content ?? string.Empty));
+
+    private static SearchMatchSpan? Locate(string? content, string? query) =>
+        SearchMatch.LocateInNormalized(
+            NormalizeContent(content), SearchText.Normalize(query ?? string.Empty));
+
+    private static SearchMatchSpan? LocateByExcerpt(string? content, string? excerpt, string? query) =>
+        SearchMatch.LocateByExcerptNormalized(NormalizeContent(content), excerpt, query);
+
     #region Locate
 
     [Fact]
     public void Locate_finds_whole_word_phrase_position()
     {
-        var span = SearchMatch.Locate("דבור בראשית ברא אלהים", "בראשית ברא");
+        var span = Locate("דבור בראשית ברא אלהים", "בראשית ברא");
 
         span.Should().Be(new SearchMatchSpan(5, 10));
     }
@@ -24,7 +36,7 @@ public class SearchMatchTests
     public void Locate_matches_through_niqqud_and_taamim()
     {
         // Rendered text carries combining marks the normalized index dropped.
-        var span = SearchMatch.Locate("בְּרֵאשִׁית בָּרָא אֱלֹהִים", "ברא");
+        var span = Locate("בְּרֵאשִׁית בָּרָא אֱלֹהִים", "ברא");
 
         span.Should().Be(new SearchMatchSpan(7, 3));
     }
@@ -32,7 +44,7 @@ public class SearchMatchTests
     [Fact]
     public void Locate_ignores_html_markup_and_entities()
     {
-        var span = SearchMatch.Locate("<p>אמר שליט&quot;א בברכה</p>", "שליטא");
+        var span = Locate("<p>אמר שליט&quot;א בברכה</p>", "שליטא");
 
         // Normalized: "אמר שליטא בברכה" — match at index 4.
         span.Should().Be(new SearchMatchSpan(4, 5));
@@ -41,7 +53,7 @@ public class SearchMatchTests
     [Fact]
     public void Locate_returns_the_first_occurrence_for_repeated_queries()
     {
-        var span = SearchMatch.Locate("אחד בראשית ועוד בראשית", "בראשית");
+        var span = Locate("אחד בראשית ועוד בראשית", "בראשית");
 
         span.Should().Be(new SearchMatchSpan(4, 6));
     }
@@ -49,7 +61,7 @@ public class SearchMatchTests
     [Fact]
     public void Locate_finds_substring_inside_a_longer_word()
     {
-        var span = SearchMatch.Locate("אמר בראשית", "ראש");
+        var span = Locate("אמר בראשית", "ראש");
 
         span.Should().Be(new SearchMatchSpan(5, 3));
     }
@@ -59,7 +71,7 @@ public class SearchMatchTests
     {
         // "בראשים" differs from "בראשית" by one letter — no substring path, so
         // the scoring word fallback highlights the whole matched word.
-        var span = SearchMatch.Locate("אמר בראשית", "בראשים");
+        var span = Locate("אמר בראשית", "בראשים");
 
         span.Should().Be(new SearchMatchSpan(4, 6));
     }
@@ -67,15 +79,15 @@ public class SearchMatchTests
     [Fact]
     public void Locate_returns_null_when_nothing_matches()
     {
-        SearchMatch.Locate("אמר דבר אחר", "קוראים").Should().BeNull();
-        SearchMatch.Locate("אמר דבר אחר", null).Should().BeNull();
-        SearchMatch.Locate("", "דבר").Should().BeNull();
+        Locate("אמר דבר אחר", "קוראים").Should().BeNull();
+        Locate("אמר דבר אחר", null).Should().BeNull();
+        Locate("", "דבר").Should().BeNull();
     }
 
     [Fact]
     public void Locate_handles_null_content()
     {
-        SearchMatch.Locate(null!, "דבר").Should().BeNull();
+        Locate(null!, "דבר").Should().BeNull();
     }
 
     #endregion
@@ -89,7 +101,7 @@ public class SearchMatchTests
         var content = "בראשית נאמר ראשון ואחר כך בראשית נאמר שני";
         var excerpt = "ואחר כך בראשית נאמר שני";
 
-        var span = SearchMatch.LocateByExcerpt(content, excerpt, "בראשית");
+        var span = LocateByExcerpt(content, excerpt, "בראשית");
 
         // Normalized content == content; "בראשית" second occurrence starts at 26.
         span.Should().Be(new SearchMatchSpan(26, 6));
@@ -101,7 +113,7 @@ public class SearchMatchTests
         var content = "אחד שתיים שלוש ארבע חמש שש שבע שמונה";
         var excerpt = "שלוש ארבע חמש";
 
-        var span = SearchMatch.LocateByExcerpt(content, excerpt, "ארבע");
+        var span = LocateByExcerpt(content, excerpt, "ארבע");
 
         span.Should().Be(new SearchMatchSpan(15, 4));
     }
@@ -109,7 +121,7 @@ public class SearchMatchTests
     [Fact]
     public void LocateByExcerpt_falls_back_to_query_locate_for_stale_excerpts()
     {
-        var span = SearchMatch.LocateByExcerpt("בראשית ברא אלהים", "חלון שאינו קיים", "אלהים");
+        var span = LocateByExcerpt("בראשית ברא אלהים", "חלון שאינו קיים", "אלהים");
 
         span.Should().Be(new SearchMatchSpan(11, 5));
     }
@@ -117,7 +129,7 @@ public class SearchMatchTests
     [Fact]
     public void LocateByExcerpt_returns_position_only_span_when_query_absent_from_window()
     {
-        var span = SearchMatch.LocateByExcerpt("אחד בראשית ברא אלהים", "ברא אלהים", "שמיים");
+        var span = LocateByExcerpt("אחד בראשית ברא אלהים", "ברא אלהים", "שמיים");
 
         // Semantic hit: excerpt anchors the passage but holds no query words —
         // a zero-length span still marks where to scroll.
@@ -127,7 +139,7 @@ public class SearchMatchTests
     [Fact]
     public void LocateByExcerpt_returns_null_without_any_anchor()
     {
-        SearchMatch.LocateByExcerpt("אחד שתיים", null, "שלוש").Should().BeNull();
+        LocateByExcerpt("אחד שתיים", null, "שלוש").Should().BeNull();
     }
 
     [Fact]
@@ -136,8 +148,8 @@ public class SearchMatchTests
         // Null inputs degrade to empty strings; an empty window falls back to a
         // query locate over empty content, and an empty query anchors a
         // zero-length span at the excerpt position.
-        SearchMatch.LocateByExcerpt(null!, "חלון", "בראשית").Should().BeNull();
-        SearchMatch.LocateByExcerpt("אחד בראשית ברא", "בראשית ברא", null)
+        LocateByExcerpt(null!, "חלון", "בראשית").Should().BeNull();
+        LocateByExcerpt("אחד בראשית ברא", "בראשית ברא", null)
             .Should().Be(new SearchMatchSpan(4, 0));
     }
 
@@ -312,7 +324,7 @@ public class SearchMatchTests
     {
         // Token fallback: early words score 0 against every query term, so the
         // scan resets until the later word wins.
-        var span = SearchMatch.Locate("משהו אחר בראשית", "נדיר בראשית");
+        var span = Locate("משהו אחר בראשית", "נדיר בראשית");
 
         span.Should().Be(new SearchMatchSpan(9, 6));
     }
