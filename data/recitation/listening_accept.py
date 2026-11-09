@@ -20,7 +20,8 @@ from listening_review import (ReviewStore, digest_file, digest_json,
 from listening_round import load_review_evidence
 from listening_tail import INITIAL_SOURCE_METHOD, MACHINE_METHOD, verify_corrections
 from model_versions import ALIGN_MODEL, ALIGN_REVISION, ASR_MODEL, ASR_REVISION
-from recite import _export_database, cached_transcript, database_lock, write_json
+from db_lock import database_lock
+from recite import _export_database, cached_transcript, write_json
 from trusted import POLICY_VERSION, SOFT_WARNING, TRUSTED_PIPELINE, valid_score, verify_source, verify_warnings
 
 POLICY = "targeted-human-listening-v1"
