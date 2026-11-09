@@ -7,9 +7,12 @@ import {
 	prepareQuery,
 	scorePrepared,
 	scorePreparedText,
-	searchScore,
 	tokenScore,
 } from "@/lib/search/score";
+import { normalizeSearchText } from "@/lib/search/normalize";
+
+const score = (text: string, query: string) =>
+	scorePrepared(normalizeSearchText(text), prepareQuery(query));
 
 describe("maxEdits", () => {
 	it("allows no edits for short terms, one for medium, two for long", () => {
@@ -80,39 +83,39 @@ describe("tokenScore", () => {
 	});
 });
 
-describe("searchScore", () => {
+describe("scorePrepared", () => {
 	it("scores exact text-phrase equality at 110", () => {
-		expect(searchScore("בראשית", "בְּרֵאשִׁית")).toBe(110);
+		expect(score("בראשית", "בְּרֵאשִׁית")).toBe(110);
 	});
 
 	it("scores a whole-word phrase containment at 100", () => {
-		expect(searchScore("אל בריאת בראשית העולם", "בראשית")).toBe(100);
+		expect(score("אל בריאת בראשית העולם", "בראשית")).toBe(100);
 	});
 
 	it("scores all-terms-present by the weakest term match", () => {
 		// Terms are present but not adjacent, so the phrase tier does not apply.
-		expect(searchScore("ברא אלהים בראשית", "בראשית ברא")).toBe(90);
+		expect(score("ברא אלהים בראשית", "בראשית ברא")).toBe(90);
 		// A prefix-matched term pulls the group's minimum down to 80.
-		expect(searchScore("ברא אלהים בראשיתו", "בראשית ברא")).toBe(80);
+		expect(score("ברא אלהים בראשיתו", "בראשית ברא")).toBe(80);
 	});
 
 	it("fails when any term is missing", () => {
-		expect(searchScore("בראשית ברא אלהים", "בראשית שלום")).toBe(0);
+		expect(score("בראשית ברא אלהים", "בראשית שלום")).toBe(0);
 	});
 
 	it("ignores niqqud in both text and query", () => {
-		expect(searchScore("בְּרֵאשִׁית בָּרָא", "בראשית ברא")).toBeGreaterThan(0);
+		expect(score("בְּרֵאשִׁית בָּרָא", "בראשית ברא")).toBeGreaterThan(0);
 	});
 
 	it("returns zero for an empty query", () => {
-		expect(searchScore("בראשית", "")).toBe(0);
+		expect(score("בראשית", "")).toBe(0);
 	});
 
 	it("keeps the strongest match even when fuzzy words appear before it", () => {
-		expect(searchScore("בראשת בראשיתו אלהים", "בראשית")).toBe(80);
-		expect(searchScore("בראשת בראשיתו אלהים ברא", "בראשית ברא")).toBe(80);
-		expect(searchScore("בראשת בראשית אלהים ברא", "בראשית ברא")).toBe(90);
-		expect(searchScore("בראשת אלהים", "בראשית")).toBe(60);
+		expect(score("בראשת בראשיתו אלהים", "בראשית")).toBe(80);
+		expect(score("בראשת בראשיתו אלהים ברא", "בראשית ברא")).toBe(80);
+		expect(score("בראשת בראשית אלהים ברא", "בראשית ברא")).toBe(90);
+		expect(score("בראשת אלהים", "בראשית")).toBe(60);
 	});
 
 	it("matches per-word scoring across exact, prefix, fuzzy and missing terms", () => {
@@ -140,7 +143,9 @@ describe("searchScore", () => {
 							: ` ${text} `.includes(` ${phrase} `)
 								? 100
 								: Math.min(...scores);
-					expect(scorePrepared(text, prepared)).toBe(expected);
+					expect(scorePrepared(normalizeSearchText(text), prepared)).toBe(
+						expected,
+					);
 				}
 			}
 		}
@@ -176,7 +181,7 @@ describe("scorePreparedText", () => {
 				"𐐨abcdefh",
 			]) {
 				expect(scorePreparedText(text, prepareQuery(query))).toBe(
-					searchScore(text, query),
+					score(text, query),
 				);
 			}
 		}
