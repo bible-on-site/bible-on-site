@@ -71,7 +71,11 @@ async function handle(request: Request) {
 			const id = url.searchParams.get("download");
 			if (!id)
 				return Response.json(
-					await uploadStore.directory(user.id, user.username),
+					await uploadStore.directory(
+						user.id,
+						user.username,
+						url.searchParams.get("after") || "",
+					),
 					{ headers: privateHeaders },
 				);
 			const { file, body } = await downloadUpload(user, id);

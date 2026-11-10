@@ -19,9 +19,13 @@ function fileSize(value: number) {
 	return `${new Intl.NumberFormat("he-IL", { maximumFractionDigits: 2 }).format(value / 1000 ** unit)} ${units[unit]}`;
 }
 
-async function api(data?: Record<string, unknown>) {
+async function api(data?: Record<string, unknown>, after = "") {
 	const response = await fetch(
-		data?.action === "logout" ? "/upload/api?logout" : "/upload/api",
+		data?.action === "logout"
+			? "/upload/api?logout"
+			: after
+				? `/upload/api?after=${encodeURIComponent(after)}`
+				: "/upload/api",
 		{
 			cache: "no-store",
 			...(data
@@ -42,6 +46,8 @@ export function UploadArea() {
 	const [directory, setDirectory] = useState<Directory | null>(null);
 	const [error, setError] = useState("");
 	const [busy, setBusy] = useState(false);
+	const [cursor, setCursor] = useState("");
+	const [history, setHistory] = useState<string[]>([]);
 	const [progress, setProgress] = useState<{
 		filename: string;
 		percent: number;
@@ -49,8 +55,8 @@ export function UploadArea() {
 	const cancel = useRef(false);
 	const request = useRef<AbortController | null>(null);
 	const refresh = useCallback(async () => {
-		setDirectory(await api());
-	}, []);
+		setDirectory(await api(undefined, cursor));
+	}, [cursor]);
 	useEffect(() => {
 		void refresh().catch((e: Error) => setError(e.message));
 		return () => {
@@ -235,7 +241,11 @@ export function UploadArea() {
 											<strong dir="auto">{file.filename}</strong>
 											<p className={styles.note}>
 												{fileSize(file.size)} ·{" "}
-												{file.status === "ready" ? "מוכן" : "העלאה לא הושלמה"}
+												{file.status === "ready"
+													? "מוכן"
+													: file.status === "deleting"
+														? "ממתין להשלמת המחיקה"
+														: "העלאה לא הושלמה"}
 											</p>
 										</div>
 										<div className={styles.actions}>
@@ -261,12 +271,40 @@ export function UploadArea() {
 											>
 												{file.status === "ready"
 													? "מחיקה"
-													: "ביטול ופינוי מקום"}
+													: file.status === "deleting"
+														? "ניסיון מחיקה מחדש"
+														: "ביטול ופינוי מקום"}
 											</button>
 										</div>
 									</li>
 								))}
 							</ul>
+						)}
+						{(history.length > 0 || directory.nextCursor) && (
+							<div className={styles.toolbar}>
+								<button
+									type="button"
+									disabled={busy || history.length === 0}
+									onClick={() => {
+										setCursor(history[history.length - 1]);
+										setHistory(history.slice(0, -1));
+									}}
+								>
+									הקבצים הקודמים
+								</button>
+								<button
+									type="button"
+									disabled={busy || !directory.nextCursor}
+									onClick={() => {
+										if (directory.nextCursor) {
+											setHistory([...history, cursor]);
+											setCursor(directory.nextCursor);
+										}
+									}}
+								>
+									קבצים נוספים
+								</button>
+							</div>
 						)}
 					</section>
 				</>

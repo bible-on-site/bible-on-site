@@ -76,7 +76,11 @@ export async function GET(
 		for (const [key, value] of Object.entries(privateHeaders))
 			response.headers.set(key, value);
 		return response;
-	} catch {
+	} catch (error) {
+		console.error(
+			"Private upload login failed",
+			error instanceof Error ? error.name : "UnknownError",
+		);
 		return new Response("הכניסה נכשלה. יש לנסות שוב.", {
 			status: 503,
 			headers: privateHeaders,

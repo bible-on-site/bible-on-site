@@ -230,3 +230,45 @@ it("handles refresh failure after an upload and cancels active work on unmount",
 	);
 	await act(async () => {});
 });
+
+it("pages through bounded directory results and returns to the previous page", async () => {
+	global.fetch = jest.fn(async (url) =>
+		reply({
+			...directory,
+			nextCursor: String(url).includes("after=") ? null : "next",
+		}),
+	) as jest.Mock;
+	render(<UploadArea />);
+	const next = await screen.findByRole("button", { name: "קבצים נוספים" });
+	fireEvent.click(next);
+	await waitFor(() =>
+		expect(fetch).toHaveBeenCalledWith(
+			"/upload/api?after=next",
+			expect.any(Object),
+		),
+	);
+	await waitFor(() =>
+		expect(
+			screen.getByRole("button", { name: "הקבצים הקודמים" }),
+		).toBeEnabled(),
+	);
+	fireEvent.click(screen.getByRole("button", { name: "הקבצים הקודמים" }));
+	await waitFor(() =>
+		expect(
+			screen.getByRole("button", { name: "הקבצים הקודמים" }),
+		).toBeDisabled(),
+	);
+});
+it("shows durable pending deletions and lets their owner retry cleanup", async () => {
+	directory.files = [
+		{ id: "pending", filename: "deleted.bin", size: 8, status: "deleting" },
+	];
+	render(<UploadArea />);
+	const retry = await screen.findByRole("button", {
+		name: "ניסיון מחיקה מחדש",
+	});
+	expect(screen.getByText(/ממתין להשלמת המחיקה/)).toBeVisible();
+	expect(screen.queryByRole("link", { name: "הורדה" })).not.toBeInTheDocument();
+	fireEvent.click(retry);
+	await screen.findByText("התיקייה עדיין ריקה. הקבצים שתעלו יופיעו כאן.");
+});

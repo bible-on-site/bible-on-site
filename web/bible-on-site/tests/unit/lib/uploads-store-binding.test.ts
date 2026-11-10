@@ -1,24 +1,36 @@
 /** @jest-environment node */
 jest.mock("server-only", () => ({}));
 jest.mock("@/lib/api-client", () => ({
-	query: jest.fn(),
-	execute: jest.fn(),
-	transaction: jest.fn(async (fn) => fn("connection")),
-	txQuery: jest.fn(),
-	txExecute: jest.fn(),
+	getDbConfig: () => ({ host: "database" }),
 }));
+jest.mock("mysql2/promise", () => ({ createPool: jest.fn() }));
 
-import { txExecute, txQuery } from "@/lib/api-client";
+import mysql from "mysql2/promise";
 import { uploadStore } from "@/lib/uploads/store";
 
-it("uses one database connection for quota locking, reservations and metadata", async () => {
-	(txQuery as jest.Mock).mockImplementation(async (_conn, sql: string) =>
+const connection = {
+	execute: jest.fn(),
+	beginTransaction: jest.fn(),
+	commit: jest.fn(),
+	rollback: jest.fn(),
+	release: jest.fn(),
+};
+const pool = {
+	execute: connection.execute,
+	getConnection: jest.fn(async () => connection),
+};
+beforeEach(() => {
+	(mysql.createPool as jest.Mock).mockReturnValue(pool);
+	connection.execute.mockImplementation(async (sql: string) => [
 		sql.includes("settings")
 			? [{ quota: 1000 }]
 			: sql.includes("SUM")
 				? [{ allocated: 0 }]
 				: [{ quota: null }],
-	);
+	]);
+});
+
+it("uses one database connection for quota locking, reservations and metadata", async () => {
 	await uploadStore.locked(
 		"11111111-1111-1111-1111-111111111111",
 		"alice",
@@ -26,5 +38,24 @@ it("uses one database connection for quota locking, reservations and metadata", 
 			await tx.execute("reservation", []);
 		},
 	);
-	expect(txExecute).toHaveBeenCalledWith("connection", "reservation", []);
+	expect(connection.execute).toHaveBeenCalledWith("reservation", []);
+	expect(mysql.createPool).toHaveBeenCalledWith({
+		host: "database",
+		connectionLimit: 3,
+		waitForConnections: true,
+		queueLimit: 25,
+	});
+	expect(connection.commit).toHaveBeenCalled();
+	expect(connection.release).toHaveBeenCalled();
+});
+
+it("rolls back and releases the private connection after commit failure", async () => {
+	connection.commit.mockRejectedValueOnce(new Error("commit failed"));
+	await expect(uploadStore.setQuota(1000)).rejects.toThrow("commit failed");
+	expect(connection.rollback).toHaveBeenCalled();
+	expect(connection.release).toHaveBeenCalled();
+});
+it("uses the private pool for metadata reads too", async () => {
+	expect((await uploadStore.settings()).quota).toBe(1000);
+	expect(pool.execute).toHaveBeenCalled();
 });

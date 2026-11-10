@@ -18,8 +18,8 @@ CREATE TABLE IF NOT EXISTS private_upload_file (
   size_bytes BIGINT UNSIGNED NOT NULL,
   part_size INT UNSIGNED NOT NULL,
   upload_id TEXT NULL,
-  status ENUM('uploading', 'ready') NOT NULL DEFAULT 'uploading',
+  status ENUM('initializing', 'uploading', 'ready', 'deleting') NOT NULL DEFAULT 'initializing',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  INDEX user_files (user_id, created_at),
+  INDEX user_files (user_id, id),
   FOREIGN KEY (user_id) REFERENCES private_upload_account(user_id)
 ) ENGINE=InnoDB;

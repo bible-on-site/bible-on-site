@@ -74,7 +74,7 @@ it("returns directory metadata without S3 upload IDs", async () => {
 		files: [{ size: 300 }],
 	});
 	expect(query.mock.calls[3][0]).not.toContain("upload_id");
-	expect(query.mock.calls[3][1]).toEqual([id]);
+	expect(query.mock.calls[3][1]).toEqual([id, ""]);
 });
 it("always checks file ownership together with file ID", async () => {
 	query.mockResolvedValueOnce([{ id: fileId, size: "1" }]);
@@ -89,6 +89,23 @@ it("always checks file ownership together with file ID", async () => {
 	await expect(store.file(db, id, "../file")).rejects.toMatchObject({
 		status: 404,
 	});
+});
+
+it("bounds directory responses and uses a validated cursor for subsequent pages", async () => {
+	const files = Array.from({ length: 101 }, () => ({ id: fileId, size: "1" }));
+	query
+		.mockResolvedValueOnce([{ quota: 1000 }])
+		.mockResolvedValueOnce([{ quota: null }])
+		.mockResolvedValueOnce([{ allocated: 101 }])
+		.mockResolvedValueOnce(files);
+	const page = await store.directory(id, "alice", fileId);
+	expect(page.files).toHaveLength(100);
+	expect(page.nextCursor).toBe(fileId);
+	expect(query.mock.calls[3]).toEqual([
+		expect.stringContaining("LIMIT 101"),
+		[id, fileId],
+	]);
+	await expect(store.directory(id, "alice", "invalid")).rejects.toThrow();
 });
 it("returns numeric admin settings and fallback defaults", async () => {
 	query.mockResolvedValueOnce([{ quota: "1000" }]).mockResolvedValueOnce([

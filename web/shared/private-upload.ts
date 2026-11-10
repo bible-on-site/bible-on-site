@@ -2,8 +2,16 @@
 export const GB = 1_000_000_000;
 export const DEFAULT_QUOTA = 1000 * GB;
 export const MAX_FILE_SIZE = 5_000 * GB;
-export const UUID =
-	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function isUploadId(value: unknown): value is string {
+	if (typeof value !== "string" || value.length !== 36) return false;
+	for (let index = 0; index < 36; index++) {
+		const character = value[index].toLowerCase();
+		if (index === 8 || index === 13 || index === 18 || index === 23) {
+			if (character !== "-") return false;
+		} else if (!"0123456789abcdef".includes(character)) return false;
+	}
+	return true;
+}
 
 export class UploadError extends Error {
 	constructor(
@@ -19,12 +27,15 @@ export function validateFile(filename: unknown, size: unknown) {
 		typeof filename !== "string" ||
 		!filename.trim() ||
 		filename.length > 255 ||
-		// biome-ignore lint/suspicious/noControlCharactersInRegex: reject control characters and path separators in user filenames.
-		/[\x00-\x1f\x7f/\\]/.test(filename) ||
 		filename === "." ||
 		filename === ".."
 	) {
 		throw new UploadError("שם הקובץ אינו תקין");
+	}
+	for (let index = 0; index < filename.length; index++) {
+		const code = filename.charCodeAt(index);
+		if (code < 32 || code === 127 || code === 47 || code === 92)
+			throw new UploadError("שם הקובץ אינו תקין");
 	}
 	if (
 		typeof size !== "number" ||
@@ -54,7 +65,7 @@ export function quotaBytes(gb: unknown): number {
 }
 
 export function objectKey(userId: string, id: string): string {
-	if (!UUID.test(userId) || !UUID.test(id))
+	if (!isUploadId(userId) || !isUploadId(id))
 		throw new UploadError("מזהה אינו תקין");
 	return `users/${userId}/${id}`;
 }
@@ -65,7 +76,7 @@ export interface UploadFile {
 	size: number;
 	partSize: number;
 	uploadId: string | null;
-	status: "uploading" | "ready";
+	status: "initializing" | "uploading" | "ready" | "deleting";
 	createdAt: string;
 }
 
@@ -74,4 +85,5 @@ export interface Directory {
 	quota: number;
 	allocated: number;
 	files: Omit<UploadFile, "uploadId">[];
+	nextCursor: string | null;
 }

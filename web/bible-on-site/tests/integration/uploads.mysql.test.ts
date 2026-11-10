@@ -35,6 +35,7 @@ integration("private upload MySQL/S3 integration", () => {
 	let pool: Pool;
 	let store: UploadStore;
 	let s3: S3Client;
+	let failCommitAfter = 0;
 	beforeAll(async () => {
 		const mysql = jest.requireActual("mysql2/promise");
 		const url = new URL(process.env.UPLOAD_INTEGRATION_DB_URL as string);
@@ -55,12 +56,17 @@ integration("private upload MySQL/S3 integration", () => {
 			.filter((statement) => statement.trim());
 		// Idempotence is part of the rollout contract.
 		for (let attempt = 0; attempt < 2; attempt++)
+			// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- DDL is read from the fixed repository migration, never from request data.
 			for (const statement of schema) await pool.query(statement);
 		const sql = (connection: Pick<Pool, "execute">): Sql => ({
-			query: async <T>(statement: string, params?: unknown[]) =>
-				(await connection.execute(statement, params as never))[0] as T[],
-			execute: async (statement, params) =>
-				connection.execute(statement, params as never),
+			query: async <T>(statement: string, params?: unknown[]) => {
+				// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- fixed parameterized store SQL; values are bound separately in this isolated test schema.
+				return (await connection.execute(statement, params as never))[0] as T[];
+			},
+			execute: async (statement, params) => {
+				// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- fixed parameterized store SQL; values are bound separately in this isolated test schema.
+				return connection.execute(statement, params as never);
+			},
 		});
 		store = new UploadStore({
 			...sql(pool),
@@ -69,6 +75,8 @@ integration("private upload MySQL/S3 integration", () => {
 				try {
 					await conn.beginTransaction();
 					const result = await fn(sql(conn));
+					if (failCommitAfter > 0 && --failCommitAfter === 0)
+						throw new Error("simulated commit failure");
 					await conn.commit();
 					return result;
 				} catch (error) {
@@ -99,6 +107,9 @@ integration("private upload MySQL/S3 integration", () => {
 		await s3.send(new CreateBucketCommand({ Bucket: bucket }));
 		await store.directory(alice.id, alice.username);
 		await store.directory(bob.id, bob.username);
+	});
+	afterEach(() => {
+		failCommitAfter = 0;
 	});
 	afterAll(async () => {
 		if (store)
@@ -191,6 +202,46 @@ integration("private upload MySQL/S3 integration", () => {
 			createHash("sha256").update(content).digest("hex"),
 		);
 		await removeUpload(alice, started.id);
+	});
+	it("records empty files durably before S3 writes and recovers preparation failures", async () => {
+		failCommitAfter = 1;
+		await expect(beginUpload(alice, "never-written", 0)).rejects.toThrow(
+			"simulated commit failure",
+		);
+		expect(
+			(await store.directory(alice.id, alice.username)).files,
+		).toHaveLength(0);
+		failCommitAfter = 2;
+		await expect(beginUpload(alice, "tracked-empty", 0)).rejects.toThrow(
+			"simulated commit failure",
+		);
+		const [tracked] = (await store.directory(alice.id, alice.username)).files;
+		expect(tracked.status).toBe("initializing");
+		await completeUpload(alice, tracked.id);
+		await removeUpload(alice, tracked.id);
+	});
+	it("never resurrects a ready row after S3 deletion and a failed database commit", async () => {
+		const started = await beginUpload(alice, "delete-recovery", 2);
+		await uploadPart(
+			alice,
+			started.id,
+			1,
+			new Request("http://local", { method: "PUT", body: "ab" }),
+		);
+		await completeUpload(alice, started.id);
+		failCommitAfter = 2;
+		await expect(removeUpload(alice, started.id)).rejects.toThrow(
+			"simulated commit failure",
+		);
+		const [pending] = (await store.directory(alice.id, alice.username)).files;
+		expect(pending.status).toBe("deleting");
+		await expect(downloadUpload(alice, started.id)).rejects.toMatchObject({
+			status: 409,
+		});
+		await removeUpload(alice, started.id);
+		expect(
+			(await store.directory(alice.id, alice.username)).files,
+		).toHaveLength(0);
 	});
 	it("serializes parallel reservations and releases space after cancellation", async () => {
 		await store.setQuota(10);

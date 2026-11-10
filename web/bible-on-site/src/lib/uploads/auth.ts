@@ -6,7 +6,7 @@ import {
 } from "@aws-sdk/client-cognito-identity-provider";
 import { createRemoteJWKSet, errors, type JWTPayload, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-import { UploadError, UUID } from "../../../../shared/private-upload";
+import { isUploadId, UploadError } from "../../../../shared/private-upload";
 
 export const SESSION_COOKIE = "upload_session";
 export const REFRESH_COOKIE = "upload_refresh";
@@ -98,7 +98,7 @@ export async function currentUploadUser() {
 			payload.token_use !== "access" ||
 			payload.client_id !== config.clientId ||
 			!payload.sub ||
-			!UUID.test(payload.sub)
+			!isUploadId(payload.sub)
 		)
 			return null;
 		// Cognito checks account disablement and token revocation on every request.

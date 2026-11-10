@@ -1,9 +1,9 @@
 import {
 	DEFAULT_QUOTA,
 	type Directory,
+	isUploadId,
 	UploadError,
 	type UploadFile,
-	UUID,
 } from "./private-upload";
 
 export interface Sql {
@@ -25,7 +25,7 @@ export class UploadStore {
 		username: string,
 		fn: (tx: Sql, quota: number, allocated: number) => Promise<T>,
 	) {
-		if (!UUID.test(userId)) throw new UploadError("מזהה משתמש אינו תקין", 401);
+		if (!isUploadId(userId)) throw new UploadError("מזהה משתמש אינו תקין", 401);
 		return this.db.transaction(async (tx) => {
 			// All quota edits and reservations use this order, including across replicas.
 			const [settings] = await tx.query<{ quota: number }>(
@@ -51,23 +51,36 @@ export class UploadStore {
 		});
 	}
 
-	async directory(userId: string, username: string): Promise<Directory> {
+	async directory(
+		userId: string,
+		username: string,
+		after = "",
+	): Promise<Directory> {
+		if (after && !isUploadId(after))
+			throw new UploadError("מיקום תיקייה אינו תקין");
 		return this.locked(userId, username, async (tx, quota, allocated) => {
 			const files = await tx.query<UploadFile>(
-				"SELECT id, filename, size_bytes AS size, part_size AS partSize, status, CAST(created_at AS CHAR) AS createdAt FROM private_upload_file WHERE user_id = ? ORDER BY created_at DESC, id",
-				[userId],
+				"SELECT id, filename, size_bytes AS size, part_size AS partSize, status, CAST(created_at AS CHAR) AS createdAt FROM private_upload_file WHERE user_id = ? AND id > ? ORDER BY id LIMIT 101",
+				[userId, after],
 			);
+			const displayed: Directory["files"] = [];
+			for (let index = 0; index < 100; index++) {
+				const file = files[index];
+				if (!file) break;
+				displayed.push({ ...file, size: Number(file.size) });
+			}
 			return {
 				username,
 				quota,
 				allocated,
-				files: files.map((file) => ({ ...file, size: Number(file.size) })),
+				files: displayed,
+				nextCursor: files.length > 100 ? displayed[99].id : null,
 			};
 		});
 	}
 
 	async file(tx: Sql, userId: string, id: string): Promise<UploadFile> {
-		if (!UUID.test(id)) throw new UploadError("הקובץ לא נמצא", 404);
+		if (!isUploadId(id)) throw new UploadError("הקובץ לא נמצא", 404);
 		const [file] = await tx.query<UploadFile>(
 			"SELECT id, filename, size_bytes AS size, part_size AS partSize, upload_id AS uploadId, status, CAST(created_at AS CHAR) AS createdAt FROM private_upload_file WHERE user_id = ? AND id = ? FOR UPDATE",
 			[userId, id],
@@ -110,8 +123,7 @@ export class UploadStore {
 				"SELECT id FROM private_upload_settings WHERE id = 1 FOR UPDATE",
 			);
 			if (userId !== undefined) {
-				if (typeof userId !== "string" || !UUID.test(userId))
-					throw new UploadError("מזהה משתמש אינו תקין");
+				if (!isUploadId(userId)) throw new UploadError("מזהה משתמש אינו תקין");
 				await tx.execute(
 					"UPDATE private_upload_account SET quota_bytes = ? WHERE user_id = ?",
 					[bytes, userId],

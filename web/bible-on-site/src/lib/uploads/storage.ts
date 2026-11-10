@@ -43,52 +43,56 @@ export async function beginUpload(
 ) {
 	const file = validateFile(filename, size);
 	const { client, bucket } = storage();
-	return uploadStore.locked(
+	const reserved = await uploadStore.locked(
 		user.id,
 		user.username,
 		async (tx, quota, allocated) => {
 			if (file.size > quota - allocated)
 				throw new UploadError("אין מספיק מקום פנוי בתיקייה", 413);
 			const id = randomUUID();
-			const key = objectKey(user.id, id);
-			let uploadId: string | null = null;
-			if (file.size === 0) {
-				await client.send(
-					new PutObjectCommand({
-						Bucket: bucket,
-						Key: key,
-						Body: new Uint8Array(),
-						ContentType: "application/octet-stream",
-						ServerSideEncryption: "AES256",
-					}),
-				);
-			} else {
-				const upload = await client.send(
-					new CreateMultipartUploadCommand({
-						Bucket: bucket,
-						Key: key,
-						ContentType: "application/octet-stream",
-						ServerSideEncryption: "AES256",
-					}),
-				);
-				if (!upload.UploadId) throw new Error("S3 did not return an upload ID");
-				uploadId = upload.UploadId;
-			}
 			await tx.execute(
-				"INSERT INTO private_upload_file (id, user_id, filename, size_bytes, part_size, upload_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-				[
-					id,
-					user.id,
-					file.filename,
-					file.size,
-					file.partSize,
-					uploadId,
-					file.size === 0 ? "ready" : "uploading",
-				],
+				"INSERT INTO private_upload_file (id, user_id, filename, size_bytes, part_size, status) VALUES (?, ?, ?, ?, ?, 'initializing')",
+				[id, user.id, file.filename, file.size, file.partSize],
 			);
 			return { id, partSize: file.partSize };
 		},
 	);
+	// Commit the reservation before S3 can hold any object bytes.
+	await uploadStore.locked(user.id, user.username, async (tx) => {
+		const pending = await uploadStore.file(tx, user.id, reserved.id);
+		if (pending.status !== "initializing")
+			throw new UploadError("ההעלאה בוטלה", 409);
+		const id = reserved.id;
+		const key = objectKey(user.id, id);
+		let uploadId: string | null = null;
+		if (file.size === 0) {
+			await client.send(
+				new PutObjectCommand({
+					Bucket: bucket,
+					Key: key,
+					Body: new Uint8Array(),
+					ContentType: "application/octet-stream",
+					ServerSideEncryption: "AES256",
+				}),
+			);
+		} else {
+			const upload = await client.send(
+				new CreateMultipartUploadCommand({
+					Bucket: bucket,
+					Key: key,
+					ContentType: "application/octet-stream",
+					ServerSideEncryption: "AES256",
+				}),
+			);
+			if (!upload.UploadId) throw new Error("S3 did not return an upload ID");
+			uploadId = upload.UploadId;
+		}
+		await tx.execute(
+			"UPDATE private_upload_file SET upload_id = ?, status = ? WHERE id = ? AND user_id = ?",
+			[uploadId, file.size === 0 ? "ready" : "uploading", id, user.id],
+		);
+	});
+	return reserved;
 }
 
 /** A bounded stream prevents a forged Content-Length from consuming storage beyond its reservation. */
@@ -165,48 +169,52 @@ export async function completeUpload(user: User, id: string) {
 	return uploadStore.locked(user.id, user.username, async (tx) => {
 		const file = await uploadStore.file(tx, user.id, id);
 		if (file.status === "ready") return;
+		if (file.status === "deleting" || (file.size > 0 && !file.uploadId))
+			throw new UploadError("יש לבטל את ההעלאה ולנסות שוב", 409);
 		const key = objectKey(user.id, id);
 		const parts: { PartNumber: number; ETag: string }[] = [];
 		let marker: string | undefined;
-		try {
-			do {
-				const page = await client.send(
-					new ListPartsCommand({
+		if (file.size > 0) {
+			try {
+				do {
+					const page = await client.send(
+						new ListPartsCommand({
+							Bucket: bucket,
+							Key: key,
+							UploadId: file.uploadId ?? undefined,
+							PartNumberMarker: marker,
+						}),
+					);
+					for (const part of page.Parts ?? []) {
+						const number = parts.length + 1;
+						const expected = Math.min(
+							file.partSize,
+							file.size - (number - 1) * file.partSize,
+						);
+						if (
+							part.PartNumber !== number ||
+							part.Size !== expected ||
+							!part.ETag
+						)
+							throw new UploadError("הקובץ עדיין לא הועלה במלואו");
+						parts.push({ PartNumber: number, ETag: part.ETag });
+					}
+					marker = page.IsTruncated ? page.NextPartNumberMarker : undefined;
+				} while (marker);
+				if (parts.length !== Math.ceil(file.size / file.partSize))
+					throw new UploadError("הקובץ עדיין לא הועלה במלואו");
+				await client.send(
+					new CompleteMultipartUploadCommand({
 						Bucket: bucket,
 						Key: key,
 						UploadId: file.uploadId ?? undefined,
-						PartNumberMarker: marker,
+						MultipartUpload: { Parts: parts },
 					}),
 				);
-				for (const part of page.Parts ?? []) {
-					const number = parts.length + 1;
-					const expected = Math.min(
-						file.partSize,
-						file.size - (number - 1) * file.partSize,
-					);
-					if (
-						part.PartNumber !== number ||
-						part.Size !== expected ||
-						!part.ETag
-					)
-						throw new UploadError("הקובץ עדיין לא הועלה במלואו");
-					parts.push({ PartNumber: number, ETag: part.ETag });
-				}
-				marker = page.IsTruncated ? page.NextPartNumberMarker : undefined;
-			} while (marker);
-			if (parts.length !== Math.ceil(file.size / file.partSize))
-				throw new UploadError("הקובץ עדיין לא הועלה במלואו");
-			await client.send(
-				new CompleteMultipartUploadCommand({
-					Bucket: bucket,
-					Key: key,
-					UploadId: file.uploadId ?? undefined,
-					MultipartUpload: { Parts: parts },
-				}),
-			);
-		} catch (error) {
-			if (!missingUpload(error)) throw error;
-			// Recover an S3 completion followed by a failed database commit.
+			} catch (error) {
+				if (!missingUpload(error)) throw error;
+				// Recover an S3 completion followed by a failed database commit.
+			}
 		}
 		const object = await client.send(
 			new HeadObjectCommand({ Bucket: bucket, Key: key }),
@@ -222,6 +230,14 @@ export async function completeUpload(user: User, id: string) {
 
 export async function removeUpload(user: User, id: string) {
 	const { client, bucket } = storage();
+	// Commit intent before S3 deletion, so a rollback can never resurrect a ready row.
+	await uploadStore.locked(user.id, user.username, async (tx) => {
+		await uploadStore.file(tx, user.id, id);
+		await tx.execute(
+			"UPDATE private_upload_file SET status = 'deleting' WHERE id = ? AND user_id = ?",
+			[id, user.id],
+		);
+	});
 	return uploadStore.locked(user.id, user.username, async (tx) => {
 		const file = await uploadStore.file(tx, user.id, id);
 		const key = objectKey(user.id, id);

@@ -52,7 +52,10 @@ beforeEach(() => {
 	(uploadStore.locked as jest.Mock).mockImplementation((_id, _username, fn) =>
 		fn(tx, quota, allocated),
 	);
-	(uploadStore.file as jest.Mock).mockImplementation(async () => file);
+	(uploadStore.file as jest.Mock).mockImplementation(
+		async (_tx, _user, fileId) =>
+			fileId === id ? file : { ...file, id: fileId, status: "initializing" },
+	);
 	(uploadStore.readFile as jest.Mock).mockImplementation(async () => file);
 	send.mockImplementation(async (command) => {
 		switch (command.constructor.name) {
@@ -123,15 +126,7 @@ it("reserves the complete size before accepting any content", async () => {
 	const started = await beginUpload(user, "a.zip", 7);
 	expect(tx.execute).toHaveBeenCalledWith(
 		expect.stringContaining("INSERT INTO private_upload_file"),
-		[
-			started.id,
-			user.id,
-			"a.zip",
-			7,
-			started.partSize,
-			"private-multipart-id",
-			"uploading",
-		],
+		[started.id, user.id, "a.zip", 7, started.partSize],
 	);
 	expect(send.mock.calls[0][0].input).toMatchObject({
 		Bucket: "private-test",
@@ -154,7 +149,10 @@ it("accepts exactly the remaining quota and empty files", async () => {
 	allocated = 1;
 	await beginUpload(user, "binary", 2);
 	await beginUpload(user, "empty", 0);
-	expect(tx.execute.mock.calls[1][1].slice(-2)).toEqual([null, "ready"]);
+	expect(tx.execute).toHaveBeenCalledWith(
+		expect.stringContaining("SET upload_id"),
+		[null, "ready", expect.any(String), user.id],
+	);
 	expect(send.mock.calls[1][0].constructor.name).toBe("PutObjectCommand");
 });
 it("requires an S3 multipart ID", async () => {
@@ -322,7 +320,69 @@ it("deletes completed files without aborting, and handles an expired upload", as
 it("preserves reservations when cleanup fails", async () => {
 	send.mockRejectedValueOnce(new Error("S3 failed"));
 	await expect(removeUpload(user, id)).rejects.toThrow();
-	expect(tx.execute).not.toHaveBeenCalled();
+	expect(tx.execute).toHaveBeenCalledWith(
+		expect.stringContaining("SET status = 'deleting'"),
+		[id, user.id],
+	);
+	expect(tx.execute.mock.calls.some(([sql]) => sql.startsWith("DELETE"))).toBe(
+		false,
+	);
+});
+
+it("makes no S3 writes when the reservation commit fails", async () => {
+	(uploadStore.locked as jest.Mock).mockImplementationOnce(
+		async (_id, _name, fn) => {
+			await fn(tx, quota, allocated);
+			throw new Error("commit failed");
+		},
+	);
+	await expect(beginUpload(user, "empty", 0)).rejects.toThrow("commit failed");
+	expect(send).not.toHaveBeenCalled();
+});
+it("retains a durable reservation when the S3 preparation commit fails", async () => {
+	(uploadStore.locked as jest.Mock)
+		.mockImplementationOnce((_id, _name, fn) => fn(tx, quota, allocated))
+		.mockImplementationOnce(async (_id, _name, fn) => {
+			await fn(tx, quota, allocated);
+			throw new Error("commit failed");
+		});
+	await expect(beginUpload(user, "empty", 0)).rejects.toThrow("commit failed");
+	expect(tx.execute.mock.calls[0][0]).toContain("'initializing'");
+	expect(tx.execute.mock.invocationCallOrder[0]).toBeLessThan(
+		send.mock.invocationCallOrder[0],
+	);
+});
+it("does not prepare S3 after a reservation was cancelled", async () => {
+	(uploadStore.file as jest.Mock).mockResolvedValue({
+		...file,
+		status: "deleting",
+	});
+	await expect(beginUpload(user, "a", 1)).rejects.toMatchObject({
+		status: 409,
+	});
+	expect(send).not.toHaveBeenCalled();
+});
+it("does not delete S3 data until the deletion marker commits", async () => {
+	(uploadStore.locked as jest.Mock).mockImplementationOnce(
+		async (_id, _name, fn) => {
+			await fn(tx, quota, allocated);
+			throw new Error("commit failed");
+		},
+	);
+	await expect(removeUpload(user, id)).rejects.toThrow("commit failed");
+	expect(send).not.toHaveBeenCalled();
+});
+it("recovers an empty file tracked as initializing and rejects deleting or unprepared files", async () => {
+	file.size = 0;
+	file.status = "initializing";
+	file.uploadId = null;
+	await completeUpload(user, id);
+	expect(send.mock.calls[0][0].constructor.name).toBe("HeadObjectCommand");
+	file.status = "deleting";
+	await expect(completeUpload(user, id)).rejects.toMatchObject({ status: 409 });
+	file.status = "initializing";
+	file.size = 1;
+	await expect(completeUpload(user, id)).rejects.toMatchObject({ status: 409 });
 });
 it("downloads only ready, owned files through the service", async () => {
 	await expect(downloadUpload(user, id)).rejects.toMatchObject({ status: 409 });

@@ -25,6 +25,14 @@ premature reuse if an upload is still in flight. Single files up to 5 TB are
 supported when the configured user quota permits them. Part data is streamed;
 database connections are not held while clients send file contents.
 
+Reservations are committed before any S3 write, including for empty files.
+Preparation failures leave a visible, cancellable reservation. Deletion first
+commits a pending-deletion state, then removes S3 data and the row. If its final
+commit fails, the row remains pending deletion, cannot be downloaded and can be
+cleaned up safely by retrying. Upload transitions use a separate pool of three
+database connections, leaving the public-page pool available. Directory pages
+contain at most 100 files and use an account-scoped cursor to fetch more.
+
 OAuth uses authorization code + PKCE and a short-lived, HttpOnly state cookie.
 Access and refresh tokens are HttpOnly, scoped to `/upload`, and Secure in
 production. Sessions refresh for up to one day; Cognito validates disablement

@@ -82,7 +82,11 @@ it("lists only the current user's directory", async () => {
 	expect(
 		await (await GET(new Request("https://site.example/upload/api"))).json(),
 	).toEqual({ files: [] });
-	expect(uploadStore.directory).toHaveBeenCalledWith(user.id, user.username);
+	expect(uploadStore.directory).toHaveBeenCalledWith(
+		user.id,
+		user.username,
+		"",
+	);
 });
 it("serves arbitrary files as safe attachments with no public URL", async () => {
 	(downloadUpload as jest.Mock).mockResolvedValue({
@@ -134,7 +138,7 @@ it("allows logout even after the account is disabled", async () => {
 	expect((await response.json()).url).toContain("https://login.example/logout");
 });
 it("rejects invalid, oversized and unknown requests", async () => {
-	for (const data of [{}, { action: "unknown", id: "file" }])
+	for (const data of [null, [], {}, { action: "unknown", id: "file" }])
 		expect((await POST(req(data))).status).toBe(400);
 	expect(
 		(
