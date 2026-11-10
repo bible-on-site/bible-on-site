@@ -176,6 +176,18 @@ export function turnBudgetFailures(
 // scheduling can miss frames even when the main thread remains interruptible.
 export const TURN_BLOCKING_LIMIT_MS = 50;
 
+/**
+ * How many frames may exceed the per-frame blocking limit before a phase
+ * fails. One stray over-limit frame per ~10-50 frame throttled batch is
+ * environmental queueing (a ~13ms real pause inflates to >50ms under the 4x
+ * CPU profile — CI evidence: 51.5ms single-frame miss of #3082, and the
+ * hosted-diagnostic single frames of 50.1/85.6ms). Every captured real
+ * regression produced >=6 over-limit frames per phase; a single frame past
+ * twice the limit is still a real stall and always fails.
+ */
+export const TURN_BLOCKING_FRAME_ALLOWANCE = 1;
+export const TURN_BLOCKING_HARD_LIMIT_MS = 2 * TURN_BLOCKING_LIMIT_MS;
+
 export function reduceTurnBlockingSamples(
 	samples: TurnSamples,
 	initialChapter: number,
@@ -211,6 +223,11 @@ export function reduceTurnBlockingSamples(
 				0,
 				...frames.map((frame) => clockMicros(frame.blockingDuration)),
 			) / MICROS_PER_MS,
+		blockingOverLimitCount: frames.filter(
+			(frame) =>
+				clockMicros(frame.blockingDuration) >
+				clockMicros(TURN_BLOCKING_LIMIT_MS),
+		).length,
 	});
 	return {
 		...summarize(records),
@@ -236,13 +253,18 @@ export function turnBlockingBudgetFailures(
 			["first turn", metrics.firstTurn],
 			["consecutive turns", metrics.consecutiveTurns],
 		] as const
-	).flatMap(([phase, values]) =>
-		values.blockingDurationMaxMs > TURN_BLOCKING_LIMIT_MS
-			? [
-					`${phase}/blockingDurationMaxMs=${values.blockingDurationMaxMs}ms > ${TURN_BLOCKING_LIMIT_MS}ms`,
-				]
-			: [],
-	);
+	).flatMap(([phase, values]) => {
+		const failures: string[] = [];
+		if (values.blockingDurationMaxMs > TURN_BLOCKING_HARD_LIMIT_MS)
+			failures.push(
+				`${phase}/blockingDurationMaxMs=${values.blockingDurationMaxMs}ms > ${TURN_BLOCKING_HARD_LIMIT_MS}ms`,
+			);
+		if (values.blockingOverLimitCount > TURN_BLOCKING_FRAME_ALLOWANCE)
+			failures.push(
+				`${phase}/blockingFramesOverLimit=${values.blockingOverLimitCount} > ${TURN_BLOCKING_FRAME_ALLOWANCE}`,
+			);
+		return failures;
+	});
 }
 
 export type TurnRenderingProfile = "hardware-cadence" | "software-work";
