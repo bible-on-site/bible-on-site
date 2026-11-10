@@ -27,7 +27,8 @@ public class MasoraViewModelTests
             bool includeCatalog = true, bool includeNotes = true, bool nullArticlesLoader = false,
             string[]? extraPerushInserts = null,
             Func<int, Task<List<Article>>>? articlesLoader = null,
-            Func<LocalDatabaseService, PerekDataService>? perekDataServiceFactory = null)
+            Func<LocalDatabaseService, PerekDataService>? perekDataServiceFactory = null,
+            Func<int, bool>? hasPerekAudio = null, Func<int, RecitationTrack?>? getTrack = null)
         {
             _includeCatalog = includeCatalog;
             _includeNotes = includeNotes;
@@ -52,7 +53,12 @@ public class MasoraViewModelTests
                 catalog,
                 notes,
                 nullArticlesLoader ? null
-                    : articlesLoader ?? (_ => Task.FromResult(articles ?? new List<Article>())));
+                    : articlesLoader ?? (_ => Task.FromResult(articles ?? new List<Article>())),
+                null, null, null,
+                // Never touch RecitationService.Instance — its lazy filesystem
+                // singleton has no host in a unit-test process.
+                hasPerekAudio ?? (_ => false),
+                getTrack ?? (_ => null));
         }
 
         public async Task Initialize()
@@ -659,5 +665,61 @@ public class MasoraViewModelTests
 
         fixture.Model.PerushimSelectionStatus.Should().Be("נבחרו 1 מתוך 5");
         fixture.Model.PerushimLimitReached.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UnitSwitch_ClearsSelectionFlagsOnLeftUnitRows()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        var unit1 = fixture.Model.Unit!;
+        fixture.Model.ToggleSelectedPasuk(1, 1);
+        unit1.Rows[0].Pasuk.IsSelected.Should().BeTrue();
+
+        await fixture.Model.NavigateToUnitAsync(2);
+
+        // ClearSelected() can only reach the displayed unit's rows — the flag
+        // on the left unit's cached rows must be cleared by the unit change
+        // itself, or navigating back shows a phantom selection.
+        unit1.Rows[0].Pasuk.IsSelected.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RefreshRecitationAvailability_UnalignedTrack_OnlyWholePerekCoverageShowsButton()
+    {
+        // An unaligned track has no approved boundary — only whole-perek
+        // slices can play, so a unit clipped to a partial perek must not
+        // offer a dead play button.
+        RecitationTrack unaligned = new(1, "https://example.com/recordings/1_record.mp3",
+            new string('a', 64), new string('b', 64), 5000, "pending", []);
+        await using var fixture = new Fixture(
+            hasPerekAudio: _ => true, getTrack: _ => unaligned);
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1); // unit 1 ends mid-pasuk 1 — partial slice
+
+        fixture.Model.HasCurrentUnitRecitation.Should().BeFalse();
+        fixture.Model.ShowHeaderPlayButton.Should().BeFalse();
+
+        await fixture.Model.NavigateToUnitAsync(3); // unit 3 covers perek 51 whole
+
+        fixture.Model.HasCurrentUnitRecitation.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task LoadedPasukim_CachesFullPerekForRecitationBounds()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        // Unit 1 clips its display rows mid-pasuk, but recitation bounds
+        // checks need the whole canonical perek — the cache keeps it.
+        var pasukim = fixture.Model.GetLoadedPasukim(1);
+
+        pasukim.Should().HaveCount(2);
+        pasukim!.SelectMany(p => p.Segments).Select(s => s.Value)
+            .Should().Equal("א", "ב", "ס", "ג", "ד");
     }
 }
