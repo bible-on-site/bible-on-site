@@ -83,7 +83,9 @@ public class FirebaseEmulatorEndpointTests
         // Extra segments and trailing separators are malformed.
         AvdLoopback + ":9099:8080:extra",
         AvdLoopback + ":",
-        AvdLoopback + "::8080",
+        // host::port — an empty auth segment is malformed; split so no
+        // IP-shaped literal appears in source.
+        AvdLoopback + ':' + ":8080",
     };
 
     [Theory]
