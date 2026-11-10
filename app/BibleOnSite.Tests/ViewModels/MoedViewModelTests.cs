@@ -242,6 +242,42 @@ public class MoedViewModelTests
     }
 
     [Fact]
+    public async Task PlanSegments_WholeMoed_FollowsPositionOrder_WhenSectionsArriveUnsorted()
+    {
+        // The wire lists the position-2 section before position-1 — whole-moed
+        // audio must follow the display's position ordering, not the DTO order
+        // (#3261 review). Each range covers its whole perek so the unaligned
+        // pending tracks can play it.
+        const string unsortedCatalogue = """
+            {"data":{"moadim":[
+                {"id":3,"slug":"shuffled","name":"מועד הפוך","summary":null,"hebrewMonth":"אלול",
+                 "dateLabel":null,"annualOrder":1,"published":true,
+                 "sections":[
+                    {"id":32,"label":"שני","position":2,"ranges":[
+                        {"id":42,"position":1,"perekIdStart":2,"pasukStart":1,"perekIdEnd":2,"pasukEnd":2}
+                    ]},
+                    {"id":31,"label":"ראשון","position":1,"ranges":[
+                        {"id":41,"position":1,"perekIdStart":1,"pasukStart":1,"perekIdEnd":1,"pasukEnd":2}
+                    ]}
+                 ],
+                 "explicitArticleIds":[],"articles":[]}
+            ]}}
+            """;
+        RecitationTrack Pending(int perek) => new(perek, $"u{perek}", "h", "t", 5000, "pending", []);
+        var tracks = new Dictionary<int, RecitationTrack> { [1] = Pending(1), [2] = Pending(2) };
+
+        await using var fixture = new Fixture(
+            hasPerekAudio: id => tracks.ContainsKey(id),
+            getTrack: id => tracks.GetValueOrDefault(id),
+            catalogue: unsortedCatalogue);
+        await fixture.Initialize();
+        await fixture.Model.LoadBySlugAsync("shuffled");
+
+        fixture.Model.PlanSegmentsForUnit(fixture.Model.Unit!)
+            .Select(s => (s.SectionId, s.PerekId)).Should().Equal((31, 1), (32, 2));
+    }
+
+    [Fact]
     public async Task PlanSegments_NoAudio_YieldsNoPlan()
     {
         await using var fixture = new Fixture();

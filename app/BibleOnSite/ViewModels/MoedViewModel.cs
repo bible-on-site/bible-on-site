@@ -332,13 +332,15 @@ public partial class MoedViewModel : ObservableObject, IPerushimSheetViewModel /
             .Select(s => s with { SectionId = section.Id }).ToList();
 
     /// <summary>
-    /// The whole-moed playback plan — every section's tagged clips in order
-    /// (the planner emits one clip per slice and never merges, so planning
-    /// per section yields exactly the flattened <see cref="MoedUnitText.PerekSlicesForUnit"/>
-    /// sequence, each clip keeping its own section).
+    /// The whole-moed playback plan — every section's tagged clips in
+    /// position order, the same ordering <see cref="MoedUnitText.PerekSlicesForUnit"/>
+    /// and the display rows use (the planner emits one clip per slice and
+    /// never merges, so planning per section yields exactly the flattened
+    /// display sequence, each clip keeping its own section).
     /// </summary>
     public List<RecitationSegment> PlanSegmentsForUnit(MoedUnit moed) =>
-        moed.Sections.SelectMany(PlanSegmentsForSection).ToList();
+        moed.Sections.OrderBy(section => section.Position)
+            .SelectMany(PlanSegmentsForSection).ToList();
 
     /// <summary>Mirrors each section's playable verdict onto its header row's play button.</summary>
     private void UpdateSectionPlayButtons()
