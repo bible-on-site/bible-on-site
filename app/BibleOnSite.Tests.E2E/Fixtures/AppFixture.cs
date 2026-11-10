@@ -507,6 +507,16 @@ public class AppFixture : IAsyncLifetime
         }
     }
 
+    /// <summary>Clicks a physical point inside an element's bounds — for
+    /// targets whose meaningful region is offset from the element's own
+    /// clickable point (e.g. dead space under a short canvas).</summary>
+    public void ClickAt(Point point)
+    {
+        AssertForeground();
+        AssertOwnedWindow(WindowFromPoint(point)); //NOSONAR — HWND hit-testing has no managed equivalent; the ownership guard must see the covering window, not a UIA child.
+        Mouse.Click(point);
+    }
+
     /// <summary>
     /// Waits for an element to appear in the UI.
     /// </summary>
