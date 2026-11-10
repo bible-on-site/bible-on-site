@@ -614,25 +614,27 @@ describe("perushim service", () => {
 			});
 
 			it("orders notes by range order, then pasuk, then note idx", async () => {
-				mockQuery.mockResolvedValue([
-					// DB orders by perek_id ASC; range order is 100 before 1.
-					{ perek_id: 1, pasuk: 1, note_idx: 0, note_content: "note-a" },
-					{
-						perek_id: 100,
-						pasuk: 7,
-						note_idx: 1,
-						note_content: "note-c",
-					},
-					{
-						perek_id: 100,
-						pasuk: 7,
-						note_idx: 0,
-						note_content: "note-b",
-					},
-					// Rows for perakim outside the slices sort last, stable.
-					{ perek_id: 500, pasuk: 1, note_idx: 0, note_content: "x-1" },
-					{ perek_id: 501, pasuk: 1, note_idx: 0, note_content: "x-2" },
-				]);
+				mockQuery
+					.mockResolvedValueOnce([
+						// DB orders by perek_id ASC; range order is 100 before 1.
+						{ perek_id: 1, pasuk: 1, note_idx: 0, note_content: "note-a" },
+						{
+							perek_id: 100,
+							pasuk: 7,
+							note_idx: 1,
+							note_content: "note-c",
+						},
+						{
+							perek_id: 100,
+							pasuk: 7,
+							note_idx: 0,
+							note_content: "note-b",
+						},
+						// Rows for perakim outside the slices sort last, stable.
+						{ perek_id: 500, pasuk: 1, note_idx: 0, note_content: "x-1" },
+						{ perek_id: 501, pasuk: 1, note_idx: 0, note_content: "x-2" },
+					])
+					.mockResolvedValueOnce([]);
 
 				const result = await getPerushNotesForRanges(1, [
 					{
@@ -666,58 +668,62 @@ describe("perushim service", () => {
 				);
 			});
 
-			it("joins stored note metrics and maps counts onto the notes (#3108)", async () => {
-				mockQuery.mockResolvedValue([
-					{
-						perek_id: 1,
-						pasuk: 30,
-						note_idx: 0,
-						note_content: "counted",
-						metric_word_count: 42,
-					},
-					{
-						perek_id: 2,
-						pasuk: 4,
-						note_idx: 0,
-						note_content: "uncounted",
-						metric_word_count: null,
-					},
-				]);
-
-				const result = await getPerushNotesForRanges(1, crossPerekRanges);
-
-				expect(mockQuery).toHaveBeenCalledWith(
-					expect.stringContaining("LEFT JOIN tanah_note_metric"),
-					expect.arrayContaining([1]),
-				);
-				expect(result[0].wordCount).toBe(42);
-				// A missing metric row leaves the field absent — the unknown
-				// state rangedPerushMetrics treats as "whole range unknown".
-				expect("wordCount" in result[1]).toBe(false);
-			});
-
-			it("falls back to the plain read when the metrics schema is missing", async () => {
+			it("merges stored note metrics onto the notes by position (#3108)", async () => {
 				mockQuery
-					.mockRejectedValueOnce(
-						Object.assign(new Error("no such table"), {
-							code: "ER_NO_SUCH_TABLE",
-						}),
-					)
 					.mockResolvedValueOnce([
 						{
 							perek_id: 1,
 							pasuk: 30,
 							note_idx: 0,
-							note_content: "plain",
+							note_content: "counted",
 						},
+						{
+							perek_id: 2,
+							pasuk: 4,
+							note_idx: 0,
+							note_content: "uncounted",
+						},
+					])
+					.mockResolvedValueOnce([
+						{ perek_id: 1, pasuk: 30, note_idx: 0, word_count: 42 },
 					]);
 
 				const result = await getPerushNotesForRanges(1, crossPerekRanges);
 
 				expect(mockQuery).toHaveBeenCalledTimes(2);
-				expect(mockQuery.mock.calls[1][0]).not.toContain("tanah_note_metric");
-				expect(result.map((n) => n.noteContent)).toEqual(["plain"]);
-				expect(result[0].wordCount).toBeUndefined();
+				expect(mockQuery.mock.calls[0][0]).toContain("FROM note n");
+				expect(mockQuery.mock.calls[1][0]).toContain(
+					"FROM tanah_note_metric m",
+				);
+				expect(mockQuery.mock.calls[1][0]).toContain("m.perush_id = ?");
+				const counted = result.find((n) => n.noteContent === "counted");
+				const uncounted = result.find((n) => n.noteContent === "uncounted");
+				expect(counted?.wordCount).toBe(42);
+				// A missing metric row leaves the field absent — the unknown
+				// state rangedPerushMetrics treats as "whole range unknown".
+				expect(uncounted && "wordCount" in uncounted).toBe(false);
+			});
+
+			it("serves notes undecorated when the metric read fails for any reason", async () => {
+				const notes = [
+					{ perek_id: 1, pasuk: 30, note_idx: 0, note_content: "plain" },
+				];
+				// Missing schema — and every other metric-read failure — must
+				// degrade to notes rather than hide the commentary.
+				for (const failure of [
+					Object.assign(new Error("no such table"), {
+						code: "ER_NO_SUCH_TABLE",
+					}),
+					new Error("lock wait timeout"),
+					"raw failure",
+				]) {
+					mockQuery
+						.mockResolvedValueOnce(notes)
+						.mockRejectedValueOnce(failure);
+					const result = await getPerushNotesForRanges(1, crossPerekRanges);
+					expect(result.map((n) => n.noteContent)).toEqual(["plain"]);
+					expect(result[0].wordCount).toBeUndefined();
+				}
 			});
 		});
 	});
