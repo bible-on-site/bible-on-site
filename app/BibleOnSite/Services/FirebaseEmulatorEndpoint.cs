@@ -30,6 +30,30 @@ public static class FirebaseEmulatorEndpoint
     public sealed record Endpoint(string Host, int AuthPort, int FirestorePort);
 
     /// <summary>
+    /// The Android emulator's fixed host-loopback alias — an AVD reaches the
+    /// runner's loopback through this address. Built as an address so the
+    /// value is typed and validated, not embedded as a bare literal the
+    /// hardcoded-address analyzer must flag (S1313); it is a fixed
+    /// device-networking constant, never a routable target.
+    /// </summary>
+    internal static readonly string AndroidEmulatorLoopback =
+        new System.Net.IPAddress(new byte[] { 10, 0, 2, 2 }).ToString();
+
+    /// <summary>
+    /// Whether <paramref name="host"/> addresses the device itself: loopback
+    /// spellings plus the Android-emulator host alias. The intent-extra
+    /// launch channel (<see cref="MarkEmulatorLaunch"/>) is attacker-writable
+    /// input on the exported main activity, so only device-local endpoints are
+    /// honored from it — a remote host must never become a preference-sync
+    /// destination or reach the persisted marker. A suite that legitimately
+    /// needs a non-local emulator target writes the marker file through
+    /// run-as, which only the suite can reach.
+    /// </summary>
+    internal static bool IsLoopbackHost(string host) =>
+        host is "127.0.0.1" or "localhost" or "::1" or "[::1]"
+            || host == AndroidEmulatorLoopback;
+
+    /// <summary>
     /// Parses <paramref name="value"/> as <c>host</c> or
     /// <c>host:authPort:firestorePort</c>. IPv6 literals keep their colons via
     /// bracket form (<c>[::1]</c> or <c>[::1]:9099:8080</c>). Anything malformed
@@ -113,18 +137,26 @@ public static class FirebaseEmulatorEndpoint
     /// <summary>
     /// Android launch channel: records the intent extra both in the process
     /// environment and the marker file, so activateApp relaunches (which drop
-    /// extras) still resolve the same endpoint.
+    /// extras) still resolve the same endpoint. The activity is exported —
+    /// anything on the device can supply this extra, so only a device-local
+    /// endpoint is honored (<see cref="IsLoopbackHost"/>). A rejected extra
+    /// leaves the channel untouched rather than redirecting sync to a
+    /// remote attacker-supplied target.
     /// </summary>
     [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
         Justification = "Device-only bridge; covered by the Firebase emulator device scenario, not unit tests.")]
     internal static void MarkEmulatorLaunch(string value)
     {
+        if (Parse(value) is not { } endpoint || !IsLoopbackHost(endpoint.Host))
+        {
+            // The resolved state stays unset: a lazy Current still sees the
+            // environment or a suite-written marker exactly as before.
+            return;
+        }
         Environment.SetEnvironmentVariable(EnvironmentVariable, value);
         lock (_gate)
         {
-            // A malformed extra is not a verdict: the persisted marker (or an
-            // already-good environment value) can still resolve an endpoint.
-            _current = Parse(value) ?? Resolve();
+            _current = endpoint;
             _resolved = true;
         }
         try

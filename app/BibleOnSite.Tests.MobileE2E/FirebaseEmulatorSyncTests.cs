@@ -20,7 +20,9 @@ namespace BibleOnSite.Tests.MobileE2E;
 // same scenario rides that channel instead. All assertions read the
 // committed backend state over the emulator REST surface
 // (FirebaseEmulatorBackend), and each scenario wipes the disposable
-// database and accounts when it finishes.
+// database when it finishes. Auth accounts stay: the install's anonymous
+// identity must survive between scenarios, or its cached uid points at a
+// deleted account and the next assertions race token revalidation.
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "Shared")]
@@ -48,7 +50,7 @@ public sealed class FirebaseEmulatorSyncTests(ITestOutputHelper output, MobileDe
         await _backend!.AccountsAsync();
         // Disposable-backend hygiene starts clean too: no residue can predate
         // the scenario's first assertion about users/{uid}.
-        await _backend.WipeAsync();
+        await _backend.WipeDatabaseAsync();
         if (Configuration.Platform == MobilePlatform.Android)
         {
             // A marker left by an earlier scenario would bind this launch to
@@ -71,7 +73,7 @@ public sealed class FirebaseEmulatorSyncTests(ITestOutputHelper output, MobileDe
         {
             try
             {
-                await _backend.WipeAsync();
+                await _backend.WipeDatabaseAsync();
             }
             catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
             {

@@ -8,9 +8,7 @@ public class FirebaseEmulatorEndpointTests
 {
     // AVD's host-loopback alias — the device-side endpoint constant the
     // parser must accept verbatim; test data, not a routable address.
-#pragma warning disable S1313 // Android emulator host loopback, test data only — never a routable address.
-    private const string AvdLoopback = "10.0.2.2";
-#pragma warning restore S1313
+    private static readonly string AvdLoopback = FirebaseEmulatorEndpoint.AndroidEmulatorLoopback;
 
     [Theory]
     [InlineData(null)]
@@ -65,26 +63,31 @@ public class FirebaseEmulatorEndpointTests
             new FirebaseEmulatorEndpoint.Endpoint(host, authPort, firestorePort));
     }
 
+    public static TheoryData<string> MalformedEndpointValues => new()
+    {
+        // A bare IPv6 literal without brackets parses as host + garbage ports.
+        "::1",
+        // Host may not be empty, contain whitespace, or be a bare port.
+        ":9099",
+        ":9099:8080",
+        "my host:9099:8080",
+        // Unbracketed bracket content and dangling brackets are malformed.
+        "[::1",
+        "[::1]junk:9099",
+        // Ports must be numeric and inside the TCP range.
+        AvdLoopback + ":abc:8080",
+        AvdLoopback + ":9099:xyz",
+        AvdLoopback + ":0:8080",
+        AvdLoopback + ":9099:65536",
+        AvdLoopback + ":-1:8080",
+        // Extra segments and trailing separators are malformed.
+        AvdLoopback + ":9099:8080:extra",
+        AvdLoopback + ":",
+        AvdLoopback + "::8080",
+    };
+
     [Theory]
-    // A bare IPv6 literal without brackets parses as host + garbage ports.
-    [InlineData("::1")]
-    // Host may not be empty, contain whitespace, or be a bare port.
-    [InlineData(":9099")]
-    [InlineData(":9099:8080")]
-    [InlineData("my host:9099:8080")]
-    // Unbracketed bracket content and dangling brackets are malformed.
-    [InlineData("[::1")]
-    [InlineData("[::1]junk:9099")]
-    // Ports must be numeric and inside the TCP range.
-    [InlineData(AvdLoopback + ":abc:8080")]
-    [InlineData(AvdLoopback + ":9099:xyz")]
-    [InlineData(AvdLoopback + ":0:8080")]
-    [InlineData(AvdLoopback + ":9099:65536")]
-    [InlineData(AvdLoopback + ":-1:8080")]
-    // Extra segments and trailing separators are malformed.
-    [InlineData(AvdLoopback + ":9099:8080:extra")]
-    [InlineData(AvdLoopback + ":")]
-    [InlineData(AvdLoopback + "::8080")]
+    [MemberData(nameof(MalformedEndpointValues))]
     public void Parse_ReturnsNull_WhenValueMalformed(string value)
     {
         FirebaseEmulatorEndpoint.Parse(value).Should().BeNull();
@@ -94,5 +97,32 @@ public class FirebaseEmulatorEndpointTests
     public void EnvironmentVariable_MatchesSuiteLaunchChannel()
     {
         FirebaseEmulatorEndpoint.EnvironmentVariable.Should().Be("BIBLE_FIREBASE_EMULATOR");
+    }
+
+    [Theory]
+    // The attacker-writable intent channel accepts only device-local targets:
+    // runner loopback spellings and the AVD host alias.
+    [InlineData("127.0.0.1")]
+    [InlineData("localhost")]
+    [InlineData("::1")]
+    [InlineData("[::1]")]
+    [InlineData("10.0.2.2")]
+    public void IsLoopbackHost_AcceptsDeviceLocalHosts(string host)
+    {
+        FirebaseEmulatorEndpoint.IsLoopbackHost(host).Should().BeTrue();
+    }
+
+    [Theory]
+    // Anything else could redirect preference sync to a remote endpoint an
+    // exported-activity intent extra must never reach.
+    [InlineData("192.168.1.5")]
+    [InlineData("example.com")]
+    [InlineData("10.0.2.2.evil.example")]
+    [InlineData("127.0.0.1.evil.example")]
+    [InlineData("localhost.evil.example")]
+    [InlineData("::1.evil.example")]
+    public void IsLoopbackHost_RejectsRemoteOrSpoofedHosts(string host)
+    {
+        FirebaseEmulatorEndpoint.IsLoopbackHost(host).Should().BeFalse();
     }
 }

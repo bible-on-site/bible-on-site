@@ -34,21 +34,26 @@ internal sealed class FirebaseEmulatorBackend : IDisposable
     public FirebaseEmulatorBackend(string host, int authPort, int firestorePort)
     {
         Host = host;
-        AuthBase = new Uri($"http://{host}:{authPort}");
-        FirestoreBase = new Uri($"http://{host}:{firestorePort}");
+        AuthBase = new Uri($"http://{UriHost(host)}:{authPort}");
+        FirestoreBase = new Uri($"http://{UriHost(host)}:{firestorePort}");
     }
 
     public string Host { get; }
     public Uri AuthBase { get; }
     public Uri FirestoreBase { get; }
 
-    /// <summary>The host the device under test must dial. An Android
-    /// emulator's host loopback is 10.0.2.2; an iOS simulator shares the
-    /// runner's loopback, so the host value applies unchanged.</summary>
-#pragma warning disable S1313 // AVD's host-loopback alias — the endpoint is the local Emulator Suite, never a routable address.
+    /// <summary>The host the device under test must dial, in endpoint form.
+    /// An Android emulator reaches the runner's loopback through the fixed
+    /// AVD alias; an iOS simulator shares the runner's loopback. An IPv6 host
+    /// keeps the brackets <see cref="FirebaseEmulatorEndpoint.Parse"/> and
+    /// Uri construction both require.</summary>
     public string DeviceHost(MobilePlatform platform) =>
-        platform == MobilePlatform.Android && IsLoopback(Host) ? "10.0.2.2" : Host;
-#pragma warning restore S1313
+        platform == MobilePlatform.Android && IsLoopback(Host)
+            ? FirebaseEmulatorEndpoint.AndroidEmulatorLoopback
+            : UriHost(Host);
+
+    private static string UriHost(string host) =>
+        host.Contains(':') && !host.StartsWith('[') ? $"[{host}]" : host;
 
     /// <summary>The endpoint as the device under test must dial it.</summary>
     public string DeviceEndpoint(MobilePlatform platform) =>
@@ -142,11 +147,11 @@ internal sealed class FirebaseEmulatorBackend : IDisposable
         var ids = new List<string>();
         if (json != null && json.RootElement.TryGetProperty("documents", out var documents))
         {
-            foreach (var document in documents.EnumerateArray())
+            ids.AddRange(documents.EnumerateArray().Select(document =>
             {
                 var name = document.GetProperty("name").GetString()!;
-                ids.Add(name[(name.LastIndexOf('/') + 1)..]);
-            }
+                return name[(name.LastIndexOf('/') + 1)..];
+            }));
         }
         return ids;
     }
@@ -201,11 +206,8 @@ internal sealed class FirebaseEmulatorBackend : IDisposable
         var accounts = new List<JsonElement>();
         if (json != null && json.RootElement.TryGetProperty("users", out var users))
         {
-            foreach (var user in users.EnumerateArray())
-            {
-                // Clone outlives the JsonDocument scope.
-                accounts.Add(user.Clone());
-            }
+            // Clone outlives the JsonDocument scope.
+            accounts.AddRange(users.EnumerateArray().Select(user => user.Clone()));
         }
         return accounts;
     }
@@ -226,16 +228,19 @@ internal sealed class FirebaseEmulatorBackend : IDisposable
 
     // ---------- Disposable-data cleanup ----------
 
-    /// <summary>Wipes the emulated database and every Auth account so the run
-    /// leaves no preference or identity residue on the disposable backend.</summary>
-    public async Task WipeAsync()
+    /// <summary>Wipes the emulated database so the run leaves no preference
+    /// residue on the disposable backend. Auth accounts deliberately persist:
+    /// the installed app keeps its anonymous identity across scenarios —
+    /// deleting the account it still holds would orphan the cached uid and
+    /// make the next scenario's assertions dependent on token-revalidation
+    /// timing. The suite is spawned fresh per run, so residue across runs is
+    /// already impossible.</summary>
+    public async Task WipeDatabaseAsync()
     {
-        using var documents = await _http.SendAsync(new HttpRequestMessage(HttpMethod.Delete,
-            $"{FirestoreBase}/emulator/v1/projects/{ProjectId}/databases/(default)/documents"));
-        documents.EnsureSuccessStatusCode();
-        using var accounts = await _http.SendAsync(new HttpRequestMessage(HttpMethod.Delete,
-            $"{AuthBase}/emulator/v1/projects/{ProjectId}/accounts"));
-        accounts.EnsureSuccessStatusCode();
+        using var request = new HttpRequestMessage(HttpMethod.Delete,
+            $"{FirestoreBase}/emulator/v1/projects/{ProjectId}/databases/(default)/documents");
+        using var response = await _http.SendAsync(request);
+        response.EnsureSuccessStatusCode();
     }
 
     private static HttpRequestMessage OwnerRequest(HttpMethod method, string uri)

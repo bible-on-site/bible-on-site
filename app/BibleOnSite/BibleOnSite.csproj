@@ -41,9 +41,12 @@
 		     is baked into the Android manifest. Release builds default to analytics
 		     on; pass -p:DisableAnalytics=false to force a Debug build back on.
 		     Emulator builds force the same posture so the suite backend is the
-		     only Firebase traffic they can produce. -->
+		     only Firebase traffic they can produce — and the force is carried by
+		     the define, not the soft toggle: an explicit -p:DisableAnalytics=false
+		     may re-open analytics on a plain Debug build but can never re-open the
+		     production backend on an emulator build. -->
 		<DisableAnalytics Condition="'$(DisableAnalytics)' == '' AND ('$(Configuration)' == 'Debug' OR '$(FirebaseEmulator)' == 'true')">true</DisableAnalytics>
-		<DefineConstants Condition="'$(DisableAnalytics)' == 'true'">$(DefineConstants);DISABLE_ANALYTICS</DefineConstants>
+		<DefineConstants Condition="'$(DisableAnalytics)' == 'true' OR '$(FirebaseEmulator)' == 'true'">$(DefineConstants);DISABLE_ANALYTICS</DefineConstants>
 
 		<!-- Push gating (#1097): Debug builds and every mobile-e2e build (which sets
 		     DisableAnalytics explicitly) get DISABLE_PUSH — PushNotificationService
@@ -54,7 +57,11 @@
 		     can opt in with -p:DisablePush=false, which also drives the iOS
 		     CrossFirebase.Initialize call the Messaging SDK depends on while the
 		     plist flag still keeps analytics collection off. -->
-		<DisablePush Condition="'$(DisablePush)' == ''">$(DisableAnalytics)</DisablePush>
+		<!-- Push inherits the analytics isolation, and the emulator force the
+		     same way: an emulator build never wires the Messaging SDK, which the
+		     emulator suite cannot route anyway. -->
+		<DisablePush Condition="'$(DisablePush)' == '' AND ('$(DisableAnalytics)' == 'true' OR '$(FirebaseEmulator)' == 'true')">true</DisablePush>
+		<DisablePush Condition="'$(DisablePush)' == ''">false</DisablePush>
 		<DefineConstants Condition="'$(DisablePush)' == 'true'">$(DefineConstants);DISABLE_PUSH</DefineConstants>
 
 		<!-- #1097: stays false until the App ID's Push Notifications capability is
@@ -231,7 +238,7 @@
 	     true; everything else resolves to false so production analytics keep
 	     working. The fallback guarantees the placeholder is always defined. -->
 	<PropertyGroup>
-		<FirebaseAnalyticsCollectionDeactivated Condition="'$(DisableAnalytics)' == 'true'">true</FirebaseAnalyticsCollectionDeactivated>
+		<FirebaseAnalyticsCollectionDeactivated Condition="'$(DisableAnalytics)' == 'true' OR '$(FirebaseEmulator)' == 'true'">true</FirebaseAnalyticsCollectionDeactivated>
 		<FirebaseAnalyticsCollectionDeactivated Condition="'$(FirebaseAnalyticsCollectionDeactivated)' == ''">false</FirebaseAnalyticsCollectionDeactivated>
 	</PropertyGroup>
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
