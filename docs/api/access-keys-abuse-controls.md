@@ -172,7 +172,10 @@ anonymous), and its telemetry answers the adoption question D/E would
 otherwise have to bootstrap. If the data instead shows arbitrary-query
 scraping as the residual problem, F outranks further credential work.
 
-**Phase 2 (grace window → enforcement):** per review decision, unsigned calls
+**Phase 2 (grace window → enforcement):** *(superseded for the public read
+surface by the #3257 policy update in the header — unsigned public reads are
+never rejected; a signature may at most earn a signed lane better budgets)*
+per review decision, unsigned calls
 get a **~2-week grace period** after signed builds ship — the window for
 store/dev-channel updates to reach the install base, tracked by the
 signed-traffic share approaching ~100%. When the window closes,
@@ -198,8 +201,8 @@ with explicit approval.
 unmodified app — it is extractable by design; let a signature satisfy
 `authorize_revision_manager`/`authorize_dedication_manager` or reach any
 admin/mutation scope; leave the unsigned lane open past the agreed grace
-window (unsigned calls are rejected once adoption completes — the env flag,
-not a permanent anonymous lane, is the rollback story); carry keys in URLs;
+window (superseded for public reads by the #3257 update — the unsigned read
+lane is permanent and bounded by A budgets); carry keys in URLs;
 write key material or signatures to logs; use UA/Origin as authorization.
 
 ## 5. Reference designs for deferred client-facing options
@@ -242,7 +245,10 @@ write key material or signatures to logs; use UA/Origin as authorization.
   inside the window ≈ re-query, which is low harm; the nonce mainly matters
   if the lane later gates costlier operations. Timestamp-only is an
   acceptable v1.
-- **Verification outcome.** Missing/invalid/expired signature ⇒ **anonymous
+- **Verification outcome.** *(Post-#3257: enforcement applies at most to the
+  signed lane's extra headroom — unsigned public reads are never rejected;
+  this bullet records the pre-#3257 mechanics if a signing lane is ever
+  built.)* Missing/invalid/expired signature ⇒ **anonymous
   lane during the grace window, 401 after it** — unsigned traffic is
   legitimate only while old builds are still upgrading (pre-C2 releases, dev
   builds). `API_REQUIRE_SIGNATURE=observe|enforce` is the rollout control:
@@ -325,7 +331,9 @@ write key material or signatures to logs; use UA/Origin as authorization.
    rebuild + redeploy — make them env-configurable so tightening/rollback is
    an env change + task restart; NGINX limits are config-reload — document
    both.
-3. **Adoption gate → grace window → enforcement** — C2 lands observe-only
+3. **Adoption gate → grace window → enforcement** *(superseded for public
+   reads by the #3257 update — unsigned public reads are a permanent lane;
+   only extra signed-lane headroom could ever be gated)* — C2 lands observe-only
    first (app signs, API counts signed vs unsigned). Per review decision,
    unsigned calls then get a ~2-week grace period for client upgrades,
    verified by signed-traffic share; at the end of the window

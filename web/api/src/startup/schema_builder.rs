@@ -8,6 +8,7 @@ use actix_web::{
 use async_graphql::{
     EmptySubscription, MergedObject, ParseRequestError, Response, Schema, ServerError,
     http::{GraphQLPlaygroundConfig, MultipartOptions, playground_source, receive_batch_body},
+    parser::{parse_query, types::DocumentOperations, types::OperationType},
 };
 use async_graphql_actix_web::GraphQLResponse;
 
@@ -125,12 +126,39 @@ pub async fn graphql_request(
         .into_single()
         .map_err(ErrorBadRequest)?;
     let auth = ApiAuth::new(extract_bearer(&req));
-    Ok(execute_within_budget(
-        schema.execute(request.data(auth)),
-        budgets.execution_timeout,
-    )
-    .await
-    .into())
+    let request = request.data(auth);
+    // The execution budget bounds anonymous compute. Mutations already sit
+    // behind the fail-closed manager keys, and a timeout landing between a
+    // committed write and its post-commit website revalidation would abandon
+    // the invalidation while the caller sees an error — writes run unbounded.
+    let budget = if selects_mutation(&request) {
+        None
+    } else {
+        budgets.execution_timeout
+    };
+    Ok(execute_within_budget(schema.execute(request), budget)
+        .await
+        .into())
+}
+
+/// Whether the request's selected operation is a mutation. Mirrors the
+/// operation lookup `Schema::execute` performs (re-parsing a ~KB query is
+/// microseconds); anything ambiguous — unparseable, or a multi-operation
+/// document without a resolvable `operationName` — stays bounded: the
+/// operation fails validation inside `execute` anyway.
+fn selects_mutation(request: &async_graphql::Request) -> bool {
+    let Ok(document) = parse_query(&request.query) else {
+        return false;
+    };
+    let operation_type = match document.operations {
+        DocumentOperations::Single(operation) => Some(operation.node.ty),
+        DocumentOperations::Multiple(operations) => match &request.operation_name {
+            Some(name) => operations.get(name.as_str()).map(|op| op.node.ty),
+            None if operations.len() == 1 => operations.values().next().map(|op| op.node.ty),
+            None => None,
+        },
+    };
+    operation_type == Some(OperationType::Mutation)
 }
 
 /// Runs one execution future under the configured time budget. A timed-out
@@ -1687,5 +1715,41 @@ mod tests {
         let response =
             execute_within_budget(schema.execute(Request::new("{ __typename }")), None).await;
         assert!(response.errors.is_empty(), "{:?}", response.errors);
+    }
+
+    /// `selects_mutation` mirrors the executor's operation lookup: only the
+    /// actually-selected operation exempts the time budget — a query
+    /// alongside a mutation in the same document stays bounded.
+    #[test]
+    fn selects_mutation_only_for_the_selected_operation() {
+        for (request, expected) in [
+            (Request::new("{ __typename }"), false),
+            (Request::new("mutation { noop }"), true),
+            (
+                Request::new("mutation M { noop } query Q { __typename }").operation_name("M"),
+                true,
+            ),
+            (
+                Request::new("mutation M { noop } query Q { __typename }").operation_name("Q"),
+                false,
+            ),
+            // Unresolvable selections stay bounded — they fail inside
+            // `execute` regardless of the budget.
+            (
+                Request::new("mutation M { noop } query Q { __typename }").operation_name("nope"),
+                false,
+            ),
+            (
+                Request::new("mutation M { noop } query Q { __typename }"),
+                false,
+            ),
+            // A lone named operation resolves without `operationName`.
+            (Request::new("mutation M { noop }"), true),
+            // Unparseable and subscription operations stay bounded too.
+            (Request::new("not graphql"), false),
+            (Request::new("subscription { noop }"), false),
+        ] {
+            assert_eq!(selects_mutation(&request), expected, "{}", request.query);
+        }
     }
 }
