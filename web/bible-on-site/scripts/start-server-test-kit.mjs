@@ -93,7 +93,12 @@ startServer(options);
 		assert.ok(path.basename(directory).startsWith("bible-handover-test-"));
 		await rm(directory, { recursive: true, force: true });
 	});
-	const waitFor = async (text, ms = 10_000) => {
+	// READY rides the spawned server's stdio — kernel-buffered and written
+	// the moment listen() fires, so the five-second default stays the
+	// startup deadline. The drain/readiness markers are printed by the
+	// wrapper's own event loop, which CI starvation can leave unturned for
+	// seconds; those call sites pass eventLoopMarkerMs explicitly.
+	const waitFor = async (text, ms = 5_000) => {
 		const deadline = Date.now() + ms;
 		while (!output.includes(text)) {
 			// exitCode alone cannot detect a signal-killed wrapper: a
@@ -115,6 +120,12 @@ startServer(options);
 	};
 	return { wrapper, exited, waitFor, measureFile, output: () => output };
 }
+
+// Bound for markers the wrapper prints from its own event loop (drain
+// notices, readiness-probe results): under CPU starvation the loop can be
+// unturned for seconds even though the child already wrote READY to the
+// shared pipe. Not an SLA — the test's own timeout is the real budget.
+export const eventLoopMarkerMs = 10_000;
 
 export const httpServer = `
 const http = require('node:http');

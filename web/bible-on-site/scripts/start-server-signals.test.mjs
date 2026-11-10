@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+	eventLoopMarkerMs,
 	fixture,
 	httpServer,
 	nativeSignals,
@@ -15,7 +16,7 @@ test(
 		await server.waitFor("READY ");
 		const port = Number(server.output().match(/READY \d+ (\d+)/)[1]);
 		server.wrapper.kill("SIGTERM");
-		await server.waitFor("Website draining");
+		await server.waitFor("Website draining", eventLoopMarkerMs);
 		server.wrapper.kill("SIGTERM");
 		const response = await fetch(`http://127.0.0.1:${port}`, {
 			signal: AbortSignal.timeout(1_000),
@@ -52,7 +53,7 @@ test(
 		await server.waitFor("READY ");
 		const started = Date.now();
 		server.wrapper.kill("SIGTERM");
-		await server.waitFor("Website draining");
+		await server.waitFor("Website draining", eventLoopMarkerMs);
 		// Quiet from the start, but DNS removal may still be propagating.
 		await sleep(400);
 		assert.equal(
@@ -83,7 +84,7 @@ test(
 		await server.waitFor("READY ");
 		const started = Date.now();
 		server.wrapper.kill("SIGTERM");
-		await server.waitFor("Website draining");
+		await server.waitFor("Website draining", eventLoopMarkerMs);
 		assert.deepEqual(await server.exited, [143, null]);
 		const elapsed = Date.now() - started;
 		assert.ok(
