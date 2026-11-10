@@ -64,6 +64,9 @@ CDN behavior, URLs, admin authentication and production content stay unchanged.
 3. Apply the additive schema with `DB_URL` supplied securely to
    `node devops/private-upload-db.mts`. Run twice to confirm idempotence. Do not
    use the existing db-populator Lambda: it injects destructive DROP statements.
+   Earlier upload schemas are upgraded in place: existing file timestamps seed
+   the new pagination timestamp, lifecycle states are extended, and the directory
+   index is replaced without deleting files, reservations or quota overrides.
 4. Deploy the reviewed website/admin images. Add `UPLOAD_AWS_REGION`,
    `UPLOAD_S3_BUCKET`, `UPLOAD_COGNITO_POOL_ID`, `UPLOAD_COGNITO_CLIENT_ID`,
    `UPLOAD_COGNITO_DOMAIN` (hostname only), and `UPLOAD_ORIGIN` (no trailing slash)

@@ -12,7 +12,7 @@ import {
 	DeleteBucketCommand,
 	S3Client,
 } from "@aws-sdk/client-s3";
-import type { Pool } from "mysql2/promise";
+import type { Pool, PoolConnection } from "mysql2/promise";
 import {
 	beginUpload,
 	completeUpload,
@@ -32,6 +32,21 @@ integration("private upload MySQL/S3 integration", () => {
 	const bucket = `private-upload-test-${randomUUID()}`;
 	const alice = { id: randomUUID(), username: "alice" };
 	const bob = { id: randomUUID(), username: "bob" };
+	const schema = readFileSync(
+		path.resolve(
+			__dirname,
+			"../../../../data/mysql/private_upload_upgrade.sql",
+		),
+		"utf8",
+	)
+		.replace(/^--.*$/gm, "")
+		.split(";")
+		.filter((statement) => statement.trim());
+	async function migrate(connection: PoolConnection) {
+		// Session variables and prepared DDL must stay on the same connection.
+		// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- DDL is read from the fixed repository migration, never from request data.
+		for (const statement of schema) await connection.query(statement);
+	}
 	let pool: Pool;
 	let store: UploadStore;
 	let s3: S3Client;
@@ -44,20 +59,14 @@ integration("private upload MySQL/S3 integration", () => {
 		await root.end();
 		url.pathname = `/${database}`;
 		pool = mysql.createPool(url.href);
-		const schema = readFileSync(
-			path.resolve(
-				__dirname,
-				"../../../../data/mysql/private_upload_upgrade.sql",
-			),
-			"utf8",
-		)
-			.replace(/^--.*$/gm, "")
-			.split(";")
-			.filter((statement) => statement.trim());
 		// Idempotence is part of the rollout contract.
-		for (let attempt = 0; attempt < 2; attempt++)
-			// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- DDL is read from the fixed repository migration, never from request data.
-			for (const statement of schema) await pool.query(statement);
+		const migration = await pool.getConnection();
+		try {
+			await migrate(migration);
+			await migrate(migration);
+		} finally {
+			migration.release();
+		}
 		const sql = (connection: Pick<Pool, "execute">): Sql => ({
 			query: async <T>(statement: string, params?: unknown[]) => {
 				// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- fixed parameterized store SQL; values are bound separately in this isolated test schema.
@@ -124,6 +133,68 @@ integration("private upload MySQL/S3 integration", () => {
 		if (pool) {
 			await pool.query(`DROP DATABASE ${database}`);
 			await pool.end();
+		}
+	});
+	it("upgrades the original schema repeatedly without losing files or quota overrides", async () => {
+		const connection = await pool.getConnection();
+		const legacyId = randomUUID();
+		try {
+			await connection.query("DROP TABLE private_upload_file");
+			await connection.query(`CREATE TABLE private_upload_file (
+				id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+				user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+				filename VARCHAR(255) NOT NULL,
+				size_bytes BIGINT UNSIGNED NOT NULL,
+				part_size INT UNSIGNED NOT NULL,
+				upload_id TEXT NULL,
+				status ENUM('uploading', 'ready') NOT NULL DEFAULT 'uploading',
+				created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				INDEX user_files (user_id, created_at),
+				FOREIGN KEY (user_id) REFERENCES private_upload_account(user_id)
+			) ENGINE=InnoDB`);
+			await store.setQuota(12345, alice.id);
+			await connection.execute(
+				"INSERT INTO private_upload_file (id, user_id, filename, size_bytes, part_size, upload_id, status, created_at) VALUES (?, ?, 'legacy.binary', 42, 8388608, 'legacy-multipart', 'uploading', '2020-01-02 03:04:05')",
+				[legacyId, alice.id],
+			);
+			await migrate(connection);
+			await migrate(connection);
+			const upgraded = await store.directory(alice.id, alice.username);
+			expect(upgraded.quota).toBe(12345);
+			expect(upgraded.allocated).toBe(42);
+			expect(upgraded.files).toEqual([
+				expect.objectContaining({
+					id: legacyId,
+					filename: "legacy.binary",
+					size: 42,
+					status: "uploading",
+					updatedAt: "2020-01-02 03:04:05.000000",
+				}),
+			]);
+			const [indexes] = await connection.query(
+				"SELECT COLUMN_NAME, COLLATION FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'private_upload_file' AND INDEX_NAME = 'user_files' ORDER BY SEQ_IN_INDEX",
+			);
+			expect(indexes).toEqual([
+				{ COLUMN_NAME: "user_id", COLLATION: "A" },
+				{ COLUMN_NAME: "updated_at", COLLATION: "D" },
+				{ COLUMN_NAME: "id", COLLATION: "D" },
+			]);
+			await connection.execute(
+				"UPDATE private_upload_file SET status = 'deleting' WHERE id = ?",
+				[legacyId],
+			);
+			expect(
+				(await store.directory(alice.id, alice.username)).files[0],
+			).toMatchObject({
+				status: "deleting",
+				updatedAt: expect.not.stringContaining("2020-01-02"),
+			});
+		} finally {
+			await connection.execute("DELETE FROM private_upload_file WHERE id = ?", [
+				legacyId,
+			]);
+			await store.setQuota(null, alice.id);
+			connection.release();
 		}
 	});
 	it("round-trips multipart binary data and rejects cross-user access", async () => {
