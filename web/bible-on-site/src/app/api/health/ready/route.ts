@@ -83,12 +83,17 @@ async function checkReadiness(): Promise<ReadinessResult> {
 		}
 		return { status: "ready", warmed: isWarmed, content };
 	} catch (error) {
-		// A synchronous warm throw can outrun the overlapped query: let it
-		// settle so its failure is recorded instead of silently discarded.
-		await contentReady;
-		if (contentError && contentError !== error) {
-			console.error("Concurrent content readiness failure:", contentError);
-		}
+		// A synchronous warm throw can outrun the overlapped query — or the
+		// query can outrun this failure. Report it when it settles instead of
+		// awaiting it here: the 503 must never stall behind the database.
+		void contentReady?.then(() => {
+			if (contentError && contentError !== error) {
+				console.error(
+					"Concurrent content readiness failure:",
+					contentError,
+				);
+			}
+		});
 		console.error("Readiness check failed:", error);
 		return {
 			status: "error",
