@@ -13,6 +13,9 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>
+    <!-- #3185: shares the app's endpoint parser and launch-channel constant so
+         the harness can never drift from the payload the app consumes. -->
+    <Compile Include="..\BibleOnSite\Services\FirebaseEmulatorEndpoint.cs" Link="Services\FirebaseEmulatorEndpoint.cs" />
     <None Update="testconfig.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>

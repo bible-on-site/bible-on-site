@@ -157,7 +157,7 @@ jobs:
         id: deps-key
         # package.json is hashed too: a manifest edit (e.g. an install script)
         # without a lockfile change must still rotate the node_modules key.
-        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs devops/package.json devops/bun.lock app/mobile-e2e/package.json app/mobile-e2e/bun.lock
+        run: node ${{ github.workspace }}/devops/github/ci/files-hash.mjs devops/package.json devops/bun.lock app/mobile-e2e/package.json app/mobile-e2e/bun.lock app/firebase/package.json app/firebase/bun.lock
 
       - name: Hash AVD readiness script inputs
         id: readiness-key
@@ -234,6 +234,7 @@ jobs:
           path: |
             devops/node_modules
             app/mobile-e2e/node_modules
+            app/firebase/node_modules
           key: ${{ runner.os }}-node-modules-e2e-${{ steps.deps-key.outputs.hash }}
 
       # The coverage tree baseline is published only by successful master push
@@ -280,6 +281,11 @@ jobs:
           bun install --cwd devops --frozen-lockfile
           if [ "${{ inputs.mode }}" != "release-smoke" ]; then
             bun install --cwd app/mobile-e2e --frozen-lockfile
+            # #3185: the Emulator Suite backend lives beside the harness —
+            # only the Android leg needs it, so the iOS install stays lean.
+            if [ "${{ inputs.platform }}" = "Android" ]; then
+              bun install --cwd app/firebase --frozen-lockfile
+            fi
           fi
 
       # .NET's DerivedData equivalent: obj intermediates from the last master
@@ -438,6 +444,7 @@ jobs:
           path: |
             devops/node_modules
             app/mobile-e2e/node_modules
+            app/firebase/node_modules
           key: ${{ runner.os }}-node-modules-e2e-${{ steps.deps-key.outputs.hash }}
 
       - name: Setup Java
@@ -718,6 +725,28 @@ jobs:
       # above — and waits at the simulator gate below instead.
       - name: Wait for test selection
         wait-all:
+
+      # #3185: Auth + Firestore run on the local Emulator Suite for the whole
+      # pilot — never production. The suite is disposable state, so the
+      # runner's job teardown is its cleanup; no shutdown step is needed.
+      # MOBILE_FIREBASE_EMULATOR exported here lands in every later step's
+      # process environment, reaches the harness through run.mjs, and gates
+      # the FirebaseEmulatorSyncTests scenarios (unset → they skip).
+      - name: Start Firebase Emulator Suite
+        if: inputs.platform == 'Android' && inputs.mode != 'release-smoke'
+        run: |
+          mkdir -p "$MOBILE_E2E_ARTIFACTS"
+          (bun run --cwd app/firebase emulators:start > "$MOBILE_E2E_ARTIFACTS/firebase-emulator.log" 2>&1 &)
+          for i in $(seq 1 60); do
+            if curl -s -o /dev/null http://127.0.0.1:9099/ && curl -s -o /dev/null http://127.0.0.1:8080/; then
+              echo "MOBILE_FIREBASE_EMULATOR=127.0.0.1:9099:8080" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Firebase Emulator Suite did not answer on 9099/8080 within 120s"
+          tail -60 "$MOBILE_E2E_ARTIFACTS/firebase-emulator.log"
+          exit 1
 
       - name: Run shared pilot on Android
         if: inputs.platform == 'Android' && inputs.mode != 'release-smoke'
