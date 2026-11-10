@@ -75,12 +75,16 @@ public sealed class FlyoutReaderDestinationTests(OfflineReaderFixture fixture)
         // PasukimCollection with realized PasukText rows, תיקון קוראים mode
         // shows TikkunScrollView with the rendered TikkunText flow. A single
         // wait must accept either — a bare PerekSource could still be the
-        // empty reader shell mid-load.
+        // empty reader shell mid-load. TikkunText itself surfaces as soon
+        // as the mode flips, but the drawable collapses the view to its
+        // 8-unit padding until words layout — a tall bounding box is the
+        // realized-content signal there.
         (await fixture.WaitForElementAsync(
             window => window.FindAllDescendants(fixture.CF.ByAutomationId("PasukText"))
                     .FirstOrDefault(element => !element.IsOffscreen && element.Name.Length > 0)
                 ?? window.FindAllDescendants(fixture.CF.ByAutomationId("TikkunText"))
-                    .FirstOrDefault(element => !element.IsOffscreen),
+                    .FirstOrDefault(element => !element.IsOffscreen
+                        && element.BoundingRectangle.Height > 40),
             TimeSpan.FromSeconds(60)))
             .Should().NotBeNull("pasuk content must render in whichever reader mode is active");
         CaptureScreenshot("flyout-back-on-perek-reader.png");
