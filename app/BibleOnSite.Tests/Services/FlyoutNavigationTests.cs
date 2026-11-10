@@ -282,6 +282,17 @@ public class FlyoutNavigationTests
     public static IEnumerable<object[]> ReaderRoutes =>
         AppRoutes.ReaderDivisions.Select(entry => new object[] { entry.Key, entry.Value });
 
+    [Fact]
+    public void EveryRegisteredReaderRoute_IsClassifiedInTheDivisionMap()
+    {
+        // Independent of the matrix above (which derives from the map itself):
+        // the flyout's reader rows are the contract — a registered reader
+        // route that silently drops out of ReaderDivisions must fail here.
+        AppRoutes.ReaderDivisions.Keys.Should().BeEquivalentTo(
+            [AppRoutes.Perek, AppRoutes.SearchReader, AppRoutes.CalendarReader,
+             AppRoutes.Parasha, AppRoutes.Masora]);
+    }
+
     [Theory]
     [MemberData(nameof(ReaderRoutes))]
     public void ReaderRoutes_StayClassifiedInExactlyOneDivision(string route, ReaderDivision division)
