@@ -65,7 +65,7 @@ public sealed class FlyoutReaderDestinationTests(OfflineReaderFixture fixture)
 
         var perekSource = await fixture.WaitForElementAsync(
             window => window.FindFirstDescendant(fixture.CF.ByAutomationId("PerekSource")),
-            TimeSpan.FromSeconds(30));
+            TimeSpan.FromSeconds(10));
         perekSource.Should().NotBeNull("choosing על הפרק must activate the perek reader");
         fixture.FindByAutomationId("ParashaSource").Should().BeNull(
             "the parasha reader must not stay active after choosing על הפרק");
@@ -76,10 +76,16 @@ public sealed class FlyoutReaderDestinationTests(OfflineReaderFixture fixture)
             window => window.FindAllDescendants(fixture.CF.ByAutomationId("PasukimCollection"))
                 .FirstOrDefault(element => !element.IsOffscreen), TimeSpan.FromSeconds(30)))
             .Should().NotBeNull("the perek reader must realize its pasuk list");
+        // The shared fixture may leave the reader in either display mode:
+        // list mode renders PasukText rows, תיקון קוראים mode renders the
+        // flow inside TikkunScrollView. Either proves real content arrived.
         (await fixture.WaitForElementAsync(
             window => window.FindAllDescendants(fixture.CF.ByAutomationId("PasukText"))
-                .FirstOrDefault(element => !element.IsOffscreen && element.Name.Length > 0), TimeSpan.FromSeconds(60)))
-            .Should().NotBeNull("a pasuk row must render in the perek reader");
+                    .FirstOrDefault(element => !element.IsOffscreen && element.Name.Length > 0)
+                ?? window.FindAllDescendants(fixture.CF.ByAutomationId("TikkunScrollView"))
+                    .FirstOrDefault(element => !element.IsOffscreen),
+            TimeSpan.FromSeconds(60)))
+            .Should().NotBeNull("pasuk content must render in whichever reader mode is active");
         CaptureScreenshot("flyout-back-on-perek-reader.png");
     }
 
