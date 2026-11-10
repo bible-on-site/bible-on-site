@@ -1,16 +1,26 @@
 import { type NextRequest, NextResponse } from "next/server";
 import bookPageSlugs from "@/data/book-page-slugs.json";
 import { resolveParashaSegment } from "@/data/parasha/parasha-slugs";
+import { markdownPreferred } from "@/lib/markdown/accept";
+import {
+	MARKDOWN_ROUTE_ROOT,
+	markdownTargetForPath,
+	splitMarkdownSuffix,
+} from "@/lib/markdown/paths";
 import { indexNowKey } from "@/lib/seo/indexnow";
 import {
 	pediaPathFromLegacy,
 	resolveCategoryRoute,
 } from "@/lib/tanahpedia/category-slug";
 
-const BLOCKED_BOTS =
-	/Bytespider|MJ12bot|AhrefsBot|SemrushBot|DotBot|PetalBot|BLEXBot|MegaIndex|Sogou|DataForSeoBot/i;
-
-const BOT_BLOCKING_ENABLED = process.env.BOT_BLOCKING_ENABLED !== "false";
+/**
+ * Agent-readiness policy (#3257): the public corpus is deliberately
+ * open — crawlers, agents and browsers receive identical content
+ * regardless of `User-agent` (זיכוי הרבים, not an ad business). No UA
+ * denylist lives here; the affirmative AI-use policy is published
+ * through /robots.txt Content-Signal, /llms.txt and the Markdown
+ * representation negotiated below.
+ */
 
 // Response-only handling preserves the statically rendered base readings.
 const PARASHA_VIEW_PARAMS = [
@@ -97,6 +107,21 @@ export function canonicalParashaTarget(segments: string[]): string | null {
 	return `/פרשה/${resolved.slug}`;
 }
 
+/**
+ * The `Link` headers every public page response advertises: the
+ * alternate Markdown representation of the same canonical URL and the
+ * agent guides/catalog. Appended (never `set`) so per-route Link
+ * headers survive intact.
+ */
+function discoveryLinkHeaders(contentPath: string): string[] {
+	const mdPath = `${contentPath === "/" ? "/" : contentPath}.md`;
+	return [
+		`<${mdPath}>; rel="alternate"; type="text/markdown"`,
+		`</llms.txt>; rel="help"; type="text/markdown"`,
+		`</.well-known/api-catalog>; rel="api-catalog"`,
+	];
+}
+
 export async function proxy(
 	request: NextRequest,
 ): Promise<NextResponse | undefined> {
@@ -121,34 +146,67 @@ export async function proxy(
 		});
 	}
 
-	if (BOT_BLOCKING_ENABLED) {
-		const ua = request.headers.get("user-agent") ?? "";
-		if (BLOCKED_BOTS.test(ua)) {
-			return new NextResponse("Forbidden", { status: 403 });
-		}
-	}
+	// The `.md` suffix selects the same canonical document the Accept
+	// negotiation selects — strip it BEFORE canonicalization so an alias
+	// redirect (e.g. /tanahpedia/x.md) lands on the canonical .md URL.
+	const { contentPath, isMarkdown } = splitMarkdownSuffix(pathname);
 
-	const canonicalTarget = canonicalPediaTarget(request.nextUrl);
+	// Canonicalization runs on the bare content path; a redirect carries
+	// the .md suffix forward so explicit-URL agents keep their format.
+	const canonicalUrl = new URL(request.nextUrl);
+	canonicalUrl.pathname = contentPath;
+	const canonicalTarget = canonicalPediaTarget(canonicalUrl);
 	if (canonicalTarget) {
+		// Filter params (role/kind/purity) are consumed into the canonical
+		// slug — the redirect drops the query like the legacy handler did.
 		return NextResponse.redirect(
-			new URL(canonicalTarget, request.nextUrl),
+			new URL(
+				`${canonicalTarget}${isMarkdown ? ".md" : ""}`,
+				request.nextUrl,
+			),
 			308,
 		);
 	}
 
 	let segments: string[];
 	try {
-		segments = decodeURIComponent(pathname).split("/").filter(Boolean);
+		segments = decodeURIComponent(contentPath).split("/").filter(Boolean);
 	} catch {
 		return undefined;
 	}
 	const parashaTarget = canonicalParashaTarget(segments);
 	if (parashaTarget) {
-		const destination = new URL(parashaTarget, request.nextUrl);
+		const destination = new URL(
+			`${parashaTarget}${isMarkdown ? ".md" : ""}`,
+			request.nextUrl,
+		);
 		// Reader-mode and content-selection params survive the redirect.
 		destination.search = request.nextUrl.search;
 		return NextResponse.redirect(destination, 308);
 	}
+
+	// Markdown: explicit `.md` URLs always negotiate; content-path
+	// requests negotiate only when the client prefers text/markdown.
+	// GET/HEAD only — writes/POSTs (incl. Server Actions) never take the
+	// Markdown path. The route root is internal: /md/* itself must not
+	// re-enter (targets only resolve for canonical paths anyway).
+	const isReadMethod = request.method === "GET" || request.method === "HEAD";
+	const wantsMarkdown =
+		isMarkdown ||
+		(isReadMethod && markdownPreferred(request.headers.get("accept")));
+	const markdownTarget =
+		isReadMethod && wantsMarkdown ? markdownTargetForPath(contentPath) : null;
+	if (markdownTarget && !contentPath.startsWith(MARKDOWN_ROUTE_ROOT)) {
+		const destination = new URL(
+			`${MARKDOWN_ROUTE_ROOT}${contentPath}`,
+			request.nextUrl,
+		);
+		destination.search = request.nextUrl.search;
+		// The /md handler emits its own Vary/Link headers — the rewrite
+		// must not append duplicates.
+		return NextResponse.rewrite(destination);
+	}
+
 	const isParasha = segments[0] === "פרשה" || segments[0] === "parasha";
 	const isBookChrome =
 		segments.length === 3 &&
@@ -163,6 +221,19 @@ export async function proxy(
 	) {
 		const response = NextResponse.next();
 		response.headers.set("X-Robots-Tag", "noindex, follow");
+		return response;
+	}
+
+	// Discovery headers on public read responses: the page stays HTML,
+	// but its alternate Markdown URL + the agent guides are declared.
+	// `Vary: Accept` rides only where the path actually negotiates, so
+	// cache keys fragment on the corpus surface alone.
+	if (isReadMethod && markdownTargetForPath(contentPath)) {
+		const response = NextResponse.next();
+		response.headers.append("Vary", "Accept");
+		for (const link of discoveryLinkHeaders(contentPath)) {
+			response.headers.append("Link", link);
+		}
 		return response;
 	}
 

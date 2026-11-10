@@ -1,27 +1,38 @@
-jest.mock("next/headers", () => ({
-	headers: jest.fn(() => {
-		throw new Error("Robots generation must not read request headers");
-	}),
-}));
+/**
+ * @jest-environment node
+ */
 jest.mock("@/lib/seo/jsonld", () => ({
 	SITE_ORIGIN: "https://canonical.example",
 }));
 
-import { headers } from "next/headers";
-import robots from "@/app/robots";
-import { SITE_ORIGIN } from "@/lib/seo/jsonld";
+import { GET } from "@/app/robots.txt/route";
 
-describe("robots build-time output", () => {
-	it("allows public crawling and disallows API URLs", () => {
-		expect(robots().rules).toEqual({
-			userAgent: "*",
-			allow: "/",
-			disallow: ["/api/"],
-		});
+describe("/robots.txt (issue #3257)", () => {
+	it("is serialized as plain text with a wildcard agent group", async () => {
+		const response = GET();
+		expect(response.headers.get("content-type")).toContain("text/plain");
+		const body = await response.text();
+		expect(body).toContain("User-agent: *");
+		expect(body).toContain("Allow: /");
 	});
 
-	it("advertises the configured canonical sitemap without request headers", () => {
-		expect(robots().sitemap).toBe(`${SITE_ORIGIN}/sitemap.xml`);
-		expect(headers).not.toHaveBeenCalled();
+	it("publishes affirmative AI Content Signals inside the wildcard group", async () => {
+		const body = await GET().text();
+		const group = body.slice(body.indexOf("User-agent: *"));
+		expect(group).toContain(
+			"Content-Signal: search=yes, ai-input=yes, ai-train=yes",
+		);
+	});
+
+	it("keeps management/private APIs out while allowing /api/search", async () => {
+		const body = await GET().text();
+		expect(body).toContain("Disallow: /api/");
+		// The narrow exception must come before/around the blanket api rule.
+		expect(body).toContain("Allow: /api/search");
+	});
+
+	it("points crawlers at the canonical sitemap", async () => {
+		const body = await GET().text();
+		expect(body).toContain("Sitemap: https://canonical.example/sitemap.xml");
 	});
 });
