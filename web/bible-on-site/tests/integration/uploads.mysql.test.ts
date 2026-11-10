@@ -243,6 +243,47 @@ integration("private upload MySQL/S3 integration", () => {
 			(await store.directory(alice.id, alice.username)).files,
 		).toHaveLength(0);
 	});
+	it("pages by modification time and places completed uploads on the newest page", async () => {
+		try {
+			for (let index = 0; index < 101; index++)
+				await pool.execute(
+					"INSERT INTO private_upload_file (id, user_id, filename, size_bytes, part_size, status, updated_at) VALUES (?, ?, 'pagination-seed', 0, 8388608, 'ready', '2000-01-01 00:00:00.000000')",
+					[randomUUID(), alice.id],
+				);
+			const first = await store.directory(alice.id, alice.username);
+			expect(first.files).toHaveLength(100);
+			const second = await store.directory(
+				alice.id,
+				alice.username,
+				first.nextCursor as string,
+			);
+			expect(second.files).toHaveLength(1);
+			expect(
+				new Set([...first.files, ...second.files].map((file) => file.id)).size,
+			).toBe(101);
+			const fresh = await beginUpload(alice, "newly-completed", 2);
+			await pool.execute(
+				"UPDATE private_upload_file SET updated_at = '1999-01-01 00:00:00.000000' WHERE user_id = ? AND id = ?",
+				[alice.id, fresh.id],
+			);
+			await uploadPart(
+				alice,
+				fresh.id,
+				1,
+				new Request("http://local", { method: "PUT", body: "ab" }),
+			);
+			await completeUpload(alice, fresh.id);
+			expect(
+				(await store.directory(alice.id, alice.username)).files[0].id,
+			).toBe(fresh.id);
+			await removeUpload(alice, fresh.id);
+		} finally {
+			await pool.execute(
+				"DELETE FROM private_upload_file WHERE user_id = ? AND filename = 'pagination-seed'",
+				[alice.id],
+			);
+		}
+	});
 	it("serializes parallel reservations and releases space after cancellation", async () => {
 		await store.setQuota(10);
 		const attempts = await Promise.allSettled([

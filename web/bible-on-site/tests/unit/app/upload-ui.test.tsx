@@ -19,6 +19,7 @@ let directory: {
 	username: string;
 	quota: number;
 	allocated: number;
+	nextCursor?: string | null;
 	files: { id: string; filename: string; size: number; status: string }[];
 };
 const reply = (data: unknown, ok = true) => ({ ok, json: async () => data });
@@ -271,4 +272,32 @@ it("shows durable pending deletions and lets their owner retry cleanup", async (
 	expect(screen.queryByRole("link", { name: "הורדה" })).not.toBeInTheDocument();
 	fireEvent.click(retry);
 	await screen.findByText("התיקייה עדיין ריקה. הקבצים שתעלו יופיעו כאן.");
+});
+
+it("returns to the newest page after uploading from an older page", async () => {
+	directory.nextCursor = "next";
+	await mount();
+	(fetch as jest.Mock).mockResolvedValueOnce(
+		reply({ ...directory, nextCursor: null }),
+	);
+	fireEvent.click(screen.getByRole("button", { name: "קבצים נוספים" }));
+	await waitFor(() =>
+		expect(
+			screen.getByRole("button", { name: "הקבצים הקודמים" }),
+		).toBeEnabled(),
+	);
+	choose();
+	await screen.findByRole("link", { name: "הורדה" });
+	expect(screen.getByRole("button", { name: "הקבצים הקודמים" })).toBeDisabled();
+	const reads = (fetch as jest.Mock).mock.calls.filter(
+		([, options]) => !options?.method,
+	);
+	expect(reads[reads.length - 1][0]).toBe("/upload/api");
+});
+it("keeps the current page available when a page request fails", async () => {
+	directory.nextCursor = "next";
+	await mount();
+	(fetch as jest.Mock).mockRejectedValueOnce(new Error("page failed"));
+	fireEvent.click(screen.getByRole("button", { name: "קבצים נוספים" }));
+	expect(await screen.findByRole("alert")).toHaveTextContent("page failed");
 });

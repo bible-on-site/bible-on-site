@@ -78,6 +78,7 @@ export interface UploadFile {
 	uploadId: string | null;
 	status: "initializing" | "uploading" | "ready" | "deleting";
 	createdAt: string;
+	updatedAt: string;
 }
 
 export interface Directory {

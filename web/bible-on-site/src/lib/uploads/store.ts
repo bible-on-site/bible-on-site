@@ -29,7 +29,9 @@ function sql(connection: Pick<mysql.Pool, "execute">): Sql {
 }
 
 export const uploadStore = new UploadStore({
+	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- only parameterized repository UploadStore statements reach this adapter.
 	query: (statement, params) => sql(uploadPool()).query(statement, params),
+	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- only parameterized repository UploadStore statements reach this adapter.
 	execute: (statement, params) => sql(uploadPool()).execute(statement, params),
 	transaction: async (fn) => {
 		const connection = await uploadPool().getConnection();

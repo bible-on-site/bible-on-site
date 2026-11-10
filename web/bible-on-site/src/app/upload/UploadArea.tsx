@@ -54,16 +54,34 @@ export function UploadArea() {
 	} | null>(null);
 	const cancel = useRef(false);
 	const request = useRef<AbortController | null>(null);
-	const refresh = useCallback(async () => {
-		setDirectory(await api(undefined, cursor));
-	}, [cursor]);
+	const listingRequest = useRef(0);
+	const load = useCallback(async (after: string) => {
+		const generation = ++listingRequest.current;
+		const result = await api(undefined, after);
+		if (generation === listingRequest.current) setDirectory(result);
+	}, []);
+	const refresh = useCallback(() => load(cursor), [load, cursor]);
 	useEffect(() => {
-		void refresh().catch((e: Error) => setError(e.message));
+		void load("").catch((e: Error) => setError(e.message));
 		return () => {
 			cancel.current = true;
 			request.current?.abort();
 		};
-	}, [refresh]);
+	}, [load]);
+
+	async function showPage(after: string, previous: string[]) {
+		setBusy(true);
+		setError("");
+		try {
+			await load(after);
+			setCursor(after);
+			setHistory(previous);
+		} catch (e) {
+			setError((e as Error).message);
+		} finally {
+			setBusy(false);
+		}
+	}
 
 	async function upload(files: FileList | null) {
 		if (!files?.length) return;
@@ -87,14 +105,15 @@ export function UploadArea() {
 					) {
 						if (cancel.current) throw new Error("ההעלאה בוטלה");
 						request.current = new AbortController();
-						const response = await fetch(
-							`/upload/api?id=${started.id}&part=${part}`,
-							{
-								method: "PUT",
-								body: file.slice(offset, offset + started.partSize),
-								signal: request.current.signal,
+						const response = await fetch("/upload/api", {
+							method: "PUT",
+							headers: {
+								"X-Upload-Id": started.id,
+								"X-Upload-Part": String(part),
 							},
-						);
+							body: file.slice(offset, offset + started.partSize),
+							signal: request.current.signal,
+						});
 						if (!response.ok) throw new Error((await response.json()).error);
 						setProgress({
 							filename: file.name,
@@ -117,8 +136,15 @@ export function UploadArea() {
 		} finally {
 			request.current = null;
 			setProgress(null);
-			setBusy(false);
-			await refresh().catch((e: Error) => setError(e.message));
+			try {
+				await load("");
+				setCursor("");
+				setHistory([]);
+			} catch (e) {
+				setError((e as Error).message);
+			} finally {
+				setBusy(false);
+			}
 		}
 	}
 
@@ -286,8 +312,10 @@ export function UploadArea() {
 									type="button"
 									disabled={busy || history.length === 0}
 									onClick={() => {
-										setCursor(history[history.length - 1]);
-										setHistory(history.slice(0, -1));
+										void showPage(
+											history[history.length - 1],
+											history.slice(0, -1),
+										);
 									}}
 								>
 									הקבצים הקודמים
@@ -297,8 +325,7 @@ export function UploadArea() {
 									disabled={busy || !directory.nextCursor}
 									onClick={() => {
 										if (directory.nextCursor) {
-											setHistory([...history, cursor]);
-											setCursor(directory.nextCursor);
+											void showPage(directory.nextCursor, [...history, cursor]);
 										}
 									}}
 								>

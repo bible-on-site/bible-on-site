@@ -32,6 +32,8 @@ commit fails, the row remains pending deletion, cannot be downloaded and can be
 cleaned up safely by retrying. Upload transitions use a separate pool of three
 database connections, leaving the public-page pool available. Directory pages
 contain at most 100 files and use an account-scoped cursor to fetch more.
+The cursor includes the last-modified timestamp and ID. Completing a file moves
+it to the newest page, and successful uploads return the browser to that page.
 
 OAuth uses authorization code + PKCE and a short-lived, HttpOnly state cookie.
 Access and refresh tokens are HttpOnly, scoped to `/upload`, and Secure in

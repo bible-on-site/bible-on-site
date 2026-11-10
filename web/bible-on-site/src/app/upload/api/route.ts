@@ -92,8 +92,10 @@ async function handle(request: Request) {
 		if (request.method === "PUT") {
 			await uploadPart(
 				user,
-				url.searchParams.get("id") || "",
-				Number(url.searchParams.get("part")),
+				request.headers.get("X-Upload-Id") || url.searchParams.get("id") || "",
+				Number(
+					request.headers.get("X-Upload-Part") || url.searchParams.get("part"),
+				),
 				request,
 			);
 			return Response.json({ ok: true }, { headers: privateHeaders });

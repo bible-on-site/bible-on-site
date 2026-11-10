@@ -17,6 +17,29 @@ interface Account {
 	quota: number | null;
 }
 
+function directoryCursor(after: string) {
+	if (!after)
+		return {
+			time: "9999-12-31 23:59:59.999999",
+			id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+		};
+	const time = after.slice(0, 26);
+	const id = after.slice(27);
+	if (after.length !== 63 || after[26] !== "|" || !isUploadId(id))
+		throw new UploadError("מיקום תיקייה אינו תקין");
+	const date = new Date(`${time.slice(0, 10)}T${time.slice(11, 23)}Z`);
+	if (
+		!Number.isFinite(date.valueOf()) ||
+		date.toISOString().slice(0, 23).replace("T", " ") !== time.slice(0, 23)
+	)
+		throw new UploadError("מיקום תיקייה אינו תקין");
+	for (let index = 23; index < 26; index++) {
+		const code = time.charCodeAt(index);
+		if (code < 48 || code > 57) throw new UploadError("מיקום תיקייה אינו תקין");
+	}
+	return { time, id };
+}
+
 export class UploadStore {
 	constructor(private db: UploadDatabase) {}
 
@@ -56,12 +79,11 @@ export class UploadStore {
 		username: string,
 		after = "",
 	): Promise<Directory> {
-		if (after && !isUploadId(after))
-			throw new UploadError("מיקום תיקייה אינו תקין");
+		const cursor = directoryCursor(after);
 		return this.locked(userId, username, async (tx, quota, allocated) => {
 			const files = await tx.query<UploadFile>(
-				"SELECT id, filename, size_bytes AS size, part_size AS partSize, status, CAST(created_at AS CHAR) AS createdAt FROM private_upload_file WHERE user_id = ? AND id > ? ORDER BY id LIMIT 101",
-				[userId, after],
+				"SELECT id, filename, size_bytes AS size, part_size AS partSize, status, CAST(created_at AS CHAR) AS createdAt, DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s.%f') AS updatedAt FROM private_upload_file WHERE user_id = ? AND (updated_at < ? OR (updated_at = ? AND id < ?)) ORDER BY updated_at DESC, id DESC LIMIT 101",
+				[userId, cursor.time, cursor.time, cursor.id],
 			);
 			const displayed: Directory["files"] = [];
 			for (let index = 0; index < 100; index++) {
@@ -74,7 +96,10 @@ export class UploadStore {
 				quota,
 				allocated,
 				files: displayed,
-				nextCursor: files.length > 100 ? displayed[99].id : null,
+				nextCursor:
+					files.length > 100
+						? `${displayed[99].updatedAt}|${displayed[99].id}`
+						: null,
 			};
 		});
 	}
@@ -82,7 +107,7 @@ export class UploadStore {
 	async file(tx: Sql, userId: string, id: string): Promise<UploadFile> {
 		if (!isUploadId(id)) throw new UploadError("הקובץ לא נמצא", 404);
 		const [file] = await tx.query<UploadFile>(
-			"SELECT id, filename, size_bytes AS size, part_size AS partSize, upload_id AS uploadId, status, CAST(created_at AS CHAR) AS createdAt FROM private_upload_file WHERE user_id = ? AND id = ? FOR UPDATE",
+			"SELECT id, filename, size_bytes AS size, part_size AS partSize, upload_id AS uploadId, status, CAST(created_at AS CHAR) AS createdAt, CAST(updated_at AS CHAR) AS updatedAt FROM private_upload_file WHERE user_id = ? AND id = ? FOR UPDATE",
 			[userId, id],
 		);
 		if (!file) throw new UploadError("הקובץ לא נמצא", 404);
