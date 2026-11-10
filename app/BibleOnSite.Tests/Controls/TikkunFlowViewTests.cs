@@ -265,8 +265,8 @@ public class TikkunFlowViewTests
         canvas.Setup(c => c.DrawString(It.IsAny<string>(), It.IsAny<float>(), It.IsAny<float>(),
                 It.IsAny<float>(), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
                 It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>(), It.IsAny<float>()))
-            .Callback((string text, float x, float y, float _, float _2,
-                HorizontalAlignment _, VerticalAlignment _, TextFlow _, float _3) => drawn.Add((text, x, y)));
+            .Callback((string text, float x, float y, float _, float _,
+                HorizontalAlignment _, VerticalAlignment _, TextFlow _, float _) => drawn.Add((text, x, y)));
         return drawn;
     }
 
