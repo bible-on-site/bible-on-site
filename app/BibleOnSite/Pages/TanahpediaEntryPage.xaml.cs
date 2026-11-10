@@ -31,6 +31,9 @@ public partial class TanahpediaEntryPage : ContentPage
         BindingContext = _viewModel;
         SetupFontSizeResources();
         EntryHtml.LinkTapped += OnEntryLinkTapped;
+        // The in-place person trail is a page-owned Back surface: it keeps
+        // the capsule Back enabled even at root stack depth (#2467).
+        TopBar.BackStateProvider = () => _viewModel.HasEntryHistory;
         // Person hops rebind this page in place - return to the top of the
         // destination entry instead of keeping the scrolled family section.
         _viewModel.PropertyChanged += (_, e) =>
@@ -38,6 +41,10 @@ public partial class TanahpediaEntryPage : ContentPage
             if (e.PropertyName == nameof(TanahpediaEntryViewModel.UniqueName))
             {
                 MainThread.BeginInvokeOnMainThread(() => EntryScroll.ScrollToAsync(0, 0, false));
+            }
+            else if (e.PropertyName == nameof(TanahpediaEntryViewModel.HasEntryHistory))
+            {
+                MainThread.BeginInvokeOnMainThread(() => TopBar.RefreshBackState());
             }
         };
     }
@@ -57,6 +64,53 @@ public partial class TanahpediaEntryPage : ContentPage
     {
         Resources["TanahpediaFontSize"] = factor * 16;
         EntryHtml.SetDynamicResource(HtmlView.FontSizeProperty, "TanahpediaFontSize");
+    }
+
+    /// <summary>
+    /// Maps the scroll offset onto the entry body (issue #2607): the anchor
+    /// sweeps the measured HtmlView extent, so the title, map and family
+    /// tree above and the occurrence rows below stay off the counted axis.
+    /// Fresh extents each scroll keep font-size and late-layout changes
+    /// honest.
+    /// </summary>
+    private void OnEntryScrolled(object? sender, ScrolledEventArgs e) =>
+        RefreshReadingProgress(e.ScrollY);
+
+    /// <summary>
+    /// Font-size changes and relayouts of the chrome above the body shift
+    /// the counted extent without scrolling — re-measure at the current
+    /// offset so the bar stays honest (issue #2607).
+    /// </summary>
+    private void OnEntryContentSizeChanged(object? sender, EventArgs e) =>
+        RefreshReadingProgress(EntryScroll.ScrollY);
+
+    private void RefreshReadingProgress(double scrollY)
+    {
+        if (!_viewModel.HasReadingProgress || EntryHtml.Height < 0)
+        {
+            // No stored units — or the body has not measured yet and any
+            // extent read off it would be fabricated (issue #2607).
+            return;
+        }
+        var top = ContentYOffset(EntryHtml);
+        _viewModel.UpdateReadingProgress(
+            scrollY,
+            EntryScroll.Height,
+            EntryScroll.ContentSize.Height,
+            [(top, top + EntryHtml.Height)]);
+    }
+
+    /// <summary>Accumulated Y of an element within the ScrollView's content.</summary>
+    private double ContentYOffset(VisualElement element)
+    {
+        double y = 0;
+        VisualElement? current = element;
+        while (current != null && !ReferenceEquals(current, EntryScroll.Content))
+        {
+            y += current.Y;
+            current = current.Parent as VisualElement;
+        }
+        return y;
     }
 
     /// <summary>
@@ -89,6 +143,7 @@ public partial class TanahpediaEntryPage : ContentPage
     /// <summary>
     /// Links inside the entry body: <c>/pedia/{slug}</c> routes in-app through
     /// the entry route (synonyms and ambiguous names resolve on that page);
+    /// <c>/929/...</c> links ride the app-link channel into the reader (#1227);
     /// everything else opens in the external browser.
     /// </summary>
     private async void OnEntryLinkTapped(object? sender, LinkTappedEventArgs e)
@@ -102,10 +157,7 @@ public partial class TanahpediaEntryPage : ContentPage
                 return;
             }
 
-            if (Uri.TryCreate(e.Url, UriKind.Absolute, out var uri))
-            {
-                await Launcher.OpenAsync(uri);
-            }
+            await AppLinkHelper.FollowHtmlLinkAsync(e.Url, Launcher.Default, ShellAppNavigator.Instance);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: link navigation/launcher failure must not crash the page
         catch (Exception ex) //NOSONAR — link navigation/launcher failure must not crash the page.
@@ -132,7 +184,7 @@ public partial class TanahpediaEntryPage : ContentPage
         {
             var pasuk = new Pasuk { PasukNum = item.PasukNumber, Text = item.VerseText };
             var result = new PasukSearchResult(pasuk, item.PerekId, string.Empty);
-            await Shell.Current.GoToAsync(AppRoutes.SearchReader, false, new ShellNavigationQueryParameters
+            await ShellAppNavigator.Instance.GoToAsync(AppRoutes.SearchReader, false, new ShellNavigationQueryParameters
             {
                 ["searchResult"] = result
             });
@@ -159,7 +211,7 @@ public partial class TanahpediaEntryPage : ContentPage
             try
             {
                 var location = shell.CurrentState.Location.OriginalString;
-                await shell.GoToAsync(AppRoutes.FlyoutPage("TanahpediaPage", location));
+                await ShellAppNavigator.Instance.GoToAsync(AppRoutes.FlyoutPage(AppRoutes.Tanahpedia, location));
             }
             #pragma warning disable S2221 // Deliberate failure boundary: back navigation failure alerts the user
             catch (Exception ex) //NOSONAR — back navigation failure alerts the user.

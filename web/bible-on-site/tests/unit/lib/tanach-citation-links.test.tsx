@@ -4,7 +4,6 @@
 import { render, screen } from "@testing-library/react";
 import {
 	build929PerushHref,
-	hasTanachRef,
 	renderCitationWithTanachLinks,
 	renderFamilyTreeCitationLine,
 } from "@/lib/tanahpedia/tanach-citation-links";
@@ -19,18 +18,6 @@ jest.mock("next/link", () => ({
 		href: string;
 	}) => <a href={href}>{children}</a>,
 }));
-
-describe("hasTanachRef", () => {
-	it.each([
-		["בראשית א א", true],
-		["ראו שמואל א ג ד", true],
-		["בראשית תתקצט א", false],
-		["משנה אבות א", false],
-		["", false],
-	])("recognizes resolvable scripture citations in %s", (text, expected) => {
-		expect(hasTanachRef(text)).toBe(expected);
-	});
-});
 
 describe("renderCitationWithTanachLinks", () => {
 	it("links sefer and perek without pasuk to /929/{perekId}", () => {

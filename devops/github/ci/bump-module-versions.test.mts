@@ -10,6 +10,17 @@ import {
 } from "./bump-module-versions.ts";
 
 describe("modulesToBump", () => {
+	it("a successful explicit service recovery bumps only its released/collided services", () => {
+		const needs: ReleaseNeeds = {
+			release_website: { result: "skipped", outputs: {} },
+			release_api: { result: "skipped", outputs: {} },
+			release_app: { result: "skipped", outputs: {} },
+			release_admin: { result: "success", outputs: { released: "true" } },
+			release_bulletin: { result: "success", outputs: { needs_bump: "true" } },
+		};
+		assert.deepEqual(modulesToBump(needs, "released"), ["admin"]);
+		assert.deepEqual(modulesToBump(needs, "retry"), ["bulletin"]);
+	});
 	it("ignores outputs from a failed release/dispatch", () => {
 		const needs: ReleaseNeeds = {
 			release_website: {
@@ -108,19 +119,31 @@ describe("rewriteCargoVersions", () => {
 });
 
 describe("rewriteAppVersions", () => {
-	it("keeps platform build numbers aligned with the display version", () => {
-		const csproj = [
-			"<ApplicationDisplayVersion>5.0.111</ApplicationDisplayVersion>",
-			`<ApplicationVersion Condition="$(X) == 'android'">50000111</ApplicationVersion>`,
-			`<ApplicationVersion Condition="$(X) != 'android'">111</ApplicationVersion>`,
+	const csproj = (display: string, shared: number, windows: number) =>
+		[
+			`<ApplicationDisplayVersion>${display}</ApplicationDisplayVersion>`,
+			`<ApplicationVersion Condition="$(X) != 'windows'">${shared}</ApplicationVersion>`,
+			`<ApplicationVersion Condition="$(X) == 'windows'">${windows}</ApplicationVersion>`,
 		].join("\n");
+
+	it("keeps platform build numbers aligned with the display version", () => {
 		assert.equal(
-			rewriteAppVersions(csproj, "5.1.112"),
-			[
-				"<ApplicationDisplayVersion>5.1.112</ApplicationDisplayVersion>",
-				`<ApplicationVersion Condition="$(X) == 'android'">50100112</ApplicationVersion>`,
-				`<ApplicationVersion Condition="$(X) != 'android'">112</ApplicationVersion>`,
-			].join("\n"),
+			rewriteAppVersions(csproj("5.0.111", 50000111, 0), "5.1.112"),
+			csproj("5.1.112", 50100112, 0),
+		);
+	});
+
+	it("advances the shared build number when a minor bump resets the patch", () => {
+		assert.equal(
+			rewriteAppVersions(csproj("5.0.224", 50000224, 0), "5.1.0"),
+			csproj("5.1.0", 50100000, 0),
+		);
+	});
+
+	it("advances the shared build number on the first patch after a minor bump", () => {
+		assert.equal(
+			rewriteAppVersions(csproj("5.1.0", 50100000, 0), "5.1.1"),
+			csproj("5.1.1", 50100001, 0),
 		);
 	});
 });

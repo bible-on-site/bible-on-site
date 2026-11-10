@@ -83,14 +83,6 @@ public partial class TanahpediaEntityTypePage : ContentPage
         }
     }
 
-    private void OnMenuButtonClicked(object sender, EventArgs e)
-    {
-        if (Shell.Current is AppShell shell)
-        {
-            shell.FlyoutIsPresented = true;
-        }
-    }
-
     private async void OnSearchTitleClicked(object sender, EventArgs e) //NOSONAR
     {
         await TanahpediaSearch.OpenAsync();
@@ -108,6 +100,7 @@ public partial class TanahpediaEntityTypePage : ContentPage
 
     /// <summary>
     /// Links inside the intro content: <c>/pedia/{slug}</c> routes in-app;
+    /// <c>/929/...</c> links ride the app-link channel into the reader (#1227);
     /// everything else opens in the external browser.
     /// </summary>
     private async void OnIntroLinkTapped(object? sender, Controls.LinkTappedEventArgs e)
@@ -121,10 +114,7 @@ public partial class TanahpediaEntityTypePage : ContentPage
                 return;
             }
 
-            if (Uri.TryCreate(e.Url, UriKind.Absolute, out var uri))
-            {
-                await Launcher.OpenAsync(uri);
-            }
+            await AppLinkHelper.FollowHtmlLinkAsync(e.Url, Launcher.Default, ShellAppNavigator.Instance);
         }
         #pragma warning disable S2221 // Deliberate failure boundary: link navigation/launcher failure must not crash the page
         catch (Exception ex) //NOSONAR — link navigation/launcher failure must not crash the page.

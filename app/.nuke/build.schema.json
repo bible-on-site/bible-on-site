@@ -45,7 +45,9 @@
         "Lint",
         "ListMobileE2E",
         "Package",
+        "PackageAndroidSymbols",
         "PackagePrepare",
+        "PackageWindowsExtensionPacks",
         "PrepareAndroidRecitation",
         "PrepareApiConfig",
         "PrepareIosRecitation",
@@ -67,6 +69,7 @@
         "TestMobileE2E",
         "TestMobileE2EUnit",
         "TestUnit",
+        "VerifyAndroidSymbols",
         "Version"
       ]
     },
@@ -160,6 +163,10 @@
         "AndroidKeystorePassword": {
           "type": "string",
           "description": "Android keystore password"
+        },
+        "AndroidSymbolsPath": {
+          "type": "string",
+          "description": "Path to native debug symbols zip for Google Play upload"
         },
         "ApiEnv": {
           "type": "string",

@@ -1,13 +1,15 @@
 import { createServerFn } from "@tanstack/react-start";
 import type mysql from "mysql2/promise";
 import {
-	assertCoveringSourcesExist,
 	type CoveringSource,
 	isCoveringSourceSchemaMissing,
 	normalizeCoveringSources,
+} from "./covering-sources";
+import {
+	assertCoveringSourcesExist,
 	replaceCoveringSources,
 	updateCoverageVerified,
-} from "./covering-sources";
+} from "./covering-sources-store.server";
 import {
 	execute,
 	query,
@@ -17,10 +19,24 @@ import {
 	txQuery,
 	txQueryOne,
 } from "./db";
+import {
+	assertHebrewDateArticleEligible,
+	assertHebrewDatesAvailable,
+	type HebrewDateAssignment,
+	invalidateUnsentBulletinsForHebrewDates,
+	isHebrewDateSchemaMissing,
+	normalizeHebrewDates,
+	replaceHebrewDates,
+} from "./hebrew-dates";
+import {
+	loadArticleMoedIds,
+	txReplaceArticleMoadim,
+} from "./moadim-links.server";
 import { recomputeArticleMetrics } from "./reading-metrics";
 import {
-	articleInvalidation,
-	articlePath,
+	articleChange,
+	mergeCoveringSpans,
+	moedChange,
 	revalidateWebsite,
 } from "./website-revalidate";
 
@@ -88,10 +104,22 @@ export interface Article {
 	 */
 	coveringSources?: CoveringSource[];
 	/**
+	 * The article's recurring Hebrew-date assignments (#3098), ordered by
+	 * month/day. `undefined` means the Hebrew-date schema is not deployed —
+	 * never "the article has no dates"; an explicitly empty array means no
+	 * assignments.
+	 */
+	hebrewDates?: HebrewDateAssignment[];
+	/**
 	 * Number of covering-source rows, populated by the list queries for
 	 * review badges; `undefined` when the schema is not deployed.
 	 */
 	covering_count?: number;
+	/**
+	 * The moadim explicitly linked to this article (#3101). `undefined`
+	 * means the moed schema is not deployed — never "linked to nothing".
+	 */
+	moedIds?: number[];
 	content?: string | null;
 	author_name?: string; // Populated when joined with authors table
 }
@@ -116,6 +144,21 @@ export interface ArticleFormData {
 	 */
 	coveringSources?: CoveringSource[];
 	coverageVerified?: boolean;
+	/**
+	 * Hebrew-date assignment semantics (#3098):
+	 * - omitted: the article's date assignments are left untouched.
+	 * - array (including []): atomically replaces the persisted set after
+	 *   shape/calendar/conflict validation; at most one article may hold a
+	 *   given recurring date.
+	 */
+	hebrewDates?: HebrewDateAssignment[];
+	/**
+	 * Article↔moed link semantics (#3101): omitted preserves the stored
+	 * link set; a supplied array (including []) atomically replaces it
+	 * after id validation — the shared relationship contract's `replace`
+	 * semantics for the `moadim` entry.
+	 */
+	moedIds?: number[];
 }
 
 const ARTICLE_COLUMNS =
@@ -125,8 +168,9 @@ const ARTICLE_COVERAGE_COLUMNS_JOINED =
 	"a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority, a.distributable, a.coverage_verified";
 const ARTICLE_COLUMNS_JOINED =
 	"a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority, a.distributable";
-const ARTICLE_COVERING_COUNT_SQL =
-	"(SELECT COUNT(*) FROM tanah_article_covering_source cs WHERE cs.article_id = a.id) AS covering_count";
+const ARTICLE_COVERING_COUNT_SQL = "COUNT(cs.article_id) AS covering_count";
+const ARTICLE_COVERING_COUNT_JOIN =
+	"LEFT JOIN tanah_article_covering_source cs ON cs.article_id = a.id";
 
 type ArticleRow = Omit<Article, "coveringSources">;
 
@@ -169,6 +213,42 @@ async function txLoadCoveringSources(
 	}
 }
 
+/**
+ * Loads the article's Hebrew-date assignments (#3098). Returns undefined when
+ * the Hebrew-date table is not deployed — distinct from an explicitly empty
+ * set — so save round-trips omit the field instead of wiping.
+ */
+async function loadHebrewDates(
+	articleId: number,
+): Promise<HebrewDateAssignment[] | undefined> {
+	try {
+		return await query<HebrewDateAssignment>(
+			"SELECT hebrew_month, hebrew_day FROM tanah_article_hebrew_date WHERE article_id = ? ORDER BY hebrew_month, hebrew_day",
+			[articleId],
+		);
+	} catch (error) {
+		if (!isHebrewDateSchemaMissing(error)) throw error;
+		return undefined;
+	}
+}
+
+/** Loads Hebrew-date assignments inside a save transaction; see loadHebrewDates. */
+async function txLoadHebrewDates(
+	conn: mysql.PoolConnection,
+	articleId: number,
+): Promise<HebrewDateAssignment[] | undefined> {
+	try {
+		return await txQuery<HebrewDateAssignment>(
+			conn,
+			"SELECT hebrew_month, hebrew_day FROM tanah_article_hebrew_date WHERE article_id = ? ORDER BY hebrew_month, hebrew_day",
+			[articleId],
+		);
+	} catch (error) {
+		if (!isHebrewDateSchemaMissing(error)) throw error;
+		return undefined;
+	}
+}
+
 type ArticleQueryOne = (
 	sql: string,
 	params?: unknown[],
@@ -204,7 +284,7 @@ export const getArticles = createServerFn({ method: "GET" }).handler(
 	async () => {
 		try {
 			return await query<ArticleRow>(
-				`SELECT ${ARTICLE_COVERAGE_COLUMNS_JOINED}, ${ARTICLE_COVERING_COUNT_SQL} FROM tanah_article a ORDER BY a.perek_id, a.priority`,
+				`SELECT ${ARTICLE_COVERAGE_COLUMNS_JOINED}, ${ARTICLE_COVERING_COUNT_SQL} FROM tanah_article a ${ARTICLE_COVERING_COUNT_JOIN} GROUP BY a.id ORDER BY a.perek_id, a.priority`,
 			);
 		} catch (error) {
 			if (!isCoveringSourceSchemaMissing(error)) throw error;
@@ -225,7 +305,9 @@ export const getArticlesByPerek = createServerFn({ method: "GET" })
 				`SELECT ${ARTICLE_COVERAGE_COLUMNS_JOINED}, au.name as author_name, ${ARTICLE_COVERING_COUNT_SQL}
 				 FROM tanah_article a
 				 LEFT JOIN tanah_author au ON a.author_id = au.id
-				 WHERE a.perek_id = ? ORDER BY a.priority`,
+				 ${ARTICLE_COVERING_COUNT_JOIN}
+				 WHERE a.perek_id = ?
+				 GROUP BY a.id ORDER BY a.priority`,
 				[perekId],
 			);
 		} catch (error) {
@@ -250,7 +332,12 @@ export const getArticle = createServerFn({ method: "GET" })
 			throw new Error("Article not found");
 		}
 
-		return { ...article, coveringSources: await loadCoveringSources(id) };
+		return {
+			...article,
+			coveringSources: await loadCoveringSources(id),
+			hebrewDates: await loadHebrewDates(id),
+			moedIds: await loadArticleMoedIds(id),
+		};
 	});
 
 // Create article
@@ -265,8 +352,13 @@ export const createArticle = createServerFn({ method: "POST" })
 			data.coveringSources === undefined
 				? undefined
 				: normalizeCoveringSources(data.coveringSources);
+		const hebrewRows =
+			data.hebrewDates === undefined
+				? undefined
+				: normalizeHebrewDates(data.hebrewDates);
 
 		await ensureArticleSearchQueue();
+		const affectedMoadim: { id: number; slug: string }[] = [];
 		const created = await transaction(async (conn) => {
 			if (coveringRows !== undefined) {
 				await assertCoveringSourcesExist(conn, coveringRows);
@@ -299,6 +391,20 @@ export const createArticle = createServerFn({ method: "POST" })
 					data.coverageVerified,
 				);
 			}
+			if (hebrewRows !== undefined) {
+				await assertHebrewDatesAvailable(conn, result.insertId, hebrewRows);
+				await replaceHebrewDates(conn, result.insertId, hebrewRows);
+			}
+
+			if (data.moedIds !== undefined) {
+				affectedMoadim.push(
+					...((await txReplaceArticleMoadim(
+						conn,
+						result.insertId,
+						data.moedIds,
+					)) ?? []),
+				);
+			}
 
 			const newArticle = await queryArticleRow(
 				(sql, params) => txQueryOne<ArticleRow>(conn, sql, params),
@@ -310,20 +416,51 @@ export const createArticle = createServerFn({ method: "POST" })
 			}
 			// Same-transaction reading metrics (#2607): the stored decoration
 			// commits atomically with the content it describes.
-			await recomputeArticleMetrics(conn, newArticle.id, newArticle.content ?? null);
+			await recomputeArticleMetrics(
+				conn,
+				newArticle.id,
+				newArticle.content ?? null,
+			);
 			// Same-transaction enqueue: the index update request commits atomically
 			// with the article row.
 			await txExecute(conn, ENQUEUE_SEARCH_SQL, [newArticle.id]);
+			const hebrewDates = await txLoadHebrewDates(conn, newArticle.id);
+			// Post-write eligibility (#3098): an article left holding recurring
+			// dates must stay distributable with a body — the bulletin treats
+			// an ineligible owner as broken data. Runs inside the transaction
+			// whose write already locks the row, so a violation rolls back.
+			assertHebrewDateArticleEligible(
+				{
+					id: newArticle.id,
+					name: data.name,
+					distributable: data.distributable === true,
+					content: data.content,
+				},
+				hebrewDates,
+			);
 			return {
 				...newArticle,
 				coveringSources: await txLoadCoveringSources(conn, newArticle.id),
+				hebrewDates,
 			};
 		});
 		// Post-commit: expire the website's article caches so the new article
 		// becomes public without a redeploy (see server/website-revalidate.ts).
-		await revalidateWebsite(
-			articleInvalidation(articlePath(created.perek_id, created.id)),
-		);
+		await revalidateWebsite([
+			articleChange({
+				id: created.id,
+				perekIds: [created.perek_id],
+				authorIds: [created.author_id],
+			}),
+			// One moed change per explicitly-linked moed — those detail pages
+			// now list the new article in their union result.
+			...affectedMoadim.map((moed) =>
+				moedChange({ id: moed.id, slug: moed.slug }),
+			),
+		]);
+		if (hebrewRows !== undefined) {
+			await invalidateUnsentBulletinsForHebrewDates(hebrewRows);
+		}
 		return created;
 	});
 
@@ -338,21 +475,38 @@ export const updateArticle = createServerFn({ method: "POST" })
 			data.coveringSources === undefined
 				? undefined
 				: normalizeCoveringSources(data.coveringSources);
+		const hebrewRows =
+			data.hebrewDates === undefined
+				? undefined
+				: normalizeHebrewDates(data.hebrewDates);
 
 		await ensureArticleSearchQueue();
 		let previousPerekId: number | null = null;
+		let previousAuthorId: number | null = null;
+		// The covering rows destroyed by a replace — the website unions them
+		// with the live rows to expire every touched reading unit.
+		let previousCovering: CoveringSource[] = [];
+		// The Hebrew dates destroyed by a replace — unsent prepared bulletins
+		// for either side must regenerate post-commit (#3098).
+		let previousHebrewDates: HebrewDateAssignment[] = [];
+		const affectedMoadim: { id: number; slug: string }[] = [];
 		const updatedArticle = await transaction(async (conn) => {
 			if (coveringRows !== undefined) {
 				await assertCoveringSourcesExist(conn, coveringRows);
 			}
-			// A perek move changes which chapter page lists the article — the
-			// old chapter/article URL must be notified too.
-			const prev = await txQueryOne<{ perek_id: number }>(
-				conn,
-				"SELECT perek_id FROM tanah_article WHERE id = ?",
-				[data.id],
-			);
+			// A perek/author move changes which surfaces list the article —
+			// the old associations are unresolvable after the commit.
+			const prev = await txQueryOne<{
+				perek_id: number;
+				author_id: number;
+			}>(conn, "SELECT perek_id, author_id FROM tanah_article WHERE id = ?", [
+				data.id,
+			]);
 			previousPerekId = prev?.perek_id ?? null;
+			previousAuthorId = prev?.author_id ?? null;
+			// Captured unconditionally: a coverage replace OR a verified→false
+			// flip both destroy the previously-effective coverage surfaces.
+			previousCovering = (await txLoadCoveringSources(conn, data.id)) ?? [];
 			await txExecute(
 				conn,
 				"UPDATE tanah_article SET perek_id = ?, author_id = ?, abstract = ?, name = ?, priority = ?, distributable = ?, content = ? WHERE id = ?",
@@ -378,6 +532,18 @@ export const updateArticle = createServerFn({ method: "POST" })
 			} else if (data.coverageVerified !== undefined) {
 				await updateCoverageVerified(conn, data.id, data.coverageVerified);
 			}
+			if (hebrewRows !== undefined) {
+				previousHebrewDates = (await txLoadHebrewDates(conn, data.id)) ?? [];
+				await assertHebrewDatesAvailable(conn, data.id, hebrewRows);
+				await replaceHebrewDates(conn, data.id, hebrewRows);
+			}
+
+			if (data.moedIds !== undefined) {
+				affectedMoadim.push(
+					...((await txReplaceArticleMoadim(conn, data.id, data.moedIds)) ??
+						[]),
+				);
+			}
 
 			const updated = await queryArticleRow(
 				(sql, params) => txQueryOne<ArticleRow>(conn, sql, params),
@@ -389,20 +555,54 @@ export const updateArticle = createServerFn({ method: "POST" })
 			}
 			await recomputeArticleMetrics(conn, updated.id, updated.content ?? null);
 			await txExecute(conn, ENQUEUE_SEARCH_SQL, [data.id]);
+			const hebrewDates = await txLoadHebrewDates(conn, data.id);
+			// Post-write eligibility (#3098): whether the assignments were just
+			// replaced or pre-existed, an article left holding recurring dates
+			// must stay distributable with a body — the bulletin treats an
+			// ineligible owner as broken data. Runs inside the transaction
+			// whose write already locks the row, so a violation rolls back.
+			assertHebrewDateArticleEligible(
+				{
+					id: data.id,
+					name: data.name,
+					distributable: data.distributable === true,
+					content: data.content,
+				},
+				hebrewDates,
+			);
 			return {
 				...updated,
 				coveringSources: await txLoadCoveringSources(conn, data.id),
+				hebrewDates,
 			};
 		});
-		const urls = [articlePath(updatedArticle.perek_id, updatedArticle.id)];
-		// A perek move leaves the old chapter URL stale — notify it too.
-		if (
-			previousPerekId !== null &&
-			previousPerekId !== updatedArticle.perek_id
-		) {
-			urls.push(articlePath(previousPerekId, updatedArticle.id));
+		// Old ∪ new associations: a perek/author move or a coverage replace
+		// leaves the old surfaces stale — the change carries both sides.
+		const perekIds = new Set([updatedArticle.perek_id]);
+		if (previousPerekId !== null) perekIds.add(previousPerekId);
+		const authorIds = new Set([updatedArticle.author_id]);
+		if (previousAuthorId !== null) authorIds.add(previousAuthorId);
+		await revalidateWebsite([
+			articleChange({
+				id: updatedArticle.id,
+				perekIds: [...perekIds],
+				authorIds: [...authorIds],
+				...(previousCovering.length > 0
+					? { coveringSpans: mergeCoveringSpans(previousCovering) }
+					: {}),
+			}),
+			// old ∪ new explicit link set — every touched moed page expires.
+			...affectedMoadim.map((moed) =>
+				moedChange({ id: moed.id, slug: moed.slug }),
+			),
+		]);
+		if (hebrewRows !== undefined) {
+			// Both sides of the replace can govern a prepared bulletin's date.
+			await invalidateUnsentBulletinsForHebrewDates([
+				...previousHebrewDates,
+				...hebrewRows,
+			]);
 		}
-		await revalidateWebsite(articleInvalidation(...urls));
 		return updatedArticle;
 	});
 
@@ -411,12 +611,26 @@ export const deleteArticle = createServerFn({ method: "POST" })
 	.validator((data: number) => data)
 	.handler(async ({ data }) => {
 		await ensureArticleSearchQueue();
-		// Resolve the public URL before the delete — afterwards the row (and
-		// its perek) can no longer be enumerated.
-		const deleted = await queryOne<{ perek_id: number }>(
-			"SELECT perek_id FROM tanah_article WHERE id = ?",
+		// Resolve the associations before the delete — afterwards the row,
+		// its perek/author and its covering rows can no longer be enumerated.
+		const deleted = await queryOne<{ perek_id: number; author_id: number }>(
+			"SELECT perek_id, author_id FROM tanah_article WHERE id = ?",
 			[data],
 		);
+		const deletedCovering = (await loadCoveringSources(data)) ?? [];
+		// Assignment rows cascade-delete with the article — captured now so
+		// unsent prepared bulletins for those dates regenerate (#3098).
+		const deletedHebrewDates = (await loadHebrewDates(data)) ?? [];
+		// The article's moed links cascade with the row — capture the moed
+		// slugs now so those detail pages expire their union lists.
+		const deletedMoedIds = (await loadArticleMoedIds(data)) ?? [];
+		const deletedMoeds =
+			deletedMoedIds.length > 0
+				? await query<{ id: number; slug: string }>(
+						`SELECT id, slug FROM tanah_moed WHERE id IN (${deletedMoedIds.map(() => "?").join(",")})`,
+						deletedMoedIds,
+					)
+				: [];
 		await transaction(async (conn) => {
 			// Coverage rows are removed with the article — explicitly (the FK
 			// ON DELETE CASCADE is the backstop) so cleanup does not depend on
@@ -436,13 +650,24 @@ export const deleteArticle = createServerFn({ method: "POST" })
 			// purges it from the index — deleted articles must stop matching.
 			await txExecute(conn, ENQUEUE_SEARCH_SQL, [data]);
 		});
-		// The article tag covers the deleted row's perek page and every other
-		// article surface; the deleted URL is still notified so search engines
-		// recrawl and drop it.
-		await revalidateWebsite(
-			articleInvalidation(
-				...(deleted ? [articlePath(deleted.perek_id, data)] : []),
-			),
-		);
+		// The deleted row's perek/author/coverage surfaces expire; the
+		// destroyed associations ride along so no stale surface remains.
+		if (deleted) {
+			await revalidateWebsite([
+				articleChange({
+					id: data,
+					perekIds: [deleted.perek_id],
+					authorIds: [deleted.author_id],
+					...(deletedCovering.length > 0
+						? { coveringSpans: mergeCoveringSpans(deletedCovering) }
+						: {}),
+				}),
+				// The cascaded article↔moed links expire the moed union lists.
+				...deletedMoeds.map((moed) =>
+					moedChange({ id: moed.id, slug: moed.slug }),
+				),
+			]);
+		}
+		await invalidateUnsentBulletinsForHebrewDates(deletedHebrewDates);
 		return { success: true };
 	});

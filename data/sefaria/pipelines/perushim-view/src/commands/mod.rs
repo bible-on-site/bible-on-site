@@ -5,6 +5,7 @@ pub mod convert_notes;
 pub mod json;
 pub mod mysql;
 pub mod note_blob;
+pub mod note_metrics;
 pub mod search_index;
 pub mod search_text;
 pub mod sqlite;

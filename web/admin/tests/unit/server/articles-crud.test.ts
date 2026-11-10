@@ -35,6 +35,7 @@ import {
 	getArticlesByPerek,
 	updateArticle,
 } from "~/server/articles";
+import { __resetRevalidateForTests } from "~/server/website-revalidate";
 
 const article = {
 	perek_id: 1,
@@ -799,6 +800,7 @@ describe("website cache invalidation", () => {
 		for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
 		process.env.VITE_WEBSITE_URL = "https://site.test";
 		process.env.REVALIDATE_SECRET = "s3cr3t";
+		__resetRevalidateForTests();
 		fetchSpy = vi
 			.spyOn(globalThis, "fetch")
 			.mockResolvedValue(new Response("{}", { status: 200 }));
@@ -812,92 +814,225 @@ describe("website cache invalidation", () => {
 		fetchSpy.mockRestore();
 	});
 
-	function revalidatedTags(): string[] {
-		return fetchSpy.mock.calls.map((call: unknown[]) =>
-			new URL(String(call[0])).searchParams.get("tag"),
-		) as string[];
+	/** The typed entity changes posted to the website across all calls. */
+	function sentChanges(): Record<string, unknown>[] {
+		return fetchSpy.mock.calls.flatMap((call: unknown[]) => {
+			const body = (call[1] as RequestInit | undefined)?.body;
+			return body ? (JSON.parse(String(body)).changes ?? []) : [];
+		});
 	}
 
-	it("expires the website's articles tag after a committed create", async () => {
+	it("sends the article change after a committed create", async () => {
 		mocks.txExecute.mockResolvedValue({ insertId: 7 });
-		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+		mocks.txQueryOne.mockResolvedValue({
+			id: 7,
+			name: "מאמר",
+			perek_id: 5,
+			author_id: 2,
+		});
 
 		await createArticle({ data: article });
 
-		expect(revalidatedTags()).toEqual(["articles"]);
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [5], authorIds: [2] },
+		]);
 		const [, init] = fetchSpy.mock.calls[0];
 		expect(init?.method).toBe("POST");
+		expect(new Headers(init?.headers).get("content-type")).toBe(
+			"application/json",
+		);
 	});
 
-	it("expires the website's articles tag after a committed update", async () => {
+	it("sends the article change after a committed update", async () => {
 		mocks.txExecute.mockResolvedValue({});
-		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+		mocks.txQuery.mockResolvedValue([]);
+		mocks.txQueryOne
+			.mockResolvedValueOnce({ perek_id: 1, author_id: 2 })
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 1, author_id: 2 });
 
 		await updateArticle({ data: { ...article, id: 7 } });
 
-		expect(revalidatedTags()).toEqual(["articles"]);
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [1], authorIds: [2] },
+		]);
 	});
 
-	it("expires the website's articles tag after a committed delete", async () => {
+	it("sends the deleted article's associations after a committed delete", async () => {
+		mocks.queryOne.mockResolvedValue({ perek_id: 5, author_id: 2 });
+		mocks.query.mockResolvedValue([]);
 		mocks.txExecute.mockResolvedValue({});
 
 		await deleteArticle({ data: 7 });
 
-		expect(revalidatedTags()).toEqual(["articles"]);
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [5], authorIds: [2] },
+		]);
 	});
 
-	function notifiedUrls(callIndex = 0): string[] {
-		const url = new URL(String(fetchSpy.mock.calls[callIndex][0]));
-		return url.searchParams.getAll("url");
-	}
-
-	it("reports the new article url after a committed create", async () => {
-		mocks.txExecute.mockResolvedValue({ insertId: 7 });
-		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 5 });
-
-		await createArticle({ data: article });
-
-		expect(notifiedUrls()).toEqual(["/929/5/7"]);
-	});
-
-	it("reports the new url plus the stale one after a perek move", async () => {
+	it("carries both the new and stale perek ids after a perek move", async () => {
 		mocks.txExecute.mockResolvedValue({});
+		mocks.txQuery.mockResolvedValue([]);
 		mocks.txQueryOne
-			.mockResolvedValueOnce({ perek_id: 5 })
-			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 9 });
+			.mockResolvedValueOnce({ perek_id: 5, author_id: 2 })
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 9, author_id: 2 });
 
 		await updateArticle({ data: { ...article, id: 7, perek_id: 9 } });
 
-		expect(notifiedUrls()).toEqual(["/929/9/7", "/929/5/7"]);
+		const change = sentChanges()[0];
+		expect(change).toMatchObject({ kind: "article", id: 7 });
+		expect([...((change?.perekIds ?? []) as number[])].sort()).toEqual([5, 9]);
+		expect(change?.authorIds).toEqual([2]);
 	});
 
-	it("reports only the new url when the article row was already gone", async () => {
+	it("carries both the new and stale author ids after an author move", async () => {
 		mocks.txExecute.mockResolvedValue({});
+		mocks.txQuery.mockResolvedValue([]);
+		mocks.txQueryOne
+			.mockResolvedValueOnce({ perek_id: 1, author_id: 3 })
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 1, author_id: 2 });
+
+		await updateArticle({ data: { ...article, id: 7, author_id: 2 } });
+
+		const change = sentChanges()[0];
+		expect(change?.perekIds).toEqual([1]);
+		expect([...((change?.authorIds ?? []) as number[])].sort()).toEqual([2, 3]);
+	});
+
+	it("expires the moadim an article links to on create", async () => {
+		mocks.txExecute.mockResolvedValue({ insertId: 7 });
+		mocks.txQuery.mockImplementation((_: unknown, sql: string) => {
+			const text = String(sql);
+			if (text.includes("FROM tanah_moed") && text.includes("slug"))
+				return Promise.resolve([{ id: 3, slug: "פסח" }]);
+			if (text.includes("FROM tanah_moed")) return Promise.resolve([{ id: 3 }]);
+			if (text.includes("FROM tanah_article_moed")) return Promise.resolve([]);
+			return Promise.resolve([]);
+		});
+		mocks.txQueryOne.mockResolvedValue({
+			id: 7,
+			name: "מאמר",
+			perek_id: 5,
+			author_id: 2,
+		});
+
+		await createArticle({ data: { ...article, moedIds: [3] } });
+
+		expect(
+			mocks.txExecute.mock.calls.some(([, sql]) =>
+				String(sql).includes("INSERT INTO tanah_article_moed"),
+			),
+		).toBe(true);
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [5], authorIds: [2] },
+			{ kind: "moed", id: 3, slug: "פסח" },
+		]);
+	});
+
+	it("expires the old and new moadim after a link-set replace on update", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQuery.mockImplementation((_: unknown, sql: string) => {
+			const text = String(sql);
+			if (text.includes("FROM tanah_article_moed"))
+				// The article currently links to moed 2.
+				return Promise.resolve([{ id: 2, slug: "ישן" }]);
+			if (text.includes("slug"))
+				// Slug resolution for the added moed.
+				return Promise.resolve([{ id: 5, slug: "חדש" }]);
+			if (text.includes("FROM tanah_moed")) return Promise.resolve([{ id: 5 }]);
+			return Promise.resolve([]);
+		});
+		mocks.txQueryOne
+			.mockResolvedValueOnce({ perek_id: 1, author_id: 2 })
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 1, author_id: 2 });
+
+		await updateArticle({ data: { ...article, id: 7, moedIds: [5] } });
+
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [1], authorIds: [2] },
+			{ kind: "moed", id: 2, slug: "ישן" },
+			{ kind: "moed", id: 5, slug: "חדש" },
+		]);
+	});
+
+	it("leaves the moed change list empty when the link set did not move", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQuery.mockImplementation((_: unknown, sql: string) => {
+			const text = String(sql);
+			if (text.includes("FROM tanah_article_moed"))
+				return Promise.resolve([{ id: 3, slug: "פסח" }]);
+			if (text.includes("FROM tanah_moed")) return Promise.resolve([{ id: 3 }]);
+			return Promise.resolve([]);
+		});
+		mocks.txQueryOne
+			.mockResolvedValueOnce({ perek_id: 1, author_id: 2 })
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 1, author_id: 2 });
+
+		await updateArticle({ data: { ...article, id: 7, moedIds: [3] } });
+
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [1], authorIds: [2] },
+		]);
+	});
+
+	it("expires the moeds whose links cascaded with the deleted article", async () => {
+		mocks.queryOne.mockResolvedValue({ perek_id: 5, author_id: 2 });
+		mocks.query.mockImplementation((sql: string) => {
+			const text = String(sql);
+			if (text.includes("FROM tanah_article_moed"))
+				return Promise.resolve([{ moed_id: 3 }]);
+			if (text.includes("FROM tanah_moed"))
+				return Promise.resolve([{ id: 3, slug: "פסח" }]);
+			return Promise.resolve([]);
+		});
+		mocks.txExecute.mockResolvedValue({});
+
+		await deleteArticle({ data: 7 });
+
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [5], authorIds: [2] },
+			{ kind: "moed", id: 3, slug: "פסח" },
+		]);
+	});
+
+	it("carries the destroyed coverage spans after a coverage replace", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQuery.mockResolvedValue([
+			{ perek_id: 5, pasuk: 1 },
+			{ perek_id: 5, pasuk: 2 },
+		]);
+		mocks.txQueryOne
+			.mockResolvedValueOnce({ perek_id: 1, author_id: 2 })
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 1, author_id: 2 });
+
+		await updateArticle({ data: { ...article, id: 7 } });
+
+		expect(sentChanges()[0]?.coveringSpans).toEqual([
+			{ perekId: 5, pasukFrom: 1, pasukTo: 2 },
+		]);
+	});
+
+	it("carries only the new perek when the article row was already gone", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQuery.mockResolvedValue([]);
 		mocks.txQueryOne
 			.mockResolvedValueOnce(null)
-			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 9 });
+			.mockResolvedValue({ id: 7, name: "מאמר", perek_id: 9, author_id: 2 });
 
 		await updateArticle({ data: { ...article, id: 7, perek_id: 9 } });
 
-		expect(notifiedUrls()).toEqual(["/929/9/7"]);
+		expect(sentChanges()).toEqual([
+			{ kind: "article", id: 7, perekIds: [9], authorIds: [2] },
+		]);
 	});
 
-	it("reports the removed article url after a delete", async () => {
-		mocks.queryOne.mockResolvedValue({ perek_id: 5 });
-		mocks.txExecute.mockResolvedValue({});
-
-		await deleteArticle({ data: 7 });
-
-		expect(notifiedUrls()).toEqual(["/929/5/7"]);
-	});
-
-	it("sends no url when the deleted article row was already gone", async () => {
+	it("sends nothing when the deleted article row was already gone", async () => {
 		mocks.queryOne.mockResolvedValue(null);
+		mocks.query.mockResolvedValue([]);
 		mocks.txExecute.mockResolvedValue({});
 
 		await deleteArticle({ data: 7 });
 
-		expect(notifiedUrls()).toEqual([]);
+		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
 	it("still resolves the save when the website is unreachable", async () => {
@@ -920,5 +1055,296 @@ describe("website cache invalidation", () => {
 		const saved = await createArticle({ data: article });
 		expect(saved.id).toBe(7);
 		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+});
+
+describe("article Hebrew dates (#3098)", () => {
+	const errMissingTable = Object.assign(new Error("no such table"), {
+		code: "ER_NO_SUCH_TABLE",
+	});
+	const txSql = () => mocks.txExecute.mock.calls.map(([, sql]) => String(sql));
+
+	beforeEach(() => {
+		for (const mock of [
+			mocks.execute,
+			mocks.queryOne,
+			mocks.query,
+			mocks.txExecute,
+			mocks.txQuery,
+			mocks.txQueryOne,
+		])
+			mock.mockReset();
+		mocks.transaction.mockClear();
+		_resetArticleSearchQueueCache();
+		vi.spyOn(console, "warn").mockImplementation(() => {});
+		mocks.execute.mockResolvedValue({});
+		// txQuery serves the conflict check, the persisted date read-back and
+		// the covering rows — answer by statement shape.
+		mocks.txQuery.mockImplementation((_: unknown, sql: string) => {
+			if (
+				String(sql).includes("tanah_article_hebrew_date") &&
+				String(sql).includes("article_id <>")
+			) {
+				return Promise.resolve([]);
+			}
+			if (String(sql).includes("tanah_article_hebrew_date")) {
+				return Promise.resolve([{ hebrew_month: 11, hebrew_day: 9 }]);
+			}
+			return Promise.resolve([]);
+		});
+		// The post-commit invalidation reads the prepared-bulletin list — no
+		// prepared rows means nothing to delete.
+		mocks.query.mockResolvedValue([]);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("persists date assignments with the new article in one transaction", async () => {
+		mocks.txExecute.mockResolvedValue({ insertId: 7 });
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		const saved = await createArticle({
+			data: { ...article, hebrewDates: [{ hebrew_month: 11, hebrew_day: 9 }] },
+		});
+
+		const dateInsert = mocks.txExecute.mock.calls.find(([, sql]) =>
+			String(sql).includes("INSERT INTO tanah_article_hebrew_date"),
+		);
+		expect(dateInsert?.[2]).toEqual([7, 11, 9]);
+		expect(saved.hebrewDates).toEqual([{ hebrew_month: 11, hebrew_day: 9 }]);
+	});
+
+	it("replaces persisted dates on update inside the save transaction", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		await updateArticle({
+			data: {
+				...article,
+				id: 7,
+				hebrewDates: [{ hebrew_month: 8, hebrew_day: 5 }],
+			},
+		});
+
+		const deleteIdx = mocks.txExecute.mock.calls.findIndex(([, sql]) =>
+			String(sql).includes("DELETE FROM tanah_article_hebrew_date"),
+		);
+		const insertIdx = mocks.txExecute.mock.calls.findIndex(([, sql]) =>
+			String(sql).includes("INSERT INTO tanah_article_hebrew_date"),
+		);
+		expect(deleteIdx).toBeGreaterThanOrEqual(0);
+		expect(insertIdx).toBeGreaterThan(deleteIdx);
+		expect(mocks.txExecute.mock.calls[insertIdx]?.[2]).toEqual([7, 8, 5]);
+	});
+
+	it("omitted hebrewDates leaves persisted assignments untouched", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		await updateArticle({ data: { ...article, id: 7 } });
+
+		expect(
+			txSql().some((sql) => sql.includes("tanah_article_hebrew_date")),
+		).toBe(false);
+	});
+
+	it("rejects an invalid date before touching the database", async () => {
+		await expect(
+			updateArticle({
+				data: {
+					...article,
+					id: 7,
+					hebrewDates: [{ hebrew_month: 15, hebrew_day: 1 }],
+				},
+			}),
+		).rejects.toThrow(/between 1 and 14/);
+		expect(mocks.transaction).not.toHaveBeenCalled();
+	});
+
+	it("rejects a date another article already holds", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+		mocks.txQuery.mockImplementation((_: unknown, sql: string) => {
+			if (
+				String(sql).includes("tanah_article_hebrew_date") &&
+				String(sql).includes("article_id <>")
+			) {
+				return Promise.resolve([{ article_id: 2199 }]);
+			}
+			return Promise.resolve([]);
+		});
+
+		await expect(
+			updateArticle({
+				data: {
+					...article,
+					id: 7,
+					hebrewDates: [{ hebrew_month: 11, hebrew_day: 9 }],
+				},
+			}),
+		).rejects.toThrow(/already assigned to article 2199/);
+	});
+
+	it("rejects a create assigning dates to a non-distributable article", async () => {
+		mocks.txExecute.mockResolvedValue({ insertId: 7 });
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		await expect(
+			createArticle({
+				data: {
+					...article,
+					distributable: false,
+					hebrewDates: [{ hebrew_month: 11, hebrew_day: 9 }],
+				},
+			}),
+		).rejects.toThrow(/must stay distributable/);
+	});
+
+	it("rejects a create assigning dates to a body-less article", async () => {
+		mocks.txExecute.mockResolvedValue({ insertId: 7 });
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		await expect(
+			createArticle({
+				data: {
+					...article,
+					content: "",
+					hebrewDates: [{ hebrew_month: 11, hebrew_day: 9 }],
+				},
+			}),
+		).rejects.toThrow(/non-empty body/);
+	});
+	it.each(["create", "update"])(
+		"rejects a %s leaving recurring dates on a recording-only article",
+		async (operation) => {
+			mocks.txExecute.mockResolvedValue({ insertId: 7 });
+			mocks.txQueryOne.mockResolvedValue({ id: 7, name: "שיעור" });
+			const data = {
+				...article,
+				name: "שיעור",
+				content:
+					'<h1>שיעור</h1><h2>להאזנה</h2><audio src="lesson.opus"></audio>',
+				hebrewDates: [{ hebrew_month: 11, hebrew_day: 9 }],
+			};
+			await expect(
+				operation === "create"
+					? createArticle({ data })
+					: updateArticle({ data: { ...data, id: 7 } }),
+			).rejects.toThrow(/written content/);
+		},
+	);
+
+	it("rejects an update that un-distributes an article already owning dates", async () => {
+		// hebrewDates is omitted — the persisted assignment (mocked read-back)
+		// must still block an update that drops distribution eligibility.
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		await expect(
+			updateArticle({
+				data: { ...article, id: 7, distributable: false },
+			}),
+		).rejects.toThrow(/must stay distributable/);
+	});
+
+	it("rejects an update that empties the body of an article already owning dates", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+
+		await expect(
+			updateArticle({
+				data: { ...article, id: 7, content: "   " },
+			}),
+		).rejects.toThrow(/non-empty body/);
+	});
+
+	it("allows clearing dates while making the article ineligible", async () => {
+		// Clearing the assignment is the documented escape: with no dates
+		// left behind, an ineligible article saves fine.
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+		mocks.txQuery.mockImplementation((_: unknown, sql: string) => {
+			if (String(sql).includes("tanah_article_hebrew_date")) {
+				return Promise.resolve([]);
+			}
+			return Promise.resolve([]);
+		});
+
+		const saved = await updateArticle({
+			data: { ...article, id: 7, distributable: false, hebrewDates: [] },
+		});
+		expect(saved.id).toBe(7);
+	});
+
+	it("getArticle returns the persisted date assignments", async () => {
+		mocks.queryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+		mocks.query.mockImplementation((sql: string) => {
+			if (String(sql).includes("tanah_article_hebrew_date")) {
+				return Promise.resolve([
+					{ hebrew_month: 8, hebrew_day: 5 },
+					{ hebrew_month: 11, hebrew_day: 9 },
+				]);
+			}
+			return Promise.resolve([]);
+		});
+
+		const loaded = await getArticle({ data: 7 });
+
+		expect(loaded.hebrewDates).toEqual([
+			{ hebrew_month: 8, hebrew_day: 5 },
+			{ hebrew_month: 11, hebrew_day: 9 },
+		]);
+	});
+
+	it("getArticle reports hebrewDates undefined when the schema is missing", async () => {
+		mocks.queryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+		mocks.query.mockImplementation((sql: string) => {
+			if (String(sql).includes("tanah_article_hebrew_date")) {
+				return Promise.reject(errMissingTable);
+			}
+			return Promise.resolve([]);
+		});
+
+		const loaded = await getArticle({ data: 7 });
+
+		expect(loaded.hebrewDates).toBeUndefined();
+	});
+
+	it("propagates a non-schema failure from the date read-back", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		mocks.txQueryOne.mockResolvedValue({ id: 7, name: "מאמר" });
+		mocks.txQuery.mockImplementation((_: unknown, sql: string) => {
+			if (String(sql).includes("tanah_article_hebrew_date")) {
+				return Promise.reject(new Error("deadlock"));
+			}
+			return Promise.resolve([]);
+		});
+
+		await expect(
+			updateArticle({ data: { ...article, id: 7 } }),
+		).rejects.toThrow("deadlock");
+	});
+
+	it("delete invalidates unsent bulletins for the article's dates", async () => {
+		mocks.txExecute.mockResolvedValue({});
+		// query serves covering rows, the article's dates, the moed link set
+		// (#3101), then the prepared bulletins list plus that bulletin's
+		// delivery statuses.
+		mocks.query
+			.mockResolvedValueOnce([]) // covering sources
+			.mockResolvedValueOnce([{ hebrew_month: 11, hebrew_day: 9 }]) // dates
+			.mockResolvedValueOnce([]) // moed ids
+			.mockResolvedValueOnce([{ bulletin_date: "2024-08-13" }]) // prepared
+			.mockResolvedValueOnce([{ status: "pending" }]); // deliveries
+
+		await deleteArticle({ data: 7 });
+
+		expect(
+			mocks.execute.mock.calls.some(([sql]) =>
+				String(sql).includes("DELETE FROM tanah_daily_bulletin"),
+			),
+		).toBe(true);
 	});
 });

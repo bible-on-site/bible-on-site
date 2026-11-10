@@ -1,12 +1,19 @@
 import type { Metadata } from "next";
-import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
 import { PerushimSection } from "@/app/929/[number]/components/PerushimSection";
 import perekStyles from "@/app/929/[number]/page.module.css";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "@/app/components/dedications/DedicationLines";
 import { UnitPerushimSection } from "@/app/components/reading/UnitPerushimSection";
 import { unitPerushHref } from "@/app/components/reading/unit-perush";
+import {
+	getMasoraRangeArticles,
+	getMasoraRangePerushim,
+} from "@/app/components/reading/unit-range-summaries";
 import {
 	getAdjacentMasoraUnits,
 	getMasoraUnitById,
@@ -16,8 +23,7 @@ import {
 	masoraPasukCount,
 } from "@/data/masora/masora-units";
 import { getPerekByPerekId } from "@/data/perek-dto";
-import { getArticleSummariesForRanges } from "@/lib/articles/service";
-import { getPerushimForRanges } from "@/lib/perushim/service";
+import { getMasoraDedications } from "@/lib/dedications/loaders";
 import { rangePerekSources } from "@/lib/reading/queries";
 import { unitEquivalentPerekId, unitPerekIds } from "@/lib/reading/ranges";
 import { SITE_NAME } from "@/lib/seo/jsonld";
@@ -38,30 +44,6 @@ export function generateStaticParams() {
 		unit: String(i + 1),
 	}));
 }
-
-const getCachedRangePerushim = unstable_cache(
-	async (unitId: number) => {
-		const unit = getMasoraUnitById(unitId);
-		return getPerushimForRanges(unit.ranges);
-	},
-	["range-perushim"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
-	},
-);
-
-const getCachedRangeArticles = unstable_cache(
-	async (unitId: number) => {
-		const unit = getMasoraUnitById(unitId);
-		return getArticleSummariesForRanges(unit.ranges);
-	},
-	["range-article-summaries"],
-	{
-		tags: ["articles"],
-		revalidate: false,
-	},
-);
 
 /** Perek ids covering every masora unit of a sefer — the book view
  * reads the whole sefer, so its entity refs arrive up front. */
@@ -122,11 +104,17 @@ export default async function MasoraUnitPage({
 		notFound();
 	}
 	const unit = getMasoraUnitById(unitId);
-	const [perushim, articles, entityRefsByPerek] = await Promise.all([
-		getCachedRangePerushim(unitId),
-		getCachedRangeArticles(unitId),
-		fetchAllEntityRefs(seferUnitsPerekIds(unit.seferName)),
-	]);
+	const [perushim, articles, entityRefsByPerek, masoraDedications] =
+		await Promise.all([
+			getMasoraRangePerushim(unitId),
+			getMasoraRangeArticles(unitId),
+			fetchAllEntityRefs(seferUnitsPerekIds(unit.seferName)),
+			getMasoraDedications(),
+		]);
+	// Feature-level מסורה על הפרק dedications (#2731): one shared set for the
+	// whole feature — the flat page shows it once and the book renders it on
+	// the cover, never duplicated per internal unit.
+	const coverDedications = dedicationLines(masoraDedications);
 	const { prev, next } = getAdjacentMasoraUnits(unitId);
 	const bookUnits = getMasoraUnitsForSefer(unit.seferName).map((bookUnit) => ({
 		unitId: bookUnit.unitId,
@@ -154,6 +142,7 @@ export default async function MasoraUnitPage({
 					perekSources={bookPerekSources}
 					articles={articles}
 					perushim={perushim}
+					coverDedications={coverDedications}
 				/>
 			</Suspense>
 			<div className={`${perekStyles.perekContainer} seo-content`}>
@@ -166,6 +155,7 @@ export default async function MasoraUnitPage({
 						</span>
 					)}
 				</h1>
+				<DedicationLines lines={coverDedications} />
 				<UnitText unit={unit} entityRefsByPerek={entityRefsByPerek} />
 				<UnitNav prev={prev} next={next} />
 

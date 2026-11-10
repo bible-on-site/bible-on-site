@@ -402,7 +402,10 @@ public class TanahpediaEntryViewModelTests
     private readonly Mock<IAppNavigator> _navigator = new();
 
     private TanahpediaEntryViewModel Create(PerekDataService? perekData = null) =>
-        new(_service.Object, _navigator.Object, perekData ?? EmptyPerekData());
+        new(_service.Object, _navigator.Object, perekData ?? EmptyPerekData(),
+            // No-op stub — LoadAsync awaits the dedication load, so a real
+            // endpoint must never be hit from unit tests (#2731).
+            StubDedicationService.Instance);
 
     private static PerekDataService EmptyPerekData()
     {
@@ -689,17 +692,20 @@ public class TanahpediaEntryViewModelTests
     }
 
     [Fact]
-    public async Task OpenEntry_FailedNavigation_PropagatesAndAllowsRetry()
+    public async Task OpenEntry_FailedNavigation_IsAbsorbedAndAllowsRetry()
     {
-        // A failed Shell navigation surfaces to the caller's failure boundary
-        // (the page logs it) and a later tap navigates again - a faulted
-        // navigation is recoverable, not a dead end (#2640).
+        // The command owns the failure boundary: a faulted Shell navigation
+        // must never escape into ICommand.Execute, which rethrows it on the
+        // main synchronization context - an unhandled fault there is a
+        // SIGABRT. A later tap navigates again - a faulted navigation is
+        // recoverable, not a dead end.
         var fail = true;
         _navigator.Setup(n => n.GoToAsync(It.IsAny<string>())).Returns<string>(_ =>
             fail ? Task.FromException(new InvalidOperationException("route failed")) : Task.CompletedTask);
 
         var vm = Create();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => vm.OpenEntryAsync("שמשון"));
+        var act = () => vm.OpenEntryAsync("שמשון");
+        await act.Should().NotThrowAsync("a navigation fault reaching ICommand.Execute crashes the app");
 
         fail = false;
         await vm.OpenEntryCommand.ExecuteAsync("דלילה");
@@ -1031,6 +1037,30 @@ public class TanahpediaEntryViewModelTests
     }
 
     [Fact]
+    public async Task EntryHistoryChanges_NotifySoTheCapsuleBackRepaints()
+    {
+        // The shared capsule derives its enabled state from HasEntryHistory —
+        // each push/pop must raise PropertyChanged so the paint tracks the
+        // trail (#2467).
+        SetupPersonEntries("שמשון", "דלילה");
+
+        var vm = Create();
+        vm.UniqueName = "שמשון";
+        await vm.LoadAsync();
+        var notifications = new List<string?>();
+        vm.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+
+        await vm.OpenPersonEntryAsync("דלילה");
+        notifications.Should().Contain(nameof(TanahpediaEntryViewModel.HasEntryHistory),
+            "pushing a person onto the trail enables the entry page's Back");
+
+        notifications.Clear();
+        await vm.GoBackAsync();
+        notifications.Should().Contain(nameof(TanahpediaEntryViewModel.HasEntryHistory),
+            "popping the trail disables it once the trail is empty");
+    }
+
+    [Fact]
     public async Task OpenPersonEntry_StaleLoadDoesNotOverwriteLatest()
     {
         var staleGate = new TaskCompletionSource<TanahpediaEntryDetail?>();
@@ -1297,5 +1327,104 @@ public class TanahpediaEntryViewModelTests
         vm.SynonymTargets.Should().HaveCount(2);
         vm.HasFamily.Should().BeFalse();
         vm.HasEntities.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Load_StoredProgressUnits_EnableWordWeightedProgress()
+    {
+        // The stored block units arrive with the detail; the single HtmlView
+        // child owns them all — progress maps the scroll anchor onto the
+        // measured body extent (issue #2607).
+        _service.Setup(s => s.GetEntryDetailAsync("משה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "משה",
+                Title = "משה רבנו",
+                Content = "<p>תוכן</p>",
+                ReadingMetric = new ReadingMetric { WordCount = 100, EstimatedSeconds = 30 },
+                ProgressUnits =
+                [
+                    new ReadingProgressUnit { Key = "0", WordCount = 40, CumulativeWords = 40 },
+                    new ReadingProgressUnit { Key = "1", WordCount = 60, CumulativeWords = 100 },
+                ],
+            });
+
+        var vm = Create();
+        vm.UniqueName = "משה";
+        await vm.LoadAsync();
+
+        vm.HasReadingProgress.Should().BeTrue();
+        vm.ReadingProgress.Should().Be(0, "a freshly opened entry reads from the top");
+
+        // scrollY 0 anchors at the body top; max scroll completes it.
+        vm.UpdateReadingProgress(scrollY: 0, viewportHeight: 200,
+            scrollContentHeight: 2000, childExtents: [(500, 1500)]);
+        vm.ReadingProgress.Should().Be(0);
+
+        vm.UpdateReadingProgress(scrollY: 1800, viewportHeight: 200,
+            scrollContentHeight: 2000, childExtents: [(500, 1500)]);
+        vm.ReadingProgress.Should().Be(1);
+
+        // Mid-scroll: ratio .5 → anchor at 1000 — halfway through the body.
+        vm.UpdateReadingProgress(scrollY: 900, viewportHeight: 200,
+            scrollContentHeight: 2000, childExtents: [(500, 1500)]);
+        vm.ReadingProgress.Should().BeApproximately(0.5, 1e-9);
+    }
+
+    [Fact]
+    public async Task Load_WithoutProgressUnits_HidesTheBar()
+    {
+        _service.Setup(s => s.GetEntryDetailAsync("משה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "משה",
+                Title = "משה רבנו",
+                Content = "<p>תוכן</p>",
+            });
+
+        var vm = Create();
+        vm.UniqueName = "משה";
+        await vm.LoadAsync();
+
+        vm.HasReadingProgress.Should().BeFalse();
+        vm.UpdateReadingProgress(scrollY: 900, viewportHeight: 200,
+            scrollContentHeight: 2000, childExtents: [(500, 1500)]);
+        vm.ReadingProgress.Should().Be(0, "no stored units never invent progress");
+    }
+
+    [Fact]
+    public async Task ResetEntryBody_ClearsProgress()
+    {
+        // A hop onto a non-entry terminal state (disambiguation) drops the
+        // previous entry's progress state with the rest of its body (#2640).
+        _service.Setup(s => s.GetEntryDetailAsync("משה", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TanahpediaEntryDetail
+            {
+                UniqueName = "משה",
+                Title = "משה רבנו",
+                Content = "<p>תוכן</p>",
+                ReadingMetric = new ReadingMetric { WordCount = 100, EstimatedSeconds = 30 },
+                ProgressUnits =
+                [
+                    new ReadingProgressUnit { Key = "0", WordCount = 100, CumulativeWords = 100 },
+                ],
+            });
+        _service.Setup(s => s.GetEntryDetailAsync("דתן", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TanahpediaEntryDetail?)null);
+        _service.Setup(s => s.GetSynonymTargetsAsync("דתן", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new TanahpediaSynonymTarget { UniqueName = "דתן", Title = "דתן" },
+                new TanahpediaSynonymTarget { UniqueName = "דתן-ואבירם", Title = "דתן ואבירם" },
+            ]);
+
+        var vm = Create();
+        vm.UniqueName = "משה";
+        await vm.LoadAsync();
+        vm.HasReadingProgress.Should().BeTrue();
+
+        await vm.OpenPersonEntryAsync("דתן");
+
+        vm.HasReadingProgress.Should().BeFalse();
+        vm.ReadingProgress.Should().Be(0);
     }
 }

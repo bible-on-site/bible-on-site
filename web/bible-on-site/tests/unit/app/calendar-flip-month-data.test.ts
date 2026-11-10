@@ -10,6 +10,7 @@ import {
 	flipPageIndexForMonth,
 	initialTurnedLeavesForPage,
 } from "@/app/calendar/components/flip-month-data";
+import type { CalendarCycleWindow } from "@/data/learning-calendar-policy";
 import {
 	getCycle,
 	getCycleStartMonth,
@@ -17,17 +18,27 @@ import {
 	getMonthOrder,
 } from "@/data/learning-schedule";
 
+// A window spanning every year the fixtures touch, so the month builders
+// behave like the unbounded schedule these tests were written against.
+const testWindow: CalendarCycleWindow = {
+	current: null,
+	next: getCycle(30),
+	first: getCycle(1),
+	minMonth: { year: 5780, month: 1 },
+	maxMonth: { year: 5800, month: 12 },
+};
+
 describe("flip-month-data", () => {
 	describe("buildYearFlipMonths", () => {
 		it("returns one entry per month of a regular year", () => {
-			const months = buildYearFlipMonths(5785);
+			const months = buildYearFlipMonths(5785, testWindow);
 			expect(months).toHaveLength(12);
 			expect(months[0].ref).toEqual({ year: 5785, month: 1 });
 			expect(months[11].ref).toEqual({ year: 5785, month: 12 });
 		});
 
 		it("includes Adar I and Adar II in a leap year, in order", () => {
-			const months = buildYearFlipMonths(5784);
+			const months = buildYearFlipMonths(5784, testWindow);
 			expect(months).toHaveLength(13);
 			const order = months.map((m) => m.ref.month);
 			expect(order).toEqual(getMonthOrder(5784));
@@ -37,7 +48,7 @@ describe("flip-month-data", () => {
 		});
 
 		it("builds real month cells with scheduled days", () => {
-			const months = buildYearFlipMonths(5785);
+			const months = buildYearFlipMonths(5785, testWindow);
 			const elul = months.find((m) => m.ref.month === 12);
 			expect(elul?.cells.some((cell) => cell.day !== undefined)).toBe(true);
 		});
@@ -46,7 +57,7 @@ describe("flip-month-data", () => {
 	describe("buildCycleFlipMonths", () => {
 		it("spans every month from cycle start through cycle end", () => {
 			const cycle = getCycle(4);
-			const months = buildCycleFlipMonths(4);
+			const months = buildCycleFlipMonths(4, testWindow);
 			expect(months.length).toBeGreaterThan(30);
 			expect(months[0].ref).toEqual(getCycleStartMonth(cycle));
 			// Last sheet is the month containing the cycle's final day.
@@ -56,7 +67,7 @@ describe("flip-month-data", () => {
 		});
 
 		it("keeps chronological order across year boundaries", () => {
-			const months = buildCycleFlipMonths(4);
+			const months = buildCycleFlipMonths(4, testWindow);
 			for (let i = 1; i < months.length; i += 1) {
 				const prev = months[i - 1].ref;
 				const cur = months[i].ref;
@@ -69,7 +80,7 @@ describe("flip-month-data", () => {
 	});
 
 	describe("page index math", () => {
-		const months = buildYearFlipMonths(5785);
+		const months = buildYearFlipMonths(5785, testWindow);
 
 		it("maps month positions to pages after the three chrome faces", () => {
 			expect(flipMonthPageIndex(0)).toBe(3);
@@ -105,7 +116,7 @@ describe("flip-month-data", () => {
 	});
 
 	describe("clampMonthToFlipScope", () => {
-		const months = buildYearFlipMonths(5785);
+		const months = buildYearFlipMonths(5785, testWindow);
 
 		it("returns the exact month when present", () => {
 			expect(
@@ -148,7 +159,7 @@ describe("flip-month-data", () => {
 
 	describe("buildFlipPageSemantics", () => {
 		it("names month pages uniquely inside a cycle book", () => {
-			const months = buildCycleFlipMonths(4);
+			const months = buildCycleFlipMonths(4, testWindow);
 			const semantics = buildFlipPageSemantics(months, 48);
 			const names = months.map((m) => m.semanticName);
 			expect(new Set(names).size).toBe(names.length);
@@ -158,14 +169,14 @@ describe("flip-month-data", () => {
 		});
 
 		it("uses bare month names inside a year book", () => {
-			const months = buildYearFlipMonths(5785);
+			const months = buildYearFlipMonths(5785, testWindow);
 			const semantics = buildFlipPageSemantics(months, 17);
 			expect(semantics.indexToSemanticName(3)).toBe(months[0].semanticName);
 			expect(semantics.indexToSemanticName(3)).not.toContain("ה'");
 		});
 
 		it("reports titles for month and chrome pages", () => {
-			const months = buildYearFlipMonths(5785);
+			const months = buildYearFlipMonths(5785, testWindow);
 			const semantics = buildFlipPageSemantics(months, 17);
 			expect(semantics.indexToTitle(3)).toBe(
 				getMonthLabel(months[0].ref),

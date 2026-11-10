@@ -37,19 +37,20 @@ The app uses a hybrid data strategy:
 
 The app integrates with Firebase for:
 
-- **User Settings Storage** - Persisting user preferences across devices
-- **Push Notifications** - Delivering updates and reminders via Firebase Cloud Messaging (FCM)
+- **User Settings Storage** - User preferences sync to Cloud Firestore at `users/{uid}` for signed-in sessions (anonymous Firebase Auth sign-in on Android/iOS; #1095). Merge is per-key last-writer-wins with tombstones; local preferences stay authoritative when offline or unsigned. Security rules and console setup steps live in [app/firebase/](../../app/firebase/README.md).
+- **Push Notifications** - Delivering updates and reminders via Firebase Cloud Messaging (FCM) — see [push-notifications.md](push-notifications.md) for the opt-in flow, identity design and backend contract
+- **Analytics** - Firebase Analytics (GA4) on Android/iOS, gated by build flags and e2e markers
 
 ## Development
 
 ### Prerequisites
 
-- .NET 9.0 SDK
+- The .NET SDK pinned in [app/global.json](../../app/global.json)
 - MAUI workloads: `dotnet workload install maui`
 
 ### Build System
 
-The app uses [NUKE](https://nuke.build/) for build automation (similar to cargo-make for Rust).
+The app uses [NUKE](https://github.com/nuke-build/nuke) for build automation (similar to cargo-make for Rust).
 
 ```bash
 cd app

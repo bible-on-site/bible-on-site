@@ -79,6 +79,21 @@ public class PerekDataServiceTests
         service.GetPerek(1).Should().BeSameAs(first, "a completed load is cached");
     }
 
+    [Fact]
+    public async Task GetPerekRangeSource_JoinsDisjointRunsWithVavNotCommas()
+    {
+        await using var storage = new TestStorage();
+        var db = await storage.CreateDatabaseAsync(DbName, Schema);
+        await db.ExecuteAsync("INSERT INTO tanah_sefer VALUES (1,'בראשית','Genesis',1,50),(2,'שמות','Exodus',51,90)");
+        await db.ExecuteAsync("INSERT INTO tanah_perek VALUES (1,1,NULL),(2,2,NULL),(3,3,NULL),(4,4,NULL),(5,5,NULL),(50,50,NULL),(51,1,NULL),(52,2,NULL)");
+        var service = new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object));
+        await service.LoadAsync();
+        service.GetPerekRangeSource([1, 2, 3, 4, 5]).Should().Be("בראשית א-ה");
+        service.GetPerekRangeSource([50, 51]).Should().Be("בראשית נ - שמות א");
+        service.GetPerekRangeSource([1, 2, 4]).Should().Be("בראשית א-ב ובראשית ד");
+        service.GetPerekRangeSource([]).Should().BeEmpty();
+    }
+
     [Theory]
     [InlineData("א", 1)] [InlineData("ב", 2)] [InlineData("ג", 3)] [InlineData("ד", 4)]
     [InlineData("ה", 5)] [InlineData("ו", 6)] [InlineData("ז", 7)] [InlineData("ח", 8)]
@@ -172,6 +187,29 @@ public class PerekDataServiceTests
             SegmentType.Qri, SegmentType.Qri, SegmentType.Stuma, SegmentType.Ptuha, SegmentType.Qri, SegmentType.Qri, SegmentType.Qri);
         verses[0].Segments[7].Value.Should().BeEmpty();
         (await service.LoadPasukimAsync(99)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task PasukimBatch_GroupsRowsByPerek_AndNarrowsToCitedPasukim()
+    {
+        await using var storage = new TestStorage();
+        var db = await storage.CreateDatabaseAsync(DbName, Schema);
+        await db.ExecuteAsync("INSERT INTO tanah_pasuk_segment VALUES (1,1,1,'qri'),(2,1,2,'qri'),(3,2,1,'qri'),(4,2,2,'qri'),(5,3,1,'qri')");
+        await db.ExecuteAsync("INSERT INTO tanah_pasuk_segment_value VALUES (1,'one'),(2,'two'),(3,'other1'),(4,'other2'),(5,'unasked')");
+        var service = new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object));
+
+        var all = await service.LoadPasukimAsync([1, 2], null);
+        all.Keys.Should().BeEquivalentTo([1, 2]);
+        all[1].Select(v => v.PasukNum).Should().Equal(1, 2);
+        all[1][0].Text.Should().Be("one");
+        all[2].Select(v => v.PasukNum).Should().Equal(1, 2);
+
+        var cited = await service.LoadPasukimAsync([1, 2], [2]);
+        cited[1].Select(v => v.PasukNum).Should().Equal(2);
+        cited[2].Select(v => v.PasukNum).Should().Equal(2);
+
+        (await service.LoadPasukimAsync([99], null)).Should().BeEmpty();
+        (await service.LoadPasukimAsync([], null)).Should().BeEmpty();
     }
 
     [Fact]

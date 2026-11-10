@@ -205,6 +205,10 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
             }
         };
         var textColor = GetTextColor();
+        /* The marker accent is the tint UITextView paints links with — the
+           reference color the note-list letters must match. Read on the main
+           thread: UIKit views must not be touched from the parse task. */
+        var accentColor = platformView.TintColor ?? UIColor.SystemBlue;
 
         // Clear recycled content before the parsed result arrives. Skipping the
         // assignment on an already-empty storage avoids a textStorage edit +
@@ -223,13 +227,13 @@ public class HtmlViewHandler : ViewHandler<HtmlView, ViewportTextView>
                 textColor.Dispose();
                 return;
             }
-            var attributedString = HtmlAttributedStringFactory.FromHtml(html, fontSize, h1Scale, h2Scale, h3Scale);
+            var attributedString = HtmlAttributedStringFactory.FromHtml(html, fontSize, h1Scale, h2Scale, h3Scale,
+                textColor, accentColor);
             var measuredHeight = -1.0;
             if (attributedString != null)
             {
                 var range = new NSRange(0, attributedString.Length);
                 attributedString.AddAttribute(UIStringAttributeKey.ParagraphStyle, paragraphStyle, range);
-                attributedString.AddAttribute(UIStringAttributeKey.ForegroundColor, textColor, range);
                 if (widthHint > 0)
                 {
                     var rect = attributedString.GetBoundingRect(new CGSize(widthHint, NFloat.MaxValue),

@@ -66,6 +66,8 @@ export const MasoraSeferComposite = (props: {
 	perekSources: Record<number, string>;
 	articles: ArticleSummary[];
 	perushim: RangePerushSummary[];
+	/** Feature-level מסורה על הפרק dedication lines (#2731). */
+	coverDedications?: string[];
 }) => {
 	const isWideEnough = useIsWideEnough(TABLET_MIN_WIDTH);
 	const router = useRouter();
@@ -78,9 +80,23 @@ export const MasoraSeferComposite = (props: {
 	const [everToggled, setEverToggled] = useState(false);
 	const [currentlyToggled, setCurrentlyToggled] = useState(false);
 	const [display, setDisplay] = useState("none");
+	const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	useEffect(() => {
+		return () => {
+			if (hideTimerRef.current !== null) {
+				clearTimeout(hideTimerRef.current);
+				hideTimerRef.current = null;
+			}
+		};
+	}, []);
 
 	const handleToggle = useCallback(
 		(wantBook: boolean, immediately = false) => {
+			if (hideTimerRef.current !== null) {
+				clearTimeout(hideTimerRef.current);
+				hideTimerRef.current = null;
+			}
 			if (wantBook) {
 				setDisplay("initial");
 				setCurrentlyToggled(true);
@@ -93,7 +109,8 @@ export const MasoraSeferComposite = (props: {
 				if (immediately) {
 					setDisplay("none");
 				} else {
-					setTimeout(() => {
+					hideTimerRef.current = setTimeout(() => {
+						hideTimerRef.current = null;
 						setDisplay("none");
 					}, 300);
 				}
@@ -203,6 +220,7 @@ export const MasoraSeferComposite = (props: {
 						perekSources={props.perekSources}
 						articles={props.articles}
 						perushim={props.perushim}
+						coverDedications={props.coverDedications}
 						initialBookPage={initialBookPage}
 						initialContent={initialContent}
 						isVisible={currentlyToggled}

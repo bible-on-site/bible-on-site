@@ -6,13 +6,12 @@ namespace BibleOnSite.Services;
 /// Monitors network connectivity and triggers background refresh of cached data
 /// when the device comes back online.
 /// </summary>
-public class NetworkService : IDisposable
+public class NetworkService
 {
     private static readonly Lazy<NetworkService> _instance = new(() => new NetworkService());
     public static NetworkService Instance => _instance.Value;
 
     private bool _wasOffline;
-    private bool _disposed;
     private bool _monitoring;
     private readonly IConnectivity _connectivity;
     private readonly Func<Task> _refresh;
@@ -39,22 +38,13 @@ public class NetworkService : IDisposable
     /// </summary>
     public void StartMonitoring()
     {
-        if (_disposed || _monitoring)
+        if (_monitoring)
         {
             return;
         }
         _monitoring = true;
         _connectivity.ConnectivityChanged += OnConnectivityChanged;
         DebugLog.Write($"[Network] Monitoring started. Online={_connectivity.NetworkAccess == NetworkAccess.Internet}");
-    }
-
-    /// <summary>
-    /// Stops listening for connectivity changes.
-    /// </summary>
-    public void StopMonitoring()
-    {
-        _connectivity.ConnectivityChanged -= OnConnectivityChanged;
-        _monitoring = false;
     }
 
     private async void OnConnectivityChanged(object? sender, ConnectivityChangedEventArgs e)
@@ -81,16 +71,5 @@ public class NetworkService : IDisposable
                 Console.Error.WriteLine($"[Network] Refresh failed: {ex.Message}");
             }
         }
-    }
-
-    public void Dispose()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-        StopMonitoring();
     }
 }

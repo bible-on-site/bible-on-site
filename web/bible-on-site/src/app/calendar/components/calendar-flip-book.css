@@ -352,6 +352,16 @@ button.cal-cell:focus-visible {
 	border-style: dashed;
 }
 
+/* Friday cell spanning the merged Friday+Saturday review block (#2365). */
+.cal-cell--merged {
+	grid-column: span 2;
+}
+
+.cal-cell__mergedDate {
+	display: block;
+	line-height: 1.1;
+}
+
 .cal-cell--review .cal-cell__perek {
 	color: var(--muted-text);
 }

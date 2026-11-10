@@ -125,9 +125,9 @@ internal readonly record struct NativeElementSnapshot(
     internal static IReadOnlyList<NativeElementSnapshot> Decode(object? value)
     {
         if (value is not IEnumerable<object> elements)
-            {
-                throw new WebDriverException("Native lookup did not return an element array.");
-            }
+        {
+            throw new WebDriverException("Native lookup did not return an element array.");
+        }
         var result = new List<NativeElementSnapshot>();
         foreach (var entry in elements)
         {
@@ -142,9 +142,9 @@ internal readonly record struct NativeElementSnapshot(
                 || text is not (null or string)
                 || !element.TryGetValue("enabled", out var enabled)
                 || enabled is not bool isEnabled)
-                {
-                    throw new WebDriverException("Native lookup is missing its element ID, displayed state, frame, text or enabled state.");
-                }
+            {
+                throw new WebDriverException("Native lookup is missing its element ID, displayed state, frame, text or enabled state.");
+            }
             result.Add(new(elementId, isDisplayed, Number(rect, "x"), Number(rect, "y"),
                 Number(rect, "width"), Number(rect, "height"), (string?)text ?? string.Empty, isEnabled,
                 element.TryGetValue("hittable", out var hittable) && hittable is bool isHittable
@@ -157,14 +157,14 @@ internal readonly record struct NativeElementSnapshot(
     {
         if (!rect.TryGetValue(name, out var value)
             || value is not (int or long or double or float or decimal))
-            {
-                throw new WebDriverException($"Native frame has no numeric {name}.");
-            }
+        {
+            throw new WebDriverException($"Native frame has no numeric {name}.");
+        }
         var number = Convert.ToDouble(value, CultureInfo.InvariantCulture);
         if (!double.IsFinite(number))
-            {
-                throw new WebDriverException($"Native frame {name} must be finite.");
-            }
+        {
+            throw new WebDriverException($"Native frame {name} must be finite.");
+        }
         return number;
     }
 }

@@ -3,37 +3,56 @@
 import { toLetters } from "gematry";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-	buildMonth,
+	memo,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
+import {
+	buildVisibleCalendarMonth,
+	CALENDAR_PDF_UNAVAILABLE,
+	canExportCalendarPeriod,
+	clampCalendarMonth,
+	getCalendarCycleWindow,
+	visibleCalendarMonths,
+} from "@/data/learning-calendar-policy";
+import {
 	type CalendarDay,
 	compareMonths,
-	getConfirmedCycleCount,
 	getCycle,
 	getCycleForDate,
 	getCycleLabel,
+	getCycleName,
 	getCycleStartMonth,
 	getDateLabel,
+	getDaySourceLabel,
 	getMonthLabel,
 	getMonthName,
 	getMonthOrder,
-	getPerekSource,
+	getPerekRangeLabel,
 	getYearLabel,
+	isMergedReviewPair,
 	type MonthCell,
 	type MonthRef,
 	nextMonth,
 	prevMonth,
 } from "@/data/learning-schedule";
+import { resolveCalendarArtifactRequest } from "@/lib/download/calendar-artifacts";
 import {
 	getStoredCalendarFlipView,
 	setStoredCalendarFlipView,
 } from "@/lib/calendar-flip-view";
 import { parseNumericalDateToHebcalDate } from "@/util/hebdates-util";
-import { CalendarPdfDownload } from "./CalendarPdfDownload";
+import {
+	CalendarPdfDownload,
+	type CalendarPdfRequest,
+} from "./CalendarPdfDownload";
 import {
 	buildCycleFlipMonths,
 	buildYearFlipMonths,
-	CALENDAR_WEEKDAYS,
 	type FlipMonthEntry,
 } from "./flip-month-data";
 import styles from "./learning-calendar.module.css";
@@ -48,6 +67,16 @@ const CalendarFlipBook = dynamic(
 	{ ssr: false },
 );
 
+const WEEKDAY_NAMES = [
+	{ short: "א", full: "ראשון" },
+	{ short: "ב", full: "שני" },
+	{ short: "ג", full: "שלישי" },
+	{ short: "ד", full: "רביעי" },
+	{ short: "ה", full: "חמישי" },
+	{ short: "ו", full: "שישי" },
+	{ short: "ש", full: "שבת" },
+] as const;
+
 const MONTH_QUERY_PARAM = "month";
 const VIEW_QUERY_PARAM = "view";
 const CYCLE_QUERY_PARAM = "cycle";
@@ -60,6 +89,8 @@ const VIEW_MODES = [
 ] as const;
 
 type ViewMode = (typeof VIEW_MODES)[number]["key"];
+
+type CalendarMonth = { ref: MonthRef; cells: MonthCell[] };
 
 function parseViewParam(raw: string | null): ViewMode {
 	return VIEW_MODES.some((mode) => mode.key === raw)
@@ -93,6 +124,24 @@ function formatMonthParam({ year, month }: MonthRef): string {
 	return `${year}${month.toString().padStart(2, "0")}`;
 }
 
+const dayAriaLabel = (day: CalendarDay): string => {
+	const dateLabel = getDateLabel(day.date);
+	if (day.perekId === undefined) {
+		return `${dateLabel} - לא משובץ`;
+	}
+	const perekLabel = getDaySourceLabel(day);
+	return day.status === "review"
+		? `${dateLabel} - חזרה: ${perekLabel}`
+		: `${dateLabel} - ${perekLabel}`;
+};
+
+/** One accessible name covering both dates of a merged review block. */
+const mergedAriaLabel = (friday: CalendarDay, shabbat: CalendarDay): string => {
+	/* istanbul ignore next -- the merge gate requires defined ids */
+	const ids = friday.reviewPerekIds ?? [];
+	return `${getDateLabel(friday.date)} - ${getDateLabel(shabbat.date)} - חזרה: ${getPerekRangeLabel(ids)}`;
+};
+
 interface LearningCalendarProps {
 	/** Hebrew year of the month to show when no ?month= param is present. */
 	initialYear: number;
@@ -100,48 +149,94 @@ interface LearningCalendarProps {
 	initialMonth: number;
 	/** Today marker as YYYYMMDD (uniform month), Jerusalem/nightfall aware. */
 	todayDateNumber: number;
+	/**
+	 * Static calendar-PDF manifest URL in the assets bucket (#2622); absent in
+	 * tests/stories, where the action falls back to the legacy API path.
+	 */
+	pdfManifestUrl?: string;
 }
 
 export function LearningCalendar({
 	initialYear,
 	initialMonth,
 	todayDateNumber,
+	pdfManifestUrl = "",
 }: LearningCalendarProps) {
 	const router = useRouter();
 	const searchParams = useSearchParams();
-	const monthParam = parseMonthParam(searchParams.get(MONTH_QUERY_PARAM));
-	const viewParam = parseViewParam(searchParams.get(VIEW_QUERY_PARAM));
-	const cycleParam = parseCycleParam(searchParams.get(CYCLE_QUERY_PARAM));
-
-	const [viewed, setViewed] = useState<MonthRef>(
-		() => monthParam ?? { year: initialYear, month: initialMonth },
+	const query = searchParams.toString();
+	const today = useMemo(
+		() => parseNumericalDateToHebcalDate(todayDateNumber),
+		[todayDateNumber],
 	);
-	const [viewMode, setViewMode] = useState<ViewMode>(viewParam);
-	const [viewedCycle, setViewedCycle] = useState<number | null>(cycleParam);
+	const window = useMemo(() => getCalendarCycleWindow(today), [today]);
+	const urlParams = useMemo(() => {
+		const params = new URLSearchParams(query);
+		return {
+			month: parseMonthParam(params.get(MONTH_QUERY_PARAM)),
+			view: parseViewParam(params.get(VIEW_QUERY_PARAM)),
+			cycle: parseCycleParam(params.get(CYCLE_QUERY_PARAM)),
+			flip: params.get(FLIP_QUERY_PARAM) === "1",
+		};
+	}, [query]);
+	const urlMonth = clampCalendarMonth(
+		urlParams.month ?? { year: initialYear, month: initialMonth },
+		window,
+	);
+	const urlCycle =
+		urlParams.cycle === null
+			? null
+			: Math.min(urlParams.cycle, window.next.number);
+	const windowBounds = `${window.minMonth.year}:${window.minMonth.month}:${window.maxMonth.year}:${window.maxMonth.month}:${window.next.number}`;
+	// A clock tick with unchanged limits is the same committed selection.
+	const urlSelection = useMemo(
+		() => ({
+			query,
+			windowBounds,
+			month: { year: urlMonth.year, month: urlMonth.month },
+			view: urlParams.view,
+			cycle: urlCycle,
+		}),
+		[
+			query,
+			windowBounds,
+			urlMonth.year,
+			urlMonth.month,
+			urlParams.view,
+			urlCycle,
+		],
+	);
+	const pendingQuery = useRef<{
+		base: typeof urlSelection;
+		value: string;
+	} | null>(null);
+	const [viewed, setViewed] = useState<MonthRef>(urlSelection.month);
+	const [viewMode, setViewMode] = useState<ViewMode>(urlSelection.view);
+	const [viewedCycle, setViewedCycle] = useState<number | null>(
+		urlSelection.cycle,
+	);
 
 	// Flipping presentation (#2993): an explicit ?flip=1 wins (shareable
 	// deep link); otherwise the persisted reader preference applies once
 	// mounted. Only meaningful for the year/cycle scopes.
-	const flipParam = searchParams.get(FLIP_QUERY_PARAM) === "1";
 	const [prefFlip, setPrefFlip] = useState<boolean | null>(null);
 	useEffect(() => {
 		setPrefFlip(getStoredCalendarFlipView() === "flip");
 	}, []);
 	const flipPresentation =
-		viewMode !== "month" && (flipParam || prefFlip === true);
+		viewMode !== "month" && (urlParams.flip || prefFlip === true);
 
-	// Keep the viewed month in sync with the URL (back/forward, shared links).
-	// While flipping, the book owns the viewed month and reports it back via
-	// ?month= — syncing from the param here would race the async router
-	// replace and flicker the position, so the book is the single writer.
+	// Apply actual URL changes (back/forward, shared links), without replacing
+	// an optimistic selection with the old URL while navigation is pending.
 	useEffect(() => {
-		if (flipPresentation) {
-			return;
-		}
-		if (monthParam && compareMonths(monthParam, viewed) !== 0) {
-			setViewed(monthParam);
-		}
-	}, [monthParam, viewed, flipPresentation]);
+		setViewed((current) =>
+			compareMonths(urlSelection.month, current) === 0
+				? current
+				: urlSelection.month,
+		);
+		setViewMode(urlSelection.view);
+		setViewedCycle(urlSelection.cycle);
+	}, [urlSelection]);
 
 	const pushParams = useCallback(
 		(updates: {
@@ -150,7 +245,11 @@ export function LearningCalendar({
 			cycle?: number;
 			flip?: "on" | "off";
 		}) => {
-			const params = new URLSearchParams(searchParams.toString());
+			// Compose rapid actions until Next commits a new URL snapshot.
+			const pending = pendingQuery.current;
+			const params = new URLSearchParams(
+				pending?.base === urlSelection ? pending.value : urlSelection.query,
+			);
 			if (updates.month) {
 				params.set(MONTH_QUERY_PARAM, formatMonthParam(updates.month));
 			}
@@ -165,17 +264,20 @@ export function LearningCalendar({
 			} else if (updates.flip === "off") {
 				params.delete(FLIP_QUERY_PARAM);
 			}
-			router.replace(`?${params.toString()}`, { scroll: false });
+			const value = params.toString();
+			pendingQuery.current = { base: urlSelection, value };
+			router.replace(`?${value}`, { scroll: false });
 		},
-		[router, searchParams],
+		[router, urlSelection],
 	);
 
 	const navigateMonth = useCallback(
 		(target: MonthRef) => {
-			setViewed(target);
-			pushParams({ month: target });
+			const bounded = clampCalendarMonth(target, window);
+			setViewed(bounded);
+			pushParams({ month: bounded });
 		},
-		[pushParams],
+		[pushParams, window],
 	);
 
 	const selectView = useCallback(
@@ -188,10 +290,11 @@ export function LearningCalendar({
 
 	const selectCycle = useCallback(
 		(cycleNumber: number) => {
-			setViewedCycle(cycleNumber);
-			pushParams({ cycle: cycleNumber });
+			const bounded = Math.max(1, Math.min(cycleNumber, window.next.number));
+			setViewedCycle(bounded);
+			pushParams({ cycle: bounded });
 		},
-		[pushParams],
+		[pushParams, window.next.number],
 	);
 
 	const selectPresentation = useCallback(
@@ -213,41 +316,44 @@ export function LearningCalendar({
 		requestAnimationFrame(() => overviewToggleRef.current?.focus());
 	}, [selectPresentation]);
 
-	const cells = useMemo(() => buildMonth(viewed.year, viewed.month), [viewed]);
+	const flipJumpNonce = useRef(0);
+	const [flipJump, setFlipJump] = useState<{
+		month: MonthRef;
+		nonce: number;
+	} | null>(null);
+	const requestFlipJump = useCallback((month: MonthRef) => {
+		flipJumpNonce.current += 1;
+		setFlipJump({ month, nonce: flipJumpNonce.current });
+	}, []);
 
-	// The cycle owning most of the visible month: the cycle of the first
-	// scheduled day, else of the last scheduled day (inter-cycle gap months).
+	const cells = useMemo(
+		() => buildVisibleCalendarMonth(viewed.year, viewed.month, window),
+		[viewed, window],
+	);
+
+	// The first scheduled day identifies the visible month's cycle.
 	const displayedCycle = useMemo(() => {
 		const days = cells.flatMap((cell) => (cell.day ? [cell.day] : []));
-		const anchor =
-			days.find((day) => day.cycle !== undefined) ??
-			[...days].reverse().find((day) => day.cycle !== undefined);
+		const anchor = days.find((day) => day.cycle !== undefined);
 		return anchor?.cycle !== undefined ? getCycle(anchor.cycle) : null;
 	}, [cells]);
 
-	const cycleOptions = useMemo(() => {
-		const confirmedCount = getConfirmedCycleCount();
-		const max =
-			displayedCycle && displayedCycle.number > confirmedCount
-				? displayedCycle.number
-				: confirmedCount;
-		return Array.from({ length: max }, (_, i) => getCycle(i + 1));
-	}, [displayedCycle]);
+	const cycleOptions = useMemo(
+		() => Array.from({ length: window.next.number }, (_, i) => getCycle(i + 1)),
+		[window.next.number],
+	);
 
 	const yearOptions = useMemo(() => {
-		const confirmedCount = getConfirmedCycleCount();
 		const years = new Set<number>();
-		const lastConfirmed = getCycle(confirmedCount);
 		for (
-			let year = getCycle(1).start.year;
-			year <= lastConfirmed.end.year;
+			let year = window.minMonth.year;
+			year <= window.maxMonth.year;
 			year += 1
 		) {
 			years.add(year);
 		}
-		years.add(viewed.year);
 		return [...years].sort((a, b) => a - b);
-	}, [viewed.year]);
+	}, [window]);
 
 	const onCycleSelected = useCallback(
 		(cycleNumber: number) => {
@@ -271,6 +377,22 @@ export function LearningCalendar({
 		},
 		[navigateMonth, viewed.month],
 	);
+
+	const backToToday = useCallback(() => {
+		const cycle = window.current?.number ?? window.next.number;
+		setViewedCycle(cycle);
+		const month = clampCalendarMonth(
+			{ year: today.year, month: today.getUniformMonth() },
+			window,
+		);
+		setViewed(month);
+		pushParams({ month, cycle });
+		// The flip book keeps its own position; ask it to jump alongside the
+		// URL/state update (a scope change remounts it on `initialMonth`).
+		if (flipPresentation) {
+			requestFlipJump(month);
+		}
+	}, [pushParams, today, window, flipPresentation, requestFlipJump]);
 
 	const openPerek = useCallback(
 		(perekId: number) => {
@@ -304,18 +426,31 @@ export function LearningCalendar({
 		);
 	}, [cells, todayDateNumber]);
 
-	const resolvedCycle = viewedCycle ?? contextualCycle;
+	const resolvedCycle = Math.min(
+		viewedCycle ?? contextualCycle,
+		window.next.number,
+	);
+
+	// Stable prop for the memoized MiniMonth grid — see below.
+	const dimOutsideCycle = useCallback(
+		(day: CalendarDay) => day.cycle !== resolvedCycle,
+		[resolvedCycle],
+	);
 
 	// Ordered month sheets for the flipping book (#2993); empty while the
-	// overview is shown so no schedule work is wasted on it.
+	// overview is shown so no schedule work is wasted on it. Window-aware
+	// builders keep the book identical to the overview grids. The memo keys
+	// on scope identity only — flipping pages inside a cycle changes
+	// `viewed.year` and must not rebuild every sheet.
+	const flipYear = viewMode === "year" ? viewed.year : null;
 	const flipMonths = useMemo<FlipMonthEntry[]>(() => {
 		if (!flipPresentation) {
 			return [];
 		}
-		return viewMode === "year"
-			? buildYearFlipMonths(viewed.year)
-			: buildCycleFlipMonths(resolvedCycle);
-	}, [flipPresentation, viewMode, viewed.year, resolvedCycle]);
+		return viewMode === "year" && flipYear !== null
+			? buildYearFlipMonths(flipYear, window)
+			: buildCycleFlipMonths(resolvedCycle, window);
+	}, [flipPresentation, viewMode, flipYear, resolvedCycle, window]);
 
 	// While flipping a full cycle without an explicit ?cycle=, pin the
 	// resolved cycle into the URL and state: each flipped month would
@@ -325,8 +460,7 @@ export function LearningCalendar({
 		if (
 			flipPresentation &&
 			viewMode === "cycle" &&
-			cycleParam === null &&
-			viewedCycle === null
+			urlSelection.cycle === null
 		) {
 			setViewedCycle(resolvedCycle);
 			pushParams({ cycle: resolvedCycle });
@@ -334,21 +468,10 @@ export function LearningCalendar({
 	}, [
 		flipPresentation,
 		viewMode,
-		cycleParam,
-		viewedCycle,
+		urlSelection.cycle,
 		resolvedCycle,
 		pushParams,
 	]);
-
-	const flipJumpNonce = useRef(0);
-	const [flipJump, setFlipJump] = useState<{
-		month: MonthRef;
-		nonce: number;
-	} | null>(null);
-	const requestFlipJump = useCallback((month: MonthRef) => {
-		flipJumpNonce.current += 1;
-		setFlipJump({ month, nonce: flipJumpNonce.current });
-	}, []);
 
 	const handleFlipMonthChange = useCallback(
 		(month: MonthRef) => {
@@ -357,71 +480,58 @@ export function LearningCalendar({
 		},
 		[pushParams],
 	);
-
-	const backToToday = useCallback(() => {
-		const today = parseNumericalDateToHebcalDate(todayDateNumber);
-		const target: MonthRef = {
-			year: today.year,
-			month: today.getUniformMonth(),
-		};
-		if (flipPresentation && viewMode === "cycle") {
-			const inScope = flipMonths.some(
-				(entry) => compareMonths(entry.ref, target) === 0,
-			);
-			if (!inScope) {
-				// Today lies outside the displayed cycle: follow it into
-				// today's own cycle so היום always lands on today.
-				const todayCycle = getCycleForDate(today)?.number;
-				if (todayCycle !== undefined && todayCycle !== resolvedCycle) {
-					setViewedCycle(todayCycle);
-					setViewed(target);
-					pushParams({ month: target, cycle: todayCycle });
-					requestFlipJump(target);
-					return;
-				}
-			}
-		}
-		navigateMonth(target);
-		if (flipPresentation) {
-			requestFlipJump(target);
-		}
-	}, [
-		flipPresentation,
-		viewMode,
-		flipMonths,
-		resolvedCycle,
-		pushParams,
-		navigateMonth,
-		requestFlipJump,
-		todayDateNumber,
-	]);
+	const canExport = canExportCalendarPeriod(
+		viewMode === "cycle"
+			? { view: "cycle", cycle: resolvedCycle }
+			: { view: viewMode, ...viewed },
+		today,
+	);
 
 	// The PDF request captures this label+URL at click time (#2621) — a
 	// pending download always keeps the period it was started for.
 	const pdfScopeLabel =
 		viewMode === "cycle"
-			? `מחזור ${resolvedCycle}`
+			? getCycleName(getCycle(resolvedCycle))
 			: viewMode === "year"
 				? `שנת ${getYearLabel(viewed.year)}`
 				: getMonthLabel(viewed);
-	const pdfUrl = `/api/calendar-pdf?month=${formatMonthParam(viewed)}&view=${viewMode}&cycle=${resolvedCycle}`;
+	const pdfRequest = useMemo<CalendarPdfRequest>(() => {
+		const params = new URLSearchParams({
+			month: formatMonthParam(viewed),
+			view: viewMode,
+			cycle: String(resolvedCycle),
+		});
+		// The shared resolver keeps the canonical artifact key and filename
+		// identical to how the legacy route reads these params (#2622).
+		const resolved = resolveCalendarArtifactRequest(params);
+		return {
+			apiUrl: `/api/calendar-pdf?${params.toString()}`,
+			manifestUrl: pdfManifestUrl,
+			artifactKey: resolved.ok
+				? resolved.key
+				: /* istanbul ignore next -- defensive: our own params always parse */ "",
+			filename: resolved.ok
+				? resolved.filename
+				: /* istanbul ignore next -- defensive: our own params always parse */ "learning-calendar.pdf",
+		};
+	}, [viewed, viewMode, resolvedCycle, pdfManifestUrl]);
 
 	const yearMonths = useMemo(
 		() =>
 			viewMode === "year"
-				? getMonthOrder(viewed.year).map((month) =>
-						buildMonth(viewed.year, month),
+				? visibleCalendarMonths(viewed.year, window).map((month) =>
+						buildVisibleCalendarMonth(viewed.year, month, window),
 					)
 				: [],
-		[viewMode, viewed.year],
+		[viewMode, viewed.year, window],
 	);
 
 	const cycleMonths = useMemo(() => {
 		if (viewMode !== "cycle") {
-			return [] as MonthCell[][];
+			return [] as CalendarMonth[];
 		}
 		const cycle = getCycle(resolvedCycle);
-		const months: MonthCell[][] = [];
+		const months: CalendarMonth[] = [];
 		let ref: MonthRef = getCycleStartMonth(cycle);
 		const endRef: MonthRef = {
 			year: cycle.end.year,
@@ -432,37 +542,31 @@ export function LearningCalendar({
 			guard < 50 && compareMonths(ref, endRef) <= 0;
 			guard += 1
 		) {
-			months.push(buildMonth(ref.year, ref.month));
+			months.push({
+				ref,
+				cells: buildVisibleCalendarMonth(ref.year, ref.month, window),
+			});
 			ref = nextMonth(ref);
 		}
 		return months;
-	}, [viewMode, resolvedCycle]);
+	}, [viewMode, resolvedCycle, window]);
 
-	const dayAriaLabel = useCallback((day: CalendarDay): string => {
-		const dateLabel = getDateLabel(day.date);
-		if (day.perekId === undefined) {
-			return `${dateLabel} - לא משובץ`;
+	/** Saturday dates swallowed by Friday's merged block in `cells`. */
+	const mergedSaturdays = useMemo(() => {
+		const merged = new Set<number>();
+		for (let i = 0; i + 1 < cells.length; i++) {
+			const shabbat = cells[i + 1].day;
+			if (isMergedReviewPair(cells[i].day, shabbat)) {
+				merged.add(shabbat.dateNumber);
+			}
 		}
-		const perekLabel = getPerekSource(day.perekId);
-		const first = day.reviewPerekIds?.[0];
-		const reviewLabel =
-			day.status === "review" && first !== undefined && first !== day.perekId
-				? `${getPerekSource(first)} - ${perekLabel}`
-				: perekLabel;
-		return day.status === "review"
-			? `${dateLabel} - חזרה: ${reviewLabel}`
-			: `${dateLabel} - ${perekLabel}`;
-	}, []);
-
-	// Out-of-cycle days in a full-cycle book render dimmed and inert —
-	// identical rule to the overview's MiniMonth.
-	const flipDayDimmed = useCallback(
-		(day: CalendarDay) => day.cycle !== resolvedCycle,
-		[resolvedCycle],
-	);
+		return merged;
+	}, [cells]);
 
 	return (
-		<main className={`${styles.page} ${flipPresentation ? styles.pageFlip : ""}`}>
+		<main
+			className={`${styles.page} ${flipPresentation ? styles.pageFlip : ""}`}
+		>
 			<h1 className={styles.title}>לוח לימוד יומי</h1>
 
 			<div className={styles.viewToggle}>
@@ -527,7 +631,13 @@ export function LearningCalendar({
 										? "שנה קודמת"
 										: "חודש קודם"
 							}
-							disabled={viewMode === "cycle" && resolvedCycle <= 1}
+							disabled={
+								viewMode === "cycle"
+									? resolvedCycle <= 1
+									: viewMode === "year"
+										? viewed.year <= window.minMonth.year
+										: compareMonths(viewed, window.minMonth) <= 0
+							}
 						>
 							‹
 						</button>
@@ -555,6 +665,13 @@ export function LearningCalendar({
 										? "שנה הבאה"
 										: "חודש הבא"
 							}
+							disabled={
+								viewMode === "cycle"
+									? resolvedCycle >= window.next.number
+									: viewMode === "year"
+										? viewed.year >= window.maxMonth.year
+										: compareMonths(viewed, window.maxMonth) >= 0
+							}
 						>
 							›
 						</button>
@@ -573,7 +690,7 @@ export function LearningCalendar({
 								})
 							}
 						>
-							{getMonthOrder(viewed.year).map((month) => (
+							{visibleCalendarMonths(viewed.year, window).map((month) => (
 								<option key={month} value={month}>
 									{getMonthName(viewed.year, month)}
 								</option>
@@ -600,7 +717,13 @@ export function LearningCalendar({
 					</label>
 				)}
 				{!flipPresentation && (
-					<CalendarPdfDownload url={pdfUrl} scopeLabel={pdfScopeLabel} />
+					<CalendarPdfDownload
+						request={pdfRequest}
+						scopeLabel={pdfScopeLabel}
+						unavailableReason={
+							canExport ? undefined : CALENDAR_PDF_UNAVAILABLE
+						}
+					/>
 				)}
 			</div>
 
@@ -628,13 +751,17 @@ export function LearningCalendar({
 						{displayedCycle === null && <option value="">-</option>}
 						{cycleOptions.map((cycle) => (
 							<option key={cycle.number} value={cycle.number}>
-								מחזור {cycle.number}
-								{cycle.projected ? " (משוער)" : ""}
+								{getCycleName(cycle)}
 							</option>
 						))}
 					</select>
 				</label>
-				{displayedCycle && (
+				{/* Month/year views keep the contextual cycle's range beside the
+				    picker; in מחזור מלא the h2 already carries the selected
+				    cycle's full label, so repeating it here would duplicate —
+				    and displayedCycle describes the viewed month, not the
+				    chosen cycle (#2725). */}
+				{displayedCycle && viewMode !== "cycle" && (
 					<span className={styles.cycleRange}>
 						{getCycleLabel(displayedCycle)}
 					</span>
@@ -663,17 +790,21 @@ export function LearningCalendar({
 					jumpRequest={flipJump}
 					onOpenPerek={openPerek}
 					dayAriaLabel={dayAriaLabel}
-					isDimmed={viewMode === "cycle" ? flipDayDimmed : undefined}
+					mergedDayAriaLabel={mergedAriaLabel}
+					isDimmed={viewMode === "cycle" ? dimOutsideCycle : undefined}
 					onToday={backToToday}
 					onShowOverview={handleShowOverview}
-					pdfUrl={pdfUrl}
+					pdfRequest={pdfRequest}
 					pdfScopeLabel={pdfScopeLabel}
+					pdfUnavailableReason={
+						canExport ? undefined : CALENDAR_PDF_UNAVAILABLE
+					}
 				/>
 			)}
 
 			{viewMode === "year" && !flipPresentation && (
 				<div className={styles.yearGrid}>
-					{getMonthOrder(viewed.year).map((month, index) => (
+					{visibleCalendarMonths(viewed.year, window).map((month, index) => (
 						<MiniMonth
 							key={month}
 							title={getMonthName(viewed.year, month)}
@@ -681,6 +812,7 @@ export function LearningCalendar({
 							todayDateNumber={todayDateNumber}
 							onOpen={openPerek}
 							dayAriaLabel={dayAriaLabel}
+							mergedDayAriaLabel={mergedAriaLabel}
 						/>
 					))}
 				</div>
@@ -688,18 +820,16 @@ export function LearningCalendar({
 
 			{viewMode === "cycle" && !flipPresentation && (
 				<div className={styles.yearGrid}>
-					{cycleMonths.map((cellsForMonth) => (
+					{cycleMonths.map(({ ref, cells: cellsForMonth }) => (
 						<MiniMonth
-							key={
-								cellsForMonth.find((cell) => cell.day !== undefined)?.day
-									?.dateNumber
-							}
-							title={getMonthLabelForCells(cellsForMonth)}
+							key={ref.year * 10000 + ref.month * 100 + 1}
+							title={getMonthLabel(ref)}
 							cells={cellsForMonth}
 							todayDateNumber={todayDateNumber}
 							onOpen={openPerek}
 							dayAriaLabel={dayAriaLabel}
-							dimmed={(day) => day.cycle !== resolvedCycle}
+							mergedDayAriaLabel={mergedAriaLabel}
+							dimmed={dimOutsideCycle}
 						/>
 					))}
 				</div>
@@ -708,7 +838,7 @@ export function LearningCalendar({
 			{viewMode === "month" && (
 				<>
 					<div className={styles.weekdays}>
-						{CALENDAR_WEEKDAYS.map((name) => (
+						{WEEKDAY_NAMES.map((name) => (
 							<div key={name.full} className={styles.weekday}>
 								<span aria-hidden="true">{name.short}</span>
 								<span className={styles.srOnly}>{name.full}</span>
@@ -717,23 +847,40 @@ export function LearningCalendar({
 					</div>
 
 					<div className={styles.grid}>
-						{cells.map((cell) =>
-							cell.day === undefined ? (
-								<div
-									key={`blank-${cell.blankColumn}`}
-									className={styles.blankCell}
-									aria-hidden="true"
-								/>
-							) : (
+						{cells.map((cell, index) => {
+							if (cell.day === undefined) {
+								return (
+									<div
+										key={`blank-${cell.blankColumn}`}
+										className={styles.blankCell}
+										aria-hidden="true"
+									/>
+								);
+							}
+							const day = cell.day;
+							if (mergedSaturdays.has(day.dateNumber)) {
+								return null;
+							}
+							const shabbat = cells[index + 1]?.day;
+							const merged = isMergedReviewPair(day, shabbat)
+								? shabbat
+								: undefined;
+							return (
 								<CalendarCell
-									key={cell.day.dateNumber}
-									day={cell.day}
-									isToday={cell.day.dateNumber === todayDateNumber}
+									key={day.dateNumber}
+									day={day}
+									mergedWith={merged}
+									isToday={
+										day.dateNumber === todayDateNumber ||
+										merged?.dateNumber === todayDateNumber
+									}
 									onOpen={openPerek}
-									ariaLabel={dayAriaLabel(cell.day)}
+									ariaLabel={
+										merged ? mergedAriaLabel(day, merged) : dayAriaLabel(day)
+									}
 								/>
-							),
-						)}
+							);
+						})}
 					</div>
 				</>
 			)}
@@ -771,11 +918,14 @@ export function LearningCalendar({
 
 function CalendarCell({
 	day,
+	mergedWith,
 	isToday,
 	onOpen,
 	ariaLabel,
 }: {
 	day: CalendarDay;
+	/** Saturday when this Friday cell spans the shared review block (#2365). */
+	mergedWith?: CalendarDay;
 	isToday: boolean;
 	/** Called only for tappable cells, so the perek id is always present. */
 	onOpen: (perekId: number) => void;
@@ -784,13 +934,26 @@ function CalendarCell({
 	const classNames = [
 		styles.cell,
 		day.status === "review" ? styles.reviewCell : "",
+		mergedWith ? styles.mergedReviewCell : "",
 		day.status === "none" ? styles.noneCell : "",
 		isToday ? styles.todayCell : "",
 	]
 		.filter(Boolean)
 		.join(" ");
 
-	const dayNumber = (
+	// Merged block: each date sits centered over its own weekday column —
+	// the column headers already mark ו/ש, so no day letters inside (#2365).
+	const dayNumber = mergedWith ? (
+		<span className={styles.dayNumber}>
+			<span className={styles.mergedDate}>
+				{toLetters(day.day, { addQuotes: true })}
+			</span>
+			<span className={styles.mergedDate}>
+				{toLetters(mergedWith.day, { addQuotes: true })}
+			</span>
+			{isToday ? <span className={styles.srOnly}> (היום)</span> : null}
+		</span>
+	) : (
 		<span className={styles.dayNumber}>
 			{toLetters(day.day, { addQuotes: true })}
 			{isToday ? <span className={styles.srOnly}> (היום)</span> : null}
@@ -807,6 +970,7 @@ function CalendarCell({
 	}
 
 	const perekId = day.perekId;
+	const perekLabel = getDaySourceLabel(day);
 	return (
 		<button
 			type="button"
@@ -815,7 +979,7 @@ function CalendarCell({
 			onClick={() => onOpen(perekId)}
 		>
 			{dayNumber}
-			<span className={styles.perekRef}>{getPerekSource(perekId)}</span>
+			<span className={styles.perekRef}>{perekLabel}</span>
 			{day.status === "review" && (
 				<span className={styles.reviewBadge}>חזרה</span>
 			)}
@@ -823,19 +987,15 @@ function CalendarCell({
 	);
 }
 
-function getMonthLabelForCells(cells: MonthCell[]): string {
-	const day = cells.find((cell) => cell.day !== undefined)?.day;
-	return day === undefined
-		? ""
-		: getMonthLabel({ year: day.date.year, month: day.date.getUniformMonth() });
-}
-
-function MiniMonth({
+// Memoized: a year/cycle view mounts a dozen+ of these (~1500 cells in a full
+// cycle, #2765); unchanged months must not re-render on unrelated state changes.
+const MiniMonth = memo(function MiniMonth({
 	title,
 	cells,
 	todayDateNumber,
 	onOpen,
 	dayAriaLabel,
+	mergedDayAriaLabel,
 	dimmed,
 }: {
 	title: string;
@@ -843,50 +1003,70 @@ function MiniMonth({
 	todayDateNumber: number;
 	onOpen: (perekId: number) => void;
 	dayAriaLabel: (day: CalendarDay) => string;
+	/** Both dates in one name for a merged review block (#2365). */
+	mergedDayAriaLabel: (friday: CalendarDay, shabbat: CalendarDay) => string;
 	dimmed?: (day: CalendarDay) => boolean;
 }) {
 	return (
 		<section className={styles.miniMonth}>
 			<h3 className={styles.miniMonthTitle}>{title}</h3>
 			<div className={styles.miniWeekdays} aria-hidden="true">
-				{CALENDAR_WEEKDAYS.map((name) => (
+				{WEEKDAY_NAMES.map((name) => (
 					<span key={name.full} className={styles.miniWeekday}>
 						{name.short}
 					</span>
 				))}
 			</div>
 			<div className={styles.miniGrid}>
-				{cells.map((cell) =>
-					cell.day === undefined ? (
-						<span
-							key={`blank-${cell.blankColumn}`}
-							className={styles.miniCell}
-							aria-hidden="true"
-						/>
-					) : (
+				{cells.map((cell, index) => {
+					if (cell.day === undefined) {
+						return (
+							<span
+								key={`blank-${cell.blankColumn}`}
+								className={styles.miniCell}
+								aria-hidden="true"
+							/>
+						);
+					}
+					const day = cell.day;
+					if (index > 0 && isMergedReviewPair(cells[index - 1].day, day)) {
+						return null;
+					}
+					const shabbat = cells[index + 1]?.day;
+					const merged = isMergedReviewPair(day, shabbat) ? shabbat : undefined;
+					return (
 						<MiniCell
-							key={cell.day.dateNumber}
-							day={cell.day}
-							isToday={cell.day.dateNumber === todayDateNumber}
-							dimmed={dimmed?.(cell.day) === true}
+							key={day.dateNumber}
+							day={day}
+							mergedWith={merged}
+							isToday={
+								day.dateNumber === todayDateNumber ||
+								merged?.dateNumber === todayDateNumber
+							}
+							dimmed={dimmed?.(day) === true && (!merged || dimmed(merged))}
 							onOpen={onOpen}
-							ariaLabel={dayAriaLabel(cell.day)}
+							ariaLabel={
+								merged ? mergedDayAriaLabel(day, merged) : dayAriaLabel(day)
+							}
 						/>
-					),
-				)}
+					);
+				})}
 			</div>
 		</section>
 	);
-}
+});
 
 function MiniCell({
 	day,
+	mergedWith,
 	isToday,
 	dimmed,
 	onOpen,
 	ariaLabel,
 }: {
 	day: CalendarDay;
+	/** Saturday when this Friday cell spans the shared review block (#2365). */
+	mergedWith?: CalendarDay;
 	isToday: boolean;
 	dimmed: boolean;
 	onOpen: (perekId: number) => void;
@@ -895,13 +1075,31 @@ function MiniCell({
 	const classNames = [
 		styles.miniCell,
 		day.status === "review" ? styles.miniReviewCell : "",
+		mergedWith ? styles.miniMergedCell : "",
 		day.status === "none" ? styles.miniNoneCell : "",
 		dimmed ? styles.miniDimmed : "",
 		isToday ? styles.miniTodayCell : "",
 	]
 		.filter(Boolean)
 		.join(" ");
-	const content = toLetters(day.day, { addQuotes: true });
+	const dateText = mergedWith
+		? `${toLetters(day.day, { addQuotes: true })} - ${toLetters(mergedWith.day, { addQuotes: true })}`
+		: toLetters(day.day, { addQuotes: true });
+	// Dimmed out-of-cycle cells keep the established date-only look — their
+	// assignment belongs to another selected cycle, exactly like the calendar
+	// PDFs, which print no label on dimmed cells (#2975).
+	const source = dimmed ? "" : getDaySourceLabel(day);
+	const content = (
+		<>
+			<span className={styles.miniDayText}>{dateText}</span>
+			{source !== "" && (
+				<span className={styles.miniPerekRef}>{source}</span>
+			)}
+			{source !== "" && day.status === "review" && (
+				<span className={styles.miniReviewBadge}>חזרה</span>
+			)}
+		</>
+	);
 
 	if (day.perekId === undefined || dimmed) {
 		return (

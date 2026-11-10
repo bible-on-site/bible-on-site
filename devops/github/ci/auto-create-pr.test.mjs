@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { headAlreadyOwned } from "./pr-head-already-owned.mjs";
 
 const workflow = readFileSync(
 	new URL("../../../.github/workflows/auto-create-pr.yml", import.meta.url),
@@ -35,10 +36,14 @@ gh() {
     [ "$body" = "$PR_BODY" ] || return 99
     return "$CREATE_EXIT"
   fi
-  [ "$1 $2 $3 $4 $5" = "pr list --state open --head" ] || return 99
+  [ "$1 $2 $3 $4 $5" = "pr list --state all --head" ] || return 99
   [ "$6" = "$PR_HEAD" ] || return 99
   [ "$LIST_EXIT" -eq 0 ] || return "$LIST_EXIT"
-  printf '%s\\n' "$EXISTING"
+  if [ "$EXISTING" -eq 1 ]; then
+    printf '[{"state":"OPEN","headRefOid":"%s"}]\\n' "$PR_HEAD_SHA"
+  else
+    printf '[]\\n'
+  fi
 }
 `;
 const shell =
@@ -62,6 +67,7 @@ for (const [name, create, existing, list, expected] of [
 					EXISTING: String(existing),
 					LIST_EXIT: String(list),
 					PR_HEAD: "codex/test-$literal",
+					PR_HEAD_SHA: "a".repeat(40),
 					PR_TITLE: "Literal title $(unexecuted)",
 					PR_BODY: "First line\nSecond line with `literal` and $text",
 				},
@@ -102,6 +108,7 @@ for (const existing of [0, 1]) {
 							LIST_EXIT: "0",
 							GITHUB_OUTPUT: output.split("\\").join("/"),
 							PR_HEAD: "codex/stacked-$literal",
+							PR_HEAD_SHA: "a".repeat(40),
 							PR_TITLE: "Stacked branch",
 							PR_BODY: "Body",
 						},
@@ -116,3 +123,41 @@ for (const existing of [0, 1]) {
 		},
 	);
 }
+
+for (const state of ["MERGED", "CLOSED"]) {
+	test(`a delayed push is already owned by its ${state} PR`, () => {
+		assert.equal(
+			headAlreadyOwned([{ state, headRefOid: "a".repeat(40) }], "a".repeat(40)),
+			1,
+		);
+	});
+	test(`reusing a branch after a ${state} PR permits a new head`, () => {
+		assert.equal(
+			headAlreadyOwned([{ state, headRefOid: "b".repeat(40) }], "a".repeat(40)),
+			0,
+		);
+	});
+}
+test("an open stacked PR owns its branch even when a later push moved its head", () => {
+	assert.equal(
+		headAlreadyOwned(
+			[{ state: "OPEN", headRefOid: "b".repeat(40) }],
+			"a".repeat(40),
+		),
+		1,
+	);
+});
+test("invalid or incomplete ownership cannot silently skip creation", () => {
+	for (const prs of [
+		null,
+		[{}],
+		[{ state: "UNKNOWN", headRefOid: "a".repeat(40) }],
+		Array.from({ length: 100 }, () => ({
+			state: "CLOSED",
+			headRefOid: "b".repeat(40),
+		})),
+	]) {
+		assert.throws(() => headAlreadyOwned(prs, "a".repeat(40)));
+	}
+	assert.throws(() => headAlreadyOwned([], "master"));
+});

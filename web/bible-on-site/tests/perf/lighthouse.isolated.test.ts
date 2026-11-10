@@ -1,9 +1,30 @@
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import getPort from "get-port";
-import lighthouse, { desktopConfig, type Flags, type Result } from "lighthouse";
-import { getLighthouseMeasure, reportBenchmark } from "../util/benchmark";
+import lighthouse, {
+	desktopConfig,
+	type Flags,
+	type Result,
+	type RunnerResult,
+} from "lighthouse";
+import { pageFunctions } from "lighthouse/core/lib/page-functions.js";
+import { lighthouseCpuProfile } from "../../scripts/lighthouse-cpu-profile.mjs";
+import { largestObservedTopLevelTask } from "../../scripts/lighthouse-observed-task.mjs";
+import {
+	lighthouseBenchmarkEntry,
+	lighthouseBenchmarkName,
+	readPerformanceReports,
+	saveLighthouseArtifacts,
+	saveLighthouseReport,
+	writePerformanceIndex,
+} from "../../scripts/performance-report.mjs";
+import {
+	getLighthouseMeasure,
+	reportBenchmark,
+	webVitalsMeasure,
+} from "../util/benchmark";
 import { test as base, expect } from "../util/playwright/test-fixture";
 
 type DeviceStrategy = "mobile" | "desktop";
@@ -26,6 +47,10 @@ const STRATEGIES: DeviceStrategy[] = ["mobile", "desktop"];
 
 type ResultKey = `${string}-${DeviceStrategy}`;
 type LighthouseResultsMap = Map<ResultKey, Result>;
+const REPORTS_DIR = resolve(
+	__dirname,
+	"../../.playwright-report/perf/diagnostics/lighthouse",
+);
 
 function getResultKey(path: string, strategy: DeviceStrategy): ResultKey {
 	return `${path}-${strategy}`;
@@ -49,6 +74,28 @@ const test = base.extend<
 	lighthouseResults: [
 		async ({ lighthousePort }, use) => {
 			const results: LighthouseResultsMap = new Map();
+			// A retried worker finds earlier attempts' namespaced reports on
+			// disk; seed the index with them so summary.json/markdown cover
+			// every attempt, not only this fixture lifetime's audits. The
+			// first run has no index yet, and a worker killed mid-write can
+			// leave a truncated one — degrade to this attempt's reports.
+			let reports: ReturnType<typeof saveLighthouseReport>[] = [];
+			try {
+				reports = readPerformanceReports(REPORTS_DIR);
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+					console.warn("Could not seed prior Lighthouse reports:", error);
+			}
+			const bufferedArtifacts: {
+				rawReport: string;
+				artifacts: RunnerResult["artifacts"];
+			}[] = [];
+			// Each worker-fixture lifetime audits the same four page/device
+			// pairs, but a failed test stops the worker and Playwright retries
+			// in a fresh process. Namespace reports by worker pid + a random
+			// attempt id so a retry's raw reports and bound *.artifacts.json
+			// never collide with or overwrite a previous attempt's evidence.
+			const reportRun = `${process.pid}-${randomBytes(6).toString("hex")}`;
 
 			// Launch browser once for all audits
 			const context = await chromium.launchPersistentContext(
@@ -69,19 +116,64 @@ const test = base.extend<
 					for (const strategy of STRATEGIES) {
 						const page = await context.newPage();
 						const url = `${BASE_URL}${path}`;
+						// Probe the empty page using Lighthouse's own CPU benchmark.
+						// Fixed targets keep heterogeneous runners comparable.
+						const cpuIndex = await page.evaluate(
+							pageFunctions.computeBenchmarkIndex,
+						);
 
 						// Warm up the page
 						await page.goto(url, { waitUntil: "networkidle" });
 						await page.close();
 
 						// Run Lighthouse
-						const lhr = await runLighthouseAudit(url, strategy, lighthousePort);
-						saveReport(lhr, strategy, path);
+						const audit = await runLighthouseAudit(
+							url,
+							strategy,
+							lighthousePort,
+							cpuIndex,
+						);
+						const lhr = audit.lhr;
+						// Observed trace timing of the largest top-level task,
+						// recorded even when the modeled TBT stays at 0. This is
+						// diagnostics-only: a malformed trace must not cost the
+						// audit's report or its buffered artifacts below.
+						let observedTask: ObservedTopLevelTask | null = null;
+						let observedTaskError: string | null = null;
+						try {
+							observedTask = await largestObservedTopLevelTask(audit.artifacts);
+						} catch (error) {
+							observedTaskError =
+								error instanceof Error ? error.message : String(error);
+							console.warn(
+								`Largest observed task extraction failed for ${url} (${strategy}):`,
+								error,
+							);
+						}
+						const report = saveReport(lhr, strategy, {
+							run: reportRun,
+							observedTask,
+							observedTaskError,
+						});
+						reports.push(report);
+						bufferedArtifacts.push({
+							rawReport: report.rawReport,
+							artifacts: audit.artifacts,
+						});
+						writePerformanceIndex(REPORTS_DIR, reports);
 						results.set(getResultKey(path, strategy), lhr);
 					}
 				}
 			} finally {
-				await context.close();
+				try {
+					await context.close();
+				} finally {
+					// These are the original gatherer's traces and network records.
+					// Flush after all audits, including on an early setup/close
+					// failure; a later diagnostic navigation cannot explain the
+					// original sample.
+					saveLighthouseArtifacts(REPORTS_DIR, bufferedArtifacts);
+				}
 			}
 
 			await use(results);
@@ -417,7 +509,9 @@ async function runLighthouseAudit(
 	url: string,
 	strategy: DeviceStrategy,
 	port: number,
-): Promise<Result> {
+	hostBenchmarkIndex: number,
+): Promise<RunnerResult> {
+	const cpuProfile = lighthouseCpuProfile(hostBenchmarkIndex, strategy);
 	const flags: Flags = {
 		logLevel: "error",
 		output: "json",
@@ -425,6 +519,7 @@ async function runLighthouseAudit(
 		port,
 		// Don't reset storage since we're using Playwright's context
 		disableStorageReset: true,
+		throttling: { cpuSlowdownMultiplier: cpuProfile.cpuSlowdownMultiplier },
 	};
 
 	// Use desktop config for desktop strategy
@@ -436,21 +531,36 @@ async function runLighthouseAudit(
 		throw new Error("Lighthouse audit failed - no result returned");
 	}
 
-	return runnerResult.lhr;
+	Object.assign(runnerResult.lhr, { cpuCalibration: cpuProfile });
+	return runnerResult;
 }
 
-function saveReport(lhr: Result, strategy: DeviceStrategy, path: string) {
-	const reportsDir = resolve(__dirname, "../../.lighthouse-reports");
-	mkdirSync(reportsDir, { recursive: true });
+type ObservedTopLevelTask = NonNullable<
+	Awaited<ReturnType<typeof largestObservedTopLevelTask>>
+>;
 
-	const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-	const safePath = path.replace(/\//g, "_");
-	const reportPath = resolve(
-		reportsDir,
-		`${strategy}${safePath}-${timestamp}.json`,
-	);
-	writeFileSync(reportPath, JSON.stringify(lhr, null, 2));
-	// Report saved silently - path available in .lighthouse-reports directory
+function saveReport(
+	lhr: Result,
+	strategy: DeviceStrategy,
+	diagnostics: {
+		run: string;
+		observedTask?: ObservedTopLevelTask | null;
+		observedTaskError?: string | null;
+	},
+) {
+	const report = saveLighthouseReport(REPORTS_DIR, lhr, {
+		device: strategy,
+		run: diagnostics.run,
+		knownIssues: [...KNOWN_ISSUES.values()]
+			.filter(
+				(issue) => issue.strategy === "all" || issue.strategy === strategy,
+			)
+			.map((issue) => issue.id),
+		largestObservedTask: diagnostics.observedTask ?? undefined,
+		largestObservedTaskError: diagnostics.observedTaskError ?? undefined,
+	});
+	console.log(`Lighthouse ${report.url} (${strategy}):`, report.metrics);
+	return report;
 }
 
 test.describe("Lighthouse", () => {
@@ -475,7 +585,11 @@ test.describe("Lighthouse", () => {
 						const score = category?.score ?? 0;
 
 						reportBenchmark({
-							name: `category: ${categoryId}`,
+							name: lighthouseBenchmarkName(
+								path,
+								strategy,
+								`category: ${categoryId}`,
+							),
 							measure: "score",
 							value: score,
 							lowerValue: minScore,
@@ -521,14 +635,24 @@ test.describe("Lighthouse", () => {
 						const audit = lhr.audits[metric.id];
 						const value = audit?.numericValue ?? 0;
 
-						// Use 'ratio' for CLS (unitless), 'time_ms' for timing metrics
-						const measure = metric.name === "CLS" ? "ratio" : "time_ms";
-						reportBenchmark({
-							name: `metric: ${metric.name}`,
-							measure,
-							value: value,
-							upperValue: metric.threshold,
-						});
+						// Use 'cls_ratio' for CLS (unitless), 'time_ms' for timing metrics
+						const measure = webVitalsMeasure(metric.name);
+						reportBenchmark(
+							lighthouseBenchmarkEntry(
+								{
+									name: lighthouseBenchmarkName(
+										path,
+										strategy,
+										`metric: ${metric.name}`,
+									),
+									measure,
+									value,
+									upperValue: metric.threshold,
+								},
+								metric.id,
+								metricThresholds.tbt,
+							),
+						);
 
 						expect(
 							value,
@@ -570,14 +694,31 @@ test.describe("Lighthouse", () => {
 						// Report to Bencher using unified measure names based on numericUnit.
 						// This groups audits by scale (time_ms, bytes, count, score) to prevent
 						// sparse matrices in Bencher reports.
-						const measure = getLighthouseMeasure(audit.numericUnit);
+						// `cls_ratio` is only for the real CLS value: when the audit
+						// lacks a numericValue the fallback below emits its 0-1 score,
+						// which must not feed the static CLS boundary.
+						const measure =
+							auditId === "cumulative-layout-shift" &&
+							audit.numericValue !== undefined
+								? "cls_ratio"
+								: getLighthouseMeasure(audit.numericUnit);
 						const benchmarkValue =
 							audit.numericValue !== undefined ? audit.numericValue : score;
-						reportBenchmark({
-							name: `audit: ${auditId}`,
-							measure,
-							value: benchmarkValue,
-						});
+						reportBenchmark(
+							lighthouseBenchmarkEntry(
+								{
+									name: lighthouseBenchmarkName(
+										path,
+										strategy,
+										`audit: ${auditId}`,
+									),
+									measure,
+									value: benchmarkValue,
+								},
+								auditId,
+								metricThresholds.tbt,
+							),
+						);
 
 						// Use test.step for per-audit visibility in the report
 						await test.step(`audit: ${auditId}`, async () => {

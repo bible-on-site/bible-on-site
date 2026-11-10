@@ -14,12 +14,19 @@ jest.mock("next/link", () => ({
 	default: ({
 		children,
 		href,
+		prefetch: _prefetch,
+		onClick,
 		...props
-	}: {
-		children: React.ReactNode;
-		href: string;
-	}) => (
-		<a href={href} {...props}>
+	}: React.ComponentProps<"a"> & { prefetch?: boolean }) => (
+		<a
+			href={href}
+			{...props}
+			onClick={(event) => {
+				onClick?.(event);
+				// Browser navigation belongs to Next, which this unit test mocks.
+				event.preventDefault();
+			}}
+		>
 			{children}
 		</a>
 	),
@@ -31,6 +38,8 @@ jest.mock("@/lib/authors/url-utils", () => ({
 
 jest.mock("../../../src/app/929/[number]/actions", () => ({
 	getArticleForBook: jest.fn(),
+	getArticleProgressUnitsForBook: jest.fn(),
+	getNoteProgressUnitsForPerekBatch: jest.fn(),
 	getPerushNotesForPerekBatch: jest.fn(),
 }));
 
@@ -49,6 +58,8 @@ import {
 } from "@testing-library/react";
 import {
 	getArticleForBook,
+	getArticleProgressUnitsForBook,
+	getNoteProgressUnitsForPerekBatch,
 	getPerushNotesForPerekBatch,
 } from "../../../src/app/929/[number]/actions";
 import { SeferPanel } from "../../../src/app/929/[number]/components/SeferPanel";
@@ -70,6 +81,14 @@ const mockGetArticleForBook = getArticleForBook as jest.MockedFunction<
 const mockGetPerushNotesBatch =
 	getPerushNotesForPerekBatch as jest.MockedFunction<
 		typeof getPerushNotesForPerekBatch
+	>;
+const mockGetArticleProgressUnits =
+	getArticleProgressUnitsForBook as jest.MockedFunction<
+		typeof getArticleProgressUnitsForBook
+	>;
+const mockGetNoteProgressUnitsBatch =
+	getNoteProgressUnitsForPerekBatch as jest.MockedFunction<
+		typeof getNoteProgressUnitsForPerekBatch
 	>;
 
 const RASHI = { id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 };
@@ -112,12 +131,59 @@ const renderPanel = async (ui: React.ReactElement) => {
 	return view;
 };
 
+test("does not repeat commentary eligibility work for an unchanged covered panel", async () => {
+	const readNoteCount = jest.fn(() => RASHI.noteCount);
+	const perushim = [
+		{
+			...RASHI,
+			get noteCount() {
+				return readNoteCount();
+			},
+		},
+	];
+	const view = await renderPanel(
+		<SeferPanel {...PROPS} perushim={perushim} isActive={false} />,
+	);
+	readNoteCount.mockClear();
+	await act(async () =>
+		view.rerender(
+			<SeferPanel {...PROPS} perushim={perushim} isActive={false} />,
+		),
+	);
+	expect(readNoteCount).not.toHaveBeenCalled();
+	await act(async () =>
+		view.rerender(<SeferPanel {...PROPS} perushim={perushim} isActive />),
+	);
+	expect(readNoteCount).toHaveBeenCalled();
+});
+
+test("loads commentary for the visible chapter and keeps completed notes when paging", async () => {
+	setSeferPerushSelection("בראשית", [RASHI.id]);
+	const panels = (chapter: number) => (
+		<>
+			<SeferPanel {...PROPS} isActive={chapter === 1} />
+			<SeferPanel {...PROPS} perekId={2} isActive={chapter === 2} />
+		</>
+	);
+	const view = await renderPanel(panels(1));
+	expect(mockGetPerushNotesBatch.mock.calls).toEqual([[1, [RASHI.id]]]);
+	await act(async () => view.rerender(panels(2)));
+	expect(mockGetPerushNotesBatch.mock.calls).toEqual([
+		[1, [RASHI.id]],
+		[2, [RASHI.id]],
+	]);
+	await act(async () => view.rerender(panels(1)));
+	expect(mockGetPerushNotesBatch).toHaveBeenCalledTimes(2);
+});
+
 beforeEach(() => {
 	jest.clearAllMocks();
 	localStorage.clear();
 	sessionStorage.clear();
 	resetSeferPasukSelectionState();
 	mockGetPerushNotesBatch.mockResolvedValue({});
+	mockGetArticleProgressUnits.mockResolvedValue([]);
+	mockGetNoteProgressUnitsBatch.mockResolvedValue({});
 });
 
 describe("tabs and date header", () => {
@@ -161,12 +227,24 @@ describe("tabs and date header", () => {
 describe("perush tag selection and persistence", () => {
 	it("renders eligible perushim as tags without pesukim counters", async () => {
 		await renderPanel(<SeferPanel {...PROPS} />);
-		expect(screen.getByRole("link", { name: 'רש"י' })).toBeTruthy();
-		expect(screen.getByRole("link", { name: "אבן עזרא" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: 'בחירת רש"י' })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "בחירת אבן עזרא" })).toBeTruthy();
 		expect(screen.getByRole("button", { name: 'בחירת רש"י' })).toBeTruthy();
 		// The old tags carried numeric pesukim counters; the panel row's own
 		// בחירת פסוקים control is not a counter.
 		expect(screen.queryByText(/\d+ פסוקים/)).toBeNull();
+	});
+
+	it("renders chips without a checkmark glyph — selection shows through aria-pressed only (#2994)", async () => {
+		await renderPanel(<SeferPanel {...PROPS} />);
+		const chip = screen.getByRole("button", { name: 'בחירת רש"י' });
+		expect(chip.textContent).not.toContain("✓");
+		expect(chip).toHaveAttribute("aria-pressed", "false");
+		fireEvent.click(chip);
+		await flushAsync();
+		const selected = screen.getByRole("button", { name: 'בחירת רש"י' });
+		expect(selected).toHaveAttribute("aria-pressed", "true");
+		expect(selected.textContent).not.toContain("✓");
 	});
 
 	it("writes toggles to the Tanach-wide default while inheriting", async () => {
@@ -177,27 +255,30 @@ describe("perush tag selection and persistence", () => {
 			localStorage.getItem(SEFER_PERUSH_SELECTION_STORAGE_KEY) ?? "{}",
 		);
 		expect(stored.global).toEqual([1]);
-		expect(stored.sefer ?? {}).toEqual({});
+		expect(stored.sefer.בראשית).toEqual([1]);
 	});
 
-	it("scopes edits to the sefer once an override exists and clears back", async () => {
-		await renderPanel(<SeferPanel {...PROPS} />);
-		fireEvent.click(screen.getByRole("button", { name: "התאמה לספר זה" }));
+	it("automatically remembers each sefer and defaults new sefarim without scope controls", async () => {
+		const view = await renderPanel(<SeferPanel {...PROPS} />);
+		expect(screen.queryByText("התאמה לספר זה")).toBeNull();
+		expect(screen.queryByText('בחירת ברירת מחדל לתנ"ך')).toBeNull();
+		fireEvent.click(screen.getByRole("button", { name: 'בחירת רש"י' }));
+		await flushAsync();
+		view.rerender(<SeferPanel {...PROPS} seferName="שמות" />);
+		expect(screen.getByRole("button", { name: 'בחירת רש"י' })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
 		fireEvent.click(screen.getByRole("button", { name: "בחירת אבן עזרא" }));
 		await flushAsync();
-		let stored = JSON.parse(
-			localStorage.getItem(SEFER_PERUSH_SELECTION_STORAGE_KEY) ?? "{}",
+		view.rerender(<SeferPanel {...PROPS} seferName="בראשית" />);
+		expect(screen.getByRole("button", { name: 'בחירת רש"י' })).toHaveAttribute(
+			"aria-pressed",
+			"true",
 		);
-		expect(stored.sefer.בראשית).toEqual([2]);
-		expect(stored.global).toEqual([]);
-		fireEvent.click(
-			screen.getByRole("button", { name: 'חזרה לברירת מחדל לתנ"ך' }),
-		);
-		await flushAsync();
-		stored = JSON.parse(
-			localStorage.getItem(SEFER_PERUSH_SELECTION_STORAGE_KEY) ?? "{}",
-		);
-		expect(stored.sefer.בראשית).toBeUndefined();
+		expect(
+			screen.getByRole("button", { name: "בחירת אבן עזרא" }),
+		).toHaveAttribute("aria-pressed", "false");
 	});
 
 	it("keeps stored ids unavailable on this perek when toggling others", async () => {
@@ -279,6 +360,28 @@ describe("grouped commentary", () => {
 		}
 	});
 
+	it("shows commentary skeletons while the batch is pending", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		let resolve!: (
+			notes: Awaited<ReturnType<typeof getPerushNotesForPerekBatch>>,
+		) => void;
+		mockGetPerushNotesBatch.mockReturnValue(
+			new Promise((r) => {
+				resolve = r;
+			}),
+		);
+		const { container } = await renderPanel(<SeferPanel {...PROPS} />);
+		expect(screen.getByText("מתחבר לפירוש...")).toBeTruthy();
+		expect(
+			container.querySelector('[aria-busy="true"] [data-skeleton]'),
+		).not.toBeNull();
+		await act(async () => {
+			resolve({ 1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>רשי א</p>" }] });
+		});
+		expect(screen.getByText("פסוק א")).toBeTruthy();
+		expect(screen.queryByText("מתחבר לפירוש...")).toBeNull();
+	});
+
 	it("shows the empty state when nothing is selected", async () => {
 		await renderPanel(<SeferPanel {...PROPS} />);
 		expect(screen.getByText(/לא נבחרו פרשנים/)).toBeTruthy();
@@ -323,14 +426,19 @@ describe("pasuk selection on the scripture page", () => {
 });
 
 describe("deep links", () => {
-	it("opens a perush deep view from its tag link", async () => {
+	it("toggles the full perush label without navigating or hiding the selection group", async () => {
 		mockGetPerushNotesBatch.mockResolvedValue({
 			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>רשי א</p>" }],
 		});
 		await renderPanel(<SeferPanel {...PROPS} />);
-		fireEvent.click(screen.getByRole("link", { name: 'רש"י' }));
-		await screen.findByText("→ חזרה לפרשנים");
-		expect(screen.getByRole("heading", { name: 'רש"י' })).toBeTruthy();
+		fireEvent.click(screen.getByRole("button", { name: 'בחירת רש"י' }));
+		expect(screen.queryByText("→ חזרה לפרשנים")).toBeNull();
+		expect(screen.queryByRole("link", { name: 'רש"י' })).toBeNull();
+		expect(
+			screen
+				.getByRole("button", { name: 'בחירת רש"י' })
+				.getAttribute("aria-pressed"),
+		).toBe("true");
 		await screen.findByText("פסוק א");
 	});
 
@@ -349,14 +457,17 @@ describe("deep links", () => {
 		expect(stored.global).toEqual([2]);
 		expect(mockGetPerushNotesBatch).toHaveBeenCalledWith(1, [1]);
 		fireEvent.click(screen.getByText("→ חזרה לפרשנים"));
-		await screen.findByRole("link", { name: "אבן עזרא" });
+		await screen.findByRole("button", { name: "בחירת אבן עזרא" });
 		await flushAsync();
 	});
 
 	it("opens a deep-linked article in the מאמרים panel", async () => {
-		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
 		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
-		await screen.findByText("חזרה למאמרים →");
+		await screen.findByRole("button", { name: "חזרה למאמרים" });
 		expect(
 			screen.getByRole("tab", { name: "מאמרים" }).getAttribute("aria-selected"),
 		).toBe("true");
@@ -388,26 +499,211 @@ describe("deep links", () => {
 
 describe("article fullscreen", () => {
 	it("opens the article fullscreen overlay and closes on Escape", async () => {
-		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
-		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		const view = await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
 		const toggle = await screen.findByRole("button", { name: "מסך מלא" });
 		fireEvent.click(toggle);
 		const dialog = await screen.findByRole("dialog");
 		expect(dialog).toBeTruthy();
+		// The panel turns inert while the modal dialog owns interaction (#2786).
+		expect(view.container.firstElementChild).toHaveAttribute("inert");
+		// Every body sibling is inert too — nothing outside the dialog stays
+		// keyboard-reachable (aria-modal alone does not contain Tab).
+		for (const sibling of document.body.children) {
+			if (sibling !== dialog) expect(sibling).toHaveAttribute("inert");
+		}
+		expect(dialog).not.toHaveAttribute("inert");
+		// The page behind the modal stops scrolling.
+		expect(document.body.style.overflow).toBe("hidden");
 		fireEvent.keyDown(document, { key: "Escape" });
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(view.container.firstElementChild).not.toHaveAttribute("inert");
+		for (const sibling of document.body.children) {
+			expect(sibling).not.toHaveAttribute("inert");
+		}
+		expect(document.body.style.overflow).toBe("");
 	});
 
 	it("ignores non-Escape keys and closes on the overlay's own control", async () => {
-		mockGetArticleForBook.mockResolvedValue(mockArticles[0]);
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
 		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
 		fireEvent.click(await screen.findByRole("button", { name: "מסך מלא" }));
 		await screen.findByRole("dialog");
 		fireEvent.keyDown(document, { key: "x" });
 		const dialog = screen.getByRole("dialog");
+		fireEvent.keyDown(dialog, { key: "x" });
 		expect(dialog).toBeTruthy();
-		fireEvent.click(within(dialog).getByRole("button", { name: "צמצם" }));
+		fireEvent.click(
+			within(dialog).getByRole("button", { name: "יציאה ממסך מלא" }),
+		);
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+	});
+
+	it("moves focus to the exit control on enter and back to the twin on exit (#2786)", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		const toggle = await screen.findByRole("button", { name: "מסך מלא" });
+		fireEvent.click(toggle);
+		const dialog = await screen.findByRole("dialog");
+		const exit = within(dialog).getByRole("button", {
+			name: "יציאה ממסך מלא",
+		});
+		expect(document.activeElement).toBe(exit);
+		fireEvent.click(exit);
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		// Exit returns to the same article — the embedded view is still open
+		// and focus lands back on its fullscreen command.
+		expect(document.activeElement).toBe(
+			screen.getByRole("button", { name: "מסך מלא" }),
+		);
+		expect(screen.getByRole("heading", { name: "מאמר ראשון" })).toBeTruthy();
+	});
+
+	it("keeps no duplicate reachable controls while the dialog is open", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		fireEvent.click(await screen.findByRole("button", { name: "מסך מלא" }));
+		const dialog = await screen.findByRole("dialog");
+		// Exactly one fullscreen command is keyboard-reachable — the embedded
+		// twin sits inside the inert panel.
+		expect(
+			within(dialog).getByRole("button", { name: "יציאה ממסך מלא" }),
+		).toBeTruthy();
+		expect(
+			screen
+				.getAllByRole("button", { name: "יציאה ממסך מלא" })
+				.filter((el) => !el.closest("[inert]")),
+		).toHaveLength(1);
+	});
+
+	it("does not clobber a body sibling that was already inert (#2786)", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		const sibling = document.createElement("div");
+		sibling.setAttribute("inert", "");
+		document.body.appendChild(sibling);
+		try {
+			await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+			fireEvent.click(await screen.findByRole("button", { name: "מסך מלא" }));
+			const dialog = await screen.findByRole("dialog");
+			expect(sibling).toHaveAttribute("inert");
+			fireEvent.click(
+				within(dialog).getByRole("button", { name: "יציאה ממסך מלא" }),
+			);
+			await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+			// The pre-existing inert belongs to someone else — kept, not removed.
+			expect(sibling).toHaveAttribute("inert");
+		} finally {
+			sibling.remove();
+		}
+	});
+
+	it("opens fullscreen for an article without body content (#2786)", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: { ...mockArticles[0], content: "" },
+			dedicationLines: [],
+		});
+		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		fireEvent.click(await screen.findByRole("button", { name: "מסך מלא" }));
+		const dialog = await screen.findByRole("dialog");
+		expect(
+			within(dialog).getByRole("heading", { name: "מאמר ראשון" }),
+		).toBeTruthy();
+		// Closing works even with no body scroller to snapshot.
+		fireEvent.click(
+			within(dialog).getByRole("button", { name: "יציאה ממסך מלא" }),
+		);
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+	});
+
+	it("mirrors the embedded reading position into fullscreen (#2786)", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		const view = await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		await screen.findByRole("button", { name: "מסך מלא" });
+		const embeddedBody = view.container.querySelector<HTMLElement>(
+			"[data-article-body]",
+		);
+		expect(embeddedBody).not.toBeNull();
+		// biome-ignore lint/style/noNonNullAssertion: asserted above
+		embeddedBody!.scrollTop = 120;
+		fireEvent.click(screen.getByRole("button", { name: "מסך מלא" }));
+		const dialog = await screen.findByRole("dialog");
+		expect(
+			dialog.querySelector<HTMLElement>("[data-article-body]")?.scrollTop,
+		).toBe(120);
+	});
+
+	it("restores the fullscreen reading position back to the embedded body (#2786)", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		const view = await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		fireEvent.click(await screen.findByRole("button", { name: "מסך מלא" }));
+		const dialog = await screen.findByRole("dialog");
+		const dialogBody = dialog.querySelector<HTMLElement>("[data-article-body]");
+		expect(dialogBody).not.toBeNull();
+		// biome-ignore lint/style/noNonNullAssertion: asserted above
+		dialogBody!.scrollTop = 88;
+		// Escape raised inside the dialog closes it (the document listener is
+		// the fallback for focus outside the dialog).
+		fireEvent.keyDown(dialog, { key: "Escape" });
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(
+			view.container.querySelector<HTMLElement>("[data-article-body]")
+				?.scrollTop,
+		).toBe(88);
+	});
+
+	it("returns to the articles grid from fullscreen, not just out of it (#2786)", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		fireEvent.click(await screen.findByRole("button", { name: "מסך מלא" }));
+		const dialog = await screen.findByRole("dialog");
+		fireEvent.click(
+			within(dialog).getByRole("button", { name: "חזרה למאמרים" }),
+		);
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		// The grid is back and the article's own card owns focus.
+		const card = await screen.findByRole("link", { name: /מאמר ראשון/ });
+		await waitFor(() => expect(document.activeElement).toBe(card));
+		expect(
+			screen.getByRole("tab", { name: "מאמרים" }).getAttribute("aria-selected"),
+		).toBe("true");
+	});
+
+	it("returns to the articles grid from the embedded view and focuses the card", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		fireEvent.click(
+			await screen.findByRole("button", { name: "חזרה למאמרים" }),
+		);
+		const card = await screen.findByRole("link", { name: /מאמר ראשון/ });
+		await waitFor(() => expect(document.activeElement).toBe(card));
+		expect(screen.queryByRole("button", { name: "חזרה למאמרים" })).toBeNull();
 	});
 });
 
@@ -473,17 +769,17 @@ describe("deep article load failures", () => {
 		mockGetArticleForBook.mockResolvedValue(null);
 		await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
 		await screen.findByRole("link", { name: /מאמר ראשון/ });
-		expect(screen.queryByText("חזרה למאמרים →")).toBeNull();
+		expect(screen.queryByRole("button", { name: "חזרה למאמרים" })).toBeNull();
 	});
 });
 
 describe("modifier clicks", () => {
-	it("leaves perush tag clicks with modifiers to the real anchor", async () => {
+	it("keeps perush selection buttons from writing history even with modifiers", async () => {
 		const push = jest.spyOn(History.prototype, "pushState");
 		try {
 			await renderPanel(<SeferPanel {...PROPS} />);
 			push.mockClear();
-			const tag = screen.getByRole("link", { name: 'רש"י' });
+			const tag = screen.getByRole("button", { name: 'בחירת רש"י' });
 			for (const modifier of [
 				"metaKey",
 				"ctrlKey",
@@ -491,6 +787,7 @@ describe("modifier clicks", () => {
 				"altKey",
 			] as const) {
 				fireEvent.click(tag, { [modifier]: true });
+				await flushAsync();
 			}
 			expect(screen.queryByText("→ חזרה לפרשנים")).toBeNull();
 			expect(push).not.toHaveBeenCalled();
@@ -506,6 +803,7 @@ describe("modifier clicks", () => {
 			fireEvent.click(screen.getByRole("tab", { name: "מאמרים" }));
 			push.mockClear();
 			const card = document.getElementById("article-7");
+			card?.addEventListener("click", (event) => event.preventDefault());
 			expect(card).toBeTruthy();
 			for (const modifier of [
 				"metaKey",
@@ -515,7 +813,7 @@ describe("modifier clicks", () => {
 			] as const) {
 				fireEvent.click(card as HTMLElement, { [modifier]: true });
 			}
-			expect(screen.queryByText("חזרה למאמרים →")).toBeNull();
+			expect(screen.queryByRole("button", { name: "חזרה למאמרים" })).toBeNull();
 			expect(push).not.toHaveBeenCalled();
 		} finally {
 			push.mockRestore();
@@ -546,8 +844,9 @@ describe("panel without a perek", () => {
 			await screen.findByText("פסוק א");
 			expect(screen.queryByRole("button", { name: /מעבר לפסוק/ })).toBeNull();
 
-			fireEvent.click(screen.getByRole("link", { name: 'רש"י' }));
-			await screen.findByText("→ חזרה לפרשנים");
+			fireEvent.click(screen.getByRole("button", { name: 'בחירת רש"י' }));
+			await flushAsync();
+			expect(screen.queryByText("→ חזרה לפרשנים")).toBeNull();
 			expect(push).not.toHaveBeenCalled();
 		} finally {
 			push.mockRestore();
@@ -576,5 +875,302 @@ describe("commentary batch lifecycle", () => {
 		} finally {
 			error.mockRestore();
 		}
+	});
+});
+
+describe("pending commentary regression", () => {
+	it("retains both responses when selection changes before the first batch resolves", async () => {
+		let finishFirst!: (
+			notes: Record<number, import("../../../src/lib/perushim").PerushNote[]>,
+		) => void;
+		mockGetPerushNotesBatch
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						finishFirst = resolve;
+					}),
+			)
+			.mockResolvedValueOnce({
+				2: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>תגובה שניה</p>" }],
+			});
+		await renderPanel(<SeferPanel {...PROPS} />);
+		fireEvent.click(screen.getByRole("button", { name: 'בחירת רש"י' }));
+		fireEvent.click(screen.getByRole("button", { name: "בחירת אבן עזרא" }));
+		await flushAsync();
+		await act(async () => {
+			finishFirst({
+				1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>תגובה ראשונה</p>" }],
+			});
+		});
+		expect(await screen.findByText("תגובה ראשונה")).toBeTruthy();
+		expect(screen.getByText("תגובה שניה")).toBeTruthy();
+		expect(mockGetPerushNotesBatch).toHaveBeenCalledTimes(2);
+	});
+	it("reloads notes on chapter changes and discards the previous chapter's late response", async () => {
+		let finishOld!: (
+			notes: Record<number, import("../../../src/lib/perushim").PerushNote[]>,
+		) => void;
+		setSeferPerushSelection("בראשית", [1]);
+		mockGetPerushNotesBatch
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						finishOld = resolve;
+					}),
+			)
+			.mockResolvedValue({
+				1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פרק חדש</p>" }],
+			});
+		const view = await renderPanel(<SeferPanel {...PROPS} />);
+		view.rerender(<SeferPanel {...PROPS} perekId={2} />);
+		expect(await screen.findByText("פרק חדש")).toBeTruthy();
+		await act(async () => {
+			finishOld({
+				1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פרק ישן</p>" }],
+			});
+		});
+		expect(screen.queryByText("פרק ישן")).toBeNull();
+	});
+	it("opens the full article body when clicking its abstract, including with parent navigation", async () => {
+		// The article's own dedication scope reaches the in-book view too
+		// (#2731) — the standalone route renders the same lines.
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: ["מוקדש לבדיקה"],
+		});
+		const onNavigate = jest.fn();
+		await renderPanel(<SeferPanel {...PROPS} onNavigate={onNavigate} />);
+		fireEvent.click(screen.getByRole("tab", { name: "מאמרים" }));
+		fireEvent.click(screen.getByText("תקציר"));
+		expect(await screen.findByText("תוכן")).toBeTruthy();
+		expect(await screen.findByText("מוקדש לבדיקה")).toBeTruthy();
+		expect(onNavigate).toHaveBeenCalledWith("7");
+		expect(mockGetArticleForBook).toHaveBeenCalledWith(7);
+	});
+});
+
+describe("reading metrics", () => {
+	it("warns but keeps the article when progress-unit loading fails", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		mockGetArticleProgressUnits.mockRejectedValue(new Error("metric down"));
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			await renderPanel(<SeferPanel {...PROPS} />);
+			fireEvent.click(screen.getByRole("tab", { name: "מאמרים" }));
+			fireEvent.click(screen.getByText("תקציר"));
+			expect(await screen.findByText("תוכן")).toBeTruthy();
+			expect(warn).toHaveBeenCalledWith(
+				"Failed to load article reading progress",
+				expect.objectContaining({ articleId: 7 }),
+			);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	it("warns but keeps the commentary when note progress units fail", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>הערה</p>" }],
+		});
+		mockGetNoteProgressUnitsBatch.mockRejectedValue(new Error("metric down"));
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			await renderPanel(<SeferPanel {...PROPS} />);
+			expect(await screen.findByText("הערה")).toBeTruthy();
+			expect(warn).toHaveBeenCalledWith(
+				"Failed to load commentary reading progress",
+				expect.objectContaining({ perekId: 1 }),
+			);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	it("shows the stored reading time on the deep perush header", async () => {
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>רשי א</p>" }],
+		});
+		const { container } = await renderPanel(
+			<SeferPanel
+				{...PROPS}
+				perushim={[
+					{
+						...RASHI,
+						metric: { wordCount: 300, estimatedSeconds: 82 },
+					},
+					IBN_EZRA,
+				]}
+				initialSlug={'רש"י'}
+			/>,
+		);
+		await screen.findByText("פסוק א");
+		expect(container.querySelector(".deepMetric")?.textContent).toBe(
+			"זמן קריאה משוער: 2 דקות",
+		);
+	});
+
+	it("shows the stored reading time for a single selected perush scope", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>הערה</p>" }],
+		});
+		const { container } = await renderPanel(
+			<SeferPanel
+				{...PROPS}
+				perushim={[
+					{
+						...RASHI,
+						metric: { wordCount: 300, estimatedSeconds: 82 },
+					},
+					IBN_EZRA,
+				]}
+			/>,
+		);
+		await screen.findByText("הערה");
+		expect(container.querySelector(".scopeMetric")?.textContent).toBe(
+			"זמן קריאה משוער: 2 דקות",
+		);
+	});
+
+	it("shows stored reading times beside perush names and article cards", async () => {
+		setSeferPerushSelection("בראשית", [1, 2]);
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>א</p>" }],
+			2: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>ב</p>" }],
+		});
+		const metric = { wordCount: 300, estimatedSeconds: 82 };
+		const { container } = await renderPanel(
+			<SeferPanel
+				{...PROPS}
+				perushim={[
+					{ ...RASHI, metric },
+					{ ...IBN_EZRA, metric },
+				]}
+				articles={[{ ...mockArticles[0], metric }]}
+			/>,
+		);
+		await screen.findByText("א");
+		// Two commentary perush-name badges (displayPerushim.length > 1)
+		// plus the article card badge mounted on the dormant tab.
+		expect(container.querySelectorAll(".commentaryPerushMetric")).toHaveLength(
+			2,
+		);
+		expect(container.querySelector(".articleCardMetric")?.textContent).toBe(
+			"זמן קריאה משוער: 2 דקות",
+		);
+	});
+
+	it("drops article progress units that resolve after unmount", async () => {
+		mockGetArticleForBook.mockResolvedValue({
+			article: mockArticles[0],
+			dedicationLines: [],
+		});
+		let finishUnits!: (units: never[]) => void;
+		mockGetArticleProgressUnits.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					finishUnits = resolve;
+				}),
+		);
+		const view = await renderPanel(<SeferPanel {...PROPS} initialSlug="7" />);
+		await screen.findByText("חזרה למאמרים");
+		view.unmount();
+		await act(async () => {
+			finishUnits([]);
+		});
+	});
+
+	it("ignores note-unit results that land after the chapter changes", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		let finishOldUnits!: (batch: Record<number, never[]>) => void;
+		mockGetNoteProgressUnitsBatch
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						finishOldUnits = resolve;
+					}),
+			)
+			.mockResolvedValue({});
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>הערה</p>" }],
+		});
+		const view = await renderPanel(<SeferPanel {...PROPS} />);
+		view.rerender(<SeferPanel {...PROPS} perekId={2} />);
+		await flushAsync();
+		// The stale perek-1 units resolve after the generation rolled — they
+		// must be dropped, not merged into perek 2's state.
+		await act(async () => {
+			finishOldUnits({ 1: [] });
+		});
+	});
+
+	it("ignores a note-unit rejection that lands after the chapter changes", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		let failOldUnits!: (error: unknown) => void;
+		mockGetNoteProgressUnitsBatch
+			.mockImplementationOnce(
+				() =>
+					new Promise((_, reject) => {
+						failOldUnits = reject;
+					}),
+			)
+			.mockResolvedValue({});
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>הערה</p>" }],
+		});
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			const view = await renderPanel(<SeferPanel {...PROPS} />);
+			view.rerender(<SeferPanel {...PROPS} perekId={2} />);
+			await flushAsync();
+			await act(async () => {
+				failOldUnits(new Error("late metric failure"));
+			});
+			expect(warn).not.toHaveBeenCalledWith(
+				"Failed to load commentary reading progress",
+				expect.anything(),
+			);
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	it("weights the commentary progress bar by rendered stored notes", async () => {
+		setSeferPerushSelection("בראשית", [1]);
+		mockGetPerushNotesBatch.mockResolvedValue({
+			1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>הערה</p>" }],
+		});
+		mockGetNoteProgressUnitsBatch.mockResolvedValue({
+			1: [
+				{ key: "1:0", wordCount: 5, cumulativeWords: 5 },
+				{ key: "9:9", wordCount: 5, cumulativeWords: 10 },
+			],
+		});
+		// The progress component measures rendered units: jsdom lacks the
+		// Range layout methods and ResizeObserver it calls.
+		Range.prototype.getBoundingClientRect = () =>
+			({ top: 0, bottom: 10 }) as DOMRect;
+		Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+		global.ResizeObserver = jest.fn(() => ({
+			observe: jest.fn(),
+			unobserve: jest.fn(),
+			disconnect: jest.fn(),
+		})) as unknown as typeof ResizeObserver;
+		global.requestAnimationFrame = (cb: FrameRequestCallback) => {
+			cb(0);
+			return 0;
+		};
+		global.cancelAnimationFrame = jest.fn();
+		const { container } = await renderPanel(<SeferPanel {...PROPS} />);
+		expect(await screen.findByText("הערה")).toBeTruthy();
+		// Only the rendered note contributes: unit 9:9 is filtered out, so
+		// the bar still mounts with the single rendered unit's weight.
+		const bar = container.querySelector('[role="progressbar"]');
+		expect(bar).not.toBeNull();
+		expect(mockGetNoteProgressUnitsBatch).toHaveBeenCalledWith(1, [1]);
 	});
 });

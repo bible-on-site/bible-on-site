@@ -11,7 +11,7 @@ import { ownedIosTestAppProcesses as parseOwned, terminateIosTestApp as terminat
 
 const devicesRoot = "/Users/runner with spaces/Library/Developer/CoreSimulator/Devices";
 const ownedIosTestAppProcesses = (listing, udid) => parseOwned(listing, udid, devicesRoot);
-const terminateIosTestApp = (udid, options = {}) => terminateOwned(udid, { devicesRoot, inspectorPath: "/owned/native-inspector", observedPids: [1234, 2345], ...options });
+const terminateIosTestApp = (udid, options = {}) => terminateOwned(udid, { devicesRoot, inspectorPath: "/owned/native-inspector", observedPids: [1234, 2345], isAlive: () => true, ...options });
 
 const udid = "CD85F334-D4C3-44B6-A7B8-EAABB9C6C1B4";
 const otherUdid = "B8D3DB6B-98FB-4E92-9ACE-9BC307F7FDE7";
@@ -66,6 +66,61 @@ test("an absent or zombie app is already stopped and an exit race is accepted", 
     execute: async () => ({ stdout: ++calls === 1 ? listing() : "" }),
     signal: () => { throw Object.assign(new Error("exited"), { code: "ESRCH" }); },
   })).status, "terminated");
+});
+
+test("an already stopped app needs only one native inspection", async () => {
+  let inspections = 0;
+  const result = await terminateIosTestApp(udid, {
+    execute: async () => {
+      assert.equal(++inspections, 1, "a second inspector cannot improve an empty ownership result");
+      return { stdout: "" };
+    },
+    signal: () => assert.fail("no app is owned"),
+  });
+  assert.equal(result.status, "already-stopped");
+});
+
+test("kernel-confirmed exit avoids a second inspector launch within the original five seconds", async t => {
+  let time = 0, inspections = 0;
+  const signals = [];
+  t.mock.method(process, "kill", (pid, signal) => {
+    assert.equal(pid, 1234);
+    assert.equal(signal, 0);
+    throw Object.assign(new Error("already reaped"), { code: "ESRCH" });
+  });
+  const result = await terminateIosTestApp(udid, {
+    isAlive: undefined,
+    execute: async () => {
+      time += ++inspections === 1 ? 2000 : 3700;
+      return { stdout: inspections === 1 ? listing() : "" };
+    },
+    signal: (...args) => signals.push(args),
+    now: () => time,
+  });
+  assert.deepEqual(signals, [[1234, "SIGKILL"]]);
+  assert.equal(inspections, 1);
+  assert.equal(result.status, "terminated");
+  assert.equal(result.elapsedMs, 2000);
+});
+
+test("a denied kernel exit probe remains a cleanup failure", async t => {
+  const denied = Object.assign(new Error("denied"), { code: "EPERM" });
+  t.mock.method(process, "kill", () => { throw denied; });
+  let inspections = 0;
+  await assert.rejects(terminateIosTestApp(udid, {
+    isAlive: undefined,
+    execute: async () => ({ stdout: ++inspections === 1 ? listing() : "" }),
+    signal: () => {},
+  }), error => error === denied);
+});
+
+test("a late kernel exit probe cannot bypass the existing cleanup deadline", async () => {
+  let time = 0, inspections = 0;
+  await assert.rejects(terminateIosTestApp(udid, {
+    isAlive: () => { time = 5001; return false; },
+    execute: async () => ({ stdout: ++inspections === 1 ? listing() : "" }),
+    signal: () => {}, now: () => time,
+  }), /within five seconds/);
 });
 
 test("process-list and permission errors remain failures without retry", async () => {
@@ -145,7 +200,7 @@ test("Darwin kernel inspection kills the owned child and rejects other-device an
   try {
     await Promise.all(children.map(child => once(child, "spawn")));
     const ended = once(children[0], "exit");
-    const result = await terminateIosTestApp(udid, { inspectorPath, devicesRoot: nativeDevicesRoot,
+    const result = await terminateOwned(udid, { inspectorPath, devicesRoot: nativeDevicesRoot,
       observedPids: children.map(child => child.pid) });
     assert.equal(result.status, "terminated");
     assert.deepEqual(result.pids, [children[0].pid]);
@@ -188,11 +243,18 @@ for (const [label, probe, succeeds] of [
     } });
     if (succeeds) assert.equal(await preparation, outputPath);
     else await assert.rejects(preparation, /did not inspect its preparer/);
-    assert.equal(calls.length, 2);
+    assert.equal(calls.length, succeeds ? 3 : 2);
     assert.equal(calls[1].command, outputPath);
     assert.deepEqual(calls[1].args, [String(process.pid)]);
     assert.equal(calls[0].options.signal, calls[1].options.signal);
     assert.equal(calls[0].options.timeout, 300000);
+    if (succeeds) {
+      // The kernel thread fallback is exercised during preparation too, so a
+      // broken enumerator cannot surface first inside the failure handoff.
+      assert.equal(calls[2].command, outputPath);
+      assert.deepEqual(calls[2].args, ["--threads", String(process.pid)]);
+      assert.equal(calls[2].options.signal, calls[0].options.signal);
+    }
   });
 }
 

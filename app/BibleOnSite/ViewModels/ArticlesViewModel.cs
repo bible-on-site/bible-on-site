@@ -146,27 +146,6 @@ public partial class ArticlesViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Creates a view model for articles filtered by perek.
-    /// </summary>
-    public ArticlesViewModel(int perekId, string perekTitle) : this()
-    {
-        _perekId = perekId;
-        _perekTitle = perekTitle;
-    }
-
-    /// <summary>
-    /// Creates a view model for articles filtered by author.
-    /// </summary>
-    public static ArticlesViewModel ForAuthor(int authorId, string authorName)
-    {
-        return new ArticlesViewModel
-        {
-            AuthorId = authorId,
-            AuthorName = authorName
-        };
-    }
-
-    /// <summary>
     /// Sets the articles collection (useful for testing and initialization).
     /// </summary>
     public void SetArticles(IEnumerable<Article> articles)
@@ -275,6 +254,9 @@ public partial class ArticlesViewModel : ObservableObject
             PerekDisplayName = string.IsNullOrEmpty(hit.Source)
                 ? _perekDataService.GetPerekSource(hit.PerekId)
                 : hit.Source,
+            // The hit excerpt is the *match context*; the badge still uses the
+            // stored full-article metric (#2607).
+            ReadingMetric = hit.ReadingMetric,
             Author = author
         };
     }
@@ -353,7 +335,16 @@ public partial class ArticlesViewModel : ObservableObject
         }
 
         // Navigate to article detail page
-        await _navigator.GoToAsync($"articleDetail?articleId={article.Id}&perekId={article.PerekId}");
+        try
+        {
+            await _navigator.GoToAsync($"articleDetail?articleId={article.Id}&perekId={article.PerekId}");
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Article navigation failed for {article.Id}: {ex}");
+        }
     }
 #endif
 }

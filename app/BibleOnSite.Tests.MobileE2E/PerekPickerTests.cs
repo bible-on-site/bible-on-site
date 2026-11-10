@@ -39,21 +39,23 @@ public sealed class PerekPickerTests(ITestOutputHelper output, MobileDeviceSessi
             $"list height {listFrame.Size.Height} should fill most of the card height {cardFrame.Size.Height}");
 
         // At the top of a long list: up is a boundary, down reports more content.
-        Assert.Equal(TopBoundary, EdgeState(Page.WaitFor("PerekPickerPerekUp")));
-        Assert.Equal(MoreBelow, EdgeState(Page.WaitFor("PerekPickerPerekDown")));
+        // WaitForSpoken returns the arrow's announced state inside the poll's
+        // own snapshot — no second GetAttribute round-trip per read on iOS.
+        Assert.Equal(TopBoundary, Page.WaitForSpoken("PerekPickerPerekUp"));
+        Assert.Equal(MoreBelow, Page.WaitForSpoken("PerekPickerPerekDown"));
         // The 3-item group column fits entirely: both directions are boundaries.
-        Assert.Equal(TopBoundary, EdgeState(Page.WaitFor("PerekPickerGroupUp")));
-        Assert.Equal(BottomBoundary, EdgeState(Page.WaitFor("PerekPickerGroupDown")));
+        Assert.Equal(TopBoundary, Page.WaitForSpoken("PerekPickerGroupUp"));
+        Assert.Equal(BottomBoundary, Page.WaitForSpoken("PerekPickerGroupDown"));
 
         // Scrolling down opens the upward direction.
         FlickList("PerekPickerPerekList", fromFraction: 0.8, toFraction: 0.2);
-        Page.WaitFor("PerekPickerPerekUp", element => EdgeState(element) == MoreAbove);
-        Assert.Equal(MoreBelow, EdgeState(Page.WaitFor("PerekPickerPerekDown")));
+        Page.WaitForSpoken("PerekPickerPerekUp", spoken => spoken == MoreAbove);
+        Assert.Equal(MoreBelow, Page.WaitForSpoken("PerekPickerPerekDown"));
 
         // A short book fits entirely: both arrows return to boundary state.
         TapItem("PickerSeferItem", "איכה");
-        Page.WaitFor("PerekPickerPerekDown", element => EdgeState(element) == BottomBoundary);
-        Assert.Equal(TopBoundary, EdgeState(Page.WaitFor("PerekPickerPerekUp")));
+        Page.WaitForSpoken("PerekPickerPerekDown", spoken => spoken == BottomBoundary);
+        Assert.Equal(TopBoundary, Page.WaitForSpoken("PerekPickerPerekUp"));
 
         // #2476: confirming completes navigation — no leftover dim or open menu.
         Page.Tap("PerekPickerConfirm");
@@ -70,8 +72,7 @@ public sealed class PerekPickerTests(ITestOutputHelper output, MobileDeviceSessi
         Page.Tap("PerekPickerCancel");
         Page.WaitForHidden("PerekPickerPopup");
         // Cancel is not a navigation: the menu the picker came from stays as it was.
-        Assert.NotEmpty(Driver!.FindElements(Platform.AutomationId("CircularMenuScrim"))
-            .Where(element => element.Displayed).ToList());
+        Assert.NotEmpty(Page.RenderedElements("CircularMenuScrim"));
         Page.Tap("CircularMenuButton");
         Page.WaitForHidden("CircularMenuScrim");
         AssertRegularReader();
@@ -98,8 +99,9 @@ public sealed class PerekPickerTests(ITestOutputHelper output, MobileDeviceSessi
 
     private void FlickList(string automationId, double fromFraction, double toFraction)
     {
-        var list = Page.WaitFor(automationId);
-        var (location, size) = MobilePlatformAdapter.ReadFrame(list);
+        // RenderedElements returns the frame inside the same lookup, so the
+        // gesture's geometry costs no second read on iOS.
+        var (location, size) = Page.RenderedElements(automationId).First().Frame;
         var x = location.X + size.Width / 2;
         var fromY = location.Y + (int)(size.Height * fromFraction);
         var toY = location.Y + (int)(size.Height * toFraction);
@@ -111,7 +113,4 @@ public sealed class PerekPickerTests(ITestOutputHelper output, MobileDeviceSessi
         sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
         Driver!.PerformActions([sequence]);
     }
-
-    // SemanticProperties.Description carries the arrow's boundary/available state.
-    private string? EdgeState(AppiumElement element) => Platform.SemanticDescription(element);
 }

@@ -263,30 +263,30 @@ public partial class ParashaPage
         var searching = ChapterSearch.IsSearchOpen;
         Shell.SetNavBarIsVisible(this, false);
         ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible;
-        Shell.SetFlyoutBehavior(this, isSelectionMode || searching ? FlyoutBehavior.Disabled : FlyoutBehavior.Flyout);
+        (Shell.Current as AppShell)?.SetPageNavHidden(this, isSelectionMode || searching);
         Shell.SetBackButtonBehavior(this, new BackButtonBehavior { IsVisible = !searching });
-        var shellBackground = isSelectionMode
-            ? (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"]
-            : Microsoft.Maui.Controls.Application.Current!.RequestedTheme == AppTheme.Dark
-                ? Color.FromArgb("#20304A")
-                : Color.FromArgb("#F2F7FE");
-        Shell.SetBackgroundColor(this, shellBackground);
-        ReaderToolbar.BackgroundColor = shellBackground;
+        // Selection mode paints the shared accent over the whole band; otherwise
+        // bind the reader band colors so a theme flip repaints both surfaces.
+        if (isSelectionMode)
+        {
+            var primary = (Color)Microsoft.Maui.Controls.Application.Current!.Resources["Primary"];
+            Shell.SetBackgroundColor(this, primary);
+            ReaderToolbar.BackgroundColor = primary;
+        }
+        else
+        {
+            this.SetAppThemeColor(Shell.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
+            ReaderToolbar.SetAppThemeColor(VisualElement.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
+        }
         NormalNavigationBar.BarVisible = !isSelectionMode && !searching;
         // The header names the focused pasuk — its perek source and pasuk
         // together — instead of the plain unit title (#2466).
         NormalNavigationTitle.Text = focused && _focusedPerekId > 0
             ? $"{PerekDataService.Instance.GetPerekSource(_focusedPerekId)} {_focusedPasuk!.PasukNumHeb}"
             : _viewModel.Title;
-        // iOS has no system Back for the overlay, so the navigation slot turns
-        // into the close control there; platforms with system Back keep the
-        // shared hamburger (#2467).
-        var focusedNavIsBack = focused && (OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst());
-        NormalNavigationBar.NavigationButton.Text = focusedNavIsBack
-            ? Fonts.FluentUI.arrow_right_24_regular
-            : Fonts.FluentUI.navigation_24_regular;
-        SemanticProperties.SetDescription(NormalNavigationBar.NavigationButton,
-            focusedNavIsBack ? "סגירת הפסוק הממוקד" : "פתיחת תפריט הניווט");
+        // The capsule Back covers the focused-pasuk return on every platform
+        // (#2467) — the hamburger glyph and its flyout role never change.
+        NormalNavigationBar.RefreshBackState();
         SearchTitleHost.IsVisible = searching;
         SearchTitleHost.Content = searching ? _searchHeader : null;
         ChapterSearch.IsVisible = searching;

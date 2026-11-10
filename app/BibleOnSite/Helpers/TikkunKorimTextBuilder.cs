@@ -13,9 +13,11 @@ namespace BibleOnSite.Helpers;
 /// </summary>
 public static class TikkunKorimTextBuilder
 {
-    private static readonly Color PasukMarkerColor = Color.FromArgb("#637598");
-    private static readonly Color QriNoteColor = Color.FromArgb("#637598");
-    private static readonly Color RecitingColor = Color.FromArgb("#1c427b");
+    // Resolved per build so a theme flip (which invalidates the flow view) emits
+    // the dark-mode variants; all three share the pasuk's span palette (#2601).
+    private static Color PasukMarkerColor => Pasuk.QriTextColor;
+    private static Color QriNoteColor => Pasuk.QriTextColor;
+    private static Color RecitingColor => Pasuk.RecitingText;
     private const float NoteFontScale = 14f / 18f;
 
     /// <summary>

@@ -132,7 +132,7 @@ On `/tanahpedia/person` (and similar entity pages), list all entities with entry
   - `getEntity<T>(type, id)` - Get specific entity with all props
   - `getCategoryHomepage(entityType)` - Get homepage config for entity type
   - `get3DModels(entityId)` - Get 3D models for an entity (via `tanahpedia_entity.id`)
-  - `getEntityReferencesForPerek(perekId)` - Entity references for tanah al haperek integration
+  - `getEntityReferencesForPereks(perekIds)` - Entity references for tanah al haperek integration
 - Direct MySQL via existing `query()` in `api-client.ts`
 
 ### 3.7 Components
@@ -183,7 +183,7 @@ Create in `web/bible-on-site/src/app/tanahpedia/components/`:
 **Goal:** When an entity appears in a pasuk (via `entity_tanah_source`), the corresponding text segment in "Tanah al Haperek" becomes a clickable `<a>` linking to the Tanahpedia entry.
 
 **Data flow:**
-1. `getEntityReferencesForPerek(perekId)` queries `entity_tanah_source` → `entity` → `entry_entity` → `entry`
+1. `getEntityReferencesForPereks(perekIds)` queries `entity_tanah_source` → `entity` → `entry_entity` → `entry`
 2. Returns: `{ entityName, entityType, entryUniqueName, pasukNumber, segmentStart, segmentEnd }`
 3. Website resolves pasuk text from static JSON, identifies the matching text range, and wraps it in `<a href="/pedia/{uniqueName}">`.
 4. If `segmentStart`/`segmentEnd` are NULL, the entire pasuk text is linked.

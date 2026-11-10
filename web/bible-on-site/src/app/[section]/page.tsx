@@ -2,10 +2,13 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { pageHeader } from "@/app/components/PageShell";
+import { getBookshelfDedicationLines } from "@/lib/dedications/loaders";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import { AppSection } from "../components/AppSection";
 import { ContactSection } from "../components/ContactSection";
+import { DailyBulletinSection } from "../components/DailyBulletinSection";
 import { Footer } from "../components/Footer";
 import { NumbersSection } from "../components/NumbersSection";
 import { ScrollToSection } from "../components/ScrollToSection";
@@ -13,21 +16,21 @@ import { TanahSefarimSection } from "../components/TanahSefarimSection";
 import { TosSection } from "../components/TosSection";
 import styles from "./page.module.css";
 
-// Sections are a closed list. Sections without a homepage block of their own
-// (donation, daily bulletin, WhatsApp group) scroll to the contact section,
-// which is where donations and subscriptions are currently arranged.
+// Sections are a closed list. The daily bulletin and WhatsApp group landing
+// pages scroll to the bulletin join section (#2941); donation still scrolls
+// to contact, where donations are arranged.
 const SECTIONS = {
 	dailyBulletin: {
 		title: "עלון יומי",
 		description:
-			'עלון יומי של תנ"ך על הפרק - לימוד הפרק היומי במייל, בטלגרם ובווטסאפ. ליצירת קשר והצטרפות.',
-		scrollTarget: "contact",
+			'עלון יומי של תנ"ך על הפרק - לימוד הפרק היומי במייל, בטלגרם ובווטסאפ. הצטרפו דרך האתר.',
+		scrollTarget: "bulletin",
 	},
 	whatsappGroup: {
 		title: "קבוצת ווטסאפ",
 		description:
-			'קבוצת הווטסאפ של תנ"ך על הפרק - העלון היומי ישירות לטלפון. ליצירת קשר והצטרפות.',
-		scrollTarget: "contact",
+			'קבוצת הווטסאפ של תנ"ך על הפרק - העלון היומי ישירות לטלפון. הצטרפו דרך האתר.',
+		scrollTarget: "bulletin-whatsapp",
 	},
 	tos: {
 		title: "תנאי שימוש",
@@ -94,61 +97,71 @@ export default async function Home({ params }: Props) {
 	const meta = getSection(section);
 	if (section !== undefined && !meta) notFound();
 	const scrollTarget = meta?.scrollTarget;
+	// Shelf dedications (#2731) — tag-cached, so a dedication change expires
+	// this render through `dedications:bookshelf`.
+	const dedications = await getBookshelfDedicationLines();
 	return (
-		<div className={styles.page}>
-			{scrollTarget && <ScrollToSection sectionId={scrollTarget} />}
-			<section className={styles.alHaperekSection}>
-				<header className={styles.sectionHeader}>
-					<h1 className={styles.sectionTitle}>תנ&quot;ך על הפרק</h1>
-					<h2 className={styles.sectionSubtitle}>לימוד תנ&quot;ך יומי</h2>
-				</header>
-				<section
-					className={`${styles.alHaperekHeadlines} ${styles.headlinesGrid}`}
-				>
-					<article className={styles.headlineArticle}>
-						<h2 className={styles.headlineTitle}>
-							<Link href="/929/">
+		<>
+			{/* The alHaperek hero paints the brand backdrop under the bar, so
+			    this family opts out of the solid bar — the declared overlay
+			    policy keeps it intentionally transparent (issue #3161). */}
+			<main {...pageHeader("overlay")} className={styles.page}>
+				{scrollTarget && <ScrollToSection sectionId={scrollTarget} />}
+				<section className={styles.alHaperekSection}>
+					<header className={styles.sectionHeader}>
+						<h1 className={styles.sectionTitle}>תנ&quot;ך על הפרק</h1>
+						<h2 className={styles.sectionSubtitle}>לימוד תנ&quot;ך יומי</h2>
+					</header>
+					<section
+						className={`${styles.alHaperekHeadlines} ${styles.headlinesGrid}`}
+					>
+						<article className={styles.headlineArticle}>
+							<h2 className={styles.headlineTitle}>
+								<Link href="/929/">
+									<Image
+										className="icon-white"
+										src="/icons/calendar-today.svg"
+										alt="עלון יומי"
+										unoptimized
+										width={48}
+										height={48}
+									/>
+									<span>לימוד יומי על הפרק</span>
+								</Link>
+							</h2>
+							<p>
+								בתנ&quot;ך על הפרק לומדים במקביל ללימוד של 929 - פרק ליום.
+								הלימוד נעים, מעמיק ומחכים.
+							</p>
+						</article>
+						<article className={styles.headlineArticle}>
+							<h2 className={styles.headlineTitle}>
 								<Image
 									className="icon-white"
-									src="/icons/calendar-today.svg"
+									src="/icons/smartphone.svg"
 									alt="עלון יומי"
+									unoptimized
 									width={48}
 									height={48}
 								/>
-								<span>לימוד יומי על הפרק</span>
-							</Link>
-						</h2>
-						<p>
-							בתנ&quot;ך על הפרק לומדים במקביל ללימוד של 929 - פרק ליום. הלימוד
-							נעים, מעמיק ומחכים.
-						</p>
-					</article>
-					<article className={styles.headlineArticle}>
-						<h2 className={styles.headlineTitle}>
-							<Image
-								className="icon-white"
-								src="/icons/smartphone.svg"
-								alt="עלון יומי"
-								width={320}
-								height={512}
-								style={{ width: 34, height: "auto" }}
-							/>
-							<span>ישומון תנ&quot;ך על הפרק</span>
-						</h2>
-						<p>
-							לתנ&quot;ך על הפרק ישנה אפליקציה לכל סוגי הסמארטפונים העיקריים.
-							באפליקציה תוכלו ללמוד תנ&quot;ך בנוחות.
-						</p>
-					</article>
+								<span>ישומון תנ&quot;ך על הפרק</span>
+							</h2>
+							<p>
+								לתנ&quot;ך על הפרק ישנה אפליקציה לכל סוגי הסמארטפונים העיקריים.
+								באפליקציה תוכלו ללמוד תנ&quot;ך בנוחות.
+							</p>
+						</article>
+					</section>
+					<div className={styles.alHaperekDivider} />
 				</section>
-				<div className={styles.alHaperekDivider} />
-			</section>
-			<TanahSefarimSection />
-			<NumbersSection />
-			<AppSection />
-			<TosSection />
-			<ContactSection />
+				<DailyBulletinSection />
+				<TanahSefarimSection dedications={dedications} />
+				<NumbersSection />
+				<AppSection />
+				<TosSection />
+				<ContactSection />
+			</main>
 			<Footer />
-		</div>
+		</>
 	);
 }

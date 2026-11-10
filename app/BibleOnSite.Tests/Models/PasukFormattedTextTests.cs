@@ -12,6 +12,9 @@ public class PasukFormattedTextTests
     private static string Flatten(FormattedString formatted) =>
         string.Concat(formatted.Spans.Select(s => s.Text));
 
+    // Span colors resolve from Application.Current.RequestedTheme (#2601), so
+    // this class serializes with the theme-mutating tests.
+    [Collection("Application state")]
     public class Pasuk_FormattedText
     {
         [Theory]
@@ -159,6 +162,9 @@ public class PasukFormattedTextTests
                 Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" }]
             };
             var weak = CreateFormattedWeakReference(pasuk);
+            // The bounded MRU keeps the freshest entries rooted (#2309); binding
+            // enough newer pesukim evicts this pasuk's entry again.
+            PushNewPesukimThroughFormattedMru(200);
 
             GarbageCollection.CollectCycles();
 
@@ -169,6 +175,20 @@ public class PasukFormattedTextTests
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static WeakReference<FormattedString> CreateFormattedWeakReference(Pasuk pasuk)
             => new(pasuk.FormattedText);
+
+        // Binds `count` fresh pesukim so the FormattedText MRU evicts older
+        // entries; the loop's side effect is the point, not the built pesukim.
+        private static void PushNewPesukimThroughFormattedMru(int count)
+        {
+            foreach (var pasukNum in Enumerable.Range(2, count))
+            {
+                _ = new Pasuk
+                {
+                    PasukNum = pasukNum, Text = "",
+                    Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "ב" }]
+                }.FormattedText;
+            }
+        }
 
         [Fact]
         public void returns_empty_string_when_segments_is_empty()
@@ -193,6 +213,42 @@ public class PasukFormattedTextTests
 
             second.Should().BeSameAs(first);
             Flatten(second).Should().Be("בְּרֵאשִׁית");
+        }
+
+        [Fact]
+        public void serves_a_rebound_verse_from_the_mru_across_gc_churn()
+        {
+            var pasuk = new Pasuk
+            {
+                PasukNum = 1, Text = "",
+                Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "בְּרֵאשִׁית" }]
+            };
+            var weak = CreateFormattedWeakReference(pasuk);
+
+            GarbageCollection.CollectCycles();
+
+            // A cell unload followed by GC must not force a rebuild on rebind
+            // (#2309): the MRU keeps the FormattedString rooted for the
+            // freshest pesukim.
+            weak.TryGetTarget(out var formatted).Should().BeTrue();
+            pasuk.FormattedText.Should().BeSameAs(formatted);
+            GC.KeepAlive(pasuk);
+        }
+
+        [Fact]
+        public void formatted_text_mru_evicts_the_least_recently_built_pasuk()
+        {
+            var first = new Pasuk
+            {
+                PasukNum = 1, Text = "",
+                Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "א" }]
+            };
+            var firstFormatted = first.FormattedText;
+            // Push the first pasuk past the MRU capacity of 128 entries.
+            PushNewPesukimThroughFormattedMru(200);
+
+            first.FormattedText.Should().NotBeSameAs(firstFormatted);
+            first.FormattedText.Should().BeSameAs(first.FormattedText);
         }
 
         [Fact]
@@ -427,61 +483,6 @@ public class PasukFormattedTextTests
             };
 
             segment.IsQriDifferentThanKtiv.Should().BeFalse();
-        }
-    }
-
-    public class PasukSegment_IsKtivDifferentThanQri
-    {
-        [Fact]
-        public void is_true_when_type_is_ktiv_and_paired_offset_is_non_zero()
-        {
-            var segment = new PasukSegment
-            {
-                Type = SegmentType.Ktiv,
-                Value = "היא",
-                PairedOffset = 1
-            };
-
-            segment.IsKtivDifferentThanQri.Should().BeTrue();
-        }
-
-        [Fact]
-        public void is_false_when_type_is_ktiv_and_paired_offset_is_zero()
-        {
-            var segment = new PasukSegment
-            {
-                Type = SegmentType.Ktiv,
-                Value = "היא",
-                PairedOffset = 0
-            };
-
-            segment.IsKtivDifferentThanQri.Should().BeFalse();
-        }
-
-        [Fact]
-        public void is_false_when_type_is_ktiv_and_paired_offset_is_null()
-        {
-            var segment = new PasukSegment
-            {
-                Type = SegmentType.Ktiv,
-                Value = "בראשית",
-                PairedOffset = null
-            };
-
-            segment.IsKtivDifferentThanQri.Should().BeFalse();
-        }
-
-        [Fact]
-        public void is_false_when_type_is_qri_even_if_paired_offset_has_value()
-        {
-            var segment = new PasukSegment
-            {
-                Type = SegmentType.Qri,
-                Value = "הוּא",
-                PairedOffset = 1
-            };
-
-            segment.IsKtivDifferentThanQri.Should().BeFalse();
         }
     }
 

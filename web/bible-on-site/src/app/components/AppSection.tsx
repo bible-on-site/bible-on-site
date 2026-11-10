@@ -1,6 +1,7 @@
 import Image from "next/image";
 import styles from "./AppSection.module.css";
 import { appPlatforms } from "./appPlatforms";
+import { PushNotificationsToggle } from "./PushNotificationsToggle";
 
 export function AppSection() {
 	return (
@@ -27,6 +28,7 @@ export function AppSection() {
 								<Image
 									src={platform.icon}
 									alt={platform.description}
+									unoptimized
 									width={platform.iconWidth ?? 24}
 									height={platform.iconHeight ?? 24}
 								/>
@@ -44,6 +46,7 @@ export function AppSection() {
 							<Image
 								src={platform.icon}
 								alt={platform.description}
+								unoptimized
 								width={platform.iconWidth ?? 24}
 								height={platform.iconHeight ?? 24}
 							/>
@@ -52,6 +55,7 @@ export function AppSection() {
 					);
 				})}
 			</section>
+			<PushNotificationsToggle />
 		</section>
 	);
 }

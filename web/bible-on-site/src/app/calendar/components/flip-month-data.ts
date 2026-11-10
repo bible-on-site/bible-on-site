@@ -1,12 +1,15 @@
 import type { PageSemantics } from "html-flip-book-react";
 import {
-	buildMonth,
+	buildVisibleCalendarMonth,
+	type CalendarCycleWindow,
+	visibleCalendarMonths,
+} from "@/data/learning-calendar-policy";
+import {
 	compareMonths,
 	getCycle,
 	getCycleStartMonth,
 	getMonthLabel,
 	getMonthName,
-	getMonthOrder,
 	getYearLabel,
 	nextMonth,
 	type MonthCell,
@@ -58,14 +61,20 @@ export function flipMonthPageIndex(position: number): number {
 	return FLIP_MONTH_PAGE_OFFSET + position;
 }
 
-/** Ordered month sheets of one Hebrew year (12 or 13 in leap years). */
-export function buildYearFlipMonths(year: number): FlipMonthEntry[] {
-	return getMonthOrder(year).map((month) => {
+/**
+ * Ordered month sheets of one Hebrew year (12 or 13 in leap years), limited
+ * to the programme window exactly like the overview's year grid.
+ */
+export function buildYearFlipMonths(
+	year: number,
+	window: CalendarCycleWindow,
+): FlipMonthEntry[] {
+	return visibleCalendarMonths(year, window).map((month) => {
 		const ref = { year, month };
 		return {
 			ref,
 			semanticName: getMonthName(year, month),
-			cells: buildMonth(year, month),
+			cells: buildVisibleCalendarMonth(year, month, window),
 		};
 	});
 }
@@ -74,9 +83,13 @@ export function buildYearFlipMonths(year: number): FlipMonthEntry[] {
  * Ordered month sheets of a full study cycle, from the month holding its
  * first day through the month holding its last — boundary months stay whole
  * and rely on the caller's dimming rule for out-of-cycle days, exactly like
- * the overview grid.
+ * the overview grid. Days outside the programme window arrive pre-masked
+ * (`status:"none"`) from buildVisibleCalendarMonth.
  */
-export function buildCycleFlipMonths(cycleNumber: number): FlipMonthEntry[] {
+export function buildCycleFlipMonths(
+	cycleNumber: number,
+	window: CalendarCycleWindow,
+): FlipMonthEntry[] {
 	const cycle = getCycle(cycleNumber);
 	const endRef: MonthRef = {
 		year: cycle.end.year,
@@ -92,7 +105,7 @@ export function buildCycleFlipMonths(cycleNumber: number): FlipMonthEntry[] {
 		entries.push({
 			ref,
 			semanticName: `${getMonthName(ref.year, ref.month)} ${getYearLabel(ref.year)}`,
-			cells: buildMonth(ref.year, ref.month),
+			cells: buildVisibleCalendarMonth(ref.year, ref.month, window),
 		});
 		ref = nextMonth(ref);
 	}

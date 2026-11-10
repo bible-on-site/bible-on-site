@@ -14,7 +14,7 @@ namespace BibleOnSite.Services;
 /// version and auto-upgrades if the store copy is newer.
 /// If the notes DB is not yet available, returns empty; download can be triggered separately.
 /// </summary>
-public class PerushimNotesService
+public class PerushimNotesService : IReaderNotesAvailability
 {
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
 #if IOS || MACCATALYST
@@ -62,6 +62,14 @@ public class PerushimNotesService
 
     private readonly object _operationCompletedSync = new();
     private Action? _operationCompleted;
+
+    // Explicit: the app-facing event stays internal while the reader
+    // display-sync consumes it through the narrow availability seam (#2573).
+    event Action? IReaderNotesAvailability.OperationCompleted
+    {
+        add => OperationCompleted += value;
+        remove => OperationCompleted -= value;
+    }
 
     private void ReleaseOperation()
     {
@@ -900,8 +908,9 @@ public class PerushimNotesService
 
     /// <summary>
     /// Copies the pack's delivered search index next to the notes DB when the
-    /// pack carries one. Optional: packs older than the delivered-index format
-    /// simply leave the app to build the index on-device.
+    /// pack carries one. The commentary index is never rebuilt on-device
+    /// (#2222), so a pack without it leaves commentary search unavailable —
+    /// the delivery contract requires it (<see cref="PadDeliveryService"/>).
     /// </summary>
     private async Task TryCopyPadIndexAsync(string padAssetsPath)
     {
@@ -973,7 +982,8 @@ public class PerushimNotesService
         }
         catch (FileNotFoundException)
         {
-            // Bundled package may not carry the index — the app builds it on-device.
+            // A bundled package may not carry the index — commentary search
+            // stays unavailable until a delivered pack provides it.
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -1049,10 +1059,104 @@ public class PerushimNotesService
             .ToList();
     }
 
+    /// <summary>
+    /// Reading metric for one perush's notes on a perek, read from the notes
+    /// pack (issue #2607). Null when the pack predates the metric tables or
+    /// has no row — the reader keeps working either way.
+    /// </summary>
+    public async Task<ReadingMetric?> GetPerushReadingMetricAsync(int perushId, int perekId)
+    {
+        await InitializeAsync();
+        if (_connection == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var rows = await _connection.QueryAsync<PerushMetricRow>(
+                "SELECT word_count, estimated_seconds, words_per_minute, calc_version, source_hash " +
+                "FROM tanah_perush_metric WHERE perush_id = ? AND perek_id = ?",
+                perushId, perekId);
+            var row = rows.FirstOrDefault();
+            return row == null
+                ? null
+                : new ReadingMetric
+                {
+                    WordCount = row.WordCount,
+                    EstimatedSeconds = row.EstimatedSeconds,
+                    WordsPerMinute = row.WordsPerMinute,
+                    CalcVersion = row.CalcVersion,
+                    SourceHash = row.SourceHash ?? string.Empty
+                };
+        }
+        catch (SQLiteException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// All stored perush reading metrics for a perek in one query (issue
+    /// #2607) — the sheet's badge source. Empty when the pack predates the
+    /// metric tables.
+    /// </summary>
+    public virtual async Task<IReadOnlyDictionary<int, ReadingMetric>> GetPerushMetricsForPerekAsync(int perekId)
+    {
+        await InitializeAsync();
+        if (_connection == null)
+        {
+            return new Dictionary<int, ReadingMetric>();
+        }
+
+        try
+        {
+            var rows = await _connection.QueryAsync<PerushMetricRow>(
+                "SELECT perush_id, word_count, estimated_seconds, words_per_minute, calc_version, source_hash " +
+                "FROM tanah_perush_metric WHERE perek_id = ?",
+                perekId);
+            return rows.ToDictionary(
+                r => r.PerushId,
+                r => new ReadingMetric
+                {
+                    WordCount = r.WordCount,
+                    EstimatedSeconds = r.EstimatedSeconds,
+                    WordsPerMinute = r.WordsPerMinute,
+                    CalcVersion = r.CalcVersion,
+                    SourceHash = r.SourceHash ?? string.Empty
+                });
+        }
+        catch (SQLiteException)
+        {
+            return new Dictionary<int, ReadingMetric>();
+        }
+    }
+
     private class MetadataRow
     {
         [Column("Value")]
         public string? Value { get; set; }
+    }
+
+    private class PerushMetricRow
+    {
+        [Column("perush_id")]
+        public int PerushId { get; set; }
+
+        [Column("word_count")]
+        public int? WordCount { get; set; }
+
+        [Column("estimated_seconds")]
+        public int? EstimatedSeconds { get; set; }
+
+        [Column("words_per_minute")]
+        public int WordsPerMinute { get; set; }
+
+        [Column("calc_version")]
+        public int CalcVersion { get; set; }
+
+        [Column("source_hash")]
+        public string? SourceHash { get; set; }
     }
 
     private class IdRow

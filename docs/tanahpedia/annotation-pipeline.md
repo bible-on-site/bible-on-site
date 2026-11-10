@@ -25,8 +25,8 @@ model re-invocation; deleting/unpublishing must revoke them the same way.
 | Candidate | License | Domain fit | Verdict |
 | --------- | ------- | ---------- | ------- |
 | **ETCBC BHSA** (`github.com/ETCBC/bhsa`, Text-Fabric) | **CC BY-NC 4.0** | The only corpus with full Biblical-Hebrew morphological annotation (POS, morphology, phrase function, qri/ktiv) | **Evaluation baseline only.** Non-commercial clause makes it unusable as a production derivation source without a license determination; its underlying text is BHS, not our Sefaria-sourced canonical text, so word-boundary alignment needs reconciliation. Text-Fabric tooling itself is MIT. Where the corpus *can* legally help: measuring baseline accuracy on Biblical Hebrew without shipping its annotations. |
-| **AlephBERT** (`OnlpLab/AlephBERT`, HF `onlplab/alephbert-base`) | **Apache-2.0** | Modern Hebrew; evaluated on SPMRL/UD treebanks incl. POS, morphological segmentation, NER | **Primary neural candidate for article (rabbinic/modern) Hebrew.** Clean license, published benchmark suite, morphological-extraction head designed for Hebrew's fused prefixes — directly useful for stripping ב/ל/מ/ש/ו/ה/כ prefixes before name resolution. |
-| **DictaBERT** family (`dicta-il`) | **CC BY 4.0** | Modern Hebrew; `dictabert-morph` is a dedicated morphological analyzer; **BEREL** targets Rabbinic Hebrew specifically | **Strong candidate, best domain coverage for articles** (BEREL is literally trained on rabbinic corpora). Attribution required — acceptable, same class as our other sourced data. Verify BEREL's exact model-card license before pinning. |
+| **AlephBERT** (`OnlpLab/AlephBERT`, HF `onlplab/alephbert-base`) | **Apache-2.0** | Modern Hebrew; evaluated on SPMRL/UD treebanks incl. POS, morphological segmentation, NER | **No official token-classification head — the base model is fill-mask only.** Community NER fine-tunes exist (e.g. `jony6484/alephbert-base-finetuned-ner-v2`) and measured slightly better pasuk typing (0.718 hybrid) than DictaBERT (0.654), but the repos declare **no license — they cannot ship**; comparison-only, mirroring BHSA's eval-only position. |
+| **DictaBERT** family (`dicta-il`) | **CC BY 4.0** | Modern Hebrew; `dictabert-morph` is a dedicated morphological analyzer; **BEREL** targets Rabbinic Hebrew specifically | **Measured winner for the typing tier.** `dictabert-ner` (base) lifts `type_accuracy` 0.55→0.65 (pasuk) / 0.67→0.89 (article) when re-typing morphhb candidates; base ties large everywhere and beats it on pasuk. Attribution required — acceptable, same class as our other sourced data. **BEREL's model card is Apache-2.0** (verified — cleaner than expected) but it is fill-mask only: no published classification head, so it stayed unmeasured this increment. |
 | **HeBERT** | Apache-2.0 (check per-variant) | Modern Hebrew, older | Superseded by DictaBERT/AlephBERT on the same benchmarks — no reason to pick it. |
 | **Multilingual mBERT** | Apache-2.0 | Weak on Hebrew morphology | Baseline floor only; AlephBERT paper documents it underperforms dedicated Hebrew models. |
 | **Local LLM (instruct) hybrid** | model-dependent (e.g. Gemma/Llama licenses) | Can classify ambiguous mentions with context | Reserved for the ambiguity tier **if and only if** the deterministic+encoder path misses the quality bar — per issue, evaluate dedicated classifiers first. No API calls; everything pinned and local. |
@@ -109,14 +109,19 @@ Deliberately **no `entity_id`/`entry_id` FK** — the decoration must
 survive the target not existing (the issue's core requirement). The live
 resolver maps `intended_name` → `tanahpedia_entry.unique_name` (plus
 synonym aliases and disambiguation labels) at presentation time and only
-then derives the link target.
+then derives the link target. The join key is the indexed generated
+`normalized_name` column (`REPLACE(name, '-', ' ')`) on
+`tanahpedia_entry` and `tanahpedia_entry_synonym`
+(`data/mysql/tanahpedia_alter_normalized_name.sql`), so each decoration
+costs index lookups instead of a `REPLACE()` scan of the whole
+namespace.
 
 ### Live resolver sketch
 
 - Bulk indexed lookup per rendered unit: collect all `intended_name`s on
   the page → one `IN (...)` query over entry+synonym names → resolve to
   entry IDs → apply existing visibility/draft rules → emit the same
-  `PerekEntityReference` shape `getEntityReferencesForPerek` already
+  `PerekEntityReference` shape `getEntityReferencesForPereks` already
   returns, so the verse renderer needs no new affordance.
 - Invalidation hooks on entry create/rename/publish/unpublish/delete —
   piggyback on the existing content lifecycle rather than a static bake.
@@ -152,12 +157,18 @@ then derives the link target.
 
 ## Open decisions recorded for implementation
 
-1. **BEREL license confirmation** on its exact model card (CC-BY
-   expected; pin only after verifying).
+1. ~~**BEREL license confirmation**~~ — **resolved: Apache-2.0** on
+   `dicta-il/BEREL` (verified on the model card). BEREL itself is
+   fill-mask only, so it stays unmeasured until/unless a classification
+   head is fine-tuned.
 2. **BHSA legal position** — keep it strictly out of shipped artifacts
    (eval-only) unless a license determination says otherwise.
-3. **Encoder vs LLM tier for ambiguity** — decided by the measured
-   golden-set gap after the lexical+encoder baseline lands, not before.
+3. **Encoder vs LLM tier for ambiguity** — the measured gap after the
+   encoder comparison is a *detection*-complete, typing-improved hybrid
+   (`type_acc` 0.65/0.89); residual misses are qri/ktiv and spelling
+   typing plus genuinely ambiguous person/place/nation cases. The
+   next-tier question is a fine-tuned head or an LLM ambiguity pass —
+   decided after the encoder tier lands in the pipeline.
 4. **`segment_*` vs character offsets for articles** — articles have no
    canonical segmentation; `span_start/span_end` are character offsets
    into the stored content with the revision hash as the staleness key.
@@ -176,7 +187,7 @@ Shipped increments on `feat/2516-tanahpedia-annotation`:
 - Idempotent importer (`devops/import-tanahpedia-mentions.mts`)
   keyed on `dedupe_key` — re-runs never duplicate or clobber manual
   decisions.
-- Live resolver (`getMentionReferencesForPerek` in the Tanahpedia
+- Live resolver (`getMentionReferencesForPereks` in the Tanahpedia
   service) + merged refs + `tanahpedia-mention-refs` cache tag wired
   into entry-lifecycle invalidation; unit-tested including the
   create-entry-makes-link-appear lifecycle regression.
@@ -195,7 +206,102 @@ Shipped increments on `feat/2516-tanahpedia-annotation`:
   spans inside existing anchors. Covered by unit tests plus e2e
   fixtures (`tanah_mention_test_data.sql`, loaded after the Tanahpedia
   seed chain) proving resolved→link and unresolved→plain.
+- Golden-set harness (`data/annotations/golden_eval.py` +
+  `golden/`): 20 curated pasuk cases + 12 authored article cases
+  covering every category the issue lists, scored for precision,
+  recall, detection recall, type/name/span accuracy and `held`
+  suppression, with per-category breakdowns and a deterministic
+  metrics record (`golden/metrics-baseline.json`) enforced by
+  `--check`. The scorer is predictor-agnostic — the encoder tier
+  plugs in via the same contract row shape. Measured results and the
+  concrete findings (type-skew 0.55/0.67, unchained multi-word
+  fragmentation, untagged divine-name recall, name-form
+  normalization bugs, gazetteer coverage floor, prefixed-compound
+  over-holding) are documented in `data/annotations/GOLDEN.md` —
+  they are the bar the encoder comparison must beat.
+- Encoder classifier comparison (`data/annotations/encoders.py`):
+  a normalized-matching-view adapter that feeds HF
+  token-classification output into the same contract rows, with
+  pinned revisions, per-candidate license tracking, `detect`
+  (end-to-end) and `retype` (morphhb detection + encoder typing)
+  modes, and a comparison CLI recording
+  `golden/encoder-metrics/*.json`. Measured verdict: encoders type
+  far better than they detect, so the selected tier is **morphhb
+  detection + `dictabert-ner` re-typing** (CC-BY-4.0) — type accuracy
+  0.55→0.65 pasuk / 0.67→0.89 article at zero detection cost. BEREL
+  verified Apache-2.0 but unrunnable (fill-mask only); the only
+  AlephBERT NER legs are licenseless community fine-tunes — flagged
+  comparison-only. See `data/annotations/GOLDEN.md` for the full
+  table and per-category findings.
+- Publish stage (`data/annotations/publish.py`): the measured hybrid
+  wired into the import path — `pasuk_rows`/`article_rows` run the
+  lexical detection tiers and re-vote `entity_type` through the same
+  `encoders.py` retype functions the eval measured, restamping each
+  row with the encoder's `name@sha+contract1` tag. The model stays
+  opt-in (`entities_fn` injection; `--no-retype` emits the
+  deterministic lexical set for diagnosis), unlicensed/unrunnable
+  candidates are refused, and inference skips sources with no
+  detections. The importer gained `--supersede-model <revision>` —
+  the deliberate model-upgrade path: `dedupe_key` includes
+  `model_revision`, so a revision swap would otherwise leave the old
+  `auto` rows rendering beside the new ones at the same spans;
+  supersede deletes the old revision's `auto`+`held` rows within the
+  imported domains while `manual`/`rejected` decisions survive.
+- Resumable publish checkpoints (`--checkpoint-dir`): each perek/article
+  is a bounded work unit cached under `<dir>/<domain>/<unit>.json`,
+  keyed by source hash plus the inference configuration (emitted
+  `model_revision` + lexicon digest; article units also cover the
+  canonical digest because their gazetteer is corpus-derived). A resumed
+  or repeated run replays unchanged units without re-running detection
+  or a single model call; an edited source invalidates only its own
+  unit, and a deliberate model/config change invalidates every unit.
+  Cached rows are the exact emitted rows, so warm output is
+  byte-identical to a cold run — verified by unit tests plus a
+  full-corpus `--no-retype` resume test (929 units).
 
-Remaining sequence: golden-set harness → encoder classifier
-comparison (BEREL license check first) → production import of the
-published pasuk + article baseline rows.
+Remaining sequence: gated production import of the published pasuk +
+article rows (exact commands below) → BEREL fine-tune / LLM
+ambiguity-tier decision once the residual qri-ktiv+spelling typing
+misses are re-measured against live output.
+
+### Gated publish/import run (explicit approval required)
+
+```bash
+# 1. Optional encoder deps — once, into a local venv
+#    (data/annotations/requirements-encoders.txt).
+python -m venv data/annotations/.venv
+data/annotations/.venv/bin/pip install \
+    --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
+data/annotations/.venv/bin/pip install transformers==5.19.0
+
+# 2. Article input straight from the database (verbatim bytes — the
+#    export must not normalize; content_hash is the staleness key).
+node devops/export-tanahpedia-articles.mts \
+    --out /tmp/tanahpedia-articles.json --env-file <module>/.dev.env
+
+# 3. Publish rows — detection + dictabert-ner re-type. Pasuk domain is
+#    the full canonical corpus (~30-40 min CPU for the encoder pass);
+#    --checkpoint-dir makes the run resumable — an interrupted run
+#    restarts where it stopped, and unchanged units never re-call the
+#    model (.cache/ is gitignored).
+data/annotations/.venv/bin/python data/annotations/publish.py \
+    --pasuk-out /tmp/mentions-pasuk.json \
+    --articles /tmp/tanahpedia-articles.json \
+    --article-out /tmp/mentions-article.json \
+    --checkpoint-dir .cache/mentions-publish
+
+# 4. Dry-run, then import. First production import needs no supersede;
+#    if a preview import of the lexical tier ever ran against the
+#    target DB, supersede its revisions so one live revision decorates
+#    each span:
+#      --supersede-model morphhb-lexical-baseline@3d15126f+contract1  (pasuk)
+#      --supersede-model morphhb-gazetteer@3d15126f+contract1        (article)
+node devops/import-tanahpedia-mentions.mts \
+    --decorations /tmp/mentions-pasuk.json --dry-run --env-file <module>/.dev.env
+node devops/import-tanahpedia-mentions.mts \
+    --decorations /tmp/mentions-pasuk.json --env-file <module>/.dev.env
+node devops/import-tanahpedia-mentions.mts \
+    --decorations /tmp/mentions-article.json --dry-run --env-file <module>/.dev.env
+node devops/import-tanahpedia-mentions.mts \
+    --decorations /tmp/mentions-article.json --env-file <module>/.dev.env
+```

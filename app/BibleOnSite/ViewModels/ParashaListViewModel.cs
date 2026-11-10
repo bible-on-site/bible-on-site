@@ -62,8 +62,19 @@ public partial class ParashaListViewModel : ObservableObject //NOSONAR
 
     /// <summary>Opens the parasha reader for a unit.</summary>
     [RelayCommand]
-    private Task OpenParasha(ParashaUnit unit) =>
-        _navigator.GoToAsync($"ParashaPage?unitId={unit.UnitId}");
+    private async Task OpenParasha(ParashaUnit unit)
+    {
+        try
+        {
+            await _navigator.GoToAsync($"ParashaPage?unitId={unit.UnitId}");
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: navigation failure must not crash the caller
+        catch (Exception ex) //NOSONAR — navigation failure must not crash the caller.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Parasha navigation failed for {unit.UnitId}: {ex}");
+        }
+    }
 }
 
 /// <summary>A Torah sefer heading plus its ordered parasha units.</summary>

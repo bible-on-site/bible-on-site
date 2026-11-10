@@ -14,12 +14,14 @@ import {
 	getCategoryHomepage,
 	getEntitiesWithEntries,
 	getEntitiesWithEntriesByRole,
-	getEntityReferencesForPerek,
 	getEntries,
 	getEntriesByEntityType,
 	getEntriesBySynonym,
 	getEntryByUniqueName,
 	getEntryOccurrences,
+	getAllEntrySummaries,
+	getEntityTypeEntrySummaries,
+	getRecentEntrySummaries,
 	getPersonFamilySummary,
 	getPlaceIdentifications,
 	getPlaceMapMarkers,
@@ -100,10 +102,21 @@ describe("tanahpedia service", () => {
 			.mockRejectedValueOnce(new Error("metric timeout"))
 			.mockResolvedValueOnce([]);
 
-		const entry = await getEntryByUniqueName("אברהם");
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		try {
+			const entry = await getEntryByUniqueName("אברהם");
 
-		expect(entry).not.toBeNull();
-		expect(entry).not.toHaveProperty("metric");
+			expect(entry).not.toBeNull();
+			expect(entry).not.toHaveProperty("metric");
+			expect(warn).toHaveBeenCalledTimes(1);
+			expect(warn).toHaveBeenCalledWith(
+				"Reading metric read failed; continuing without estimates:",
+				"entry entry-abraham",
+				"metric timeout",
+			);
+		} finally {
+			warn.mockRestore();
+		}
 	});
 
 	it("returns null when a unique entry name is not found", async () => {
@@ -527,6 +540,58 @@ describe("tanahpedia service", () => {
 		await expect(getAllEntryUniqueNames()).resolves.toEqual(["אברהם", "שרה"]);
 	});
 
+	it("queries recent entry summaries without the content body", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{ id: "entry-recent", uniqueName: "entry-recent", title: "recent" },
+		]);
+
+		await expect(getRecentEntrySummaries(3)).resolves.toEqual([
+			{ id: "entry-recent", uniqueName: "entry-recent", title: "recent" },
+		]);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining(
+				"FROM tanahpedia_entry ORDER BY updated_at DESC LIMIT ?",
+			),
+			["3"],
+		);
+		expect(mockQuery.mock.calls[0][0]).not.toContain("content");
+
+		mockQuery.mockResolvedValueOnce([]);
+		await expect(getRecentEntrySummaries()).resolves.toEqual([]);
+		expect(mockQuery).toHaveBeenLastCalledWith(expect.any(String), ["10"]);
+	});
+
+	it("queries entity-type entry summaries without the content body", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{ id: "entry-place", uniqueName: "ירושלים", title: "ירושלים" },
+		]);
+
+		await expect(getEntityTypeEntrySummaries("PLACE")).resolves.toEqual([
+			{ id: "entry-place", uniqueName: "ירושלים", title: "ירושלים" },
+		]);
+		expect(mockQuery).toHaveBeenCalledWith(
+			expect.stringContaining("WHERE e.entity_type = ?"),
+			["PLACE"],
+		);
+		expect(mockQuery.mock.calls[0][0]).not.toContain(" content");
+	});
+
+	it("queries all entry summaries ordered by title", async () => {
+		mockQuery.mockResolvedValueOnce([
+			{ id: "entry-1", uniqueName: "אברהם", title: "אברהם" },
+		]);
+
+		await expect(getAllEntrySummaries(500, 0)).resolves.toEqual([
+			{ id: "entry-1", uniqueName: "אברהם", title: "אברהם" },
+		]);
+		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), ["500", "0"]);
+		expect(mockQuery.mock.calls[0][0]).not.toContain(" content");
+
+		mockQuery.mockResolvedValueOnce([]);
+		await expect(getAllEntrySummaries()).resolves.toEqual([]);
+		expect(mockQuery).toHaveBeenLastCalledWith(expect.any(String), ["50", "0"]);
+	});
+
 	it("queries distinct synonym names that are not canonical entry names", async () => {
 		mockQuery.mockResolvedValueOnce([{ name: "משה" }, { name: "ישראל" }]);
 
@@ -630,48 +695,6 @@ describe("tanahpedia service", () => {
 		);
 		expect(mockQuery.mock.calls[0][0]).toContain("SELECT DISTINCT");
 		expect(mockQuery.mock.calls[0][0]).not.toContain("entity_type");
-	});
-
-	it("returns entity references for a perek", async () => {
-		mockQuery.mockResolvedValueOnce([
-			{
-				entityId: "entity-1",
-				entityName: "משה",
-				entityType: "PERSON",
-				entryUniqueName: "משה",
-				pasukNumber: 1,
-				segmentStart: 0,
-				segmentEnd: 3,
-			},
-		]);
-
-		await expect(getEntityReferencesForPerek(12)).resolves.toEqual([
-			{
-				entityId: "entity-1",
-				entityName: "משה",
-				entityType: "PERSON",
-				entryUniqueName: "משה",
-				pasukNumber: 1,
-				segmentStart: 0,
-				segmentEnd: 3,
-			},
-		]);
-		expect(mockQuery).toHaveBeenCalledWith(expect.any(String), ["12"]);
-	});
-
-	it("logs and returns no entity references when the perek query fails", async () => {
-		const consoleErrorSpy = jest
-			.spyOn(console, "error")
-			.mockImplementation(() => undefined);
-		mockQuery.mockRejectedValueOnce(new Error("database unavailable"));
-
-		await expect(getEntityReferencesForPerek(99)).resolves.toEqual([]);
-		expect(consoleErrorSpy).toHaveBeenCalledWith(
-			"Failed to fetch entity references for perek 99:",
-			"database unavailable",
-		);
-
-		consoleErrorSpy.mockRestore();
 	});
 
 	it("returns null when a person has no family rows", async () => {

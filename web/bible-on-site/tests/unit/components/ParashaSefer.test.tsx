@@ -155,6 +155,7 @@ import type {
 	BookPage,
 	ParashaBookUnit,
 } from "@/app/parasha/[unit]/components/parasha-book-utils";
+import { parashaUnitDocumentTitle } from "@/app/parasha/[unit]/components/parasha-book-utils";
 import type { Perek } from "@/data/db/tanah-view-types";
 import type { ScriptureRange } from "@/lib/reading/contract";
 
@@ -178,14 +179,32 @@ const perek = (pesukim: number): Perek => ({
 const units: ParashaBookUnit[] = [
 	{
 		unitId: 1,
+		slug: "בראשית",
 		name: "בראשית",
 		order: 1,
 		refSpan: "בראשית א א - ו ח",
 		ranges: [range(1, 1, 6, 8)],
 		aliyahMarkers: {
-			"1:12": [{ key: "bereshit:shabbat", label: "שני", role: "aliyah" }],
+			"1:12": [
+				{
+					key: "bereshit:shabbat",
+					label: "שני",
+					role: "aliyah",
+					tag: "שבת",
+					category: "shabbat",
+					detail: "פרשת בראשית · קריאת שבת · עלייה שנייה (בראשית א יב - א יד)",
+				},
+				{
+					key: "bereshit:weekday",
+					label: "שני",
+					role: "aliyah",
+					tag: "חול",
+					category: "weekday",
+					detail: "פרשת בראשית · קריאת חול · עלייה שנייה (בראשית א יב - א יד)",
+				},
+			],
 		},
-		aliyahMarkerKey: "bereshit:shabbat",
+		aliyahEmphasisKey: "bereshit:shabbat",
 		haftarot: [
 			{
 				id: "haftara-ashkenazi",
@@ -199,6 +218,7 @@ const units: ParashaBookUnit[] = [
 	},
 	{
 		unitId: 2,
+		slug: "נח",
 		name: "נח",
 		order: 2,
 		refSpan: "בראשית ו ט - יא לב",
@@ -269,6 +289,53 @@ const baseProps = () => ({
 });
 
 describe("ParashaSefer", () => {
+	it("does not rerender scripture when background summaries arrive", async () => {
+		let finish!: (value: unknown) => void;
+		mockSummariesBatch
+			.mockReturnValueOnce(
+				new Promise((resolve) => {
+					finish = resolve;
+				}),
+			)
+			.mockResolvedValueOnce({});
+		render(<ParashaSefer {...baseProps()} />);
+		const renders = mockUnitTextBodies.length;
+		await act(async () =>
+			finish({
+				"2": { articles: [], perushim: currentUnitSummaries.perushim },
+			}),
+		);
+		expect(mockBlankPages.get("2:torah")?.perushim).toBe(
+			currentUnitSummaries.perushim,
+		);
+		expect(mockUnitTextBodies).toHaveLength(renders);
+	});
+	it("updates commentary selection without rerendering scripture", () => {
+		render(<ParashaSefer {...baseProps()} />);
+		const renders = mockUnitTextBodies.length;
+		const navigate = mockBlankPages.get("1:torah")?.onNavigate as (
+			kind?: string,
+			slug?: string,
+		) => void;
+		act(() => navigate("perush", 'רש"י'));
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBe('רש"י');
+		act(() => navigate());
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBeUndefined();
+		expect(mockUnitTextBodies).toHaveLength(renders);
+	});
+	it("refreshes scripture when the chapter corpus changes", () => {
+		const props = baseProps();
+		const { rerender } = render(<ParashaSefer {...props} />);
+		const renders = mockUnitTextBodies.length;
+		const updated = new Map(props.perekById);
+		updated.set(1, perek(7));
+		rerender(<ParashaSefer {...props} perekById={updated} />);
+		expect(mockUnitTextBodies.length).toBeGreaterThan(renders);
+		expect(
+			(mockUnitTextBodies[renders].pasukCount as (id: number) => number)(1),
+		).toBe(7);
+	});
+
 	beforeEach(() => {
 		capturedFlipBookProps = {};
 		capturedTocProps = {};
@@ -282,7 +349,7 @@ describe("ParashaSefer", () => {
 		mockSummariesBatch.mockReset().mockReturnValue(new Promise(() => {}));
 		mockSetSeferDocumentTitle.mockClear();
 		mockReleaseSeferDocumentTitle.mockClear();
-		history.replaceState(null, "", "/פרשה/1?book");
+		history.replaceState(null, "", "/פרשה/בראשית?book");
 	});
 
 	it("lays out cover, contents, and Torah + Haftarah spreads per parasha", () => {
@@ -320,15 +387,19 @@ describe("ParashaSefer", () => {
 		expect(mockUnitTextBodies[0].anchorScope).toBe("book-1");
 		expect(mockUnitTextBodies[1].anchorScope).toBe("book-1-haftara-ashkenazi");
 		expect(mockUnitTextBodies[2].anchorScope).toBe("book-2");
-		// The Torah spread carries the unit's standalone-Shabbat marker
-		// layer rebuilt into the renderer's map (issue #2519); the
-		// Haftarah body and markerless units get none.
+		// The Torah spread carries the unit's full aliyah marker layers —
+		// every applicable division, not only standalone Shabbat (issue
+		// #3165) — rebuilt into the renderer's map; the Haftarah body
+		// and markerless units get none.
 		const torahMarkers = mockUnitTextBodies[0].boundaryMarkers;
 		expect(torahMarkers).toBeInstanceOf(Map);
-		expect((torahMarkers as Map<string, unknown>).get("1:12")).toEqual([
-			{ key: "bereshit:shabbat", label: "שני", role: "aliyah" },
+		expect(
+			(torahMarkers as Map<string, { key: string }[]>).get("1:12"),
+		).toEqual([
+			expect.objectContaining({ key: "bereshit:shabbat" }),
+			expect.objectContaining({ key: "bereshit:weekday" }),
 		]);
-		expect(mockUnitTextBodies[0].defaultMarkerKey).toBe("bereshit:shabbat");
+		expect(mockUnitTextBodies[0].emphasisMarkerKey).toBe("bereshit:shabbat");
 		expect(mockUnitTextBodies[0].modestPerekLabels).toBe(true);
 		expect(mockUnitTextBodies[1].boundaryMarkers).toBeUndefined();
 		expect(mockUnitTextBodies[2].boundaryMarkers).toBeUndefined();
@@ -451,6 +522,36 @@ describe("ParashaSefer", () => {
 		expect(mockBlankPages.get("1:torah")?.initialSlug).toBeUndefined();
 	});
 
+	it("clears the selection when popstate lands on an unresolvable unit segment", () => {
+		// `unitIdFor`'s null arm: a /פרשה book route whose segment claims
+		// no unit parses as no selection instead of latching a numeric
+		// fallback (issue #2738).
+		render(
+			<ParashaSefer
+				{...baseProps()}
+				initialContent={{ scope: "torah", kind: "perush", slug: 'רש"י' }}
+			/>,
+		);
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBe('רש"י');
+		act(() => {
+			history.pushState(null, "", "/פרשה/לא-פרשה?book");
+			window.dispatchEvent(new Event("popstate"));
+		});
+		expect(mockBlankPages.get("1:torah")?.initialSlug).toBeUndefined();
+	});
+
+	it("falls back to the decimal id when the current unit is outside the book", () => {
+		// Defensive end of the slug lookup: a currentUnitId no rendered
+		// unit claims can't produce a Hebrew slug — routes and the flat
+		// title degrade to the id rather than crashing the book.
+		render(
+			<ParashaSefer {...baseProps()} currentUnitId={99} isVisible={false} />,
+		);
+		expect(mockReleaseSeferDocumentTitle).toHaveBeenCalledWith(
+			parashaUnitDocumentTitle(""),
+		);
+	});
+
 	it("marks text pages for the facing blank's pasuk navigation", () => {
 		render(<ParashaSefer {...baseProps()} />);
 		// Each text section carries the pane key ({unitId}:{scope}) the
@@ -508,17 +609,17 @@ describe("ParashaSefer", () => {
 		);
 		expect(
 			getHref({ pageIndex: 3, semanticName: "א", title: "פרשת בראשית" }),
-		).toBe("/פרשה/1?book");
+		).toBe("/פרשה/בראשית?book");
 		// The blank shares the Torah spread's route; the Haftarah spread
 		// rides on &haftara.
 		expect(getHref({ pageIndex: 4, semanticName: "", title: "" })).toBe(
-			"/פרשה/1?book",
+			"/פרשה/בראשית?book",
 		);
 		expect(
 			getHref({ pageIndex: 5, semanticName: "", title: "הפטרת בראשית" }),
-		).toBe("/פרשה/1?book&haftara");
+		).toBe("/פרשה/בראשית?book&haftara");
 		expect(getHref({ pageIndex: 7, semanticName: "ב", title: "פרשת נח" })).toBe(
-			"/פרשה/2?book",
+			"/פרשה/נח?book",
 		);
 		expect(getHref({ pageIndex: 11, semanticName: "", title: "" })).toBe(
 			"/פרשה/בראשית/גב?book",
@@ -594,6 +695,7 @@ describe("ParashaSefer", () => {
 		// still yields a stable anchor instead of crashing the book.
 		const emptyUnit: ParashaBookUnit = {
 			unitId: 3,
+			slug: "ריק",
 			name: "ריק",
 			order: 3,
 			refSpan: "",
@@ -622,19 +724,19 @@ describe("ParashaSefer", () => {
 		);
 	});
 
-	it("updates the document title on page flips and open content", () => {
+	it("updates the document title on page flips and open content", async () => {
 		render(<ParashaSefer {...baseProps()} />);
 		const handlers = capturedFlipBookProps.handlers as {
 			onPageFlipped: () => void;
 		};
 		// Page 5 is unit 1's Haftarah text spread.
 		mockGetCurrentPageIndex.mockReturnValue(5);
-		act(() => handlers.onPageFlipped());
+		await act(async () => handlers.onPageFlipped());
 		expect(mockSetSeferDocumentTitle).toHaveBeenLastCalledWith(
 			'הפטרת בראשית | פרשה על הפרק | תנ"ך על הפרק',
 		);
 		mockGetCurrentPageIndex.mockReturnValue(3);
-		act(() => handlers.onPageFlipped());
+		await act(async () => handlers.onPageFlipped());
 		expect(mockSetSeferDocumentTitle).toHaveBeenLastCalledWith(
 			'פרשת בראשית | פרשה על הפרק | תנ"ך על הפרק',
 		);

@@ -1,11 +1,15 @@
 import "@tanstack/react-start/server-only";
 import { randomInt } from "node:crypto";
+import { hasBulletinArticleText } from "~/lib/bulletin-article";
 import type {
 	BulletinArtifacts,
 	BulletinInput,
 	PreparedBulletin,
 } from "~/lib/daily-bulletin";
-import { hebrewBulletinDate } from "~/lib/daily-bulletin";
+import {
+	hebrewBulletinDate,
+	hebrewBulletinMonthDay,
+} from "~/lib/daily-bulletin";
 import { pool, query, queryOne } from "./db";
 import { renderDailyBulletin } from "./render-daily.server";
 
@@ -45,6 +49,123 @@ export async function readPreparedBulletin(
 	};
 }
 
+/** Per-recipient send path: the small columns only, never the PDF blob. */
+export async function readBulletinEmailContent(
+	date: string,
+): Promise<{ subject: string; emailHtml: string } | null> {
+	return queryOne<{ subject: string; emailHtml: string }>(
+		"SELECT subject, email_html AS emailHtml FROM tanah_daily_bulletin WHERE bulletin_date = ?",
+		[date],
+	);
+}
+
+/** ER_NO_SUCH_TABLE / ER_BAD_FIELD_ERROR — the dedication upgrade is not there yet. */
+function isMissingMysqlSchema(error: unknown): boolean {
+	const code = (error as { code?: string })?.code;
+	return code === "ER_NO_SUCH_TABLE" || code === "ER_BAD_FIELD_ERROR";
+}
+
+/**
+ * The article assigned to the target date's recurring Hebrew month/day
+ * (#3098). Returns null when no assignment exists — the caller then keeps
+ * ordinary candidate selection. An assignment row whose article is missing,
+ * non-distributable or body-less is an operational error, never a silent
+ * fallback to a random chapter article: the article save path validates
+ * eligibility whenever a save leaves assignments behind, so this state is
+ * only reachable through out-of-band data corruption — and a thrown prepare
+ * persists nothing, letting the next scheduled prepare recover once the
+ * data is fixed. Before the migration is deployed the missing table reads
+ * as "no assignments" so preparation keeps working.
+ */
+async function bulletinHebrewDateArticle(date: string): Promise<{
+	id: number;
+	name: string;
+	author: string;
+	content: string;
+} | null> {
+	const { hebrewMonth, hebrewDay } = hebrewBulletinMonthDay(date);
+	try {
+		const assigned = await queryOne<{
+			id: number;
+			name: string;
+			author: string;
+			content: string | null;
+			distributable: number;
+		}>(
+			`SELECT a.id, a.name, au.name AS author, a.content, a.distributable
+			 FROM tanah_article_hebrew_date hd
+			 JOIN tanah_article a ON a.id = hd.article_id
+			 JOIN tanah_author au ON au.id = a.author_id
+			 WHERE hd.hebrew_month = ? AND hd.hebrew_day = ?`,
+			[hebrewMonth, hebrewDay],
+		);
+		if (!assigned) return null;
+		if (
+			!assigned.distributable ||
+			assigned.content === null ||
+			!hasBulletinArticleText(assigned.content, assigned.name)
+		) {
+			throw new Error(
+				`המאמר המשויך לתאריך העברי אינו זמין להפצה (מאמר ${assigned.id})`,
+			);
+		}
+		return {
+			id: assigned.id,
+			name: assigned.name,
+			author: assigned.author,
+			content: assigned.content,
+		};
+	} catch (error) {
+		if (isMissingMysqlSchema(error)) {
+			console.warn(
+				"Article Hebrew-date schema is not deployed yet; " +
+					"bulletin keeps ordinary article selection until the migration runs.",
+			);
+			return null;
+		}
+		throw error;
+	}
+}
+
+/** Active dedication subjects applicable to one perek (#2731). */
+async function bulletinDedications(
+	perekId: number,
+): Promise<{ subject: string }[]> {
+	try {
+		return await query<{ subject: string }>(
+			`SELECT DISTINCT d.id, d.subject FROM tanah_dedication d
+			 WHERE (d.expires_at IS NULL OR d.expires_at > UTC_TIMESTAMP())
+			   AND (
+			     EXISTS (SELECT 1 FROM tanah_perek_dedication pd
+			             WHERE pd.dedication_id = d.id
+			               AND ? BETWEEN pd.perek_id_low AND pd.perek_id_high
+			               AND (pd.expires_at IS NULL OR pd.expires_at > UTC_TIMESTAMP()))
+			     OR EXISTS (SELECT 1 FROM tanah_sefer_dedication sd
+			             JOIN tanah_sefer s ON s.id = sd.sefer_id
+			             WHERE sd.dedication_id = d.id
+			               AND ? BETWEEN s.perek_id_from AND s.perek_id_to
+			               AND (sd.expires_at IS NULL OR sd.expires_at > UTC_TIMESTAMP()))
+			     OR EXISTS (SELECT 1 FROM tanah_helek_dedication hd
+			             JOIN tanah_helek h ON h.id = hd.helek_id
+			             JOIN tanah_sefer s2 ON s2.id BETWEEN h.sefer_id_from AND h.sefer_id_to
+			             WHERE hd.dedication_id = d.id
+			               AND ? BETWEEN s2.perek_id_from AND s2.perek_id_to
+			               AND (hd.expires_at IS NULL OR hd.expires_at > UTC_TIMESTAMP()))
+			   )
+			 ORDER BY d.id`,
+			[perekId, perekId, perekId],
+		);
+	} catch (error) {
+		if (!isMissingMysqlSchema(error)) throw error;
+		return await query<{ subject: string }>(
+			`SELECT DISTINCT d.id, d.subject FROM tanah_dedication d
+			 JOIN tanah_perek_dedication pd ON pd.dedication_id = d.id
+			 WHERE ? BETWEEN pd.perek_id_low AND pd.perek_id_high ORDER BY d.id`,
+			[perekId],
+		);
+	}
+}
+
 export async function prepareBulletin(date: string): Promise<PreparedBulletin> {
 	const existing = await readPreparedBulletin(date);
 	if (existing) return existing;
@@ -60,25 +181,38 @@ export async function prepareBulletin(date: string): Promise<PreparedBulletin> {
 		[studyDate.toISOString().slice(0, 10)],
 	);
 	if (!perek) throw new Error("לא נמצא פרק לימוד לתאריך שנבחר");
-	const articles = await query<{
-		id: number;
-		name: string;
-		author: string;
-		content: string;
-	}>(
-		`SELECT a.id, a.name, au.name AS author, a.content FROM tanah_article a
-		 JOIN tanah_author au ON au.id = a.author_id
-		 WHERE a.perek_id = ? AND a.distributable = TRUE AND a.content IS NOT NULL AND TRIM(a.content) <> ''
-		 ORDER BY a.priority, a.id`,
-		[perek.perek_id],
-	);
-	const chosen = articles.length ? articles[randomInt(articles.length)] : null;
-	const dedications = await query<{ subject: string }>(
-		`SELECT DISTINCT d.id, d.subject FROM tanah_dedication d
-		 JOIN tanah_perek_dedication pd ON pd.dedication_id = d.id
-		 WHERE ? BETWEEN pd.perek_id_low AND pd.perek_id_high ORDER BY d.id`,
-		[perek.perek_id],
-	);
+	// Recurring Hebrew-date article override (#3098): a month/day assignment is
+	// the day's sole article — it replaces candidate selection outright, so
+	// randomInt is never invoked for assigned dates. The TARGET bulletin date
+	// decides: a Friday/Shabbat bulletin follows its own Hebrew date even
+	// though the study chapter came from Thursday.
+	const assigned = await bulletinHebrewDateArticle(date);
+	const chosen =
+		assigned ??
+		(await (async () => {
+			const articles = await query<{
+				id: number;
+				name: string;
+				author: string;
+				content: string;
+			}>(
+				`SELECT a.id, a.name, au.name AS author, a.content FROM tanah_article a
+				 JOIN tanah_author au ON au.id = a.author_id
+				 WHERE a.perek_id = ? AND a.distributable = TRUE AND a.content IS NOT NULL AND TRIM(a.content) <> ''
+				 ORDER BY a.priority, a.id`,
+				[perek.perek_id],
+			);
+			const written = articles.filter((article) =>
+				hasBulletinArticleText(article.content, article.name),
+			);
+			return written.length ? written[randomInt(written.length)] : null;
+		})());
+	// Dedications for the day's perek (#2731): direct perek ranges plus the
+	// perek's sefer and helek ancestors, with dedication- and assignment-level
+	// expiry honoured (expires_at is a UTC wall-clock). During rollout, when
+	// the expanded schema is not deployed yet, the covering query falls back
+	// to the legacy perek-only join so bulletin preparation keeps working.
+	const dedications = await bulletinDedications(perek.perek_id);
 	const input: BulletinInput = {
 		date,
 		hebrewDate: hebrewBulletinDate(date),

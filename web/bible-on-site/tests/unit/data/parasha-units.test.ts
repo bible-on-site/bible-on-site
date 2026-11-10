@@ -16,7 +16,6 @@ import {
 	getParashaFirstUnitBySefer,
 	getParashaOccasions,
 	getParashaUnitById,
-	getParashaUnitContaining,
 	getParashaUnitCount,
 	getParashaUnitsForSefer,
 	PARASHA_CUSTOM_LABELS,
@@ -79,14 +78,21 @@ describe("unit integrity", () => {
 		expect(units).toHaveLength(54);
 		units.forEach((unit, index) => {
 			expect(unit.unitId).toBe(index + 1);
-			expect(unit.slug).toBe(String(unit.unitId));
+			// The canonical slug is the unit's Hebrew name hyphenated —
+			// never the decimal id (issue #2738); the dedicated slug tests
+			// pin the full 54-slug table.
+			expect(unit.slug).toBe(unit.heading.replace(/ /g, "-"));
+			expect(unit.slug).toMatch(/^[א-ת-]+$/);
 			expect(unit.division).toBe("parasha");
 			expect(unit.ranges).toHaveLength(1);
 		});
 		expect(units[0].heading).toBe("בראשית");
+		expect(units[2].slug).toBe("לך-לך");
 		expect(units[16].heading).toBe("יתרו");
+		expect(units[28].slug).toBe("אחרי-מות");
 		expect(units[51].heading).toBe("וילך");
 		expect(units[53].heading).toBe("וזאת הברכה");
+		expect(units[53].slug).toBe("וזאת-הברכה");
 	});
 
 	it("covers only the five Torah sefarim, in order", () => {
@@ -152,19 +158,6 @@ describe("unit integrity", () => {
 });
 
 describe("lookup helpers", () => {
-	it("resolves a canonical position to its containing parasha", () => {
-		expect(getParashaUnitContaining({ perekId: 1, pasuk: 1 })?.unitId).toBe(1);
-		// Boundary pasuk stays inside the unit it ends.
-		expect(getParashaUnitContaining({ perekId: 6, pasuk: 8 })?.unitId).toBe(1);
-		expect(getParashaUnitContaining({ perekId: 6, pasuk: 9 })?.unitId).toBe(2);
-	});
-
-	it("returns null for positions outside the Torah", () => {
-		// יהושע א is perekId 188 — prophetic territory, never a parasha.
-		expect(getParashaUnitContaining({ perekId: 188, pasuk: 1 })).toBeNull();
-		expect(getParashaUnitContaining({ perekId: 929, pasuk: 1 })).toBeNull();
-	});
-
 	it("returns prev/next units across the Torah edges", () => {
 		const { prev, next } = getAdjacentParashaUnits(1);
 		expect(prev).toBeNull();
@@ -417,6 +410,7 @@ describe("source-table validation", () => {
 
 	const validUnit = (overrides: Record<string, unknown> = {}) => ({
 		name: "פלוני",
+		slug: "פלוני",
 		sefer: "בראשית",
 		start: { perek: 1, pasuk: 1 },
 		end: { perek: 1, pasuk: 2 },

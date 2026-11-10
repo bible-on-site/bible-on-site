@@ -1,26 +1,30 @@
 import { toLetters } from "gematry";
 import {
 	type CalendarDay,
+	getDaySourceLabel,
 	getMonthLabel,
-	getPerekSource,
+	isMergedReviewPair,
 	type MonthCell,
 } from "@/data/learning-schedule";
 import { CALENDAR_WEEKDAYS, type FlipMonthEntry } from "./flip-month-data";
 
 /**
  * One month face of the vertical calendar book (#2993): a full-page Hebrew
- * month grid with day numbers, perek sources, review badges and the today
- * marker — the page-sized counterpart of the overview's month cell. Day
- * buttons stay flippable zones on purpose: the engine only turns pages for
- * drags that start in the bottom ~22% edge, and it suppresses the trailing
- * click after a real drag — so taps still open the perek while edge drags
- * turn the sheet.
+ * month grid with day numbers, perek sources, review badges, merged
+ * Friday/Saturday review blocks and the today marker — the page-sized
+ * counterpart of the overview's month cells, following the same merged-pair
+ * and dimmed-cell rules as MiniMonth (#2365, #2975). Day buttons stay
+ * flippable zones on purpose: the engine only turns pages for drags that
+ * start in the bottom ~22% edge, and it suppresses the trailing click after
+ * a real drag — so taps still open the perek while edge drags turn the
+ * sheet.
  */
 export function FlipMonthSheet({
 	entry,
 	todayDateNumber,
 	onOpen,
 	dayAriaLabel,
+	mergedDayAriaLabel,
 	isDimmed,
 }: {
 	entry: FlipMonthEntry;
@@ -28,6 +32,8 @@ export function FlipMonthSheet({
 	/** Called only for tappable cells, so the perek id is always present. */
 	onOpen: (perekId: number) => void;
 	dayAriaLabel: (day: CalendarDay) => string;
+	/** Both dates in one name for a merged review block (#2365). */
+	mergedDayAriaLabel: (friday: CalendarDay, shabbat: CalendarDay) => string;
 	/** Out-of-cycle days in a full-cycle book render dimmed and inert. */
 	isDimmed?: (day: CalendarDay) => boolean;
 }) {
@@ -46,24 +52,51 @@ export function FlipMonthSheet({
 				))}
 			</div>
 			<div className="cal-sheet__grid">
-				{cells.map((cell) =>
-					cell.day === undefined ? (
-						<span
-							key={`blank-${cell.blankColumn}`}
-							className="cal-cell cal-cell--blank"
-							aria-hidden="true"
-						/>
-					) : (
+				{cells.map((cell, index) => {
+					if (cell.day === undefined) {
+						return (
+							<span
+								key={`blank-${cell.blankColumn}`}
+								className="cal-cell cal-cell--blank"
+								aria-hidden="true"
+							/>
+						);
+					}
+					const day = cell.day;
+					// The Saturday of a merged review pair is swallowed by
+					// Friday's spanning cell — same rule as MiniMonth.
+					if (
+						index > 0 &&
+						isMergedReviewPair(cells[index - 1].day, day)
+					) {
+						return null;
+					}
+					const shabbat = cells[index + 1]?.day;
+					const merged = isMergedReviewPair(day, shabbat)
+						? shabbat
+						: undefined;
+					return (
 						<SheetCell
-							key={cell.day.dateNumber}
-							day={cell.day}
-							isToday={cell.day.dateNumber === todayDateNumber}
-							dimmed={isDimmed?.(cell.day) === true}
+							key={day.dateNumber}
+							day={day}
+							mergedWith={merged}
+							isToday={
+								day.dateNumber === todayDateNumber ||
+								merged?.dateNumber === todayDateNumber
+							}
+							dimmed={
+								isDimmed?.(day) === true &&
+								(!merged || isDimmed(merged))
+							}
 							onOpen={onOpen}
-							ariaLabel={dayAriaLabel(cell.day)}
+							ariaLabel={
+								merged
+									? mergedDayAriaLabel(day, merged)
+									: dayAriaLabel(day)
+							}
 						/>
-					),
-				)}
+					);
+				})}
 			</div>
 			<div className="cal-sheet__grip" aria-hidden="true">
 				<span className="cal-sheet__gripDots" />
@@ -91,12 +124,15 @@ function padMonthCells(cells: MonthCell[]): MonthCell[] {
 
 function SheetCell({
 	day,
+	mergedWith,
 	isToday,
 	dimmed,
 	onOpen,
 	ariaLabel,
 }: {
 	day: CalendarDay;
+	/** Saturday when this Friday cell spans the shared review block (#2365). */
+	mergedWith?: CalendarDay;
 	isToday: boolean;
 	dimmed: boolean;
 	onOpen: (perekId: number) => void;
@@ -105,6 +141,7 @@ function SheetCell({
 	const classNames = [
 		"cal-cell",
 		day.status === "review" ? "cal-cell--review" : "",
+		mergedWith ? "cal-cell--merged" : "",
 		day.status === "none" ? "cal-cell--none" : "",
 		dimmed ? "cal-cell--dimmed" : "",
 		isToday ? "cal-cell--today" : "",
@@ -112,7 +149,19 @@ function SheetCell({
 		.filter(Boolean)
 		.join(" ");
 
-	const dayNumber = (
+	// Merged block: each date sits centered over its own weekday column —
+	// the column headers already mark ו/ש, so no day letters inside (#2365).
+	const dayNumber = mergedWith ? (
+		<span className="cal-cell__day">
+			<span className="cal-cell__mergedDate">
+				{toLetters(day.day, { addQuotes: true })}
+			</span>
+			<span className="cal-cell__mergedDate">
+				{toLetters(mergedWith.day, { addQuotes: true })}
+			</span>
+			{isToday ? <span className="cal-sr-only"> (היום)</span> : null}
+		</span>
+	) : (
 		<span className="cal-cell__day">
 			{toLetters(day.day, { addQuotes: true })}
 			{isToday ? <span className="cal-sr-only"> (היום)</span> : null}
@@ -128,6 +177,10 @@ function SheetCell({
 		);
 	}
 
+	// Dimmed out-of-cycle cells keep the established date-only look — their
+	// assignment belongs to another selected cycle, exactly like the calendar
+	// PDFs and the overview grid, which print no label on dimmed cells (#2975).
+	const source = dimmed ? "" : getDaySourceLabel(day);
 	const perekId = day.perekId;
 	return (
 		<button
@@ -137,10 +190,10 @@ function SheetCell({
 			onClick={() => onOpen(perekId)}
 		>
 			{dayNumber}
-			<span className="cal-cell__perek">
-				{getPerekSource(perekId)}
-			</span>
-			{day.status === "review" && (
+			{source !== "" && (
+				<span className="cal-cell__perek">{source}</span>
+			)}
+			{source !== "" && day.status === "review" && (
 				<span className="cal-cell__review">חזרה</span>
 			)}
 		</button>

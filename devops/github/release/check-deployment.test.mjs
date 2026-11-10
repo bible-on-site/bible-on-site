@@ -194,6 +194,16 @@ for (const file of [
 					"Check deployment source and freshness",
 					"Record deployment result",
 					"Record distribution result",
+					// #2972: publish_app_store_notes is a separate metadata
+					// phase, not binary delivery — it is needs-gated on the
+					// deploy job instead of the deployment guard so reruns
+					// can retry notes after the binary is already delivered.
+					"Preserve notes publication automation",
+					"Checkout the released source",
+					"Setup App Store Connect API Key",
+					"Publish Hebrew What's New on the editable version record",
+					// Credential cleanup is not a production write.
+					"Cleanup",
 				].includes(name)
 			)
 				continue;
@@ -212,6 +222,200 @@ test("unverified source CI cannot write to production", () => {
 					: mock(endpoint),
 			),
 		/has not passed/,
+	);
+});
+
+test("AWS release replays retain current automation and isolate immutable artifact source", () => {
+	const workflow = readFileSync(
+		new URL("../../../.github/workflows/cd-aws.yml", import.meta.url),
+		"utf8",
+	).replace(/\r/g, "");
+	const steps = workflow.split("      - name: ").slice(1);
+	const automation = steps.find((block) =>
+		block.startsWith("Checkout deployment automation\n"),
+	);
+	const artifact = steps.find((block) =>
+		block.startsWith("Checkout artifact source\n"),
+	);
+	assert.match(automation, /ref: \$\{\{ github.sha \}\}/);
+	assert.doesNotMatch(automation, /path:/);
+	assert.match(
+		artifact,
+		/ref: \$\{\{ steps.guard.outputs.ref \}\}\n +path: release-source/,
+	);
+	const verify = steps.find((block) =>
+		block.startsWith("Verify website recitation after ECS rollout\n"),
+	);
+	assert.match(verify, /working-directory: release-source/);
+	assert.match(verify, /NODE_PATH="\$GITHUB_WORKSPACE\/devops\/node_modules"/);
+	assert.match(
+		workflow,
+		/import\('\$GITHUB_WORKSPACE\/release-source\/web\/bible-on-site\/scripts\/verify-public-content.mjs'\)/,
+	);
+	const deploy = steps.find((block) => block.startsWith("Deploy to ECR\n"));
+	assert.match(deploy, /working-directory: \$\{\{ env.DEVOPS_DIRECTORY \}\}/);
+	assert.match(deploy, /--source-ref "\$RELEASE_SOURCE"/);
+	assert.match(
+		workflow,
+		/run-name: Deploy \$\{\{ github.event.client_payload.module_name \}\}/,
+	);
+	assert.match(
+		workflow,
+		/name: api-handover-\$\{\{ github.run_id \}\}-\$\{\{ github.run_attempt \}\}/,
+	);
+});
+
+test("only the API EventBridge trigger is disabled for coordinated publication", () => {
+	const template = readFileSync(
+		new URL(
+			"../../../docs/aws/cloudformation/ecr-ecs-auto-deploy.yaml",
+			import.meta.url,
+		),
+		"utf8",
+	);
+	for (const [resource, state] of [
+		["Api", "DISABLED"],
+		["Website", "ENABLED"],
+		["Admin", "ENABLED"],
+	]) {
+		const block = template
+			.split(`  ECRPushRule${resource}:`)[1]
+			.split(/^ {2}[A-Za-z]/m)[0];
+		assert.ok(block.includes(`State: ${state}`));
+	}
+});
+
+test("only master API releases assume the dedicated role with API-only image access", () => {
+	const template = readFileSync(
+		new URL(
+			"../../../docs/aws/cloudformation/github-oidc.yaml",
+			import.meta.url,
+		),
+		"utf8",
+	).replace(/\r/g, "");
+	const resource = (name) =>
+		template.split(`  ${name}:\n`)[1].split(/^ {2}(?:[A-Za-z]|#)/m)[0];
+	assert.match(
+		resource("GitHubActionsAPIDeployRole"),
+		/DependsOn: GitHubOIDCProvider/,
+	);
+	const trust = JSON.parse(
+		resource("GitHubActionsAPIDeployRole")
+			.split("        Fn::Sub: |\n")[1]
+			.split("      Tags:")[0]
+			.trim(),
+	);
+	assert.deepEqual(trust.Statement, [
+		{
+			Effect: "Allow",
+			Principal: {
+				Federated:
+					"arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com",
+			},
+			Action: "sts:AssumeRoleWithWebIdentity",
+			Condition: {
+				StringEquals: {
+					"token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+					"token.actions.githubusercontent.com:sub":
+						"repo:${GitHubOrg}/${GitHubRepo}:ref:refs/heads/master",
+				},
+			},
+		},
+	]);
+	assert.doesNotMatch(
+		resource("GitHubActionsAPIDeployRole"),
+		/ManagedPolicyArns/,
+	);
+	const publishBlock = resource("GitHubActionsAPIPublishPolicy"),
+		publish = JSON.parse(publishBlock.split("        Fn::Sub: |\n")[1].trim());
+	assert.match(publishBlock, /Roles: \[!Ref GitHubActionsAPIDeployRole\]/);
+	assert.equal(publish.Statement[0].Action, "ecr:GetAuthorizationToken");
+	assert.equal(publish.Statement[0].Resource, "*");
+	assert.equal(
+		publish.Statement[1].Resource,
+		"arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/bible-on-site-api",
+	);
+	assert.ok(publish.Statement[1].Action.includes("ecr:PutImage"));
+	assert.ok(
+		publish.Statement.every(
+			(row) =>
+				row.Condition.StringEquals["aws:RequestedRegion"] === "il-central-1",
+		),
+	);
+	assert.doesNotMatch(
+		JSON.stringify(publish),
+		/CreateRepository|Delete|ssm:|iam:|s3:|lambda:/,
+	);
+	const workflow = readFileSync(
+		new URL("../../../.github/workflows/cd-aws.yml", import.meta.url),
+		"utf8",
+	);
+	assert.match(
+		workflow,
+		/role-to-assume: \$\{\{ env\.MODULE_NAME == 'api' && format\('arn:aws:iam::\{0\}:role\/GitHubActionsAPIDeployRole', env\.AWS_ACCOUNT_ID\) \|\| secrets\.AWS_DEPLOY_ROLE_ARN \}\}/,
+	);
+});
+
+test("the handover policy limits service writes, role passing, size and lease tags", () => {
+	const template = readFileSync(
+		new URL(
+			"../../../docs/aws/cloudformation/github-oidc.yaml",
+			import.meta.url,
+		),
+		"utf8",
+	).replace(/\r/g, "");
+	const block = template
+		.split("  GitHubActionsAPIHandoverPolicy:\n")[1]
+		.split("Outputs:\n")[0];
+	const json = block.split("        Fn::Sub: |\n")[1].trim();
+	const policy = JSON.parse(json),
+		statements = Object.fromEntries(
+			policy.Statement.map((row) => [row.Sid, row]),
+		);
+	assert.equal(
+		statements.APIServiceUpdate.Resource.endsWith(
+			"service/bible-on-site-cluster/bible-on-site-api",
+		),
+		true,
+	);
+	assert.equal(
+		statements.APIRegisterExistingSize.Condition.NumericEquals["ecs:task-cpu"],
+		"256",
+	);
+	assert.equal(
+		statements.APIRegisterExistingSize.Condition.NumericEquals[
+			"ecs:task-memory"
+		],
+		"512",
+	);
+	assert.deepEqual(
+		statements.OwnedLeaseMarkersOnly.Condition["ForAllValues:StringLike"][
+			"aws:TagKeys"
+		],
+		["tanahpedia:api-handover:*"],
+	);
+	assert.equal(
+		statements.PassExistingExecutionRoleOnly.Resource.endsWith(
+			"role/ecsTaskExecutionRole",
+		),
+		true,
+	);
+	assert.equal(statements.APIRuleStateRead.Action, "events:DescribeRule");
+	assert.match(block, /Roles: \[!Ref GitHubActionsAPIDeployRole\]/);
+	assert.doesNotMatch(json, /token\.actions\.githubusercontent\.com/);
+	for (const statement of policy.Statement.filter(
+		(row) => row.Action !== "iam:PassRole",
+	))
+		assert.equal(
+			statement.Condition.StringEquals["aws:RequestedRegion"],
+			"il-central-1",
+		);
+	assert.ok(
+		policy.Statement.every(
+			(row) =>
+				!JSON.stringify(row.Action).includes("iam:Put") &&
+				!JSON.stringify(row.Action).includes("servicediscovery:Update"),
+		),
 	);
 });
 
@@ -461,6 +665,112 @@ test("pinned SQL keeps its original passing attempt when a later rebuild fails",
 	assert.equal(result.runAttempt, 1);
 });
 
+const baselineSha = "d".repeat(40);
+const baselineArtifact = {
+	id: 80,
+	name: "perushim-data-sql.master",
+	expired: false,
+	digest: `sha256:${"a".repeat(64)}`,
+	workflow_run: {
+		id: 7,
+		head_sha: baselineSha,
+		head_branch: "master",
+		repository_id: 1,
+		head_repository_id: 1,
+	},
+};
+const producingRun = {
+	name: "Continuous Integration",
+	event: "push",
+	head_branch: "master",
+	head_sha: baselineSha,
+};
+const baselineInput = {
+	...input,
+	moduleName: "data",
+	artifactId: "80",
+	artifactDigest: `sha256:${"a".repeat(64)}`,
+	sourceRunId: "7",
+	sourceRef: baselineSha,
+};
+function baselineRequest(overrides = {}) {
+	const mock = request();
+	return (url) => {
+		if (url.includes("/actions/runs?")) return { workflow_runs: [] };
+		if (url.endsWith("/artifacts/80"))
+			return overrides.artifact ?? baselineArtifact;
+		if (url.endsWith("/actions/runs/7"))
+			return overrides.producingRun ?? producingRun;
+		if (url.includes("/contents/"))
+			return (
+				overrides.contents?.(url) ?? [
+					{ name: "perushim-view", sha: "e".repeat(40) },
+					{
+						name: "sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+						sha: "e".repeat(40),
+					},
+				]
+			);
+		return mock(url);
+	};
+}
+
+test("a reused master SQL baseline deploys with its producing run bound", () => {
+	const result = checkDeployment(baselineInput, baselineRequest());
+	assert.equal(result.deploy, true);
+	assert.equal(result.artifactId, "80");
+	assert.equal(result.artifactDigest, `sha256:${"a".repeat(64)}`);
+});
+
+test("a reused baseline keeps failing closed on source, trust and input drift", () => {
+	// Declared source disagrees with the archive record.
+	assert.throws(
+		() =>
+			checkDeployment(
+				{ ...baselineInput, sourceRunId: "8" },
+				baselineRequest(),
+			),
+		/not by run 8/,
+	);
+	// A producing run that is not master push CI cannot be trusted.
+	assert.throws(
+		() =>
+			checkDeployment(
+				baselineInput,
+				baselineRequest({
+					producingRun: { ...producingRun, event: "pull_request" },
+				}),
+			),
+		/untrusted run/,
+	);
+	// SQL inputs changed between the producing and delivered revisions.
+	assert.throws(
+		() =>
+			checkDeployment(
+				baselineInput,
+				baselineRequest({
+					contents: (url) =>
+						url.includes(`ref=${baselineSha}`)
+							? [
+									{ name: "perushim-view", sha: "f".repeat(40) },
+									{
+										name: "sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+										sha: "e".repeat(40),
+									},
+								]
+							: [
+									{ name: "perushim-view", sha: "e".repeat(40) },
+									{
+										name: "sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+										sha: "e".repeat(40),
+									},
+								],
+				}),
+			),
+		/differs between/,
+	);
+});
+
 test("a completed SQL dispatch is a no-op even after its archive expires", () => {
 	const result = checkDeployment(
 		{ ...input, moduleName: "data", artifactId: "90" },
@@ -479,4 +789,132 @@ test("a completed SQL dispatch is a no-op even after its archive expires", () =>
 	);
 	assert.equal(result.deploy, false);
 	assert.match(result.reason, /already deployed/);
+});
+
+test("API platform selection comes from published provenance rather than dispatch flags", () => {
+	const payload = {
+		ref: sha,
+		ci_run_id: 10,
+		module_name: "api",
+		module_version: "1.0.10",
+		released_artifact_name: "bible-on-site-api-docker-10",
+		released_arm64_artifact_name: "bible-on-site-api-docker-10-arm64",
+	};
+	const release = {
+		...published,
+		tag_name: "api-v1.0.10",
+		body: `<!-- release-delivery:${JSON.stringify(payload)} -->`,
+	};
+	const api = { ...input, moduleName: "api", moduleDirectory: "web/api" };
+	assert.equal(
+		checkDeployment(api, request({ releases: [release] })).apiArm64,
+		true,
+	);
+	const legacy = { ...release, body: "legacy single-platform release" };
+	assert.equal(
+		checkDeployment({ ...api, apiArm64: true }, request({ releases: [legacy] }))
+			.apiArm64,
+		undefined,
+	);
+	const wrong = {
+		...release,
+		body: `<!-- release-delivery:${JSON.stringify({ ...payload, released_arm64_artifact_name: "other-run" })} -->`,
+	};
+	assert.throws(
+		() => checkDeployment(api, request({ releases: [wrong] })),
+		/published CI provenance/,
+	);
+});
+
+test("website platform selection requires its own immutable published artifact pair", () => {
+	const payload = {
+		ref: sha,
+		ci_run_id: 10,
+		module_name: "website",
+		module_version: "1.0.10",
+		released_artifact_name: "bible-on-site-docker-10",
+		released_arm64_artifact_name: "bible-on-site-docker-10-arm64",
+	};
+	const release = {
+		...published,
+		body: `<!-- release-delivery:${JSON.stringify(payload)} -->`,
+	};
+	assert.equal(
+		checkDeployment(input, request({ releases: [release] })).websiteArm64,
+		true,
+	);
+	assert.equal(
+		checkDeployment(input, request({ releases: [release] })).apiArm64,
+		undefined,
+	);
+	assert.equal(
+		checkDeployment({ ...input, websiteArm64: true }, request()).websiteArm64,
+		undefined,
+	);
+	for (const changed of [
+		{ released_arm64_artifact_name: "bible-on-site-api-docker-10-arm64" },
+		{ released_artifact_name: "bible-on-site-docker-9" },
+	]) {
+		const wrong = {
+			...release,
+			body: `<!-- release-delivery:${JSON.stringify({ ...payload, ...changed })} -->`,
+		};
+		assert.throws(
+			() => checkDeployment(input, request({ releases: [wrong] })),
+			/published CI provenance/,
+		);
+	}
+});
+
+test("admin platform selection requires its own immutable published artifact pair", () => {
+	const payload = {
+		ref: sha,
+		ci_run_id: 10,
+		module_name: "admin",
+		module_version: "1.0.10",
+		released_artifact_name: "bible-on-site-admin-docker-10",
+		released_arm64_artifact_name: "bible-on-site-admin-docker-10-arm64",
+	};
+	const release = {
+		tag_name: "admin-v1.0.10",
+		draft: false,
+		prerelease: false,
+		body: `<!-- release-delivery:${JSON.stringify(payload)} -->`,
+	};
+	const admin = {
+		...input,
+		moduleName: "admin",
+		moduleDirectory: "web/admin",
+	};
+	assert.equal(
+		checkDeployment(admin, request({ releases: [release] })).adminArm64,
+		true,
+	);
+	assert.equal(
+		checkDeployment(admin, request({ releases: [release] })).apiArm64,
+		undefined,
+	);
+	assert.equal(
+		checkDeployment(admin, request({ releases: [release] })).websiteArm64,
+		undefined,
+	);
+	const legacy = { ...release, body: "legacy single-platform release" };
+	assert.equal(
+		checkDeployment(admin, request({ releases: [legacy] })).adminArm64,
+		undefined,
+	);
+	for (const changed of [
+		{ released_arm64_artifact_name: "bible-on-site-api-docker-10-arm64" },
+		{ released_artifact_name: "bible-on-site-admin-docker-9" },
+		{ module_name: "website" },
+	]) {
+		const wrong = {
+			...release,
+			body: `<!-- release-delivery:${JSON.stringify({ ...payload, ...changed })} -->`,
+		};
+		assert.throws(
+			() => checkDeployment(admin, request({ releases: [wrong] })),
+			/published CI provenance|tag\/source/,
+		);
+	}
 });

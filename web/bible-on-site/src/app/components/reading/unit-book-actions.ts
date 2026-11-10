@@ -1,20 +1,26 @@
 "use server";
 
+import type { Pasuk } from "@/data/db/tanah-view-types";
 import { getMasoraUnitById } from "@/data/masora/masora-units";
 import {
 	getParashaUnitById,
 	parashaAuxiliaryRanges,
 } from "@/data/parasha/parasha-units";
-import { getArticleSummariesForRanges } from "@/lib/articles/service";
-import {
-	getPerushimForRanges,
-	getPerushNotesForRanges,
-	type RangePerushSummary,
-	type RangedPerushNote,
-} from "@/lib/perushim";
+import { getPerekByPerekId, LAST_PEREK_ID } from "@/data/perek-dto";
 import type { ArticleSummary } from "@/lib/articles";
+import { getArticleSummariesForRangeGroups } from "@/lib/articles/service";
+import {
+	getPerushimForRangeGroups,
+	getPerushNotesForRanges,
+	type RangedPerushNote,
+	type RangePerushSummary,
+} from "@/lib/perushim";
 import type { DivisionId, ScriptureRange } from "@/lib/reading/contract";
 import type { UnitBookScope } from "./unit-book-content";
+import {
+	primeUnitSummaries,
+	type UnitSummaryPair,
+} from "./unit-summary-prefetch";
 
 function unitScopeRanges(
 	division: DivisionId,
@@ -51,32 +57,60 @@ export async function getUnitScopeSummariesBatch(
 	scope: UnitBookScope,
 ): Promise<Record<string, UnitBookSummaries>> {
 	if (scope !== "torah" && scope !== "haftara") return {};
-	const entries = await Promise.all(
-		unitIds.map(async (unitId) => {
-			if (!Number.isInteger(unitId) || unitId < 1) return null;
-			try {
-				const ranges = unitScopeRanges(division, unitId, scope);
-				if (ranges.length === 0) {
-					return [String(unitId), { articles: [], perushim: [] }] as const;
-				}
-				const [articles, perushim] = await Promise.all([
-					getArticleSummariesForRanges(ranges),
-					getPerushimForRanges(ranges),
-				]);
-				return [String(unitId), { articles, perushim }] as const;
-			} catch (error) {
-				console.warn(
-					"Failed to resolve %s unit %d %s summaries:",
-					division,
-					unitId,
-					scope,
-					error instanceof Error ? error.message : error,
-				);
-				return [String(unitId), { articles: [], perushim: [] }] as const;
-			}
-		}),
+	const validIds = unitIds.filter(
+		(unitId) => Number.isInteger(unitId) && unitId >= 1,
 	);
-	return Object.fromEntries(entries.filter((entry) => entry !== null));
+	const rangeGroups = validIds.map((unitId) => {
+		try {
+			return unitScopeRanges(division, unitId, scope);
+		} catch (error) {
+			console.warn(
+				"Failed to resolve %s unit %d %s ranges:",
+				division,
+				unitId,
+				scope,
+				error,
+			);
+			return [];
+		}
+	});
+	// One grouped query per service for the whole sefer — a per-unit
+	// fan-out over a 5-connection pool turned a large sefer's book open
+	// into hundreds of serialized round-trips.
+	let summaries: Record<string, UnitSummaryPair>;
+	try {
+		const [articleGroups, perushGroups] = await Promise.all([
+			getArticleSummariesForRangeGroups(rangeGroups),
+			getPerushimForRangeGroups(rangeGroups),
+		]);
+		summaries = Object.fromEntries(
+			validIds.map((unitId, index) => [
+				String(unitId),
+				{
+					articles: articleGroups[index] ?? [],
+					perushim: perushGroups[index] ?? [],
+				},
+			]),
+		);
+	} catch (error) {
+		console.warn(
+			"Failed to resolve %s %s summaries batch:",
+			division,
+			scope,
+			error instanceof Error ? error.message : error,
+		);
+		return Object.fromEntries(
+			validIds.map((unitId) => [
+				String(unitId),
+				{ articles: [], perushim: [] },
+			]),
+		);
+	}
+	// Warm the flat unit pages' per-unit cache entries from the same
+	// grouped results, so a later unit render reuses them instead of
+	// re-querying (unit-summary-prefetch).
+	primeUnitSummaries(division, scope, validIds, summaries);
+	return summaries;
 }
 
 /**
@@ -110,4 +144,22 @@ export async function getUnitBookPerushNotes(
 		);
 		return [];
 	}
+}
+
+/**
+ * Range-scoped scripture for the פרשה sefer book's auxiliary (Haftarah)
+ * readings — only the perakim the book actually renders, resolved from
+ * the canonical corpus, instead of whole-sefer JSON downloads per
+ * prophetic sefer the Haftarot touch.
+ */
+export async function getPerakimText(
+	perekIds: number[],
+): Promise<Record<number, { pesukim: Pasuk[] }>> {
+	const result: Record<number, { pesukim: Pasuk[] }> = {};
+	for (const perekId of new Set(perekIds.slice(0, LAST_PEREK_ID))) {
+		if (!Number.isInteger(perekId) || perekId < 1 || perekId > LAST_PEREK_ID)
+			continue;
+		result[perekId] = { pesukim: getPerekByPerekId(perekId).pesukim };
+	}
+	return result;
 }

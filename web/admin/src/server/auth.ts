@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { skipAuthEnabled } from "./environment.server";
 
 const COGNITO_REGION = "il-central-1";
 const COGNITO_USER_POOL_ID = requireEnv("COGNITO_USER_POOL_ID");
@@ -17,7 +18,7 @@ const COGNITO_SERVICE_SCOPE =
 
 function requireEnv(name: string): string {
 	const value = process.env[name];
-	if (!value && process.env.SKIP_AUTH !== "true") {
+	if (!value && !skipAuthEnabled()) {
 		throw new Error(`Missing required environment variable: ${name}`);
 	}
 	return value ?? "";
@@ -78,7 +79,7 @@ export async function exchangeCodeForTokens(
  */
 export async function verifyIdTokenClaims(
 	token: string,
-): Promise<{ sub?: string } | null> {
+): Promise<{ sub?: string; email?: string } | null> {
 	try {
 		const { payload } = await jwtVerify(token, jwks, {
 			issuer: ISSUER,

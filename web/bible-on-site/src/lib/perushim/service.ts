@@ -2,11 +2,13 @@ import { query } from "../api-client";
 import {
 	getPerushMetric,
 	getPerushMetricsByPerekId,
+	getPerushMetricsByPerekIds,
 	metricOrFallback,
 } from "../reading-metrics";
 import type { ReadingMetric } from "../reading-metrics";
 import type { ScriptureRange } from "../reading/contract";
 import {
+	groupedSliceSelects,
 	noteSliceCondition,
 	slicePerekOrder,
 	slicesForRanges,
@@ -74,7 +76,68 @@ export async function getPerushimByPerekId(
 			perekId,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// Reject so a failed fetch cannot become a cached empty list.
+		throw error;
+	}
+}
+
+/**
+ * Batch variant of {@link getPerushimByPerekId}: one grouped query for
+ * a whole set of perakim (e.g. every perek of a sefer's book view)
+ * instead of one query per perek, followed by a single perush-metrics
+ * read. Keys are perek ids; a perek with no commentaries has no key.
+ */
+export async function getPerushimByPerekIds(
+	perekIds: number[],
+): Promise<Map<number, PerushSummary[]>> {
+	const byPerek = new Map<number, PerushSummary[]>();
+	if (perekIds.length === 0) return byPerek;
+	const placeholders = perekIds.map(() => "?").join(", ");
+	try {
+		const rows = await query<PerushSummaryRow & { perek_id: number }>(
+			`SELECT
+				n.perek_id AS perek_id,
+				p.id AS perush_id,
+				p.name AS perush_name,
+				pa.name AS parshan_name,
+				COUNT(*) AS note_count,
+				p.priority AS priority
+			 FROM note n
+			 JOIN perush p ON n.perush_id = p.id
+			 JOIN parshan pa ON p.parshan_id = pa.id
+			 WHERE n.perek_id IN (${placeholders})
+			 GROUP BY n.perek_id, p.id, p.name, pa.name, p.priority
+			 ORDER BY n.perek_id ASC, p.priority ASC, note_count DESC`,
+			perekIds,
+		);
+
+		const metrics = await metricOrFallback(
+			`perushim (${perekIds.length} perakim)`,
+			new Map<number, Map<number, ReadingMetric>>(),
+			() => getPerushMetricsByPerekIds(perekIds),
+		);
+		for (const row of rows) {
+			const metric = metrics.get(row.perek_id)?.get(row.perush_id);
+			const summary: PerushSummary = {
+				id: row.perush_id,
+				name: row.perush_name,
+				parshanName: row.parshan_name,
+				noteCount: Number(row.note_count),
+				...(metric ? { metric } : {}),
+			};
+			const list = byPerek.get(row.perek_id) ?? [];
+			list.push(summary);
+			byPerek.set(row.perek_id, list);
+		}
+		return byPerek;
+	} catch (error) {
+		console.warn(
+			"Failed to fetch perushim for %d perakim:",
+			perekIds.length,
+			error instanceof Error ? error.message : error,
+		);
+		// Reject so a failed fetch cannot become a cached empty list.
+		throw error;
 	}
 }
 
@@ -215,7 +278,100 @@ export async function getPerushimForRanges(
 			"Failed to fetch perushim for ranges:",
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// Reject so a failed fetch cannot become a cached empty list.
+		throw error;
+	}
+}
+
+interface GroupedRangePerushRow extends RangePerushRow {
+	unit_order: number;
+	first_slice_order: number;
+}
+
+/**
+ * Batch variant of {@link getPerushimForRanges}: one grouped query for
+ * several range lists (e.g. every unit of an alternative-division
+ * sefer book, issue #2191) instead of one query per unit. Element i of
+ * the result holds the perush summaries for `rangeGroups[i]` under the
+ * same aggregation and ordering semantics — a boundary pasuk shared by
+ * two units counts in both.
+ */
+export async function getPerushimForRangeGroups(
+	rangeGroups: ScriptureRange[][],
+): Promise<RangePerushSummary[][]> {
+	const sliceGroups = rangeGroups.map(slicesForRanges);
+	const byUnit = rangeGroups.map(
+		() =>
+			new Map<
+				number,
+				RangePerushSummary & { priority: number; firstSliceOrder: number }
+			>(),
+	);
+	if (sliceGroups.every((slices) => slices.length === 0)) {
+		return byUnit.map(() => []);
+	}
+	const slicesTable = groupedSliceSelects(sliceGroups);
+	try {
+		const rows = await query<GroupedRangePerushRow>(
+			`SELECT
+				sm.unit_order AS unit_order,
+				MIN(sm.slice_order) AS first_slice_order,
+				n.perush_id AS perush_id,
+				p.name AS perush_name,
+				pa.name AS parshan_name,
+				n.perek_id AS perek_id,
+				COUNT(DISTINCT n.pasuk) AS note_count,
+				p.priority AS priority
+			 FROM note n
+			 JOIN perush p ON n.perush_id = p.id
+			 JOIN parshan pa ON p.parshan_id = pa.id
+			 JOIN (${slicesTable.sql}) sm
+				ON n.perek_id = sm.perek_id
+				AND n.pasuk BETWEEN sm.start_pasuk AND sm.end_pasuk
+			 GROUP BY sm.unit_order, p.id, p.name, pa.name, p.priority, n.perek_id`,
+			slicesTable.params,
+		);
+
+		for (const row of rows) {
+			const byPerush = byUnit[row.unit_order];
+			if (!byPerush) continue;
+			const order = Number(row.first_slice_order);
+			const existing = byPerush.get(row.perush_id);
+			if (existing) {
+				existing.noteCount += Number(row.note_count);
+				if (order < existing.firstSliceOrder) {
+					existing.firstSliceOrder = order;
+					existing.perekId = row.perek_id;
+				}
+			} else {
+				byPerush.set(row.perush_id, {
+					id: row.perush_id,
+					name: row.perush_name,
+					parshanName: row.parshan_name,
+					noteCount: Number(row.note_count),
+					priority: row.priority,
+					perekId: row.perek_id,
+					firstSliceOrder: order,
+				});
+			}
+		}
+		return byUnit.map((byPerush) =>
+			[...byPerush.values()]
+				.sort(
+					(a, b) => a.priority - b.priority || b.noteCount - a.noteCount,
+				)
+				.map(
+					({ priority: _priority, firstSliceOrder: _order, ...summary }) =>
+						summary,
+				),
+		);
+	} catch (error) {
+		console.warn(
+			"Failed to fetch perushim for range groups:",
+			error instanceof Error ? error.message : error,
+		);
+		// Reject so a failed fetch cannot become a cached empty list.
+		throw error;
 	}
 }
 
@@ -259,7 +415,47 @@ export async function getPerushNotesForRanges(
 			perushId,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// Reject so a failed fetch cannot become a cached empty list.
+		throw error;
+	}
+}
+
+/**
+ * Fetch a named perush's notes for a single pasuk in one indexed lookup —
+ * the hover-preview path needs only this pasuk, not the perush's whole
+ * perek notes nor the perek summary + metrics queries.
+ * Empty result when the perush is unknown or has no notes on the pasuk.
+ */
+export async function getPerushNotesForPasuk(
+	perushName: string,
+	perekId: number,
+	pasuk: number,
+): Promise<PerushNote[]> {
+	try {
+		const rows = await query<NoteRow>(
+			`SELECT n.pasuk, n.note_idx, n.note_content
+			 FROM note n
+			 JOIN perush p ON n.perush_id = p.id
+			 WHERE p.name = ? AND n.perek_id = ? AND n.pasuk = ?
+			 ORDER BY n.note_idx ASC`,
+			[perushName, perekId, pasuk],
+		);
+
+		return rows.map((row) => ({
+			pasuk: row.pasuk,
+			noteIdx: row.note_idx,
+			noteContent: row.note_content,
+		}));
+	} catch (error) {
+		console.warn(
+			"Failed to fetch notes for perush %s perek %d pasuk %d:",
+			perushName,
+			perekId,
+			pasuk,
+			error instanceof Error ? error.message : error,
+		);
+		// Reject so a failed fetch cannot become a cached empty list.
+		throw error;
 	}
 }
 
@@ -292,7 +488,8 @@ export async function getPerushNotes(
 			perekId,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// Reject so a failed fetch cannot become a cached empty list.
+		throw error;
 	}
 }
 
@@ -339,7 +536,8 @@ export async function getPerushNotesBatch(
 			perekId,
 			error instanceof Error ? error.message : error,
 		);
-		return {};
+		// Reject so a failed fetch cannot become a cached empty panel.
+		throw error;
 	}
 }
 
@@ -353,10 +551,11 @@ export async function getPerushDetail(
 	try {
 		const metaRows = await query<{
 			perush_name: string;
+			parshan_id: number;
 			parshan_name: string;
 			parshan_birth_year: number | null;
 		}>(
-			`SELECT p.name AS perush_name, pa.name AS parshan_name, pa.birth_year AS parshan_birth_year
+			`SELECT p.name AS perush_name, p.parshan_id, pa.name AS parshan_name, pa.birth_year AS parshan_birth_year
 			 FROM perush p
 			 JOIN parshan pa ON p.parshan_id = pa.id
 			 WHERE p.id = ?`,
@@ -377,6 +576,7 @@ export async function getPerushDetail(
 		return {
 			id: perushId,
 			name: r.perush_name,
+			parshanId: r.parshan_id,
 			parshanName: r.parshan_name,
 			...(r.parshan_birth_year != null && {
 				parshanBirthYear: r.parshan_birth_year,
@@ -390,6 +590,7 @@ export async function getPerushDetail(
 			perushId,
 			error instanceof Error ? error.message : error,
 		);
-		return null;
+		// Reject so a failed fetch cannot become a cached false 404.
+		throw error;
 	}
 }

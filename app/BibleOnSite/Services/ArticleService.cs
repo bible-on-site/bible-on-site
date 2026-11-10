@@ -47,6 +47,13 @@ public class ArticleService : BaseGraphQLService
                         abstract
                         name
                         priority
+                        readingMetric {
+                            wordCount
+                            estimatedSeconds
+                            wordsPerMinute
+                            calcVersion
+                            sourceHash
+                        }
                     }
                 }",
             Variables = new Dictionary<string, object?> { ["perekId"] = perekId }
@@ -77,6 +84,7 @@ public class ArticleService : BaseGraphQLService
                 Abstract = dto.Abstract ?? string.Empty,
                 Name = dto.Name ?? string.Empty,
                 Priority = dto.Priority,
+                ReadingMetric = dto.ReadingMetric?.ToModel(),
                 Author = author
             };
         }).OrderBy(a => a.Priority).ToList();
@@ -99,6 +107,18 @@ public class ArticleService : BaseGraphQLService
                         articleContent
                         name
                         priority
+                        readingMetric {
+                            wordCount
+                            estimatedSeconds
+                            wordsPerMinute
+                            calcVersion
+                            sourceHash
+                        }
+                        progressUnits {
+                            key
+                            wordCount
+                            cumulativeWords
+                        }
                     }
                 }",
             Variables = new Dictionary<string, object?> { ["id"] = articleId }
@@ -132,6 +152,8 @@ public class ArticleService : BaseGraphQLService
             ArticleContent = dto.ArticleContent,
             Name = dto.Name ?? string.Empty,
             Priority = dto.Priority,
+            ReadingMetric = dto.ReadingMetric?.ToModel(),
+            ProgressUnits = dto.ProgressUnits?.Select(unit => unit.ToModel()).ToList() ?? [],
             Author = author
         };
     }
@@ -152,6 +174,13 @@ public class ArticleService : BaseGraphQLService
                         abstract
                         name
                         priority
+                        readingMetric {
+                            wordCount
+                            estimatedSeconds
+                            wordsPerMinute
+                            calcVersion
+                            sourceHash
+                        }
                     }
                 }",
             Variables = new Dictionary<string, object?> { ["authorId"] = authorId }
@@ -180,6 +209,7 @@ public class ArticleService : BaseGraphQLService
                 Abstract = dto.Abstract ?? string.Empty,
                 Name = dto.Name ?? string.Empty,
                 Priority = dto.Priority,
+                ReadingMetric = dto.ReadingMetric?.ToModel(),
                 Author = author
             };
         }).OrderBy(a => a.Priority).ToList();
@@ -244,6 +274,13 @@ public class ArticleService : BaseGraphQLService
                             source
                             excerpt
                             score
+                            readingMetric {
+                                wordCount
+                                estimatedSeconds
+                                wordsPerMinute
+                                calcVersion
+                                sourceHash
+                            }
                         }
                     }
                 }",
@@ -280,7 +317,8 @@ public class ArticleService : BaseGraphQLService
                     Name = dto.Name ?? string.Empty,
                     Source = dto.Source ?? string.Empty,
                     Excerpt = dto.Excerpt ?? string.Empty,
-                    Score = dto.Score
+                    Score = dto.Score,
+                    ReadingMetric = dto.ReadingMetric?.ToModel()
                 }).ToList()
             };
         }
@@ -310,6 +348,7 @@ public class ArticleService : BaseGraphQLService
         public string Source { get; set; } = string.Empty;
         public string Excerpt { get; set; } = string.Empty;
         public float Score { get; set; }
+        public ReadingMetric? ReadingMetric { get; set; }
     }
 
     /// <summary>Paginated remote search result.</summary>
@@ -342,6 +381,7 @@ public class ArticleService : BaseGraphQLService
         public string? Source { get; set; }
         public string? Excerpt { get; set; }
         public float Score { get; set; }
+        public ReadingMetricDto? ReadingMetric { get; set; }
     }
 
     internal class ArticlesByPerekIdResponse
@@ -373,6 +413,42 @@ public class ArticleService : BaseGraphQLService
 
         public string? Name { get; set; }
         public int Priority { get; set; }
+        public ReadingMetricDto? ReadingMetric { get; set; }
+        public List<ReadingProgressUnitDto>? ProgressUnits { get; set; }
+    }
+
+    /// <summary>Persisted reading metric as the API returns it (issue #2607).</summary>
+    internal class ReadingMetricDto
+    {
+        public int? WordCount { get; set; }
+        public int? EstimatedSeconds { get; set; }
+        public int WordsPerMinute { get; set; }
+        public int CalcVersion { get; set; }
+        public string? SourceHash { get; set; }
+
+        public ReadingMetric ToModel() => new()
+        {
+            WordCount = WordCount,
+            EstimatedSeconds = EstimatedSeconds,
+            WordsPerMinute = WordsPerMinute,
+            CalcVersion = CalcVersion,
+            SourceHash = SourceHash ?? string.Empty
+        };
+    }
+
+    /// <summary>Ordered progress unit as the API returns it (issue #2607).</summary>
+    internal class ReadingProgressUnitDto
+    {
+        public string? Key { get; set; }
+        public int WordCount { get; set; }
+        public int CumulativeWords { get; set; }
+
+        public ReadingProgressUnit ToModel() => new()
+        {
+            Key = Key ?? string.Empty,
+            WordCount = WordCount,
+            CumulativeWords = CumulativeWords
+        };
     }
 
     #endregion

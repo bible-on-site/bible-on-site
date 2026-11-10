@@ -57,10 +57,8 @@ public class MasoraDataServiceTests
         service.Units.Should().BeNull();
         service.UnitCount.Should().Be(0);
         service.GetUnit(1).Should().BeNull();
-        service.GetFirstUnitsBySefer().Should().BeEmpty();
         service.GetUnitIndex(1).Should().Be(-1);
         service.GetAdjacentUnits(1).Should().Be((null, null));
-        service.GetUnitContainingPasuk(1).Should().BeNull();
         service.GetUnitContainingPasuk(1, 1).Should().BeNull();
     }
 
@@ -89,17 +87,6 @@ public class MasoraDataServiceTests
 
         service.IsLoaded.Should().BeTrue();
         service.UnitCount.Should().Be(4);
-    }
-
-    [Fact]
-    public async Task GetUnitContainingPasuk_SingleArg_UsesFirstPasuk()
-    {
-        await using var storage = new TestStorage();
-        var service = await LoadedServiceAsync(storage, Seed);
-
-        service.GetUnitContainingPasuk(1)!.UnitId.Should().Be(1);
-        service.GetUnitContainingPasuk(2)!.UnitId.Should().Be(2);
-        service.GetUnitContainingPasuk(51)!.UnitId.Should().Be(9);
     }
 
     [Fact]
@@ -180,7 +167,6 @@ public class MasoraDataServiceTests
         service.IsAvailable.Should().BeFalse();
         service.UnitCount.Should().Be(0);
         service.GetUnit(1).Should().BeNull();
-        service.GetFirstUnitsBySefer().Should().BeEmpty();
         service.GetUnitIndex(1).Should().Be(-1);
         service.GetAdjacentUnits(1).Should().Be((null, null));
         service.GetUnitContainingPasuk(1, 1).Should().BeNull();
@@ -212,15 +198,6 @@ public class MasoraDataServiceTests
         service.GetAdjacentUnits(1).Prev.Should().BeNull();
         service.GetAdjacentUnits(9).Next.Should().BeNull();
         service.GetAdjacentUnits(77).Should().Be((null, null));
-    }
-
-    [Fact]
-    public async Task GetFirstUnitsBySefer_ReturnsOpeningUnits()
-    {
-        await using var storage = new TestStorage();
-        var service = await LoadedServiceAsync(storage, Seed);
-
-        service.GetFirstUnitsBySefer().Select(u => u.UnitId).Should().Equal(1, 9);
     }
 
     [Fact]
@@ -300,7 +277,7 @@ public class MasoraDataServiceTests
     }
 
     [Fact]
-    public async Task PackagedAsset_MasoraHeadings_CarryParashaIdentity()
+    public void PackagedAsset_MasoraHeadings_CarryParashaIdentity()
     {
         // The app reads `heading` verbatim from the packaged tanah_view
         // database, so the tracked asset itself must carry parasha-identity
@@ -309,28 +286,26 @@ public class MasoraDataServiceTests
         var dbPath = FindPackagedDbPath();
         Assert.SkipUnless(dbPath != null && File.Exists(dbPath), "Packaged tanah_view database not present");
 
-        var db = new SQLiteAsyncConnection(dbPath, SQLiteOpenFlags.ReadOnly);
-        try
-        {
-            var unitCount = await db.ExecuteScalarAsync<int>(
-                "SELECT COUNT(*) FROM tanah_reading_unit WHERE division_id = 'masora'");
-            unitCount.Should().Be(3197);
+        // A plain synchronous connection, not the async pool: the shared pool
+        // hands one SQLiteConnectionWithLock per connection string to every
+        // caller, and any parallel CloseConnection on it would null the handle
+        // out from under these queries.
+        using var db = new SQLiteConnection(dbPath, SQLiteOpenFlags.ReadOnly);
 
-            // Every heading is the parasha identity "<sefer name> פרשה <ordinal>" —
-            // a scripture-reference span (e.g. "בראשית א א-ה") fails this check.
-            var nonParashaHeadings = await db.ExecuteScalarAsync<int>(
-                "SELECT COUNT(*) FROM tanah_reading_unit u " +
-                "JOIN tanah_sefer s ON s.id = u.sefer_id " +
-                "WHERE u.division_id = 'masora' AND u.heading NOT LIKE s.name || ' פרשה %'");
-            nonParashaHeadings.Should().Be(0);
+        var unitCount = db.ExecuteScalar<int>(
+            "SELECT COUNT(*) FROM tanah_reading_unit WHERE division_id = 'masora'");
+        unitCount.Should().Be(3197);
 
-            var firstHeading = await db.ExecuteScalarAsync<string>(
-                "SELECT heading FROM tanah_reading_unit WHERE division_id = 'masora' AND unit_id = 1");
-            firstHeading.Should().Be("בראשית פרשה א");
-        }
-        finally
-        {
-            await db.CloseAsync();
-        }
+        // Every heading is the parasha identity "<sefer name> פרשה <ordinal>" —
+        // a scripture-reference span (e.g. "בראשית א א-ה") fails this check.
+        var nonParashaHeadings = db.ExecuteScalar<int>(
+            "SELECT COUNT(*) FROM tanah_reading_unit u " +
+            "JOIN tanah_sefer s ON s.id = u.sefer_id " +
+            "WHERE u.division_id = 'masora' AND u.heading NOT LIKE s.name || ' פרשה %'");
+        nonParashaHeadings.Should().Be(0);
+
+        var firstHeading = db.ExecuteScalar<string>(
+            "SELECT heading FROM tanah_reading_unit WHERE division_id = 'masora' AND unit_id = 1");
+        firstHeading.Should().Be("בראשית פרשה א");
     }
 }

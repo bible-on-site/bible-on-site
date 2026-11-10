@@ -150,34 +150,61 @@ pub fn normalize_strict(text: &str) -> String {
 
 fn normalize_impl(text: &str, fold_finals: bool) -> String {
     let mut out = String::with_capacity(text.len());
-    for c in text.chars().flat_map(char::nfd) {
-        if is_combining_mark(c) {
-            continue;
-        }
-        if matches!(
-            c,
-            '\'' | '"'
-                | '\u{05f3}'
-                | '\u{05f4}'
-                | '\u{2018}'
-                | '\u{2019}'
-                | '\u{201c}'
-                | '\u{201d}'
-        ) {
-            continue;
-        }
-        let c = if fold_finals { fold_final_form(c) } else { c };
-        if c.is_alphanumeric() {
-            for lower in c.to_lowercase() {
-                if lower.is_alphanumeric() {
-                    out.push(lower);
+    write_normalized(text, fold_finals, &mut out);
+    out.trim().to_string()
+}
+
+/// Appends the normalized form of `text` to `out` without trimming, so callers
+/// scanning many tokens can reuse one allocation.
+fn write_normalized(text: &str, fold_finals: bool, out: &mut String) {
+    // ASCII and regular Hebrew letters have identity NFD decompositions.
+    // Keep the generic per-character path for every other Unicode scalar.
+    for c in text.chars() {
+        match c {
+            'a'..='z' | '0'..='9' => out.push(c),
+            'A'..='Z' => out.push(c.to_ascii_lowercase()),
+            // Quotes are removed without creating a word boundary.
+            '\'' | '"' => {}
+            '\u{05d0}'..='\u{05ea}' => out.push(if fold_finals { fold_final_form(c) } else { c }),
+            _ if c.is_ascii() => {
+                if !out.ends_with(' ') && !out.is_empty() {
+                    out.push(' ');
                 }
             }
-        } else if !out.ends_with(' ') && !out.is_empty() {
-            out.push(' ');
+            _ => {
+                for decomposed in c.nfd() {
+                    if is_combining_mark(decomposed)
+                        || matches!(
+                            decomposed,
+                            '\'' | '"'
+                                | '\u{05f3}'
+                                | '\u{05f4}'
+                                | '\u{2018}'
+                                | '\u{2019}'
+                                | '\u{201c}'
+                                | '\u{201d}'
+                        )
+                    {
+                        continue;
+                    }
+                    let normalized = if fold_finals {
+                        fold_final_form(decomposed)
+                    } else {
+                        decomposed
+                    };
+                    if normalized.is_alphanumeric() {
+                        for lower in normalized.to_lowercase() {
+                            if lower.is_alphanumeric() {
+                                out.push(lower);
+                            }
+                        }
+                    } else if !out.ends_with(' ') && !out.is_empty() {
+                        out.push(' ');
+                    }
+                }
+            }
         }
     }
-    out.trim().to_string()
 }
 
 /// Splits text into normalized tokens.
@@ -220,6 +247,9 @@ pub fn excerpt(plain: &str, terms: &[String], max_chars: usize) -> String {
     }
     let mut positions: Vec<usize> = Vec::new();
     if !terms.is_empty() {
+        // Word chars never normalize to a space, so a word span produces a
+        // contiguous normalized token with no separators to trim.
+        let mut word = String::new();
         let mut word_start: Option<usize> = None;
         for (i, c) in trimmed.char_indices() {
             if is_word_char(c) {
@@ -227,7 +257,8 @@ pub fn excerpt(plain: &str, terms: &[String], max_chars: usize) -> String {
                     word_start = Some(i);
                 }
             } else if let Some(start) = word_start.take() {
-                let word = normalize(&trimmed[start..i]);
+                word.clear();
+                write_normalized(&trimmed[start..i], true, &mut word);
                 if !word.is_empty()
                     && terms
                         .iter()
@@ -238,7 +269,8 @@ pub fn excerpt(plain: &str, terms: &[String], max_chars: usize) -> String {
             }
         }
         if let Some(start) = word_start {
-            let word = normalize(&trimmed[start..]);
+            word.clear();
+            write_normalized(&trimmed[start..], true, &mut word);
             if terms
                 .iter()
                 .any(|term| !term.is_empty() && word.starts_with(term.as_str()))
@@ -394,6 +426,22 @@ mod tests {
         assert_eq!(normalize("  מלים   רבות  "), "מלימ רבות");
         // Maqaf is punctuation: splits into separate tokens.
         assert_eq!(normalize("שמואל־א"), "שמואל א");
+    }
+
+    #[test]
+    fn normalization_fast_ranges_preserve_boundaries_and_final_forms() {
+        let input = " ABC xyz 012\"'() \t\r\n ךםןףץ אבג! דהו ";
+        assert_eq!(normalize(input), "abc xyz 012 כמנפצ אבג דהו");
+        assert_eq!(normalize_strict(input), "abc xyz 012 ךםןףץ אבג דהו");
+        assert_eq!(normalize("\"\t'\n"), "");
+        assert_eq!(normalize("one\"'two"), "onetwo");
+    }
+
+    #[test]
+    fn normalization_generic_path_keeps_unicode_decomposition_and_case() {
+        let input = "CAFÉ İ Σ שׁ ﭏ 각 ﺏ 𐐀 𝟘";
+        assert_eq!(normalize(input), "cafe i σ ש ﭏ 각 ﺏ 𐐨 𝟘");
+        assert_eq!(normalize_strict(input), "cafe i σ ש ﭏ 각 ﺏ 𐐨 𝟘");
     }
 
     #[test]

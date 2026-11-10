@@ -9,10 +9,21 @@ const baseConfig = getBaseConfig(TestType.PERF);
 
 export default defineConfig({
 	...baseConfig,
+	globalSetup: "./playwright-perf-setup.mjs",
+	globalTeardown: [
+		"./playwright-perf-teardown.mjs",
+		...(typeof baseConfig.globalTeardown === "string"
+			? [baseConfig.globalTeardown]
+			: baseConfig.globalTeardown || []),
+	],
 	webServer: {
 		...(baseConfig.webServer as TestConfigWebServer),
 		command: "bun run start",
+		// Enables /api/dev/memory on the production server for the perf benchmark
+		env: { ENABLE_DEV_MEMORY_API: "1" },
 	},
 	fullyParallel: false,
+	// Timing profiles require an idle browser host, including across projects.
+	workers: 1,
 	retries: process.env.CI ? 4 : 0,
 });

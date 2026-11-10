@@ -1,3 +1,4 @@
+using System.Reflection;
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
@@ -260,7 +261,7 @@ public class SearchIndexServiceTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await vm.SearchAsync(cancellation.Token);
-        vm.SearchResults.Should().BeEmpty();
+        vm.SearchResults.Should().ContainSingle().Which.Title.Should().Be("שמות א");
         vm.IsLoading.Should().BeFalse();
     }
 
@@ -274,9 +275,9 @@ public class SearchIndexServiceTests
     public void Snippet_PreservesVowelsAndSafeMarkup_AndHighlightsTheActualTypoMatch()
     {
         SearchText.Snippet("<b>בְּרֵאשִׁית</b> &lt;script&gt;", "בראשיט").Should().Contain("<b>בְּרֵאשִׁית</b>").And.NotContain("<script>");
-        SearchText.Score("בראשית", "בראשית").Should().BeGreaterThan(SearchText.Score("בראשית", "בראשיט"));
-        SearchText.Score("משה", "דוד").Should().Be(0);
-        SearchText.Score("ברא אלהים", "ברא").Should().BeGreaterThan(SearchText.Score("בראשית", "ברא"));
+        SearchText.ScoreNormalized("בראשית", SearchText.Normalize("בראשית")).Should().BeGreaterThan(SearchText.ScoreNormalized("בראשית", SearchText.Normalize("בראשיט")));
+        SearchText.ScoreNormalized("משה", SearchText.Normalize("דוד")).Should().Be(0);
+        SearchText.ScoreNormalized("ברא אלהים", SearchText.Normalize("ברא")).Should().BeGreaterThan(SearchText.ScoreNormalized("בראשית", SearchText.Normalize("ברא")));
         SearchText.PlainText("<p>בריאת</p><p>העולם</p>").Should().Contain("בריאת העולם");
         SearchText.PlainText("בריאה &amp; אור").Should().Be("בריאה & אור");
     }
@@ -286,8 +287,8 @@ public class SearchIndexServiceTests
     {
         SearchText.PlainText("<script>hidden</script><style>hidden</style><p>בריאה</p>")
             .Should().Contain("בריאה").And.NotContain("hidden");
-        SearchText.Score("בריאה", " * ").Should().Be(0);
-        SearchText.Score("", "בריאה").Should().Be(0);
+        SearchText.ScoreNormalized("בריאה", SearchText.Normalize(" * ")).Should().Be(0);
+        SearchText.ScoreNormalized("", SearchText.Normalize("בריאה")).Should().Be(0);
         SearchText.Normalize("का").Should().Be("क", "spacing combining marks are removed along with Hebrew vowel marks");
     }
 
@@ -659,6 +660,67 @@ public class SearchIndexServiceTests
         await Assert.ThrowsAsync<ObjectDisposedException>(() => index.SearchAsync("בראשית",
             new HashSet<SearchFilter> { SearchFilter.Pasuk }, new HashSet<int> { 1 },
             10, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task DisposeAsync_StillDisposesGates_WhenIndexCloseFails()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var index = new SearchIndexService(perakim, null, Path.Join(storage.Root, "search.sqlite"));
+
+        // Let the constructor-launched build finish so the close is the only failure.
+        var type = typeof(SearchIndexService);
+        var initialization = (Task)type
+            .GetField("_initialization", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(index)!;
+        await initialization;
+
+        // sqlite3_close_v2 cannot be made to fail through the public API, so the
+        // exception path of the inner try/finally is driven by fault injection.
+        var indexField = type.GetField("_index", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var realIndex = (SQLite.SQLiteAsyncConnection)indexField.GetValue(index)!;
+        indexField.SetValue(index, null);
+
+        await Assert.ThrowsAsync<NullReferenceException>(() => index.DisposeAsync().AsTask());
+        // The finally still disposed the per-key gates: a second dispose now fails
+        // on the already-disposed semaphore instead of closing anything again.
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => index.DisposeAsync().AsTask());
+
+        // DisposeAsync skipped the real close: release the pooled connection so
+        // the storage cleanup can delete the still-locked index file.
+        await realIndex.CloseAsync();
+    }
+
+    [Fact]
+    public async Task DisposeAsync_StillDisposesGates_WhenBuildTaskFails()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        var index = new SearchIndexService(perakim, null, Path.Join(storage.Root, "search.sqlite"));
+
+        // Let the constructor-launched build finish so the injected failure is
+        // the only error Task.WhenAll can observe.
+        var type = typeof(SearchIndexService);
+        var initialization = (Task)type
+            .GetField("_initialization", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(index)!;
+        await initialization;
+
+        // _buildTasks has no public fault-injection seam; a completed faulted
+        // entry makes Task.WhenAll(builds) throw synchronously inside
+        // DisposeAsync. The captured exception must still flow through the
+        // finally body and be rethrown after the gates are disposed.
+        var buildTasks = (Dictionary<string, Task>)type
+            .GetField("_buildTasks", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(index)!;
+        buildTasks["injected-failure"] =
+            Task.FromException(new InvalidOperationException("simulated build failure"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => index.DisposeAsync().AsTask());
+        // The finally still disposed the per-key gates: a second dispose now
+        // fails on the already-disposed semaphore.
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => index.DisposeAsync().AsTask());
     }
 
     [Fact]

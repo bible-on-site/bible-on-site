@@ -38,6 +38,12 @@ on:
   # Use the dispatch's native branch/tag selector so execution and cache scope match.
   workflow_dispatch:
     inputs:
+      release_recovery:
+        description: "Rebuild and release selected services after successful normal master CI for this exact commit"
+        required: false
+        type: choice
+        options: ["none", "admin", "bulletin", "admin-and-bulletin"]
+        default: "none"
       # e2e-impact (#2085): shadow computes selections for evidence; enforce
       # actually runs the selected subset in the Playwright suites. The mobile
       # suite has its own dispatch inputs on app-mobile-e2e.yml.
@@ -107,7 +113,8 @@ env:
   # every other run stays in shadow mode (diagnostics only). The selector
   # itself honors FORCE_FULL_SUITE.
   E2E_SELECTION_MODE: ${{ inputs.e2e_selection_mode || vars.E2E_SELECTION_MODE || 'shadow' }}
-  FORCE_FULL_SUITE: ${{ inputs.force_full_suite || vars.E2E_FORCE_FULL_SUITE || '' }}
+  # Queue checks cover every entry in the combined head, not just its last delta.
+  FORCE_FULL_SUITE: ${{ github.event_name == 'merge_group' && 'true' || inputs.force_full_suite || vars.E2E_FORCE_FULL_SUITE || '' }}
   IS_MASTER_BRANCH: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
   TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY: tmp-website-junit-reports
   WEBSITE_COVERAGE_ARTIFACT_NAME_MASTER: website-coverage.master
@@ -124,6 +131,7 @@ env:
   APP_INTEGRATION_JUNIT_REPORT_ARTIFACT_NAME: app-integration-junit-report-${{ github.run_id }}
   ADMIN_DIRECTORY: web/admin
   ADMIN_DOCKER_ARTIFACT_NAME: bible-on-site-admin-docker-${{ github.run_id }}
+  ADMIN_DOCKER_ARM64_ARTIFACT_NAME: bible-on-site-admin-docker-${{ github.run_id }}-arm64
   ADMIN_DOCKER_IMAGE_NAME: bible-on-site-admin
   ADMIN_NODE_CACHE_PATH: web/admin/bun.lock
   ADMIN_NODE_VERSION_FILE: web/admin/package.json
@@ -173,6 +181,7 @@ jobs:
       is_master_branch: ${{ env.IS_MASTER_BRANCH }} # a workaround for places where only needs.<job_id>.<output> is allowed
       website_directory: ${{ env.WEBSITE_DIRECTORY }} # a workaround for places where only needs.<job_id>.<output> is allowed
       website_playwright_version: ${{ steps.get_website_playwright_version.outputs.PLAYWRIGHT_VERSION }}
+      admin_playwright_version: ${{ steps.get_admin_playwright_version.outputs.PLAYWRIGHT_VERSION }}
     steps:
       - run: echo "Setting up environment variables"
       - name: Checkout
@@ -184,9 +193,13 @@ jobs:
         id: get_website_playwright_version
         working-directory: ${{ env.WEBSITE_DIRECTORY }}
         run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_OUTPUT
+      - name: Get Admin Playwright version
+        id: get_admin_playwright_version
+        working-directory: ${{ env.ADMIN_DIRECTORY }}
+        run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_OUTPUT
 
   determine_baseline_availability:
-    name: Determine Baseline Availability
+    name: Coverage / Baseline availability detection
     permissions:
       contents: read
       actions: read
@@ -259,7 +272,7 @@ jobs:
           echo "is_app_e2e_ios_coverage_available=$IS_APP_E2E_IOS_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
 
   determine_docker_image_availability:
-    name: Determine Docker Image Availability
+    name: Docker / Image availability detection
     permissions:
       contents: read
       packages: read
@@ -267,8 +280,8 @@ jobs:
     outputs:
       is_sefaria_mongo_available: ${{ steps.check_sefaria_mongo.outputs.is_sefaria_mongo_available }}
       sefaria_mongo_image: ${{ steps.check_sefaria_mongo.outputs.sefaria_mongo_image }}
-      # Fork PR tokens are read-only, so their rebuilt image travels as a workflow artifact instead.
-      can_publish_sefaria_mongo: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+      # Queue validation and read-only fork PRs use a workflow artifact instead of publishing.
+      can_publish_sefaria_mongo: ${{ github.event_name != 'merge_group' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
       - name: Check Sefaria MongoDB image availability
         id: check_sefaria_mongo
@@ -292,15 +305,16 @@ jobs:
           fi
 
   determine_changes:
-    name: Determine Changes
+    name: Modules / Changes detection
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     outputs:
       website_module_changed: ${{ steps.determine.outputs.website_module_changed }}
       website_ci_changed: ${{ steps.determine.outputs.website_ci_changed }}
-      api_module_changed: ${{ steps.determine.outputs.api_module_changed }}
-      api_ci_changed: ${{ steps.determine.outputs.api_ci_changed }}
+      api_module_changed: ${{ steps.determine.outputs.api_module_changed == 'true' || steps.pending-api.outputs.api_release_pending == 'true' }}
+      api_ci_changed: ${{ steps.determine.outputs.api_ci_changed == 'true' || steps.pending-api.outputs.api_release_pending == 'true' }}
       app_module_changed: ${{ steps.determine.outputs.app_module_changed }}
       app_ci_changed: ${{ steps.determine.outputs.app_ci_changed }}
       admin_module_changed: ${{ steps.determine.outputs.admin_module_changed }}
@@ -310,8 +324,14 @@ jobs:
       data_module_changed: ${{ steps.determine.outputs.data_module_changed }}
       data_ci_changed: ${{ steps.determine.outputs.data_ci_changed }}
       data_schema_only_changed: ${{ steps.determine.outputs.data_schema_only_changed }}
+      data_deploy_changed: ${{ steps.determine.outputs.data_deploy_changed }}
       perushim_pipeline_module_changed: ${{ steps.determine.outputs.perushim_pipeline_module_changed }}
       perushim_pipeline_ci_changed: ${{ steps.determine.outputs.perushim_pipeline_ci_changed }}
+      release_recovery_requested: ${{ steps.recovery.outputs.recovery_requested }}
+      release_recovery_modules: ${{ steps.recovery.outputs.recovery_modules }}
+      normal_master_ci: ${{ steps.recovery.outputs.normal_master_ci }}
+      admin_release_recovery: ${{ steps.determine.outputs.admin_release_recovery }}
+      bulletin_release_recovery: ${{ steps.determine.outputs.bulletin_release_recovery }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -320,14 +340,132 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
+      - name: Validate explicit release recovery
+        id: recovery
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node devops/github/release/recovery-request.mjs --preflight --out "$RUNNER_TEMP/recovery-master-ci.json"
+      - name: Test module change routing
+        run: node --test devops/github/ci/determine-changes.test.ts
       - name: Determine module changes
         id: determine
         run: node devops/github/ci/determine-changes.ts
+      - name: Verify pending API release reconciliation
+        run: node --test devops/github/ci/pending-api-release.test.mjs
+      - name: Reconcile previously blocked API release
+        id: pending-api
+        # Ordinary API changes keep their existing release/version-bump path.
+        # Recovery only selects real API code left unpublished by an older run.
+        if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && steps.determine.outputs.api_module_changed != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node devops/github/ci/pending-api-release.mjs
+
+  # Fixed ~30-second verification of the pre-generated calendar-PDF artifact
+  # cache (#2608). Full (re)generation and S3 publication live in
+  # calendar-pdf-publish.yml — a cold or broadly invalidated render must never
+  # inflate this pipeline.
+  calendar_pdf_artifacts:
+    name: Calendar PDF Artifacts
+    runs-on: ubuntu-latest
+    needs: [setup_env, determine_changes]
+    if: >-
+      ${{ always() && !cancelled() &&
+        needs.setup_env.result == 'success' &&
+        needs.determine_changes.result == 'success' &&
+        (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true')
+      }}
+    defaults:
+      run:
+        working-directory: ${{ env.WEBSITE_DIRECTORY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      # The generated catalog is a fingerprinted input — regenerate before
+      # hashing so the fingerprint always reflects current data.
+      - name: Generate client catalog
+        run: node scripts/generate-client-catalog.mjs
+
+      - name: Compute calendar-PDF input fingerprint
+        id: fp
+        run: echo "fingerprint=$(node scripts/calendar-pdf-inputs.mjs)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore calendar-PDF artifact cache
+        id: artifacts-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.WEBSITE_DIRECTORY }}/.cache/calendar-pdf
+          # Content-addressed key: a relevant-input change opens a new cache
+          # lineage while the previous lineage is still restored for partial
+          # regeneration (per-artifact input shas decide what re-renders).
+          key: ${{ runner.os }}-calendar-pdf-${{ steps.fp.outputs.fingerprint }}
+          restore-keys: ${{ runner.os }}-calendar-pdf-
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node.js
+        id: setup-node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: ${{ env.WEBSITE_NODE_VERSION_FILE }}
+
+      - name: Restore bun store cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-website-${{ hashFiles(env.WEBSITE_NODE_CACHE_PATH) }}
+          restore-keys: ${{ runner.os }}-bun-website-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # On an unchanged fingerprint this is an O(keys) manifest check plus a
+      # small re-rendered byte-compare sample; on drift it measures the
+      # partial-invalidation rate on a bounded sample. Never a full render.
+      # The cache is write-owned by calendar-pdf-publish.yml (serialized by
+      # its concurrency group) — this job only restores + verifies, so two
+      # overlapping CI runs can never race on a cache save.
+      - name: Verify calendar-PDF artifacts
+        run: bun run check:calendar-pdf
+
+  validate_website_architectures:
+    name: Validate Website Architectures
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/architecture-validation.yml
+    with:
+      service: website
+
+  validate_api_architectures:
+    name: Validate API Architectures
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/architecture-validation.yml
+    with:
+      service: api
+
+  validate_admin_architectures:
+    name: Validate Admin Architectures
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.admin_module_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/architecture-validation.yml
+    with:
+      service: admin
 
   package_website:
     name: Package Website
-    needs: [setup_env, determine_changes]
-    if: ${{ needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
+    if: ${{ always() && !cancelled() && !failure() && ((github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.website_module_changed == 'true') || (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true'))) }}
     permissions:
       contents: write
       actions: read
@@ -336,6 +474,28 @@ jobs:
     uses: ./.github/workflows/shared-dockerize.yml
     with:
       module_directory: ${{ needs.setup_env.outputs.website_directory }}
+      # Prefer the perushim SQL generated in this run; fall back to the master
+      # baseline. Empty means no artifact is available and the SSG build keeps
+      # querying prod RDS directly.
+      perushim_data_artifact: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' && 'perushim-data-sql.master' || '' }}
+
+  package_website_arm64:
+    name: Package Website ARM64
+    needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
+    if: ${{ always() && !cancelled() && !failure() && ((github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.website_module_changed == 'true') || (github.event_name != 'push' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (needs.determine_changes.outputs.website_module_changed == 'true' || needs.determine_changes.outputs.website_ci_changed == 'true'))) }}
+    permissions:
+      contents: write
+      actions: read
+      id-token: write # Required for AWS OIDC authentication to access RDS during SSG build
+    secrets: inherit
+    uses: ./.github/workflows/shared-dockerize.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.website_directory }}
+      image_arch: arm64
+      # Prefer the perushim SQL generated in this run; fall back to the master
+      # baseline. Empty means no artifact is available and the SSG build keeps
+      # querying prod RDS directly.
+      perushim_data_artifact: ${{ needs.perushim_data.result == 'success' && 'perushim-data-sql' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' && 'perushim-data-sql.master' || '' }}
 
   # Master pushes package the release; other events (PR, merge queue) build the
   # same release Docker configuration as a pre-merge check without uploading it,
@@ -352,6 +512,20 @@ jobs:
     uses: ./.github/workflows/shared-dockerize.yml
     with:
       module_directory: ${{ needs.setup_env.outputs.api_directory }}
+
+  package_api_arm64:
+    name: Package API ARM64
+    needs: [setup_env, determine_changes]
+    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.api_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.api_module_changed == 'true' || needs.determine_changes.outputs.api_ci_changed == 'true')) }}
+    permissions:
+      contents: write
+      actions: read
+      id-token: write # Required by shared-dockerize.yml
+    secrets: inherit
+    uses: ./.github/workflows/shared-dockerize.yml
+    with:
+      module_directory: ${{ needs.setup_env.outputs.api_directory }}
+      image_arch: arm64
 
   package_app:
     name: Package App
@@ -371,10 +545,12 @@ jobs:
   # Compile and inspect the actual signed distribution on relevant PRs too.
   # Simulator builds cannot detect missing App Groups provisioning or a broken
   # embedded downloader; publication remains in the master-only job above.
+  # Pull requests only: the ~17-minute macOS job already gated the PR, and
+  # repeating it per merge_group entry doubles scarce macOS runner time.
   package_ios_pr:
     name: Validate iOS Distribution
     needs: [setup_env, determine_changes, perushim_data]
-    if: ${{ always() && !cancelled() && !failure() && github.event_name != 'push' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    if: ${{ always() && !cancelled() && !failure() && github.event_name == 'pull_request' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
     permissions:
       contents: read
       actions: read
@@ -386,23 +562,26 @@ jobs:
 
   # Windows-only source (#if WINDOWS) compiled nowhere before merge: package_app
   # is master-only and App CI builds Android/iOS only — a Windows-only compile
-  # regression shipped in #2496 undetected (#2526). A compile-only Release build
-  # gates the real Windows target without signing secrets or store upload.
+  # regression shipped in #2496 undetected (#2526). The release-path gate
+  # (#2292) runs the real packaging leg before merge — signed MSIX publish,
+  # recitation/perushim prep, extension-pack optional packages and payload
+  # verification — with publication skipped, like package_ios_pr. Same-repo PR
+  # and merge-queue runs carry the signing secrets via inherit.
   package_windows_pr:
-    name: Validate Windows Compile
-    needs: [setup_env, determine_changes]
+    name: Validate Windows Package
+    needs: [setup_env, determine_changes, perushim_data]
     if: ${{ always() && !cancelled() && !failure() && github.event_name != 'push' && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
     # The caller's permissions ceiling is validated at workflow-compile time
     # (before `if:` evaluation): app-package.yml declares `actions: read` for its
-    # master-baseline artifact fetches, so the ceiling must cover it even though
-    # compile_only never runs them — otherwise the whole run dies at startup_failure.
+    # master-baseline artifact fetches, so the ceiling must cover them.
     permissions:
       contents: read
       actions: read
+    secrets: inherit
     uses: ./.github/workflows/app-package.yml
     with:
       platform: Windows
-      compile_only: true
+      perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
   # Same release/pre-merge split as package_api (#2292).
   package_bulletin:
@@ -427,7 +606,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Get Module Version
         id: get_version
@@ -466,7 +646,7 @@ jobs:
           rm -rf ./bootstrap fonts/
 
       - name: Store Lambda ZIP
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' || needs.determine_changes.outputs.bulletin_release_recovery == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.BULLETIN_LAMBDA_ZIP_ARTIFACT_NAME }}
@@ -520,12 +700,29 @@ jobs:
       - name: Dockerize Admin
         run: |
           docker buildx build --load \
+            --platform linux/amd64 \
             --cache-from type=gha,scope=admin \
             --cache-to type=gha,mode=max,scope=admin \
             --progress=plain \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.version=${{ steps.get_version.outputs.MODULE_VERSION }}" \
             -f ${{ env.ADMIN_DIRECTORY }}/Dockerfile \
             -t ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
+
+      - name: Pull the isolated admin fixture image
+        run: docker pull mysql:8.4
+
+      - name: Setup devops Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+
+      - name: Verify the packaged admin against its own disposable database
+        run: >-
+          node devops/github/ci/verify-native-image.mjs --service admin
+          --image "${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }}"
+          --arch amd64
 
       - name: Export Docker Image
         run: |
@@ -537,10 +734,96 @@ jobs:
         run: gzip -c -f ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}.gz
 
       - name: Store Docker Image
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' || needs.determine_changes.outputs.admin_release_recovery == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_DOCKER_ARTIFACT_NAME }}
+          path: ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
+          retention-days: 1
+
+  # Same release/pre-merge split and source binding as package_admin, on the
+  # native ARM64 runner with its own cache scope — the paired release contract.
+  package_admin_arm64:
+    name: Package Admin ARM64
+    needs: [setup_env, determine_changes]
+    if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.admin_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.admin_module_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true')) }}
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-26.04-arm
+    outputs:
+      module_version: ${{ steps.get_version.outputs.MODULE_VERSION }}
+      docker_artifact_name: ${{ env.ADMIN_DOCKER_ARM64_ARTIFACT_NAME }}
+    env:
+      SHARED_ROOT_DIR: web
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Get Module Version
+        id: get_version
+        working-directory: ${{ env.ADMIN_DIRECTORY }}
+        run: |
+          MODULE_VERSION=$(node -e "console.log(require('./package.json').version)")
+          echo "MODULE_VERSION=${MODULE_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Prepare Dockerizing
+        id: prepare
+        run: |
+          mkdir -p ${{ env.ADMIN_DIRECTORY }}/.release
+          DOCKER_IMAGE_TAR_NAME="${{ env.ADMIN_DOCKER_IMAGE_NAME }}-v${{ steps.get_version.outputs.MODULE_VERSION }}-arm64.tar"
+          DOCKER_IMAGE_TAR_GZ_PATH="${{ env.ADMIN_DIRECTORY }}/.release/${DOCKER_IMAGE_TAR_NAME}.gz"
+          echo "DOCKER_IMAGE_TAR_NAME=${DOCKER_IMAGE_TAR_NAME}" >> $GITHUB_OUTPUT
+          echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: |
+            network=host
+            image=moby/buildkit:v0.22.0
+
+      - name: Dockerize Admin
+        run: |
+          docker buildx build --load \
+            --platform linux/arm64 \
+            --cache-from type=gha,scope=admin-arm64 \
+            --cache-to type=gha,mode=max,scope=admin-arm64 \
+            --progress=plain \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --label "org.opencontainers.image.version=${{ steps.get_version.outputs.MODULE_VERSION }}" \
+            -f ${{ env.ADMIN_DIRECTORY }}/Dockerfile \
+            -t ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
+            ${{ env.SHARED_ROOT_DIR }}
+
+      - name: Pull the isolated admin fixture image
+        run: docker pull mysql:8.4
+
+      - name: Setup devops Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+
+      - name: Verify the packaged admin against its own disposable database
+        run: >-
+          node devops/github/ci/verify-native-image.mjs --service admin
+          --image "${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }}"
+          --arch arm64
+
+      - name: Export Docker Image
+        run: |
+          docker save ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
+            -o ${{ env.ADMIN_DIRECTORY }}/.release/${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}
+
+      - name: GZip Docker Image
+        working-directory: ${{ env.ADMIN_DIRECTORY }}/.release
+        run: gzip -c -f ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }} > ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_NAME }}.gz
+
+      - name: Store Docker Image
+        if: ${{ github.event_name == 'push' || needs.determine_changes.outputs.admin_release_recovery == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ADMIN_DOCKER_ARM64_ARTIFACT_NAME }}
           path: ${{ steps.prepare.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}
           retention-days: 1
 
@@ -554,23 +837,27 @@ jobs:
       # GitHub caps fork PR tokens to read-only, so only trusted runs can publish.
       packages: write
     steps:
-      # Free disk space for the MongoDB Docker image build (~10GB+ needed for mongorestore)
-      # Enable large-packages and docker-images to maximize available space
-      - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@v2.0.0
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
-
       - name: Checkout
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+
+      # Free disk space for the MongoDB Docker image build (~10GB+ needed for mongorestore)
+      # Remove installed packages separately so one absent optional name cannot
+      # prevent the rest of the package sweep.
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          preinstalled-runtimes: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: true
+
+      - name: Remove installed large packages
+        run: bash "$GITHUB_WORKSPACE/devops/github/ci/free-large-packages.sh"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -641,6 +928,20 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 2 # Inspect the actual base of the tested PR merge.
 
+      # Dependency/build caches and the SSG output can exhaust a hosted
+      # runner. Reclaim unused SDKs/images before restoring those caches;
+      # preserve browser packages, installed runtimes and swap for benchmarks.
+      - name: Free space for the website production build
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          preinstalled-runtimes: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
       - name: Merge and audit approved recitation timings
         run: |
           python ../../data/recitation/publish.py
@@ -653,6 +954,7 @@ jobs:
           module: website
           directory: ${{ env.WEBSITE_DIRECTORY }}
           playwright-version: ${{ needs.setup_env.outputs.website_playwright_version }}
+          playwright-distribution: full
 
       # bun install --frozen-lockfile is done here, so ~/.bun/install/cache is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
@@ -664,8 +966,9 @@ jobs:
           key: ${{ steps.bun-cache.outputs.cache-primary-key }}
 
       # The browser install only needs node_modules; it runs in the background
-      # across MySQL/Rust/populate/build and is gated before the perf test. On
-      # a binary-cache hit only the system dependencies are installed.
+      # across MySQL/Rust/populate/build and is gated before the perf test.
+      # The consecutive-turn profile uses the full Chromium headless mode;
+      # existing shell-only cache entries do not contain that executable.
       - name: Install Playwright Browsers
         id: playwright-install
         background: true
@@ -730,7 +1033,8 @@ jobs:
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Cache Cargo dependencies
         if: ${{ needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true' }}
@@ -751,11 +1055,21 @@ jobs:
           cp mysql/perushim-sql-master/perushim_data.sql mysql/perushim_data.sql
           cargo make mysql-populate
 
+      - name: Report disk space before website build
+        run: df -h .
+
       - name: Build
         id: bun-build
         env:
           DB_URL: ${{ (needs.perushim_data.result == 'success' || needs.determine_baseline_availability.outputs.is_perushim_data_sql_available == 'true') && 'mysql://root:test_123@127.0.0.1:3306/tanah_test' || '' }}
-        run: bun run build
+        run: |
+          df -h .
+          for path in .next/cache node_modules ../../data/target; do
+            if [ -d "$path" ]; then du -sh "$path"; fi
+          done
+          bun run build
+          df -h .
+          du -sh .next
 
       - name: Save Next.js build cache
         if: ${{ github.ref == 'refs/heads/master' && steps.nextjs-cache.outputs.cache-hit != 'true' }}
@@ -781,9 +1095,33 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ steps.bun-cache.outputs.playwright-cache-primary-key }}
 
+      - name: Test performance reporting
+        run: bun run test:perf-reporting
+
       - name: Perf Test
         id: bun-perf-test
         run: bun run test:perf
+
+      - name: Store Website Performance Diagnostics
+        id: perf-diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: website-perf-diagnostics-${{ github.run_id }}
+          path: ${{ env.WEBSITE_DIRECTORY }}/.playwright-report/perf/diagnostics
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Publish performance diagnostics summary
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          DIAGNOSTICS_URL: ${{ steps.perf-diagnostics.outputs.artifact-url }}
+        run: |
+          if [ -f .playwright-report/perf/diagnostics/lighthouse/summary.md ]; then
+            printf '[Full Lighthouse diagnostics](%s)\n\n' "$DIAGNOSTICS_URL" >> "$GITHUB_STEP_SUMMARY"
+            sed -E 's/\[(JSON|HTML)\]\([^)]*\)/\1 in artifact/g' .playwright-report/perf/diagnostics/lighthouse/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Install Bencher CLI
         uses: bencherdev/bencher@main
@@ -797,12 +1135,21 @@ jobs:
           # master push history intact; reset only feature/queue comparisons.
           node "$GITHUB_WORKSPACE/devops/github/ci/bencher-comparison.mjs" > "$RUNNER_TEMP/bencher-comparison-args.txt"
           mapfile -t BENCHER_COMPARISON_ARGS < "$RUNNER_TEMP/bencher-comparison-args.txt"
+          # CLS gets a dedicated measure with a static boundary: a percentage
+          # test on a zero CLS baseline collapses the upper boundary limit to
+          # 0, so every nonzero (still-good) reading alerts (#2718). Static
+          # tests reject the sample-size and window options. 0.1 is the
+          # Lighthouse "good" CLS bound. Bencher zips repeated --threshold-*
+          # options positionally across groups, so cls_ratio must pass
+          # --threshold-max-sample-size _ to leave it unset (#2718).
+          # Frame blocking can also be zero. Its normalized measure uses
+          # the browser test's existing CPU-scaled budget: 1 means the limit.
           bencher run \
             --project "$BENCHER_PROJECT" \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
             --branch "$BENCHER_BRANCH" \
             "${BENCHER_COMPARISON_ARGS[@]}" \
-            --testbed ubuntu-latest \
+            --testbed ubuntu-latest-lh-cpu-m500-d1500-v1 \
             --adapter json \
             --github-actions '${{ secrets.GITHUB_TOKEN }}' \
             --file .playwright-report/perf/bencher/benchmark.json \
@@ -811,6 +1158,8 @@ jobs:
             --threshold-measure size_mb --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
             --threshold-measure score --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary _ --threshold-lower-boundary 5.00 \
             --threshold-measure ratio --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 20.00 --threshold-lower-boundary _ \
+            --threshold-measure cls_ratio --threshold-test static --threshold-max-sample-size _ --threshold-upper-boundary 0.1 --threshold-lower-boundary _ \
+            --threshold-measure frame_budget_ratio --threshold-test static --threshold-max-sample-size _ --threshold-upper-boundary 1.0 --threshold-lower-boundary _ \
             --threshold-measure bytes --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 5.00 --threshold-lower-boundary _ \
             --threshold-measure count --threshold-test percentage --threshold-max-sample-size 64 --threshold-upper-boundary 10.00 --threshold-lower-boundary _ \
 
@@ -909,6 +1258,8 @@ jobs:
       # The browser install only needs node_modules; it runs in the background
       # across lint/unit/MySQL/Rust and is gated before E2E. On a binary-cache
       # hit only the system dependencies are installed.
+      # Every suite runs headless, so --only-shell skips the headed Chromium
+      # build and downloads only the headless shell.
       - name: Install Playwright Browsers
         id: playwright-install
         background: true
@@ -916,7 +1267,7 @@ jobs:
           if [ "${{ steps.bun-cache.outputs.playwright-cache-hit }}" = "true" ]; then
             bun x playwright install-deps chromium
           else
-            bun x playwright install --with-deps chromium
+            bun x playwright install --with-deps --only-shell chromium
           fi
 
       - name: Setup Rust
@@ -925,7 +1276,8 @@ jobs:
       - name: Install cargo-make
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -958,6 +1310,11 @@ jobs:
       - name: Unit Test
         id: bun-unit-test
         run: bun run coverage:unit
+
+      - name: Local flip-book workflow guards
+        run: >-
+          node --test scripts/copy-local-flip-book.test.mjs
+          scripts/copy-local-flip-book-windows.test.mjs
 
       - name: Store Website Unit JUnit Report
         uses: actions/upload-artifact@v7
@@ -1195,10 +1552,21 @@ jobs:
           echo "=== next dev server.log (tail) ==="
           tail -n 300 .playwright-report/setup/server.log 2>/dev/null || echo "(no server.log)"
 
-      - name: Build lcov Docker image
-        uses: ./.github/actions/lcov-image
-
+      # The published website report merges both test layers as a plain
+      # union of --require inputs. Both enumerate the same canonical
+      # universe: sanitizeCoverage projects every collected record onto the
+      # coordinates jest's transform emits for the file and drops records
+      # that name no real instrumentable src file, so dev-server generated
+      # modules and compile-variant coordinates can never reach the merge
+      # (#2670).
       - name: Merge Test Coverage (Unit + E2E)
+        id: coverage-merge
+        # Run when the e2e step executed at all (success or failure): jest and
+        # monocart write their lcov even for failing tests, so the report can
+        # still be produced. Skip only when e2e never ran (e.g. unit failure)
+        # because the --require inputs would be absent and the merge could
+        # never produce a report anyway.
+        if: ${{ !cancelled() && steps.bun-e2e-test.outcome != 'skipped' }}
         run: bun run coverage:merge
 
       - name: Store Coverage Debug Snippets
@@ -1212,6 +1580,9 @@ jobs:
           if-no-files-found: ignore
 
       - name: Store Website Coverage Report (wf)
+        # Upload the report whenever the merge step produced one — including
+        # failed test runs, which still carry the coverage they collected.
+        if: ${{ !cancelled() && steps.coverage-merge.outcome == 'success' }}
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.WEBSITE_COVERAGE_ARTIFACT_NAME_WF }}
@@ -1244,6 +1615,9 @@ jobs:
 
     env:
       RUSTC_WRAPPER: sccache
+      # Recovery re-runs this service's complete E2E suite, independently of
+      # repository selection defaults; other modules retain their own flags.
+      FORCE_FULL_SUITE: ${{ needs.determine_changes.outputs.admin_release_recovery == 'true' && 'true' || inputs.force_full_suite || vars.E2E_FORCE_FULL_SUITE || '' }}
     steps:
       - name: Checkout
         id: checkout
@@ -1272,6 +1646,7 @@ jobs:
         with:
           module: admin
           directory: ${{ env.ADMIN_DIRECTORY }}
+          playwright-version: ${{ needs.setup_env.outputs.admin_playwright_version }}
 
       # bun install --frozen-lockfile is done here, so ~/.bun/install/cache is frozen — the tar+upload can run in
       # the background; the implicit wait-all before job cleanup completes it.
@@ -1293,11 +1668,19 @@ jobs:
         run: docker run --rm -v "$PWD":/src:ro oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a sh -c "mkdir /app && cp /src/package.json /src/bun.lock /src/bunfig.toml /app/ && cd /app && bun install --frozen-lockfile --ignore-scripts"
 
       # The browser install only needs node_modules; it runs in the background
-      # across lint/typecheck/unit/build and is gated before E2E.
+      # across lint/typecheck/unit/build and is gated before E2E. On a
+      # binary-cache hit only the system dependencies are installed.
+      # Every suite runs headless, so --only-shell skips the headed Chromium
+      # build and downloads only the headless shell.
       - name: Install Playwright Browsers
         id: playwright-install
         background: true
-        run: bun x playwright install --with-deps chromium
+        run: |
+          if [ "${{ steps.bun-cache.outputs.playwright-cache-hit }}" = "true" ]; then
+            bun x playwright install-deps chromium
+          else
+            bun x playwright install --with-deps --only-shell chromium
+          fi
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1305,7 +1688,8 @@ jobs:
       - name: Install cargo-make
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -1338,7 +1722,9 @@ jobs:
 
       - name: Unit Test with Coverage
         id: bun-unit-test
-        run: bun run coverage:unit
+        run: >-
+          bun run coverage:unit --reporter=default --reporter=github-actions
+          --reporter=junit --outputFile.junit=.junit-report/unit-results.xml
 
       - name: Build
         id: bun-build
@@ -1363,6 +1749,13 @@ jobs:
           distribution: "mysql"
           auto-start: true
 
+      # A fresh random schema exercises real locks, quota reservations and the
+      # additive deployment parser without altering the E2E database.
+      - name: Verify WhatsApp migration and concurrent claims with MySQL
+        env:
+          BULLETIN_MYSQL_TEST_DB_URL: mysql://root:test_123@127.0.0.1:3306/
+        run: bun run test:mysql
+
       - name: Wait for RustFS and S3 buckets
         wait: rustfs
 
@@ -1377,6 +1770,17 @@ jobs:
 
       - name: Wait for data crate build
         wait: crates
+
+      # Saved after the wait: the cache key's payload is what the background
+      # install produced. The upload itself backgrounds too — nothing writes
+      # ~/.cache/ms-playwright afterwards.
+      - name: Save playwright binaries
+        if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.playwright-cache-hit != 'true' }}
+        background: true
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.bun-cache.outputs.playwright-cache-primary-key }}
 
       # The e2e-impact coverage tree is published only by successful master
       # push runs. A missing baseline is not an error — the selector falls
@@ -1519,15 +1923,22 @@ jobs:
           retention-days: 90
           overwrite: true
 
-      - name: Merge test coverage (unit; E2E lcov when enabled)
+      # The published admin report merges both test layers: unit's V8 report
+      # is the canonical universe (every eligible source file enumerated);
+      # the istanbul-instrumented E2E layer only confirms hits on shared
+      # coordinates (--hits-only, #2270) and can never extend or dilute the
+      # denominator. Both inputs are required — a missing layer fails the
+      # job instead of publishing a partial report as complete (#2707).
+      - name: Merge test coverage (unit + E2E into one admin report)
         run: bun run coverage:merge
 
       - name: Store Admin Coverage Report (wf)
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
-          # Unit + e2e files too: each is uploaded to Codecov under its own
-          # flag (merged is for the cross-module report).
+          # Unit + e2e files too: kept as per-layer diagnostics; the merged
+          # file is the single report Codecov's `admin` flag and the
+          # cross-module merge consume.
           path: |
             ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
             ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
@@ -1553,7 +1964,9 @@ jobs:
         if: always()
         with:
           name: admin-e2e-html-report-${{ github.run_id }}
+          # The configured report root is hidden; retain only this report tree.
           path: ${{ env.ADMIN_DIRECTORY }}/.playwright-report
+          include-hidden-files: true
           retention-days: 7
           overwrite: true
 
@@ -1589,7 +2002,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make, cargo-llvm-cov, cargo-nextest
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24, cargo-llvm-cov, cargo-nextest
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -1635,6 +2049,19 @@ jobs:
           root-password: test_123
           distribution: "mysql"
           auto-start: true
+
+      # Mock connections cannot prove session-scoped MySQL advisory locks.
+      # Run the ignored regression explicitly and add its production-code hits
+      # to the existing unit LCOV report before E2E and the normal coverage merge.
+      - name: Verify article-search advisory lock with MySQL and coverage
+        working-directory: ${{ env.API_DIRECTORY }}
+        env:
+          MYSQL_PWD: test_123
+          ARTICLE_SEARCH_LOCK_TEST_DB_URL: mysql://root:test_123@127.0.0.1:3306/article_search_lock_test
+        run: |
+          mysql --host=127.0.0.1 --user=root --execute='CREATE DATABASE article_search_lock_test'
+          trap 'mysql --host=127.0.0.1 --user=root --execute="DROP DATABASE article_search_lock_test"' EXIT
+          cargo make coverage-article-search-lock
 
       - name: Setup tests bun, Node.js and dependencies
         id: tests-bun-cache
@@ -1841,13 +2268,6 @@ jobs:
           flags: api
           report_type: test_results
 
-      - name: Store API E2E HTML Report
-        uses: actions/upload-artifact@v7
-        with:
-          name: api-e2e-html-report-${{ github.run_id }}
-          path: ${{ env.API_DIRECTORY }}/.playwright-report/e2e/html
-          retention-days: 7
-          overwrite: true
 
       - name: Store API Coverage Report (wf)
         uses: actions/upload-artifact@v7
@@ -1918,25 +2338,45 @@ jobs:
         with:
           distribution: "microsoft"
           java-version: "17"
+          verify-signature: true
 
       - name: Setup Python for recitation extension packaging
         uses: actions/setup-python@v7
         with:
           python-version: "3.15"
 
+      - name: Install Python verifier dependencies
+        run: python3 -m pip install --disable-pip-version-check --no-input -r devops/requirements-signing.txt
+
+      - name: Resolve immutable recitation audio cache key
+        id: recitation_audio_identity
+        run: python3 devops/prepare_recitation_assets.py --platform Android --cache-key
+
       - name: Restore original recitation audio cache
-        uses: actions/cache@v6
+        id: recitation_audio
+        uses: actions/cache/restore@v6
         with:
-          path: .cache/recitation-assets
-          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
-          restore-keys: recitation-audio-v1-
+          path: .cache/recitation-assets/*.ogg
+          key: ${{ steps.recitation_audio_identity.outputs.key }}
+          restore-keys: recitation-audio-v2-opus-
 
       - name: Prepare release recitation book packs
         run: python3 devops/prepare_recitation_assets.py --platform Android
+        env:
+          RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
+
+      - name: Save verified recitation audio cache
+        if: ${{ steps.recitation_audio.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .cache/recitation-assets/*.ogg
+          key: ${{ steps.recitation_audio.outputs.cache-primary-key }}
 
       - name: Verify Android release package
         run: |
-          dotnet workload install maui-android
+          # Workload set 10.0.402.1 pins Android SDK 36.1.118 — the first servicing
+          # release honoring AndroidR8ObfuscationMode and emitting r8.json (#2708).
+          dotnet workload install maui-android --version 10.0.402.1
           dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
           # Compile with the checked-in notes fixture; store packages use the paired release artifact.
           NOTES_GZ="BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
@@ -1945,6 +2385,20 @@ jobs:
           fi
           # Exercise D8 and release linking before merging, without store signing keys.
           dotnet build BibleOnSite/BibleOnSite.csproj --no-restore -c Release -f net10.0-android -r android-arm64 -p:RuntimeIdentifiers=android-arm64 -p:AndroidPackageFormats=aab
+          # #2708: the bundle must carry r8.json (enabled stages plus the
+          # no*Percentage stats Play scores) and proguard.map; the verifier
+          # enforces each Play score ≥25% over the 10 MB DEX threshold.
+          python3 devops/verify_android_dex_metadata.py --package "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)"
+
+      # #2970: the release packaging job is master-only. Exercise the real
+      # symbols path here — produce the archive from this build's
+      # app_shared_libraries and validate it against the AAB just built, so a
+      # symbols regression fails on the pull request, not after merge.
+      - name: Verify native symbols archive
+        run: |
+          dotnet run --project devops -- PackageAndroidSymbols --configuration Release \
+            --aab-path "$(realpath "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)")" \
+            --android-symbols-path "$RUNNER_TEMP/native-symbols.zip"
 
       - name: Verify native canonical recitation word identities
         run: python3 ../data/recitation/audit_native.py
@@ -1952,11 +2406,35 @@ jobs:
       - name: Verify packaged Android recitation modules
         run: python3 devops/verify_recitation_assets.py --platform Android --catalog BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)"
 
+      # This job has finished validating the real AAB. The following .NET test
+      # projects include product sources directly and do not consume its bin/obj.
+      # Retaining those large intermediates exhausted the hosted runner before
+      # MySQL could start (#2921); keep raw audio cached, not redundant build ZIPs.
+      - name: Release validated Android build intermediates
+        run: |
+          set -euo pipefail
+          workspace=$(realpath -e "${GITHUB_WORKSPACE:?}")
+          product=$(realpath -e "$workspace/app/BibleOnSite")
+          test "$product" = "$workspace/app/BibleOnSite"
+          df -h "$workspace"
+          for directory in "$product/bin" "$product/obj"; do
+            if [ -d "$directory" ]; then du -sh -- "$directory"; fi
+          done
+          dotnet build-server shutdown
+          rm -rf -- "$product/bin" "$product/obj"
+          audio_cache=$(realpath -e "$workspace/.cache/recitation-assets")
+          test "$audio_cache" = "$workspace/.cache/recitation-assets"
+          rm -f -- "$audio_cache"/*.zip
+          df -h "$workspace"
+
       - name: Test recitation extension packaging
         run: python3 -m unittest discover -s devops -p 'test_*recitation_assets.py'
 
       - name: Test paired Perushim release assets
         run: python3 -m unittest discover -s devops -p test_prepare_perushim_assets.py
+
+      - name: Test Android DEX metadata verification
+        run: python3 -m unittest discover -s devops -p test_verify_android_dex_metadata.py
 
       - name: Setup Python for signing validation tests
         uses: actions/setup-python@v7
@@ -2001,7 +2479,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -2088,14 +2567,15 @@ jobs:
       actions: read
     uses: ./.github/workflows/app-mobile-e2e.yml
     with:
+      force_full_suite: ${{ github.event_name == 'merge_group' }}
       perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
   app_ios_ci:
     name: App iOS native audio CI
     runs-on: ubuntu-latest
     needs: [setup_env, determine_changes]
-    # Only on PRs — on master, Package iOS (IPA) already validates the full iOS build.
-    if: ${{ github.event_name == 'pull_request' && always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
+    # PR and combined queue heads need native audio precision as well as the signed build.
+    if: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true') }}
     permissions:
       contents: read
     steps:
@@ -2110,15 +2590,25 @@ jobs:
         with:
           node-version-file: web/bible-on-site/package.json
 
-      # Needs webkit on top of chromium, so it cannot share the website jobs'
-      # Linux playwright cache entry. PR-scoped by design: a save on miss
-      # speeds up reruns and later pushes of the same pull request.
+      # Needs webkit on top of the chromium headless shell. A first-run miss
+      # still restores the website jobs' master-seeded shell entry so only
+      # webkit downloads; the webkit-keyed entry holds both and is PR-scoped
+      # by design: a save on miss speeds up reruns and later pushes of the
+      # same pull request.
       - name: Restore playwright binaries
         id: playwright-cache
         uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
+          key: ${{ runner.os }}-playwright-shell-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
+
+      - name: Restore shared chromium binaries
+        id: playwright-chromium-cache
+        if: ${{ steps.playwright-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-shell-${{ needs.setup_env.outputs.website_playwright_version }}
 
       - name: Verify native audio time origin on Chromium and Apple WebKit
         working-directory: web/bible-on-site
@@ -2130,7 +2620,7 @@ jobs:
           if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
             bun x playwright install-deps chromium webkit
           else
-            bun x playwright install --with-deps chromium webkit
+            bun x playwright install --with-deps --only-shell chromium webkit
           fi
           bun x playwright test --config playwright.recitation.config.ts
 
@@ -2139,7 +2629,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
+          key: ${{ runner.os }}-playwright-shell-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
 
   bulletin_ci:
     name: Bulletin CI
@@ -2168,7 +2658,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make, cargo-llvm-cov, cargo-nextest
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24, cargo-llvm-cov, cargo-nextest
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -2243,7 +2734,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: "26.12.1"
+          node-version: "26.13.0"
       - name: Test alignment invariants without downloading GPU models
         run: |
           python -m venv data/recitation/.venv
@@ -2253,15 +2744,23 @@ jobs:
           .venv/bin/python -m unittest -v
           .venv/bin/python publish.py
           .venv/bin/python audit.py
+      - name: Score the mention-annotation pipeline against its golden set
+        run: |
+          python3 -m unittest discover -s data/annotations -p 'test_*.py'
+          python3 data/annotations/golden_eval.py --check
       - name: Verify canonical text preprocessing
         run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
       - name: Verify module release and shared decoder check routing
         run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs
+      - name: Verify daily bulletin mail infrastructure and assets
+        run: bun test devops/daily-bulletin-infra.test.mjs
       - name: Install storage test dependencies
         run: bun install --cwd devops --frozen-lockfile
       - name: Verify repeatable deployment recovery
         working-directory: devops
-        run: node --test deploy/ecr-deploy/resume-image.test.mts
+        run: |
+          node --test deploy/ecr-deploy/resume-image.test.mts deploy/ecr-deploy/ecr-client.test.mts deploy/ecr-deploy/api-images.test.mts deploy/ecr-deploy/admin-repository-policy.test.mts github/ci/website-image-gates.test.mjs github/release/website-handover-lock.test.mjs
+          bun run test:api-handover
       - name: Start RustFS
         run: docker compose -f devops/docker-compose.yml up -d --wait --wait-timeout 180 rustfs
       - name: Verify MP3 and Opus byte-range seeking
@@ -2334,6 +2833,23 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
+      # The restored Mongo image, its writable copy and Rust coverage artifacts
+      # exceed the default free disk space on the hosted runner. Reclaim unused
+      # SDKs/images before either cache restoration or the parallel image pull.
+      - name: Free space for Sefaria and Rust
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          preinstalled-runtimes: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      - name: Remove installed large packages
+        run: bash "$GITHUB_WORKSPACE/devops/github/ci/free-large-packages.sh"
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -2341,7 +2857,8 @@ jobs:
 
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-make, cargo-llvm-cov, cargo-nextest
+          # Current CLI ZIP dependency tracking: https://github.com/bible-on-site/bible-on-site/issues/2826
+          tool: cargo-make@0.37.24, cargo-llvm-cov, cargo-nextest
 
       # Per-job key: rust-cache never overwrites an existing key, so a shared key is owned by whichever job saves first.
       - name: Cache Cargo dependencies
@@ -2428,15 +2945,22 @@ jobs:
         env:
           SEFARIA_MONGO_IMAGE: ${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_image }}
         run: |
-          docker run -d --name sefaria-mongo -p 27017:27017 "$SEFARIA_MONGO_IMAGE"
+          mongo_started_at=$SECONDS
+          docker run -d --name sefaria-mongo -p 27017:27017 \
+            --entrypoint docker-entrypoint.sh "$SEFARIA_MONGO_IMAGE" \
+            mongod --dbpath /mongodb-data
           echo "Waiting for MongoDB to be ready..."
-          # Data was restored at Docker BUILD time to /mongodb-data
-          # On first container startup, entrypoint.sh copies it to /data/db
-          # This should take ~15-30 seconds vs 5+ minutes for runtime mongorestore
+          # Reuse the database restored at build time without a full startup copy.
+          # Keep the existing 60 attempts and two-second interval.
           for i in {1..60}; do
+            if [ "$((SECONDS - mongo_started_at))" -ge 120 ]; then
+              break
+            fi
             count=$(docker exec sefaria-mongo mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" 2>/dev/null || echo "0")
-            if [ "$count" != "0" ] && [ -n "$count" ]; then
+            if [[ "$count" =~ ^[1-9][0-9]*$ ]]; then
+              test "$((SECONDS - mongo_started_at))" -lt 120
               echo "MongoDB is ready with $count documents in sefaria.texts collection!"
+              echo "MongoDB startup took $((SECONDS - mongo_started_at)) seconds"
               # Regression check: the running server must match the version pinned
               # in the Dockerfile, so a stale cached GHCR image cannot slip through.
               expected=$(grep -oP 'FROM mongo:\K[0-9]+\.[0-9]+\.[0-9]+' "$GITHUB_WORKSPACE/${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}/Dockerfile")
@@ -2528,6 +3052,7 @@ jobs:
     if: >-
       ${{ always() && !cancelled() && !failure() && (
         needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true' ||
+        (github.event_name == 'merge_group' && needs.determine_changes.outputs.perushim_pipeline_ci_changed == 'true') ||
         needs.determine_baseline_availability.outputs.is_perushim_data_sql_available != 'true' ||
         needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available != 'true'
       ) }}
@@ -2545,6 +3070,23 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+
+      # The restored Mongo image, its writable copy and Rust coverage artifacts
+      # exceed the default free disk space on the hosted runner. Reclaim unused
+      # SDKs/images before either cache restoration or the parallel image pull.
+      - name: Free space for Sefaria and Rust
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          preinstalled-runtimes: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      - name: Remove installed large packages
+        run: bash "$GITHUB_WORKSPACE/devops/github/ci/free-large-packages.sh"
 
       # Same overlap as data_ci: the image pull (or artifact download + load)
       # only depends on the needs/ outputs, so it runs in the background while
@@ -2588,12 +3130,21 @@ jobs:
         env:
           SEFARIA_MONGO_IMAGE: ${{ needs.determine_docker_image_availability.outputs.sefaria_mongo_image }}
         run: |
-          docker run -d --name sefaria-mongo -p 27017:27017 "$SEFARIA_MONGO_IMAGE"
+          mongo_started_at=$SECONDS
+          docker run -d --name sefaria-mongo -p 27017:27017 \
+            --entrypoint docker-entrypoint.sh "$SEFARIA_MONGO_IMAGE" \
+            mongod --dbpath /mongodb-data
           echo "Waiting for MongoDB to be ready..."
+          # Reuse the restored fixture within the original startup budget.
           for i in {1..60}; do
+            if [ "$((SECONDS - mongo_started_at))" -ge 120 ]; then
+              break
+            fi
             count=$(docker exec sefaria-mongo mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" 2>/dev/null || echo "0")
-            if [ "$count" != "0" ] && [ -n "$count" ]; then
+            if [[ "$count" =~ ^[1-9][0-9]*$ ]]; then
+              test "$((SECONDS - mongo_started_at))" -lt 120
               echo "MongoDB is ready with $count documents in sefaria.texts collection!"
+              echo "MongoDB startup took $((SECONDS - mongo_started_at)) seconds"
               # Regression check: the running server must match the version pinned
               # in the Dockerfile, so a stale cached GHCR image cannot slip through.
               expected=$(grep -oP 'FROM mongo:\K[0-9]+\.[0-9]+\.[0-9]+' "$GITHUB_WORKSPACE/${{ env.SEFARIA_MONGO_DOCKER_DIRECTORY }}/Dockerfile")
@@ -2713,11 +3264,16 @@ jobs:
           flags: website # Assuming you want to flag these as website tests
           report_type: test_results
 
+  database_backups:
+    name: Database backup recovery
+    uses: ./.github/workflows/ci-db-backup.yml
+
   cross_module_ci:
     name: Cross Module CI
     runs-on: ubuntu-latest
     needs:
       [
+        setup_env,
         determine_changes,
         website_performance,
         website_e2e,
@@ -2728,16 +3284,25 @@ jobs:
         package_ios_pr,
         package_windows_pr,
         package_api,
+        package_api_arm64,
+        package_website,
+        package_website_arm64,
         package_bulletin,
         package_admin,
+        package_admin_arm64,
         app_mobile_e2e,
         bulletin_ci,
         data_ci,
         recitation_ci,
         deploy_verifier,
+        database_backups,
         perushim_data,
         determine_baseline_availability,
         determine_docker_image_availability,
+        calendar_pdf_artifacts,
+        validate_website_architectures,
+        validate_api_architectures,
+        validate_admin_architectures,
       ]
     # Evaluate failures, but release the PR concurrency slot when replaced.
     if: ${{ always() && !cancelled() }}
@@ -2749,6 +3314,11 @@ jobs:
       - name: Check Prerequisites
         id: check_prerequisites
         run: |
+          if [ "${{ needs.database_backups.result }}" != "success" ]; then
+            echo "Database backup and restore validation did not pass."
+            exit 1
+          fi
+
           if [ "${{ needs.determine_changes.result }}" != "success" ]; then
             echo "Could not determine module changes."
             echo "Overall status: failure"
@@ -2784,52 +3354,107 @@ jobs:
             fi
           fi
 
-          WEBSITE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          WEBSITE_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          WEBSITE_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          # Match validate_website_architectures exactly: a triggered native
+          # image check must succeed even when it was skipped or cancelled.
+          if [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.validate_website_architectures.result }}" != "success" ]; then
+              echo "Website native image validation failed or did not run"
+              exit 1
+            fi
+          fi
+
+          # Match validate_api_architectures exactly: a triggered native
+          # image check must succeed even when it was skipped or cancelled.
+          if [ "${{ needs.determine_changes.outputs.api_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.api_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.validate_api_architectures.result }}" != "success" ]; then
+              echo "API native image validation failed or did not run"
+              exit 1
+            fi
+          fi
+
+          # Match validate_admin_architectures exactly: a triggered native
+          # image check must succeed even when it was skipped or cancelled.
+          if [ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ] || [ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ]; then
+            if [ "${{ needs.validate_admin_architectures.result }}" != "success" ]; then
+              echo "Admin native image validation failed or did not run"
+              exit 1
+            fi
+          fi
+
+          if [ "${{ needs.determine_changes.outputs.website_module_changed }}" = "true" ]; then WEBSITE_MODULE_CHANGED=true; else WEBSITE_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.website_ci_changed }}" = "true" ]; then WEBSITE_CI_CHANGED=true; else WEBSITE_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_website_master_coverage_available }}" = "true" ]; then WEBSITE_MASTER_COVERAGE_AVAILABLE=true; else WEBSITE_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$WEBSITE_CI_CHANGED" = "true" ] || [ "$WEBSITE_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            E2E_STATUS=$([ "${{ needs.website_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.website_e2e.result }}" = "success" ]; then E2E_STATUS=success; else E2E_STATUS=failure; fi
             # The performance job owns production-build validation, including
             # coverage-baseline recovery runs with no source changes.
-            PERFORMANCE_STATUS=$([ "${{ needs.website_performance.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.website_performance.result }}" = "success" ]; then PERFORMANCE_STATUS=success; else PERFORMANCE_STATUS=failure; fi
             if [ "$E2E_STATUS" = "failure" ] || [ "$PERFORMANCE_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
           fi
 
-          API_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.api_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          API_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.api_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          API_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_api_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          # Match both native website package jobs. Fork PRs retain credential-free
+          # native dependency checks; full SSG requires the trusted repository secrets.
+          if { [ "${{ github.event_name }}" = push ] && [ "${{ needs.setup_env.outputs.is_master_branch }}" = true ] && [ "$WEBSITE_MODULE_CHANGED" = true ]; } ||
+             { [ "${{ github.event_name }}" != push ] && { [ "${{ github.event_name }}" != pull_request ] || [ "${{ github.event.pull_request.head.repo.full_name }}" = "${{ github.repository }}" ]; } && { [ "$WEBSITE_MODULE_CHANGED" = true ] || [ "$WEBSITE_CI_CHANGED" = true ]; }; }; then
+            if [ "${{ needs.package_website.result }}" != success ] || [ "${{ needs.package_website_arm64.result }}" != success ]; then
+              echo "Both native website release images must pass or the build did not run"
+              exit 1
+            fi
+            if [ -z "${{ needs.package_website.outputs.module_version }}" ] || [ "${{ needs.package_website.outputs.module_version }}" != "${{ needs.package_website_arm64.outputs.module_version }}" ]; then
+              echo "Both website images must have the same nonempty release version"
+              exit 1
+            fi
+          fi
+
+          # The artifacts job is only triggered by website module/CI changes —
+          # the same condition that gates it — so check it only then (#2608).
+          if [ "$WEBSITE_MODULE_CHANGED" = "true" ] || [ "$WEBSITE_CI_CHANGED" = "true" ]; then
+            if [ "${{ needs.calendar_pdf_artifacts.result }}" != "success" ]; then
+              echo "Calendar PDF artifact verification did not pass."
+              exit 1
+            fi
+          fi
+
+          if [ "${{ needs.determine_changes.outputs.api_module_changed }}" = "true" ]; then API_MODULE_CHANGED=true; else API_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.api_ci_changed }}" = "true" ]; then API_CI_CHANGED=true; else API_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_api_master_coverage_available }}" = "true" ]; then API_MASTER_COVERAGE_AVAILABLE=true; else API_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$API_MODULE_CHANGED" = "true" ] || [ "$API_CI_CHANGED" = "true" ] || [ "$API_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            API_STATUS=$([ "${{ needs.api_e2e.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.api_e2e.result }}" = "success" ]; then API_STATUS=success; else API_STATUS=failure; fi
             if [ "$API_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
           fi
-          if [ "${{ github.event_name }}" != "push" ] && { [ "$API_MODULE_CHANGED" = "true" ] || [ "$API_CI_CHANGED" = "true" ]; }; then
-            if [ "${{ needs.package_api.result }}" != "success" ]; then
-              echo "API release Docker build failed or did not run"
+          if { [ "${{ github.event_name }}" = "push" ] && [ "${{ needs.setup_env.outputs.is_master_branch }}" = "true" ] && [ "$API_MODULE_CHANGED" = "true" ]; } ||
+            { [ "${{ github.event_name }}" != "push" ] && { [ "$API_MODULE_CHANGED" = "true" ] || [ "$API_CI_CHANGED" = "true" ]; }; }; then
+            if [ "${{ needs.package_api.result }}" != "success" ] || [ "${{ needs.package_api_arm64.result }}" != "success" ]; then
+              echo "An API release Docker build failed or did not run"
+              exit 1
+            fi
+            if [ -z "${{ needs.package_api.outputs.module_version }}" ] || [ "${{ needs.package_api.outputs.module_version }}" != "${{ needs.package_api_arm64.outputs.module_version }}" ]; then
+              echo "API architecture builds require the same nonempty release version"
               exit 1
             fi
           fi
 
-          APP_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          APP_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.app_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.app_module_changed }}" = "true" ]; then APP_MODULE_CHANGED=true; else APP_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.app_ci_changed }}" = "true" ]; then APP_CI_CHANGED=true; else APP_CI_CHANGED=false; fi
           if [ "${{ github.event_name }}" != "push" ] && { [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; }; then
-            if [ "${{ needs.package_ios_pr.result }}" != "success" ]; then
+            if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ needs.package_ios_pr.result }}" != "success" ]; then
               echo "Signed iOS distribution validation failed or did not run"
               exit 1
             fi
             if [ "${{ needs.package_windows_pr.result }}" != "success" ]; then
-              echo "Windows compile validation failed or did not run"
+              echo "Windows packaging validation failed or did not run"
               exit 1
             fi
           fi
-          APP_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_baseline_availability.outputs.is_app_master_coverage_available }}" = "true" ]; then APP_MASTER_COVERAGE_AVAILABLE=true; else APP_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ] || [ "$APP_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            APP_STATUS=$([ "${{ needs.app_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.app_ci.result }}" = "success" ]; then APP_STATUS=success; else APP_STATUS=failure; fi
             if [ "$APP_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
@@ -2842,20 +3467,20 @@ jobs:
               exit 1
             fi
             APP_IOS_RESULT="${{ needs.app_ios_ci.result }}"
-            # Native audio precision runs on PRs; mobile E2E runs on every relevant CI event.
-            if [ "$APP_IOS_RESULT" != "success" ] && [ "$APP_IOS_RESULT" != "skipped" ]; then
+            # Match app_ios_ci: a triggered PR or queue precision suite must succeed.
+            if { [ "${{ github.event_name }}" = "pull_request" ] || [ "${{ github.event_name }}" = "merge_group" ]; } && { [ "$APP_MODULE_CHANGED" = "true" ] || [ "$APP_CI_CHANGED" = "true" ]; } && [ "$APP_IOS_RESULT" != "success" ]; then
               echo "App iOS CI failed"
               echo "Overall status: failure"
               exit 1
             fi
           fi
 
-          BULLETIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.bulletin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          BULLETIN_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.bulletin_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          BULLETIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.bulletin_module_changed }}" = "true" ]; then BULLETIN_MODULE_CHANGED=true; else BULLETIN_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.bulletin_ci_changed }}" = "true" ]; then BULLETIN_CI_CHANGED=true; else BULLETIN_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_bulletin_master_coverage_available }}" = "true" ]; then BULLETIN_MASTER_COVERAGE_AVAILABLE=true; else BULLETIN_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$BULLETIN_MODULE_CHANGED" = "true" ] || [ "$BULLETIN_CI_CHANGED" = "true" ] || [ "$BULLETIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
             # A triggered suite that did not complete (failure, skip, cancel) blocks the merge.
-            BULLETIN_STATUS=$([ "${{ needs.bulletin_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.bulletin_ci.result }}" = "success" ]; then BULLETIN_STATUS=success; else BULLETIN_STATUS=failure; fi
             if [ "$BULLETIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
@@ -2868,39 +3493,47 @@ jobs:
             fi
           fi
 
-          ADMIN_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          ADMIN_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          ADMIN_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_admin_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.admin_module_changed }}" = "true" ]; then ADMIN_MODULE_CHANGED=true; else ADMIN_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.admin_ci_changed }}" = "true" ]; then ADMIN_CI_CHANGED=true; else ADMIN_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_admin_master_coverage_available }}" = "true" ]; then ADMIN_MASTER_COVERAGE_AVAILABLE=true; else ADMIN_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$ADMIN_CI_CHANGED" = "true" ] || [ "$ADMIN_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            ADMIN_STATUS=$([ "${{ needs.admin_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.admin_ci.result }}" = "success" ]; then ADMIN_STATUS=success; else ADMIN_STATUS=failure; fi
             if [ "$ADMIN_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
           fi
-          if [ "${{ github.event_name }}" != "push" ] && { [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$ADMIN_CI_CHANGED" = "true" ]; }; then
-            if [ "${{ needs.package_admin.result }}" != "success" ]; then
-              echo "Admin release Docker build failed or did not run"
+          # Match both native admin package jobs. A triggered build that failed,
+          # was skipped or was cancelled still blocks the merge or release.
+          if { [ "${{ github.event_name }}" = "push" ] && [ "${{ needs.setup_env.outputs.is_master_branch }}" = "true" ] && [ "$ADMIN_MODULE_CHANGED" = "true" ]; } ||
+            { [ "${{ github.event_name }}" != "push" ] && { [ "$ADMIN_MODULE_CHANGED" = "true" ] || [ "$ADMIN_CI_CHANGED" = "true" ]; }; }; then
+            if [ "${{ needs.package_admin.result }}" != "success" ] || [ "${{ needs.package_admin_arm64.result }}" != "success" ]; then
+              echo "Both native admin release images must pass or the build did not run"
+              exit 1
+            fi
+            if [ -z "${{ needs.package_admin.outputs.module_version }}" ] || [ "${{ needs.package_admin.outputs.module_version }}" != "${{ needs.package_admin_arm64.outputs.module_version }}" ]; then
+              echo "Both admin images must have the same nonempty release version"
               exit 1
             fi
           fi
 
-          DATA_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.data_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          DATA_CI_CHANGED=$([ "${{ needs.determine_changes.outputs.data_ci_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          DATA_MASTER_COVERAGE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_data_master_coverage_available }}" = "true" ] && echo "true" || echo "false") # Generated
+          if [ "${{ needs.determine_changes.outputs.data_module_changed }}" = "true" ]; then DATA_MODULE_CHANGED=true; else DATA_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.data_ci_changed }}" = "true" ]; then DATA_CI_CHANGED=true; else DATA_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_data_master_coverage_available }}" = "true" ]; then DATA_MASTER_COVERAGE_AVAILABLE=true; else DATA_MASTER_COVERAGE_AVAILABLE=false; fi
           if [ "$DATA_MODULE_CHANGED" = "true" ] || [ "$DATA_CI_CHANGED" = "true" ] || [ "$DATA_MASTER_COVERAGE_AVAILABLE" = "false" ]; then
-            DATA_STATUS=$([ "${{ needs.data_ci.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+            if [ "${{ needs.data_ci.result }}" = "success" ]; then DATA_STATUS=success; else DATA_STATUS=failure; fi
             if [ "$DATA_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
             fi
           fi
 
-          PERUSHIM_PIPELINE_MODULE_CHANGED=$([ "${{ needs.determine_changes.outputs.perushim_pipeline_module_changed }}" = "true" ] && echo "true" || echo "false") # Generated
-          PERUSHIM_DATA_SQL_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available }}" = "true" ] && echo "true" || echo "false") # Generated
-          PERUSHIM_NOTES_SQLITE_AVAILABLE=$([ "${{ needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available }}" = "true" ] && echo "true" || echo "false") # Generated
-          if [ "$PERUSHIM_PIPELINE_MODULE_CHANGED" = "true" ] || [ "$PERUSHIM_DATA_SQL_AVAILABLE" = "false" ] || [ "$PERUSHIM_NOTES_SQLITE_AVAILABLE" = "false" ]; then
-            PERUSHIM_STATUS=$([ "${{ needs.perushim_data.result }}" = "success" ] && echo "success" || echo "failure") # Generated
+          if [ "${{ needs.determine_changes.outputs.perushim_pipeline_ci_changed }}" = "true" ]; then PERUSHIM_PIPELINE_CI_CHANGED=true; else PERUSHIM_PIPELINE_CI_CHANGED=false; fi
+          if [ "${{ needs.determine_changes.outputs.perushim_pipeline_module_changed }}" = "true" ]; then PERUSHIM_PIPELINE_MODULE_CHANGED=true; else PERUSHIM_PIPELINE_MODULE_CHANGED=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_perushim_data_sql_available }}" = "true" ]; then PERUSHIM_DATA_SQL_AVAILABLE=true; else PERUSHIM_DATA_SQL_AVAILABLE=false; fi
+          if [ "${{ needs.determine_baseline_availability.outputs.is_perushim_notes_sqlite_available }}" = "true" ]; then PERUSHIM_NOTES_SQLITE_AVAILABLE=true; else PERUSHIM_NOTES_SQLITE_AVAILABLE=false; fi
+          if [ "$PERUSHIM_PIPELINE_MODULE_CHANGED" = "true" ] || { [ "${{ github.event_name }}" = "merge_group" ] && [ "$PERUSHIM_PIPELINE_CI_CHANGED" = "true" ]; } || [ "$PERUSHIM_DATA_SQL_AVAILABLE" = "false" ] || [ "$PERUSHIM_NOTES_SQLITE_AVAILABLE" = "false" ]; then
+            if [ "${{ needs.perushim_data.result }}" = "success" ]; then PERUSHIM_STATUS=success; else PERUSHIM_STATUS=failure; fi
             if [ "$PERUSHIM_STATUS" = "failure" ]; then
               echo "Overall status: failure"
               exit 1
@@ -3042,24 +3675,17 @@ jobs:
           gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
           unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.ADMIN_COVERAGE_DIRECTORY }}"
 
+      # The `admin` flag carries one merged report: unit's canonical V8
+      # universe plus the hits the E2E layer confirmed on shared coordinates
+      # (merged in the Admin CI job). Per-layer files stay in the coverage
+      # artifact as diagnostics only.
       - name: Publish Admin Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          # The admin flag tracks unit coverage (its historical baseline);
-          # e2e goes under admin_e2e so thin e2e suites don't dilute it.
-          files: ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
+          files: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
           disable_search: true
           flags: admin
-          fail_ci_if_error: false
-
-      - name: Publish Admin E2E Coverage To Codecov
-        uses: codecov/codecov-action@v7
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
-          disable_search: true
-          flags: admin_e2e
           fail_ci_if_error: false
 
       - name: Restore Data Coverage Report
@@ -3107,15 +3733,34 @@ jobs:
         with:
           key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
 
+      - name: Restore database backup coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: database-backup-coverage-${{ github.run_id }}
+          path: .coverage/db-backup
+
+      - name: Measure release and image-publisher regression coverage
+        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        run: bun run coverage:release
+
       - name: Test release, deployment, and CI reporting guards
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
         run: |
           bun run test:version
+          node --test github/release/api-image-assets.test.mjs github/ci/api-image-gates.test.mjs github/ci/admin-image-gates.test.mjs github/ci/free-large-packages.test.mjs
           bun run test:review-audit
+          node --test edge-compat-check.test.mjs latency-baseline.test.mjs
+          bun run test:coverage-gaps
           # Whole-tree generic-catch audit — the catch-boundary pre-commit
           # hook is local-only; this keeps hook-less commits honest.
           node review-audit/scan-catch.cjs
-          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts github/ci/e2e-impact/shard-plan.test.ts github/ci/e2e-impact/timings.test.ts github/ci/e2e-impact/verify.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
+          # Whole-repo cargo-make ZIP gate (#2826): single-version pins,
+          # Renovate tracking, no Cargo.toml dependency, and no unassessed
+          # SDK archive commands in Makefile.toml duckscript tasks. Same
+          # reason as scan-catch: the pre-commit hook is local-only.
+          bun run test:cargo-make-zip-guard
+          bun run verify:cargo-make-zip
+          node --test github/ci/codecov-report-state.test.mjs github/ci/bencher-comparison.test.mjs github/ci/bencher-thresholds.test.mjs github/ci/e2e-impact/e2e-impact.test.ts github/ci/e2e-impact/playwright-impact.test.ts github/ci/e2e-impact/shard-plan.test.ts github/ci/e2e-impact/timings.test.ts github/ci/e2e-impact/verify.test.ts e2e-coverage-trees/e2e-coverage-trees.test.ts
 
       # Real app-process coverage from the instrumented mobile E2E legs
       # (#1232). A successful mobile run must contribute both platform reports;
@@ -3309,10 +3954,10 @@ jobs:
 
   release_website:
     name: Release Website
-    needs: [setup_env, determine_changes, cross_module_ci, package_website]
+    needs: [setup_env, determine_changes, cross_module_ci, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_bulletin, package_admin, package_admin_arm64]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_website passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && needs.package_website.outputs.module_version != '' && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_website.result == 'success' && needs.package_website_arm64.result == 'success' && needs.package_website.outputs.module_version == needs.package_website_arm64.outputs.module_version && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && (needs.package_admin_arm64.result == 'success' || needs.package_admin_arm64.result == 'skipped') && needs.package_website.outputs.module_version != '' && needs.determine_changes.outputs.website_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3324,15 +3969,15 @@ jobs:
       # Keep in sync with website extraModulePaths in devops/github/ci/determine-changes.ts
       extra_module_paths: '["data/recitation/recitation.sqlite", "app/BibleOnSite/Resources/Raw/recitation-audio.html"]'
       module_version: ${{ needs.package_website.outputs.module_version }}
-      artifacts_json: '[{"name": "${{ needs.package_website.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release", "glob": "*.tar.gz"}]'
+      artifacts_json: '[{"name": "${{ needs.package_website.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_website_arm64.outputs.docker_artifact_name }}", "path": "web/bible-on-site/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
 
   release_api:
     name: Release API
-    needs: [setup_env, determine_changes, cross_module_ci, package_api]
+    needs: [setup_env, determine_changes, cross_module_ci, package_api, package_api_arm64, package_website, package_website_arm64, package_app, package_bulletin, package_admin, package_admin_arm64]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_api passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api.outputs.module_version != '' && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_api.result == 'success' && needs.package_api_arm64.result == 'success' && needs.package_api.outputs.module_version == needs.package_api_arm64.outputs.module_version && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && (needs.package_admin_arm64.result == 'success' || needs.package_admin_arm64.result == 'skipped') && needs.package_api.outputs.module_version != '' && needs.determine_changes.outputs.api_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3342,15 +3987,15 @@ jobs:
       module_name: api
       module_directory: ${{ needs.setup_env.outputs.api_directory }}
       module_version: ${{ needs.package_api.outputs.module_version }}
-      artifacts_json: '[{"name": "${{ needs.package_api.outputs.docker_artifact_name }}", "path": "web/api/.release", "glob": "*.tar.gz"}]'
+      artifacts_json: '[{"name": "${{ needs.package_api.outputs.docker_artifact_name }}", "path": "web/api/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_api_arm64.outputs.docker_artifact_name }}", "path": "web/api/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
 
   release_app:
     name: Release App
-    needs: [setup_env, determine_changes, cross_module_ci, package_app]
+    needs: [setup_env, determine_changes, cross_module_ci, package_app, package_website, package_website_arm64, package_api, package_api_arm64, package_bulletin, package_admin, package_admin_arm64]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_app passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && needs.package_app.outputs.module_version != '' && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_app.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && (needs.package_admin_arm64.result == 'success' || needs.package_admin_arm64.result == 'skipped') && needs.package_app.outputs.module_version != '' && needs.determine_changes.outputs.app_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: write
       actions: read
@@ -3365,19 +4010,23 @@ jobs:
       artifacts_json: |
         [
           {"name": "${{ needs.package_app.outputs.windows_artifact_name }}", "path": "app/.artifacts/windows", "glob": "**/BibleOnSite*.msix", "label": "Windows (MSIX)", "cd_key": "windows_artifact_name"},
+          {"name": "${{ needs.package_app.outputs.windows_artifact_name }}", "path": "app/.artifacts/windows", "glob": "extension-packs/*.msix", "label": "Windows extension packs (MSIX optional packages — Store DLC)", "cd_key": "windows_extpacks_artifact_name"},
+          {"name": "${{ needs.package_app.outputs.windows_artifact_name }}", "path": "app/.artifacts/windows", "glob": "payloads/*", "label": "Windows pack payloads (HTTPS delivery for sideloaded installs)", "cd_key": "windows_payloads_artifact_name"},
           {"name": "${{ needs.package_app.outputs.android_artifact_name }}", "path": "app/.artifacts/android", "glob": "**/*.aab", "label": "Android (AAB)", "cd_key": "android_artifact_name"},
+          {"name": "${{ needs.package_app.outputs.android_artifact_name }}", "path": "app/.artifacts/android", "glob": "**/*-native-symbols.zip", "label": "Android native debug symbols", "cd_key": "android_symbols_artifact_name"},
           {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/*.ipa", "label": "iOS (IPA)", "cd_key": "ios_artifact_name"},
           {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/*.aar", "label": "iOS asset packs (.aar — Apple-hosted Background Assets)", "cd_key": "ios_assetpacks_artifact_name"},
+          {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "**/asset-packs.json", "label": "iOS asset-pack plan (verified pack manifest for release-time reuse)", "cd_key": "ios_packplan_artifact_name"},
           {"name": "${{ needs.package_app.outputs.ios_artifact_name }}", "path": "app/.artifacts/ios", "glob": "payloads/*", "label": "iOS pack payloads (HTTPS delivery below iOS 26)", "cd_key": "ios_payloads_artifact_name"}
         ]
       cd_event_type: deploy-app
 
   release_bulletin:
     name: Release Bulletin
-    needs: [setup_env, determine_changes, cross_module_ci, package_bulletin]
+    needs: [setup_env, determine_changes, cross_module_ci, package_bulletin, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_admin, package_admin_arm64]
     # Note: Using always() + output check as a workaround for reusable workflow result evaluation issues (see #1065)
     # Also verify cross_module_ci and package_bulletin passed to ensure quality gate
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_bulletin.result == 'success' && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_admin.result == 'success' || needs.package_admin.result == 'skipped') && (needs.package_admin_arm64.result == 'success' || needs.package_admin_arm64.result == 'skipped') && needs.package_bulletin.outputs.module_version != '' && needs.determine_changes.outputs.bulletin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && needs.determine_changes.outputs.release_recovery_requested == 'true' && needs.determine_changes.outputs.bulletin_release_recovery == 'true')) }}
     permissions:
       contents: write
       actions: read
@@ -3389,11 +4038,13 @@ jobs:
       module_version: ${{ needs.package_bulletin.outputs.module_version }}
       artifacts_json: '[{"name": "${{ needs.package_bulletin.outputs.lambda_zip_artifact_name }}", "path": "web/bulletin/.release", "glob": "*.zip"}]'
       cd_event_type: deploy-bulletin
+      release_recovery_modules_json: ${{ needs.determine_changes.outputs.release_recovery_modules }}
+      normal_master_ci_json: ${{ needs.determine_changes.outputs.normal_master_ci }}
 
   release_admin:
     name: Release Admin
-    needs: [setup_env, determine_changes, cross_module_ci, package_admin]
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    needs: [setup_env, determine_changes, cross_module_ci, package_admin, package_admin_arm64, package_website, package_website_arm64, package_api, package_api_arm64, package_app, package_bulletin]
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.package_admin.result == 'success' && needs.package_admin_arm64.result == 'success' && needs.package_admin.outputs.module_version == needs.package_admin_arm64.outputs.module_version && (needs.package_website.result == 'success' || needs.package_website.result == 'skipped') && (needs.package_website_arm64.result == 'success' || needs.package_website_arm64.result == 'skipped') && (needs.package_api.result == 'success' || needs.package_api.result == 'skipped') && (needs.package_api_arm64.result == 'success' || needs.package_api_arm64.result == 'skipped') && (needs.package_app.result == 'success' || needs.package_app.result == 'skipped') && (needs.package_bulletin.result == 'success' || needs.package_bulletin.result == 'skipped') && needs.package_admin.outputs.module_version != '' && needs.determine_changes.outputs.admin_module_changed == 'true' && needs.setup_env.outputs.is_master_branch == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && needs.determine_changes.outputs.release_recovery_requested == 'true' && needs.determine_changes.outputs.admin_release_recovery == 'true')) }}
     permissions:
       contents: write
       actions: read
@@ -3403,18 +4054,29 @@ jobs:
       module_name: admin
       module_directory: web/admin
       module_version: ${{ needs.package_admin.outputs.module_version }}
-      artifacts_json: '[{"name": "${{ needs.package_admin.outputs.docker_artifact_name }}", "path": "web/admin/.release", "glob": "*.tar.gz"}]'
+      artifacts_json: '[{"name": "${{ needs.package_admin.outputs.docker_artifact_name }}", "path": "web/admin/.release/amd64", "glob": "*.tar.gz", "label": "Linux amd64", "cd_key": "released_artifact_name"}, {"name": "${{ needs.package_admin_arm64.outputs.docker_artifact_name }}", "path": "web/admin/.release/arm64", "glob": "*.tar.gz", "label": "Linux ARM64", "cd_key": "released_arm64_artifact_name"}]'
       cd_event_type: deploy-aws
+      release_recovery_modules_json: ${{ needs.determine_changes.outputs.release_recovery_modules }}
+      normal_master_ci_json: ${{ needs.determine_changes.outputs.normal_master_ci }}
 
   release_data:
     name: Release Data
     needs: [setup_env, determine_changes, cross_module_ci, data_ci, perushim_data]
     # Note: Using always() as a workaround for reusable workflow result evaluation issues (see #1065)
-    # Perushim generation is intentionally skipped for Tanahpedia/schema-only changes;
-    # Data CD falls back to the always-present master artifact in that case.
+    # Delivery intent tracks the released payload only: data content, perushim
+    # pipeline inputs, or the data-deploy tooling itself. Shared CI plumbing
+    # (data_ci_changed covers ci.yml, composite actions and the detector) is
+    # never delivery intent — the producer rightly skips those runs, leaving
+    # no current-run SQL artifact to bind (#2730).
+    # When perushim_data is skipped but delivery is intended, the bind step
+    # resolves the trusted master baseline archive instead — pinned by
+    # immutable ID/digest and bound to its producing master CI run and to
+    # identical pipeline inputs (devops/github/release/data-artifact.mjs).
+    # data_ci may be skipped when only perushim inputs changed; cross_module_ci
+    # already forces data_ci success whenever data checks were needed.
     # Schema-only changes require a separately approved, selective migration.
     # Skip this entire job: success would supersede older queued data deployments.
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && needs.data_ci.result == 'success' && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') && needs.determine_changes.outputs.data_schema_only_changed == 'false' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    if: ${{ always() && needs.cross_module_ci.result == 'success' && (needs.data_ci.result == 'success' || needs.data_ci.result == 'skipped') && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_deploy_changed == 'true' || needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true') && needs.determine_changes.outputs.data_schema_only_changed == 'false' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read
@@ -3426,6 +4088,9 @@ jobs:
         id: sql_source
         env:
           GH_TOKEN: ${{ github.token }}
+          # Skipped producer = generated SQL is unchanged; bind the trusted
+          # master baseline archive produced by an earlier master CI run.
+          SQL_FROM_BASELINE: ${{ needs.perushim_data.result == 'skipped' }}
         run: node devops/github/release/data-artifact.mjs
       - name: Trigger Data CD Workflow
         uses: peter-evans/repository-dispatch@v4
@@ -3443,10 +4108,10 @@ jobs:
   # ====================================================================================
   bump_versions:
     name: Bump Versions
-    needs: [setup_env, release_website, release_api, release_app, release_admin, release_bulletin]
+    needs: [setup_env, determine_changes, release_website, release_api, release_app, release_admin, release_bulletin]
     # Note: Using always() and success checks as a workaround for reusable workflow result evaluation issues (see #1065)
     if: >-
-      ${{ always() && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' &&
+      ${{ always() && needs.setup_env.outputs.is_master_branch == 'true' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && needs.determine_changes.outputs.release_recovery_requested == 'true')) &&
       ((needs.release_website.result == 'success' && (needs.release_website.outputs.released == 'true' || needs.release_website.outputs.needs_bump == 'true')) ||
        (needs.release_api.result == 'success' && (needs.release_api.outputs.released == 'true' || needs.release_api.outputs.needs_bump == 'true')) ||
        (needs.release_app.result == 'success' && (needs.release_app.outputs.released == 'true' || needs.release_app.outputs.needs_bump == 'true')) ||

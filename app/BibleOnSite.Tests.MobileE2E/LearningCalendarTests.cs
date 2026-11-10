@@ -52,6 +52,38 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
         AssertDayCellsFillWeekdayColumns();
     });
 
+    // #2975: a mini cell's source must be a rendered label — the day's semantic
+    // description already carried it, which never helped a sighted reader. The
+    // old 24px date-only template has no MiniMonthDaySource element at all, so
+    // these checks fail there by timeout rather than by a weak text match.
+    [Fact]
+    public void YearViewDayCellsShowPerekSources() => Scenario(() =>
+    {
+        OpenCalendarIn("CalendarViewYear");
+        AssertMiniCellsShowSources();
+    });
+
+    [Fact]
+    public void CycleViewDayCellsShowPerekSources() => Scenario(() =>
+    {
+        OpenCalendarIn("CalendarViewCycle");
+        AssertMiniCellsShowSources();
+    });
+
+    private void AssertMiniCellsShowSources()
+    {
+        var source = Page.WaitFor("MiniMonthDaySource", element => element.Displayed);
+        Assert.False(
+            string.IsNullOrWhiteSpace(source.Text),
+            "A mini-cell source label rendered but carried no text.");
+
+        var badge = Page.WaitFor("MiniMonthReviewBadge", element => element.Displayed);
+        Assert.Equal("חזרה", badge.Text);
+
+        // The taller cells must still land centered under their weekday columns.
+        AssertDayCellsFillWeekdayColumns();
+    }
+
     private void OpenCalendarIn(string viewButton)
     {
         Assert.NotEmpty(Page.FirstPasuk);
@@ -81,7 +113,7 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
 
         // Any rendered header row gives the same seven column positions: every
         // mini-month is built from the identical template on one shared width.
-        var headerRow = RenderedElements("MiniMonthWeekday", element => element.Text)
+        var headerRow = Page.RenderedElements("MiniMonthWeekday", element => element.Text)
             .GroupBy(header => header.Frame.Location.Y)
             .OrderBy(group => group.Key)
             .Select(group => group.ToArray())
@@ -108,7 +140,7 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
         // a whole month exercises all seven — a collapsed right-side strip maps
         // every cell onto one or two columns instead. The label is centered in
         // its cell, so its frame marks the cell's column.
-        var dayLabels = RenderedElements("MiniMonthDayText",
+        var dayLabels = Page.RenderedElements("MiniMonthDayText",
                 element => Platform.SemanticDescription(element) ?? string.Empty)
             .Select(day => (Description: day.Text, day.Frame))
             .ToArray();
@@ -141,32 +173,6 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
                 $"Day cell for {spoken} centered at x={center:F0}, expected under weekday column " +
                     $"x={columns[6 - weekday]:F0} ({string.Join(", ", columns.Select(x => x.ToString("F0")))}).");
         }
-    }
-
-    // Every element read is a WDA round-trip on iOS; hundreds of displayed/
-    // text/rect/label calls ran about five minutes inside this shard's
-    // 15-minute wall clock. The snapshot driver carries text, visibility and
-    // frames for every match in a single lookup response, and there a labeled
-    // cell's text is its accessibility description.
-    private IReadOnlyList<(string Text, (System.Drawing.Point Location, System.Drawing.Size Size) Frame)>
-        RenderedElements(string automationId, Func<AppiumElement, string>? text = null)
-    {
-        if (Driver is IosSnapshotDriver snapshots)
-        {
-            return snapshots.FindSnapshots(Platform.AutomationId(automationId))
-                .Where(match => match.Snapshot.Displayed)
-                .Select(match => (match.Snapshot.Text.Trim(),
-                    (new System.Drawing.Point(Convert.ToInt32(match.Snapshot.X),
-                        Convert.ToInt32(match.Snapshot.Y)),
-                     new System.Drawing.Size(Convert.ToInt32(match.Snapshot.Width),
-                        Convert.ToInt32(match.Snapshot.Height)))))
-                .ToArray();
-        }
-        return Driver!.FindElements(Platform.AutomationId(automationId))
-            .Where(element => element.Displayed)
-            .Select(element => (text?.Invoke(element).Trim() ?? string.Empty,
-                MobilePlatformAdapter.ReadFrame(element)))
-            .ToArray();
     }
 
     private static double CenterX((System.Drawing.Point Location, System.Drawing.Size Size) frame) =>

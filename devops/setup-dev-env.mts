@@ -3,17 +3,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
-import {
-	AuthorizeSecurityGroupIngressCommand,
-	EC2Client,
-	RevokeSecurityGroupIngressCommand,
-} from "@aws-sdk/client-ec2";
+import { EC2Client } from "@aws-sdk/client-ec2";
 import * as dotenv from "dotenv";
 import {
 	isCheckpointCurrent,
 	parseTableTimes,
 } from "./dev-db-checkpoint.mts";
 import { configureRecordings, prepareRecitation } from "./local-recitation.mjs";
+import { withDevSyncIngress } from "./rds-sync-access.mts";
+import { assertLocalAssetTarget, localAssetEnvironment, syncLocalAssetMirror } from "./asset-mirror.mjs";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
 const __dirname = path.dirname(__filename); // get the name of the directory
@@ -136,8 +134,6 @@ function decompressPerushimNotes(): void {
 }
 
 // --- sync-from-prod subcommand ---
-
-const DEV_SYNC_TAG = "dev-sync";
 
 interface MysqlUrlParts {
 	host: string;
@@ -295,55 +291,6 @@ async function resolveSyncContext(): Promise<SyncContext> {
 	};
 }
 
-function ingressPermission(publicIp: string) {
-	return {
-		IpProtocol: "tcp",
-		FromPort: 3306,
-		ToPort: 3306,
-		IpRanges: [{ CidrIp: `${publicIp}/32`, Description: DEV_SYNC_TAG }],
-	};
-}
-
-async function authorizeIngress(
-	ec2: EC2Client,
-	sgId: string,
-	publicIp: string,
-): Promise<void> {
-	console.info("Authorizing RDS security group ingress for your IP...");
-	try {
-		await ec2.send(
-			new AuthorizeSecurityGroupIngressCommand({
-				GroupId: sgId,
-				IpPermissions: [ingressPermission(publicIp)],
-			}),
-		);
-	} catch (e) {
-		// A rule left behind by an interrupted run shouldn't block the next one.
-		if (!String(e).includes("InvalidPermission.Duplicate")) throw e;
-	}
-}
-
-async function revokeIngress(
-	ec2: EC2Client,
-	sgId: string,
-	publicIp: string,
-): Promise<void> {
-	console.info("Revoking RDS security group ingress...");
-	try {
-		await ec2.send(
-			new RevokeSecurityGroupIngressCommand({
-				GroupId: sgId,
-				IpPermissions: [ingressPermission(publicIp)],
-			}),
-		);
-	} catch (e) {
-		console.warn(
-			"Revoke ingress failed (you may need to remove the rule manually):",
-			e,
-		);
-	}
-}
-
 async function runSyncFromProd(): Promise<void> {
 	const dryRun = process.argv.includes("--dry-run");
 	if (dryRun) console.info("[dry-run] Would execute the following steps.");
@@ -365,14 +312,12 @@ async function runSyncFromProd(): Promise<void> {
 	// the checkpoint older-or-equal to the synced content, never newer.
 	let prodWatermark = new Map<string, string | null>();
 
-	try {
+	// The sync body — runs only while holding owned ingress, so cleanup
+	// revokes exactly the rule this invocation created even when a step fails
+	// (see withDevSyncIngress).
+	const syncBody = async (): Promise<void> => {
 		if (!dryRun) {
-			await authorizeIngress(ec2, sgId, publicIp);
 			prodWatermark = queryTableUpdateTimes(prodDb);
-		} else {
-			console.info(
-				`[dry-run] Would authorize ingress on ${sgId} for ${publicIp}/32`,
-			);
 		}
 
 		// Dump from prod and restore to dev
@@ -666,11 +611,11 @@ async function runSyncFromProd(): Promise<void> {
 			}
 			console.info("  Tanahpedia safe structure + baseline seed complete");
 
-			writeDevCheckpoint(devDb, prodWatermark);
 		}
 
 		// S3 sync (optional if buckets are set)
 		if (prodS3Bucket && devS3Bucket) {
+			if (s3Endpoint) assertLocalAssetTarget(s3Endpoint, prodS3Bucket, devS3Bucket);
 			if (!dryRun && s3Endpoint) {
 				ensureRustfsRunning();
 			}
@@ -680,7 +625,7 @@ async function runSyncFromProd(): Promise<void> {
 				);
 				if (s3Endpoint) {
 					console.info(
-						`[dry-run] Would sync: AWS s3://${prodS3Bucket} → local temp → RustFS s3://${devS3Bucket}`,
+						`[dry-run] Would sync: AWS s3://${prodS3Bucket} → shared incremental mirror → RustFS s3://${devS3Bucket}`,
 					);
 				} else {
 					console.info(
@@ -702,6 +647,7 @@ async function runSyncFromProd(): Promise<void> {
 					stdio: ["ignore", "pipe", "pipe"],
 					shell: isWin,
 					encoding: "utf-8",
+					env: s3Endpoint ? localAssetEnvironment() : process.env,
 				});
 				if (mbResult.status === 0) {
 					console.info(`  Created bucket '${devS3Bucket}'`);
@@ -718,72 +664,14 @@ async function runSyncFromProd(): Promise<void> {
 				}
 
 				if (s3Endpoint) {
-					// Two-step sync: AWS prod → local temp dir → RustFS dev
-					// Required because --endpoint-url applies to both source and dest
-					const tempS3Dir = path.join(projectDir, "data", ".s3-sync-temp");
-					fs.mkdirSync(tempS3Dir, { recursive: true });
-
-					console.info(
-						`Downloading S3 from prod (s3://${prodS3Bucket}) to temp dir...`,
-					);
-					const downloadResult = spawnSync(
-						"aws",
-						[
-							"s3",
-							"sync",
-							`s3://${prodS3Bucket}`,
-							tempS3Dir,
-							"--delete",
-							"--region",
-							awsRegion,
-						],
-						{
-							stdio: ["ignore", "pipe", "pipe"],
-							shell: isWin,
-							encoding: "utf-8",
-						},
-					);
-					if (downloadResult.status !== 0) {
-						const stderr = downloadResult.stderr || "";
-						console.warn(`  Warning: S3 download failed: ${stderr}`);
-					} else {
-						console.info("  S3 download complete");
-						console.info(
-							`Uploading to RustFS (s3://${devS3Bucket}) at ${s3Endpoint}...`,
-						);
-						const uploadResult = spawnSync(
-							"aws",
-							[
-								"s3",
-								"sync",
-								tempS3Dir,
-								`s3://${devS3Bucket}`,
-								"--delete",
-								"--endpoint-url",
-								s3Endpoint,
-							],
-							{
-								stdio: ["ignore", "pipe", "pipe"],
-								shell: isWin,
-								encoding: "utf-8",
-								env: {
-									...process.env,
-									AWS_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID || "test",
-									AWS_SECRET_ACCESS_KEY:
-										process.env.S3_SECRET_ACCESS_KEY || "test_1234",
-								},
-							},
-						);
-						if (uploadResult.status !== 0) {
-							const stderr = uploadResult.stderr || "";
-							console.warn(`  Warning: RustFS upload failed: ${stderr}`);
-						} else {
-							console.info("  RustFS upload complete");
-						}
-					}
-
-					// Clean up temp dir
-					fs.rmSync(tempS3Dir, { recursive: true, force: true });
+					console.info("Syncing assets incrementally through the shared local mirror...");
+					const directory = syncLocalAssetMirror({
+						sourceBucket: prodS3Bucket,
+						region: awsRegion,
+						targetBucket: devS3Bucket,
+						endpoint: s3Endpoint,
+					});
+					console.info(`  Asset mirror retained for all worktrees: ${directory}`);
 				} else {
 					// Direct S3-to-S3 sync (both on AWS)
 					console.info("Syncing S3 from prod to dev...");
@@ -815,12 +703,18 @@ async function runSyncFromProd(): Promise<void> {
 				"Skipping S3 sync (set PROD_S3_BUCKET and S3_BUCKET to enable).",
 			);
 		}
-	} finally {
-		if (!dryRun) {
-			await revokeIngress(ec2, sgId, publicIp);
-		} else {
-			console.info("[dry-run] Would revoke ingress on", sgId);
-		}
+		// A failed asset refresh must not mark the complete local sync fresh.
+		if (!dryRun) writeDevCheckpoint(devDb, prodWatermark);
+	};
+
+	if (dryRun) {
+		console.info(
+			`[dry-run] Would authorize ingress on ${sgId} for ${publicIp}/32`,
+		);
+		await syncBody();
+		console.info("[dry-run] Would revoke ingress on", sgId);
+	} else {
+		await withDevSyncIngress(ec2, sgId, `${publicIp}/32`, syncBody);
 	}
 
 	console.info("sync-from-prod finished.");
@@ -918,16 +812,16 @@ function writeDevCheckpoint(
  */
 async function runCheckFreshness(): Promise<void> {
 	const { prodDb, devDb, sgId, publicIp, ec2 } = await resolveSyncContext();
-	let fresh = false;
-	try {
-		await authorizeIngress(ec2, sgId, publicIp);
-		fresh = isCheckpointCurrent(
-			queryDevCheckpoint(devDb),
-			queryTableUpdateTimes(prodDb),
-		);
-	} finally {
-		await revokeIngress(ec2, sgId, publicIp);
-	}
+	const fresh = await withDevSyncIngress(
+		ec2,
+		sgId,
+		`${publicIp}/32`,
+		async () =>
+			isCheckpointCurrent(
+				queryDevCheckpoint(devDb),
+				queryTableUpdateTimes(prodDb),
+			),
+	);
 	console.info(
 		fresh
 			? "dev DB matches the recorded prod checkpoint — sync not needed"

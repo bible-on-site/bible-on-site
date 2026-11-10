@@ -63,3 +63,30 @@ test("Hides overlay after animation when toggling sefer view OFF", async ({
 	// Auto-retry until the overlay animation completes and display becomes none
 	await expect(seferOverlay).toBeHidden({ timeout: 10_000 });
 });
+
+test("Keeps the usable viewport width constant across the sefer scroll lock", async ({
+	page,
+}) => {
+	// Regression guard for a CLS alert: the perek reader scrolls inside
+	// .perekContainer, so the root has no scrollbar — any width-affecting
+	// rule tied to the lock (a scrollbar or a reserved scrollbar-gutter
+	// appearing/disappearing on toggle) shifts the layout by ~15px, which
+	// Bencher's CLS measure scores when it lands outside the input window.
+	const viewportWidth = () =>
+		page.evaluate(() => document.documentElement.clientWidth);
+
+	await page.goto(`${BASE_URL}/1`);
+	const widthBefore = await viewportWidth();
+
+	await toggleSeferOn(page);
+	const widthLocked = await viewportWidth();
+
+	await toggleSeferOff(page);
+	await expect(page.locator("html")).not.toHaveAttribute("data-book-view", {
+		timeout: 10_000,
+	});
+	const widthAfter = await viewportWidth();
+
+	expect(widthLocked).toBe(widthBefore);
+	expect(widthAfter).toBe(widthBefore);
+});

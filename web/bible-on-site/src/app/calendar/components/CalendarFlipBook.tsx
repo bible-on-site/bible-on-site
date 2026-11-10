@@ -11,7 +11,10 @@ import {
 } from "html-flip-book-react/toolbar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CalendarDay, MonthRef } from "@/data/learning-schedule";
-import { CalendarPdfDownload } from "./CalendarPdfDownload";
+import {
+	CalendarPdfDownload,
+	type CalendarPdfRequest,
+} from "./CalendarPdfDownload";
 import { FlipMonthSheet } from "./FlipMonthSheet";
 import {
 	buildFlipPageSemantics,
@@ -48,11 +51,13 @@ export function CalendarFlipBook({
 	jumpRequest,
 	onOpenPerek,
 	dayAriaLabel,
+	mergedDayAriaLabel,
 	isDimmed,
 	onToday,
 	onShowOverview,
-	pdfUrl,
+	pdfRequest,
 	pdfScopeLabel,
+	pdfUnavailableReason,
 }: {
 	/** Ordered month sheets of the displayed scope (year or full cycle). */
 	months: FlipMonthEntry[];
@@ -69,11 +74,14 @@ export function CalendarFlipBook({
 	jumpRequest: { month: MonthRef; nonce: number } | null;
 	onOpenPerek: (perekId: number) => void;
 	dayAriaLabel: (day: CalendarDay) => string;
+	/** Both dates in one name for a merged review block (#2365). */
+	mergedDayAriaLabel: (friday: CalendarDay, shabbat: CalendarDay) => string;
 	isDimmed?: (day: CalendarDay) => boolean;
 	onToday: () => void;
 	onShowOverview: () => void;
-	pdfUrl: string;
+	pdfRequest: CalendarPdfRequest;
 	pdfScopeLabel: string;
+	pdfUnavailableReason?: string;
 }) {
 	const flipBookRef = useRef<FlipBookHandle>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -106,6 +114,7 @@ export function CalendarFlipBook({
 				todayDateNumber={todayDateNumber}
 				onOpen={onOpenPerek}
 				dayAriaLabel={dayAriaLabel}
+				mergedDayAriaLabel={mergedDayAriaLabel}
 				isDimmed={isDimmed}
 			/>
 		));
@@ -158,6 +167,7 @@ export function CalendarFlipBook({
 		todayDateNumber,
 		onOpenPerek,
 		dayAriaLabel,
+		mergedDayAriaLabel,
 		isDimmed,
 		scopeLabel,
 		scopeDetail,
@@ -284,7 +294,11 @@ export function CalendarFlipBook({
 					<LastPageButton />
 				</div>
 				<div className="flipbook-toolbar-end">
-					<CalendarPdfDownload url={pdfUrl} scopeLabel={pdfScopeLabel} />
+					<CalendarPdfDownload
+						request={pdfRequest}
+						scopeLabel={pdfScopeLabel}
+						unavailableReason={pdfUnavailableReason}
+					/>
 				</div>
 			</Toolbar>
 		</div>

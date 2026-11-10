@@ -10,10 +10,11 @@ import {
 import type { ReadingUnit } from "@/lib/reading/contract";
 
 /**
- * Breadcrumb for a פרשה unit: תנ"ך > פרשה על הפרק > תורה > ספר > פרשה.
- * The division covers only the five Torah sefarim, so the חלק and ספר
- * pickers stay inside תורה; the last dropdown lists the sefer's
- * parashot by name — the parasha picker for this division.
+ * Breadcrumb for a פרשה unit: תנ"ך > פרשה על הפרק > ספר > פרשה.
+ * The division covers only the five Torah sefarim, so no חלק node is
+ * rendered — תורה stays an underlying filter fact while the sefer
+ * picker lists the same five books directly; the last dropdown lists
+ * the sefer's parashot by name — the parasha picker for this division.
  */
 export function UnitBreadcrumb({ unit }: { unit: ReadingUnit }) {
 	const firstUnits = getParashaFirstUnitBySefer();
@@ -40,30 +41,6 @@ export function UnitBreadcrumb({ unit }: { unit: ReadingUnit }) {
 						</Link>
 					</li>
 					<BreadcrumbDropdown
-						label="תורה"
-						ariaLabel="חלק נוכחי: תורה. לחץ לבחירת ספר"
-						dropClassName={styles["sefer-grid-torah"]}
-					>
-						<ul className={`${styles.list} ${styles.pl0}`}>
-							{torahSefarim.map((s) => {
-								const target = firstUnitBySefer.get(s.name);
-								return (
-									<li key={s.name}>
-										{target ? (
-											<Link
-												href={`${PARASHA_DIVISION.rootPath}/${target.unitId}`}
-											>
-												{s.name}
-											</Link>
-										) : (
-											s.name
-										)}
-									</li>
-								);
-							})}
-						</ul>
-					</BreadcrumbDropdown>
-					<BreadcrumbDropdown
 						label={unit.seferName}
 						ariaLabel={`ספר נוכחי: ${unit.seferName}. לחץ לבחירת ספר אחר`}
 						dropClassName={styles["sefer-grid-torah"]}
@@ -75,7 +52,7 @@ export function UnitBreadcrumb({ unit }: { unit: ReadingUnit }) {
 									<li key={s.name}>
 										{target ? (
 											<Link
-												href={`${PARASHA_DIVISION.rootPath}/${target.unitId}`}
+												href={`${PARASHA_DIVISION.rootPath}/${target.slug}`}
 											>
 												{s.name}
 											</Link>
@@ -97,7 +74,7 @@ export function UnitBreadcrumb({ unit }: { unit: ReadingUnit }) {
 							{seferUnits.map((seferUnit) => (
 								<li key={seferUnit.unitId}>
 									<Link
-										href={`${PARASHA_DIVISION.rootPath}/${seferUnit.unitId}`}
+										href={`${PARASHA_DIVISION.rootPath}/${seferUnit.slug}`}
 									>
 										פרשת {seferUnit.heading}
 									</Link>

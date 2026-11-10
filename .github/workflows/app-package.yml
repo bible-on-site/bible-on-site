@@ -30,7 +30,7 @@ on:
         type: string
         default: ""
       compile_only:
-        description: "Compile the Release target without recitation assets, signing or packaging (PR gate)"
+        description: "Compile Windows Release without recitation assets, signing or packaging (PR gate)"
         required: false
         type: boolean
         default: false
@@ -160,17 +160,65 @@ jobs:
         with:
           python-version: "3.15"
 
+      - name: Install Python verifier dependencies
+        if: ${{ !inputs.compile_only }}
+        run: python -m pip install --disable-pip-version-check --no-input -r app/devops/requirements-signing.txt
+
+      - name: Restore perushim notes SQLite for the Windows optional package
+        if: ${{ !inputs.compile_only && inputs.perushim_notes_sqlite_artifact != '' && inputs.perushim_notes_sqlite_artifact != env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.perushim_notes_sqlite_artifact }}
+          path: ${{ runner.temp }}/perushim-sqlite
+
+      # The master baseline lives outside this run's artifact namespace; fetch
+      # it by name through the REST API. A missing baseline is an error here —
+      # the pair is required for the perushim_notes optional package.
+      - name: Restore perushim notes SQLite for the Windows optional package (master baseline)
+        if: ${{ !inputs.compile_only && (inputs.perushim_notes_sqlite_artifact == '' || inputs.perushim_notes_sqlite_artifact == env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER) }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          ARTIFACT_NAME="${{ env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}"
+          ARTIFACT_ID=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=$ARTIFACT_NAME" \
+            --jq "[.artifacts[] | select(.expired == false)] | first | .id")
+          test -n "$ARTIFACT_ID" && test "$ARTIFACT_ID" != "null"
+          mkdir -p "${{ runner.temp }}/perushim-sqlite"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
+          unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ runner.temp }}/perushim-sqlite"
+
+      - name: Prepare matching Perushim catalog and Windows notes optional package
+        if: ${{ !inputs.compile_only }}
+        run: python app/devops/prepare_perushim_assets.py --source "${{ runner.temp }}/perushim-sqlite" --app-directory app/BibleOnSite --platform Windows
+
+      - name: Resolve immutable recitation audio cache key
+        if: ${{ !inputs.compile_only }}
+        id: recitation_audio_identity
+        run: python app/devops/prepare_recitation_assets.py --platform Windows --cache-key
+
       - name: Restore original recitation audio cache
         if: ${{ !inputs.compile_only }}
-        uses: actions/cache@v6
+        id: recitation_audio
+        uses: actions/cache/restore@v6
         with:
-          path: .cache/recitation-assets
-          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
-          restore-keys: recitation-audio-v1-
+          path: .cache/recitation-assets/*.mp3
+          key: ${{ steps.recitation_audio_identity.outputs.key }}
+          restore-keys: recitation-audio-v2-mp3-
 
       - name: Prepare lossless recitation book extension packages
         if: ${{ !inputs.compile_only }}
         run: python app/devops/prepare_recitation_assets.py --platform Windows
+        env:
+          RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
+
+      # Preserve verified downloads even if a later packaging/store step fails.
+      - name: Save verified recitation audio cache
+        if: ${{ !inputs.compile_only && steps.recitation_audio.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .cache/recitation-assets/*.mp3
+          key: ${{ steps.recitation_audio.outputs.cache-primary-key }}
 
       # PR gate (#2526): compile the real Windows TFM in Release — including
       # #if WINDOWS code and XamlC — without signing or packaging.
@@ -198,7 +246,9 @@ jobs:
         if: ${{ !inputs.compile_only }}
         id: find_msix
         run: |
-          $msix = Get-ChildItem -Path "${{ env.APP_DIRECTORY }}/.artifacts" -Filter "*.msix" -Recurse | Select-Object -First 1
+          # extension-packs/*.msix are optional packages, never the base image.
+          $msix = Get-ChildItem -Path "${{ env.APP_DIRECTORY }}/.artifacts" -Filter "*.msix" -Recurse |
+            Where-Object { $_.FullName -notmatch 'extension-packs' } | Select-Object -First 1
           if ($msix) {
             echo "Found .msix file"
             echo "MSIX_PATH=$($msix.FullName)" >> $env:GITHUB_OUTPUT
@@ -220,9 +270,9 @@ jobs:
         run: echo "artifact_name=app-windows-v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Verify all recitation Windows archives and hashes
+      - name: Verify Windows extension packs and clean base MSIX
         if: ${{ !inputs.compile_only }}
-        run: python app/devops/verify_recitation_assets.py --platform Windows --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "${{ steps.find_msix.outputs.MSIX_PATH }}"
+        run: python app/devops/verify_recitation_assets.py --platform Windows --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "${{ steps.find_msix.outputs.MSIX_PATH }}" --asset-pack-dir app/BibleOnSite/Platforms/Windows/ExtensionPacks --archive-dir app/.artifacts/extension-packs --payload-dir app/.artifacts/payloads
 
       - name: Upload MSIX artifact
         if: ${{ !inputs.compile_only }}
@@ -276,6 +326,7 @@ jobs:
         with:
           distribution: "microsoft"
           java-version: "17"
+          verify-signature: true
 
       - name: Hash NuGet dependency inputs
         id: nuget-key
@@ -291,8 +342,11 @@ jobs:
             ${{ runner.os }}-nuget-maui-android-
             ${{ runner.os }}-nuget-
 
+      # Workload set 10.0.402.1 pins Android SDK 36.1.118 — the first servicing
+      # release honoring AndroidR8ObfuscationMode and emitting the r8.json build
+      # metadata Play reads for code-optimization scoring (#2708).
       - name: Install MAUI workload
-        run: dotnet workload install maui-android
+        run: dotnet workload install maui-android --version 10.0.402.1
 
       - name: Restore perushim notes SQLite for AAB asset pack
         if: ${{ inputs.perushim_notes_sqlite_artifact != '' && inputs.perushim_notes_sqlite_artifact != env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
@@ -342,21 +396,36 @@ jobs:
         run: dotnet tool restore
 
       - name: Setup Python for recitation extension packaging
-        if: ${{ !inputs.compile_only }}
         uses: actions/setup-python@v7
         with:
           python-version: "3.15"
 
+      - name: Install Python verifier dependencies
+        run: python -m pip install --disable-pip-version-check --no-input -r app/devops/requirements-signing.txt
+
+      - name: Resolve immutable recitation audio cache key
+        id: recitation_audio_identity
+        run: python app/devops/prepare_recitation_assets.py --platform Android --cache-key
+
       - name: Restore original recitation audio cache
-        if: ${{ !inputs.compile_only }}
-        uses: actions/cache@v6
+        id: recitation_audio
+        uses: actions/cache/restore@v6
         with:
-          path: .cache/recitation-assets
-          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
-          restore-keys: recitation-audio-v1-
+          path: .cache/recitation-assets/*.ogg
+          key: ${{ steps.recitation_audio_identity.outputs.key }}
+          restore-keys: recitation-audio-v2-opus-
 
       - name: Prepare lossless recitation book extension packages
         run: python app/devops/prepare_recitation_assets.py --platform Android
+        env:
+          RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
+
+      - name: Save verified recitation audio cache
+        if: ${{ steps.recitation_audio.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .cache/recitation-assets/*.ogg
+          key: ${{ steps.recitation_audio.outputs.cache-primary-key }}
 
       - name: Package AAB
         working-directory: ${{ env.APP_DIRECTORY }}
@@ -402,6 +471,22 @@ jobs:
       - name: Verify all recitation PAD modules and hashes
         run: python app/devops/verify_recitation_assets.py --platform Android --catalog app/BibleOnSite/Resources/Raw/recitation-catalog.json --package "$(find app/.artifacts -name '*.aab' -print -quit)"
 
+      # #2708: the uploaded bundle itself must carry the R8 build metadata and
+      # deobfuscation map Play scores (>=25% obfuscation/optimization/shrinking
+      # from February 2027 for apps over 10 MB uncompressed DEX).
+      - name: Verify AAB DEX optimization metadata
+        run: python app/devops/verify_android_dex_metadata.py --package "$(find app/.artifacts -name '*.aab' -print -quit)"
+
+      # #2970: the archive Play receives is this zip — its entries must be
+      # symbol-bearing arm64 ELFs named after, and build-ID-matched to, the
+      # bundled libraries. Verify the stored artifact, not just intermediates.
+      - name: Verify native symbols archive
+        working-directory: ${{ env.APP_DIRECTORY }}
+        run: |
+          dotnet run --project devops -- VerifyAndroidSymbols \
+            --aab-path "$(realpath "$(find .artifacts -name '*.aab' -print -quit)")" \
+            --android-symbols-path "$(realpath "$(find .artifacts -name '*-native-symbols.zip' -print -quit)")"
+
       - name: Set artifact name output
         id: set_artifact_name
         run: echo "artifact_name=app-android-v${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_OUTPUT
@@ -410,7 +495,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.set_artifact_name.outputs.artifact_name }}
-          path: ${{ env.APP_DIRECTORY }}/.artifacts/*.aab
+          path: |
+            ${{ env.APP_DIRECTORY }}/.artifacts/*.aab
+            ${{ env.APP_DIRECTORY }}/.artifacts/*-native-symbols.zip
           retention-days: 30
           if-no-files-found: error
           include-hidden-files: true
@@ -641,15 +728,29 @@ jobs:
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
 
+      - name: Resolve immutable recitation audio cache key
+        id: recitation_audio_identity
+        run: python app/devops/prepare_recitation_assets.py --platform iOS --cache-key
+
       - name: Restore original recitation audio cache
-        uses: actions/cache@v6
+        id: recitation_audio
+        uses: actions/cache/restore@v6
         with:
-          path: .cache/recitation-assets
-          key: recitation-audio-v1-${{ hashFiles('data/recitation/recitation.sqlite') }}
-          restore-keys: recitation-audio-v1-
+          path: .cache/recitation-assets/*.ogg
+          key: ${{ steps.recitation_audio_identity.outputs.key }}
+          restore-keys: recitation-audio-v2-opus-
 
       - name: Prepare lossless recitation book extension packages
         run: python app/devops/prepare_recitation_assets.py --platform iOS
+        env:
+          RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
+
+      - name: Save verified recitation audio cache
+        if: ${{ steps.recitation_audio.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .cache/recitation-assets/*.ogg
+          key: ${{ steps.recitation_audio.outputs.cache-primary-key }}
 
       # The extension's DerivedData is keyed on its own sources: any hit means
       # the .appex is already built and the xcodebuild step below is skipped.
@@ -748,6 +849,7 @@ jobs:
           path: |
             ${{ env.IOS_VERIFIED_IPA }}
             ${{ env.APP_DIRECTORY }}/.artifacts/assetpacks/*.aar
+            ${{ env.APP_DIRECTORY }}/.artifacts/assetpacks/asset-packs.json
             ${{ env.APP_DIRECTORY }}/.artifacts/payloads/*
           retention-days: 30
           if-no-files-found: error

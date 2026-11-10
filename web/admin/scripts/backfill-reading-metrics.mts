@@ -530,9 +530,7 @@ const KIND_INVALIDATION: Record<
 	entry: [{ path: "/pedia/[slug]", type: "page" }],
 };
 
-async function revalidateWebsite(
-	changedKinds: Set<string>,
-): Promise<void> {
+async function revalidateWebsite(changedKinds: Set<string>): Promise<void> {
 	const requests = [...changedKinds].flatMap(
 		(kind) => KIND_INVALIDATION[kind] ?? [],
 	);
