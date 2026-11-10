@@ -74,6 +74,34 @@ export function reportFrameBlockingBenchmark(
 }
 
 /**
+ * Converts a timing benchmark that carries its own test budget (`upperValue`)
+ * into the static-bound `frame_budget_ratio` measure. Sub-50ms interaction
+ * timings — Web Vitals INP/TTFB measure 5-48ms and arrive quantized to 8ms —
+ * sit under the runner-jitter floor of a percentage-of-history threshold, the
+ * same false-alert class as `sefer-flip/*-drag-blocked` (#2971). Their Bencher
+ * bound becomes the browser test's existing "good" budget instead of a noisy
+ * fraction of near-zero history; entries without a positive finite budget are
+ * returned untouched.
+ */
+export function budgetedTimingBenchmarkEntry(
+	entry: BenchmarkEntry,
+): BenchmarkEntry {
+	if (
+		entry.measure !== "time_ms" ||
+		typeof entry.upperValue !== "number" ||
+		!Number.isFinite(entry.upperValue) ||
+		entry.upperValue <= 0
+	)
+		return entry;
+	return {
+		...entry,
+		measure: "frame_budget_ratio",
+		value: entry.value / entry.upperValue,
+		upperValue: 1,
+	};
+}
+
+/**
  * Maps a Web Vitals metric name to its unified Bencher measure name.
  * CLS is the only unitless Web Vitals metric; all others are timings.
  */
