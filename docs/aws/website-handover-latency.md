@@ -58,8 +58,9 @@ the ~35-second estimate.
 
 `drainMs`, `minDrainMs`, `quietMs`, `pollMs`, `routerCacheMs`,
 `dnsTimeoutMs`, the port, the metric reader, the resolver, the discovery
-name, the own-address provider and the logger are injectable for tests;
-production uses `PORT` (default 3000), procfs and the VPC resolver.
+name, the own-address provider and the loggers are injectable for tests;
+production uses `PORT` (default 3000), procfs and the VPC resolver with a
+one-second query timeout (cancelled with the child).
 
 ## Early readiness probe
 
