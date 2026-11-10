@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { Page, Worker } from "@playwright/test";
+import { dailyPerekPayload } from "../../src/lib/web-push/payload";
 import { expect, test } from "../util/playwright/test-fixture";
 
 /**
@@ -208,6 +209,22 @@ const pushSection = (page: Page) =>
 	page.locator('section[aria-labelledby="push-notifications-title"]');
 
 test.describe("daily perek push notifications (#1096)", () => {
+	test.beforeEach(async ({ request }) => {
+		// `reuseExistingServer` lets an ordinary dev server already listening on
+		// the e2e port stand in for the launcher, but such a server never
+		// received the VAPID/send-secret env the config injects, so the toggle
+		// would stay hidden and every test would time out. Fail fast on the
+		// deployment's own configured check instead.
+		const response = await request.get("/api/push/subscription");
+		const { publicKey } = (await response.json()) as {
+			publicKey: string | null;
+		};
+		expect(
+			publicKey,
+			"push is unconfigured on the reused server — stop the server already on the e2e port so the launcher injects the test VAPID keys",
+		).toBeTruthy();
+	});
+
 	test("opt-in registers the worker, stores the subscription, renders pushes and routes clicks to the daily perek", async ({
 		page,
 		context,
@@ -249,24 +266,21 @@ test.describe("daily perek push notifications (#1096)", () => {
 		const worker = await workerRegistered;
 		expect(worker.url().endsWith("/sw.js")).toBe(true);
 
-		// The daily sender's payload reaches the real push handler.
+		// The exact payload the daily sender builds reaches the real push
+		// handler, so a sender/worker contract drift fails here.
 		const origin = new URL(baseURL as string).origin;
-		const shown = await dispatchPush(worker, {
-			title: 'הפרק היומי - תנ"ך על הפרק',
-			body: "הפרק של היום: בראשית א",
-			url: "/929/1",
-			tag: "daily-perek",
-		});
+		const payload = dailyPerekPayload(1);
+		const shown = await dispatchPush(worker, payload);
 		expect(shown).toHaveLength(1);
-		expect(shown[0].title).toBe('הפרק היומי - תנ"ך על הפרק');
+		expect(shown[0].title).toBe(payload.title);
 		expect(shown[0].options).toMatchObject({
-			body: "הפרק של היום: בראשית א",
+			body: payload.body,
 			icon: "/images/logos/logo192.webp",
 			lang: "he",
 			dir: "rtl",
-			tag: "daily-perek",
+			tag: payload.tag,
 		});
-		expect(shown[0].options.data?.url).toBe(`${origin}/929/1`);
+		expect(shown[0].options.data?.url).toBe(`${origin}${payload.url}`);
 
 		// A foreign URL in a push never navigates off-site.
 		const hostile = await dispatchPush(worker, {
