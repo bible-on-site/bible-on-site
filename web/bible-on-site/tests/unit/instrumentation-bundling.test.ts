@@ -25,10 +25,26 @@ interface WebpackStatsLike {
 	};
 }
 
-jest.setTimeout(120_000);
+// Each `it` runs one vendored-webpack cold compile of instrumentation.ts
+// (~5-15s typical); 60s bounds a pathological hang while leaving headroom for
+// a loaded CI runner. Jest's 5s default is far too tight for a real webpack run.
+jest.setTimeout(60_000);
 
 const srcDir = path.resolve(__dirname, "../../src");
 const tsLoader = path.resolve(__dirname, "../util/webpack-swc-ts-loader.cjs");
+const bundleOutputDirs: string[] = [];
+
+function makeBundleOutputDir(): string {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "instr-bundle-"));
+	bundleOutputDirs.push(dir);
+	return dir;
+}
+
+afterAll(() => {
+	for (const dir of bundleOutputDirs) {
+		fs.rmSync(dir, { recursive: true, force: true });
+	}
+});
 
 /**
  * Bundles `src/instrumentation.ts` the way Next does per runtime:
@@ -46,7 +62,7 @@ function compileInstrumentation(
 		context: srcDir,
 		entry: "./instrumentation.ts",
 		output: {
-			path: fs.mkdtempSync(path.join(os.tmpdir(), "instr-bundle-")),
+			path: makeBundleOutputDir(),
 			filename: "instrumentation.js",
 		},
 		devtool: false,
