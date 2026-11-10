@@ -17,6 +17,7 @@ use tracing_actix_web::TracingLogger;
 use crate::providers::Database;
 use crate::services::article_search::{self, ArticleSearchIndex};
 
+use super::budgets::GraphqlBudgets;
 use super::profile::Profile;
 use super::schema_builder::{build_schema, graphql_playground, graphql_request};
 use tokio::time::Duration;
@@ -48,9 +49,13 @@ impl ActixApp {
         let article_index = ArticleSearchIndex::new(db.clone());
         tokio::spawn(article_search::run_worker(article_index.clone()));
         let shutdown_signal = Arc::new(AtomicBool::new(false));
+        // Query work budgets resolve once per process; changing them is an
+        // env update plus task restart (#3066 rollout contract).
+        let budgets = GraphqlBudgets::resolve();
         let server = HttpServer::new({
             let shutdown_signal = shutdown_signal.clone();
             let article_index = article_index.clone();
+            let budgets = budgets.clone();
             move || {
                 App::new()
                     .wrap(Compress::default())
@@ -60,10 +65,11 @@ impl ActixApp {
                         &article_index,
                         shutdown_signal.clone(),
                         &profile,
+                        &budgets,
                     ))
             }
         })
-        .listen_auto_h2c(listener)?
+        .listen(listener)?
         .run();
         tracing::info!("Server running on port {}", port);
         Ok(Self {
@@ -90,24 +96,33 @@ impl ActixApp {
 
     /// `profile` is the single resolved environment: development tooling is
     /// registered only when it explicitly allows it, so production and any
-    /// unrecognized configuration expose nothing extra.
+    /// unrecognized configuration expose nothing extra. `budgets` carries the
+    /// env-resolved query work budgets (#3066) into the schema, the request
+    /// body cap and the per-request execution timeout.
     pub fn build_app_config(
         db: &Database,
         article_index: &ArticleSearchIndex,
         shutdown_signal: Arc<AtomicBool>,
         profile: &Profile,
+        budgets: &GraphqlBudgets,
     ) -> impl Fn(&mut web::ServiceConfig) {
         let db = db.clone();
         let article_index = article_index.clone();
         let dev_tools = profile.dev_tools_enabled();
+        let budgets = budgets.clone();
         move |cfg: &mut web::ServiceConfig| {
             // Keep unmatched requests on a uniform non-disclosing 404:
             // actix-web's built-in default answers 405 + Allow when a path
             // matches but its method guard rejects, which would reveal that
             // a resource exists at the path (e.g. POST-only GraphQL root).
             cfg.default_service(web::to(|| async { HttpResponse::NotFound().finish() }))
-                .app_data(web::Data::new(build_schema(&db, &article_index)))
+                .app_data(web::Data::new(build_schema(&db, &article_index, &budgets)))
                 .app_data(web::Data::new(article_index.clone()))
+                .app_data(web::Data::new(budgets.clone()))
+                // Body cap for `web::Bytes` inside `graphql_request`: rejects
+                // oversized bodies with 413 (Content-Length fast path plus a
+                // hard cap on the streamed/decompressed bytes).
+                .app_data(web::PayloadConfig::new(budgets.payload_limit()))
                 .service(web::resource("/").guard(guard::Post()).to(graphql_request))
                 .service(
                     web::resource("/health")
@@ -254,6 +269,7 @@ mod tests {
             &index,
             Arc::new(AtomicBool::new(false)),
             &test_profile(),
+            &GraphqlBudgets::default(),
         )))
         .await;
         let response = test::call_service(
@@ -332,6 +348,7 @@ mod tests {
             &article_index,
             Arc::new(AtomicBool::new(false)),
             &test_profile(),
+            &GraphqlBudgets::default(),
         )))
         .await;
         let mut instance = None;
@@ -409,6 +426,7 @@ mod tests {
             &article_index,
             Arc::new(AtomicBool::new(false)),
             &test_profile(),
+            &GraphqlBudgets::default(),
         )))
         .await;
 
@@ -459,6 +477,7 @@ mod tests {
                 &article_index,
                 Arc::new(AtomicBool::new(false)),
                 &test_profile(),
+                &GraphqlBudgets::default(),
             ))
         })
         .workers(1)
@@ -523,6 +542,7 @@ mod tests {
                 &article_index,
                 Arc::new(AtomicBool::new(false)),
                 &Profile::from_name(profile_name),
+                &GraphqlBudgets::default(),
             )))
             .await;
 
@@ -612,6 +632,7 @@ mod tests {
                 &article_index,
                 Arc::new(AtomicBool::new(false)),
                 &Profile::from_name(Some(profile_name)),
+                &GraphqlBudgets::default(),
             )))
             .await;
 
@@ -668,6 +689,172 @@ mod tests {
                 test::call_service(&app, test::TestRequest::get().uri("/health").to_request())
                     .await;
             assert_eq!(health_response.status(), StatusCode::OK);
+        }
+    }
+
+    /// Query work budgets at the HTTP boundary (#3066): the body cap answers
+    /// 413, JSON-array batches and invalid JSON keep their 400 contract, and
+    /// over-budget/timeout executions surface as ordinary GraphQL errors.
+    #[actix_web::test]
+    async fn graphql_budgets_enforced_at_the_http_boundary() {
+        // Body cap: Content-Length fast path and streamed-bodies both trip.
+        for budgets in [
+            GraphqlBudgets {
+                max_body_bytes: 16,
+                ..GraphqlBudgets::default()
+            },
+            GraphqlBudgets::default(),
+        ] {
+            let db = mock_database();
+            let article_index = ArticleSearchIndex::new(db.clone());
+            let app = test::init_service(App::new().configure(ActixApp::build_app_config(
+                &db,
+                &article_index,
+                Arc::new(AtomicBool::new(false)),
+                &test_profile(),
+                &budgets,
+            )))
+            .await;
+
+            let oversized = budgets.max_body_bytes < 64;
+            let body = r#"{"query":"{ __typename }"}"#;
+            let response = test::call_service(
+                &app,
+                test::TestRequest::post()
+                    .uri("/")
+                    .insert_header((header::CONTENT_TYPE, "application/json"))
+                    .set_payload(body)
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(
+                response.status(),
+                if oversized {
+                    StatusCode::PAYLOAD_TOO_LARGE
+                } else {
+                    StatusCode::OK
+                },
+                "body={body} cap={}",
+                budgets.max_body_bytes
+            );
+            if !oversized {
+                // JSON-array batches keep the previous extractor's 400.
+                let response = test::call_service(
+                    &app,
+                    test::TestRequest::post()
+                        .uri("/")
+                        .insert_header((header::CONTENT_TYPE, "application/json"))
+                        .set_payload(
+                            r#"[{"query":"{ a: __typename }"},{"query":"{ b: __typename }"}]"#,
+                        )
+                        .to_request(),
+                )
+                .await;
+                assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+                // Malformed JSON is a client error, not a GraphQL response.
+                let response = test::call_service(
+                    &app,
+                    test::TestRequest::post()
+                        .uri("/")
+                        .insert_header((header::CONTENT_TYPE, "application/json"))
+                        .set_payload("{not json")
+                        .to_request(),
+                )
+                .await;
+                assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+            }
+        }
+    }
+
+    /// Multipart bodies (graphql-multipart-request-spec) keep flowing through
+    /// the same parse path — the transport change did not drop them.
+    #[actix_web::test]
+    async fn graphql_multipart_operations_still_execute() {
+        let db = mock_database();
+        let article_index = ArticleSearchIndex::new(db.clone());
+        let app = test::init_service(App::new().configure(ActixApp::build_app_config(
+            &db,
+            &article_index,
+            Arc::new(AtomicBool::new(false)),
+            &test_profile(),
+            &GraphqlBudgets::default(),
+        )))
+        .await;
+        let boundary = "----testboundary";
+        let payload = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"operations\"\r\n\r\n{{\"query\":\"{{ __typename }}\",\"variables\":{{}}}}\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"map\"\r\n\r\n{{}}\r\n--{boundary}--\r\n"
+        );
+        let response = test::call_service(
+            &app,
+            test::TestRequest::post()
+                .uri("/")
+                .insert_header((
+                    header::CONTENT_TYPE,
+                    format!("multipart/form-data; boundary={boundary}"),
+                ))
+                .set_payload(payload)
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body())
+            .await
+            .expect("multipart body");
+        let json: serde_json::Value = serde_json::from_slice(&body).expect("GraphQL JSON");
+        assert_eq!(json["data"]["__typename"].is_string(), true, "{json}");
+    }
+
+    /// Depth/complexity/time budgets degrade to GraphQL `errors`, not HTTP
+    /// failures — anonymous callers keep the standard error contract.
+    #[actix_web::test]
+    async fn graphql_budget_violations_surface_as_graphql_errors() {
+        for (budgets, query, expected) in [
+            (
+                GraphqlBudgets {
+                    max_depth: Some(2),
+                    ..GraphqlBudgets::default()
+                },
+                "{ __schema { types { name } } }",
+                "Query is nested too deep.",
+            ),
+            (
+                GraphqlBudgets {
+                    max_complexity: Some(1),
+                    ..GraphqlBudgets::default()
+                },
+                "{ a: sefarim { name } b: sefarim { name } }",
+                "Query is too complex.",
+            ),
+        ] {
+            let db = mock_database();
+            let article_index = ArticleSearchIndex::new(db.clone());
+            let app = test::init_service(App::new().configure(ActixApp::build_app_config(
+                &db,
+                &article_index,
+                Arc::new(AtomicBool::new(false)),
+                &test_profile(),
+                &budgets,
+            )))
+            .await;
+            let response = test::call_service(
+                &app,
+                test::TestRequest::post()
+                    .uri("/")
+                    .insert_header((header::CONTENT_TYPE, "application/json"))
+                    .set_payload(format!(r#"{{"query":"{query}"}}"#))
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::OK, "{query}");
+            let body = to_bytes(response.into_body()).await.expect("response body");
+            let json: serde_json::Value = serde_json::from_slice(&body).expect("GraphQL JSON");
+            assert_eq!(
+                json["errors"][0]["message"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("unexpected error shape for {query}: {json}")),
+                expected,
+                "{query}"
+            );
         }
     }
 }
