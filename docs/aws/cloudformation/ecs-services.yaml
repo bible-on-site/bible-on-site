@@ -52,6 +52,18 @@ Metadata:
                             └─────────────────────────────────────────────┘
 
 Parameters:
+  UploadCognitoUserPoolId:
+    Type: String
+    Default: ""
+  UploadCognitoClientId:
+    Type: String
+    Default: ""
+  UploadCognitoDomain:
+    Type: String
+    Default: ""
+  UploadWebsiteOrigin:
+    Type: String
+    Default: https://xn--febl3a.co.il
   Environment:
     Type: String
     Default: production
@@ -339,6 +351,19 @@ Resources:
             # Bulletin Lambda function name — used by AWS SDK to invoke directly
             - Name: BULLETIN_LAMBDA_NAME
               Value: bible-on-site-bulletin
+            # Populate from the approved private-upload stack outputs.
+            - Name: UPLOAD_AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: UPLOAD_S3_BUCKET
+              Value: !Sub "bible-on-site-private-upload-${AWS::AccountId}-${AWS::Region}"
+            - Name: UPLOAD_COGNITO_POOL_ID
+              Value: !Ref UploadCognitoUserPoolId
+            - Name: UPLOAD_COGNITO_CLIENT_ID
+              Value: !Ref UploadCognitoClientId
+            - Name: UPLOAD_COGNITO_DOMAIN
+              Value: !Ref UploadCognitoDomain
+            - Name: UPLOAD_ORIGIN
+              Value: !Ref UploadWebsiteOrigin
             # ASSETS_BASE_URL is intentionally unset in production. Enable
             # only after an approved additive CDN rollout passes the legacy
             # S3 URL, CORS, Range and freshness checks in the cost risk audit.

@@ -49,6 +49,7 @@ describe("page header contract", () => {
 			"pedia/[slug]",
 			"rabbis-blessing",
 			"search",
+			"upload",
 		]) {
 			expect(routes).toContain(family);
 		}
@@ -96,6 +97,7 @@ describe("page header contract", () => {
 			"pedia/[slug]",
 			"rabbis-blessing",
 			"search",
+			"upload",
 		]) {
 			expect(byRoute.get(solid)).toMatchObject({
 				kind: "declared",

@@ -126,6 +126,12 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 										רבנים
 									</Link>
 									<Link
+										to="/uploads"
+										className="text-gray-600 hover:text-blue-600 px-4 py-2 text-sm font-medium"
+									>
+										אחסון פרטי
+									</Link>
+									<Link
 										to="/tanahpedia"
 										className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
 										activeProps={{

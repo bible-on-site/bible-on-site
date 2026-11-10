@@ -17,6 +17,7 @@ import { Route as LinkProposalsRouteImport } from './routes/link-proposals'
 import { Route as MoadimRouteImport } from './routes/moadim'
 import { Route as RabbisRouteImport } from './routes/rabbis'
 import { Route as TanahpediaRouteImport } from './routes/tanahpedia'
+import { Route as UploadsRouteImport } from './routes/uploads'
 import { Route as ArticlesIdRouteImport } from './routes/articles.$id'
 import { Route as RabbisIdRouteImport } from './routes/rabbis.$id'
 import { Route as TanahpediaPersonsRouteImport } from './routes/tanahpedia.persons'
@@ -64,6 +65,11 @@ const TanahpediaRoute = TanahpediaRouteImport.update({
   path: '/tanahpedia',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UploadsRoute = UploadsRouteImport.update({
+  id: '/uploads',
+  path: '/uploads',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ArticlesIdRoute = ArticlesIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -104,6 +110,7 @@ export interface FileRoutesByFullPath {
   '/moadim': typeof MoadimRoute
   '/rabbis': typeof RabbisRouteWithChildren
   '/tanahpedia': typeof TanahpediaRouteWithChildren
+  '/uploads': typeof UploadsRoute
   '/articles/$id': typeof ArticlesIdRoute
   '/rabbis/$id': typeof RabbisIdRoute
   '/tanahpedia/persons': typeof TanahpediaPersonsRoute
@@ -120,6 +127,7 @@ export interface FileRoutesByTo {
   '/moadim': typeof MoadimRoute
   '/rabbis': typeof RabbisRouteWithChildren
   '/tanahpedia': typeof TanahpediaRouteWithChildren
+  '/uploads': typeof UploadsRoute
   '/articles/$id': typeof ArticlesIdRoute
   '/rabbis/$id': typeof RabbisIdRoute
   '/tanahpedia/persons': typeof TanahpediaPersonsRoute
@@ -137,6 +145,7 @@ export interface FileRoutesById {
   '/moadim': typeof MoadimRoute
   '/rabbis': typeof RabbisRouteWithChildren
   '/tanahpedia': typeof TanahpediaRouteWithChildren
+  '/uploads': typeof UploadsRoute
   '/articles/$id': typeof ArticlesIdRoute
   '/rabbis/$id': typeof RabbisIdRoute
   '/tanahpedia/persons': typeof TanahpediaPersonsRoute
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
     | '/moadim'
     | '/rabbis'
     | '/tanahpedia'
+    | '/uploads'
     | '/articles/$id'
     | '/rabbis/$id'
     | '/tanahpedia/persons'
@@ -171,6 +181,7 @@ export interface FileRouteTypes {
     | '/moadim'
     | '/rabbis'
     | '/tanahpedia'
+    | '/uploads'
     | '/articles/$id'
     | '/rabbis/$id'
     | '/tanahpedia/persons'
@@ -187,6 +198,7 @@ export interface FileRouteTypes {
     | '/moadim'
     | '/rabbis'
     | '/tanahpedia'
+    | '/uploads'
     | '/articles/$id'
     | '/rabbis/$id'
     | '/tanahpedia/persons'
@@ -204,6 +216,7 @@ export interface RootRouteChildren {
   MoadimRoute: typeof MoadimRoute
   RabbisRoute: typeof RabbisRouteWithChildren
   TanahpediaRoute: typeof TanahpediaRouteWithChildren
+  UploadsRoute: typeof UploadsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -262,6 +275,13 @@ declare module '@tanstack/react-router' {
       path: '/tanahpedia'
       fullPath: '/tanahpedia'
       preLoaderRoute: typeof TanahpediaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/uploads': {
+      id: '/uploads'
+      path: '/uploads'
+      fullPath: '/uploads'
+      preLoaderRoute: typeof UploadsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/articles/$id': {
@@ -359,6 +379,7 @@ const rootRouteChildren: RootRouteChildren = {
   MoadimRoute: MoadimRoute,
   RabbisRoute: RabbisRouteWithChildren,
   TanahpediaRoute: TanahpediaRouteWithChildren,
+  UploadsRoute: UploadsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
