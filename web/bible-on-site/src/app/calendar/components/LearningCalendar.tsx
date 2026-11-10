@@ -2,7 +2,14 @@
 
 import { toLetters } from "gematry";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	memo,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import {
 	buildVisibleCalendarMonth,
 	CALENDAR_PDF_UNAVAILABLE,
@@ -95,6 +102,24 @@ function parseMonthParam(raw: string | null): MonthRef | null {
 function formatMonthParam({ year, month }: MonthRef): string {
 	return `${year}${month.toString().padStart(2, "0")}`;
 }
+
+const dayAriaLabel = (day: CalendarDay): string => {
+	const dateLabel = getDateLabel(day.date);
+	if (day.perekId === undefined) {
+		return `${dateLabel} - לא משובץ`;
+	}
+	const perekLabel = getDaySourceLabel(day);
+	return day.status === "review"
+		? `${dateLabel} - חזרה: ${perekLabel}`
+		: `${dateLabel} - ${perekLabel}`;
+};
+
+/** One accessible name covering both dates of a merged review block. */
+const mergedAriaLabel = (friday: CalendarDay, shabbat: CalendarDay): string => {
+	/* istanbul ignore next -- the merge gate requires defined ids */
+	const ids = friday.reviewPerekIds ?? [];
+	return `${getDateLabel(friday.date)} - ${getDateLabel(shabbat.date)} - חזרה: ${getPerekRangeLabel(ids)}`;
+};
 
 interface LearningCalendarProps {
 	/** Hebrew year of the month to show when no ?month= param is present. */
@@ -329,6 +354,12 @@ export function LearningCalendar({
 		viewedCycle ?? contextualCycle,
 		window.next.number,
 	);
+
+	// Stable prop for the memoized MiniMonth grid — see below.
+	const dimOutsideCycle = useCallback(
+		(day: CalendarDay) => day.cycle !== resolvedCycle,
+		[resolvedCycle],
+	);
 	const canExport = canExportCalendarPeriod(
 		viewMode === "cycle"
 			? { view: "cycle", cycle: resolvedCycle }
@@ -399,27 +430,6 @@ export function LearningCalendar({
 		}
 		return months;
 	}, [viewMode, resolvedCycle, window]);
-
-	const dayAriaLabel = (day: CalendarDay): string => {
-		const dateLabel = getDateLabel(day.date);
-		if (day.perekId === undefined) {
-			return `${dateLabel} - לא משובץ`;
-		}
-		const perekLabel = getDaySourceLabel(day);
-		return day.status === "review"
-			? `${dateLabel} - חזרה: ${perekLabel}`
-			: `${dateLabel} - ${perekLabel}`;
-	};
-
-	/** One accessible name covering both dates of a merged review block. */
-	const mergedAriaLabel = (
-		friday: CalendarDay,
-		shabbat: CalendarDay,
-	): string => {
-		/* istanbul ignore next -- the merge gate requires defined ids */
-		const ids = friday.reviewPerekIds ?? [];
-		return `${getDateLabel(friday.date)} - ${getDateLabel(shabbat.date)} - חזרה: ${getPerekRangeLabel(ids)}`;
-	};
 
 	/** Saturday dates swallowed by Friday's merged block in `cells`. */
 	const mergedSaturdays = useMemo(() => {
@@ -629,7 +639,7 @@ export function LearningCalendar({
 							onOpen={openPerek}
 							dayAriaLabel={dayAriaLabel}
 							mergedDayAriaLabel={mergedAriaLabel}
-							dimmed={(day) => day.cycle !== resolvedCycle}
+							dimmed={dimOutsideCycle}
 						/>
 					))}
 				</div>
@@ -783,7 +793,9 @@ function CalendarCell({
 	);
 }
 
-function MiniMonth({
+// Memoized: a year/cycle view mounts a dozen+ of these (~1500 cells in a full
+// cycle, #2765); unchanged months must not re-render on unrelated state changes.
+const MiniMonth = memo(function MiniMonth({
 	title,
 	cells,
 	todayDateNumber,
@@ -848,7 +860,7 @@ function MiniMonth({
 			</div>
 		</section>
 	);
-}
+});
 
 function MiniCell({
 	day,

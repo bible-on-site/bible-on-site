@@ -486,61 +486,6 @@ public class PasukFormattedTextTests
         }
     }
 
-    public class PasukSegment_IsKtivDifferentThanQri
-    {
-        [Fact]
-        public void is_true_when_type_is_ktiv_and_paired_offset_is_non_zero()
-        {
-            var segment = new PasukSegment
-            {
-                Type = SegmentType.Ktiv,
-                Value = "היא",
-                PairedOffset = 1
-            };
-
-            segment.IsKtivDifferentThanQri.Should().BeTrue();
-        }
-
-        [Fact]
-        public void is_false_when_type_is_ktiv_and_paired_offset_is_zero()
-        {
-            var segment = new PasukSegment
-            {
-                Type = SegmentType.Ktiv,
-                Value = "היא",
-                PairedOffset = 0
-            };
-
-            segment.IsKtivDifferentThanQri.Should().BeFalse();
-        }
-
-        [Fact]
-        public void is_false_when_type_is_ktiv_and_paired_offset_is_null()
-        {
-            var segment = new PasukSegment
-            {
-                Type = SegmentType.Ktiv,
-                Value = "בראשית",
-                PairedOffset = null
-            };
-
-            segment.IsKtivDifferentThanQri.Should().BeFalse();
-        }
-
-        [Fact]
-        public void is_false_when_type_is_qri_even_if_paired_offset_has_value()
-        {
-            var segment = new PasukSegment
-            {
-                Type = SegmentType.Qri,
-                Value = "הוּא",
-                PairedOffset = 1
-            };
-
-            segment.IsKtivDifferentThanQri.Should().BeFalse();
-        }
-    }
-
     public class PasukSegment_EndsWithMaqaf
     {
         [Fact]

@@ -685,7 +685,7 @@ checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
 name = "bible-on-site-api"
-version = "0.1.123"
+version = "0.1.126"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -3666,9 +3666,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-actix-web"
-version = "0.7.25"
+version = "0.7.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3133a9a17a910bb708dcdcf1ff89d3dd98d412938b5e017c6e42de11b63ef164"
+checksum = "57452ae2b79737a7f0c32ec1d430aaf7ed068c53284f6a63adf0e0855ac17f79"
 dependencies = [
  "actix-web",
  "mutually_exclusive_features",

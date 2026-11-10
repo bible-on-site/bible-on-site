@@ -49,8 +49,15 @@ test.describe("Section pages", () => {
 		await expect(appHeading).toBeVisible();
 	});
 
-	for (const section of ["donation", "dailyBulletin", "whatsappGroup"]) {
-		test(`${section} has its own title and canonical and scrolls to contact`, async ({
+	// The landing pages scroll to the section matching their intent: donation
+	// still lands on contact, while the bulletin pages land on their join card
+	// (#2941 — see SECTIONS.scrollTarget in app/[section]/page.tsx).
+	for (const [section, scrollTarget] of [
+		["donation", "contact"],
+		["dailyBulletin", "bulletin"],
+		["whatsappGroup", "bulletin-whatsapp"],
+	] as const) {
+		test(`${section} has its own title and canonical and scrolls to ${scrollTarget}`, async ({
 			page,
 		}) => {
 			await page.goto(`/${section}`);
@@ -60,7 +67,7 @@ test.describe("Section pages", () => {
 				.locator('link[rel="canonical"]')
 				.getAttribute("href");
 			expect(new URL(canonical ?? "", page.url()).pathname).toBe(`/${section}`);
-			await expect(page.locator("#contact")).toBeInViewport();
+			await expect(page.locator(`#${scrollTarget}`)).toBeInViewport();
 		});
 	}
 

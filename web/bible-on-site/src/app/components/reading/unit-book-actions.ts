@@ -1,20 +1,26 @@
 "use server";
 
+import type { Pasuk } from "@/data/db/tanah-view-types";
 import { getMasoraUnitById } from "@/data/masora/masora-units";
 import {
 	getParashaUnitById,
 	parashaAuxiliaryRanges,
 } from "@/data/parasha/parasha-units";
+import { getPerekByPerekId, LAST_PEREK_ID } from "@/data/perek-dto";
+import type { ArticleSummary } from "@/lib/articles";
 import { getArticleSummariesForRangeGroups } from "@/lib/articles/service";
 import {
 	getPerushimForRangeGroups,
 	getPerushNotesForRanges,
-	type RangePerushSummary,
 	type RangedPerushNote,
+	type RangePerushSummary,
 } from "@/lib/perushim";
-import type { ArticleSummary } from "@/lib/articles";
 import type { DivisionId, ScriptureRange } from "@/lib/reading/contract";
 import type { UnitBookScope } from "./unit-book-content";
+import {
+	primeUnitSummaries,
+	type UnitSummaryPair,
+} from "./unit-summary-prefetch";
 
 function unitScopeRanges(
 	division: DivisionId,
@@ -71,12 +77,13 @@ export async function getUnitScopeSummariesBatch(
 	// One grouped query per service for the whole sefer — a per-unit
 	// fan-out over a 5-connection pool turned a large sefer's book open
 	// into hundreds of serialized round-trips.
+	let summaries: Record<string, UnitSummaryPair>;
 	try {
 		const [articleGroups, perushGroups] = await Promise.all([
 			getArticleSummariesForRangeGroups(rangeGroups),
 			getPerushimForRangeGroups(rangeGroups),
 		]);
-		return Object.fromEntries(
+		summaries = Object.fromEntries(
 			validIds.map((unitId, index) => [
 				String(unitId),
 				{
@@ -99,6 +106,11 @@ export async function getUnitScopeSummariesBatch(
 			]),
 		);
 	}
+	// Warm the flat unit pages' per-unit cache entries from the same
+	// grouped results, so a later unit render reuses them instead of
+	// re-querying (unit-summary-prefetch).
+	primeUnitSummaries(division, scope, validIds, summaries);
+	return summaries;
 }
 
 /**
@@ -132,4 +144,22 @@ export async function getUnitBookPerushNotes(
 		);
 		return [];
 	}
+}
+
+/**
+ * Range-scoped scripture for the פרשה sefer book's auxiliary (Haftarah)
+ * readings — only the perakim the book actually renders, resolved from
+ * the canonical corpus, instead of whole-sefer JSON downloads per
+ * prophetic sefer the Haftarot touch.
+ */
+export async function getPerakimText(
+	perekIds: number[],
+): Promise<Record<number, { pesukim: Pasuk[] }>> {
+	const result: Record<number, { pesukim: Pasuk[] }> = {};
+	for (const perekId of new Set(perekIds.slice(0, LAST_PEREK_ID))) {
+		if (!Number.isInteger(perekId) || perekId < 1 || perekId > LAST_PEREK_ID)
+			continue;
+		result[perekId] = { pesukim: getPerekByPerekId(perekId).pesukim };
+	}
+	return result;
 }

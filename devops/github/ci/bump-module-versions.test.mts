@@ -10,6 +10,17 @@ import {
 } from "./bump-module-versions.ts";
 
 describe("modulesToBump", () => {
+	it("a successful explicit service recovery bumps only its released/collided services", () => {
+		const needs: ReleaseNeeds = {
+			release_website: { result: "skipped", outputs: {} },
+			release_api: { result: "skipped", outputs: {} },
+			release_app: { result: "skipped", outputs: {} },
+			release_admin: { result: "success", outputs: { released: "true" } },
+			release_bulletin: { result: "success", outputs: { needs_bump: "true" } },
+		};
+		assert.deepEqual(modulesToBump(needs, "released"), ["admin"]);
+		assert.deepEqual(modulesToBump(needs, "retry"), ["bulletin"]);
+	});
 	it("ignores outputs from a failed release/dispatch", () => {
 		const needs: ReleaseNeeds = {
 			release_website: {

@@ -25,8 +25,8 @@ import { createServerFn } from "@tanstack/react-start";
  * (a burst of edits across entity screens becomes a handful of website
  * calls instead of a regeneration stampede), and each call resolves when
  * the flush carrying its requests completes. Requests that fail delivery
- * move to `pendingRetry` and ride along with the NEXT flush — recorded on
- * `lastRevalidationFailure` until then so the editor UI can warn that the
+ * move to `pendingRetry` and ride along with the NEXT flush — recorded in
+ * `lastFailure` until then so the editor UI can warn that the
  * public site may still be stale.
  *
  * shortcut: per-instance queue state, accurate on the single admin ECS
@@ -211,10 +211,6 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 /** Callers awaiting the flush that carries the current generation. */
 let generation: { resolvers: ((applied: boolean) => void)[] } | null = null;
 
-export function lastRevalidationFailure(): RevalidationFailure | null {
-	return lastFailure;
-}
-
 /**
  * Test hook — clears the queue, retry backlog, status and the pending
  * generation so one test's failed delivery cannot ride the next test's
@@ -362,47 +358,9 @@ export function revalidateWebsite(
 	return waiting;
 }
 
-/**
- * Public path of an article page (`/929/<perek>/<article>`) — kept for
- * operator/manual `urls` use. Entity changes derive their own paths.
- */
-export function articlePath(perekId: number, articleId: number): string {
-	return `/929/${perekId}/${articleId}`;
-}
-
-/**
- * Public path of an author page. Keep the slug rule in sync with the
- * website's `authorNameToSlug` (web/bible-on-site/src/util/slug.ts):
- * strip geresh/gershayim/quote characters, trim, then percent-encode.
- */
-export function authorPath(name: string): string {
-	return `/929/authors/${encodeURIComponent(name.replace(/["׳']/g, "").trim())}`;
-}
-
 /** Public path of a pedia entry page (`/pedia/<unique_name>`). */
 export function pediaEntryPath(uniqueName: string): string {
 	return `/pedia/${uniqueName}`;
-}
-
-/**
- * Every page that renders article data carries the `articles` tag; `urls`
- * lists the article pages (and their old locations after a move) whose
- * content changed.
- */
-export function articleInvalidation(...urls: string[]): RevalidateRequest[] {
-	return [{ tag: "articles", ...(urls.length ? { urls } : {}) }];
-}
-
-/**
- * Author names and details render on author pages and inside article
- * pages/lists, so both tags must expire on an author change. `urls` lists
- * the changed author pages (old slug included after a rename).
- */
-export function authorInvalidation(...urls: string[]): RevalidateRequest[] {
-	return [
-		{ tag: "authors" },
-		{ tag: "articles", ...(urls.length ? { urls } : {}) },
-	];
 }
 
 /**
