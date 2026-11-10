@@ -365,10 +365,10 @@ UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
 SET s.position = 3 WHERE m.slug = 'תשעה-באב' AND s.label = 'הפטרת שחרית - ספרדים ואשכנזים' AND s.position = 2;
 
 -- New sections: one guarded insert per labelled section. The position guard
--- keeps redeploys idempotent and never rewrites an admin-renamed section:
--- a renamed section still occupies its (moed_id, position) slot, so guarding
+-- keeps redeploys idempotent and never rewrites an admin-renamed section.
+-- A renamed section still occupies its (moed_id, position) slot, so guarding
 -- on label would reinsert the old label and collide with
--- uk_moed_section_position; guarding on position skips instead.
+-- uk_moed_section_position — guarding on position skips instead.
 INSERT INTO tanah_moed_section (moed_id, label, position)
 SELECT m.id, 'קריאת התורה ומפטיר - יום א''', 1 FROM tanah_moed m
 WHERE m.slug = 'ראש-השנה'
