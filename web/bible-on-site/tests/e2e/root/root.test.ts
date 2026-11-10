@@ -134,6 +134,16 @@ test.describe("Root page", () => {
 		expect(edge.mask).toContain(".svg");
 		expect(edge.height).toBeGreaterThan(10);
 
+		// The mask asset must actually resolve — a missing SVG would still
+		// leave a url() in computed style while the boundary renders
+		// unshaped (Devin Review #3293).
+		const maskUrl = /url\(["']?([^"')]+)/.exec(edge.mask)?.[1];
+		expect(maskUrl).toBeTruthy();
+		const maskResponse = await page.request.get(
+			new URL(maskUrl ?? "", page.url()).href,
+		);
+		expect(maskResponse.ok()).toBe(true);
+
 		// Straddles the seam without covering any join-card action.
 		const seam = await shelf.evaluate(
 			(el) => el.getBoundingClientRect().top,
