@@ -28,6 +28,7 @@ const clipDispose = jest.fn();
 const clipPause = jest.fn();
 const clipResume = jest.fn();
 let positionMs: number | null;
+let rangeIndex: number | null;
 const frames = new Map<number, FrameRequestCallback>();
 let frameId = 0;
 let clipEnded: () => void;
@@ -92,6 +93,7 @@ const perakim = [
 beforeEach(() => {
 	localStorage.clear();
 	positionMs = null;
+	rangeIndex = null;
 	frames.clear();
 	jest.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
 		frames.set(++frameId, callback);
@@ -102,6 +104,7 @@ beforeEach(() => {
 	});
 	playRanges.mockImplementation(async (_ranges, _pauseMs, ended) => {
 		positionMs = _ranges[0]?.startMs ?? null;
+		rangeIndex = 0;
 		clipEnded = ended;
 		return true;
 	});
@@ -109,6 +112,7 @@ beforeEach(() => {
 	clipResume.mockResolvedValue(true);
 	clipPlay.mockImplementation(async (_start, _end, ended) => {
 		positionMs = _start;
+		rangeIndex = 0;
 		clipEnded = ended;
 		return true;
 	});
@@ -118,6 +122,9 @@ beforeEach(() => {
 		play: clipPlay,
 		get positionMs() {
 			return positionMs;
+		},
+		get positionRangeIndex() {
+			return rangeIndex;
 		},
 		stop: clipStop,
 		dispose: clipDispose,
@@ -160,21 +167,21 @@ test("play runs the declared pieces in order across perakim", async () => {
 	fireEvent.click(screen.getByRole("button", { name: "השמעת הקריאה" }));
 	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(1));
 	expect(playRanges).toHaveBeenLastCalledWith(
-		[{ startMs: 0, endMs: 200 }],
+		[{ startMs: 0, endMs: 200, pasuk: 1 }],
 		expect.any(Number),
 		expect.any(Function),
 	);
 	act(() => clipEnded());
 	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(2));
 	expect(playRanges).toHaveBeenLastCalledWith(
-		[{ startMs: 0, endMs: 150 }],
+		[{ startMs: 0, endMs: 150, pasuk: 1 }],
 		expect.any(Number),
 		expect.any(Function),
 	);
 	act(() => clipEnded());
 	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(3));
 	expect(playRanges).toHaveBeenLastCalledWith(
-		[{ startMs: 300, endMs: 400 }],
+		[{ startMs: 300, endMs: 400, pasuk: 2 }],
 		expect.any(Number),
 		expect.any(Function),
 	);
@@ -215,26 +222,68 @@ test("a tapped word previews and the next play resumes at its piece", async () =
 	fireEvent.click(screen.getByRole("button", { name: "השמעת הקריאה" }));
 	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(1));
 	expect(playRanges).toHaveBeenLastCalledWith(
-		[{ startMs: 100, endMs: 200 }],
+		[{ startMs: 100, endMs: 200, pasuk: 1 }],
 		expect.any(Number),
 		expect.any(Function),
 	);
 	act(() => clipEnded());
 	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(2));
 	expect(playRanges).toHaveBeenLastCalledWith(
-		[{ startMs: 0, endMs: 150 }],
+		[{ startMs: 0, endMs: 150, pasuk: 1 }],
 		expect.any(Number),
 		expect.any(Function),
 	);
+});
+
+test("a tap on the second copy of a repeated pasuk resumes that copy", async () => {
+	// Perek 1's first pasuk legitimately appears twice in the reading;
+	// each rendered copy carries its own ordinal, so tapping the second
+	// copy bookmarks its piece even before any playback.
+	await openListening(
+		[range(1, 1, 1, 1), range(2, 1, 2, 1), range(1, 1, 1, 1)],
+		<>
+			<RecitationWordControl perek={1} pasuk={1} segment={1} occurrence={0}>
+				אֶחָד
+			</RecitationWordControl>
+			<RecitationWordControl perek={1} pasuk={1} segment={1} occurrence={1}>
+				אֶחָד
+			</RecitationWordControl>
+		</>,
+	);
+	const copies = screen.getAllByRole("button", { name: "השמעת המילה אֶחָד" });
+	expect(copies).toHaveLength(2);
+	fireEvent.click(copies[1]);
+	await waitFor(() => expect(clipPlay).toHaveBeenCalledWith(
+		0,
+		100,
+		expect.any(Function),
+	));
+	act(() => clipEnded());
+	fireEvent.click(screen.getByRole("button", { name: "השמעת הקריאה" }));
+	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(1));
+	expect(playRanges).toHaveBeenLastCalledWith(
+		[{ startMs: 0, endMs: 200, pasuk: 1 }],
+		expect.any(Number),
+		expect.any(Function),
+	);
+	act(() => clipEnded());
+	// The bookmarked copy was the last piece — a first-copy bookmark
+	// would replay the perek-2 piece and the second copy as well.
+	expect(playRanges).toHaveBeenCalledTimes(1);
 });
 
 test("a word tapped after a repeated passage played resumes its later copy", async () => {
 	// Perek 1's first pasuk legitimately appears twice in the reading.
 	await openListening(
 		[range(1, 1, 1, 1), range(2, 1, 2, 1), range(1, 1, 1, 1)],
-		<RecitationWordControl perek={1} pasuk={1} segment={1}>
-			אֶחָד
-		</RecitationWordControl>,
+		<>
+			<RecitationWordControl perek={1} pasuk={1} segment={1} occurrence={0}>
+				אֶחָד
+			</RecitationWordControl>
+			<RecitationWordControl perek={1} pasuk={1} segment={1} occurrence={1}>
+				אֶחָד
+			</RecitationWordControl>
+		</>,
 	);
 	fireEvent.click(screen.getByRole("button", { name: "השמעת הקריאה" }));
 	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(1));
@@ -243,10 +292,10 @@ test("a word tapped after a repeated passage played resumes its later copy", asy
 	act(() => clipEnded());
 	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(3));
 	act(() => clipEnded());
-	// The full reading finished; tapping the word now bookmarks the copy
-	// the listener last heard (piece 2), not the identical earlier one.
+	// The full reading finished; tapping the second copy still bookmarks
+	// its own piece, not the identical earlier one.
 	fireEvent.click(
-		screen.getByRole("button", { name: "השמעת המילה אֶחָד" }),
+		screen.getAllByRole("button", { name: "השמעת המילה אֶחָד" })[1],
 	);
 	await waitFor(() => expect(clipPlay).toHaveBeenCalled());
 	act(() => clipEnded());
@@ -256,6 +305,44 @@ test("a word tapped after a repeated passage played resumes its later copy", asy
 	// Resume from the last piece ends the queue — a first-copy bookmark
 	// would replay the perek-2 piece and the second copy again.
 	expect(playRanges).toHaveBeenCalledTimes(4);
+});
+
+test("only the playing copy of a repeated pasuk highlights", async () => {
+	await openListening(
+		[range(1, 1, 1, 1), range(2, 1, 2, 1), range(1, 1, 1, 1)],
+		<>
+			<RecitationWordControl perek={1} pasuk={1} segment={1} occurrence={0}>
+				אֶחָד
+			</RecitationWordControl>
+			<RecitationWordControl perek={1} pasuk={1} segment={1} occurrence={1}>
+				אֶחָד
+			</RecitationWordControl>
+		</>,
+	);
+	const copies = screen.getAllByRole("button", { name: "השמעת המילה אֶחָד" });
+	const stepFrame = () =>
+		act(() => {
+			// Each callback reschedules itself — clear first so the new
+			// frame registrations survive for the next step.
+			const pending = [...frames.values()];
+			frames.clear();
+			for (const callback of pending) callback(0);
+		});
+	fireEvent.click(screen.getByRole("button", { name: "השמעת הקריאה" }));
+	await screen.findByRole("button", { name: "השהיית ההקראה" });
+	// The first copy's piece is playing — only its control highlights.
+	positionMs = 50;
+	stepFrame();
+	expect(copies[0].getAttribute("data-recitation-active")).toBe("true");
+	expect(copies[1].getAttribute("data-recitation-active")).toBeNull();
+	// The repeated copy's piece plays later — the highlight moves to it.
+	act(() => clipEnded());
+	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(2));
+	act(() => clipEnded());
+	await waitFor(() => expect(playRanges).toHaveBeenCalledTimes(3));
+	stepFrame();
+	expect(copies[0].getAttribute("data-recitation-active")).toBeNull();
+	expect(copies[1].getAttribute("data-recitation-active")).toBe("true");
 });
 
 test("a silent perek keeps its entity links while sibling perakim play", async () => {

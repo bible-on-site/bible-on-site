@@ -170,11 +170,18 @@ export function UnitTextBody({
 	}
 	// Only a coordinate's first slice emits its anchor id — an
 	// intentionally repeated pasuk renders text again, not a second id.
+	// Each rendered copy also gets a 0-based occurrence ordinal: identical
+	// copies share recording timestamps, so the recitation controls use
+	// the ordinal to tap and highlight the right instance.
 	const firstSliceByCoord = new Map<string, number>();
+	const occurrenceByPasuk = new Map<string, number>();
+	const coordCounts = new Map<string, number>();
 	slices.forEach((slice, index) => {
 		for (let pasuk = slice.startPasuk; pasuk <= slice.endPasuk; pasuk++) {
 			const coord = `${slice.perekId}-${pasuk}`;
 			if (!firstSliceByCoord.has(coord)) firstSliceByCoord.set(coord, index);
+			occurrenceByPasuk.set(`${index}-${pasuk}`, coordCounts.get(coord) ?? 0);
+			coordCounts.set(coord, (coordCounts.get(coord) ?? 0) + 1);
 		}
 	});
 	return (
@@ -185,6 +192,7 @@ export function UnitTextBody({
 					slice={slice}
 					sliceIndex={sliceIndex}
 					firstSliceByCoord={firstSliceByCoord}
+					occurrenceByPasuk={occurrenceByPasuk}
 					anchorScope={anchorScope}
 					entityRefs={entityRefsByPerek[slice.perekId] ?? []}
 					resolvePerek={resolvePerek}
@@ -206,6 +214,7 @@ function UnitPerekSlice({
 	slice,
 	sliceIndex,
 	firstSliceByCoord,
+	occurrenceByPasuk,
 	anchorScope,
 	entityRefs,
 	resolvePerek,
@@ -219,6 +228,9 @@ function UnitPerekSlice({
 	slice: PerekSlice;
 	sliceIndex: number;
 	firstSliceByCoord: Map<string, number>;
+	/** `"sliceIndex-pasuk"` → that rendered copy's ordinal among this
+	 * coordinate's copies (0-based, in declared reading order). */
+	occurrenceByPasuk: Map<string, number>;
 	anchorScope?: string;
 	entityRefs: PerekEntityReference[];
 	resolvePerek: UnitTextPerekResolver;
@@ -394,6 +406,9 @@ function UnitPerekSlice({
 												perek={slice.perekId}
 												pasuk={wrappedPasuk}
 												segment={segment}
+												occurrence={occurrenceByPasuk.get(
+													`${sliceIndex}-${wrappedPasuk}`,
+												)}
 												plainWhenInactive
 											>
 												{text}

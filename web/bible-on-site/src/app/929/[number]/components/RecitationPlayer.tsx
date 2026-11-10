@@ -51,7 +51,9 @@ interface RecitationTextState {
 	rangesByPasuk: Map<string, { startMs: number; endMs: number }>;
 	subscribeActive: (listener: () => void) => () => void;
 	isActive: (key: string) => boolean;
-	play: (start: number, end: number, perekId?: number) => void;
+	/** `occurrence` picks which rendered copy of a repeated pasuk was
+	 * tapped (0-based in reading order); chapter players never pass it. */
+	play: (start: number, end: number, perekId?: number, occurrence?: number) => void;
 }
 
 // Range players (RangeRecitationPlayer) provide these same contexts so
@@ -104,6 +106,7 @@ export function RecitationWordControl({
 	pasuk,
 	segment,
 	perek,
+	occurrence,
 	children,
 	plainWhenInactive = false,
 }: {
@@ -112,6 +115,11 @@ export function RecitationWordControl({
 	/** Canonical perek id scopes the word's key for range players whose
 	 * plan spans several perakim; chapter players leave it unset. */
 	perek?: number;
+	/** 0-based ordinal among this pasuk's rendered copies in a range
+	 * reading that repeats a passage — identical words share recording
+	 * timestamps, so the copy index is the only thing distinguishing a
+	 * tap or highlight on the second copy from one on the first. */
+	occurrence?: number;
 	children: ReactNode;
 	/** The reader can keep the original text without an inert layout box. */
 	plainWhenInactive?: boolean;
@@ -122,11 +130,15 @@ export function RecitationWordControl({
 			? `${perek}:${pasuk}:${segment}`
 			: `${pasuk}:${segment}`;
 	const word = context?.enabled ? context.wordByKey.get(key) : undefined;
+	// Repeated copies share the word key (same manifest word); the
+	// highlight key carries the copy ordinal so only the playing copy
+	// lights up.
+	const activeKey = occurrence !== undefined ? `${key}:${occurrence}` : key;
 	// The active word lives outside the context value so a word-boundary change
 	// re-renders only the two controls whose highlight flips.
 	const pressed = useSyncExternalStore(
 		context?.subscribeActive ?? noopSubscribe,
-		() => context?.isActive(key) ?? false,
+		() => context?.isActive(activeKey) ?? false,
 		() => false,
 	);
 	// Keep the text-node boundaries: joining adjacent words changes Hebrew
@@ -139,7 +151,7 @@ export function RecitationWordControl({
 			pressed={pressed}
 			onActivate={
 				word && context
-					? () => context.play(word.startMs, word.endMs, perek)
+					? () => context.play(word.startMs, word.endMs, perek, occurrence)
 					: undefined
 			}
 		>

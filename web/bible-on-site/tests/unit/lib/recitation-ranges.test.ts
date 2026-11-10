@@ -1,6 +1,6 @@
 import type { ScriptureRange } from "@/lib/reading/contract";
 import {
-	pieceIndexContaining,
+	pieceSpotContaining,
 	type RecitationPlaybackPiece,
 	type RecitationWord,
 	rangePlaybackPieces,
@@ -70,9 +70,9 @@ describe("rangePlaybackPieces", () => {
 			{
 				perekId: 1,
 				intervals: [
-					{ startMs: 0, endMs: 200 },
-					{ startMs: 300, endMs: 500 },
-					{ startMs: 600, endMs: 800 },
+					{ startMs: 0, endMs: 200, pasuk: 1 },
+					{ startMs: 300, endMs: 500, pasuk: 2 },
+					{ startMs: 600, endMs: 800, pasuk: 3 },
 				],
 			},
 		]);
@@ -86,10 +86,12 @@ describe("rangePlaybackPieces", () => {
 		);
 		expect(pieces.map((piece) => piece.perekId)).toEqual([1, 2]);
 		expect(pieces[0].intervals).toEqual([
-			{ startMs: 300, endMs: 500 },
-			{ startMs: 600, endMs: 800 },
+			{ startMs: 300, endMs: 500, pasuk: 2 },
+			{ startMs: 600, endMs: 800, pasuk: 3 },
 		]);
-		expect(pieces[1].intervals).toEqual([{ startMs: 0, endMs: 200 }]);
+		expect(pieces[1].intervals).toEqual([
+			{ startMs: 0, endMs: 200, pasuk: 1 },
+		]);
 	});
 
 	it("keeps declared order when a reading revisits a perek", () => {
@@ -99,7 +101,9 @@ describe("rangePlaybackPieces", () => {
 			wordsByPerek,
 		);
 		expect(pieces.map((piece) => piece.perekId)).toEqual([1, 2, 1]);
-		expect(pieces[2].intervals).toEqual([{ startMs: 600, endMs: 800 }]);
+		expect(pieces[2].intervals).toEqual([
+			{ startMs: 600, endMs: 800, pasuk: 3 },
+		]);
 	});
 
 	it("merges adjacent same-perek slices into one piece", () => {
@@ -110,8 +114,8 @@ describe("rangePlaybackPieces", () => {
 		);
 		expect(pieces).toHaveLength(1);
 		expect(pieces[0].intervals).toEqual([
-			{ startMs: 0, endMs: 200 },
-			{ startMs: 300, endMs: 500 },
+			{ startMs: 0, endMs: 200, pasuk: 1 },
+			{ startMs: 300, endMs: 500, pasuk: 2 },
 		]);
 	});
 
@@ -124,8 +128,8 @@ describe("rangePlaybackPieces", () => {
 		// Pasuk 1 starts at segment 1 → only its second word; pasuk 2 ends
 		// at segment 0 → only its first word.
 		expect(pieces[0].intervals).toEqual([
-			{ startMs: 100, endMs: 200 },
-			{ startMs: 300, endMs: 400 },
+			{ startMs: 100, endMs: 200, pasuk: 1 },
+			{ startMs: 300, endMs: 400, pasuk: 2 },
 		]);
 	});
 
@@ -139,37 +143,92 @@ describe("rangePlaybackPieces", () => {
 	});
 });
 
-describe("pieceIndexContaining", () => {
-	// A reading that repeats perek 1's first pasuk: the same perek and
-	// timestamps appear in pieces 0 and 2.
+describe("pieceSpotContaining", () => {
+	// A reading that repeats perek 1's first pasuk: the same perek,
+	// pasuk and timestamps appear in pieces 0 and 2.
 	const pieces: RecitationPlaybackPiece[] = [
-		{ perekId: 1, intervals: [{ startMs: 0, endMs: 200 }] },
-		{ perekId: 2, intervals: [{ startMs: 0, endMs: 200 }] },
-		{ perekId: 1, intervals: [{ startMs: 0, endMs: 200 }] },
+		{ perekId: 1, intervals: [{ startMs: 0, endMs: 200, pasuk: 1 }] },
+		{ perekId: 2, intervals: [{ startMs: 0, endMs: 200, pasuk: 1 }] },
+		{ perekId: 1, intervals: [{ startMs: 0, endMs: 200, pasuk: 1 }] },
 	];
 
-	it("finds the first matching piece by default", () => {
-		expect(pieceIndexContaining(pieces, 1, 100)).toBe(0);
+	it("finds the first matching copy by default", () => {
+		expect(pieceSpotContaining(pieces, 1, 100)).toEqual({
+			pieceIndex: 0,
+			intervalIndex: 0,
+		});
 	});
 
-	it("prefers the occurrence at or after the reading position", () => {
-		expect(pieceIndexContaining(pieces, 1, 100, 1)).toBe(2);
-		expect(pieceIndexContaining(pieces, 1, 100, 2)).toBe(2);
+	it("selects the tapped copy's ordinal regardless of playback position", () => {
+		expect(pieceSpotContaining(pieces, 1, 100, 1)).toEqual({
+			pieceIndex: 2,
+			intervalIndex: 0,
+		});
+		expect(pieceSpotContaining(pieces, 1, 100, 0)).toEqual({
+			pieceIndex: 0,
+			intervalIndex: 0,
+		});
 	});
 
-	it("falls back to the first match when every occurrence already played", () => {
-		expect(pieceIndexContaining(pieces, 1, 100, 3)).toBe(0);
+	it("resolves a later copy merged into the same piece", () => {
+		// Two adjacent identical ranges merge into one piece carrying two
+		// identical intervals — occurrence 1 is the second interval, not
+		// a later piece.
+		const merged: RecitationPlaybackPiece[] = [
+			{
+				perekId: 1,
+				intervals: [
+					{ startMs: 0, endMs: 200, pasuk: 1 },
+					{ startMs: 0, endMs: 200, pasuk: 1 },
+				],
+			},
+		];
+		expect(pieceSpotContaining(merged, 1, 100, 1)).toEqual({
+			pieceIndex: 0,
+			intervalIndex: 1,
+		});
+	});
+
+	it("matches ordinals by pasuk even when timestamps differ per copy", () => {
+		// A clipped repeat shares only part of the first copy's interval;
+		// a tap inside the overlap still selects the copy the ordinal
+		// names, not the first containing interval.
+		const clipped: RecitationPlaybackPiece[] = [
+			{ perekId: 1, intervals: [{ startMs: 0, endMs: 200, pasuk: 1 }] },
+			{ perekId: 1, intervals: [{ startMs: 100, endMs: 200, pasuk: 1 }] },
+		];
+		expect(pieceSpotContaining(clipped, 1, 150, 1)).toEqual({
+			pieceIndex: 1,
+			intervalIndex: 0,
+		});
+		expect(pieceSpotContaining(clipped, 1, 150, 0)).toEqual({
+			pieceIndex: 0,
+			intervalIndex: 0,
+		});
+	});
+
+	it("falls back to the first containing interval for out-of-range ordinals", () => {
+		expect(pieceSpotContaining(pieces, 1, 100, 9)).toEqual({
+			pieceIndex: 0,
+			intervalIndex: 0,
+		});
 	});
 
 	it("ignores pieces from other perakim and unmatched positions", () => {
-		expect(pieceIndexContaining(pieces, 2, 50)).toBe(1);
-		expect(pieceIndexContaining(pieces, 1, 250)).toBe(-1);
-		expect(pieceIndexContaining(pieces, 3, 100)).toBe(-1);
+		expect(pieceSpotContaining(pieces, 2, 50)).toEqual({
+			pieceIndex: 1,
+			intervalIndex: 0,
+		});
+		expect(pieceSpotContaining(pieces, 1, 250)).toBeNull();
+		expect(pieceSpotContaining(pieces, 3, 100)).toBeNull();
 	});
 
 	it("uses the interval end as an exclusive bound", () => {
-		expect(pieceIndexContaining(pieces, 1, 200)).toBe(-1);
-		expect(pieceIndexContaining(pieces, 1, 0)).toBe(0);
+		expect(pieceSpotContaining(pieces, 1, 200)).toBeNull();
+		expect(pieceSpotContaining(pieces, 1, 0)).toEqual({
+			pieceIndex: 0,
+			intervalIndex: 0,
+		});
 	});
 });
 
@@ -178,43 +237,55 @@ describe("resumePieces", () => {
 		{
 			perekId: 1,
 			intervals: [
-				{ startMs: 0, endMs: 200 },
-				{ startMs: 300, endMs: 500 },
-				{ startMs: 600, endMs: 800 },
+				{ startMs: 0, endMs: 200, pasuk: 1 },
+				{ startMs: 300, endMs: 500, pasuk: 2 },
+				{ startMs: 600, endMs: 800, pasuk: 3 },
 			],
 		},
-		{ perekId: 2, intervals: [{ startMs: 0, endMs: 200 }] },
+		{ perekId: 2, intervals: [{ startMs: 0, endMs: 200, pasuk: 1 }] },
 	];
 
 	it("trims the bookmarked pasuk interval and drops earlier pieces", () => {
-		expect(resumePieces(pieces, 0, 350)).toEqual([
+		expect(resumePieces(pieces, 0, 1, 350)).toEqual([
 			{
 				perekId: 1,
 				intervals: [
-					{ startMs: 350, endMs: 500 },
-					{ startMs: 600, endMs: 800 },
+					{ startMs: 350, endMs: 500, pasuk: 2 },
+					{ startMs: 600, endMs: 800, pasuk: 3 },
 				],
 			},
-			{ perekId: 2, intervals: [{ startMs: 0, endMs: 200 }] },
+			{ perekId: 2, intervals: [{ startMs: 0, endMs: 200, pasuk: 1 }] },
 		]);
 	});
 
 	it("resumes from a later piece's first interval", () => {
-		expect(resumePieces(pieces, 1, 100)).toEqual([
-			{ perekId: 2, intervals: [{ startMs: 100, endMs: 200 }] },
+		expect(resumePieces(pieces, 1, 0, 100)).toEqual([
+			{ perekId: 2, intervals: [{ startMs: 100, endMs: 200, pasuk: 1 }] },
 		]);
 	});
 
-	it("drops intervals fully before a gap bookmark", () => {
-		expect(resumePieces(pieces, 0, 250)).toEqual([
+	it("drops earlier identical intervals inside a merged piece", () => {
+		// Adjacent duplicate ranges merge identical intervals into one
+		// piece; the explicit interval index resumes at the tapped copy
+		// instead of replaying the first.
+		const repeated: RecitationPlaybackPiece[] = [
 			{
 				perekId: 1,
 				intervals: [
-					{ startMs: 300, endMs: 500 },
-					{ startMs: 600, endMs: 800 },
+					{ startMs: 0, endMs: 200, pasuk: 1 },
+					{ startMs: 0, endMs: 200, pasuk: 1 },
+					{ startMs: 600, endMs: 800, pasuk: 3 },
 				],
 			},
-			{ perekId: 2, intervals: [{ startMs: 0, endMs: 200 }] },
+		];
+		expect(resumePieces(repeated, 0, 1, 50)).toEqual([
+			{
+				perekId: 1,
+				intervals: [
+					{ startMs: 50, endMs: 200, pasuk: 1 },
+					{ startMs: 600, endMs: 800, pasuk: 3 },
+				],
+			},
 		]);
 	});
 });

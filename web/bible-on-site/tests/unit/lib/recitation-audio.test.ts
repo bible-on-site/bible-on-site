@@ -457,3 +457,35 @@ test("speed changes during a verse gap preserve remaining silence; stop cancels 
 	expect(() => player.setOptions(Number.NaN, 1)).toThrow("settings");
 	player.dispose();
 });
+test("the range index keeps original ordinals across pause and resume", async () => {
+	const player = new RecitationAudio("/audio.mp3", hash);
+	const ended = jest.fn();
+	expect(player.positionRangeIndex).toBeNull();
+	await player.playRanges(
+		[
+			{ startMs: 0, endMs: 1000 },
+			{ startMs: 2000, endMs: 3000 },
+			{ startMs: 4000, endMs: 5000 },
+		],
+		100,
+		ended,
+	);
+	expect(player.positionRangeIndex).toBe(0);
+	audioClock = 11.2;
+	expect(player.positionRangeIndex).toBe(1);
+	// Pausing mid-range keeps the ordinal of the interrupted range, and
+	// the resumed (trimmed) plan still reports original list indices —
+	// equal timestamps repeat only by ordinal, so this must not reset.
+	expect(player.pause()).toBe(true);
+	expect(player.positionRangeIndex).toBe(1);
+	audioClock = 20;
+	await player.resume();
+	audioClock = 20.5;
+	expect(player.positionRangeIndex).toBe(1);
+	audioClock = 21.5;
+	expect(player.positionRangeIndex).toBe(2);
+	sources[4].onended?.();
+	expect(ended).toHaveBeenCalledTimes(1);
+	expect(player.positionRangeIndex).toBeNull();
+	player.dispose();
+});

@@ -22,7 +22,7 @@ import type { Pasuk } from "@/data/db/tanah-view-types";
 import type { ScriptureRange } from "@/lib/reading/contract";
 import {
 	parseRecitation,
-	pieceIndexContaining,
+	pieceSpotContaining,
 	playableWords,
 	type Recitation,
 	type RecitationPlaybackPiece,
@@ -108,14 +108,21 @@ export function RangeRecitationPlayer({
 	const activeQueue = useRef<RecitationPlaybackPiece[]>([]);
 	const queueIndex = useRef(0);
 	// `queueIndex` is relative to `activeQueue`, which may be a bookmarked
-	// subset of `pieces`; the base maps it back to absolute plan indices.
+	// subset of `pieces`; the base maps it back to absolute plan indices,
+	// and `queueBaseInterval` maps its trimmed first piece's intervals
+	// back to absolute interval indices within that plan piece.
 	const queueBaseIndex = useRef(0);
+	const queueBaseInterval = useRef(0);
 	const heldIndex = useRef<number | null>(null);
 	const pausedAudio = useRef<RecitationAudio | null>(null);
 	const activeAudioId = useRef<number | null>(null);
 	const activeWords = useRef<RecitationWord[]>([]);
 	// Tapped-word bookmark — where the next continuous playback resumes.
-	const resumeAt = useRef<{ pieceIndex: number; ms: number } | null>(null);
+	const resumeAt = useRef<{
+		pieceIndex: number;
+		intervalIndex: number;
+		ms: number;
+	} | null>(null);
 	const previewActive = useRef(false);
 
 	const perakimById = useMemo(
@@ -279,6 +286,20 @@ export function RangeRecitationPlayer({
 		() => rangePlaybackPieces(ranges, pasukCount, wordsByPerek),
 		[ranges, pasukCount, wordsByPerek],
 	);
+	// Per-plan-position copy ordinals: `intervalOccurrences[i][j]` counts
+	// how many earlier intervals carry the same (perek, pasuk) — matching
+	// the `occurrence` ordinals the rendered word controls send.
+	const intervalOccurrences = useMemo(() => {
+		const seen = new Map<string, number>();
+		return pieces.map((piece) =>
+			piece.intervals.map((interval) => {
+				const key = `${piece.perekId}:${interval.pasuk}`;
+				const ordinal = seen.get(key) ?? 0;
+				seen.set(key, ordinal + 1);
+				return ordinal;
+			}),
+		);
+	}, [pieces]);
 
 	useEffect(() => {
 		stop(true);
@@ -360,10 +381,16 @@ export function RangeRecitationPlayer({
 		pausedAudio.current = null;
 		const bookmark = resumeAt.current;
 		const queue = bookmark
-			? resumePieces(pieces, bookmark.pieceIndex, bookmark.ms)
+			? resumePieces(
+					pieces,
+					bookmark.pieceIndex,
+					bookmark.intervalIndex,
+					bookmark.ms,
+				)
 			: pieces;
 		activeQueue.current = queue;
 		queueBaseIndex.current = bookmark?.pieceIndex ?? 0;
+		queueBaseInterval.current = bookmark?.intervalIndex ?? 0;
 		// Words only exist for fully aligned manifests, so a plan with
 		// pieces is always alignment-ready; the verse-pause applies as-is.
 		const pauseMs = settings.current.versePauseMs ?? 0;
@@ -374,7 +401,12 @@ export function RangeRecitationPlayer({
 	// Word tap → bounded preview on that perek's recording plus a resume
 	// bookmark for the next continuous playback.
 	const play = useCallback(
-		async (startMs: number, endMs: number, perekId?: number) => {
+		async (
+			startMs: number,
+			endMs: number,
+			perekId?: number,
+			occurrence?: number,
+		) => {
 			if (perekId === undefined) return;
 			const recitation = manifestsRef.current?.get(perekId);
 			if (!recitation) return;
@@ -387,16 +419,16 @@ export function RangeRecitationPlayer({
 			previewActive.current = true;
 			heldIndex.current = null;
 			pausedAudio.current = null;
-			// A repeated passage renders identical words in several pieces;
-			// prefer the copy at/after the reading's current position so the
-			// bookmark lands on the occurrence the listener actually reached.
-			const pieceIndex = pieceIndexContaining(
+			// A repeated passage renders identical words in several copies;
+			// the tapped copy's ordinal selects its exact plan interval so
+			// the bookmark never lands on the first identical one.
+			const spot = pieceSpotContaining(
 				pieces,
 				perekId,
 				startMs,
-				queueBaseIndex.current + queueIndex.current,
+				occurrence ?? 0,
 			);
-			resumeAt.current = pieceIndex < 0 ? null : { pieceIndex, ms: startMs };
+			resumeAt.current = spot ? { ...spot, ms: startMs } : null;
 			try {
 				const audio = audioFor(recitation);
 				activeAudioId.current = perekId;
@@ -508,8 +540,8 @@ export function RangeRecitationPlayer({
 			rangesByPasuk,
 			subscribeActive,
 			isActive,
-			play: (start: number, end: number, perekId?: number) =>
-				void play(start, end, perekId),
+			play: (start: number, end: number, perekId?: number, occurrence?: number) =>
+				void play(start, end, perekId, occurrence),
 		}),
 		[
 			textEnabled,
@@ -534,16 +566,35 @@ export function RangeRecitationPlayer({
 				activeWords.current,
 				audio?.positionMs ?? null,
 			);
-			setActive(
-				word && activeAudioId.current !== null
-					? `${activeAudioId.current}:${word.pasuk}:${word.segment}`
-					: null,
-			);
+			// A repeated pasuk renders several identical word controls; the
+			// active key carries the copy ordinal of the plan position, so
+			// only the copy currently being read highlights. Queue playback
+			// resolves its absolute plan spot via the queue bookkeeping; a
+			// bounded preview keeps the bookmarked spot directly.
+			let key: string | null = null;
+			if (word && activeAudioId.current !== null) {
+				const pieceIndex = previewActive.current
+					? (resumeAt.current?.pieceIndex ?? 0)
+					: queueBaseIndex.current + queueIndex.current;
+				const rangeIndex = audio?.positionRangeIndex ?? null;
+				const intervalIndex = previewActive.current
+					? (resumeAt.current?.intervalIndex ?? 0)
+					: rangeIndex === null
+						? -1
+						: rangeIndex +
+							(queueIndex.current === 0 ? queueBaseInterval.current : 0);
+				const occurrence =
+					intervalIndex >= 0
+						? (intervalOccurrences[pieceIndex]?.[intervalIndex] ?? 0)
+						: 0;
+				key = `${activeAudioId.current}:${word.pasuk}:${word.segment}:${occurrence}`;
+			}
+			setActive(key);
 			frame = requestAnimationFrame(update);
 		};
 		update();
 		return () => cancelAnimationFrame(frame);
-	}, [state, alignedWords, setActive]);
+	}, [state, alignedWords, setActive, intervalOccurrences]);
 
 	const controlsValue = useMemo<RangeControlsState>(
 		() => ({
