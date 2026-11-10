@@ -230,27 +230,24 @@
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                <!-- Single wrapping label: the report sentence and its
-                     tappable address share one text flow so the address
-                     can never be pushed off a narrow screen. -->
-                <Label FontSize="14"
+                <!-- The report sentence and its tappable address stack
+                     vertically so the address can never be pushed off a
+                     narrow screen, and the address stays its own native
+                     view for focus and activation. -->
+                <Label Text="אם זיהיתם פריט שקיים לגביו חשש להפרת זכויות יוצרים, אנא פנו אלינו בכתובת:"
+                       FontSize="14"
                        LineHeight="1.4"
-                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}">
-                    <Label.FormattedText>
-                        <FormattedString>
-                            <Span Text="אם זיהיתם פריט שקיים לגביו חשש להפרת זכויות יוצרים, אנא פנו אלינו בכתובת "/>
-                            <Span Text="tanah.site@gmail.com"
-                                  TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
-                                  TextDecorations="Underline"
-                                  SemanticProperties.Description="שליחת דיווח בנושא זכויות יוצרים בדוא&quot;ל"
-                                  AutomationId="CopyrightEmailLink">
-                                <Span.GestureRecognizers>
-                                    <TapGestureRecognizer Tapped="OnCopyrightEmailTapped"/>
-                                </Span.GestureRecognizers>
-                            </Span>
-                            <Span Text="."/>
-                        </FormattedString>
-                    </Label.FormattedText>
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="tanah.site@gmail.com"
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                       TextDecorations="Underline"
+                       SemanticProperties.Description="שליחת דיווח בנושא זכויות יוצרים בדוא&quot;ל"
+                       AutomationId="CopyrightEmailLink">
+                    <Label.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnCopyrightEmailTapped"/>
+                    </Label.GestureRecognizers>
                 </Label>
                 <Label Text="לצורך בירור הפנייה, נא לצרף פרטי קשר למענה, קישור או זיהוי ברור של הפריט, תיאור החשש ואסמכתאות ככל שהן מצויות ברשותכם."
                        FontSize="14"

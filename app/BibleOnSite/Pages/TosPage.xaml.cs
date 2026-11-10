@@ -30,10 +30,8 @@ public partial class TosPage : ContentPage
         {
             await Launcher.OpenAsync(new Uri("mailto:tanah.site@gmail.com"));
         }
-        #pragma warning disable S2221 // Deliberate failure boundary: launcher failure alerts the user
         catch (Exception ex) //NOSONAR — launcher failure alerts the user.
         {
-            #pragma warning restore S2221
             Console.Error.WriteLine($"Error opening email: {ex.Message}");
             await ShellAppNavigator.Instance.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את אפליקציית הדואר. נסו שוב", "אישור");
         }
