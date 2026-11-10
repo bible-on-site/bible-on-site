@@ -17,7 +17,7 @@ function note(
 		perekId,
 		pasuk,
 		noteIdx,
-		noteContent: `<p>${perekId}-${pasuk}-${noteIdx}</p>`,
+		noteContent: `note ${perekId}:${pasuk}:${noteIdx}`,
 		...(wordCount != null && { wordCount }),
 	};
 }
