@@ -67,6 +67,16 @@ function escapeMd(text: string, inTable: boolean): string {
 	return inTable ? out.replace(/\|/g, "\\|") : out;
 }
 
+/**
+ * Escape a raw value embedded in rendered markup (attribute-derived
+ * labels/destinations) so a `|` can't split the containing table cell.
+ * `\` is escaped with it — these values are re-parsed as inline
+ * Markdown, so a source `\|` must round-trip like it does in escapeMd.
+ */
+function escapeCellValue(text: string, inTable: boolean): string {
+	return inTable ? text.replace(/[\\|]/g, "\\$&") : text;
+}
+
 /** Collapse runs of whitespace inside inline text like HTML does. */
 function normalizeText(text: string): string {
 	return text.replace(/\s+/g, " ");
@@ -135,9 +145,13 @@ function renderInline(node: Node, state: State): string {
 		case "del":
 		case "strike":
 			return `~~${inlineChildren(el, state).trim()}~~`;
-		case "code":
+		case "code": {
 			/* istanbul ignore next: an Element's textContent is never null */
-			return `\`${(el.textContent ?? "").trim()}\``;
+			const code = (el.textContent ?? "").trim();
+			// A `|` splits the cell even inside a code span. Escape it raw —
+			// no `\` doubling: code content is literal, never re-parsed.
+			return `\`${state.inTable ? code.split("|").join("\\|") : code}\``;
+		}
 		case "u":
 		case "ins":
 		case "mark":
@@ -148,7 +162,9 @@ function renderInline(node: Node, state: State): string {
 			return `~${inlineChildren(el, state).trim()}~`;
 		case "sup": {
 			const ref = footnoteRefId(el.querySelector("a") ?? el);
-			if (ref !== null && ref !== "") return `[^${ref}]`;
+			if (ref !== null && ref !== "") {
+				return `[^${escapeCellValue(ref, state.inTable)}]`;
+			}
 			if (ref === "") return "";
 			return `^(${inlineChildren(el, state).trim()})`;
 		}
@@ -156,17 +172,17 @@ function renderInline(node: Node, state: State): string {
 			const ref = footnoteRefId(el);
 			if (ref === "") return "";
 			const text = inlineChildren(el, state).trim();
-			if (ref !== null) return `[^${ref}]`;
+			if (ref !== null) return `[^${escapeCellValue(ref, state.inTable)}]`;
 			const href = el.getAttribute("href");
 			if (!href) return text;
-			const url = absolutize(href);
+			const url = escapeCellValue(absolutize(href), state.inTable);
 			return text === "" || text === url ? url : `[${text}](${url})`;
 		}
 		case "img": {
 			const src = el.getAttribute("src");
 			if (!src) return "";
-			const alt = el.getAttribute("alt") ?? "";
-			return `![${alt}](${absolutize(src)})`;
+			const alt = escapeCellValue(el.getAttribute("alt") ?? "", state.inTable);
+			return `![${alt}](${escapeCellValue(absolutize(src), state.inTable)})`;
 		}
 		case "audio":
 		case "video": {
@@ -176,11 +192,11 @@ function renderInline(node: Node, state: State): string {
 			if (!src) return "";
 			const label =
 				el.getAttribute("title") ?? el.getAttribute("aria-label") ?? tag;
-			return `[${label}](${absolutize(src)})`;
+			return `[${escapeCellValue(label, state.inTable)}](${escapeCellValue(absolutize(src), state.inTable)})`;
 		}
 		case "iframe": {
 			const src = el.getAttribute("src");
-			return src ? absolutize(src) : "";
+			return src ? escapeCellValue(absolutize(src), state.inTable) : "";
 		}
 		case "hr":
 			return "\n\n---\n\n";

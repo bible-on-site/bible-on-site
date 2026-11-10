@@ -256,6 +256,39 @@ describe("htmlToMarkdown", () => {
 		).toBe("| a\\|b | c\\\\\\|d |\n| --- | --- |");
 	});
 
+	it("escapes pipes in inline markup inside table cells", () => {
+		// `|` inside code spans, alt text, labels and link destinations
+		// never passes through escapeMd — escaped at emission so the row
+		// keeps its column count.
+		const md = htmlToMarkdown(
+			'<table><tr><td><code>a|b</code></td>' +
+				'<td><img src="/i.png" alt="x|y"/></td>' +
+				'<td><a href="/p|q">t</a></td>' +
+				'<td><audio src="/a.mp3" title="m|n"></audio></td></tr></table>',
+		);
+		expect(md).toBe(
+			"| `a\\|b` | ![x\\|y](https://canonical.example/i.png) | [t](https://canonical.example/p\\|q) | [m\\|n](https://canonical.example/a.mp3) |\n| --- | --- | --- | --- |",
+		);
+	});
+
+	it("escapes backslashes in cell values by their parsing context", () => {
+		// Code content is literal — only the cell-splitting `|` is
+		// escaped; a source `\` must not be doubled.
+		expect(
+			htmlToMarkdown("<table><tr><td><code>a\\b</code></td></tr></table>"),
+		).toBe("| `a\\b` |\n| --- |");
+		expect(
+			htmlToMarkdown("<table><tr><td><code>a\\|b</code></td></tr></table>"),
+		).toBe("| `a\\\\|b` |\n| --- |");
+		// Attribute-derived values are re-parsed as inline markup, so
+		// `\` escapes there like it does in escapeMd.
+		expect(
+			htmlToMarkdown(
+				'<table><tr><td><img src="/i.png" alt="a\\b"/></td></tr></table>',
+			),
+		).toBe("| ![a\\\\b](https://canonical.example/i.png) |\n| --- |");
+	});
+
 	it("renders empty and ragged tables", () => {
 		expect(htmlToMarkdown("<table></table>")).toBe("");
 		expect(htmlToMarkdown("<table><tr></tr><tr><td>1</td></tr></table>")).toBe(
