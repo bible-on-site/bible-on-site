@@ -20,6 +20,7 @@
 		"ios:boot:resolve": "node boot-ios.mjs resolve"
 	},
 	"_driverSecurityIssue": "https://github.com/bible-on-site/bible-on-site/issues/1995",
+	"_driverCompatibilityIssue": "https://github.com/bible-on-site/bible-on-site/issues/2967",
 	"devDependencies": {
 		"appium": "3.9.0",
 		"appium-uiautomator2-driver": "9.0.1",
