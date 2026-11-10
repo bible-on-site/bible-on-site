@@ -5,7 +5,14 @@ import { fileURLToPath } from "node:url";
 import { resolveSqlArtifact } from "./data-artifact.mjs";
 import { startDeployment } from "./deployment-state.mjs";
 import { ghApi } from "./gh-api.mjs";
-import { nativeImageArtifacts, releasePayload } from "./release-provenance.mjs";
+import {
+	readRecoveryAsset,
+	verifyRecoveryDeployment,
+} from "./recovery-request.mjs";
+import {
+	nativeImageArtifacts,
+	releasePayload,
+} from "./release-provenance.mjs";
 
 const api = (endpoint) => ghApi(endpoint);
 const directories = {
@@ -70,14 +77,18 @@ export function checkDeployment(
 		sourceRef,
 	},
 	request = api,
+	readAsset = readRecoveryAsset,
 ) {
 	if (!/^\d+$/.test(String(runId)))
 		throw new Error("A source CI run ID is required");
 	const root = `repos/${repo}`;
 	const source = request(`${root}/actions/runs/${runId}`);
+	const recoverySource =
+		source.event === "workflow_dispatch" &&
+		["admin", "bulletin"].includes(moduleName);
 	if (
 		source.name !== "Continuous Integration" ||
-		source.event !== "push" ||
+		(source.event !== "push" && !recoverySource) ||
 		source.head_branch !== "master"
 	)
 		throw new Error("Deployment source must be master push CI");
@@ -240,6 +251,26 @@ export function checkDeployment(
 		if (runAttempt > currentAttempt)
 			throw new Error("Published CI attempt exceeds source CI");
 	}
+	let recoveryFile;
+	if (recoverySource)
+		recoveryFile = verifyRecoveryDeployment(
+			{
+				repo,
+				source,
+				runAttempt,
+				moduleName,
+				moduleDirectory,
+				version,
+				release: found,
+				provenance,
+			},
+			request,
+			readAsset,
+		).file;
+	else if (provenance?.recovery !== undefined)
+		throw new Error(
+			"Recovery provenance requires an explicit manual CI source",
+		);
 	const platformArtifacts = nativeImageArtifacts(provenance);
 	checkQuality(root, runId, runAttempt, request);
 	return {
@@ -254,6 +285,7 @@ export function checkDeployment(
 					? { adminArm64: true }
 					: { websiteArm64: true }
 			: {}),
+		...(recoveryFile ? { recoveryFile } : {}),
 	};
 }
 
@@ -310,6 +342,11 @@ if (
 		process.env.GITHUB_OUTPUT,
 		`deploy=${result.deploy}\nref=${result.ref}\ndeployment_id=${result.deploymentId ?? ""}\nartifact_id=${result.artifactId ?? ""}\nartifact_digest=${result.artifactDigest ?? ""}\napi_arm64=${result.apiArm64 === true}\nwebsite_arm64=${result.websiteArm64 === true}\nadmin_arm64=${result.adminArm64 === true}\n`,
 	);
+	if (result.recoveryFile)
+		appendFileSync(
+			process.env.GITHUB_OUTPUT,
+			`recovery_file_id=${result.recoveryFile.id}\nrecovery_file_name=${result.recoveryFile.name}\nrecovery_file_digest=${result.recoveryFile.digest}\nrecovery_file_size=${result.recoveryFile.size}\n`,
+		);
 	if (result.version)
 		appendFileSync(
 			process.env.GITHUB_ENV,

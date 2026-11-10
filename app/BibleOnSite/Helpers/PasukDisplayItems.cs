@@ -22,11 +22,6 @@ public static class PasukDisplayItems
     /// </summary>
     /// <param name="pesukim">The logical pesukim of the perek.</param>
     /// <param name="repeatEachPasuk">שניים מקרא — emit each pasuk twice.</param>
-    public static List<PasukDisplayItem> Create(IReadOnlyList<Pasuk>? pesukim, bool repeatEachPasuk) =>
-        Create(pesukim, repeatEachPasuk, fontFactor: 1.0);
-
-    /// <param name="pesukim">The logical pesukim of the perek.</param>
-    /// <param name="repeatEachPasuk">שניים מקרא — emit each pasuk twice.</param>
     /// <param name="fontFactor">User font-scaling factor; sizes mirror the page's
     /// PasukFontSize/PasukNumFontSize resources (factor × 18 / factor × 16).</param>
     public static List<PasukDisplayItem> Create(IReadOnlyList<Pasuk>? pesukim, bool repeatEachPasuk,

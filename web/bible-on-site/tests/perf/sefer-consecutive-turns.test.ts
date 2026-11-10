@@ -253,7 +253,10 @@ for (const [chapter, bookmarks] of [
 					contentType: "application/json",
 				});
 				// Close the original recording before the independent diagnostic replay.
-				await finishOriginalTrace(testInfo, failures.length > 0);
+				await finishOriginalTrace(
+					testInfo,
+					failures.length > 0 || process.env.SEFER_TURN_TRACE === "1",
+				);
 				if (failures.length) {
 					try {
 						await captureTurnFailureTrace(

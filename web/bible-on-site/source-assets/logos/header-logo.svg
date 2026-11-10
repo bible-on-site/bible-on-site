@@ -10,7 +10,6 @@
   The reviewed header treatment crops to viewBox 248 248 737 534, recolors
   lettering white and the tagline #c7d0ed, and moves the tagline down 60
   source units to preserve the existing lockup spacing.
-  Rasterize this vector at 276 x 200 with scripts/render-header-logo.mjs.
   The existing public WebP URL stays valid for links and structured data.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="276" height="200" viewBox="248 248 737 534">

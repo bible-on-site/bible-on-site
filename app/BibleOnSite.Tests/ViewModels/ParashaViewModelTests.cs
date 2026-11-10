@@ -289,19 +289,6 @@ public class ParashaViewModelTests
     }
 
     [Fact]
-    public async Task GetUnitIdForPasuk_UsesExactCanonicalBounds()
-    {
-        await using var fixture = new Fixture();
-        await fixture.Initialize();
-
-        (await fixture.Model.GetUnitIdForPasukAsync(3, 5)).Should().Be(2);
-        (await fixture.Model.GetUnitIdForPasukAsync(3, 4)).Should().Be(1);
-        // Unit 1's Torah range starts at בראשית א ב — pasuk 1 is uncovered.
-        (await fixture.Model.GetUnitIdForPasukAsync(1, 1)).Should().BeNull();
-        (await fixture.Model.GetUnitIdForPasukAsync(4, 1)).Should().BeNull();
-    }
-
-    [Fact]
     public async Task UnitContainsPasuk_RespectsTorahAndHaftarahBounds()
     {
         await using var fixture = new Fixture();

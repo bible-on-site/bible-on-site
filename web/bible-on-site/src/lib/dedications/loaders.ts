@@ -135,14 +135,6 @@ export const getSeferPerekDedicationLines = cachedPerKey(
 	},
 );
 
-/** Active dedications for one helek. */
-export const getHelekDedications = cachedPerKey(
-	"helek-dedications",
-	(helekId: number) => String(helekId),
-	(key) => [COLLECTION_TAGS.dedications, helekDedicationsTag(Number(key))],
-	(helekId: number) => resolveDedications({ helekIds: [helekId] }),
-);
-
 /** Active dedications for one weekly parasha unit. */
 export const getParashaDedications = cachedPerKey(
 	"parasha-dedications",

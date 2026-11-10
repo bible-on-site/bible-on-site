@@ -17,7 +17,7 @@ public class RecitationPlaybackCursorTests
         var cursor = new RecitationPlaybackCursor();
         cursor.BarIssued.Should().BeFalse();
         cursor.PlayingKey.Should().BeNull();
-        cursor.HasBookmarkFor(1).Should().BeFalse();
+        cursor.ResumePosition.Should().BeNull();
     }
 
     [Theory]
@@ -37,7 +37,7 @@ public class RecitationPlaybackCursorTests
     {
         var cursor = new RecitationPlaybackCursor();
         cursor.MarkResume(1, 1900);
-        cursor.HasBookmarkFor(1).Should().BeTrue();
+        cursor.ResumePosition.Should().Be((1, 1900.0));
         cursor.PendingSeekFor(1, continuous: true, new RecitationTimeline(Track())).Should().Be(1900);
     }
 
@@ -67,13 +67,13 @@ public class RecitationPlaybackCursorTests
         cursor.Begin("word:1:1:2", continuous: false);
         cursor.End();
         // The word preview ended — the bookmark still waits for continuous Play.
-        cursor.HasBookmarkFor(1).Should().BeTrue();
+        cursor.ResumePosition.Should().Be((1, 1900.0));
         cursor.PlayingKey.Should().BeNull();
 
         cursor.Begin("chapter:1", continuous: true);
         cursor.End();
         // Reaching the chapter's end consumes the bookmark.
-        cursor.HasBookmarkFor(1).Should().BeFalse();
+        cursor.ResumePosition.Should().BeNull();
     }
 
     [Fact]
@@ -83,12 +83,12 @@ public class RecitationPlaybackCursorTests
         cursor.MarkResume(1, 1900);
         cursor.Begin("pasuk:1:1", continuous: false);
         cursor.Stop();
-        cursor.HasBookmarkFor(1).Should().BeTrue();
+        cursor.ResumePosition.Should().Be((1, 1900.0));
         cursor.PlayingKey.Should().BeNull();
 
         cursor.MarkResume(1, 5000);
         cursor.Reset();
-        cursor.HasBookmarkFor(1).Should().BeFalse();
+        cursor.ResumePosition.Should().BeNull();
     }
 
     [Theory]
@@ -118,7 +118,7 @@ public class RecitationPlaybackCursorTests
     {
         var cursor = new RecitationPlaybackCursor();
         cursor.MarkResume(1, 1900);
-        cursor.HasBookmarkFor(2).Should().BeFalse();
+        cursor.ResumePosition!.Value.PerekId.Should().Be(1);
         cursor.PendingSeekFor(2, continuous: true, new RecitationTimeline(Track())).Should().BeNull();
     }
 }

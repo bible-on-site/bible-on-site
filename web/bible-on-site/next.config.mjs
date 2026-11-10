@@ -176,6 +176,17 @@ const nextConfig = {
 
 	async headers() {
 		return [
+			// Stable join routes (#2939) resolve admin-managed destinations at
+			// request time; the redirect may never be cached by browsers or
+			// the CDN.
+			{
+				source: "/dailyBulletin/join/telegram",
+				headers: [{ key: "Cache-Control", value: "no-store" }],
+			},
+			{
+				source: "/dailyBulletin/join/whatsapp",
+				headers: [{ key: "Cache-Control", value: "no-store" }],
+			},
 			{
 				// Reader book assets (#3095) are precompressed Brotli bytes the
 				// generator writes under public/generated/sefarim/. They are
@@ -203,6 +214,12 @@ const nextConfig = {
 	async rewrites() {
 		return {
 			beforeFiles: [
+				// Installed native apps use these public join URLs. Resolve them
+				// through the same live destinations and signup page as the website.
+				...["telegram", "whatsapp", "email"].map((channel) => ({
+					source: `/bulletin/${channel}/join`,
+					destination: `/dailyBulletin/join/${channel}`,
+				})),
 				// Requests for /לוח arrive percent-encoded and never match the
 				// decoded filesystem route; serve the page from /calendar instead.
 				{ source: "/לוח", destination: "/calendar" },

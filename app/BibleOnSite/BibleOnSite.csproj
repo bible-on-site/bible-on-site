@@ -78,12 +78,12 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.1.17</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.1.19</ApplicationDisplayVersion>
 		<!-- Platform build number = major*10^7 + minor*10^5 + patch (5.1.0 -> 50100000) for
 		     every store that accepts large integers: Android versionCode (continuing Play
 		     Store's 40000017 base) and Apple CFBundleVersion, which must never regress
 		     across marketing versions, including on minor bumps where the patch resets. -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">50100017</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">50100019</ApplicationVersion>
 		<!-- Windows MSIX merges the display version and this value into a 4-part version.
 		     The Microsoft Store reserves the revision component, so it stays 0 (the Nuke
 		     packer also pins it); the leading marketing version keeps packages strictly
