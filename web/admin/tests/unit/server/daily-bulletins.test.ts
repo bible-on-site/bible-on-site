@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+	randomInt: vi.fn(),
 	query: vi.fn(),
 	queryOne: vi.fn(),
 	render: vi.fn(),
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 	rollback: vi.fn(),
 	release: vi.fn(),
 }));
+vi.mock("node:crypto", () => ({ randomInt: mocks.randomInt }));
 vi.mock("~/server/db", () => ({
 	query: mocks.query,
 	queryOne: mocks.queryOne,
@@ -50,6 +52,7 @@ const deliveries = [
 describe("prepared bulletins", () => {
 	beforeEach(() => {
 		for (const mock of Object.values(mocks)) mock.mockReset();
+		mocks.randomInt.mockReturnValue(0);
 		mocks.getConnection.mockResolvedValue(mocks);
 		mocks.render.mockResolvedValue({
 			subject: row.subject,
@@ -87,6 +90,104 @@ describe("prepared bulletins", () => {
 		expect(mocks.commit).toHaveBeenCalledOnce();
 		expect(mocks.release).toHaveBeenCalledOnce();
 		expect(result.delivery).toEqual(deliveries);
+	});
+	it("randomizes over written candidates after filtering recording-only entries", async () => {
+		const selected = {
+			id: 8,
+			title: "מאמר נוסף",
+			author: "מחבר",
+			html: "<p>תוכן נוסף</p>",
+		};
+		mocks.randomInt.mockReturnValue(1);
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 1 })
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({
+				...row,
+				input_json: { ...input, article: selected },
+			});
+		mocks.query
+			.mockResolvedValueOnce([
+				{
+					id: 9,
+					name: "שיעור",
+					author: "מחבר",
+					content:
+						'<h1>שיעור</h1><h2>להאזנה</h2><audio><a href="lesson.opus">להאזנה לשיעור</a></audio>',
+				},
+				{
+					id: 10,
+					name: "שיעור",
+					author: "מחבר",
+					content:
+						'<h1>שיעור</h1><h2>לצפייה</h2><video src="lesson.webm"></video>',
+				},
+				{ id: 7, name: "מאמר", author: "מחבר", content: "<p>תוכן</p>" },
+				{
+					id: 8,
+					name: selected.title,
+					author: selected.author,
+					content: selected.html,
+				},
+			])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce(deliveries);
+		await prepareBulletin(input.date);
+		expect(mocks.randomInt).toHaveBeenCalledExactlyOnceWith(2);
+		expect(mocks.render).toHaveBeenCalledWith({ ...input, article: selected });
+		expect(mocks.query.mock.calls[0][0]).toContain("a.distributable = TRUE");
+	});
+	it.each([
+		["2026-11-08", 311],
+		["2026-11-09", 312],
+	] as const)(
+		"includes the newly approved written article for %s (perek %i)",
+		async (date, perekId) => {
+			mocks.queryOne
+				.mockResolvedValueOnce(null)
+				.mockResolvedValueOnce({ perek_id: perekId })
+				.mockResolvedValueOnce(null)
+				.mockImplementationOnce(async () => ({
+					...row,
+					input_json: JSON.parse(mocks.execute.mock.calls[0][1][3]),
+				}));
+			mocks.query
+				.mockResolvedValueOnce([
+					{ id: 7, name: "מאמר", author: "מחבר", content: "<p>תוכן</p>" },
+				])
+				.mockResolvedValueOnce([])
+				.mockResolvedValueOnce(deliveries);
+			const prepared = await prepareBulletin(date);
+			expect(prepared.input.perekId).toBe(perekId);
+			expect(prepared.input.article).toEqual(input.article);
+			expect(prepared.delivery).toEqual(deliveries);
+			expect(mocks.render).toHaveBeenCalledWith(
+				expect.objectContaining({ date, perekId, article: input.article }),
+			);
+		},
+	);
+	it("excludes a recording-only candidate even when its approval box is checked", async () => {
+		const html =
+			'<h1>שיעור</h1><h2>להאזנה</h2><audio controls><source src="lesson.opus"><a href="lesson.opus">להאזנה לשיעור</a></audio>';
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 1 })
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({
+				...row,
+				input_json: { ...input, article: null },
+			});
+		mocks.query
+			.mockResolvedValueOnce([
+				{ id: 7, name: "שיעור", author: "מחבר", content: html },
+			])
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce(deliveries);
+		const prepared = await prepareBulletin(input.date);
+		expect(prepared.input.article).toBeNull();
+		expect(mocks.render).toHaveBeenCalledWith({ ...input, article: null });
+		expect(mocks.randomInt).not.toHaveBeenCalled();
 	});
 	it("returns the stored winner when another request prepared the date first", async () => {
 		const winner = {
@@ -192,6 +293,7 @@ describe("Hebrew-date article override (#3098)", () => {
 
 	beforeEach(() => {
 		for (const mock of Object.values(mocks)) mock.mockReset();
+		mocks.randomInt.mockReturnValue(0);
 		mocks.getConnection.mockResolvedValue(mocks);
 		mocks.render.mockResolvedValue({
 			subject: row.subject,
@@ -250,6 +352,19 @@ describe("Hebrew-date article override (#3098)", () => {
 		await expect(prepareBulletin("2024-08-13")).rejects.toThrow(
 			"אינו זמין להפצה",
 		);
+	});
+	it("rejects an approved recurring-date article that only contains a recording", async () => {
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 700 })
+			.mockResolvedValueOnce({
+				...assigned,
+				content: '<h1>שיעור</h1><audio src="lesson.opus"></audio>',
+			});
+		await expect(prepareBulletin("2024-08-13")).rejects.toThrow(
+			"אינו זמין להפצה",
+		);
+		expect(mocks.render).not.toHaveBeenCalled();
 	});
 
 	it("resolves the TARGET Hebrew date, not the Thursday study date, on Fridays", async () => {

@@ -25,34 +25,6 @@ public readonly record struct SearchMatchSpan(int Start, int Length);
 public static class SearchMatch
 {
     /// <summary>
-    /// Finds the best match for <paramref name="query"/> in
-    /// <paramref name="content"/> (plain text or HTML). Returns the span in
-    /// normalized-text coordinates, or null when nothing matches — mirroring
-    /// <see cref="SearchText.Score"/>: a whole-word phrase first, then a bare
-    /// substring, then the first word scoring against any query term.
-    /// </summary>
-    public static SearchMatchSpan? Locate(string content, string? query)
-    {
-        var normalized = SearchText.Normalize(SearchText.PlainText(content ?? string.Empty));
-        return LocateInNormalized(normalized, SearchText.Normalize(query ?? string.Empty));
-    }
-
-    /// <summary>
-    /// Finds the occurrence described by <paramref name="excerpt"/> — a verbatim
-    /// slice of the indexed plain text — inside <paramref name="content"/>, then
-    /// narrows to the query span within that window. When the query words occur
-    /// several times in the document, the excerpt anchors the occurrence the
-    /// result actually ranked rather than the first match. Falls back to a plain
-    /// <see cref="Locate"/> when the excerpt no longer appears (content edited
-    /// since indexing).
-    /// </summary>
-    public static SearchMatchSpan? LocateByExcerpt(string content, string? excerpt, string? query)
-    {
-        var normalized = SearchText.Normalize(SearchText.PlainText(content ?? string.Empty));
-        return LocateByExcerptNormalized(normalized, excerpt, query);
-    }
-
-    /// <summary>
     /// Locates the hit inside a combined perush display whose contents are the
     /// note rows joined with a single space — exactly like
     /// <see cref="PerushNoteDisplay.DisplayContent"/>. Identity comes from
@@ -283,7 +255,7 @@ public static class SearchMatch
         return map;
     }
 
-    private static SearchMatchSpan? LocateByExcerptNormalized(string normalized, string? excerpt, string? query)
+    internal static SearchMatchSpan? LocateByExcerptNormalized(string normalized, string? excerpt, string? query)
     {
         var needle = SearchText.Normalize(query ?? string.Empty);
         var window = SearchText.Normalize(excerpt ?? string.Empty);
@@ -303,13 +275,13 @@ public static class SearchMatch
         return LocateInNormalized(normalized, needle);
     }
 
-    private static SearchMatchSpan? LocateInNormalized(string normalized, string needle)
+    internal static SearchMatchSpan? LocateInNormalized(string normalized, string needle)
     {
         if (needle.Length == 0 || normalized.Length == 0)
         {
             return null;
         }
-        // Whole-word phrase — the hit SearchText.Score ranks at 100.
+        // Whole-word phrase — the hit SearchText.ScoreNormalized ranks at 100.
         var phraseIndex = (" " + normalized + " ").IndexOf(" " + needle + " ", StringComparison.Ordinal);
         if (phraseIndex >= 0)
         {

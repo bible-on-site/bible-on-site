@@ -334,22 +334,37 @@ export interface ListFilter {
  * (#2731). A row with no live target sits on the expired tab. `outer` is
  * the enclosing query's tanah_dedication alias (or the bare table name).
  */
+const TARGET_TABLES = [
+	"tanah_perek_dedication",
+	"tanah_sefer_dedication",
+	"tanah_helek_dedication",
+	"tanah_parasha_dedication",
+	"tanah_article_dedication",
+	"tanahpedia_entry_dedication",
+	"tanah_masora_dedication",
+];
+
 function liveTargetClause(outer: string): string {
-	return [
-		"tanah_perek_dedication",
-		"tanah_sefer_dedication",
-		"tanah_helek_dedication",
-		"tanah_parasha_dedication",
-		"tanah_article_dedication",
-		"tanahpedia_entry_dedication",
-		"tanah_masora_dedication",
-	]
-		.map(
-			(table) =>
-				`EXISTS (SELECT 1 FROM ${table} lt WHERE lt.dedication_id = ${outer}.id AND (lt.expires_at IS NULL OR lt.expires_at > UTC_TIMESTAMP()))`,
-		)
-		.join(" OR ");
+	return TARGET_TABLES.map(
+		(table) =>
+			`EXISTS (SELECT 1 FROM ${table} lt WHERE lt.dedication_id = ${outer}.id AND (lt.expires_at IS NULL OR lt.expires_at > UTC_TIMESTAMP()))`,
+	).join(" OR ");
 }
+
+/**
+ * The same live-target rule as liveTargetClause, computed in one pass
+ * over the link tables instead of seven correlated EXISTS per row: `lt`
+ * carries each dedication that still holds an unexpired assignment.
+ * Used by the list query; getDedication keeps the per-row form since it
+ * reads a single id.
+ */
+const LIVE_TARGETS_JOIN = `LEFT JOIN (
+	SELECT dedication_id FROM (
+		${TARGET_TABLES.map((table) => `SELECT dedication_id, expires_at FROM ${table}`).join(" UNION ALL ")}
+	) lt_all
+	WHERE lt_all.expires_at IS NULL OR lt_all.expires_at > UTC_TIMESTAMP()
+	GROUP BY dedication_id
+) lt ON lt.dedication_id = d.id`;
 
 export const listDedications = createServerFn({ method: "GET" })
 	.validator((data?: ListFilter) => data ?? {})
@@ -362,11 +377,11 @@ export const listDedications = createServerFn({ method: "GET" })
 		}
 		if (data.show === "active") {
 			clauses.push("(d.expires_at IS NULL OR d.expires_at > UTC_TIMESTAMP())");
-			clauses.push(`(${liveTargetClause("d")})`);
+			clauses.push("lt.dedication_id IS NOT NULL");
 		}
 		if (data.show === "expired") {
 			clauses.push(
-				`((d.expires_at IS NOT NULL AND d.expires_at <= UTC_TIMESTAMP()) OR NOT (${liveTargetClause("d")}))`,
+				"((d.expires_at IS NOT NULL AND d.expires_at <= UTC_TIMESTAMP()) OR lt.dedication_id IS NULL)",
 			);
 		}
 		const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
@@ -377,8 +392,8 @@ export const listDedications = createServerFn({ method: "GET" })
 			expired: number;
 		}>(
 			`SELECT d.id, d.subject, CAST(d.expires_at AS CHAR) AS expires_at,
-			        ((d.expires_at IS NOT NULL AND d.expires_at <= UTC_TIMESTAMP()) OR NOT (${liveTargetClause("d")})) AS expired
-			 FROM tanah_dedication d ${where} ORDER BY d.id`,
+			        ((d.expires_at IS NOT NULL AND d.expires_at <= UTC_TIMESTAMP()) OR lt.dedication_id IS NULL) AS expired
+			 FROM tanah_dedication d ${LIVE_TARGETS_JOIN} ${where} ORDER BY d.id`,
 			params,
 		);
 		return enrich(rows);

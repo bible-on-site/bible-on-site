@@ -7,10 +7,7 @@ import type {
 } from "@/lib/reading/contract";
 import { READING_CONTRACT_VERSION } from "@/lib/reading/contract";
 import { formatCoordinateSpan } from "@/lib/reading/format";
-import {
-	compareCoordinates,
-	rangeContainsCoordinate,
-} from "@/lib/reading/ranges";
+import { compareCoordinates } from "@/lib/reading/ranges";
 import { sefarim } from "../db/sefarim";
 import { getPerekByPerekId } from "../perek-dto";
 import divisionData from "./parasha-division.json";
@@ -128,7 +125,6 @@ export interface ParashaOccasion {
 export const PARASHA_CUSTOM_LABELS: Record<ParashaCustom, string> =
 	source.customs;
 export const PARASHA_SOURCE_ATTRIBUTION: string = source.source;
-export const PARASHA_SOURCE_LIST: string[] = source.sources;
 export const PARASHA_JOINED_PAIRS: [string, string][] =
 	source.joinedReadings.pairs;
 export const PARASHA_JOINED_NOTE: string = source.joinedReadings.note;
@@ -328,23 +324,6 @@ export function getParashaFirstUnitBySefer(): ReadingUnit[] {
 		if (unit.order === 1) first.push(unit);
 	}
 	return first;
-}
-
-/**
- * Resolves a canonical position to the parasha containing it — the
- * contract's canonical-position -> containing-unit direction.
- */
-export function getParashaUnitContaining(
-	coordinate: ScriptureCoordinate,
-): ReadingUnit | null {
-	for (const unit of getAllParashaUnits()) {
-		if (
-			unit.ranges.some((range) => rangeContainsCoordinate(range, coordinate))
-		) {
-			return unit;
-		}
-	}
-	return null;
 }
 
 /** Previous/next units in canonical order (null at the Torah edges). */

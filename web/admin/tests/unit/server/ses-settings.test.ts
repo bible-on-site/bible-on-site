@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 	ensureSubscribed: vi.fn(),
 	unsubscribe: vi.fn(),
 	sesConfig: vi.fn(),
+	sesDestroy: vi.fn(),
 	sdkConfig: vi.fn(),
 	sdkSend: vi.fn(),
 	destroy: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock("~/server/ses-client.server", () => ({
 		}
 		ensureSubscribedContact = mocks.ensureSubscribed;
 		unsubscribeContact = mocks.unsubscribe;
+		destroy = mocks.sesDestroy;
 	},
 }));
 vi.mock("@aws-sdk/client-sesv2", () => ({
@@ -94,6 +96,28 @@ function slot(overrides: Record<string, unknown> = {}) {
 	};
 }
 
+function mockSubscribers(
+	rows: { email: string; audience: string; consent_status: string }[],
+) {
+	mocks.query.mockImplementation(async (sql: string) => {
+		if (sql.includes("GROUP BY")) {
+			const counts = new Map<string, number>();
+			for (const r of rows)
+				counts.set(
+					`${r.audience}|${r.consent_status}`,
+					(counts.get(`${r.audience}|${r.consent_status}`) ?? 0) + 1,
+				);
+			return [...counts].map(([key, n]) => {
+				const [audience, consent_status] = key.split("|");
+				return { audience, consent_status, n };
+			});
+		}
+		return rows
+			.filter((r) => r.audience === "test" && r.consent_status === "confirmed")
+			.map((r) => ({ email: r.email }));
+	});
+}
+
 function mockSlot(value = slot()) {
 	mocks.txQueryOne.mockImplementation(async (_conn, sql: string) =>
 		sql.includes("email_settings")
@@ -131,7 +155,7 @@ beforeEach(async () => {
 		command.kind === "account" ? account : identity,
 	);
 	mocks.transaction.mockImplementation(async (fn) => fn(connection));
-	mocks.query.mockResolvedValue([]);
+	mockSubscribers([]);
 	mocks.execute.mockResolvedValue({ affectedRows: 1 });
 	mocks.txExecute.mockResolvedValue({ affectedRows: 1 });
 	mocks.wait.mockResolvedValue(undefined);
@@ -334,7 +358,7 @@ describe("audience settings and subscriber overview", () => {
 
 	it("combines the persisted audience, consent counts and latest job", async () => {
 		mocks.queryOne.mockResolvedValue({ audience: "test", revision: 3 });
-		mocks.query.mockResolvedValue([
+		mockSubscribers([
 			{
 				email: "reader@example.com",
 				audience: "test",
@@ -365,7 +389,7 @@ describe("audience settings and subscriber overview", () => {
 	});
 
 	it("exposes confirmed recipients separately from pending and suppressed contacts", async () => {
-		mocks.query.mockResolvedValue([
+		mockSubscribers([
 			{
 				email: "test@example.com",
 				audience: "test",
@@ -470,7 +494,7 @@ describe("audience settings and subscriber overview", () => {
 	});
 
 	it("requires production approval and confirmed subscribers before selecting real delivery", async () => {
-		mocks.query.mockResolvedValue([
+		mockSubscribers([
 			{
 				audience: "real",
 				consent_status: "confirmed",
@@ -489,7 +513,7 @@ describe("audience settings and subscriber overview", () => {
 
 	it("does not select the real audience when all imported contacts are pending", async () => {
 		account.ProductionAccessEnabled = true;
-		mocks.query.mockResolvedValue([
+		mockSubscribers([
 			{
 				audience: "real",
 				consent_status: "pending",
@@ -508,7 +532,7 @@ describe("audience settings and subscriber overview", () => {
 
 	it("permits an explicitly approved real audience only after all gates pass", async () => {
 		account.ProductionAccessEnabled = true;
-		mocks.query.mockResolvedValue([
+		mockSubscribers([
 			{
 				audience: "real",
 				consent_status: "confirmed",
@@ -568,6 +592,7 @@ describe("consent management", () => {
 		expect(params).toEqual([consent.email, "test", consent.source]);
 		expect(sql).toContain("'unsubscribed','bounced','complained'");
 		expect(sql).toContain("last_event_at");
+		expect(mocks.sesDestroy).toHaveBeenCalledOnce();
 	});
 
 	it("leaves local consent untouched if provider setup fails", async () => {
@@ -575,6 +600,7 @@ describe("consent management", () => {
 		mocks.ensureSubscribed.mockRejectedValue(new Error("Provider unavailable"));
 		await expect(settings.changeSubscriber(consent)).rejects.toThrow();
 		expect(mocks.execute).not.toHaveBeenCalled();
+		expect(mocks.sesDestroy).toHaveBeenCalledOnce();
 	});
 
 	it("persists global unsubscribe before calling SES and preserves bounced/complained guards", async () => {
@@ -588,6 +614,7 @@ describe("consent management", () => {
 			mocks.unsubscribe.mock.invocationCallOrder[0],
 		);
 		expect(mocks.unsubscribe).toHaveBeenCalledWith(consent.email, "test");
+		expect(mocks.sesDestroy).toHaveBeenCalledOnce();
 	});
 
 	it("keeps the durable unsubscribe even if the native provider update fails", async () => {

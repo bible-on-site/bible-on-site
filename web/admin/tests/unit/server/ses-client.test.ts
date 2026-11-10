@@ -2,13 +2,18 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ send: vi.fn(), config: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+	send: vi.fn(),
+	config: vi.fn(),
+	destroy: vi.fn(),
+}));
 vi.mock("@aws-sdk/client-sesv2", () => ({
 	SESv2Client: class {
 		constructor(config: unknown) {
 			mocks.config(config);
 		}
 		send = mocks.send;
+		destroy = mocks.destroy;
 	},
 	GetContactCommand: class {
 		kind = "get";
@@ -81,6 +86,7 @@ describe("SES managed-subscription transport", () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		mocks.send.mockReset();
 		mocks.config.mockReset();
+		mocks.destroy.mockReset();
 		mocks.send.mockImplementation(async (command) => {
 			if (command.kind === "get") return contact();
 			if (command.kind === "send") return { MessageId: "ses-message-123" };
@@ -766,4 +772,8 @@ describe("SES managed-subscription transport", () => {
 			expect(calls("send")).toHaveLength(1);
 		},
 	);
+	it("releases the SES client's resources on shutdown", () => {
+		new SesClient(config).destroy();
+		expect(mocks.destroy).toHaveBeenCalledTimes(1);
+	});
 });

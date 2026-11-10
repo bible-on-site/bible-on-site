@@ -1316,41 +1316,6 @@ public sealed class PerushimNotesServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task GetNoteProgressUnitsAsync_ReturnsOrderedCumulativeCounts()
-    {
-        var dataDir = Path.Join(_tempRoot, nameof(GetNoteProgressUnitsAsync_ReturnsOrderedCumulativeCounts));
-        Directory.CreateDirectory(dataDir);
-        await CreateNotesDatabaseFromStatementsAsync(
-            dataDir,
-            [.. BibleOnSite.Tests.Support.NotesDbV2.Statements((5, 2, 3, 0, "a"), (5, 2, 3, 1, "b")),
-                .. MetricDdl,
-                "INSERT INTO tanah_note_metric VALUES " +
-                "(5, 2, 3, 1, 25, 55, 1, 'h2')," +
-                "(5, 2, 3, 0, 30, 30, 1, 'h1')," +
-                "(7, 2, 3, 0, 10, 10, 1, 'other-perush')"]);
-        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
-
-        var units = await service.GetNoteProgressUnitsAsync(5, 2);
-
-        units.Should().HaveCount(2);
-        units.Select(u => u.Key).Should().Equal("3:0", "3:1");
-        units.Select(u => u.CumulativeWords).Should().Equal(30, 55);
-    }
-
-    [Fact]
-    public async Task GetNoteProgressUnitsAsync_ReturnEmpty_WhenMetricTablesAreAbsent()
-    {
-        var dataDir = Path.Join(_tempRoot, nameof(GetNoteProgressUnitsAsync_ReturnEmpty_WhenMetricTablesAreAbsent));
-        Directory.CreateDirectory(dataDir);
-        await CreateNotesDatabaseAsync(dataDir, (5, 2, 3, 0, "a"));
-        var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
-
-        var units = await service.GetNoteProgressUnitsAsync(5, 2);
-
-        units.Should().BeEmpty();
-    }
-
-    [Fact]
     public async Task MetricReads_WhenNoNotesDb_ReturnEmptyWithoutOpening()
     {
         // No notes file anywhere — each metric API must degrade to its empty
@@ -1360,7 +1325,6 @@ public sealed class PerushimNotesServiceTests : IDisposable
         var service = PerushimNotesService.CreateForTesting(new FakePadDeliveryService(), dataDir);
 
         (await service.GetPerushReadingMetricAsync(5, 2)).Should().BeNull();
-        (await service.GetNoteProgressUnitsAsync(5, 2)).Should().BeEmpty();
         (await service.GetPerushMetricsForPerekAsync(2)).Should().BeEmpty();
     }
 

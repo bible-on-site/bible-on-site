@@ -22,7 +22,7 @@ public sealed class ReadingProgressEngineTests
     [Fact]
     public void EmptyUnits_StayAtZero()
     {
-        ReadingProgressEngine.Fraction([], totalWords: 100, anchorUnitIndex: 0).Should().Be(0);
+        ReadingProgressEngine.Fraction([], totalWords: 100, anchorUnitIndex: 0, insideUnitFraction: 0, contentEndVisible: false).Should().Be(0);
         ReadingProgressEngine.Fraction([], totalWords: 100, anchorUnitIndex: 0, insideUnitFraction: 0, contentEndVisible: true).Should().Be(0);
     }
 
@@ -32,14 +32,14 @@ public sealed class ReadingProgressEngineTests
     public void UnknownTotals_StayAtZero(int? totalWords)
     {
         var units = Units(("1", 30, 30), ("2", 40, 70));
-        ReadingProgressEngine.Fraction(units, totalWords, anchorUnitIndex: 1).Should().Be(0);
+        ReadingProgressEngine.Fraction(units, totalWords, anchorUnitIndex: 1, insideUnitFraction: 0, contentEndVisible: false).Should().Be(0);
     }
 
     [Fact]
     public void RestPosition_ReadsZero()
     {
         var units = Units(("1", 30, 30), ("2", 40, 70), ("3", 30, 100));
-        ReadingProgressEngine.Fraction(units, totalWords: 100, anchorUnitIndex: 0).Should().Be(0);
+        ReadingProgressEngine.Fraction(units, totalWords: 100, anchorUnitIndex: 0, insideUnitFraction: 0, contentEndVisible: false).Should().Be(0);
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public sealed class ReadingProgressEngineTests
     {
         var units = Units(("1", 30, 30), ("2", 40, 70), ("3", 30, 100));
         // Anchored at pasuk 2: only the 30 words of pasuk 1 have passed.
-        ReadingProgressEngine.Fraction(units, totalWords: 100, anchorUnitIndex: 1)
+        ReadingProgressEngine.Fraction(units, totalWords: 100, anchorUnitIndex: 1, insideUnitFraction: 0, contentEndVisible: false)
             .Should().BeApproximately(0.3, 1e-9);
     }
 
@@ -72,24 +72,19 @@ public sealed class ReadingProgressEngineTests
     public void OutOfRangeAnchors_ClampIntoTheUnitList()
     {
         var units = Units(("1", 30, 30), ("2", 40, 70));
-        ReadingProgressEngine.Fraction(units, totalWords: 100, anchorUnitIndex: -5).Should().Be(0);
+        ReadingProgressEngine.Fraction(units, totalWords: 100, anchorUnitIndex: -5, insideUnitFraction: 0, contentEndVisible: false).Should().Be(0);
         // Beyond the last unit clamps to it: all but the last unit's words passed.
-        ReadingProgressEngine.Fraction(units, totalWords: 70, anchorUnitIndex: 99)
+        ReadingProgressEngine.Fraction(units, totalWords: 70, anchorUnitIndex: 99, insideUnitFraction: 0, contentEndVisible: false)
             .Should().BeApproximately(30.0 / 70, 1e-9);
     }
 
     [Fact]
-    public void IndexOfPasuk_ResolvesPasukAndNoteKeys()
+    public void IndexOfPasuk_ResolvesPasukKeys()
     {
         var pasukUnits = Units(("1", 30, 30), ("2", 40, 70), ("10", 30, 100));
         ReadingProgressEngine.IndexOfPasuk(pasukUnits, 2).Should().Be(1);
         ReadingProgressEngine.IndexOfPasuk(pasukUnits, 10).Should().Be(2);
         ReadingProgressEngine.IndexOfPasuk(pasukUnits, 42).Should().Be(-1);
-
-        var noteUnits = Units(("1:0", 10, 10), ("1:1", 10, 20), ("2:0", 40, 60));
-        ReadingProgressEngine.IndexOfPasuk(noteUnits, 1).Should().Be(0);
-        ReadingProgressEngine.IndexOfPasuk(noteUnits, 2).Should().Be(2);
-        ReadingProgressEngine.IndexOfPasuk(noteUnits, 3).Should().Be(-1);
     }
 
     #region ScrollView extent variant — counted-child readers (article/entry)

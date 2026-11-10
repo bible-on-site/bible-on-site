@@ -2,7 +2,6 @@ import {
 	CATEGORY_SLUGS,
 	categoryHref,
 	categoryKeyFromSlug,
-	categoryShortHref,
 	isSubCategoryKey,
 	pediaPathFromLegacy,
 	resolveCategoryRoute,
@@ -54,17 +53,12 @@ describe("tanahpedia/category-slug", () => {
 	describe("hrefs", () => {
 		it("uses the plain path for entity types", () => {
 			expect(categoryHref("PERSON")).toBe("/pedia/אישים");
-			expect(categoryShortHref("PERSON")).toBe("/pedia/אישים");
 		});
 
 		it("uses direct subcategory slugs", () => {
 			expect(categoryHref("PROPHET")).toBe("/pedia/נביאים");
 			expect(categoryHref("CHAYA")).toBe("/pedia/חיות");
 			expect(categoryHref("TAHOR")).toBe("/pedia/טהורים");
-		});
-
-		it("exposes the short sugar path for subcategories", () => {
-			expect(categoryShortHref("PROPHET")).toBe("/pedia/נביאים");
 		});
 	});
 

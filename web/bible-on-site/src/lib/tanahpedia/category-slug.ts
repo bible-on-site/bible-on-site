@@ -61,14 +61,6 @@ export function slugForCategoryKey(key: CategoryKey): string {
 
 /** Canonical public path for a category or subcategory. */
 export function categoryHref(key: CategoryKey): string {
-	if (isSubCategoryKey(key)) {
-		return `/pedia/${CATEGORY_SLUGS[key]}`;
-	}
-	return `/pedia/${CATEGORY_SLUGS[key]}`;
-}
-
-/** Short alias path for a subcategory, e.g. `/pedia/נביאים`. */
-export function categoryShortHref(key: CategoryKey): string {
 	return `/pedia/${CATEGORY_SLUGS[key]}`;
 }
 

@@ -713,6 +713,24 @@ CPU profile under `diagnostics/sefer-turn-traces`. These profiled samples are
 labelled diagnostic-only and never replace the failed qualification samples.
 Both sequences share the same native inputs and retain the original test deadline.
 
+Original qualification traces use `toplevel,blink.user_timing`. They retain
+task boundaries, scheduling pauses and the qualification markers. Detailed
+`devtools.timeline` instrumentation runs in the separate failure replay with
+its CPU profile. Passive browser long-animation-frame records continue to
+accompany the original native-input samples.
+
+A matched heavy/light/light/heavy comparison on the full commentary dataset
+found that detailed timeline recording increased layout measurement cost.
+At the original 4x CPU profile, six toolbar turns from chapter 125 recorded
+mean CDP `LayoutDuration` deltas of 230.780ms with detailed recording and
+185.306ms with the task-only recording, a 19.7% reduction. Both qualification
+markers and main-thread task records remained present in the lighter traces.
+These are local Linux/SwiftShader measurements on Docker Desktop, with the
+original 20s interaction deadline; retain their environment separately from
+hosted CI and hardware-rendered desktop qualification. The
+[matching measurements](sefer-turn-recording-measurements.json) include all
+four cases, native response/blocking samples and the recording categories.
+
 For the user's desktop Chrome/Edge profile, run the same matrix in a visible
 browser window on an active desktop:
 

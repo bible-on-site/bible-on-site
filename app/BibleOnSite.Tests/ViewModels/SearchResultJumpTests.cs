@@ -67,7 +67,7 @@ public class SearchResultJumpTests
         var pasuk = new Pasuk { PasukNum = 3, Text = "ויאמר" };
         var items = PasukDisplayItems.Create([pasuk], repeatEachPasuk: true, fontFactor: 1.0);
 
-        var target = items.FirstOrDefault(item => item.IsFirstCopy && item.PasukNum == 3);
+        var target = items.FirstOrDefault(item => !item.IsRepeatedCopy && item.PasukNum == 3);
 
         target.Should().BeSameAs(items[0]);
         items[1].IsRepeatedCopy.Should().BeTrue();

@@ -129,7 +129,7 @@
 			]
 		},
 		{
-			"description": "xcuitest-driver 13+ declares peer appium ^4.0.0-beta.6 but the harness pins stable appium 3.x; v13 fails every iOS session at create-time. Hold below 13 until Appium server v4 is stable, then bump appium and the driver together. See https://github.com/bible-on-site/bible-on-site/issues/2967",
+			"description": "xcuitest-driver v13 requires peer appium ^4.0.0-beta.6 while the repo pins stable appium 3.9.0; on the v3 server every iOS E2E session fails at create-time with '(intermediate value).setPageLoadTimeout is not a function'. Hold below 13 until appium v4 is stable; see https://github.com/bible-on-site/bible-on-site/issues/2967",
 			"matchManagers": [
 				"npm",
 				"bun"
