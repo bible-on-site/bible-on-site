@@ -50,12 +50,16 @@ type ReadinessResult =
 let inflight: Promise<ReadinessResult> | undefined;
 
 async function checkReadiness(): Promise<ReadinessResult> {
+	let contentReady:
+		| Promise<{ authorCount: number; articleCount: number }[] | undefined>
+		| undefined;
+	let contentError: unknown;
 	try {
 		// Fire the content query first: its pool setup and round trip overlap
-		// the synchronous warm below instead of serializing after it. The
-		// rejection still surfaces through the await; guard the gap so a thrown
-		// warm-up never leaves it unhandled.
-		const contentReady = query<{
+		// the synchronous warm below instead of serializing after it. Catching
+		// into `contentError` keeps the rejection handled and visible — the
+		// gate still fails below.
+		contentReady = query<{
 			authorCount: number;
 			articleCount: number;
 		}>(
@@ -63,19 +67,28 @@ async function checkReadiness(): Promise<ReadinessResult> {
 			 COUNT(DISTINCT a.author_id) AS authorCount, COUNT(*) AS articleCount
 			 FROM tanah_article a JOIN tanah_author au ON au.id = a.author_id
 			 WHERE a.perek_id BETWEEN 1 AND 929`,
-		);
-		void contentReady.catch(() => {});
+		).catch((error: unknown) => {
+			contentError = error;
+			return undefined;
+		});
 		warmCriticalPaths();
 		recitationResponse();
 		// Page renders and the database check are independent gates; await both
 		// together so whichever is slower is the only tail left.
 		const [rows] = await Promise.all([contentReady, warmServerPages()]);
+		if (!rows) throw contentError;
 		const [content] = rows;
 		if (!content || content.authorCount < 1 || content.articleCount < 1) {
 			throw new Error("Public authors and articles are unavailable");
 		}
 		return { status: "ready", warmed: isWarmed, content };
 	} catch (error) {
+		// A synchronous warm throw can outrun the overlapped query: let it
+		// settle so its failure is recorded instead of silently discarded.
+		await contentReady;
+		if (contentError && contentError !== error) {
+			console.error("Concurrent content readiness failure:", contentError);
+		}
 		console.error("Readiness check failed:", error);
 		return {
 			status: "error",

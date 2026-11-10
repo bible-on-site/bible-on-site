@@ -113,6 +113,8 @@ test(
 		assert.deepEqual(await server.exited, [143, null]);
 		const elapsed = Date.now() - started;
 		assert.doesNotMatch(server.output(), /left discovery answers/);
+		// The failed resolver reads surface once instead of disappearing.
+		assert.match(server.output(), /Website discovery read failed/);
 		assert.match(server.output(), /saw no inbound connections/);
 		assert.ok(
 			elapsed > 600,

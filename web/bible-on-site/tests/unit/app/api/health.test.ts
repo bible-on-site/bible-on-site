@@ -127,6 +127,24 @@ describe("GET /api/health/ready", () => {
 		expect(mockPerekIndex).toHaveBeenCalledTimes(2);
 		expect(mockPasukIndex).toHaveBeenCalledTimes(2);
 	});
+	test("reports a concurrent content failure masked by a warm-up error", async () => {
+		mockQuery.mockRejectedValue(new Error("Database unavailable"));
+		mockPasukIndex.mockImplementationOnce(() => {
+			throw new Error("Verse search index unavailable");
+		});
+		const { GET } = await import("@/app/api/health/ready/route");
+		const failed = await GET();
+		expect(failed.status).toBe(503);
+		expect((await failed.json()).message).toBe(
+			"Verse search index unavailable",
+		);
+		// The overlapped query still failed; its error reaches diagnostics
+		// instead of being swallowed by the warm-up failure.
+		expect(console.error).toHaveBeenCalledWith(
+			"Concurrent content readiness failure:",
+			expect.any(Error),
+		);
+	});
 	test("requires a working HTML sanitizer before admitting traffic and can recover", async () => {
 		mockSanitize.mockReturnValueOnce("");
 		const { GET } = await import("@/app/api/health/ready/route");

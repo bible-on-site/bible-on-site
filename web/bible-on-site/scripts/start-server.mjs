@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { resolve4 } from "node:dns/promises";
+import { Resolver } from "node:dns/promises";
 import { readFile } from "node:fs/promises";
 import net from "node:net";
 import { constants, networkInterfaces } from "node:os";
@@ -138,16 +138,20 @@ const READINESS_PATH = "/api/health/ready";
 function socketAccept(port, signal) {
 	return new Promise((resolve, reject) => {
 		const socket = net.connect({ port, host: "127.0.0.1" });
-		const done = (error) => {
+		function done(error) {
+			// Each refused retry re-registers; the listener must not outlive
+			// its own attempt or refused cold starts accumulate handlers on the
+			// shared signal.
+			signal?.removeEventListener("abort", onAbort);
 			socket.destroy();
 			if (error) reject(error);
 			else resolve();
-		};
+		}
+		const onAbort = () => done(signal?.reason ?? new Error("aborted"));
+		if (signal?.aborted) return done(signal.reason);
 		socket.once("connect", () => done());
 		socket.once("error", (error) => done(error));
-		signal?.addEventListener("abort", () =>
-			done(signal.reason ?? new Error("aborted")),
-		);
+		signal?.addEventListener("abort", onAbort);
 	});
 }
 
@@ -295,12 +299,13 @@ export function startServer({
 	port = Number(process.env.PORT) || 3000,
 	cwd = process.cwd(),
 	measure = () => inboundConnections(port),
-	resolve = resolve4,
+	resolve,
 	serviceName = process.env.WEBSITE_DISCOVERY_NAME ??
 		"website.bible-on-site.local",
 	ownAddresses = taskAddresses,
 	now = Date.now,
 	log = console.log,
+	warn = console.warn,
 } = {}) {
 	for (const [name, value] of [
 		["drain", drainMs],
@@ -329,6 +334,15 @@ export function startServer({
 		);
 	if (!Number.isSafeInteger(port) || port < 0 || port > 65_535)
 		throw new RangeError("Website port must be between 0 and 65535");
+	// The default resolver self-bounds each query so a stalled VPC resolver
+	// cannot hold the event loop open; `cancel` tears anything in-flight down
+	// with the child. Injected resolvers keep their own behavior — the drain
+	// race still bounds them.
+	const resolver =
+		resolve === undefined
+			? new Resolver({ timeout: dnsTimeoutMs, tries: 1 })
+			: null;
+	const resolveName = resolve ?? ((name) => resolver.resolve4(name));
 	const child = spawn(process.execPath, ["server.js"], {
 		cwd,
 		stdio: "inherit",
@@ -373,7 +387,7 @@ export function startServer({
 			const own = ownAddresses();
 			if (own.length === 0) return null;
 			const answer = await Promise.race([
-				resolve(serviceName),
+				resolveName(serviceName),
 				boundedDelay(dnsTimeoutMs).then(() => {
 					throw new Error("discovery resolve timed out");
 				}),
@@ -382,6 +396,19 @@ export function startServer({
 			return answer.some((address) => own.includes(address))
 				? "listed"
 				: "absent";
+		};
+		// Resolver failures must not silently downgrade the drain to its fixed
+		// floor: report each distinct failure once per drain.
+		const reported = new Set();
+		const report = (error) => {
+			const signature = `${error}`;
+			if (!reported.has(signature)) {
+				reported.add(signature);
+				warn(
+					"Website discovery read failed; fixed minimum drain floor applies:",
+					error,
+				);
+			}
 		};
 		const check = async () => {
 			if (stopping || polling) return;
@@ -397,7 +424,8 @@ export function startServer({
 			let listing;
 			try {
 				listing = await discover();
-			} catch {
+			} catch (error) {
+				if (!stopping) report(error);
 				listing = null;
 			} finally {
 				polling = false;
@@ -435,6 +463,7 @@ export function startServer({
 	const interrupt = () => forward("SIGINT");
 	const cleanup = () => {
 		stopProbe();
+		resolver?.cancel();
 		clearTimeout(drainTimer);
 		process.off("SIGTERM", terminate);
 		process.off("SIGINT", interrupt);
