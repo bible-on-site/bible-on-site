@@ -21,10 +21,11 @@ export default defineConfig({
 	],
 	webServer: {
 		...(baseConfig.webServer as TestConfigWebServer),
-		// `bun run start` forces PORT=3001 through cross-env, so the standalone
-		// server is invoked directly and receives the suite's port via env —
-		// the same command the script wraps (issue #2881).
-		command: "node .next/standalone/server.js",
+		// The shared launcher populates the per-checkout test database first —
+		// standalone perf runs cannot assume an earlier e2e run created it —
+		// then serves `.next/standalone/server.js` with PORT/HOSTNAME from
+		// webServer.env (`bun run start` would force PORT=3001).
+		command: "node ./launch-e2e-server.mts --standalone",
 		env: {
 			...(baseConfig.webServer as TestConfigWebServer).env,
 			PORT: String(port),

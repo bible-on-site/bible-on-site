@@ -5,7 +5,14 @@
  * the Next.js server for E2E tests. This approach is more reliable than using
  * Playwright's globalSetup for database operations.
  *
- * Usage: node ./launch-e2e-server.mts [--coverage]
+ * Usage: node ./launch-e2e-server.mts [--coverage] [--standalone]
+ *
+ * --standalone populates the database when cargo-make is available (it is
+ * skipped where the Rust toolchain was never installed, matching the
+ * pre-launcher behavior), then serves the built
+ * `.next/standalone/server.js` instead of `next dev`. The perf suite uses it
+ * so a standalone `test:perf` run in a fresh worktree still gets its
+ * per-checkout database populated (issue #2881 review).
  */
 
 import { execSync, spawn, spawnSync } from "node:child_process";
@@ -48,6 +55,9 @@ writeFileSync(
 
 // --coverage is passed by Playwright when MEASURE_COV=1; env vars come from the playwright config
 const _useCoverage = process.argv.includes("--coverage");
+// --standalone is passed by playwright.perf.config.ts: populate the database
+// like e2e, then serve the production build instead of `next dev`.
+const STANDALONE = process.argv.includes("--standalone");
 
 try {
 	await main();
@@ -87,6 +97,17 @@ async function populateDatabase(): Promise<void> {
 			`[DB Setup] cargo-make check failed with status: ${cargoMakeCheck.status}`,
 		);
 		log(`[DB Setup] stderr: ${cargoMakeCheck.stderr?.toString()}`);
+		// Standalone (perf) runs may execute where the Rust toolchain was never
+		// installed — e.g. the Website Performance job skips MySQL/cargo-make
+		// when perushim data is unavailable. The production server tolerates a
+		// missing or empty database the same way it did before the launcher
+		// owned population, so skip rather than fail the whole suite.
+		if (STANDALONE) {
+			log(
+				"[DB Setup] cargo-make unavailable — skipping population; the standalone server will use the existing database.",
+			);
+			return;
+		}
 		throw new Error(
 			"cargo-make is not installed. Install with: cargo install cargo-make",
 		);
@@ -229,24 +250,40 @@ async function main() {
 	// Always use `next dev` for e2e so tests pass: standalone can throw NoFallbackError
 	// on some routes; coverage also requires dev (instrumentation). No pre-build needed.
 	//
-	// The Playwright config passes the suite's port as WEB_PORT so parallel
-	// local sessions never share :3001 (issue #2881); manual runs keep :3001.
-	const webPort = process.env.WEB_PORT?.trim();
-	const port = webPort ? Number(webPort) : 3001;
-	if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-		throw new Error(
-			`WEB_PORT must be an integer between 1 and 65535, got "${webPort}"`,
-		);
+	// --standalone serves the production build instead: the perf suite measures
+	// the artifact CI ships, and its webServer.env already carries PORT and
+	// HOSTNAME for `.next/standalone/server.js`.
+	let serverArgs: string[];
+	let serverDescription: string;
+	if (STANDALONE) {
+		serverArgs = [path.resolve(__dirname, ".next/standalone/server.js")];
+		serverDescription = "node .next/standalone/server.js";
+	} else {
+		// The Playwright config passes the suite's port as WEB_PORT so parallel
+		// local sessions never share :3001 (issue #2881); manual runs keep :3001.
+		const webPort = process.env.WEB_PORT?.trim();
+		const port = webPort ? Number(webPort) : 3001;
+		if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+			throw new Error(
+				`WEB_PORT must be an integer between 1 and 65535, got "${webPort}"`,
+			);
+		}
+		serverArgs = [
+			require.resolve("next/dist/bin/next"),
+			"dev",
+			"-p",
+			String(port),
+		];
+		serverDescription = `node next dev -p ${port}`;
 	}
-	const nextCli = require.resolve("next/dist/bin/next");
-	log(`[Server] Starting Next.js server: node next dev -p ${port}`);
+	log(`[Server] Starting ${serverDescription}`);
 
 	// Tee the dev server's stdout/stderr into the artifact so CI failures keep
 	// the `⨯` lines Playwright's webServer pipe would otherwise discard (#2005).
 	const serverLogPath = path.resolve(logDir, "server.log");
 	const serverLog = createWriteStream(serverLogPath, { flags: "w" });
 
-	const server = spawn(process.execPath, [nextCli, "dev", "-p", String(port)], {
+	const server = spawn(process.execPath, serverArgs, {
 		cwd: __dirname,
 		stdio: ["inherit", "pipe", "pipe"],
 		env: process.env,
