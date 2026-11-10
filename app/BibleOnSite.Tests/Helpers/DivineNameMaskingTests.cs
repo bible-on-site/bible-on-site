@@ -496,10 +496,7 @@ public class DivineNameMaskingTests
 
             using (DivineNameMasking.Scope(Enabled()))
             {
-                TikkunKorimTextBuilder.BuildWords(pesukim, false, false)
-                    .Select(w => w.Text).Should().Equal("א", "ה'", "א-להים");
-                // hideMarks is a no-op on masked words (they carry no marks).
-                TikkunKorimTextBuilder.BuildWords(pesukim, false, true)
+                TikkunKorimTextBuilder.BuildWords(pesukim, false)
                     .Select(w => w.Text).Should().Equal("א", "ה'", "א-להים");
             }
         }

@@ -88,6 +88,38 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
         Assert.Equal("בראשית א", Page.Source);
     });
 
+    // #3265: toggling niqqud/taamim repaints the flow on the unchanged marked
+    // geometry — the scroll offset (and every base letter under it) cannot
+    // move. A reflow on the stripped text would shrink the content and clamp
+    // the offset, which the "tsy:{dips}" probe exposes exactly.
+    [Fact]
+    public void TogglingMarksKeepsTheTikkunScrollOffset() => Scenario(() =>
+    {
+        NavigateToPerek("תורה", "בראשית", "א");
+        Page.Tap("ReaderMenuButton");
+        Page.Tap("TikkunKorimCheckBox");
+        var scrollView = Page.WaitFor("TikkunScrollView");
+        var topFrame = TikkunFrame(scrollView);
+
+        ScrollTikkunDown(scrollView, topFrame);
+        var offset = SettledTikkunOffset(scrollView);
+        Assert.True(offset is null or > 200,
+            $"the flow must be scrolled before the toggle (tsy={offset})");
+
+        var shownFrame = TikkunFrame(scrollView);
+        Platform.Tap(Driver!, scrollView);
+
+        WaitForTikkun(() => !TikkunFrame(scrollView).SequenceEqual(shownFrame),
+            "hiding marks must repaint the flow");
+        Assert.Equal(offset, TikkunOffsetY(scrollView));
+
+        Platform.Tap(Driver!, scrollView);
+        var hiddenFrame = TikkunFrame(scrollView);
+        WaitForTikkun(() => !TikkunFrame(scrollView).SequenceEqual(hiddenFrame),
+            "restoring marks must repaint the flow");
+        Assert.Equal(offset, TikkunOffsetY(scrollView));
+    });
+
     /// <summary>
     /// Opens בחירת פרק from the radial menu and confirms the requested unit —
     /// deterministic long-perek setup regardless of which perek the day opens on.
@@ -222,6 +254,28 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
         TikkunOffsetY(scrollView) is { } offset
             ? offset <= 2
             : TikkunFrame(scrollView).SequenceEqual(topFrame);
+
+    /// <summary>
+    /// Reads the תיקון offset once two consecutive samples agree — the probe
+    /// value must be read after the scroll animation fully settles or a
+    /// still-moving view looks like a geometry change (#3265).
+    /// </summary>
+    private int? SettledTikkunOffset(AppiumElement scrollView)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(8);
+        var previous = TikkunOffsetY(scrollView);
+        while (DateTime.UtcNow < deadline)
+        {
+            Thread.Sleep(300);
+            var current = TikkunOffsetY(scrollView);
+            if (current == previous)
+            {
+                return current;
+            }
+            previous = current;
+        }
+        return previous;
+    }
 
     /// <summary>
     /// Reads the תיקון scroll offset that Debug builds mirror into the view's

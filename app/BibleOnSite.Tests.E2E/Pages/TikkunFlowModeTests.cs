@@ -45,6 +45,16 @@ public sealed class TikkunFlowModeTests(OfflineReaderFixture fixture)
         // The canvas draws words, not UIA text — the capture is the checkable
         // artifact that lines honor the letter cap and stay intact.
         CaptureScreenshot("tikkun-linecap.png");
+
+        // #3265: tapping the flow hides niqqud/taamim. The marked geometry is
+        // the layout reference, so the scroll surface must stay put and only
+        // the painted marks change — the second frame is the artifact.
+        fixture.Click(flow!);
+        var repainted = await fixture.WaitForElementAsync(window =>
+            window.FindAllDescendants(fixture.CF.ByAutomationId("TikkunScrollView"))
+                .FirstOrDefault(element => !element.IsOffscreen), TimeSpan.FromSeconds(15));
+        repainted.Should().NotBeNull("the תיקון flow must stay in place across the marks toggle");
+        CaptureScreenshot("tikkun-marks-hidden.png");
     }
 
     private async Task NavigateToBereshitYudAsync()

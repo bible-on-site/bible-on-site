@@ -258,6 +258,92 @@ public class TikkunFlowViewTests
         });
     }
 
+    /// <summary>Captures every DrawString call as (text, x, y) in call order.</summary>
+    private static List<(string Text, float X, float Y)> CaptureDraws(Mock<ICanvas> canvas)
+    {
+        var drawn = new List<(string, float, float)>();
+        canvas.Setup(c => c.DrawString(It.IsAny<string>(), It.IsAny<float>(), It.IsAny<float>(),
+                It.IsAny<float>(), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
+                It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>(), It.IsAny<float>()))
+            .Callback((string text, float x, float y, float _, float _2,
+                HorizontalAlignment _, VerticalAlignment _, TextFlow _, float _3) => drawn.Add((text, x, y)));
+        return drawn;
+    }
+
+    [Fact]
+    public void hiding_marks_paints_stripped_text_on_the_unchanged_geometry()
+    {
+        WithInlineDispatcher(() =>
+        {
+            // Marks contribute width under any honest text stack; the fake
+            // measure charges per character so the marked word measurably
+            // outweights its stripped form.
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים")] };
+            var canvas = MeasuringCanvas();
+            var drawn = CaptureDraws(canvas);
+
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+            var marked = drawn.ToArray();
+            drawn.Clear();
+
+            view.HideMarks = true;
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+
+            drawn.Should().HaveCount(marked.Length);
+            drawn.Select(d => d.Text)
+                .Should().Equal(marked.Select(m => TikkunKorimTextBuilder.StripMarks(m.Text)),
+                    "marks hide at paint time");
+            drawn.Select(d => (d.X, d.Y))
+                .Should().Equal(marked.Select(m => (m.X, m.Y)),
+                    "the fully-marked geometry is the reference — no base letter moves (#3265)");
+        });
+    }
+
+    [Fact]
+    public void hiding_marks_does_not_remeasure_or_reflow()
+    {
+        WithInlineDispatcher(() =>
+        {
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "בְּרֵאשִׁ֖ית בָּרָ֣א")] };
+            var canvas = MeasuringCanvas();
+
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+            var measures = canvas.Invocations.Count(i => i.Method.Name == nameof(ICanvas.GetStringSize));
+            var height = view.HeightRequest;
+
+            view.HideMarks = true;
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+
+            canvas.Invocations.Count(i => i.Method.Name == nameof(ICanvas.GetStringSize))
+                .Should().Be(measures, "a visibility toggle repaints — it must not re-layout (#3265)");
+            view.HeightRequest.Should().Be(height,
+                "content height is a marked-geometry property — it cannot move the scroll position");
+        });
+    }
+
+    [Fact]
+    public void showing_marks_again_restores_the_full_text_and_geometry()
+    {
+        WithInlineDispatcher(() =>
+        {
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "בְּרֵאשִׁ֖ית בָּרָ֣א")] };
+            var canvas = MeasuringCanvas();
+            var drawn = CaptureDraws(canvas);
+
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+            var marked = drawn.ToArray();
+
+            view.HideMarks = true;
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+            drawn.Clear();
+            view.HideMarks = false;
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+
+            drawn.Select(d => (d.Text, d.X, d.Y)).Should().Equal(marked,
+                "the toggle is fully reversible — marked text returns at identical positions");
+        });
+    }
+
     // #2623: תיקון קוראים is a scripture presentation — its canvas draws and
     // measures in the same Taamey D face as the pasuk labels (a different
     // measure face would also corrupt the justification math). The canvas

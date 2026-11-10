@@ -28,10 +28,16 @@ public class TikkunFlowView : GraphicsView
         nameof(RepeatEachPasuk), typeof(bool), typeof(TikkunFlowView), false,
         propertyChanged: OnContentChanged);
 
-    /// <summary>Hide niqqud and taamim for the whole perek.</summary>
+    /// <summary>
+    /// Hide niqqud and taamim for the whole perek. Visibility is a paint-time
+    /// concern only: the fully marked text stays the measurement/layout
+    /// reference, so a toggle repaints without moving a single base letter
+    /// (#3265) — hence a bare <see cref="GraphicsView.Invalidate"/> rather than
+    /// <see cref="InvalidateContent"/>.
+    /// </summary>
     public static readonly BindableProperty HideMarksProperty = BindableProperty.Create(
         nameof(HideMarks), typeof(bool), typeof(TikkunFlowView), false,
-        propertyChanged: OnContentChanged);
+        propertyChanged: (bindable, _, _) => ((TikkunFlowView)bindable).Invalidate());
 
     /// <summary>
     /// הסתר שם השם revision — a change-only input bound to
@@ -178,7 +184,11 @@ public class TikkunFlowView : GraphicsView
                 // give every word the whole column, and an overlong word its
                 // measured width plus slack.
                 var drawWidth = MathF.Max(word.Width + 1f, textWidth);
-                canvas.DrawString(word.Text, padLeft + word.X, padTop + word.Y,
+                // word.Text is the geometry string (fully marked); PaintText
+                // drops the marks only for the painted run so every base
+                // letter keeps the origin the marked layout gave it (#3265).
+                var paintText = PaintText(word.Text);
+                canvas.DrawString(paintText, padLeft + word.X, padTop + word.Y,
                     drawWidth, lineHeight,
                     HorizontalAlignment.Left, VerticalAlignment.Center, TextFlow.OverflowBounds);
 #if !WINDOWS
@@ -189,7 +199,7 @@ public class TikkunFlowView : GraphicsView
                     // only Windows honors it via CanvasTextFormat.FontWeight.
                     // A sub-pixel double-strike keeps the pasuk-marker emphasis
                     // the system font used to provide (#2623).
-                    canvas.DrawString(word.Text, padLeft + word.X + FauxBoldOffset, padTop + word.Y,
+                    canvas.DrawString(paintText, padLeft + word.X + FauxBoldOffset, padTop + word.Y,
                         drawWidth, lineHeight,
                         HorizontalAlignment.Left, VerticalAlignment.Center, TextFlow.OverflowBounds);
                 }
@@ -210,9 +220,31 @@ public class TikkunFlowView : GraphicsView
                 return;
             }
 
-            _words = TikkunKorimTextBuilder.BuildWords(_view.Pasukim, _view.RepeatEachPasuk, _view.HideMarks);
+            // Geometry words always carry the marked text — HideMarks never
+            // reaches this method (it repaints instead of invalidating content).
+            _words = TikkunKorimTextBuilder.BuildWords(_view.Pasukim, _view.RepeatEachPasuk);
             _wordsVersion = _view._contentVersion;
             _layout = null;
+        }
+
+        // Painted text per word, stripped on demand. Keyed by the marked
+        // geometry string so a few hundred words share their stripped form
+        // instead of re-allocating it on every repaint.
+        private readonly Dictionary<string, string> _strippedTexts = new();
+
+        private string PaintText(string markedText)
+        {
+            if (!_view.HideMarks)
+            {
+                return markedText;
+            }
+
+            if (!_strippedTexts.TryGetValue(markedText, out var stripped))
+            {
+                stripped = TikkunKorimTextBuilder.StripMarks(markedText);
+                _strippedTexts[markedText] = stripped;
+            }
+            return stripped;
         }
 
         private Func<string, float, bool, float> MeasureWord(ICanvas canvas)
