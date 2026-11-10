@@ -57,10 +57,8 @@ public class MasoraDataServiceTests
         service.Units.Should().BeNull();
         service.UnitCount.Should().Be(0);
         service.GetUnit(1).Should().BeNull();
-        service.GetFirstUnitsBySefer().Should().BeEmpty();
         service.GetUnitIndex(1).Should().Be(-1);
         service.GetAdjacentUnits(1).Should().Be((null, null));
-        service.GetUnitContainingPasuk(1).Should().BeNull();
         service.GetUnitContainingPasuk(1, 1).Should().BeNull();
     }
 
@@ -89,17 +87,6 @@ public class MasoraDataServiceTests
 
         service.IsLoaded.Should().BeTrue();
         service.UnitCount.Should().Be(4);
-    }
-
-    [Fact]
-    public async Task GetUnitContainingPasuk_SingleArg_UsesFirstPasuk()
-    {
-        await using var storage = new TestStorage();
-        var service = await LoadedServiceAsync(storage, Seed);
-
-        service.GetUnitContainingPasuk(1)!.UnitId.Should().Be(1);
-        service.GetUnitContainingPasuk(2)!.UnitId.Should().Be(2);
-        service.GetUnitContainingPasuk(51)!.UnitId.Should().Be(9);
     }
 
     [Fact]
@@ -180,7 +167,6 @@ public class MasoraDataServiceTests
         service.IsAvailable.Should().BeFalse();
         service.UnitCount.Should().Be(0);
         service.GetUnit(1).Should().BeNull();
-        service.GetFirstUnitsBySefer().Should().BeEmpty();
         service.GetUnitIndex(1).Should().Be(-1);
         service.GetAdjacentUnits(1).Should().Be((null, null));
         service.GetUnitContainingPasuk(1, 1).Should().BeNull();
@@ -212,15 +198,6 @@ public class MasoraDataServiceTests
         service.GetAdjacentUnits(1).Prev.Should().BeNull();
         service.GetAdjacentUnits(9).Next.Should().BeNull();
         service.GetAdjacentUnits(77).Should().Be((null, null));
-    }
-
-    [Fact]
-    public async Task GetFirstUnitsBySefer_ReturnsOpeningUnits()
-    {
-        await using var storage = new TestStorage();
-        var service = await LoadedServiceAsync(storage, Seed);
-
-        service.GetFirstUnitsBySefer().Select(u => u.UnitId).Should().Equal(1, 9);
     }
 
     [Fact]

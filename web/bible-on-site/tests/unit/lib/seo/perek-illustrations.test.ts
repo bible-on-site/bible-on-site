@@ -2,7 +2,6 @@ import {
 	type ImageRow,
 	imagesFromRows,
 	perekImageUrl,
-	selectImagesForVerseRanges,
 	selectPerekImages,
 } from "../../../../src/lib/seo/perek-illustrations";
 
@@ -118,7 +117,7 @@ it("does not publish an image without a WebP display fallback", () => {
 	).toEqual({});
 });
 
-it("matches reading divisions across chapters without duplicating variants or images", () => {
+it("attaches verse ranges to images without duplicating variants", () => {
 	const rows: ImageRow[] = [
 		{
 			...base,
@@ -152,23 +151,4 @@ it("matches reading divisions across chapters without duplicating variants or im
 	]);
 	expect(images[1][0].avifSrcSet).toMatch(/a.avif 640w$/);
 	expect(images[1][0].verseRanges).toHaveLength(2);
-	const reading = [
-		{ perekId: 1, pasukFrom: 31, pasukTo: 31 },
-		{ perekId: 2, pasukFrom: 1, pasukTo: 1 },
-	];
-	expect(
-		selectImagesForVerseRanges({ ...images, 2: images[1] }, reading).map(
-			(i) => i.id,
-		),
-	).toEqual([4]);
-	expect(
-		selectImagesForVerseRanges(images, [
-			{ perekId: 2, pasukFrom: 4, pasukTo: 8 },
-		]),
-	).toEqual([]);
-	expect(
-		selectImagesForVerseRanges(images, [
-			{ perekId: 3, pasukFrom: 1, pasukTo: 3 },
-		]),
-	).toEqual([]);
 });

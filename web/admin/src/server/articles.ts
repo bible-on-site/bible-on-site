@@ -168,8 +168,9 @@ const ARTICLE_COVERAGE_COLUMNS_JOINED =
 	"a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority, a.distributable, a.coverage_verified";
 const ARTICLE_COLUMNS_JOINED =
 	"a.id, a.perek_id, a.author_id, a.abstract, a.name, a.priority, a.distributable";
-const ARTICLE_COVERING_COUNT_SQL =
-	"(SELECT COUNT(*) FROM tanah_article_covering_source cs WHERE cs.article_id = a.id) AS covering_count";
+const ARTICLE_COVERING_COUNT_SQL = "COUNT(cs.article_id) AS covering_count";
+const ARTICLE_COVERING_COUNT_JOIN =
+	"LEFT JOIN tanah_article_covering_source cs ON cs.article_id = a.id";
 
 type ArticleRow = Omit<Article, "coveringSources">;
 
@@ -283,7 +284,7 @@ export const getArticles = createServerFn({ method: "GET" }).handler(
 	async () => {
 		try {
 			return await query<ArticleRow>(
-				`SELECT ${ARTICLE_COVERAGE_COLUMNS_JOINED}, ${ARTICLE_COVERING_COUNT_SQL} FROM tanah_article a ORDER BY a.perek_id, a.priority`,
+				`SELECT ${ARTICLE_COVERAGE_COLUMNS_JOINED}, ${ARTICLE_COVERING_COUNT_SQL} FROM tanah_article a ${ARTICLE_COVERING_COUNT_JOIN} GROUP BY a.id ORDER BY a.perek_id, a.priority`,
 			);
 		} catch (error) {
 			if (!isCoveringSourceSchemaMissing(error)) throw error;
@@ -304,7 +305,9 @@ export const getArticlesByPerek = createServerFn({ method: "GET" })
 				`SELECT ${ARTICLE_COVERAGE_COLUMNS_JOINED}, au.name as author_name, ${ARTICLE_COVERING_COUNT_SQL}
 				 FROM tanah_article a
 				 LEFT JOIN tanah_author au ON a.author_id = au.id
-				 WHERE a.perek_id = ? ORDER BY a.priority`,
+				 ${ARTICLE_COVERING_COUNT_JOIN}
+				 WHERE a.perek_id = ?
+				 GROUP BY a.id ORDER BY a.priority`,
 				[perekId],
 			);
 		} catch (error) {
@@ -429,6 +432,7 @@ export const createArticle = createServerFn({ method: "POST" })
 			assertHebrewDateArticleEligible(
 				{
 					id: newArticle.id,
+					name: data.name,
 					distributable: data.distributable === true,
 					content: data.content,
 				},
@@ -560,6 +564,7 @@ export const updateArticle = createServerFn({ method: "POST" })
 			assertHebrewDateArticleEligible(
 				{
 					id: data.id,
+					name: data.name,
 					distributable: data.distributable === true,
 					content: data.content,
 				},

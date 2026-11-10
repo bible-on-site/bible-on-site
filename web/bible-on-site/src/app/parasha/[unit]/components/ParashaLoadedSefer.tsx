@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getPerakimText } from "@/app/components/reading/unit-book-actions";
 import catalog from "@/data/db/client-catalog.generated.json";
-import type { Perek } from "@/data/db/tanah-view-types";
+import type { Pasuk, Perek } from "@/data/db/tanah-view-types";
 import { BookRequestError, loadSefer, seferPerekMap } from "@/data/load-sefer";
 import type { ArticleSummary } from "@/lib/articles";
 import type { RangePerushSummary } from "@/lib/perushim";
@@ -16,9 +17,10 @@ import type { BookPage, ParashaBookUnit } from "./parasha-book-utils";
 import styles from "@/app/929/[number]/components/sefer-composite.module.css";
 
 /**
- * Loads the Torah sefer plus every sefer its parashot's Haftarot reach,
- * then renders the פרשה sefer book. The prophetic sefarim stay auxiliary
- * payloads fetched only when the book view opens — the flat SSG page
+ * Loads the Torah sefer plus just the perakim its parashot's Haftarot
+ * reach (a single range-scoped request rather than whole prophetic
+ * sefarim), then renders the פרשה sefer book. The auxiliary payload
+ * stays fetched only when the book view opens — the flat SSG page
  * stays light.
  */
 export default function ParashaLoadedSefer(props: {
@@ -42,13 +44,15 @@ export default function ParashaLoadedSefer(props: {
 	} | null;
 	isVisible?: boolean;
 }) {
-	const neededFiles = useMemo(() => {
-		const files = new Set<string>();
-		const mainFile = catalog.books.find(
-			(book) => book.name === props.seferName,
-		)?.file;
-		if (mainFile) files.add(mainFile);
-		const auxPerekIds = new Set<number>();
+	const mainFile = useMemo(
+		() =>
+			catalog.books.find((book) => book.name === props.seferName)?.file,
+		[props.seferName],
+	);
+	/** Canonical perek ids the parashot's Haftarot render — fetched
+	 * range-scoped, not as whole-sefer downloads. */
+	const auxPerekIds = useMemo(() => {
+		const ids = new Set<number>();
 		for (const unit of props.units) {
 			for (const haftara of unit.haftarot) {
 				for (const range of haftara.ranges) {
@@ -57,52 +61,53 @@ export default function ParashaLoadedSefer(props: {
 						perekId <= range.end.perekId;
 						perekId++
 					) {
-						auxPerekIds.add(perekId);
+						ids.add(perekId);
 					}
 				}
 			}
 		}
-		for (const book of catalog.books) {
-			for (const perekId of auxPerekIds) {
-				if (perekId >= book.perekFrom && perekId <= book.perekTo) {
-					files.add(book.file);
-					break;
-				}
-			}
-		}
-		return [...files].sort();
-	}, [props.seferName, props.units]);
+		return [...ids].sort((a, b) => a - b);
+	}, [props.units]);
 
-	const [loaded, setLoaded] = useState<Map<number, Perek> | null>(null);
+	const [loaded, setLoaded] = useState<Map<
+		number,
+		Pick<Perek, "pesukim">
+	> | null>(null);
 	const [loadedKey, setLoadedKey] = useState("");
 	const [failure, setFailure] = useState<{ refreshPage: boolean } | null>(null);
 	const [attempt, setAttempt] = useState(0);
-	const filesKey = neededFiles.join("|");
+	const loadKey = `${mainFile ?? ""}|${auxPerekIds.join(",")}`;
 
-	// neededFiles is memoized on (seferName, units); filesKey keeps the
-	// effect honest across prop changes without re-running on array identity.
+	// Both inputs are memoized on the same props; loadKey keeps the
+	// effect honest across prop changes without re-running on identity.
 	useEffect(() => {
 		let current = true;
 		if (attempt > 0) {
 			setLoaded(null);
 		}
 		setFailure(null);
-		Promise.all(neededFiles.map((file) => loadSefer(file)))
-			.then((sefarim) => {
+		Promise.all([
+			mainFile ? loadSefer(mainFile) : Promise.resolve(null),
+			getPerakimText(auxPerekIds),
+		])
+			.then(([sefer, auxPerakim]) => {
 				if (!current) return;
-				const map = new Map<number, Perek>();
-				for (const sefer of sefarim) {
+				const map = new Map<number, { pesukim: Pasuk[] }>();
+				for (const [perekId, perek] of Object.entries(auxPerakim)) {
+					map.set(Number(perekId), perek);
+				}
+				if (sefer) {
 					for (const [perekId, perek] of seferPerekMap(sefer)) {
 						map.set(perekId, perek);
 					}
 				}
 				setLoaded(map);
-				setLoadedKey(filesKey);
+				setLoadedKey(loadKey);
 			})
 			.catch((error) => {
 				if (current) {
 					console.error("Failed to load parasha book", {
-						files: neededFiles,
+						sefer: props.seferName,
 						error,
 					});
 					setFailure({
@@ -114,7 +119,7 @@ export default function ParashaLoadedSefer(props: {
 		return () => {
 			current = false;
 		};
-	}, [filesKey, attempt, neededFiles]);
+	}, [loadKey, attempt, mainFile, auxPerekIds, props.seferName]);
 
 	if (failure) {
 		return (
@@ -132,7 +137,7 @@ export default function ParashaLoadedSefer(props: {
 			</div>
 		);
 	}
-	if (loaded == null || loadedKey !== filesKey) {
+	if (loaded == null || loadedKey !== loadKey) {
 		return (
 			<output
 				className={styles.loadingContainer}

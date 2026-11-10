@@ -104,7 +104,6 @@ jest.mock("../../../src/app/929/[number]/components/SeferComposite", () => ({
 
 jest.mock("../../../src/app/929/[number]/[slug]/ScrollToArticle", () => ({
 	ScrollToSlug: () => null,
-	ScrollToArticle: () => null,
 }));
 
 jest.mock("../../../src/app/929/[number]/[slug]/ScrollToArticleMatch", () => ({

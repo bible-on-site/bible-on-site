@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+	existsSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -10,10 +16,121 @@ import {
 	lighthouseBenchmarkEntry,
 	lighthouseBenchmarkName,
 	performanceMarkdown,
+	readPerformanceReports,
+	saveLighthouseArtifacts,
 	saveLighthouseReport,
 	summarizeLighthouse,
 	writePerformanceIndex,
 } from "./performance-report.mjs";
+
+test("original Lighthouse traces and network records survive a failed audit unchanged", () => {
+	const dir = mkdtempSync(join(tmpdir(), "original-lighthouse-"));
+	try {
+		const rawReport = "_929_686-desktop-1-original.json";
+		const artifacts = {
+			Trace: {
+				traceEvents: [
+					{
+						name: "RunTask",
+						pid: 15,
+						tid: 23,
+						ts: 1234567,
+						dur: 72412,
+						tdur: 35987,
+						args: { data: { scripts: [] } },
+					},
+				],
+			},
+			DevtoolsLog: [
+				{
+					method: "Network.responseReceived",
+					params: {
+						requestId: "r1",
+						timestamp: 123.456,
+						response: { status: 500 },
+					},
+				},
+			],
+			PageLoadError: { code: "FAILED_DOCUMENT_REQUEST" },
+			settings: { throttlingMethod: "simulate" },
+		};
+		const buffered = [{ rawReport, artifacts }];
+		const original = JSON.stringify(buffered);
+		const output = join(dir, "diagnostics");
+		// Adding an audit to the buffer performs no serialization or disk writes.
+		assert.equal(existsSync(output), false);
+		saveLighthouseArtifacts(output, buffered);
+		assert.deepEqual(
+			JSON.parse(
+				readFileSync(
+					join(output, "_929_686-desktop-1-original.artifacts.json"),
+				),
+			),
+			buffered[0],
+		);
+		assert.equal(JSON.stringify(buffered), original);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("Lighthouse artifact files bind each original report and cannot overwrite evidence", () => {
+	const dir = mkdtempSync(join(tmpdir(), "lighthouse-bindings-"));
+	try {
+		const reports = ["home-mobile.json", "home-desktop.json"].map(
+			(rawReport, index) => ({
+				rawReport,
+				artifacts: { Trace: { traceEvents: [{ ts: index }] } },
+			}),
+		);
+		saveLighthouseArtifacts(dir, reports);
+		for (const report of reports) {
+			const file = join(
+				dir,
+				report.rawReport.replace(/\.json$/, ".artifacts.json"),
+			);
+			assert.deepEqual(JSON.parse(readFileSync(file)), report);
+		}
+		assert.throws(() => saveLighthouseArtifacts(dir, reports), {
+			code: "EEXIST",
+		});
+		assert.deepEqual(
+			JSON.parse(readFileSync(join(dir, "home-mobile.artifacts.json"))),
+			reports[0],
+		);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("readPerformanceReports returns indexed reports and surfaces unreadable indexes", () => {
+	const dir = mkdtempSync(join(tmpdir(), "perf-index-"));
+	try {
+		// No index yet is a normal first run for the caller to distinguish.
+		assert.throws(() => readPerformanceReports(dir), { code: "ENOENT" });
+		const reports = [
+			{
+				...summarizeLighthouse(fixture(), {
+					device: "desktop",
+					run: "111-abc123",
+				}),
+				rawReport: "attempt-1.json",
+			},
+		];
+		writePerformanceIndex(dir, reports);
+		// summary.json is JSON: compare against the round-tripped expectation.
+		assert.deepEqual(
+			readPerformanceReports(dir),
+			JSON.parse(JSON.stringify(reports)),
+		);
+		// A worker killed mid-write leaves a truncated index the caller must
+		// see rather than silently seeding from.
+		writeFileSync(join(dir, "summary.json"), "{truncated");
+		assert.throws(() => readPerformanceReports(dir), SyntaxError);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
 
 test("both TBT reporting paths preserve the existing browser blocking budget", () => {
 	// PR #3005: 7ms exceeded a 6.43ms history-derived limit even though the
@@ -122,6 +239,103 @@ test("the CPU profile is retained beside the raw Lighthouse settings", () => {
 	assert.deepEqual(summary.settings.throttling, {
 		cpuSlowdownMultiplier: 4.898,
 	});
+});
+
+test("the largest observed top-level task reaches the summary and markdown", () => {
+	const observedTask = {
+		startTime: 20.46,
+		duration: 36.119,
+		attributableUrl: "Unattributable",
+	};
+	const summary = {
+		...summarizeLighthouse(fixture(), {
+			device: "desktop",
+			largestObservedTask: observedTask,
+		}),
+		rawReport: "report.json",
+	};
+	assert.deepEqual(summary.largestObservedTask, observedTask);
+	assert.match(
+		performanceMarkdown([summary]),
+		/Run 1 largest observed top-level task: 36\.12ms at 20\.46ms; attributable to Unattributable/,
+	);
+	// A run without the record renders no task line and keeps the field unset.
+	const plain = {
+		...summarizeLighthouse(fixture(), { device: "desktop" }),
+		rawReport: "plain.json",
+	};
+	assert.equal(plain.largestObservedTask, undefined);
+	assert.doesNotMatch(
+		performanceMarkdown([plain]),
+		/largest observed top-level task/,
+	);
+});
+
+test("failed and nonmedian runs keep their observed task and extraction error visible", () => {
+	const task = { startTime: 1, duration: 12.5, attributableUrl: "a.js" };
+	// Three samples: the failed run is neither valid nor the median pick, yet
+	// its observed-task record must still reach the published markdown.
+	const reports = [10, 20, 30].map((lcp, i) => ({
+		...summarizeLighthouse(fixture(undefined, lcp), {
+			device: "desktop",
+			run: `worker-${i + 1}`,
+			largestObservedTask: task,
+			largestObservedTaskError:
+				i === 0 ? "Trace traceEvents missing" : undefined,
+		}),
+		rawReport: `run-${i}.json`,
+		runtimeError: i === 2 ? { code: "NO_FCP", message: "boom" } : undefined,
+	}));
+	const text = performanceMarkdown(reports);
+	for (const run of ["worker-1", "worker-2", "worker-3"]) {
+		assert.ok(
+			text.includes(
+				`Run ${run} largest observed top-level task: 12.5ms at 1ms; attributable to a.js`,
+			),
+		);
+	}
+	assert.match(text, /Run worker-1 largest observed task extraction failed/);
+	assert.doesNotMatch(text, /Run worker-2 largest observed task extraction/);
+	assert.match(text, /Run worker-3 failed: boom/);
+});
+
+test("retry-namespaced reports keep distinct raw reports and artifact bindings", () => {
+	const dir = mkdtempSync(join(tmpdir(), "lighthouse-retry-"));
+	try {
+		// A failed test stops the worker; the retry audits in a fresh process
+		// and must not overwrite the previous attempt's retained evidence.
+		const first = saveLighthouseReport(dir, fixture(), {
+			device: "desktop",
+			run: "111-1",
+		});
+		const second = saveLighthouseReport(dir, fixture(), {
+			device: "desktop",
+			run: "222-1",
+		});
+		assert.notEqual(first.rawReport, second.rawReport);
+		saveLighthouseArtifacts(dir, [
+			{ rawReport: first.rawReport, artifacts: { attempt: 1 } },
+			{ rawReport: second.rawReport, artifacts: { attempt: 2 } },
+		]);
+		assert.deepEqual(
+			JSON.parse(
+				readFileSync(
+					join(dir, first.rawReport.replace(/\.json$/, ".artifacts.json")),
+				),
+			),
+			{ rawReport: first.rawReport, artifacts: { attempt: 1 } },
+		);
+		assert.deepEqual(
+			JSON.parse(
+				readFileSync(
+					join(dir, second.rawReport.replace(/\.json$/, ".artifacts.json")),
+				),
+			),
+			{ rawReport: second.rawReport, artifacts: { attempt: 2 } },
+		);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
 });
 
 test("page and device benchmark keys retain all four measurements", () => {

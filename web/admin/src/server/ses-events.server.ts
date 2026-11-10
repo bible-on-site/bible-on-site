@@ -23,6 +23,7 @@ export interface SesSubscriptionEvent {
 	email: string;
 	timestamp: string;
 	unsubscribeAll: boolean;
+	/** Suppressions and proven opt-in transitions, excluding unchanged OPT_IN. */
 	topics: Partial<Record<Topic, Preference>>;
 }
 
@@ -139,6 +140,18 @@ function topicPreferences(
 	return topics;
 }
 
+function subscriptionPreferences(value: unknown) {
+	if (!record(value) || typeof value.unsubscribeAll !== "boolean") return null;
+	const defaults = topicPreferences(value.topicDefaultSubscriptionStatus);
+	const explicit = topicPreferences(value.topicSubscriptionStatus);
+	if (!defaults || !explicit) return null;
+	return {
+		unsubscribeAll: value.unsubscribeAll,
+		topics: { ...defaults, ...explicit },
+		explicit,
+	};
+}
+
 // Input is the SES JSON body from a trusted SNS -> SQS raw-message destination.
 // The consumer must match messageId AND attemptId to its persisted recipient attempt.
 // Schema: https://docs.aws.amazon.com/ses/latest/dg/event-publishing-retrieving-sns-contents.html
@@ -176,31 +189,51 @@ export function parseSesEvent(
 			const subscription = payload.subscription;
 			if (
 				!record(subscription) ||
-				subscription.contactList !== expected.contactListName ||
-				!record(subscription.newTopicPreferences) ||
-				typeof subscription.newTopicPreferences.unsubscribeAll !== "boolean"
+				subscription.contactList !== expected.contactListName
 			) {
 				return null;
 			}
 			const changedAt = timestamp(subscription.timestamp);
-			const preferences = subscription.newTopicPreferences;
-			const defaults = topicPreferences(
-				preferences.topicDefaultSubscriptionStatus,
+			const preferences = subscriptionPreferences(
+				subscription.newTopicPreferences,
 			);
-			const explicit = topicPreferences(preferences.topicSubscriptionStatus);
-			if (!changedAt || !defaults || !explicit) return null;
+			if (!changedAt || !preferences) return null;
+			const previous = subscriptionPreferences(
+				subscription.oldTopicPreferences,
+			);
+			const topics: Partial<Record<Topic, Preference>> = {};
+			for (const topic of ["test", "real"] as const) {
+				const preference = preferences.topics[topic];
+				// SES events contain full snapshots. An unchanged OPT_IN (or an
+				// unknown prior state) cannot restore locally withdrawn consent.
+				// Negative preferences remain effective even without an old snapshot.
+				if (preference === "OPT_OUT") topics[topic] = preference;
+				else if (
+					preference === "OPT_IN" &&
+					!preferences.unsubscribeAll &&
+					preferences.explicit[topic] === "OPT_IN" &&
+					previous &&
+					(previous.unsubscribeAll || previous.topics[topic] === "OPT_OUT")
+				) {
+					topics[topic] = "OPT_IN";
+				}
+			}
 			return {
 				type: "subscription",
 				email,
 				timestamp: changedAt,
-				unsubscribeAll: preferences.unsubscribeAll as boolean,
-				topics: { ...defaults, ...explicit },
+				unsubscribeAll: preferences.unsubscribeAll,
+				topics,
 			};
 		}
 
 		const attempt = attemptId(singleTag(mail.tags, "bulletin_attempt"));
 		if (!attempt) return null;
-		const common = { messageId: mail.messageId, attemptId: attempt, email };
+		const common = {
+			messageId: mail.messageId,
+			attemptId: attempt,
+			email,
+		};
 		switch (payload.eventType) {
 			case "Send":
 				return record(payload.send)

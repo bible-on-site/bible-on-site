@@ -15,7 +15,7 @@ public class NetworkServiceTests
         var connectivity = new Mock<IConnectivity>();
         connectivity.SetupGet(c => c.NetworkAccess).Returns(NetworkAccess.Internet);
         var calls = 0;
-        using var service = new NetworkService(connectivity.Object, () => { calls++; return Task.CompletedTask; });
+        var service = new NetworkService(connectivity.Object, () => { calls++; return Task.CompletedTask; });
         service.StartMonitoring();
         service.StartMonitoring();
         Raise(connectivity, NetworkAccess.Internet);
@@ -27,15 +27,7 @@ public class NetworkServiceTests
         Raise(connectivity, NetworkAccess.None);
         Raise(connectivity, NetworkAccess.Internet);
         calls.Should().Be(2);
-        service.StopMonitoring();
-        Raise(connectivity, NetworkAccess.None);
-        Raise(connectivity, NetworkAccess.Internet);
-        calls.Should().Be(2);
-        service.StartMonitoring();
-        service.Dispose();
-        service.Dispose();
-        service.StartMonitoring();
-        connectivity.VerifyAdd(c => c.ConnectivityChanged += It.IsAny<EventHandler<ConnectivityChangedEventArgs>>(), Times.Exactly(2));
+        connectivity.VerifyAdd(c => c.ConnectivityChanged += It.IsAny<EventHandler<ConnectivityChangedEventArgs>>(), Times.Once());
     }
 
     [Fact]
@@ -45,7 +37,7 @@ public class NetworkServiceTests
         connectivity.SetupGet(c => c.NetworkAccess).Returns(NetworkAccess.None);
         var pending = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var calls = 0;
-        using var service = new NetworkService(connectivity.Object, () => { calls++; return pending.Task; });
+        var service = new NetworkService(connectivity.Object, () => { calls++; return pending.Task; });
         service.StartMonitoring();
         Raise(connectivity, NetworkAccess.Internet);
         Raise(connectivity, NetworkAccess.Internet);
@@ -59,7 +51,7 @@ public class NetworkServiceTests
     {
         var connectivity = new Mock<IConnectivity>();
         var calls = 0;
-        using var service = new NetworkService(connectivity.Object, () => { calls++; throw new IOException("offline"); });
+        var service = new NetworkService(connectivity.Object, () => { calls++; throw new IOException("offline"); });
         service.StartMonitoring();
         Raise(connectivity, NetworkAccess.Internet);
         Raise(connectivity, NetworkAccess.None);

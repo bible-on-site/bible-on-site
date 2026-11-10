@@ -961,9 +961,3 @@ function fingerprintXml(text: string): SourceFingerprint | null {
 		declarations: [...declarations].sort(),
 	};
 }
-
-/** Fingerprint for a buffer read from disk; binary content never computes. */
-export function fingerprintFileBytes(path: string, bytes: Buffer): SourceFingerprint | null {
-	if (bytes.includes(0)) return null;
-	return fingerprintSource(path, bytes.toString("utf8"));
-}
