@@ -45,6 +45,24 @@ public partial class DisplayPreferencesViewModel : DivineNamePreferencesViewMode
         }
     }
 
+    /// <summary>
+    /// Windows-only "keep above other windows" opt-in (#2766). Off by
+    /// default; non-Windows platforms ignore the stored value entirely.
+    /// </summary>
+    public bool AlwaysOnTop
+    {
+        get => _preferencesService.AlwaysOnTop;
+        set
+        {
+            if (_preferencesService.AlwaysOnTop == value)
+            {
+                return;
+            }
+            _preferencesService.AlwaysOnTop = value;
+            OnPropertyChanged();
+        }
+    }
+
     public bool IsBackButtonPlatformDefault
     {
         get => InAppBackButton == InAppBackButtonPreference.PlatformDefault;
@@ -187,6 +205,7 @@ public partial class DisplayPreferencesViewModel : DivineNamePreferencesViewMode
         OnPropertyChanged(nameof(IsBackButtonPlatformDefault));
         OnPropertyChanged(nameof(IsBackButtonShow));
         OnPropertyChanged(nameof(IsBackButtonHide));
+        OnPropertyChanged(nameof(AlwaysOnTop));
         OnPropertyChanged(nameof(PasukFontPercent));
         OnPropertyChanged(nameof(PerushFontPercent));
         OnPropertyChanged(nameof(ArticleFontPercent));
