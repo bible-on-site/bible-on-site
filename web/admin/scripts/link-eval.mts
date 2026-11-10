@@ -47,6 +47,7 @@ import {
 	runLinkGeneration,
 } from "~/server/article-link-pipeline";
 import { execute, pool, queryOne } from "~/server/db";
+import { callOpenAiJson } from "~/server/llm-json";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const corpusPath = resolve(scriptDir, "link-eval-corpus.json");
@@ -313,9 +314,32 @@ async function generate(engine: string): Promise<void> {
 	let setCurrent: ((id: number) => void) | undefined;
 	const manifest = loadManifest();
 	if (engine === "llm" || engine === "both") {
+		let currentArticleId = 0;
+		setCurrent = (id: number) => {
+			currentArticleId = id;
+		};
+		// Usage belongs to the invocation, not to any proposal it emitted —
+		// record it once per call, including zero-proposal calls (which no
+		// proposal row can represent). Recording under the article key also
+		// replaces any stale usage an earlier evaluation left for it.
+		const recordUsage = (
+			promptTokens: number | null,
+			completionTokens: number | null,
+		) => {
+			manifest.llmCalls[String(currentArticleId)] = {
+				articleId: currentArticleId,
+				promptTokens,
+				completionTokens,
+			};
+		};
 		if (args.live) {
-			// Real provider path — no fixture caller; runLinkGeneration uses
-			// callOpenAiJson and gates on OPENAI_API_KEY per article.
+			// Real provider path: wrap callOpenAiJson so live token usage lands
+			// in the same ledger the fixture caller fills.
+			_setLinkLlmCaller(async (params) => {
+				const result = await callOpenAiJson(params);
+				recordUsage(result.promptTokens, result.completionTokens);
+				return result;
+			});
 		} else {
 			const fixturePath = resolve(
 				args.fixture ?? resolve(scriptDir, "link-eval-llm-fixture.json"),
@@ -325,18 +349,14 @@ async function generate(engine: string): Promise<void> {
 			) as LlmFixture;
 			// Generator provenance honestly marks fixture output.
 			process.env.OPENAI_MODEL = fixture.model;
-			let currentArticleId = 0;
 			_setLinkLlmCaller(async () => {
 				const output = fixture.byArticle[String(currentArticleId)] ?? {
 					proposals: [],
 				};
-				// Usage belongs to the invocation, not to any proposal it
-				// emitted — record it once, including zero-proposal calls.
-				manifest.llmCalls[String(currentArticleId)] = {
-					articleId: currentArticleId,
-					promptTokens: fixture.promptTokens ?? null,
-					completionTokens: fixture.completionTokens ?? null,
-				};
+				recordUsage(
+					fixture.promptTokens ?? null,
+					fixture.completionTokens ?? null,
+				);
 				return {
 					content: JSON.stringify(output),
 					model: fixture.model,
@@ -344,9 +364,6 @@ async function generate(engine: string): Promise<void> {
 					completionTokens: fixture.completionTokens ?? null,
 				};
 			});
-			setCurrent = (id: number) => {
-				currentArticleId = id;
-			};
 		}
 	}
 
@@ -436,6 +453,10 @@ async function generate(engine: string): Promise<void> {
 		console.info(
 			`  ${engine} article ${art.id}: ${oc.outcome} — ${oc.proposals.length} drafts (${ms} ms)`,
 		);
+		// Flush after every committed article — an interruption between
+		// articles must not leave checkpointed drafts without manifest
+		// membership (a rerun would skip them, hiding them from review).
+		persist();
 	}
 	persist();
 	console.info(
