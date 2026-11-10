@@ -139,7 +139,7 @@
                                                    TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
                                         </VerticalStackLayout>
                                         <!-- Shared action slot: every lifecycle action of a ספר keeps the
-                                             same end-side margin so הסרה lands exactly where הורדה sat —
+                                             same end-side margin so הסרה lands exactly where הורדה sat -
                                              the per-book action must not travel when the state flips (#3264). -->
                                         <FlexLayout Direction="Row" Wrap="Wrap" JustifyContent="End" HorizontalOptions="End">
                                             <Label Text="מוריד…"

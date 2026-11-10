@@ -10,11 +10,11 @@ using Moq;
 namespace BibleOnSite.Tests.Controls;
 
 /// <summary>
-/// #3264 — the per-book קריינות action keeps one end-anchored slot across the
+/// #3264 - the per-book קריינות action keeps one end-anchored slot across the
 /// הורדה → מוריד… → הסרה lifecycle. The authored ExtensionPacksView.xaml row is
 /// parsed and instantiated as real MAUI layout objects bound to a real
 /// <see cref="RecitationBookChoice"/>, so the measured painted edges come from
-/// the actual XAML values and the shared FlexLayout arrange — not a margin
+/// the actual XAML values and the shared FlexLayout arrange - not a margin
 /// string comparison and not a hand-copied tree. (The dev/e2e app cannot reach
 /// these rows: without the packaged recitation catalog the view model surfaces
 /// a retry status and no book rows materialize.)
@@ -25,7 +25,7 @@ public class ExtensionPacksLayoutTests
     private const double RowHeight = 120;
     private const double Tolerance = 0.01;
 
-    /// <summary>Deterministic paint size for leaf views — isolates placement from text metrics.</summary>
+    /// <summary>Deterministic paint size for leaf views - isolates placement from text metrics.</summary>
     private static readonly Size LeafSize = new(96, 36);
     private static readonly XNamespace Maui = "http://schemas.microsoft.com/dotnet/2021/maui";
 
@@ -42,7 +42,7 @@ public class ExtensionPacksLayoutTests
     });
 
     /// <summary>
-    /// Deterministic measured size via a stub handler — the headless measure
+    /// Deterministic measured size via a stub handler - the headless measure
     /// path resolves DesiredSize through <c>IViewHandler.GetDesiredSize</c>.
     /// Layouts get a stub too so their LayoutManager is created.
     /// </summary>
@@ -96,7 +96,7 @@ public class ExtensionPacksLayoutTests
     /// authored alignment and every child keeps its authored margin/type, with
     /// visibility driven by the actual bound flag.
     /// </summary>
-    private static FlexLayout ArrangeStrip(RecitationBookChoice book)
+    private static FlexLayout ArrangeStrip(RecitationBookChoice book, double width = RowWidth)
     {
         var source = ActionStripElement.Value;
         var strip = new FlexLayout
@@ -106,8 +106,8 @@ public class ExtensionPacksLayoutTests
             JustifyContent = Enum.Parse<FlexJustify>(source.Attribute("JustifyContent")?.Value ?? "Start"),
             HorizontalOptions = LayoutOptions.End,
             // The production row is full width; fix the strip to it so End anchoring is observable.
-            WidthRequest = RowWidth,
-            // The production shell is RTL — the pack direction the device shows.
+            WidthRequest = width,
+            // The production shell is RTL - the pack direction the device shows.
             FlowDirection = FlowDirection.RightToLeft,
         };
         foreach (var child in source.Elements())
@@ -138,21 +138,21 @@ public class ExtensionPacksLayoutTests
         }
 
         // Headless: the platform-driven arrange never runs, so drive the
-        // cross-platform layout entry points the handlers would call — the
+        // cross-platform layout entry points the handlers would call - the
         // real FlexLayoutManager measures and places each child.
         var layout = (ICrossPlatformLayout)strip;
-        layout.CrossPlatformMeasure(RowWidth, RowHeight);
-        // Populate each child's DesiredSize after the manager measure — the
+        layout.CrossPlatformMeasure(width, RowHeight);
+        // Populate each child's DesiredSize after the manager measure - the
         // arrange pass consumes DesiredSize for the painted frame.
         foreach (var view in strip.Children.OfType<View>())
         {
-            ((IView)view).Measure(RowWidth, RowHeight);
+            ((IView)view).Measure(width, RowHeight);
         }
-        layout.CrossPlatformArrange(new Rect(0, 0, RowWidth, LeafSize.Height));
+        layout.CrossPlatformArrange(new Rect(0, 0, width, LeafSize.Height));
         return strip;
     }
 
-    /// <summary>Painted left edge inside the strip — the RTL end-anchored inset.</summary>
+    /// <summary>Painted left edge inside the strip - the RTL end-anchored inset.</summary>
     private static double EndInset(VisualElement child) => child.Frame.X;
 
     private static View? Action(FlexLayout strip, string automationId) =>
@@ -177,6 +177,17 @@ public class ExtensionPacksLayoutTests
             "the הסרה action must occupy the same end-anchored slot הורדה used (#3264)");
         downloadInset.Should().BeGreaterThan(0,
             "the action keeps the designed inset from the row edge rather than touching it");
+
+        // The production strip is measured without a width request: the shared
+        // slot is an end anchor, so the invariant must hold at other widths too.
+        var narrowDownload = ArrangeStrip(Book(available: 3, installed: 0), width: 280);
+        var narrowRemove = ArrangeStrip(Book(available: 3, installed: 3), width: 280);
+        var narrowRemoveInset = EndInset(Action(narrowRemove, "RemoveBookButton")!);
+        var narrowDownloadInset = EndInset(Action(narrowDownload, "DownloadBookButton")!);
+        narrowRemoveInset.Should().BeApproximately(narrowDownloadInset, Tolerance,
+            "the shared slot is width-independent - no width request pins the strip in production");
+        narrowDownloadInset.Should().BeApproximately(downloadInset, Tolerance,
+            "the end inset itself, not the absolute frame, is what the slot defines");
     }
 
 
