@@ -487,7 +487,12 @@ public partial class MoedViewModel : ObservableObject, IPerushimSheetViewModel /
     /// Raised when the ViewModel completed a moed swap — the code-behind
     /// resets the recitation session and scrolls the reader to the top.
     /// </summary>
+    // Codacy: S3264 false positive — invoked via ?.Invoke at
+    // NavigateToUnitAsync below; the XAML-less analysis misses the page's
+    // subscription too.
+#pragma warning disable S3264
     public event EventHandler<int>? NavigationRequested;
+#pragma warning restore S3264
 
     /// <summary>
     /// Navigates to a moed by id (prev/next satellites, picker). Rebuilds the

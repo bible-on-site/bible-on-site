@@ -12,7 +12,11 @@ namespace BibleOnSite.ViewModels;
 /// <see cref="MoedService"/> (or its offline cache) — the app keeps no
 /// hardcoded corpus (#3261).
 /// </summary>
+// Codacy: S2333 false positive — partial is required by the MVVM source
+// generators ([ObservableProperty]/[RelayCommand]).
+#pragma warning disable S2333
 public partial class MoadimListViewModel : ObservableObject //NOSONAR
+#pragma warning restore S2333
 {
     /// <summary>Header shown for entries the catalogue left without a month anchor.</summary>
     internal const string UngroupedLabel = "ללא חודש";

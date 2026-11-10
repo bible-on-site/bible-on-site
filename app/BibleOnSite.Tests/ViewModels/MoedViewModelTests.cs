@@ -212,9 +212,10 @@ public class MoedViewModelTests
     [Fact]
     public async Task PlanSegments_PartitionedPerSection_AndWholeMoed()
     {
-        // perek 1 and 2 have audio (unaligned tracks — the moed's ranges
-        // cover whole perakim, which unaligned tracks can play unbounded);
-        // the aligned-clip path lives in RecitationRangePlannerTests.
+        // perek 1 and 2 carry audio through unaligned tracks — the moed's
+        // ranges cover whole perakim, which unaligned tracks can play
+        // unbounded. The aligned-clip path is covered by
+        // RecitationRangePlannerTests.
         RecitationTrack Pending(int perek) => new(perek, $"u{perek}", "h", "t", 5000, "pending", []);
         var tracks = new Dictionary<int, RecitationTrack> { [1] = Pending(1), [2] = Pending(2) };
 

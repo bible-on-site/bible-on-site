@@ -362,4 +362,6 @@ public class MoedService : BaseGraphQLService
 /// trimming-safe pattern as StarterJsonContext.
 /// </summary>
 [System.Text.Json.Serialization.JsonSerializable(typeof(MoedService.MoadimResponse))]
+#pragma warning disable S2333 // System.Text.Json source generation supplies this partial implementation.
 internal partial class MoedJsonContext : System.Text.Json.Serialization.JsonSerializerContext { }
+#pragma warning restore S2333
