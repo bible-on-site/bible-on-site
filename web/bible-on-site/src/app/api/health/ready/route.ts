@@ -39,7 +39,17 @@ function warmCriticalPaths(): void {
 	isWarmed = true;
 }
 
-export async function GET(): Promise<NextResponse> {
+type ReadinessResult =
+	| {
+			status: "ready";
+			warmed: boolean;
+			content: { authorCount: number; articleCount: number };
+	  }
+	| { status: "error"; message: string };
+
+let inflight: Promise<ReadinessResult> | undefined;
+
+async function checkReadiness(): Promise<ReadinessResult> {
 	try {
 		warmCriticalPaths();
 		recitationResponse();
@@ -56,22 +66,25 @@ export async function GET(): Promise<NextResponse> {
 			throw new Error("Public authors and articles are unavailable");
 		}
 		await warmServerPages();
-		return NextResponse.json(
-			{
-				status: "ready",
-				warmed: isWarmed,
-				content,
-			},
-			{ status: 200 },
-		);
+		return { status: "ready", warmed: isWarmed, content };
 	} catch (error) {
 		console.error("Readiness check failed:", error);
-		return NextResponse.json(
-			{
-				status: "error",
-				message: error instanceof Error ? error.message : "Unknown error",
-			},
-			{ status: 503 },
-		);
+		return {
+			status: "error",
+			message: error instanceof Error ? error.message : "Unknown error",
+		};
 	}
+}
+
+export async function GET(): Promise<NextResponse> {
+	// The launcher's early probe and the scheduled container check can overlap
+	// during startup: share the in-flight check so the warm runs once, then let
+	// the next probe re-verify the database as before.
+	inflight ??= checkReadiness().finally(() => {
+		inflight = undefined;
+	});
+	const result = await inflight;
+	return NextResponse.json(result, {
+		status: result.status === "ready" ? 200 : 503,
+	});
 }
