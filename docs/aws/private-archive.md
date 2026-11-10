@@ -40,6 +40,16 @@ request is checked against the verified actor. Author breadcrumbs stop at home.
 Folders and files share one name namespace. Folder names reject traversal,
 control characters and invalid Unicode; S3 keys are limited to 1024 UTF-8 bytes.
 
+## Database connection verification
+
+Both admin database pools verify the server certificate and hostname, using the
+[official RDS root bundle](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html)
+for `il-central-1`, bundled as public certificate data. The roots were retrieved
+on 2026-11-11 and a real TLS 1.3 handshake to the current RDS endpoint passed
+certificate and hostname validation without sending database credentials.
+The task-owned temporary test ingress was removed and its absence verified.
+Plaintext is permitted only for non-production loopback development databases.
+
 ## Storage and quotas
 
 Only the **admin ECS task role** can read or write data in the new private S3
@@ -88,14 +98,18 @@ admin-only architecture.**
 1. Verify account `250598594267`, region `il-central-1`, the live admin task role
    `adminTaskRole` and its exact ARN. Save current task definitions, pinned image
    digests and the current router file. Recheck them immediately before applying.
-2. Deploy only `docs/aws/cloudformation/private-archive.yaml`, passing
+2. Deploy only `devops/aws/private-archive.yaml`, passing
    `AdminTaskRoleArn`, `AdminTaskRoleName` and the canonical `AdminOrigin`.
-   It adds a retained private bucket, retained native user pool, public PKCE
+   This new deployable artifact is outside the reference-only templates in
+   `docs/aws/cloudformation/`. It adds a retained private bucket, retained native user pool, public PKCE
    client/domain and S3 plus pool-scoped ListUsers permissions on the admin role.
    It does not change the existing admin SSO pool/client or website role.
 3. Apply `node devops/private-archive-db.mts` with DB_URL supplied securely.
-   Run twice to confirm idempotence. This additive migration preserves any older
-   upload metadata and S3 keys. Never use the destructive db-populator Lambda.
+   Run twice to confirm idempotence. The schema upgrade preserves older test
+   metadata and keys within the same configured bucket. This is the first live
+   private-archive deployment: neither an older upload bucket nor an author pool
+   exists in the target account. This migration does not copy objects between
+   buckets or replace existing identity pools. Never use the destructive db-populator Lambda.
 4. Add `ARCHIVE_AWS_REGION`, `ARCHIVE_S3_BUCKET`, `ARCHIVE_COGNITO_POOL_ID`,
    `ARCHIVE_COGNITO_CLIENT_ID`, `ARCHIVE_COGNITO_DOMAIN` and `ARCHIVE_ORIGIN` to
    the **admin task only**, from stack outputs. Keep existing SSO settings.

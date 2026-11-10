@@ -391,3 +391,15 @@ it("creates folders within the displayed directory and opens folder entries", as
 		),
 	);
 });
+
+it("treats the trailing-slash archive URL as the archiver home", async () => {
+	directory.isAdmin = false;
+	window.history.replaceState(null, "", "/archive/");
+	await mount();
+	expect(fetch).toHaveBeenCalledWith(
+		"/archive/api",
+		expect.objectContaining({
+			headers: expect.objectContaining({ "X-Archive-Path": "" }),
+		}),
+	);
+});

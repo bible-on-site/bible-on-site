@@ -18,6 +18,10 @@ function fileSize(value: number) {
 }
 
 async function api(data?: Record<string, unknown>, directory = "", after = "") {
+	const pathname =
+		window.location.pathname === "/archive/"
+			? "/archive"
+			: window.location.pathname;
 	const response = await fetch(
 		data?.action === "logout" ? "/archive/api?logout" : "/archive/api",
 		{
@@ -26,10 +30,8 @@ async function api(data?: Record<string, unknown>, directory = "", after = "") {
 				"X-Archive-Directory": directory,
 				"X-Archive-After": after,
 				"X-Archive-Path":
-					!directory && window.location.pathname.startsWith("/archive/")
-						? encodeURIComponent(
-								decodeURIComponent(window.location.pathname.slice(8)),
-							)
+					!directory && pathname.startsWith("/archive/")
+						? encodeURIComponent(decodeURIComponent(pathname.slice(8)))
 						: "",
 			},
 			...(data

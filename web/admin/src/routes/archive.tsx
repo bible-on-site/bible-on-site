@@ -1,5 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ArchivePage } from "~/components/archive/ArchivePage";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 export const Route = createFileRoute("/archive")({
 	head: () => ({
 		meta: [
@@ -7,5 +6,5 @@ export const Route = createFileRoute("/archive")({
 			{ name: "robots", content: "noindex, nofollow, noarchive" },
 		],
 	}),
-	component: ArchivePage,
+	component: Outlet,
 });

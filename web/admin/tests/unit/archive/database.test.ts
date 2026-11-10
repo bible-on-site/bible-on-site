@@ -2,7 +2,8 @@ import { beforeEach, expect, it, type Mock, vi } from "vitest";
 
 vi.mock("@tanstack/react-start/server-only", () => ({}));
 vi.mock("~/server/db-config", () => ({
-	resolveMysqlUrl: () => "mysql://root:test@database/archive?ssl-mode=DISABLED",
+	resolveMysqlUrl: () =>
+		"mysql://root:test@localhost/archive?ssl-mode=DISABLED",
 }));
 vi.mock("mysql2/promise", () => ({ default: { createPool: vi.fn() } }));
 
@@ -41,7 +42,7 @@ it("uses one database connection for quota locking, reservations and metadata", 
 	);
 	expect(connection.execute).toHaveBeenCalledWith("reservation", []);
 	expect(mysql.createPool).toHaveBeenCalledWith({
-		uri: "mysql://root:test@database/archive?ssl-mode=DISABLED",
+		uri: "mysql://root:test@localhost/archive",
 		ssl: undefined,
 		connectionLimit: 3,
 		waitForConnections: true,

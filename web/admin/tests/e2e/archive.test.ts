@@ -39,9 +39,14 @@ test("upload directory accepts arbitrary files and shows completed files", async
 		status: string;
 		createdAt: string;
 	}[] = [];
+	let initialListing = true;
 	await page.route("**/archive/api**", async (route) => {
 		const request = route.request();
-		if (request.method() === "GET")
+		if (request.method() === "GET") {
+			if (initialListing) {
+				expect(request.headers()["x-archive-path"] || "").toBe("");
+				initialListing = false;
+			}
 			return route.fulfill({
 				json: {
 					id: "author-home",
@@ -56,6 +61,7 @@ test("upload directory accepts arbitrary files and shows completed files", async
 					files,
 				},
 			});
+		}
 		if (request.method() === "PUT")
 			return route.fulfill({ json: { ok: true } });
 		const data = request.postDataJSON();
@@ -74,7 +80,7 @@ test("upload directory accepts arbitrary files and shows completed files", async
 		if (data.action === "remove") files.splice(0);
 		return route.fulfill({ json: { ok: true } });
 	});
-	await page.goto("/archive");
+	await page.goto("/archive/");
 	await expect(
 		page.getByText("התיקייה עדיין ריקה.", { exact: false }),
 	).toBeVisible();
@@ -106,6 +112,11 @@ test("upload directory accepts arbitrary files and shows completed files", async
 test("administrators browse root and named author homes", async ({
 	page,
 }, testInfo) => {
+	const routeWarnings: string[] = [];
+	page.on("console", (message) => {
+		if (message.text().includes("Generated path"))
+			routeWarnings.push(message.text());
+	});
 	const root = "00000000-0000-0000-0000-000000000001",
 		authors = "00000000-0000-0000-0000-000000000002",
 		home = "11111111-1111-1111-1111-111111111111";
@@ -125,7 +136,15 @@ test("administrators browse root and named author homes", async ({
 		updatedAt: "2026-11-10 00:00:00.000000",
 	});
 	await page.route("**/archive/api", (route) => {
-		const id = route.request().headers()["x-archive-directory"] || root;
+		const headers = route.request().headers();
+		const path = decodeURIComponent(headers["x-archive-path"] || "");
+		const id =
+			headers["x-archive-directory"] ||
+			(path.startsWith("/authors/מחבר לדוגמה")
+				? home
+				: path.startsWith("/authors")
+					? authors
+					: root);
 		const crumbs =
 			id === root
 				? [root]
@@ -193,4 +212,5 @@ test("administrators browse root and named author homes", async ({
 		path: testInfo.outputPath("archive-mobile.png"),
 		fullPage: true,
 	});
+	expect(routeWarnings).toEqual([]);
 });

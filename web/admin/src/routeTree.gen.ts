@@ -19,6 +19,7 @@ import { Route as LinkProposalsRouteImport } from './routes/link-proposals'
 import { Route as MoadimRouteImport } from './routes/moadim'
 import { Route as RabbisRouteImport } from './routes/rabbis'
 import { Route as TanahpediaRouteImport } from './routes/tanahpedia'
+import { Route as ArchiveIndexRouteImport } from './routes/archive.index'
 import { Route as ArchiveSplatRouteImport } from './routes/archive.$'
 import { Route as ArticlesIdRouteImport } from './routes/articles.$id'
 import { Route as RabbisIdRouteImport } from './routes/rabbis.$id'
@@ -77,6 +78,11 @@ const TanahpediaRoute = TanahpediaRouteImport.update({
   path: '/tanahpedia',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ArchiveIndexRoute = ArchiveIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ArchiveRoute,
+} as any)
 const ArchiveSplatRoute = ArchiveSplatRouteImport.update({
   id: '/$',
   path: '/$',
@@ -129,12 +135,12 @@ export interface FileRoutesByFullPath {
   '/rabbis/$id': typeof RabbisIdRoute
   '/tanahpedia/persons': typeof TanahpediaPersonsRoute
   '/tanahpedia/places': typeof TanahpediaPlacesRoute
+  '/archive/': typeof ArchiveIndexRoute
   '/articles/perek/$perekId': typeof ArticlesPerekPerekIdRoute
   '/tanahpedia/entries/$id': typeof TanahpediaEntriesIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/archive': typeof ArchiveRouteWithChildren
   '/archive-settings': typeof ArchiveSettingsRoute
   '/articles': typeof ArticlesRouteWithChildren
   '/bulletins': typeof BulletinsRoute
@@ -148,6 +154,7 @@ export interface FileRoutesByTo {
   '/rabbis/$id': typeof RabbisIdRoute
   '/tanahpedia/persons': typeof TanahpediaPersonsRoute
   '/tanahpedia/places': typeof TanahpediaPlacesRoute
+  '/archive': typeof ArchiveIndexRoute
   '/articles/perek/$perekId': typeof ArticlesPerekPerekIdRoute
   '/tanahpedia/entries/$id': typeof TanahpediaEntriesIdRoute
 }
@@ -168,6 +175,7 @@ export interface FileRoutesById {
   '/rabbis/$id': typeof RabbisIdRoute
   '/tanahpedia/persons': typeof TanahpediaPersonsRoute
   '/tanahpedia/places': typeof TanahpediaPlacesRoute
+  '/archive/': typeof ArchiveIndexRoute
   '/articles/perek/$perekId': typeof ArticlesPerekPerekIdRoute
   '/tanahpedia/entries/$id': typeof TanahpediaEntriesIdRoute
 }
@@ -189,12 +197,12 @@ export interface FileRouteTypes {
     | '/rabbis/$id'
     | '/tanahpedia/persons'
     | '/tanahpedia/places'
+    | '/archive/'
     | '/articles/perek/$perekId'
     | '/tanahpedia/entries/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/archive'
     | '/archive-settings'
     | '/articles'
     | '/bulletins'
@@ -208,6 +216,7 @@ export interface FileRouteTypes {
     | '/rabbis/$id'
     | '/tanahpedia/persons'
     | '/tanahpedia/places'
+    | '/archive'
     | '/articles/perek/$perekId'
     | '/tanahpedia/entries/$id'
   id:
@@ -227,6 +236,7 @@ export interface FileRouteTypes {
     | '/rabbis/$id'
     | '/tanahpedia/persons'
     | '/tanahpedia/places'
+    | '/archive/'
     | '/articles/perek/$perekId'
     | '/tanahpedia/entries/$id'
   fileRoutesById: FileRoutesById
@@ -316,6 +326,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TanahpediaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/archive/': {
+      id: '/archive/'
+      path: '/'
+      fullPath: '/archive/'
+      preLoaderRoute: typeof ArchiveIndexRouteImport
+      parentRoute: typeof ArchiveRoute
+    }
     '/archive/$': {
       id: '/archive/$'
       path: '/$'
@@ -370,10 +387,12 @@ declare module '@tanstack/react-router' {
 
 interface ArchiveRouteChildren {
   ArchiveSplatRoute: typeof ArchiveSplatRoute
+  ArchiveIndexRoute: typeof ArchiveIndexRoute
 }
 
 const ArchiveRouteChildren: ArchiveRouteChildren = {
   ArchiveSplatRoute: ArchiveSplatRoute,
+  ArchiveIndexRoute: ArchiveIndexRoute,
 }
 
 const ArchiveRouteWithChildren =

@@ -2,16 +2,13 @@ import "@tanstack/react-start/server-only";
 import mysql from "mysql2/promise";
 import { ArchiveStore, type Sql } from "~/server/archive/store";
 import { resolveMysqlUrl } from "../db-config";
+import { databaseConnectionOptions } from "../db-tls.server";
 
 // Upload transitions may wait on S3. They never borrow an ordinary admin connection.
 let pool: mysql.Pool | undefined;
 function uploadPool() {
 	pool ??= mysql.createPool({
-		uri: resolveMysqlUrl(),
-		ssl:
-			new URL(resolveMysqlUrl()).searchParams.get("ssl-mode") === "DISABLED"
-				? undefined
-				: { rejectUnauthorized: false },
+		...databaseConnectionOptions(new URL(resolveMysqlUrl())),
 		connectionLimit: 3,
 		waitForConnections: true,
 		queueLimit: 25,
