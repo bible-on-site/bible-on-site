@@ -118,6 +118,23 @@ export const externalIPv4 = () =>
 		.find((iface) => iface && iface.family === "IPv4" && !iface.internal)
 		?.address;
 
+// node:test's own timeout marks a hung test failed but cannot unwind its
+// awaits: a pending connect or process exit keeps the file (and the spawned
+// wrapper) alive until the outer execFile kills it — an opaque SIGTERM that
+// also leaks the fixture children. Bounding a wait inside the test's existing
+// budget turns such a stall into a failure that names the phase which never
+// settled.
+export const deadline = (promise, ms, what) => {
+	let timer;
+	const expired = new Promise((_, reject) => {
+		timer = setTimeout(
+			() => reject(new Error(`${what} did not settle within ${ms}ms`)),
+			ms,
+		);
+	});
+	return Promise.race([promise, expired]).finally(() => clearTimeout(timer));
+};
+
 export const freePort = async () => {
 	const probe = net.createServer();
 	probe.listen(0, "0.0.0.0");
