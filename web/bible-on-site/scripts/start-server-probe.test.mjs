@@ -165,6 +165,60 @@ test("readiness probe retries refused connections and logs the first response on
 	stop();
 });
 
+test("readiness probe marks listener accept before the readiness response", async () => {
+	let connects = 0;
+	const lines = [];
+	let clock = 1_000;
+	const stop = startReadinessProbe({
+		port: 3000,
+		connect: async () => {
+			connects += 1;
+			if (connects < 3) throw new Error("connect ECONNREFUSED");
+			clock += 120; // listener begins accepting 120ms in
+		},
+		request: async () => {
+			clock += 500; // the warm response lands 500ms after accept
+			return Response.json({ status: "ready" });
+		},
+		sleep: async () => {},
+		now: () => clock,
+		log: (line) => lines.push(line),
+		warn: () => {},
+	});
+	const deadline = Date.now() + 2_000;
+	while (lines.length < 2) {
+		if (Date.now() > deadline) throw new Error("probe never logged");
+		await new Promise((resolve) => setTimeout(resolve, 5));
+	}
+	assert.deepEqual(lines, [
+		"Website listener accepting connections after 120ms",
+		"Website readiness probe: HTTP 200 after 620ms",
+	]);
+	assert.equal(connects, 3);
+	stop();
+});
+
+test("readiness probe without a connector logs only the response line", async () => {
+	const lines = [];
+	const stop = startReadinessProbe({
+		port: 3000,
+		connect: null,
+		request: async () => Response.json({ status: "ready" }),
+		sleep: async () => {},
+		now: () => 1_000,
+		log: (line) => lines.push(line),
+		warn: () => {},
+	});
+	const deadline = Date.now() + 2_000;
+	while (lines.length === 0) {
+		if (Date.now() > deadline) throw new Error("probe never logged");
+		await new Promise((resolve) => setTimeout(resolve, 5));
+	}
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	assert.deepEqual(lines, ["Website readiness probe: HTTP 200 after 0ms"]);
+	stop();
+});
+
 test("readiness probe warns once per distinct failure", async () => {
 	const warnings = [];
 	let attempts = 0;

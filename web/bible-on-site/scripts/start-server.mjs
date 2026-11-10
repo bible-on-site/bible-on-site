@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
+import { resolve4 } from "node:dns/promises";
 import { readFile } from "node:fs/promises";
-import { constants } from "node:os";
+import net from "node:net";
+import { constants, networkInterfaces } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -128,6 +130,28 @@ export async function inboundConnections(
 const READINESS_PATH = "/api/health/ready";
 
 /**
+ * One bare TCP handshake against the listener — the timestamp separates
+ * "first listening socket" from the initialization and warm-up work the HTTP
+ * request then queues behind. The socket is closed immediately; the server's
+ * backlog already proved the listener is up.
+ */
+function socketAccept(port, signal) {
+	return new Promise((resolve, reject) => {
+		const socket = net.connect({ port, host: "127.0.0.1" });
+		const done = (error) => {
+			socket.destroy();
+			if (error) reject(error);
+			else resolve();
+		};
+		socket.once("connect", () => done());
+		socket.once("error", (error) => done(error));
+		signal?.addEventListener("abort", () =>
+			done(signal.reason ?? new Error("aborted")),
+		);
+	});
+}
+
+/**
  * Fire the canonical warm-up as soon as the listener accepts instead of
  * waiting for the first scheduled container check: the Docker
  * `--start-interval` delays that check several seconds after the socket is
@@ -139,10 +163,17 @@ const READINESS_PATH = "/api/health/ready";
  * Connection refusals while the listener boots are retried; any HTTP
  * response — ready or not — ends the probe because the warm was triggered.
  * `stop` aborts a pending request so the wrapper never outlives its child.
+ *
+ * With the real `request` (or an injected `connect`) a bare handshake first
+ * marks when the socket itself starts accepting, so listener-accept and the
+ * initialization+warm response are separately measurable in CloudWatch —
+ * the split the handover issue asks for. An injected `request` without a
+ * `connect` runs the request loop alone, unchanged.
  */
 export function startReadinessProbe({
 	port,
 	request = fetch,
+	connect,
 	retryDelayMs = 250,
 	log = console.log,
 	warn = console.warn,
@@ -156,6 +187,12 @@ export function startReadinessProbe({
 } = {}) {
 	if (!Number.isSafeInteger(port) || port < 1 || port > 65_535)
 		throw new RangeError("Website port must be between 1 and 65535");
+	// `connect: null` disables the accept check explicitly; a test that injects
+	// `request` without `connect` has no real socket to accept against.
+	const connector =
+		connect === null
+			? null
+			: (connect ?? (request === fetch ? socketAccept : null));
 	const controller = new AbortController();
 	const startedAt = now();
 	const reported = new Set();
@@ -164,9 +201,34 @@ export function startReadinessProbe({
 		stopped = true;
 		controller.abort();
 	};
+	const report = (error) => {
+		// Listener-boot refusals are the expected retry; report each distinct
+		// failure once so a stuck warm-up stays visible in the container log
+		// without flooding it every 250ms.
+		const signature = `${error} ${error?.cause ?? ""}`;
+		if (!reported.has(signature)) {
+			reported.add(signature);
+			warn("Website readiness probe attempt failed:", error);
+		}
+	};
 	const run = async () => {
 		const url = `http://127.0.0.1:${port}${READINESS_PATH}`;
+		let accepted = false;
 		while (!stopped) {
+			if (connector && !accepted) {
+				try {
+					await connector(port, controller.signal);
+					accepted = true;
+					log(
+						`Website listener accepting connections after ${now() - startedAt}ms`,
+					);
+				} catch (error) {
+					if (stopped) return;
+					report(error);
+					await sleep(retryDelayMs);
+					continue;
+				}
+			}
 			try {
 				const response = await request(url, {
 					signal: controller.signal,
@@ -184,14 +246,7 @@ export function startReadinessProbe({
 				return;
 			} catch (error) {
 				if (stopped) return;
-				// Listener-boot refusals are the expected retry; report each
-				// distinct failure once so a stuck warm-up stays visible in the
-				// container log without flooding it every 250ms.
-				const signature = `${error} ${error?.cause ?? ""}`;
-				if (!reported.has(signature)) {
-					reported.add(signature);
-					warn("Website readiness probe attempt failed:", error);
-				}
+				report(error);
 			}
 			await sleep(retryDelayMs);
 		}
@@ -204,20 +259,46 @@ export function startReadinessProbe({
 	return stop;
 }
 
+/** The task's own non-loopback IPv4 addresses — its service-discovery answer. */
+function taskAddresses() {
+	return Object.values(networkInterfaces())
+		.flat()
+		.filter((row) => row && row.family === "IPv4" && !row.internal)
+		.map((row) => row.address);
+}
+
+const boundedDelay = (ms) =>
+	new Promise((resolve) => {
+		setTimeout(resolve, ms).unref();
+	});
+
 /**
  * Keep accepting requests while Cloud Map removal reaches cached DNS answers.
- * `minDrainMs` is the floor covering that propagation: quiet termination is
- * allowed only after it elapses, because a zero socket count cannot prove the
- * router has stopped resolving the old address.
+ * The floor is measured, not guessed: the task resolves its own discovery
+ * name through the same VPC resolver the router uses, and quiet termination
+ * is allowed once this task's address has been absent from answers for the
+ * router's full `valid=10s` cache window (`routerCacheMs`) — a cached answer
+ * naming the removed address can be at most that old. When no discovery read
+ * succeeds, `minDrainMs` remains the unconditional floor, exactly as before:
+ * a zero socket count cannot prove the old address is out of answers, and a
+ * missing answer cannot either. Slow removal that outlasts the old floor keeps
+ * the drain serving toward the same `drainMs` deadline instead of dropping
+ * clients the fixed estimate was protecting.
  */
 export function startServer({
 	drainMs = 90_000,
 	minDrainMs = 45_000,
 	quietMs = 30_000,
 	pollMs = 500,
+	routerCacheMs = 10_000,
+	dnsTimeoutMs = 1_000,
 	port = Number(process.env.PORT) || 3000,
 	cwd = process.cwd(),
 	measure = () => inboundConnections(port),
+	resolve = resolve4,
+	serviceName = process.env.WEBSITE_DISCOVERY_NAME ??
+		"website.bible-on-site.local",
+	ownAddresses = taskAddresses,
 	now = Date.now,
 	log = console.log,
 } = {}) {
@@ -225,6 +306,7 @@ export function startServer({
 		["drain", drainMs],
 		["minimum drain", minDrainMs],
 		["quiet window", quietMs],
+		["router cache", routerCacheMs],
 	]) {
 		if (!Number.isSafeInteger(value) || value < 0 || value > 90_000)
 			throw new RangeError(
@@ -236,6 +318,14 @@ export function startServer({
 	if (!Number.isSafeInteger(pollMs) || pollMs < 1 || pollMs > 90_000)
 		throw new RangeError(
 			"Website drain poll must be between 1 and 90000 milliseconds",
+		);
+	if (
+		!Number.isSafeInteger(dnsTimeoutMs) ||
+		dnsTimeoutMs < 1 ||
+		dnsTimeoutMs > 90_000
+	)
+		throw new RangeError(
+			"Website discovery timeout must be between 1 and 90000 milliseconds",
 		);
 	if (!Number.isSafeInteger(port) || port < 0 || port > 65_535)
 		throw new RangeError("Website port must be between 0 and 65535");
@@ -257,10 +347,17 @@ export function startServer({
 	const terminate = () => {
 		if (stopping || drainTimer) return;
 		log(
-			`Website draining cached DNS requests: forwarding SIGTERM after ${quietMs}ms without inbound connections, no earlier than ${minDrainMs}ms, or ${drainMs}ms at most`,
+			`Website draining cached DNS requests: forwarding SIGTERM after ${quietMs}ms without inbound connections, once this task has been out of discovery answers for ${routerCacheMs}ms (${minDrainMs}ms when discovery is unreadable), or ${drainMs}ms at most`,
 		);
 		const startedAt = now();
 		let lastBusy = startedAt;
+		// The latest moment the address could still have been in answers: the
+		// last "listed" read, or — when no read ever saw it — the first
+		// "absent" read, the earliest point absence is provable. The floor is
+		// one full router-cache window after that.
+		let lastListedAt = startedAt;
+		let discoveryReadable = false;
+		let removalObserved = false;
 		let polling = false;
 		const finish = (reason) => {
 			if (stopping) return;
@@ -268,6 +365,23 @@ export function startServer({
 				`Website drain ${reason} after ${now() - startedAt}ms; forwarding SIGTERM to server.js`,
 			);
 			forward("SIGTERM");
+		};
+		// "listed" only when an answer actually contains a task address;
+		// unknown own addresses cannot prove anything — like a failed read.
+		const discover = async () => {
+			if (!serviceName) return null;
+			const own = ownAddresses();
+			if (own.length === 0) return null;
+			const answer = await Promise.race([
+				resolve(serviceName),
+				boundedDelay(dnsTimeoutMs).then(() => {
+					throw new Error("discovery resolve timed out");
+				}),
+			]);
+			if (!Array.isArray(answer)) return null;
+			return answer.some((address) => own.includes(address))
+				? "listed"
+				: "absent";
 		};
 		const check = async () => {
 			if (stopping || polling) return;
@@ -279,14 +393,39 @@ export function startServer({
 				// An unreadable metric keeps the drain serving, identical to
 				// the previous unconditional wait — but the deadline still holds.
 				inbound = Number.NaN;
+			}
+			let listing;
+			try {
+				listing = await discover();
+			} catch {
+				listing = null;
 			} finally {
 				polling = false;
 			}
 			const at = now();
 			// Only an exact zero is quiet; errors and junk fail closed.
 			if (!Number.isFinite(inbound) || inbound !== 0) lastBusy = at;
+			if (listing !== null) {
+				discoveryReadable = true;
+				if (listing === "listed") {
+					lastListedAt = at;
+				} else if (!removalObserved) {
+					removalObserved = true;
+					lastListedAt = at;
+					log(`Website task left discovery answers after ${at - startedAt}ms`);
+				}
+			}
 			if (at - startedAt >= drainMs) return finish("reached the deadline");
-			if (at - startedAt >= minDrainMs && at - lastBusy >= quietMs)
+			// Once absence is proven, the floor is the router's full cache
+			// window after the last moment the answer could still have named
+			// this task. While a readable answer still lists the task the floor
+			// stays open toward the deadline — quiet clients can reconnect at
+			// an advertised address. With no successful read at all, the fixed
+			// minimum covers removal propagation exactly as before.
+			const floorCleared = removalObserved
+				? at - lastListedAt >= routerCacheMs
+				: !discoveryReadable && at - startedAt >= minDrainMs;
+			if (floorCleared && at - lastBusy >= quietMs)
 				return finish("saw no inbound connections");
 		};
 		void check();

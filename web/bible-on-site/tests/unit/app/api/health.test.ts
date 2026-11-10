@@ -120,7 +120,8 @@ describe("GET /api/health/ready", () => {
 		expect((await failed.json()).message).toBe(
 			"Verse search index unavailable",
 		);
-		expect(mockQuery).not.toHaveBeenCalled();
+		// The database check now overlaps the warm-up instead of following it.
+		expect(mockQuery).toHaveBeenCalledTimes(1);
 		expect(mockRecitation).not.toHaveBeenCalled();
 		expect((await GET()).status).toBe(200);
 		expect(mockPerekIndex).toHaveBeenCalledTimes(2);
@@ -132,7 +133,7 @@ describe("GET /api/health/ready", () => {
 		const failed = await GET();
 		expect(failed.status).toBe(503);
 		expect((await failed.json()).message).toBe("HTML sanitizer is unavailable");
-		expect(mockQuery).not.toHaveBeenCalled();
+		expect(mockQuery).toHaveBeenCalledTimes(1);
 		expect(mockRecitation).not.toHaveBeenCalled();
 		expect((await GET()).status).toBe(200);
 		expect(mockSanitize).toHaveBeenCalledTimes(2);
@@ -146,7 +147,9 @@ describe("GET /api/health/ready", () => {
 		const failed = await GET();
 		expect(failed.status).toBe(503);
 		expect((await failed.json()).message).toBe("Recitation validation failed");
-		expect(mockQuery).toHaveBeenCalledTimes(1);
+		// The content query fires concurrently, even on a check the recitation
+		// gate then fails.
+		expect(mockQuery).toHaveBeenCalledTimes(2);
 		expect((await GET()).status).toBe(200);
 		expect(mockPerek).toHaveBeenCalledTimes(2);
 		expect(mockRecitation).toHaveBeenCalledTimes(3);
