@@ -18,10 +18,18 @@
  * key): _setLinkLlmCaller injects per-article RawModelOutput JSON from
  * --fixture. The generator label is `openai:<fixture model>` so provenance
  * honestly marks the rows as fixture output, never real OpenAI traffic.
+ * `--live` skips the fixture and calls the real provider path (requires
+ * OPENAI_API_KEY).
+ *
+ * `generate` also writes `link-eval-manifest.json` (gitignored): the
+ * identity of every draft this evaluation produced plus per-invocation
+ * token usage. `review` and `report` only see proposals inside that
+ * manifest, so stale or unrelated pending rows in a reused dev DB can
+ * neither be approved nor counted.
  *
  * Usage (from web/admin; DB_URL selects the DB, dev default tanah-dev):
  *   bun run scripts/link-eval.mts seed
- *   bun run scripts/link-eval.mts generate --engine heuristic|llm|both [--fixture scripts/link-eval-llm-fixture.json] [--force]
+ *   bun run scripts/link-eval.mts generate --engine heuristic|llm|both [--fixture scripts/link-eval-llm-fixture.json] [--force] [--live]
  *   bun run scripts/link-eval.mts review --decisions scripts/link-eval-decisions.json --reviewer eval-agent
  *   bun run scripts/link-eval.mts report [--out scripts/link-eval-report.json]
  *   bun run scripts/link-eval.mts run   # seed + generate both + review + report
@@ -43,6 +51,7 @@ import { execute, pool, queryOne } from "~/server/db";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const corpusPath = resolve(scriptDir, "link-eval-corpus.json");
 const runtimesPath = resolve(scriptDir, "link-eval-runtimes.json");
+const manifestPath = resolve(scriptDir, "link-eval-manifest.json");
 const reportPath = resolve(scriptDir, "link-eval-report.json");
 
 interface CorpusArticle {
@@ -79,9 +88,105 @@ const { values: args, positionals } = parseArgs({
 		reviewer: { type: "string", default: "eval-agent-record" },
 		out: { type: "string", default: reportPath },
 		force: { type: "boolean", default: false },
+		live: { type: "boolean", default: false },
 	},
 });
 const command = positionals[0] ?? "run";
+
+// ---------------------------------------------------------------------------
+// manifest — the evaluation boundary. `generate` records the identity of
+// every draft it produced plus per-invocation token usage; `review` and
+// `report` act only on proposals inside this manifest.
+// ---------------------------------------------------------------------------
+
+interface ManifestDraft {
+	relationshipKey: string;
+	action: string;
+	/** Serialized generated target (`target_json`) — patch-stable: a
+	 *  review patch only updates `review_patch_json`/`target_label`. */
+	targetJson: string;
+}
+interface Manifest {
+	/** `${engine}:${articleId}` → drafts emitted by the latest real generation. */
+	proposals: Record<string, ManifestDraft[]>;
+	/** One entry per model invocation (keyed by article) — including calls
+	 *  that emitted zero proposals, which no proposal row can represent. */
+	llmCalls: Record<
+		string,
+		{
+			articleId: number;
+			promptTokens: number | null;
+			completionTokens: number | null;
+		}
+	>;
+}
+
+function loadManifest(): Manifest {
+	try {
+		return JSON.parse(readFileSync(manifestPath, "utf-8")) as Manifest;
+	} catch {
+		return { proposals: {}, llmCalls: {} };
+	}
+}
+
+const engineOf = (generator: string) =>
+	generator.startsWith("heuristic") ? "heuristic" : "llm";
+
+/** Key-order-insensitive serialization: stored `target_json` may carry a
+ *  different key order than the in-memory draft (JSON re-serialization is
+ *  not guaranteed stable across the write/read round-trip), while object
+ *  identity must still distinguish targets. */
+function canonicalJson(value: unknown): string {
+	if (Array.isArray(value)) {
+		return `[${value
+			.map((v) => (v === undefined ? "null" : canonicalJson(v)))
+			.join(",")}]`;
+	}
+	if (value !== null && typeof value === "object") {
+		// JSON.stringify drops undefined-valued properties — mirror that so
+		// drafts carrying e.g. `coverageVerified: undefined` match the row.
+		const entries = Object.entries(value as Record<string, unknown>)
+			.filter(([, v]) => v !== undefined)
+			.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+		return `{${entries
+			.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`)
+			.join(",")}}`;
+	}
+	return JSON.stringify(value);
+}
+
+/** Is this stored proposal one this evaluation generated? Matched on the
+ *  generated target (`target_json`), which a review patch never rewrites. */
+function inManifest(
+	manifest: Manifest,
+	p: {
+		articleId: number;
+		generator: string;
+		relationshipKey: string;
+		action: string;
+		target: unknown;
+	},
+): boolean {
+	const list =
+		manifest.proposals[`${engineOf(p.generator)}:${p.articleId}`] ?? [];
+	const targetJson = canonicalJson(p.target);
+	return list.some(
+		(d) =>
+			d.relationshipKey === p.relationshipKey &&
+			d.action === p.action &&
+			d.targetJson === targetJson,
+	);
+}
+
+function requireManifest(): Manifest {
+	const manifest = loadManifest();
+	if (Object.keys(manifest.proposals).length === 0) {
+		throw new Error(
+			`no eval manifest at ${manifestPath} — run generate (or generate --force) first`,
+		);
+	}
+	return manifest;
+}
 
 // ---------------------------------------------------------------------------
 // seed — schema parity for local DBs that lag the deployed upgrade chain,
@@ -206,51 +311,68 @@ interface LlmFixture {
 
 async function generate(engine: string): Promise<void> {
 	let setCurrent: ((id: number) => void) | undefined;
+	const manifest = loadManifest();
 	if (engine === "llm" || engine === "both") {
-		const fixturePath = resolve(
-			args.fixture ?? resolve(scriptDir, "link-eval-llm-fixture.json"),
-		);
-		const fixture = JSON.parse(
-			readFileSync(fixturePath, "utf-8"),
-		) as LlmFixture;
-		// Generator provenance honestly marks fixture output.
-		process.env.OPENAI_MODEL = fixture.model;
-		let currentArticleId = 0;
-		_setLinkLlmCaller(async () => {
-			const output = fixture.byArticle[String(currentArticleId)] ?? {
-				proposals: [],
+		if (args.live) {
+			// Real provider path — no fixture caller; runLinkGeneration uses
+			// callOpenAiJson and gates on OPENAI_API_KEY per article.
+		} else {
+			const fixturePath = resolve(
+				args.fixture ?? resolve(scriptDir, "link-eval-llm-fixture.json"),
+			);
+			const fixture = JSON.parse(
+				readFileSync(fixturePath, "utf-8"),
+			) as LlmFixture;
+			// Generator provenance honestly marks fixture output.
+			process.env.OPENAI_MODEL = fixture.model;
+			let currentArticleId = 0;
+			_setLinkLlmCaller(async () => {
+				const output = fixture.byArticle[String(currentArticleId)] ?? {
+					proposals: [],
+				};
+				// Usage belongs to the invocation, not to any proposal it
+				// emitted — record it once, including zero-proposal calls.
+				manifest.llmCalls[String(currentArticleId)] = {
+					articleId: currentArticleId,
+					promptTokens: fixture.promptTokens ?? null,
+					completionTokens: fixture.completionTokens ?? null,
+				};
+				return {
+					content: JSON.stringify(output),
+					model: fixture.model,
+					promptTokens: fixture.promptTokens ?? null,
+					completionTokens: fixture.completionTokens ?? null,
+				};
+			});
+			setCurrent = (id: number) => {
+				currentArticleId = id;
 			};
-			return {
-				content: JSON.stringify(output),
-				model: fixture.model,
-				promptTokens: fixture.promptTokens ?? null,
-				completionTokens: fixture.completionTokens ?? null,
-			};
-		});
-		setCurrent = (id: number) => {
-			currentArticleId = id;
-		};
+		}
 	}
 
 	// Merge into any existing runtimes so sequential --engine runs accumulate.
-	let runtimes: Record<
-		string,
-		{
-			articleId: number;
-			engine: string;
-			runId: string;
-			ms: number;
-			outcome: string;
-			drafts: number;
-			pending: number;
-			held: number;
-		}
-	> = {};
+	interface RuntimeEntry {
+		articleId: number;
+		engine: string;
+		runId: string;
+		ms: number;
+		outcome: string;
+		drafts: number;
+		pending: number;
+		held: number;
+		skips?: number;
+		lastOutcome?: string;
+	}
+	let runtimes: Record<string, RuntimeEntry> = {};
 	try {
 		runtimes = JSON.parse(readFileSync(runtimesPath, "utf-8"));
 	} catch {
 		/* first run */
 	}
+	const persist = () => {
+		writeFileSync(runtimesPath, JSON.stringify(runtimes, null, 1));
+		writeFileSync(manifestPath, JSON.stringify(manifest, null, 1));
+	};
 	for (const art of corpus.articles) {
 		setCurrent?.(art.id);
 		const t0 = performance.now();
@@ -261,26 +383,64 @@ async function generate(engine: string): Promise<void> {
 		});
 		const ms = Math.round((performance.now() - t0) * 10) / 10;
 		const oc = outcomes[0];
-		runtimes[`${engine}:${art.id}`] = {
-			articleId: art.id,
-			engine,
-			runId,
-			ms,
-			outcome: oc?.outcome ?? "?",
-			drafts: oc?.proposals.length ?? 0,
-			pending:
-				oc?.proposals.filter((p: DraftProposal) => p.status === "pending")
-					.length ?? 0,
-			held:
-				oc?.proposals.filter((p: DraftProposal) => p.status === "held")
-					.length ?? 0,
-		};
+		const key = `${engine}:${art.id}`;
+		if (!oc || oc.outcome === "error") {
+			runtimes[key] = {
+				articleId: art.id,
+				engine,
+				runId,
+				ms,
+				outcome: "error",
+				drafts: 0,
+				pending: 0,
+				held: 0,
+			};
+			persist();
+			throw new Error(
+				`Generation failed for article ${art.id}: ${oc?.error ?? "missing outcome"}`,
+			);
+		}
+		if (oc.outcome.startsWith("skipped") && runtimes[key]) {
+			// A checkpoint skip measures nothing — keep the recorded
+			// generation timing and count the skip separately.
+			runtimes[key] = {
+				...runtimes[key],
+				runId,
+				skips: (runtimes[key].skips ?? 0) + 1,
+				lastOutcome: oc.outcome,
+			};
+		} else {
+			runtimes[key] = {
+				articleId: art.id,
+				engine,
+				runId,
+				ms,
+				outcome: oc.outcome,
+				drafts: oc.proposals.length,
+				pending: oc.proposals.filter(
+					(p: DraftProposal) => p.status === "pending",
+				).length,
+				held: oc.proposals.filter((p: DraftProposal) => p.status === "held")
+					.length,
+			};
+		}
+		// The manifest tracks what this run generated; a checkpoint skip
+		// emits no drafts so the earlier manifest stays authoritative.
+		if (oc.outcome === "generated" || oc.outcome === "dry-run") {
+			manifest.proposals[key] = oc.proposals.map((d: DraftProposal) => ({
+				relationshipKey: d.relationshipKey,
+				action: d.action,
+				targetJson: canonicalJson(d.target),
+			}));
+		}
 		console.info(
-			`  ${engine} article ${art.id}: ${oc?.outcome} — ${oc?.proposals.length ?? 0} drafts (${ms} ms)`,
+			`  ${engine} article ${art.id}: ${oc.outcome} — ${oc.proposals.length} drafts (${ms} ms)`,
 		);
 	}
-	writeFileSync(runtimesPath, JSON.stringify(runtimes, null, 1));
-	console.info(`generate ${engine}: runtimes -> ${runtimesPath}`);
+	persist();
+	console.info(
+		`generate ${engine}: runtimes -> ${runtimesPath}, manifest -> ${manifestPath}`,
+	);
 }
 
 // ---------------------------------------------------------------------------
@@ -302,6 +462,7 @@ interface Decision {
 }
 
 async function review(): Promise<void> {
+	const manifest = requireManifest();
 	const decisionsPath = resolve(args.decisions as string);
 	const { decisions } = JSON.parse(readFileSync(decisionsPath, "utf-8")) as {
 		decisions: Decision[];
@@ -318,7 +479,8 @@ async function review(): Promise<void> {
 				(d.targetLabel === undefined || p.targetLabel === d.targetLabel) &&
 				(d.generator === undefined || p.generator.startsWith(d.generator)) &&
 				(d.conflict === undefined || (p.conflict ?? "").includes(d.conflict)) &&
-				(p.status === "pending" || p.status === "held"),
+				(p.status === "pending" || p.status === "held") &&
+				inManifest(manifest, p),
 		);
 		if (matches.length === 0) {
 			console.info(
@@ -349,17 +511,25 @@ async function review(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function report(): Promise<void> {
+	const manifest = requireManifest();
 	const runtimes = JSON.parse(readFileSync(runtimesPath, "utf-8")) as Record<
 		string,
-		{ articleId: number; engine: string; ms: number; drafts: number }
+		{
+			articleId: number;
+			engine: string;
+			ms: number;
+			outcome?: string;
+			skips?: number;
+			drafts: number;
+		}
 	>;
 	const articles = corpus.articles.map((a) => a.id);
 	const proposals = (
 		await Promise.all(articles.map((id) => listProposals({ articleId: id })))
-	).flat();
+	)
+		.flat()
+		.filter((p) => inManifest(manifest, p));
 
-	const engineOf = (generator: string) =>
-		generator.startsWith("heuristic") ? "heuristic" : "llm";
 	const edited = (p: { reviewPatch: unknown }) => p.reviewPatch !== null;
 
 	const groups = new Map<string, typeof proposals>();
@@ -409,20 +579,37 @@ async function report(): Promise<void> {
 			decidedPct: list.length
 				? +((decided.length / list.length) * 100).toFixed(1)
 				: 0,
-			promptTokens: list.reduce((s, p) => s + (p.promptTokens ?? 0), 0),
-			completionTokens: list.reduce((s, p) => s + (p.completionTokens ?? 0), 0),
 		});
 	}
 
-	for (const engine of ["heuristic", "llm"]) {
+	// Usage belongs to the invocation, not to each proposal it emitted —
+	// aggregate the per-call records once. Zero-proposal calls count too.
+	const calls = Object.values(manifest.llmCalls);
+	if (calls.length) {
+		(metrics.runtime as Record<string, unknown>).llmUsage = {
+			calls: calls.length,
+			promptTokens: calls.reduce((s, c) => s + (c.promptTokens ?? 0), 0),
+			completionTokens: calls.reduce(
+				(s, c) => s + (c.completionTokens ?? 0),
+				0,
+			),
+		};
+	}
+
+	for (const engine of ["heuristic", "llm", "both"]) {
 		const rows = Object.values(runtimes).filter((r) => r.engine === engine);
 		if (!rows.length) continue;
-		const total = rows.reduce((s, r) => s + r.ms, 0);
+		const generated = rows.filter((r) => r.outcome === "generated");
+		const total = generated.reduce((s, r) => s + r.ms, 0);
 		(metrics.runtime.byEngine as Record<string, unknown>)[engine] = {
 			articles: rows.length,
+			skippedRuns: rows.reduce((s, r) => s + (r.skips ?? 0), 0),
+			errored: rows.filter((r) => r.outcome === "error").length,
 			totalMs: Math.round(total),
-			avgMsPerArticle: Math.round(total / rows.length),
-			maxMs: Math.max(...rows.map((r) => r.ms)),
+			avgMsPerArticle: generated.length
+				? Math.round(total / generated.length)
+				: 0,
+			maxMs: generated.length ? Math.max(...generated.map((r) => r.ms)) : 0,
 		};
 	}
 

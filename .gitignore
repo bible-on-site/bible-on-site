@@ -30,6 +30,7 @@ __pycache__/
 # Generated eval outputs — the script regenerates them; results live in docs
 web/admin/scripts/link-eval-report.json
 web/admin/scripts/link-eval-runtimes.json
+web/admin/scripts/link-eval-manifest.json
 
 # Raw data files (downloaded/generated locally, except tracked assets)
 app/BibleOnSite/Resources/Raw/*

@@ -54,6 +54,12 @@ pipeline's own entry points:
    edit-and-approve, or reject.
 5. `report` — computes the tables below from stored proposal rows.
 
+Generation also writes `link-eval-manifest.json` (gitignored): the
+identity of every draft the evaluation produced plus one token-usage
+record per model invocation. `review` and `report` act only on
+proposals inside that manifest, so unrelated pending rows in a reused
+dev database can neither be approved nor counted.
+
 Review policy used throughout: approve pasukim the article **quotes and
 engages**; reject non-scripture resolutions, commentary-source pointers
 whose pasuk is not discussed, duplicates, and any fabricated, ambiguous
@@ -86,11 +92,12 @@ defect).
   included so the validator's catch rate is measured, and it was 100%
   (every invalid/unsupported/hallucinated target landed `held` or was
   rejected at review).
-- **Invalid-target rate**: 8/16 fixture proposals were deliberately
+- **Invalid-target rate**: 11/16 fixture proposals were deliberately
   invalid or unsupported (hallucinated perek, out-of-range pasuk,
   ambiguous sefer, fabricated evidence, fabricated dedication id,
-  read-only key, unsupported key, pending-schema keys) — the validator
-  held **8/8** before any could reach a reviewer as `pending`.
+  read-only key, unsupported key — 7 adversarial cases — plus 4
+  proposals on pending-schema keys) — the validator held **11/11**
+  before any could reach a reviewer as `pending`.
   Heuristic generated 0 structurally-invalid targets (its catalogue is
   closed); its 7 errors were semantically wrong-but-resolvable.
 - **Reviewer correction rate**: 2/46 heuristic approvals needed a patch
@@ -110,10 +117,11 @@ defect).
   max 1.68 s — dominated by the per-run catalogue load; a batch call
   amortizes this). llm fixture 0.8 s total (avg 45 ms — not
   representative of real provider latency, which is seconds/article).
-- **Cost**: **$0**. No provider call ran. The recorded token columns
-  (24,000 prompt / 4,550 completion across 16 fixture proposals) are
-  fixture-annotated estimates of the prompt shape, and the table shows
-  per-relation-type totals so a real run's cost can be extrapolated.
+- **Cost**: **$0**. No provider call ran. The recorded usage
+  (18 invocations × 2,400 prompt / 350 completion = 43,200 / 6,300
+  tokens) is a fixture-annotated estimate of the prompt shape, counted
+  per invocation — a call that emits several proposals is charged
+  once, and an abstention call still consumes its prompt.
 
 ### Safety check during the run
 
@@ -172,8 +180,9 @@ re-generates over checkpoints; dedupe keys make re-runs idempotent.)
 - **The llm pass is a fixture**, not a live model: it measures the
   contract end-to-end (validation, dedupe, review, hold paths) and the
   recall shape a model adds, but not real model quality or cost. A paid
-  live run on this same corpus is the next step before scaling — the
-  harness needs only a real `OPENAI_API_KEY` instead of `--fixture`.
+  live run on this same corpus is the next step before scaling —
+  `generate --engine llm --live` skips the fixture and uses the real
+  provider path (`OPENAI_API_KEY` required).
 - 18 articles is enough to surface the failure classes above, not to
   bind precision tightly; the midrash/pointer classes in particular
   deserve a targeted fix + re-eval.
