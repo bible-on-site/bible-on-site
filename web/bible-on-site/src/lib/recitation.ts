@@ -252,6 +252,36 @@ export function rangePlaybackPieces(
 }
 
 /**
+ * Locates the piece that owns a tapped word: the first piece on its perek
+ * whose intervals contain `startMs`, preferring a match at or after
+ * `fromIndex`. A reading may legitimately repeat a passage (a concluding
+ * verse read twice), and then several pieces share the same perek and
+ * timestamps — without `fromIndex` the bookmark always lands on the first
+ * copy even when the tapped one is the copy currently being read.
+ */
+export function pieceIndexContaining(
+	pieces: RecitationPlaybackPiece[],
+	perekId: number,
+	startMs: number,
+	fromIndex = 0,
+): number {
+	let first = -1;
+	for (let i = 0; i < pieces.length; i++) {
+		const piece = pieces[i];
+		if (
+			piece.perekId !== perekId ||
+			!piece.intervals.some(
+				(range) => startMs >= range.startMs && startMs < range.endMs,
+			)
+		)
+			continue;
+		if (i >= fromIndex) return i;
+		if (first < 0) first = i;
+	}
+	return first;
+}
+
+/**
  * Trims a piece list so continuous range playback resumes at a tapped
  * word's recording position: the containing pasuk interval is cut at
  * fromMs (like `resumeRanges` for one perek) and every earlier piece

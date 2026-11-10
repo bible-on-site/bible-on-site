@@ -360,9 +360,13 @@ function UnitPerekSlice({
 									recitationWords ? (
 										// Keep entity links out of listening mode so
 										// interactive elements never nest — the same
-										// RecitationLink swap the /929 reader uses.
+										// RecitationLink swap the /929 reader uses. The
+										// perek scopes listening mode: a perek without a
+										// recording keeps its links even when sibling
+										// perakim in the section play.
 										<RecitationLink
 											key={key}
+											perek={slice.perekId}
 											link={
 												<TanahpediaLink
 													key={key}

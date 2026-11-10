@@ -40,6 +40,11 @@ export function stopRecitation() {
 }
 interface RecitationTextState {
 	enabled: boolean;
+	/** Range players may mix recorded and silent perakim; `enabledFor`
+	 * narrows listening mode to perakim that actually carry aligned words
+	 * so silent text keeps entity links and inert rendering. Chapter
+	 * players leave it unset — `enabled` governs the whole perek. */
+	enabledFor?: (perekId: number) => boolean;
 	wordByKey: Map<string, RecitationWord>;
 	/** Keys are `"pasuk"` for chapter players and `"perek:pasuk"` for
 	 * range players whose plan can touch several perakim. */
@@ -260,12 +265,21 @@ export function RecitationVerse({
 export function RecitationLink({
 	children,
 	link,
+	perek,
 }: {
 	children: ReactNode;
 	link: ReactNode;
+	/** Perek whose listening state decides; when the provider narrows mode
+	 * per perek (`enabledFor`), a silent perek keeps its link. */
+	perek?: number;
 }) {
 	const context = useContext(RecitationTextContext);
-	return <>{context?.enabled ? children : link}</>;
+	const listening = context
+		? perek !== undefined && context.enabledFor
+			? context.enabledFor(perek)
+			: context.enabled
+		: false;
+	return <>{listening ? children : link}</>;
 }
 
 export function ListenIcon() {

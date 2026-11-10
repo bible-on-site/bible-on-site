@@ -1,5 +1,6 @@
 import type { ScriptureRange } from "@/lib/reading/contract";
 import {
+	pieceIndexContaining,
 	type RecitationPlaybackPiece,
 	type RecitationWord,
 	rangePlaybackPieces,
@@ -135,6 +136,40 @@ describe("rangePlaybackPieces", () => {
 			new Map([[1, wordsByPerek.get(1) as RecitationWord[]]]),
 		);
 		expect(pieces.map((piece) => piece.perekId)).toEqual([1]);
+	});
+});
+
+describe("pieceIndexContaining", () => {
+	// A reading that repeats perek 1's first pasuk: the same perek and
+	// timestamps appear in pieces 0 and 2.
+	const pieces: RecitationPlaybackPiece[] = [
+		{ perekId: 1, intervals: [{ startMs: 0, endMs: 200 }] },
+		{ perekId: 2, intervals: [{ startMs: 0, endMs: 200 }] },
+		{ perekId: 1, intervals: [{ startMs: 0, endMs: 200 }] },
+	];
+
+	it("finds the first matching piece by default", () => {
+		expect(pieceIndexContaining(pieces, 1, 100)).toBe(0);
+	});
+
+	it("prefers the occurrence at or after the reading position", () => {
+		expect(pieceIndexContaining(pieces, 1, 100, 1)).toBe(2);
+		expect(pieceIndexContaining(pieces, 1, 100, 2)).toBe(2);
+	});
+
+	it("falls back to the first match when every occurrence already played", () => {
+		expect(pieceIndexContaining(pieces, 1, 100, 3)).toBe(0);
+	});
+
+	it("ignores pieces from other perakim and unmatched positions", () => {
+		expect(pieceIndexContaining(pieces, 2, 50)).toBe(1);
+		expect(pieceIndexContaining(pieces, 1, 250)).toBe(-1);
+		expect(pieceIndexContaining(pieces, 3, 100)).toBe(-1);
+	});
+
+	it("uses the interval end as an exclusive bound", () => {
+		expect(pieceIndexContaining(pieces, 1, 200)).toBe(-1);
+		expect(pieceIndexContaining(pieces, 1, 0)).toBe(0);
 	});
 });
 

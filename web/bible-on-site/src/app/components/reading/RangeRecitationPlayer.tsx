@@ -22,6 +22,7 @@ import type { Pasuk } from "@/data/db/tanah-view-types";
 import type { ScriptureRange } from "@/lib/reading/contract";
 import {
 	parseRecitation,
+	pieceIndexContaining,
 	playableWords,
 	type Recitation,
 	type RecitationPlaybackPiece,
@@ -106,6 +107,9 @@ export function RangeRecitationPlayer({
 	// the gap between two pieces' recordings.
 	const activeQueue = useRef<RecitationPlaybackPiece[]>([]);
 	const queueIndex = useRef(0);
+	// `queueIndex` is relative to `activeQueue`, which may be a bookmarked
+	// subset of `pieces`; the base maps it back to absolute plan indices.
+	const queueBaseIndex = useRef(0);
 	const heldIndex = useRef<number | null>(null);
 	const pausedAudio = useRef<RecitationAudio | null>(null);
 	const activeAudioId = useRef<number | null>(null);
@@ -359,6 +363,7 @@ export function RangeRecitationPlayer({
 			? resumePieces(pieces, bookmark.pieceIndex, bookmark.ms)
 			: pieces;
 		activeQueue.current = queue;
+		queueBaseIndex.current = bookmark?.pieceIndex ?? 0;
 		// Words only exist for fully aligned manifests, so a plan with
 		// pieces is always alignment-ready; the verse-pause applies as-is.
 		const pauseMs = settings.current.versePauseMs ?? 0;
@@ -382,12 +387,14 @@ export function RangeRecitationPlayer({
 			previewActive.current = true;
 			heldIndex.current = null;
 			pausedAudio.current = null;
-			const pieceIndex = pieces.findIndex(
-				(piece) =>
-					piece.perekId === perekId &&
-					piece.intervals.some(
-						(range) => startMs >= range.startMs && startMs < range.endMs,
-					),
+			// A repeated passage renders identical words in several pieces;
+			// prefer the copy at/after the reading's current position so the
+			// bookmark lands on the occurrence the listener actually reached.
+			const pieceIndex = pieceIndexContaining(
+				pieces,
+				perekId,
+				startMs,
+				queueBaseIndex.current + queueIndex.current,
 			);
 			resumeAt.current = pieceIndex < 0 ? null : { pieceIndex, ms: startMs };
 			try {
@@ -492,6 +499,11 @@ export function RangeRecitationPlayer({
 	const textState = useMemo(
 		() => ({
 			enabled: textEnabled,
+			// A mixed section keeps listening mode per perek: a perek whose
+			// manifest never loaded (no recording) has no words, so its text
+			// stays inert and its entity links stay intact.
+			enabledFor: (perekId: number) =>
+				textEnabled && (wordsByPerek.get(perekId)?.length ?? 0) > 0,
 			wordByKey,
 			rangesByPasuk,
 			subscribeActive,
@@ -499,7 +511,15 @@ export function RangeRecitationPlayer({
 			play: (start: number, end: number, perekId?: number) =>
 				void play(start, end, perekId),
 		}),
-		[textEnabled, wordByKey, rangesByPasuk, subscribeActive, isActive, play],
+		[
+			textEnabled,
+			wordsByPerek,
+			wordByKey,
+			rangesByPasuk,
+			subscribeActive,
+			isActive,
+			play,
+		],
 	);
 
 	useEffect(() => {
