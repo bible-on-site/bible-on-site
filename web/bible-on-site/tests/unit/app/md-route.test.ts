@@ -147,6 +147,7 @@ describe("/md/[[...path]] route (issue #3257)", () => {
 	});
 
 	it("literal-encodes malformed escape segments in Link headers", async () => {
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 		mockRender.mockResolvedValue({
 			title: "x",
 			canonicalPath: "/929/%E0",
@@ -155,5 +156,7 @@ describe("/md/[[...path]] route (issue #3257)", () => {
 		const response = await GET(REQ, ctx(["929", "1"]));
 		expect(response.status).toBe(200);
 		expect(response.headers.get("link")).toContain("/929/%25E0");
+		expect(warn).toHaveBeenCalled();
+		warn.mockRestore();
 	});
 });

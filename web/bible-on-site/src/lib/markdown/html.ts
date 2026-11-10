@@ -55,13 +55,16 @@ interface State {
 	footnotes: Map<string, Footnote>;
 	/** Inside an `ol.footnotes`/`section.footnotes` list — collect, don't emit. */
 	collectingFootnotes: boolean;
+	/** Inside a table cell — `|` joins the escaped characters. */
+	inTable: boolean;
 }
 
 /** Escape the minimal Markdown-structural characters in text. */
-function escapeMd(text: string): string {
-	return text
-		.replace(/\\/g, "\\\\")
-		.replace(/([[\]`*_<])/g, "\\$1");
+function escapeMd(text: string, inTable: boolean): string {
+	// `\` first, then the structural set — source `\|` must not produce
+	// an escaped-backslash-then-separator sequence.
+	const out = text.replace(/\\/g, "\\\\").replace(/([[\]`*_<])/g, "\\$1");
+	return inTable ? out.replace(/\|/g, "\\|") : out;
 }
 
 /** Collapse runs of whitespace inside inline text like HTML does. */
@@ -112,7 +115,7 @@ function inlineChildren(el: Element, state: State): string {
 function renderInline(node: Node, state: State): string {
 	if (node.nodeType === node.TEXT_NODE) {
 		/* istanbul ignore next: a text node's textContent is never null */
-		return escapeMd(normalizeText(node.textContent ?? ""));
+		return escapeMd(normalizeText(node.textContent ?? ""), state.inTable);
 	}
 	if (node.nodeType !== node.ELEMENT_NODE) return "";
 	const el = node as Element;
@@ -213,6 +216,11 @@ function listItems(el: Element, state: State, depth: number): string {
 
 function tableMarkdown(el: Element, state: State): string {
 	const rows: string[][] = [];
+	// Pipe escaping happens at the text layer (escapeMd) where the
+	// backslash ordering is correct — post-escaping rendered cells would
+	// corrupt `\\` sequences already emitted for the text.
+	const prevInTable = state.inTable;
+	state.inTable = true;
 	for (const tr of Array.from(el.querySelectorAll("tr"))) {
 		const cells = Array.from(tr.children)
 			.filter(
@@ -220,9 +228,10 @@ function tableMarkdown(el: Element, state: State): string {
 					c.tagName.toLowerCase() === "td" ||
 					c.tagName.toLowerCase() === "th",
 			)
-			.map((c) => inlineChildren(c, state).trim().replace(/\|/g, "\\|"));
+			.map((c) => inlineChildren(c, state).trim());
 		if (cells.length) rows.push(cells);
 	}
+	state.inTable = prevInTable;
 	if (rows.length === 0) return "";
 	const [header, ...body] = rows;
 	const width = header.length;
@@ -354,7 +363,11 @@ export function htmlToMarkdown(html: string): string {
 	// wrapper, so fragment or full documents land in <body> either way.
 	const dom = new JSDOM(trimmed);
 	const body = dom.window.document.body;
-	const state: State = { footnotes: new Map(), collectingFootnotes: false };
+	const state: State = {
+		footnotes: new Map(),
+		collectingFootnotes: false,
+		inTable: false,
+	};
 	const main = blockChildren(body, state).trim();
 	const footnoteLines = [...state.footnotes.values()].map(
 		(fn) => `[^${fn.id}]: ${fn.content.replace(/\n/g, "\n    ")}`,

@@ -248,6 +248,14 @@ describe("htmlToMarkdown", () => {
 		).toBe("t[^1]\n\n[^1]: no id");
 	});
 
+	it("escapes pipes in cells after backslashes", () => {
+		// `\` must escape before `|` — a source `\|` stays literal
+		// text, never becomes an escaped-backslash then a separator.
+		expect(
+			htmlToMarkdown("<table><tr><td>a|b</td><td>c\\|d</td></tr></table>"),
+		).toBe("| a\\|b | c\\\\\\|d |\n| --- | --- |");
+	});
+
 	it("renders empty and ragged tables", () => {
 		expect(htmlToMarkdown("<table></table>")).toBe("");
 		expect(htmlToMarkdown("<table><tr></tr><tr><td>1</td></tr></table>")).toBe(

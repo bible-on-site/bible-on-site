@@ -33,8 +33,13 @@ function encodePathForHeader(path: string): string {
 		.map((segment) => {
 			try {
 				return encodeURIComponent(decodeURIComponent(segment));
-			} catch {
+			} catch (error) {
 				// Malformed escapes — encode the literal segment.
+				console.warn(
+					"[md] malformed canonical path segment:",
+					segment,
+					error,
+				);
 				return encodeURIComponent(segment);
 			}
 		})
