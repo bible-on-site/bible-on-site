@@ -47,6 +47,18 @@ export function noteSliceCondition(slices: PerekSlice[]): {
 }
 
 /**
+ * SQL WHERE fragment matching tanah_note_metric rows inside the given
+ * slices — the same pasuk bounds as noteSliceCondition applied to the
+ * metric table's own columns (#3108).
+ */
+export function noteMetricSliceCondition(slices: PerekSlice[]): {
+	sql: string;
+	params: number[];
+} {
+	return pasukSliceCondition(slices, "m");
+}
+
+/**
  * SQL WHERE fragment matching tanah_article_covering_source rows inside
  * the given slices — the verified verse-level article coverage overlap
  * condition. Pasuk-granular like the commentary path: a covering row on

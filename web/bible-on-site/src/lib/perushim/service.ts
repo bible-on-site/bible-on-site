@@ -2,6 +2,7 @@ import { query } from "../api-client";
 import type { ScriptureRange } from "../reading/contract";
 import {
 	groupedSliceSelects,
+	noteMetricSliceCondition,
 	noteSliceCondition,
 	slicePerekOrder,
 	slicesForRanges,
@@ -11,7 +12,6 @@ import {
 	getPerushMetric,
 	getPerushMetricsByPerekId,
 	getPerushMetricsByPerekIds,
-	isReadingMetricsSchemaMissing,
 	metricOrFallback,
 } from "../reading-metrics";
 import type { PerushDetail, PerushNote, PerushSummary } from "./types";
@@ -189,8 +189,8 @@ export interface RangedPerushNote extends PerushNote {
 	perekId: number;
 	/**
 	 * Stored `tanah_note_metric` word count for this note (#3108).
-	 * Absent/`null` when the metric row is missing or the metrics schema
-	 * is not deployed — one uncounted note makes the whole range's
+	 * Absent/`null` when the metric row is missing or the metric read
+	 * degraded — one uncounted note makes the whole range's
 	 * metric unknown (`rangedPerushMetrics`).
 	 */
 	wordCount?: number | null;
@@ -381,9 +381,11 @@ export async function getPerushimForRangeGroups(
 	}
 }
 
-interface RangedNoteMetricRow extends RangedNoteRow {
-	/** `NULL` when no `tanah_note_metric` row covers this note. */
-	metric_word_count?: number | null;
+interface NoteMetricRow {
+	perek_id: number;
+	pasuk: number;
+	note_idx: number;
+	word_count: number;
 }
 
 /**
@@ -395,9 +397,11 @@ interface RangedNoteMetricRow extends RangedNoteRow {
  * Each note carries its stored `tanah_note_metric` word count when the
  * row exists (#3108) — the ranged readers aggregate those counts into
  * the range's own estimate and progress units (`rangedPerushMetrics`).
- * A database predating the metric tables falls back to the plain read,
- * leaving `wordCount` absent — the same schema-missing degradation the
- * article covering-source path uses.
+ * The counts ride a second, purely decorative read that degrades on ANY
+ * failure (`metricOrFallback` semantics): the notes query is the
+ * pre-metrics path verbatim and still owns this fetch's failure
+ * contract — a broken or missing metrics table can never hide the
+ * commentary itself.
  */
 export async function getPerushNotesForRanges(
 	perushId: number,
@@ -406,43 +410,52 @@ export async function getPerushNotesForRanges(
 	const slices = slicesForRanges(ranges);
 	if (slices.length === 0) return [];
 	const { sql, params } = noteSliceCondition(slices);
-	const notesSql = `SELECT n.perek_id, n.pasuk, n.note_idx, n.note_content
-		 FROM note n
-		 WHERE n.perush_id = ? AND (${sql})
-		 ORDER BY n.perek_id ASC, n.pasuk ASC, n.note_idx ASC`;
-	const decoratedSql = `SELECT n.perek_id, n.pasuk, n.note_idx, n.note_content,
-			m.word_count AS metric_word_count
-		 FROM note n
-		 LEFT JOIN tanah_note_metric m
-			ON m.perush_id = n.perush_id
-			AND m.perek_id = n.perek_id
-			AND m.pasuk = n.pasuk
-			AND m.note_idx = n.note_idx
-		 WHERE n.perush_id = ? AND (${sql})
-		 ORDER BY n.perek_id ASC, n.pasuk ASC, n.note_idx ASC`;
+	const { sql: metricCond, params: metricParams } =
+		noteMetricSliceCondition(slices);
 	try {
-		const rows = await query<RangedNoteMetricRow>(decoratedSql, [
-			perushId,
-			...params,
-		]).catch((error: unknown) => {
-			if (!isReadingMetricsSchemaMissing(error)) throw error;
-			console.warn(
-				"Reading-metrics schema is not deployed yet; " +
-					"serving ranged commentary without note metrics.",
+		const [rows, metricRows] = await Promise.all([
+			query<RangedNoteRow>(
+				`SELECT n.perek_id, n.pasuk, n.note_idx, n.note_content
+				 FROM note n
+				 WHERE n.perush_id = ? AND (${sql})
+				 ORDER BY n.perek_id ASC, n.pasuk ASC, n.note_idx ASC`,
+				[perushId, ...params],
+			),
+			query<NoteMetricRow>(
+				`SELECT m.perek_id, m.pasuk, m.note_idx, m.word_count
+				 FROM tanah_note_metric m
+				 WHERE m.perush_id = ? AND (${metricCond})`,
+				[perushId, ...metricParams],
+			).catch((error: unknown) => {
+				console.warn(
+					"Reading metrics unavailable; " +
+						"serving ranged commentary without estimates:",
+					error instanceof Error ? error.message : error,
+				);
+				return [] as NoteMetricRow[];
+			}),
+		]);
+		const wordCountByKey = new Map<string, number>();
+		for (const row of metricRows) {
+			wordCountByKey.set(
+				`${row.perek_id}:${row.pasuk}:${row.note_idx}`,
+				Number(row.word_count),
 			);
-			return query<RangedNoteMetricRow>(notesSql, [perushId, ...params]);
-		});
+		}
 		const perekOrder = slicePerekOrder(slices);
 		return rows
-			.map((row) => ({
-				perekId: row.perek_id,
-				pasuk: row.pasuk,
-				noteIdx: row.note_idx,
-				noteContent: row.note_content,
-				...(row.metric_word_count != null
-					? { wordCount: Number(row.metric_word_count) }
-					: {}),
-			}))
+			.map((row) => {
+				const wordCount = wordCountByKey.get(
+					`${row.perek_id}:${row.pasuk}:${row.note_idx}`,
+				);
+				return {
+					perekId: row.perek_id,
+					pasuk: row.pasuk,
+					noteIdx: row.note_idx,
+					noteContent: row.note_content,
+					...(wordCount != null ? { wordCount } : {}),
+				};
+			})
 			.sort((a, b) => {
 				const orderA = perekOrder.get(a.perekId) ?? Number.MAX_SAFE_INTEGER;
 				const orderB = perekOrder.get(b.perekId) ?? Number.MAX_SAFE_INTEGER;

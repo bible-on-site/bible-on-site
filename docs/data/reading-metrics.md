@@ -88,7 +88,9 @@ source notes (or whole groups) no longer exist.
   (`RangedPerushView`, `UnitPerushFullView`) clip one perush to a reading
   unit's canonical ranges across perakim, so no aggregate
   `tanah_perush_metric` row describes them. `getPerushNotesForRanges`
-  LEFT JOINs `tanah_note_metric` per note and `rangedPerushMetrics`
+  reads `tanah_note_metric` alongside the notes — the metric read
+  degrades on any failure (`metricOrFallback` semantics) so it can
+  never hide the commentary itself — and `rangedPerushMetrics`
   folds the counts into the range's own metric + keyed progress units —
   cumulative in *range order*, since stored `cumulative_words` is a
   per-perek axis. One uncounted note marks the whole range unknown.
