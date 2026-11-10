@@ -148,9 +148,18 @@ function renderInline(node: Node, state: State): string {
 		case "code": {
 			/* istanbul ignore next: an Element's textContent is never null */
 			const code = (el.textContent ?? "").trim();
-			// A `|` splits the cell even inside a code span. Escape it raw —
-			// no `\` doubling: code content is literal, never re-parsed.
-			return `\`${state.inTable ? code.split("|").join("\\|") : code}\``;
+			// A `|` splits the cell even inside a code span, and `\|` would
+			// render literally — code spans never process escapes. Emit
+			// inline <code> with the pipe as a numeric entity instead.
+			if (state.inTable && code.includes("|")) {
+				const escaped = code
+					.replace(/&/g, "&amp;")
+					.replace(/</g, "&lt;")
+					.replace(/>/g, "&gt;")
+					.replace(/\|/g, "&#124;");
+				return `<code>${escaped}</code>`;
+			}
+			return `\`${code}\``;
 		}
 		case "u":
 		case "ins":

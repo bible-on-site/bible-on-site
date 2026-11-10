@@ -267,19 +267,31 @@ describe("htmlToMarkdown", () => {
 				'<td><audio src="/a.mp3" title="m|n"></audio></td></tr></table>',
 		);
 		expect(md).toBe(
-			"| `a\\|b` | ![x\\|y](https://canonical.example/i.png) | [t](https://canonical.example/p\\|q) | [m\\|n](https://canonical.example/a.mp3) |\n| --- | --- | --- | --- |",
+			"| <code>a&#124;b</code> | ![x\\|y](https://canonical.example/i.png) | [t](https://canonical.example/p\\|q) | [m\\|n](https://canonical.example/a.mp3) |\n| --- | --- | --- | --- |",
 		);
 	});
 
+	it("emits piped code as an entity-escaped HTML span in cells", () => {
+		// Code spans are literal — `\|` would display, so a table code
+		// span with `|` degrades to inline <code> and a `&#124;` entity.
+		expect(
+			htmlToMarkdown("<table><tr><td><code>a|b</code></td></tr></table>"),
+		).toBe("| <code>a&#124;b</code> |\n| --- |");
+		// Markup characters in the code are HTML-escaped with it.
+		expect(
+			htmlToMarkdown("<table><tr><td><code>x < y | z</code></td></tr></table>"),
+		).toBe("| <code>x &lt; y &#124; z</code> |\n| --- |");
+	});
+
 	it("escapes backslashes in cell values by their parsing context", () => {
-		// Code content is literal — only the cell-splitting `|` is
-		// escaped; a source `\` must not be doubled.
+		// Code content is literal — a source `\` must not be doubled.
 		expect(
 			htmlToMarkdown("<table><tr><td><code>a\\b</code></td></tr></table>"),
 		).toBe("| `a\\b` |\n| --- |");
+		// A literal `\` beside the `|` travels into the entity form.
 		expect(
 			htmlToMarkdown("<table><tr><td><code>a\\|b</code></td></tr></table>"),
-		).toBe("| `a\\\\|b` |\n| --- |");
+		).toBe("| <code>a\\&#124;b</code> |\n| --- |");
 		// Attribute-derived values are re-parsed as inline markup, so
 		// `\` escapes there like it does in escapeMd.
 		expect(
