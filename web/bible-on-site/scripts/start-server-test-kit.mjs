@@ -81,12 +81,14 @@ startServer(options);
 	t.after(async () => {
 		if (wrapper.exitCode === null && wrapper.signalCode === null) {
 			wrapper.kill("SIGKILL");
-			if (serverPid) {
-				try {
-					process.kill(serverPid, "SIGKILL");
-				} catch (error) {
-					if (error.code !== "ESRCH") throw error;
-				}
+		}
+		// An unexpectedly terminated wrapper can leave its child holding our
+		// output pipes open. Always clean up that child so failures can report.
+		if (serverPid) {
+			try {
+				process.kill(serverPid, "SIGKILL");
+			} catch (error) {
+				if (error.code !== "ESRCH") throw error;
 			}
 		}
 		assert.equal(path.dirname(directory), os.tmpdir());
@@ -96,7 +98,11 @@ startServer(options);
 	const waitFor = async (text) => {
 		const deadline = Date.now() + 5_000;
 		while (!output.includes(text)) {
-			if (wrapper.exitCode !== null || Date.now() > deadline)
+			if (
+				wrapper.exitCode !== null ||
+				wrapper.signalCode !== null ||
+				Date.now() > deadline
+			)
 				throw new Error(`Missing ${text}: ${output}`);
 			await new Promise((resolve) => setTimeout(resolve, 10));
 		}
