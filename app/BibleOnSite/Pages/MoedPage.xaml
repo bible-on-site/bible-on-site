@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:behaviors="clr-namespace:BibleOnSite.Behaviors"
+             xmlns:converters="clr-namespace:BibleOnSite.Converters"
+             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
+             xmlns:fonts="clr-namespace:Fonts"
+             x:Class="BibleOnSite.Pages.MoedPage"
+             x:Name="MoedPageRoot"
+             x:DataType="viewmodels:MoedViewModel"
+             Title="{Binding Heading}"
+             BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}"
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <x:Double x:Key="BottomBarTotalHeight">90</x:Double>
+            <Color x:Key="SelectedPasukBackground">#E3F2FD</Color>
+            <Color x:Key="SelectedPasukBackgroundDark">#3D5A80</Color>
+            <converters:PasukMarkerTextConverter x:Key="PasukMarkerTextConverter" MarkerColor="{StaticResource Primary}" MarkerColorDark="{StaticResource AccentOnDark}"/>
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <Grid x:Name="MainGrid" RowDefinitions="Auto,*">
+        <Grid x:Name="ReaderToolbar" Grid.Row="0" MinimumHeightRequest="56"
+              BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
+            <controls:SharedTopBar x:Name="NormalNavigationBar" NavigationAutomationId="ReaderNavigationButton">
+                <controls:SharedTopBar.CenterContent>
+                <Button x:Name="NormalNavigationTitle"
+                   AutomationId="MoedSource"
+                   Text="{Binding Heading}"
+                   FontSize="20"
+                   Padding="12,0"
+                   HeightRequest="40"
+                   CornerRadius="14"
+                   BorderWidth="0"
+                   BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
+                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                   VerticalOptions="Center"
+                   HorizontalOptions="Fill"
+                   Margin="4,0"
+                   SemanticProperties.Hint="הקישו לפתיחת בחירת מועד"
+                   Clicked="OnMoedSourceClicked"/>
+                </controls:SharedTopBar.CenterContent>
+            </controls:SharedTopBar>
+            <controls:ReaderSelectionBar x:Name="SelectionBar"
+                  IsVisible="False"
+                  BackRequested="OnSelectionBackClicked"
+                  RecitationRequested="OnSelectionRecitationClicked"
+                  ShareRequested="OnSelectionShareClicked"
+                  CopyRequested="OnSelectionCopyClicked"/>
+        </Grid>
+
+        <!-- Exit Full Screen Button (floating, draggable, hidden by default) -->
+        <controls:ReaderExitFullscreenButton x:Name="ExitFullScreenButton" Grid.Row="1"
+                Margin="16,16,16,100"
+                ZIndex="100"/>
+
+        <!-- Main Content Area - fills entire viewport -->
+        <Grid x:Name="ContentArea" Grid.Row="1" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}"
+              ZIndex="0"
+              RowDefinitions="Auto,Auto,*">
+
+            <!-- Loading overlay — shown until the moed's sections resolve. -->
+            <controls:ReaderLoadingOverlay x:Name="MoedLoadingOverlay"
+                  Grid.Row="1" Grid.RowSpan="2"
+                  ZIndex="10"
+                  LoadingText="מתחבר למועד..."
+                  ErrorTitle="שגיאה בטעינת המועד"
+                  AutomationIdPrefix="MoedLoad"
+                  RetryRequested="OnMoedLoadRetryClicked"/>
+
+            <!-- Reader surface: moed header + the ordered labelled sections.
+                 On Windows the column caps and centers (#2766). -->
+            <Grid Grid.Row="1"
+                  Grid.RowSpan="2"
+                  RowDefinitions="Auto,*"
+                  IsVisible="{Binding HasUnit}">
+                <Grid.MaximumWidthRequest>
+                    <!-- +∞ = uncapped; an explicit -1 collapses the element on mobile. -->
+                    <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
+                        <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ReaderColumnMaxWidth}"/>
+                    </OnPlatform>
+                </Grid.MaximumWidthRequest>
+                <Grid.HorizontalOptions>
+                    <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+                        <On Platform="Windows" Value="Center"/>
+                    </OnPlatform>
+                </Grid.HorizontalOptions>
+
+                <!-- Moed header: name + date/context + summary;
+                     long-press enters the whole-moed recitation surface -->
+                <Grid Grid.Row="0">
+                    <VerticalStackLayout Spacing="2" Padding="16,12,16,8">
+                        <Label AutomationId="MoedHeading"
+                               Text="{Binding Heading}"
+                               FontSize="22"
+                               FontAttributes="Bold"
+                               HorizontalTextAlignment="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}">
+                            <Label.Triggers>
+                                <DataTrigger TargetType="Label"
+                                             Binding="{Binding ShowHeaderPlayButton}"
+                                             Value="True">
+                                    <Setter Property="Padding" Value="56,0"/>
+                                </DataTrigger>
+                            </Label.Triggers>
+                            <Label.GestureRecognizers>
+                                <PointerGestureRecognizer PointerPressed="OnHeaderPointerPressed" PointerReleased="OnHeaderPointerReleased" PointerMoved="OnHeaderPointerMoved"/>
+                            </Label.GestureRecognizers>
+                            <Label.Behaviors>
+                                <behaviors:LongPressBehavior LongPressDuration="600" LongPressed="OnHeaderLongPressed"/>
+                            </Label.Behaviors>
+                        </Label>
+                        <Label AutomationId="MoedContext"
+                               Text="{Binding ContextText}"
+                               IsVisible="{Binding HasContext}"
+                               FontSize="14"
+                               HorizontalTextAlignment="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                        <Label AutomationId="MoedSummary"
+                               Text="{Binding SummaryText}"
+                               IsVisible="{Binding HasSummary}"
+                               FontSize="14"
+                               HorizontalTextAlignment="Center"
+                               LineBreakMode="TailTruncation"
+                               MaxLines="2"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                    </VerticalStackLayout>
+                    <!-- קריינות: plays the whole moed in section order; shown
+                         only when the menu checkbox is checked and audio exists -->
+                    <Button x:Name="HeaderPlayButton"
+                            AutomationId="HeaderPlayButton"
+                            Text="{x:Static fonts:FluentUI.play_24_regular}"
+                            FontFamily="FluentIcons"
+                            FontSize="20"
+                            WidthRequest="40"
+                            HeightRequest="40"
+                            Padding="0"
+                            BackgroundColor="Transparent"
+                            TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                            HorizontalOptions="Start"
+                            VerticalOptions="Center"
+                            Margin="8,0"
+                            IsVisible="{Binding ShowHeaderPlayButton}"
+                            Clicked="OnHeaderPlayClicked"/>
+                </Grid>
+
+                <!-- Section/perek headers + pasuk rows clipped to each range -->
+                <CollectionView Grid.Row="1"
+                                x:Name="MoedRowsCollection"
+                                AutomationId="MoedRowsCollection"
+                                ItemsSource="{Binding Rows}"
+                                SelectionMode="None"
+                                Loaded="OnReaderListLoaded"
+                                Scrolled="OnPasukimScrolled"
+                                Margin="8,0,8,0">
+                    <CollectionView.Footer>
+                        <ContentView HeightRequest="{DynamicResource BottomBarTotalHeight}" BackgroundColor="Transparent"/>
+                    </CollectionView.Footer>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:MoedDisplayRow">
+                            <VerticalStackLayout Spacing="0">
+                                <!-- Section boundary: its DB label + canonical refs
+                                     + a per-section קריינות play button -->
+                                <Grid IsVisible="{Binding IsSectionHeader}">
+                                    <VerticalStackLayout Spacing="1" Padding="8,18,8,6">
+                                        <Label Text="{Binding Text}"
+                                               AutomationId="MoedSectionHeader"
+                                               FontSize="19"
+                                               FontAttributes="Bold"
+                                               TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
+                                        <Label Text="{Binding RefsText}"
+                                               AutomationId="MoedSectionRefs"
+                                               IsVisible="{Binding RefsText, Converter={StaticResource StringNotEmptyConverter}}"
+                                               FontSize="13"
+                                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                    </VerticalStackLayout>
+                                    <Button AutomationId="MoedSectionPlayButton"
+                                            Text="{x:Static fonts:FluentUI.play_24_regular}"
+                                            FontFamily="FluentIcons"
+                                            FontSize="18"
+                                            WidthRequest="36"
+                                            HeightRequest="36"
+                                            Padding="0"
+                                            BackgroundColor="Transparent"
+                                            TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                                            HorizontalOptions="Start"
+                                            VerticalOptions="Start"
+                                            Margin="0,14,0,0"
+                                            IsVisible="{Binding ShowPlayButton}"
+                                            CommandParameter="{Binding SectionId}"
+                                            Clicked="OnSectionPlayClicked"/>
+                                </Grid>
+                                <Label Text="{Binding Text}"
+                                       AutomationId="MoedPerekHeader"
+                                       IsVisible="{Binding IsPerekHeader}"
+                                       FontSize="15"
+                                       FontAttributes="Bold"
+                                       Padding="8,10,8,2"
+                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                <controls:ReaderCellBorder Padding="12,8"
+                                        Margin="0,4"
+                                        StrokeShape="RoundRectangle 8"
+                                        Stroke="Transparent"
+                                        x:Name="PasukBorder"
+                                        IsVisible="{Binding Pasuk, Converter={StaticResource NotNullConverter}}"
+                                        BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                                    <Border.FlowDirection>
+                                        <OnPlatform x:TypeArguments="FlowDirection">
+                                            <On Platform="iOS" Value="RightToLeft"/>
+                                            <On Platform="MacCatalyst" Value="RightToLeft"/>
+                                        </OnPlatform>
+                                    </Border.FlowDirection>
+                                    <Border.Triggers>
+                                        <DataTrigger TargetType="Border" Binding="{Binding Pasuk.IsSelected}" Value="True">
+                                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource SelectedPasukBackground}, Dark={StaticResource SelectedPasukBackgroundDark}}"/>
+                                        </DataTrigger>
+                                    </Border.Triggers>
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer Tapped="OnPasukTapped"
+                                                              CommandParameter="{Binding .}"/>
+                                        <TapGestureRecognizer Tapped="OnPasukDoubleTapped" NumberOfTapsRequired="2"
+                                                              CommandParameter="{Binding .}"/>
+                                        <TapGestureRecognizer Tapped="OnPasukRightClicked"
+                                                              CommandParameter="{Binding .}"
+                                                              Buttons="Secondary"/>
+                                        <PointerGestureRecognizer PointerPressed="OnPasukPointerPressed"
+                                                                  PointerReleased="OnPasukPointerReleased"/>
+                                    </Border.GestureRecognizers>
+                                    <Border.Behaviors>
+                                        <behaviors:LongPressBehavior LongPressDuration="600"
+                                                                     LongPressed="OnPasukLongPressed"
+                                                                     NativeTapped="OnPasukNativeTapped"/>
+                                    </Border.Behaviors>
+                                    <VerticalStackLayout Spacing="2">
+                                        <controls:PasukTextLabel AutomationId="PasukText"
+                                                                 FontSize="{Binding FontSize}"
+                                                                 FlowDirection="RightToLeft"
+                                                                 LineBreakMode="WordWrap"
+                                                                 LineHeight="1.4">
+                                            <controls:PasukTextLabel.FormattedText>
+                                                <MultiBinding Converter="{StaticResource PasukMarkerTextConverter}">
+                                                    <!-- Observe Pasuk.FormattedText directly so the
+                                                         binding repulls on theme-change notifications
+                                                         (#2601 review). -->
+                                                    <Binding Path="Pasuk.FormattedText"/>
+                                                    <Binding Path="PasukNumHeb"/>
+                                                    <Binding Path="MarkerFontSize"/>
+                                                </MultiBinding>
+                                            </controls:PasukTextLabel.FormattedText>
+                                        </controls:PasukTextLabel>
+                                        <controls:InlinePerushimView ItemsSource="{Binding PerushNotes}"
+                                                                     LinkTapped="OnContentLinkTapped"/>
+                                    </VerticalStackLayout>
+                                </controls:ReaderCellBorder>
+                            </VerticalStackLayout>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                    <CollectionView.EmptyView>
+                        <VerticalStackLayout VerticalOptions="Center"
+                                             HorizontalOptions="Center"
+                                             Padding="20">
+                            <Image Source="loading_book_anim.gif"
+                                   IsAnimationPlaying="True"
+                                   HeightRequest="60"
+                                   WidthRequest="60"
+                                   Aspect="AspectFit"/>
+                            <Label Text="מתחבר למועד..."
+                                   AutomationId="MoedLoadingLabel"
+                                   FontSize="18"
+                                   HorizontalTextAlignment="Center"
+                                   Margin="0,10,0,0"/>
+                        </VerticalStackLayout>
+                    </CollectionView.EmptyView>
+                </CollectionView>
+            </Grid>
+
+            <!-- Articles View (hidden by default, shown when articles button clicked) -->
+            <controls:ReaderArticlesView Grid.Row="2"
+                            x:Name="ArticlesCollection"
+                            EmptyText="אין מאמרים למועד זה"
+                            SelectedArticleId="{Binding SelectedArticleId}"/>
+        </Grid>
+
+        <!-- Perushim Panel (slides up from bottom, above content but behind bottom bar) -->
+        <controls:PerushimSheet x:Name="PerushimPanel" Grid.Row="1" ZIndex="50"/>
+
+        <!-- Bottom Navigation Bar with Circular Menu - OVERLAY floating at bottom -->
+        <controls:ReaderBottomBar x:Name="BottomBar" Grid.Row="1"
+              ZIndex="100"
+              ArticlesBadgeCount="{Binding ArticlesCount}"/>
+
+        <!-- Circular navigation fan - shared layer (scrim + satellites + FAB) -->
+        <controls:ReaderFanMenu x:Name="FanMenu" Grid.Row="1" ZIndex="150">
+            <controls:ReaderFanMenu.Satellites>
+                <!-- Previous moed (bottom-left satellite). Disabled at the first moed via Command.CanExecute. -->
+                <controls:ReaderFanMenuSatellite x:Name="PrevMoedButton"
+                        AutomationId="PrevUnitButton"
+                        SemanticProperties.Description="המועד הקודם"
+                        ToolTipProperties.Text="המועד הקודם"
+                        Text="{x:Static fonts:FluentUI.document_arrow_right_24_regular}"
+                        Command="{Binding LoadPreviousCommand}"
+                        Clicked="OnMenuItemClicked"/>
+
+                <!-- Moadim catalogue (top satellite) -->
+                <controls:ReaderFanMenuSatellite x:Name="MoedListButton"
+                        AutomationId="UnitPickerButton"
+                        SemanticProperties.Description="בחירת מועד"
+                        ToolTipProperties.Text="בחירת מועד"
+                        Text="{x:Static fonts:FluentUI.library_24_regular}"
+                        Clicked="OnMoedListClicked"/>
+
+                <!-- Next moed (bottom-right satellite). Disabled at the last moed via Command.CanExecute. -->
+                <controls:ReaderFanMenuSatellite x:Name="NextMoedButton"
+                        AutomationId="NextUnitButton"
+                        SemanticProperties.Description="המועד הבא"
+                        ToolTipProperties.Text="המועד הבא"
+                        Text="{x:Static fonts:FluentUI.document_arrow_right_24_regular}"
+                        ScaleX="-1"
+                        Command="{Binding LoadNextCommand}"
+                        Clicked="OnMenuItemClicked"/>
+            </controls:ReaderFanMenu.Satellites>
+        </controls:ReaderFanMenu>
+
+        <!-- Focused pasuk overlay - double-tap pasuk detail + its perushim -->
+        <controls:FocusedPasukOverlay x:Name="FocusedPasukOverlay" Grid.Row="1" ZIndex="150"
+              PlayRequested="OnFocusedPlayClicked"/>
+
+        <!-- Recitation player + decoder hosts (offscreen, drive moed/pasuk/word playback) -->
+        <controls:RecitationDecoderHost x:Name="RecitationDecoder" Grid.Row="1"/>
+        <controls:RecitationPlaybackHost x:Name="RecitationPlayerHost" Grid.Row="1"/>
+    </Grid>
+
+</ContentPage>

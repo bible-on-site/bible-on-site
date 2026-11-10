@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:fonts="clr-namespace:Fonts"
+             xmlns:converters="clr-namespace:BibleOnSite.Converters"
+             x:Class="BibleOnSite.Pages.MoadimListPage"
+             x:DataType="viewmodels:MoadimListViewModel"
+             Title="מועדים על הפרק"
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False">
+
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter"/>
+        </ResourceDictionary>
+    </ContentPage.Resources>
+
+    <!-- The shared navigation capsule: hamburger at the far-right edge, Back
+         immediately beside it, then the title pill (#2467). -->
+    <Grid RowDefinitions="Auto,*">
+        <controls:SharedTopBar Grid.Row="0" NavigationAutomationId="MoadimMenuButton">
+            <controls:SharedTopBar.CenterContent>
+                <controls:ToolbarPill>
+                    <Label Text="מועדים על הפרק"
+                           FontSize="16"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"
+                           LineBreakMode="TailTruncation"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                </controls:ToolbarPill>
+            </controls:SharedTopBar.CenterContent>
+        </controls:SharedTopBar>
+
+    <Grid Grid.Row="1" RowDefinitions="*">
+        <!-- The published catalogue ordered by annual order and grouped by
+             its Hebrew-month anchor — the מעגל השנה reading order. -->
+        <CollectionView ItemsSource="{Binding Groups}"
+                        IsGrouped="True"
+                        SelectionMode="None"
+                        Margin="8">
+            <CollectionView.GroupHeaderTemplate>
+                <DataTemplate x:DataType="viewmodels:MoedMonthGroup">
+                    <Label Text="{Binding MonthName}"
+                           FontSize="17"
+                           FontAttributes="Bold"
+                           Padding="8,12,8,4"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
+                </DataTemplate>
+            </CollectionView.GroupHeaderTemplate>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:MoedUnit">
+                    <Border Padding="12,10"
+                            Margin="0,3"
+                            StrokeShape="RoundRectangle 8"
+                            Stroke="Transparent"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:MoadimListViewModel}}, Path=OpenMoedCommand}"
+                                                  CommandParameter="{Binding .}"/>
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="*,Auto" InputTransparent="True">
+                            <VerticalStackLayout Grid.Column="0" Spacing="1">
+                                <Label Text="{Binding Name}"
+                                       AutomationId="MoedName"
+                                       FontSize="16"
+                                       VerticalOptions="Center"/>
+                                <Label Text="{Binding DateLabel}"
+                                       FontSize="13"
+                                       IsVisible="{Binding DateLabel, Converter={StaticResource StringNotEmptyConverter}}"
+                                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                            </VerticalStackLayout>
+                            <Label Grid.Column="1"
+                                   Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
+                                   FontFamily="FluentIcons"
+                                   FontSize="18"
+                                   TextColor="{StaticResource Gray400}"
+                                   VerticalOptions="Center"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+            <CollectionView.EmptyView>
+                <Label Text="הקטלוג אינו זמין - בדקו את החיבור ונסו שוב"
+                       AutomationId="MoadimEmptyLabel"
+                       FontSize="16"
+                       HorizontalTextAlignment="Center"
+                       VerticalOptions="Center"
+                       Padding="20"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            </CollectionView.EmptyView>
+        </CollectionView>
+
+        <ActivityIndicator IsVisible="{Binding IsLoading}"
+                           IsRunning="{Binding IsLoading}"
+                           VerticalOptions="Center"
+                           HorizontalOptions="Center"/>
+    </Grid>
+    </Grid>
+</ContentPage>

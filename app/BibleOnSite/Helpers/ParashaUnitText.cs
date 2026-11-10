@@ -115,7 +115,7 @@ public static class ParashaUnitText
     /// ("ישעיהו מב ה - ירמיהו ב ג").
     /// </summary>
     public static string RangeLabel(
-        ScriptureRange range,
+        IScriptureRange range,
         Func<int, string?> perekSource,
         Func<int, (string SeferName, int PerekNumber, int? Additional)?> perekInfo)
     {

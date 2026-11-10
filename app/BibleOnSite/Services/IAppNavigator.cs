@@ -117,6 +117,8 @@ public enum ReaderDivision
     Parasha,
     /// <summary>The מסורה על הפרק reading instance.</summary>
     Masora,
+    /// <summary>The מועדים על הפרק reading instance (#3261).</summary>
+    Moed,
 }
 
 public static class AppRoutes
@@ -144,6 +146,12 @@ public static class AppRoutes
 
     /// <summary>The פרשה listing above the reader — same flyout destination.</summary>
     public static string ParashaList => "ParashaListPage";
+
+    /// <summary>The מועדים catalogue listing above the reader — same flyout destination.</summary>
+    public static string Moadim => "MoadimListPage";
+
+    /// <summary>The מועדים על הפרק reader instance — a reader page like ParashaPage.</summary>
+    public static string Moed => "MoedPage";
 
     public static string Tanahpedia => "TanahpediaPage";
     public static string TanahpediaCategory => "tanahpediaCategory";
@@ -182,6 +190,7 @@ public static class AppRoutes
             [CalendarReader] = ReaderDivision.Perek,
             [Parasha] = ReaderDivision.Parasha,
             [Masora] = ReaderDivision.Masora,
+            [Moed] = ReaderDivision.Moed,
         };
 
     /// <summary>

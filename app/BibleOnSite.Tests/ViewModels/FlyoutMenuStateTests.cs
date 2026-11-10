@@ -218,7 +218,7 @@ public class FlyoutMenuStateTests : IDisposable
     [Fact]
     public void CurrentDestination_ExactlyOneRowFlagIsSet()
     {
-        // Every row reads its own Is*Current flag — all eleven getters must
+        // Every row reads its own Is*Current flag — all twelve getters must
         // agree with the destination on every value, not just the ones other
         // tests happened to read.
         var state = new FlyoutMenuState(_service);
@@ -234,6 +234,7 @@ public class FlyoutMenuStateTests : IDisposable
                 state.IsLearningCalendarCurrent,
                 state.IsMasoraCurrent,
                 state.IsParashaCurrent,
+                state.IsMoadimCurrent,
                 state.IsAuthorsCurrent,
                 state.IsDailyBulletinCurrent,
                 state.IsTermsCurrent,
@@ -272,6 +273,8 @@ public class FlyoutMenuStateTests : IDisposable
     [InlineData("MasoraPage", FlyoutDestination.Masora)]
     [InlineData("ParashaListPage", FlyoutDestination.Parasha)]
     [InlineData("ParashaPage", FlyoutDestination.Parasha)]
+    [InlineData("MoadimListPage", FlyoutDestination.Moadim)]
+    [InlineData("MoedPage", FlyoutDestination.Moadim)]
     [InlineData("AuthorsPage", FlyoutDestination.Authors)]
     [InlineData("DailyBulletinPage", FlyoutDestination.DailyBulletin)]
     [InlineData("TosPage", FlyoutDestination.Terms)]
