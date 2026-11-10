@@ -445,8 +445,10 @@ describe("detectChanges", () => {
 		"web/bible-on-site/tests/perf/build-size.test.ts",
 		"web/bible-on-site/tests/util/coverage/merge-coverage.mts",
 		// Colocated *.test.* / *.spec.* files anywhere in the module.
-		"web/bible-on-site/scripts/start-server.test.mjs",
-		"web/bible-on-site/scripts/start-server-launcher.test.mjs",
+		"web/bible-on-site/scripts/start-server-drain.test.mjs",
+		"web/bible-on-site/scripts/start-server-remote.test.mjs",
+		"web/bible-on-site/scripts/start-server-signals.test.mjs",
+		"web/bible-on-site/scripts/start-server-lifecycle.test.mjs",
 		"web/bible-on-site/scripts/start-server-probe.test.mjs",
 		"web/bible-on-site/scripts/verify-public-content.test.mjs",
 		"web/bible-on-site/src/lib/search/service.spec.ts",
