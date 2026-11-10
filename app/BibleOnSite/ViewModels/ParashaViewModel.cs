@@ -186,6 +186,19 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
         // leave the exclusion flag on a page that is actually on screen.
         if (oldValue is not null) { oldValue.IsOffscreenCarouselPage = true; }
         if (newValue is not null) { newValue.IsOffscreenCarouselPage = false; }
+        // Selection flags live on the rows' pasuk objects — clear them on
+        // the unit being left, or its cached rows keep showing a phantom
+        // selection after ClearSelected() only reaches the new unit's rows.
+        if (oldValue is not null && !ReferenceEquals(oldValue, newValue))
+        {
+            foreach (var row in oldValue.Rows)
+            {
+                if (row.Display is { Pasuk.IsSelected: true } display)
+                {
+                    display.Pasuk.IsSelected = false;
+                }
+            }
+        }
         RefreshRecitationAvailability(newValue);
         if (newValue is null)
         {
@@ -719,13 +732,31 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
 
         var (rows, tikkunPasukim) = await ParashaUnitText.BuildRowsAsync(
             unit,
-            perekId => _perekService.LoadPasukimAsync(perekId),
+            LoadAndCachePasukimAsync,
             perekId => _perekService.GetPerekSource(perekId),
             FontFactor,
             IsShnayimMikraEnabled);
         unit.TikkunPasukim = tikkunPasukim;
         unit.Rows = rows;
         unit.RangeLabel = RangeLabelOf(unit.TorahRange);
+    }
+
+    /// <summary>
+    /// Full canonical pasukim of a perek a loaded unit covers, or null until
+    /// its rows load. Recitation bounds checks (<see cref="RecitationTrack.Matches"/>)
+    /// hash the whole perek — the rows' clipped pesukim can't supply it, and
+    /// <c>Perek.Pasukim</c> only fills when the perek reader visits.
+    /// </summary>
+    public IReadOnlyList<Pasuk>? GetLoadedPasukim(int perekId) =>
+        _loadedPerekPasukim.GetValueOrDefault(perekId);
+
+    private readonly Dictionary<int, List<Pasuk>> _loadedPerekPasukim = new();
+
+    private async Task<List<Pasuk>> LoadAndCachePasukimAsync(int perekId)
+    {
+        var pasukim = await _perekService.LoadPasukimAsync(perekId);
+        _loadedPerekPasukim[perekId] = pasukim;
+        return pasukim;
     }
 
     /// <summary>
@@ -740,7 +771,7 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
         {
             var (rows, tikkunPasukim) = await ParashaUnitText.BuildRowsAsync(
                 unit,
-                perekId => _perekService.LoadPasukimAsync(perekId),
+                LoadAndCachePasukimAsync,
                 perekId => _perekService.GetPerekSource(perekId),
                 FontFactor,
                 IsShnayimMikraEnabled);

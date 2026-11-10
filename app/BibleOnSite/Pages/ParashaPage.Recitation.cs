@@ -290,7 +290,7 @@ public partial class ParashaPage
             return;
         }
 
-        var perekPasukim = PerekDataService.Instance.GetPerek(perekId)?.Pasukim;
+        var perekPasukim = _viewModel.GetLoadedPasukim(perekId);
         if (perekPasukim == null)
         {
             return;
@@ -384,7 +384,7 @@ public partial class ParashaPage
 
         FocusedPasukOverlay.PlayButtonVisible = RecitationAvailable;
         FocusedPasukOverlay.PlayButtonEnabled = CanPlayFocusedPasuk;
-        var perekPasukim = PerekDataService.Instance.GetPerek(_focusedPerekId)?.Pasukim;
+        var perekPasukim = _viewModel.GetLoadedPasukim(_focusedPerekId);
         var track = RecitationService.Instance.GetTrack(_focusedPerekId);
         var canPlayWords = RecitationAvailable && RecitationService.Instance.HasAudio(_focusedPerekId) &&
             track?.AlignmentStatus == "ready" && perekPasukim != null && track.Matches(perekPasukim);
@@ -447,7 +447,7 @@ public partial class ParashaPage
     private bool CanPlayFocusedPasuk => _focusedPasuk != null && _focusedPerekId > 0 &&
         RecitationAvailable &&
         RecitationService.Instance.GetTrack(_focusedPerekId) is { AlignmentStatus: "ready" } focusedTrack &&
-        PerekDataService.Instance.GetPerek(_focusedPerekId)?.Pasukim is { } focusedPasukim &&
+        _viewModel.GetLoadedPasukim(_focusedPerekId) is { } focusedPasukim &&
         focusedTrack.Matches(focusedPasukim) &&
         focusedTrack.GetWords(_focusedPasuk.PasukNum).Any(w => w.StartMs != null && w.EndMs != null);
 
@@ -469,7 +469,7 @@ public partial class ParashaPage
         }
         return selected.GroupBy(s => s.PerekId).All(g =>
             RecitationService.Instance.GetTrack(g.Key) is { AlignmentStatus: "ready" } track &&
-            PerekDataService.Instance.GetPerek(g.Key)?.Pasukim is { } pasukim && track.Matches(pasukim));
+            _viewModel.GetLoadedPasukim(g.Key) is { } pasukim && track.Matches(pasukim));
     }
 
     /// <summary>Whether any perek the unit reads has a downloaded recording.</summary>
@@ -507,12 +507,22 @@ public partial class ParashaPage
         }
 
         // A selection may cross the unit's perek boundary: each perek's pesukim
-        // become one chained verses clip, in row order.
+        // become one chained verses clip. Groups order by the perek's first
+        // row — GroupBy's tap order would play a later perek selected first
+        // ahead of an earlier reading.
+        var rowOrder = new Dictionary<int, int>();
+        var rows = _viewModel.Unit.Rows;
+        for (var i = 0; i < rows.Count; i++)
+        {
+            rowOrder.TryAdd(rows[i].PerekId, i);
+        }
+
         var segments = new List<RecitationSegment>();
-        foreach (var group in _viewModel.SelectedPasukim.GroupBy(s => s.PerekId))
+        foreach (var group in _viewModel.SelectedPasukim.GroupBy(s => s.PerekId)
+            .OrderBy(g => rowOrder.GetValueOrDefault(g.Key, int.MaxValue)))
         {
             var track = RecitationService.Instance.GetTrack(group.Key);
-            var pasukim = PerekDataService.Instance.GetPerek(group.Key)?.Pasukim;
+            var pasukim = _viewModel.GetLoadedPasukim(group.Key);
             if (track?.AlignmentStatus != "ready" || pasukim == null || !track.Matches(pasukim))
             {
                 continue;
@@ -553,7 +563,7 @@ public partial class ParashaPage
 
         var segments = RecitationRangePlanner.SegmentsForSlices(
             ParashaUnitText.PerekSlicesForUnit(unit),
-            perekId => PerekDataService.Instance.GetPerek(perekId)?.Pasukim,
+            _viewModel.GetLoadedPasukim,
             RecitationService.Instance.GetTrack,
             RecitationService.Instance.HasAudio,
             versePause: PreferencesService.Instance.RecitationVersePauseMs >= 0);

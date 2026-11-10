@@ -258,6 +258,40 @@ public class ParashaViewModelTests
     }
 
     [Fact]
+    public async Task UnitSwitch_ClearsSelectionFlagsOnLeftUnitRows()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        var unit1 = fixture.Model.Unit!;
+        fixture.Model.ToggleSelectedPasuk(1, 2);
+        unit1.Rows.Where(r => r.Display is not null && r.PerekId == 1 && r.PasukNum == 2)
+            .Should().OnlyContain(r => r.Display!.Pasuk.IsSelected);
+
+        await fixture.Model.NavigateToUnitAsync(2);
+
+        // ClearSelected() can only reach the displayed unit's rows — the flag
+        // on the left unit's cached rows must be cleared by the unit change
+        // itself, or navigating back shows a phantom selection.
+        unit1.Rows.Should().OnlyContain(r => r.Display == null || !r.Display.Pasuk.IsSelected);
+    }
+
+    [Fact]
+    public async Task LoadedPasukim_CachesFullPerekForRecitationBounds()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        // Recitation bounds checks (track.Matches) hash the whole canonical
+        // perek — the unit's rows can't supply it; the load cache does.
+        fixture.Model.GetLoadedPasukim(1).Should().NotBeNullOrEmpty();
+        fixture.Model.GetLoadedPasukim(2).Should().NotBeNullOrEmpty();
+        fixture.Model.GetLoadedPasukim(999).Should().BeNull();
+    }
+
+    [Fact]
     public async Task GetInitialUnitId_ResolvesLastLearntPerekInsideTorahRange()
     {
         // בראשית ג sits inside unit 1's Torah range (perek 1-3).

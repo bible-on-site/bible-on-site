@@ -29,6 +29,7 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
     private readonly PreferencesService _preferencesService;
     private readonly Func<int, Task<List<Article>>>? _articlesLoader;
     private readonly Func<int, bool> _hasPerekAudio;
+    private readonly Func<int, RecitationTrack?> _getTrack;
 
     // Using fields with [ObservableProperty] - the MVVMTK0045 warnings are acceptable
     // as we're not targeting AOT scenarios for WinRT marshalling.
@@ -156,6 +157,16 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
         PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
         IAppNavigator? navigator, IFileSystem? fileSystem, IShare? share,
         Func<int, bool>? hasPerekAudio)
+        : this(masoraDataService, perekDataService, preferencesService, catalogService, notesService,
+            articlesLoader, navigator, fileSystem, share, hasPerekAudio, null)
+    {
+    }
+
+    public MasoraViewModel(MasoraDataService masoraDataService, PerekDataService perekDataService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
+        IAppNavigator? navigator, IFileSystem? fileSystem, IShare? share,
+        Func<int, bool>? hasPerekAudio, Func<int, RecitationTrack?>? getTrack)
     {
         _masoraDataService = masoraDataService;
         _perekDataService = perekDataService;
@@ -167,6 +178,7 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
         _share = share ?? Share.Default;
         _articlesLoader = articlesLoader;
         _hasPerekAudio = hasPerekAudio ?? (static perekId => RecitationService.Instance.HasAudio(perekId));
+        _getTrack = getTrack ?? (static perekId => RecitationService.Instance.GetTrack(perekId));
 
         // Sync FontFactor from preferences and listen for changes
         _fontFactor = _preferencesService.PasukFontFactor;
@@ -267,18 +279,41 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
     public bool ShowHeaderPlayButton => IsQriynotEnabled && HasCurrentUnitRecitation;
 
 #pragma warning disable S1172 // ObservableProperty generates this hook with both values.
-    partial void OnUnitChanged(MasoraUnit? oldValue, MasoraUnit? newValue) => RefreshRecitationAvailability();
+    partial void OnUnitChanged(MasoraUnit? oldValue, MasoraUnit? newValue)
 #pragma warning restore S1172
+    {
+        // Selection flags live on the rows' pasuk objects — clear them on
+        // the unit being left, or its cached rows keep showing a phantom
+        // selection after ClearSelected() only reaches the new unit's rows.
+        if (oldValue is not null && !ReferenceEquals(oldValue, newValue))
+        {
+            foreach (var pasuk in oldValue.Rows.Select(row => row.Pasuk).Where(pasuk => pasuk.IsSelected))
+            {
+                pasuk.IsSelected = false;
+            }
+        }
+
+        RefreshRecitationAvailability();
+    }
 
     /// <summary>
-    /// Re-evaluates whether the currently displayed unit has any downloaded
+    /// Re-evaluates whether the currently displayed unit has any playable
     /// recitation — controls the קריינות menu item and header play button.
     /// Called when the unit changes and after the recitation package updates.
     /// </summary>
     public void RefreshRecitationAvailability()
     {
+        // The shared planner is the source of truth for what unit playback
+        // would produce — a unit whose only downloaded audio is an
+        // unaligned track behind partial slices gets no clip, so offering
+        // its play button would be dead UI.
         HasCurrentUnitRecitation = Unit is { } current &&
-            MasoraUnitText.PerekIdsForUnit(current).Any(_hasPerekAudio);
+            RecitationRangePlanner.SegmentsForSlices(
+                MasoraUnitText.PerekSlicesForUnit(current),
+                GetLoadedPasukim,
+                _getTrack,
+                _hasPerekAudio,
+                _preferencesService.RecitationVersePauseMs >= 0).Count > 0;
     }
 
     #endregion
@@ -495,8 +530,26 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
 
         unit.Rows = await MasoraUnitText.BuildRowsAsync(
             unit,
-            perekId => _perekDataService.LoadPasukimAsync(perekId),
+            LoadAndCachePasukimAsync,
             FontFactor);
+    }
+
+    /// <summary>
+    /// Full canonical pasukim of a perek a loaded unit covers, or null until
+    /// its rows load. Recitation bounds checks (<see cref="RecitationTrack.Matches"/>)
+    /// hash the whole perek — the rows' clipped pesukim can't supply it, and
+    /// <c>Perek.Pasukim</c> only fills when the perek reader visits.
+    /// </summary>
+    public IReadOnlyList<Pasuk>? GetLoadedPasukim(int perekId) =>
+        _loadedPerekPasukim.GetValueOrDefault(perekId);
+
+    private readonly Dictionary<int, List<Pasuk>> _loadedPerekPasukim = new();
+
+    private async Task<List<Pasuk>> LoadAndCachePasukimAsync(int perekId)
+    {
+        var pasukim = await _perekDataService.LoadPasukimAsync(perekId);
+        _loadedPerekPasukim[perekId] = pasukim;
+        return pasukim;
     }
 
     /// <summary>
