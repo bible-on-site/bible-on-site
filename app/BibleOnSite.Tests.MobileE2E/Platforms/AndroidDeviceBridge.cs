@@ -34,11 +34,30 @@ internal static class AndroidDeviceBridge
         return component;
     }
 
-    /// <summary>Cold-starts the app carrying the emulator endpoint as the
-    /// intent extra <see cref="BibleOnSite.Services.FirebaseEmulatorEndpoint.EnvironmentVariable"/> —
-    /// the channel MainActivity persists for later activateApp relaunches.</summary>
+    /// <summary>Cold-starts the app bound to the emulator endpoint. Loopback
+    /// targets ride the intent extra
+    /// <see cref="BibleOnSite.Services.FirebaseEmulatorEndpoint.EnvironmentVariable"/>,
+    /// which MainActivity persists for later activateApp relaunches. A
+    /// non-local target — a physical device reaching a dev-machine emulator
+    /// over LAN — cannot use that channel: the exported activity rejects
+    /// non-loopback extras, so the suite writes the persisted marker through
+    /// run-as instead and cold-starts so the marker resolves.</summary>
     public static void StartWithEmulatorEndpoint(string component, string deviceEndpoint)
     {
+        var endpoint = BibleOnSite.Services.FirebaseEmulatorEndpoint.Parse(deviceEndpoint)
+            ?? throw new InvalidOperationException(
+                $"Malformed emulator endpoint for launch: {deviceEndpoint}");
+        if (!BibleOnSite.Services.FirebaseEmulatorEndpoint.IsLoopbackHost(endpoint.Host))
+        {
+            WriteEmulatorMarker(deviceEndpoint);
+            var started = Run("shell", "am", "start", "-n", component);
+            if (started is null || started.Contains("Error", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Launching {component} for a LAN emulator endpoint failed: {started ?? "<no output>"}");
+            }
+            return;
+        }
         var output = Run("shell", "am", "start", "-n", component,
             "--es", BibleOnSite.Services.FirebaseEmulatorEndpoint.EnvironmentVariable, deviceEndpoint);
         if (output is null || output.Contains("Error", StringComparison.OrdinalIgnoreCase))
@@ -46,6 +65,20 @@ internal static class AndroidDeviceBridge
             throw new InvalidOperationException(
                 $"Launching {component} with the emulator endpoint failed: {output ?? "<no output>"}");
         }
+    }
+
+    /// <summary>Writes the endpoint marker straight into the app's private
+    /// files — the non-local channel the endpoint contract reserves for
+    /// targets the exported intent extra must not carry.</summary>
+    private static void WriteEmulatorMarker(string deviceEndpoint)
+    {
+        if (deviceEndpoint.Contains('\''))
+        {
+            throw new InvalidOperationException(
+                $"Emulator endpoint cannot be shell-quoted into the marker write: {deviceEndpoint}");
+        }
+        Run("shell", "run-as", PackageId, "sh", "-c",
+            $"printf '%s' '{deviceEndpoint}' > files/firebase-emulator");
     }
 
     /// <summary>Removes the persisted endpoint marker so the next cold start

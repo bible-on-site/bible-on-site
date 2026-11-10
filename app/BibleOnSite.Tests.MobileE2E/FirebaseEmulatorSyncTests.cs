@@ -104,16 +104,8 @@ public sealed class FirebaseEmulatorSyncTests(ITestOutputHelper output, MobileDe
 
         // Silent anonymous auth: no consent, account picker or error dialog —
         // the only observable effect is the committed document.
-        var uid = await WaitForSingleUserAsync();
+        var uid = await WaitForAnonymousUserAsync();
         AssertNoBlockingDialog();
-        var account = Assert.Single(await _backend.AccountsAsync(),
-            user => user.GetProperty("localId").GetString() == uid);
-        // Anonymous sessions carry no providerUserInfo — anything else would
-        // be a real (prompted) login flow, which the feature must never open.
-        var providerInfo = account.TryGetProperty("providerUserInfo", out var providers)
-            ? providers.GetRawText() : "[]";
-        Assert.True(providerInfo is "[]" or "null",
-            $"users/{uid} should belong to an anonymous identity but lists providers {providerInfo}");
 
         var document = await _backend.WaitForUserDocumentAsync(uid, doc =>
             EntryBool(doc, SyncedToggleKey) == toggled);
@@ -156,7 +148,7 @@ public sealed class FirebaseEmulatorSyncTests(ITestOutputHelper output, MobileDe
     private async Task OfflineSyncAsync()
     {
         LaunchWithEndpoint(_backend!.DeviceEndpoint(Configuration.Platform));
-        var uid = await WaitForSingleUserAsync();
+        var uid = await WaitForAnonymousUserAsync();
 
         // Offline: auth and store are both unreachable. The app must save
         // locally and stay silent — no sign-in prompt, no error dialog.
@@ -248,6 +240,34 @@ public sealed class FirebaseEmulatorSyncTests(ITestOutputHelper output, MobileDe
 
     private string DeadEndpoint() =>
         $"{_backend!.DeviceHost(Configuration.Platform)}:{DeadAuthPort}:{DeadFirestorePort}";
+
+    /// <summary>Resolves the signed-in uid and asserts its backend account is
+    /// a silent anonymous identity. The provider check proves first-time
+    /// sign-in only in whichever scenario runs first — the backend starts
+    /// account-free, so that scenario's uid is necessarily a fresh account
+    /// this run created. A later scenario's uid is the persisted install
+    /// identity it already proved; there the check still runs as a
+    /// regression, and the identity's survival across the relaunch is what
+    /// the scenario asserts separately.</summary>
+    private async Task<string> WaitForAnonymousUserAsync()
+    {
+        var preexisting = (await _backend!.AccountsAsync())
+            .Select(user => user.GetProperty("localId").GetString())
+            .ToHashSet(StringComparer.Ordinal);
+        var uid = await WaitForSingleUserAsync();
+        var account = Assert.Single(await _backend.AccountsAsync(),
+            user => user.GetProperty("localId").GetString() == uid);
+        // Anonymous sessions carry no providerUserInfo — anything else would
+        // be a real (prompted) login flow, which the feature must never open.
+        var providerInfo = account.TryGetProperty("providerUserInfo", out var providers)
+            ? providers.GetRawText() : "[]";
+        Assert.True(providerInfo is "[]" or "null",
+            $"users/{uid} should belong to an anonymous identity but lists providers {providerInfo}");
+        Output.WriteLine(preexisting.Contains(uid)
+            ? $"install identity {uid} reused — first-time sign-in was proven by the earlier scenario"
+            : $"fresh silent anonymous sign-in created {uid}");
+        return uid;
+    }
 
     private async Task<string> WaitForSingleUserAsync()
     {
