@@ -649,6 +649,62 @@ describe("ReadingProgress", () => {
 		expect(fill.style.width).toBe("0%");
 	});
 
+	it("does not remeasure per paint when the content root is the scroller", async () => {
+		// Nested commentary scrollers (ranged perush views, SeferPanel)
+		// point `content` at the scroller itself — the scrollable body IS
+		// the counted text. Its own top is scrollTop, so the drift check
+		// must key on scrollHeight instead: plain scrolling is no layout
+		// change and must not re-query every unit per frame.
+		const { container } = render(
+			<div className="scroll">
+				<ReadingProgress
+					units={[unit("a", 10), unit("b", 10)]}
+					scroller=".scroll"
+					content=".scroll"
+					unitSelector='[data-u="{key}"]'
+				/>
+				<div data-u="a">{T.unitA}</div>
+				<div data-u="b">{T.unitB}</div>
+			</div>,
+		);
+		const scroller = container.querySelector(".scroll") as Element;
+		const a = container.querySelector('[data-u="a"]') as Element;
+		const b = container.querySelector('[data-u="b"]') as Element;
+		setRect(a, 0, 100);
+		setRect(b, 100, 100);
+		rangeLines.set(a, [{ top: 0, height: 100 }]);
+		rangeLines.set(b, [{ top: 100, height: 100 }]);
+		setScroller(scroller);
+		await remeasure();
+
+		const reads = jest.mocked(Element.prototype.getBoundingClientRect);
+		const unitReads = () =>
+			reads.mock.contexts.filter((el) => el === a || el === b).length;
+
+		reads.mockClear();
+		await scroll(scroller, 400);
+		expect(unitReads()).toBe(0);
+		expect(
+			container
+				.querySelector('[role="progressbar"]')
+				?.getAttribute("aria-valuenow"),
+		).not.toBeNull();
+
+		// Inner growth — a late-loading image or async note inside the
+		// scroller — still re-measures through the scrollHeight signal.
+		setRect(a, 0, 200);
+		setRect(b, 200, 100);
+		rangeLines.set(a, [{ top: 0, height: 200 }]);
+		rangeLines.set(b, [{ top: 200, height: 100 }]);
+		reads.mockClear();
+		await act(async () => {
+			setScroller(scroller, { scrollTop: 400, scrollHeight: 1100 });
+			scroller.dispatchEvent(new Event("scroll"));
+		});
+		await act(flushRaf);
+		expect(unitReads()).toBeGreaterThan(0);
+	});
+
 	it("coalesces repeated scroll events into one animation frame", async () => {
 		const { container } = renderInScroller(
 			<ReadingProgress
