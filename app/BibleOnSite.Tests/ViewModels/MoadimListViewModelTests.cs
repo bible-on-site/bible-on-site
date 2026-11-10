@@ -29,6 +29,27 @@ public class MoadimListViewModelTests
         ]}}
         """;
 
+    /// <summary>The catalogue after connectivity recovery — adds a כסלו moed between orders 3 and 20.</summary>
+    private const string RefreshedResponse = """
+        {"data":{"moadim":[
+            {"id":2,"slug":"tisha-bav","name":"תשעה באב","summary":null,"hebrewMonth":"אב",
+             "dateLabel":"ט' באב","annualOrder":20,"published":true,"sections":[],
+             "explicitArticleIds":[],"articles":[]},
+            {"id":1,"slug":"rosh-hashana","name":"ראש השנה","summary":null,"hebrewMonth":"תשרי",
+             "dateLabel":"א' בתשרי","annualOrder":1,"published":true,"sections":[],
+             "explicitArticleIds":[],"articles":[]},
+            {"id":3,"slug":"yom-kippur","name":"יום כיפור","summary":null,"hebrewMonth":"תשרי",
+             "dateLabel":"י' בתשרי","annualOrder":2,"published":true,"sections":[],
+             "explicitArticleIds":[],"articles":[]},
+            {"id":4,"slug":"shemini-atzeret","name":"שמיני עצרת","summary":null,"hebrewMonth":null,
+             "dateLabel":null,"annualOrder":3,"published":true,"sections":[],
+             "explicitArticleIds":[],"articles":[]},
+            {"id":5,"slug":"chanuka","name":"חנוכה","summary":null,"hebrewMonth":"כסלו",
+             "dateLabel":"כה' בכסלו","annualOrder":10,"published":true,"sections":[],
+             "explicitArticleIds":[],"articles":[]}
+        ]}}
+        """;
+
     private static (MoadimListViewModel vm, Mock<IAppNavigator> navigator) Subject(
         GraphQLTransport http, TestStorage storage)
     {
@@ -83,6 +104,30 @@ public class MoadimListViewModelTests
 
         // A populated landing does not refetch on re-appearance.
         http.Requests.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task Load_AfterServiceRefresh_RebuildsGroupsFromTheNewCatalogue()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(Response);
+        var service = new MoedService(http.Client, storage.FileSystem.Object);
+        var vm = new MoadimListViewModel(service, new Mock<IAppNavigator>().Object);
+        await vm.LoadAsync();
+        vm.Groups.SelectMany(g => g).Select(m => m.Slug).Should().NotContain("chanuka");
+
+        // Connectivity recovery swaps the service catalogue while a reader
+        // sits above this page — re-appearance rebuilds the month groups
+        // rather than showing the pre-refresh snapshot (#3261 review).
+        http.Respond = _ => Task.FromResult(GraphQLTransport.JsonResponse(RefreshedResponse));
+        await service.TryRefreshAsync();
+        await vm.LoadAsync();
+
+        vm.Groups.SelectMany(g => g).Select(m => m.Slug).Should().Equal(
+            "rosh-hashana", "yom-kippur", "shemini-atzeret", "chanuka", "tisha-bav");
+        // Only the initial load and the refresh hit the API — re-appearance
+        // rebuilds from the in-memory catalogue without refetching.
+        http.Requests.Should().HaveCount(2);
     }
 
     [Fact]

@@ -319,6 +319,8 @@ public partial class MoedViewModel : ObservableObject, IPerushimSheetViewModel /
     /// <summary>
     /// The shared range planner applied to one section's ordered slices —
     /// the exact clips <c>moed:{id}:s{sectionId}</c> playback would chain.
+    /// Each clip carries its section so a repeated reading's highlight maps
+    /// to the playing occurrence, not the first canonical match (#3261).
     /// </summary>
     public List<RecitationSegment> PlanSegmentsForSection(MoedSection section) =>
         RecitationRangePlanner.SegmentsForSlices(
@@ -326,16 +328,17 @@ public partial class MoedViewModel : ObservableObject, IPerushimSheetViewModel /
             GetLoadedPasukim,
             _getTrack,
             _hasPerekAudio,
-            _preferencesService.RecitationVersePauseMs >= 0);
+            _preferencesService.RecitationVersePauseMs >= 0)
+            .Select(s => s with { SectionId = section.Id }).ToList();
 
-    /// <summary>The whole-moed playback plan — every section's slices in order.</summary>
+    /// <summary>
+    /// The whole-moed playback plan — every section's tagged clips in order
+    /// (the planner emits one clip per slice and never merges, so planning
+    /// per section yields exactly the flattened <see cref="MoedUnitText.PerekSlicesForUnit"/>
+    /// sequence, each clip keeping its own section).
+    /// </summary>
     public List<RecitationSegment> PlanSegmentsForUnit(MoedUnit moed) =>
-        RecitationRangePlanner.SegmentsForSlices(
-            MoedUnitText.PerekSlicesForUnit(moed),
-            GetLoadedPasukim,
-            _getTrack,
-            _hasPerekAudio,
-            _preferencesService.RecitationVersePauseMs >= 0);
+        moed.Sections.SelectMany(PlanSegmentsForSection).ToList();
 
     /// <summary>Mirrors each section's playable verdict onto its header row's play button.</summary>
     private void UpdateSectionPlayButtons()

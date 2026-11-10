@@ -226,9 +226,15 @@ public class MoedViewModelTests
         await fixture.Model.LoadBySlugAsync("first");
 
         var unit = fixture.Model.Unit!;
-        fixture.Model.PlanSegmentsForUnit(unit).Select(s => s.PerekId).Should().Equal(1, 2);
+        var unitSegments = fixture.Model.PlanSegmentsForUnit(unit);
+        unitSegments.Select(s => s.PerekId).Should().Equal(1, 2);
+        // Whole-moed clips keep their section so a repeated reading's
+        // highlight maps to the playing occurrence (#3261 review).
+        unitSegments.Should().OnlyContain(s => s.SectionId == unit.Sections[0].Id);
         var section = unit.Sections[0];
-        fixture.Model.PlanSegmentsForSection(section).Select(s => s.PerekId).Should().Equal(1, 2);
+        var sectionSegments = fixture.Model.PlanSegmentsForSection(section);
+        sectionSegments.Select(s => s.PerekId).Should().Equal(1, 2);
+        sectionSegments.Should().OnlyContain(s => s.SectionId == section.Id);
         // The unit setter already ran the availability refresh — the header
         // affordance and each section header's play button mirror the plan.
         fixture.Model.HasCurrentUnitRecitation.Should().BeTrue();

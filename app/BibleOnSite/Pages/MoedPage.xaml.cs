@@ -273,8 +273,6 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
 
             var slug = _pendingSlug;
             var id = _pendingId;
-            _pendingSlug = null;
-            _pendingId = null;
 
             if (!string.IsNullOrEmpty(slug))
             {
@@ -298,6 +296,11 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
                 return;
             }
 
+            // Resolved — the requested destination is consumed. Pending values
+            // survive a failed load so the retry overlay still targets the
+            // deep-linked moed rather than the catalogue's first entry (#3261).
+            _pendingSlug = null;
+            _pendingId = null;
             MoedLoadingOverlay.Hide();
             await UpdateArticlesCountAsync();
         }

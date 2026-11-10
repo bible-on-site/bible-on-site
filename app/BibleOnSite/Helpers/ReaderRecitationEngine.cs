@@ -42,6 +42,7 @@ public sealed class ReaderRecitationEngine
     private IRecitationFrameTicker? _ticker;
     private RecitationTimeline? _timeline;
     private int _timelinePerekId;
+    private RecitationSegment? _currentSegment;
     private RecitationWord? _highlightedWord;
     private PlaybackAudioOwnership.Lease? _lease;
 
@@ -92,6 +93,12 @@ public sealed class ReaderRecitationEngine
 
     /// <summary>The perek the active highlight timeline maps, or 0 while none is loaded.</summary>
     public int TimelinePerekId => _timelinePerekId;
+
+    /// <summary>
+    /// The clip whose audio is loaded — its <see cref="RecitationSegment.SectionId"/>
+    /// tells the page which labelled occurrence a highlight maps to.
+    /// </summary>
+    public RecitationSegment? CurrentSegment => _currentSegment;
 
     /// <summary>The word under the playhead right now, or null.</summary>
     public RecitationWord? HighlightedWord => _highlightedWord;
@@ -331,6 +338,7 @@ public sealed class ReaderRecitationEngine
             }
 
             _timelinePerekId = segment.PerekId;
+            _currentSegment = segment;
             _timeline = track?.AlignmentStatus == "ready"
                 ? new RecitationTimeline(track, ranges ??
                     (segment.Start.HasValue && segment.End.HasValue ? [(segment.Start.Value, segment.End.Value)] : null), pauseMs)
@@ -355,6 +363,10 @@ public sealed class ReaderRecitationEngine
             System.Diagnostics.Debug.WriteLine($"Recitation playback: {ex}");
             if (!request.IsCancellationRequested)
             {
+                // A failed prepare leaves no source to play — drop the cursor,
+                // the queued clips and the pending seek so the bar does not
+                // stay up over dead audio (#3261 review).
+                StopPlayback();
                 await _alert("הקראה", "לא ניתן להשמיע את ההקלטה. בדקו את חבילת ההקראה בהעדפות.", "אישור");
             }
         }
@@ -469,6 +481,7 @@ public sealed class ReaderRecitationEngine
     {
         _ticker?.Stop();
         _timeline = null;
+        _currentSegment = null;
         SetHighlightedWord(null);
     }
 

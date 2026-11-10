@@ -230,6 +230,60 @@ public class ReaderRecitationEngineTests
     }
 
     [Fact]
+    public async Task PrepareFailure_ClearsCursorAndQueue_AndAlerts()
+    {
+        await using var rig = await StartedRig();
+
+        // Perek 2 has no installed track — prepare throws inside the engine
+        // while a second clip still waits in the queue (#3261 review).
+        await rig.Engine.PlayPlanAsync("unit:1", continuous: true,
+            [SegmentFor(2), ClipFor()]);
+
+        rig.Engine.Cursor.PlayingKey.Should().BeNull();
+        rig.Engine.CurrentSegment.Should().BeNull();
+        rig.Alerts.Should().ContainSingle();
+
+        // The cleared queue chains nothing — an ended notification later
+        // prepares no further clip.
+        rig.Surface.RaiseEnded();
+        rig.Decoder.ClipCalls.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task MediaEnded_Chain_SwapsCurrentSegment()
+    {
+        await using var rig = await StartedRig();
+        // Clips from two labelled sections — the engine surfaces whichever
+        // one is loaded so the page can scope its highlight (#3261 review).
+        var first = ClipFor() with { SectionId = 11 };
+        var second = ClipFor() with { SectionId = 12 };
+
+        await rig.Engine.PlayPlanAsync("unit:1", continuous: true, [first, second]);
+        rig.Engine.CurrentSegment.Should().Be(first);
+        rig.Surface.RaiseOpened();
+        rig.Surface.RaiseEnded();
+
+        await WaitForAsync(() => rig.Engine.CurrentSegment == second || rig.Alerts.Count > 0);
+        rig.Engine.CurrentSegment.Should().Be(second);
+        rig.Alerts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CurrentSegment_ClearOnStop_AndEnd()
+    {
+        await using var rig = await StartedRig();
+        var segment = SegmentFor() with { SectionId = 42 };
+
+        await rig.Engine.PlayClipAsync("chapter:1", continuous: true, segment);
+        rig.Engine.CurrentSegment.Should().Be(segment);
+
+        rig.Surface.RaiseOpened();
+        rig.Surface.RaiseEnded();
+
+        rig.Engine.CurrentSegment.Should().BeNull();
+    }
+
+    [Fact]
     public async Task StopPlayback_ClearsSourceAndCursor()
     {
         await using var rig = await StartedRig();

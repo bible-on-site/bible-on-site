@@ -261,21 +261,19 @@
                             </VerticalStackLayout>
                         </DataTemplate>
                     </CollectionView.ItemTemplate>
+                    <!-- Shown only after a successful load — HasUnit gates the
+                         whole grid while the loading overlay owns the
+                         connecting state, so an empty Rows list means a
+                         published moed with no reading sections (#3261). -->
                     <CollectionView.EmptyView>
-                        <VerticalStackLayout VerticalOptions="Center"
-                                             HorizontalOptions="Center"
-                                             Padding="20">
-                            <Image Source="loading_book_anim.gif"
-                                   IsAnimationPlaying="True"
-                                   HeightRequest="60"
-                                   WidthRequest="60"
-                                   Aspect="AspectFit"/>
-                            <Label Text="מתחבר למועד..."
-                                   AutomationId="MoedLoadingLabel"
-                                   FontSize="18"
-                                   HorizontalTextAlignment="Center"
-                                   Margin="0,10,0,0"/>
-                        </VerticalStackLayout>
+                        <Label Text="אין קטעי קריאה למועד זה"
+                               AutomationId="MoedEmptyLabel"
+                               FontSize="18"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center"
+                               HorizontalTextAlignment="Center"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                               Padding="20"/>
                     </CollectionView.EmptyView>
                 </CollectionView>
             </Grid>

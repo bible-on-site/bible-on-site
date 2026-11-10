@@ -36,7 +36,23 @@ public class MoedService : BaseGraphQLService
     }
 
     /// <summary>Published moadim in annual order, loaded from the API or cache.</summary>
-    public List<MoedUnit> Moadim { get; private set; } = [];
+    public List<MoedUnit> Moadim
+    {
+        get => _moadim;
+        private set
+        {
+            _moadim = value;
+            // Every catalogue replacement (API load, cache load, slug-merge)
+            // bumps the revision so snapshot consumers — the month-grouped
+            // landing — rebuild when they resurface (#3261 review).
+            CatalogueRevision++;
+        }
+    }
+
+    private List<MoedUnit> _moadim = [];
+
+    /// <summary>Monotonic revision of <see cref="Moadim"/> — bumps on every replacement.</summary>
+    public int CatalogueRevision { get; private set; }
 
     /// <summary>Whether catalogue data has been successfully loaded (API or cache).</summary>
     public bool IsLoaded { get; private set; }

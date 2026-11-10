@@ -2,9 +2,19 @@ using BibleOnSite.Models;
 
 namespace BibleOnSite.Helpers;
 
-/// <summary>One perek-scoped clip inside a playback plan.</summary>
+/// <summary>
+/// One perek-scoped clip inside a playback plan. <see cref="SectionId"/>
+/// scopes the clip to a labelled section when a reader can display the same
+/// canonical range more than once (מועדים repeated readings): the word→row
+/// mapping highlights the occurrence that is actually playing. 0 means the
+/// clip is not bound to one section — word/verses previews and single-pass
+/// readers leave it unset.
+/// </summary>
 public sealed record RecitationSegment(int PerekId, IReadOnlyList<Pasuk> Pasukim,
-    double? Start, double? End, IReadOnlyList<(double Start, double End)>? Ranges);
+    double? Start, double? End, IReadOnlyList<(double Start, double End)>? Ranges)
+{
+    public int SectionId { get; init; }
+}
 
 /// <summary>
 /// The playback states the shared recitation engine reasons about, mapped

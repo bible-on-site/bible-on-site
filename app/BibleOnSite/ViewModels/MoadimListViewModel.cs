@@ -24,6 +24,14 @@ public partial class MoadimListViewModel : ObservableObject //NOSONAR
     private readonly MoedService _moedService;
     private readonly IAppNavigator _navigator;
 
+    /// <summary>
+    /// The catalogue revision the current <see cref="Groups"/> were built from
+    /// — a background refresh swaps the catalogue instance while a reader sits
+    /// above this page, so re-appearance rebuilds rather than showing the stale
+    /// grouping (#3261 review). -1 forces the first build.
+    /// </summary>
+    private int _builtRevision = -1;
+
     public MoadimListViewModel() : this(MoedService.Instance, ShellAppNavigator.Instance) { }
 
     public MoadimListViewModel(MoedService moedService, IAppNavigator navigator)
@@ -45,7 +53,7 @@ public partial class MoadimListViewModel : ObservableObject //NOSONAR
     /// <summary>Loads the catalogue and groups it by Hebrew month, in annual order.</summary>
     public async Task LoadAsync()
     {
-        if (Groups.Count > 0)
+        if (Groups.Count > 0 && _builtRevision == _moedService.CatalogueRevision)
         {
             return;
         }
@@ -68,6 +76,7 @@ public partial class MoadimListViewModel : ObservableObject //NOSONAR
             }
             Groups = groups;
             IsEmpty = groups.Count == 0;
+            _builtRevision = _moedService.CatalogueRevision;
         }
         finally { IsLoading = false; }
     }

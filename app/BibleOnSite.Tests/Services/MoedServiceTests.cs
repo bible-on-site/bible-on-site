@@ -210,4 +210,29 @@ public class MoedServiceTests
         service.GetMoedBySlug("rosh-hashana")!.Name.Should().Be("ראש השנה!");
         http.Requests.Should().HaveCount(2);
     }
+
+    [Fact]
+    public async Task CatalogueRevision_BumpsOnEveryCatalogueReplacement()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(Response);
+        var service = ServiceWith(http, storage);
+        var initial = service.CatalogueRevision;
+
+        await service.LoadWithRetryAsync();
+        var loaded = service.CatalogueRevision;
+        loaded.Should().BeGreaterThan(initial);
+
+        // The slug-miss merge is a catalogue replacement too — snapshot
+        // consumers like the grouped landing rebuild on it (#3261 review).
+        var detail = """
+            {"data":{"moed":{"id":9,"slug":"chanuka","name":"חנוכה","summary":null,
+             "hebrewMonth":"כסלו","dateLabel":null,"annualOrder":3,"published":true,
+             "sections":[],"explicitArticleIds":[],"articles":[]}}}
+            """;
+        http.Respond = _ => Task.FromResult(GraphQLTransport.JsonResponse(detail));
+        await service.GetMoedBySlugAsync("chanuka");
+
+        service.CatalogueRevision.Should().BeGreaterThan(loaded);
+    }
 }

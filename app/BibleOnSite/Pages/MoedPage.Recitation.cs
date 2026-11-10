@@ -29,6 +29,8 @@ public partial class MoedPage
     private CancellationTokenSource? _headerPress;
     private Pasuk? _recitingPasuk;
     private RecitationWord? _recitingWord;
+    /// <summary>The section the focused row came from — previews tag their clip with it.</summary>
+    private int _focusedSectionId;
     private readonly Dictionary<int, Span> _focusedWordSpans = [];
     private ReaderRecitationEngine? _recitation;
     private DateTime _lastLongPressTime = DateTime.MinValue;
@@ -105,10 +107,21 @@ public partial class MoedPage
 
     private void StopRecitation() => Recitation.StopPlayback();
 
-    /// <summary>The display row a highlighted word belongs to, found by its canonical perek.</summary>
-    private MoedDisplayRow? FindRecitingRow(int perekId, int pasukNum) =>
-        _viewModel.Rows.FirstOrDefault(
-            row => row.PerekId == perekId && row.PasukNum == pasukNum);
+    /// <summary>
+    /// The display row a highlighted word belongs to. Canonical identity alone
+    /// always lands on the first occurrence, so a clip tagged with its section
+    /// (<see cref="RecitationSegment.SectionId"/>) scopes the lookup to the
+    /// occurrence that is actually playing — a repeated reading highlights its
+    /// own row (#3261 review). Untagged clips (word/verses previews spanning
+    /// sections) keep the first-occurrence fallback.
+    /// </summary>
+    private MoedDisplayRow? FindRecitingRow(int perekId, int pasukNum)
+    {
+        var sectionId = Recitation.CurrentSegment?.SectionId ?? 0;
+        return _viewModel.Rows.FirstOrDefault(
+            row => row.PerekId == perekId && row.PasukNum == pasukNum &&
+                (sectionId == 0 || row.SectionId == sectionId));
+    }
 
     /// <summary>
     /// Maps the engine's highlighted word onto the displayed row — clipped
@@ -159,6 +172,7 @@ public partial class MoedPage
         _unitRecitationSelection = false;
         _focusedPasuk = null;
         _focusedPerekId = 0;
+        _focusedSectionId = 0;
         _focusedClipStart = 0;
         _focusedClipEnd = int.MaxValue;
         _focusedWordSpans.Clear();
@@ -310,15 +324,18 @@ public partial class MoedPage
     /// stop at.
     /// </summary>
     private async Task PlayPasukRecitationAsync(MoedDisplayRow row) =>
-        await PlayPasukRecitationAsync(row.PerekId, row.PasukNum, row.ClipStartIndex, row.ClipEndIndex);
+        await PlayPasukRecitationAsync(row.PerekId, row.PasukNum, row.ClipStartIndex,
+            row.ClipEndIndex, row.SectionId);
 
     /// <summary>
     /// Plays exactly one row's clip — a full pasuk or the range's clipped
     /// segment span — by bounding the track to its word timings. Requires an
     /// aligned ("ready") track; without word timings there is no boundary to
-    /// stop at.
+    /// stop at. The clip keeps the row's section so its highlight maps to the
+    /// tapped occurrence.
     /// </summary>
-    private async Task PlayPasukRecitationAsync(int perekId, int pasukNum, int clipStart, int clipEnd)
+    private async Task PlayPasukRecitationAsync(int perekId, int pasukNum, int clipStart,
+        int clipEnd, int sectionId)
     {
         var track = RecitationService.Instance.GetTrack(perekId);
         if (track?.AlignmentStatus != "ready")
@@ -350,7 +367,8 @@ public partial class MoedPage
         // second tap of a double-tap opens the focused view and keeps it.
         await Recitation.PlayClipAsync($"pasuk:{perekId}:{pasukNum}:{clipStart}", continuous: false,
             new RecitationSegment(perekId, perekPasukim, null, null,
-                [(words[0].StartMs!.Value, words[^1].EndMs!.Value)]),
+                [(words[0].StartMs!.Value, words[^1].EndMs!.Value)])
+            { SectionId = sectionId },
             resumeFromMs: words[0].StartMs!.Value);
     }
 
@@ -525,6 +543,7 @@ public partial class MoedPage
         ResetRecitationContext(stopPlayback: false);
         _focusedPasuk = pasuk;
         _focusedPerekId = row.PerekId;
+        _focusedSectionId = row.SectionId;
         _focusedClipStart = row.ClipStartIndex;
         _focusedClipEnd = row.ClipEndIndex;
         // A double tap's first press paused this row's preview through the
@@ -621,7 +640,8 @@ public partial class MoedPage
                 var perekId = _focusedPerekId;
                 tap.Tapped += async (_, _) => await Recitation.PlayClipAsync(
                     $"word:{perekId}:{word.Pasuk}:{word.Segment}", continuous: false,
-                    new RecitationSegment(perekId, perekPasukim!, word.StartMs, word.EndMs, null),
+                    new RecitationSegment(perekId, perekPasukim!, word.StartMs, word.EndMs, null)
+                    { SectionId = _focusedSectionId },
                     resumeFromMs: word.StartMs);
                 span.GestureRecognizers.Add(tap);
             }
@@ -656,7 +676,7 @@ public partial class MoedPage
         if (_focusedPasuk != null && _focusedPerekId > 0)
         {
             await PlayPasukRecitationAsync(_focusedPerekId, _focusedPasuk.PasukNum,
-                _focusedClipStart, _focusedClipEnd);
+                _focusedClipStart, _focusedClipEnd, _focusedSectionId);
         }
     }
 
@@ -736,6 +756,9 @@ public partial class MoedPage
                 continue;
             }
 
+            // One clip can cover a pasuk repeated across sections — no single
+            // section owns it, so SectionId stays 0 and the highlight falls
+            // back to the first occurrence.
             segments.Add(new RecitationSegment(group.Key, pasukim, null, null,
                 ranges.Select(r => (r[0].StartMs!.Value, r[^1].EndMs!.Value)).ToList()));
         }
