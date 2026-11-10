@@ -11,14 +11,14 @@ import { query } from "../../../src/lib/api-client";
 import {
 	getAllPerushPerekNamePairs,
 	getPerushDetail,
-	getPerushNotes,
-	getPerushNotesBatch,
-	getPerushNotesForPasuk,
-	getPerushNotesForRanges,
 	getPerushimByPerekId,
 	getPerushimByPerekIds,
 	getPerushimForRangeGroups,
 	getPerushimForRanges,
+	getPerushNotes,
+	getPerushNotesBatch,
+	getPerushNotesForPasuk,
+	getPerushNotesForRanges,
 } from "../../../src/lib/perushim";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
@@ -133,9 +133,7 @@ describe("perushim service", () => {
 		it("rethrows on non-Error rejection", async () => {
 			mockQuery.mockRejectedValue("raw string error");
 
-			await expect(getPerushimByPerekId(1)).rejects.toBe(
-				"raw string error",
-			);
+			await expect(getPerushimByPerekId(1)).rejects.toBe("raw string error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch perushim for perek %d:",
 				1,
@@ -267,9 +265,7 @@ describe("perushim service", () => {
 		it("rethrows on Error instance so a false empty is never cached", async () => {
 			mockQuery.mockRejectedValue(new Error("connection lost"));
 
-			await expect(getPerushNotes(5, 3)).rejects.toThrow(
-				"connection lost",
-			);
+			await expect(getPerushNotes(5, 3)).rejects.toThrow("connection lost");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch notes for perush %d perek %d:",
 				5,
@@ -298,7 +294,7 @@ describe("perushim service", () => {
 				{ pasuk: 23, note_idx: 1, note_content: "<p>B</p>" },
 			]);
 
-			const result = await getPerushNotesForPasuk("רש\"י", 32, 23);
+			const result = await getPerushNotesForPasuk('רש"י', 32, 23);
 
 			expect(mockQuery).toHaveBeenCalledWith(
 				expect.stringContaining(
@@ -315,9 +311,9 @@ describe("perushim service", () => {
 		it("rethrows on Error instance so a false empty is never cached", async () => {
 			mockQuery.mockRejectedValue(new Error("connection lost"));
 
-			await expect(
-				getPerushNotesForPasuk("רש\"י", 5, 3),
-			).rejects.toThrow("connection lost");
+			await expect(getPerushNotesForPasuk('רש"י', 5, 3)).rejects.toThrow(
+				"connection lost",
+			);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch notes for perush %s perek %d pasuk %d:",
 				'רש"י',
@@ -330,9 +326,7 @@ describe("perushim service", () => {
 		it("rethrows on non-Error rejection", async () => {
 			mockQuery.mockRejectedValue(42);
 
-			await expect(getPerushNotesForPasuk("רש\"י", 5, 3)).rejects.toBe(
-				42,
-			);
+			await expect(getPerushNotesForPasuk('רש"י', 5, 3)).rejects.toBe(42);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch notes for perush %s perek %d pasuk %d:",
 				'רש"י',
@@ -403,9 +397,7 @@ describe("perushim service", () => {
 		it("rethrows on non-Error rejection", async () => {
 			mockQuery.mockRejectedValue("raw failure");
 
-			await expect(getPerushNotesBatch(1, [1])).rejects.toBe(
-				"raw failure",
-			);
+			await expect(getPerushNotesBatch(1, [1])).rejects.toBe("raw failure");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch notes batch for perek %d:",
 				1,
@@ -604,13 +596,13 @@ describe("perushim service", () => {
 
 			it("rethrows on failure so a false empty is never cached", async () => {
 				mockQuery.mockRejectedValue(new Error("DB error"));
-				await expect(
-					getPerushimForRanges(crossPerekRanges),
-				).rejects.toThrow("DB error");
+				await expect(getPerushimForRanges(crossPerekRanges)).rejects.toThrow(
+					"DB error",
+				);
 				mockQuery.mockRejectedValue("raw error");
-				await expect(
-					getPerushimForRanges(crossPerekRanges),
-				).rejects.toBe("raw error");
+				await expect(getPerushimForRanges(crossPerekRanges)).rejects.toBe(
+					"raw error",
+				);
 			});
 		});
 
@@ -669,9 +661,63 @@ describe("perushim service", () => {
 					getPerushNotesForRanges(1, crossPerekRanges),
 				).rejects.toThrow("DB error");
 				mockQuery.mockRejectedValue("raw error");
-				await expect(
-					getPerushNotesForRanges(1, crossPerekRanges),
-				).rejects.toBe("raw error");
+				await expect(getPerushNotesForRanges(1, crossPerekRanges)).rejects.toBe(
+					"raw error",
+				);
+			});
+
+			it("joins stored note metrics and maps counts onto the notes (#3108)", async () => {
+				mockQuery.mockResolvedValue([
+					{
+						perek_id: 1,
+						pasuk: 30,
+						note_idx: 0,
+						note_content: "counted",
+						metric_word_count: 42,
+					},
+					{
+						perek_id: 2,
+						pasuk: 4,
+						note_idx: 0,
+						note_content: "uncounted",
+						metric_word_count: null,
+					},
+				]);
+
+				const result = await getPerushNotesForRanges(1, crossPerekRanges);
+
+				expect(mockQuery).toHaveBeenCalledWith(
+					expect.stringContaining("LEFT JOIN tanah_note_metric"),
+					expect.arrayContaining([1]),
+				);
+				expect(result[0].wordCount).toBe(42);
+				// A missing metric row leaves the field absent — the unknown
+				// state rangedPerushMetrics treats as "whole range unknown".
+				expect("wordCount" in result[1]).toBe(false);
+			});
+
+			it("falls back to the plain read when the metrics schema is missing", async () => {
+				mockQuery
+					.mockRejectedValueOnce(
+						Object.assign(new Error("no such table"), {
+							code: "ER_NO_SUCH_TABLE",
+						}),
+					)
+					.mockResolvedValueOnce([
+						{
+							perek_id: 1,
+							pasuk: 30,
+							note_idx: 0,
+							note_content: "plain",
+						},
+					]);
+
+				const result = await getPerushNotesForRanges(1, crossPerekRanges);
+
+				expect(mockQuery).toHaveBeenCalledTimes(2);
+				expect(mockQuery.mock.calls[1][0]).not.toContain("tanah_note_metric");
+				expect(result.map((n) => n.noteContent)).toEqual(["plain"]);
+				expect(result[0].wordCount).toBeUndefined();
 			});
 		});
 	});

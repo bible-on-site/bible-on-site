@@ -20,6 +20,8 @@ jest.mock("@/app/929/[number]/components/perushim-section.module.css", () => ({
 	fullViewTitle: "fullViewTitle",
 	sectionTitle: "sectionTitle",
 	parshanSubtitle: "parshanSubtitle",
+	readingTime: "readingTime",
+	progressTrack: "progressTrack",
 	notesContainer: "notesContainer",
 	pasukGroup: "pasukGroup",
 	pasukLabel: "pasukLabel",
@@ -187,5 +189,34 @@ describe("UnitPerushFullView", () => {
 	it("renders sanitized note HTML", () => {
 		renderView([{ ...note(1, 1), noteContent: "<b>bold</b>" }]);
 		expect(document.querySelector("b")?.textContent).toBe("bold");
+	});
+
+	it("shows the stored estimate and word-weighted progress when every note is counted (#3108)", () => {
+		// jsdom lacks the layout APIs ReadingProgress measures with.
+		global.ResizeObserver = jest.fn(() => ({
+			observe: jest.fn(),
+			unobserve: jest.fn(),
+			disconnect: jest.fn(),
+		})) as unknown as typeof ResizeObserver;
+		Range.prototype.getClientRects = function (this: Range) {
+			return [] as unknown as DOMRectList;
+		};
+		renderView([
+			{ ...note(1, 1), wordCount: 400 },
+			{ ...note(1, 2), wordCount: 300 },
+		]);
+		// 700 words at the shared baseline → ceil(700*60/220)=192s → 4 דקות.
+		expect(screen.getByText("זמן קריאה משוער: 4 דקות")).toBeInTheDocument();
+		expect(screen.getByRole("progressbar")).toBeInTheDocument();
+		const keys = [...document.querySelectorAll("[data-reading-unit]")].map(
+			(el) => el.getAttribute("data-reading-unit"),
+		);
+		expect(keys).toEqual(["1:1:0", "1:2:0"]);
+	});
+
+	it("omits the estimate and progress when a note lacks a stored count", () => {
+		renderView([note(1, 1), { ...note(1, 2), wordCount: 50 }]);
+		expect(screen.queryByText(/זמן קריאה משוער/)).toBeNull();
+		expect(screen.queryByRole("progressbar")).toBeNull();
 	});
 });

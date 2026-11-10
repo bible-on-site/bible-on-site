@@ -126,9 +126,10 @@ describe("RangedPerushView", () => {
 				sharePath={`/929/2/${encodeURIComponent('רש"י')}`}
 			/>,
 		);
-		expect(
-			screen.getByRole("link", { name: "שיתוף" }),
-		).toHaveAttribute("href", `/929/2/${encodeURIComponent('רש"י')}`);
+		expect(screen.getByRole("link", { name: "שיתוף" })).toHaveAttribute(
+			"href",
+			`/929/2/${encodeURIComponent('רש"י')}`,
+		);
 	});
 
 	it("shows the empty message when no notes fall inside the bounds", () => {
@@ -142,5 +143,52 @@ describe("RangedPerushView", () => {
 			/>,
 		);
 		expect(screen.getByText("אין פרשנות לפרשה זו")).toBeInTheDocument();
+	});
+
+	it("shows the stored estimate and word-weighted progress when every note is counted (#3108)", () => {
+		// jsdom lacks the layout APIs ReadingProgress measures with.
+		global.ResizeObserver = jest.fn(() => ({
+			observe: jest.fn(),
+			unobserve: jest.fn(),
+			disconnect: jest.fn(),
+		})) as unknown as typeof ResizeObserver;
+		Range.prototype.getClientRects = function (this: Range) {
+			return [] as unknown as DOMRectList;
+		};
+		const counted: RangedPerushNote[] = [
+			{ ...note(2, 4, "<p>counted-a</p>"), wordCount: 400 },
+			{ ...note(3, 4, "<p>counted-b</p>"), wordCount: 300 },
+		];
+		render(
+			<RangedPerushView
+				name='רש"י'
+				parshanName='רש"י'
+				notes={counted}
+				onBack={jest.fn()}
+			/>,
+		);
+		// 700 words at the shared baseline → ceil(700*60/220)=192s → 4 דקות.
+		expect(screen.getByText("זמן קריאה משוער: 4 דקות")).toBeInTheDocument();
+		expect(screen.getByRole("progressbar")).toBeInTheDocument();
+		const keys = [...document.querySelectorAll("[data-reading-unit]")].map(
+			(el) => el.getAttribute("data-reading-unit"),
+		);
+		expect(keys).toEqual(["2:4:0", "3:4:0"]);
+	});
+
+	it("omits the estimate and progress when a note lacks a stored count", () => {
+		render(
+			<RangedPerushView
+				name='רש"י'
+				parshanName='רש"י'
+				notes={[
+					note(2, 4, "<p>uncounted</p>"),
+					{ ...note(3, 4, "<p>counted</p>"), wordCount: 50 },
+				]}
+				onBack={jest.fn()}
+			/>,
+		);
+		expect(screen.queryByText(/זמן קריאה משוער/)).toBeNull();
+		expect(screen.queryByRole("progressbar")).toBeNull();
 	});
 });

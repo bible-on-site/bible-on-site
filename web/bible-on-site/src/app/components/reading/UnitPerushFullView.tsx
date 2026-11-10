@@ -6,8 +6,11 @@ import { useMemo } from "react";
 import styles from "@/app/929/[number]/components/perushim-section.module.css";
 import { ShareButton } from "@/app/929/[number]/components/ShareButton";
 import seferStyles from "@/app/929/[number]/components/sefer.module.css";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { demoteHeadings } from "@/lib/html-headings";
 import type { RangedPerushNote } from "@/lib/perushim";
+import { rangedPerushMetrics } from "@/lib/perushim/ranged-metrics";
 import unitStyles from "./unit-book.module.css";
 import { scrollToUnitTextPasuk } from "./unit-book-navigation";
 
@@ -59,7 +62,7 @@ export function UnitPerushFullView({
 	sharePath,
 	emptyMessage = "אין פירושים לפרשה זו",
 }: UnitPerushFullViewProps) {
-	const { groups, multiPerek } = useMemo(() => {
+	const { groups, multiPerek, metric, units } = useMemo(() => {
 		const result: PasukGroup[] = [];
 		const perekIds = new Set<number>();
 		for (const note of notes) {
@@ -76,7 +79,13 @@ export function UnitPerushFullView({
 				});
 			}
 		}
-		return { groups: result, multiPerek: perekIds.size > 1 };
+		return {
+			groups: result,
+			multiPerek: perekIds.size > 1,
+			// Stored per-note counts fold into the range's own metric +
+			// progress units (#3108); unknown stays unknown.
+			...rangedPerushMetrics(notes),
+		};
 	}, [notes]);
 
 	return (
@@ -92,6 +101,10 @@ export function UnitPerushFullView({
 				<div className={styles.fullViewTitle}>
 					<h2 className={styles.sectionTitle}>{name}</h2>
 					<span className={styles.parshanSubtitle}>{parshanName}</span>
+					<ReadingTime
+						estimatedSeconds={metric?.estimatedSeconds}
+						className={styles.readingTime}
+					/>
 				</div>
 				{sharePath && (
 					<ShareButton
@@ -104,6 +117,13 @@ export function UnitPerushFullView({
 			<div
 				className={`${styles.notesContainer} ${seferStyles.perushNotesInBook}`}
 			>
+				<ReadingProgress
+					units={units}
+					scroller={`.${styles.notesContainer}`}
+					content={`.${styles.notesContainer}`}
+					unitSelector='[data-reading-unit="{key}"]'
+					className={styles.progressTrack}
+				/>
 				{groups.length === 0 ? (
 					<p className={styles.emptyMessage}>{emptyMessage}</p>
 				) : (
@@ -139,10 +159,13 @@ export function UnitPerushFullView({
 									<div
 										key={`${note.perekId}-${note.pasuk}-${note.noteIdx}`}
 										className={styles.noteContent}
+										data-reading-unit={`${note.perekId}:${note.pasuk}:${note.noteIdx}`}
 										// nosemgrep -- DOMPurify-sanitized perush note
 										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 										dangerouslySetInnerHTML={{
-											__html: DOMPurify.sanitize(demoteHeadings(note.noteContent)),
+											__html: DOMPurify.sanitize(
+												demoteHeadings(note.noteContent),
+											),
 										}}
 									/>
 								))}

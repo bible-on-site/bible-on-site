@@ -170,6 +170,18 @@
   color: var(--hc-muted, #6b5835);
 }
 
+.readingTime {
+  font-size: 0.75rem;
+  color: var(--hc-muted, #6b5835);
+}
+
+/* The reading-progress track renders as a height:0 sticky child of the
+   flex-column notes container; this margin absorbs the column gap that
+   would otherwise push the first note group down (#3108). */
+.progressTrack {
+  margin-bottom: -16px;
+}
+
 .notesContainer {
   display: flex;
   flex-direction: column;
@@ -324,7 +336,8 @@
   .emptyMessage,
   .parshanName,
   .pasukLabel,
-  .parshanSubtitle {
+  .parshanSubtitle,
+  .readingTime {
     color: var(--hc-muted, #b8a578);
   }
 
