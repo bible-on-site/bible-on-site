@@ -1,10 +1,17 @@
-use actix_web::{HttpRequest, HttpResponse, Result, web::Data};
-use async_graphql::{
-    EmptySubscription, MergedObject, Schema,
-    http::{GraphQLPlaygroundConfig, playground_source},
-};
-use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
+use std::time::Duration;
 
+use actix_web::{
+    HttpRequest, HttpResponse, Result,
+    error::{ErrorBadRequest, ErrorPayloadTooLarge},
+    web::{Bytes, Data},
+};
+use async_graphql::{
+    EmptySubscription, MergedObject, ParseRequestError, Response, Schema, ServerError,
+    http::{GraphQLPlaygroundConfig, MultipartOptions, playground_source, receive_batch_body},
+};
+use async_graphql_actix_web::GraphQLResponse;
+
+use super::budgets::GraphqlBudgets;
 use crate::common::auth::ApiAuth;
 use crate::providers::Database;
 use crate::resolvers::article_relationships_resolver;
@@ -50,19 +57,31 @@ pub struct MutationRoot(
 pub fn build_schema(
     database: &Database,
     index: &ArticleSearchIndex,
+    budgets: &GraphqlBudgets,
 ) -> Schema<QueryRoot, MutationRoot, EmptySubscription> {
     // Introspection policy: `__schema`/`__type` stay enabled. The schema is
     // public source in this repository and anonymous POST reads are already
     // permitted, so disabling it would add no protection; access control
     // stays on mutations via `ApiAuth`.
-    Schema::build(
+    let builder = Schema::build(
         QueryRoot::default(),
         MutationRoot::default(),
         EmptySubscription,
     )
     .data(database.to_owned())
-    .data(index.to_owned())
-    .finish()
+    .data(index.to_owned());
+    // Depth/complexity budgets bound per-request work (deep nesting, alias
+    // amplification) for every caller — anonymous reads included — without
+    // touching the request/response contract. `None` = that control is off.
+    let builder = match budgets.max_depth {
+        Some(depth) => builder.limit_depth(depth),
+        None => builder,
+    };
+    let builder = match budgets.max_complexity {
+        Some(complexity) => builder.limit_complexity(complexity),
+        None => builder,
+    };
+    builder.finish()
 }
 
 /// Extracts a `Authorization: Bearer <token>` header value, if present.
@@ -75,13 +94,62 @@ fn extract_bearer(req: &HttpRequest) -> Option<String> {
         .filter(|token| !token.is_empty())
 }
 
+/// Single-request GraphQL endpoint (`POST /`). The body arrives through
+/// `web::Bytes`, so the app-level `PayloadConfig` enforces the configured
+/// byte cap with a real `413` — the upstream `GraphQLRequest` extractor
+/// collects JSON bodies unbounded (`read_to_end` with no limit). JSON-array
+/// batches keep returning `400`, exactly as `into_single` did before.
 pub async fn graphql_request(
     schema: Data<Schema<QueryRoot, MutationRoot, EmptySubscription>>,
+    budgets: Data<GraphqlBudgets>,
     req: HttpRequest,
-    gql_req: GraphQLRequest,
-) -> GraphQLResponse {
+    body: Bytes,
+) -> Result<GraphQLResponse> {
+    let content_type = req
+        .headers()
+        .get(actix_web::http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    // Same extraction contract as `GraphQLBatchRequest`: `MultipartOptions`
+    // is honored when registered as app data, otherwise defaults apply.
+    let multipart = req
+        .app_data::<MultipartOptions>()
+        .cloned()
+        .unwrap_or_default();
+    let request = receive_batch_body(content_type, &body[..], multipart)
+        .await
+        .map_err(|err| match err {
+            ParseRequestError::PayloadTooLarge => ErrorPayloadTooLarge(err),
+            _ => ErrorBadRequest(err),
+        })?
+        .into_single()
+        .map_err(ErrorBadRequest)?;
     let auth = ApiAuth::new(extract_bearer(&req));
-    schema.execute(gql_req.into_inner().data(auth)).await.into()
+    Ok(execute_within_budget(
+        schema.execute(request.data(auth)),
+        budgets.execution_timeout,
+    )
+    .await
+    .into())
+}
+
+/// Runs one execution future under the configured time budget. A timed-out
+/// operation answers with a GraphQL-level error (HTTP 200 + `errors`) instead
+/// of an HTTP failure, so every consumer keeps its standard error path.
+async fn execute_within_budget(
+    execute: impl std::future::Future<Output = Response>,
+    budget: Option<Duration>,
+) -> Response {
+    match budget {
+        Some(limit) => match tokio::time::timeout(limit, execute).await {
+            Ok(response) => response,
+            Err(_elapsed) => Response::from_errors(vec![ServerError::new(
+                "query execution exceeded the configured time budget",
+                None,
+            )]),
+        },
+        None => execute.await,
+    }
 }
 
 /// Development tooling only — `build_app_config` registers this route
@@ -248,7 +316,11 @@ mod tests {
                 >([vec![article_metric_model(9)]])
                 .into_connection(),
         );
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
 
         let by_id = schema
             .execute(Request::new(
@@ -304,7 +376,11 @@ mod tests {
                     ]])
                     .into_connection(),
             );
-            let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+            let schema = build_schema(
+                &db,
+                &ArticleSearchIndex::new(db.clone()),
+                &GraphqlBudgets::default(),
+            );
             let response = schema.execute(Request::new(query)).await;
             assert!(response.errors.is_empty(), "{query}: {:?}", response.errors);
             let json = response.data.into_json().unwrap();
@@ -328,7 +404,11 @@ mod tests {
                     ])
                     .into_connection(),
             );
-            let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+            let schema = build_schema(
+                &db,
+                &ArticleSearchIndex::new(db.clone()),
+                &GraphqlBudgets::default(),
+            );
             let response = schema.execute(Request::new(query)).await;
             assert!(response.errors.is_empty(), "{query}: {:?}", response.errors);
             let json = response.data.into_json().unwrap();
@@ -389,7 +469,7 @@ mod tests {
             let db = Database::from_connection(mock.into_connection());
             let index = ArticleSearchIndex::new(db.clone());
             index.load().await.unwrap();
-            let schema = build_schema(&db, &index);
+            let schema = build_schema(&db, &index, &GraphqlBudgets::default());
             let fields = if selected {
                 "articleId estimate: readingMetric { wordCount }"
             } else {
@@ -417,7 +497,11 @@ mod tests {
     async fn empty_search_metric_selection_needs_no_database_rows() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
         let response = schema.execute(Request::new(
             "{ searchArticles(phrase: \"בראשית\") { total hits { readingMetric { wordCount } } } }",
         )).await;
@@ -461,7 +545,11 @@ mod tests {
                 ]])
                 .into_connection(),
         );
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
 
         let response = schema
             .execute(Request::new(
@@ -485,7 +573,11 @@ mod tests {
         // resolves to an empty page rather than erroring.
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
 
         let response = schema
             .execute(Request::new(
@@ -507,7 +599,11 @@ mod tests {
                 .append_query_errors([DbErr::Custom("probe down".to_string())])
                 .into_connection(),
         );
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
 
         let response = schema
             .execute(Request::new(
@@ -525,7 +621,11 @@ mod tests {
     async fn schema_article_search_rejects_invalid_arguments() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
 
         for query in [
             "{ searchArticles(phrase: \"x\", limit: 0) { total } }",
@@ -601,7 +701,11 @@ mod tests {
                 >([vec![]])
                 .into_connection(),
         );
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
 
         let one = schema
             .execute(Request::new(
@@ -664,7 +768,11 @@ mod tests {
                 >([vec![article_metric_model(2)]])
                 .into_connection(),
         );
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
 
         let response = schema
             .execute(Request::new(
@@ -707,7 +815,11 @@ mod tests {
                 >([vec![revision_model("rev-1", Some("entry-1"))]])
                 .into_connection(),
         );
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
 
         let response = schema
             .execute(
@@ -735,7 +847,11 @@ mod tests {
     async fn schema_executes_all_tanahpedia_family_resolvers() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
 
         let response = schema
             .execute(
@@ -771,7 +887,11 @@ mod tests {
     async fn schema_rejects_revision_mutations_without_api_auth() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
 
         let submit = schema
             .execute(
@@ -805,7 +925,11 @@ mod tests {
     async fn schema_rejects_family_mutations_without_api_auth() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
         let operations = [
             r#"mutation { putTanahpediaEntryEntityLink(input: { id: "ee", entryUniqueName: "entry", entityId: "e" }) { id } }"#,
             r#"mutation { deleteTanahpediaEntryEntityLink(id: "ee") { id } }"#,
@@ -859,7 +983,7 @@ mod tests {
                 }])
                 .into_connection(),
         );
-        let response = build_schema(&db, &ArticleSearchIndex::new(db.clone()))
+        let response = build_schema(&db, &ArticleSearchIndex::new(db.clone()), &GraphqlBudgets::default())
             .execute(
                 Request::new(
                     r#"mutation { putTanahpediaEntryEntityLink(input: { id: "entry-entity-1", entryUniqueName: "שמשון", entityId: "entity-1" }) { id entryId entityId } }"#,
@@ -897,7 +1021,11 @@ mod tests {
                 ])
                 .into_connection(),
         );
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
         let response = schema
             .execute(
                 Request::new(
@@ -983,7 +1111,11 @@ mod tests {
                 ])
                 .into_connection(),
         );
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
         let auth = || {
             crate::common::auth::ApiAuth::with_revision_api_key(
                 Some("family-test-key".to_string()),
@@ -1080,7 +1212,11 @@ mod tests {
                 .append_exec_results([exec_result.clone(), exec_result.clone(), exec_result])
                 .into_connection(),
         );
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
         let auth = || {
             crate::common::auth::ApiAuth::with_revision_api_key(
                 Some("family-test-key".to_string()),
@@ -1104,7 +1240,11 @@ mod tests {
     async fn schema_rejects_dedication_operations_without_api_auth() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
         let operations = [
             r#"{ dedicationsAdmin { id } }"#,
             r#"mutation { createDedication(input: { subject: "x" }) { id } }"#,
@@ -1199,7 +1339,11 @@ mod tests {
                 }]])
                 .into_connection(),
         );
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
 
         let response = schema
             .execute(
@@ -1267,7 +1411,11 @@ mod tests {
                 }]])
                 .into_connection(),
         );
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
 
         let response = schema
             .execute(Request::new(
@@ -1287,7 +1435,11 @@ mod tests {
     async fn schema_rejects_alias_operations_without_api_auth() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
         let operations = [
             r#"{ tanahpediaNameStatus(name: "משה") { kind } }"#,
             r#"{ tanahpediaEntryAliases(entryId: "e1") { name } }"#,
@@ -1365,7 +1517,11 @@ mod tests {
                 ])
                 .into_connection(),
         );
-        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
         let auth = || {
             crate::common::auth::ApiAuth::with_revision_api_key(
                 Some("alias-test-key".to_string()),
@@ -1414,5 +1570,122 @@ mod tests {
         assert_eq!(saved_json["targetCount"], 1);
         // No WEBSITE_URL/REVALIDATE_SECRET on the test box → documented no-op.
         assert_eq!(saved_json["revalidation"], "SKIPPED");
+    }
+
+    /// Depth/complexity budgets (#3066): over-budget queries fail validation
+    /// with GraphQL errors, matching queries and unlimited (`None`) controls
+    /// keep working, and introspection stays inside the default budgets.
+    #[tokio::test]
+    async fn schema_budgets_reject_over_budget_queries_but_not_legitimate_ones() {
+        let db = || {
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection())
+        };
+        // `{ __schema { types { name } } }` nests 3 levels;
+        // `{ a: sefarim { name } b: sefarim { name } }` costs 4 complexity
+        // (`__typename` meta fields are free — a real field is needed here).
+        let tight_depth = GraphqlBudgets {
+            max_depth: Some(2),
+            max_complexity: None,
+            ..GraphqlBudgets::default()
+        };
+        let schema = build_schema(&db(), &ArticleSearchIndex::new(db().clone()), &tight_depth);
+        let deep = schema
+            .execute(Request::new("{ __schema { types { name } } }"))
+            .await;
+        assert_eq!(deep.errors[0].message, "Query is nested too deep.");
+        // A query inside the budget still executes.
+        let ok = schema.execute(Request::new("{ a: __typename }")).await;
+        assert!(ok.errors.is_empty(), "{:?}", ok.errors);
+
+        let tight_complexity = GraphqlBudgets {
+            max_depth: None,
+            max_complexity: Some(1),
+            ..GraphqlBudgets::default()
+        };
+        let schema = build_schema(
+            &db(),
+            &ArticleSearchIndex::new(db().clone()),
+            &tight_complexity,
+        );
+        let complex = schema
+            .execute(Request::new("{ a: sefarim { name } b: sefarim { name } }"))
+            .await;
+        assert_eq!(complex.errors[0].message, "Query is too complex.");
+
+        // Disabled controls (`0` → `None`) accept the same over-budget shapes.
+        let unbounded = GraphqlBudgets {
+            max_depth: None,
+            max_complexity: None,
+            ..GraphqlBudgets::default()
+        };
+        let schema = build_schema(&db(), &ArticleSearchIndex::new(db().clone()), &unbounded);
+        let deep = schema
+            .execute(Request::new("{ __schema { types { name } } }"))
+            .await;
+        assert!(deep.errors.is_empty(), "{:?}", deep.errors);
+    }
+
+    /// The default budgets keep full-schema introspection working — it is the
+    /// deepest legitimate query shape this schema serves (#3066 keeps
+    /// introspection enabled: the schema is public source).
+    #[tokio::test]
+    async fn default_budgets_keep_introspection_and_real_operations_within_limits() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
+        // The standard tooling introspection shape: ofType recursion 7 deep.
+        let introspection = schema
+            .execute(Request::new(
+                "{ __schema { queryType { name } types { kind name fields { name type { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } } } } } } } } } }",
+            ))
+            .await;
+        assert!(
+            introspection.errors.is_empty(),
+            "{:?}",
+            introspection.errors
+        );
+        // The app's heaviest operation shape (~4 levels, ~60 fields) must
+        // pass budget validation; the unmocked DB may still fail the
+        // resolver itself, which is unrelated to the budgets under test.
+        let family = schema
+            .execute(Request::new(
+                r#"query TanahpediaPersonFamily($entityId: String!) { tanahpediaPersonFamily(entityId: $entityId) { focalPersonId focalEntityId focalDisplayName focalSex focalBirthYyyymmdd parents { related { personId entityId displayName entryUniqueName entryTitle sex } parentRole relationshipType altGroupId sourceCitation } children { related { personId entityId displayName entryUniqueName entryTitle sex } parentRole relationshipType altGroupId sourceCitation birthOrder coParentEntityId coParentDisplayName coParentUnionOrder } spouses { related { personId entityId displayName entryUniqueName entryTitle sex } unionType unionOrder altGroupId sourceCitation personSourceCitation unionEndReason unionStartDate unionEndDate } siblings { personId entityId displayName entryUniqueName entryTitle sex birthDateYyyymmdd sourceCitation } } }"#,
+            ))
+            .await;
+        assert!(
+            family.errors.iter().all(|e| {
+                !e.message.contains("too complex")
+                    && !e.message.contains("nested too deep")
+                    && !e.message.contains("Unknown field")
+            }),
+            "real app query must stay valid and inside the default budgets: {:?}",
+            family.errors
+        );
+    }
+
+    #[tokio::test]
+    async fn execute_within_budget_returns_a_graphql_error_on_timeout() {
+        // A never-completing execution deterministically trips the budget.
+        let response =
+            execute_within_budget(std::future::pending(), Some(Duration::from_millis(1))).await;
+        assert_eq!(
+            response.errors[0].message,
+            "query execution exceeded the configured time budget"
+        );
+        // `None` (env `0`) runs the request with no time budget.
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(
+            &db,
+            &ArticleSearchIndex::new(db.clone()),
+            &GraphqlBudgets::default(),
+        );
+        let response =
+            execute_within_budget(schema.execute(Request::new("{ __typename }")), None).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
     }
 }

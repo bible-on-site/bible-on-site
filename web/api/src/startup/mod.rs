@@ -1,4 +1,5 @@
 pub mod app;
+pub mod budgets;
 pub mod profile;
 pub mod schema_builder;
 pub mod telemetry;

@@ -26,9 +26,20 @@ Revised again 2026-11-08 (PR review): per review decision, unsigned API calls
 are **not** a permanent lane — they get a bounded grace period (~2 weeks, until
 client adoption completes) after signed builds ship, then are rejected. The
 unsigned lane is a rollout stage, not a forever lane.
+**Policy update 2026-11-09 (#3257, after this record merged):** the owner
+clarified that the public learning corpus is זיכוי הרבים — agents and crawlers
+may read/download/use all of it, including as AI input and training — and that
+anonymous public reads must not be gated behind accounts, API keys, ad
+interaction or paid crawl access. That **supersedes the Phase-2 unsigned-call
+cutoff below** for the public read surface: the anonymous bounded lane stays
+open permanently. Any later credential lane (C2 signing, sessions,
+attestation) may only add telemetry or differential budget tiers to public
+reads — never rejection of unsigned reads — while admin/write/sensitive scopes
+stay fail-closed authenticated exactly as designed here.
 Related issues: #3065 (immediate Playground removal + dev-route fail-closed —
 do **not** gate it on this research), #3069 (admin-boundary cleanup — a
-public-read credential must never authorize admin operations).
+public-read credential must never authorize admin operations), #3257
+(public-corpus access policy — governs the anonymous read lane).
 
 ---
 
@@ -333,8 +344,15 @@ write key material or signatures to logs; use UA/Origin as authorization.
 ## 8. Follow-up issues to file (not started here)
 
 - **#3065** — immediate, independent: Playground/dev-route hardening.
+  **Landed.**
 - API query budgets (depth/complexity/introspection toggle + body cap +
-  timeout) — D2, API.
+  timeout) — D2, API. **Landed:** `GraphqlBudgets` env knobs
+  (`GRAPHQL_MAX_DEPTH`/`GRAPHQL_MAX_COMPLEXITY`/`GRAPHQL_MAX_BODY_BYTES`/
+  `GRAPHQL_TIMEOUT_MS`, `0` disables each) applied in `build_schema`,
+  `PayloadConfig` body cap on `POST /`, and a `tokio::time::timeout`
+  execution budget in `graphql_request`. Introspection stays enabled by
+  decision (public schema), so the depth default (20) keeps the ~12-level
+  introspection shape working while bounding alias fan-out.
 - NGINX api-host rate limits (observe-first) — D2, AWS/devops; requires
   Dorad's approval before merge per #3066 §6 since it touches router config.
 - Live-config verification: ECS SG :3003 ingress = VPC CIDR only;
