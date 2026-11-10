@@ -32,3 +32,4 @@ When asked to **inspire from legacy website** or reference the old website imple
 ## Styling Guidelines
 
 - **Do not mix font families**: Use `font-family: inherit` to maintain consistency with the website's global font. Avoid introducing custom fonts (like "Lora", "Roboto", etc.) in component styles.
+- **One feature per landing visual section** (#3267): each independent top-level landing-page feature owns a dedicated visual band with a distinct surface and a shaped/nonlinear boundary — semantic `<section>` tags alone do not count when the backgrounds still merge. Render the shared `SectionDivider` component at the shared edge and set `--divider-paint` to the neighbor's surface color. Full rule: `docs/practices/implementation.md` → web/bible-on-site → *Landing page visual sections*.

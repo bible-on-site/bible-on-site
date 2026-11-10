@@ -88,6 +88,12 @@ The following are currently expected and can be ignored:
 - When writing a test and asserting non-null using the framework, you can use the non-null assertion operator after and decorate the usage with a linter suppression comment explaining why it's safe
 - When catching an error, log that it took place using `console.warn` or `console.error`
 
+**Landing page visual sections (#3267):**
+
+Each independent top-level landing-page feature owns a dedicated visual section. Do not place unrelated features in one undivided visual band. Adjacent feature sections must have deliberate visual separation, following the site's shaped/nonlinear transition language. Related cards within one feature may share its section.
+
+Semantic HTML `<section>` elements alone are **not** sufficient: two sibling `<section>`s sharing one continuous background still read as a single band. Separation means a distinct surface color plus a shaped boundary — the shared `SectionDivider` component (`src/app/components/SectionDivider.tsx`) is the reusable edge contract: render it in the owning section and set `--divider-paint` to the next section's surface color (with its dark-scheme value). Decorative edges must stay non-interactive and hidden from assistive technology, and must not cover cards, links or shelf content.
+
 ### web/api (Rust GraphQL API)
 
 **Development:**

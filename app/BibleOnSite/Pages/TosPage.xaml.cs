@@ -24,6 +24,11 @@ public partial class TosPage : ContentPage
         await AccessibilityStatement.OpenAsync(Launcher.Default, ShellAppNavigator.Instance);
     }
 
+    private async void OnCopyrightEmailTapped(object? sender, TappedEventArgs e)
+    {
+        await Launcher.OpenAsync(new Uri("mailto:tanah.site@gmail.com"));
+    }
+
     private async void OnPrivacyPolicyTapped(object? sender, TappedEventArgs e)
     {
         try

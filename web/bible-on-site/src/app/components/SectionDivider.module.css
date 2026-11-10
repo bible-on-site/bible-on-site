@@ -1,0 +1,55 @@
+/* Shared landing-section edge (#3267): the nonlinear transition between two
+   feature bands. The dome mask is the shared shape; `--divider-paint`
+   carries the NEXT section's surface color, so both sides meet seamlessly
+   in light, dark and high-contrast themes — the paint lives in CSS, not in
+   tinted SVG assets. */
+.divider {
+	background-color: var(--divider-paint, #fff);
+	bottom: 0;
+	height: 3em;
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-size: 100% 100%;
+	mask-size: 100% 100%;
+	pointer-events: none;
+	position: absolute;
+	right: 0;
+	width: 100%;
+	z-index: 3;
+}
+
+/* The dome asset ships per-width curves like the other root dividers. */
+@media screen and (max-width: 960px) {
+	.divider {
+		-webkit-mask-image: url(/root/daily-bulletin-devider-xs.svg);
+		mask-image: url(/root/daily-bulletin-devider-xs.svg);
+	}
+}
+
+@media screen and (min-width: 960px) and (max-width: 1280px) {
+	.divider {
+		-webkit-mask-image: url(/root/daily-bulletin-devider-s.svg);
+		mask-image: url(/root/daily-bulletin-devider-s.svg);
+	}
+}
+
+@media screen and (min-width: 1280px) and (max-width: 1920px) {
+	.divider {
+		-webkit-mask-image: url(/root/daily-bulletin-devider-m.svg);
+		mask-image: url(/root/daily-bulletin-devider-m.svg);
+	}
+}
+
+@media screen and (min-width: 1920px) and (max-width: 2560px) {
+	.divider {
+		-webkit-mask-image: url(/root/daily-bulletin-devider-l.svg);
+		mask-image: url(/root/daily-bulletin-devider-l.svg);
+	}
+}
+
+@media screen and (min-width: 2560px) {
+	.divider {
+		-webkit-mask-image: url(/root/daily-bulletin-devider-xl.svg);
+		mask-image: url(/root/daily-bulletin-devider-xl.svg);
+	}
+}

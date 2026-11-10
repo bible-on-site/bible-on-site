@@ -3,6 +3,8 @@
   text-align: center;
   width: 100%;
   z-index: 1;
+  /* The bulletin's shared bottom edge paints this color via --divider-paint
+     (#3267) — keep the two values in sync, including the dark value below. */
   background-color: #d8ebff;
   padding: 2em 0 5em;
   scroll-margin-top: 1em;
@@ -106,6 +108,7 @@
 
 @media (prefers-color-scheme: dark) {
   .section {
+    /* Mirrored in DailyBulletinSection's dark --divider-paint. */
     background-color: #16283f;
   }
 

@@ -197,6 +197,77 @@
 
             </VerticalStackLayout>
 
+            <!-- Divider -->
+            <BoxView HeightRequest="1" Color="{StaticResource Gray300}" Margin="0,8"/>
+
+            <!-- Copyright & content reports Section -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="זכויות יוצרים ופניות בנושא תוכן"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                <Label Text="פרויקט תנ&quot;ך על הפרק פועל לשם לימוד וזיכוי הרבים, ללא מטרת רווח. אנו פועלים בתום לב ונוקטים מאמצים סבירים לכבד זכויות יוצרים ולשמור על ייחוס מתאים ליוצרים ולבעלי הזכויות."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="למיטב ידיעתנו ועל יסוד המידע המצוי בידינו:"
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="• המאמרים מוצגים על סמך אישורים שקיבלנו מהרבנים המחברים או מההוצאה לאור, ובכפוף להיקף ההרשאה ולתנאיה."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="• התמונות צולמו על ידינו, סופקו לנו על ידי המצלמים, נוצרו באמצעות בינה מלאכותית, או מוצגות על בסיס שימוש הוגן או שימוש אחר המותר על פי דין, בהתאם לנסיבות העניין."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="• הערכים בתנכפדיה נכתבו במלואם על ידינו באופן מקורי ולא הועתקו מערכים במקורות קיימים."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="המידע בדבר מקור התכנים וההרשאות לשימוש בהם נמסר לפי המידע שבידינו, ואינו התחייבות לכך שלא תתעורר מחלוקת בנוגע לזכויות בפריט מסוים. אין בפרסום תוכן כדי להקנות זכויות שאין בידינו להקנותן, ואין בו לגרוע מזכויות היוצרים ובעלי הזכויות לפי דין."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <HorizontalStackLayout Spacing="4">
+                    <Label Text="אם זיהיתם פריט שקיים לגביו חשש להפרת זכויות יוצרים, אנא פנו אלינו בכתובת"
+                           FontSize="14"
+                           LineHeight="1.4"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                    <Label Text="tanah.site@gmail.com"
+                           FontSize="14"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                           TextDecorations="Underline"
+                           SemanticProperties.Description="שליחת דיווח בנושא זכויות יוצרים בדוא&quot;ל"
+                           AutomationId="CopyrightEmailLink">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Tapped="OnCopyrightEmailTapped"/>
+                        </Label.GestureRecognizers>
+                    </Label>
+                </HorizontalStackLayout>
+                <Label Text="לצורך בירור הפנייה, נא לצרף פרטי קשר למענה, קישור או זיהוי ברור של הפריט, תיאור החשש ואסמכתאות ככל שהן מצויות ברשותכם."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="נבחן את הפנייה ונפעל לטיפול בה בהקדם האפשרי, בהתאם לנסיבותיה ולמידע שיתקבל. ככל שיתברר שיש להסיר פריט, לתקן ייחוס או לנקוט פתרון אחר, נפעל לכך בהקדם האפשרי ובהתאם לדין."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="המדווח יקבל מידע שקוף לאורך כל תהליך הטיפול: אישור על קבלת הפנייה, עדכונים על הטיפול ועל כל שינוי בסטטוס, ועדכון עם סיום הטיפול. עדכון הסיום יפרט את התוצאה, לרבות השארת הפריט, הסרתו או כל סיום אחר, ואת ההסבר המתאים. העדכונים יישלחו לפי פרטי הקשר שנמסרו בפנייה."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="עצם קבלת הפנייה, בירורה, מסירת עדכון, שינוי תוכן או הסרתו אינם מהווים, כשלעצמם, הודאה בהפרת זכויות או בחבות כלשהי, או ויתור על טענה, זכות או הגנה העומדות לנו על פי דין."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="הוראות סעיף זה כפופות לדין, ואין בהן כדי לגרוע מהוראות דין שאין להתנות עליהן."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            </VerticalStackLayout>
+
             <!-- Bottom spacing -->
             <BoxView HeightRequest="20"/>
 

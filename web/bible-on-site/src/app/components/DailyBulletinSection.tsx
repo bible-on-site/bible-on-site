@@ -1,6 +1,7 @@
 import Image from "next/image";
 import styles from "./DailyBulletinSection.module.css";
 import { EmailSignupForm } from "./EmailSignupForm";
+import { SectionDivider } from "./SectionDivider";
 
 /**
  * The daily-bulletin join section (#2941): exactly three cards — Telegram,
@@ -77,6 +78,7 @@ export function DailyBulletinSection() {
 					<EmailSignupForm source="card" />
 				</article>
 			</div>
+			<SectionDivider />
 		</section>
 	);
 }
