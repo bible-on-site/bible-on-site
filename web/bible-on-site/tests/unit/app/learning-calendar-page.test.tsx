@@ -1,13 +1,39 @@
 /**
  * @jest-environment jsdom
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 jest.mock("next/navigation", () => ({
 	useRouter: jest.fn(),
 	useSearchParams: jest.fn(),
 }));
+
+// The flip book is code-split; unit tests stub it and drive its props
+// directly instead of loading the engine.
+const mockFlipBookProps: {
+	current: {
+		months: { ref: { year: number; month: number } }[];
+		initialMonth: { year: number; month: number };
+		onMonthChange: (month: { year: number; month: number }) => void;
+		onToday: () => void;
+		onShowOverview: () => void;
+		jumpRequest: { month: { year: number; month: number }; nonce: number } | null;
+	} | null;
+} = { current: null };
+
+jest.mock("@/app/calendar/components/CalendarFlipBook", () => {
+	const React = jest.requireActual<typeof import("react")>("react");
+	return {
+		CalendarFlipBook: (props: typeof mockFlipBookProps.current) => {
+			mockFlipBookProps.current = props;
+			return React.createElement("div", {
+				"data-testid": "calendar-flip-book",
+				"data-month-count": props?.months.length ?? 0,
+			});
+		},
+	};
+});
 
 import { LearningCalendar } from "@/app/calendar/components/LearningCalendar";
 import {
@@ -16,8 +42,20 @@ import {
 	nextMonth,
 } from "@/data/learning-schedule";
 
-const mockReplace = jest.fn();
-const mockPush = jest.fn();
+// Search params behave like real Next.js navigation: router.replace/push
+// with a "?..." URL updates what useSearchParams returns on the next render.
+let currentSearchParams = new URLSearchParams();
+
+function applySearchParams(url: string) {
+	if (!url.startsWith("?")) {
+		return;
+	}
+	currentSearchParams = new URLSearchParams(url.slice(1));
+	(useSearchParams as jest.Mock).mockReturnValue(currentSearchParams);
+}
+
+const mockReplace = jest.fn((url: string) => applySearchParams(url));
+const mockPush = jest.fn((url: string) => applySearchParams(url));
 
 function setSearchParam(value: string | null, extra?: Record<string, string>) {
 	const params = new URLSearchParams();
@@ -27,6 +65,7 @@ function setSearchParam(value: string | null, extra?: Record<string, string>) {
 	for (const [key, val] of Object.entries(extra ?? {})) {
 		params.set(key, val);
 	}
+	currentSearchParams = params;
 	(useSearchParams as jest.Mock).mockReturnValue(params);
 }
 
@@ -419,6 +458,158 @@ describe("LearningCalendar", () => {
 			fireEvent.click(screen.getByRole("button", { name: "שנתי" }));
 
 			expect(global.fetch).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("flipping presentation (#2993)", () => {
+		beforeEach(() => {
+			localStorage.clear();
+			mockFlipBookProps.current = null;
+		});
+
+		it("shows the presentation toggle only in year and cycle views", async () => {
+			render(<LearningCalendar {...cycleStartProps} />);
+
+			// Monthly view has no flipping presentation.
+			expect(
+				screen.queryByRole("button", { name: "דפדוף" }),
+			).not.toBeInTheDocument();
+
+			fireEvent.click(screen.getByRole("button", { name: "שנתי" }));
+			expect(
+				await screen.findByRole("button", { name: "דפדוף" }),
+			).toBeInTheDocument();
+			expect(screen.getByRole("button", { name: "סקירה" })).toHaveAttribute(
+				"aria-pressed",
+				"true",
+			);
+			expect(screen.getByRole("button", { name: "דפדוף" })).toHaveAttribute(
+				"aria-pressed",
+				"false",
+			);
+		});
+
+		it("lazy-loads the flip book with one sheet per month of the year", async () => {
+			setSearchParam("578512", { view: "year", flip: "1" });
+			const { container } = render(<LearningCalendar {...cycleStartProps} />);
+
+			const book = await screen.findByTestId("calendar-flip-book");
+			expect(book).toHaveAttribute("data-month-count", "12");
+			// The book opens on the month carried by ?month=.
+			expect(mockFlipBookProps.current?.initialMonth).toEqual({
+				year: 5785,
+				month: 12,
+			});
+			// The overview mini-month grid is not rendered alongside.
+			expect(container.querySelectorAll("h3")).toHaveLength(0);
+		});
+
+		it("renders a sheet per month of a full cycle", async () => {
+			setSearchParam("578512", { view: "cycle", cycle: "4", flip: "1" });
+			render(<LearningCalendar {...cycleStartProps} />);
+
+			const book = await screen.findByTestId("calendar-flip-book");
+			const count = Number(book.getAttribute("data-month-count"));
+			expect(count).toBeGreaterThan(30);
+			// Chronological coverage: first sheet is the cycle's first month.
+			expect(mockFlipBookProps.current?.months[0].ref).toEqual(
+				getCycleStartMonth(getCycle(4)),
+			);
+			expect(
+				mockFlipBookProps.current?.months[count - 1].ref,
+			).toBeDefined();
+		});
+
+		it("writes the flipped month back to ?month= without losing flip=1", async () => {
+			setSearchParam("578512", { view: "year", flip: "1" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			await screen.findByTestId("calendar-flip-book");
+
+			act(() => {
+				mockFlipBookProps.current?.onMonthChange({
+					year: 5785,
+					month: 7,
+				});
+			});
+
+			expect(mockReplace).toHaveBeenCalledWith(
+				expect.stringContaining("month=578507"),
+				{ scroll: false },
+			);
+			expect(mockReplace).toHaveBeenCalledWith(
+				expect.stringContaining("flip=1"),
+				{ scroll: false },
+			);
+		});
+
+		it("returns to the overview and clears the flip param", async () => {
+			setSearchParam("578512", { view: "year", flip: "1" });
+			const { container, rerender } = render(
+				<LearningCalendar {...cycleStartProps} />,
+			);
+			await screen.findByTestId("calendar-flip-book");
+
+			fireEvent.click(screen.getByRole("button", { name: "סקירה" }));
+			// router.replace updates the URL; Next.js then re-renders with the
+			// new searchParams — simulate that propagation here.
+			rerender(<LearningCalendar {...cycleStartProps} />);
+
+			expect(screen.queryByTestId("calendar-flip-book")).not.toBeInTheDocument();
+			expect(mockReplace).toHaveBeenCalledWith(
+				expect.not.stringContaining("flip="),
+				{ scroll: false },
+			);
+			expect(localStorage.getItem("calendarFlipView")).toBe("overview");
+			expect(container.querySelectorAll("h3").length).toBeGreaterThan(0);
+		});
+
+		it("persists the flipping preference across visits", async () => {
+			localStorage.setItem("calendarFlipView", "flip");
+			setSearchParam("578512", { view: "year" });
+			render(<LearningCalendar {...cycleStartProps} />);
+
+			expect(
+				await screen.findByTestId("calendar-flip-book"),
+			).toBeInTheDocument();
+		});
+
+		it("pins the resolved cycle into the URL when flipping without ?cycle=", async () => {
+			setSearchParam("578512", { view: "cycle", flip: "1" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			await screen.findByTestId("calendar-flip-book");
+
+			expect(mockReplace).toHaveBeenCalledWith(
+				expect.stringContaining("cycle=4"),
+				{ scroll: false },
+			);
+		});
+
+		it("jumps the book to today's month via the toolbar היום action", async () => {
+			setSearchParam("578512", { view: "year", flip: "1" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			await screen.findByTestId("calendar-flip-book");
+
+			act(() => {
+				mockFlipBookProps.current?.onToday();
+			});
+
+			// todayDateNumber 57851207 → אלול ה'תשפ"ה, already inside the book.
+			expect(mockFlipBookProps.current?.jumpRequest).toMatchObject({
+				month: { year: 5785, month: 12 },
+				nonce: 1,
+			});
+		});
+
+		it("keeps the overview when ?flip=1 is combined with the monthly view", () => {
+			setSearchParam("578512", { view: "month", flip: "1" });
+			render(<LearningCalendar {...cycleStartProps} />);
+
+			expect(
+				screen.queryByTestId("calendar-flip-book"),
+			).not.toBeInTheDocument();
+			expect(
+				screen.queryByRole("button", { name: "דפדוף" }),
+			).not.toBeInTheDocument();
 		});
 	});
 });
