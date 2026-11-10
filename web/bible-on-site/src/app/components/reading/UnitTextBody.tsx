@@ -1,4 +1,8 @@
 import { Ptuah } from "@/app/929/[number]/components/Ptuha";
+import {
+	RecitationLink,
+	RecitationWordControl,
+} from "@/app/929/[number]/components/RecitationPlayer";
 import { Stuma } from "@/app/929/[number]/components/Stuma";
 import { TanahpediaLink } from "@/app/929/[number]/components/TanahpediaLink";
 import { renderPasukSegmentsWithEntityRefs } from "@/app/929/[number]/components/pasuk-renderer";
@@ -118,6 +122,7 @@ export function UnitTextBody({
 	boundaryMarkers,
 	emphasisMarkerKey,
 	modestPerekLabels,
+	recitationWords,
 }: {
 	ranges: ScriptureRange[];
 	entityRefsByPerek: Record<number, PerekEntityReference[]>;
@@ -147,6 +152,10 @@ export function UnitTextBody({
 	 * Haftarah text, which shares the page with an annotated Torah
 	 * reading (issue #2519). */
 	modestPerekLabels?: boolean;
+	/** Wrap each spoken word in the shared recitation control (issue
+	 * #3259): inside a `RangeRecitationPlayer` the words play and
+	 * highlight, outside one they render plain text unchanged. */
+	recitationWords?: boolean;
 }) {
 	const slices = rangesPerekSlices(ranges, pasukCount);
 	const multiPerek = new Set(slices.map((slice) => slice.perekId)).size > 1;
@@ -186,6 +195,7 @@ export function UnitTextBody({
 					firstPosition={
 						unitPositionMarkers ? firstPositions[sliceIndex] : undefined
 					}
+					recitationWords={recitationWords}
 				/>
 			))}
 		</>
@@ -204,6 +214,7 @@ function UnitPerekSlice({
 	boundaryMarkers,
 	emphasisMarkerKey,
 	firstPosition,
+	recitationWords,
 }: {
 	slice: PerekSlice;
 	sliceIndex: number;
@@ -216,6 +227,7 @@ function UnitPerekSlice({
 	boundaryMarkers?: ReadonlyMap<string, readonly UnitBoundaryMarker[]>;
 	emphasisMarkerKey?: string;
 	firstPosition?: number;
+	recitationWords?: boolean;
 }) {
 	const perek = resolvePerek(slice.perekId);
 	if (!perek) return null;
@@ -344,15 +356,46 @@ function UnitPerekSlice({
 								Ptuah,
 								Stuma,
 								perekStyles.qri,
-								(entryUniqueName, children, key) => (
-									<TanahpediaLink
-										key={key}
-										entryUniqueName={entryUniqueName}
-										className={perekStyles.tanahpediaLink}
-									>
-										{children}
-									</TanahpediaLink>
-								),
+								(entryUniqueName, children, key) =>
+									recitationWords ? (
+										// Keep entity links out of listening mode so
+										// interactive elements never nest — the same
+										// RecitationLink swap the /929 reader uses.
+										<RecitationLink
+											key={key}
+											link={
+												<TanahpediaLink
+													key={key}
+													entryUniqueName={entryUniqueName}
+													className={perekStyles.tanahpediaLink}
+												>
+													{children}
+												</TanahpediaLink>
+											}
+										>
+											{children}
+										</RecitationLink>
+									) : (
+										<TanahpediaLink
+											key={key}
+											entryUniqueName={entryUniqueName}
+											className={perekStyles.tanahpediaLink}
+										>
+											{children}
+										</TanahpediaLink>
+									),
+								recitationWords
+									? (wrappedPasuk, segment, text) => (
+											<RecitationWordControl
+												perek={slice.perekId}
+												pasuk={wrappedPasuk}
+												segment={segment}
+												plainWhenInactive
+											>
+												{text}
+											</RecitationWordControl>
+										)
+									: undefined,
 							)}{" "}
 						</span>
 					);

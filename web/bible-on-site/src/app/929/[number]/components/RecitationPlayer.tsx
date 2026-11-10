@@ -41,14 +41,19 @@ export function stopRecitation() {
 interface RecitationTextState {
 	enabled: boolean;
 	wordByKey: Map<string, RecitationWord>;
-	rangesByPasuk: Map<number, { startMs: number; endMs: number }>;
+	/** Keys are `"pasuk"` for chapter players and `"perek:pasuk"` for
+	 * range players whose plan can touch several perakim. */
+	rangesByPasuk: Map<string, { startMs: number; endMs: number }>;
 	subscribeActive: (listener: () => void) => () => void;
 	isActive: (key: string) => boolean;
-	play: (start: number, end: number) => void;
+	play: (start: number, end: number, perekId?: number) => void;
 }
 
-const RecitationTextContext = createContext<RecitationTextState | null>(null);
-const RecitationEnabledContext = createContext(false);
+// Range players (RangeRecitationPlayer) provide these same contexts so
+// the word/pasuk controls stay shared across chapter and range surfaces.
+export const RecitationTextContext =
+	createContext<RecitationTextState | null>(null);
+export const RecitationEnabledContext = createContext(false);
 const RecitationContext = createContext<
 	| (RecitationTextState & {
 			controls: ReactNode;
@@ -93,17 +98,24 @@ export function RecitationHeader({ title }: { title: string }) {
 export function RecitationWordControl({
 	pasuk,
 	segment,
+	perek,
 	children,
 	plainWhenInactive = false,
 }: {
 	pasuk: number;
 	segment: number;
+	/** Canonical perek id scopes the word's key for range players whose
+	 * plan spans several perakim; chapter players leave it unset. */
+	perek?: number;
 	children: ReactNode;
 	/** The reader can keep the original text without an inert layout box. */
 	plainWhenInactive?: boolean;
 }) {
 	const context = useContext(RecitationTextContext);
-	const key = `${pasuk}:${segment}`;
+	const key =
+		perek !== undefined
+			? `${perek}:${pasuk}:${segment}`
+			: `${pasuk}:${segment}`;
 	const word = context?.enabled ? context.wordByKey.get(key) : undefined;
 	// The active word lives outside the context value so a word-boundary change
 	// re-renders only the two controls whose highlight flips.
@@ -122,7 +134,7 @@ export function RecitationWordControl({
 			pressed={pressed}
 			onActivate={
 				word && context
-					? () => context.play(word.startMs, word.endMs)
+					? () => context.play(word.startMs, word.endMs, perek)
 					: undefined
 			}
 		>
@@ -133,10 +145,14 @@ export function RecitationWordControl({
 
 export function RecitationPasukControl({
 	pasuk,
+	perek,
 	children,
 	onNavigate,
 }: {
 	pasuk: number;
+	/** Canonical perek id scopes the lookup for range players; chapter
+	 * players leave it unset. */
+	perek?: number;
 	children: ReactNode;
 	/**
 	 * When set (a perush is open for this perek), activation jumps to the
@@ -145,8 +161,9 @@ export function RecitationPasukControl({
 	onNavigate?: () => void;
 }) {
 	const context = useContext(RecitationTextContext);
+	const rangeKey = perek !== undefined ? `${perek}:${pasuk}` : String(pasuk);
 	const range = context?.enabled
-		? (context.rangesByPasuk.get(pasuk) ?? null)
+		? (context.rangesByPasuk.get(rangeKey) ?? null)
 		: null;
 	const label = onNavigate
 		? `מעבר לפירוש על פסוק ${toLetters(pasuk)}`
@@ -251,7 +268,7 @@ export function RecitationLink({
 	return <>{context?.enabled ? children : link}</>;
 }
 
-function ListenIcon() {
+export function ListenIcon() {
 	return (
 		<svg
 			width="18"
@@ -532,11 +549,12 @@ export default function RecitationPlayer({
 		[alignedWords],
 	);
 	const rangesByPasuk = useMemo(() => {
-		const ranges = new Map<number, { startMs: number; endMs: number }>();
+		const ranges = new Map<string, { startMs: number; endMs: number }>();
 		for (const word of alignedWords) {
-			const range = ranges.get(word.pasuk);
+			const key = String(word.pasuk);
+			const range = ranges.get(key);
 			if (range) range.endMs = word.endMs;
-			else ranges.set(word.pasuk, { startMs: word.startMs, endMs: word.endMs });
+			else ranges.set(key, { startMs: word.startMs, endMs: word.endMs });
 		}
 		return ranges;
 	}, [alignedWords]);

@@ -3,27 +3,31 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
 import { PerushimSection } from "@/app/929/[number]/components/PerushimSection";
+import {
+	RangeRecitationControls,
+	RangeRecitationPlayer,
+} from "@/app/components/reading/RangeRecitationPlayer";
 import { SharedUnitText } from "@/app/components/reading/UnitText";
 import { rangesRefSpans } from "@/data/parasha/parasha-units";
+import { getPerekByPerekId } from "@/data/perek-dto";
 import {
 	getMoedArticleSummaries,
 	getMoedBySlug,
 	getPublishedMoedSlugs,
 	type Moed,
-	MOADIM_ROOT,
 	MOED_STALE_BOUND_SECONDS,
 	moedHref,
 } from "@/lib/moadim";
+import { getCachedMoadim } from "@/lib/moadim/catalogue-cache";
 import { getPerushimForRanges } from "@/lib/perushim/service";
 import { canonicalPasukCount, rangePerekSources } from "@/lib/reading/queries";
-import {
-	cachedPerKey,
-	COLLECTION_TAGS,
-	moedTag,
-} from "@/lib/revalidate/tags";
+import type { ScriptureRange } from "@/lib/reading/contract";
+import { rangesPerekIds } from "@/lib/reading/ranges";
+import { cachedPerKey, COLLECTION_TAGS, moedTag } from "@/lib/revalidate/tags";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
+import { MoedBreadcrumb } from "../components/MoedBreadcrumb";
 import styles from "./page.module.css";
 
 // Published moadim are a growing DB set — a slug added after build
@@ -62,6 +66,19 @@ const getCachedMoedArticles = cachedPerKey(
 	(slug) => [COLLECTION_TAGS.articles, moedTag(slug)],
 	(moed) => getMoedArticleSummaries(moed.id, moed.ranges),
 );
+
+/** Every perek a section's ranges touch — the range player loads and
+ * validates each one's recitation manifest (issue #3259). */
+function sectionPerakim(ranges: ScriptureRange[]) {
+	return rangesPerekIds(ranges).map((perekId) => {
+		const perek = getPerekByPerekId(perekId);
+		return {
+			perekId,
+			pesukim: perek.pesukim,
+			hasRecording: Boolean(perek.recitation),
+		};
+	});
+}
 
 function decodeSlug(param: string): string {
 	try {
@@ -109,31 +126,22 @@ export default async function MoedPage({
 	}
 	const perekSources = rangePerekSources(moed.ranges);
 	const perekIds = Object.keys(perekSources).map(Number);
-	const [entityRefsByPerek, perushim, articles] = await Promise.all([
+	const [entityRefsByPerek, perushim, articles, siblings] = await Promise.all([
 		fetchAllEntityRefs(perekIds),
 		getCachedMoedPerushim(moed),
 		getCachedMoedArticles(moed),
+		getCachedMoadim(),
 	]);
 	const firstPerekId = perekIds[0] ?? 1;
 
 	return (
 		<div className={styles.container}>
+			<MoedBreadcrumb moed={moed} siblings={siblings} />
 			<header className={styles.header}>
-				<nav aria-label="breadcrumb" className={styles.breadcrumb}>
-					<a href={MOADIM_ROOT} className={styles.breadcrumbLink}>
-						מועדים על הפרק
-					</a>
-					<span aria-hidden="true" className={styles.breadcrumbSep}>
-						/
-					</span>
-					<span aria-current="page">{moed.name}</span>
-				</nav>
 				<h1 className={styles.heading}>{moed.name}</h1>
 				{(moed.hebrewMonth || moed.dateLabel) && (
 					<p className={styles.dateLine}>
-						{[moed.hebrewMonth, moed.dateLabel]
-							.filter(Boolean)
-							.join(" · ")}
+						{[moed.hebrewMonth, moed.dateLabel].filter(Boolean).join(" · ")}
 					</p>
 				)}
 				{moed.summary && <p className={styles.summary}>{moed.summary}</p>}
@@ -153,13 +161,20 @@ export default async function MoedPage({
 					<p className={styles.sectionRefs}>
 						{rangesRefSpans(section.ranges).join(" · ")}
 					</p>
-					<SharedUnitText
+					<RangeRecitationPlayer
 						ranges={section.ranges}
-						entityRefsByPerek={entityRefsByPerek}
-						pasukCount={canonicalPasukCount}
-						scrollScope={`moed-${moed.id}-s${section.id}`}
-						anchorScope={`moed-${moed.id}-s${section.id}`}
-					/>
+						perakim={sectionPerakim(section.ranges)}
+					>
+						<RangeRecitationControls playLabel={`השמעת ${section.label}`} />
+						<SharedUnitText
+							ranges={section.ranges}
+							entityRefsByPerek={entityRefsByPerek}
+							pasukCount={canonicalPasukCount}
+							scrollScope={`moed-${moed.id}-s${section.id}`}
+							anchorScope={`moed-${moed.id}-s${section.id}`}
+							recitationWords
+						/>
+					</RangeRecitationPlayer>
 				</section>
 			))}
 			<Suspense>
