@@ -1,42 +1,40 @@
 using BibleOnSite.Tests.E2E.Fixtures;
+using BibleOnSite.Tests.E2E.Pages;
+using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Capturing;
 
 namespace BibleOnSite.Tests.E2E.Navigation;
 
 /// <summary>
 /// #3263 device-level regression: the reported four-step flow —
 /// על הפרק → פרשה על הפרק → בראשית → על הפרק — must activate the perek
-/// reader, not reselect the parasha reader the location ended on.
+/// reader, not reselect the parasha reader the location ended on. The two
+/// captures (parasha reader active, then perek reader active) are the
+/// visual evidence the transition actually switched divisions.
 /// </summary>
-[Collection(nameof(AppCollection))]
-public class FlyoutReaderDestinationTests
+[Collection("Offline reader")]
+public sealed class FlyoutReaderDestinationTests(OfflineReaderFixture fixture)
 {
-    private readonly AppFixture _fixture;
-
-    public FlyoutReaderDestinationTests(AppFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     /// <summary>The pinned nav pane shows the flyout rows directly; a narrow
     /// window needs one hamburger press first.</summary>
     private async Task<AutomationElement> FlyoutRowAsync(string automationId)
     {
-        var row = await _fixture.WaitForElementAsync(
-            window => window.FindFirstDescendant(_fixture.CF.ByAutomationId(automationId)),
+        var row = await fixture.WaitForElementAsync(
+            window => window.FindFirstDescendant(fixture.CF.ByAutomationId(automationId)),
             TimeSpan.FromSeconds(5));
         if (row != null)
         {
             return row;
         }
 
-        var hamburger = await _fixture.WaitForElementAsync(
-            window => window.FindFirstDescendant(_fixture.CF.ByAutomationId("ReaderNavigationButton")),
+        var hamburger = await fixture.WaitForElementAsync(
+            window => window.FindFirstDescendant(fixture.CF.ByAutomationId("ReaderNavigationButton")),
             TimeSpan.FromSeconds(5));
         hamburger.Should().NotBeNull("the reader hamburger must be available to open the flyout");
-        _fixture.Click(hamburger!);
+        fixture.Click(hamburger!);
 
-        row = await _fixture.WaitForElementAsync(
-            window => window.FindFirstDescendant(_fixture.CF.ByAutomationId(automationId)),
+        row = await fixture.WaitForElementAsync(
+            window => window.FindFirstDescendant(fixture.CF.ByAutomationId(automationId)),
             TimeSpan.FromSeconds(5));
         row.Should().NotBeNull($"flyout row {automationId} must be reachable");
         return row!;
@@ -45,28 +43,50 @@ public class FlyoutReaderDestinationTests
     [Fact]
     public async Task AlHaperekFromTheParashaReader_ActivatesThePerekReader()
     {
-        _fixture.Click(await FlyoutRowAsync("FlyoutParasha"));
+        fixture.MainWindow.Focus();
+        fixture.Click(await FlyoutRowAsync("FlyoutParasha"));
 
         // בראשית — the first unit in the פרשה על הפרק listing.
-        var bereshit = await _fixture.WaitForElementAsync(
-            window => window.FindAllDescendants(_fixture.CF.ByAutomationId("ParashaName"))
+        var bereshit = await fixture.WaitForElementAsync(
+            window => window.FindAllDescendants(fixture.CF.ByAutomationId("ParashaName"))
                 .FirstOrDefault(element => element.Name == "בראשית"),
             TimeSpan.FromSeconds(10));
         bereshit.Should().NotBeNull("the בראשית row must be listed");
-        _fixture.Click(bereshit!);
+        fixture.Click(bereshit!);
 
-        var parashaSource = await _fixture.WaitForElementAsync(
-            window => window.FindFirstDescendant(_fixture.CF.ByAutomationId("ParashaSource")),
+        var parashaSource = await fixture.WaitForElementAsync(
+            window => window.FindFirstDescendant(fixture.CF.ByAutomationId("ParashaSource")),
             TimeSpan.FromSeconds(10));
         parashaSource.Should().NotBeNull("the parasha reader must be active after opening בראשית");
+        CaptureScreenshot("flyout-parasha-reader.png");
 
-        _fixture.Click(await FlyoutRowAsync("FlyoutAlHaperek"));
+        fixture.MainWindow.Focus();
+        fixture.Click(await FlyoutRowAsync("FlyoutAlHaperek"));
 
-        var perekSource = await _fixture.WaitForElementAsync(
-            window => window.FindFirstDescendant(_fixture.CF.ByAutomationId("PerekSource")),
-            TimeSpan.FromSeconds(10));
+        var perekSource = await fixture.WaitForElementAsync(
+            window => window.FindFirstDescendant(fixture.CF.ByAutomationId("PerekSource")),
+            TimeSpan.FromSeconds(30));
         perekSource.Should().NotBeNull("choosing על הפרק must activate the perek reader");
-        _fixture.FindByAutomationId("ParashaSource").Should().BeNull(
+        fixture.FindByAutomationId("ParashaSource").Should().BeNull(
             "the parasha reader must not stay active after choosing על הפרק");
+
+        // Let the perek content realize before the evidence capture — a bare
+        // PerekSource could still be the empty reader shell mid-load.
+        (await fixture.WaitForElementAsync(
+            window => window.FindAllDescendants(fixture.CF.ByAutomationId("PasukimCollection"))
+                .FirstOrDefault(element => !element.IsOffscreen), TimeSpan.FromSeconds(30)))
+            .Should().NotBeNull("the perek reader must realize its pasuk list");
+        (await fixture.WaitForElementAsync(
+            window => window.FindAllDescendants(fixture.CF.ByAutomationId("PasukText"))
+                .FirstOrDefault(element => !element.IsOffscreen && element.Name.Length > 0), TimeSpan.FromSeconds(60)))
+            .Should().NotBeNull("a pasuk row must render in the perek reader");
+        CaptureScreenshot("flyout-back-on-perek-reader.png");
+    }
+
+    private void CaptureScreenshot(string name)
+    {
+        var artifacts = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".artifacts"));
+        Directory.CreateDirectory(artifacts);
+        Capture.Element(fixture.MainWindow).ToFile(Path.Join(artifacts, name));
     }
 }
