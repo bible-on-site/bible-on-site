@@ -70,19 +70,16 @@ public sealed class FlyoutReaderDestinationTests(OfflineReaderFixture fixture)
         fixture.FindByAutomationId("ParashaSource").Should().BeNull(
             "the parasha reader must not stay active after choosing על הפרק");
 
-        // Let the perek content realize before the evidence capture — a bare
-        // PerekSource could still be the empty reader shell mid-load.
-        (await fixture.WaitForElementAsync(
-            window => window.FindAllDescendants(fixture.CF.ByAutomationId("PasukimCollection"))
-                .FirstOrDefault(element => !element.IsOffscreen), TimeSpan.FromSeconds(30)))
-            .Should().NotBeNull("the perek reader must realize its pasuk list");
-        // The shared fixture may leave the reader in either display mode:
-        // list mode renders PasukText rows, תיקון קוראים mode renders the
-        // flow inside TikkunScrollView. Either proves real content arrived.
+        // The shared fixture may leave the reader in either display mode,
+        // and the two containers are mutually exclusive: list mode shows
+        // PasukimCollection with realized PasukText rows, תיקון קוראים mode
+        // shows TikkunScrollView with the rendered TikkunText flow. A single
+        // wait must accept either — a bare PerekSource could still be the
+        // empty reader shell mid-load.
         (await fixture.WaitForElementAsync(
             window => window.FindAllDescendants(fixture.CF.ByAutomationId("PasukText"))
                     .FirstOrDefault(element => !element.IsOffscreen && element.Name.Length > 0)
-                ?? window.FindAllDescendants(fixture.CF.ByAutomationId("TikkunScrollView"))
+                ?? window.FindAllDescendants(fixture.CF.ByAutomationId("TikkunText"))
                     .FirstOrDefault(element => !element.IsOffscreen),
             TimeSpan.FromSeconds(60)))
             .Should().NotBeNull("pasuk content must render in whichever reader mode is active");
