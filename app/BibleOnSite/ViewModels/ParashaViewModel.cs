@@ -191,12 +191,11 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
         // selection after ClearSelected() only reaches the new unit's rows.
         if (oldValue is not null && !ReferenceEquals(oldValue, newValue))
         {
-            foreach (var row in oldValue.Rows)
+            foreach (var display in oldValue.Rows
+                .Where(row => row.Display is { Pasuk.IsSelected: true })
+                .Select(row => row.Display!))
             {
-                if (row.Display is { Pasuk.IsSelected: true } display)
-                {
-                    display.Pasuk.IsSelected = false;
-                }
+                display.Pasuk.IsSelected = false;
             }
         }
         RefreshRecitationAvailability(newValue);
@@ -818,11 +817,15 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
             return;
         }
 
+        // Adjacent units share boundary perakim — one task-level cache
+        // serves the whole batch so each perek hits SQLite once. Declared
+        // outside the task so its entries can join _loadedPerekPasukim on
+        // the UI context: the recitation paths query canonical pasukim by
+        // perek for any loaded unit, and a preloaded-only perek must not
+        // come back null.
+        var pasukimCache = new Dictionary<int, Task<List<Pasuk>>>();
         var loaded = await Task.Run(async () =>
         {
-            // Adjacent units share boundary perakim — one task-level cache
-            // serves the whole batch so each perek hits SQLite once.
-            var pasukimCache = new Dictionary<int, Task<List<Pasuk>>>();
             Task<List<Pasuk>> LoadPasukimCached(int perekId) =>
                 pasukimCache.TryGetValue(perekId, out var pending)
                     ? pending
@@ -846,6 +849,11 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
                 u.Rows = rows;
                 u.RangeLabel = RangeLabelOf(u.TorahRange);
             }
+        }
+        foreach (var (perekId, pending) in pasukimCache)
+        {
+            // Every task already completed inside BuildRowsAsync.
+            _loadedPerekPasukim[perekId] = await pending;
         }
     }
 

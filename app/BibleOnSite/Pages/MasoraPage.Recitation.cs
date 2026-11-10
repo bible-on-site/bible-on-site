@@ -134,7 +134,7 @@ public partial class MasoraPage
 
         _recitingWord = word;
         _recitingPasuk = nextPasuk;
-        if (nextRow != null && word != null)
+        if (word != null && nextRow != null)
         {
             nextRow.Pasuk.RecitingSegment = word.Segment - nextRow.ClipStartIndex;
         }

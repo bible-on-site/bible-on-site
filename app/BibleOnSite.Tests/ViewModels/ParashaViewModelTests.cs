@@ -831,6 +831,12 @@ public class ParashaViewModelTests
         await fixture.Model.PreloadAdjacentRowsAsync(1);
         other.Rows.Should().NotBeEmpty();
 
+        // Recitation queries canonical pasukim for every perek a loaded
+        // unit covers — a preloaded-only perek must not come back null.
+        fixture.Model.GetLoadedPasukim(other.TorahRange.EndPerekId)
+            .Should().NotBeNullOrEmpty();
+        fixture.Model.GetLoadedPasukim(999).Should().BeNull();
+
         // A second pass finds everything already loaded — nothing to do.
         await fixture.Model.PreloadAdjacentRowsAsync(1);
 

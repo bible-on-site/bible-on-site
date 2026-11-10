@@ -587,12 +587,16 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
             return;
         }
 
+        // Adjacent units share boundary perakim — one task-level cache
+        // serves the whole batch so each perek hits SQLite once. The
+        // awaits stay sequential, so a plain Dictionary suffices. Declared
+        // outside the task so its entries can join _loadedPerekPasukim on
+        // the UI context: the recitation paths query canonical pasukim by
+        // perek for any loaded unit, and a preloaded-only perek must not
+        // come back null.
+        var pasukimCache = new Dictionary<int, Task<List<Pasuk>>>();
         var loaded = await Task.Run(async () =>
         {
-            // Adjacent units share boundary perakim — one task-level cache
-            // serves the whole batch so each perek hits SQLite once. The
-            // awaits stay sequential, so a plain Dictionary suffices.
-            var pasukimCache = new Dictionary<int, Task<List<Pasuk>>>();
             Task<List<Pasuk>> LoadPasukimCached(int perekId) =>
                 pasukimCache.TryGetValue(perekId, out var pending)
                     ? pending
@@ -612,6 +616,11 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
             {
                 u.Rows = rows;
             }
+        }
+        foreach (var (perekId, pending) in pasukimCache)
+        {
+            // Every task already completed inside BuildRowsAsync.
+            _loadedPerekPasukim[perekId] = await pending;
         }
     }
 

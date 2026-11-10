@@ -415,6 +415,11 @@ public class MasoraViewModelTests
         unit2.Rows.Should().NotBeEmpty();
         unit3.Rows.Should().NotBeEmpty();
 
+        // Recitation queries canonical pasukim for every perek a loaded
+        // unit covers — a preloaded-only perek must not come back null.
+        fixture.Model.GetLoadedPasukim(51).Should().NotBeNullOrEmpty();
+        fixture.Model.GetLoadedPasukim(999).Should().BeNull();
+
         // Everything already loaded → nothing left to do.
         await fixture.Model.PreloadAdjacentRowsAsync(1);
     }
