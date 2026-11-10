@@ -84,6 +84,14 @@ source notes (or whole groups) no longer exist.
   content. `ReadingTime` renders the badge; `format.ts` formats Hebrew
   labels; JSON-LD adds `timeRequired` + `wordCount` only when a stored
   metric exists.
+- **Ranged perush readers** (#3108): the alternative-division views
+  (`RangedPerushView`, `UnitPerushFullView`) clip one perush to a reading
+  unit's canonical ranges across perakim, so no aggregate
+  `tanah_perush_metric` row describes them. `getPerushNotesForRanges`
+  LEFT JOINs `tanah_note_metric` per note and `rangedPerushMetrics`
+  folds the counts into the range's own metric + keyed progress units —
+  cumulative in *range order*, since stored `cumulative_words` is a
+  per-perek axis. One uncounted note marks the whole range unknown.
 - **Native app / GraphQL**: the API exposes `readingMetric` and ordered
   `progressUnits` on `articleById`, `perekByPerekId` and
   `tanahpediaEntry` (`web/api`); the MAUI app consumes them — badges on

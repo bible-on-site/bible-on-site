@@ -1,11 +1,4 @@
 import { query } from "../api-client";
-import {
-	getPerushMetric,
-	getPerushMetricsByPerekId,
-	getPerushMetricsByPerekIds,
-	metricOrFallback,
-} from "../reading-metrics";
-import type { ReadingMetric } from "../reading-metrics";
 import type { ScriptureRange } from "../reading/contract";
 import {
 	groupedSliceSelects,
@@ -13,6 +6,14 @@ import {
 	slicePerekOrder,
 	slicesForRanges,
 } from "../reading/queries";
+import type { ReadingMetric } from "../reading-metrics";
+import {
+	getPerushMetric,
+	getPerushMetricsByPerekId,
+	getPerushMetricsByPerekIds,
+	isReadingMetricsSchemaMissing,
+	metricOrFallback,
+} from "../reading-metrics";
 import type { PerushDetail, PerushNote, PerushSummary } from "./types";
 
 interface PerushSummaryRow {
@@ -186,6 +187,13 @@ interface RangedNoteRow extends NoteRow {
  */
 export interface RangedPerushNote extends PerushNote {
 	perekId: number;
+	/**
+	 * Stored `tanah_note_metric` word count for this note (#3108).
+	 * Absent/`null` when the metric row is missing or the metrics schema
+	 * is not deployed — one uncounted note makes the whole range's
+	 * metric unknown (`rangedPerushMetrics`).
+	 */
+	wordCount?: number | null;
 }
 
 interface RangePerushRow {
@@ -357,9 +365,7 @@ export async function getPerushimForRangeGroups(
 		}
 		return byUnit.map((byPerush) =>
 			[...byPerush.values()]
-				.sort(
-					(a, b) => a.priority - b.priority || b.noteCount - a.noteCount,
-				)
+				.sort((a, b) => a.priority - b.priority || b.noteCount - a.noteCount)
 				.map(
 					({ priority: _priority, firstSliceOrder: _order, ...summary }) =>
 						summary,
@@ -375,11 +381,23 @@ export async function getPerushimForRangeGroups(
 	}
 }
 
+interface RangedNoteMetricRow extends RangedNoteRow {
+	/** `NULL` when no `tanah_note_metric` row covers this note. */
+	metric_word_count?: number | null;
+}
+
 /**
  * Fetch a perush's notes inside canonical ranges, preserving range
  * order across perakim. Verse-addressed notes whose pasuk sits inside
  * the bounds are returned; boundary pesukim shared by two units appear
  * in both units' results.
+ *
+ * Each note carries its stored `tanah_note_metric` word count when the
+ * row exists (#3108) — the ranged readers aggregate those counts into
+ * the range's own estimate and progress units (`rangedPerushMetrics`).
+ * A database predating the metric tables falls back to the plain read,
+ * leaving `wordCount` absent — the same schema-missing degradation the
+ * article covering-source path uses.
  */
 export async function getPerushNotesForRanges(
 	perushId: number,
@@ -388,14 +406,32 @@ export async function getPerushNotesForRanges(
 	const slices = slicesForRanges(ranges);
 	if (slices.length === 0) return [];
 	const { sql, params } = noteSliceCondition(slices);
+	const notesSql = `SELECT n.perek_id, n.pasuk, n.note_idx, n.note_content
+		 FROM note n
+		 WHERE n.perush_id = ? AND (${sql})
+		 ORDER BY n.perek_id ASC, n.pasuk ASC, n.note_idx ASC`;
+	const decoratedSql = `SELECT n.perek_id, n.pasuk, n.note_idx, n.note_content,
+			m.word_count AS metric_word_count
+		 FROM note n
+		 LEFT JOIN tanah_note_metric m
+			ON m.perush_id = n.perush_id
+			AND m.perek_id = n.perek_id
+			AND m.pasuk = n.pasuk
+			AND m.note_idx = n.note_idx
+		 WHERE n.perush_id = ? AND (${sql})
+		 ORDER BY n.perek_id ASC, n.pasuk ASC, n.note_idx ASC`;
 	try {
-		const rows = await query<RangedNoteRow>(
-			`SELECT n.perek_id, n.pasuk, n.note_idx, n.note_content
-			 FROM note n
-			 WHERE n.perush_id = ? AND (${sql})
-			 ORDER BY n.perek_id ASC, n.pasuk ASC, n.note_idx ASC`,
-			[perushId, ...params],
-		);
+		const rows = await query<RangedNoteMetricRow>(decoratedSql, [
+			perushId,
+			...params,
+		]).catch((error: unknown) => {
+			if (!isReadingMetricsSchemaMissing(error)) throw error;
+			console.warn(
+				"Reading-metrics schema is not deployed yet; " +
+					"serving ranged commentary without note metrics.",
+			);
+			return query<RangedNoteMetricRow>(notesSql, [perushId, ...params]);
+		});
 		const perekOrder = slicePerekOrder(slices);
 		return rows
 			.map((row) => ({
@@ -403,6 +439,9 @@ export async function getPerushNotesForRanges(
 				pasuk: row.pasuk,
 				noteIdx: row.note_idx,
 				noteContent: row.note_content,
+				...(row.metric_word_count != null
+					? { wordCount: Number(row.metric_word_count) }
+					: {}),
 			}))
 			.sort((a, b) => {
 				const orderA = perekOrder.get(a.perekId) ?? Number.MAX_SAFE_INTEGER;
