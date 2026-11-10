@@ -222,7 +222,12 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
     private void OnUnitChanged()
     {
         ResetRecitationSession();
-        MoedRowsCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
+        // ScrollTo(0) throws on an empty items source — a published moed with
+        // no readable ranges leaves no rows to reset.
+        if (_viewModel.Rows.Count > 0)
+        {
+            MoedRowsCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
+        }
         ClearAllSelections();
         _chrome.RefreshPrevNext();
         _ = UpdateArticlesCountAsync();
