@@ -5,7 +5,7 @@
  * the Next.js server for E2E tests. This approach is more reliable than using
  * Playwright's globalSetup for database operations.
  *
- * Usage: node ./launch-e2e-server.mts [--coverage] [--standalone]
+ * Usage: node ./launch-e2e-server.mts [--coverage] [--standalone] [--record-populate-marker]
  *
  * --standalone populates the database like e2e when cargo-make is available
  * (population is skipped where the Rust toolchain was never installed,
@@ -13,6 +13,11 @@
  * `.next/standalone/server.js` instead of `next dev`. The perf suite uses it
  * so a standalone `test:perf` run in a fresh worktree still gets its
  * per-checkout database populated (issue #2881 review).
+ *
+ * --record-populate-marker verifies DB_URL and records the current
+ * populate-input hash without starting a server. CI populate steps that run
+ * `cargo make mysql-populate` outside the launcher (e.g. before `next build`)
+ * use it so the perf webServer reuses that population instead of rebuilding.
  */
 
 import { execSync, spawn, spawnSync } from "node:child_process";
@@ -68,6 +73,10 @@ const _useCoverage = process.argv.includes("--coverage");
 // --standalone is passed by playwright.perf.config.ts: populate the database
 // like e2e, then serve the production build instead of `next dev`.
 const STANDALONE = process.argv.includes("--standalone");
+// --record-populate-marker is used by CI populate steps that run
+// `cargo make mysql-populate` outside the launcher so the perf webServer can
+// reuse that population instead of rebuilding the database.
+const RECORD_MARKER = process.argv.includes("--record-populate-marker");
 
 // Records which populate inputs built the target database so --standalone
 // can skip mysql-populate only when they are unchanged. Declared before
@@ -220,7 +229,7 @@ async function populateInputsHash(): Promise<string> {
 		path.join(mysqlDirectory, "db-populator", "Cargo.toml"),
 		path.join(dataDirectory, "Cargo.toml"),
 		path.join(dataDirectory, "Cargo.lock"),
-		path.join(dataDirectory, "makefile.toml"),
+		path.join(dataDirectory, "Makefile.toml"),
 	].sort();
 	const hash = createHash("sha256");
 	for (const input of inputs) {
@@ -347,6 +356,20 @@ async function verifyTestDatabase(dbUrl: string): Promise<void> {
 }
 
 async function main() {
+	if (RECORD_MARKER) {
+		const dbUrl = process.env.DB_URL;
+		if (!dbUrl) {
+			throw new Error("--record-populate-marker requires DB_URL");
+		}
+		// Verify before marking so a broken population is never recorded as
+		// current — the perf webServer trusts the marker and would skip its
+		// own populate + verification.
+		await verifyTestDatabase(dbUrl);
+		await writePopulateMarker(dbUrl, await populateInputsHash());
+		log("[DB Setup] Recorded populate marker for the current inputs.");
+		return;
+	}
+
 	// Populate database before starting the server
 	await populateDatabase();
 
