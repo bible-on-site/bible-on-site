@@ -30,7 +30,8 @@ public partial class TosPage : ContentPage
         {
             await Launcher.OpenAsync(new Uri("mailto:tanah.site@gmail.com"));
         }
-        catch (Exception ex) //NOSONAR — launcher failure alerts the user.
+        catch (Exception ex) when (ex is FeatureNotSupportedException
+            or InvalidOperationException or UriFormatException or ArgumentException)
         {
             Console.Error.WriteLine($"Error opening email: {ex.Message}");
             await ShellAppNavigator.Instance.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את אפליקציית הדואר. נסו שוב", "אישור");
@@ -43,7 +44,8 @@ public partial class TosPage : ContentPage
         {
             await Launcher.OpenAsync(new Uri($"{Config.AppConfig.Instance.WebsiteUrl}/#privacyPolicy"));
         }
-        catch (Exception ex) //NOSONAR - launcher failures are platform-specific; the user gets an alert.
+        catch (Exception ex) when (ex is FeatureNotSupportedException
+            or InvalidOperationException or UriFormatException or ArgumentException)
         {
             System.Diagnostics.Debug.WriteLine($"Open privacy policy failed: {ex.Message}");
             await ShellAppNavigator.Instance.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את מדיניות הפרטיות", "אישור");
