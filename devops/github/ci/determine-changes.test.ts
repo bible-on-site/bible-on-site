@@ -446,6 +446,8 @@ describe("detectChanges", () => {
 		"web/bible-on-site/tests/util/coverage/merge-coverage.mts",
 		// Colocated *.test.* / *.spec.* files anywhere in the module.
 		"web/bible-on-site/scripts/start-server.test.mjs",
+		"web/bible-on-site/scripts/start-server-launcher.test.mjs",
+		"web/bible-on-site/scripts/start-server-probe.test.mjs",
 		"web/bible-on-site/scripts/verify-public-content.test.mjs",
 		"web/bible-on-site/src/lib/search/service.spec.ts",
 		// The jest harness.
@@ -467,6 +469,8 @@ describe("detectChanges", () => {
 		"web/bible-on-site/shared/typing/coverage.d.ts",
 		// Standalone report inspection never ships in the website.
 		"web/bible-on-site/scripts/coverage-gaps.mjs",
+		// Shared fixture module for the node:test launcher suites.
+		"web/bible-on-site/scripts/start-server-test-kit.mjs",
 	]) {
 		test(`${path} runs website checks without a release`, () => {
 			assert.deepEqual(changed([path], "website"), [
