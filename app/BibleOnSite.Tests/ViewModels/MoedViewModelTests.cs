@@ -271,9 +271,32 @@ public class MoedViewModelTests
             getTrack: id => tracks.GetValueOrDefault(id),
             catalogue: unsortedCatalogue);
         await fixture.Initialize();
+        // The catalogue load caches the covered perakim's pasukim — the unit
+        // itself is built directly so the planner receives genuinely
+        // wire-reversed sections (ToModel already position-sorts its output,
+        // which would mask a missing planner ordering).
         await fixture.Model.LoadBySlugAsync("shuffled");
+        var direct = new MoedUnit
+        {
+            Id = 3,
+            Slug = "shuffled",
+            Name = "מועד הפוך",
+            Sections =
+            [
+                new MoedSection
+                {
+                    Id = 32, Label = "שני", Position = 2,
+                    Ranges = [new MoedRange { Id = 42, Position = 1, StartPerekId = 2, StartPasuk = 1, EndPerekId = 2, EndPasuk = 2 }],
+                },
+                new MoedSection
+                {
+                    Id = 31, Label = "ראשון", Position = 1,
+                    Ranges = [new MoedRange { Id = 41, Position = 1, StartPerekId = 1, StartPasuk = 1, EndPerekId = 1, EndPasuk = 2 }],
+                },
+            ],
+        };
 
-        fixture.Model.PlanSegmentsForUnit(fixture.Model.Unit!)
+        fixture.Model.PlanSegmentsForUnit(direct)
             .Select(s => (s.SectionId, s.PerekId)).Should().Equal((31, 1), (32, 2));
     }
 
