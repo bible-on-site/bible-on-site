@@ -7,9 +7,10 @@
  *
  * Usage: node ./launch-e2e-server.mts [--coverage] [--standalone]
  *
- * --standalone populates the database when cargo-make is available (it is
- * skipped where the Rust toolchain was never installed, matching the
- * pre-launcher behavior), then serves the built
+ * --standalone populates the database when it is missing or incomplete and
+ * cargo-make is available (population is skipped where the Rust toolchain
+ * was never installed, matching the pre-launcher behavior), then serves the
+ * built
  * `.next/standalone/server.js` instead of `next dev`. The perf suite uses it
  * so a standalone `test:perf` run in a fresh worktree still gets its
  * per-checkout database populated (issue #2881 review).
@@ -82,6 +83,28 @@ async function populateDatabase(): Promise<void> {
 	log("[DB Setup] ========================================");
 	log("[DB Setup] Ensuring test database is populated...");
 	log("[DB Setup] DB_URL is configured");
+
+	// --standalone runs can point at a database an earlier step already
+	// populated — the Website Performance job populates tanah_test for the
+	// production build, and mysql-populate is not idempotent (it dies on
+	// duplicate keys). Verify first and populate only a missing or
+	// incomplete database; a fresh local worktree's derived per-checkout
+	// database gets created by that populate (issue #2881 review).
+	if (STANDALONE) {
+		try {
+			await verifyTestDatabase(dbUrl);
+			log(
+				"[DB Setup] Database already populated — skipping cargo make mysql-populate.",
+			);
+			return;
+		} catch (error) {
+			log(
+				`[DB Setup] Database missing or incomplete (${
+					error instanceof Error ? error.message : error
+				}) — populating.`,
+			);
+		}
+	}
 
 	// Path to data directory (relative to web/bible-on-site)
 	const dataDirectory = path.resolve(__dirname, "../../data");

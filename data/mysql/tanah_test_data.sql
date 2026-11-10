@@ -157,8 +157,12 @@ UPDATE tanah_article SET coverage_verified = TRUE WHERE id = 1;
 -- tanah_article_hebrew_date_upgrade.sql). Article 2 is bound to 9 Av (11,9)
 -- and article 3 to 5 Iyar (8,5) so date lookups exercise the override path
 -- across different primary perek/author ownership than the scheduled perek.
+-- The table is CREATE IF NOT EXISTS and survives repopulation, so the
+-- fixtures re-assert on every run: ON DUPLICATE keeps the fixture owner even
+-- when the prod upgrade claims the same date first.
 INSERT INTO tanah_article_hebrew_date (article_id, hebrew_month, hebrew_day)
-VALUES (2, 11, 9), (3, 8, 5);
+VALUES (2, 11, 9), (3, 8, 5)
+ON DUPLICATE KEY UPDATE article_id = VALUES(article_id);
 
 -- ---------------------------------------------------------------------------
 -- Representative test data for perushim (commentaries)
