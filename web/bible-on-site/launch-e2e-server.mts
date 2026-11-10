@@ -38,10 +38,18 @@ const logDir = path.resolve(__dirname, ".playwright-report/setup");
 mkdirSync(logDir, { recursive: true });
 const logFile = path.resolve(logDir, "launcher.log");
 
-function log(message: string): void {
+type LogLevel = "info" | "warn" | "error";
+
+function log(message: string, level: LogLevel = "info"): void {
 	const timestamp = new Date().toISOString();
 	const line = `[${timestamp}] ${message}\n`;
-	console.log(message);
+	if (level === "error") {
+		console.error(message);
+	} else if (level === "warn") {
+		console.warn(message);
+	} else {
+		console.log(message);
+	}
 	try {
 		writeFileSync(logFile, line, { flag: "a" });
 	} catch (e) {
@@ -69,7 +77,7 @@ const POPULATE_MARKER_TABLE = "test_populate_marker";
 try {
 	await main();
 } catch (err) {
-	log(`[ERROR] ${err}`);
+	log(`[ERROR] ${err}`, "error");
 	process.exit(1);
 }
 
@@ -108,6 +116,7 @@ async function populateDatabase(): Promise<void> {
 			} catch {
 				log(
 					"[DB Setup] Marker matched but verification failed — repopulating.",
+					"warn",
 				);
 			}
 		}
@@ -125,8 +134,9 @@ async function populateDatabase(): Promise<void> {
 	if (cargoMakeCheck.status !== 0) {
 		log(
 			`[DB Setup] cargo-make check failed with status: ${cargoMakeCheck.status}`,
+			"error",
 		);
-		log(`[DB Setup] stderr: ${cargoMakeCheck.stderr?.toString()}`);
+		log(`[DB Setup] stderr: ${cargoMakeCheck.stderr?.toString()}`, "error");
 		// Standalone (perf) runs may execute where the Rust toolchain was never
 		// installed — e.g. the Website Performance job skips MySQL/cargo-make
 		// when perushim data is unavailable. The production server tolerates a
@@ -135,6 +145,7 @@ async function populateDatabase(): Promise<void> {
 		if (STANDALONE) {
 			log(
 				"[DB Setup] cargo-make unavailable — skipping population; the standalone server will use the existing database.",
+				"warn",
 			);
 			return;
 		}
@@ -158,7 +169,7 @@ async function populateDatabase(): Promise<void> {
 		});
 		log("[DB Setup] Database population completed successfully.");
 	} catch (error) {
-		log(`[DB Setup] ERROR: Failed to populate database: ${error}`);
+		log(`[DB Setup] ERROR: Failed to populate database: ${error}`, "error");
 		log("[DB Setup] ========================================");
 		throw new Error(
 			"Database population failed. E2E tests require a populated database.",
@@ -174,7 +185,7 @@ async function populateDatabase(): Promise<void> {
 		try {
 			await writePopulateMarker(dbUrl, inputsHash);
 		} catch (error) {
-			console.warn(`[DB Setup] Could not record populate marker: ${error}`);
+			log(`[DB Setup] Could not record populate marker: ${error}`, "warn");
 		}
 	}
 	log("[DB Setup] ========================================");
@@ -322,7 +333,7 @@ async function verifyTestDatabase(dbUrl: string): Promise<void> {
 		if (missing.length > 0) parts.push(`missing tables: ${missing.join(", ")}`);
 		if (empty.length > 0) parts.push(`empty tables: ${empty.join(", ")}`);
 		const msg = `[DB Health] FAILED — ${parts.join("; ")} in database '${database}'`;
-		log(msg);
+		log(msg, "error");
 		throw new Error(
 			`${msg}. Either the db-populator didn't populate these tables, ` +
 				`or the app is connecting to the wrong database. ` +
@@ -408,7 +419,7 @@ async function main() {
 	});
 
 	server.on("error", (err) => {
-		log(`[Server] Error: ${err.message}`);
+		log(`[Server] Error: ${err.message}`, "error");
 		process.exit(1);
 	});
 
