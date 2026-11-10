@@ -100,6 +100,9 @@ public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
     {
         if (sender is BindableObject { BindingContext: Perush perush })
         {
+            // The display-only CheckBox is input-transparent, so the keyboard
+            // dismissal its handler performed moves to the row tap.
+            _ = HideKeyboardAsync();
             ViewModel?.ToggleCheckedPerush(perush.Id);
         }
     }
