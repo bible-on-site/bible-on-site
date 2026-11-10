@@ -20,11 +20,30 @@ export const dynamic = "force-dynamic";
 
 const MARKDOWN_TYPE = "text/markdown; charset=utf-8";
 
+/**
+ * Canonical paths arrive in mixed spellings — renderers emit raw Hebrew
+ * for some routes and percent-encoded for others (entry/perush hrefs,
+ * pedia categories). Decode-then-encode each segment once so encoded
+ * triplets stay stable and raw Hebrew encodes exactly once (header
+ * values are ByteString — the same spelling the sitemap emits).
+ */
+function encodePathForHeader(path: string): string {
+	return path
+		.split("/")
+		.map((segment) => {
+			try {
+				return encodeURIComponent(decodeURIComponent(segment));
+			} catch {
+				// Malformed escapes — encode the literal segment.
+				return encodeURIComponent(segment);
+			}
+		})
+		.join("/");
+}
+
 function discoveryLinks(canonicalPath: string): string {
-	// Header values are ByteString — Hebrew canonical paths must travel
-	// URI-encoded (the same spelling the proxy and sitemap emit).
-	const encoded = encodeURI(canonicalPath);
-	const mdPath = `${canonicalPath === "/" ? "/" : encoded}.md`;
+	const encoded = encodePathForHeader(canonicalPath);
+	const mdPath = canonicalPath === "/" ? "/.md" : `${encoded}.md`;
 	return [
 		`<${encoded}>; rel="alternate"; type="text/html"`,
 		`<${mdPath}>; rel="alternate"; type="text/markdown"`,

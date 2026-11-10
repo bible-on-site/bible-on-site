@@ -304,6 +304,27 @@ describe("proxy", () => {
 			expect(rewrittenPath(response)).toBe("/md/929/1");
 		});
 
+		it("keeps parasha view-param variants on the noindex HTML path", async () => {
+			// A negotiated request must not bypass the X-Robots-Tag
+			// exclusion the variant page carries.
+			const response = await proxy(
+				makeRequest("/פרשה/בראשית?reading=weekday", {
+					accept: "text/markdown",
+				}),
+			);
+			expect(rewrittenPath(response)).toBeNull();
+			expect(response?.headers.get("x-robots-tag")).toBe("noindex, follow");
+		});
+
+		it("still serves the explicit .md document under view params", async () => {
+			// The .md URL is the canonical base document — the query does
+			// not select a variant for it.
+			const response = await proxy(
+				makeRequest("/פרשה/בראשית.md?reading=weekday"),
+			);
+			expect(rewrittenPath(response)).toBe("/md/פרשה/בראשית");
+		});
+
 		it("keeps the .md suffix on alias redirects", async () => {
 			const parasha = await proxy(makeRequest("/פרשה/1.md"));
 			expect(parasha?.status).toBe(308);

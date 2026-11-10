@@ -270,9 +270,19 @@ function renderBlock(el: Element, state: State, depth: number): string {
 	if (isFootnoteList(el)) {
 		// Collect definitions; emit them once at document end.
 		state.collectingFootnotes = true;
+		// Definitions sit either as direct `<li>` children (`ol.footnotes`)
+		// or one list level down (`section.footnotes > ol > li`).
+		const items = Array.from(el.children).flatMap((child) =>
+			child.tagName.toLowerCase() === "li"
+				? [child]
+				: ["ol", "ul"].includes(child.tagName.toLowerCase())
+					? Array.from(child.children).filter(
+							(c) => c.tagName.toLowerCase() === "li",
+						)
+					: [],
+		);
 		let index = 0;
-		for (const li of Array.from(el.children)) {
-			if (li.tagName.toLowerCase() !== "li") continue;
+		for (const li of items) {
 			index += 1;
 			const id = li.getAttribute("id") ?? String(index);
 			const key = id.replace(/^(fn|note|footnote)[-:]?/i, "");
@@ -339,7 +349,10 @@ function renderBlock(el: Element, state: State, depth: number): string {
 export function htmlToMarkdown(html: string): string {
 	const trimmed = html.trim();
 	if (trimmed === "") return "";
-	const dom = new JSDOM(`<body>${trimmed}</body>`);
+	// Parsed directly — the input is stored body markup (already
+	// DOMPurify-sanitized by callers), never string-interpolated into a
+	// wrapper, so fragment or full documents land in <body> either way.
+	const dom = new JSDOM(trimmed);
 	const body = dom.window.document.body;
 	const state: State = { footnotes: new Map(), collectingFootnotes: false };
 	const main = blockChildren(body, state).trim();

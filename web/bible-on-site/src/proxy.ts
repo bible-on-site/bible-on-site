@@ -190,10 +190,21 @@ export async function proxy(
 	// GET/HEAD only — writes/POSTs (incl. Server Actions) never take the
 	// Markdown path. The route root is internal: /md/* itself must not
 	// re-enter (targets only resolve for canonical paths anyway).
+	// Parasha view-param variants stay on the HTML path with their
+	// noindex header — a negotiated request must not bypass it (the
+	// Markdown document is the canonical base reading regardless).
 	const isReadMethod = request.method === "GET" || request.method === "HEAD";
+	const isParasha = segments[0] === "פרשה" || segments[0] === "parasha";
+	const hasParashaViewParams =
+		isParasha &&
+		PARASHA_VIEW_PARAMS.some((param) =>
+			request.nextUrl.searchParams.has(param),
+		);
 	const wantsMarkdown =
 		isMarkdown ||
-		(isReadMethod && markdownPreferred(request.headers.get("accept")));
+		(isReadMethod &&
+			!hasParashaViewParams &&
+			markdownPreferred(request.headers.get("accept")));
 	const markdownTarget =
 		isReadMethod && wantsMarkdown ? markdownTargetForPath(contentPath) : null;
 	if (markdownTarget && !contentPath.startsWith(MARKDOWN_ROUTE_ROOT)) {
@@ -207,18 +218,11 @@ export async function proxy(
 		return NextResponse.rewrite(destination);
 	}
 
-	const isParasha = segments[0] === "פרשה" || segments[0] === "parasha";
 	const isBookChrome =
 		segments.length === 3 &&
 		["בראשית", "שמות", "ויקרא", "במדבר", "דברים"].includes(segments[1]) &&
 		Object.values(bookPageSlugs).includes(segments[2]);
-	if (
-		isParasha &&
-		(isBookChrome ||
-			PARASHA_VIEW_PARAMS.some((param) =>
-				request.nextUrl.searchParams.has(param),
-			))
-	) {
+	if (isParasha && (isBookChrome || hasParashaViewParams)) {
 		const response = NextResponse.next();
 		response.headers.set("X-Robots-Tag", "noindex, follow");
 		return response;

@@ -126,5 +126,34 @@ describe("/md/[[...path]] route (issue #3257)", () => {
 		});
 		const response = await GET(REQ, ctx(undefined));
 		expect(response.status).toBe(200);
+		const link = response.headers.get("link") ?? "";
+		expect(link).toContain('</.md>; rel="alternate"; type="text/markdown"');
+	});
+
+	it("keeps already-encoded canonical paths stable in Link headers", async () => {
+		mockRender.mockResolvedValue({
+			title: "אברהם",
+			canonicalPath: `/pedia/${encodeURIComponent("אברהם")}`,
+			markdown: "# אברהם",
+		});
+		const response = await GET(REQ, ctx(["pedia", "אברהם"]));
+		expect(response.status).toBe(200);
+		const link = response.headers.get("link") ?? "";
+		expect(link).toContain(
+			`<${encodeURI("/pedia/אברהם")}>; rel="alternate"; type="text/html"`,
+		);
+		// Encoded triplets must never be re-encoded (%D7 -> %25D7).
+		expect(link).not.toContain("%25");
+	});
+
+	it("literal-encodes malformed escape segments in Link headers", async () => {
+		mockRender.mockResolvedValue({
+			title: "x",
+			canonicalPath: "/929/%E0",
+			markdown: "x",
+		});
+		const response = await GET(REQ, ctx(["929", "1"]));
+		expect(response.status).toBe(200);
+		expect(response.headers.get("link")).toContain("/929/%25E0");
 	});
 });

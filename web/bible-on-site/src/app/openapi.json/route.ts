@@ -72,8 +72,14 @@ const DOCUMENT = {
 						name: "path",
 						in: "path",
 						required: true,
+						// The catch-all keeps interior slashes: /md/929/1, not
+						// /md/929%2F1. allowReserved tells generators not to
+						// percent-encode the `/` separators inside the value.
+						allowReserved: true,
 						schema: { type: "string" },
-						description: "Canonical path without the leading slash.",
+						description:
+							"Canonical path without the leading slash, slashes " +
+							"preserved (e.g. `929/1`, `פרשה/בראשית`, `pedia/אברהם`).",
 					},
 				],
 				responses: {

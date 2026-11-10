@@ -150,6 +150,15 @@ describe("htmlToMarkdown", () => {
 		expect(md).toBe("Text[^1] more.\n\n[^1]: The note.");
 	});
 
+	it("collects footnote definitions nested in a section wrapper", () => {
+		expect(
+			htmlToMarkdown(
+				'<p>t<sup><a href="#fn:1">1</a></sup></p>' +
+					'<section class="footnotes"><ol><li id="fn:1">Note</li></ol></section>',
+			),
+		).toBe("t[^1]\n\n[^1]: Note");
+	});
+
 	it("renders tables", () => {
 		const md = htmlToMarkdown(
 			"<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>",
@@ -169,7 +178,7 @@ describe("htmlToMarkdown", () => {
 	});
 
 	it("keeps long article content complete (no snippet truncation)", () => {
-		const long = `<p>${"content ".repeat(500)}</p>`;
+		const long = Array(500).fill("<p>content</p>").join("");
 		const md = htmlToMarkdown(long);
 		expect(md.length).toBeGreaterThan(3000);
 		expect(md).not.toContain("…");

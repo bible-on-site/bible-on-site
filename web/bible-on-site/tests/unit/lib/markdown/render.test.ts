@@ -25,6 +25,7 @@ const mockEntryOccurrences = jest.fn();
 const mockResolveSynonym = jest.fn();
 const mockEntitiesWithEntries = jest.fn();
 const mockParashaEntry = jest.fn();
+const mockCategoryHomepage = jest.fn();
 
 jest.mock("@/lib/articles/service", () => ({
 	getArticleById: (...args: unknown[]) => mockArticleById(...args),
@@ -95,6 +96,7 @@ jest.mock("@/lib/tanahpedia/service", () => ({
 		TAMEH: "טמאים",
 	},
 	getAnimalsByClassification: jest.fn(async () => []),
+	getCategoryHomepage: (...args: unknown[]) => mockCategoryHomepage(...args),
 	getEntitiesWithEntries: (...args: unknown[]) =>
 		mockEntitiesWithEntries(...args),
 	getEntitiesWithEntriesByRole: (...args: unknown[]) =>
@@ -136,6 +138,7 @@ beforeEach(() => {
 	mockParashaEntry.mockImplementation((unitId: number) =>
 		realParashaUnits.getParashaEntry(unitId),
 	);
+	mockCategoryHomepage.mockResolvedValue(null);
 });
 
 describe("renderMarkdown", () => {
@@ -184,7 +187,7 @@ describe("renderMarkdown", () => {
 	});
 
 	it("renders a full article beyond snippet length with author attribution", async () => {
-		const longContent = `<p>${"מלל מאמר ".repeat(400)}</p>`;
+		const longContent = Array(400).fill("<p>מלל מאמר</p>").join("");
 		mockArticleById.mockResolvedValue({
 			id: 42,
 			perekId: 1,
@@ -476,6 +479,27 @@ describe("renderMarkdown", () => {
 		expect(doc?.markdown).toContain("](/pedia/");
 	});
 
+	it("renders the category homepage editorial content for top-level categories", async () => {
+		mockCategoryHomepage.mockResolvedValue({
+			id: "h1",
+			entityType: "PERSON",
+			layoutType: "standard",
+			config: {},
+			content: "<p>פתיחה לקטגוריית האישים</p>",
+			updatedAt: "",
+		});
+		mockEntitiesWithEntries.mockResolvedValue([]);
+		const doc = await renderMarkdown({ kind: "pedia", slug: "אישים" });
+		expect(doc?.markdown).toContain("פתיחה לקטגוריית האישים");
+		expect(mockCategoryHomepage).toHaveBeenCalledWith("PERSON");
+	});
+
+	it("does not load the homepage for subcategories", async () => {
+		mockEntitiesWithEntries.mockResolvedValue([]);
+		await renderMarkdown({ kind: "pedia", slug: "נביאים" });
+		expect(mockCategoryHomepage).not.toHaveBeenCalled();
+	});
+
 	it("renders the pedia index with every category", async () => {
 		const doc = await renderMarkdown({ kind: "pedia-index" });
 		expect(doc?.canonicalPath).toBe("/pedia");
@@ -512,7 +536,7 @@ describe("renderMarkdown", () => {
 			id: "e1",
 			uniqueName: "אברהם",
 			title: "אברהם אבינו",
-			content: `<p>${"תוכן ערך ".repeat(300)}</p>`,
+			content: Array(300).fill("<p>תוכן ערך</p>").join(""),
 			createdAt: "",
 			updatedAt: "",
 			entities: [

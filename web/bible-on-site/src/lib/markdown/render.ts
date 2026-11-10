@@ -85,6 +85,7 @@ import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
 import {
 	ENTITY_TYPE_LABELS,
 	getAnimalsByClassification,
+	getCategoryHomepage,
 	getEntitiesWithEntries,
 	getEntitiesWithEntriesByRole,
 	getEntryByUniqueName,
@@ -635,15 +636,23 @@ async function pediaCategoryDocument(
 	label: string,
 	canonicalPath: string,
 ): Promise<MarkdownDocument> {
-	const entities =
+	// Top-level categories carry a stored editorial homepage which the
+	// HTML page renders above the entity list — same content, same
+	// pipeline (subcategories never display it, so it is not loaded).
+	const [entities, homepage] = await Promise.all([
 		sub && entityType === "PERSON"
-			? await getEntitiesWithEntriesByRole(sub as PersonRole)
+			? getEntitiesWithEntriesByRole(sub as PersonRole)
 			: sub && entityType === "ANIMAL"
 				? ANIMAL_PURITIES.includes(sub)
-					? await getAnimalsByClassification("purity", sub as AnimalPurity)
-					: await getAnimalsByClassification("kind", sub as AnimalKind)
-				: await getEntitiesWithEntries(entityType);
+					? getAnimalsByClassification("purity", sub as AnimalPurity)
+					: getAnimalsByClassification("kind", sub as AnimalKind)
+				: getEntitiesWithEntries(entityType),
+		sub ? Promise.resolve(null) : getCategoryHomepage(entityType),
+	]);
 	const parts: string[] = [`# ${label} - תנכפדיה`, ""];
+	if (homepage?.content) {
+		parts.push(bodyMarkdown(homepage.content, { footnotes: true }), "");
+	}
 	for (const entity of entities) {
 		if (entity.linkedEntries.length === 0) {
 			parts.push(`- ${entity.entityName}`);
