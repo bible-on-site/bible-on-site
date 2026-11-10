@@ -684,11 +684,14 @@ describe("ReadingProgress", () => {
 		reads.mockClear();
 		await scroll(scroller, 400);
 		expect(unitReads()).toBe(0);
+		// scrollTop 400 of range 800 → half the 200px content extent → unit a
+		// (10 of 20 words) fully read. Asserting the value (not just presence)
+		// catches a stalled paint.
 		expect(
 			container
 				.querySelector('[role="progressbar"]')
 				?.getAttribute("aria-valuenow"),
-		).not.toBeNull();
+		).toBe("50");
 
 		// Inner growth — a late-loading image or async note inside the
 		// scroller — still re-measures through the scrollHeight signal.
