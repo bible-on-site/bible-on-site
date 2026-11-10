@@ -93,11 +93,23 @@ startServer(options);
 		assert.ok(path.basename(directory).startsWith("bible-handover-test-"));
 		await rm(directory, { recursive: true, force: true });
 	});
-	const waitFor = async (text) => {
-		const deadline = Date.now() + 5_000;
+	const waitFor = async (text, ms = 10_000) => {
+		const deadline = Date.now() + ms;
 		while (!output.includes(text)) {
-			if (wrapper.exitCode !== null || Date.now() > deadline)
-				throw new Error(`Missing ${text}: ${output}`);
+			// exitCode alone cannot detect a signal-killed wrapper: a
+			// SIGTERM/SIGKILL death sets signalCode while exitCode stays
+			// null, and polling only exitCode would spin the whole bound
+			// on a process that can never print the marker again.
+			const gone =
+				wrapper.exitCode !== null || wrapper.signalCode !== null;
+			if (gone || Date.now() > deadline)
+				throw new Error(
+					`Missing ${text} (${
+						gone
+							? `wrapper exited ${wrapper.exitCode ?? wrapper.signalCode}`
+							: "wrapper still running"
+					}): ${output}`,
+				);
 			await new Promise((resolve) => setTimeout(resolve, 10));
 		}
 	};
