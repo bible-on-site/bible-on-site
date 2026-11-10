@@ -112,6 +112,10 @@ public class PreferencesService
     // must never leak to other platforms.
     private const string InAppBackButtonKey = "inAppBackButton";
 
+    // Deliberately NOT synced (#1095): a Windows-only device override that
+    // must never leak to other platforms.
+    private const string AlwaysOnTopKey = "alwaysOnTop";
+
     // הסתר שם השם — stored values mirror the website's divineNameMasking
     // settings (same option spellings), so the policy stays portable.
     internal const string DivineNameMaskingEnabledKey = "divineNameMaskingEnabled";
@@ -401,6 +405,31 @@ public class PreferencesService
         }
     }
 
+    private bool _alwaysOnTop;
+
+    /// <summary>
+    /// Windows-only "keep above other windows" display preference (#2766).
+    /// Off by default — only an explicit stored choice opts in, so existing
+    /// installations keep ordinary window stacking. The Windows chrome layer
+    /// applies the stored value to the running window; every other platform
+    /// ignores it (mobile has no window z-order).
+    /// </summary>
+    public bool AlwaysOnTop
+    {
+        get => _alwaysOnTop;
+        set
+        {
+            if (_alwaysOnTop == value)
+            {
+                return;
+            }
+
+            _alwaysOnTop = value;
+            _storage.Set(AlwaysOnTopKey, value);
+            OnPreferencesChanged();
+        }
+    }
+
     private bool _masoraMenuEnabled;
 
     /// <summary>
@@ -596,6 +625,7 @@ public class PreferencesService
     {
         _masoraMenuEnabled = _storage.Get(MasoraMenuEnabledKey, false);
         _dailyPerekPushEnabled = _storage.Get(DailyPerekPushEnabledKey, false);
+        _alwaysOnTop = _storage.Get(AlwaysOnTopKey, false);
         _qriynotEnabled = _storage.Get(QriynotEnabledKey, true);
         var storedBackButton = _storage.Get(InAppBackButtonKey, (int)InAppBackButtonPreference.PlatformDefault);
         _inAppBackButton = Enum.IsDefined((InAppBackButtonPreference)storedBackButton)

@@ -1,9 +1,11 @@
 using BibleOnSite.Helpers;
+using BibleOnSite.Services;
 using Microsoft.Maui.Storage;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
+using WinRT.Interop;
 using Windows.Foundation;
 using Windows.System;
 using KeyboardAccelerator = Microsoft.UI.Xaml.Input.KeyboardAccelerator;
@@ -45,6 +47,9 @@ internal sealed class DesktopWindowChrome
 	private DesktopRect _lastNormalBounds;
 	private bool _hasNormalBounds;
 	private bool _pendingMaximized;
+	private IntPtr _hwnd;
+	private IntPtr _topmostHwnd;
+	private bool _topmostApplied;
 	// The window's last Restored/Maximized state — Minimized is reported on
 	// close too, so the saved "maximized" bit must not read it directly.
 	private OverlappedPresenterState _lastNonMinimizedState = OverlappedPresenterState.Restored;
@@ -80,6 +85,10 @@ internal sealed class DesktopWindowChrome
 		// the CurrentPage property change.
 		shell.PropertyChanged += chrome.OnShellPropertyChanged;
 		shell.HandlerChanged += OnShellHandlerChanged;
+		// The always-on-top opt-in applies the moment the stored choice
+		// changes — including the bulk Load() notification that lands after
+		// the window already exists (#2766).
+		PreferencesService.Instance.PreferencesChanged += chrome.OnPreferencesChanged;
 		return chrome;
 	}
 
@@ -89,6 +98,14 @@ internal sealed class DesktopWindowChrome
 	/// with an English UIA name ("Open Navigation") that swapped sides with
 	/// the title-bar Back between root and pushed pages. MAUI re-shows it on
 	/// flyout/navigation updates, hence the property callback.
+	///
+	/// The same holds for the native NavigationView back arrow: every page
+	/// hides the Shell nav bar (<c>NavBarIsVisible=false</c>), so
+	/// <see cref="BackChromePolicy.ShowNavBarBack"/>'s Windows carve-out never
+	/// reaches it and it rendered beside the title-bar Back on every pushed
+	/// page — the duplicate the owner reported (#2766). The window title bar
+	/// is the one Windows Back, so the native arrow is collapsed
+	/// unconditionally and clamped against MAUI's toolbar-driven re-shows.
 	/// </summary>
 	private static void OnShellHandlerChanged(object? sender, EventArgs e)
 	{
@@ -102,6 +119,24 @@ internal sealed class DesktopWindowChrome
 					if (d is Microsoft.UI.Xaml.Controls.NavigationView { IsPaneToggleButtonVisible: true } view)
 					{
 						view.IsPaneToggleButtonVisible = false;
+					}
+				});
+
+			// ClearValue severs the Toolbar binding MAUI puts on the native
+			// view so its back-visibility stops following the Shell toolbar.
+			// The arrow is then pinned collapsed, and the callback re-asserts
+			// it whenever a later template pass or toolbar update pushes a
+			// visible value again.
+			nav.ClearValue(Microsoft.UI.Xaml.Controls.NavigationView.IsBackButtonVisibleProperty);
+			nav.IsBackButtonVisible = Microsoft.UI.Xaml.Controls.NavigationViewBackButtonVisible.Collapsed;
+			nav.RegisterPropertyChangedCallback(
+				Microsoft.UI.Xaml.Controls.NavigationView.IsBackButtonVisibleProperty,
+				static (d, _) =>
+				{
+					if (d is Microsoft.UI.Xaml.Controls.NavigationView
+						{ IsBackButtonVisible: not Microsoft.UI.Xaml.Controls.NavigationViewBackButtonVisible.Collapsed } view)
+					{
+						view.IsBackButtonVisible = Microsoft.UI.Xaml.Controls.NavigationViewBackButtonVisible.Collapsed;
 					}
 				});
 		}
@@ -191,6 +226,14 @@ internal sealed class DesktopWindowChrome
 			_lastNonMinimizedState = presenter.State;
 		}
 
+		// A presenter swap re-asserts the chosen z-order band: the
+		// always-on-top opt-in must survive fullscreen/presenter transitions
+		// and a normal window must never come back topmost (#2766).
+		if (args.DidPresenterChange)
+		{
+			ApplyTopmost(force: true);
+		}
+
 		// The MAUI Window's own X/Y/Width/Height report the maximized frame
 		// while maximized, so the "normal" rect only updates while restored.
 		if (presenter.State == OverlappedPresenterState.Restored
@@ -229,7 +272,13 @@ internal sealed class DesktopWindowChrome
 			WindowPlacementPlan.Serialize(_lastNormalBounds, maximized));
 	}
 
-	private void OnDestroying(object? sender, EventArgs e) => SavePlacement();
+	private void OnDestroying(object? sender, EventArgs e)
+	{
+		SavePlacement();
+		PreferencesService.Instance.PreferencesChanged -= OnPreferencesChanged;
+	}
+
+	private void OnPreferencesChanged(object? sender, EventArgs e) => ApplyTopmost();
 
 	private void OnWindowSizeChanged(object? sender, EventArgs e) => _shell.ApplyNavPaneWidth(_window.Width);
 
@@ -245,6 +294,7 @@ internal sealed class DesktopWindowChrome
 		}
 
 		_appWindow = platformWindow.AppWindow;
+		_hwnd = WindowNative.GetWindowHandle(platformWindow);
 
 		if (_pendingMaximized
 			&& _appWindow?.Presenter is OverlappedPresenter presenter)
@@ -256,6 +306,38 @@ internal sealed class DesktopWindowChrome
 		TrackWindowChanges();
 		AttachAccelerators(platformWindow);
 		AttachMouseBack(platformWindow);
+		ApplyTopmost();
+	}
+
+	/// <summary>
+	/// Pushes the stored always-on-top choice onto the Win32 z-order band
+	/// (#2766). Runs once the platform HWND exists, on every preference
+	/// change (the bulk <see cref="PreferencesService.Load"/> notification
+	/// re-asserts a stored opt-in after startup), and forced after a
+	/// presenter swap. The band is a window style, so maximize/restore and
+	/// Snap keep it; only an explicit preference write or a presenter
+	/// transition re-asserts it. No-op until the HWND exists.
+	/// </summary>
+	private void ApplyTopmost(bool force = false)
+	{
+		if (_hwnd == IntPtr.Zero)
+		{
+			return;
+		}
+
+		var wanted = PreferencesService.Instance.AlwaysOnTop;
+		// The cached band only counts for the HWND it was pushed onto — a
+		// replaced window handler must re-apply even when the value matches.
+		if (!force && wanted == _topmostApplied && _topmostHwnd == _hwnd)
+		{
+			return;
+		}
+
+		if (WindowZOrder.SetTopMost(_hwnd, wanted))
+		{
+			_topmostApplied = wanted;
+			_topmostHwnd = _hwnd;
+		}
 	}
 
 	private void AttachAccelerators(WinWindow platformWindow)

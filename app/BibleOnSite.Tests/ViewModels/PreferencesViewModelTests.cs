@@ -820,6 +820,58 @@ public class PreferencesViewModelTests : IDisposable
 
     #endregion
 
+    #region AlwaysOnTop (DisplayPreferencesViewModel)
+
+    [Fact]
+    public void AlwaysOnTop_Get_ReturnsServiceValue()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        _service.AlwaysOnTop = true;
+
+        display.AlwaysOnTop.Should().BeTrue();
+    }
+
+    [Fact]
+    public void AlwaysOnTop_SetNewValue_PersistsAndNotifies()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        var notified = new List<string>();
+        display.PropertyChanged += (_, args) => notified.Add(args.PropertyName!);
+
+        display.AlwaysOnTop = true;
+
+        display.AlwaysOnTop.Should().BeTrue();
+        _service.AlwaysOnTop.Should().BeTrue();
+        notified.Should().Contain(nameof(DisplayPreferencesViewModel.AlwaysOnTop));
+    }
+
+    [Fact]
+    public void AlwaysOnTop_SetSameValue_DoesNotNotify()
+    {
+        _service.AlwaysOnTop = true;
+        var display = new DisplayPreferencesViewModel(_service);
+        var eventCount = 0;
+        display.PropertyChanged += (_, _) => eventCount++;
+
+        display.AlwaysOnTop = true;
+
+        eventCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void AlwaysOnTop_ServiceChange_RaisesPropertyChanged()
+    {
+        var display = new DisplayPreferencesViewModel(_service);
+        var notified = new List<string>();
+        display.PropertyChanged += (_, args) => notified.Add(args.PropertyName!);
+
+        _service.AlwaysOnTop = true;
+
+        notified.Should().Contain(nameof(DisplayPreferencesViewModel.AlwaysOnTop));
+    }
+
+    #endregion
+
     #region Category navigation (settings overview)
 
     [Fact]
