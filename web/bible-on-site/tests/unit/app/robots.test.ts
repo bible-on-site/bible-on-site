@@ -16,7 +16,7 @@ describe("robots build-time output", () => {
 		expect(robots().rules).toEqual({
 			userAgent: "*",
 			allow: "/",
-			disallow: ["/api/", "/upload"],
+			disallow: ["/api/"],
 		});
 	});
 

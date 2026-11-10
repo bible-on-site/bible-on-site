@@ -52,18 +52,18 @@ Metadata:
                             └─────────────────────────────────────────────┘
 
 Parameters:
-  UploadCognitoUserPoolId:
+  ArchiveCognitoUserPoolId:
     Type: String
     Default: ""
-  UploadCognitoClientId:
+  ArchiveCognitoClientId:
     Type: String
     Default: ""
-  UploadCognitoDomain:
+  ArchiveCognitoDomain:
     Type: String
     Default: ""
-  UploadWebsiteOrigin:
+  ArchiveAdminOrigin:
     Type: String
-    Default: https://xn--febl3a.co.il
+    Default: https://admin.xn--febl3a.co.il
   Environment:
     Type: String
     Default: production
@@ -351,19 +351,6 @@ Resources:
             # Bulletin Lambda function name — used by AWS SDK to invoke directly
             - Name: BULLETIN_LAMBDA_NAME
               Value: bible-on-site-bulletin
-            # Populate from the approved private-upload stack outputs.
-            - Name: UPLOAD_AWS_REGION
-              Value: !Ref AWS::Region
-            - Name: UPLOAD_S3_BUCKET
-              Value: !Sub "bible-on-site-private-upload-${AWS::AccountId}-${AWS::Region}"
-            - Name: UPLOAD_COGNITO_POOL_ID
-              Value: !Ref UploadCognitoUserPoolId
-            - Name: UPLOAD_COGNITO_CLIENT_ID
-              Value: !Ref UploadCognitoClientId
-            - Name: UPLOAD_COGNITO_DOMAIN
-              Value: !Ref UploadCognitoDomain
-            - Name: UPLOAD_ORIGIN
-              Value: !Ref UploadWebsiteOrigin
             # ASSETS_BASE_URL is intentionally unset in production. Enable
             # only after an approved additive CDN rollout passes the legacy
             # S3 URL, CORS, Range and freshness checks in the cost risk audit.
@@ -566,6 +553,19 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
           Environment:
+            # Populate from the approved private-archive stack outputs.
+            - Name: ARCHIVE_AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: ARCHIVE_S3_BUCKET
+              Value: !Sub "bible-on-site-private-archive-${AWS::AccountId}-${AWS::Region}"
+            - Name: ARCHIVE_COGNITO_POOL_ID
+              Value: !Ref ArchiveCognitoUserPoolId
+            - Name: ARCHIVE_COGNITO_CLIENT_ID
+              Value: !Ref ArchiveCognitoClientId
+            - Name: ARCHIVE_COGNITO_DOMAIN
+              Value: !Ref ArchiveCognitoDomain
+            - Name: ARCHIVE_ORIGIN
+              Value: !Ref ArchiveAdminOrigin
             - Name: HOST
               Value: "0.0.0.0"
             - Name: PORT

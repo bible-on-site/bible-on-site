@@ -195,9 +195,7 @@ describe("admin server auth gate", () => {
 
 		expect(handlerFetchMock).not.toHaveBeenCalled();
 		expect(response.status).toBe(302);
-		expect(response.headers.get("location")).toBe(
-			"https://login.example.com/",
-		);
+		expect(response.headers.get("location")).toBe("https://login.example.com/");
 	});
 });
 
@@ -301,6 +299,73 @@ describe("admin server auth routes", () => {
 				"admin_session=; HttpOnly; Path=/; Max-Age=0",
 			);
 		});
+	});
+});
+
+describe("archive role boundary", () => {
+	beforeEach(() => {
+		vi.stubEnv("SKIP_AUTH", "false");
+		handlerFetchMock
+			.mockReset()
+			.mockResolvedValue(new Response("archive shell"));
+		verifyIdTokenMock.mockReset().mockResolvedValue(false);
+		verifyServiceAccessTokenMock.mockReset().mockResolvedValue(false);
+		parseCookieMock
+			.mockReset()
+			.mockImplementation((_header: string, name: string) =>
+				name === "archive_session" ? "author-token" : null,
+			);
+	});
+	afterEach(() => vi.unstubAllEnvs());
+	it.each([
+		"/",
+		"/articles",
+		"/archive-settings",
+		"/_serverFn/forged",
+		"/api/admin",
+	])("denies archivers direct access to %s", async (path) => {
+		const entry = await loadServer();
+		const response = await entry.fetch(
+			new Request(`https://admin.example${path}`, {
+				headers: {
+					cookie: "archive_session=author-token",
+					"x-tsr-serverFn": "true",
+				},
+			}),
+		);
+		expect(response.status).toBe(403);
+		expect(handlerFetchMock).not.toHaveBeenCalled();
+	});
+	it("serves only an empty private archive shell before login", async () => {
+		const entry = await loadServer();
+		const response = await entry.fetch(
+			new Request("https://admin.example/archive/authors/name"),
+		);
+		expect(response.status).toBe(200);
+		expect(response.headers.get("x-robots-tag")).toContain("noindex");
+		expect(response.headers.get("cache-control")).toContain("no-store");
+	});
+	it.each([
+		{ method: "POST", headers: undefined },
+		{ method: "GET", headers: { "x-tsr-serverFn": "true" } },
+	])(
+		"rejects server-function tunneling through archive pages",
+		async (options) => {
+			const entry = await loadServer();
+			const response = await entry.fetch(
+				new Request("https://admin.example/archive", options),
+			);
+			expect(response.status).toBe(405);
+			expect(handlerFetchMock).not.toHaveBeenCalled();
+		},
+	);
+	it("admin SSO still grants all ordinary admin pages", async () => {
+		parseCookieMock.mockReturnValue("sso");
+		verifyIdTokenMock.mockResolvedValue(true);
+		const entry = await loadServer();
+		expect(
+			(await entry.fetch(new Request("https://admin.example/articles"))).status,
+		).toBe(200);
 	});
 });
 

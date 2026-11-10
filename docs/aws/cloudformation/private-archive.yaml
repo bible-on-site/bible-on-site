@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Private archive with named author folders and an SSO administrator root. Deploy only after explicit approval.
+Parameters:
+  AdminOrigin:
+    Type: String
+    Default: https://admin.xn--febl3a.co.il
+    AllowedPattern: https://[^/]+
+  CognitoDomainPrefix:
+    Type: String
+    Default: bible-on-site-private-archive
+  AdminTaskRoleName:
+    Type: String
+    Default: adminTaskRole
+  AdminTaskRoleArn:
+    Type: String
+    AllowedPattern: arn:aws:iam::[0-9]{12}:role/.+
+Resources:
+  UploadUsers:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      UserPoolName: bible-on-site-archive-authors
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: admin_only
+            Priority: 1
+      UsernameConfiguration:
+        CaseSensitive: false
+      Schema:
+        - Name: name
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+          StringAttributeConstraints: { MinLength: "1", MaxLength: "255" }
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 14
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          TemporaryPasswordValidityDays: 7
+      MfaConfiguration: "OFF"
+  UploadClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: private-archive-archivers
+      UserPoolId: !Ref UploadUsers
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      ExplicitAuthFlows: [ALLOW_REFRESH_TOKEN_AUTH]
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [code]
+      AllowedOAuthScopes: [openid, aws.cognito.signin.user.admin]
+      SupportedIdentityProviders: [COGNITO]
+      CallbackURLs: [!Sub "${AdminOrigin}/archive/auth/callback"]
+      LogoutURLs: [!Sub "${AdminOrigin}/archive"]
+      AccessTokenValidity: 1
+      IdTokenValidity: 1
+      RefreshTokenValidity: 1
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
+  UploadDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref CognitoDomainPrefix
+      UserPoolId: !Ref UploadUsers
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "bible-on-site-private-archive-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerEnforced }]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortAbandonedUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload: { DaysAfterInitiation: 7 }
+  UploadBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref UploadBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: RequireTLS
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource: [!GetAtt UploadBucket.Arn, !Sub "${UploadBucket.Arn}/*"]
+            Condition:
+              Bool: { "aws:SecureTransport": "false" }
+          - Sid: OnlyAdminServiceMayAccessData
+            Effect: Deny
+            Principal: "*"
+            Action: ["s3:GetObject*", "s3:PutObject*", "s3:DeleteObject*", "s3:ListBucket*", s3:AbortMultipartUpload, s3:ListMultipartUploadParts]
+            Resource: [!GetAtt UploadBucket.Arn, !Sub "${UploadBucket.Arn}/*"]
+            Condition:
+              ArnNotEquals: { "aws:PrincipalArn": !Ref AdminTaskRoleArn }
+  UploadServicePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: PrivateArchiveStorage
+      Roles: [!Ref AdminTaskRoleName]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: [s3:GetObject, s3:PutObject, s3:DeleteObject, s3:AbortMultipartUpload, s3:ListMultipartUploadParts]
+            Resource: !Sub "${UploadBucket.Arn}/*"
+          - Effect: Allow
+            Action: cognito-idp:ListUsers
+            Resource: !GetAtt UploadUsers.Arn
+Outputs:
+  BucketName:
+    Value: !Ref UploadBucket
+  UserPoolId:
+    Value: !Ref UploadUsers
+  ClientId:
+    Value: !Ref UploadClient
+  CognitoDomain:
+    Value: !Sub "${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com"
+  AdminOrigin:
+    Value: !Ref AdminOrigin

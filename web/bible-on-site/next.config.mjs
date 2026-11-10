@@ -71,7 +71,7 @@ const nextConfig = {
 	},
 	transpilePackages: ["html-flip-book-react"],
 	turbopack: {
-		root: path.resolve(import.meta.dirname, ".."),
+		root: import.meta.dirname,
 		// Preserve the canonical JSON number literals: Turbopack's JSON parser
 		// can change the last digit of alignment diagnostics during bundling.
 		rules: {
@@ -176,23 +176,6 @@ const nextConfig = {
 
 	async headers() {
 		return [
-			{
-				source: "/upload/:path*",
-				headers: [
-					{ key: "Cache-Control", value: "private, no-store, max-age=0" },
-					{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
-					{ key: "Referrer-Policy", value: "no-referrer" },
-					{ key: "X-Content-Type-Options", value: "nosniff" },
-					// Keep private filenames and account activity away from analytics.
-					{
-						key: "Content-Security-Policy",
-						value:
-							"default-src 'self'; script-src 'self' 'unsafe-inline'" +
-							(isProduction ? "" : " 'unsafe-eval'") +
-							"; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
-					},
-				],
-			},
 			// Stable join routes (#2939) resolve admin-managed destinations at
 			// request time; the redirect may never be cached by browsers or
 			// the CDN.

@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { UploadSettings } from "~/components/UploadSettings";
-import { getUploadSettings, setUploadQuota } from "~/server/uploads";
+import { getUploadSettings, setUploadQuota } from "~/server/archive";
 
-vi.mock("~/server/uploads", () => ({
+vi.mock("~/server/archive", () => ({
 	getUploadSettings: vi.fn(),
 	setUploadQuota: vi.fn(),
 }));
@@ -13,10 +13,17 @@ const settings = {
 		{
 			userId: "alice",
 			username: "alice",
+			displayName: "alice",
 			quota: 5_000_000_000,
 			allocated: 1_000_000_000,
 		},
-		{ userId: "bob", username: "bob", quota: null, allocated: 0 },
+		{
+			userId: "bob",
+			username: "bob",
+			displayName: "bob",
+			quota: null,
+			allocated: 0,
+		},
 	],
 };
 beforeEach(() => {

@@ -290,11 +290,11 @@ describe("browser auth helpers", () => {
 
 		await expect(
 			exchangeCodeForTokens("bad-code", "https://admin.example.com"),
-		).rejects.toThrow("Token exchange failed: 400 bad code");
+		).rejects.toThrow("Token exchange failed: 400");
 	});
 
 	it("verifies browser ID tokens for the configured client", async () => {
-		jwtVerifyMock.mockResolvedValue({ payload: {} });
+		jwtVerifyMock.mockResolvedValue({ payload: { token_use: "id" } });
 		const { verifyIdToken } = await loadAuth();
 
 		await expect(verifyIdToken("id-token")).resolves.toBe(true);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getUploadSettings, setUploadQuota } from "~/server/uploads";
+import { getUploadSettings, setUploadQuota } from "~/server/archive";
 
 type Settings = Awaited<ReturnType<typeof getUploadSettings>>;
 
@@ -28,10 +28,10 @@ export function UploadSettings() {
 	}
 	return (
 		<div className="space-y-6">
-			<h1 className="text-3xl font-bold">אחסון קבצים פרטי</h1>
+			<h1 className="text-3xl font-bold">מכסות אחסון בארכיון</h1>
 			<p>
-				הגדרת נפח אחסון למשתמשי אזור ההעלאה. החשבונות והסיסמאות מנוהלים ב-Amazon
-				Cognito, ללא הרשמה עצמית.
+				הגדרת נפח אחסון למחברים ולמנהלי הארכיון. הקבצים של כל מחבר נשמרים
+				בתיקייה נפרדת.
 			</p>
 			{message && <p role="status">{message}</p>}
 			{settings && (
@@ -48,14 +48,14 @@ export function UploadSettings() {
 						1 TB = 1000 GB. שינוי ברירת המחדל חל גם על משתמשים קיימים ללא מכסה
 						אישית. הקטנת מכסה אינה מוחקת קבצים קיימים.
 					</p>
-					<h2 className="text-xl font-semibold">משתמשים שנכנסו לאזור ההעלאה</h2>
+					<h2 className="text-xl font-semibold">משתמשי הארכיון</h2>
 					{settings.users.length === 0 && <p>עדיין אין תיקיות משתמשים.</p>}
 					{settings.users.map((user) => (
 						<section
 							className="bg-white border rounded-xl p-6 space-y-3"
 							key={user.userId}
 						>
-							<h3 className="font-bold">{user.username}</h3>
+							<h3 className="font-bold">{user.displayName || user.username}</h3>
 							<p>
 								{(user.allocated / 1_000_000_000).toLocaleString("he-IL")} GB
 								בשימוש, כולל העלאות שלא הושלמו

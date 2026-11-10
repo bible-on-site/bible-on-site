@@ -23,7 +23,7 @@ function parseDbUrl(url: string): mysql.PoolOptions {
 // Supports both DB_URL (connection string) and individual env vars.
 // When DB_URL is set explicitly, it is always respected as-is — no overrides.
 // When using individual env vars, the default database name depends on NODE_ENV.
-export function getDbConfig(): mysql.PoolOptions {
+function getDbConfig(): mysql.PoolOptions {
 	if (process.env.DB_URL) {
 		return parseDbUrl(process.env.DB_URL);
 	}
