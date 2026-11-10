@@ -7,16 +7,16 @@
  *
  * Usage: node ./launch-e2e-server.mts [--coverage] [--standalone]
  *
- * --standalone populates the database when it is missing or incomplete and
- * cargo-make is available (population is skipped where the Rust toolchain
- * was never installed, matching the pre-launcher behavior), then serves the
- * built
+ * --standalone populates the database like e2e when cargo-make is available
+ * (population is skipped where the Rust toolchain was never installed,
+ * matching the pre-launcher behavior), then serves the built
  * `.next/standalone/server.js` instead of `next dev`. The perf suite uses it
  * so a standalone `test:perf` run in a fresh worktree still gets its
  * per-checkout database populated (issue #2881 review).
  */
 
 import { execSync, spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
 	createWriteStream,
 	existsSync,
@@ -24,6 +24,7 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,6 +61,11 @@ const _useCoverage = process.argv.includes("--coverage");
 // like e2e, then serve the production build instead of `next dev`.
 const STANDALONE = process.argv.includes("--standalone");
 
+// Records which populate inputs built the target database so --standalone
+// can skip mysql-populate only when they are unchanged. Declared before
+// `await main()` — const bindings are not hoisted past it.
+const POPULATE_MARKER_TABLE = "test_populate_marker";
+
 try {
 	await main();
 } catch (err) {
@@ -84,25 +90,26 @@ async function populateDatabase(): Promise<void> {
 	log("[DB Setup] Ensuring test database is populated...");
 	log("[DB Setup] DB_URL is configured");
 
-	// --standalone runs can point at a database an earlier step already
-	// populated — the Website Performance job populates tanah_test for the
-	// production build, and mysql-populate is not idempotent (it dies on
-	// duplicate keys). Verify first and populate only a missing or
-	// incomplete database; a fresh local worktree's derived per-checkout
-	// database gets created by that populate (issue #2881 review).
+	// --standalone reuses a database only when it was populated from the
+	// exact current inputs: the marker is written after the post-populate
+	// verification, so a match means schema and fixtures are current. Any
+	// populate-input change (SQL, populator code, deps, the cargo-make task)
+	// forces a rebuild instead of measuring a stale schema (#3251 review).
+	let inputsHash: string | undefined;
 	if (STANDALONE) {
-		try {
-			await verifyTestDatabase(dbUrl);
-			log(
-				"[DB Setup] Database already populated — skipping cargo make mysql-populate.",
-			);
-			return;
-		} catch (error) {
-			log(
-				`[DB Setup] Database missing or incomplete (${
-					error instanceof Error ? error.message : error
-				}) — populating.`,
-			);
+		inputsHash = await populateInputsHash();
+		if ((await readPopulateMarker(dbUrl)) === inputsHash) {
+			try {
+				await verifyTestDatabase(dbUrl);
+				log(
+					"[DB Setup] Database already populated from the current inputs — skipping cargo make mysql-populate.",
+				);
+				return;
+			} catch {
+				log(
+					"[DB Setup] Marker matched but verification failed — repopulating.",
+				);
+			}
 		}
 	}
 
@@ -163,7 +170,94 @@ async function populateDatabase(): Promise<void> {
 	// wrong database name, etc.) early — before tests run and produce
 	// confusing "element not found" errors.
 	await verifyTestDatabase(dbUrl);
+	if (STANDALONE && inputsHash) {
+		try {
+			await writePopulateMarker(dbUrl, inputsHash);
+		} catch (error) {
+			console.warn(`[DB Setup] Could not record populate marker: ${error}`);
+		}
+	}
 	log("[DB Setup] ========================================");
+}
+
+async function connectTestDatabase(dbUrl: string) {
+	const url = new URL(dbUrl);
+	const { default: mysql } = await import("mysql2/promise");
+	return mysql.createConnection({
+		host: url.hostname,
+		port: Number.parseInt(url.port || "3306", 10),
+		user: decodeURIComponent(url.username),
+		password: decodeURIComponent(url.password),
+		database: url.pathname.slice(1),
+	});
+}
+
+/**
+ * Hash every input that determines the populated schema and fixtures, so
+ * --standalone can reuse a database only when it was built from exactly
+ * these files. Any populate-input change (SQL, populator code, deps, the
+ * cargo-make task) forces a rebuild instead of measuring a stale schema.
+ */
+async function populateInputsHash(): Promise<string> {
+	const dataDirectory = path.resolve(__dirname, "../../data");
+	const mysqlDirectory = path.join(dataDirectory, "mysql");
+	const inputs = [
+		...(await readdir(mysqlDirectory))
+			.filter((name) => name.endsWith(".sql"))
+			.map((name) => path.join(mysqlDirectory, name)),
+		path.join(mysqlDirectory, "db-populator", "src", "main.rs"),
+		path.join(mysqlDirectory, "db-populator", "Cargo.toml"),
+		path.join(dataDirectory, "Cargo.toml"),
+		path.join(dataDirectory, "Cargo.lock"),
+		path.join(dataDirectory, "makefile.toml"),
+	].sort();
+	const hash = createHash("sha256");
+	for (const input of inputs) {
+		hash.update(path.relative(dataDirectory, input));
+		hash.update(await readFile(input));
+	}
+	return hash.digest("hex");
+}
+
+/** Returns the populate-input hash recorded in the database, or null. */
+async function readPopulateMarker(dbUrl: string): Promise<string | null> {
+	try {
+		const connection = await connectTestDatabase(dbUrl);
+		try {
+			const [rows] = await connection.execute(
+				`SELECT sql_hash FROM \`${POPULATE_MARKER_TABLE}\` WHERE id = 1`,
+			);
+			return (rows as { sql_hash: string }[])[0]?.sql_hash ?? null;
+		} finally {
+			await connection.end();
+		}
+	} catch {
+		// Missing database or marker table means "never populated here".
+		return null;
+	}
+}
+
+async function writePopulateMarker(
+	dbUrl: string,
+	inputsHash: string,
+): Promise<void> {
+	const connection = await connectTestDatabase(dbUrl);
+	try {
+		await connection.execute(
+			`CREATE TABLE IF NOT EXISTS \`${POPULATE_MARKER_TABLE}\` (
+				id TINYINT NOT NULL PRIMARY KEY,
+				sql_hash CHAR(64) NOT NULL,
+				populated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+		);
+		await connection.execute(
+			`INSERT INTO \`${POPULATE_MARKER_TABLE}\` (id, sql_hash)
+			 VALUES (1, ?) ON DUPLICATE KEY UPDATE sql_hash = VALUES(sql_hash)`,
+			[inputsHash],
+		);
+	} finally {
+		await connection.end();
+	}
 }
 
 /**
@@ -174,16 +268,8 @@ async function populateDatabase(): Promise<void> {
 async function verifyTestDatabase(dbUrl: string): Promise<void> {
 	log("[DB Health] Verifying test database tables...");
 
-	const url = new URL(dbUrl);
-	const database = url.pathname.slice(1);
-	const { default: mysql } = await import("mysql2/promise");
-	const connection = await mysql.createConnection({
-		host: url.hostname,
-		port: Number.parseInt(url.port || "3306", 10),
-		user: decodeURIComponent(url.username),
-		password: decodeURIComponent(url.password),
-		database,
-	});
+	const database = new URL(dbUrl).pathname.slice(1);
+	const connection = await connectTestDatabase(dbUrl);
 
 	// Tables that must exist and contain at least 1 row for e2e tests to pass.
 	// When adding a new feature that queries a new table, add it here!
