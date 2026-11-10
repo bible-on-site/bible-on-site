@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <Grid xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+      xmlns:controls="clr-namespace:BibleOnSite.Controls"
       x:Class="BibleOnSite.Controls.ReaderMenuPanel"
       AutomationId="ReaderMenuOverlay"
       IsVisible="False"
@@ -27,10 +28,9 @@
             <!-- קריינות is a global setting under העדפות → על הפרק (#2472),
                  not a per-page menu mode. -->
             <!-- שניים מקרא - checkbox toggle -->
+            <controls:TappableView Activated="OnShnayimMikraTapped"
+                                   SemanticProperties.Description="שניים מקרא">
             <Grid Padding="10,6">
-                <Grid.GestureRecognizers>
-                    <TapGestureRecognizer Tapped="OnShnayimMikraTapped"/>
-                </Grid.GestureRecognizers>
                 <Grid ColumnDefinitions="Auto,*">
                     <CheckBox AutomationId="ShnayimMikraCheckBox"
                               IsChecked="{Binding IsShnayimMikraEnabled}"
@@ -43,11 +43,11 @@
                            Margin="10,0,0,0"/>
                 </Grid>
             </Grid>
+            </controls:TappableView>
             <!-- תיקון קוראים - checkbox toggle -->
+            <controls:TappableView Activated="OnTikkunKorimTapped"
+                                   SemanticProperties.Description="תיקון קוראים">
             <Grid Padding="10,6">
-                <Grid.GestureRecognizers>
-                    <TapGestureRecognizer Tapped="OnTikkunKorimTapped"/>
-                </Grid.GestureRecognizers>
                 <Grid ColumnDefinitions="Auto,*">
                     <CheckBox AutomationId="TikkunKorimCheckBox"
                               IsChecked="{Binding IsTikkunKorimEnabled}"
@@ -60,12 +60,12 @@
                            Margin="10,0,0,0"/>
                 </Grid>
             </Grid>
+            </controls:TappableView>
             <!-- הסתר שם השם - checkbox toggle; replacement options live
                  under Preferences → הסתרת שם השם -->
+            <controls:TappableView Activated="OnDivineNameMaskingTapped"
+                                   SemanticProperties.Description="הסתר שם השם">
             <Grid Padding="10,6">
-                <Grid.GestureRecognizers>
-                    <TapGestureRecognizer Tapped="OnDivineNameMaskingTapped"/>
-                </Grid.GestureRecognizers>
                 <Grid ColumnDefinitions="Auto,*">
                     <CheckBox AutomationId="DivineNameMaskingCheckBox"
                               IsChecked="{Binding DivineNameMaskingEnabled}"
@@ -78,6 +78,7 @@
                            Margin="10,0,0,0"/>
                 </Grid>
             </Grid>
+            </controls:TappableView>
         </VerticalStackLayout>
     </Border>
 </Grid>
