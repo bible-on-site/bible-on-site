@@ -111,13 +111,27 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
 
         WaitForTikkun(() => !TikkunFrame(scrollView).SequenceEqual(shownFrame),
             "hiding marks must repaint the flow");
-        Assert.Equal(offset, TikkunOffsetY(scrollView));
+        if (offset is { } scrolled)
+        {
+            Assert.Equal(scrolled, SettledTikkunOffset(scrollView));
+        }
 
         Platform.Tap(Driver!, scrollView);
         var hiddenFrame = TikkunFrame(scrollView);
         WaitForTikkun(() => !TikkunFrame(scrollView).SequenceEqual(hiddenFrame),
             "restoring marks must repaint the flow");
-        Assert.Equal(offset, TikkunOffsetY(scrollView));
+        if (offset is { } restored)
+        {
+            Assert.Equal(restored, SettledTikkunOffset(scrollView));
+        }
+        else
+        {
+            // Without the probe the restored pixels are the only position
+            // signal: marks repaint over the unchanged marked geometry, so
+            // the frame must come back identical to the pre-hide capture.
+            WaitForTikkun(() => TikkunFrame(scrollView).SequenceEqual(shownFrame),
+                "restoring marks must repaint the identical flow");
+        }
     });
 
     /// <summary>
