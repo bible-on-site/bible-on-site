@@ -47,6 +47,9 @@ class ModelConfigTests(unittest.TestCase):
             {"beam_size": 0},
             {"beam_size": True},
             {"beam_size": 1.5},
+            {"audio_stream": -1},
+            {"audio_stream": True},
+            {"audio_stream": 0.5},
         ]
         for kwargs in cases:
             with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
@@ -68,6 +71,13 @@ class LocalTranscriberTests(unittest.TestCase):
         for filename in ("config.json", "model.bin", "tokenizer.json"):
             (self.snapshot / filename).write_bytes(b"fixture")
         self.engine = MagicMock()
+        self.samples = object()
+        self.audio_metadata = {"sample_rate": 16000, "channels": 1, "selected_audio_stream": 0}
+        decoder = patch("devops.transcription.model.decode_media", return_value=SimpleNamespace(
+            samples=self.samples, metadata=self.audio_metadata,
+        ))
+        self.decode = decoder.start()
+        self.addCleanup(decoder.stop)
         self.info = SimpleNamespace(language="he", language_probability=0.99, duration=12.5)
         self.recognized = [
             SimpleNamespace(start=0.0, end=2.0, text=" שלום עולם"),
@@ -110,15 +120,19 @@ class LocalTranscriberTests(unittest.TestCase):
             str(self.snapshot), device="cuda", device_index=0, compute_type="float16", local_files_only=True,
         )
         self.engine.transcribe.assert_called_once_with(
-            "recording.mp3", language="he", task="transcribe", beam_size=5, temperature=0.0,
-            vad_filter=True, word_timestamps=False, condition_on_previous_text=False,
+            self.samples, language="he", task="transcribe", beam_size=5, best_of=5,
+            temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0), compression_ratio_threshold=2.4,
+            log_prob_threshold=-1.0, no_speech_threshold=0.6, prompt_reset_on_temperature=0.5,
+            vad_filter=False, word_timestamps=False, condition_on_previous_text=True,
         )
+        self.decode.assert_called_once_with(Path("recording.mp3"), audio_stream=None)
         self.assertEqual(result.segments, (Segment(0.0, 2.0, " שלום עולם"), Segment(3.0, 5.0, " תנ״ך")))
         self.assertEqual(result.duration, 12.5)
         self.assertEqual(result.language, "he")
         self.assertEqual(result.language_probability, 0.99)
         self.assertEqual(result.model["revision"], DEFAULT_REVISION)
         self.assertEqual(result.model["device"], "cuda")
+        self.assertEqual(result.model["audio"], self.audio_metadata)
         self.assertEqual(result.model["runtime_versions"], {"ctranslate2": "ct2-test", "faster_whisper": "whisper-test"})
 
     def test_no_gpu_fails_before_any_download(self):
@@ -172,12 +186,15 @@ class LocalTranscriberTests(unittest.TestCase):
 
     def test_language_detection_and_custom_gpu_configuration_are_forwarded(self):
         self.ctranslate.get_cuda_device_count.return_value = 3
-        config = ModelConfig(language="auto", device_index=2, compute_type="int8_float16", beam_size=7)
+        config = ModelConfig(language="auto", device_index=2, compute_type="int8_float16", beam_size=7, audio_stream=1)
         result = LocalTranscriber(config).transcribe(Path("video.mp4"))
         self.engine.transcribe.assert_called_once_with(
-            "video.mp4", language=None, task="transcribe", beam_size=7, temperature=0.0,
-            vad_filter=True, word_timestamps=False, condition_on_previous_text=False,
+            self.samples, language=None, task="transcribe", beam_size=7, best_of=5,
+            temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0), compression_ratio_threshold=2.4,
+            log_prob_threshold=-1.0, no_speech_threshold=0.6, prompt_reset_on_temperature=0.5,
+            vad_filter=False, word_timestamps=False, condition_on_previous_text=True,
         )
+        self.decode.assert_called_once_with(Path("video.mp4"), audio_stream=1)
         self.assertIsNone(result.model["language"])
         self.assertEqual(result.model["compute_type"], "int8_float16")
         self.ctranslate.get_supported_compute_types.assert_called_once_with("cuda", 2)
@@ -206,6 +223,25 @@ class LocalTranscriberTests(unittest.TestCase):
         result = LocalTranscriber(ModelConfig()).transcribe(Path("silence.wav"))
         self.assertEqual(result.segments, ())
         self.assertEqual(result.duration, 12.5)
+
+    def test_decoder_failure_never_downloads_model_or_starts_inference(self):
+        self.decode.side_effect = RuntimeError("Corrupt audio frame")
+        with self.assertRaisesRegex(RuntimeError, "Corrupt audio frame"):
+            LocalTranscriber(ModelConfig()).transcribe(Path("recording.mp3"))
+        self.hub.snapshot_download.assert_not_called()
+        self.whisper.WhisperModel.assert_not_called()
+
+    def test_quality_settings_and_media_provenance_are_recorded(self):
+        result = LocalTranscriber(ModelConfig()).transcribe(Path("recording.mp3"))
+        self.assertFalse(result.model["vad_filter"])
+        self.assertTrue(result.model["condition_on_previous_text"])
+        self.assertEqual(result.model["temperature"], (0.0, 0.2, 0.4, 0.6, 0.8, 1.0))
+        self.assertEqual(result.model["best_of"], 5)
+        self.assertEqual(result.model["compression_ratio_threshold"], 2.4)
+        self.assertEqual(result.model["log_prob_threshold"], -1.0)
+        self.assertEqual(result.model["no_speech_threshold"], 0.6)
+        self.assertEqual(result.model["prompt_reset_on_temperature"], 0.5)
+        self.assertEqual(result.model["audio"], self.audio_metadata)
 
     def test_progress_log_does_not_disclose_recognized_text(self):
         with self.assertLogs("devops.transcription.model", level="INFO") as logs:

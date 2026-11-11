@@ -5,6 +5,8 @@ import logging
 from pathlib import Path
 import re
 
+from .audio import decode_media
+
 
 DEFAULT_MODEL = "ivrit-ai/whisper-large-v3-ct2"
 DEFAULT_REVISION = "e9ed4a4a98d761b0f617d668303de2c514236c66"
@@ -30,6 +32,7 @@ class ModelConfig:
     beam_size: int = 5
     local_files_only: bool = False
     model_cache: str | None = None
+    audio_stream: int | None = None
 
     def __post_init__(self) -> None:
         """Reject mutable revisions and implicit compute/device selection."""
@@ -47,6 +50,12 @@ class ModelConfig:
             raise ValueError("Choose an explicit CUDA compute type: float16, float32, int8_float16 or int8_float32.")
         if isinstance(self.beam_size, bool) or not isinstance(self.beam_size, int) or self.beam_size < 1:
             raise ValueError("Beam size must be a positive integer.")
+        if self.audio_stream is not None and (
+            isinstance(self.audio_stream, bool)
+            or not isinstance(self.audio_stream, int)
+            or self.audio_stream < 0
+        ):
+            raise ValueError("Audio stream must be a nonnegative integer.")
 
 
 @dataclass(frozen=True)
@@ -138,18 +147,24 @@ class LocalTranscriber:
 
     def transcribe(self, path: Path) -> Transcript:
         """Consume native long-form decoding completely before returning a result."""
+        decoded = decode_media(path, audio_stream=self.config.audio_stream)
         if self._model is None:
             self._load()
         options = {
             "language": None if self.config.language == "auto" else self.config.language,
             "task": "transcribe",
             "beam_size": self.config.beam_size,
-            "temperature": 0.0,
-            "vad_filter": True,
+            "best_of": 5,
+            "temperature": (0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
+            "compression_ratio_threshold": 2.4,
+            "log_prob_threshold": -1.0,
+            "no_speech_threshold": 0.6,
+            "prompt_reset_on_temperature": 0.5,
+            "vad_filter": False,
             "word_timestamps": False,
-            "condition_on_previous_text": False,
+            "condition_on_previous_text": True,
         }
-        segments, info = self._model.transcribe(str(path), **options)
+        segments, info = self._model.transcribe(decoded.samples, **options)
         result = []
         for segment in segments:
             result.append(Segment(start=segment.start, end=segment.end, text=segment.text))
@@ -166,6 +181,7 @@ class LocalTranscriber:
                 "device_index": self.config.device_index,
                 "compute_type": self.config.compute_type,
                 "runtime_versions": dict(self._runtime_versions),
+                "audio": dict(decoded.metadata),
                 **options,
             },
         )

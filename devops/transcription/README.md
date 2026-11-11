@@ -16,6 +16,12 @@ model at commit `e9ed4a4a98d761b0f617d668303de2c514236c66`, CUDA FP16, beam size
 The model download requires several GB of disk space and inference requires
 sufficient free VRAM. CUDA availability and compute support are checked before
 downloading model weights. There is no automatic CPU or smaller-model fallback.
+Quality takes priority over throughput: the pipeline uses native sequential
+long-form decoding with context between windows, standard temperature fallback
+for uncertain/repetitive decoding, and no VAD removal of quiet sections.
+FP16 is the explicit non-quantized default; `--compute-type float32` requires
+substantially more free GPU memory. A larger precision value is not a guarantee
+of better recognition. No processing-time deadline reduces the model or audio.
 
 From the repository root in PowerShell:
 
@@ -88,11 +94,17 @@ the **contents** of `article.html`. There is no file-upload endpoint in this
 feature. Author, chapter/source references, rights and publication decisions
 remain editorial choices; they are not inferred from an archive folder name.
 
+Audio and video containers are decoded through PyAV. A video must contain an
+audio track. A file with several audio tracks requires an explicit zero-based
+`--audio-stream INDEX`; the selected track and original media properties are
+recorded in the provenance. Other tracks are not mixed into the transcript.
+Decoding errors stop the run instead of silently discarding corrupt frames.
+
 The result is a transcription, without summarization or rewriting. It requires
 human listening and editing, particularly for names, source references and quiet
-audio. No ASR confidence is presented as an approval. Voice activity detection
-filters non-speech; decoding disables previous-text conditioning to reduce
-repetition loops. Model segment timestamps are retained as ASR estimates, not
+audio. No ASR confidence is presented as an approval. The recognizer still uses
+its ordinary no-speech and repetition safeguards. Model segment timestamps are
+retained as ASR estimates, not
 verified word alignment. Speech missed by the recognizer cannot be guaranteed
 absent by these checks.
 

@@ -36,6 +36,7 @@ class CliTests(unittest.TestCase):
                      "--aws-profile", "reader", "--title", "תנ״ך", "--model", "owner/model",
                      "--model-revision", "a" * 40, "--language", "auto", "--device-index", "1",
                      "--compute-type", "int8_float16", "--beam-size", "3", "--model-cache", "cache",
+                     "--audio-stream", "1",
                      "--offline", "--paragraph-pause", "2.0", "--max-paragraph-characters", "500"]
         status, _, _, execute = self.invoke(arguments)
         self.assertEqual(status, 0)
@@ -43,6 +44,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(config.model, "owner/model")
         self.assertEqual(config.device_index, 1)
         self.assertEqual(config.model_cache, "cache")
+        self.assertEqual(config.audio_stream, 1)
         self.assertTrue(config.local_files_only)
         self.assertEqual(execute.call_args.kwargs["aws_profile"], "reader")
         options = execute.call_args.kwargs["options"]

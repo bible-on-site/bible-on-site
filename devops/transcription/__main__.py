@@ -20,6 +20,7 @@ def parser() -> argparse.ArgumentParser:
     cli.add_argument("--model", default=defaults.model)
     cli.add_argument("--model-revision", default=None, help="Exact Hugging Face model commit; required for custom models")
     cli.add_argument("--language", default=defaults.language, help="Language code, or auto (default: he)")
+    cli.add_argument("--audio-stream", type=int, help="Zero-based audio track; required when a video has multiple audio tracks")
     cli.add_argument("--device-index", type=int, default=defaults.device_index)
     cli.add_argument("--compute-type", choices=["float16", "float32", "int8_float16", "int8_float32"], default=defaults.compute_type)
     cli.add_argument("--beam-size", type=int, default=defaults.beam_size)
@@ -38,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
         config_args = {"model": args.model, "language": args.language,
                        "device_index": args.device_index, "compute_type": args.compute_type,
                        "beam_size": args.beam_size, "local_files_only": args.offline,
-                       "model_cache": args.model_cache}
+                       "model_cache": args.model_cache, "audio_stream": args.audio_stream}
         if args.model_revision is not None:
             config_args["revision"] = args.model_revision
         elif args.model != ModelConfig().model:
