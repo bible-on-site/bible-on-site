@@ -34,6 +34,8 @@ engines:
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
 exclude_paths:
+  # MySQL-only additive migration, exercised twice by the isolated MySQL integration test.
+  - "data/mysql/private_archive_upgrade.sql"
   # These are exercised against MySQL by the API and website database tests.
   - "data/mysql/tanah_dynamic_structure.sql"
   - "data/mysql/tanah_test_data.sql"

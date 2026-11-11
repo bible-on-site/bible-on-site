@@ -12,7 +12,10 @@ import {
 } from "./server/auth";
 import { rescanDedicationExpiries } from "./server/dedication-expiry";
 import { ensureEmailWorkerStarted } from "./server/email-worker-runtime.server";
-import { measureCovEnabled, skipAuthEnabled } from "./server/environment.server";
+import {
+	measureCovEnabled,
+	skipAuthEnabled,
+} from "./server/environment.server";
 
 // Local dev/test escape hatch only — fails closed in production (#3069).
 const SKIP_AUTH = skipAuthEnabled();
@@ -65,6 +68,29 @@ export default createServerEntry({
 	async fetch(request) {
 		await ensureEmailWorkerStarted();
 		const url = new URL(request.url);
+		const { origin, isSecure } = resolveRequestOrigin(request);
+
+		// Native archivers enter only this explicit HTTP surface. They never reach
+		// TanStack server functions, which continue to require the admin SSO client.
+		if (
+			url.pathname === "/archive/api" ||
+			url.pathname.startsWith("/archive/auth/")
+		) {
+			const { handleArchiveRequest } = await import("./server/archive/http");
+			return handleArchiveRequest(request, origin);
+		}
+		if (url.pathname === "/archive" || url.pathname.startsWith("/archive/")) {
+			if (
+				request.headers.has("x-tsr-serverFn") ||
+				!["GET", "HEAD"].includes(request.method)
+			)
+				return new Response(null, { status: 405 });
+			const response = await handler.fetch(request);
+			const headers = new Headers(response.headers);
+			headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+			headers.set("Cache-Control", "private, no-store, max-age=0");
+			return new Response(response.body, { status: response.status, headers });
+		}
 
 		// E2E coverage drain: instrumented SSR modules write istanbul coverage to
 		// this realm's globalThis; the Playwright fixture fetches it per test.
@@ -79,10 +105,8 @@ export default createServerEntry({
 			return handler.fetch(request);
 		}
 
-		const { origin, isSecure } = resolveRequestOrigin(request);
-
 		if (url.pathname === "/auth/callback") {
-			return handleCallback(url, origin, isSecure);
+			return handleCallback(url, origin, isSecure, request);
 		}
 
 		if (url.pathname === "/auth/logout") {
@@ -103,6 +127,14 @@ export default createServerEntry({
 		const sessionToken = parseCookie(cookieHeader, "admin_session");
 
 		if (!sessionToken || !(await verifyIdToken(sessionToken))) {
+			if (
+				parseCookie(cookieHeader, "archive_session") ||
+				parseCookie(cookieHeader, "archive_refresh")
+			)
+				return new Response("אין הרשאה לאזור הניהול", {
+					status: 403,
+					headers: { "Cache-Control": "no-store" },
+				});
 			// Server-fn calls cannot follow the Cognito redirect (cross-origin
 			// fetch rejects); a plain 401 gives them a throwable response.
 			if (request.headers.get("x-tsr-serverFn") === "true") {
@@ -122,6 +154,7 @@ async function handleCallback(
 	url: URL,
 	origin: string,
 	isSecure: boolean,
+	request: Request,
 ): Promise<Response> {
 	const code = url.searchParams.get("code");
 	if (!code) {
@@ -135,13 +168,24 @@ async function handleCallback(
 			tokens.expires_in,
 			isSecure,
 		);
-		return new Response(null, {
+		const returnToArchive =
+			parseCookie(
+				request.headers.get("cookie") || "",
+				"archive_admin_return",
+			) === "1";
+		const response = new Response(null, {
 			status: 302,
 			headers: {
-				Location: "/",
+				Location: returnToArchive ? "/archive" : "/",
 				"Set-Cookie": cookie,
 			},
 		});
+		if (returnToArchive)
+			response.headers.append(
+				"Set-Cookie",
+				`archive_admin_return=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${isSecure ? "; Secure" : ""}`,
+			);
+		return response;
 	} catch (error) {
 		console.error("Auth callback error:", error);
 		return new Response("Authentication failed", { status: 500 });

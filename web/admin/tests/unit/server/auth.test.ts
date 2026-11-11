@@ -290,11 +290,11 @@ describe("browser auth helpers", () => {
 
 		await expect(
 			exchangeCodeForTokens("bad-code", "https://admin.example.com"),
-		).rejects.toThrow("Token exchange failed: 400 bad code");
+		).rejects.toThrow("Token exchange failed: 400");
 	});
 
 	it("verifies browser ID tokens for the configured client", async () => {
-		jwtVerifyMock.mockResolvedValue({ payload: {} });
+		jwtVerifyMock.mockResolvedValue({ payload: { token_use: "id" } });
 		const { verifyIdToken } = await loadAuth();
 
 		await expect(verifyIdToken("id-token")).resolves.toBe(true);
@@ -324,4 +324,11 @@ describe("browser auth helpers", () => {
 			"admin_session=; HttpOnly; Path=/; Max-Age=0",
 		);
 	});
+});
+
+it("does not grant an admin session to an access token", async () => {
+	stubRequiredAuthEnv();
+	jwtVerifyMock.mockResolvedValue({ payload: { token_use: "access" } });
+	const { verifyIdToken } = await loadAuth();
+	expect(await verifyIdToken("access-token")).toBe(false);
 });

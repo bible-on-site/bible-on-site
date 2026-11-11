@@ -122,10 +122,14 @@ it.each([...numbers.cases, ...kings.cases])(
 	},
 );
 
-function sample(blockingDuration: number, startTime: number): TurnSamples {
+function sample(
+	blockingDuration: number,
+	startTime: number,
+	duration = blockingDuration + 50,
+): TurnSamples {
 	const frame: TurnLongAnimationFrame = {
 		startTime,
-		duration: blockingDuration + 50,
+		duration,
 		blockingDuration,
 		firstUIEventTimestamp: startTime,
 		renderStart: startTime,
@@ -174,6 +178,47 @@ it("does not hide a block spanning the first-turn handoff", () => {
 	);
 	expect(failures).toHaveLength(3);
 });
+
+it("retains a pre-input browser pause as a diagnostic instead of turn blocking", () => {
+	// The original CI frame ended at 1859.5ms; the first trusted pointerdown
+	// arrived at 1860.2ms. First-turn blocking was 19ms, but the sequence
+	// incorrectly inherited this earlier 156.6ms setup pause.
+	const samples = sample(156.6, 1643, 216.5);
+	for (const input of samples.inputs) {
+		input.at += 1860.2;
+		input.firstMotion = (input.firstMotion as number) + 1860.2;
+		input.responseFrame = (input.responseFrame as number) + 1860.2;
+		input.settled = (input.settled as number) + 1860.2;
+	}
+	const original = structuredClone(samples);
+	const metrics = reduceTurnBlockingSamples(samples, 300, 2);
+	expect(metrics.blockingDurationMaxMs).toBe(0);
+	expect(metrics.beforeInput.blockingDurationMaxMs).toBe(156.6);
+	expect(turnBlockingBudgetFailures(metrics)).toEqual([]);
+	expect(samples).toEqual(original);
+});
+
+it.each([
+	["ends at the first input", 100, 350, false],
+	["overlaps the first input by one microsecond", 100, 349.999, true],
+	["starts at the final settlement", 1800, 0, true],
+	["overlaps the final settlement by one microsecond", 1799.999, 0, true],
+] as const)(
+	"keeps the full block when its frame %s",
+	(_phase, start, offset, active) => {
+		const samples = sample(200, start);
+		for (const input of samples.inputs) {
+			input.at += offset;
+			input.firstMotion = (input.firstMotion as number) + offset;
+			input.responseFrame = (input.responseFrame as number) + offset;
+			input.settled = (input.settled as number) + offset;
+		}
+		const metrics = reduceTurnBlockingSamples(samples, 300, 2);
+		expect(metrics.blockingDurationMaxMs).toBe(active ? 200 : 0);
+		expect(metrics.beforeInput.blockingDurationMaxMs).toBe(active ? 0 : 200);
+		expect(turnBlockingBudgetFailures(metrics).length > 0).toBe(active);
+	},
+);
 
 it("tolerates one stray frame per phase but keeps a single-stall bound", () => {
 	// #3082: a lone over-limit frame in a throttled batch is runner queueing

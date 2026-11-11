@@ -217,6 +217,13 @@ export function reduceTurnBlockingSamples(
 	}
 	const first = samples.inputs[0];
 	const firstEnd = first.settled as number;
+	// The observer also retains setup frames. A frame ending before the first
+	// trusted input cannot block a measured turn. Preserve it in diagnostics;
+	// every overlapping frame keeps its full blocking duration. Keep the
+	// original collection boundary, including post-settlement cleanup work.
+	const reachesInput = (frame: TurnLongAnimationFrame) =>
+		frame.startTime + frame.duration > first.at;
+	const turnRecords = records.filter(reachesInput);
 	const summarize = (frames: TurnLongAnimationFrame[]) => ({
 		blockingDurationMaxMs:
 			Math.max(
@@ -230,16 +237,19 @@ export function reduceTurnBlockingSamples(
 		).length,
 	});
 	return {
-		...summarize(records),
+		...summarize(turnRecords),
+		beforeInput: summarize(records.filter((frame) => !reachesInput(frame))),
 		firstTurn: summarize(
-			records.filter(
+			turnRecords.filter(
 				(frame) =>
 					frame.startTime < firstEnd &&
 					frame.startTime + frame.duration > first.at,
 			),
 		),
 		consecutiveTurns: summarize(
-			records.filter((frame) => frame.startTime + frame.duration > firstEnd),
+			turnRecords.filter(
+				(frame) => frame.startTime + frame.duration > firstEnd,
+			),
 		),
 	};
 }
