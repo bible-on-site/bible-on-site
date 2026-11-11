@@ -58,6 +58,7 @@ public class FlyoutMenuState : ObservableObject
             OnPropertyChanged(nameof(IsLearningCalendarCurrent));
             OnPropertyChanged(nameof(IsMasoraCurrent));
             OnPropertyChanged(nameof(IsParashaCurrent));
+            OnPropertyChanged(nameof(IsMoadimCurrent));
             OnPropertyChanged(nameof(IsAuthorsCurrent));
             OnPropertyChanged(nameof(IsDailyBulletinCurrent));
             OnPropertyChanged(nameof(IsTermsCurrent));
@@ -74,6 +75,7 @@ public class FlyoutMenuState : ObservableObject
     public bool IsLearningCalendarCurrent => CurrentDestination == FlyoutDestination.LearningCalendar;
     public bool IsMasoraCurrent => CurrentDestination == FlyoutDestination.Masora;
     public bool IsParashaCurrent => CurrentDestination == FlyoutDestination.Parasha;
+    public bool IsMoadimCurrent => CurrentDestination == FlyoutDestination.Moadim;
     public bool IsAuthorsCurrent => CurrentDestination == FlyoutDestination.Authors;
     public bool IsDailyBulletinCurrent => CurrentDestination == FlyoutDestination.DailyBulletin;
     public bool IsTermsCurrent => CurrentDestination == FlyoutDestination.Terms;
@@ -120,6 +122,7 @@ public class FlyoutMenuState : ObservableObject
         var map = new Dictionary<string, FlyoutDestination>(StringComparer.Ordinal)
         {
             [AppRoutes.ParashaList] = FlyoutDestination.Parasha,
+            [AppRoutes.Moadim] = FlyoutDestination.Moadim,
             [AppRoutes.Tanahpedia] = FlyoutDestination.Tanahpedia,
             [AppRoutes.TanahpediaCategory] = FlyoutDestination.Tanahpedia,
             [AppRoutes.TanahpediaEntryRoute] = FlyoutDestination.Tanahpedia,
@@ -144,6 +147,7 @@ public class FlyoutMenuState : ObservableObject
                 ReaderDivision.Perek => FlyoutDestination.AlHaperek,
                 ReaderDivision.Parasha => FlyoutDestination.Parasha,
                 ReaderDivision.Masora => FlyoutDestination.Masora,
+                ReaderDivision.Moed => FlyoutDestination.Moadim,
                 _ => FlyoutDestination.None,
             };
         }

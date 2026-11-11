@@ -53,6 +53,8 @@ public partial class AppShell : Shell, Helpers.IAdaptiveNavPane
 		Routing.RegisterRoute(AppRoutes.CalendarReader, typeof(PerekPage));
 		Routing.RegisterRoute(AppRoutes.SearchReader, typeof(PerekPage));
 		Routing.RegisterRoute(AppRoutes.Masora, typeof(MasoraPage));
+		Routing.RegisterRoute(AppRoutes.Moadim, typeof(MoadimListPage));
+		Routing.RegisterRoute(AppRoutes.Moed, typeof(MoedPage));
 
 		// One styled presenter for every blocking dialog — alerts, confirmations
 		// and the exit/stay prompt — so colors, order, radius and typography
@@ -511,6 +513,12 @@ public partial class AppShell : Shell, Helpers.IAdaptiveNavPane
 	{
 		CloseFlyoutOverlay();
 		await GoToFlyoutAsync(AppRoutes.FlyoutPage(AppRoutes.ParashaList, CurrentState.Location.OriginalString));
+	}
+
+	private async void OnMoadimTapped(object? sender, EventArgs e)
+	{
+		CloseFlyoutOverlay();
+		await GoToFlyoutAsync(AppRoutes.FlyoutPage(AppRoutes.Moadim, CurrentState.Location.OriginalString));
 	}
 
 	private async void OnAuthorsTapped(object? sender, EventArgs e)

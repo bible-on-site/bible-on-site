@@ -1,5 +1,6 @@
 namespace BibleOnSite.Pages;
 
+using BibleOnSite.Behaviors;
 using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
@@ -128,13 +129,14 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 BottomBar = BottomBar,
                 FanMenu = FanMenu,
                 Carousel = MasoraCarousel,
-                BackSensitiveOverlays = [ExitFullScreenButton],
+                BackSensitiveOverlays = [ExitFullScreenButton, FocusedPasukOverlay],
                 PerushimSheet = PerushimPanel,
                 StatusBarColorSource = ReaderToolbar,
+                SelectionSurface = SelectionBar,
             },
             new ReaderPlatformChromeActions
             {
-                OwnsReturnSurface = () => ExitFullScreenButton.IsVisible || PerushimPanel.IsOpen,
+                OwnsReturnSurface = OwnsReaderReturnSurface,
                 TryHandleBack = TryHandleReaderBack,
             });
     }
@@ -172,9 +174,10 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     /// <summary>
     /// Wires the shared carousel coordinator (#2573) — programmatic-scroll
     /// guard, rotation resnap and the Android swipe settle — through the one
-    /// implementation every reader page uses. Masora rows carry no long-press
-    /// arming, so the dispatched-touch plug stays unwired; the articles view
-    /// still suppresses swipe tracking while it shows.
+    /// implementation every reader page uses. Masora rows now arm their
+    /// long-press selection through the same dispatched-touch plug the other
+    /// readers use (#3260); the articles view and the focused-pasuk overlay
+    /// suppress swipe tracking while they show.
     /// </summary>
     private void SetupCarousel()
     {
@@ -185,13 +188,17 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 LoadingOverlay = CarouselLoadingOverlay,
                 FanMenu = FanMenu,
                 SwipeExcluded = [BottomBar, PerushimPanel, ExitFullScreenButton, MasoraUnitPickerPopup],
+                PressExcluded = [FanMenu.ToggleButton, SelectionBar],
             },
             new ReaderCarouselActions
             {
                 CurrentPosition = () => _viewModel.CarouselPosition,
                 ItemCount = () => _viewModel.CarouselUnits.Count,
                 IsLoading = () => _isLoading,
-                IsSwipeSuppressed = () => _chrome.IsShowingArticles,
+                IsSwipeSuppressed = () => _chrome.IsShowingArticles || _focusedPasuk != null,
+#if ANDROID
+                ArmUnreceivedPress = (x, y) => LongPressBehavior.BeginUnreceivedPress(x, y, _viewModel.Unit),
+#endif
             });
     }
 
@@ -245,8 +252,10 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     /// <summary>Jumps the carousel to a programmatically requested unit index.</summary>
     private void OnViewModelNavigationRequested(int index)
     {
+        ResetRecitationSession();
         _carousel.ScrollToUnit(index);
 
+        ClearAllSelections();
         _chrome.RefreshPrevNext();
 
         _ = UpdateArticlesCountAsync();
@@ -272,6 +281,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     /// <summary>Refreshes articles and nav-button visuals after a unit change (main thread).</summary>
     private void OnUnitChangedOnMainThread()
     {
+        ClearAllSelections();
         _ = UpdateArticlesCountAsync();
         if (_chrome.IsShowingArticles)
         {
@@ -285,6 +295,8 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         base.OnAppearing();
         _platformChrome.Appearing();
         _carousel.Appearing();
+        SubscribeRecitation();
+        await InitializeRecitationAsync();
 
         if (_viewModel.Unit == null && !_isLoading)
         {
@@ -381,6 +393,10 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     protected override void OnDisappearing()
     {
         _platformChrome.Disappearing();
+        ResetRecitationSession();
+        PreferencesService.Instance.PreferencesChanged -= OnRecitationPreferencesChanged;
+        RecitationService.Instance.Changed -= OnRecitationPackageChanged;
+        RecitationService.Instance.PlaybackStopRequested -= OnPlaybackStopRequested;
         _carousel.Disappearing();
         base.OnDisappearing();
     }
@@ -508,8 +524,24 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         { _ = FanMenu.CloseAsync(); return true; }
         if (PerushimPanel.IsOpen)
         { PerushimPanel.CloseImmediate(); return true; }
+        // Whatever keeps the selection bar up also owns Back — including a clip
+        // playing with nothing selected, which stops instead of navigating.
+        if (ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount, _unitRecitationSelection,
+                _focusedPasuk != null, Recitation.Cursor.PlayingKey != null))
+        { ClearAllSelections(); return true; }
         return false;
     }
+
+    /// <summary>
+    /// The capsule back affordance stays enabled while any transient surface
+    /// the back pipeline serves is up (#2467).
+    /// </summary>
+    private bool OwnsReaderReturnSurface() =>
+        ExitFullScreenButton.IsVisible
+        || PerushimPanel.IsOpen
+        || ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
+            _unitRecitationSelection, _focusedPasuk != null,
+            Recitation.Cursor.PlayingKey != null);
 
     /// <summary>
     /// Links inside rendered note content: /929/ targets navigate natively,

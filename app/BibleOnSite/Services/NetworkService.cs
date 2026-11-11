@@ -16,7 +16,16 @@ public class NetworkService
     private readonly IConnectivity _connectivity;
     private readonly Func<Task> _refresh;
 
-    private NetworkService() : this(Connectivity.Current, () => StarterService.Instance.TryRefreshAsync()) { }
+    private NetworkService() : this(Connectivity.Current, RefreshAllAsync) { }
+
+    /// <summary>Every API-backed cache refreshes together on connectivity
+    /// recovery — starter data first, then the moadim catalogue (#3261), so a
+    /// catalogue edit lands without an app-store release.</summary>
+    private static async Task RefreshAllAsync()
+    {
+        await StarterService.Instance.TryRefreshAsync();
+        await MoedService.Instance.TryRefreshAsync();
+    }
 
     public NetworkService(IConnectivity connectivity, Func<Task> refresh)
     {
