@@ -7,10 +7,28 @@ import {
 import type { CoverageReportOptions } from "monocart-reporter";
 import { isCI, shouldMeasureCov } from "../shared/tests-util/environment.mjs";
 import { monocartAllFilter } from "./.covignore.mjs";
+import {
+	isDerivedEndpoint,
+	isolatedDatabaseUrl,
+	webServerPort,
+	webServerUrl,
+} from "./tests/util/playwright/server-endpoint";
 import type { TestType } from "./tests/util/playwright/types";
 
 export function getBaseConfig(testType: TestType) {
-	const WEB_SERVER_URL = "http://127.0.0.1:3001";
+	// Per-worktree/per-suite port locally so parallel sessions cannot share a
+	// listener (issue #2881); :3001 on CI; WEB_PORT overrides both.
+	const webServerPortNumber = webServerPort(testType);
+	const WEB_SERVER_URL = webServerUrl(webServerPortNumber);
+	// The port split alone still leaves every worktree on the same tanah_test
+	// database, which the e2e launcher drops and rebuilds — point DB_URL at a
+	// per-checkout database when the endpoint is derived. process.env reaches
+	// the webServer command, the `next dev` server it spawns, and every test
+	// worker (they all inherit the runner's environment), so the launcher,
+	// the app, and DB-touching specs all agree on the isolated database.
+	if (process.env.DB_URL) {
+		process.env.DB_URL = isolatedDatabaseUrl(process.env.DB_URL);
+	}
 	const baseTimeout = isCI || shouldMeasureCov ? 60000 : 20000;
 	const timeout = baseTimeout;
 	const config = defineConfig({
@@ -63,7 +81,13 @@ export function getBaseConfig(testType: TestType) {
 			command:
 				"echo 'Error: A derived playwright config must set the web server command' && exit 1",
 			url: WEB_SERVER_URL,
-			reuseExistingServer: true, // consider that for some tests, such as for admin pages, restart the server before running each test
+			// The e2e launcher is a separate process: hand it the port explicitly.
+			env: { WEB_PORT: String(webServerPortNumber) },
+			// A derived port can still collide (the hash maps into ~29k ports),
+			// and reuseExistingServer would then silently attach this suite to
+			// another checkout's server. Fail loudly instead; CI and manual
+			// WEB_PORT runs keep the historical reuse.
+			reuseExistingServer: !isDerivedEndpoint(),
 		},
 		reporter: [
 			[isCI ? "github" : "list"],
