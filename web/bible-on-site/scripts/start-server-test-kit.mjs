@@ -50,6 +50,7 @@ if (process.env.START_SERVER_TEST_PROBE_SIGNAL) {
 		return request(...args);
 	};
 }
+${options.beforeStart ?? ""}
 startServer(options);
 `,
 	);
@@ -105,6 +106,7 @@ startServer(options);
 				wrapper.kill("SIGKILL");
 			if (serverPid) killOwned(serverPid);
 		}
+		await exited;
 		assert.equal(path.dirname(directory), os.tmpdir());
 		assert.ok(path.basename(directory).startsWith("bible-handover-test-"));
 		await rm(directory, { recursive: true, force: true });
@@ -117,7 +119,9 @@ startServer(options);
 				wrapper.signalCode !== null ||
 				Date.now() > deadline
 			)
-				throw new Error(`Missing ${text}: ${output}`);
+				throw new Error(
+					`Missing ${text} (exit=${wrapper.exitCode}, signal=${wrapper.signalCode}): ${output}`,
+				);
 			await new Promise((resolve) => setTimeout(resolve, 10));
 		}
 	};
