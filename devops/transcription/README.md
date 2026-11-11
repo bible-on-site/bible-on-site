@@ -12,16 +12,20 @@ The backend uses [faster-whisper](https://github.com/SYSTRAN/faster-whisper#requ
 and PyAV, which bundles media decoding libraries. A separate FFmpeg installation
 is not required. The default is the full Hebrew
 [ivrit-ai/whisper-large-v3-ct2](https://huggingface.co/ivrit-ai/whisper-large-v3-ct2)
-model at commit `e9ed4a4a98d761b0f617d668303de2c514236c66`, CUDA FP16, beam size 5.
+model at commit `e9ed4a4a98d761b0f617d668303de2c514236c66`, CUDA FP32, beam size 5.
 The model download requires several GB of disk space and inference requires
 sufficient free VRAM. CUDA availability and compute support are checked before
 downloading model weights. There is no automatic CPU or smaller-model fallback.
 Quality takes priority over throughput: the pipeline uses native sequential
 long-form decoding with context between windows, standard temperature fallback
 for uncertain/repetitive decoding, and no VAD removal of quiet sections.
-FP16 is the explicit non-quantized default; `--compute-type float32` requires
-substantially more free GPU memory. A larger precision value is not a guarantee
-of better recognition. No processing-time deadline reduces the model or audio.
+FP32 is the quality-first default. The full model used about 7.3 GiB of GPU
+memory in a 65-second audio/video pilot on an idle RTX 4070 Laptop with 8 GiB.
+Most of that GPU must be free; longer/different inputs can require more memory.
+`--compute-type float16` is an explicit lower-memory option. The short pilot
+produced identical text at both precisions; this is not evidence of a word-error
+rate advantage for either precision. No processing-time deadline reduces the
+model or audio.
 
 From the repository root in PowerShell:
 

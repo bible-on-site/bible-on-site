@@ -28,7 +28,7 @@ class ModelConfig:
     revision: str = DEFAULT_REVISION
     language: str = "he"
     device_index: int = 0
-    compute_type: str = "float16"
+    compute_type: str = "float32"
     beam_size: int = 5
     local_files_only: bool = False
     model_cache: str | None = None

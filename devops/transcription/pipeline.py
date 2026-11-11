@@ -90,7 +90,7 @@ def validate_transcript(transcript: Transcript) -> list[dict[str, object]]:
         if segment.end > transcript.duration:
             warnings.append({"code": "timestamp-beyond-recording", "segment_index": index})
         previous_start = segment.start
-        previous_end = segment.end
+        previous_end = max(previous_end, segment.end)
     if not any(segment.text.strip() for segment in transcript.segments):
         raise ValueError("No speech recognized; no article was exported")
     return warnings
@@ -111,7 +111,7 @@ def build_article(transcript: Transcript, title: str, options: ExportOptions) ->
             paragraphs.append(current)
             current = ""
         current = f"{current} {text}" if current else text
-        previous_end = segment.end
+        previous_end = max(previous_end, segment.end)
     if current:
         paragraphs.append(current)
     content = "\n".join(f"<p>{escape(paragraph)}</p>" for paragraph in paragraphs) + "\n"
@@ -121,6 +121,8 @@ def build_article(transcript: Transcript, title: str, options: ExportOptions) ->
 def preview_document(article: ArticleCandidate, language: str) -> str:
     """Wrap the importable fragment in a script-free local review document."""
     direction = "rtl" if language in {"he", "ar", "fa", "ur", "yi"} else "ltr"
+    notice = ("תמלול אוטומטי - יש לערוך ולאשר לפני פרסום." if language == "he"
+              else "Automatic transcription - requires editorial review before publication.")
     return (f'<!doctype html>\n<html lang="{escape(language, quote=True)}" dir="{direction}">\n'
             '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width">\n'
             '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; '
@@ -131,7 +133,7 @@ def preview_document(article: ArticleCandidate, language: str) -> str:
             'padding:0 1.5rem;color:#202625;background:#faf9f5}aside{font-size:1rem;'
             'border-inline-start:3px solid #96743d;padding-inline-start:1rem}h1{line-height:1.3}</style>'
             '</head>\n<body>\n'
-            '<aside>Automatic transcription - requires editorial review before publication.</aside>\n'
+            f'<aside dir="auto">{notice}</aside>\n'
             f'<h1>{escape(article.title)}</h1>\n{article.content}</body>\n</html>\n')
 
 

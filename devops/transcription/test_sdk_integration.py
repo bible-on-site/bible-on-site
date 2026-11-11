@@ -40,9 +40,6 @@ def local_s3_response(directory: Path, body: bytes, status: int = 200):
             self.end_headers()
             self.wfile.write(body)
 
-        def log_message(self, format, *args):
-            """Keep local fixture access and error logs out of test output."""
-
     with HTTPServer(("127.0.0.1", 0), Handler) as server:
         worker = Thread(target=server.serve_forever, daemon=True)
         worker.start()
@@ -68,7 +65,9 @@ def local_s3_response(directory: Path, body: bytes, status: int = 200):
             return resolve(host, *args, **kwargs)
 
         try:
-            with patch.dict(os.environ, environment, clear=True), patch("socket.getaddrinfo", side_effect=loopback_only):
+            with (patch.dict(os.environ, environment, clear=True),
+                  patch("socket.getaddrinfo", side_effect=loopback_only),
+                  patch.object(BaseHTTPRequestHandler, "log_message", return_value=None)):
                 yield requests
         finally:
             server.shutdown()

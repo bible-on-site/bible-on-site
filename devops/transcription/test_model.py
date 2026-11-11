@@ -25,7 +25,7 @@ class ModelConfigTests(unittest.TestCase):
         self.assertEqual(config.model, DEFAULT_MODEL)
         self.assertEqual(config.revision, DEFAULT_REVISION)
         self.assertEqual(config.language, "he")
-        self.assertEqual(config.compute_type, "float16")
+        self.assertEqual(config.compute_type, "float32")
         with self.assertRaises(FrozenInstanceError):
             config.language = "en"
 
@@ -117,7 +117,7 @@ class LocalTranscriberTests(unittest.TestCase):
         )
         self.ctranslate.get_supported_compute_types.assert_called_once_with("cuda", 0)
         self.whisper.WhisperModel.assert_called_once_with(
-            str(self.snapshot), device="cuda", device_index=0, compute_type="float16", local_files_only=True,
+            str(self.snapshot), device="cuda", device_index=0, compute_type="float32", local_files_only=True,
         )
         self.engine.transcribe.assert_called_once_with(
             self.samples, language="he", task="transcribe", beam_size=5, best_of=5,
@@ -152,6 +152,13 @@ class LocalTranscriberTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "precision is never changed automatically"):
             LocalTranscriber(ModelConfig()).transcribe(Path("recording.mp3"))
         self.hub.snapshot_download.assert_not_called()
+
+    def test_fp16_requires_explicit_selection_and_is_recorded(self):
+        result = LocalTranscriber(ModelConfig(compute_type="float16")).transcribe(Path("recording.mp3"))
+        self.whisper.WhisperModel.assert_called_once_with(
+            str(self.snapshot), device="cuda", device_index=0, compute_type="float16", local_files_only=True,
+        )
+        self.assertEqual(result.model["compute_type"], "float16")
 
     def test_cuda_initialization_failure_has_actionable_error(self):
         self.ctranslate.get_cuda_device_count.side_effect = OSError("driver unavailable")

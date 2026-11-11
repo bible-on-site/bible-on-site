@@ -83,7 +83,7 @@ class ArticleTests(unittest.TestCase):
                 preview = preview_document(ArticleCandidate("t", "<p>x</p>"), language)
                 self.assertIn(f'lang="{language}" dir="{direction}"', preview)
                 self.assertIn("default-src 'none'", preview)
-                self.assertIn("requires editorial review", preview)
+                self.assertIn("יש לערוך ולאשר" if language == "he" else "requires editorial review", preview)
 
     def test_rejects_invalid_format_options_before_inference(self):
         for values in [{"paragraph_pause": 0}, {"paragraph_pause": float("nan")},
@@ -163,6 +163,17 @@ class ExportTests(unittest.TestCase):
         ])
         self.assertEqual(manifest["transcription"]["segments"][1]["start"], 1.98)
         self.assertEqual(manifest["transcription"]["segments"][2]["end"], 12.02)
+        self.assertEqual(result.article.content, "<p>אחד שתיים שלוש</p>\n")
+
+    def test_nested_estimates_do_not_hide_overlaps_or_invent_paragraph_pauses(self):
+        transcript = recognized(Segment(0, 10, "אחד"), Segment(1, 2, "שתיים"),
+                                Segment(4, 5, "שלוש"))
+        result = export_transcript(self.source, transcript, self.output, ExportOptions())
+        manifest = json.loads((result.directory / "transcript.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["transcription"]["warnings"], [
+            {"code": "timestamp-overlap", "segment_index": 1},
+            {"code": "timestamp-overlap", "segment_index": 2},
+        ])
         self.assertEqual(result.article.content, "<p>אחד שתיים שלוש</p>\n")
 
     def test_modified_snapshot_cannot_claim_original_provenance(self):

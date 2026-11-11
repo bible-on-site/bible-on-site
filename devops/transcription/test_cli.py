@@ -1,7 +1,7 @@
 """Check CLI configuration, honest failure statuses and offline help."""
 
 from contextlib import redirect_stderr, redirect_stdout
-from io import StringIO
+from io import BytesIO, StringIO, TextIOWrapper
 from pathlib import Path
 import runpy
 import sys
@@ -78,6 +78,22 @@ class CliTests(unittest.TestCase):
         status, stdout, stderr, _ = self.invoke(["a.mp3"], KeyboardInterrupt())
         self.assertEqual((status, stdout), (130, ""))
         self.assertIn("interrupted", stderr)
+
+    def test_hebrew_output_paths_and_errors_work_with_legacy_windows_pipes(self):
+        for error in (None, OSError("תיקייה לא זמינה")):
+            with self.subTest(error=error):
+                stdout_bytes, stderr_bytes = BytesIO(), BytesIO()
+                stdout = TextIOWrapper(stdout_bytes, encoding="ascii")
+                stderr = TextIOWrapper(stderr_bytes, encoding="ascii")
+                with patch.object(cli, "run", return_value=Mock(directory=Path("תמלול")), side_effect=error):
+                    with redirect_stdout(stdout), redirect_stderr(stderr):
+                        status = cli.main(["lecture.mp4"])
+                        stdout.flush()
+                        stderr.flush()
+                self.assertEqual(status, 1 if error else 0)
+                self.assertEqual(stdout_bytes.getvalue().decode("utf-8").splitlines(), [] if error else ["תמלול"])
+                if error:
+                    self.assertIn("תיקייה לא זמינה", stderr_bytes.getvalue().decode("utf-8"))
 
     def test_module_help_needs_no_gpu_runtime(self):
         with patch.dict(sys.modules), patch("sys.argv", ["transcription", "--help"]):

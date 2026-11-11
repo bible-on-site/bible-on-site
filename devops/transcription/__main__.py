@@ -33,6 +33,11 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     """Return nonzero on failure and print only completed artifact paths on success."""
+    # Windows pipes may default to a legacy encoding even when files/arguments
+    # contain Hebrew. A successful export must remain a successful command.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
     args = parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
     try:
