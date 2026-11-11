@@ -997,6 +997,9 @@ jobs:
       # across MySQL/Rust/populate/build and is gated before the perf test.
       # The consecutive-turn profile uses the full Chromium headless mode;
       # existing shell-only cache entries do not contain that executable.
+      - name: Prepare signed Ubuntu package mirror
+        run: sudo "$(command -v node)" "$GITHUB_WORKSPACE/devops/github/ci/ubuntu-apt-mirrors.mjs"
+
       - name: Install Playwright Browsers
         id: playwright-install
         background: true
@@ -1289,6 +1292,9 @@ jobs:
       # hit only the system dependencies are installed.
       # Every suite runs headless, so --only-shell skips the headed Chromium
       # build and downloads only the headless shell.
+      - name: Prepare signed Ubuntu package mirror
+        run: sudo "$(command -v node)" "$GITHUB_WORKSPACE/devops/github/ci/ubuntu-apt-mirrors.mjs"
+
       - name: Install Playwright Browsers
         id: playwright-install
         background: true
@@ -1702,6 +1708,9 @@ jobs:
       # binary-cache hit only the system dependencies are installed.
       # Every suite runs headless, so --only-shell skips the headed Chromium
       # build and downloads only the headless shell.
+      - name: Prepare signed Ubuntu package mirror
+        run: sudo "$(command -v node)" "$GITHUB_WORKSPACE/devops/github/ci/ubuntu-apt-mirrors.mjs"
+
       - name: Install Playwright Browsers
         id: playwright-install
         background: true
@@ -2650,6 +2659,7 @@ jobs:
           # The native decoder check rebuilds the shipped asset through the
           # app-owned manifest's esbuild (#2391).
           bun install --cwd ../../app/devops/recitation-decoder --frozen-lockfile
+          sudo "$(command -v node)" "$GITHUB_WORKSPACE/devops/github/ci/ubuntu-apt-mirrors.mjs"
           if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
             bun x playwright install-deps chromium webkit
           else
@@ -2786,7 +2796,7 @@ jobs:
       - name: Verify canonical text preprocessing
         run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
       - name: Verify module release and shared decoder check routing
-        run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs
+        run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs devops/github/ci/web-push-daily.test.mjs devops/github/ci/ubuntu-apt-mirrors.test.mjs
       - name: Verify daily bulletin mail infrastructure and assets
         run: bun test devops/daily-bulletin-infra.test.mjs
       - name: Install storage test dependencies

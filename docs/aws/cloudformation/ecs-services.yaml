@@ -200,8 +200,8 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: "*"
-        # Permissions to read SSM parameters for database credentials
-        # and the shared website revalidation secret.
+        # Permissions to read SSM parameters for database credentials,
+        # the shared website revalidation secret and the web-push secrets.
         - PolicyName: SSMParameterReadAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -215,6 +215,9 @@ Resources:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-indexnow-key"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanahpedia-revision-api-key"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-vapid-public-key"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-vapid-private-key"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-push-send-secret"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -354,6 +357,10 @@ Resources:
             # ASSETS_BASE_URL is intentionally unset in production. Enable
             # only after an approved additive CDN rollout passes the legacy
             # S3 URL, CORS, Range and freshness checks in the cost risk audit.
+            # VAPID_SUBJECT is the public contact URI advertised to browser
+            # push services (web-push spec: mailto: or https:). Not a secret.
+            - Name: VAPID_SUBJECT
+              Value: https://xn--febl3a.co.il
           # Database credentials injected from SSM Parameter Store
           # Required for runtime database queries (dynamic pages, ISR, etc.)
           # Each parameter must exist before the task starts — see the
@@ -371,6 +378,16 @@ Resources:
             # warning, so a placeholder can stand in until enrollment.
             - Name: INDEXNOW_KEY
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-indexnow-key"
+            # Web push (#1096): VAPID keypair and the bearer secret authorizing
+            # POST /api/push/daily (must equal the PUSH_SEND_SECRET GitHub
+            # secret). All three must exist before this task revision starts,
+            # or ECS fails the task — see docs/aws/web-push-activation.md.
+            - Name: VAPID_PUBLIC_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-vapid-public-key"
+            - Name: VAPID_PRIVATE_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-vapid-private-key"
+            - Name: PUSH_SEND_SECRET
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-push-send-secret"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -745,6 +762,27 @@ Outputs:
 #   # api task (revision submits/applies, family writes, alias writes).
 #   aws ssm put-parameter --name bible-on-site-tanahpedia-revision-api-key \
 #     --type SecureString --value "$(openssl rand -hex 32)" \
+#     --region il-central-1
+#
+#   # Web push (#1096): one VAPID keypair per deployment plus the bearer
+#   # secret authorizing POST /api/push/daily. Generate the pair with
+#   # `VAPID_KEYS="$(bunx web-push generate-vapid-keys --json)"` with tracing
+#   # disabled; capture the private key without printing it as documented in
+#   # docs/aws/web-push-activation.md steps 2-3. The public key is returned by
+#   # GET /api/push/subscription to every browser, so keep it server-side
+#   # consistent — browsers unsubscribe and resubscribe if it rotates.
+#   # The send secret must equal the PUSH_SEND_SECRET GitHub repository
+#   # secret exactly. Generate PUSH_SEND_SECRET once into a shell variable
+#   # without printing it, as in docs/aws/web-push-activation.md step 2.
+#   # Full activation order: docs/aws/web-push-activation.md
+#   aws ssm put-parameter --name bible-on-site-vapid-public-key \
+#     --type SecureString --value "<vapid-public-key>" \
+#     --region il-central-1
+#   aws ssm put-parameter --name bible-on-site-vapid-private-key \
+#     --type SecureString --value "<vapid-private-key>" \
+#     --region il-central-1
+#   aws ssm put-parameter --name bible-on-site-push-send-secret \
+#     --type SecureString --value "$PUSH_SEND_SECRET" \
 #     --region il-central-1
 #
 #   # Database URL (mysql://admin:<password>@<host>:3306/tanah)
