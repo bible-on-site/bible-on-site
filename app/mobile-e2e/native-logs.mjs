@@ -95,8 +95,10 @@ export function iosAutomationLogArguments(udid) {
 // disappears during an otherwise valid XCTest query. Do not launch,
 // inspect, or signal the simulator while collecting this evidence.
 export function iosHostLogArguments() {
-  return ["stream", "--style", "compact", "--level", "info", "--predicate",
-    'process == "CoreSimulatorService" OR process == "com.apple.CoreSimulator.CoreSimulatorService" OR process == "DeviceHub" OR process == "Simulator" OR process == "simulatord" OR process == "launchd_sim"'];
+  // A real controlled shutdown produced service activity at info level but
+  // no lifecycle record. Include debug events and the requesting CLI client.
+  return ["stream", "--style", "compact", "--level", "debug", "--predicate",
+    'process == "CoreSimulatorService" OR process == "com.apple.CoreSimulator.CoreSimulatorService" OR process == "DeviceHub" OR process == "Simulator" OR process == "simulatord" OR process == "launchd_sim" OR process == "simctl"'];
 }
 
 // Stop every owned reader even when one failed. Each retains the existing
