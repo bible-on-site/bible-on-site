@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
@@ -52,6 +53,7 @@ vi.mock("~/server/llm-json", () => ({
 	llmConfigured: mocks.llmIsConfigured,
 }));
 
+import { canonicalJson } from "~/lib/canonical-json";
 import {
 	_resetLinkSchemaCache,
 	_setLinkLlmCaller,
@@ -123,6 +125,25 @@ function dispatchQueryOne(sql: string): unknown {
 	if (sql.includes("tanah_article_link_checkpoint")) return null;
 	if (sql.includes("tanah_article_link_proposal")) return proposalRow;
 	return null;
+}
+
+/** Simulate persisted checkpoint keys so reruns exercise the read/write contract. */
+function trackCheckpoints(initial: unknown[][] = []) {
+	const keys = new Set(initial.map((key) => JSON.stringify(key)));
+	mocks.queryOne.mockImplementation(async (sql: string, params: unknown[]) => {
+		if (sql.includes("tanah_article_link_checkpoint")) {
+			return keys.has(JSON.stringify(params)) ? { article_id: 7 } : null;
+		}
+		return dispatchQueryOne(sql);
+	});
+	mocks.txExecute.mockImplementation(
+		async (_conn: unknown, sql: string, params: unknown[]) => {
+			if (sql.includes("INSERT INTO tanah_article_link_checkpoint")) {
+				keys.add(JSON.stringify(params.slice(0, 4)));
+			}
+			return { affectedRows: 1, insertId: 1 };
+		},
+	);
 }
 
 let proposalRows: unknown[] = [];
@@ -236,6 +257,41 @@ describe("article link proposals server", () => {
 			expect(
 				sqls.some((s) => s.includes("tanah_article_link_checkpoint")),
 			).toBe(true);
+			const inserts = mocks.txExecute.mock.calls.filter((call) =>
+				String(call[1]).includes(
+					"INSERT IGNORE INTO tanah_article_link_proposal",
+				),
+			);
+			for (const [index, call] of inserts.entries()) {
+				const draft = result.outcomes[0].proposals[index];
+				const historicalKey = createHash("sha256")
+					.update(
+						canonicalJson([
+							"dedupe",
+							"heuristic-citations:v1",
+							"linking-v1",
+							7,
+							HASH,
+							draft.relationshipKey,
+							draft.action,
+							draft.target,
+						]),
+					)
+					.digest("hex");
+				expect(call[2][12]).toBe(historicalKey);
+				expect(call[2][16]).toBe("linking-v1");
+			}
+			const checkpoint = mocks.txExecute.mock.calls.find((call) =>
+				String(call[1]).includes("INSERT INTO tanah_article_link_checkpoint"),
+			);
+			expect(checkpoint?.[2]).toEqual([
+				7,
+				"heuristic-citations:v1",
+				"linking-v1",
+				HASH,
+				result.runId,
+				inserts.length,
+			]);
 		});
 
 		it("persists nothing on dry-run", async () => {
@@ -279,7 +335,163 @@ describe("article link proposals server", () => {
 				(d) => d.confidence !== null,
 			);
 			expect(llmDrafts.length).toBeGreaterThan(0);
+			const insert = mocks.txExecute.mock.calls.find((call) =>
+				String(call[1]).includes(
+					"INSERT IGNORE INTO tanah_article_link_proposal",
+				),
+			);
+			expect(insert?.[2][16]).toBe("linking-v2");
+			const draft = llmDrafts[0];
+			const expectedKey = createHash("sha256")
+				.update(
+					canonicalJson([
+						"dedupe",
+						insert?.[2][14],
+						"linking-v2",
+						7,
+						HASH,
+						draft.relationshipKey,
+						draft.action,
+						draft.target,
+					]),
+				)
+				.digest("hex");
+			expect(insert?.[2][12]).toBe(expectedKey);
+			const checkpoint = mocks.txExecute.mock.calls.find((call) =>
+				String(call[1]).includes("INSERT INTO tanah_article_link_checkpoint"),
+			);
+			expect(checkpoint?.[2].slice(0, 4)).toEqual([
+				7,
+				insert?.[2][14],
+				"linking-v2",
+				HASH,
+			]);
 		});
+
+		it.each([
+			{
+				description: "author-only proposals",
+				output: {
+					proposals: [
+						{
+							relationshipKey: "author",
+							action: "replace",
+							target: { authorId: 9 },
+							evidence: [{ quote: "המאמר" }],
+						},
+					],
+				},
+			},
+			{
+				description: "abstentions without proposals",
+				output: {
+					proposals: [],
+					abstentions: [
+						{ relationshipKey: "coveringSources", reason: "no evidence" },
+					],
+				},
+			},
+		])(
+			"checkpoints $description so reruns avoid another paid call",
+			async ({ output }) => {
+				trackCheckpoints();
+				mocks.llmCall.mockResolvedValue({
+					content: JSON.stringify(output),
+					model: "mock",
+					promptTokens: 10,
+					completionTokens: 5,
+				});
+				const input = { data: { articleIds: [7], engine: "llm" as const } };
+				const first = await generateLinkProposals(input);
+				const second = await generateLinkProposals(input);
+				expect(first.outcomes[0]).toMatchObject({
+					outcome: "generated",
+					proposals: [],
+				});
+				expect(second.outcomes[0].outcome).toBe("skipped-checkpoint");
+				expect(mocks.llmCall).toHaveBeenCalledTimes(1);
+				const writes = mocks.txExecute.mock.calls.filter((call) =>
+					String(call[1]).includes("INSERT INTO tanah_article_link_checkpoint"),
+				);
+				expect(writes).toHaveLength(1);
+				expect(writes[0][2][2]).toBe("linking-v2");
+				expect(writes[0][2][5]).toBe(0);
+				expect(
+					mocks.txExecute.mock.calls.some((call) =>
+						String(call[1]).includes(
+							"INSERT IGNORE INTO tanah_article_link_proposal",
+						),
+					),
+				).toBe(false);
+			},
+		);
+
+		it("does not rewrite a skipped heuristic checkpoint when only the LLM runs", async () => {
+			trackCheckpoints([[7, "heuristic-citations:v1", "linking-v1", HASH]]);
+			mocks.llmCall.mockResolvedValue({
+				content: JSON.stringify({ proposals: [] }),
+				model: "mock",
+				promptTokens: 10,
+				completionTokens: 5,
+			});
+			const result = await generateLinkProposals({
+				data: { articleIds: [7], engine: "both" },
+			});
+			expect(result.outcomes[0]).toMatchObject({
+				outcome: "generated",
+				proposals: [],
+			});
+			const writes = mocks.txExecute.mock.calls.filter((call) =>
+				String(call[1]).includes("INSERT INTO tanah_article_link_checkpoint"),
+			);
+			expect(writes).toHaveLength(1);
+			expect(writes[0][2][1]).toMatch(/^openai:/);
+			expect(writes[0][2][2]).toBe("linking-v2");
+			expect(writes[0][2][5]).toBe(0);
+		});
+
+		it("never checkpoints a dry-run even when the LLM returns no drafts", async () => {
+			trackCheckpoints();
+			mocks.llmCall.mockResolvedValue({
+				content: JSON.stringify({ proposals: [] }),
+				model: "mock",
+				promptTokens: 10,
+				completionTokens: 5,
+			});
+			const input = {
+				data: { articleIds: [7], engine: "llm" as const, dryRun: true },
+			};
+			const first = await generateLinkProposals(input);
+			const second = await generateLinkProposals(input);
+			expect(first.outcomes[0].outcome).toBe("dry-run");
+			expect(second.outcomes[0].outcome).toBe("dry-run");
+			expect(mocks.llmCall).toHaveBeenCalledTimes(2);
+			expect(mocks.txExecute).not.toHaveBeenCalled();
+		});
+
+		it.each(["caller error", "invalid JSON"])(
+			"leaves %s retryable without a checkpoint",
+			async (failure) => {
+				trackCheckpoints();
+				if (failure === "caller error") {
+					mocks.llmCall.mockRejectedValue(new Error("provider unavailable"));
+				} else {
+					mocks.llmCall.mockResolvedValue({
+						content: "not valid JSON",
+						model: "mock",
+						promptTokens: 10,
+						completionTokens: 5,
+					});
+				}
+				const input = { data: { articleIds: [7], engine: "llm" as const } };
+				const first = await generateLinkProposals(input);
+				const second = await generateLinkProposals(input);
+				expect(first.outcomes[0].outcome).toBe("error");
+				expect(second.outcomes[0].outcome).toBe("error");
+				expect(mocks.llmCall).toHaveBeenCalledTimes(2);
+				expect(mocks.txExecute).not.toHaveBeenCalled();
+			},
+		);
 	});
 
 	describe("reviewLinkProposal", () => {
@@ -466,16 +678,13 @@ describe("article link proposals server", () => {
 			expect(result.outcomes[0].error).toBe("article not found");
 		});
 
-		it("skips an article whose checkpoint is fresh", async () => {
-			mocks.queryOne.mockImplementation(async (sql: string) => {
-				if (sql.includes("tanah_article_link_checkpoint"))
-					return { article_id: 7 };
-				return dispatchQueryOne(sql);
-			});
+		it("skips an article whose historical heuristic v1 checkpoint is fresh", async () => {
+			trackCheckpoints([[7, "heuristic-citations:v1", "linking-v1", HASH]]);
 			const result = await generateLinkProposals({
 				data: { articleIds: [7] },
 			});
 			expect(result.outcomes[0].outcome).toBe("skipped-checkpoint");
+			expect(mocks.txExecute).not.toHaveBeenCalled();
 		});
 
 		it("regenerates over a fresh checkpoint when forced", async () => {

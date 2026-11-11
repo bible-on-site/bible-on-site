@@ -25,6 +25,7 @@ import {
 	buildArticleLinkSystemPrompt,
 	buildArticleLinkUserMessage,
 	HEURISTIC_GENERATOR_ID,
+	HEURISTIC_PROMPT_VERSION,
 	LINK_PROMPT_VERSION,
 } from "~/lib/article-linking/prompt";
 import type {
@@ -453,12 +454,19 @@ interface InsertableProposal {
 	snapshot: ArticleLinkSnapshot;
 }
 
+function promptVersionFor(generator: string): string {
+	return generator === HEURISTIC_GENERATOR_ID
+		? HEURISTIC_PROMPT_VERSION
+		: LINK_PROMPT_VERSION;
+}
+
 async function insertProposals(
 	conn: mysql.PoolConnection,
 	items: InsertableProposal[],
 ): Promise<number> {
 	let inserted = 0;
 	for (const item of items) {
+		const promptVersion = promptVersionFor(item.generator);
 		const result = await txExecute(
 			conn,
 			`INSERT IGNORE INTO tanah_article_link_proposal
@@ -483,7 +491,7 @@ async function insertProposals(
 				item.draft.status,
 				dedupeKey(
 					item.generator,
-					LINK_PROMPT_VERSION,
+					promptVersion,
 					item.articleId,
 					item.baseContentHash,
 					item.draft,
@@ -491,7 +499,7 @@ async function insertProposals(
 				decisionKey(item.articleId, item.draft),
 				item.generator.slice(0, 120),
 				item.model?.slice(0, 120) ?? null,
-				LINK_PROMPT_VERSION,
+				promptVersion,
 				item.baseContentHash,
 				JSON.stringify(item.snapshot),
 				item.promptTokens,
@@ -521,7 +529,7 @@ async function upsertCheckpoint(
 		[
 			articleId,
 			generator.slice(0, 120),
-			LINK_PROMPT_VERSION,
+			promptVersionFor(generator),
 			contentHash,
 			runId,
 			proposalCount,
@@ -537,7 +545,12 @@ async function checkpointExists(
 	const row = await queryOne<{ article_id: number }>(
 		`SELECT article_id FROM tanah_article_link_checkpoint
 		 WHERE article_id = ? AND generator = ? AND prompt_version = ? AND content_hash = ?`,
-		[articleId, generator.slice(0, 120), LINK_PROMPT_VERSION, contentHash],
+		[
+			articleId,
+			generator.slice(0, 120),
+			promptVersionFor(generator),
+			contentHash,
+		],
 	);
 	return row !== null;
 }
@@ -586,6 +599,7 @@ export async function runLinkGeneration(
 			const plainText = articlePlainText(row);
 			const snapshot = await loadSnapshot(articleId);
 			const drafts: InsertableProposal[] = [];
+			const successfulGenerators = new Set<string>();
 
 			const wantHeuristic = engine === "heuristic" || engine === "both";
 			const llmGenerator = `openai:${process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini"}`;
@@ -638,6 +652,7 @@ export async function runLinkGeneration(
 						snapshot,
 					});
 				}
+				successfulGenerators.add(HEURISTIC_GENERATOR_ID);
 			}
 
 			if (runLlm) {
@@ -706,6 +721,7 @@ export async function runLinkGeneration(
 						snapshot,
 					});
 				}
+				successfulGenerators.add(generator);
 			}
 
 			if (data.dryRun) {
@@ -719,30 +735,14 @@ export async function runLinkGeneration(
 
 			const inserted = await transaction(async (conn) => {
 				const count = await insertProposals(conn, drafts);
-				const heuristicCount = drafts.filter(
-					(d) => d.generator === HEURISTIC_GENERATOR_ID,
-				).length;
-				const llmDrafts = drafts.filter(
-					(d) => d.generator !== HEURISTIC_GENERATOR_ID,
-				);
-				if (wantHeuristic) {
+				for (const generator of successfulGenerators) {
 					await upsertCheckpoint(
 						conn,
 						articleId,
-						HEURISTIC_GENERATOR_ID,
+						generator,
 						contentHash,
 						runId,
-						heuristicCount,
-					);
-				}
-				if (llmDrafts.length > 0) {
-					await upsertCheckpoint(
-						conn,
-						articleId,
-						llmDrafts[0].generator,
-						contentHash,
-						runId,
-						llmDrafts.length,
+						drafts.filter((draft) => draft.generator === generator).length,
 					);
 				}
 				return count;

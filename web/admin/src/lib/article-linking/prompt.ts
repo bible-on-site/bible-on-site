@@ -11,12 +11,14 @@ import { ARTICLE_RELATIONSHIP_REGISTRY } from "~/lib/article-relationships";
 import type { TargetCatalogue } from "./catalogue";
 
 /**
- * Bump when the prompt or the output contract changes — recorded on every
- * proposal so generations stay traceable and reruns re-checkpoint.
+ * Bump when the LLM prompt or output contract changes — recorded on LLM
+ * proposals so generations stay traceable and reruns re-checkpoint.
  */
 export const LINK_PROMPT_VERSION = "linking-v2";
 
 export const HEURISTIC_GENERATOR_ID = "heuristic-citations:v1";
+/** Keep historical heuristic checkpoints/dedupe stable across LLM prompt edits. */
+export const HEURISTIC_PROMPT_VERSION = "linking-v1";
 
 export function buildArticleLinkSystemPrompt(): string {
 	const catalogueLines = ARTICLE_RELATIONSHIP_REGISTRY.relationships

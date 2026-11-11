@@ -60,6 +60,12 @@ article+generator+prompt version+content hash) make re-generation of
 unchanged input a no-op; `force: true` bypasses them and `dryRun: true`
 validates without persisting.
 
+Engine versions are independent: changing the LLM prompt does not invalidate
+the heuristic engine's existing checkpoints or duplicate its drafts. A
+successful run is checkpointed even when it produces no eligible proposals,
+including when the model only attempts a forbidden author suggestion. Failed
+calls remain retryable and dry runs never write checkpoints.
+
 ## Storage
 
 `tanah_article_link_proposal` (DDL in
