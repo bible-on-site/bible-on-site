@@ -133,7 +133,20 @@ test.describe("Production metadata snapshots", () => {
 	test("robots publishes the configured sitemap while keeping noindex pages crawlable", () => {
 		const robots = readGeneratedBody("/robots.txt").toString("utf8");
 		expect(robots).toBe(
-			`User-Agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${SITE_ORIGIN}/sitemap.xml\n`,
+			`# תנ"ך על הפרק is a זיכוי הרבים project: the public learning
+# corpus is open for indexing, AI input/retrieval and training.
+# Content Signals per contentsignals.org:
+#   search   - index the content and show links/snippets in results
+#   ai-input - use the content inside AI answers (RAG, grounding)
+#   ai-train - use the content to train or fine-tune models
+User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
+Allow: /
+Allow: /api/search
+Disallow: /api/
+
+Sitemap: ${SITE_ORIGIN}/sitemap.xml
+`,
 		);
 	});
 });
