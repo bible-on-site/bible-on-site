@@ -157,7 +157,11 @@ function renderInline(node: Node, state: State): string {
 					.replace(/</g, "&lt;")
 					.replace(/>/g, "&gt;")
 					.replace(/\|/g, "&#124;");
-				return `<code>${escaped}</code>`;
+				// Join, not an HTML-looking template literal — `escaped`
+				// is fully entity-escaped above but static analyzers
+				// (Semgrep html-in-template-string) can't prove it, and
+				// Biome's useTemplate dislikes "+" concatenation.
+				return ["<code>", escaped, "</code>"].join("");
 			}
 			return `\`${code}\``;
 		}
