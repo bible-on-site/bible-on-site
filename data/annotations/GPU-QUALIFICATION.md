@@ -5,6 +5,18 @@ qualification and the classifier-versus-LLM selection are in progress.**
 The tables below contain measured classifier results only. They must not be
 read as an LLM comparison or a production-accuracy claim.
 
+Checkpoint remaining work:
+
+- Complete the schema-enforced DictaLM and Qwen validation runs for retyping
+  and independent detection in both domains.
+- Select the strongest measured profile per domain using correct-link
+  metrics, retaining raw responses, failures and generation provenance.
+- Validate a bounded cold run and checkpoint resume with the selected current
+  profile before recommending a corpus generation command.
+
+The implementation and classifier evidence are pushed for review. No
+production import or final LLM model promotion is part of this checkpoint.
+
 ## Inputs and scoring
 
 - **Development:** the existing 20 curated verse cases (83 positive
@@ -100,6 +112,15 @@ response. The current prompt versions are `local-retype-v3` and
 selection are still in progress.** Their measurements must be recorded
 separately; no completed final LLM quality result is claimed here.
 
+The `target-key-v1` postprocessor also accepts vocalized model target names
+and removes only marks and formatting to produce the target key. It preserves
+letters, prefixes and suffixes; it cannot repair a wrong target or entity
+type. Source surfaces remain exact. This change has its own cache/provenance
+version and does not change prompts, schemas or generation. Earlier actual
+GPU responses may therefore be reprocessed on CPU only when their exact
+messages, model profile and schema match; captured responses and newly
+generated requests must be reported separately.
+
 ## Hardware and raw runtimes
 
 - NVIDIA GeForce RTX 4070 Laptop GPU, 8,585,216,000 bytes reported VRAM,
@@ -125,6 +146,15 @@ the predictor on whole chapters before selecting scored verses; the LLM
 harness restricts inference to selected test verses. Repeated chapters,
 initialization, allocator state and CPU preparation also differ. Peak CUDA
 allocation measures PyTorch allocations, not total process/device usage.
+
+A supplemental CPU/GPU consistency comparison did not complete: the same
+Windows CUDA-wheel environment loaded DictaBERT on explicit CPU/FP32, but
+terminated with native access violation `0xC0000005` during BERT forward
+execution. One diagnostic retry with a Python fault trace confirmed the
+forward-path failure. CUDA was masked for both attempts, and no complete CPU
+split was produced. The tables above remain actual GPU measurements; they
+do not establish prediction equivalence with CPU. This observation is scoped
+to the tested Windows environment, not every CPU installation.
 
 ## Source alignment and target-name audit
 

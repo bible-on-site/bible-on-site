@@ -84,6 +84,11 @@ for the classifier's FP32 accuracy comparison.
 Inspect generated rows and run the importer with `--dry-run` against a local
 database first. Production imports require a separately approved, verified
 target and rollback plan. This work does not run a production import.
+Model revisions have distinct import identities. An upgrade needs the importer's
+documented `--supersede-model` procedure and the previous rows for rollback;
+otherwise both revisions can render. That flag removes the prior revision
+across each source domain present in the file, so never use a bounded pilot
+to supersede a complete corpus.
 
 ```powershell
 python -m unittest discover -s data/annotations -p 'test_*.py'
