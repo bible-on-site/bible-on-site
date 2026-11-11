@@ -27,5 +27,12 @@ test("retains app, automation and simulator failures for this run without copyin
     ].sort());
     assert.equal(readFileSync(join(artifacts, "crash-2-BibleOnSite-2026.ips"), "utf8"), "device report");
     assert.equal(readFileSync(join(artifacts, "crash-0-BibleOnSite-2026.ips"), "utf8"), "BibleOnSite-2026.ips");
+    // The OS can finalize a report while simulator log export is running.
+    // A later pass adds that report without losing the earlier evidence.
+    writeFileSync(join(host, "CoreSimulatorService-delayed.ips"), "finalized report");
+    copyIosCrashReports([host, join(root, "missing"), device], artifacts, started);
+    assert.equal(readdirSync(artifacts).length, hostReports.length + 2);
+    assert.equal(readFileSync(join(artifacts, "crash-0-CoreSimulatorService-delayed.ips"), "utf8"), "finalized report");
+    assert.equal(readFileSync(join(artifacts, "crash-2-BibleOnSite-2026.ips"), "utf8"), "device report");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

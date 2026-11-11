@@ -276,14 +276,15 @@ try {
   }
   // Copy local reports before simulator RPCs: a failed log export must not
   // prevent retaining the crash that explains the simulator's disappearance.
+  const copyCrashReports = () => {
+    const reportDirectories = [resolve(homedir(), "Library/Logs/DiagnosticReports"),
+      resolve(homedir(), "Library/Developer/CoreSimulator/Devices", process.env.MOBILE_UDID,
+        "data/Library/Logs/CrashReporter")];
+    copyIosCrashReports(reportDirectories, artifacts, runStarted);
+  };
   if (platform === "ios") {
     try {
-      await phase("crash-report-copy", () => {
-        const reportDirectories = [resolve(homedir(), "Library/Logs/DiagnosticReports"),
-          resolve(homedir(), "Library/Developer/CoreSimulator/Devices", process.env.MOBILE_UDID,
-            "data/Library/Logs/CrashReporter")];
-        copyIosCrashReports(reportDirectories, artifacts, runStarted);
-      });
+      await phase("crash-report-copy", copyCrashReports);
     } catch (error) {
       writeFileSync(resolve(artifacts, "crash-report-error.txt"), String(error));
       console.error("Could not copy iOS crash reports:", error);
@@ -325,6 +326,16 @@ try {
     // Diagnostic-only: a failed log export must not fail a passing run.
     writeFileSync(resolve(artifacts, "device-log-error.txt"), String(error));
     console.error("Could not export native device logs:", error);
+  }
+  if (platform === "ios") {
+    try {
+      // Reports can finalize during log export. One final filesystem pass
+      // retains them even if that export failed; no waiting or retry is added.
+      await phase("crash-report-copy-final", copyCrashReports);
+    } catch (error) {
+      writeFileSync(resolve(artifacts, "crash-report-final-error.txt"), String(error));
+      console.error("Could not copy finalized iOS crash reports:", error);
+    }
   }
   stop();
   serverLogOpen = false;
