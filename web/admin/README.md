@@ -47,10 +47,10 @@ bun install
 bun run dev
 ```
 
-`predev` starts the shared Docker services and checks the configured local
-database, bootstrapping missing tables. The database check requires `DB_URL` and
-reachable MySQL; it logs a skipped check when either is unavailable. The hook
-also checks local image storage when configured. The app runs at
+`predev` starts the shared Docker services. With `DB_URL` set and MySQL reachable,
+the default database check runs the bootstrap only when `tanah_sefer` is missing
+or empty. It logs a skipped check when the URL is missing or MySQL is unreachable,
+and checks local image storage when configured. The app runs at
 `http://localhost:3101`.
 
 The development command loads `.dev.env`. Set local overrides in your shell or
