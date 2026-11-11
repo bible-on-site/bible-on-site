@@ -154,13 +154,13 @@ test(
 	"a closed wrapper cannot leave a server with closed output listening",
 	nativeSignals,
 	async (t) => {
-		let port;
+		let connectionClosed;
 		await t.test("close wrapper and inherited output", async (subtest) => {
 			const server = await fixture(
 				subtest,
 				`
 const fs = require('node:fs');
-const server = require('node:net').createServer();
+const server = require('node:net').createServer(client => client.write('accepted'));
 server.listen(0, '127.0.0.1', () => {
   process.stdout.write('READY ' + process.pid + ' ' + server.address().port + '\\n', () => {
     fs.closeSync(1);
@@ -177,15 +177,17 @@ server.listen(0, '127.0.0.1', () => {
 				}
 			});
 			await server.waitFor("READY ");
-			port = Number(server.output().match(/READY \d+ (\d+)/)[1]);
+			const port = Number(server.output().match(/READY \d+ (\d+)/)[1]);
+			const client = net.createConnection({ host: "127.0.0.1", port });
+			t.after(() => client.destroy());
+			await once(client, "data", { signal: t.signal });
+			connectionClosed = once(client, "close", { signal: t.signal });
 			server.wrapper.kill("SIGKILL");
 			await server.exited;
 		});
-		const client = net.createConnection({ host: "127.0.0.1", port });
-		t.after(() => client.destroy());
-		await assert.rejects(once(client, "connect", { signal: t.signal }), {
-			code: "ECONNREFUSED",
-		});
+		// Signal delivery is asynchronous. Observe the accepted connection
+		// closing instead of racing the kernel with an immediate port probe.
+		await connectionClosed;
 	},
 );
 
