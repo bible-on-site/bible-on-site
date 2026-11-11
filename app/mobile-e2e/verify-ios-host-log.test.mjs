@@ -59,10 +59,18 @@ test("refuses an absent or already stopped target without starting an observer o
 test("missing startup or shutdown evidence still closes the owned host observer", async t => {
   for (const failureAt of [1, 2]) {
     const f = fixture(t);
+    const stages = [];
+    f.options.report = event => stages.push(event);
     let observations = 0;
     f.options.observe = () => ({ write() {},
       async waitFor() { if (++observations === failureAt) throw new Error("evidence absent"); } });
-    await assert.rejects(verifyIosHostLog(f.options), /evidence absent/);
+    await assert.rejects(verifyIosHostLog(f.options), error => {
+      assert.match(error.message, failureAt === 1 ? /host logger startup/ : /device-correlated host shutdown event/);
+      assert.equal(error.cause.message, "evidence absent");
+      return true;
+    });
+    assert.equal(stages.at(-1).udid, udid);
+    assert(Number.isFinite(Date.parse(stages.at(-1).at)));
     assert(f.stopped);
     assert.equal(f.calls.filter(call => call.args[1] === "shutdown").length, failureAt - 1);
   }

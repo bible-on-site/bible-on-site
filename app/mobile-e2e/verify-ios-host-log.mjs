@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -50,7 +50,8 @@ export function observeIosHostLog(udid) {
 // is no longer needed, and those events never publish a simulator-state cache.
 // A real shutdown checks the host predicate, not just its argument spelling.
 export async function verifyIosHostLog({ udid, artifact,
-  execute = promisify(execFile), stream = startNativeLog, observe = observeIosHostLog }) {
+  execute = promisify(execFile), stream = startNativeLog, observe = observeIosHostLog,
+  report = () => {} }) {
   assert.match(udid, /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i);
   // Reserve the existing five-second observer stop cap inside the 45s check.
   const deadline = AbortSignal.timeout(40000);
@@ -64,15 +65,26 @@ export async function verifyIosHostLog({ udid, artifact,
   const evidence = observe(udid);
   const observer = stream("/usr/bin/log", iosHostLogArguments(), artifact,
     { onOutput: chunk => evidence.write(chunk) });
+  let stage;
+  const enter = name => {
+    stage = name;
+    report({ udid, stage, at: new Date().toISOString() });
+  };
   try {
+    enter("host logger startup");
     await evidence.waitFor("startup",
       AbortSignal.any([deadline, AbortSignal.timeout(5000)]));
+    enter("owned simulator shutdown command");
     await execute("xcrun", ["simctl", "shutdown", udid], { timeout: 30000, signal: deadline });
+    enter("shutdown state verification");
     assert.equal((await device())?.state, "Shutdown");
+    enter("device-correlated host shutdown event");
     await evidence.waitFor("shutdown",
       AbortSignal.any([deadline, AbortSignal.timeout(5000)]));
     return { udid, shutdownVerified: true,
       correlatedLines: shutdownEvidence(readFileSync(artifact, "utf8"), udid).length };
+  } catch (cause) {
+    throw new Error(`iOS host log verification failed during ${stage}: ${cause.message}`, { cause });
   } finally { await observer.stop(); }
 }
 
@@ -82,6 +94,13 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   assert(["pull_request", "merge_group"].includes(process.env.GITHUB_EVENT_NAME));
   assert.equal(process.env.MOBILE_PLATFORM, "iOS");
   assert(process.env.MOBILE_E2E_ARTIFACTS);
-  console.log(JSON.stringify(await verifyIosHostLog({ udid: process.env.MOBILE_UDID,
-    artifact: resolve(process.env.MOBILE_E2E_ARTIFACTS, "simulator-host-shutdown-contract.log") })));
+  const artifact = resolve(process.env.MOBILE_E2E_ARTIFACTS, "simulator-host-shutdown-contract.log");
+  try {
+    console.log(JSON.stringify(await verifyIosHostLog({ udid: process.env.MOBILE_UDID,
+      artifact, report: event => console.log(JSON.stringify(event)) })));
+  } catch (error) {
+    // Keep the short controlled capture visible even if artifact storage fails.
+    if (existsSync(artifact)) console.error(`Host shutdown capture (last 16 KiB):\n${readFileSync(artifact, "utf8").slice(-16384)}`);
+    throw error;
+  }
 }
