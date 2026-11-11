@@ -56,6 +56,15 @@ work records. A real 250ms input-handler stall is detected through response
 timing; a separate 250ms animation callback verifies the blocking guard. The
 animation control fails without collecting the final pending browser record.
 Frame/input sampling closes before that collection, so no measured window grows.
+Blocking qualification covers the continuous interval from the first trusted
+input through the final settled turn, including every gap between turns. Frames
+that overlap either boundary retain their full blocking duration. Frames wholly
+outside that interval remain unchanged in the raw samples and are summarized
+separately as `outsideTurns`; they cannot block a measured turn. This corrects
+merge-group run `43000562356`, whose 156.6ms setup blocking frame ended at
+1859.5ms, before the first pointerdown at 1860.2ms. Its first-turn blocking was
+19ms. All historical bad-reader and injected-stall controls retain their original
+failure classification; response, cadence and blocking limits stay unchanged.
 Visibility is observed without filtering slow frames. Fixed-budget benchmark
 ratios have separate rendering/CPU namespaces and do not use a noisy relative
 threshold on zero blocking.
