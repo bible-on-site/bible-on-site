@@ -7,6 +7,7 @@ export default defineConfig({
 	test: {
 		environment: "node",
 		include: [
+			"tests/integration/archive-mysql.test.ts",
 			"tests/integration/whatsapp-mysql.test.ts",
 			"tests/integration/bulletin-approval-mysql.test.ts",
 			"tests/integration/join-links-mysql.test.ts",
