@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { observeIosHostLog, shutdownEvidence, verifyIosHostLog } from "./verify-ios-host-log.mjs";
 
 const udid = "24E299B4-C77B-4426-AC2B-71243825F07C";
+const service = "2026-11-11 20:17:06.012 Df com.apple.CoreSimulator.CoreSimulatorService[24253:28cfc]";
 function fixture(t, state = "Booted") {
   const directory = mkdtempSync(join(tmpdir(), "host-shutdown-contract-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
@@ -19,7 +20,7 @@ function fixture(t, state = "Booted") {
       calls.push({ command, args });
       if (args[1] === "shutdown") {
         state = "Shutdown";
-        const log = `CoreSimulatorService: Shutdown requested for ${udid}\n`;
+        const log = `${service} Shutdown requested for ${udid}\n`;
         writeFileSync(artifact, log);
         onOutput(log);
       }
@@ -76,9 +77,16 @@ test("missing startup or shutdown evidence still closes the owned host observer"
   }
 });
 
-test("shutdown evidence requires both this device identity and a shutdown event", () => {
-  const valid = `CoreSimulatorService: Shutting down ${udid.toLowerCase()}`;
-  assert.deepEqual(shutdownEvidence(`booting ${udid}\nshutdown foreign\n${valid}`, udid), [valid]);
+test("shutdown evidence requires the lifecycle emitter, device identity and shutdown event", () => {
+  const valid = `${service} Shutting down ${udid.toLowerCase()}`;
+  const requester = `2026-11-11 20:17:02.375 Df simctl[65397:1b938] Shutdown requested for ${udid}`;
+  const guiRequest = requester.replace("simctl[", "Simulator[");
+  const quotedService = `${requester} via ${service}`;
+  const lookalike = valid.replace("CoreSimulatorService[", "CoreSimulatorServiceHelper[");
+  assert.deepEqual(shutdownEvidence([
+    `booting ${udid}`, "shutdown foreign", requester, guiRequest, quotedService,
+    lookalike, valid, `${service} booting ${udid}`, `${service} shutdown foreign`,
+  ].join("\n"), udid), [valid]);
 });
 
 test("pipe observation retains early and split writes, unrelated events and cancellation without polling", async () => {
@@ -86,7 +94,7 @@ test("pipe observation retains early and split writes, unrelated events and canc
   evidence.write("Filtering the log data using process scope\n");
   await evidence.waitFor("startup", AbortSignal.timeout(5000));
   const pending = evidence.waitFor("shutdown", AbortSignal.timeout(5000));
-  evidence.write("shutdown foreign\nbooting " + udid + "\nCoreSimulatorService: Shutting do");
+  evidence.write("shutdown foreign\nbooting " + udid + `\n${service} Shutting do`);
   evidence.write("wn " + udid + "\n");
   await pending;
   await evidence.waitFor("shutdown", AbortSignal.timeout(5000));
@@ -101,7 +109,7 @@ test("a complete startup or shutdown record needs no trailing newline", async ()
   const evidence = observeIosHostLog(udid);
   evidence.write("Filtering the log data using process scope");
   await evidence.waitFor("startup", AbortSignal.timeout(5000));
-  evidence.write("\nCoreSimulatorService: Shutdown requested for " + udid.slice(0, 16));
+  evidence.write(`\n${service} Shutdown requested for ` + udid.slice(0, 16));
   const pending = evidence.waitFor("shutdown", AbortSignal.timeout(5000));
   evidence.write(udid.slice(16));
   await pending;

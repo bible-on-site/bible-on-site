@@ -6,9 +6,17 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { iosHostLogArguments, startNativeLog } from "./native-logs.mjs";
 
+const lifecycleEmitters = new Set(["CoreSimulatorService",
+  "com.apple.CoreSimulator.CoreSimulatorService", "DeviceHub", "simulatord", "launchd_sim"]);
+
 export function shutdownEvidence(log, udid) {
-  return log.split(/\r?\n/).filter(line => line.toLowerCase().includes(udid.toLowerCase())
-    && /\bshut(?:ting)?[ -]?down/i.test(line));
+  return log.split(/\r?\n/).filter(line => {
+    // Parse the compact record's emitter, rather than matching a service name
+    // quoted in its payload. Requester logs remain useful context, not proof.
+    const emitter = /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+\S+\s+([A-Za-z_.]+)\[\d+(?::[a-f0-9]+)?\]/.exec(line)?.[1];
+    return lifecycleEmitters.has(emitter) && line.toLowerCase().includes(udid.toLowerCase())
+      && /\bshut(?:ting)?[ -]?down/i.test(line);
+  });
 }
 
 // Consume the logger's pipe directly. macOS file watcher registration can
