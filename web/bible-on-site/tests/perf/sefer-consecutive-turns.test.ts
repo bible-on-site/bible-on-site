@@ -9,6 +9,8 @@ import { dispatchTurnInput, prepareTurnInput } from "../util/turn-input";
 import {
 	reduceTurnBlockingSamples,
 	reduceTurnSamples,
+	TURN_BLOCKING_FRAME_ALLOWANCE,
+	TURN_BLOCKING_HARD_LIMIT_MS,
 	TURN_BLOCKING_LIMIT_MS,
 	type TURN_LIMITS,
 	turnBlockingBudgetFailures,
@@ -171,6 +173,7 @@ for (const [chapter, bookmarks] of [
 								renderingProfile,
 								limits,
 								blockingLimitMs: TURN_BLOCKING_LIMIT_MS,
+								blockingHardLimitMs: TURN_BLOCKING_HARD_LIMIT_MS,
 								samples,
 							},
 							null,
@@ -224,7 +227,15 @@ for (const [chapter, bookmarks] of [
 					reportBenchmark({
 						name: `${name}/blockingDurationMaxMs`,
 						measure: "frame_budget_ratio",
-						value: work.blockingDurationMaxMs / TURN_BLOCKING_LIMIT_MS,
+						value: work.blockingDurationMaxMs / TURN_BLOCKING_HARD_LIMIT_MS,
+						upperValue: 1,
+					});
+					reportBenchmark({
+						name: `${name}/blockingOverLimitCount`,
+						measure: "frame_budget_ratio",
+						value:
+							work.blockingOverLimitCount /
+							(TURN_BLOCKING_FRAME_ALLOWANCE + 1),
 						upperValue: 1,
 					});
 				}
