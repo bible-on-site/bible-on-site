@@ -88,7 +88,7 @@ describe("admin startup integration", () => {
 
 		expect(response.status).toBe(401);
 		expect(await response.text()).toContain("SESSION_EXPIRED");
-		expect(mocks.parseCookie).toHaveBeenCalledOnce();
+		expect(mocks.parseCookie).toHaveBeenCalledWith("", "admin_session");
 		expect(mocks.appFetch).not.toHaveBeenCalled();
 		await entry.fetch(unauthenticatedRpc());
 		expect(mocks.rescan).toHaveBeenCalledOnce();

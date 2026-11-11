@@ -5,10 +5,23 @@
  * the Next.js server for E2E tests. This approach is more reliable than using
  * Playwright's globalSetup for database operations.
  *
- * Usage: node ./launch-e2e-server.mts [--coverage]
+ * Usage: node ./launch-e2e-server.mts [--coverage] [--standalone] [--record-populate-marker]
+ *
+ * --standalone populates the database like e2e when cargo-make is available
+ * (population is skipped where the Rust toolchain was never installed,
+ * matching the pre-launcher behavior), then serves the built
+ * `.next/standalone/server.js` instead of `next dev`. The perf suite uses it
+ * so a standalone `test:perf` run in a fresh worktree still gets its
+ * per-checkout database populated (issue #2881 review).
+ *
+ * --record-populate-marker verifies DB_URL and records the current
+ * populate-input hash without starting a server. CI populate steps that run
+ * `cargo make mysql-populate` outside the launcher (e.g. before `next build`)
+ * use it so the perf webServer reuses that population instead of rebuilding.
  */
 
 import { execSync, spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
 	createWriteStream,
 	existsSync,
@@ -16,6 +29,7 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,10 +43,18 @@ const logDir = path.resolve(__dirname, ".playwright-report/setup");
 mkdirSync(logDir, { recursive: true });
 const logFile = path.resolve(logDir, "launcher.log");
 
-function log(message: string): void {
+type LogLevel = "info" | "warn" | "error";
+
+function log(message: string, level: LogLevel = "info"): void {
 	const timestamp = new Date().toISOString();
 	const line = `[${timestamp}] ${message}\n`;
-	console.log(message);
+	if (level === "error") {
+		console.error(message);
+	} else if (level === "warn") {
+		console.warn(message);
+	} else {
+		console.log(message);
+	}
 	try {
 		writeFileSync(logFile, line, { flag: "a" });
 	} catch (e) {
@@ -48,11 +70,23 @@ writeFileSync(
 
 // --coverage is passed by Playwright when MEASURE_COV=1; env vars come from the playwright config
 const _useCoverage = process.argv.includes("--coverage");
+// --standalone is passed by playwright.perf.config.ts: populate the database
+// like e2e, then serve the production build instead of `next dev`.
+const STANDALONE = process.argv.includes("--standalone");
+// --record-populate-marker is used by CI populate steps that run
+// `cargo make mysql-populate` outside the launcher so the perf webServer can
+// reuse that population instead of rebuilding the database.
+const RECORD_MARKER = process.argv.includes("--record-populate-marker");
+
+// Records which populate inputs built the target database so --standalone
+// can skip mysql-populate only when they are unchanged. Declared before
+// `await main()` — const bindings are not hoisted past it.
+const POPULATE_MARKER_TABLE = "test_populate_marker";
 
 try {
 	await main();
 } catch (err) {
-	log(`[ERROR] ${err}`);
+	log(`[ERROR] ${err}`, "error");
 	process.exit(1);
 }
 
@@ -73,6 +107,30 @@ async function populateDatabase(): Promise<void> {
 	log("[DB Setup] Ensuring test database is populated...");
 	log("[DB Setup] DB_URL is configured");
 
+	// --standalone reuses a database only when it was populated from the
+	// exact current inputs: the marker is written after the post-populate
+	// verification, so a match means schema and fixtures are current. Any
+	// populate-input change (SQL, populator code, deps, the cargo-make task)
+	// forces a rebuild instead of measuring a stale schema (#3251 review).
+	let inputsHash: string | undefined;
+	if (STANDALONE) {
+		inputsHash = await populateInputsHash();
+		if ((await readPopulateMarker(dbUrl)) === inputsHash) {
+			try {
+				await verifyTestDatabase(dbUrl);
+				log(
+					"[DB Setup] Database already populated from the current inputs — skipping cargo make mysql-populate.",
+				);
+				return;
+			} catch {
+				log(
+					"[DB Setup] Marker matched but verification failed — repopulating.",
+					"warn",
+				);
+			}
+		}
+	}
+
 	// Path to data directory (relative to web/bible-on-site)
 	const dataDirectory = path.resolve(__dirname, "../../data");
 	log(`[DB Setup] Data directory: ${dataDirectory}`);
@@ -85,8 +143,21 @@ async function populateDatabase(): Promise<void> {
 	if (cargoMakeCheck.status !== 0) {
 		log(
 			`[DB Setup] cargo-make check failed with status: ${cargoMakeCheck.status}`,
+			"error",
 		);
-		log(`[DB Setup] stderr: ${cargoMakeCheck.stderr?.toString()}`);
+		log(`[DB Setup] stderr: ${cargoMakeCheck.stderr?.toString()}`, "error");
+		// Standalone (perf) runs may execute where the Rust toolchain was never
+		// installed — e.g. the Website Performance job skips MySQL/cargo-make
+		// when perushim data is unavailable. The production server tolerates a
+		// missing or empty database the same way it did before the launcher
+		// owned population, so skip rather than fail the whole suite.
+		if (STANDALONE) {
+			log(
+				"[DB Setup] cargo-make unavailable — skipping population; the standalone server will use the existing database.",
+				"warn",
+			);
+			return;
+		}
 		throw new Error(
 			"cargo-make is not installed. Install with: cargo install cargo-make",
 		);
@@ -107,7 +178,7 @@ async function populateDatabase(): Promise<void> {
 		});
 		log("[DB Setup] Database population completed successfully.");
 	} catch (error) {
-		log(`[DB Setup] ERROR: Failed to populate database: ${error}`);
+		log(`[DB Setup] ERROR: Failed to populate database: ${error}`, "error");
 		log("[DB Setup] ========================================");
 		throw new Error(
 			"Database population failed. E2E tests require a populated database.",
@@ -119,7 +190,94 @@ async function populateDatabase(): Promise<void> {
 	// wrong database name, etc.) early — before tests run and produce
 	// confusing "element not found" errors.
 	await verifyTestDatabase(dbUrl);
+	if (STANDALONE && inputsHash) {
+		try {
+			await writePopulateMarker(dbUrl, inputsHash);
+		} catch (error) {
+			log(`[DB Setup] Could not record populate marker: ${error}`, "warn");
+		}
+	}
 	log("[DB Setup] ========================================");
+}
+
+async function connectTestDatabase(dbUrl: string) {
+	const url = new URL(dbUrl);
+	const { default: mysql } = await import("mysql2/promise");
+	return mysql.createConnection({
+		host: url.hostname,
+		port: Number.parseInt(url.port || "3306", 10),
+		user: decodeURIComponent(url.username),
+		password: decodeURIComponent(url.password),
+		database: url.pathname.slice(1),
+	});
+}
+
+/**
+ * Hash every input that determines the populated schema and fixtures, so
+ * --standalone can reuse a database only when it was built from exactly
+ * these files. Any populate-input change (SQL, populator code, deps, the
+ * cargo-make task) forces a rebuild instead of measuring a stale schema.
+ */
+async function populateInputsHash(): Promise<string> {
+	const dataDirectory = path.resolve(__dirname, "../../data");
+	const mysqlDirectory = path.join(dataDirectory, "mysql");
+	const inputs = [
+		...(await readdir(mysqlDirectory))
+			.filter((name) => name.endsWith(".sql"))
+			.map((name) => path.join(mysqlDirectory, name)),
+		path.join(mysqlDirectory, "db-populator", "src", "main.rs"),
+		path.join(mysqlDirectory, "db-populator", "Cargo.toml"),
+		path.join(dataDirectory, "Cargo.toml"),
+		path.join(dataDirectory, "Cargo.lock"),
+		path.join(dataDirectory, "Makefile.toml"),
+	].sort();
+	const hash = createHash("sha256");
+	for (const input of inputs) {
+		hash.update(path.relative(dataDirectory, input));
+		hash.update(await readFile(input));
+	}
+	return hash.digest("hex");
+}
+
+/** Returns the populate-input hash recorded in the database, or null. */
+async function readPopulateMarker(dbUrl: string): Promise<string | null> {
+	try {
+		const connection = await connectTestDatabase(dbUrl);
+		try {
+			const [rows] = await connection.execute(
+				`SELECT sql_hash FROM \`${POPULATE_MARKER_TABLE}\` WHERE id = 1`,
+			);
+			return (rows as { sql_hash: string }[])[0]?.sql_hash ?? null;
+		} finally {
+			await connection.end();
+		}
+	} catch {
+		// Missing database or marker table means "never populated here".
+		return null;
+	}
+}
+
+async function writePopulateMarker(
+	dbUrl: string,
+	inputsHash: string,
+): Promise<void> {
+	const connection = await connectTestDatabase(dbUrl);
+	try {
+		await connection.execute(
+			`CREATE TABLE IF NOT EXISTS \`${POPULATE_MARKER_TABLE}\` (
+				id TINYINT NOT NULL PRIMARY KEY,
+				sql_hash CHAR(64) NOT NULL,
+				populated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+		);
+		await connection.execute(
+			`INSERT INTO \`${POPULATE_MARKER_TABLE}\` (id, sql_hash)
+			 VALUES (1, ?) ON DUPLICATE KEY UPDATE sql_hash = VALUES(sql_hash)`,
+			[inputsHash],
+		);
+	} finally {
+		await connection.end();
+	}
 }
 
 /**
@@ -130,16 +288,8 @@ async function populateDatabase(): Promise<void> {
 async function verifyTestDatabase(dbUrl: string): Promise<void> {
 	log("[DB Health] Verifying test database tables...");
 
-	const url = new URL(dbUrl);
-	const database = url.pathname.slice(1);
-	const { default: mysql } = await import("mysql2/promise");
-	const connection = await mysql.createConnection({
-		host: url.hostname,
-		port: Number.parseInt(url.port || "3306", 10),
-		user: decodeURIComponent(url.username),
-		password: decodeURIComponent(url.password),
-		database,
-	});
+	const database = new URL(dbUrl).pathname.slice(1);
+	const connection = await connectTestDatabase(dbUrl);
 
 	// Tables that must exist and contain at least 1 row for e2e tests to pass.
 	// When adding a new feature that queries a new table, add it here!
@@ -192,7 +342,7 @@ async function verifyTestDatabase(dbUrl: string): Promise<void> {
 		if (missing.length > 0) parts.push(`missing tables: ${missing.join(", ")}`);
 		if (empty.length > 0) parts.push(`empty tables: ${empty.join(", ")}`);
 		const msg = `[DB Health] FAILED — ${parts.join("; ")} in database '${database}'`;
-		log(msg);
+		log(msg, "error");
 		throw new Error(
 			`${msg}. Either the db-populator didn't populate these tables, ` +
 				`or the app is connecting to the wrong database. ` +
@@ -206,6 +356,20 @@ async function verifyTestDatabase(dbUrl: string): Promise<void> {
 }
 
 async function main() {
+	if (RECORD_MARKER) {
+		const dbUrl = process.env.DB_URL;
+		if (!dbUrl) {
+			throw new Error("--record-populate-marker requires DB_URL");
+		}
+		// Verify before marking so a broken population is never recorded as
+		// current — the perf webServer trusts the marker and would skip its
+		// own populate + verification.
+		await verifyTestDatabase(dbUrl);
+		await writePopulateMarker(dbUrl, await populateInputsHash());
+		log("[DB Setup] Recorded populate marker for the current inputs.");
+		return;
+	}
+
 	// Populate database before starting the server
 	await populateDatabase();
 
@@ -228,15 +392,41 @@ async function main() {
 	// flip-book to local and runs docker compose — both break in CI)
 	// Always use `next dev` for e2e so tests pass: standalone can throw NoFallbackError
 	// on some routes; coverage also requires dev (instrumentation). No pre-build needed.
-	const nextCli = require.resolve("next/dist/bin/next");
-	log("[Server] Starting Next.js server: node next dev -p 3001");
+	//
+	// --standalone serves the production build instead: the perf suite measures
+	// the artifact CI ships, and its webServer.env already carries PORT and
+	// HOSTNAME for `.next/standalone/server.js`.
+	let serverArgs: string[];
+	let serverDescription: string;
+	if (STANDALONE) {
+		serverArgs = [path.resolve(__dirname, ".next/standalone/server.js")];
+		serverDescription = "node .next/standalone/server.js";
+	} else {
+		// The Playwright config passes the suite's port as WEB_PORT so parallel
+		// local sessions never share :3001 (issue #2881); manual runs keep :3001.
+		const webPort = process.env.WEB_PORT?.trim();
+		const port = webPort ? Number(webPort) : 3001;
+		if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+			throw new Error(
+				`WEB_PORT must be an integer between 1 and 65535, got "${webPort}"`,
+			);
+		}
+		serverArgs = [
+			require.resolve("next/dist/bin/next"),
+			"dev",
+			"-p",
+			String(port),
+		];
+		serverDescription = `node next dev -p ${port}`;
+	}
+	log(`[Server] Starting ${serverDescription}`);
 
 	// Tee the dev server's stdout/stderr into the artifact so CI failures keep
 	// the `⨯` lines Playwright's webServer pipe would otherwise discard (#2005).
 	const serverLogPath = path.resolve(logDir, "server.log");
 	const serverLog = createWriteStream(serverLogPath, { flags: "w" });
 
-	const server = spawn(process.execPath, [nextCli, "dev", "-p", "3001"], {
+	const server = spawn(process.execPath, serverArgs, {
 		cwd: __dirname,
 		stdio: ["inherit", "pipe", "pipe"],
 		env: process.env,
@@ -252,7 +442,7 @@ async function main() {
 	});
 
 	server.on("error", (err) => {
-		log(`[Server] Error: ${err.message}`);
+		log(`[Server] Error: ${err.message}`, "error");
 		process.exit(1);
 	});
 
