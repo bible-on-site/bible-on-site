@@ -68,7 +68,7 @@ function run(event, eventName = "workflow_dispatch") {
 	}
 }
 
-test("manual delivery masks its endpoint and sends only that subscription", () => {
+test("masks the manual endpoint and sends only that subscription", () => {
 	const endpoint = "https://fcm.googleapis.com/fcm/send/private-token";
 	const result = run({ inputs: { endpoint } });
 	assert.equal(result.status, 0, result.stderr);
@@ -83,7 +83,7 @@ test("manual delivery masks its endpoint and sends only that subscription", () =
 	assert.doesNotMatch(workflow, /\$\{\{\s*inputs\.endpoint\s*\}\}/);
 });
 
-test("manual input is JSON encoded and cannot inject logging commands", () => {
+test("encodes manual input as JSON and prevents logging command injection", () => {
 	const endpoint =
 		'https://fcm.googleapis.com/private%20"\\\r\n::warning::private';
 	const result = run({ inputs: { endpoint } });
@@ -109,7 +109,7 @@ for (const event of [
 	{ inputs: { endpoint: null } },
 	{ inputs: { endpoint: 42 } },
 ]) {
-	test(`invalid manual input fails before a network request: ${JSON.stringify(event)}`, () => {
+	test(`rejects invalid manual input before a network request: ${JSON.stringify(event)}`, () => {
 		const result = run(event);
 		assert.equal(result.status, 4, result.stderr);
 		assert.deepEqual(result.args, []);
@@ -117,7 +117,7 @@ for (const event of [
 	});
 }
 
-test("malformed event JSON fails before a network request", () => {
+test("rejects malformed event JSON before a network request", () => {
 	const result = run('{"inputs":');
 	assert.notEqual(result.status, 0);
 	assert.deepEqual(result.args, []);
@@ -125,7 +125,7 @@ test("malformed event JSON fails before a network request", () => {
 	assert.match(result.stderr, /parse error/);
 });
 
-test("scheduled sends retain the bodyless broadcast and arm gate", () => {
+test("retains the bodyless broadcast and arm gate for scheduled sends", () => {
 	const result = run({}, "schedule");
 	assert.equal(result.status, 0, result.stderr);
 	assert.ok(!result.args.includes("--data"));
