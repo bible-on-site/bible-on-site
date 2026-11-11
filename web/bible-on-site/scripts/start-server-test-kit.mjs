@@ -61,6 +61,8 @@ startServer(options);
 			String(options.port ?? 0),
 		],
 		{
+			// Own the descendant tree even when no child PID was announced.
+			detached: process.platform !== "win32",
 			stdio: ["ignore", "pipe", "pipe"],
 			env: {
 				...process.env,
@@ -78,21 +80,38 @@ startServer(options);
 	wrapper.stderr.on("data", (data) => {
 		output += data;
 	});
-	const exited = once(wrapper, "close");
+	let wrapperClosed = false;
+	wrapper.once("close", () => {
+		wrapperClosed = true;
+	});
+	const closed = once(wrapper, "close");
+	const exited = once(wrapper, "close", { signal: t.signal });
+	// Output-only callers need not await this promise. Awaiting callers still
+	// see cancellation, allowing node:test to enter teardown on its deadline.
+	exited.catch(() => {});
 	t.after(async () => {
-		if (wrapper.exitCode === null && wrapper.signalCode === null) {
-			wrapper.kill("SIGKILL");
-		}
-		// A signaled wrapper can exit before its child; inherited pipes then
-		// keep the test runner alive unless the fixture reaps that child too.
-		if (serverPid) {
-			try {
-				process.kill(serverPid, "SIGKILL");
-			} catch (error) {
-				if (error.code !== "ESRCH") throw error;
+		if (!wrapperClosed) {
+			if (process.platform !== "win32") {
+				try {
+					process.kill(-wrapper.pid, "SIGKILL");
+				} catch (error) {
+					if (error.code !== "ESRCH") throw error;
+				}
+			} else {
+				if (wrapper.exitCode === null && wrapper.signalCode === null) {
+					wrapper.kill("SIGKILL");
+				}
+				if (serverPid) {
+					try {
+						process.kill(serverPid, "SIGKILL");
+					} catch (error) {
+						if (error.code !== "ESRCH") throw error;
+					}
+				}
 			}
 		}
-		await exited;
+		// Teardown observes real EOF even if the test-facing wait was aborted.
+		await closed;
 		assert.equal(path.dirname(directory), os.tmpdir());
 		assert.ok(path.basename(directory).startsWith("bible-handover-test-"));
 		await rm(directory, { recursive: true, force: true });

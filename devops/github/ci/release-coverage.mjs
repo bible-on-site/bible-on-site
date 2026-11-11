@@ -61,6 +61,7 @@ const result = spawnSync(
 		"web/bible-on-site/scripts/start-server-signals.test.mjs",
 		"web/bible-on-site/scripts/start-server-lifecycle.test.mjs",
 		"web/bible-on-site/scripts/start-server-probe.test.mjs",
+		"web/bible-on-site/scripts/start-server-fixture.test.mjs",
 	],
 	{ cwd: root, stdio: "inherit" },
 );
