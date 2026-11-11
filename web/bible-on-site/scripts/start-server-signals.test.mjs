@@ -56,7 +56,7 @@ fetch = (...args) => {
 );
 
 test(
-	"SIGTERM retains a real listener during DNS drain, then forwards and exits",
+	"retains a real listener during DNS drain before forwarding SIGTERM and exiting",
 	nativeSignals,
 	async (t) => {
 		const server = await fixture(t, httpServer, { drainMs: 500 });
@@ -76,7 +76,7 @@ test(
 );
 
 test(
-	"SIGINT interrupts without waiting for the production drain",
+	"interrupts on SIGINT without waiting for the production drain",
 	nativeSignals,
 	async (t) => {
 		const server = await fixture(t, httpServer);
@@ -88,7 +88,7 @@ test(
 );
 
 test(
-	"the quiet exit waits out the minimum drain covering DNS removal",
+	"waits out the minimum drain covering DNS removal before a quiet exit",
 	nativeSignals,
 	async (t) => {
 		const server = await fixture(t, httpServer, {
@@ -119,7 +119,7 @@ test(
 );
 
 test(
-	"an unreadable connection metric falls back to the full drain deadline",
+	"falls back to the full drain deadline when the connection metric is unreadable",
 	nativeSignals,
 	async (t) => {
 		const server = await fixture(t, httpServer, {

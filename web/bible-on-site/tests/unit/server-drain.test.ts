@@ -16,7 +16,7 @@ const suites = [
 ];
 
 for (const suite of suites) {
-	test.concurrent(`${suite} passes its real child-process and HTTP checks`, async () => {
+	test.concurrent(`passes ${suite}'s real child-process and HTTP checks`, async () => {
 		let stdout: string;
 		try {
 			({ stdout } = await promisify(execFile)(
