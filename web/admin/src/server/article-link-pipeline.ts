@@ -702,11 +702,37 @@ export async function runLinkGeneration(
 				} catch {
 					throw new Error("המודל החזיר JSON לא תקין");
 				}
+				if (
+					!parsed ||
+					typeof parsed !== "object" ||
+					Array.isArray(parsed) ||
+					(!Object.hasOwn(parsed, "proposals") &&
+						!Object.hasOwn(parsed, "abstentions")) ||
+					(Object.hasOwn(parsed, "proposals") &&
+						!Array.isArray(parsed.proposals)) ||
+					(Object.hasOwn(parsed, "abstentions") &&
+						!Array.isArray(parsed.abstentions))
+				) {
+					throw new Error(
+						"LLM response must be an object containing proposals and/or abstentions arrays; correct the response and retry generation",
+					);
+				}
 				const validated = validateModelOutput(parsed, {
 					catalogue,
 					plainText,
 					snapshot,
 				});
+				const submittedItems =
+					(parsed.proposals?.length ?? 0) + (parsed.abstentions?.length ?? 0);
+				if (
+					submittedItems > 0 &&
+					validated.drafts.length === 0 &&
+					validated.abstentions.length === 0
+				) {
+					throw new Error(
+						"LLM returned only malformed proposals or abstentions; correct the response and retry generation",
+					);
+				}
 				for (const draft of validated.drafts) {
 					drafts.push({
 						id: randomUUID(),

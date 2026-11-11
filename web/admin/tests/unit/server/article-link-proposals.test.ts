@@ -370,6 +370,14 @@ describe("article link proposals server", () => {
 
 		it.each([
 			{
+				description: "valid empty proposals",
+				output: { proposals: [] },
+			},
+			{
+				description: "valid empty abstentions",
+				output: { abstentions: [] },
+			},
+			{
 				description: "author-only proposals",
 				output: {
 					proposals: [
@@ -423,6 +431,163 @@ describe("article link proposals server", () => {
 						),
 					),
 				).toBe(false);
+			},
+		);
+
+		it.each(["proposals", "abstentions"])(
+			"retries malformed-only %s and checkpoints the corrected response",
+			async (collection) => {
+				trackCheckpoints();
+				const candidate = {
+					relationshipKey: "coveringSources",
+					action: "add",
+					target: { citations: [{ sefer: "בראשית", perek: "יח", pasuk: "ב" }] },
+					evidence: [{ quote: "בראשית יח, ב" }],
+				};
+				const reply = (output: unknown) => ({
+					content: JSON.stringify(output),
+					model: "mock",
+					promptTokens: 10,
+					completionTokens: 5,
+				});
+				const malformed =
+					collection === "proposals"
+						? { proposals: [{ ...candidate, action: "bogus" }] }
+						: { abstentions: [{ reason: "missing relationshipKey" }] };
+				mocks.llmCall
+					.mockResolvedValueOnce(reply(malformed))
+					.mockResolvedValueOnce(reply({ proposals: [candidate] }));
+				const input = { data: { articleIds: [7], engine: "llm" as const } };
+
+				const first = await generateLinkProposals(input);
+				expect(first.outcomes[0].outcome).toBe("error");
+				expect(first.outcomes[0].error).toContain("malformed proposals");
+				expect(mocks.txExecute).not.toHaveBeenCalled();
+
+				const corrected = await generateLinkProposals(input);
+				expect(corrected.outcomes[0].outcome).toBe("generated");
+				expect(corrected.outcomes[0].proposals).toHaveLength(1);
+				expect(corrected.outcomes[0].proposals[0].status).toBe("pending");
+				const writes = mocks.txExecute.mock.calls.filter((call) =>
+					String(call[1]).includes("INSERT INTO tanah_article_link_checkpoint"),
+				);
+				expect(writes).toHaveLength(1);
+				expect(writes[0][2][5]).toBe(1);
+
+				const repeated = await generateLinkProposals(input);
+				expect(repeated.outcomes[0].outcome).toBe("skipped-checkpoint");
+				expect(mocks.llmCall).toHaveBeenCalledTimes(2);
+			},
+		);
+
+		it.each([
+			{ description: "an empty object", output: {} },
+			{ description: "an array", output: [] },
+			{ description: "null", output: null },
+			{ description: "a string", output: "unexpected" },
+			{ description: "a number", output: 42 },
+			{ description: "a boolean", output: true },
+			{
+				description: "an object instead of proposals",
+				output: { proposals: {} },
+			},
+			{
+				description: "a string instead of proposals",
+				output: { proposals: "unexpected" },
+			},
+			{ description: "null instead of proposals", output: { proposals: null } },
+			{
+				description: "an object instead of abstentions",
+				output: { abstentions: {} },
+			},
+			{
+				description: "a string instead of abstentions",
+				output: { abstentions: "unexpected" },
+			},
+			{
+				description: "null instead of abstentions",
+				output: { abstentions: null },
+			},
+			{
+				description: "a malformed optional collection",
+				output: { proposals: [], abstentions: false },
+			},
+		])(
+			"leaves $description retryable instead of checkpointing malformed response shape",
+			async ({ output }) => {
+				trackCheckpoints();
+				mocks.llmCall
+					.mockResolvedValueOnce({
+						content: JSON.stringify(output),
+						model: "mock",
+						promptTokens: 10,
+						completionTokens: 5,
+					})
+					.mockResolvedValueOnce({
+						content: JSON.stringify({ proposals: [] }),
+						model: "mock",
+						promptTokens: 10,
+						completionTokens: 5,
+					});
+				const input = { data: { articleIds: [7], engine: "llm" as const } };
+				const malformed = await generateLinkProposals(input);
+				expect(malformed.outcomes[0].outcome).toBe("error");
+				expect(malformed.outcomes[0].error).toContain(
+					"proposals and/or abstentions arrays",
+				);
+				expect(mocks.txExecute).not.toHaveBeenCalled();
+
+				const corrected = await generateLinkProposals(input);
+				const repeated = await generateLinkProposals(input);
+				expect(corrected.outcomes[0].outcome).toBe("generated");
+				expect(repeated.outcomes[0].outcome).toBe("skipped-checkpoint");
+				expect(mocks.llmCall).toHaveBeenCalledTimes(2);
+			},
+		);
+
+		it.each(["draft", "abstention"])(
+			"checkpoints mixed malformed output when a usable %s remains",
+			async (usable) => {
+				trackCheckpoints();
+				mocks.llmCall.mockResolvedValue({
+					content: JSON.stringify({
+						proposals: [
+							{ relationshipKey: "coveringSources", action: "bogus" },
+							...(usable === "draft"
+								? [
+										{
+											relationshipKey: "coveringSources",
+											action: "add",
+											target: {
+												citations: [
+													{ sefer: "בראשית", perek: "יח", pasuk: "ב" },
+												],
+											},
+											evidence: [{ quote: "בראשית יח, ב" }],
+										},
+									]
+								: []),
+						],
+						abstentions:
+							usable === "abstention"
+								? [
+										{
+											relationshipKey: "coveringSources",
+											reason: "no evidence",
+										},
+									]
+								: [],
+					}),
+					model: "mock",
+					promptTokens: 10,
+					completionTokens: 5,
+				});
+				const input = { data: { articleIds: [7], engine: "llm" as const } };
+				const first = await generateLinkProposals(input);
+				const repeated = await generateLinkProposals(input);
+				expect(first.outcomes[0].outcome).toBe("generated");
+				expect(repeated.outcomes[0].outcome).toBe("skipped-checkpoint");
+				expect(mocks.llmCall).toHaveBeenCalledTimes(1);
 			},
 		);
 

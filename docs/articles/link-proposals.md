@@ -64,7 +64,9 @@ Engine versions are independent: changing the LLM prompt does not invalidate
 the heuristic engine's existing checkpoints or duplicate its drafts. A
 successful run is checkpointed even when it produces no eligible proposals,
 including when the model only attempts a forbidden author suggestion. Failed
-calls remain retryable and dry runs never write checkpoints.
+calls remain retryable and dry runs never write checkpoints. A response with
+invalid structure or only malformed items is a failed generation, rather
+than a successful empty result.
 
 ## Storage
 
