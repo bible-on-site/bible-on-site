@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "pasuk": {
-  "model_revision": "morphhb-lexical-baseline@3d15126f+aligned2+names1+contract1",
+  "model_revision": "morphhb-lexical-baseline@3d15126f+aligned2+names2+contract1",
   "cases": 20,
   "gold_auto": 83,
   "gold_held": 0,
@@ -1074,7 +1074,7 @@
   }
  },
  "article": {
-  "model_revision": "morphhb-gazetteer@3d15126f+aligned2+names1+contract1",
+  "model_revision": "morphhb-gazetteer@3d15126f+aligned2+names2+contract1",
   "cases": 12,
   "gold_auto": 21,
   "gold_held": 17,

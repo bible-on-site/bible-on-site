@@ -15,6 +15,11 @@ alwaysApply: true
 
 - **DevOps**: Node.js/TypeScript (`devops/`)
 - **Data processing**: Rust (`data/`)
+- **Tanahpedia local model inference**: the existing `data/annotations/`
+  pipeline uses Python for PyTorch/Transformers model adapters, GPU execution,
+  evaluation, checkpoints and tests. This is a scoped ML-runtime exception;
+  general data ingestion remains Rust and durable content uses the normal
+  database editing/import path.
 
 ## Tool Learning (Agents/Copilot)
 

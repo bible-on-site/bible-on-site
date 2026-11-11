@@ -34,8 +34,8 @@ review. Neither set supports an unbiased production-accuracy claim.
 ```powershell
 python data/annotations/golden_eval.py --gold-dir data/annotations/golden/validation --out .cache/validation-baseline.json
 python data/annotations/encoders.py --model dictabert-ner-retype --model dictabert-large-ner-retype --device cuda:0 --dtype float32 --gold-dir data/annotations/golden/validation --out .cache/encoder-validation
-python data/annotations/local_llm.py --device cuda:0 --dtype bfloat16 --gold-dir data/annotations/golden/validation --cache-dir .cache/llm-retype --out .cache/dictalm-retype.json
-python data/annotations/llm_detect.py --model qwen3-8b-retype --device cuda:0 --dtype bfloat16 --gold-dir data/annotations/golden/validation --cache-dir .cache/llm-detect --out .cache/qwen-detect.json --rows-out .cache/qwen-detect-rows.json
+python data/annotations/local_llm.py --device cuda:0 --dtype bfloat16 --constrained-json --gold-dir data/annotations/golden/validation --cache-dir .cache/llm-retype --out .cache/dictalm-retype.json
+python data/annotations/llm_detect.py --model qwen3-8b-retype --device cuda:0 --dtype bfloat16 --constrained-json --gold-dir data/annotations/golden/validation --cache-dir .cache/llm-detect --out .cache/qwen-detect.json --rows-out .cache/qwen-detect-rows.json
 ```
 
 Use `link_precision`, `link_recall` and `link_f1` for model choice: a reference
@@ -49,13 +49,16 @@ LLM retyping on those same candidates. `llm_detect.py` also evaluates independen
 detection, so names outside the gazetteer and all 13 supported entity types can
 reach the model. LLMs have no database tools. Output indices, exact source spans,
 types and JSON are validated; uncertain/conflicting results remain suppressed.
+The model selects source indices or supplied candidate IDs. Code derives exact
+surface text and preserves original coordinates; the model cannot rewrite them.
+`--constrained-json` enforces required fields and legal values during generation.
 Existing anchors, scripts and styles are excluded from article annotations.
 
 ## Produce resumable local rows
 
 ```powershell
 python data/annotations/publish.py --device cuda:0 --dtype float32 --pasuk-out .cache/mentions-pasuk.json --checkpoint-dir .cache/mentions-publish
-python data/annotations/publish.py --engine llm-detect --llm-model qwen3-8b-retype --device cuda:0 --dtype bfloat16 --max-perakim 1 --pasuk-out .cache/mentions-pilot.json --checkpoint-dir .cache/mentions-pilot
+python data/annotations/publish.py --engine llm-detect --llm-model qwen3-8b-retype --device cuda:0 --dtype bfloat16 --constrained-json --max-perakim 1 --pasuk-out .cache/mentions-pilot.json --checkpoint-dir .cache/mentions-pilot
 ```
 
 Choose `--engine classifier` (the compatibility default), `llm-retype`, or

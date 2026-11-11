@@ -30,7 +30,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import baseline
 
-MODEL_REVISION = "morphhb-gazetteer@3d15126f+aligned2+names1+contract1"
+MODEL_REVISION = "morphhb-gazetteer@3d15126f+aligned2+names2+contract1"
 
 # Elements whose text must never be decorated: an anchor interior would
 # nest links, and script/style bodies are not visible prose.

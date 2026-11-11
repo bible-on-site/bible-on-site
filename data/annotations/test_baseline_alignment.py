@@ -55,6 +55,39 @@ class TestCanonicalAlignment(unittest.TestCase):
 
 
 class TestIntendedNameNormalization(unittest.TestCase):
+    def test_compound_components_with_same_root_id_keep_separate_forms(self):
+        lexicon = {"books": {"X": {"1": {"1": [
+            [0, "l/42+", "כרמל", "p"], [1, "42", "ים", "p"],
+        ]}}}}
+        names = baseline.preferred_lemma_names(lexicon)
+        self.assertEqual(names["42+"], "כרמל")
+        self.assertEqual(names["42"], "ים")
+        self.assertEqual(baseline.base_lemma("l/42+"), "42")
+
+    def test_compound_tail_cannot_rename_directive_head_with_same_root_id(self):
+        lexicon = {"books": {"X": {"1": {"1": [
+            [0, "42+", "כרמל/ה", "p"], [1, "42", "ים", "p"],
+        ]}}}}
+        source = perek("כרמלה", "ים")
+        result = baseline.decorations_for_perek(source, lexicon["books"]["X"]["1"], lexicon)
+        self.assertEqual(result[0]["intended_name"], "כרמל ים")
+        self.assertEqual(result[0]["surface"], "כרמלה ים")
+        self.assertEqual(result[0]["acceptance"], "auto")
+
+    def test_genesis_28_2_retains_padan_aram_and_original_surface(self):
+        source = baseline.load_canonical()[0]["perakim"][27]
+        lexicon = baseline.load_lexicon()
+        result = baseline.decorations_for_perek(source, lexicon["books"]["Gen"]["28"], lexicon)
+        mention = next(row for row in result
+                       if row["pasuk_number"] == 2 and row["segment_start"] == 2)
+        self.assertEqual(mention["segment_end"], 3)
+        self.assertEqual(mention["intended_name"], "פדן ארם")
+        self.assertEqual(
+            mention["surface"],
+            " ".join(segment["value"] for segment in source["pesukim"][1]["segments"][2:4]),
+        )
+        self.assertEqual(mention["acceptance"], "auto")
+
     def test_directional_suffix_is_removed_and_final_letter_restored(self):
         result = rows(perek("מִצְרַיְמָה"), [0, "4714", "מִצְרַיְמָ/ה", "p"])
         self.assertEqual(result[0]["intended_name"], "מצרים")

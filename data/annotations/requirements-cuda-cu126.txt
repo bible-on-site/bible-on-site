@@ -9,3 +9,4 @@ transformers==5.22.2
 # Only the Qwen3 NF4 comparison needs these two optional packages.
 accelerate==1.15.0
 bitsandbytes==0.50.2
+lm-format-enforcer==0.11.3

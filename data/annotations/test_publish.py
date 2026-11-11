@@ -218,11 +218,24 @@ class TestCheckpointStore(unittest.TestCase):
     def test_diagnostics_roundtrip_and_corrupt_diagnostics_miss(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = self.store(tmp)
-            store.save("perek-1", "src", [contract_row()], {"invalid_response_chunks": 2})
+            store.save("perek-1", "src", [contract_row()], {"valid_response_chunks": 2})
             self.assertIsNotNone(store.load("perek-1", "src"))
-            self.assertEqual(store.last_diagnostics, {"invalid_response_chunks": 2})
+            self.assertEqual(store.last_diagnostics, {"valid_response_chunks": 2})
             store.save("perek-1", "src", [contract_row()], {"invalid_response_chunks": True})
             self.assertIsNone(store.load("perek-1", "src"))
+
+    def test_legacy_incomplete_record_is_a_retryable_miss_with_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.store(tmp)
+            store.save("perek-1", "src", [], {"invalid_response_chunks": 2})
+            path = store.dir / "perek-1.json"
+            legacy = json.loads(path.read_text(encoding="utf-8"))
+            del legacy["failure_history"]
+            path.write_text(json.dumps(legacy), encoding="utf-8")
+            resumed = self.store(tmp)
+            self.assertIsNone(resumed.load("perek-1", "src"))
+            self.assertEqual((resumed.hits, resumed.misses), (0, 1))
+            self.assertEqual(resumed.failure_history["invalid_response_chunks"], 2)
 
     def test_source_mismatch_is_a_miss(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -556,12 +569,13 @@ class TestLlmEngines(unittest.TestCase):
         units = json.loads(messages[-1]["content"])["units"]
         word = units[0]
         return json.dumps({"mentions": [{"start": word["index"], "end": word["index"],
-            "surface": word["text"], "intended_name": word["text"], "entity_type": "ANIMAL"}]})
+            "intended_name": word["text"], "entity_type": "ANIMAL"}]})
 
     def retyper(self, messages):
         candidates = json.loads(messages[-1]["content"])["candidates"]
-        return json.dumps({"decisions": [dict(candidate, entity_type="PLACE", decision="accept")
-                                         for candidate in candidates]})
+        return json.dumps({"decisions": [{"id": candidate["id"],
+            "intended_name": candidate["intended_name"], "entity_type": "PLACE", "decision": "accept"}
+            for candidate in candidates]})
 
     def test_independent_detection_bypasses_lexical_gate_and_respects_unit_limits(self):
         seen = []
@@ -608,15 +622,49 @@ class TestLlmEngines(unittest.TestCase):
         self.assertEqual((store.hits, store.misses), (1, 1))
         self.assertEqual([row["perek_id"] for row in rows], [1, 2])
 
-    def test_failed_detection_diagnostics_survive_cached_empty_rows(self):
+    def test_failed_detection_retries_on_resume_and_retains_quarantined_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
-            for generate in (lambda _messages: "invalid", lambda _messages: self.fail("cached model call")):
-                diagnostics = publish.collections.Counter()
-                rows = publish.pasuk_rows(self.corpus(), None, engine="llm-detect",
-                    generate_fn=generate, model_revision="detect@1", max_perakim=1,
-                    checkpoint=publish.CheckpointStore(tmp, "pasuk", "cfg"), diagnostics=diagnostics)
-                self.assertEqual(rows, [])
-                self.assertEqual(diagnostics["invalid_response_chunks"], 1)
+            calls = []
+            def transient(messages):
+                calls.append(1)
+                return "invalid" if len(calls) == 1 else self.detector(messages)
+
+            request_dir = Path(tmp) / "requests"
+            first_cache = publish.local_llm.CachedGenerator(transient, request_dir, "detect@1")
+            first_store = publish.CheckpointStore(tmp, "pasuk", "cfg")
+            failed_stats = publish.collections.Counter()
+            failed = publish.pasuk_rows(self.corpus(), None, engine="llm-detect",
+                generate_fn=first_cache, model_revision="detect@1", max_perakim=1,
+                checkpoint=first_store, diagnostics=failed_stats)
+            self.assertEqual(failed, [])
+            self.assertEqual(failed_stats["invalid_response_chunks"], 1)
+            second_cache = publish.local_llm.CachedGenerator(transient, request_dir, "detect@1")
+            second_store = publish.CheckpointStore(tmp, "pasuk", "cfg")
+            recovered_stats = publish.collections.Counter()
+            recovered = publish.pasuk_rows(self.corpus(), None, engine="llm-detect",
+                generate_fn=second_cache, model_revision="detect@1", max_perakim=1,
+                checkpoint=second_store, diagnostics=recovered_stats)
+            self.assertEqual(recovered[0]["entity_type"], "ANIMAL")
+            self.assertEqual((second_store.hits, second_store.misses), (0, 1))
+            self.assertEqual(recovered_stats["invalid_response_chunks"], 0)
+            self.assertEqual(second_store.failure_history["invalid_response_chunks"], 1)
+            self.assertEqual(len(calls), 2)
+            self.assertTrue(list((request_dir / "invalid").glob("*.reason.json")))
+            output = Path(tmp) / "rows.json"
+            output.write_text(json.dumps(recovered), encoding="utf-8")
+            publish.write_provenance(output, spec=None, execution=None, entities_fn=second_cache,
+                checkpoint=second_store, runtime={}, engine="llm-detect", diagnostics=recovered_stats)
+            provenance = json.loads(Path(f"{output}.provenance.json").read_text(encoding="utf-8"))
+            self.assertTrue(provenance["complete_valid_responses"])
+            self.assertEqual(provenance["failure_history"]["invalid_response_chunks"], 1)
+            warm_store = publish.CheckpointStore(tmp, "pasuk", "cfg")
+            warm = publish.pasuk_rows(self.corpus(), None, engine="llm-detect",
+                generate_fn=lambda _: self.fail("valid unit should stay cached"),
+                model_revision="detect@1", max_perakim=1, checkpoint=warm_store)
+            self.assertEqual(warm, recovered)
+            self.assertEqual(warm_store.hits, 1)
+            self.assertEqual(warm_store.failure_history["invalid_response_chunks"], 1)
+            self.assertEqual(len(calls), 2)
 
     def test_llm_retype_changes_only_supplied_candidates_and_collects_diagnostics(self):
         corpus, lexicon = fake_corpus()

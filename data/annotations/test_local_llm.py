@@ -1,7 +1,6 @@
-"""Local LLM safety, source-coordinate fidelity and provenance tests.
+"""Test local LLM safety, source-coordinate fidelity and provenance."""
 
-No weights, torch, external provider or database is needed for these tests.
-"""
+# Tests need no weights, torch, external provider or database.
 
 import copy
 import contextlib
@@ -10,9 +9,11 @@ from pathlib import Path
 import tempfile
 import types
 import unittest
-from unittest import mock
+import unittest.mock
 
 import local_llm as llm
+
+mock = unittest.mock
 
 
 def row(**changes):
@@ -25,7 +26,8 @@ def row(**changes):
 
 def respond(messages, **changes):
     candidates = json.loads(messages[-1]["content"])["candidates"]
-    decisions = [candidate | {"decision": "accept"} | changes for candidate in candidates]
+    decisions = [{key: candidate[key] for key in ("id", "intended_name", "entity_type")}
+                 | {"decision": "accept"} | changes for candidate in candidates]
     return json.dumps({"decisions": decisions}, ensure_ascii=False)
 
 
@@ -33,7 +35,8 @@ class TestValidation(unittest.TestCase):
     def setUp(self):
         self.candidates = [{"id": 0, "surface": "ישראל", "span": [0, 0],
                             "intended_name": "ישראל", "entity_type": "PERSON"}]
-        self.valid = {"decisions": [dict(self.candidates[0], decision="accept")]}
+        self.valid = {"decisions": [{"id": 0, "intended_name": "ישראל",
+                                     "entity_type": "PERSON", "decision": "accept"}]}
 
     def test_full_taxonomy_can_be_emitted_without_ner_label_mapping(self):
         for kind in llm.ENTITY_TYPES:
@@ -43,8 +46,8 @@ class TestValidation(unittest.TestCase):
                 self.assertEqual(actual[0]["entity_type"], kind)
 
     def test_untrusted_output_cannot_change_identity_span_or_schema(self):
-        changes = [{"id": 99}, {"id": False}, {"surface": "דוד"},
-                   {"span": [0, 2]}, {"span": [False, 0]}, {"entity_type": "SQL"},
+        changes = [{"id": 99}, {"id": False}, {"surface": "דוד"}, {"surface": "ישראל"},
+                   {"span": [0, 0]}, {"span": [0, 2]}, {"span": [False, 0]}, {"entity_type": "SQL"},
                    {"entity_type": []}, {"decision": []}, {"decision": "publish"},
                    {"intended_name": "<a>ישראל</a>"}, {"intended_name": "יִשְׂרָאֵל"},
                    {"intended_name": ""}, {"confidence": 1}]
@@ -71,6 +74,7 @@ class TestRetype(unittest.TestCase):
     def test_context_changes_type_without_modifying_original_source(self):
         original = row()
         source = copy.deepcopy(self.perek)
+
         def generate(messages):
             self.assertIn("ישראל יצאו", messages[-1]["content"])
             return respond(messages, entity_type="NATION")
@@ -121,6 +125,27 @@ class TestRetype(unittest.TestCase):
         self.assertEqual(stale[0]["acceptance"], "held")
         generate.assert_not_called()
 
+    def test_lean_decision_preserves_vocalized_article_surface_and_utf16_coordinates(self):
+        surface = "יִשְׂרָאֵל"
+        content = f"<p>😀 {surface}</p>"
+        original = row(source_kind="article", surface=surface, span_start=6,
+                       span_end=6 + len(surface))
+        responses = []
+
+        def generate(messages):
+            response = respond(messages, entity_type="NATION")
+            responses.append(json.loads(response)["decisions"][0])
+            return response
+
+        actual = llm.retype_article_rows(content, [original], generate)[0]
+        self.assertEqual(set(responses[0]), llm.DECISION_FIELDS)
+        self.assertNotIn("surface", responses[0])
+        self.assertNotIn("span", responses[0])
+        self.assertEqual(actual["surface"], surface)
+        self.assertEqual((actual["span_start"], actual["span_end"]), (6, 6 + len(surface)))
+        encoded = content.encode("utf-16-le")
+        self.assertEqual(encoded[actual["span_start"] * 2:actual["span_end"] * 2].decode("utf-16-le"), surface)
+
     def test_article_candidates_in_one_text_run_share_bounded_request(self):
         content = "<p>ישראל ומשה</p>"
         first = row(source_kind="article", span_start=3, span_end=8)
@@ -141,6 +166,20 @@ class TestRetype(unittest.TestCase):
 
 
 class TestProvenanceAndCache(unittest.TestCase):
+    def test_grammar_schema_and_library_changes_isolate_cache_identity(self):
+        with mock.patch.object(llm.importlib.metadata, "version", return_value=llm.FORMAT_ENFORCER_PIN):
+            plain = llm.revision_tag()
+            structured = llm.revision_tag(constrained_json=True)
+            self.assertNotEqual(plain, structured)
+            with mock.patch.object(llm, "GRAMMAR_VERSION", "changed"):
+                self.assertNotEqual(structured, llm.revision_tag(constrained_json=True))
+            schema = copy.deepcopy(llm.RETYPE_RESPONSE_SCHEMA)
+            schema["properties"]["decisions"]["maxItems"] += 1
+            self.assertNotEqual(llm.format_identity(schema)["schema_sha256"],
+                                llm.format_identity(llm.RETYPE_RESPONSE_SCHEMA)["schema_sha256"])
+        with mock.patch.object(llm.importlib.metadata, "version", return_value="different"):
+            self.assertNotEqual(structured, llm.revision_tag(constrained_json=True))
+
     def test_execution_and_prompt_change_revision(self):
         with mock.patch.object(llm.encoders, "runtime_signature", return_value={"tokenizers": "v1"}):
             cpu = llm.revision_tag(execution={"device": "cpu", "dtype": "float32"})
@@ -174,6 +213,39 @@ class TestProvenanceAndCache(unittest.TestCase):
                 path.write_text(broken, encoding="utf-8")
                 self.assertEqual(cached([]), '{"decisions":[]}')
             self.assertEqual(generate.call_count, 4)
+
+    def test_invalid_response_is_quarantined_and_next_attempt_recovers_without_force(self):
+        calls = []
+
+        def transient(messages):
+            calls.append(messages)
+            return "truncated-json{" if len(calls) == 1 else respond(messages, entity_type="NATION")
+
+        perek = {"perekId": 1, "pesukim": [{"segments": [{"type": "qri", "value": "ישראל"}]}]}
+        with tempfile.TemporaryDirectory() as directory:
+            first = llm.CachedGenerator(transient, directory, "pinned")
+            failed = llm.retype_perek_rows(perek, [row()], first)
+            self.assertEqual(failed[0]["acceptance"], "held")
+            self.assertEqual(list(Path(directory).glob("*.json")), [])
+            evidence = list((Path(directory) / "invalid").glob("*.json"))
+            outputs = [json.loads(path.read_text(encoding="utf-8")) for path in evidence]
+            self.assertTrue(any(record.get("output") == "truncated-json{" for record in outputs))
+            self.assertTrue(any(record.get("reason") == "model output is not a JSON object" for record in outputs))
+            second = llm.CachedGenerator(transient, directory, "pinned")
+            recovered = llm.retype_perek_rows(perek, [row()], second)
+            self.assertEqual((recovered[0]["entity_type"], recovered[0]["acceptance"]), ("NATION", "auto"))
+            self.assertEqual(second.calls, 1)
+            llm.retype_perek_rows(perek, [row()], second)
+            self.assertEqual(second.cache_hits, 1)
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(first.diagnostics["invalid_batches"], 1)
+            self.assertEqual(first.diagnostics["quarantined_responses"], 1)
+
+    def test_invalidating_an_absent_request_is_a_noop(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cached = llm.CachedGenerator(lambda _: "unused", directory, "pinned")
+            self.assertIsNone(cached.invalidate([]))
+            self.assertFalse((Path(directory) / "invalid").exists())
 
     def test_mutable_model_revision_is_rejected_before_dependencies_or_download(self):
         with self.assertRaisesRegex(ValueError, "immutable"):
@@ -267,6 +339,120 @@ class TestLocalLoading(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "no truncation"):
                 generate(messages)
             self.assertEqual(model.generate.call_count, 1)
+
+
+class TestResponseGrammar(unittest.TestCase):
+    def test_retype_grammar_uses_only_supplied_candidate_indices_and_count(self):
+        candidates = [{"id": 7, "span": [3, 5], "surface": "ישראל", "intended_name": "ישראל",
+                       "entity_type": "PERSON"}]
+        messages = llm.build_messages("ישראל יצאו", candidates)
+        schema = llm.request_schema(llm.RETYPE_RESPONSE_SCHEMA, messages)
+        array = schema["properties"]["decisions"]
+        properties = array["items"]["properties"]
+        self.assertEqual((array["minItems"], array["maxItems"]), (1, 1))
+        self.assertEqual(properties["id"]["enum"], [7])
+        self.assertNotIn("surface", properties)
+        self.assertNotIn("span", properties)
+        self.assertEqual(set(properties["entity_type"]["enum"]), llm.ENTITY_TYPES)
+        self.assertEqual(set(array["items"]["required"]), llm.DECISION_FIELDS)
+        self.assertFalse(array["items"]["additionalProperties"])
+
+    def test_detect_grammar_uses_source_indices_and_full_taxonomy_plus_other(self):
+        import llm_detect
+        messages = llm_detect.build_messages("אריה שאג", [{"index": 8, "text": "אריה"},
+                                                       {"index": 9, "text": "שאג"}])
+        schema = llm.request_schema(llm_detect.DETECT_RESPONSE_SCHEMA, messages)
+        array = schema["properties"]["mentions"]
+        properties = array["items"]["properties"]
+        self.assertEqual(properties["start"]["enum"], [8, 9])
+        self.assertEqual(properties["end"]["enum"], [8, 9])
+        self.assertNotIn("surface", properties)
+        self.assertEqual(set(properties["entity_type"]["enum"]), llm.ENTITY_TYPES | {"OTHER"})
+        self.assertEqual(set(array["items"]["required"]), llm_detect.MENTION_FIELDS)
+        self.assertFalse(array["items"]["additionalProperties"])
+        self.assertEqual(array["maxItems"], llm_detect.MAX_MENTIONS)
+
+    def test_invalid_source_bounds_fail_before_generation(self):
+        import llm_detect
+        for value in ({"units": [{"index": True}]}, {"units": [{"index": -1}]},
+                      {"units": []}, {"units": "bad"}):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                llm.request_schema(llm_detect.DETECT_RESPONSE_SCHEMA,
+                                   [{"role": "user", "content": json.dumps(value)}])
+
+    def test_bound_profiles_share_weights_and_stats_and_use_fresh_prefix_state(self):
+        import llm_detect
+        tensor = mock.Mock()
+        tensor.shape = [1, 5]
+        tensor.to.return_value = tensor
+        tokenizer = mock.MagicMock()
+        tokenizer.__len__.return_value = 100
+        tokenizer.return_value = {"input_ids": tensor}
+        tokenizer.pad_token_id = 0
+        tokenizer.eos_token_id = 7
+        tokenizer.decode.return_value = '{"decisions":[]}'
+        model = mock.Mock()
+        model.to.return_value = model
+        model.config = types.SimpleNamespace(vocab_size=90)
+        output = mock.MagicMock()
+        output.__getitem__.return_value = [8, 7]
+        model.generate.return_value = output
+        loaders = types.SimpleNamespace(
+            AutoTokenizer=types.SimpleNamespace(from_pretrained=mock.Mock(return_value=tokenizer)),
+            AutoModelForCausalLM=types.SimpleNamespace(from_pretrained=mock.Mock(return_value=model)))
+        tokenizer_data = object()
+        parsers = mock.Mock(side_effect=[object(), object()])
+        configs = mock.Mock(side_effect=lambda **kwargs: kwargs)
+        data_builder = mock.Mock(return_value=tokenizer_data)
+        prefixes = [object(), object()]
+        prefix_builder = mock.Mock(side_effect=prefixes)
+        modules = {
+            "torch": types.SimpleNamespace(float32="fp32", inference_mode=contextlib.nullcontext),
+            "transformers": loaders,
+            "lmformatenforcer": types.SimpleNamespace(CharacterLevelParserConfig=configs, JsonSchemaParser=parsers),
+            "lmformatenforcer.consts": types.SimpleNamespace(COMPLETE_ALPHABET='abc123 {}"'),
+            "lmfe_transformers": types.SimpleNamespace(
+                build_token_enforcer_tokenizer_data=data_builder,
+                build_transformers_prefix_allowed_tokens_fn=prefix_builder),
+        }
+        execution = {"device": "cpu", "dtype": "float32", "tf32": False}
+        with (
+            mock.patch.dict("sys.modules", modules),
+            mock.patch.object(llm.encoders, "normalize_execution", return_value=execution),
+            mock.patch.object(llm.encoders, "execution_provenance", return_value=dict(execution)),
+            mock.patch.object(llm.importlib.metadata, "version", return_value=llm.FORMAT_ENFORCER_PIN),
+        ):
+            base = llm.load_generate_fn(device="cpu", dtype="float32")
+            original = copy.deepcopy(llm.RETYPE_RESPONSE_SCHEMA)
+            retype = base.bind_schema(original)
+            original["required"].append("mutated")
+            self.assertNotIn("mutated", retype.response_schema["required"])
+            detect = base.bind_schema(llm_detect.DETECT_RESPONSE_SCHEMA)
+            messages = llm.build_messages("😀 יִשְׂרָאֵל", [{"id": 7, "surface": "יִשְׂרָאֵל", "span": [3, 5],
+                                                           "intended_name": "ישראל", "entity_type": "PERSON"}])
+            retype(messages)
+            self.assertIs(model.generate.call_args.kwargs["prefix_allowed_tokens_fn"], prefixes[0])
+            self.assertEqual(model.generate.call_args.kwargs["pad_token_id"], 0)
+            detect(llm_detect.build_messages("אריה שאג", [{"index": 8, "text": "אריה"},
+                                                       {"index": 9, "text": "שאג"}]))
+            self.assertIs(model.generate.call_args.kwargs["prefix_allowed_tokens_fn"], prefixes[1])
+            base(messages)
+            self.assertNotIn("prefix_allowed_tokens_fn", model.generate.call_args.kwargs)
+            self.assertIs(retype.stats, base.stats)
+            self.assertIs(detect.stats, base.stats)
+            self.assertEqual(base.stats["generated_requests"], 3)
+            self.assertIs(retype.count_input_tokens, base.count_input_tokens)
+            self.assertEqual(retype.execution["structured_output"]["library_pin"], llm.FORMAT_ENFORCER_PIN)
+        loaders.AutoModelForCausalLM.from_pretrained.assert_called_once()
+        loaders.AutoTokenizer.from_pretrained.assert_called_once()
+        data_builder.assert_called_once_with(tokenizer, vocab_size=90)
+        self.assertEqual(parsers.call_count, 2)
+        alphabet = configs.call_args_list[0].kwargs["alphabet"]
+        self.assertIn("ץ", alphabet)
+        self.assertIn("֑", alphabet)
+        self.assertIn("😀", alphabet)
+        self.assertTrue(configs.call_args.kwargs["force_json_field_order"])
+        self.assertEqual(parsers.call_args_list[0].args[0]["properties"]["decisions"]["items"]["properties"]["id"]["enum"], [7])
 
 
 if __name__ == "__main__":

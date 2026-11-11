@@ -20,7 +20,7 @@ CANONICAL = (
     ROOT / "web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json"
 )
 LEXICON = Path(__file__).with_name("morphhb-proper-nouns.json.gz")
-MODEL_REVISION = "morphhb-lexical-baseline@3d15126f+aligned2+names1+contract1"
+MODEL_REVISION = "morphhb-lexical-baseline@3d15126f+aligned2+names2+contract1"
 
 DIACRITICS = re.compile("[\u0591-\u05bd\u05bf-\u05c7]")
 ZERO_WIDTH = re.compile("[\u200b\u200c\u200d\ufeff]")
@@ -140,9 +140,12 @@ def preferred_lemma_names(lexicon):
     The runtime index is cached on the loaded lexicon only; it is never
     written to the artifact or derived from entries or evaluation labels.
     A tied vote supplies no preferred form, so ambiguity cannot invent a
-    canonical spelling. This is used only to remove inflectional suffixes.
+    canonical spelling. Compound components keep their '+' marker in the
+    key: an unsuffixed tail must never rename the suffixed head merely
+    because morphology assigns the same root ID to both. This is used
+    only to remove inflectional suffixes.
     """
-    cache_key = "_runtime_preferred_lemma_names"
+    cache_key = "_runtime_preferred_component_names_v2"
     if cache_key not in lexicon:
         votes = collections.defaultdict(collections.Counter)
         for book in lexicon.get("books", {}).values():
@@ -152,7 +155,7 @@ def preferred_lemma_names(lexicon):
                         form = strip_prefix_parts(surface)
                         name = normalize_name(form)
                         if "/" not in form and name:
-                            votes[base_lemma(lemma)][name] += 1
+                            votes[component_lemma(lemma)][name] += 1
         preferred = {}
         for lemma, forms in votes.items():
             ranked = forms.most_common(2)
@@ -175,7 +178,7 @@ def intended_token_name(token, lemma_names):
     stem = normalize_name(parts[0])
     if len(parts) == 1:
         return stem, False
-    preferred = lemma_names.get(base_lemma(lemma))
+    preferred = lemma_names.get(component_lemma(lemma))
     if preferred:
         return preferred, False
     if stem:
@@ -184,8 +187,14 @@ def intended_token_name(token, lemma_names):
     return stem, suffix != "ה"
 
 
+def component_lemma(lemma):
+    """Morphology ID for name normalization, retaining compound position."""
+    return lemma.split("/")[-1]
+
+
 def base_lemma(lemma):
-    return lemma.split("/")[-1].rstrip("+")
+    """Root ID for classification, where compound position is irrelevant."""
+    return component_lemma(lemma).rstrip("+")
 
 
 def assemble(tokens):

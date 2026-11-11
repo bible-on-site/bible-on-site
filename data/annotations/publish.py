@@ -110,19 +110,21 @@ def _valid_rows(rows):
             return False
         confidence = row["confidence"]
         if confidence is not None and (
-            type(confidence) not in (int, float) or not math.isfinite(confidence)
-            or not 0 <= confidence <= 1
+            not isinstance(confidence, (int, float)) or isinstance(confidence, bool)
+            or not 0 <= confidence <= 1 or not math.isfinite(confidence)
         ):
             return False
         if row["source_kind"] == "pasuk":
             keys = ("perek_id", "pasuk_number", "segment_start", "segment_end")
-            if (any(type(row.get(key)) is not int for key in keys)
+            if (any(not isinstance(row.get(key), int) or isinstance(row.get(key), bool)
+                    for key in keys)
                     or row["perek_id"] < 1 or row["pasuk_number"] < 1
                     or not 0 <= row["segment_start"] <= row["segment_end"]):
                 return False
         elif row["source_kind"] == "article":
             keys = ("article_id", "span_start", "span_end")
-            if (any(type(row.get(key)) is not int for key in keys)
+            if (any(not isinstance(row.get(key), int) or isinstance(row.get(key), bool)
+                    for key in keys)
                     or row["article_id"] < 1 or not 0 <= row["span_start"] < row["span_end"]
                     or not isinstance(row.get("content_hash"), str)
                     or not re.fullmatch(r"[0-9a-f]{64}", row["content_hash"])):
@@ -134,9 +136,15 @@ def _valid_rows(rows):
 
 def _valid_diagnostics(value):
     return isinstance(value, dict) and all(
-        isinstance(key, str) and type(count) is int and count >= 0
+        isinstance(key, str) and isinstance(count, int)
+        and not isinstance(count, bool) and count >= 0
         for key, count in value.items()
     )
+
+
+def _incomplete_responses(diagnostics):
+    return any(diagnostics.get(key, 0) for key in
+               ("invalid_batches", "invalid_response_chunks", "oversized_source_units"))
 
 
 def _file_digest(path):
@@ -162,19 +170,30 @@ class CheckpointStore:
     all three keys to match, so a source edit invalidates only its own
     unit while a model/config change invalidates every unit. Missing,
     stale or corrupt files are plain misses — the cache is a rebuildable
-    artifact, never content truth.
+    artifact, never content truth. Incomplete model-response records also
+    miss and retry on the next run; their diagnostics remain in failure_history.
     """
 
     def __init__(self, root, domain, config):
+        """Bind a source domain and inference profile to an atomic unit cache."""
         self.dir = Path(root) / domain
         self.config = config
         self.hits = 0
         self.misses = 0
         self.last_diagnostics = collections.Counter()
+        self._failure_histories = {}
+
+    @property
+    def failure_history(self):
+        total = collections.Counter()
+        for history in self._failure_histories.values():
+            total.update(history)
+        return total
 
     def load(self, unit, source_hash):
         """The unit's cached rows, or None when they must be recomputed."""
         self.last_diagnostics = collections.Counter()
+        self._failure_histories[unit] = collections.Counter()
         try:
             record = json.loads(
                 (self.dir / f"{unit}.json").read_text(encoding="utf-8")
@@ -190,22 +209,37 @@ class CheckpointStore:
             or record.get("source") != source_hash
             or not _valid_rows(record.get("rows"))
             or not _valid_diagnostics(record.get("diagnostics", {}))
+            or not _valid_diagnostics(record.get("failure_history", {}))
         ):
             self.misses += 1
             return None
+        diagnostics = record.get("diagnostics", {})
+        # Old incomplete records had no history field. Preserve their failure
+        # diagnostics while treating them as retryable, rather than cache hits.
+        history = record.get("failure_history") or (
+            diagnostics if _incomplete_responses(diagnostics) else {}
+        )
+        self._failure_histories[unit].update(history)
+        if _incomplete_responses(diagnostics):
+            self.misses += 1
+            return None
         self.hits += 1
-        self.last_diagnostics.update(record.get("diagnostics", {}))
+        self.last_diagnostics.update(diagnostics)
         return record["rows"]
 
     def save(self, unit, source_hash, rows, diagnostics=None):
         """Atomically record the unit's rows (tmp file + rename)."""
         self.dir.mkdir(parents=True, exist_ok=True)
+        history = self._failure_histories.setdefault(unit, collections.Counter())
+        if _incomplete_responses(diagnostics or {}):
+            history.update(diagnostics)
         record = {
             "version": CHECKPOINT_VERSION,
             "config": self.config,
             "source": source_hash,
             "rows": rows,
             "diagnostics": dict(diagnostics or {}),
+            "failure_history": dict(history),
         }
         tmp = self.dir / f"{unit}.{os.getpid()}.tmp"
         tmp.write_text(
@@ -264,7 +298,9 @@ def _validate_engine(engine, generate_fn, limit):
         raise ValueError(f"unknown engine {engine!r}")
     if engine != "classifier" and not callable(generate_fn):
         raise ValueError("LLM engines require generate_fn")
-    if limit is not None and (type(limit) is not int or limit < 1):
+    if limit is not None and (
+        not isinstance(limit, int) or isinstance(limit, bool) or limit < 1
+    ):
         raise ValueError("source-unit limit must be a positive integer")
 
 
@@ -273,16 +309,19 @@ def _diagnostic_snapshot(generate_fn):
     return collections.Counter(value) if isinstance(value, collections.Counter) else collections.Counter()
 
 
-def lazy_generate_fn(spec, execution):
+def lazy_generate_fn(spec, execution, response_schema=None):
     """A fully checkpointed run never loads model weights or its tokenizer."""
     loaded = None
 
     def ensure_loaded():
         nonlocal loaded
-        if loaded is None:
+        # The loader returns a plain function, which is always truthy.
+        if not loaded:
             loaded = local_llm.load_generate_fn(
                 spec, device=execution["device"], dtype=execution["dtype"]
             )
+            if response_schema is not None:
+                loaded = loaded.bind_schema(response_schema)
             generate.execution = loaded.execution
             generate.model_loaded = True
             generate.stats = loaded.stats
@@ -293,6 +332,8 @@ def lazy_generate_fn(spec, execution):
 
     generate.count_input_tokens = lambda messages: ensure_loaded().count_input_tokens(messages)
     generate.execution = execution
+    if response_schema is not None:
+        generate.execution = dict(execution, structured_output=local_llm.format_identity(response_schema))
     generate.model_loaded = False
     generate.stats = {}
     generate.diagnostics = collections.Counter()
@@ -463,10 +504,8 @@ def write_provenance(path, *, spec, execution, entities_fn, checkpoint=None, run
             "article": baseline_articles.MODEL_REVISION,
         }),
         "diagnostics": diagnostics,
-        "complete_valid_responses": not any(
-            diagnostics.get(key, 0) for key in
-            ("invalid_batches", "invalid_response_chunks", "oversized_source_units")
-        ),
+        "failure_history": dict(checkpoint.failure_history) if checkpoint else {},
+        "complete_valid_responses": not _incomplete_responses(diagnostics),
         "checkpoint": (
             {"config": checkpoint.config, "hits": checkpoint.hits,
              "misses": checkpoint.misses} if checkpoint else None
@@ -506,6 +545,8 @@ def main():
                         default=local_llm.CANDIDATE["name"], help="pinned local LLM candidate")
     parser.add_argument("--llm-cache-dir", type=Path,
                         help="optional content-addressed response cache (defaults below checkpoint-dir)")
+    parser.add_argument("--constrained-json", action="store_true",
+                        help="enforce LLM JSON schemas during decoding (optional pinned LMFE dependency)")
     def positive_limit(value):
         try:
             number = int(value)
@@ -550,6 +591,8 @@ def main():
         )
     if args.engine != "classifier" and (args.no_retype or args.retype != RETYPE_DEFAULT):
         parser.error("--no-retype/--retype select classifier behavior; choose --llm-model for LLM engines")
+    if args.constrained_json and args.engine == "classifier":
+        parser.error("--constrained-json applies to local LLM engines")
 
     entities_fn = None
     revision = None
@@ -577,10 +620,13 @@ def main():
                 parser.error("NF4 models require --device cuda:N --dtype bfloat16")
             if args.engine == "llm-detect":
                 spec = llm_detect.detection_spec(spec)
-                revision = llm_detect.revision_tag(execution, spec)
+                revision = llm_detect.revision_tag(execution, spec, constrained_json=args.constrained_json)
+                response_schema = llm_detect.DETECT_RESPONSE_SCHEMA
             else:
-                revision = local_llm.revision_tag(spec, execution)
-            generate_fn = lazy_generate_fn(spec, execution)
+                revision = local_llm.revision_tag(spec, execution, constrained_json=args.constrained_json)
+                response_schema = local_llm.RETYPE_RESPONSE_SCHEMA
+            generate_fn = (lazy_generate_fn(spec, execution, response_schema=response_schema)
+                           if args.constrained_json else lazy_generate_fn(spec, execution))
             response_cache = args.llm_cache_dir or (
                 args.checkpoint_dir / "requests" if args.checkpoint_dir else None
             )

@@ -2,19 +2,22 @@
 
 import collections
 import json
+from pathlib import Path
+import tempfile
 import unittest
-from unittest import mock
+import unittest.mock
 
 import llm_detect as detect
+
+mock = unittest.mock
 
 
 def raw(*mentions):
     return json.dumps({"mentions": list(mentions)}, ensure_ascii=False)
 
 
-def mention(start=0, end=0, surface="דוד", name="דוד", entity_type="PERSON"):
-    return {"start": start, "end": end, "surface": surface,
-            "intended_name": name, "entity_type": entity_type}
+def mention(start=0, end=0, name="דוד", entity_type="PERSON"):
+    return {"start": start, "end": end, "intended_name": name, "entity_type": entity_type}
 
 
 def pasuk(*words):
@@ -27,14 +30,15 @@ class TestStrictOutput(unittest.TestCase):
         self.surface = lambda start, end: " ".join(unit["text"] for unit in self.units[start:end + 1])
 
     def test_exact_multiword_span_and_other(self):
-        valid = [mention(1, 2, "בית אל", "בית אל", "PLACE"),
-                 mention(0, 0, "דוד", "", "OTHER")]
-        self.assertEqual(detect.validate_output(raw(*valid), self.units, self.surface), valid)
+        valid = [mention(1, 2, "בית אל", "PLACE"), mention(0, 0, "", "OTHER")]
+        expected = [dict(valid[0], surface="בית אל"), dict(valid[1], surface="דוד")]
+        self.assertEqual(detect.validate_output(raw(*valid), self.units, self.surface), expected)
 
     def test_invalid_bounds_surfaces_types_and_names_are_rejected(self):
         cases = [
             mention(start=True), mention(start=-1), mention(end=3),
-            mention(start=2, end=1), mention(surface="דויד"),
+            mention(start=2, end=1), dict(mention(), surface="דויד"),
+            dict(mention(), surface="דוד"), dict(mention(), span=[0, 0]),
             mention(entity_type="SQL"), mention(name="<דוד>"),
             mention(name="דָוִד"), mention(name=""),
             mention(entity_type="OTHER"),
@@ -52,7 +56,7 @@ class TestStrictOutput(unittest.TestCase):
     def test_noncontiguous_original_indices_cannot_be_bridged(self):
         units = [{"index": 0, "text": "בית"}, {"index": 2, "text": "אל"}]
         with self.assertRaisesRegex(ValueError, "noncontiguous"):
-            detect.validate_output(raw(mention(0, 2, "בית אל", "בית אל", "PLACE")),
+            detect.validate_output(raw(mention(0, 2, "בית אל", "PLACE")),
                                    units, lambda _a, _b: "בית אל")
 
 
@@ -64,7 +68,7 @@ class TestIndependentDetection(unittest.TestCase):
 
             def generate(messages):
                 seen.append(json.loads(messages[-1]["content"]))
-                return raw(mention(surface=word, name=word, entity_type=entity_type))
+                return raw(mention(name=word, entity_type=entity_type))
 
             with mock.patch.object(detect.baseline, "load_lexicon", side_effect=AssertionError("lexicon gate")):
                 rows = detect.decorations_for_pasuk(pasuk(word), 4, 2, generate)
@@ -74,7 +78,7 @@ class TestIndependentDetection(unittest.TestCase):
     def test_scripture_keeps_exact_vocalized_source_and_original_coordinates(self):
         p = pasuk("וַיֵּלֶךְ", "דָּוִד")
         rows = detect.decorations_for_pasuk(p, 7, 9,
-            lambda _messages: raw(mention(1, 1, "דָּוִד", "דוד")), "revision")
+            lambda _messages: raw(mention(1, 1, "דוד")), "revision")
         self.assertEqual(rows[0]["segment_start"], 1)
         self.assertEqual(rows[0]["surface"], p["segments"][1]["value"])
         self.assertEqual(rows[0]["pasuk_number"], 7)
@@ -88,6 +92,22 @@ class TestIndependentDetection(unittest.TestCase):
         self.assertEqual(rows, [])
         self.assertEqual(diagnostics["invalid_response_chunks"], 1)
 
+    def test_invalid_cached_generation_retries_instead_of_replaying_failure(self):
+        calls = []
+
+        def transient(_messages):
+            calls.append(1)
+            return "bad-json" if len(calls) == 1 else raw(mention())
+
+        with tempfile.TemporaryDirectory() as directory:
+            first = detect.local_llm.CachedGenerator(transient, directory, "pinned")
+            self.assertEqual(detect.decorations_for_pasuk(pasuk("דוד"), 1, 1, first), [])
+            second = detect.local_llm.CachedGenerator(transient, directory, "pinned")
+            recovered = detect.decorations_for_pasuk(pasuk("דוד"), 1, 1, second)
+            self.assertEqual(recovered[0]["surface"], "דוד")
+            self.assertEqual(len(calls), 2)
+            self.assertTrue(list((Path(directory) / "invalid").glob("*.reason.json")))
+
     def test_other_abstains_without_inventing_an_enum_or_rendered_row(self):
         diagnostics = collections.Counter()
         rows = detect.decorations_for_pasuk(pasuk("דוד"), 1, 1,
@@ -96,7 +116,8 @@ class TestIndependentDetection(unittest.TestCase):
         self.assertEqual(diagnostics["abstained_mentions"], 1)
 
     def test_articles_skip_anchor_script_style_and_keep_utf16_offsets(self):
-        content = "<p>😀 דוד</p><a href='/x'>סוד</a><script>אסור</script><style>מוסתר</style>"
+        surface = "דָּוִד"
+        content = f"<p>😀 {surface}</p><a href='/x'>סוד</a><script>אסור</script><style>מוסתר</style>"
         seen = []
 
         def generate(messages):
@@ -106,9 +127,9 @@ class TestIndependentDetection(unittest.TestCase):
         rows = detect.decorations_for_article(5, content, generate)
         self.assertEqual(len(rows), 1)
         row = rows[0]
-        self.assertEqual((row["span_start"], row["span_end"]), (6, 9))
+        self.assertEqual((row["span_start"], row["span_end"]), (6, 6 + len(surface)))
         encoded = content.encode("utf-16-le")
-        self.assertEqual(encoded[row["span_start"] * 2:row["span_end"] * 2].decode("utf-16-le"), "דוד")
+        self.assertEqual(encoded[row["span_start"] * 2:row["span_end"] * 2].decode("utf-16-le"), surface)
         self.assertNotIn("סוד", " ".join(seen))
         self.assertNotIn("אסור", " ".join(seen))
         self.assertNotIn("מוסתר", " ".join(seen))
@@ -120,8 +141,7 @@ class TestIndependentDetection(unittest.TestCase):
         def generate(messages):
             data = json.loads(messages[-1]["content"])
             seen.extend(data["units"])
-            return raw(mention(0, 0, 'רש"י', "רשי"),
-                       mention(1, 2, "בבית־אל", "בית אל", "PLACE"))
+            return raw(mention(0, 0, "רשי"), mention(1, 2, "בית אל", "PLACE"))
 
         rows = detect.decorations_for_article(2, content, generate)
         self.assertEqual(seen[0]["text"], 'רש"י')
@@ -154,7 +174,7 @@ class TestBoundedChunks(unittest.TestCase):
         diagnostics = collections.Counter()
 
         def generate(_messages):
-            return raw(mention(1, 1, "דוד", "דוד"))
+            return raw(mention(1, 1, "דוד"))
 
         def count(messages):
             units = json.loads(messages[-1]["content"])["units"]
