@@ -37,7 +37,26 @@ public class TikkunFlowView : GraphicsView
     /// </summary>
     public static readonly BindableProperty HideMarksProperty = BindableProperty.Create(
         nameof(HideMarks), typeof(bool), typeof(TikkunFlowView), false,
-        propertyChanged: (bindable, _, _) => ((TikkunFlowView)bindable).Invalidate());
+        propertyChanged: (bindable, _, _) =>
+        {
+            var view = (TikkunFlowView)bindable;
+            view.Invalidate();
+            // Windows: once the carousel's host item stops re-arranging, the
+            // CanvasControl's visual stays attached to the compositor but its
+            // swapchain stops presenting — Draw() runs, the frame never
+            // reaches the screen (dotnet/maui#7639 family). Detaching and
+            // re-attaching the CanvasControl gives it a fresh composition
+            // visual, so the next Invalidate() actually presents (#3265).
+#if WINDOWS
+            if (view.Handler?.PlatformView is Microsoft.UI.Xaml.Controls.UserControl platform
+                && platform.Content is Microsoft.UI.Xaml.UIElement canvas)
+            {
+                platform.Content = null;
+                platform.Content = canvas;
+                view.Invalidate();
+            }
+#endif
+        });
 
     /// <summary>
     /// הסתר שם השם revision — a change-only input bound to

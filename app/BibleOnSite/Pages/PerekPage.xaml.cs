@@ -464,6 +464,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
         // Hide loading overlay — carousel is ready
         CarouselLoadingOverlay.Hide();
+        // Windows: a carousel realized mid Shell push can keep its items panel
+        // anchored at a stale offset — re-anchor natively once settled.
+        _carousel.ResnapAfterLoad();
 
         await ApplySearchReaderLocationAsync();
         _ = _viewModel.PreloadAdjacentPasukimAsync(_viewModel.PerekId);
@@ -632,6 +635,13 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         // A perek explicitly requested by navigation (e.g. calendar day tap)
         // wins over search-reader and preference defaults.
+        // E2E-only: pin the first perek so the suite renders a known, richly
+        // marked perek on the first page — no push navigation, whose
+        // re-parented native tree orphans GraphicsView repaint surfaces (#3265).
+        if (int.TryParse(Environment.GetEnvironmentVariable("BIBLE_E2E_PEREK"), out var e2ePerek))
+        {
+            return e2ePerek;
+        }
         if (_pendingPerekId is int pendingPerek)
         {
             _pendingPerekId = null;

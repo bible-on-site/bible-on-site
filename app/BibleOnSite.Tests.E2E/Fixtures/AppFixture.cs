@@ -18,10 +18,16 @@ namespace BibleOnSite.Tests.E2E.Fixtures;
 public class AppFixture : IAsyncLifetime
 {
     protected virtual bool RequiresApi => true;
+
+    /// <summary>Extra environment variables passed to the launched app —
+    /// e2e mode presets the app reads at boot (e.g. BIBLE_E2E_TIKKUN).</summary>
+    protected virtual IEnumerable<KeyValuePair<string, string>> LaunchEnvironment =>
+        [];
     private Application? _app;
     private UIA3Automation? _automation;
     private Process? _appProcess;
     private Process? _apiProcess;
+    private StreamWriter? _appLog;
     private bool _weStartedApi;
     private DateTime _apiStartedAt;
 
@@ -38,9 +44,12 @@ public class AppFixture : IAsyncLifetime
     public UIA3Automation Automation => _automation ?? throw new InvalidOperationException("Automation not initialized.");
 
     /// <summary>
-    /// Gets the main window of the application.
+    /// Gets the main window of the application. The inner wait stays short so a
+    /// transient UIA attach stall is retried by the caller's own budget
+    /// (WaitForElementAsync catches the timeout FlaUI wraps it in) instead of
+    /// one ElementFromHandle call spending the whole deadline at once.
     /// </summary>
-    public Window MainWindow => App.GetMainWindow(Automation, TimeSpan.FromSeconds(10))
+    public Window MainWindow => App.GetMainWindow(Automation, TimeSpan.FromSeconds(2))
         ?? throw new InvalidOperationException("Main window not found within timeout.");
 
     /// <summary>
@@ -186,7 +195,12 @@ public class AppFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         SetProcessDPIAware(); //NOSONAR — process DPI awareness has no managed API; synthetic-input coordinates must map to physical pixels.
-        _automation = new UIA3Automation();
+        // The default 2s connection timeout is shorter than the window in
+        // which a freshly launched WinUI app registers its UIA provider —
+        // every first query then throws UIA Timeout even though the window
+        // exists. Give the COM layer room to retry instead of failing the
+        // attach on a provider that is still spinning up.
+        _automation = new UIA3Automation { ConnectionTimeout = TimeSpan.FromSeconds(15) };
 
         // Ensure API is running first (reuse if already running)
         if (RequiresApi)
@@ -216,13 +230,17 @@ public class AppFixture : IAsyncLifetime
             UseShellExecute = false,
             CreateNoWindow = true,
             WindowStyle = ProcessWindowStyle.Hidden,
-            RedirectStandardOutput = false,
-            RedirectStandardError = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
         };
 
         // Offline fixtures use a closed endpoint even when a development API is running.
         var launchApiUrl = RequiresApi ? ApiUrl : "http://127.0.0.1:1";
         startInfo.EnvironmentVariables["API_URL"] = launchApiUrl;
+        foreach (var pair in LaunchEnvironment)
+        {
+            startInfo.EnvironmentVariables[pair.Key] = pair.Value;
+        }
 
         Console.WriteLine($"Starting app from {projectDir} with API_URL={launchApiUrl}");
 
@@ -232,6 +250,42 @@ public class AppFixture : IAsyncLifetime
         {
             throw new InvalidOperationException("Failed to start dotnet run process");
         }
+
+        // Drain the app's stdout/stderr so its startup stages show up in test
+        // output instead of deadlocking the app on a full pipe buffer. A copy
+        // also goes to .artifacts/app-log-<fixture>.txt — the test host swallows
+        // console output on a passing run, so the file is the durable diagnostic
+        // sink. Collection fixtures initialize in parallel, so each fixture
+        // type gets its own file instead of racing one shared path.
+        var appLogName = $"app-log-{GetType().Name}.txt";
+        var appLogPath = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".artifacts", appLogName));
+        Directory.CreateDirectory(Path.GetDirectoryName(appLogPath)!);
+        var appLog = new StreamWriter(appLogPath, append: false) { AutoFlush = true };
+        _appLog = appLog;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (await _appProcess.StandardOutput.ReadLineAsync() is { } line)
+                {
+                    Console.WriteLine($"[app] {line}");
+                    lock (appLog) { appLog.WriteLine($"[app] {line}"); }
+                }
+            }
+            catch { /* pipe closed at teardown */ }
+        });
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (await _appProcess.StandardError.ReadLineAsync() is { } line)
+                {
+                    Console.WriteLine($"[app:err] {line}");
+                    lock (appLog) { appLog.WriteLine($"[app:err] {line}"); }
+                }
+            }
+            catch { /* pipe closed at teardown */ }
+        });
 
         // dotnet run evaluates the project even with --no-build, so the app
         // process can spawn seconds after the launcher returns on a loaded
@@ -405,6 +459,7 @@ public class AppFixture : IAsyncLifetime
             using var apiProcess = _apiProcess;
             using var appProcess = _appProcess;
             using var automation = _automation;
+            using var appLog = _appLog;
         }
     }
 
@@ -468,7 +523,6 @@ public class AppFixture : IAsyncLifetime
     private static extern IntPtr WindowFromPoint(Point point); //NOSONAR — HWND hit-testing is Win32-only; UIA FromPoint can return a child element instead of the covering window.
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId); //NOSONAR — HWND→PID mapping has no managed API.
-
     private void AssertOwnedWindow(IntPtr window)
     {
         GetWindowThreadProcessId(window, out var processId); //NOSONAR — HWND→PID mapping has no managed API.
@@ -546,6 +600,12 @@ public class AppFixture : IAsyncLifetime
             catch (COMException ex) when (ex.HResult == unchecked((int)0x80131505))
             {
                 // WinUI can briefly time out while its first visual tree is being built.
+            }
+            catch (TimeoutException ex) when (ex.InnerException is COMException { HResult: unchecked((int)0x80131505) })
+            {
+                // FlaUI wraps the same UIA_TIMEOUT COMException in
+                // System.TimeoutException ("UIA Timeout") — retry it too or a
+                // single transient attach race fails the whole wait.
             }
             await Task.Delay(100);
         }

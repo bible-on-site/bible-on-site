@@ -50,6 +50,8 @@ public partial class ReaderLoadingOverlay : Grid
         set => SetValue(AutomationIdPrefixProperty, value);
     }
 
+    private bool _showRequested;
+
     public ReaderLoadingOverlay()
     {
         InitializeComponent();
@@ -59,21 +61,64 @@ public partial class ReaderLoadingOverlay : Grid
     public void ShowLoading()
     {
         ErrorPanel.IsVisible = false;
+        LoadingSpinner.IsRunning = true;
         LoadingIndicator.IsVisible = true;
-        IsVisible = true;
+        Show();
     }
 
     /// <summary>Swaps the overlay to its retryable error state.</summary>
     public void ShowError(Exception ex)
     {
+        LoadingSpinner.IsRunning = false;
         LoadingIndicator.IsVisible = false;
         ErrorDetailLabel.Text = ex.Message;
         ErrorPanel.IsVisible = true;
-        IsVisible = true;
+        Show();
     }
 
     /// <summary>Hides the overlay once the carousel is ready.</summary>
-    public void Hide() => IsVisible = false;
+    public void Hide()
+    {
+        _showRequested = false;
+        LoadingSpinner.IsRunning = false;
+        IsVisible = false;
+    }
+
+    /// <summary>
+    /// Shows the overlay once the platform view is settled: making the overlay
+    /// visible while the page is mid Shell push-navigation creates a stranded
+    /// composition visual that keeps painting even after Visibility collapses,
+    /// so the show is deferred until after attach.
+    /// </summary>
+    private void Show()
+    {
+        _showRequested = true;
+        if (Handler is null)
+        {
+            Loaded += OnLoadedShow;
+            return;
+        }
+        if (!IsVisible)
+        {
+            Dispatcher.DispatchDelayed(ShowDelay, ShowIfRequested);
+        }
+    }
+
+    private static readonly TimeSpan ShowDelay = TimeSpan.FromMilliseconds(450);
+
+    private void OnLoadedShow(object? sender, EventArgs e)
+    {
+        Loaded -= OnLoadedShow;
+        Dispatcher.DispatchDelayed(ShowDelay, ShowIfRequested);
+    }
+
+    private void ShowIfRequested()
+    {
+        if (_showRequested)
+        {
+            IsVisible = true;
+        }
+    }
 
     private void ApplyAutomationIdPrefix(string prefix)
     {

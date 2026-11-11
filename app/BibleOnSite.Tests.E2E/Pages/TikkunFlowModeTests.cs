@@ -1,44 +1,41 @@
 using BibleOnSite.Tests.E2E.Fixtures;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Capturing;
-using FlaUI.Core.Definitions;
-using FlaUI.Core.Input;
 
 namespace BibleOnSite.Tests.E2E.Pages;
+
+/// <summary>Offline app instance booted straight into תיקון קוראים mode —
+/// driving the mode through the reader menu is unreliable under UIA
+/// (CarouselView leaves stale peers claiming the same AutomationIds), so
+/// the suite presets the flags at launch instead.</summary>
+public sealed class TikkunModeFixture : AppFixture
+{
+    protected override bool RequiresApi => false;
+
+    protected override IEnumerable<KeyValuePair<string, string>> LaunchEnvironment =>
+        [new("BIBLE_E2E_TIKKUN", "1"), new("BIBLE_E2E_PEREK", "10")];
+}
+
+[CollectionDefinition("Tikkun reader", DisableParallelization = true)]
+public sealed class TikkunReaderCollection : ICollectionFixture<TikkunModeFixture>;
 
 /// <summary>
 /// #2839: enabling תיקון קוראים (with שניים מקרא) swaps the pasuk list for the
 /// continuous canvas flow. Captures the rendered flow — the 34-Hebrew-letter
 /// line cap is a layout rule, so the frame is the device-level evidence.
 /// </summary>
-[Collection("Offline reader")]
-public sealed class TikkunFlowModeTests(OfflineReaderFixture fixture)
+[Collection("Tikkun reader")]
+public sealed class TikkunFlowModeTests(TikkunModeFixture fixture)
 {
     [Fact]
     public async Task TikkunKorimMode_RendersTheContinuousFlow()
     {
-        await NavigateToBereshitYudAsync();
-
-        // Mode prefs persist across runs, so a blind row tap can toggle the
-        // mode off instead of on — drive each checkbox to a confirmed state
-        // through its own UIA Toggle instead.
-        await SetMenuCheckBoxAsync("ShnayimMikraCheckBox", ToggleState.On);
-        await SetMenuCheckBoxAsync("TikkunKorimCheckBox", ToggleState.On);
-
-        var flow = await WaitForTikkunFlowAsync(TimeSpan.FromSeconds(30));
+        // The fixture boots straight into תיקון קוראים on בראשית י — no
+        // navigation, so the first painted flow surface is the live one.
+        var flow = await WaitForTikkunFlowAsync(TimeSpan.FromSeconds(45));
         if (flow == null)
         {
-            CaptureScreenshot("flow-fail.png");
-            var scrollViews = fixture.MainWindow
-                .FindAllDescendants(fixture.CF.ByAutomationId("TikkunScrollView"));
-            var probed = fixture.MainWindow
-                .FindAllDescendants()
-                .Count(e => (e.Properties.HelpText.ValueOrDefault ?? string.Empty)
-                    .StartsWith("tsy:", StringComparison.Ordinal));
-            Console.WriteLine($"tikkun-flow failed: scroll-views={scrollViews.Length} tsy-elements={probed} " +
-                              $"states={string.Join(";", scrollViews.Select(e =>
-                                  $"offscreen={e.IsOffscreen} help='{e.Properties.HelpText.ValueOrDefault}' rect={e.BoundingRectangle} " +
-                                  $"scroll={(e.Patterns.Scroll.TryGetPattern(out var s) ? $"vert={s.VerticallyScrollable} pct={s.VerticalScrollPercent}" : "none")}"))}");
+            DumpTikkunDiagnostics("flow-fail.png");
         }
         flow.Should().NotBeNull("תיקון קוראים must replace the pasuk list with the continuous flow");
 
@@ -49,24 +46,20 @@ public sealed class TikkunFlowModeTests(OfflineReaderFixture fixture)
         // #3265: tapping the flow hides niqqud/taamim. The marked geometry is
         // the layout reference, so the scroll surface must stay put and only
         // the painted marks change — the second frame is the artifact. The
-        // repaint is asynchronous, so wait for the flow's own pixels to
+        // repaint is asynchronous, so wait for the flow's own word band to
         // differ before capturing (the canvas exposes no UIA text to poll).
         var offsetBefore = ReadScrollPercent(flow!);
         offsetBefore.Should().NotBe(double.NaN,
             "the flow's scroll surface must expose UIA scroll state");
-        // The tap recognizer sits on the drawable at the scroll content's
-        // top — the viewport's dead space below a short flow is not a tap
-        // target (and the custom canvas exposes no UIA element of its own).
-        // An overlay can swallow one click, so retry the tap bounded times.
-        var shownPixels = Capture.Element(flow).Bitmap;
-        var tapPoint = new System.Drawing.Point(
-            (int)(flow!.BoundingRectangle.Left + flow.BoundingRectangle.Width / 2),
-            (int)(flow.BoundingRectangle.Top + 40));
-        var repaintedInPlace = false;
-        for (var attempt = 0; attempt < 3 && !repaintedInPlace; attempt++)
+        // The flow wait already proved the tap point answers FromPoint with
+        // the live scroll view, so one click lands — re-tapping would mask
+        // a genuinely dead surface.
+        using var shownCapture = Capture.Element(flow!);
+        fixture.ClickAt(FlowTapPoint(flow!));
+        var repaintedInPlace = await WaitForRepaintAsync(flow!, shownCapture.Bitmap);
+        if (!repaintedInPlace)
         {
-            fixture.ClickAt(tapPoint);
-            repaintedInPlace = await WaitForRepaintAsync(flow!, shownPixels);
+            DumpTikkunDiagnostics("repaint-fail.png");
         }
         repaintedInPlace.Should().BeTrue("tapping the flow must repaint it in place with the marks hidden");
 
@@ -81,31 +74,82 @@ public sealed class TikkunFlowModeTests(OfflineReaderFixture fixture)
     }
 
     /// <summary>Waits for the realized תיקון scroll view. The "tsy:" semantic
-    /// probe is an Android content-description channel — on Windows the same
-    /// "loaded and scrollable" signal is a real bounding box plus the native
-    /// UIA scroll pattern, which only a live ScrollViewer exposes.</summary>
+    /// probe is an Android content-description channel — on Windows the live
+    /// signal is a real bounding box plus the hit-test, which only the
+    /// displayed page's ScrollViewer passes.</summary>
     private async Task<AutomationElement?> WaitForTikkunFlowAsync(TimeSpan timeout)
     {
-        return await fixture.WaitForElementAsync(window =>
+        var deadline = DateTime.UtcNow.Add(timeout);
+        while (DateTime.UtcNow < deadline)
         {
+            var window = fixture.MainWindow;
             // The pasuk list and the flow are bound to opposite mode flags, so
             // the realized mode is the pair of signals — a stale element can
             // fake presence, but a live list while the flow claims visibility
             // means the mode never actually flipped.
-            var pasukimVisible = window
+            // The loading overlay covers the carousel while a perek jump is in
+            // flight — any flow found beneath it is stale. Its caption carries
+            // no AutomationId; the label's text is its UIA Name.
+            var loading = window
+                .FindAllDescendants(fixture.CF.ByName("מתחבר לפרק..."))
+                .Any(element => IsVisibleInTree(element));
+            var pasukimVisible = !loading && window
                 .FindAllDescendants(fixture.CF.ByAutomationId("PasukimCollection"))
-                .Any(element => !element.IsOffscreen
+                .Any(element => IsVisibleInTree(element)
                     && element.BoundingRectangle is { Height: > 200 }
                     && RenderedAtCenter(element));
-            if (pasukimVisible)
+            if (!loading && !pasukimVisible)
             {
-                return null;
+                var flow = window.FindAllDescendants(fixture.CF.ByAutomationId("TikkunScrollView"))
+                    .FirstOrDefault(element => IsVisibleInTree(element)
+                        && element.BoundingRectangle is { Height: > 200 });
+                if (flow != null && RenderedAtCenter(flow) && RenderedAtPoint(flow, FlowTapPoint(flow)))
+                {
+                    // UIA state can claim a flow exists while the page is
+                    // still covered by the load overlay — painted pixels in
+                    // the element's own word band are the unfakeable check.
+                    using var probe = Capture.Element(flow);
+                    if (PaintedFraction(probe.Bitmap, WordBand(probe.Bitmap)) > 0.03)
+                    {
+                        var artifacts = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".artifacts"));
+                        Directory.CreateDirectory(artifacts);
+                        probe.ToFile(Path.Join(artifacts, "flow-probe.png"));
+                        return flow;
+                    }
+                }
             }
-            return window.FindAllDescendants(fixture.CF.ByAutomationId("TikkunScrollView"))
-                .FirstOrDefault(element => !element.IsOffscreen
-                    && element.BoundingRectangle is { Height: > 200 }
-                    && RenderedAtCenter(element));
-        }, timeout);
+            await Task.Delay(300, TestContext.Current.CancellationToken);
+        }
+        return null;
+    }
+
+    /// <summary>The tap recognizer sits on the drawable at the scroll
+    /// content's top — the viewport's dead space below a short flow is not
+    /// a tap target (and the custom canvas exposes no UIA element of its
+    /// own).</summary>
+    private static System.Drawing.Point FlowTapPoint(AutomationElement element) =>
+        new((int)(element.BoundingRectangle.Left + element.BoundingRectangle.Width / 2),
+            (int)(element.BoundingRectangle.Top + 40));
+
+    /// <summary>The element itself and every ancestor report on-screen and
+    /// enabled. A hidden CarouselView page keeps its last bounds/state —
+    /// including a stale IsOffscreen=false on the element — but the page
+    /// root carries IsEnabled=false for the whole subtree (bound to
+    /// IsOffscreenCarouselPage), so the chain walk catches peers UIA still
+    /// enumerates with stale "live" state.</summary>
+    private bool IsVisibleInTree(AutomationElement element)
+    {
+        for (var node = (AutomationElement?)element; node != null; node = node.Parent)
+        {
+            // The desktop root does not support IsOffscreen — missing means
+            // treat as visible, not as an error.
+            if ((node.Properties.IsOffscreen.TryGetValue(out var offscreen) && offscreen)
+                || (node.Properties.IsEnabled.TryGetValue(out var enabled) && !enabled))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// <summary>Proves the element is what physically renders at its claimed
@@ -120,9 +164,17 @@ public sealed class TikkunFlowModeTests(OfflineReaderFixture fixture)
         {
             return false;
         }
-        var hit = fixture.Automation.FromPoint(new System.Drawing.Point(
+        return RenderedAtPoint(element, new System.Drawing.Point(
             (int)(bounds.Left + bounds.Width / 2),
             (int)(bounds.Top + bounds.Height / 2)));
+    }
+
+    /// <summary>Same hit-test proof at an arbitrary point — the tap point
+    /// is not the center, so the click must be gated on its own coverage.
+    /// </summary>
+    private bool RenderedAtPoint(AutomationElement element, System.Drawing.Point point)
+    {
+        var hit = fixture.Automation.FromPoint(point);
         var wanted = element.Properties.RuntimeId.ValueOrDefault;
         for (var node = hit; node != null; node = node.Parent)
         {
@@ -144,139 +196,76 @@ public sealed class TikkunFlowModeTests(OfflineReaderFixture fixture)
             ? Math.Max(0, scroll.VerticalScrollPercent)
             : double.NaN;
 
-    /// <summary>Drives a reader-menu checkbox to the wanted state and confirms
-    /// the binding landed — the checkbox reflects the same view-model flag
-    /// that shows or hides the flow, which is the honest signal the UIA tree
-    /// cannot give (hidden copies stay enumerated with stale bounds). Reading
-    /// the state first keeps the action idempotent under persisted prefs.
-    /// </summary>
-    private async Task SetMenuCheckBoxAsync(string checkBoxId, ToggleState wanted)
-    {
-        await OpenReaderMenuAsync();
-        var overlay = await LiveMenuOverlayAsync(TimeSpan.FromSeconds(15));
-        overlay.Should().NotBeNull("the reader menu overlay must be open before rows can be toggled");
-        var checkbox = overlay!.FindAllDescendants(fixture.CF.ByAutomationId(checkBoxId))
-            .FirstOrDefault(element => !element.IsOffscreen);
-        checkbox.Should().NotBeNull($"the reader menu exposes {checkBoxId}");
-        checkbox!.Patterns.Toggle.TryGetPattern(out var toggle)
-            .Should().BeTrue($"{checkBoxId} must expose the UIA toggle pattern");
-        if (toggle!.ToggleState != wanted)
-        {
-            toggle.Toggle();
-        }
-        // The confirm must stay inside the live overlay: dismissed menu copies
-        // linger in the tree with their last toggle state, so a window-wide
-        // query can "confirm" against a ghost while the real row never moved.
-        var confirmed = await fixture.WaitForElementAsync(window =>
-        {
-            var live = window.FindAllDescendants(fixture.CF.ByAutomationId("ReaderMenuOverlay"))
-                .FirstOrDefault(element => !element.IsOffscreen
-                    && element.BoundingRectangle is { Width: > 50, Height: > 50 });
-            return live?.FindAllDescendants(fixture.CF.ByAutomationId(checkBoxId))
-                .FirstOrDefault(element => !element.IsOffscreen
-                    && element.Patterns.Toggle.TryGetPattern(out var state)
-                    && state.ToggleState == wanted);
-        }, TimeSpan.FromSeconds(10));
-        confirmed.Should().NotBeNull($"{checkBoxId} must reach {wanted}");
-        // A row tap dismisses the dropdown; a pattern toggle leaves it up —
-        // put it away so the overlay never covers the evidence capture.
-        await CloseReaderMenuAsync();
-    }
+    /// <summary>The rows where the flow's words paint: just under the content
+    /// padding and well above the bottom action bar that overlays the element's
+    /// lower strip. Sampling the whole element lets a bare action bar fake a
+    /// painted flow — the band only counts rows real text covers.</summary>
+    private static System.Drawing.Rectangle WordBand(System.Drawing.Bitmap bitmap) =>
+        new(0, 8, bitmap.Width, Math.Min(160, bitmap.Height - 60) - 8);
 
-    /// <summary>The ReaderMenuPanel grid fills its row when shown; hidden
-    /// copies keep reporting their last bounds, so the live signal is the
-    /// physical hit-test at the overlay's own point.</summary>
-    private async Task<AutomationElement?> LiveMenuOverlayAsync(TimeSpan timeout)
+    /// <summary>Fraction of pixels meaningfully different from the region's
+    /// dominant color. UIA state in this app can claim "visible" for surfaces
+    /// the compositor is not painting (stale carousel peers, overlay-covered
+    /// content), so rendered pixels are the only honest proof that words are
+    /// on screen. A painted text flow is several percent non-background; a
+    /// blank or spinner-covered region stays under ~2%.</summary>
+    private static double PaintedFraction(System.Drawing.Bitmap bitmap, System.Drawing.Rectangle region)
     {
-        return await fixture.WaitForElementAsync(window =>
-            window.FindAllDescendants(fixture.CF.ByAutomationId("ReaderMenuOverlay"))
-                .FirstOrDefault(element => !element.IsOffscreen
-                    && element.BoundingRectangle is { Width: > 50, Height: > 50 }
-                    && RenderedAtCenter(element)),
-            timeout);
-    }
-
-    /// <summary>Ensures the reader menu is open — the button toggles, so a
-    /// blind click can close an already-open menu.</summary>
-    private async Task OpenReaderMenuAsync()
-    {
-        AutomationElement? menuButton = null;
-        for (var attempt = 0; attempt < 3; attempt++)
+        var full = new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height);
+        var data = bitmap.LockBits(full, System.Drawing.Imaging.ImageLockMode.ReadOnly,
+            System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        try
         {
-            if (await ReaderMenuIsOpenAsync(TimeSpan.FromSeconds(4)))
+            var bytes = new byte[Math.Abs(data.Stride) * bitmap.Height];
+            System.Runtime.InteropServices.Marshal.Copy(data.Scan0, bytes, 0, bytes.Length);
+            var stride = Math.Abs(data.Stride);
+            var counts = new Dictionary<uint, int>();
+            for (var y = region.Top; y < region.Bottom; y += 2)
             {
-                return;
+                for (var x = region.Left; x < region.Right; x += 2)
+                {
+                    var px = BitConverter.ToUInt32(bytes, y * stride + x * 4);
+                    counts[px] = counts.TryGetValue(px, out var c) ? c + 1 : 1;
+                }
             }
-            // Re-fetch each attempt: a recycled page can leave the earlier
-            // element detached, whose stale point clicks the wrong surface.
-            // A real Button exposes UIA Invoke — firing its Clicked handler
-            // without depending on what the physical point happens to hit.
-            menuButton = await fixture.WaitForElementAsync(window =>
-                window.FindAllDescendants(fixture.CF.ByAutomationId("ReaderMenuButton"))
-                    .FirstOrDefault(button => !button.IsOffscreen), TimeSpan.FromSeconds(15));
-            menuButton.Should().NotBeNull("the reader menu button opens the display modes");
-            if (menuButton!.Patterns.Invoke.TryGetPattern(out var invoke))
+            var dominant = counts.MaxBy(pair => pair.Value).Key;
+            var sampled = (region.Height / 2) * (region.Width / 2);
+            var dr = (dominant >> 16) & 0xFF;
+            var dg = (dominant >> 8) & 0xFF;
+            var db = dominant & 0xFF;
+            var painted = 0;
+            foreach (var pair in counts)
             {
-                invoke.Invoke();
+                var pr = (pair.Key >> 16) & 0xFF;
+                var pg = (pair.Key >> 8) & 0xFF;
+                var pb = pair.Key & 0xFF;
+                if (Math.Abs((int)pr - dr) + Math.Abs((int)pg - dg) + Math.Abs((int)pb - db) > 24)
+                {
+                    painted += pair.Value;
+                }
             }
-            else
-            {
-                fixture.MainWindow.Focus();
-                fixture.Click(menuButton);
-            }
+            return (double)painted / sampled;
         }
-        if (!await ReaderMenuIsOpenAsync(TimeSpan.FromSeconds(10)))
+        finally
         {
-            CaptureScreenshot("menu-open-fail.png");
-            var overlay = fixture.MainWindow.FindAllDescendants(fixture.CF.ByAutomationId("ReaderMenuOverlay")).FirstOrDefault();
-            var shnayim = fixture.MainWindow.FindAllDescendants(fixture.CF.ByAutomationId("ShnayimMikraCheckBox")).FirstOrDefault();
-            var rowLabel = fixture.MainWindow.FindAllDescendants(fixture.CF.ByName("שניים מקרא")).FirstOrDefault();
-            Console.WriteLine($"menu-open failed: overlay={(overlay == null ? "absent" : $"offscreen={overlay.IsOffscreen} rect={overlay.BoundingRectangle}")} " +
-                              $"shnayim={(shnayim == null ? "absent" : $"offscreen={shnayim.IsOffscreen} rect={shnayim.BoundingRectangle}")} " +
-                              $"row-label={(rowLabel == null ? "absent" : $"offscreen={rowLabel.IsOffscreen} rect={rowLabel.BoundingRectangle}")} " +
-                              $"button=rect:{menuButton!.BoundingRectangle} enabled={menuButton.IsEnabled}");
-        }
-        (await ReaderMenuIsOpenAsync(TimeSpan.FromSeconds(1)))
-            .Should().BeTrue("the reader menu must open");
-    }
-
-    /// <summary>Dismisses the menu through its backdrop — a directional close:
-    /// a ghost overlay still reporting stale bounds cannot invert this into an
-    /// open the way re-invoking the toggle button can.</summary>
-    private async Task CloseReaderMenuAsync()
-    {
-        for (var attempt = 0; attempt < 3; attempt++)
-        {
-            var overlay = await LiveMenuOverlayAsync(TimeSpan.FromSeconds(2));
-            if (overlay == null)
-            {
-                return;
-            }
-            var bounds = overlay.BoundingRectangle;
-            fixture.ClickAt(new System.Drawing.Point(
-                (int)(bounds.Left + bounds.Width / 2),
-                (int)(bounds.Top + bounds.Height / 2)));
+            bitmap.UnlockBits(data);
         }
     }
 
-    private async Task<bool> ReaderMenuIsOpenAsync(TimeSpan timeout)
-    {
-        // Dismissed menu rows can linger enumerated as on-screen, so the
-        // checkbox/label signals can claim "open" while the overlay is
-        // gone — the overlay's own geometry is the honest signal.
-        return await LiveMenuOverlayAsync(timeout) != null;
-    }
-
-    /// <summary>Polls until the flow's painted pixels differ from the
-    /// pre-toggle capture — the marks toggle repaints the canvas in place.
-    /// </summary>
+    /// <summary>Polls until the word band shows directional mark-removal
+    /// evidence — erased niqqud/taamim are bright pixels over a dark
+    /// background, so stripping produces many bright→dark transitions and
+    /// nearly no dark→bright ones. A bare "pixels changed" gate is not
+    /// enough: a brightness/AA shift in the re-rendered frame produces
+    /// exactly that without removing a single mark (#3265). Chrome outside
+    /// the band is not the flow's repaint either.</summary>
     private static async Task<bool> WaitForRepaintAsync(AutomationElement element, System.Drawing.Bitmap before)
     {
         var deadline = DateTime.UtcNow.AddSeconds(10);
         while (DateTime.UtcNow < deadline)
         {
-            var current = Capture.Element(element).Bitmap;
-            if (!ReferenceEquals(current, before) && !BitmapsEqual(current, before))
+            using var current = Capture.Element(element);
+            if (WordBandRemovedInk(current.Bitmap, before) >= 40)
             {
                 return true;
             }
@@ -285,82 +274,82 @@ public sealed class TikkunFlowModeTests(OfflineReaderFixture fixture)
         return false;
     }
 
-    /// <summary>Exact pixel comparison — hidden niqqud dots are only a few
-    /// px wide, so a sampling stride can miss every change.</summary>
-    private static bool BitmapsEqual(System.Drawing.Bitmap a, System.Drawing.Bitmap b)
+    /// <summary>Count of word-band pixels that were lit before and went dark —
+    /// the structural signature of marks actually being erased rather than the
+    /// frame just shifting intensity. Hidden niqqud dots are only a few px
+    /// wide, so every pixel is compared (no sampling stride), and only
+    /// background-level darkness counts as erased so antialiasing shimmer on
+    /// surviving glyphs cannot accumulate into a pass.</summary>
+    private static int WordBandRemovedInk(System.Drawing.Bitmap after, System.Drawing.Bitmap before)
     {
-        if (a.Width != b.Width || a.Height != b.Height)
+        if (after.Width != before.Width || after.Height != before.Height)
         {
-            return false;
+            return 0;
         }
-        var rect = new System.Drawing.Rectangle(0, 0, a.Width, a.Height);
-        var dataA = a.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadOnly,
+        var rect = new System.Drawing.Rectangle(0, 0, after.Width, after.Height);
+        var dataA = after.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadOnly,
             System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-        var dataB = b.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadOnly,
+        var dataB = before.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadOnly,
             System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         try
         {
-            var bytesA = new byte[Math.Abs(dataA.Stride) * a.Height];
-            var bytesB = new byte[Math.Abs(dataB.Stride) * b.Height];
+            var bytesA = new byte[Math.Abs(dataA.Stride) * after.Height];
+            var bytesB = new byte[Math.Abs(dataB.Stride) * before.Height];
             System.Runtime.InteropServices.Marshal.Copy(dataA.Scan0, bytesA, 0, bytesA.Length);
             System.Runtime.InteropServices.Marshal.Copy(dataB.Scan0, bytesB, 0, bytesB.Length);
-            return bytesA.SequenceEqual(bytesB);
+            var stride = Math.Abs(dataA.Stride);
+            var band = WordBand(after);
+            var removed = 0;
+            for (var y = band.Top; y < band.Bottom; y++)
+            {
+                var row = y * stride;
+                for (var x = band.Left; x < band.Right; x++)
+                {
+                    var px = row + x * 4;
+                    var lumaBefore = (bytesB[px] + bytesB[px + 1] + bytesB[px + 2]) / 3;
+                    var lumaAfter = (bytesA[px] + bytesA[px + 1] + bytesA[px + 2]) / 3;
+                    if (lumaBefore > 110 && lumaAfter < 70)
+                    {
+                        removed++;
+                    }
+                }
+            }
+            return removed;
         }
         finally
         {
-            a.UnlockBits(dataA);
-            b.UnlockBits(dataB);
+            after.UnlockBits(dataA);
+            before.UnlockBits(dataB);
         }
     }
 
-    private async Task NavigateToBereshitYudAsync()
+    /// <summary>Dumps every enumerated copy of the ambiguous elements with
+    /// the state each ghost check reads — the tree says what the pixels
+    /// cannot.</summary>
+    private void DumpTikkunDiagnostics(string capture)
     {
-        // Same offline search path as PerekReselectScrollTests.
-        var source = await fixture.WaitForElementAsync(window =>
-            window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSource"))
-                .FirstOrDefault(title => !title.IsOffscreen), TimeSpan.FromSeconds(30));
-        source.Should().NotBeNull("the reader must finish startup before search opens");
-        fixture.MainWindow.Focus();
-        fixture.Click(source!);
-        var input = await fixture.WaitForElementAsync(window =>
-            window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSearchInput"))
-                .FirstOrDefault(field => !field.IsOffscreen && field.IsEnabled), TimeSpan.FromSeconds(30));
-        input.Should().NotBeNull();
-        // The entry can take the click before the search panel finishes
-        // presenting — focus never lands. Re-click bounded times until the
-        // native field reports keyboard focus.
-        var focused = (AutomationElement?)null;
-        for (var attempt = 0; attempt < 3 && focused == null; attempt++)
+        CaptureScreenshot(capture);
+        foreach (var id in new[] { "TikkunScrollView", "PasukimCollection", "ReaderMenuOverlay", "ReaderMenuButton" })
         {
-            fixture.Click(input!);
-            focused = await fixture.WaitForElementAsync(window =>
-                window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSearchInput"))
-                    .FirstOrDefault(field => field.FrameworkAutomationElement.HasKeyboardFocus),
-                TimeSpan.FromSeconds(8));
+            var elements = fixture.MainWindow.FindAllDescendants(fixture.CF.ByAutomationId(id));
+            foreach (var element in elements)
+            {
+                var chain = new List<string>();
+                for (var node = element.Parent; node != null; node = node.Parent)
+                {
+                    chain.Add($"{node.Properties.AutomationId.ValueOrDefault ?? node.ControlType.ToString()}(off={node.Properties.IsOffscreen.ValueOrDefault},en={node.Properties.IsEnabled.ValueOrDefault})");
+                }
+                Console.WriteLine($"{id}: off={element.IsOffscreen} en={element.IsEnabled} rect={element.BoundingRectangle} " +
+                                  $"centerHit={RenderedAtCenter(element)} chain={string.Join(">", chain)}");
+            }
         }
-        focused.Should().NotBeNull("typing starts after the native field receives focus");
-        Keyboard.TypeSimultaneously(FlaUI.Core.WindowsAPI.VirtualKeyShort.CONTROL, FlaUI.Core.WindowsAPI.VirtualKeyShort.KEY_A);
-        Keyboard.Type("בראשית 10");
-        (await fixture.WaitForElementAsync(window =>
-            window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchStatus")) is { } status
-                && System.Text.RegularExpressions.Regex.IsMatch(status.Name, @"^\d+ תוצאות$") ? status : null,
-            TimeSpan.FromSeconds(90))).Should().NotBeNull("search must finish before selecting a result");
-        var result = await fixture.WaitForElementAsync(window =>
-            window.FindFirstDescendant(fixture.CF.ByAutomationId("SearchResults"))
-                ?.FindFirstDescendant(fixture.CF.ByName("בראשית י")), TimeSpan.FromSeconds(45));
-        result.Should().NotBeNull("the chapter result must appear for the query");
-        fixture.MainWindow.Focus();
-        fixture.Click(result!);
-        var landed = await fixture.WaitForElementAsync(window =>
-            window.FindFirstDescendant(fixture.CF.ByAutomationId("PerekSource").And(fixture.CF.ByName("בראשית י"))),
-            TimeSpan.FromSeconds(30));
-        landed.Should().NotBeNull("the reader opens בראשית י after the search result tap");
     }
 
     private void CaptureScreenshot(string name)
     {
         var artifacts = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".artifacts"));
         Directory.CreateDirectory(artifacts);
-        Capture.Element(fixture.MainWindow).ToFile(Path.Join(artifacts, name));
+        using var capture = Capture.Element(fixture.MainWindow);
+        capture.ToFile(Path.Join(artifacts, name));
     }
 }

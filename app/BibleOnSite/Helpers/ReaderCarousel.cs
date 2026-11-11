@@ -189,6 +189,27 @@ public sealed class ReaderCarousel
     }
 
     /// <summary>
+    /// Windows: a carousel whose platform tree materialized during a Shell
+    /// push can keep its ItemsStackPanel realizing items at a stale offset —
+    /// Position already reads correctly, so a managed ScrollTo is a no-op and
+    /// the visible slot stays blank. A native ScrollIntoView re-anchors the
+    /// panel on the current item once the platform tree settles (#3265).
+    /// </summary>
+    public void ResnapAfterLoad()
+    {
+#if WINDOWS
+        _ui.Carousel.Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(600), () =>
+        {
+            if (_ui.Carousel.Handler?.PlatformView is Microsoft.UI.Xaml.Controls.ListViewBase list
+                && _ui.Carousel.CurrentItem is { } item)
+            {
+                list.ScrollIntoView(item, Microsoft.UI.Xaml.Controls.ScrollIntoViewAlignment.Leading);
+            }
+        });
+#endif
+    }
+
+    /// <summary>
     /// Re-snaps the carousel to the current position after its width changed,
     /// restoring a single full-width item.
     /// </summary>
