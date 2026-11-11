@@ -80,33 +80,29 @@ startServer(options);
 	wrapper.stderr.on("data", (data) => {
 		output += data;
 	});
-	let wrapperClosed = false;
-	wrapper.once("close", () => {
-		wrapperClosed = true;
-	});
 	const closed = once(wrapper, "close");
 	const exited = once(wrapper, "close", { signal: t.signal });
 	// Output-only callers need not await this promise. Awaiting callers still
 	// see cancellation, allowing node:test to enter teardown on its deadline.
 	exited.catch(() => {});
 	t.after(async () => {
-		if (!wrapperClosed) {
-			if (process.platform !== "win32") {
+		// EOF proves only that the wrapper and its captured output closed.
+		// A descendant can close its output and keep serving after that point.
+		if (process.platform !== "win32") {
+			try {
+				process.kill(-wrapper.pid, "SIGKILL");
+			} catch (error) {
+				if (error.code !== "ESRCH") throw error;
+			}
+		} else {
+			if (wrapper.exitCode === null && wrapper.signalCode === null) {
+				wrapper.kill("SIGKILL");
+			}
+			if (serverPid) {
 				try {
-					process.kill(-wrapper.pid, "SIGKILL");
+					process.kill(serverPid, "SIGKILL");
 				} catch (error) {
 					if (error.code !== "ESRCH") throw error;
-				}
-			} else {
-				if (wrapper.exitCode === null && wrapper.signalCode === null) {
-					wrapper.kill("SIGKILL");
-				}
-				if (serverPid) {
-					try {
-						process.kill(serverPid, "SIGKILL");
-					} catch (error) {
-						if (error.code !== "ESRCH") throw error;
-					}
 				}
 			}
 		}

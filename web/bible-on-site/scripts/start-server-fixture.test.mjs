@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -146,6 +147,45 @@ test(
 		assert.equal(result.signal, null);
 		assert.equal(result.code, 1, result.output);
 		assert.match(result.output, /testTimeoutFailure/);
+	},
+);
+
+test(
+	"a closed wrapper cannot leave a server with closed output listening",
+	nativeSignals,
+	async (t) => {
+		let port;
+		await t.test("close wrapper and inherited output", async (subtest) => {
+			const server = await fixture(
+				subtest,
+				`
+const fs = require('node:fs');
+const server = require('node:net').createServer();
+server.listen(0, '127.0.0.1', () => {
+  process.stdout.write('READY ' + process.pid + ' ' + server.address().port + '\\n', () => {
+    fs.closeSync(1);
+    fs.closeSync(2);
+  });
+});`,
+			);
+			// Also reap a leaking regression so a red run cannot leave a server.
+			t.after(() => {
+				try {
+					process.kill(-server.wrapper.pid, "SIGKILL");
+				} catch (error) {
+					if (error.code !== "ESRCH") throw error;
+				}
+			});
+			await server.waitFor("READY ");
+			port = Number(server.output().match(/READY \d+ (\d+)/)[1]);
+			server.wrapper.kill("SIGKILL");
+			await server.exited;
+		});
+		const client = net.createConnection({ host: "127.0.0.1", port });
+		t.after(() => client.destroy());
+		await assert.rejects(once(client, "connect", { signal: t.signal }), {
+			code: "ECONNREFUSED",
+		});
 	},
 );
 
