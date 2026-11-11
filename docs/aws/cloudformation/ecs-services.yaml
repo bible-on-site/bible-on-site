@@ -52,6 +52,18 @@ Metadata:
                             └─────────────────────────────────────────────┘
 
 Parameters:
+  ArchiveCognitoUserPoolId:
+    Type: String
+    Default: ""
+  ArchiveCognitoClientId:
+    Type: String
+    Default: ""
+  ArchiveCognitoDomain:
+    Type: String
+    Default: ""
+  ArchiveAdminOrigin:
+    Type: String
+    Default: https://admin.xn--febl3a.co.il
   Environment:
     Type: String
     Default: production
@@ -541,6 +553,19 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
           Environment:
+            # Populate from the approved private-archive stack outputs.
+            - Name: ARCHIVE_AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: ARCHIVE_S3_BUCKET
+              Value: !Sub "bible-on-site-private-archive-${AWS::AccountId}-${AWS::Region}"
+            - Name: ARCHIVE_COGNITO_POOL_ID
+              Value: !Ref ArchiveCognitoUserPoolId
+            - Name: ARCHIVE_COGNITO_CLIENT_ID
+              Value: !Ref ArchiveCognitoClientId
+            - Name: ARCHIVE_COGNITO_DOMAIN
+              Value: !Ref ArchiveCognitoDomain
+            - Name: ARCHIVE_ORIGIN
+              Value: !Ref ArchiveAdminOrigin
             - Name: HOST
               Value: "0.0.0.0"
             - Name: PORT
