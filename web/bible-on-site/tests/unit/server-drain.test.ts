@@ -16,12 +16,21 @@ const suites = [
 ];
 
 for (const suite of suites) {
-	test.concurrent(`${suite} passes its real child-process and HTTP checks`, async () => {
-		const { stdout } = await promisify(execFile)(
-			process.execPath,
-			["--test", "--test-reporter=tap", path.resolve(`scripts/${suite}`)],
-			{ timeout: 20_000 },
-		);
+	test.concurrent(`passes ${suite}'s real child-process and HTTP checks`, async () => {
+		let stdout: string;
+		try {
+			({ stdout } = await promisify(execFile)(
+				process.execPath,
+				["--test", "--test-reporter=tap", path.resolve(`scripts/${suite}`)],
+				{ timeout: 20_000 },
+			));
+		} catch (error) {
+			const failure = error as Error & { stdout?: string; stderr?: string };
+			throw new Error(
+				`${failure.message}\n${failure.stdout ?? ""}\n${failure.stderr ?? ""}`,
+				{ cause: error },
+			);
+		}
 		expect(stdout).toContain("# fail 0");
 	}, 25_000);
 }

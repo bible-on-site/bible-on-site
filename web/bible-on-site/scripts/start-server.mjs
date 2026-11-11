@@ -243,9 +243,6 @@ export function startServer({
 		cwd,
 		stdio: "inherit",
 	});
-	// Port 0 selects an ephemeral listener the probe cannot address; production
-	// always binds the configured port.
-	const stopProbe = port > 0 ? startReadinessProbe({ port, log }) : () => {};
 	let drainTimer;
 	let stopping = false;
 	const forward = (signal) => {
@@ -311,6 +308,11 @@ export function startServer({
 		cleanup();
 		process.exitCode = code ?? 128 + (constants.signals[signal] ?? 0);
 	});
+	// The first fetch can synchronously initialize its HTTP client while the
+	// child is already listening. Install signal and lifecycle handlers before
+	// starting it so an immediate stop still drains and reaps the child.
+	// Port 0 selects an ephemeral listener the probe cannot address.
+	const stopProbe = port > 0 ? startReadinessProbe({ port, log }) : () => {};
 	return child;
 }
 
