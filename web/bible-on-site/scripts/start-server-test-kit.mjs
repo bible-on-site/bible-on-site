@@ -42,6 +42,7 @@ if (process.env.MEASURE_FILE) {
 	const metric = process.env.MEASURE_FILE;
 	options.measure = async () => Number(await readFile(metric, "utf8"));
 }
+${options.beforeStart ?? ""}
 startServer(options);
 `,
 	);
@@ -82,8 +83,8 @@ startServer(options);
 		if (wrapper.exitCode === null && wrapper.signalCode === null) {
 			wrapper.kill("SIGKILL");
 		}
-		// An unexpectedly terminated wrapper can leave its child holding our
-		// output pipes open. Always clean up that child so failures can report.
+		// A signaled wrapper can exit before its child; inherited pipes then
+		// keep the test runner alive unless the fixture reaps that child too.
 		if (serverPid) {
 			try {
 				process.kill(serverPid, "SIGKILL");
@@ -91,6 +92,7 @@ startServer(options);
 				if (error.code !== "ESRCH") throw error;
 			}
 		}
+		await exited;
 		assert.equal(path.dirname(directory), os.tmpdir());
 		assert.ok(path.basename(directory).startsWith("bible-handover-test-"));
 		await rm(directory, { recursive: true, force: true });
@@ -103,7 +105,9 @@ startServer(options);
 				wrapper.signalCode !== null ||
 				Date.now() > deadline
 			)
-				throw new Error(`Missing ${text}: ${output}`);
+				throw new Error(
+					`Missing ${text} (exit=${wrapper.exitCode}, signal=${wrapper.signalCode}): ${output}`,
+				);
 			await new Promise((resolve) => setTimeout(resolve, 10));
 		}
 	};

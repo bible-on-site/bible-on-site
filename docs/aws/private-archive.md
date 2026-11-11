@@ -132,13 +132,12 @@ admin-only architecture.**
 
 Cost is actual S3 bytes/requests, Cognito active users and proxy bandwidth. File
 traffic loads the admin service and EC2 router. Existing public website delivery
-is independent. The only separate customer-website source fix retained in this PR
-corrects an already reproduced early-startup SIGTERM race; it changes no URLs.
+is independent. The early-startup SIGTERM fix was delivered separately in #3314;
+this PR retains only performance-test tooling changes in the customer website.
 
 Rollback restores the saved admin task definition using its pinned prior image
 and the saved router configuration, validates nginx and reloads. Remove archive
-environment values to disable its backend. Restore the prior website image if
-rolling back the separate startup fix. Retain the additive tables, user pool and
+environment values to disable its backend. Retain the additive tables, user pool and
 bucket to preserve files and identities. Do not delete storage or accounts during
 rollback. Re-enabling uses the same pool/database and preserves ownership.
 

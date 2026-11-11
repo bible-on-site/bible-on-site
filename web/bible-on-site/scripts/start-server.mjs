@@ -239,7 +239,10 @@ export function startServer({
 		);
 	if (!Number.isSafeInteger(port) || port < 0 || port > 65_535)
 		throw new RangeError("Website port must be between 0 and 65535");
-	let stopProbe = () => {};
+	const child = spawn(process.execPath, ["server.js"], {
+		cwd,
+		stdio: "inherit",
+	});
 	let drainTimer;
 	let stopping = false;
 	const forward = (signal) => {
@@ -296,13 +299,6 @@ export function startServer({
 	};
 	process.on("SIGTERM", terminate);
 	process.on("SIGINT", interrupt);
-	// Install signal handling before the child can announce readiness. Creating
-	// the first fetch probe initializes Undici synchronously; a fast child can
-	// already accept traffic while that initialization is still running.
-	const child = spawn(process.execPath, ["server.js"], {
-		cwd,
-		stdio: "inherit",
-	});
 	child.once("error", (error) => {
 		cleanup();
 		console.error("Website server could not start:", error);
@@ -312,8 +308,11 @@ export function startServer({
 		cleanup();
 		process.exitCode = code ?? 128 + (constants.signals[signal] ?? 0);
 	});
+	// The first fetch can synchronously initialize its HTTP client while the
+	// child is already listening. Install signal and lifecycle handlers before
+	// starting it so an immediate stop still drains and reaps the child.
 	// Port 0 selects an ephemeral listener the probe cannot address.
-	stopProbe = port > 0 ? startReadinessProbe({ port, log }) : () => {};
+	const stopProbe = port > 0 ? startReadinessProbe({ port, log }) : () => {};
 	return child;
 }
 
