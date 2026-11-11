@@ -79,6 +79,15 @@ export function iosAutomationLogArguments(udid) {
     "--predicate", 'process BEGINSWITH "WebDriverAgent" OR process == "testmanagerd"'];
 }
 
+// Device-scoped streams disappear with the simulator. Observe its host-side
+// lifecycle independently so a shutdown during an otherwise valid XCTest
+// query retains the service's reason and requesting client. Do not launch,
+// inspect, or signal the simulator while collecting this evidence.
+export function iosHostLogArguments() {
+  return ["stream", "--style", "compact", "--level", "info", "--predicate",
+    'process == "CoreSimulatorService" OR process == "DeviceHub" OR process == "Simulator" OR process == "simulatord" OR process == "launchd_sim"'];
+}
+
 // Stop every owned reader even when one failed. Each retains the existing
 // five-second stop cap; concurrent joins do not add another shutdown allowance.
 export async function stopNativeLogStreams(streams) {

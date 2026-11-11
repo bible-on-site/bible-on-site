@@ -10,7 +10,7 @@ import { iosInteractionDiagnostics, readLoggedIosAppPid, sampleIosFallback, samp
 import { listenScenarioFailures } from "./scenario-failure-monitor.mjs";
 import { probeAppiumReadiness, waitForAppiumReadiness } from "./appium-readiness.mjs";
 import { prepareWda } from "./prepare-wda.mjs";
-import { exportNativeLog, iosAutomationLogArguments, startNativeLog, stopNativeLogStreams } from "./native-logs.mjs";
+import { exportNativeLog, iosAutomationLogArguments, iosHostLogArguments, startNativeLog, stopNativeLogStreams } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
 import { installAppUnderTest } from "./android-install.mjs";
 import { collectAndroidCrashDiagnostics } from "./android-crash-diagnostics.mjs";
@@ -117,6 +117,7 @@ let diagnosticsFailed = false;
 const androidEmulator = platform === "android" && /^emulator-\d+$/.test(process.env.MOBILE_UDID);
 let nativeStream;
 let automationStream;
+let hostStream;
 if (platform === "ios") {
   nativeStream = startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
     "log", "stream", "--style", "compact", "--level", "info", "--predicate", 'process == "BibleOnSite"'],
@@ -161,12 +162,15 @@ let failureObserverConfirmed = false;
 const failureDirectory = resolve(hostDiagnostics, "scenario-failures");
 if (platform === "ios") mkdirSync(failureDirectory, { recursive: true });
 let failureMonitor;
-const stop = () => { test?.kill(); server.kill(); nativeStream?.kill(); automationStream?.kill(); };
+const stop = () => { test?.kill(); server.kill(); nativeStream?.kill(); automationStream?.kill(); hostStream?.kill(); };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
 try {
   if (platform === "ios") {
+    // Unlike simctl-spawned readers this host observer survives device shutdown.
+    hostStream = startNativeLog("/usr/bin/log", iosHostLogArguments(),
+      resolve(artifacts, "simulator-host-live.log"));
     const args = iosAutomationLogArguments(process.env.MOBILE_UDID);
     writeFileSync(resolve(artifacts, "automation-log-start.json"), JSON.stringify({
       time: new Date().toISOString(), source: process.env.GITHUB_SHA ?? null,
@@ -232,7 +236,7 @@ try {
   }
   try {
     await phase("native-log-stream", () => platform === "ios"
-      ? stopNativeLogStreams([nativeStream, automationStream]) : nativeStream?.stop());
+      ? stopNativeLogStreams([nativeStream, automationStream, hostStream]) : nativeStream?.stop());
   } catch (error) {
     if (platform === "ios") diagnosticsFailed = true;
     else writeFileSync(resolve(artifacts, "android-native-log-stop-error.txt"), String(error));

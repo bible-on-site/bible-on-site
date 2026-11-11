@@ -115,25 +115,31 @@ for (const firstExit of [null, 7]) {
   test(`joins both original and automation streams when the first stream ${firstExit === null ? "is alive" : "failed"}`, async () => {
     const directory = mkdtempSync(join(tmpdir(), "mobile-automation-stream-test-"));
     const appFile = join(directory, "app.log"), automationFile = join(directory, "automation.log");
+    const hostFile = join(directory, "host.log");
     const source = (label, exit) => `process.stdout.write('${label} live log'); ${exit === null
       ? "setInterval(() => {}, 1000)" : `process.exit(${exit})`}`;
     const app = startNativeLog(process.execPath, ["-e", source("app", firstExit)], appFile);
     const automation = startNativeLog(process.execPath, ["-e", source("automation", null)], automationFile);
+    const host = startNativeLog(process.execPath, ["-e", source("host", null)], hostFile);
     let automationExited = false;
+    let hostExited = false;
     let shutdownAttempted = false;
     void automation.completion.then(() => { automationExited = true; });
+    void host.completion.then(() => { hostExited = true; });
     // The prior runner closes only its original stream. Keep that real behavior
     // as the red control until the joint stop operation exists.
     const stop = nativeLogs.stopNativeLogStreams ?? (async ([first]) => first.stop());
     try {
-      await Promise.all([waitForLog(appFile), waitForLog(automationFile)]);
+      await Promise.all([waitForLog(appFile), waitForLog(automationFile), waitForLog(hostFile)]);
       if (firstExit !== null) await app.completion;
       let failure;
       shutdownAttempted = true;
-      try { await stop([app, automation]); } catch (error) { failure = error; }
+      try { await stop([app, automation, host]); } catch (error) { failure = error; }
       assert.equal(automationExited, true, "the owned automation process must exit before shutdown finishes");
+      assert.equal(hostExited, true, "the host observer must exit even when a device stream failed");
       assert.equal(readFileSync(appFile, "utf8"), "app live log");
       assert.equal(readFileSync(automationFile, "utf8"), "automation live log");
+      assert.equal(readFileSync(hostFile, "utf8"), "host live log");
       if (firstExit === null) assert.equal(failure, undefined);
       else {
         assert.ok(failure instanceof AggregateError);
@@ -143,6 +149,7 @@ for (const firstExit of [null, 7]) {
       await Promise.allSettled([
         ...(!shutdownAttempted ? [app.stop()] : []),
         ...(!automationExited ? [automation.stop()] : []),
+        ...(!hostExited ? [host.stop()] : []),
       ]);
       rmSync(directory, { recursive: true, force: true });
     }
@@ -163,6 +170,19 @@ test("automation logging stays on the explicit simulator and does not replace th
     assert.match(args[10], /process == "testmanagerd"/);
     assert.ok(!args[10].includes("BibleOnSite"), "keep the app-only identity stream separate");
   }
+});
+
+test("host lifecycle logging remains independent of device RPCs and limits its process scope", () => {
+  const args = nativeLogs.iosHostLogArguments();
+  assert.deepEqual(args.slice(0, 6), ["stream", "--style", "compact", "--level", "info", "--predicate"]);
+  const names = args[6].split(" OR ").map(term => {
+    const match = /^process == "([A-Za-z_]+)"$/.exec(term);
+    assert.ok(match, "only exact process filters may broaden this host observer");
+    return match[1];
+  });
+  assert.deepEqual(names.sort(), ["CoreSimulatorService", "DeviceHub", "Simulator", "launchd_sim", "simulatord"].sort());
+  assert.equal(args.length, 7);
+  assert.ok(!args.includes("simctl"));
 });
 
 test("an automation-start failure still closes the original stream", async () => {
