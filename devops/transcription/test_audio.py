@@ -18,6 +18,7 @@ class Samples:
     """Provide the small NumPy surface used by decoding and its assertions."""
 
     def __init__(self, values):
+        """Retain sample values and the array attributes used by the decoder."""
         self.values = list(values)
         self.size = len(self.values)
         self.dtype = None

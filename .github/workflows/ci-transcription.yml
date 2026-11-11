@@ -17,6 +17,9 @@ jobs:
       - name: Install coverage tooling
         run: python -m pip install -r devops/transcription/requirements-ci.txt
       - name: Test transcription without downloading GPU models
+        env:
+          TRANSCRIPTION_TEST_S3: "1"
+          TRANSCRIPTION_TEST_MEDIA: "1"
         run: |
           coverage run --rcfile=devops/transcription/.coveragerc -m unittest discover -s devops/transcription -p 'test_*.py'
           coverage report --rcfile=devops/transcription/.coveragerc

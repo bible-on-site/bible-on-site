@@ -35,11 +35,9 @@ class SourceFile:
 
 
 def _s3_location(source: str) -> tuple[str, str]:
-    """Parse an exact S3 object URI without query or fragment semantics.
-
-    Every character after the bucket's slash belongs to the literal key,
-    including question marks, hash signs and percent sequences.
-    """
+    """Parse an exact S3 object URI without query or fragment semantics."""
+    # Every character after the bucket slash belongs to the literal key,
+    # including question marks, hash signs and percent sequences.
     bucket, separator, key = source.removeprefix("s3://").partition("/")
     if (
         not source.startswith("s3://")
@@ -127,15 +125,11 @@ def _s3_source(source: str, aws_profile: str | None) -> Iterator[SourceFile]:
 
 @contextmanager
 def materialize_source(source: str, *, aws_profile: str | None = None) -> Iterator[SourceFile]:
-    """Yield a private snapshot of one local file or exact S3 object.
-
-    The caller may use the path only inside the context. Both source kinds
-    are copied, so editing a local original cannot change the inference input.
-    S3 uses the standard
-    boto3 credential chain, optionally selecting an existing named profile.
-    Archive keys are literal: percent escapes are not URL-decoded, and question
-    marks and hash signs are part of the key rather than URL query/fragment delimiters.
-    """
+    """Yield a private snapshot of one local file or exact S3 object."""
+    # The caller may use the path only inside the context. Both sources are
+    # copied, so editing a local original cannot change the inference input.
+    # S3 uses boto3's credential chain or an existing selected profile.
+    # Percent escapes, question marks and hash signs are literal key characters.
     if source.startswith("s3://"):
         with _s3_source(source, aws_profile) as media:
             yield media

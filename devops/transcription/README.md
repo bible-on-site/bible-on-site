@@ -41,6 +41,18 @@ On Windows, CUDA/cuDNN DLL directories must be available to the process before
 starting Python. The CUDA version reported by `nvidia-smi` describes driver
 support; it does not establish that those libraries are installed.
 
+The optional pinned NVIDIA wheels provide the runtime without installing PyTorch:
+
+```powershell
+devops/transcription/.venv/Scripts/python.exe -m pip install -r devops/transcription/requirements-cuda.txt
+$transcriptionNvidia = "$PWD/devops/transcription/.venv/Lib/site-packages/nvidia"
+$env:PATH = "$transcriptionNvidia/cublas/bin;$transcriptionNvidia/cudnn/bin;$transcriptionNvidia/cuda_nvrtc/bin;$env:PATH"
+```
+
+On Linux, set `LD_LIBRARY_PATH` to the installed wheels' corresponding
+`nvidia/cublas/lib`, `nvidia/cudnn/lib` and `nvidia/cuda_nvrtc/lib` directories
+before starting the command, as described in the backend's GPU instructions.
+
 Inference executes locally. The first run downloads the pinned public model
 from Hugging Face; audio is never uploaded for inference. Use `--model-cache PATH`
 to choose a model cache and `--offline` to require an already cached snapshot.
@@ -121,7 +133,10 @@ rename. A failed/interrupted run removes its private input and staging files;
 completed prior runs remain intact. A process killed without cleanup may leave
 temporary files. Each successful rerun has a distinct directory, so repeated
 runs do not silently overwrite an edited export. An empty recognition, invalid
-timestamps, changed snapshot or write error fails without publishing an export.
+timestamps (nonfinite, negative or unordered starts), changed snapshot or write
+error fails without publishing an export. Overlapping estimates or estimates
+beyond the decoded duration are preserved and flagged in the manifest's
+`transcription.warnings`; they do not discard otherwise usable recognized text.
 Exports contain private source names and speech; keep them in local ignored
 `.outputs/` storage and apply the recording's access restrictions when sharing.
 
@@ -146,16 +161,25 @@ The selected device must support the requested precision; failures stop the run.
 
 ## Validation
 
-The CPU-only contract tests mock model inference and AWS transport, and exercise
-real filesystem snapshots/exports. They do not download weights or require CUDA:
+The CPU-only contract tests mock model inference and exercise real filesystem
+snapshots/exports. SDK integration tests use actual boto3 transport against an
+isolated loopback server, with a guard prohibiting non-loopback connections.
+Media integration tests generate real WAV, video and multi-track fixtures,
+then exercise the actual PyAV decoder without an external FFmpeg executable.
+They do not download weights, access production AWS or require CUDA:
 
 ```powershell
 python -m unittest discover -s devops/transcription -p 'test_*.py'
 python -m pip install -r devops/transcription/requirements-ci.txt
+$env:TRANSCRIPTION_TEST_S3 = '1'
+$env:TRANSCRIPTION_TEST_MEDIA = '1'
 python -m coverage run --rcfile=devops/transcription/.coveragerc -m unittest discover -s devops/transcription -p 'test_*.py'
 python -m coverage report --rcfile=devops/transcription/.coveragerc
 ```
 
+Plain stdlib discovery skips the two SDK integration tests unless
+`TRANSCRIPTION_TEST_S3=1` and boto3 is installed; it skips the seven media integration
+tests unless `TRANSCRIPTION_TEST_MEDIA=1` and PyAV/NumPy are installed. CI runs both.
 CI enforces at least 95% branch-aware coverage and contributes the LCOV report to
 the repository's combined quality report. Actual GPU and actual authorized S3
 smoke runs are separate checks; mocked tests do not establish recognition quality

@@ -22,6 +22,7 @@ class ElementCollector(HTMLParser):
     """Inspect actual parsed markup rather than checking escape implementation."""
 
     def __init__(self):
+        """Collect parsed elements and text without executing markup."""
         super().__init__()
         self.elements = []
         self.text = []
@@ -100,9 +101,9 @@ class ArticleTests(unittest.TestCase):
 
     def test_rejects_invalid_segments_and_silence(self):
         invalid = [(), (Segment(0, 1, " "),), (Segment(-1, 1, "x"),),
-                   (Segment(0, 0, "x"),), (Segment(0, 13, "x"),),
+                   (Segment(0, 0, "x"),),
                    (Segment(float("nan"), 1, "x"),), (Segment(0, float("inf"), "x"),),
-                   (Segment(0, 2, "x"), Segment(1, 3, "y")), (Segment(0, 1, None),)]
+                   (Segment(2, 3, "x"), Segment(1, 3, "y")), (Segment(0, 1, None),)]
         for segments in invalid:
             with self.subTest(segments=segments), self.assertRaises(ValueError):
                 validate_transcript(replace(recognized(), segments=segments))
@@ -150,6 +151,19 @@ class ExportTests(unittest.TestCase):
         self.assertNotEqual(first.directory, second.directory)
         self.assertEqual(second.directory.parent, self.output)
         self.assertEqual(before, {path.name: path.read_bytes() for path in first.directory.iterdir()})
+
+    def test_uncertain_timestamp_estimates_preserve_text_and_raw_review_evidence(self):
+        transcript = recognized(Segment(0, 2, "אחד"), Segment(1.98, 3, "שתיים"),
+                                Segment(3, 12.02, "שלוש"))
+        result = export_transcript(self.source, transcript, self.output, ExportOptions())
+        manifest = json.loads((result.directory / "transcript.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["transcription"]["warnings"], [
+            {"code": "timestamp-overlap", "segment_index": 1},
+            {"code": "timestamp-beyond-recording", "segment_index": 2},
+        ])
+        self.assertEqual(manifest["transcription"]["segments"][1]["start"], 1.98)
+        self.assertEqual(manifest["transcription"]["segments"][2]["end"], 12.02)
+        self.assertEqual(result.article.content, "<p>אחד שתיים שלוש</p>\n")
 
     def test_modified_snapshot_cannot_claim_original_provenance(self):
         self.media.write_bytes(b"changed")

@@ -67,8 +67,8 @@ def normalize_display(text: str) -> str:
     })).split())
 
 
-def validate_transcript(transcript: Transcript) -> None:
-    """Refuse incomplete, unordered or non-finite inference output."""
+def validate_transcript(transcript: Transcript) -> list[dict[str, object]]:
+    """Reject invalid results and retain uncertain timestamp estimates for review."""
     if not math.isfinite(transcript.duration) or transcript.duration <= 0:
         raise ValueError("Recording duration must be finite and greater than zero")
     if (not math.isfinite(transcript.language_probability)
@@ -76,17 +76,24 @@ def validate_transcript(transcript: Transcript) -> None:
         raise ValueError("Invalid detected-language probability")
     if not re.fullmatch(r"[a-z]{2,3}", transcript.language):
         raise ValueError("Invalid transcript language")
+    previous_start = 0.0
     previous_end = 0.0
-    for segment in transcript.segments:
+    warnings: list[dict[str, object]] = []
+    for index, segment in enumerate(transcript.segments):
         if (not math.isfinite(segment.start) or not math.isfinite(segment.end)
-                or segment.start < previous_end or segment.end <= segment.start
-                or segment.end > transcript.duration + 0.001):
-            raise ValueError("Transcript segments must have ordered timestamps within the recording")
+                or segment.start < previous_start or segment.end <= segment.start):
+            raise ValueError("Transcript segments must have finite positive spans and ordered nonnegative starts")
         if not isinstance(segment.text, str):
             raise ValueError("Transcript text must be a string")
+        if segment.start < previous_end:
+            warnings.append({"code": "timestamp-overlap", "segment_index": index})
+        if segment.end > transcript.duration:
+            warnings.append({"code": "timestamp-beyond-recording", "segment_index": index})
+        previous_start = segment.start
         previous_end = segment.end
     if not any(segment.text.strip() for segment in transcript.segments):
         raise ValueError("No speech recognized; no article was exported")
+    return warnings
 
 
 def build_article(transcript: Transcript, title: str, options: ExportOptions) -> ArticleCandidate:
@@ -151,6 +158,7 @@ def export_transcript(source: SourceFile, transcript: Transcript, output_dir: Pa
         "transcription": {"language": transcript.language,
                           "language_probability": transcript.language_probability,
                           "duration_seconds": transcript.duration, "model": transcript.model,
+                          "warnings": validate_transcript(transcript),
                           "segments": [asdict(segment) for segment in transcript.segments]},
         "article": {"title": article.title, "content_file": "article.html",
                     "content_sha256": hashlib.sha256(article.content.encode("utf-8")).hexdigest()},

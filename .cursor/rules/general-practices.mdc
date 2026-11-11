@@ -16,6 +16,11 @@ alwaysApply: true
 - **DevOps**: Node.js/TypeScript (`devops/`)
 - **Data processing**: Rust (`data/`)
 
+The standalone local GPU transcription pipeline in `devops/transcription/` and
+its tests use Python for the native PyAV, faster-whisper and CTranslate2 runtime.
+This exception is scoped to that pipeline. Infrastructure, deployment and other
+DevOps tooling continue to use Node.js/TypeScript.
+
 ## Tool Learning (Agents/Copilot)
 
 1. Check `.github/tool-registry.md` for existing research.

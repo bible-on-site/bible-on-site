@@ -3,3 +3,6 @@ faster-whisper==1.2.1
 ctranslate2==4.9.0
 huggingface-hub==2.4.0
 boto3==1.44.0
+# Strict media decoding is application-owned rather than delegated to Whisper.
+av==19.0.2
+numpy==2.5.4

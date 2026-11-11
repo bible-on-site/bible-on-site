@@ -1,8 +1,7 @@
-"""Opt-in boto3 HTTP transport checks against an isolated loopback S3 fixture.
+"""Opt-in boto3 HTTP transport checks against an isolated loopback S3 fixture."""
 
-Run with TRANSCRIPTION_TEST_S3=1 and the transcription runtime installed. No
-production AWS identity, configuration, endpoint or recording is used.
-"""
+# Run with TRANSCRIPTION_TEST_S3=1 and boto3 installed. No production AWS
+# identity, configuration, endpoint or recording is used.
 
 from contextlib import contextmanager
 import hashlib
@@ -10,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
 from pathlib import Path
+import secrets
 import socket
 from tempfile import TemporaryDirectory
 from threading import Thread
@@ -40,7 +40,7 @@ def local_s3_response(directory: Path, body: bytes, status: int = 200):
             self.end_headers()
             self.wfile.write(body)
 
-        def log_message(self, format_string, *args):
+        def log_message(self, format, *args):
             """Keep local fixture access and error logs out of test output."""
 
     with HTTPServer(("127.0.0.1", 0), Handler) as server:
@@ -51,7 +51,7 @@ def local_s3_response(directory: Path, body: bytes, status: int = 200):
         # prevent discovery of real credentials even on a developer's machine.
         environment = {
             "AWS_ACCESS_KEY_ID": "transcription-fixture",
-            "AWS_SECRET_ACCESS_KEY": "transcription-fixture-only",
+            "AWS_SECRET_ACCESS_KEY": secrets.token_hex(20),
             "AWS_DEFAULT_REGION": "us-east-1",
             "AWS_REGION": "us-east-1",
             "AWS_ENDPOINT_URL_S3": f"http://127.0.0.1:{server.server_port}",
@@ -79,6 +79,7 @@ class FixtureTranscriber:
     """Assert the transport delivered original bytes before returning known speech."""
 
     def __init__(self, expected: bytes):
+        """Retain expected bytes without loading any real inference runtime."""
         self.expected = expected
         self.recording_path = None
 
