@@ -1085,6 +1085,9 @@ jobs:
         run: |
           cp mysql/perushim-sql-master/perushim_data.sql mysql/perushim_data.sql
           cargo make mysql-populate
+          # Record the populate-input hash so the perf webServer reuses this
+          # population instead of running mysql-populate a second time.
+          node ../web/bible-on-site/launch-e2e-server.mts --record-populate-marker
 
       - name: Report disk space before website build
         run: df -h .
