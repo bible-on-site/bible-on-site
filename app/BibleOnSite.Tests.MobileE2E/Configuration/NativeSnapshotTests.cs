@@ -91,6 +91,27 @@ public sealed class NativeSnapshotTests
         Assert.Single(executor.Commands, command => command == DriverCommand.IsElementEnabled);
     }
 
+    [Theory]
+    [InlineData("PerekSource", false)]
+    [InlineData("PasukText", false)]
+    [InlineData("PerekSource", true)]
+    [InlineData("PasukText", true)]
+    public void ReaderTextUsesTheAcceptedSnapshotEvenWhenItsNativeElementHasBeenReplaced(string automationId, bool startsEmpty)
+    {
+        var ready = Entry("captured text");
+        var executor = new SnapshotExecutor(startsEmpty ? [Entry(" "), ready] : [ready])
+        {
+            StaleOnText = true
+        };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var page = new PerekPage(driver, new IosPlatformAdapter());
+
+        Assert.Equal("captured text", automationId == "PerekSource" ? page.Source : page.FirstPasuk);
+        Assert.Equal(startsEmpty ? 2 : 1, executor.Lookups);
+        Assert.Equal(automationId, executor.LastParameters!["value"]);
+        Assert.DoesNotContain(DriverCommand.GetElementText, executor.Commands);
+    }
+
     [Fact]
     public void ReadOnlySearchGeometryNeedsNoNativeHitTestOrPropertyRequests()
     {
@@ -307,6 +328,7 @@ public sealed class NativeSnapshotTests
         public int Lookups { get; private set; }
         public Dictionary<string, object?>? LastParameters { get; private set; }
         public bool Stale { get; init; }
+        public bool StaleOnText { get; init; }
         public int TimeoutOnLookup { get; init; }
         public string TimeoutMessage { get; init; } = "The element observation timed out.";
         public string Orientation { get; set; } = "PORTRAIT";
@@ -358,7 +380,15 @@ public sealed class NativeSnapshotTests
             }
             else if (command.Name == DriverCommand.GetElementText)
             {
-                value = "live text after lookup";
+                if (StaleOnText)
+                {
+                    status = WebDriverResult.ObsoleteElement;
+                    value = new Dictionary<string, object> { ["message"] = "The native element was replaced after the snapshot." };
+                }
+                else
+                {
+                    value = "live text after lookup";
+                }
             }
             else if (command.Name == DriverCommand.IsElementEnabled)
             {
