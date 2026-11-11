@@ -152,6 +152,41 @@ beyond the decoded duration are preserved and flagged in the manifest's
 Exports contain private source names and speech; keep them in local ignored
 `.outputs/` storage and apply the recording's access restrictions when sharing.
 
+## Incremental diagnostic checkpoints
+
+The checkpoint entry point runs the same CLI and flushes each ready native
+segment to a private JSONL file:
+
+```powershell
+$env:TRANSCRIPTION_SEGMENT_CHECKPOINT = "$PWD/.outputs/lecture.checkpoint.jsonl"
+devops/transcription/.venv/Scripts/python.exe -m devops.transcription.checkpoint `
+  "C:/recordings/lecture.webm" --output-dir .outputs/transcription
+```
+
+Use a new checkpoint filename for every run; existing files are never overwritten.
+The process-local wrapper forwards the original model arguments, iterator items
+and info unchanged, and restores the native method on exit. It preserves raw
+segment text/timestamps and native diagnostics, including tokens, temperature,
+log probability, compression ratio and no-speech score. These are uncalibrated
+model diagnostics, not correctness probabilities.
+
+Events are `started`, `recognition_started`, `segment` and `finished`.
+`pipeline_elapsed_seconds` starts at wrapper entry and includes setup, source
+retrieval, decoding, model loading and export. `recognition_elapsed_seconds`
+starts immediately before the native transcription call, excluding earlier
+setup; it includes that call's feature preparation and generation. Use pipeline
+time when calculating track minutes per complete runtime minute.
+
+Only `finished` with `complete: true` and `exit_code: 0` denotes a successful
+ordinary command. Exceptions, interruption, a nonzero exit or a missing terminal
+event leave a partial diagnostic checkpoint. Abrupt termination can leave an
+unfinished final JSONL line. Complete checkpoints link to the ordinary command
+through its printed export directory and request metadata; `transcript.json`
+remains the source-hash authority. Checkpoints do not implement automatic resume
+and are not partial articles for admin import. The normal three-file export
+remains atomic. Keep checkpoints in ignored local storage: they contain private
+source names and recognized speech and are created with mode 0600 where supported.
+
 ## Pipeline design and future drafts
 
 `sources.materialize_source` owns input retrieval and provenance.
@@ -196,3 +231,12 @@ CI enforces at least 95% branch-aware coverage and contributes the LCOV report t
 the repository's combined quality report. Actual GPU and actual authorized S3
 smoke runs are separate checks; mocked tests do not establish recognition quality
 or production archive accessibility.
+
+Full-length validation remains incomplete. Two exclusive-GPU FP32 runs of a
+1462.112-second lecture emitted segments through 312 seconds before sustained
+Windows shared-memory paging. They were stopped after 886.234 seconds with the
+default allocator and 1103.391 seconds with an experimental allocator. Those
+partial snapshots represent 0.35 and 0.28 track minutes per runtime minute;
+neither is completed-pipeline throughput or evidence of full-lecture quality.
+No experimental allocator, precision or backend change was promoted. Completing
+the representative lecture runs and resolving the memory pressure remain open.
