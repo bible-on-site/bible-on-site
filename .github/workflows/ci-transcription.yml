@@ -9,6 +9,7 @@ permissions:
 jobs:
   transcription-contract:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7

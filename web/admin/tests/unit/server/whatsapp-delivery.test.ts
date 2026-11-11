@@ -53,6 +53,7 @@ import {
 	type CachedWhatsAppTarget,
 	loadWhatsAppRuntime,
 	targetGroupId,
+	WHATSAPP_CACHE_SECONDS,
 	whatsAppConfigDigest,
 } from "~/server/whatsapp-settings.server";
 
@@ -742,10 +743,18 @@ describe("immutable durable enqueue and legacy preservation", () => {
 			);
 		function expireTargets() {
 			state.settings.audience = "real";
-			for (const row of state.targets)
-				row.expires_at = new Date(Date.now() - 1).toISOString();
+			const expires = Date.now() - 1000;
+			for (const row of state.targets) {
+				row.checked_at = new Date(
+					expires - WHATSAPP_CACHE_SECONDS * 1000,
+				).toISOString();
+				row.expires_at = new Date(expires).toISOString();
+			}
 		}
 		it("refreshes the expired real group before reserving Sunday's publication", async () => {
+			const now = Date.now();
+			vi.spyOn(Date, "now").mockReturnValue(now);
+			state.targets = [target(), target("real")];
 			expireTargets();
 			const testTarget = structuredClone(state.targets[0]);
 			const result = await scheduled();

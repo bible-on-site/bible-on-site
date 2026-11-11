@@ -114,6 +114,7 @@ class CheckpointTests(unittest.TestCase):
 
         def fails(engine, *args, **kwargs):
             segments, info = original(engine, *args, **kwargs)
+
             def generate():
                 yield from segments
                 raise failure
