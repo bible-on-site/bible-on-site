@@ -7,22 +7,24 @@ import { observeIosHostLog, shutdownEvidence, verifyIosHostLog } from "./verify-
 
 const udid = "24E299B4-C77B-4426-AC2B-71243825F07C";
 const service = "2026-11-11 20:17:06.012 Df com.apple.CoreSimulator.CoreSimulatorService[24253:28cfc]";
-function fixture(t, state = "Booted") {
+function fixture(t, state = "Booted", classic = false) {
   const directory = mkdtempSync(join(tmpdir(), "host-shutdown-contract-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const artifact = join(directory, "host.log");
   const calls = [];
   let stopped = false;
+  let classicStopped = false;
   let onOutput;
-  return { artifact, calls, get stopped() { return stopped; }, options: {
+  let classicOutput, classicArtifact;
+  return { artifact, calls, get stopped() { return stopped && (!classic || classicStopped); }, options: {
     udid, artifact,
     async execute(command, args) {
       calls.push({ command, args });
       if (args[1] === "shutdown") {
         state = "Shutdown";
         const log = `${service} Shutdown requested for ${udid}\n`;
-        writeFileSync(artifact, log);
-        onOutput(log);
+        writeFileSync(classic ? classicArtifact : artifact, log);
+        (classic ? classicOutput : onOutput)(log);
       }
       return { stdout: JSON.stringify({ devices: { ios: [{ udid: "foreign", state: "Booted" }, { udid, state }] } }) };
     },
@@ -34,16 +36,34 @@ function fixture(t, state = "Booted") {
       onOutput(log);
       return { async stop() { stopped = true; } };
     },
+    classicStream(path, options) {
+      if (!classic) return undefined;
+      classicArtifact = path;
+      classicOutput = options.onOutput;
+      writeFileSync(path, "");
+      return { async stop() { classicStopped = true; } };
+    },
   } };
 }
 
 test("validates the target transition and preserves correlated evidence before stopping the observer", async t => {
   const f = fixture(t);
-  assert.deepEqual(await verifyIosHostLog(f.options), { udid, shutdownVerified: true, correlatedLines: 1 });
+  assert.deepEqual(await verifyIosHostLog(f.options), {
+    udid, shutdownVerified: true, correlatedLines: 1, sources: { unified: 1 },
+  });
   assert(f.stopped);
   assert.deepEqual(f.calls.filter(call => call.args[1] === "shutdown"),
     [{ command: "xcrun", args: ["simctl", "shutdown", udid] }]);
   assert.match(readFileSync(f.artifact, "utf8"), /Shutdown requested/);
+});
+
+test("classic evidence is retained independently when unified logging has no lifecycle event", async t => {
+  const f = fixture(t, "Booted", true);
+  assert.deepEqual(await verifyIosHostLog(f.options), {
+    udid, shutdownVerified: true, correlatedLines: 1, sources: { unified: 0, classic: 1 },
+  });
+  assert(f.stopped);
+  assert.match(readFileSync(`${f.artifact}.classic.log`, "utf8"), /Shutdown requested/);
 });
 
 test("refuses an absent or already stopped target without starting an observer or shutting another device down", async t => {
@@ -59,7 +79,7 @@ test("refuses an absent or already stopped target without starting an observer o
 
 test("missing startup or shutdown evidence still closes the owned host observer", async t => {
   for (const failureAt of [1, 2]) {
-    const f = fixture(t);
+    const f = fixture(t, "Booted", true);
     const stages = [];
     f.options.report = event => stages.push(event);
     let observations = 0;
@@ -83,10 +103,14 @@ test("shutdown evidence requires the lifecycle emitter, device identity and shut
   const guiRequest = requester.replace("simctl[", "Simulator[");
   const quotedService = `${requester} via ${service}`;
   const lookalike = valid.replace("CoreSimulatorService[", "CoreSimulatorServiceHelper[");
+  const legacy = `Nov 11 20:17:06 localhost com.apple.CoreSimulator.CoreSimulatorService[24253] <Debug>: Shutting down ${udid}`;
+  const legacyRequester = legacy.replace("CoreSimulatorService[", "simctl[");
+  const bareRequester = `2026-11-11 20:17:02.375 simctl[65397] ${service} Shutdown ${udid}`;
   assert.deepEqual(shutdownEvidence([
     `booting ${udid}`, "shutdown foreign", requester, guiRequest, quotedService,
-    lookalike, valid, `${service} booting ${udid}`, `${service} shutdown foreign`,
-  ].join("\n"), udid), [valid]);
+    lookalike, valid, legacy, legacyRequester, `${legacyRequester} via ${service}`,
+    bareRequester, `${service} booting ${udid}`, `${service} shutdown foreign`,
+  ].join("\n"), udid), [valid, legacy]);
 });
 
 test("pipe observation retains early and split writes, unrelated events and cancellation without polling", async () => {
@@ -112,5 +136,14 @@ test("a complete startup or shutdown record needs no trailing newline", async ()
   evidence.write(`\n${service} Shutdown requested for ` + udid.slice(0, 16));
   const pending = evidence.waitFor("shutdown", AbortSignal.timeout(5000));
   evidence.write(udid.slice(16));
+  await pending;
+});
+
+test("interleaved host readers keep fragmented records in separate buffers", async () => {
+  const evidence = observeIosHostLog(udid);
+  evidence.write(`${service} Shutting do`, "unified");
+  evidence.write("Nov 11 20:17:06 localhost simctl[65397] unrelated", "classic");
+  const pending = evidence.waitFor("shutdown", AbortSignal.timeout(5000));
+  evidence.write(`wn ${udid}`, "unified");
   await pending;
 });

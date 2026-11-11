@@ -1,5 +1,7 @@
 import { execFileSync, spawn } from "node:child_process";
-import { closeSync, openSync, writeFileSync, writeSync } from "node:fs";
+import { closeSync, openSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 // A pre-deadline observation must not pause a healthy app with launchctl/LLDB
 // or replace a successful test exit with a failed diagnostic probe.
@@ -95,10 +97,31 @@ export function iosAutomationLogArguments(udid) {
 // disappears during an otherwise valid XCTest query. Do not launch,
 // inspect, or signal the simulator while collecting this evidence.
 export function iosHostLogArguments() {
-  // A real controlled shutdown produced service activity at info level but
-  // no lifecycle record. Include debug events and the requesting CLI client.
-  return ["stream", "--style", "compact", "--level", "debug", "--predicate",
-    'process == "CoreSimulatorService" OR process == "com.apple.CoreSimulator.CoreSimulatorService" OR process == "DeviceHub" OR process == "Simulator" OR process == "simulatord" OR process == "launchd_sim" OR process == "simctl"'];
+  return ["stream", "--style", "compact", "--level", "info", "--predicate",
+    'process == "CoreSimulatorService" OR process == "com.apple.CoreSimulator.CoreSimulatorService" OR process == "DeviceHub" OR process == "Simulator" OR process == "simulatord" OR process == "launchd_sim"'];
+}
+
+// CoreSimulator also keeps a host file log. On the measured macOS image its
+// lifecycle records are absent from unified logging, even at debug level.
+// Start at an absolute byte offset so an append before tail opens is retained.
+export function startIosClassicHostLog(destination, { onOutput, home = homedir(),
+  start = startNativeLog } = {}) {
+  const candidates = [join(home, "Library", "Logs", "CoreSimulator", "CoreSimulator.log"),
+    join(home, "Library", "Logs", "CoreSimulator.log")];
+  let source, offset = null;
+  for (const path of candidates) {
+    let status;
+    try { status = statSync(path); }
+    catch (error) {
+      if (["ENOENT", "ENOTDIR"].includes(error.code)) continue;
+      throw error;
+    }
+    if (status.isFile()) { source = path; offset = status.size; break; }
+  }
+  writeFileSync(`${destination}.source.json`, JSON.stringify({ source: source ?? null,
+    candidates, offset, startedAt: new Date().toISOString() }, null, 2));
+  if (!source) return undefined;
+  return start("/usr/bin/tail", ["-c", `+${offset + 1}`, "-F", source], destination, { onOutput });
 }
 
 // Stop every owned reader even when one failed. Each retains the existing

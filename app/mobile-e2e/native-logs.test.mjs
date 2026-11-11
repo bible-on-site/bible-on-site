@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { monitorNativeInteractions } from "./native-hang-monitor.mjs";
 import { captureNativeFrame, exportNativeLog, startNativeLog } from "./native-logs.mjs";
 import * as nativeLogs from "./native-logs.mjs";
+import { observeIosHostLog } from "./verify-ios-host-log.mjs";
 
 function withArtifact(run) {
   const directory = mkdtempSync(join(tmpdir(), "mobile-native-log-test-"));
@@ -174,17 +175,77 @@ test("automation logging stays on the explicit simulator and does not replace th
 
 test("host lifecycle logging remains independent of device RPCs and limits its process scope", () => {
   const args = nativeLogs.iosHostLogArguments();
-  assert.deepEqual(args.slice(0, 6), ["stream", "--style", "compact", "--level", "debug", "--predicate"]);
+  assert.deepEqual(args.slice(0, 6), ["stream", "--style", "compact", "--level", "info", "--predicate"]);
   const names = args[6].split(" OR ").map(term => {
     const match = /^process == "([A-Za-z_.]+)"$/.exec(term);
     assert.ok(match, "only exact process filters may broaden this host observer");
     return match[1];
   });
   assert.deepEqual(names.sort(), ["CoreSimulatorService", "com.apple.CoreSimulator.CoreSimulatorService",
-    "DeviceHub", "Simulator", "launchd_sim", "simulatord", "simctl"].sort());
+    "DeviceHub", "Simulator", "launchd_sim", "simulatord"].sort());
   assert.equal(args.length, 7);
   assert.ok(!args.includes("simctl"));
 });
+
+test("absent classic logs are recorded without launching a reader or creating host files", t => {
+  const home = mkdtempSync(join(tmpdir(), "classic-host-absent-"));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const artifact = join(home, "capture.log");
+  assert.equal(nativeLogs.startIosClassicHostLog(artifact, { home,
+    start() { assert.fail("No reader should start without a regular source file"); } }), undefined);
+  const metadata = JSON.parse(readFileSync(`${artifact}.source.json`, "utf8"));
+  assert.equal(metadata.source, null);
+  assert.equal(metadata.offset, null);
+  assert.equal(metadata.candidates.length, 2);
+});
+
+test("classic log fallback starts at the exact byte offset and ignores a directory candidate", t => {
+  const home = mkdtempSync(join(tmpdir(), "classic-host-fallback-"));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  mkdirSync(join(home, "Library", "Logs", "CoreSimulator", "CoreSimulator.log"), { recursive: true });
+  const source = join(home, "Library", "Logs", "CoreSimulator.log");
+  writeFileSync(source, "previous לילה\n");
+  const artifact = join(home, "capture.log");
+  const observer = {};
+  const onOutput = () => {};
+  assert.equal(nativeLogs.startIosClassicHostLog(artifact, { home, onOutput,
+    start(command, args, destination, options) {
+      assert.equal(command, "/usr/bin/tail");
+      assert.deepEqual(args, ["-c", `+${statSync(source).size + 1}`, "-F", source]);
+      assert.equal(destination, artifact);
+      assert.equal(options.onOutput, onOutput);
+      return observer;
+    } }), observer);
+  const metadata = JSON.parse(readFileSync(`${artifact}.source.json`, "utf8"));
+  assert.equal(metadata.source, source);
+  assert.equal(metadata.offset, Buffer.byteLength("previous לילה\n"));
+  assert(Number.isFinite(Date.parse(metadata.startedAt)));
+  assert.equal(readFileSync(source, "utf8"), "previous לילה\n");
+});
+
+test("real classic reader preserves an append before spawn and excludes historical evidence",
+  { skip: process.platform === "win32" }, async t => {
+    const home = mkdtempSync(join(tmpdir(), "classic-host-live-"));
+    t.after(() => rmSync(home, { recursive: true, force: true }));
+    const directory = join(home, "Library", "Logs", "CoreSimulator");
+    mkdirSync(directory, { recursive: true });
+    const source = join(directory, "CoreSimulator.log");
+    const udid = "24E299B4-C77B-4426-AC2B-71243825F07C";
+    const event = `Nov 11 20:17:06 localhost com.apple.CoreSimulator.CoreSimulatorService[24253] <Debug>: Shutting down ${udid}`;
+    writeFileSync(source, `historical ${event}\n`);
+    const artifact = join(home, "capture.log");
+    const evidence = observeIosHostLog(udid);
+    const observer = nativeLogs.startIosClassicHostLog(artifact, { home,
+      onOutput: chunk => evidence.write(chunk, "classic"),
+      start(command, args, destination, options) {
+        // Force the append into the startup window that an end-relative tail misses.
+        appendFileSync(source, event);
+        return startNativeLog(command, args, destination, options);
+      } });
+    try { await evidence.waitFor("shutdown", AbortSignal.timeout(5000)); }
+    finally { await observer.stop(); }
+    assert.equal(readFileSync(artifact, "utf8"), event);
+  });
 
 test("an automation-start failure still closes the original stream", async () => {
   await withStreamArtifact(async (artifact) => {

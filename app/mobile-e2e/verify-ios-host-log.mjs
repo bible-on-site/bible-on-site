@@ -4,16 +4,16 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { iosHostLogArguments, startNativeLog } from "./native-logs.mjs";
+import { iosHostLogArguments, startIosClassicHostLog, startNativeLog, stopNativeLogStreams } from "./native-logs.mjs";
 
 const lifecycleEmitters = new Set(["CoreSimulatorService",
   "com.apple.CoreSimulator.CoreSimulatorService", "DeviceHub", "simulatord", "launchd_sim"]);
 
 export function shutdownEvidence(log, udid) {
   return log.split(/\r?\n/).filter(line => {
-    // Parse the compact record's emitter, rather than matching a service name
+    // Parse the record's first emitter, rather than matching a service name
     // quoted in its payload. Requester logs remain useful context, not proof.
-    const emitter = /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+\S+\s+([A-Za-z_.]+)\[\d+(?::[a-f0-9]+)?\]/.exec(line)?.[1];
+    const emitter = /^(?:\d{4}-\d{2}-\d{2}|[A-Z][a-z]{2}\s+\d{1,2})\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?\s+(?:[^\s\[\]]+\s+){0,2}([A-Za-z_.]+)\[\d+(?::[a-f0-9]+)?\]/.exec(line)?.[1];
     return lifecycleEmitters.has(emitter) && line.toLowerCase().includes(udid.toLowerCase())
       && /\bshut(?:ting)?[ -]?down/i.test(line);
   });
@@ -23,11 +23,13 @@ export function shutdownEvidence(log, udid) {
 // miss an immediate write; a pipe buffers that output until its reader runs.
 export function observeIosHostLog(udid) {
   const listeners = new Set();
-  let partial = "", startup = false, shutdown = false;
+  const partials = new Map();
+  let startup = false, shutdown = false;
   return {
-    write(chunk) {
-      const lines = (partial + chunk.toString()).split(/\r?\n/);
-      partial = lines.pop();
+    write(chunk, source = "unified") {
+      const lines = ((partials.get(source) ?? "") + chunk.toString()).split(/\r?\n/);
+      const partial = lines.pop();
+      partials.set(source, partial);
       // The bytes are already persisted even if the logger omits the final LF.
       // Inspect the partial record too, once its complete device ID is present.
       for (const line of [...lines, partial]) {
@@ -56,10 +58,10 @@ export function observeIosHostLog(udid) {
 
 // Called only after PR/queue tests and coverage finish. That job's simulator
 // is no longer needed, and those events never publish a simulator-state cache.
-// A real shutdown checks the host predicate, not just its argument spelling.
+// A real shutdown checks the available host log sources, not just their arguments.
 export async function verifyIosHostLog({ udid, artifact,
   execute = promisify(execFile), stream = startNativeLog, observe = observeIosHostLog,
-  report = () => {} }) {
+  classicStream = startIosClassicHostLog, report = () => {} }) {
   assert.match(udid, /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i);
   // Reserve the existing five-second observer stop cap inside the 45s check.
   const deadline = AbortSignal.timeout(40000);
@@ -73,6 +75,8 @@ export async function verifyIosHostLog({ udid, artifact,
   const evidence = observe(udid);
   const observer = stream("/usr/bin/log", iosHostLogArguments(), artifact,
     { onOutput: chunk => evidence.write(chunk) });
+  const classicArtifact = `${artifact}.classic.log`;
+  let classicObserver;
   let stage;
   const enter = name => {
     stage = name;
@@ -80,6 +84,8 @@ export async function verifyIosHostLog({ udid, artifact,
   };
   try {
     enter("host logger startup");
+    classicObserver = classicStream(classicArtifact,
+      { onOutput: chunk => evidence.write(chunk, "classic") });
     await evidence.waitFor("startup",
       AbortSignal.any([deadline, AbortSignal.timeout(5000)]));
     enter("owned simulator shutdown command");
@@ -89,11 +95,13 @@ export async function verifyIosHostLog({ udid, artifact,
     enter("device-correlated host shutdown event");
     await evidence.waitFor("shutdown",
       AbortSignal.any([deadline, AbortSignal.timeout(5000)]));
-    return { udid, shutdownVerified: true,
-      correlatedLines: shutdownEvidence(readFileSync(artifact, "utf8"), udid).length };
+    const sources = { unified: shutdownEvidence(readFileSync(artifact, "utf8"), udid).length };
+    if (classicObserver) sources.classic = shutdownEvidence(readFileSync(classicArtifact, "utf8"), udid).length;
+    return { udid, shutdownVerified: true, sources,
+      correlatedLines: Object.values(sources).reduce((sum, count) => sum + count, 0) };
   } catch (cause) {
     throw new Error(`iOS host log verification failed during ${stage}: ${cause.message}`, { cause });
-  } finally { await observer.stop(); }
+  } finally { await stopNativeLogStreams([observer, classicObserver]); }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -108,7 +116,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       artifact, report: event => console.log(JSON.stringify(event)) })));
   } catch (error) {
     // Keep the short controlled capture visible even if artifact storage fails.
-    if (existsSync(artifact)) console.error(`Host shutdown capture (last 16 KiB):\n${readFileSync(artifact, "utf8").slice(-16384)}`);
+    for (const path of [artifact, `${artifact}.classic.log`, `${artifact}.classic.log.source.json`]) {
+      if (existsSync(path)) console.error(`${path} (last 16 KiB):\n${readFileSync(path, "utf8").slice(-16384)}`);
+    }
     throw error;
   }
 }
