@@ -176,11 +176,12 @@ test("host lifecycle logging remains independent of device RPCs and limits its p
   const args = nativeLogs.iosHostLogArguments();
   assert.deepEqual(args.slice(0, 6), ["stream", "--style", "compact", "--level", "info", "--predicate"]);
   const names = args[6].split(" OR ").map(term => {
-    const match = /^process == "([A-Za-z_]+)"$/.exec(term);
+    const match = /^process == "([A-Za-z_.]+)"$/.exec(term);
     assert.ok(match, "only exact process filters may broaden this host observer");
     return match[1];
   });
-  assert.deepEqual(names.sort(), ["CoreSimulatorService", "DeviceHub", "Simulator", "launchd_sim", "simulatord"].sort());
+  assert.deepEqual(names.sort(), ["CoreSimulatorService", "com.apple.CoreSimulator.CoreSimulatorService",
+    "DeviceHub", "Simulator", "launchd_sim", "simulatord"].sort());
   assert.equal(args.length, 7);
   assert.ok(!args.includes("simctl"));
 });

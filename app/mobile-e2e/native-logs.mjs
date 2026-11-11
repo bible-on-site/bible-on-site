@@ -96,7 +96,7 @@ export function iosAutomationLogArguments(udid) {
 // inspect, or signal the simulator while collecting this evidence.
 export function iosHostLogArguments() {
   return ["stream", "--style", "compact", "--level", "info", "--predicate",
-    'process == "CoreSimulatorService" OR process == "DeviceHub" OR process == "Simulator" OR process == "simulatord" OR process == "launchd_sim"'];
+    'process == "CoreSimulatorService" OR process == "com.apple.CoreSimulator.CoreSimulatorService" OR process == "DeviceHub" OR process == "Simulator" OR process == "simulatord" OR process == "launchd_sim"'];
 }
 
 // Stop every owned reader even when one failed. Each retains the existing
