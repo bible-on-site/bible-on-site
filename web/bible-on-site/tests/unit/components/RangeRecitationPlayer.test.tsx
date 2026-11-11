@@ -936,7 +936,7 @@ test.each([
 	).toBeInTheDocument();
 });
 
-test("a verse-pause gap keeps the current pasuk highlighted", async () => {
+test("a verse pause releases the highlight", async () => {
 	await openListening(
 		[range(1, 1, 1, 1)],
 		<RecitationWordControl perek={1} pasuk={1} segment={2} occurrence={0}>
@@ -945,8 +945,30 @@ test("a verse-pause gap keeps the current pasuk highlighted", async () => {
 	);
 	fireEvent.click(screen.getByRole("button", { name: "השמעת הקריאה" }));
 	await screen.findByRole("button", { name: "השהיית ההקראה" });
-	// The audio sits between intervals — no range index, but the word
-	// position still maps the plan's pasuk copy.
+	positionMs = 150;
+	stepFrame();
+	const word = screen.getByRole("button", { name: "השמעת המילה שְׁנַיִם" });
+	expect(word.getAttribute("data-recitation-active")).toBe("true");
+	// Between scheduled intervals both position getters return null — no
+	// word is being read, so the highlight releases until the next pasuk.
+	positionMs = null;
+	rangeIndex = null;
+	stepFrame();
+	expect(word.getAttribute("data-recitation-active")).toBeNull();
+});
+
+test("a word resolving at an interval boundary still highlights", async () => {
+	await openListening(
+		[range(1, 1, 1, 1)],
+		<RecitationWordControl perek={1} pasuk={1} segment={2} occurrence={0}>
+			שְׁנַיִם
+		</RecitationWordControl>,
+	);
+	fireEvent.click(screen.getByRole("button", { name: "השמעת הקריאה" }));
+	await screen.findByRole("button", { name: "השהיית ההקראה" });
+	// positionMs and positionRangeIndex each read context.currentTime; at
+	// an interval boundary the position can still resolve its word while
+	// the index already reports the range as finished.
 	positionMs = 150;
 	rangeIndex = null;
 	stepFrame();
