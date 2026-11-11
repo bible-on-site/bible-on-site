@@ -65,7 +65,7 @@
 		"parse5": "8.1.1",
 		"react": "19.3.1",
 		"react-dom": "19.3.1",
-		"tiptap-footnotes": "3.0.1"
+		"tiptap-footnotes": "4.0.1"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.6.6",
