@@ -5,7 +5,7 @@ It runs separately from the customer website.
 
 ## Features
 
-- Article editing with TipTap, chapter navigation and automatic saving.
+- Article editing with TipTap, Perek navigation and automatic saving.
 - Rabbi profiles and images, Tanahpedia editing, daily bulletins and other editorial tools.
 - A private archive at `/archive`, with folders, file uploads, downloads and storage quotas.
 
@@ -47,8 +47,10 @@ bun install
 bun run dev
 ```
 
-`predev` starts the shared Docker services, ensures the local database exists,
-and checks local image storage when configured. The app runs at
+`predev` starts the shared Docker services and checks the configured local
+database, bootstrapping missing tables. The database check requires `DB_URL` and
+reachable MySQL; it logs a skipped check when either is unavailable. The hook
+also checks local image storage when configured. The app runs at
 `http://localhost:3101`.
 
 The development command loads `.dev.env`. Set local overrides in your shell or
