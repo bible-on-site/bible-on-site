@@ -37,6 +37,7 @@ concurrency:
 
 jobs:
   plan_ios:
+    timeout-minutes: 60
     name: Plan iOS A/B shards
     runs-on: ubuntu-latest
     outputs:
@@ -255,6 +256,7 @@ jobs:
   # this job only makes the raw per-leg dataset trivial to collect across
   # iterations.
   report:
+    timeout-minutes: 60
     name: Collect A/B iteration results
     needs: [leg_a, leg_b]
     if: ${{ always() && !cancelled() }}
