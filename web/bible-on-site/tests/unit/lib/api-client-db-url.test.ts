@@ -16,14 +16,17 @@ jest.mock("mysql2/promise", () => ({
 
 describe("api-client with DB_URL", () => {
 	const originalEnv = process.env;
+	let warnSpy: jest.SpyInstance;
 
 	beforeEach(() => {
 		jest.resetModules();
 		process.env = { ...originalEnv };
+		warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
 	});
 
 	afterEach(() => {
 		process.env = originalEnv;
+		warnSpy.mockRestore();
 	});
 
 	it("parses DB_URL and creates pool with parsed options", async () => {
@@ -94,6 +97,7 @@ describe("api-client with DB_URL", () => {
 		{
 			description: "legacy malformed percent escapes",
 			url: "mysql://reader%GG:pass%2@db.example.com/db%",
+			warnings: 3,
 			expected: {
 				user: "reader%GG",
 				password: "pass%2",
@@ -111,7 +115,7 @@ describe("api-client with DB_URL", () => {
 		},
 	])(
 		"parses $description without changing intended database values",
-		async ({ url, expected }) => {
+		async ({ url, expected, warnings = 0 }) => {
 			process.env.DB_URL = url;
 
 			const mysql = require("mysql2/promise");
@@ -120,6 +124,11 @@ describe("api-client with DB_URL", () => {
 
 			expect(mysql.createPool).toHaveBeenCalledWith(
 				expect.objectContaining(expected),
+			);
+			expect(warnSpy.mock.calls).toEqual(
+				Array.from({ length: warnings }, () => [
+					"Malformed database URL component; preserving its original value",
+				]),
 			);
 		},
 	);

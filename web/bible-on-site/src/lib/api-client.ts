@@ -11,6 +11,9 @@ function decodeDbComponent(value: string): string {
 	} catch {
 		// Legacy connection strings can contain literal, malformed percent
 		// escapes. Keep those values intact instead of rejecting the config.
+		console.warn(
+			"Malformed database URL component; preserving its original value",
+		);
 		return value;
 	}
 }
