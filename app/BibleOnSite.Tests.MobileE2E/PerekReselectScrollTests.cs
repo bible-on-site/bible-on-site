@@ -116,8 +116,13 @@ public sealed class PerekReselectScrollTests(ITestOutputHelper output, MobileDev
             Assert.Equal(scrolled, SettledTikkunOffset(scrollView));
         }
 
-        Platform.Tap(Driver!, scrollView);
+        // Capture the hidden frame BEFORE the restore tap: the hide-wait above
+        // already proved the frame differs from shownFrame, so this capture is
+        // the hidden state. Taking it after the tap races the repaint — on a
+        // fast restore the capture already equals the restored frame and the
+        // wait can never observe a difference.
         var hiddenFrame = TikkunFrame(scrollView);
+        Platform.Tap(Driver!, scrollView);
         WaitForTikkun(() => !TikkunFrame(scrollView).SequenceEqual(hiddenFrame),
             "restoring marks must repaint the flow");
         if (offset is { } restored)
