@@ -16,11 +16,11 @@ describe("/robots.txt (issue #3257)", () => {
 		expect(body).toContain("Allow: /");
 	});
 
-	it("publishes affirmative AI Content Signals inside the wildcard group", async () => {
+	it("publishes AI Content Signals: surfacing uses granted, training withheld", async () => {
 		const body = await GET().text();
 		const group = body.slice(body.indexOf("User-agent: *"));
 		expect(group).toContain(
-			"Content-Signal: search=yes, ai-input=yes, ai-train=yes",
+			"Content-Signal: search=yes, ai-input=yes, ai-train=no",
 		);
 	});
 

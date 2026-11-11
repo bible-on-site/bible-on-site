@@ -3,26 +3,42 @@
 Implementation of
 [issue #3257](https://github.com/bible-on-site/bible-on-site/issues/3257):
 the public learning corpus is explicitly open to crawlers, agents and
-AI systems — indexing, retrieval input, and training alike
-(זיכוי הרבים, not an ad-driven business). Administrative, private,
-write, and development surfaces stay protected.
+AI systems that surface it — indexing and retrieval input
+(זיכוי הרבים, not an ad-driven business). Model training is withheld
+pending a per-bucket decision; administrative, private, write, and
+development surfaces stay protected.
 
 ## Policy surfaces
 
 | Surface | File | Content |
 | ------- | ---- | ------- |
-| `robots.txt` | `src/app/robots.txt/route.ts` | `Allow: /`, narrow public-read exception for `/api/search`, disallow for admin/dev/write paths, and affirmative Content Signals `search=yes, ai-input=yes, ai-train=yes` |
+| `robots.txt` | `src/app/robots.txt/route.ts` | `Allow: /`, narrow public-read exception for `/api/search`, disallow for admin/dev/write paths, and Content Signals `search=yes, ai-input=yes, ai-train=no` (surfacing uses granted; training withheld pending per-bucket policy decision) |
 | `llms.txt` | `src/app/llms.txt/route.ts` | Project purpose, open-corpus policy, canonical URL families, source references, attribution and licence guidance |
 | `/.well-known/api-catalog` | `src/app/.well-known/api-catalog/route.ts` | RFC 9727 linkset catalog of the public read APIs |
 | `/openapi.json` | `src/app/openapi.json/route.ts` | OpenAPI description of `/api/search` and the Markdown surface |
 
-## Crawler parity
+## Crawler buckets
 
-The `BLOCKED_BOTS`/`BOT_BLOCKING_ENABLED` denylist was removed from
-`src/proxy.ts`. Every User-Agent — search, AI, SEO, or unknown — now
-receives identical content; the only per-agent differentiation that
-remains is none. Canonicalization (Tanahpedia/parasha aliases) and the
-parasha view-param `noindex` handling are unchanged.
+Per the PR #3299 review, crawler access is bucketized rather than
+blanket-open:
+
+- **Surfacing bots — welcome.** Search engines and AI answer/retrieval
+  agents receive identical content to browsers, and `robots.txt`
+  grants `Content-Signal: search=yes, ai-input=yes`.
+- **Training — withheld.** `ai-train=no` until a per-bucket policy
+  decision is made; flipping it to `yes` is a one-word change once
+  approved.
+- **Pure-harvest SEO/scrapers — blocked.** The pre-existing
+  `BLOCKED_BOTS`/`BOT_BLOCKING_ENABLED` denylist in `src/proxy.ts`
+  stays in force (Bytespider, MJ12bot, AhrefsBot, SemrushBot, DotBot,
+  PetalBot, BLEXBot, MegaIndex, Sogou, DataForSeoBot): these agents
+  never surfaced the content and remain excluded pending the same
+  decision.
+- **Everything else — open.** Browsers, AI crawlers not in the
+  denylist, and unknown agents receive the full public corpus.
+
+Canonicalization (Tanahpedia/parasha aliases) and the parasha
+view-param `noindex` handling are unchanged.
 
 ## Markdown representations
 
@@ -72,10 +88,11 @@ of a pasuk.
 
 ## Edge / proxy audit
 
-Application layer: the proxy denylist was the only UA-based blocking
-found — sitemap, canonical redirects, and `next.config.mjs`
-headers/rewrites contain no crawler discrimination. The assets CDN
-module (`devops/assets-cdn.mjs`) serves recording/image files and has
-no UA gating. Any live AWS/WAF/CloudFront rule sits outside this repo;
-nothing was changed there and any such change requires Dorad's
-explicit approval per repository policy.
+Application layer: the proxy denylist is the only UA-based blocking —
+it is kept for the pure-harvest bucket (above). Sitemap, canonical
+redirects, and `next.config.mjs` headers/rewrites contain no other
+crawler discrimination. The assets CDN module (`devops/assets-cdn.mjs`)
+serves recording/image files and has no UA gating. Any live
+AWS/WAF/CloudFront rule sits outside this repo; nothing was changed
+there and any such change requires Dorad's explicit approval per
+repository policy.

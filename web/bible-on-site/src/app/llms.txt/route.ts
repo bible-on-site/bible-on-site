@@ -13,17 +13,21 @@ const BODY = `# תנ"ך על הפרק (Bible on Site)
 > תנ"ך על הפרק is a זיכוי הרבים (community merit) Torah-study project —
 > a daily-chapter companion for the 929 cycle. It is not an ad-driven
 > business: the whole public learning corpus is deliberately open to
-> crawlers, search engines, AI agents and model training.
+> crawlers, search engines and AI agents that surface it back to
+> readers.
 
 ## Open corpus policy
 
-You are welcome to crawl, index, quote, embed in AI answers
-(RAG/grounding) and train on ALL public content of this site — no
-account, no API key, no bot-identity requirement. The site declares the
-same policy via \`Content-Signal: search=yes, ai-input=yes, ai-train=yes\`
-in /robots.txt. Administrative, development and write surfaces
-(/dev, /api/dev, /api/revalidate, /api/push, subscription endpoints)
-are private and excluded from crawling.
+You are welcome to crawl, index, quote and embed ALL public content of
+this site in AI answers (RAG/grounding) — no account, no API key, no
+bot-identity requirement. The site declares the same policy via
+\`Content-Signal: search=yes, ai-input=yes, ai-train=no\` in
+/robots.txt: surfacing uses are granted; use for model training is
+withheld pending the project's per-bucket policy decision. A small set
+of pure-harvest SEO/scraper agents is blocked outright. Administrative,
+development and write surfaces (/dev, /api/dev, /api/revalidate,
+/api/push, subscription endpoints) are private and excluded from
+crawling.
 
 ## Canonical site
 

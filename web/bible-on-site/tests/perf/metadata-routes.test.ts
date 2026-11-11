@@ -134,13 +134,16 @@ test.describe("Production metadata snapshots", () => {
 		const robots = readGeneratedBody("/robots.txt").toString("utf8");
 		expect(robots).toBe(
 			`# תנ"ך על הפרק is a זיכוי הרבים project: the public learning
-# corpus is open for indexing, AI input/retrieval and training.
+# corpus is open for indexing and AI input/retrieval.
 # Content Signals per contentsignals.org:
 #   search   - index the content and show links/snippets in results
 #   ai-input - use the content inside AI answers (RAG, grounding)
 #   ai-train - use the content to train or fine-tune models
+# ai-train is withheld pending a per-bucket policy decision
+# (PR #3299 review): surfacing uses are welcome, training is not
+# granted by default.
 User-agent: *
-Content-Signal: search=yes, ai-input=yes, ai-train=yes
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 Allow: /
 Allow: /api/search
 Disallow: /api/

@@ -14,13 +14,21 @@ import {
 } from "@/lib/tanahpedia/category-slug";
 
 /**
- * Agent-readiness policy (#3257): the public corpus is deliberately
- * open — crawlers, agents and browsers receive identical content
- * regardless of `User-agent` (זיכוי הרבים, not an ad business). No UA
- * denylist lives here; the affirmative AI-use policy is published
- * through /robots.txt Content-Signal, /llms.txt and the Markdown
- * representation negotiated below.
+ * Agent-readiness policy (#3257): the public corpus is open to
+ * crawlers, search engines and AI agents — bots that surface the
+ * content (search indexing, AI answers) are welcome
+ * (זיכוי הרבים, not an ad business). The affirmative AI-use policy is
+ * published through /robots.txt Content-Signal, /llms.txt and the
+ * Markdown representation negotiated below.
+ *
+ * The one bucket that stays blocked is the pre-existing pure-harvest
+ * SEO/scraper list below — it was never a surfacing bot and remains
+ * excluded pending a per-bucket policy decision (PR #3299 review).
  */
+const BLOCKED_BOTS =
+	/Bytespider|MJ12bot|AhrefsBot|SemrushBot|DotBot|PetalBot|BLEXBot|MegaIndex|Sogou|DataForSeoBot/i;
+
+const BOT_BLOCKING_ENABLED = process.env.BOT_BLOCKING_ENABLED !== "false";
 
 // Response-only handling preserves the statically rendered base readings.
 const PARASHA_VIEW_PARAMS = [
@@ -144,6 +152,13 @@ export async function proxy(
 		return new NextResponse(key, {
 			headers: { "content-type": "text/plain; charset=utf-8" },
 		});
+	}
+
+	if (BOT_BLOCKING_ENABLED) {
+		const ua = request.headers.get("user-agent") ?? "";
+		if (BLOCKED_BOTS.test(ua)) {
+			return new NextResponse("Forbidden", { status: 403 });
+		}
 	}
 
 	// The `.md` suffix selects the same canonical document the Accept

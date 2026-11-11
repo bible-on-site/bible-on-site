@@ -162,10 +162,11 @@ describe("proxy", () => {
 		});
 	});
 
-	describe("crawler parity (issue #3257)", () => {
+	describe("crawler buckets (issue #3257)", () => {
 		it.each([
-			// Crawlers the legacy denylist used to block — now identical to
-			// any other agent on the public corpus.
+			// The pre-existing pure-harvest SEO/scraper bucket stays blocked —
+			// it never surfaced the content and is excluded pending a
+			// per-bucket decision (PR #3299 review).
 			"Bytespider",
 			"MJ12bot/v1.4.8",
 			"AhrefsBot/7.0",
@@ -176,7 +177,13 @@ describe("proxy", () => {
 			"MegaIndex.ru/2.0",
 			"Sogou web spider/4.0",
 			"DataForSeoBot/1.0",
-			// Search + AI crawlers.
+		])("keeps the pure-harvest bucket blocked: %s gets 403", async (ua) => {
+			const result = await proxy(makeRequest("/929/1", { ua }));
+			expect(result?.status).toBe(403);
+		});
+
+		it.each([
+			// Search + AI crawlers and every other agent.
 			"Googlebot/2.1",
 			"GPTBot/1.2",
 			"ClaudeBot/1.0",
@@ -421,6 +428,34 @@ describe("proxy", () => {
 			process.env.INDEXNOW_KEY = KEY;
 			const result = await proxy(makeRequest(`/sub/${KEY}.txt`));
 			expect(result).toBeUndefined();
+		});
+	});
+
+	describe("BOT_BLOCKING_ENABLED", () => {
+		it("allows a blocked crawler when bot blocking is disabled", async () => {
+			jest.replaceProperty(process, "env", {
+				...process.env,
+				BOT_BLOCKING_ENABLED: "false",
+			});
+			let configuredProxy: typeof proxy = proxy;
+			jest.isolateModules(() => {
+				configuredProxy = require("@/proxy").proxy;
+			});
+			try {
+				// /929/1 is Markdown-eligible, so an allowed bot now reaches the
+				// discovery-header branch instead of returning undefined.
+				const result = await configuredProxy(
+					makeRequest("/929/1", { ua: "Bytespider" }),
+				);
+				expect(result?.status).not.toBe(403);
+			} finally {
+				jest.restoreAllMocks();
+			}
+		});
+
+		it("blocks bots by default (env var not set)", async () => {
+			const result = await proxy(makeRequest("/929/1", { ua: "Bytespider" }));
+			expect(result?.status).toBe(403);
 		});
 	});
 

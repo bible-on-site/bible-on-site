@@ -25,7 +25,7 @@ describe("/llms.txt (issue #3257)", () => {
 	it("documents the open-corpus policy and every content family", async () => {
 		const body = await llmsGET().text();
 		for (const fragment of [
-			"search=yes, ai-input=yes, ai-train=yes",
+			"search=yes, ai-input=yes, ai-train=no",
 			"/929/{perekId",
 			"/פרשה/",
 			"/מסורה/",
