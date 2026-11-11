@@ -176,13 +176,16 @@ it("dispatches uploads, folder creation and completion with server-selected iden
 	);
 	expect(await r.json()).toEqual({ id: "file", partSize: 8 });
 	expect(mocks.begin).toHaveBeenCalledWith(author, "file.any", 3, "home");
-	await handle(
+	mocks.createFolder.mockResolvedValue({ id: "folder" });
+	const folder = await handle(
 		request("/archive/api", "POST", {
 			action: "mkdir",
 			name: "folder",
 			directory: "home",
 		}),
 	);
+	expect(folder.status).toBe(200);
+	expect(await folder.json()).toEqual({ id: "folder" });
 	expect(mocks.createFolder).toHaveBeenCalledWith(
 		author,
 		expect.any(String),
