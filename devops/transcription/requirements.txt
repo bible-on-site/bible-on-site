@@ -1,0 +1,5 @@
+# Local inference and the exact-key, read-only S3 input adapter.
+faster-whisper==1.2.1
+ctranslate2==4.9.0
+huggingface-hub==2.4.0
+boto3==1.44.0

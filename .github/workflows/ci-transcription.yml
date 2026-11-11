@@ -1,0 +1,31 @@
+name: Local transcription tests
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  transcription-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install coverage tooling
+        run: python -m pip install -r devops/transcription/requirements-ci.txt
+      - name: Test transcription without downloading GPU models
+        run: |
+          coverage run --rcfile=devops/transcription/.coveragerc -m unittest discover -s devops/transcription -p 'test_*.py'
+          coverage report --rcfile=devops/transcription/.coveragerc
+          coverage lcov --rcfile=devops/transcription/.coveragerc -o .coverage/transcription/lcov.info
+      # Publish one combined Codacy report from the parent workflow.
+      - name: Store transcription code coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: transcription-coverage-${{ github.run_id }}
+          path: .coverage/transcription/lcov.info
+          if-no-files-found: error
+          retention-days: 7

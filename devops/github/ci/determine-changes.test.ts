@@ -104,6 +104,20 @@ describe("explicit service release recovery selection", () => {
 });
 
 describe("detectChanges", () => {
+	test("local transcription tooling cannot select a service or data deployment", () => {
+		const files = [
+			"devops/transcription/pipeline.py",
+			"devops/transcription/sources.py",
+			"devops/transcription/model.py",
+			"devops/transcription/test_pipeline.py",
+			".github/workflows/ci-transcription.yml",
+		];
+		for (const flags of Object.values(detectChanges(files)))
+			assert.deepEqual(flags, { module_changed: false, ci_changed: false });
+		assert.equal(isDataDeployChange(files), false);
+		assert.equal(isSchemaOnlyDataChange(files), false);
+	});
+
 	describe("documentation preserves every migration routing decision", () => {
 		for (const migrations of [
 			["data/mysql/tanah_daily_bulletin_upgrade.sql"],
@@ -1611,6 +1625,7 @@ fi
 			"validate_api_architectures",
 			"validate_admin_architectures",
 			"recitation_ci",
+			"transcription_ci",
 			"deploy_verifier",
 			"calendar_pdf_artifacts",
 		]) {
