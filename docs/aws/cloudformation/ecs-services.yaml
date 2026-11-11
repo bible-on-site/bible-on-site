@@ -741,7 +741,9 @@ Outputs:
 #
 #   # Web push (#1096): one VAPID keypair per deployment plus the bearer
 #   # secret authorizing POST /api/push/daily. Generate the pair with
-#   # `bunx web-push generate-vapid-keys`; the public key is returned by
+#   # `VAPID_KEYS="$(bunx web-push generate-vapid-keys --json)"` with tracing
+#   # disabled; capture the private key without printing it as documented in
+#   # docs/aws/web-push-activation.md steps 2-3. The public key is returned by
 #   # GET /api/push/subscription to every browser, so keep it server-side
 #   # consistent — browsers unsubscribe and resubscribe if it rotates.
 #   # The send secret must equal the PUSH_SEND_SECRET GitHub repository

@@ -2731,7 +2731,7 @@ jobs:
       - name: Verify canonical text preprocessing
         run: node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
       - name: Verify module release and shared decoder check routing
-        run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs
+        run: node --test devops/github/ci/determine-changes.test.ts devops/github/ci/auto-create-pr.test.mjs devops/github/ci/nuget-cache-key.test.mjs devops/github/ci/web-push-daily.test.mjs
       - name: Verify daily bulletin mail infrastructure and assets
         run: bun test devops/daily-bulletin-infra.test.mjs
       - name: Install storage test dependencies

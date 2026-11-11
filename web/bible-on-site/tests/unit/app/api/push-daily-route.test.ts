@@ -40,6 +40,13 @@ const callRaw = (authorization: string, body: string) =>
 	);
 
 const FCM = "https://fcm.googleapis.com/fcm/send/abc";
+const privateFailure = () =>
+	Object.assign(
+		new Error(`request failed for ${FCM}`, {
+			cause: new Error("private request body"),
+		}),
+		{ endpoint: FCM, body: "private request body" },
+	);
 
 describe("POST /api/push/daily", () => {
 	beforeEach(() => {
@@ -51,6 +58,7 @@ describe("POST /api/push/daily", () => {
 	afterEach(() => {
 		delete process.env.PUSH_SEND_SECRET;
 		delete process.env.MOCK_DATE;
+		jest.restoreAllMocks();
 	});
 
 	it("returns 503 when web push is not configured", async () => {
@@ -137,25 +145,25 @@ describe("POST /api/push/daily", () => {
 			expect(mockSend).not.toHaveBeenCalled();
 		});
 
-		it("rejects an unreadable body without sending", async () => {
+		it("rejects an unreadable body without sending or logging private details", async () => {
 			const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 			const request = new Request("http://localhost/api/push/daily", {
 				method: "POST",
 				headers: { authorization: "Bearer s3cret" },
 			});
-			jest.spyOn(request, "text").mockRejectedValue(new Error("read failed"));
+			jest.spyOn(request, "text").mockRejectedValue(privateFailure());
 			expect((await POST(request)).status).toBe(400);
 			expect(mockSend).not.toHaveBeenCalled();
-			expect(warn).toHaveBeenCalledWith(
-				"Push daily request body read failed",
-				expect.any(Error),
-			);
+			expect(warn).toHaveBeenCalledTimes(1);
+			expect(warn).toHaveBeenCalledWith("Push daily request body read failed");
 		});
 
-		it("returns 500 when sending fails", async () => {
-			jest.spyOn(console, "error").mockImplementation(() => {});
-			mockSend.mockRejectedValue(new Error("db down"));
+		it("returns 500 when sending fails without logging private details", async () => {
+			const error = jest.spyOn(console, "error").mockImplementation(() => {});
+			mockSend.mockRejectedValue(privateFailure());
 			expect((await call("Bearer s3cret")).status).toBe(500);
+			expect(error).toHaveBeenCalledTimes(1);
+			expect(error).toHaveBeenCalledWith("Daily web push failed");
 		});
 	});
 

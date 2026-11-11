@@ -41,15 +41,25 @@ jobs:
         env:
           PUSH_SEND_SECRET: ${{ secrets.PUSH_SEND_SECRET }}
           SITE_ORIGIN: ${{ vars.WEB_PUSH_SITE_ORIGIN || 'https://xn--febl3a.co.il' }}
-          ENDPOINT: ${{ inputs.endpoint }}
         run: |
           args=(-X POST -H "Authorization: Bearer ${PUSH_SEND_SECRET}")
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            # Step env values appear in public logs. Read the private URL
+            # from the event file instead, and mask it before sending.
+            endpoint="$(jq --exit-status --raw-output \
+              '.inputs.endpoint | select(type == "string" and length > 0)' \
+              "${GITHUB_EVENT_PATH}")"
+            masked_endpoint="${endpoint//'%'/'%25'}"
+            masked_endpoint="${masked_endpoint//$'\r'/'%0D'}"
+            masked_endpoint="${masked_endpoint//$'\n'/'%0A'}"
+            printf '::add-mask::%s\n' "${masked_endpoint}"
             # Manual dispatch targets exactly one subscription; only the
             # armed schedule sends the bodyless broadcast. The route also
             # validates the endpoint against the push-service allowlist.
+            body="$(jq --compact-output --null-input \
+              --arg endpoint "${endpoint}" '{endpoint: $endpoint}')"
             args+=(-H "Content-Type: application/json"
-              --data "{\"endpoint\": \"${ENDPOINT}\"}")
+              --data "${body}")
           fi
           curl --fail-with-body --silent --show-error --max-time 300 \
             "${args[@]}" "${SITE_ORIGIN}/api/push/daily"

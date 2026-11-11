@@ -25,8 +25,8 @@ async function readBody(
 	let text: string;
 	try {
 		text = await request.text();
-	} catch (error) {
-		console.warn("Push daily request body read failed", error);
+	} catch {
+		console.warn("Push daily request body read failed");
 		return { ok: false, body: null };
 	}
 	if (text.length === 0) return { ok: true, body: undefined };
@@ -99,8 +99,8 @@ export async function POST(request: Request) {
 	try {
 		const result = await sendDailyPerek(day.perekId, endpoint);
 		return NextResponse.json({ perekId: day.perekId, ...result });
-	} catch (error) {
-		console.error("Daily web push failed", error);
+	} catch {
+		console.error("Daily web push failed");
 		return NextResponse.json({ error: "Send failed" }, { status: 500 });
 	}
 }
