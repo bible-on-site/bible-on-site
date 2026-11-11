@@ -88,3 +88,13 @@ test("pipe observation retains early and split writes, unrelated events and canc
   await assert.rejects(canceled, /canceled/);
   await assert.rejects(evidence.waitFor("shutdown", abort.signal), /canceled/);
 });
+
+test("a complete startup or shutdown record needs no trailing newline", async () => {
+  const evidence = observeIosHostLog(udid);
+  evidence.write("Filtering the log data using process scope");
+  await evidence.waitFor("startup", AbortSignal.timeout(5000));
+  evidence.write("\nCoreSimulatorService: Shutdown requested for " + udid.slice(0, 16));
+  const pending = evidence.waitFor("shutdown", AbortSignal.timeout(5000));
+  evidence.write(udid.slice(16));
+  await pending;
+});

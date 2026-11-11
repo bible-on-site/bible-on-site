@@ -20,7 +20,9 @@ export function observeIosHostLog(udid) {
     write(chunk) {
       const lines = (partial + chunk.toString()).split(/\r?\n/);
       partial = lines.pop();
-      for (const line of lines) {
+      // The bytes are already persisted even if the logger omits the final LF.
+      // Inspect the partial record too, once its complete device ID is present.
+      for (const line of [...lines, partial]) {
         startup ||= /Filtering the log data using/.test(line);
         shutdown ||= shutdownEvidence(line, udid).length > 0;
       }
