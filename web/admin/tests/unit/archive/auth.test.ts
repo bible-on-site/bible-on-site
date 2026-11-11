@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@tanstack/react-start/server-only", () => ({}));
 vi.mock("jose", async (original) => ({
 	...(await original<typeof import("jose")>()),
-	createRemoteJWKSet: vi.fn(),
+	createRemoteJWKSet: vi.fn(() => ({})),
 	jwtVerify: mocks.jwt,
 }));
 vi.mock("@aws-sdk/client-cognito-identity-provider", () => ({
@@ -31,7 +31,7 @@ vi.mock("~/server/auth", () => ({
 			?.slice(name.length + 1) || null,
 }));
 
-import { errors } from "jose";
+import { createRemoteJWKSet, errors } from "jose";
 import {
 	ArchiveCookies,
 	authConfig,
@@ -83,7 +83,7 @@ it("native users remain archivers even with an admin username and claim", async 
 		role: "archiver",
 		name: "מחבר לדוגמה",
 	});
-	expect(mocks.jwt).toHaveBeenCalledWith("access", undefined, {
+	expect(mocks.jwt).toHaveBeenCalledWith("access", expect.any(Object), {
 		issuer: "https://cognito-idp.il-central-1.amazonaws.com/author-pool",
 	});
 });
@@ -227,4 +227,35 @@ it("requires configured origin and fails closed when deployment is incomplete", 
 	).not.toThrow();
 	vi.stubEnv("ARCHIVE_COGNITO_POOL_ID", "");
 	expect(() => authConfig()).toThrow();
+});
+
+it("uses the immutable SSO subject when optional profile claims are absent", async () => {
+	mocks.claims.mockResolvedValue({ sub: id });
+	expect(
+		await currentAdmin(
+			new Request("https://admin.example", {
+				headers: { cookie: "admin_session=sso" },
+			}),
+		),
+	).toEqual({ id, username: id, name: undefined, role: "admin" });
+});
+it("keeps native identity scoped to its subject when Cognito omits Username", async () => {
+	mocks.send.mockResolvedValue({
+		UserAttributes: [
+			{ Name: "sub", Value: id },
+			{ Name: "name", Value: "מחבר" },
+		],
+	});
+	expect(await currentArchiver(jar())).toMatchObject({
+		id,
+		username: id,
+		role: "archiver",
+	});
+});
+it("reuses the issuer key set across authenticated requests", async () => {
+	vi.stubEnv("ARCHIVE_COGNITO_POOL_ID", "cache-regression-pool");
+	await currentArchiver(jar());
+	await currentArchiver(jar());
+	expect(createRemoteJWKSet).toHaveBeenCalledTimes(1);
+	expect(mocks.send).toHaveBeenCalledTimes(2);
 });

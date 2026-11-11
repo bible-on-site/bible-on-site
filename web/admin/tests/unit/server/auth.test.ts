@@ -325,3 +325,10 @@ describe("browser auth helpers", () => {
 		);
 	});
 });
+
+it("does not grant an admin session to an access token", async () => {
+	stubRequiredAuthEnv();
+	jwtVerifyMock.mockResolvedValue({ payload: { token_use: "access" } });
+	const { verifyIdToken } = await loadAuth();
+	expect(await verifyIdToken("access-token")).toBe(false);
+});

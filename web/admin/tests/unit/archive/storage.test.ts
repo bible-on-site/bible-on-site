@@ -15,6 +15,7 @@ import { ReadableStream } from "node:stream/web";
 import { S3Client } from "@aws-sdk/client-s3";
 import {
 	GB,
+	isUploadId,
 	objectKey,
 	quotaBytes,
 	UploadError,
@@ -458,4 +459,11 @@ it("only admins can remove a completed file or retry its deletion", async () => 
 it("rejects malformed Unicode names before their UTF-8 replacement could alias an existing key", () => {
 	expect(() => validateFile(String.fromCharCode(0xd800), 0)).toThrow();
 	expect(() => validateFile("valid-😀.any", 0)).not.toThrow();
+});
+
+it("rejects same-length identities with invalid separators or hexadecimal digits", () => {
+	const uuid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+	expect(isUploadId(uuid.replace("-", "x"))).toBe(false);
+	expect(isUploadId(uuid.replace("a", "g"))).toBe(false);
+	expect(isUploadId(uuid.toUpperCase())).toBe(true);
 });

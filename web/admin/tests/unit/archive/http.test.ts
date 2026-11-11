@@ -307,3 +307,97 @@ it("exchanges a matching PKCE callback without exposing tokens to the page", asy
 	expect(r.headers.get("set-cookie")).toContain("Max-Age=86400");
 	expect(await r.text()).toBe("");
 });
+
+it.each(["/authors", "/authors/name", "/"])(
+	"synchronizes named homes only in the admin authors namespace: %s",
+	async (path) => {
+		mocks.admin.mockResolvedValue({ ...author, role: "admin" });
+		mocks.resolvePath.mockResolvedValue("directory");
+		expect(
+			(
+				await handle(
+					request("/archive/api", "GET", undefined, {
+						"X-Archive-Path": encodeURIComponent(path),
+					}),
+				)
+			).status,
+		).toBe(200);
+		expect(mocks.sync).toHaveBeenCalledTimes(path === "/" ? 0 : 1);
+	},
+);
+it("rejects a missing part identity through the storage ownership check", async () => {
+	mocks.part.mockRejectedValue(new UploadError("not found", 404));
+	const req = request("/archive/api", "PUT", "abc");
+	expect((await handle(req)).status).toBe(404);
+	expect(mocks.part).toHaveBeenCalledWith(author, "", 0, req);
+});
+it.each([
+	{ access_token: 123, expires_in: 3600 },
+	{ access_token: "token", expires_in: 0 },
+	{ access_token: "token" },
+])(
+	"rejects malformed OAuth token responses and consumes login state",
+	async (data) => {
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(data)));
+		const flow = encodeURIComponent(
+			JSON.stringify({ state: "match", verifier: "verifier" }),
+		);
+		const response = await handle(
+			request("/archive/auth/callback?code=c&state=match", "GET", undefined, {
+				cookie: `archive_login=${flow}`,
+			}),
+		);
+		expect(response.status).toBe(503);
+		expect(response.headers.get("set-cookie")).toContain("archive_login=;");
+		spy.mockRestore();
+	},
+);
+it("handles a rejected OAuth exchange without exposing provider details", async () => {
+	const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+	vi.mocked(fetch).mockResolvedValue(
+		new Response("private provider error", { status: 400 }),
+	);
+	const flow = encodeURIComponent(
+		JSON.stringify({ state: "match", verifier: "verifier" }),
+	);
+	const response = await handle(
+		request("/archive/auth/callback?code=c&state=match", "GET", undefined, {
+			cookie: `archive_login=${flow}`,
+		}),
+	);
+	expect(response.status).toBe(503);
+	expect(await response.text()).not.toContain("private provider");
+	spy.mockRestore();
+});
+it("clears a previous refresh cookie when an exchange returns no refresh token", async () => {
+	vi.mocked(fetch).mockResolvedValue(
+		new Response(JSON.stringify({ access_token: "access", expires_in: 3600 })),
+	);
+	const flow = encodeURIComponent(
+		JSON.stringify({ state: "match", verifier: "verifier" }),
+	);
+	const response = await handle(
+		request("/archive/auth/callback?code=c&state=match", "GET", undefined, {
+			cookie: `archive_login=${flow}; archive_refresh=previous`,
+		}),
+	);
+	expect(response.status).toBe(302);
+	expect(
+		response.headers
+			.getSetCookie()
+			.find((value) => value.startsWith("archive_refresh=")),
+	).toContain("Max-Age=0");
+});
+it("conceals non-Error provider failures", async () => {
+	const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+	mocks.directory.mockRejectedValue({ detail: "private" });
+	const response = await handle(request());
+	expect(response.status).toBe(503);
+	expect(await response.text()).not.toContain("private");
+	expect(spy).toHaveBeenCalledWith(
+		"Private archive request failed",
+		"UnknownError",
+	);
+	spy.mockRestore();
+});

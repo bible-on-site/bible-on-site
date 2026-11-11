@@ -40,9 +40,12 @@ test("upload directory accepts arbitrary files and shows completed files", async
 		createdAt: string;
 	}[] = [];
 	let initialListing = true;
+	let loggedOut = false;
 	await page.route("**/archive/api**", async (route) => {
 		const request = route.request();
 		if (request.method() === "GET") {
+			if (loggedOut)
+				return route.fulfill({ status: 401, json: { error: "login" } });
 			if (initialListing) {
 				expect(request.headers()["x-archive-path"] || "").toBe("");
 				initialListing = false;
@@ -65,6 +68,10 @@ test("upload directory accepts arbitrary files and shows completed files", async
 		if (request.method() === "PUT")
 			return route.fulfill({ json: { ok: true } });
 		const data = request.postDataJSON();
+		if (data.action === "logout") {
+			loggedOut = true;
+			return route.fulfill({ json: { url: "/archive" } });
+		}
 		if (data.action === "start") {
 			files.push({
 				id: "11111111-1111-1111-1111-111111111111",
@@ -107,6 +114,10 @@ test("upload directory accepts arbitrary files and shows completed files", async
 		path: testInfo.outputPath("archive-author.png"),
 		fullPage: true,
 	});
+	await page.getByRole("button", { name: "יציאה מהחשבון" }).click();
+	await expect(
+		page.getByRole("heading", { name: "כניסה לארכיון" }),
+	).toBeVisible();
 });
 
 test("administrators browse root and named author homes", async ({

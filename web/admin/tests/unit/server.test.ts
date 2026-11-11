@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const archiveHttpMock = vi.hoisted(() => vi.fn());
+vi.mock("~/server/archive/http", () => ({
+	handleArchiveRequest: archiveHttpMock,
+}));
+
 const {
 	verifyServiceAccessTokenMock,
 	verifyIdTokenMock,
@@ -397,4 +402,51 @@ describe("admin server coverage drain", () => {
 		expect((globalThis as { __coverage__?: unknown }).__coverage__).toEqual({});
 		expect(handlerFetchMock).not.toHaveBeenCalled();
 	});
+});
+
+describe("archive HTTP dispatch and admin login return", () => {
+	beforeEach(() => {
+		vi.stubEnv("SKIP_AUTH", "false");
+		vi.stubEnv("MEASURE_COV", "0");
+		archiveHttpMock.mockReset().mockResolvedValue(new Response("archive"));
+		parseCookieMock
+			.mockReset()
+			.mockImplementation((_header: string, name: string) =>
+				name === "archive_admin_return" ? "1" : null,
+			);
+		exchangeCodeForTokensMock
+			.mockReset()
+			.mockResolvedValue({ id_token: "sso", expires_in: 3600 });
+		buildSessionCookieMock.mockReset().mockReturnValue("admin_session=sso");
+	});
+	afterEach(() => vi.unstubAllEnvs());
+	it.each(["/archive/api", "/archive/auth/login", "/archive/auth/callback"])(
+		"delegates %s to the archive boundary",
+		async (path) => {
+			const entry = await loadServer();
+			const request = new Request(`https://admin.example${path}`);
+			expect(await (await entry.fetch(request)).text()).toBe("archive");
+			expect(archiveHttpMock).toHaveBeenCalledWith(
+				request,
+				"https://admin.example",
+			);
+		},
+	);
+	it.each(["https", "http"])(
+		"returns an existing SSO admin to the archive after login over %s",
+		async (protocol) => {
+			const entry = await loadServer();
+			const response = await entry.fetch(
+				new Request(`${protocol}://admin.example/auth/callback?code=c`, {
+					headers: { cookie: "archive_admin_return=1" },
+				}),
+			);
+			expect(response.headers.get("location")).toBe("/archive");
+			const cleared = response.headers
+				.getSetCookie()
+				.find((value) => value.startsWith("archive_admin_return="));
+			expect(cleared).toContain("Max-Age=0");
+			expect(cleared?.includes("Secure")).toBe(protocol === "https");
+		},
+	);
 });

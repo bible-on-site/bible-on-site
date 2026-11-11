@@ -403,3 +403,129 @@ it("treats the trailing-slash archive URL as the archiver home", async () => {
 		}),
 	);
 });
+
+it("shows completed empty files without a negative size", async () => {
+	directory.files = [
+		{ id: "empty", filename: "empty.bin", size: 0, status: "ready" },
+	];
+	render(<ArchiveArea />);
+	expect(await screen.findByText(/0 B/)).toBeVisible();
+});
+it("keeps the current folder available when opening another folder fails", async () => {
+	directory.files = [
+		{
+			id: "nested",
+			filename: "חומרים",
+			size: 0,
+			status: "ready",
+			kind: "folder",
+		},
+	];
+	render(<ArchiveArea />);
+	const open = await screen.findByRole("button", {
+		name: "פתיחת תיקייה חומרים",
+	});
+	vi.mocked(fetch).mockRejectedValueOnce(new Error("folder unavailable"));
+	fireEvent.click(open);
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		"folder unavailable",
+	);
+	await waitFor(() =>
+		expect(screen.getByRole("button", { name: "רענון" })).toBeEnabled(),
+	);
+});
+it("preserves a new folder name when creation fails", async () => {
+	await mount();
+	fireEvent.change(screen.getByLabelText("שם תיקייה חדשה"), {
+		target: { value: "חומרים" },
+	});
+	vi.mocked(fetch).mockRejectedValueOnce(new Error("cannot create folder"));
+	fireEvent.click(screen.getByRole("button", { name: "יצירת תיקייה" }));
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		"cannot create folder",
+	);
+	expect(screen.getByLabelText("שם תיקייה חדשה")).toHaveValue("חומרים");
+});
+it("navigates breadcrumbs back to the permitted home", async () => {
+	directory = {
+		...directory,
+		id: "nested",
+		path: "/authors/מחבר א/חומרים/",
+		breadcrumbs: [
+			{ id: "home", name: "מחבר א" },
+			{ id: "nested", name: "חומרים" },
+		],
+	};
+	render(<ArchiveArea />);
+	const home = await screen.findByRole("button", { name: "מחבר א" });
+	directory = {
+		...directory,
+		id: "home",
+		path: "/authors/מחבר א/",
+		breadcrumbs: [{ id: "home", name: "מחבר א" }],
+	};
+	fireEvent.click(home);
+	await waitFor(() =>
+		expect(fetch).toHaveBeenCalledWith(
+			"/archive/api",
+			expect.objectContaining({
+				headers: expect.objectContaining({ "X-Archive-Directory": "home" }),
+			}),
+		),
+	);
+});
+it("does not let a delayed refresh replace a newly opened folder", async () => {
+	directory.files = [
+		{
+			id: "nested",
+			filename: "חומרים",
+			size: 0,
+			status: "ready",
+			kind: "folder",
+		},
+	];
+	render(<ArchiveArea />);
+	await screen.findByRole("button", { name: "פתיחת תיקייה חומרים" });
+	let finish: (response: Response) => void = () => {};
+	const stale = JSON.parse(JSON.stringify(directory));
+	vi.mocked(fetch).mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				finish = resolve;
+			}),
+	);
+	fireEvent.click(screen.getByRole("button", { name: "רענון" }));
+	vi.mocked(fetch).mockResolvedValueOnce(
+		reply({
+			...directory,
+			id: "nested",
+			path: "/authors/מחבר א/חומרים/",
+			files: [],
+			breadcrumbs: [
+				{ id: "home", name: "מחבר א" },
+				{ id: "nested", name: "חומרים" },
+			],
+		}) as Response,
+	);
+	fireEvent.click(screen.getByRole("button", { name: "פתיחת תיקייה חומרים" }));
+	await screen.findByText("/authors/מחבר א/חומרים/");
+	await act(async () => {
+		finish(reply(stale) as Response);
+	});
+	expect(screen.getByText("/authors/מחבר א/חומרים/")).toBeVisible();
+});
+it("ignores a late initial-login failure after unmount", async () => {
+	let reject: (reason: Error) => void = () => {};
+	vi.mocked(fetch).mockImplementationOnce(
+		() =>
+			new Promise((_resolve, fail) => {
+				reject = fail;
+			}),
+	);
+	const view = render(<ArchiveArea />);
+	view.unmount();
+	await act(async () => {
+		reject(new Error("late failure"));
+	});
+	expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});

@@ -187,3 +187,114 @@ it("rechecks file ownership under the owner's quota lock", async () => {
 		),
 	).toHaveLength(2);
 });
+
+it.each([
+	{ name: undefined, username: "account", expected: "account" },
+	{ name: ".", username: "account", expected: "מחבר" },
+	{ name: "..", username: "account", expected: "מחבר" },
+	{
+		name: ` /\\${String.fromCharCode(0, 127, 0xd800)}`,
+		username: "account",
+		expected: "מחבר",
+	},
+	{ name: "😀".repeat(110), username: "account", expected: "😀".repeat(100) },
+])(
+	"creates safe bounded homes for legacy profile names: $username",
+	async ({ name, username, expected }) => {
+		query.mockImplementation(async (sql: string) =>
+			sql.includes("home_directory_id AS homeId") ? [{ homeId: null }] : [],
+		);
+		await store.home({ ...author, name, username });
+		expect(execute).toHaveBeenCalledWith(
+			expect.stringContaining("INSERT INTO private_archive_folder"),
+			[id, AUTHORS_DIRECTORY, expected, `authors/${expected}/`, id],
+		);
+	},
+);
+it("returns not-found for a missing directory without exposing another home", async () => {
+	await expect(
+		store.scope(author, "44444444-4444-4444-4444-444444444444"),
+	).rejects.toMatchObject({ status: 404 });
+});
+it("bounds URL depth and length before walking directory names", async () => {
+	await expect(
+		store.resolvePath(admin, `/${"x/".repeat(128)}`),
+	).rejects.toThrow("התיקייה לא נמצאה");
+	await expect(
+		store.resolvePath(admin, `/${"x".repeat(2049)}`),
+	).rejects.toMatchObject({ status: 404 });
+});
+it("rejects folder nesting beyond the supported depth before insertion", async () => {
+	vi.spyOn(store, "scope").mockResolvedValue({
+		folder: { ...folders[2], path: "x/".repeat(127) },
+		homeId: id,
+		ownerId: id,
+	});
+	await expect(store.createFolder(author, nested, "extra")).rejects.toThrow(
+		"עומק התיקיות גדול מדי",
+	);
+	expect(execute).not.toHaveBeenCalled();
+});
+it("builds author breadcrumbs up to home and lets admins list root", async () => {
+	const page = await store.directory({ ...author, name: undefined }, nested);
+	expect(page.breadcrumbs).toEqual([
+		{ id, name: "הרב מחבר" },
+		{ id: nested, name: "חומרים" },
+	]);
+	expect(page.username).toBe(author.username);
+	const root = await store.directory(admin);
+	expect(root.breadcrumbs).toEqual([{ id: ROOT_DIRECTORY, name: "/" }]);
+	expect(root).toMatchObject({
+		isAdmin: true,
+		path: "/",
+		username: "admin",
+		quotaName: "admin",
+	});
+});
+it("rejects broken and cyclic ancestry instead of leaking parent navigation", async () => {
+	const broken = { ...folders[3], parentId: null };
+	const scope = vi
+		.spyOn(store, "scope")
+		.mockResolvedValue({ folder: broken, homeId: id, ownerId: id });
+	await expect(store.directory(author, nested)).rejects.toMatchObject({
+		status: 404,
+	});
+	const cyclic = { ...folders[3], parentId: nested };
+	scope.mockResolvedValue({ folder: cyclic, homeId: id, ownerId: id });
+	const normal = query.getMockImplementation();
+	query.mockImplementation(async (sql: string, args: unknown[] = []) =>
+		sql.includes("FROM private_archive_folder WHERE id")
+			? [cyclic]
+			: normal?.(sql, args),
+	);
+	await expect(store.directory(author, nested)).rejects.toThrow(
+		"עומק התיקיות גדול מדי",
+	);
+});
+it("grants only a verified admin the file-owner override", async () => {
+	query.mockResolvedValueOnce([{ id: nested, ownerId: id, size: "0" }]);
+	expect(await store.readFile(admin, nested)).toMatchObject({
+		ownerId: id,
+		size: 0,
+	});
+	expect(query).toHaveBeenCalledWith(
+		expect.stringContaining("user_id = ? OR ? = 1"),
+		[nested, admin.id, 1],
+	);
+});
+it("does not create a folder over an existing file name", async () => {
+	const normal = query.getMockImplementation();
+	query.mockImplementation(async (sql: string, args: unknown[] = []) =>
+		sql.includes("private_upload_file WHERE directory_id")
+			? [{ id: nested }]
+			: normal?.(sql, args),
+	);
+	await expect(
+		store.createFolder(author, nested, "taken", id),
+	).rejects.toMatchObject({ status: 409 });
+	expect(
+		execute.mock.calls.some(([sql]) =>
+			sql.includes("INSERT INTO private_archive_folder"),
+		),
+	).toBe(false);
+});
