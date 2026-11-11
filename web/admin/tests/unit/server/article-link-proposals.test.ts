@@ -523,6 +523,36 @@ describe("article link proposals server", () => {
 	});
 
 	describe("reviewLinkProposal edge paths", () => {
+		it.each([undefined, { authorId: 99 }])(
+			"refuses to approve a legacy author proposal with patch %j",
+			async (reviewPatch) => {
+				mocks.txQueryOne.mockResolvedValue(
+					makeProposalRow({
+						relationship_key: "author",
+						status: "pending",
+					}),
+				);
+				await expect(
+					reviewLinkProposal({
+						data: { id: "prop-1", decision: "approve", reviewPatch },
+					}),
+				).rejects.toThrow(/author attribution is fixed/);
+				expect(mocks.txExecute).not.toHaveBeenCalled();
+				expect(mocks.updateApi).not.toHaveBeenCalled();
+			},
+		);
+
+		it("allows rejection of a legacy author proposal", async () => {
+			mocks.txQueryOne.mockResolvedValue(
+				makeProposalRow({ relationship_key: "author", status: "pending" }),
+			);
+			const result = await reviewLinkProposal({
+				data: { id: "prop-1", decision: "reject" },
+			});
+			expect(result.status).toBe("rejected");
+			expect(mocks.updateApi).not.toHaveBeenCalled();
+		});
+
 		it("throws when the proposal does not exist", async () => {
 			mocks.txQueryOne.mockResolvedValue(null);
 			await expect(
@@ -743,6 +773,7 @@ describe("article link proposals server", () => {
 			expect(status.llmEnabled).toBe(true);
 			expect(status.articleApiConfigured).toBe(true);
 			expect(status.supportedKeys).toContain("coveringSources");
+			expect(status.supportedKeys).not.toContain("author");
 			expect(status.supportedKeys).toContain("moadim");
 			expect(status.pendingKeys).toContain("recurringHebrewDate");
 		});
@@ -1175,18 +1206,26 @@ describe("article link proposals server", () => {
 			expect(mocks.updateApi).not.toHaveBeenCalled();
 		});
 
-		it("completes an author replace the live state already satisfies", async () => {
-			proposalRow = makeProposalRow({
-				relationship_key: "author",
-				action: "replace",
-				target_json: JSON.stringify({ authorId: 2 }),
-			});
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("already-applied");
-		});
+		it.each([2, 99])(
+			"blocks a legacy approved author replace targeting %i",
+			async (authorId) => {
+				proposalRow = makeProposalRow({
+					relationship_key: "author",
+					action: "replace",
+					target_json: JSON.stringify({ authorId }),
+				});
+				mocks.txQueryOne.mockResolvedValue(proposalRow);
+				const result = await applyLinkProposals({
+					data: { ids: ["prop-1"] },
+				});
+				expect(result.outcomes[0].outcome).toBe("conflict");
+				expect(result.outcomes[0].detail).toContain(
+					"author attribution is fixed",
+				);
+				expect(mocks.updateApi).not.toHaveBeenCalled();
+				expect(mocks.applyDed).not.toHaveBeenCalled();
+			},
+		);
 
 		it("conflicts an author action the write contract cannot express", async () => {
 			proposalRow = makeProposalRow({

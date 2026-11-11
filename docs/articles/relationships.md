@@ -20,6 +20,14 @@ changes as evidence-backed drafts and never writes production rows directly.
 | `recurringHebrewDate` | תאריך עברי חוזר | Hebrew month/day | many | — | article | `ARTICLE_API_KEY` | — | pending-schema (#3098) |
 | `moadim` | מועדים | moed | many | — | article | `ARTICLE_API_KEY` | — | pending-schema (#3101) |
 
+The matrix describes the relationship contract, not eligibility for AI
+suggestions. An article's author is explicitly selected during upload and is
+authoritative. The LLM/heuristic linking pipeline must never infer, assign or
+replace that attribution, even with a byline or human approval. It rejects
+author approvals and blocks application of legacy author proposals; explicit
+upload and manual editor/API attribution workflows remain available. See
+[author attribution](./link-proposals.md#author-attribution).
+
 ## Write contracts
 
 - **`updateArticleRelationships`** (API, `ARTICLE_API_KEY` bearer):

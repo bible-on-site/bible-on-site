@@ -25,6 +25,20 @@ Rejection leaves live data untouched. Stale proposals never apply. A
 human-edited patch (`review_patch_json`) stays separate from the model's
 original target.
 
+## Author attribution
+
+Every article is uploaded for an explicitly selected author. That stored
+attribution is authoritative context, never an inference target. The linking
+pipeline must not guess, assign or replace an author, even when the article
+contains a byline or an editor would review the suggestion.
+
+The prompt excludes author targets, and validation turns model-authored
+`author` suggestions into abstentions instead of storing drafts. Existing
+author proposals can be rejected, but cannot be approved, including with a
+human-edited patch. Previously approved author proposals cannot be applied.
+Explicit author assignment during upload and manual attribution edits remain
+available through their existing editor/API workflows.
+
 ## Generation engines
 
 - **`heuristic` (default, offline)** — `buildHeuristicDrafts` extracts
@@ -68,14 +82,15 @@ patch), `rejected`, `stale` (content changed since generation). The
 `planProposalApply` (src/lib/article-linking/merge.ts) maps an approved
 proposal to exactly one write:
 
-- article-owned keys (`primaryPerek`, `author`, `coveringSources`) →
+- article-owned keys (`primaryPerek`, `coveringSources`) →
   `updateArticleRelationships` via `ARTICLE_API_KEY`
   (src/server/article-relationships-api.ts), carrying
   `expectedContentHash` and `expectedCoveringSources` freshness tokens so
   the API's own lock rejects a raced write;
 - `dedicationAssignments` → the dedication aggregate workflow
   (`applyArticleDedicationLink`), preserving `expiresAt` semantics;
-- `mentionAnnotations` (read-only) and pending-schema keys →
+- legacy `author` proposals, `mentionAnnotations` (read-only) and
+  pending-schema keys →
   `cannot-apply`, surfaced honestly.
 
 Apply runs under the proposal's row lock; a content-hash change flips the
@@ -100,7 +115,7 @@ contract version, LLM/API configuration and pending-schema keys.
 | `html-text.ts` | Safe HTML→plain-text extraction (evidence anchors) |
 | `hebrew-numerals.ts` | גמטריא parsing for citations |
 | `citations.ts` | Citation tokenization (`בראשית יח, ב`, `שמואל ב ה, ז-ח`, …) |
-| `catalogue.ts` | Bounded perakim/authors/dedications target catalogue |
+| `catalogue.ts` | Bounded perek/dedication targets; authors supply current-attribution context only |
 | `heuristic.ts` | Deterministic citation→covering-source drafts |
 | `prompt.ts` | LLM prompt + schema instructions |
 | `validate.ts` | Strict model-output validation/normalization |

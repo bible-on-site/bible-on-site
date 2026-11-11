@@ -37,6 +37,7 @@ import type {
 	ProposalTarget,
 } from "~/lib/article-linking/types";
 import {
+	AUTHOR_ATTRIBUTION_POLICY_REASON,
 	normalizeTarget,
 	type RawModelOutput,
 	validateModelOutput,
@@ -930,6 +931,10 @@ export async function reviewProposal(
 			return { id: data.id, status: "rejected" as const };
 		}
 
+		// Uploaded attribution is authoritative, including for legacy drafts.
+		if (row.relationship_key === "author") {
+			throw new Error(AUTHOR_ATTRIBUTION_POLICY_REASON);
+		}
 		// approve — a stale article must be regenerated, not approved blind.
 		if (stale) {
 			throw new Error("תוכן המאמר השתנה מאז ההפקה — יש להפיק מחדש לפני אישור");
@@ -1007,11 +1012,6 @@ function alreadySatisfied(
 			return (
 				action === "replace" &&
 				snapshot.perekId === (target as { perekId?: number }).perekId
-			);
-		case "author":
-			return (
-				action === "replace" &&
-				snapshot.authorId === (target as { authorId?: number }).authorId
 			);
 		case "coveringSources": {
 			const live = new Set(
@@ -1245,7 +1245,12 @@ export async function pipelineStatus(): Promise<LinkPipelineStatus> {
 		articleApiConfigured: articleApiConfigured(),
 		contractVersion: ARTICLE_RELATIONSHIP_REGISTRY.contractVersion,
 		supportedKeys: ARTICLE_RELATIONSHIP_REGISTRY.relationships
-			.filter((r) => r.status === "supported" && r.operations.length > 1)
+			.filter(
+				(r) =>
+					r.key !== "author" &&
+					r.status === "supported" &&
+					r.operations.length > 1,
+			)
 			.map((r) => r.key),
 		pendingKeys: ARTICLE_RELATIONSHIP_REGISTRY.relationships
 			.filter((r) => r.status === "pending-schema")
