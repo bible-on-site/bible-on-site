@@ -136,7 +136,7 @@ test("real nginx preserves the archive canonical URL and route boundaries", {
 			throw new Error("Archive canonicalization exceeded four redirects");
 		}
 		for (const path of ["/archive", "/archive/", "/archive?probe=1"]) {
-			await t.test(`canonical entry ${path}`, async () => {
+			await t.test(`resolves canonical entry ${path}`, async () => {
 				const response = await follow(path);
 				assert.equal(response.status, 200);
 				assert.equal(
@@ -151,7 +151,7 @@ test("real nginx preserves the archive canonical URL and route boundaries", {
 			});
 		}
 		await t.test(
-			"archive API retains its authentication and privacy response",
+			"forwards the backend's API denial and privacy headers",
 			async () => {
 				const response = await request("/archive/api");
 				assert.equal(response.status, 401);
