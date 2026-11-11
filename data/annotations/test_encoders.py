@@ -8,6 +8,7 @@ views, span snapping, name normalization, and acceptance gating.
 
 import unittest
 import unittest.mock
+from types import SimpleNamespace
 
 import encoders
 
@@ -409,6 +410,15 @@ class TestCandidateRegistry(unittest.TestCase):
         tag = encoders.spec_revision_tag(spec)
         self.assertEqual(tag, "dictabert-ner@05ed61bc+contract1")
 
+    def test_hybrid_revision_changes_with_either_detector(self):
+        spec = next(s for s in encoders.CANDIDATES if s.get("mode") == "retype")
+        original = encoders.spec_revision_tag(spec)
+        self.assertRegex(original, r"\+detect[0-9a-f]{8}\+contract1$")
+        with mock.patch.object(encoders.baseline, "MODEL_REVISION", "new-pasuk-detector"):
+            self.assertNotEqual(encoders.spec_revision_tag(spec), original)
+        with mock.patch.object(encoders.baseline_articles, "MODEL_REVISION", "new-article-detector"):
+            self.assertNotEqual(encoders.spec_revision_tag(spec), original)
+
 
 class TestLazyEntitiesFn(unittest.TestCase):
     """The publish wrapper defers weight loading to first inference."""
@@ -419,11 +429,13 @@ class TestLazyEntitiesFn(unittest.TestCase):
             encoders, "load_entities_fn"
         ) as load_mock:
             load_mock.return_value = fake_entities(("PER", 0, 4, 0.9))
+            load_mock.return_value.execution = {"device": "cpu", "dtype": "float32"}
             entities_fn = encoders.lazy_entities_fn(spec)
             load_mock.assert_not_called()
             out = entities_fn("אברם הלך")
-            load_mock.assert_called_once_with(spec)
+            load_mock.assert_called_once_with(spec, device="cpu", dtype="float32")
             self.assertEqual(out[0]["entity_group"], "PER")
+            self.assertTrue(entities_fn.model_loaded)
 
     def test_load_is_memoized_across_calls(self):
         spec = encoders.CANDIDATES[0]
@@ -431,10 +443,135 @@ class TestLazyEntitiesFn(unittest.TestCase):
             encoders, "load_entities_fn"
         ) as load_mock:
             load_mock.return_value = fake_entities()
+            load_mock.return_value.execution = {"device": "cpu", "dtype": "float32"}
             entities_fn = encoders.lazy_entities_fn(spec)
             entities_fn("א")
             entities_fn("ב")
-            load_mock.assert_called_once_with(spec)
+            load_mock.assert_called_once_with(spec, device="cpu", dtype="float32")
+
+
+def fake_torch(available=True):
+    """Minimal backend: tests never import real torch or fetch weights."""
+    cuda = mock.Mock()
+    cuda.is_available.return_value = available
+    cuda.device_count.return_value = 2 if available else 0
+    cuda.device = mock.MagicMock()
+    cuda.is_bf16_supported.return_value = True
+    cuda.get_device_properties.return_value = SimpleNamespace(
+        name="test GPU", total_memory=8 * 1024**3
+    )
+    cuda.get_device_capability.return_value = (8, 9)
+    return SimpleNamespace(
+        cuda=cuda, __version__="test-torch", version=SimpleNamespace(cuda="12.x"),
+        float32="fp32", float16="fp16", bfloat16="bf16",
+        backends=SimpleNamespace(
+            cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=True)),
+            cudnn=SimpleNamespace(allow_tf32=True),
+        ),
+        set_float32_matmul_precision=mock.Mock(),
+    )
+
+
+class TestExecutionSelection(unittest.TestCase):
+    def test_cpu_default_needs_no_optional_dependencies(self):
+        with mock.patch.dict(encoders.sys.modules, {"torch": None}):
+            self.assertEqual(
+                encoders.normalize_execution(),
+                {"device": "cpu", "dtype": "float32", "tf32": False},
+            )
+
+    def test_cpu_runtime_identity_uses_only_package_metadata(self):
+        with (
+            mock.patch.dict(encoders.sys.modules, {"torch": None}),
+            mock.patch.object(encoders.importlib.metadata, "version", side_effect=lambda package: f"{package}-v1"),
+        ):
+            runtime = encoders.runtime_signature({"device": "cpu"})
+        self.assertEqual(runtime, {"torch": "torch-v1", "transformers": "transformers-v1",
+                                   "tokenizers": "tokenizers-v1", "bitsandbytes": "bitsandbytes-v1"})
+
+    def test_cuda_is_canonicalized_and_index_validated(self):
+        backend = fake_torch()
+        self.assertEqual(
+            encoders.normalize_execution("cuda", torch_module=backend)["device"],
+            "cuda:0",
+        )
+        self.assertEqual(
+            encoders.normalize_execution("cuda:1", torch_module=backend)["device"],
+            "cuda:1",
+        )
+        with self.assertRaisesRegex(RuntimeError, "device 2"):
+            encoders.normalize_execution("cuda:2", torch_module=backend)
+
+    def test_explicit_cuda_never_falls_back(self):
+        with self.assertRaisesRegex(RuntimeError, "CUDA was requested"):
+            encoders.normalize_execution("cuda", torch_module=fake_torch(False))
+
+    def test_auto_records_the_resolved_device(self):
+        self.assertEqual(
+            encoders.normalize_execution("auto", torch_module=fake_torch())["device"],
+            "cuda:0",
+        )
+        self.assertEqual(
+            encoders.normalize_execution("auto", torch_module=fake_torch(False))["device"],
+            "cpu",
+        )
+
+    def test_invalid_device_and_precision_fail_clearly(self):
+        for value in ("cuda:-1", "cuda:abc", "mps", "", None):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                encoders.normalize_execution(value)
+        with self.assertRaisesRegex(ValueError, "dtype"):
+            encoders.normalize_execution(dtype="int8")
+        with self.assertRaisesRegex(ValueError, "CPU inference"):
+            encoders.normalize_execution(dtype="float16")
+
+    def test_bfloat16_requires_supported_cuda_device(self):
+        backend = fake_torch()
+        backend.cuda.is_bf16_supported.return_value = False
+        with self.assertRaisesRegex(RuntimeError, "bfloat16"):
+            encoders.normalize_execution("cuda:1", "bfloat16", backend)
+        backend.cuda.device.assert_called_once_with(1)
+
+    def test_pipeline_uses_explicit_backend_and_full_precision(self):
+        backend = fake_torch()
+        pipe = mock.Mock()
+        pipe.device = "cuda:1"
+        pipe.return_value = [{"entity_group": "PER"}]
+        factory = mock.Mock(return_value=pipe)
+        modules = {
+            "torch": backend,
+            "transformers": SimpleNamespace(pipeline=factory),
+            "tokenizers": SimpleNamespace(),
+            "tokenizers.decoders": SimpleNamespace(WordPiece=mock.Mock()),
+        }
+        with mock.patch.dict(encoders.sys.modules, modules):
+            entities_fn = encoders.load_entities_fn(
+                encoders.CANDIDATES[0], device="cuda:1"
+            )
+            self.assertEqual(entities_fn("דוד"), pipe.return_value)
+        kwargs = factory.call_args.kwargs
+        self.assertEqual(kwargs["device"], "cuda:1")
+        self.assertEqual(kwargs["dtype"], "fp32")
+        self.assertEqual(kwargs["revision"], encoders.CANDIDATES[0]["revision"])
+        pipe.model.eval.assert_called_once()
+        self.assertFalse(backend.backends.cuda.matmul.allow_tf32)
+        self.assertFalse(backend.backends.cudnn.allow_tf32)
+        backend.set_float32_matmul_precision.assert_called_once_with("highest")
+        self.assertEqual(entities_fn.execution["gpu_name"], "test GPU")
+        self.assertEqual(entities_fn.execution["cuda_runtime"], "12.x")
+
+    def test_pipeline_refuses_unexpected_device(self):
+        pipe = mock.Mock()
+        pipe.device = "cpu"
+        modules = {
+            "torch": fake_torch(),
+            "transformers": SimpleNamespace(pipeline=mock.Mock(return_value=pipe)),
+            "tokenizers": SimpleNamespace(),
+            "tokenizers.decoders": SimpleNamespace(WordPiece=mock.Mock()),
+        }
+        with mock.patch.dict(encoders.sys.modules, modules):
+            with self.assertRaisesRegex(RuntimeError, "model loaded on cpu"):
+                encoders.load_entities_fn(encoders.CANDIDATES[0], device="cuda")
 
 
 if __name__ == "__main__":

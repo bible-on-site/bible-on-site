@@ -1,0 +1,11 @@
+# Reproducible Windows/Linux NVIDIA runtime for the GPU qualification.
+# CUDA 12.6 supports the tested NVIDIA 566.07 driver. The current torch
+# 2.15.0 pin in requirements-encoders.txt has no cu126 wheel; do not let
+# pip silently install a newer CUDA runtime or the CPU wheel instead.
+# Install this file INSTEAD OF requirements-encoders.txt for this profile.
+--extra-index-url https://download.pytorch.org/whl/cu126
+torch==2.14.1+cu126
+transformers==5.22.2
+# Only the Qwen3 NF4 comparison needs these two optional packages.
+accelerate==1.15.0
+bitsandbytes==0.50.2
