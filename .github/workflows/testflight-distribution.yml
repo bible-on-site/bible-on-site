@@ -47,6 +47,7 @@ concurrency:
 
 jobs:
   distribute:
+    timeout-minutes: 60
     name: Distribute the verified build to TestFlight testers
     runs-on: ubuntu-latest
     env:
