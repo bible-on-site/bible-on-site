@@ -5,6 +5,19 @@
 
 import mysql, { type RowDataPacket } from "mysql2/promise";
 
+function decodeDbComponent(value: string): string {
+	try {
+		return decodeURIComponent(value);
+	} catch {
+		// Legacy connection strings can contain literal, malformed percent
+		// escapes. Keep those values intact instead of rejecting the config.
+		console.warn(
+			"Malformed database URL component; preserving its original value",
+		);
+		return value;
+	}
+}
+
 /**
  * Parse database URL in format: mysql://user:password@host:port/database
  */
@@ -13,9 +26,9 @@ function parseDbUrl(url: string): mysql.PoolOptions {
 	return {
 		host: parsed.hostname,
 		port: Number.parseInt(parsed.port || "3306", 10),
-		user: parsed.username,
-		password: parsed.password,
-		database: parsed.pathname.slice(1), // Remove leading /
+		user: decodeDbComponent(parsed.username),
+		password: decodeDbComponent(parsed.password),
+		database: decodeDbComponent(parsed.pathname.slice(1)), // Remove leading /
 	};
 }
 
