@@ -65,10 +65,11 @@ function coverageIgnoreTsrHmrPlugin(): Plugin {
 		enforce: "post",
 		apply: "serve",
 		transform(code, id, options) {
-			const normalizedId = id.replace(/\\/g, "/");
+			const normalizedId = id.split("?")[0].replace(/\\/g, "/");
 			if (
 				options?.ssr ||
-				!normalizedId.startsWith(srcRoot) ||
+				!normalizedId.startsWith(`${srcRoot}routes/`) ||
+				!/\.[cm]?[jt]sx?$/.test(normalizedId) ||
 				!code.includes("import.meta.hot")
 			) {
 				return;

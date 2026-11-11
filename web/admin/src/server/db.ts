@@ -1,22 +1,12 @@
 import mysql from "mysql2/promise";
 import { resolveMysqlUrl } from "./db-config";
-
-const dbUrl = resolveMysqlUrl();
-
-// Parse the URL to extract connection parameters
-const url = new URL(dbUrl);
-const sslMode = url.searchParams.get("ssl-mode");
+import { databaseConnectionOptions } from "./db-tls.server";
 
 export const pool = mysql.createPool({
-	host: url.hostname,
-	port: Number.parseInt(url.port || "3306", 10),
-	user: url.username,
-	password: url.password,
-	database: url.pathname.slice(1), // Remove leading slash
+	...databaseConnectionOptions(new URL(resolveMysqlUrl())),
 	waitForConnections: true,
 	connectionLimit: 10,
 	queueLimit: 0,
-	ssl: sslMode === "DISABLED" ? undefined : { rejectUnauthorized: false },
 });
 
 export async function query<T>(sql: string, params?: unknown[]): Promise<T[]> {
