@@ -63,6 +63,7 @@ def revision_tag(execution=None, spec=None, *, constrained_json=False):
         spec = CANDIDATE
     identity = {
         "candidate": spec, "prompt": PROMPT_VERSION,
+        "output_normalization_version": local_llm.OUTPUT_NORMALIZATION_VERSION,
         "execution": execution or {}, "units": MAX_UNITS,
         "runtime": encoders.runtime_signature(execution),
         "overlap": OVERLAP_UNITS, "mentions": MAX_MENTIONS,
@@ -73,7 +74,8 @@ def revision_tag(execution=None, spec=None, *, constrained_json=False):
     if constrained_json:
         identity["structured_output"] = local_llm.format_identity(DETECT_RESPONSE_SCHEMA)
     digest = hashlib.sha256(_json(identity).encode("utf-8")).hexdigest()[:12]
-    return f"{spec['name']}@{spec['revision'][:8]}+{PROMPT_VERSION}+{digest}"
+    return (f"{spec['name']}@{spec['revision'][:8]}+{PROMPT_VERSION}"
+            f"+{local_llm.OUTPUT_NORMALIZATION_VERSION}+{digest}")
 
 
 def build_messages(context, units):
@@ -176,12 +178,9 @@ def validate_output(raw, units, surface_for_span):
         if entity_type == "OTHER":
             if name != "":
                 raise ValueError("OTHER requires an empty intended name")
-        elif (not isinstance(name, str) or not name or len(name) > 120
-                or name != baseline.normalize_name(name)
-                or re.search(r"[<>\x00-\x1f]", name)
-                or not re.search(r"[א-ת]", name)):
-            raise ValueError("invalid normalized Hebrew intended name")
-        enriched.append(dict(mention, surface=surface_for_span(start, end)))
+        else:
+            name = local_llm.normalize_model_name(name)
+        enriched.append(dict(mention, intended_name=name, surface=surface_for_span(start, end)))
     return enriched
 
 
@@ -336,6 +335,7 @@ def evaluate_candidate(*, device="cuda:0", dtype="bfloat16", cache_dir=None,
 
     start = time.perf_counter()
     report = {"schema": 1, "candidate": spec, "execution": execution,
+              "output_normalization_version": local_llm.OUTPUT_NORMALIZATION_VERSION,
               "prompt_version": PROMPT_VERSION, "model_revision": revision}
     if constrained_json:
         report["structured_output"] = local_llm.format_identity(DETECT_RESPONSE_SCHEMA)

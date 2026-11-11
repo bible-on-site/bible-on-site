@@ -52,6 +52,12 @@ types and JSON are validated; uncertain/conflicting results remain suppressed.
 The model selects source indices or supplied candidate IDs. Code derives exact
 surface text and preserves original coordinates; the model cannot rewrite them.
 `--constrained-json` enforces required fields and legal values during generation.
+Target keys use the separately versioned `target-key-v1` normalization: remove
+niqqud, cantillation and zero-width formatting, turn word separators into spaces,
+and collapse whitespace. Hebrew letters, attached prefixes and suffixes remain
+as the model returned them; normalization does not resolve a mistaken referent.
+Source surfaces are never normalized. Control characters, markup delimiters
+and empty or non-Hebrew target keys fail validation.
 Existing anchors, scripts and styles are excluded from article annotations.
 
 ## Produce resumable local rows

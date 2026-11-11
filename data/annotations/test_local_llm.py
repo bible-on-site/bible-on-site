@@ -49,7 +49,7 @@ class TestValidation(unittest.TestCase):
         changes = [{"id": 99}, {"id": False}, {"surface": "דוד"}, {"surface": "ישראל"},
                    {"span": [0, 0]}, {"span": [0, 2]}, {"span": [False, 0]}, {"entity_type": "SQL"},
                    {"entity_type": []}, {"decision": []}, {"decision": "publish"},
-                   {"intended_name": "<a>ישראל</a>"}, {"intended_name": "יִשְׂרָאֵל"},
+                   {"intended_name": "<a>ישראל</a>"},
                    {"intended_name": ""}, {"confidence": 1}]
         for change in changes:
             with self.subTest(change=change):
@@ -64,6 +64,29 @@ class TestValidation(unittest.TestCase):
                        json.dumps(dict(self.valid, sql="DROP TABLE x"))]:
             with self.subTest(output=output), self.assertRaises(ValueError):
                 llm.validate_output(output, self.candidates)
+
+    def test_target_keys_normalize_format_without_removing_letters_or_prefixes(self):
+        variants = {
+            "דָּֽן": "דן", "הַגִּלְעָ֖ד": "הגלעד", "וּבְדָן": "ובדן",
+            "\u200bבֵּית\u200d־אֵל\ufeff": "בית אל", "  בֵּית--אֵל  ": "בית אל",
+            "מִצְרַיְמָה": "מצרימה",
+        }
+        for original, canonical in variants.items():
+            with self.subTest(original=original):
+                output = copy.deepcopy(self.valid)
+                output["decisions"][0]["intended_name"] = original
+                raw = json.dumps(output, ensure_ascii=False)
+                actual = llm.validate_output(raw, self.candidates)
+                self.assertEqual(actual[0]["intended_name"], canonical)
+                self.assertEqual(json.loads(raw)["decisions"][0]["intended_name"], original)
+
+    def test_target_key_normalization_still_rejects_malformed_names(self):
+        bad_names = [None, False, 123, [], {}, "", " ", "\u0591\u05b0\u200b",
+                     "א" * 121, "<דוד>", "דוד\x00", "דוד\n", "דוד\x7f", "\x85דוד",
+                     "דוד\ud800", "דוד\udfff", "OTHER"]
+        for value in bad_names:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                llm.normalize_model_name(value)
 
 
 class TestRetype(unittest.TestCase):
@@ -166,6 +189,20 @@ class TestRetype(unittest.TestCase):
 
 
 class TestProvenanceAndCache(unittest.TestCase):
+    def test_output_normalization_versions_rows_and_cache_without_changing_generation(self):
+        messages = llm.build_messages("ישראל", [{"id": 0, "surface": "ישראל", "span": [0, 0],
+                                               "intended_name": "ישראל", "entity_type": "PERSON"}])
+        schema = copy.deepcopy(llm.RETYPE_RESPONSE_SCHEMA)
+        revision = llm.revision_tag()
+        profile = llm.format_identity(schema)
+        with mock.patch.object(llm, "OUTPUT_NORMALIZATION_VERSION", "target-key-next"):
+            self.assertNotEqual(llm.revision_tag(), revision)
+            self.assertIn("+target-key-next+", llm.revision_tag())
+            self.assertNotEqual(llm.format_identity(schema), profile)
+            self.assertEqual(llm.RETYPE_RESPONSE_SCHEMA, schema)
+            self.assertEqual(messages, llm.build_messages("ישראל", [{"id": 0, "surface": "ישראל", "span": [0, 0],
+                                                                      "intended_name": "ישראל", "entity_type": "PERSON"}]))
+
     def test_grammar_schema_and_library_changes_isolate_cache_identity(self):
         with mock.patch.object(llm.importlib.metadata, "version", return_value=llm.FORMAT_ENFORCER_PIN):
             plain = llm.revision_tag()

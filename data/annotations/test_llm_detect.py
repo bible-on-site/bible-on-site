@@ -40,7 +40,7 @@ class TestStrictOutput(unittest.TestCase):
             mention(start=2, end=1), dict(mention(), surface="דויד"),
             dict(mention(), surface="דוד"), dict(mention(), span=[0, 0]),
             mention(entity_type="SQL"), mention(name="<דוד>"),
-            mention(name="דָוִד"), mention(name=""),
+            mention(name=""),
             mention(entity_type="OTHER"),
         ]
         for value in cases:
@@ -52,6 +52,15 @@ class TestStrictOutput(unittest.TestCase):
                       raw(mention(), mention())):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 detect.validate_output(value, self.units, self.surface)
+
+    def test_vocalized_target_normalization_keeps_authoritative_source_and_prefixes(self):
+        for raw_name, expected in [("דָּֽן", "דן"), ("הַגִּלְעָ֖ד", "הגלעד"),
+                                   ("בֵּית\u200d־אֵל", "בית אל"), ("  בֵּית--אֵל  ", "בית אל")]:
+            with self.subTest(raw_name=raw_name):
+                output = detect.validate_output(raw(mention(name=raw_name)), self.units, self.surface)
+                self.assertEqual(output[0]["intended_name"], expected)
+                self.assertEqual(output[0]["surface"], "דוד")
+                self.assertEqual((output[0]["start"], output[0]["end"]), (0, 0))
 
     def test_noncontiguous_original_indices_cannot_be_bridged(self):
         units = [{"index": 0, "text": "בית"}, {"index": 2, "text": "אל"}]
@@ -237,6 +246,10 @@ class TestEvaluationScope(unittest.TestCase):
         self.assertIn("qwen3-8b-detect", detect.revision_tag(spec=qwen))
         self.assertNotEqual(cpu, detect.revision_tag(spec=qwen))
         self.assertNotEqual(cpu, detect.local_llm.revision_tag())
+        revision = detect.revision_tag()
+        with mock.patch.object(detect.local_llm, "OUTPUT_NORMALIZATION_VERSION", "target-key-next"):
+            self.assertNotEqual(detect.revision_tag(), revision)
+            self.assertIn("+target-key-next+", detect.revision_tag())
 
 
 def _all_text(messages):

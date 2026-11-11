@@ -42,6 +42,7 @@ MODEL_CANDIDATES = {
     },
 }
 PROMPT_VERSION = "local-retype-v3"
+OUTPUT_NORMALIZATION_VERSION = "target-key-v1"
 MAX_CONTEXT_CHARS = 1600
 MAX_CANDIDATES = 8
 MAX_INPUT_TOKENS = 3072
@@ -77,6 +78,7 @@ def format_identity(schema):
     except importlib.metadata.PackageNotFoundError:
         version = None
     return {"backend": "lm-format-enforcer", "library_pin": FORMAT_ENFORCER_PIN,
+            "output_normalization_version": OUTPUT_NORMALIZATION_VERSION,
             "adapter_version": ADAPTER_VERSION,
             "library_version": version, "grammar_version": GRAMMAR_VERSION,
             "schema_sha256": hashlib.sha256(_json(schema).encode("utf-8")).hexdigest(),
@@ -134,6 +136,7 @@ def revision_tag(spec=None, execution=None, *, constrained_json=False):
     if spec is None:
         spec = CANDIDATE
     identity = {"spec": spec, "prompt": PROMPT_VERSION,
+                "output_normalization_version": OUTPUT_NORMALIZATION_VERSION,
                 "detector": [baseline.MODEL_REVISION, baseline_articles.MODEL_REVISION],
                 "runtime": encoders.runtime_signature(execution),
                 "execution": execution or {}, "input_tokens": MAX_INPUT_TOKENS,
@@ -142,7 +145,8 @@ def revision_tag(spec=None, execution=None, *, constrained_json=False):
     if constrained_json:
         identity["structured_output"] = format_identity(RETYPE_RESPONSE_SCHEMA)
     digest = hashlib.sha256(_json(identity).encode("utf-8")).hexdigest()[:12]
-    return f"{spec['name']}@{spec['revision'][:8]}+{PROMPT_VERSION}+{digest}"
+    return (f"{spec['name']}@{spec['revision'][:8]}+{PROMPT_VERSION}"
+            f"+{OUTPUT_NORMALIZATION_VERSION}+{digest}")
 
 
 def _json(value):
@@ -151,6 +155,17 @@ def _json(value):
 
 def _is_integer(value):
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def normalize_model_name(raw):
+    """Normalize target-key formatting while preserving letters and prefixes."""
+    if (not isinstance(raw, str) or not raw or len(raw) > 120
+            or re.search(r"[<>\x00-\x1f\x7f-\x9f\ud800-\udfff]", raw)):
+        raise ValueError("invalid normalized Hebrew intended name")
+    canonical = " ".join(baseline.normalize_name(raw).replace("-", " ").split())
+    if not canonical or len(canonical) > 120 or not re.search(r"[\u05d0-\u05ea]", canonical):
+        raise ValueError("invalid normalized Hebrew intended name")
+    return canonical
 
 
 def build_messages(context, candidates):
@@ -207,13 +222,8 @@ def validate_output(raw, candidates):
             raise ValueError("unknown decision")
         if not isinstance(decision["entity_type"], str) or decision["entity_type"] not in ENTITY_TYPES:
             raise ValueError("unknown entity type")
-        name = decision["intended_name"]
-        if (not isinstance(name, str) or not name or len(name) > 120
-                or name != baseline.normalize_name(name)
-                or re.search(r"[<>\x00-\x1f]", name)
-                or not re.search(r"[\u05d0-\u05ea]", name)):
-            raise ValueError("invalid normalized Hebrew intended name")
-        result[identity] = decision
+        name = normalize_model_name(decision["intended_name"])
+        result[identity] = dict(decision, intended_name=name)
     return result
 
 
@@ -277,6 +287,75 @@ class CachedGenerator:
         return output
 
 
+def _prefix_factory(tokenizer, model):
+    """Share tokenizer grammar data while keeping each request parser fresh."""
+    tokenizer_data = None
+
+    def constrained_prefix(schema, messages):
+        nonlocal tokenizer_data
+        identity = format_identity(schema)
+        if identity["library_version"] != FORMAT_ENFORCER_PIN:
+            raise RuntimeError(
+                f"structured generation requires lm-format-enforcer=={FORMAT_ENFORCER_PIN}; "
+                f"installed: {identity['library_version']}"
+            )
+        from lmformatenforcer import CharacterLevelParserConfig, JsonSchemaParser
+        from lmformatenforcer.consts import COMPLETE_ALPHABET
+        from lmfe_transformers import (
+            build_token_enforcer_tokenizer_data,
+            build_transformers_prefix_allowed_tokens_fn,
+        )
+        if not tokenizer_data:
+            vocabulary = min(len(tokenizer), int(model.config.vocab_size))
+            tokenizer_data = build_token_enforcer_tokenizer_data(tokenizer, vocab_size=vocabulary)
+        # LMFE defaults to ASCII. Add all Hebrew characters and every source
+        # character so format enforcement cannot exclude names or source marks.
+        hebrew = "".join(chr(code) for code in range(0x590, 0x600))
+        hebrew += "".join(chr(code) for code in range(0xFB1D, 0xFB50))
+        alphabet = "".join(dict.fromkeys(COMPLETE_ALPHABET + hebrew + _json(messages)))
+        config = CharacterLevelParserConfig(
+            alphabet=alphabet, force_json_field_order=True,
+            max_consecutive_whitespaces=GRAMMAR_MAX_WHITESPACE,
+        )
+        parser = JsonSchemaParser(request_schema(schema, messages), config=config)
+        # Each call gets fresh parser state; immutable tokenizer data is shared.
+        return build_transformers_prefix_allowed_tokens_fn(tokenizer_data, parser)
+
+    return constrained_prefix
+
+
+def _generation_runner(model, tokenizer, execution, stats, torch, encode, constrained_prefix):
+    """Keep bounded generation and its shared measurements in one callable."""
+    def run_generation(messages, schema=None):
+        generation_start = time.perf_counter()
+        inputs = encode(messages)
+        if inputs["input_ids"].shape[-1] > MAX_INPUT_TOKENS:
+            raise ValueError("local LLM input exceeds the token budget; no truncation performed")
+        inputs = {key: value.to(execution["device"]) for key, value in inputs.items()}
+        options = {}
+        if schema is not None:
+            options["prefix_allowed_tokens_fn"] = constrained_prefix(schema, messages)
+        with torch.inference_mode():
+            output = model.generate(
+                **inputs, do_sample=False, max_new_tokens=MAX_NEW_TOKENS,
+                pad_token_id=(tokenizer.pad_token_id if tokenizer.pad_token_id is not None
+                              else tokenizer.eos_token_id),
+                **options,
+            )
+        continuation = output[0, inputs["input_ids"].shape[-1]:]
+        text = tokenizer.decode(continuation, skip_special_tokens=True).strip()
+        if execution["device"].startswith("cuda"):
+            torch.cuda.synchronize(execution["device"])
+            stats["cuda_peak_allocated_bytes"] = torch.cuda.max_memory_allocated(execution["device"])
+        stats["generation_seconds"] = round(stats["generation_seconds"] + time.perf_counter() - generation_start, 3)
+        stats["generated_requests"] += 1
+        stats["input_tokens"] += inputs["input_ids"].shape[-1]
+        stats["output_tokens"] += len(continuation)
+        return text
+
+    return run_generation
+
+
 def load_generate_fn(spec=None, *, device="cuda:0", dtype="bfloat16"):
     """Pinned safetensors + supplied chat template; greedy bounded generation."""
     if spec is None:
@@ -328,64 +407,11 @@ def load_generate_fn(spec=None, *, device="cuda:0", dtype="bfloat16"):
                                              **spec.get("chat_template_kwargs", {}))
         return tokenizer(text, return_tensors="pt", add_special_tokens=False)
 
-    tokenizer_data = None
+    constrained_prefix = _prefix_factory(tokenizer, model)
 
-    def constrained_prefix(schema, messages):
-        nonlocal tokenizer_data
-        identity = format_identity(schema)
-        if identity["library_version"] != FORMAT_ENFORCER_PIN:
-            raise RuntimeError(
-                f"structured generation requires lm-format-enforcer=={FORMAT_ENFORCER_PIN}; "
-                f"installed: {identity['library_version']}"
-            )
-        from lmformatenforcer import CharacterLevelParserConfig, JsonSchemaParser
-        from lmformatenforcer.consts import COMPLETE_ALPHABET
-        from lmfe_transformers import (
-            build_token_enforcer_tokenizer_data,
-            build_transformers_prefix_allowed_tokens_fn,
-        )
-        if tokenizer_data is None:
-            vocabulary = min(len(tokenizer), int(model.config.vocab_size))
-            tokenizer_data = build_token_enforcer_tokenizer_data(tokenizer, vocab_size=vocabulary)
-        # LMFE defaults to ASCII. Add all Hebrew characters and every source
-        # character so format enforcement cannot exclude names or source marks.
-        hebrew = "".join(chr(code) for code in range(0x590, 0x600))
-        hebrew += "".join(chr(code) for code in range(0xFB1D, 0xFB50))
-        alphabet = "".join(dict.fromkeys(COMPLETE_ALPHABET + hebrew + _json(messages)))
-        config = CharacterLevelParserConfig(
-            alphabet=alphabet, force_json_field_order=True,
-            max_consecutive_whitespaces=GRAMMAR_MAX_WHITESPACE,
-        )
-        parser = JsonSchemaParser(request_schema(schema, messages), config=config)
-        # Each call gets fresh parser state; immutable tokenizer data is shared.
-        return build_transformers_prefix_allowed_tokens_fn(tokenizer_data, parser)
-
-    def run_generation(messages, schema=None):
-        generation_start = time.perf_counter()
-        inputs = encode(messages)
-        if inputs["input_ids"].shape[-1] > MAX_INPUT_TOKENS:
-            raise ValueError("local LLM input exceeds the token budget; no truncation performed")
-        inputs = {key: value.to(execution["device"]) for key, value in inputs.items()}
-        options = {}
-        if schema is not None:
-            options["prefix_allowed_tokens_fn"] = constrained_prefix(schema, messages)
-        with torch.inference_mode():
-            output = model.generate(
-                **inputs, do_sample=False, max_new_tokens=MAX_NEW_TOKENS,
-                pad_token_id=(tokenizer.pad_token_id if tokenizer.pad_token_id is not None
-                              else tokenizer.eos_token_id),
-                **options,
-            )
-        continuation = output[0, inputs["input_ids"].shape[-1]:]
-        text = tokenizer.decode(continuation, skip_special_tokens=True).strip()
-        if execution["device"].startswith("cuda"):
-            torch.cuda.synchronize(execution["device"])
-            stats["cuda_peak_allocated_bytes"] = torch.cuda.max_memory_allocated(execution["device"])
-        stats["generation_seconds"] = round(stats["generation_seconds"] + time.perf_counter() - generation_start, 3)
-        stats["generated_requests"] += 1
-        stats["input_tokens"] += inputs["input_ids"].shape[-1]
-        stats["output_tokens"] += len(continuation)
-        return text
+    run_generation = _generation_runner(
+        model, tokenizer, execution, stats, torch, encode, constrained_prefix
+    )
 
     def generate(messages):
         return run_generation(messages)
@@ -409,6 +435,7 @@ def load_generate_fn(spec=None, *, device="cuda:0", dtype="bfloat16"):
     generate.execution = encoders.execution_provenance(execution, torch)
     generate.execution.update(encoders.runtime_signature())
     generate.execution["quantization"] = quantization
+    generate.execution["output_normalization_version"] = OUTPUT_NORMALIZATION_VERSION
     generate.stats = stats
     generate.count_input_tokens = lambda messages: encode(messages)["input_ids"].shape[-1]
     generate.bind_schema = bind_schema
@@ -507,11 +534,8 @@ def retype_article_rows(content, rows, generate_fn, model_revision="local-llm"):
     return result
 
 
-def evaluate_candidate(*, spec=None, device="cuda:0", dtype="bfloat16", cache_dir=None,
-                       generate_fn=None, gold_dir=ge.GOLDEN_DIR, constrained_json=False):
-    """Compare the pinned generative retype model using the existing scorer."""
-    if spec is None:
-        spec = CANDIDATE
+def _evaluation_execution(spec, device, dtype):
+    """Resolve execution settings and installed evaluation package versions."""
     execution = encoders.normalize_execution(device, dtype)
     packages = ["torch", "transformers"]
     if spec.get("quantization"):
@@ -521,6 +545,26 @@ def evaluate_candidate(*, spec=None, device="cuda:0", dtype="bfloat16", cache_di
             execution[package] = importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError:
             execution[package] = None
+    return execution
+
+
+def _append_evaluation_stats(report, generate_fn, loaded):
+    """Add the same cache and model measurements to the completed report."""
+    if isinstance(generate_fn, CachedGenerator):
+        report["runtime"].update(model_calls=generate_fn.calls, cache_hits=generate_fn.cache_hits)
+        report["diagnostics"] = dict(generate_fn.diagnostics)
+    if loaded is not None:
+        report["environment"] = loaded.execution
+        report["runtime"].update(loaded.stats)
+    report["runtime"]["domain_times_include_model_load"] = loaded is not None
+
+
+def evaluate_candidate(*, spec=None, device="cuda:0", dtype="bfloat16", cache_dir=None,
+                       generate_fn=None, gold_dir=ge.GOLDEN_DIR, constrained_json=False):
+    """Compare the pinned generative retype model using the existing scorer."""
+    if spec is None:
+        spec = CANDIDATE
+    execution = _evaluation_execution(spec, device, dtype)
     revision = revision_tag(spec, execution=execution, constrained_json=constrained_json)
     loaded = None
     if generate_fn is None:
@@ -556,6 +600,7 @@ def evaluate_candidate(*, spec=None, device="cuda:0", dtype="bfloat16", cache_di
 
     start = time.perf_counter()
     report = {"schema": 1, "candidate": spec, "execution": execution,
+              "output_normalization_version": OUTPUT_NORMALIZATION_VERSION,
               "prompt_version": PROMPT_VERSION, "model_revision": revision}
     if constrained_json:
         report["structured_output"] = format_identity(RETYPE_RESPONSE_SCHEMA)
@@ -571,13 +616,7 @@ def evaluate_candidate(*, spec=None, device="cuda:0", dtype="bfloat16", cache_di
     cases = ge.load_golden(Path(gold_dir) / "articles.json")["cases"]
     report["article"] = ge.evaluate_articles(cases, predict_article, revision)
     report["runtime"]["article_seconds"] = round(time.perf_counter() - start, 3)
-    if isinstance(generate_fn, CachedGenerator):
-        report["runtime"].update(model_calls=generate_fn.calls, cache_hits=generate_fn.cache_hits)
-        report["diagnostics"] = dict(generate_fn.diagnostics)
-    if loaded is not None:
-        report["environment"] = loaded.execution
-        report["runtime"].update(loaded.stats)
-    report["runtime"]["domain_times_include_model_load"] = loaded is not None
+    _append_evaluation_stats(report, generate_fn, loaded)
     return report
 
 
