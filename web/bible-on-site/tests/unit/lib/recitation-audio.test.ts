@@ -489,3 +489,23 @@ test("the range index keeps original ordinals across pause and resume", async ()
 	expect(player.positionRangeIndex).toBeNull();
 	player.dispose();
 });
+test("the range index is null during a verse gap and stays null when paused inside it", async () => {
+	const player = new RecitationAudio("/audio.mp3", hash);
+	const ended = jest.fn();
+	await player.playRanges(
+		[
+			{ startMs: 0, endMs: 1000 },
+			{ startMs: 2000, endMs: 3000 },
+		],
+		1000,
+		ended,
+	);
+	expect(player.positionRangeIndex).toBe(0);
+	// The second source waits out the verse pause — no interval owns
+	// the clock in between, so there is no range index to report.
+	audioClock = 11.5;
+	expect(player.positionRangeIndex).toBeNull();
+	expect(player.pause()).toBe(true);
+	expect(player.positionRangeIndex).toBeNull();
+	player.dispose();
+});

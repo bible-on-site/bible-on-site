@@ -260,6 +260,9 @@ export function RangeRecitationPlayer({
 			activeWords.current = playableWords(recitation);
 			audio
 				.playRanges(piece.intervals, pauseMs, () => {
+					// A superseded piece must not clobber the newer request's
+					// active audio or chase a queue it no longer owns.
+					if (request.current !== generation) return;
 					activeAudioId.current = null;
 					playPiece(generation, queue, index + 1, pauseMs);
 				})
@@ -369,6 +372,8 @@ export function RangeRecitationPlayer({
 	}, [open, hasRecording, perakim, stop, id]);
 
 	const playAll = useCallback(async () => {
+		/* istanbul ignore next -- play controls render only once a loaded
+		 * manifest produced pieces, so both guards are unreachable */
 		if (!manifestsRef.current || pieces.length === 0) return;
 		window.dispatchEvent(new CustomEvent(STOP_EVENT, { detail: id }));
 		const generation = ++request.current;
@@ -395,6 +400,8 @@ export function RangeRecitationPlayer({
 		// pieces is always alignment-ready; the verse-pause applies as-is.
 		const pauseMs = settings.current.versePauseMs ?? 0;
 		playPiece(generation, queue, 0, pauseMs);
+		/* istanbul ignore else -- nothing between the synchronous
+		 * playPiece call and this line can supersede the request */
 		if (request.current === generation) setState("playing");
 	}, [pieces, id, playPiece, setActive]);
 
@@ -448,6 +455,8 @@ export function RangeRecitationPlayer({
 	);
 
 	const togglePlayback = useCallback(async () => {
+		/* istanbul ignore if -- the play button is disabled while
+		 * loading, so this entry point is unreachable */
 		if (state === "loading") return;
 		if (state === "playing" || state === "paused") {
 			// A bounded word preview is not the reading's playback: Play
@@ -472,7 +481,14 @@ export function RangeRecitationPlayer({
 					} else {
 						const index = heldIndex.current;
 						heldIndex.current = null;
-						if (index === null || index >= activeQueue.current.length) {
+						if (
+							/* istanbul ignore next -- a held pause always
+							 * carries a resume index */
+							index === null ||
+							index >= activeQueue.current.length
+						) {
+							/* istanbul ignore else -- this synchronous path
+							 * cannot interleave a newer request */
 							if (request.current === generation) finish();
 							return;
 						}
@@ -490,7 +506,9 @@ export function RangeRecitationPlayer({
 			const audio =
 				activeAudioId.current !== null
 					? audios.current.get(activeAudioId.current)
-					: undefined;
+					: /* istanbul ignore next -- the active id is always
+						 * set while the reading plays */
+						undefined;
 			heldIndex.current = queueIndex.current + 1;
 			if (audio?.pause()) {
 				pausedAudio.current = audio;
@@ -576,7 +594,10 @@ export function RangeRecitationPlayer({
 				const pieceIndex = previewActive.current
 					? (resumeAt.current?.pieceIndex ?? 0)
 					: queueBaseIndex.current + queueIndex.current;
-				const rangeIndex = audio?.positionRangeIndex ?? null;
+				const rangeIndex =
+					/* istanbul ignore next -- a live word position implies
+					 * its audio exists in the map */
+					audio?.positionRangeIndex ?? null;
 				const intervalIndex = previewActive.current
 					? (resumeAt.current?.intervalIndex ?? 0)
 					: rangeIndex === null

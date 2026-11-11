@@ -141,6 +141,25 @@ describe("rangePlaybackPieces", () => {
 		);
 		expect(pieces.map((piece) => piece.perekId)).toEqual([1]);
 	});
+
+	it("skips pesukim and whole slices without aligned words", () => {
+		// The manifest exists for perek 1 but aligns only pasuk 1: pasuk 2
+		// drops its interval slot, and a slice entirely outside the aligned
+		// span contributes no piece at all.
+		const sparse = new Map<number, RecitationWord[]>([
+			[1, [word(1, 1, 0, 100), word(1, 2, 100, 200)]],
+		]);
+		expect(rangePlaybackPieces([range(1, 1, 1, 3)], pasukCount, sparse))
+			.toEqual([
+				{
+					perekId: 1,
+					intervals: [{ startMs: 0, endMs: 200, pasuk: 1 }],
+				},
+			]);
+		expect(
+			rangePlaybackPieces([range(1, 4, 1, 5)], () => 5, sparse),
+		).toEqual([]);
+	});
 });
 
 describe("pieceSpotContaining", () => {
@@ -230,6 +249,25 @@ describe("pieceSpotContaining", () => {
 			intervalIndex: 0,
 		});
 	});
+
+	it("keeps counting copies past intervals of other pesukim", () => {
+		// A piece carrying several pesukim: the second pass must skip the
+		// non-matching pasuk interval before reaching the tapped copy.
+		const mixed: RecitationPlaybackPiece[] = [
+			{
+				perekId: 1,
+				intervals: [
+					{ startMs: 0, endMs: 200, pasuk: 1 },
+					{ startMs: 300, endMs: 500, pasuk: 2 },
+					{ startMs: 600, endMs: 800, pasuk: 1 },
+				],
+			},
+		];
+		expect(pieceSpotContaining(mixed, 1, 650, 1)).toEqual({
+			pieceIndex: 0,
+			intervalIndex: 2,
+		});
+	});
 });
 
 describe("resumePieces", () => {
@@ -286,6 +324,25 @@ describe("resumePieces", () => {
 					{ startMs: 600, endMs: 800, pasuk: 3 },
 				],
 			},
+		]);
+	});
+
+	it("drops the whole piece when the bookmark is past its last interval", () => {
+		expect(resumePieces(pieces, 0, 5, 100)).toEqual(pieces.slice(1));
+	});
+
+	it("leaves the interval untrimmed when the tap sits on its edge", () => {
+		// A tap exactly at an interval bound never shifts its start.
+		expect(resumePieces(pieces, 0, 0, 0)).toEqual(pieces);
+		expect(resumePieces(pieces, 0, 1, 500)).toEqual([
+			{
+				perekId: 1,
+				intervals: [
+					{ startMs: 300, endMs: 500, pasuk: 2 },
+					{ startMs: 600, endMs: 800, pasuk: 3 },
+				],
+			},
+			{ perekId: 2, intervals: [{ startMs: 0, endMs: 200, pasuk: 1 }] },
 		]);
 	});
 });
