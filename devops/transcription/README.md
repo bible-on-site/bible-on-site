@@ -19,13 +19,19 @@ downloading model weights. There is no automatic CPU or smaller-model fallback.
 Quality takes priority over throughput: the pipeline uses native sequential
 long-form decoding with context between windows, standard temperature fallback
 for uncertain/repetitive decoding, and no VAD removal of quiet sections.
-FP32 is the quality-first default. The full model used about 7.3 GiB of GPU
-memory in a 65-second audio/video pilot on an idle RTX 4070 Laptop with 8 GiB.
-Most of that GPU must be free; longer/different inputs can require more memory.
-`--compute-type float16` is an explicit lower-memory option. The short pilot
-produced identical text at both precisions; this is not evidence of a word-error
-rate advantage for either precision. No processing-time deadline reduces the
-model or audio.
+FP32 is the default numerical precision. A 65-second pilot used about 7.3 GiB,
+but the representative 24-minute lecture exceeded an idle 8 GiB RTX 4070 Laptop's
+dedicated memory and paged into shared memory. A short successful test does not
+establish sufficient VRAM for a whole lecture.
+
+For that 8 GiB GPU, use the explicit `--compute-type float16` profile shown below.
+It retains the full pinned model, beam size 5, temperature fallback, previous-text
+context and all input audio. The complete lecture exported successfully with
+about 5 GiB of sampled dedicated memory. FP32 remains available for a GPU with
+sufficient memory; precision is never selected or downgraded automatically.
+The two precisions can produce different words. No reference transcript or
+word-error-rate comparison establishes an accuracy advantage for either one.
+No processing-time deadline reduces the model or audio.
 
 From the repository root in PowerShell:
 
@@ -35,7 +41,8 @@ devops/transcription/.venv/Scripts/python.exe -m pip install -r devops/transcrip
 devops/transcription/.venv/Scripts/python.exe -m devops.transcription --help
 
 devops/transcription/.venv/Scripts/python.exe -m devops.transcription `
-  "C:/recordings/lecture.mp4" --title 'כותרת השיעור' --output-dir .outputs/transcription
+  "C:/recordings/lecture.mp4" --compute-type float16 `
+  --title 'כותרת השיעור' --output-dir .outputs/transcription
 ```
 
 On Linux, use `python3.12 -m venv devops/transcription/.venv` and
@@ -149,6 +156,9 @@ timestamps (nonfinite, negative or unordered starts), changed snapshot or write
 error fails without publishing an export. Overlapping estimates or estimates
 beyond the decoded duration are preserved and flagged in the manifest's
 `transcription.warnings`; they do not discard otherwise usable recognized text.
+These comparisons ignore floating-point roundoff within one microsecond, while
+preserving the original timestamp values. Real overlaps and overruns remain
+review warnings.
 Exports contain private source names and speech; keep them in local ignored
 `.outputs/` storage and apply the recording's access restrictions when sharing.
 
@@ -232,11 +242,47 @@ the repository's combined quality report. Actual GPU and actual authorized S3
 smoke runs are separate checks; mocked tests do not establish recognition quality
 or production archive accessibility.
 
-Full-length validation remains incomplete. Two exclusive-GPU FP32 runs of a
-1462.112-second lecture emitted segments through 312 seconds before sustained
-Windows shared-memory paging. They were stopped after 886.234 seconds with the
-default allocator and 1103.391 seconds with an experimental allocator. Those
-partial snapshots represent 0.35 and 0.28 track minutes per runtime minute;
-neither is completed-pipeline throughput or evidence of full-lecture quality.
-No experimental allocator, precision or backend change was promoted. Completing
-the representative lecture runs and resolving the memory pressure remain open.
+### Representative lecture measurements
+
+The owner's complete lecture contains 1462.112 seconds (24.37 minutes) of audio.
+An exclusive-GPU run with the pinned full model, explicit FP16 and otherwise
+unchanged decoding settings completed its three-file export:
+
+| Input | Complete pipeline runtime | Track minutes / runtime minute | Sampled peak dedicated GPU memory |
+| --- | ---: | ---: | ---: |
+| Opus audio | 906.469 s (15.11 min) | 1.61 | 5167 MiB |
+| WebM video with Opus audio | 750.407 s (12.51 min) | 1.95 | 5071 MiB |
+
+These timings include local retrieval, decoding, cached model loading, recognition
+and export. They exclude downloading weights. No foreign compute process was
+observed. The Opus result has 423 segments, 3472 words and 29 paragraphs; its last
+estimated segment ends at 1461.24 seconds. Its HTML and source hashes were retained
+in the private local provenance. These are completed-run measurements, without
+a processing-time projection for other recordings.
+
+The WebM result has 481 segments, 3448 words and 29 paragraphs, with the same last
+estimated segment end. Both inputs were processed completely, and their source
+and article hashes were independently verified. Their decoded audio has small
+sample differences, and native temperature fallback can sample different text;
+the two exports are not expected to be identical.
+
+The observed `445.50000000000006`/`445.5` boundary exposed a floating-point-only
+overlap warning. Its regression also verifies a real 20 ms overlap is still
+reported. Re-exporting the saved complete recognition with the corrected
+validator preserves all raw segments and the article content hash; it does not
+repeat inference or change the runtime measurement above.
+
+The Opus prefix comparison found 9 identical text windows among 11 shared decoding
+windows, with 14 word edits across 675 FP32 words. This measures disagreement
+between outputs, not correctness or WER. The completed output has no adjacent
+identical segments of at least eight words; it still needs human listening and
+editing. Native diagnostics and mechanical repetition checks are not an accuracy
+assessment. The lecture's content, original paths and exports remain local.
+
+Full-length FP32 validation remains limited by the 8 GiB hardware. Two exclusive
+runs emitted segments through 312 seconds before sustained shared-memory paging.
+They were stopped after 886.234 seconds with the default allocator and 1103.391
+seconds with an experimental allocator. Those partial snapshots represent 0.35
+and 0.28 track minutes per runtime minute; neither is completed-pipeline throughput
+or full-lecture quality evidence. No experimental allocator or backend change was
+promoted, and the default precision is unchanged.

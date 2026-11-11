@@ -64,12 +64,49 @@ promoted from those measurements.
 
 An earlier explicit FP16/FP32 comparison on the same short recording produced
 byte-identical `article.html`. No word-error-rate improvement is claimed from
-changing precision. FP32 prioritizes arithmetic precision and requires most of
-this 8 GiB GPU to be free. Different recordings can require more memory.
+changing precision. FP32 prioritizes arithmetic precision. The complete lecture
+exceeded this 8 GiB GPU's dedicated memory even without another compute process;
+short-run headroom did not establish full-length capacity.
+
+## Representative lecture - 2026-11-12
+
+The full 1462.112-second Opus lecture completed with explicit FP16, using the same
+pinned full model, beam 5, context, temperature fallback and complete decoded audio.
+All three artifacts were exported in 906.469 seconds: 24.37 track minutes in
+15.11 pipeline minutes, or 1.61 track minutes per runtime minute. The sampled
+per-process dedicated-memory peak was 5167 MiB, with 76 MiB shared; no foreign
+compute PID was observed. The final raw segment ends at 1461.24 seconds.
+
+The export contains 423 segments, 3472 words and 29 paragraphs. A real browser
+capture of that complete local preview was reviewed and retained privately.
+The source and article hashes remain in its local manifest. Its text is an
+unedited transcription requiring human listening and editorial review.
+
+Among 11 shared prefix windows, FP16 and FP32 produced 9 identical text windows
+and 14 word edits across 675 FP32 words. Neither output is a reference transcript;
+this measures disagreement, without establishing WER or a precision advantage.
+The completed FP16 output has no adjacent identical segments of eight or more
+words. Mechanical diagnostics do not establish recognition accuracy.
+
+FP32 remains the explicit default and no allocator or backend experiment was
+promoted. The guide documents the tested FP16 invocation for this 8 GiB GPU.
+
+The full WebM counterpart also completed with explicit FP16: 750.407 seconds
+(12.51 pipeline minutes), or 1.95 track minutes per runtime minute. It exported
+481 segments, 3448 words and 29 paragraphs, ending at the same estimated
+1461.24-second boundary. Its sampled dedicated-memory peak was 5071 MiB, shared
+memory was 76 MiB, and no foreign compute PID was observed. Both source hashes
+and both article hashes were independently verified. Small acoustic differences
+and native sampling fallback mean the two transcriptions can differ.
+
+The observed floating-point-only overlap in the original Opus manifest was
+reproduced and fixed without rounding saved timestamps. Re-exporting both saved
+recognitions produces no timestamp warnings and preserves every raw segment and
+article content hash. Both complete original CLI runtimes above remain unchanged.
 
 ## Automated checks
 
-All 83 tests pass with the real S3 SDK and media integrations enabled, with
+All 91 tests pass with the real S3 SDK and media integrations enabled, with
 99% branch-aware coverage and every production source line covered. Tests
 generate their own WAV/video/multi-track/corrupt-media fixtures. Real boto3
 transport is constrained to a loopback-only server; no production AWS identity,

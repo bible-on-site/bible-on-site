@@ -17,6 +17,10 @@ from .model import LocalTranscriber, ModelConfig, Transcript
 from .sources import SourceFile, materialize_source
 
 
+# Well below native ASR timestamp resolution; raw estimates remain untouched.
+_TIMESTAMP_ROUNDOFF_SECONDS = 1e-6
+
+
 class Transcriber(Protocol):
     """The inference boundary, independent of storage and future draft delivery."""
 
@@ -86,9 +90,13 @@ def validate_transcript(transcript: Transcript) -> list[dict[str, object]]:
             raise ValueError("Transcript segments must have finite positive spans and ordered nonnegative starts")
         if not isinstance(segment.text, str):
             raise ValueError("Transcript text must be a string")
-        if segment.start < previous_end:
+        if segment.start < previous_end and not math.isclose(
+            segment.start, previous_end, rel_tol=0.0, abs_tol=_TIMESTAMP_ROUNDOFF_SECONDS,
+        ):
             warnings.append({"code": "timestamp-overlap", "segment_index": index})
-        if segment.end > transcript.duration:
+        if segment.end > transcript.duration and not math.isclose(
+            segment.end, transcript.duration, rel_tol=0.0, abs_tol=_TIMESTAMP_ROUNDOFF_SECONDS,
+        ):
             warnings.append({"code": "timestamp-beyond-recording", "segment_index": index})
         previous_start = segment.start
         previous_end = max(previous_end, segment.end)

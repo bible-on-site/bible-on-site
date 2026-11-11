@@ -176,6 +176,21 @@ class ExportTests(unittest.TestCase):
         ])
         self.assertEqual(result.article.content, "<p>אחד שתיים שלוש</p>\n")
 
+    def test_native_timestamp_roundoff_is_not_reported_as_overlap_or_overrun(self):
+        transcript = replace(recognized(
+            Segment(444, 445.50000000000006, "אחד"),
+            Segment(445.5, 448.5, "שתיים"),
+            Segment(448.48, 448.50000000000006, "שלוש"),
+        ), duration=448.5)
+        result = export_transcript(self.source, transcript, self.output, ExportOptions())
+        manifest = json.loads((result.directory / "transcript.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["transcription"]["warnings"], [
+            {"code": "timestamp-overlap", "segment_index": 2},
+        ])
+        self.assertEqual(manifest["transcription"]["segments"][0]["end"], 445.50000000000006)
+        self.assertEqual(manifest["transcription"]["segments"][2]["end"], 448.50000000000006)
+        self.assertEqual(result.article.content, "<p>אחד שתיים שלוש</p>\n")
+
     def test_modified_snapshot_cannot_claim_original_provenance(self):
         self.media.write_bytes(b"changed")
         with self.assertRaisesRegex(ValueError, "changed during transcription"):
