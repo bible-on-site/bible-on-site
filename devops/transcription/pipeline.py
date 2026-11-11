@@ -1,5 +1,6 @@
 """Turn a recording into a reviewable, admin-compatible article candidate."""
 
+from abc import abstractmethod
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -19,9 +20,9 @@ from .sources import SourceFile, materialize_source
 class Transcriber(Protocol):
     """The inference boundary, independent of storage and future draft delivery."""
 
+    @abstractmethod
     def transcribe(self, path: Path) -> Transcript:
         """Recognize the recording without publishing any article."""
-        ...
 
 
 @dataclass(frozen=True)

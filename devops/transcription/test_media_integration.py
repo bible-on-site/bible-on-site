@@ -35,7 +35,7 @@ class MediaIntegrationTests(unittest.TestCase):
             video.height = 32
             video.pix_fmt = "yuv420p"
             audio_tracks = []
-            for _level in levels:
+            for _ in levels:
                 track = container.add_stream("aac", rate=48000)
                 track.codec_context.layout = "mono"
                 audio_tracks.append(track)

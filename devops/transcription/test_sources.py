@@ -46,10 +46,12 @@ class SourcesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "lecture.mp3"
             path.write_bytes(b"original")
+            consumer = Mock(side_effect=ValueError("consumer failed"))
             with self.assertRaises(ValueError):
                 with materialize_source(str(path)) as media:
                     snapshot = media.path
-                    raise ValueError("consumer failed")
+                    consumer(snapshot)
+            consumer.assert_called_once_with(snapshot)
             self.assertFalse(snapshot.parent.exists())
             self.assertEqual(path.read_bytes(), b"original")
 
@@ -135,11 +137,13 @@ class SourcesTests(unittest.TestCase):
 
     def test_s3_cleanup_when_consumer_fails(self):
         body = Mock(wraps=BytesIO(b"audio"))
+        consumer = Mock(side_effect=ValueError("consumer failed"))
         with self.aws_modules(self.fake_download({"Body": body})):
             with self.assertRaisesRegex(ValueError, "consumer failed"):
                 with materialize_source("s3://bucket/file") as media:
                     path = media.path
-                    raise ValueError("consumer failed")
+                    consumer(path)
+        consumer.assert_called_once_with(path)
         self.assertFalse(path.parent.exists())
         body.close.assert_called_once_with()
 
