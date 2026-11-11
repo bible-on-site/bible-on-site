@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdirSync, readFileSync, watch } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -11,34 +11,47 @@ export function shutdownEvidence(log, udid) {
     && /\bshut(?:ting)?[ -]?down/i.test(line));
 }
 
-export async function waitForLogEvidence(path, matches, signal) {
-  signal.throwIfAborted();
-  await new Promise((accept, reject) => {
-    let watcher;
-    const finish = error => {
-      watcher?.close();
-      signal.removeEventListener("abort", aborted);
-      if (error) reject(error); else accept();
-    };
-    const inspect = () => {
-      try { if (matches(readFileSync(path, "utf8"))) finish(); }
-      catch (error) { finish(error); }
-    };
-    const aborted = () => finish(signal.reason);
-    watcher = watch(path, inspect);
-    watcher.once("error", finish);
-    signal.addEventListener("abort", aborted, { once: true });
-    inspect();
-  });
+// Consume the logger's pipe directly. macOS file watcher registration can
+// miss an immediate write; a pipe buffers that output until its reader runs.
+export function observeIosHostLog(udid) {
+  const listeners = new Set();
+  let partial = "", startup = false, shutdown = false;
+  return {
+    write(chunk) {
+      const lines = (partial + chunk.toString()).split(/\r?\n/);
+      partial = lines.pop();
+      for (const line of lines) {
+        startup ||= /Filtering the log data using/.test(line);
+        shutdown ||= shutdownEvidence(line, udid).length > 0;
+      }
+      for (const inspect of [...listeners]) inspect();
+    },
+    async waitFor(stage, signal) {
+      signal.throwIfAborted();
+      await new Promise((accept, reject) => {
+        const finish = error => {
+          listeners.delete(inspect);
+          signal.removeEventListener("abort", aborted);
+          if (error) reject(error); else accept();
+        };
+        const inspect = () => { if (stage === "startup" ? startup : shutdown) finish(); };
+        const aborted = () => finish(signal.reason);
+        listeners.add(inspect);
+        signal.addEventListener("abort", aborted, { once: true });
+        inspect();
+      });
+    },
+  };
 }
 
 // Called only after PR/queue tests and coverage finish. That job's simulator
 // is no longer needed, and those events never publish a simulator-state cache.
 // A real shutdown checks the host predicate, not just its argument spelling.
 export async function verifyIosHostLog({ udid, artifact,
-  execute = promisify(execFile), stream = startNativeLog, wait = waitForLogEvidence }) {
+  execute = promisify(execFile), stream = startNativeLog, observe = observeIosHostLog }) {
   assert.match(udid, /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i);
-  const deadline = AbortSignal.timeout(45000);
+  // Reserve the existing five-second observer stop cap inside the 45s check.
+  const deadline = AbortSignal.timeout(40000);
   const device = async () => {
     const { stdout } = await execute("xcrun", ["simctl", "list", "devices", "--json"],
       { timeout: 5000, signal: deadline });
@@ -46,13 +59,15 @@ export async function verifyIosHostLog({ udid, artifact,
   };
   assert.equal((await device())?.state, "Booted", "Refuse shutdown without this job's booted simulator.");
   mkdirSync(dirname(artifact), { recursive: true });
-  const observer = stream("/usr/bin/log", iosHostLogArguments(), artifact);
+  const evidence = observe(udid);
+  const observer = stream("/usr/bin/log", iosHostLogArguments(), artifact,
+    { onOutput: chunk => evidence.write(chunk) });
   try {
-    await wait(artifact, log => /Filtering the log data using/.test(log),
+    await evidence.waitFor("startup",
       AbortSignal.any([deadline, AbortSignal.timeout(5000)]));
     await execute("xcrun", ["simctl", "shutdown", udid], { timeout: 30000, signal: deadline });
     assert.equal((await device())?.state, "Shutdown");
-    await wait(artifact, log => shutdownEvidence(log, udid).length > 0,
+    await evidence.waitFor("shutdown",
       AbortSignal.any([deadline, AbortSignal.timeout(5000)]));
     return { udid, shutdownVerified: true,
       correlatedLines: shutdownEvidence(readFileSync(artifact, "utf8"), udid).length };

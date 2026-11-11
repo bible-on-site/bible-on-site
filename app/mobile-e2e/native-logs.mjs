@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
-import { closeSync, openSync, writeFileSync } from "node:fs";
+import { closeSync, openSync, writeFileSync, writeSync } from "node:fs";
 
 // A pre-deadline observation must not pause a healthy app with launchctl/LLDB
 // or replace a successful test exit with a failed diagnostic probe.
@@ -32,21 +32,32 @@ export function exportNativeLog(command, args, destination, timeout = 120000) {
 
 // Save diagnostics while the suite runs, including when CI cancels the job
 // before its final log export can execute.
-export function startNativeLog(command, args, destination) {
+export function startNativeLog(command, args, destination, { onOutput } = {}) {
   const output = openSync(destination, "w");
   let child;
+  let failure;
   try {
-    child = spawn(command, args, { windowsHide: true, stdio: ["ignore", output, output] });
+    child = spawn(command, args, { windowsHide: true,
+      stdio: onOutput ? ["ignore", "pipe", "pipe"] : ["ignore", output, output] });
   } catch (error) {
     closeSync(output);
     throw error;
   }
-  let failure;
+  if (onOutput) {
+    for (const pipe of [child.stdout, child.stderr]) pipe.on("data", chunk => {
+      try {
+        // Persist before notifying the observer; close waits for both pipes
+        // to drain, so the final event cannot race descriptor cleanup.
+        writeSync(output, chunk);
+        onOutput(chunk);
+      } catch (error) { failure ??= error; }
+    });
+  }
   let stopping = false;
   const completion = new Promise((resolve) => {
-    child.once("error", (error) => { failure = error; resolve(); });
-    child.once("exit", (code, signal) => {
-      if (!stopping) failure = new Error(`Native log stream exited unexpectedly: code ${code}, signal ${signal}`);
+    child.once("error", (error) => { failure ??= error; resolve(); });
+    child.once("close", (code, signal) => {
+      if (!stopping) failure ??= new Error(`Native log stream exited unexpectedly: code ${code}, signal ${signal}`);
       resolve();
     });
   });

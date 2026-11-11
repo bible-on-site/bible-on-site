@@ -201,3 +201,33 @@ test("an automation-start failure still closes the original stream", async () =>
     } finally { if (!stopped) await stream.stop(); }
   });
 });
+
+test("pipe observations persist immediate stdout and final stderr before stream completion", async () => {
+  await withStreamArtifact(async artifact => {
+    let observed = "";
+    const stream = startNativeLog(process.execPath, ["-e",
+      "process.stdout.write('live log early\\n'); process.stderr.write('last log\\n');"], artifact, {
+      onOutput(chunk) {
+        assert.ok(readFileSync(artifact, "utf8").includes(chunk.toString()));
+        observed += chunk.toString();
+      },
+    });
+    await stream.completion;
+    await assert.rejects(stream.stop(), /exited unexpectedly: code 0/);
+    for (const value of ["live log early", "last log"]) {
+      assert.ok(observed.includes(value));
+      assert.ok(readFileSync(artifact, "utf8").includes(value));
+    }
+  });
+});
+
+test("observer errors remain reportable after the owned child stops", async () => {
+  await withStreamArtifact(async artifact => {
+    const stream = startNativeLog(process.execPath,
+      ["-e", "process.stdout.write('live log'); setInterval(() => {}, 1000)"], artifact,
+      { onOutput() { throw new Error("observer failed"); } });
+    await waitForLog(artifact);
+    await assert.rejects(stream.stop(), /observer failed/);
+    assert.equal(readFileSync(artifact, "utf8"), "live log");
+  });
+});

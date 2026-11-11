@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { shutdownEvidence, verifyIosHostLog, waitForLogEvidence } from "./verify-ios-host-log.mjs";
+import { observeIosHostLog, shutdownEvidence, verifyIosHostLog } from "./verify-ios-host-log.mjs";
 
 const udid = "24E299B4-C77B-4426-AC2B-71243825F07C";
 function fixture(t, state = "Booted") {
@@ -12,19 +12,25 @@ function fixture(t, state = "Booted") {
   const artifact = join(directory, "host.log");
   const calls = [];
   let stopped = false;
+  let onOutput;
   return { artifact, calls, get stopped() { return stopped; }, options: {
     udid, artifact,
     async execute(command, args) {
       calls.push({ command, args });
       if (args[1] === "shutdown") {
         state = "Shutdown";
-        writeFileSync(artifact, `CoreSimulatorService: Shutdown requested for ${udid}\n`);
+        const log = `CoreSimulatorService: Shutdown requested for ${udid}\n`;
+        writeFileSync(artifact, log);
+        onOutput(log);
       }
       return { stdout: JSON.stringify({ devices: { ios: [{ udid: "foreign", state: "Booted" }, { udid, state }] } }) };
     },
-    stream(command, args, path) {
+    stream(command, args, path, options) {
       calls.push({ command, args });
-      writeFileSync(path, "Filtering the log data using process scope\n");
+      onOutput = options.onOutput;
+      const log = "Filtering the log data using process scope\n";
+      writeFileSync(path, log);
+      onOutput(log);
       return { async stop() { stopped = true; } };
     },
   } };
@@ -54,7 +60,8 @@ test("missing startup or shutdown evidence still closes the owned host observer"
   for (const failureAt of [1, 2]) {
     const f = fixture(t);
     let observations = 0;
-    f.options.wait = async () => { if (++observations === failureAt) throw new Error("evidence absent"); };
+    f.options.observe = () => ({ write() {},
+      async waitFor() { if (++observations === failureAt) throw new Error("evidence absent"); } });
     await assert.rejects(verifyIosHostLog(f.options), /evidence absent/);
     assert(f.stopped);
     assert.equal(f.calls.filter(call => call.args[1] === "shutdown").length, failureAt - 1);
@@ -66,17 +73,18 @@ test("shutdown evidence requires both this device identity and a shutdown event"
   assert.deepEqual(shutdownEvidence(`booting ${udid}\nshutdown foreign\n${valid}`, udid), [valid]);
 });
 
-test("filesystem observation handles existing data, later writes and cancellation without polling", async t => {
-  const f = fixture(t);
-  writeFileSync(f.artifact, "ready");
-  await waitForLogEvidence(f.artifact, log => log === "ready", AbortSignal.timeout(5000));
-  const pending = waitForLogEvidence(f.artifact, log => log === "shutdown", AbortSignal.timeout(5000));
-  writeFileSync(f.artifact, "shutdown");
+test("pipe observation retains early and split writes, unrelated events and cancellation without polling", async () => {
+  const evidence = observeIosHostLog(udid);
+  evidence.write("Filtering the log data using process scope\n");
+  await evidence.waitFor("startup", AbortSignal.timeout(5000));
+  const pending = evidence.waitFor("shutdown", AbortSignal.timeout(5000));
+  evidence.write("shutdown foreign\nbooting " + udid + "\nCoreSimulatorService: Shutting do");
+  evidence.write("wn " + udid + "\n");
   await pending;
+  await evidence.waitFor("shutdown", AbortSignal.timeout(5000));
   const abort = new AbortController();
-  const canceled = waitForLogEvidence(f.artifact, () => false, abort.signal);
+  const canceled = observeIosHostLog(udid).waitFor("shutdown", abort.signal);
   abort.abort(new Error("canceled"));
   await assert.rejects(canceled, /canceled/);
-  await assert.rejects(waitForLogEvidence(f.artifact, () => false, abort.signal), /canceled/);
-  await assert.rejects(waitForLogEvidence(join(f.artifact, "missing"), () => false, AbortSignal.timeout(5000)));
+  await assert.rejects(evidence.waitFor("shutdown", abort.signal), /canceled/);
 });
