@@ -22,6 +22,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   test:
+    timeout-minutes: 60
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:

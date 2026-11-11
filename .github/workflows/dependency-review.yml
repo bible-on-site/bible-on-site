@@ -36,6 +36,7 @@ jobs:
     uses: ./.github/workflows/dependency-submission.yml
   # Reusable jobs have prefixed check names; retain the repository's PR gate.
   submit-nuget:
+    timeout-minutes: 60
     needs: nuget-snapshots
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
@@ -46,6 +47,7 @@ jobs:
           SUBMISSION_RESULT: ${{ needs.nuget-snapshots.result }}
         run: test "$SUBMISSION_RESULT" = success
   dependency-review:
+    timeout-minutes: 60
     needs: submit-nuget
     runs-on: ubuntu-latest
     steps:
