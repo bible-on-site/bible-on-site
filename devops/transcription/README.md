@@ -44,6 +44,8 @@ See the backend's [GPU library installation instructions](https://github.com/SYS
 On Windows, CUDA/cuDNN DLL directories must be available to the process before
 starting Python. The CUDA version reported by `nvidia-smi` describes driver
 support; it does not establish that those libraries are installed.
+The Windows CTranslate2 wheel preloads its bundled cuDNN dispatcher, so installed
+NVIDIA package versions and the DLL versions observed at runtime can differ.
 
 The optional pinned NVIDIA wheels provide the runtime without installing PyTorch:
 
@@ -62,6 +64,12 @@ from Hugging Face; audio is never uploaded for inference. Use `--model-cache PAT
 to choose a model cache and `--offline` to require an already cached snapshot.
 This flag controls model downloads only; S3 input still requires an S3 connection.
 An entirely offline run uses a local input and a cached model.
+
+Arrange an exclusive GPU window for full-precision validation. Concurrent model
+allocations can force Windows to use shared GPU memory and slow a run without
+an out-of-memory exception. Check all compute processes throughout the test;
+a measurement that overlaps another GPU workload does not establish this
+pipeline's standalone capacity or processing time.
 
 ## Private archive input
 

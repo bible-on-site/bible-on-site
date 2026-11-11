@@ -1,5 +1,13 @@
 # Transcription validation - 2026-11-11
 
+The captures below establish rendering and short-run functionality. The owner
+selected a representative 24-minute lecture in Opus and WebM for the full-length
+quality check. Both strict decodes contain 23,393,792 samples (1462.112 seconds),
+with no decoded timing offset; they have small acoustic differences.
+The [pull request](https://github.com/bible-on-site/bible-on-site/pull/3311)
+records the representative-run results and review limits. The supplied lecture
+text, audio, video, private paths and full exports remain local.
+
 These are real browser captures of the input and exported output for the same
 36.8849-second Esther 10 recording. `before.jpg` shows the original recording
 in a minimal local browser media harness. `after.jpg` shows the unmodified
@@ -19,10 +27,13 @@ formatting applied. The raw transcript and model timestamps remain in JSON.
 ## Hardware and runtime
 
 Windows, NVIDIA RTX 4070 Laptop GPU (8188 MiB), driver 566.07, Python 3.12.
-The final validation uses the exact task-local runtime pins:
+The final short-run validation used these installed task-local runtime pins:
 faster-whisper 1.2.1, CTranslate2 4.9.0, PyAV 19.0.2, NumPy 2.5.4,
 Hugging Face Hub 2.4.0, boto3 1.44.0, Windows cuBLAS 12.9.2.10,
 cuDNN 9.28.1.4 and NVRTC 12.9.86. `pip check` passed.
+The cuDNN number is the installed NVIDIA package version. Runtime snapshots
+observed CTranslate2's bundled cuDNN dispatcher 9.10.2.21; they do not establish
+which cuDNN component libraries executed. No bundled DLL was replaced.
 
 The model is `ivrit-ai/whisper-large-v3-ct2` at
 `e9ed4a4a98d761b0f617d668303de2c514236c66`. Its downloaded model file was
@@ -44,6 +55,12 @@ console repair without environment overrides. GPU usage was sampled with
 `nvidia-smi` during otherwise idle-device validation. Elapsed times include
 local model loading and export, exclude the initial model download, and are
 functional smoke measurements rather than performance gates.
+
+Full-length measurements require an exclusive GPU window, with all compute PIDs
+recorded throughout. Two initial lecture attempts overlapped another local LLM
+task and are classified as confounded; they do not establish standalone FP32
+capacity, throughput or transcription quality. No allocator or model change was
+promoted from those measurements.
 
 An earlier explicit FP16/FP32 comparison on the same short recording produced
 byte-identical `article.html`. No word-error-rate improvement is claimed from
