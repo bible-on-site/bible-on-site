@@ -52,8 +52,8 @@ test("a held remote connection keeps the real measured drain open until it close
 	});
 	await server.waitFor("READY ");
 	const client = net.connect(port, externalIPv4());
-	await once(client, "connect");
 	t.after(() => client.destroy());
+	await once(client, "connect", { signal: t.signal });
 	// Skip only when procfs provably exposes no socket rows — an environment
 	// where the drain metric cannot work at all (empty /proc/net/tcp tables,
 	// e.g. some WSL2 setups). A populated table with an invisible held

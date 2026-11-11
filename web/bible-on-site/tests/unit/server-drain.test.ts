@@ -13,6 +13,7 @@ const suites = [
 	"start-server-signals.test.mjs",
 	"start-server-lifecycle.test.mjs",
 	"start-server-probe.test.mjs",
+	"start-server-fixture.test.mjs",
 ];
 
 for (const suite of suites) {
