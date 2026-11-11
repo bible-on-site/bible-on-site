@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -18,6 +18,7 @@ import { iosAppLogPids } from "./ios-processes.mjs";
 import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
 import { captureTestHostStacks, monitorTestHostShutdown } from "./test-host-diagnostics.mjs";
 import { prepareIosProcessInspector } from "./ios-process-inspector.mjs";
+import { copyIosCrashReports } from "./ios-crash-reports.mjs";
 import { exitCode, phaseRecorder, remainingBudget } from "./shutdown-budget.mjs";
 
 const directory = dirname(fileURLToPath(import.meta.url));
@@ -273,6 +274,21 @@ try {
       process.exitCode ||= 1;
     }
   }
+  // Copy local reports before simulator RPCs: a failed log export must not
+  // prevent retaining the crash that explains the simulator's disappearance.
+  if (platform === "ios") {
+    try {
+      await phase("crash-report-copy", () => {
+        const reportDirectories = [resolve(homedir(), "Library/Logs/DiagnosticReports"),
+          resolve(homedir(), "Library/Developer/CoreSimulator/Devices", process.env.MOBILE_UDID,
+            "data/Library/Logs/CrashReporter")];
+        copyIosCrashReports(reportDirectories, artifacts, runStarted);
+      });
+    } catch (error) {
+      writeFileSync(resolve(artifacts, "crash-report-error.txt"), String(error));
+      console.error("Could not copy iOS crash reports:", error);
+    }
+  }
   try {
     const androidSdk = process.env.ANDROID_HOME ?? process.env.ANDROID_SDK_ROOT;
     const adb = androidSdk ? resolve(androidSdk, "platform-tools", process.platform === "win32" ? "adb.exe" : "adb") : "adb";
@@ -293,30 +309,17 @@ try {
         "Skipped: the pilot deadline left no remaining budget for log export.");
     if (platform === "ios") {
       const lifecycleBudget = budget(logExportTimeout);
+      // The first scenario can fail well before the final ten minutes. Use
+      // this run's full interval while retaining the existing export budget.
       if (lifecycleBudget > 0)
         await phase("app-lifecycle-export", () =>
           exportNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
-            "log", "show", "--style", "compact", "--last", "10m", "--predicate",
+            "log", "show", "--style", "compact", "--last", `${Math.ceil((Date.now() - runStarted) / 1000)}s`, "--predicate",
             '(process == "SpringBoard" OR process == "runningboardd" OR process == "ReportCrash" OR process == "testmanagerd") AND (eventMessage CONTAINS[c] "daily929" OR eventMessage CONTAINS[c] "BibleOnSite" OR eventMessage CONTAINS[c] "WebDriverAgent" OR eventMessage CONTAINS[c] "xctrunner")'],
           resolve(artifacts, "app-lifecycle.log"), lifecycleBudget));
       else
         writeFileSync(resolve(artifacts, "app-lifecycle-skipped.txt"),
           "Skipped: the pilot deadline left no remaining budget for log export.");
-      await phase("crash-report-copy", () => {
-        const reportDirectories = [resolve(homedir(), "Library/Logs/DiagnosticReports"),
-          resolve(homedir(), "Library/Developer/CoreSimulator/Devices", process.env.MOBILE_UDID,
-            "data/Library/Logs/CrashReporter")];
-        for (const [index, reports] of reportDirectories.entries()) {
-          if (!existsSync(reports)) continue;
-          for (const report of readdirSync(reports)) {
-            const source = resolve(reports, report);
-            const metadata = statSync(source);
-            if ((report.startsWith("BibleOnSite") || report.startsWith("WebDriverAgent")) && metadata.isFile() && metadata.mtimeMs >= runStarted) {
-              copyFileSync(source, resolve(artifacts, `crash-${index}-${report}`));
-            }
-          }
-        }
-      });
     }
   } catch (error) {
     // Diagnostic-only: a failed log export must not fail a passing run.
