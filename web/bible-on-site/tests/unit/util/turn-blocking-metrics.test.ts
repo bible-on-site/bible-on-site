@@ -193,7 +193,7 @@ it("retains a pre-input browser pause as a diagnostic instead of turn blocking",
 	const original = structuredClone(samples);
 	const metrics = reduceTurnBlockingSamples(samples, 300, 2);
 	expect(metrics.blockingDurationMaxMs).toBe(0);
-	expect(metrics.outsideTurns.blockingDurationMaxMs).toBe(156.6);
+	expect(metrics.beforeInput.blockingDurationMaxMs).toBe(156.6);
 	expect(turnBlockingBudgetFailures(metrics)).toEqual([]);
 	expect(samples).toEqual(original);
 });
@@ -201,7 +201,7 @@ it("retains a pre-input browser pause as a diagnostic instead of turn blocking",
 it.each([
 	["ends at the first input", 100, 350, false],
 	["overlaps the first input by one microsecond", 100, 349.999, true],
-	["starts at the final settlement", 1800, 0, false],
+	["starts at the final settlement", 1800, 0, true],
 	["overlaps the final settlement by one microsecond", 1799.999, 0, true],
 ] as const)(
 	"keeps the full block when its frame %s",
@@ -215,7 +215,7 @@ it.each([
 		}
 		const metrics = reduceTurnBlockingSamples(samples, 300, 2);
 		expect(metrics.blockingDurationMaxMs).toBe(active ? 200 : 0);
-		expect(metrics.outsideTurns.blockingDurationMaxMs).toBe(active ? 0 : 200);
+		expect(metrics.beforeInput.blockingDurationMaxMs).toBe(active ? 0 : 200);
 		expect(turnBlockingBudgetFailures(metrics).length > 0).toBe(active);
 	},
 );
