@@ -80,8 +80,8 @@ export function iosAutomationLogArguments(udid) {
 }
 
 // Device-scoped streams disappear with the simulator. Observe its host-side
-// lifecycle independently so a shutdown during an otherwise valid XCTest
-// query retains the service's reason and requesting client. Do not launch,
+// lifecycle independently to retain the service's events when a device
+// disappears during an otherwise valid XCTest query. Do not launch,
 // inspect, or signal the simulator while collecting this evidence.
 export function iosHostLogArguments() {
   return ["stream", "--style", "compact", "--level", "info", "--predicate",
