@@ -42,6 +42,14 @@ if (process.env.MEASURE_FILE) {
 	const metric = process.env.MEASURE_FILE;
 	options.measure = async () => Number(await readFile(metric, "utf8"));
 }
+if (process.env.START_SERVER_TEST_PROBE_SIGNAL) {
+	const request = globalThis.fetch;
+	globalThis.fetch = (...args) => {
+		globalThis.fetch = request;
+		process.kill(process.pid, process.env.START_SERVER_TEST_PROBE_SIGNAL);
+		return request(...args);
+	};
+}
 startServer(options);
 `,
 	);
@@ -61,9 +69,13 @@ startServer(options);
 		],
 		{
 			stdio: ["ignore", "pipe", "pipe"],
+			// Own the whole process group even when the launcher exits before
+			// its server, so a failed assertion cannot leave CI waiting on pipes.
+			detached: process.platform !== "win32",
 			env: {
 				...process.env,
 				MEASURE_FILE: options.measure === false ? "" : measureFile,
+				START_SERVER_TEST_PROBE_SIGNAL: options.signalDuringProbe ?? "",
 				...options.env,
 			},
 		},
@@ -79,15 +91,19 @@ startServer(options);
 	});
 	const exited = once(wrapper, "close");
 	t.after(async () => {
-		if (wrapper.exitCode === null && wrapper.signalCode === null) {
-			wrapper.kill("SIGKILL");
-			if (serverPid) {
-				try {
-					process.kill(serverPid, "SIGKILL");
-				} catch (error) {
-					if (error.code !== "ESRCH") throw error;
-				}
+		const killOwned = (pid) => {
+			try {
+				process.kill(pid, "SIGKILL");
+			} catch (error) {
+				if (error.code !== "ESRCH") throw error;
 			}
+		};
+		if (process.platform !== "win32" && wrapper.pid) {
+			killOwned(-wrapper.pid);
+		} else {
+			if (wrapper.exitCode === null && wrapper.signalCode === null)
+				wrapper.kill("SIGKILL");
+			if (serverPid) killOwned(serverPid);
 		}
 		assert.equal(path.dirname(directory), os.tmpdir());
 		assert.ok(path.basename(directory).startsWith("bible-handover-test-"));
@@ -96,7 +112,11 @@ startServer(options);
 	const waitFor = async (text) => {
 		const deadline = Date.now() + 5_000;
 		while (!output.includes(text)) {
-			if (wrapper.exitCode !== null || Date.now() > deadline)
+			if (
+				wrapper.exitCode !== null ||
+				wrapper.signalCode !== null ||
+				Date.now() > deadline
+			)
 				throw new Error(`Missing ${text}: ${output}`);
 			await new Promise((resolve) => setTimeout(resolve, 10));
 		}

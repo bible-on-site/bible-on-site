@@ -239,13 +239,8 @@ export function startServer({
 		);
 	if (!Number.isSafeInteger(port) || port < 0 || port > 65_535)
 		throw new RangeError("Website port must be between 0 and 65535");
-	const child = spawn(process.execPath, ["server.js"], {
-		cwd,
-		stdio: "inherit",
-	});
-	// Port 0 selects an ephemeral listener the probe cannot address; production
-	// always binds the configured port.
-	const stopProbe = port > 0 ? startReadinessProbe({ port, log }) : () => {};
+	let child;
+	let stopProbe = () => {};
 	let drainTimer;
 	let stopping = false;
 	const forward = (signal) => {
@@ -302,6 +297,17 @@ export function startServer({
 	};
 	process.on("SIGTERM", terminate);
 	process.on("SIGINT", interrupt);
+	// Register shutdown handling before the child can become ready or fetch
+	// initializes its client synchronously during the first readiness probe.
+	try {
+		child = spawn(process.execPath, ["server.js"], {
+			cwd,
+			stdio: "inherit",
+		});
+	} catch (error) {
+		cleanup();
+		throw error;
+	}
 	child.once("error", (error) => {
 		cleanup();
 		console.error("Website server could not start:", error);
@@ -311,6 +317,9 @@ export function startServer({
 		cleanup();
 		process.exitCode = code ?? 128 + (constants.signals[signal] ?? 0);
 	});
+	// Port 0 selects an ephemeral listener the probe cannot address; production
+	// always binds the configured port.
+	if (port > 0) stopProbe = startReadinessProbe({ port, log });
 	return child;
 }
 
