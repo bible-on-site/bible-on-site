@@ -5,10 +5,12 @@
  */
 
 const mockExecute = jest.fn().mockResolvedValue([[{ id: 42 }]]);
+const mockQuery = jest.fn().mockResolvedValue([[{ id: 42 }]]);
 
 jest.mock("mysql2/promise", () => ({
 	createPool: jest.fn().mockReturnValue({
 		execute: mockExecute,
+		query: mockQuery,
 	}),
 }));
 
@@ -61,6 +63,67 @@ describe("api-client with DB_URL", () => {
 		);
 	});
 
+	it.each([
+		{
+			description: "percent-encoded punctuation",
+			url: "mysql://reader%40example:pa%3Ass%2Fword%3F%23%25@db.example.com/bible%20notes%2B2026",
+			expected: {
+				user: "reader@example",
+				password: "pa:ss/word?#%",
+				database: "bible notes+2026",
+			},
+		},
+		{
+			description: "percent-encoded UTF-8",
+			url: "mysql://%D7%A7%D7%95%D7%A8%D7%90:%C3%A9%D7%90%F0%9F%94%91@db.example.com/caf%C3%A9",
+			expected: {
+				user: "קורא",
+				password: "éא🔑",
+				database: "café",
+			},
+		},
+		{
+			description: "literal plus signs",
+			url: "mysql://reader+notes:one+two@db.example.com/bible+notes",
+			expected: {
+				user: "reader+notes",
+				password: "one+two",
+				database: "bible+notes",
+			},
+		},
+		{
+			description: "legacy malformed percent escapes",
+			url: "mysql://reader%GG:pass%2@db.example.com/db%",
+			expected: {
+				user: "reader%GG",
+				password: "pass%2",
+				database: "db%",
+			},
+		},
+		{
+			description: "percent signs encoded exactly once",
+			url: "mysql://reader%252F:pass%252B@db.example.com/db%2520name",
+			expected: {
+				user: "reader%2F",
+				password: "pass%2B",
+				database: "db%20name",
+			},
+		},
+	])(
+		"parses $description without changing intended database values",
+		async ({ url, expected }) => {
+			process.env.DB_URL = url;
+
+			const mysql = require("mysql2/promise");
+			const { query } = require("../../../src/lib/api-client");
+			await query("SELECT 1");
+
+			expect(mysql.createPool).toHaveBeenCalledWith(
+				expect.objectContaining(expected),
+			);
+		},
+	);
+
 	it("uses default config when DB_URL is unset", async () => {
 		delete process.env.DB_URL;
 
@@ -77,6 +140,32 @@ describe("api-client with DB_URL", () => {
 				database: "tanah",
 			}),
 		);
+	});
+
+	it("preserves raw individual env values when DB_URL is unset", async () => {
+		delete process.env.DB_URL;
+		Object.assign(process.env, {
+			DB_HOST: "db.example.com",
+			DB_PORT: "3308",
+			DB_USER: "reader%40example",
+			DB_PASSWORD: "raw%2B+value",
+			DB_NAME: "bible%20notes",
+		});
+
+		const mysql = require("mysql2/promise");
+		const { queryText } = require("../../../src/lib/api-client");
+		await queryText("SELECT 1");
+
+		expect(mysql.createPool).toHaveBeenCalledWith(
+			expect.objectContaining({
+				host: "db.example.com",
+				port: 3308,
+				user: "reader%40example",
+				password: "raw%2B+value",
+				database: "bible%20notes",
+			}),
+		);
+		expect(mockQuery).toHaveBeenCalledWith("SELECT 1", []);
 	});
 
 	it("reuses pool on subsequent calls", async () => {
