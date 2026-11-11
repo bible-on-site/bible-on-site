@@ -55,6 +55,13 @@ internal sealed class FirebaseEmulatorBackend : IDisposable
     private static string UriHost(string host) =>
         host.Contains(':') && !host.StartsWith('[') ? $"[{host}]" : host;
 
+    /// <summary>Joins an emulator root with a request path. <see cref="Uri"/>
+    /// normalization gives the root a trailing slash, so plain interpolation
+    /// (<c>$"{AuthBase}/x"</c>) would build <c>//x</c> — a path the emulator
+    /// routers never match (observed as CI 404s on every REST call). Uri
+    /// resolution handles the slash boundary correctly either way.</summary>
+    internal static Uri Combine(Uri emulatorBase, string path) => new(emulatorBase, path);
+
     /// <summary>The endpoint as the device under test must dial it.</summary>
     public string DeviceEndpoint(MobilePlatform platform) =>
         $"{DeviceHost(platform)}:{AuthBase.Port}:{FirestoreBase.Port}";
@@ -81,7 +88,8 @@ internal sealed class FirebaseEmulatorBackend : IDisposable
     /// rules would never hand to a stranger. Null while absent.</summary>
     public async Task<JsonDocument?> UserDocumentAsync(string userId)
     {
-        using var request = OwnerRequest(HttpMethod.Get, $"{FirestoreBase}{DocumentsPath}/users/{userId}");
+        using var request = OwnerRequest(HttpMethod.Get,
+            Combine(FirestoreBase, $"{DocumentsPath}/users/{userId}"));
         using var response = await _http.SendAsync(request);
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
@@ -140,7 +148,8 @@ internal sealed class FirebaseEmulatorBackend : IDisposable
     /// <summary>Uid of every committed <c>users/*</c> document (owner read).</summary>
     public async Task<IReadOnlyList<string>> UserDocumentIdsAsync()
     {
-        using var request = OwnerRequest(HttpMethod.Get, $"{FirestoreBase}{DocumentsPath}/users");
+        using var request = OwnerRequest(HttpMethod.Get,
+            Combine(FirestoreBase, $"{DocumentsPath}/users"));
         using var response = await _http.SendAsync(request);
         response.EnsureSuccessStatusCode();
         using var json = await response.Content.ReadFromJsonAsync<JsonDocument>();
@@ -172,7 +181,7 @@ internal sealed class FirebaseEmulatorBackend : IDisposable
             .Replace("@key", JsonEncodedText.Encode(key).Value)
             .Replace("@deviceId", JsonEncodedText.Encode(deviceId).Value);
         using var request = OwnerRequest(HttpMethod.Patch,
-            $"{FirestoreBase}{DocumentsPath}/users/{userId}?updateMask.fieldPaths=entries.{key}");
+            Combine(FirestoreBase, $"{DocumentsPath}/users/{userId}?updateMask.fieldPaths=entries.{key}"));
         request.Content = new StringContent(body, Encoding.UTF8, "application/json");
         using var response = await _http.SendAsync(request);
         response.EnsureSuccessStatusCode();
@@ -185,7 +194,7 @@ internal sealed class FirebaseEmulatorBackend : IDisposable
     public async Task<string> SignUpAnonymousAsync()
     {
         using var request = new HttpRequestMessage(HttpMethod.Post,
-            $"{AuthBase}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=e2e-suite");
+            Combine(AuthBase, "/identitytoolkit.googleapis.com/v1/accounts:signUp?key=e2e-suite"));
         request.Content = JsonContent.Create(new { returnSecureToken = true });
         using var response = await _http.SendAsync(request);
         response.EnsureSuccessStatusCode();
@@ -199,7 +208,7 @@ internal sealed class FirebaseEmulatorBackend : IDisposable
     public async Task<IReadOnlyList<JsonElement>> AccountsAsync()
     {
         using var request = OwnerRequest(HttpMethod.Get,
-            $"{AuthBase}/identitytoolkit.googleapis.com/v1/projects/{ProjectId}/accounts:batchGet?maxResults=100");
+            Combine(AuthBase, $"/identitytoolkit.googleapis.com/v1/projects/{ProjectId}/accounts:batchGet?maxResults=100"));
         using var response = await _http.SendAsync(request);
         response.EnsureSuccessStatusCode();
         using var json = await response.Content.ReadFromJsonAsync<JsonDocument>();
@@ -217,7 +226,8 @@ internal sealed class FirebaseEmulatorBackend : IDisposable
     /// </summary>
     public async Task<HttpStatusCode> ReadStatusAsync(string userId, string? bearerToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"{FirestoreBase}{DocumentsPath}/users/{userId}");
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            Combine(FirestoreBase, $"{DocumentsPath}/users/{userId}"));
         if (bearerToken != null)
         {
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", bearerToken);
@@ -238,12 +248,12 @@ internal sealed class FirebaseEmulatorBackend : IDisposable
     public async Task WipeDatabaseAsync()
     {
         using var request = new HttpRequestMessage(HttpMethod.Delete,
-            $"{FirestoreBase}/emulator/v1/projects/{ProjectId}/databases/(default)/documents");
+            Combine(FirestoreBase, $"/emulator/v1/projects/{ProjectId}/databases/(default)/documents"));
         using var response = await _http.SendAsync(request);
         response.EnsureSuccessStatusCode();
     }
 
-    private static HttpRequestMessage OwnerRequest(HttpMethod method, string uri)
+    private static HttpRequestMessage OwnerRequest(HttpMethod method, Uri uri)
     {
         var request = new HttpRequestMessage(method, uri);
         // The emulator's documented rules-bypass token for admin verification.
