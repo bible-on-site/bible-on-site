@@ -339,13 +339,17 @@
                                           BindableLayout.ItemsSource="{Binding Cells}">
                                         <BindableLayout.ItemTemplate>
                                             <DataTemplate x:DataType="viewmodels:CalendarCellViewModel">
+                                            <!-- No SemanticProperties.Description here: on iOS a described
+                                                 container becomes an accessibility leaf and hides the inner
+                                                 MiniMonthDayText/Source/ReviewBadge labels, which carry
+                                                 their own descriptions (and feed the composed UIA name on
+                                                 Windows via AccessibleContentText.ComposeName). -->
                                             <controls:TappableView Activated="OnCellTapped"
                                                                    CommandParameter="{Binding .}"
                                                                    Grid.Column="{Binding Column}"
                                                                    Grid.ColumnSpan="{Binding ColumnSpan}"
                                                                    IsEnabled="{Binding IsTappable}"
-                                                                   AutomationId="MiniMonthDay"
-                                                                   SemanticProperties.Description="{Binding AccessibilityText}">
+                                                                   AutomationId="MiniMonthDay">
                                             <Border Margin="1"
                                                     Padding="1"
                                                     MinimumHeightRequest="26"

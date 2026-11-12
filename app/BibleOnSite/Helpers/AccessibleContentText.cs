@@ -6,7 +6,7 @@ namespace BibleOnSite.Helpers;
 /// Builds a screen-reader name for an activatable container from the text
 /// inside it (#3252). Rows converted from the
 /// Grid/Border + TapGestureRecognizer pattern to <see cref="TappableView"/>
-/// keep carrying <see cref="SemanticProperties.Description"/> where one was
+/// keep carrying <c>SemanticProperties.Description</c> where one was
 /// authored; the rest (chips, links, cards, calendar cells) get a name the
 /// platform layer composes from their own visible labels — mirroring what
 /// ListItemAutomationNames does for CollectionView rows on Windows.
