@@ -116,7 +116,9 @@ describe("server entry auth boundary", () => {
 	});
 
 	it("returns 401 for a server-fn call whose session token fails verification", async () => {
-		parseCookieMock.mockReturnValue("expired-session");
+		parseCookieMock.mockImplementation((_header: string, name: string) =>
+			name === "admin_session" ? "expired-session" : null,
+		);
 		verifyIdTokenMock.mockResolvedValue(false);
 		const entry = await loadEntry();
 		const response = await entry.fetch(serverFnRequest());
