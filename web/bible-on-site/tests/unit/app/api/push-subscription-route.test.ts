@@ -24,6 +24,13 @@ jest.mock("web-push", () => ({
 import { DELETE, GET, POST } from "@/app/api/push/subscription/route";
 
 const FCM = "https://fcm.googleapis.com/fcm/send/abc";
+const privateFailure = () =>
+	Object.assign(
+		new Error(`request failed for ${FCM}`, {
+			cause: new Error("private request body"),
+		}),
+		{ endpoint: FCM, body: "private request body" },
+	);
 const subscription = { endpoint: FCM, keys: { p256dh: "BN-1", auth: "t_8" } };
 const request = (method: string, body: unknown) =>
 	new Request("http://localhost/api/push/subscription", {
@@ -60,6 +67,34 @@ describe("/api/push/subscription", () => {
 		expect(await response.json()).toEqual({ publicKey: "public-key" });
 	});
 
+	it.each(["POST", "DELETE"])(
+		"%s rejects bodies over the UTF-8 byte limit",
+		async (method) => {
+			const handler = method === "POST" ? POST : DELETE;
+			const response = await handler(
+				request(method, { ...subscription, pad: "א".repeat(2100) }),
+			);
+			expect(response.status).toBe(400);
+			expect(mockSave).not.toHaveBeenCalled();
+			expect(mockDelete).not.toHaveBeenCalled();
+		},
+	);
+
+	it.each(["POST", "DELETE"])(
+		"%s rejects an unreadable body without logging private details",
+		async (method) => {
+			const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+			const handler = method === "POST" ? POST : DELETE;
+			const req = request(method, subscription);
+			jest.spyOn(req, "text").mockRejectedValue(privateFailure());
+			expect((await handler(req)).status).toBe(400);
+			expect(mockSave).not.toHaveBeenCalled();
+			expect(mockDelete).not.toHaveBeenCalled();
+			expect(warn).toHaveBeenCalledTimes(1);
+			expect(warn).toHaveBeenCalledWith("Push subscription body read failed");
+		},
+	);
+
 	describe("POST", () => {
 		it("stores a valid subscription", async () => {
 			const response = await POST(request("POST", subscription));
@@ -76,9 +111,13 @@ describe("/api/push/subscription", () => {
 			expect(mockSave).not.toHaveBeenCalled();
 		});
 
-		it("returns 503 when the database write fails", async () => {
-			mockSave.mockRejectedValue(new Error("db down"));
+		it("returns 503 when the database write fails without logging private details", async () => {
+			mockSave.mockRejectedValue(privateFailure());
 			expect((await POST(request("POST", subscription))).status).toBe(503);
+			expect(console.error).toHaveBeenCalledTimes(1);
+			expect(console.error).toHaveBeenCalledWith(
+				"Failed to save push subscription",
+			);
 		});
 	});
 
@@ -97,10 +136,14 @@ describe("/api/push/subscription", () => {
 			},
 		);
 
-		it("returns 503 when the database delete fails", async () => {
-			mockDelete.mockRejectedValue(new Error("db down"));
+		it("returns 503 when the database delete fails without logging private details", async () => {
+			mockDelete.mockRejectedValue(privateFailure());
 			expect((await DELETE(request("DELETE", { endpoint: FCM }))).status).toBe(
 				503,
+			);
+			expect(console.error).toHaveBeenCalledTimes(1);
+			expect(console.error).toHaveBeenCalledWith(
+				"Failed to delete push subscription",
 			);
 		});
 	});
