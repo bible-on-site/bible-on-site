@@ -159,13 +159,16 @@ export function ArchiveArea() {
 	 * Walks a dropped entry into concrete upload items. Directories become real
 	 * archive folders (reusing a same-named folder on a 409), so nested content
 	 * keeps its structure instead of being lost or flattened. Names of folders
-	 * that cannot be created or resolved are reported back.
+	 * that cannot be created go to `skipped`; names whose existing-folder
+	 * lookup failed go to `unresolved`. Either way the rest of the drop keeps
+	 * collecting, so one bad folder never discards its sibling uploads.
 	 */
 	async function collectEntry(
 		entry: FileSystemEntry,
 		parentId: string,
 		items: UploadItem[],
 		skipped: string[],
+		unresolved: string[],
 	): Promise<void> {
 		if (cancel.current) return;
 		if (entry.isFile) {
@@ -186,11 +189,17 @@ export function ArchiveArea() {
 		} catch (e) {
 			// A 409 means the name is taken; reuse it only when it is a folder.
 			if ((e as { status?: number }).status === 409) {
-				const existing = await findFolder(parentId, entry.name);
-				if (existing) {
+				try {
+					const existing = await findFolder(parentId, entry.name);
+					if (!existing) {
+						skipped.push(entry.name);
+						return;
+					}
 					directoryId = existing;
-				} else {
-					skipped.push(entry.name);
+				} catch {
+					// The parent listing failed, so the conflict cannot be
+					// resolved — report this folder and keep collecting.
+					unresolved.push(entry.name);
 					return;
 				}
 			} else {
@@ -203,16 +212,22 @@ export function ArchiveArea() {
 			const batch = await entriesFromReader(reader);
 			if (!batch.length) break;
 			for (const child of batch)
-				await collectEntry(child, directoryId, items, skipped);
+				await collectEntry(child, directoryId, items, skipped, unresolved);
 		}
 	}
 
 	async function collectDropped(
 		dataTransfer: DataTransfer,
 		current: Directory,
-	): Promise<{ items: UploadItem[]; skipped: string[]; hadEntries: boolean }> {
+	): Promise<{
+		items: UploadItem[];
+		skipped: string[];
+		unresolved: string[];
+		hadEntries: boolean;
+	}> {
 		const items: UploadItem[] = [];
 		const skipped: string[] = [];
+		const unresolved: string[] = [];
 		const entries: FileSystemEntry[] = [];
 		for (const item of Array.from(dataTransfer.items ?? []))
 			if (item.kind === "file") {
@@ -227,13 +242,13 @@ export function ArchiveArea() {
 			}
 		if (entries.length)
 			for (const entry of entries)
-				await collectEntry(entry, current.id, items, skipped);
+				await collectEntry(entry, current.id, items, skipped, unresolved);
 		// Without entry support at all (no DataTransferItem list) fall back to
 		// the flat file list so plain file drops still upload.
 		else if (!items.length)
 			for (const file of Array.from(dataTransfer.files ?? []))
 				items.push({ file, directory: current.id });
-		return { items, skipped, hadEntries: entries.length > 0 };
+		return { items, skipped, unresolved, hadEntries: entries.length > 0 };
 	}
 
 	async function showPage(after: string, previous: string[]) {
@@ -395,9 +410,10 @@ export function ArchiveArea() {
 		cancel.current = false;
 		let items: UploadItem[] = [];
 		let skipped: string[] = [];
+		let unresolved: string[] = [];
 		let hadEntries = false;
 		try {
-			({ items, skipped, hadEntries } = await collectDropped(
+			({ items, skipped, unresolved, hadEntries } = await collectDropped(
 				dataTransfer,
 				directory,
 			));
@@ -428,11 +444,15 @@ export function ArchiveArea() {
 			}
 			setBusy(false);
 		}
-		if (skipped.length)
-			setError(
-				(current) =>
-					current || `לא ניתן ליצור את התיקיות: ${skipped.join(", ")}`,
-			);
+		const problems = [
+			...(skipped.length
+				? [`לא ניתן ליצור את התיקיות: ${skipped.join(", ")}`]
+				: []),
+			...(unresolved.length
+				? [`לא ניתן לאתר את התיקיות הקיימות: ${unresolved.join(", ")}`]
+				: []),
+		];
+		if (problems.length) setError((current) => current || problems.join(". "));
 	}
 
 	async function remove(id: string) {

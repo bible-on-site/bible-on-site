@@ -415,6 +415,32 @@ it("reports dropped folders it cannot create and still uploads loose files", asy
 		expect.objectContaining({ filename: "ok.bin", directory: "home" }),
 	]);
 });
+it("keeps sibling uploads when a conflicted folder cannot be resolved", async () => {
+	await mount();
+	(fetch as Mock)
+		.mockResolvedValueOnce({
+			ok: false,
+			status: 409,
+			json: async () => ({ error: "conflict" }),
+		} as Response)
+		.mockRejectedValueOnce(new Error("listing failed"));
+	await act(async () => {
+		fireEvent.drop(dropZone(), {
+			dataTransfer: dragData([
+				dirEntry("חומרים", [fileEntry(new File(["x"], "nested.bin"))]),
+				fileEntry(new File(["y"], "ok.bin")),
+			]),
+		});
+	});
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		"לא ניתן לאתר את התיקיות הקיימות: חומרים",
+	);
+	await waitFor(() => expect(commandsSent("complete")).toHaveLength(1));
+	expect(commandsSent("start")).toEqual([
+		expect.objectContaining({ filename: "ok.bin", directory: "home" }),
+	]);
+	expect(screen.getByRole("button", { name: "רענון" })).toBeEnabled();
+});
 it("creates and reveals an empty dropped folder", async () => {
 	await mount();
 	const before = (fetch as Mock).mock.calls.length;
