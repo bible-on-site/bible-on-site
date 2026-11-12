@@ -84,10 +84,11 @@ export function findMissingIgnoreRule(root) {
 	if (!existsSync(file)) return "root .gitignore is missing entirely";
 	const anchored = readFileSync(file, "utf8")
 		.split("\n")
-		// gitignore ignores *trailing* whitespace but leading whitespace is
-		// significant — ` /evidence/` is an inert pattern that must not
-		// satisfy the anchor check.
-		.some((line) => line.trimEnd() === `/${FORBIDDEN_ROOT}/`);
+		// gitignore strips only unescaped trailing ASCII *spaces* — never
+		// tabs (`/evidence/\t` keeps the tab in its pattern) — while leading
+		// whitespace is significant: ` /evidence/` is an inert pattern that
+		// must not satisfy the anchor check.
+		.some((line) => line.replace(/ +$/, "") === `/${FORBIDDEN_ROOT}/`);
 	return anchored
 		? null
 		: "root .gitignore no longer anchors `/evidence/` — restore the ignore entry as first-line protection";

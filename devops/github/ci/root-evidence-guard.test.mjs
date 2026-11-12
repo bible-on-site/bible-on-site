@@ -34,6 +34,13 @@ function git(dir, args) {
 	assert.equal(result.status, 0, `git ${args[0]}: ${result.stderr}`);
 }
 
+/** Does Git's own ignore engine actually ignore `path` under `dir`? */
+function isGitIgnored(dir, path) {
+	return (
+		spawnSync("git", ["-C", dir, "check-ignore", "-q", path]).status === 0
+	);
+}
+
 /** A temp git repo whose index mirrors the requested tracked paths. */
 function fixtureRepo(trackedPaths, { gitignore = "/evidence/\n" } = {}) {
 	const dir = mkdtempSync(join(tmpdir(), "root-evidence-guard-"));
@@ -170,7 +177,7 @@ test("removing the /evidence/ .gitignore anchor is a finding on its own", () => 
 	}
 });
 
-test("gitignore whitespace semantics — leading space is inert, trailing is fine", () => {
+test("gitignore whitespace semantics — leading space is inert, trailing spaces are fine", () => {
 	// ` /evidence/` never matches `evidence/` in gitignore terms, so the
 	// anchor check must not accept it.
 	const inert = fixtureRepo(["AGENTS.md"], { gitignore: " /evidence/\n" });
@@ -179,13 +186,25 @@ test("gitignore whitespace semantics — leading space is inert, trailing is fin
 	} finally {
 		rmSync(inert, { recursive: true, force: true });
 	}
-	// Trailing whitespace is stripped by gitignore, so `/evidence/ \t` is
-	// still a live anchor and must pass.
-	const live = fixtureRepo(["AGENTS.md"], { gitignore: "/evidence/ \t\n" });
+	// Git strips unescaped trailing ASCII *spaces*, so `/evidence/   ` is
+	// still a live anchor — and the accepted pattern must really ignore
+	// evidence/ under Git's own rules.
+	const live = fixtureRepo(["AGENTS.md"], { gitignore: "/evidence/   \n" });
 	try {
 		assert.equal(findMissingIgnoreRule(live), null);
+		assert.equal(isGitIgnored(live, "evidence/shot.png"), true);
 	} finally {
 		rmSync(live, { recursive: true, force: true });
+	}
+	// A trailing TAB is *not* stripped by gitignore — `/evidence/\t` keeps
+	// the tab in its pattern and never ignores evidence/, so the anchor
+	// check must reject it instead of declaring the anchor live.
+	const tabbed = fixtureRepo(["AGENTS.md"], { gitignore: "/evidence/ \t\n" });
+	try {
+		assert.equal(isGitIgnored(tabbed, "evidence/shot.png"), false);
+		assert.match(findMissingIgnoreRule(tabbed), /anchors `\/evidence\/`/);
+	} finally {
+		rmSync(tabbed, { recursive: true, force: true });
 	}
 });
 
