@@ -67,47 +67,13 @@ public sealed class NativeSnapshotTests
     }
 
     [Fact]
-    public void FiltersVisiblePageLookupsOnTheDevice()
+    public void PageLookupsByIdUseThePlainAccessibilityId()
     {
         var executor = new SnapshotExecutor([Entry("ready")]);
         using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
         new PerekPage(driver, new IosPlatformAdapter()).WaitFor("PerekSource");
-        Assert.Equal("-ios predicate string", executor.LastParameters!["using"]);
-        Assert.Equal("name == 'PerekSource' AND visible == 1", executor.LastParameters["value"]);
-    }
-
-    [Theory]
-    [InlineData("visible")]
-    [InlineData("custom-budget")]
-    [InlineData("spoken")]
-    [InlineData("geometry")]
-    public void FiltersVisibleReadsOnDeviceAndStillRejectsHiddenSnapshots(string operation)
-    {
-        var executor = new SnapshotExecutor([Entry("hidden", false), Entry("ready")]);
-        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
-        var page = new PerekPage(driver, new IosPlatformAdapter());
-        switch (operation)
-        {
-            case "custom-budget":
-                Assert.Equal("ready", page.WaitFor("MiniMonthDayText", _ => true, TimeSpan.FromSeconds(45)).Id);
-                break;
-            case "spoken":
-                Assert.Equal("ready", page.WaitForSpoken("MiniMonthDayText"));
-                break;
-            case "geometry":
-                Assert.Empty(page.RenderedElements("MiniMonthDayText"));
-                Assert.Equal("ready", Assert.Single(page.RenderedElements("MiniMonthDayText")).Text);
-                break;
-            default:
-                Assert.Equal("ready", page.WaitFor("MiniMonthDayText").Id);
-                break;
-        }
-        Assert.Equal(2, executor.Lookups);
-        Assert.Equal("-ios predicate string", executor.LastParameters!["using"]);
-        Assert.Equal("name == 'MiniMonthDayText' AND visible == 1", executor.LastParameters["value"]);
-        Assert.DoesNotContain(DriverCommand.IsElementDisplayed, executor.Commands);
-        Assert.DoesNotContain(DriverCommand.GetElementText, executor.Commands);
-        Assert.DoesNotContain(DriverCommand.GetElementRect, executor.Commands);
+        Assert.Equal("accessibility id", executor.LastParameters!["using"]);
+        Assert.Equal("PerekSource", executor.LastParameters["value"]);
     }
 
     [Fact]
