@@ -1,12 +1,9 @@
 /**
- * Tests for ScrollToSlug / ScrollToArticle scroll-on-mount helpers.
+ * Tests for the ScrollToSlug scroll-on-mount helper.
  */
 
 import { act, render } from "@testing-library/react";
-import {
-	ScrollToArticle,
-	ScrollToSlug,
-} from "../../../src/app/929/[number]/[slug]/ScrollToArticle";
+import { ScrollToSlug } from "../../../src/app/929/[number]/[slug]/ScrollToArticle";
 
 describe("ScrollToSlug", () => {
 	beforeEach(() => {
@@ -53,7 +50,7 @@ describe("ScrollToSlug", () => {
 	it("clears the pending timer on unmount", () => {
 		const scrollIntoView = stubTarget();
 
-		const { unmount } = render(<ScrollToArticle />);
+		const { unmount } = render(<ScrollToSlug />);
 		unmount();
 		act(() => {
 			jest.advanceTimersByTime(150);

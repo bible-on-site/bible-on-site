@@ -34,12 +34,15 @@ engines:
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
 exclude_paths:
+  # MySQL-only additive migration, exercised twice by the isolated MySQL integration test.
+  - "data/mysql/private_archive_upgrade.sql"
   # These are exercised against MySQL by the API and website database tests.
   - "data/mysql/tanah_dynamic_structure.sql"
   - "data/mysql/tanah_test_data.sql"
   - "data/mysql/tanah_daily_bulletin_upgrade.sql"
   - "data/mysql/tanah_daily_bulletin_telegram_upgrade.sql"
   - "data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"
+  - "data/mysql/tanah_daily_bulletin_join_upgrade.sql"
   - "data/mysql/tanah_article_covering_source_upgrade.sql"
   - "data/mysql/tanah_article_link_proposal_upgrade.sql"
   - "data/mysql/tanah_article_hebrew_date_upgrade.sql"
@@ -82,6 +85,7 @@ exclude_paths:
   - "data/mysql/tanahpedia_place_eretz_yisrael_data.sql"
   - "data/mysql/tanahpedia_structure.sql"
   - "data/mysql/tanahpedia_alter_mention_decoration.sql"
+  - "data/mysql/tanahpedia_alter_normalized_name.sql"
   - "data/mysql/tanah_mention_test_data.sql"
   - "data/sqlite/perushim_catalog_structure.sql"
   - "data/sqlite/perushim_notes_structure.sql"

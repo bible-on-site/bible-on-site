@@ -144,23 +144,26 @@ export async function subscriberSummary(): Promise<{
 	realRecipients: number;
 	unverifiedRecipients: number;
 }> {
-	const rows = await query<{
-		email: string;
-		audience: EmailAudience;
-		consent_status: string;
-	}>(
-		"SELECT email, audience, consent_status FROM tanah_daily_bulletin_subscriber ORDER BY email",
-	);
+	const [counts, testRows] = await Promise.all([
+		query<{ audience: EmailAudience; consent_status: string; n: number }>(
+			"SELECT audience, consent_status, COUNT(*) AS n FROM tanah_daily_bulletin_subscriber GROUP BY audience, consent_status",
+		),
+		query<{ email: string }>(
+			"SELECT email FROM tanah_daily_bulletin_subscriber WHERE audience = 'test' AND consent_status = 'confirmed' ORDER BY email",
+		),
+	]);
+	let realRecipients = 0;
+	let unverifiedRecipients = 0;
+	for (const row of counts) {
+		if (row.audience !== "real") continue;
+		if (row.consent_status === "confirmed") realRecipients = Number(row.n);
+		else if (row.consent_status === "pending")
+			unverifiedRecipients = Number(row.n);
+	}
 	return {
-		testRecipients: rows
-			.filter((r) => r.audience === "test" && r.consent_status === "confirmed")
-			.map((r) => r.email),
-		realRecipients: rows.filter(
-			(r) => r.audience === "real" && r.consent_status === "confirmed",
-		).length,
-		unverifiedRecipients: rows.filter(
-			(r) => r.audience === "real" && r.consent_status === "pending",
-		).length,
+		testRecipients: testRows.map((r) => r.email),
+		realRecipients,
+		unverifiedRecipients,
 	};
 }
 
@@ -239,10 +242,12 @@ export async function changeSubscriber(value: SubscriberChange): Promise<void> {
 			"UPDATE tanah_daily_bulletin_subscriber SET consent_status = IF(consent_status IN ('bounced','complained'), consent_status, 'unsubscribed'), last_event_at = UTC_TIMESTAMP(3) WHERE email = ?",
 			[value.email],
 		);
-		await new SesClient(runtime).unsubscribeContact(
-			value.email,
-			value.audience,
-		);
+		const client = new SesClient(runtime);
+		try {
+			await client.unsubscribeContact(value.email, value.audience);
+		} finally {
+			client.destroy();
+		}
 		return;
 	}
 	const current = await queryOne<{ consent_status: string }>(
@@ -254,10 +259,16 @@ export async function changeSubscriber(value: SubscriberChange): Promise<void> {
 		["unsubscribed", "bounced", "complained"].includes(current.consent_status)
 	)
 		throw new Error("המנוי חסום לדיוור. נדרשת הרשמה מחודשת של הנמען.");
-	const result = await new SesClient(runtime).ensureSubscribedContact(
-		value.email,
-		value.audience,
-	);
+	const client = new SesClient(runtime);
+	let result: "subscribed" | "opted_out";
+	try {
+		result = await client.ensureSubscribedContact(
+			value.email,
+			value.audience,
+		);
+	} finally {
+		client.destroy();
+	}
 	if (result !== "subscribed")
 		throw new Error(
 			"המנוי הסיר את הסכמתו. אין להחזירו לרשימה ללא הרשמה מחודשת.",

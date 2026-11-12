@@ -23,19 +23,73 @@ import boto3
 import pymysql
 
 
-def db_credentials(event):
-    """Parse host/port/user/password/database from the DB URL.
+def _credentials_from_ssm():
+    """Resolve DB credentials from SSM Parameter Store (legacy contract).
 
-    The CD deployer reads the URL from SSM Parameter Store and delivers it
-    inside the invoke payload as ``db_url``, so the function never calls
-    SSM from inside the VPC. A ``DB_URL`` env var is accepted as a
-    fallback for manual invocations.
+    Replicates the live pre-payload handler exactly: it reads the
+    ``{SSM_PREFIX}-{host,port,name,username,url}`` SecureStrings and takes
+    host/user/database from the discrete parameters (port defaults to
+    3306), extracting only the password from the ``-url`` mysql:// URL —
+    including the legacy quirk of NOT percent-decoding it. Callers that
+    omit ``db_url`` — manual invokes and older deployer checkouts — still
+    rely on that path, so it stays as the last credential source until the
+    approved endpoint migration proves no VPC consumer remains.
+    """
+    ssm = boto3.client("ssm")
+    prefix = os.environ.get("SSM_PREFIX", "bible-on-site-tanah-db")
+    suffixes = ("host", "port", "name", "username", "url")
+    params = ssm.get_parameters(
+        Names=[f"{prefix}-{suffix}" for suffix in suffixes],
+        WithDecryption=True,
+    )
+    param_dict = {
+        p["Name"].rsplit("-", 1)[-1]: p["Value"] for p in params["Parameters"]
+    }
+    # host/name/username are mandatory in the legacy contract (it indexed
+    # them unconditionally); port defaults to 3306 and url only feeds the
+    # password extraction, exactly as the live handler treats them.
+    missing = [s for s in ("host", "name", "username") if not param_dict.get(s)]
+    if missing:
+        raise ValueError(
+            f"SSM parameters {prefix}-{{{', '.join(missing)}}} missing or empty"
+        )
+    # Legacy extraction: password is the substring between the first ':'
+    # after '://' and the next '@', verbatim (no percent-decoding).
+    db_url = param_dict.get("url", "")
+    password = db_url.split(":")[2].split("@")[0] if "://" in db_url else ""
+    return {
+        "host": param_dict["host"],
+        "port": int(param_dict.get("port") or 3306),
+        "user": param_dict["username"],
+        "password": password,
+        "database": param_dict["name"],
+    }
+
+
+def db_credentials(event):
+    """Resolve host/port/user/password/database for the MySQL connection.
+
+    Credential sources, in order:
+
+    1. ``db_url`` in the invoke payload — the CD deployer reads the URL
+       from SSM Parameter Store and delivers it inside the payload, so the
+       function normally never calls SSM from inside the VPC.
+    2. ``DB_URL`` env var — fallback for manual invocations.
+    3. SSM Parameter Store ``{SSM_PREFIX}-*`` parameters — the legacy
+       contract used by callers that predate the payload field.
+       Transitional: it keeps working until the approved endpoint
+       migration removes the need.
+
+    Never log resolved values.
     """
     db_url = event.get("db_url") or os.environ.get("DB_URL", "")
+    if not db_url:
+        return _credentials_from_ssm()
     parts = urlparse(db_url)
     if parts.scheme != "mysql" or not parts.hostname or not parts.username:
         raise ValueError(
-            "db_url event field (or DB_URL env var) must be a mysql://user:pass@host:port/db URL"
+            "resolved DB URL (db_url payload or DB_URL env) must be a "
+            "mysql://user:pass@host:port/db URL"
         )
     return {
         "host": parts.hostname,
@@ -53,12 +107,12 @@ def handler(event, context):
     {
         "sql_files": ["file1.sql", "file2.sql"],
         "s3_prefix": "sql/2024-01-01-120000/",
-        "db_url": "mysql://user:pass@host:3306/db"
+        "db_url": "mysql://user:pass@host:3306/db"   # optional; see db_credentials
     }
 
     The handler:
-    1. Reads DB credentials from the event's db_url field (DB_URL env var
-       as fallback for manual invocations)
+    1. Resolves DB credentials from db_url, then DB_URL env, then SSM
+       {SSM_PREFIX}-url for callers that omit the payload field
     2. Downloads SQL files from S3
     3. Preprocesses SQL to add DROP TABLE/VIEW IF EXISTS
     4. Filters out MySQL dump artifacts

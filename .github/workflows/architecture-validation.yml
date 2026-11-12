@@ -22,6 +22,7 @@ permissions:
 
 jobs:
   validate:
+    timeout-minutes: 60
     name: ${{ inputs.service }} / ${{ matrix.arch }}
     strategy:
       fail-fast: false

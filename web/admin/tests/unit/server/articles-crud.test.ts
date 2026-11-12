@@ -1216,6 +1216,25 @@ describe("article Hebrew dates (#3098)", () => {
 			}),
 		).rejects.toThrow(/non-empty body/);
 	});
+	it.each(["create", "update"])(
+		"rejects a %s leaving recurring dates on a recording-only article",
+		async (operation) => {
+			mocks.txExecute.mockResolvedValue({ insertId: 7 });
+			mocks.txQueryOne.mockResolvedValue({ id: 7, name: "שיעור" });
+			const data = {
+				...article,
+				name: "שיעור",
+				content:
+					'<h1>שיעור</h1><h2>להאזנה</h2><audio src="lesson.opus"></audio>',
+				hebrewDates: [{ hebrew_month: 11, hebrew_day: 9 }],
+			};
+			await expect(
+				operation === "create"
+					? createArticle({ data })
+					: updateArticle({ data: { ...data, id: 7 } }),
+			).rejects.toThrow(/written content/);
+		},
+	);
 
 	it("rejects an update that un-distributes an article already owning dates", async () => {
 		// hebrewDates is omitted — the persisted assignment (mocked read-back)

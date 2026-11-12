@@ -96,6 +96,7 @@ jobs:
   # they are assigned — they never re-select — and a legitimately empty
   # selection produces zero shards, so no simulator starts.
   plan_ios:
+    timeout-minutes: 60
     name: Plan iOS shards
     runs-on: ubuntu-latest
     outputs:
@@ -188,6 +189,7 @@ jobs:
       force_full_suite: ${{ inputs.force_full_suite }}
 
   merge_ios:
+    timeout-minutes: 60
     name: Merge complete iOS suite
     needs: [ios, plan_ios]
     # Skips with the runner matrix on a legitimately empty plan; a failed plan

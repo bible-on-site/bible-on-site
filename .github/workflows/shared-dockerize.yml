@@ -47,6 +47,7 @@ env:
 
 jobs:
   setup_env:
+    timeout-minutes: 60
     name: Setup Environment Variables
     runs-on: ubuntu-latest
     outputs:
@@ -54,6 +55,7 @@ jobs:
     steps:
       - run: echo "Setting up environment variables"
   package:
+    timeout-minutes: 60
     needs: setup_env
     name: Package
     runs-on: ${{ inputs.image_arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}

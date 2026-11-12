@@ -1,5 +1,4 @@
-import { revalidatePath, revalidateTag } from "next/cache";
-import { after, type NextRequest, NextResponse } from "next/server";
+import { clearUnitSummaryPrefetch } from "@/app/components/reading/unit-summary-prefetch";
 import { seferIdByPerekId } from "@/lib/dedications/service";
 import {
 	ChangeValidationError,
@@ -11,6 +10,8 @@ import {
 } from "@/lib/revalidate/dependencies";
 import { seferPerekDedicationsTag } from "@/lib/revalidate/tags";
 import { collectSubmissionPaths, submitIndexNow } from "@/lib/seo/indexnow";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { type NextRequest, NextResponse, after } from "next/server";
 
 /**
  * On-demand invalidation for public content caches.
@@ -69,6 +70,9 @@ interface InvalidationWork {
 }
 
 function applyInvalidation(work: InvalidationWork) {
+	// Primed unit summaries predate this invalidation; drop them so a later
+	// flat-page read refetches instead of caching the stale batch result.
+	clearUnitSummaryPrefetch();
 	for (const tag of work.tags) {
 		revalidateTag(tag, { expire: 0 });
 	}
@@ -144,10 +148,7 @@ export async function POST(request: NextRequest) {
 			changes = parseEntityChanges(body);
 		} catch (error) {
 			if (error instanceof ChangeValidationError) {
-				return NextResponse.json(
-					{ error: error.message },
-					{ status: 400 },
-				);
+				return NextResponse.json({ error: error.message }, { status: 400 });
 			}
 			throw error;
 		}
@@ -184,7 +185,8 @@ export async function POST(request: NextRequest) {
 		const perekMatch = /^perek:([1-9]\d*):dedications$/.exec(tag ?? "");
 		if (perekMatch) {
 			const seferId = seferIdByPerekId(Number(perekMatch[1]));
-			if (seferId !== undefined) manualTags.push(seferPerekDedicationsTag(seferId));
+			if (seferId !== undefined)
+				manualTags.push(seferPerekDedicationsTag(seferId));
 		}
 		const work: InvalidationWork = {
 			tags: [...(resolved?.tags ?? []), ...manualTags],
@@ -194,9 +196,7 @@ export async function POST(request: NextRequest) {
 			],
 			patterns: [
 				...(resolved?.patterns ?? []),
-				...(path?.includes("[")
-					? [{ path, type: pathType ?? "page" }]
-					: []),
+				...(path?.includes("[") ? [{ path, type: pathType ?? "page" }] : []),
 			],
 			urls: [...(resolved?.urls ?? []), ...urls],
 		};

@@ -1,13 +1,22 @@
+import { randomBytes } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import getPort from "get-port";
-import lighthouse, { desktopConfig, type Flags, type Result } from "lighthouse";
+import lighthouse, {
+	desktopConfig,
+	type Flags,
+	type Result,
+	type RunnerResult,
+} from "lighthouse";
 import { pageFunctions } from "lighthouse/core/lib/page-functions.js";
 import { lighthouseCpuProfile } from "../../scripts/lighthouse-cpu-profile.mjs";
+import { largestObservedTopLevelTask } from "../../scripts/lighthouse-observed-task.mjs";
 import {
 	lighthouseBenchmarkEntry,
 	lighthouseBenchmarkName,
+	readPerformanceReports,
+	saveLighthouseArtifacts,
 	saveLighthouseReport,
 	writePerformanceIndex,
 } from "../../scripts/performance-report.mjs";
@@ -16,7 +25,12 @@ import {
 	reportBenchmark,
 	webVitalsMeasure,
 } from "../util/benchmark";
+import {
+	webServerPort,
+	webServerUrl,
+} from "../util/playwright/server-endpoint";
 import { test as base, expect } from "../util/playwright/test-fixture";
+import { TestType } from "../util/playwright/types";
 
 type DeviceStrategy = "mobile" | "desktop";
 
@@ -65,7 +79,28 @@ const test = base.extend<
 	lighthouseResults: [
 		async ({ lighthousePort }, use) => {
 			const results: LighthouseResultsMap = new Map();
-			const reports: ReturnType<typeof saveLighthouseReport>[] = [];
+			// A retried worker finds earlier attempts' namespaced reports on
+			// disk; seed the index with them so summary.json/markdown cover
+			// every attempt, not only this fixture lifetime's audits. The
+			// first run has no index yet, and a worker killed mid-write can
+			// leave a truncated one — degrade to this attempt's reports.
+			let reports: ReturnType<typeof saveLighthouseReport>[] = [];
+			try {
+				reports = readPerformanceReports(REPORTS_DIR);
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+					console.warn("Could not seed prior Lighthouse reports:", error);
+			}
+			const bufferedArtifacts: {
+				rawReport: string;
+				artifacts: RunnerResult["artifacts"];
+			}[] = [];
+			// Each worker-fixture lifetime audits the same four page/device
+			// pairs, but a failed test stops the worker and Playwright retries
+			// in a fresh process. Namespace reports by worker pid + a random
+			// attempt id so a retry's raw reports and bound *.artifacts.json
+			// never collide with or overwrite a previous attempt's evidence.
+			const reportRun = `${process.pid}-${randomBytes(6).toString("hex")}`;
 
 			// Launch browser once for all audits
 			const context = await chromium.launchPersistentContext(
@@ -97,19 +132,53 @@ const test = base.extend<
 						await page.close();
 
 						// Run Lighthouse
-						const lhr = await runLighthouseAudit(
+						const audit = await runLighthouseAudit(
 							url,
 							strategy,
 							lighthousePort,
 							cpuIndex,
 						);
-						reports.push(saveReport(lhr, strategy));
+						const lhr = audit.lhr;
+						// Observed trace timing of the largest top-level task,
+						// recorded even when the modeled TBT stays at 0. This is
+						// diagnostics-only: a malformed trace must not cost the
+						// audit's report or its buffered artifacts below.
+						let observedTask: ObservedTopLevelTask | null = null;
+						let observedTaskError: string | null = null;
+						try {
+							observedTask = await largestObservedTopLevelTask(audit.artifacts);
+						} catch (error) {
+							observedTaskError =
+								error instanceof Error ? error.message : String(error);
+							console.warn(
+								`Largest observed task extraction failed for ${url} (${strategy}):`,
+								error,
+							);
+						}
+						const report = saveReport(lhr, strategy, {
+							run: reportRun,
+							observedTask,
+							observedTaskError,
+						});
+						reports.push(report);
+						bufferedArtifacts.push({
+							rawReport: report.rawReport,
+							artifacts: audit.artifacts,
+						});
 						writePerformanceIndex(REPORTS_DIR, reports);
 						results.set(getResultKey(path, strategy), lhr);
 					}
 				}
 			} finally {
-				await context.close();
+				try {
+					await context.close();
+				} finally {
+					// These are the original gatherer's traces and network records.
+					// Flush after all audits, including on an early setup/close
+					// failure; a later diagnostic navigation cannot explain the
+					// original sample.
+					saveLighthouseArtifacts(REPORTS_DIR, bufferedArtifacts);
+				}
 			}
 
 			await use(results);
@@ -434,8 +503,9 @@ const CATEGORY_THRESHOLDS: Record<DeviceStrategy, Record<string, number>> = {
 	},
 };
 
-// Use local dev server URL
-const BASE_URL = "http://127.0.0.1:3001";
+// The perf suite's server endpoint — the same per-worktree port the
+// Playwright webServer bound (issue #2881).
+const BASE_URL = webServerUrl(webServerPort(TestType.PERF));
 
 /**
  * Run Lighthouse audit using the Playwright-managed Chrome instance.
@@ -446,7 +516,7 @@ async function runLighthouseAudit(
 	strategy: DeviceStrategy,
 	port: number,
 	hostBenchmarkIndex: number,
-): Promise<Result> {
+): Promise<RunnerResult> {
 	const cpuProfile = lighthouseCpuProfile(hostBenchmarkIndex, strategy);
 	const flags: Flags = {
 		logLevel: "error",
@@ -467,17 +537,33 @@ async function runLighthouseAudit(
 		throw new Error("Lighthouse audit failed - no result returned");
 	}
 
-	return Object.assign(runnerResult.lhr, { cpuCalibration: cpuProfile });
+	Object.assign(runnerResult.lhr, { cpuCalibration: cpuProfile });
+	return runnerResult;
 }
 
-function saveReport(lhr: Result, strategy: DeviceStrategy) {
+type ObservedTopLevelTask = NonNullable<
+	Awaited<ReturnType<typeof largestObservedTopLevelTask>>
+>;
+
+function saveReport(
+	lhr: Result,
+	strategy: DeviceStrategy,
+	diagnostics: {
+		run: string;
+		observedTask?: ObservedTopLevelTask | null;
+		observedTaskError?: string | null;
+	},
+) {
 	const report = saveLighthouseReport(REPORTS_DIR, lhr, {
 		device: strategy,
+		run: diagnostics.run,
 		knownIssues: [...KNOWN_ISSUES.values()]
 			.filter(
 				(issue) => issue.strategy === "all" || issue.strategy === strategy,
 			)
 			.map((issue) => issue.id),
+		largestObservedTask: diagnostics.observedTask ?? undefined,
+		largestObservedTaskError: diagnostics.observedTaskError ?? undefined,
 	});
 	console.log(`Lighthouse ${report.url} (${strategy}):`, report.metrics);
 	return report;

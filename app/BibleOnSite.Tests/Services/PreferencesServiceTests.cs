@@ -529,6 +529,52 @@ public class PreferencesServiceTests : IDisposable
         eventCount.Should().Be(0, "writing the current value is a no-op");
     }
 
+    [Fact]
+    public void AlwaysOnTop_DefaultsOff_AndExplicitOptInSurvivesRestart()
+    {
+        // #2766: normal window stacking is the default for clean installs
+        // and upgrades that never stored the key.
+        _service.Load();
+        _service.AlwaysOnTop.Should().BeFalse();
+
+        _service.AlwaysOnTop = true;
+        var restored = PreferencesService.CreateForTesting(_storage);
+        restored.Load();
+        restored.AlwaysOnTop.Should().BeTrue("an explicit opt-in is preserved across relaunch");
+    }
+
+    [Fact]
+    public void AlwaysOnTop_ExplicitOffChoice_IsPersistedAndHonored()
+    {
+        // A stored false is an explicit prior choice — it must resolve to
+        // ordinary stacking, never be re-inferred as opt-in.
+        _storage.Set("alwaysOnTop", false);
+        _service.Load();
+        _service.AlwaysOnTop.Should().BeFalse();
+
+        _service.AlwaysOnTop = true;
+        _service.AlwaysOnTop = false;
+        var restored = PreferencesService.CreateForTesting(_storage);
+        restored.Load();
+        restored.AlwaysOnTop.Should().BeFalse("turning the preference off persists the off choice");
+    }
+
+    [Fact]
+    public void AlwaysOnTop_ChangeFiresPreferencesChanged_SameValueIsNoOp()
+    {
+        _service.Load();
+        _service.AlwaysOnTop = true;
+        var eventCount = 0;
+        _service.PreferencesChanged += (_, _) => eventCount++;
+
+        _service.AlwaysOnTop = true;
+        eventCount.Should().Be(0, "writing the current value is a no-op");
+
+        _service.AlwaysOnTop = false;
+        eventCount.Should().Be(1, "a real change notifies so the window applies it immediately");
+        _storage.Get("alwaysOnTop", true).Should().BeFalse();
+    }
+
     #region InMemoryPreferencesStorage Tests
 
     [Fact]
