@@ -321,7 +321,10 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(text_columns, 0, "notes_documents must not store the text a second time");
+        assert_eq!(
+            text_columns, 0,
+            "notes_documents must not store the text a second time"
+        );
 
         // Verses indexed with concatenated segments.
         let vhits: i64 = index
