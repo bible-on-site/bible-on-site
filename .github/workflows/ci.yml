@@ -169,7 +169,26 @@ env:
   SEFARIA_MONGO_DOCKER_DIRECTORY: data/sefaria/mongodb-docker
 
 jobs:
+  workflow_timeouts:
+    name: Workflow timeout policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-js
+        with:
+          module: devops
+          directory: devops
+      - name: Check all workflow job limits
+        working-directory: devops
+        run: |
+          bun run test:workflow-timeouts
+          bun run verify:workflow-timeouts
+
   setup_env:
+    timeout-minutes: 60
     name: Setup Environment Variables
     runs-on: ubuntu-latest
     outputs:
@@ -199,6 +218,7 @@ jobs:
         run: echo "PLAYWRIGHT_VERSION=$(node -e "console.log(require('./package.json').devDependencies['@playwright/test'])")" >> $GITHUB_OUTPUT
 
   determine_baseline_availability:
+    timeout-minutes: 60
     name: Coverage / Baseline availability detection
     permissions:
       contents: read
@@ -272,6 +292,7 @@ jobs:
           echo "is_app_e2e_ios_coverage_available=$IS_APP_E2E_IOS_COVERAGE_AVAILABLE" >> $GITHUB_OUTPUT
 
   determine_docker_image_availability:
+    timeout-minutes: 60
     name: Docker / Image availability detection
     permissions:
       contents: read
@@ -305,6 +326,7 @@ jobs:
           fi
 
   determine_changes:
+    timeout-minutes: 60
     name: Modules / Changes detection
     runs-on: ubuntu-latest
     permissions:
@@ -366,6 +388,7 @@ jobs:
   # calendar-pdf-publish.yml — a cold or broadly invalidated render must never
   # inflate this pipeline.
   calendar_pdf_artifacts:
+    timeout-minutes: 60
     name: Calendar PDF Artifacts
     runs-on: ubuntu-latest
     needs: [setup_env, determine_changes]
@@ -585,6 +608,7 @@ jobs:
 
   # Same release/pre-merge split as package_api (#2292).
   package_bulletin:
+    timeout-minutes: 60
     name: Package Bulletin
     needs: [setup_env, determine_changes]
     if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.bulletin_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.bulletin_module_changed == 'true' || needs.determine_changes.outputs.bulletin_ci_changed == 'true')) }}
@@ -658,6 +682,7 @@ jobs:
 
   # Same release/pre-merge split as package_api (#2292).
   package_admin:
+    timeout-minutes: 60
     name: Package Admin
     needs: [setup_env, determine_changes]
     if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.admin_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.admin_module_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true')) }}
@@ -744,6 +769,7 @@ jobs:
   # Same release/pre-merge split and source binding as package_admin, on the
   # native ARM64 runner with its own cache scope — the paired release contract.
   package_admin_arm64:
+    timeout-minutes: 60
     name: Package Admin ARM64
     needs: [setup_env, determine_changes]
     if: ${{ (github.event_name == 'push' && needs.setup_env.outputs.is_master_branch == 'true' && needs.determine_changes.outputs.admin_module_changed == 'true') || (github.event_name != 'push' && (needs.determine_changes.outputs.admin_module_changed == 'true' || needs.determine_changes.outputs.admin_ci_changed == 'true')) }}
@@ -828,6 +854,7 @@ jobs:
           retention-days: 1
 
   build_sefaria_mongo_docker:
+    timeout-minutes: 60
     name: Build Sefaria MongoDB Docker Image
     needs: [setup_env, determine_changes, determine_docker_image_availability]
     if: ${{ needs.determine_docker_image_availability.outputs.is_sefaria_mongo_available != 'true' && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_ci_changed == 'true') }}
@@ -896,6 +923,7 @@ jobs:
   # ACTUAL JOBS
   website_performance:
     # Owns the production build gate; Website CI uses the instrumented dev server.
+    timeout-minutes: 60
     name: Website Performance
     runs-on: ubuntu-latest
     needs: [setup_env, determine_changes, determine_baseline_availability, perushim_data]
@@ -1057,6 +1085,9 @@ jobs:
         run: |
           cp mysql/perushim-sql-master/perushim_data.sql mysql/perushim_data.sql
           cargo make mysql-populate
+          # Record the populate-input hash so the perf webServer reuses this
+          # population instead of running mysql-populate a second time.
+          node ../web/bible-on-site/launch-e2e-server.mts --record-populate-marker
 
       - name: Report disk space before website build
         run: df -h .
@@ -1185,6 +1216,7 @@ jobs:
           overwrite: true
 
   website_e2e:
+    timeout-minutes: 60
     name: Website CI
     runs-on: ubuntu-latest
     needs:
@@ -1607,6 +1639,7 @@ jobs:
           overwrite: true
 
   admin_ci:
+    timeout-minutes: 60
     name: Admin CI
     runs-on: ubuntu-latest
     needs: [setup_env, determine_changes, determine_baseline_availability]
@@ -1980,6 +2013,7 @@ jobs:
           overwrite: true
 
   api_e2e:
+    timeout-minutes: 60
     name: API CI
     runs-on: ubuntu-latest
     needs:
@@ -2296,6 +2330,7 @@ jobs:
           overwrite: true
 
   app_ci:
+    timeout-minutes: 60
     name: App CI
     runs-on: ubuntu-latest
     needs:
@@ -2580,6 +2615,7 @@ jobs:
       perushim_notes_sqlite_artifact: ${{ needs.perushim_data.result != 'skipped' && format('perushim-sqlite-v2-indexed.{0}', github.run_id) || 'perushim-sqlite-v2-indexed.master' }}
 
   app_ios_ci:
+    timeout-minutes: 60
     name: App iOS native audio CI
     runs-on: ubuntu-latest
     needs: [setup_env, determine_changes]
@@ -2642,6 +2678,7 @@ jobs:
           key: ${{ runner.os }}-playwright-shell-webkit-${{ needs.setup_env.outputs.website_playwright_version }}
 
   bulletin_ci:
+    timeout-minutes: 60
     name: Bulletin CI
     runs-on: ubuntu-latest
     needs: [setup_env, determine_changes, determine_baseline_availability]
@@ -2731,6 +2768,7 @@ jobs:
           overwrite: true
 
   recitation_ci:
+    timeout-minutes: 60
     name: Recitation alignment and RustFS
     runs-on: ubuntu-latest
     needs: [setup_env, determine_changes]
@@ -2779,6 +2817,7 @@ jobs:
           node data/recitation/check_storage.mjs data/recitation/fixtures/seek.ogg
 
   deploy_verifier:
+    timeout-minutes: 60
     name: CD verifier dependency contract
     runs-on: ubuntu-latest
     needs: [setup_env, determine_changes]
@@ -2816,6 +2855,7 @@ jobs:
             node web/bible-on-site/scripts/verify-public-content.mjs --origin http://127.0.0.1:48123
 
   data_ci:
+    timeout-minutes: 60
     name: Data CI
     runs-on: ubuntu-26.04
     needs:
@@ -3049,6 +3089,7 @@ jobs:
   #   2. Website CI/Perf baseline (master artifact: perushim-data-sql.master)
   # ====================================================================================
   perushim_data:
+    timeout-minutes: 60
     name: Perushim Data
     runs-on: ubuntu-26.04
     needs:
@@ -3237,6 +3278,7 @@ jobs:
         run: docker stop sefaria-mongo || true
 
   website_publish_test_results_to_codecov:
+    timeout-minutes: 60
     name: Publish Website Test Results To Codecov
     permissions:
       contents: read
@@ -3279,10 +3321,12 @@ jobs:
     uses: ./.github/workflows/ci-db-backup.yml
 
   cross_module_ci:
+    timeout-minutes: 10
     name: Cross Module CI
     runs-on: ubuntu-latest
     needs:
       [
+        workflow_timeouts,
         setup_env,
         determine_changes,
         website_performance,
@@ -3324,6 +3368,11 @@ jobs:
       - name: Check Prerequisites
         id: check_prerequisites
         run: |
+          if [ "${{ needs.workflow_timeouts.result }}" != "success" ]; then
+            echo "Workflow timeout policy did not pass."
+            exit 1
+          fi
+
           if [ "${{ needs.database_backups.result }}" != "success" ]; then
             echo "Database backup and restore validation did not pass."
             exit 1
@@ -4070,6 +4119,7 @@ jobs:
       normal_master_ci_json: ${{ needs.determine_changes.outputs.normal_master_ci }}
 
   release_data:
+    timeout-minutes: 60
     name: Release Data
     needs: [setup_env, determine_changes, cross_module_ci, data_ci, perushim_data]
     # Note: Using always() as a workaround for reusable workflow result evaluation issues (see #1065)
@@ -4117,6 +4167,7 @@ jobs:
   # belongs to another commit, a retry bump without [skip ci] starts a new release run.
   # ====================================================================================
   bump_versions:
+    timeout-minutes: 60
     name: Bump Versions
     needs: [setup_env, determine_changes, release_website, release_api, release_app, release_admin, release_bulletin]
     # Note: Using always() and success checks as a workaround for reusable workflow result evaluation issues (see #1065)
