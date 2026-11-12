@@ -23,7 +23,6 @@ import json
 from pathlib import Path
 import sqlite3
 import sys
-import tempfile
 import zipfile
 
 SEARCH_INDEX = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"
@@ -66,7 +65,7 @@ def _module_of(entry_name: str) -> str:
 
 
 def _audit_search_index(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> dict:
-    """Open the packaged index in place and verify the slim documents layout."""
+    """Read the packaged index straight from the zip and verify the slim layout."""
     finding = {"uncompressedBytes": info.file_size}
     if info.file_size > SEARCH_INDEX_MAX_UNCOMPRESSED:
         raise ValueError(
@@ -75,13 +74,10 @@ def _audit_search_index(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> dict
             "The index must store note identity, not duplicate the note text "
             "the notes database already holds compressed (#3309)."
         )
-    with tempfile.TemporaryDirectory() as tmpdir:
-        extracted = Path(tmpdir) / "index.sqlite"
-        extracted.write_bytes(archive.read(info))
-        with closing(sqlite3.connect(
-                f"file:{extracted.as_posix()}?mode=ro", uri=True)) as index:
-            columns = {row[1] for row in index.execute("PRAGMA table_info(notes_documents)")}
-            documents = index.execute("SELECT COUNT(*) FROM notes_documents").fetchone()[0]
+    with closing(sqlite3.connect(":memory:")) as index:
+        index.deserialize(archive.read(info))
+        columns = {row[1] for row in index.execute("PRAGMA table_info(notes_documents)")}
+        documents = index.execute("SELECT COUNT(*) FROM notes_documents").fetchone()[0]
     finding["notesDocumentColumns"] = sorted(columns)
     finding["notesDocumentRows"] = documents
     if "Text" in columns:
