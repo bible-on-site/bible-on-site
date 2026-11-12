@@ -363,8 +363,8 @@ public sealed class SearchIndexService : IAsyncDisposable
             orderSql = $"{generationSql}, c.PerekId, c.PasukNum, {table}.rowid";
         }
         arguments.Add(limit);
-        // Slim notes_documents carry NoteIdx instead of the duplicated text;
-        // the hit body is resolved from the notes blob afterwards (#3309).
+        // In the slim layout the documents row holds the note's identity and
+        // the body is resolved from the notes blob below instead (#3309).
         var bodySql = table == "notes" && _notesDocumentsCarryText == false
             ? "c.NoteIdx"
             : "c.Text AS Body";

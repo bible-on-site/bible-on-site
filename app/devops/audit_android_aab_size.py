@@ -20,6 +20,7 @@ compiled manifest's embedded element names.
 import argparse
 from contextlib import closing
 import json
+import os
 from pathlib import Path
 import sqlite3
 import sys
@@ -75,10 +76,11 @@ def _audit_search_index(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> dict
             "The index must store note identity, not duplicate the note text "
             "the notes database already holds compressed (#3309)."
         )
-    with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as handle:
-        handle.write(archive.read(info))
-        path = Path(handle.name)
+    fd, temp_name = tempfile.mkstemp(suffix=".sqlite")
+    path = Path(temp_name)
     try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(archive.read(info))
         with closing(sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)) as index:
             columns = {row[1] for row in index.execute("PRAGMA table_info(notes_documents)")}
             documents = index.execute("SELECT COUNT(*) FROM notes_documents").fetchone()[0]

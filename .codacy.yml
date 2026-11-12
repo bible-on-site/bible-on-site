@@ -30,6 +30,8 @@ engines:
       - "data/annotations/publish.py"
       - "data/annotations/test_publish.py"
       - "app/devops/verify_android_dex_metadata.py"
+      - "app/devops/audit_android_aab_size.py"
+      - "app/devops/test_audit_android_aab_size.py"
 
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
