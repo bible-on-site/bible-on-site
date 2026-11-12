@@ -3,8 +3,9 @@ import styles from "./SectionDivider.module.css";
 /**
  * Shaped decorative edge between two adjacent landing feature sections
  * (#3267). Paints the NEIGHBORING section's surface color through a shared
- * dome mask, so the boundary reads as one deliberate curved transition
- * instead of a straight seam.
+ * NON-SYMMETRIC wave mask — the same artistic multi-lobe transition
+ * language as the sefarim/numbers/contact dividers — so the boundary is a
+ * deliberate color interplay, not a straight seam or a symmetric dome.
  *
  * Landing-section contract (docs/practices/implementation.md): each
  * independent top-level landing feature owns a distinct visual band and

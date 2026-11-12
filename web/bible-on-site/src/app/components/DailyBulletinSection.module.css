@@ -2,9 +2,10 @@
    Rule: each independent top-level landing feature owns a distinct visual
    band — never merge independent features into one continuous band (see
    docs/practices/implementation.md). This band is the white island between
-   the hero's blue and the sefarim shelf's light blue: the hero's bottom
-   divider paints this band's white, and the shared SectionDivider paints
-   the shelf's surface (--divider-paint) at the bottom edge. */
+   the hero's blue and the sefarim shelf's light blue — the section-color
+   game: the hero's bottom divider paints this band's white, and the shared
+   SectionDivider invades this band with the shelf's surface
+   (--divider-paint) in an asymmetric wave at the bottom edge. */
 
 .section {
 	/* Paints the shared bottom edge with the NEXT section's surface — the
