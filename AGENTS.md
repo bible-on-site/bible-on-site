@@ -48,6 +48,8 @@ Do not increase timeouts, retries, sleeps, polling budgets, or hang-watchdog lim
 
 When a change affects user-visible UI, show before/after evidence in the pull request description and when reporting the result to the user: screenshots, screen recordings, or captured device/emulator frames. Prefer real captures from the app's own e2e artifacts over mockups.
 
+Publish validation evidence only through pull-request descriptions/comments, issue attachments, CI artifacts or commit permalinks — never the repository-root `evidence/` directory, which CI rejects (#3319). Module-scoped evidence such as `docs/evidence/` remains allowed.
+
 # AWS Change Approval
 
 Never merge an AWS-related pull request without Dorad's explicit approval of that specific pull request and its current AWS-impacting changes. This includes infrastructure/IaC, IAM and networking, DNS/CDN/cache behavior, S3 access and public asset URLs, deployment workflows, production resource settings, and cost optimizations.
