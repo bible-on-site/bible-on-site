@@ -724,9 +724,15 @@ public class PerushimNotesService : IReaderNotesAvailability
                 }
                 catch (FileNotFoundException)
                 {
+                    // A bundled package may not carry the index.
+                    return null;
                 }
                 catch (Exception ex) when (ex is IOException or NotSupportedException or UnauthorizedAccessException)
                 {
+                    // Package streams cannot always report a length — the caller
+                    // restores and evaluates the payload instead.
+                    Console.Error.WriteLine($"Delivered index size unavailable: {ex.Message}");
+                    return null;
                 }
             }
             return null;

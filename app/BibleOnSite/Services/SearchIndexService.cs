@@ -735,6 +735,7 @@ public sealed class SearchIndexService : IAsyncDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            // No readable marker means nothing was rejected yet.
             return false;
         }
         var parts = marker.Trim().Split('|');
@@ -765,6 +766,7 @@ public sealed class SearchIndexService : IAsyncDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            Console.Error.WriteLine($"Failed to remove the rejected delivered-index marker: {ex.Message}");
         }
     }
 
