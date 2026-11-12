@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   deploy:
+    timeout-minutes: 60
     permissions:
       contents: read
       actions: read

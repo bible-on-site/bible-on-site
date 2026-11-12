@@ -55,6 +55,7 @@ if (process.env.DNS_FILE) {
 	const answers = process.env.DNS_FILE;
 	options.resolve = async () => JSON.parse(await readFile(answers, "utf8"));
 }
+${options.beforeStart ?? ""}
 startServer(options);
 `,
 	);
@@ -75,6 +76,8 @@ startServer(options);
 			String(options.dnsTimeoutMs ?? 1_000),
 		],
 		{
+			// Own the descendant tree even when no child PID was announced.
+			detached: process.platform !== "win32",
 			stdio: ["ignore", "pipe", "pipe"],
 			env: {
 				...process.env,
@@ -93,10 +96,24 @@ startServer(options);
 	wrapper.stderr.on("data", (data) => {
 		output += data;
 	});
-	const exited = once(wrapper, "close");
+	const closed = once(wrapper, "close");
+	const exited = once(wrapper, "close", { signal: t.signal });
+	// Output-only callers need not await this promise. Awaiting callers still
+	// see cancellation, allowing node:test to enter teardown on its deadline.
+	exited.catch(() => {});
 	t.after(async () => {
-		if (wrapper.exitCode === null && wrapper.signalCode === null) {
-			wrapper.kill("SIGKILL");
+		// EOF proves only that the wrapper and its captured output closed.
+		// A descendant can close its output and keep serving after that point.
+		if (process.platform !== "win32") {
+			try {
+				process.kill(-wrapper.pid, "SIGKILL");
+			} catch (error) {
+				if (error.code !== "ESRCH") throw error;
+			}
+		} else {
+			if (wrapper.exitCode === null && wrapper.signalCode === null) {
+				wrapper.kill("SIGKILL");
+			}
 			if (serverPid) {
 				try {
 					process.kill(serverPid, "SIGKILL");
@@ -105,6 +122,8 @@ startServer(options);
 				}
 			}
 		}
+		// Teardown observes real EOF even if the test-facing wait was aborted.
+		await closed;
 		assert.equal(path.dirname(directory), os.tmpdir());
 		assert.ok(path.basename(directory).startsWith("bible-handover-test-"));
 		await rm(directory, { recursive: true, force: true });
@@ -112,8 +131,14 @@ startServer(options);
 	const waitFor = async (text) => {
 		const deadline = Date.now() + 5_000;
 		while (!output.includes(text)) {
-			if (wrapper.exitCode !== null || Date.now() > deadline)
-				throw new Error(`Missing ${text}: ${output}`);
+			if (
+				wrapper.exitCode !== null ||
+				wrapper.signalCode !== null ||
+				Date.now() > deadline
+			)
+				throw new Error(
+					`Missing ${text} (exit=${wrapper.exitCode}, signal=${wrapper.signalCode}): ${output}`,
+				);
 			await new Promise((resolve) => setTimeout(resolve, 10));
 		}
 	};

@@ -2,13 +2,61 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
 	fixture,
+	freePort,
 	httpServer,
 	nativeSignals,
 	sleep,
 } from "./start-server-test-kit.mjs";
 
 test(
-	"SIGTERM retains a real listener during DNS drain, then forwards and exits",
+	"drains an immediate child-ready SIGTERM during synchronous probe initialization",
+	nativeSignals,
+	async (t) => {
+		const port = await freePort();
+		const source = `
+const http = require('node:http');
+const { writeFileSync } = require('node:fs');
+const server = http.createServer((_request, response) => response.end('ready'));
+server.listen(Number(process.env.PORT), '0.0.0.0', () => {
+  console.log('READY ' + process.pid + ' ' + server.address().port);
+  process.kill(process.ppid, 'SIGTERM');
+  writeFileSync('probe-initialized', 'ready');
+});
+process.on('SIGTERM', () => server.close(() => process.exit(143)));
+`;
+		const server = await fixture(t, source, {
+			drainMs: 500,
+			quietMs: 0,
+			pollMs: 1,
+			port,
+			env: { PORT: String(port) },
+			// Hold the first request initialization until the real child has
+			// signaled its parent. This reproduces lazy HTTP-client startup
+			// deterministically without enlarging the signal-test deadline.
+			beforeStart: `
+const { existsSync } = await import('node:fs');
+const { join } = await import('node:path');
+const request = fetch;
+const gate = join(process.argv[3], 'probe-initialized');
+fetch = (...args) => {
+  const deadline = Date.now() + 5_000;
+  const signal = new Int32Array(new SharedArrayBuffer(4));
+  while (!existsSync(gate)) {
+    if (Date.now() > deadline) throw new Error('child never reached readiness');
+    Atomics.wait(signal, 0, 0, 1);
+  }
+  return request(...args);
+};
+`,
+		});
+		await server.waitFor("Website draining");
+		assert.deepEqual(await server.exited, [143, null]);
+		assert.match(server.output(), /saw no inbound connections/);
+	},
+);
+
+test(
+	"retains a real listener during DNS drain before forwarding SIGTERM and exiting",
 	nativeSignals,
 	async (t) => {
 		const server = await fixture(t, httpServer, { drainMs: 500 });
@@ -28,7 +76,7 @@ test(
 );
 
 test(
-	"SIGINT interrupts without waiting for the production drain",
+	"interrupts on SIGINT without waiting for the production drain",
 	nativeSignals,
 	async (t) => {
 		const server = await fixture(t, httpServer);
@@ -40,7 +88,7 @@ test(
 );
 
 test(
-	"the quiet exit waits out the minimum drain covering DNS removal",
+	"waits out the minimum drain covering DNS removal before a quiet exit",
 	nativeSignals,
 	async (t) => {
 		const server = await fixture(t, httpServer, {
@@ -71,7 +119,7 @@ test(
 );
 
 test(
-	"an unreadable connection metric falls back to the full drain deadline",
+	"falls back to the full drain deadline when the connection metric is unreadable",
 	nativeSignals,
 	async (t) => {
 		const server = await fixture(t, httpServer, {
