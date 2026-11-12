@@ -319,7 +319,7 @@ public partial class ParashaPage
             // in שניים מקרא (#2403); a pasuk hit keeps the first/marked copy.
             var item = list?.ItemsSource?.Cast<object>().OfType<ParashaDisplayItem>()
                 .FirstOrDefault(row => row.PerekId == perekId && row.PasukNum == pasukNum && row.Display != null &&
-                    (matchTarget == null ? row.Display.IsFirstCopy : row.Display.IsLastCopy));
+                    (matchTarget == null ? !row.Display.IsRepeatedCopy : row.Display.IsLastCopy));
             if (list != null && item != null)
             {
                 bool landed;

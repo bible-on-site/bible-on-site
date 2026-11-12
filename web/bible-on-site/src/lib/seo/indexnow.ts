@@ -47,19 +47,8 @@ export function indexNowKey(): string | null {
 	return key;
 }
 
-/** File name of the ownership proof served at the site root. */
-export function indexNowKeyFileName(): string | null {
-	const key = indexNowKey();
-	return key ? `${key}.txt` : null;
-}
-
 /** Absolute URLs reported but not yet accepted by the IndexNow endpoint. */
 const pending = new Set<string>();
-
-/** Snapshot of undelivered URLs — observability and tests. */
-export function pendingIndexNowUrls(): string[] {
-	return [...pending];
-}
 
 /**
  * Normalizes caller-reported site-relative paths into the deduped set to

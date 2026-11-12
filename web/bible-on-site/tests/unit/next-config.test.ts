@@ -111,6 +111,21 @@ describe("next.config.mjs", () => {
 		expect(headerValue("Content-Type")).toContain("application/json");
 	});
 
+	it("preserves the public join URLs used by installed native apps", () => {
+		const rewrites = nativeJson(
+			`const { default: configure } = await import(${JSON.stringify(configUrl)});
+			 const { PHASE_DEVELOPMENT_SERVER } = await import("next/constants.js");
+			 const config = configure(PHASE_DEVELOPMENT_SERVER, { defaultConfig: {} });
+			 console.log(JSON.stringify((await config.rewrites()).beforeFiles));`,
+		);
+		for (const channel of ["telegram", "whatsapp", "email"]) {
+			expect(rewrites).toContainEqual({
+				source: `/bulletin/${channel}/join`,
+				destination: `/dailyBulletin/join/${channel}`,
+			});
+		}
+	});
+
 	it.each(["linux", "darwin", "win32"])(
 		"budgets only production builds on %s and preserves other options",
 		(platform) => {

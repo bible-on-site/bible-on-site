@@ -2,9 +2,9 @@
  * @jest-environment jsdom
  *
  * Unit tests for ParashaLoadedSefer — the lazy loader behind the פרשה
- * sefer book. It fetches the Torah sefer plus every prophetic sefer the
- * parashot's Haftarot reach, builds a canonical perekId → perek map,
- * and only then renders the flipbook.
+ * sefer book. It fetches the Torah sefer file plus just the perakim the
+ * parashot's Haftarot reach (one range-scoped request), builds a
+ * canonical perekId → perek map, and only then renders the flipbook.
  */
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ParashaBookUnit } from "@/app/parasha/[unit]/components/parasha-book-utils";
@@ -21,6 +21,10 @@ jest.mock("@/data/load-sefer", () => ({
 	loadSefer: jest.fn(),
 }));
 
+jest.mock("@/app/components/reading/unit-book-actions", () => ({
+	getPerakimText: jest.fn(),
+}));
+
 let capturedSeferProps: Record<string, unknown> = {};
 jest.mock("@/app/parasha/[unit]/components/ParashaSefer", () => ({
 	__esModule: true,
@@ -31,10 +35,12 @@ jest.mock("@/app/parasha/[unit]/components/ParashaSefer", () => ({
 }));
 
 import ParashaLoadedSefer from "@/app/parasha/[unit]/components/ParashaLoadedSefer";
+import { getPerakimText } from "@/app/components/reading/unit-book-actions";
 import catalog from "@/data/db/client-catalog.generated.json";
 import { BookRequestError, loadSefer } from "@/data/load-sefer";
 
 const mockLoad = jest.mocked(loadSefer);
+const mockGetPerakimText = jest.mocked(getPerakimText);
 
 const catalogFileOf = (seferName: string): string => {
 	const file = catalog.books.find((book) => book.name === seferName)?.file;
@@ -130,34 +136,36 @@ const baseProps = (units: ParashaBookUnit[] = [unitWithHaftara]) => ({
 	haftara: false,
 });
 
-// בראשית (perekIds 1–50) and ישעיהו (perekIds 335–400) are the two
-// generated files the fixtures resolve through the client catalog.
+// בראשית (perekIds 1–50) is the generated file the fixtures resolve
+// through the client catalog; Haftarah perakim arrive via getPerakimText.
 const BERESHIT_FILE = catalogFileOf("בראשית");
-const YESHAYAHU_FILE = catalogFileOf("ישעיהו");
 
 beforeEach(() => {
 	mockLoad.mockReset();
+	mockGetPerakimText.mockReset().mockResolvedValue({});
 	capturedSeferProps = {};
 });
 
 describe("ParashaLoadedSefer", () => {
-	it("loads the Torah sefer plus the sefarim its Haftarot reach", async () => {
-		mockLoad.mockImplementation((file: string) =>
-			Promise.resolve(
-				file === BERESHIT_FILE
-					? seferWithPerakim(1, [perek("א")])
-					: seferWithPerakim(335, [perek("מב"), perek("מג")]),
-			),
+	it("loads the Torah sefer plus just the perakim its Haftarot reach", async () => {
+		const auxPesukim = { pesukim: [{ segments: [{ type: "stuma" as const }] }] };
+		mockLoad.mockImplementation(() =>
+			Promise.resolve(seferWithPerakim(1, [perek("א")])),
 		);
+		mockGetPerakimText.mockResolvedValue({
+			335: auxPesukim,
+			336: auxPesukim,
+		});
 		render(<ParashaLoadedSefer {...baseProps()} />);
 		expect(screen.getByLabelText("טוען תצוגת ספר...")).toBeInTheDocument();
 		expect(await screen.findByTestId("parasha-book")).toBeInTheDocument();
-		expect(mockLoad.mock.calls.map(([file]) => file).sort()).toEqual(
-			[BERESHIT_FILE, YESHAYAHU_FILE].sort(),
-		);
+		expect(mockLoad.mock.calls.map(([file]) => file)).toEqual([
+			BERESHIT_FILE,
+		]);
+		expect(mockGetPerakimText).toHaveBeenCalledWith([335, 336]);
 		const perekById = capturedSeferProps.perekById as Map<number, Perek>;
 		expect(perekById.get(1)?.header).toBe("א");
-		expect(perekById.get(336)?.header).toBe("מג");
+		expect(perekById.get(336)?.pesukim).toEqual(auxPesukim.pesukim);
 	});
 
 	it("maps perakim through book additionals when a sefer is split", async () => {
@@ -174,18 +182,18 @@ describe("ParashaLoadedSefer", () => {
 		expect(perekById.get(290)?.header).toBe("א");
 	});
 
-	it("loads only the auxiliary sefarim when the main sefer is unknown", async () => {
-		mockLoad.mockImplementation(() =>
-			Promise.resolve(seferWithPerakim(335, [perek("מב")])),
-		);
+	it("loads only the auxiliary perakim when the main sefer is unknown", async () => {
+		mockGetPerakimText.mockResolvedValue({
+			335: { pesukim: [] },
+			336: { pesukim: [] },
+		});
 		render(<ParashaLoadedSefer {...baseProps()} seferName="לא קיים" />);
 		expect(await screen.findByTestId("parasha-book")).toBeInTheDocument();
-		expect(mockLoad.mock.calls.map(([file]) => file)).toEqual([
-			YESHAYAHU_FILE,
-		]);
+		expect(mockLoad).not.toHaveBeenCalled();
+		expect(mockGetPerakimText).toHaveBeenCalledWith([335, 336]);
 	});
 
-	it("skips auxiliary fetches for parashot without Haftarot", async () => {
+	it("fetches no auxiliary perakim for parashot without Haftarot", async () => {
 		mockLoad.mockImplementation(() =>
 			Promise.resolve(seferWithPerakim(1, [perek("א")])),
 		);
@@ -193,16 +201,22 @@ describe("ParashaLoadedSefer", () => {
 		expect(await screen.findByTestId("parasha-book")).toBeInTheDocument();
 		expect(mockLoad).toHaveBeenCalledTimes(1);
 		expect(mockLoad).toHaveBeenCalledWith(BERESHIT_FILE);
+		expect(mockGetPerakimText).toHaveBeenCalledWith([]);
 	});
 
 	it("keeps the loading indicator while the loaded map is stale", async () => {
 		let pending = false;
-		const pendingResolvers: Array<(value: SefarimItem) => void> = [];
-		mockLoad.mockImplementation(() => {
+		const pendingResolvers: Array<
+			(value: Record<number, { pesukim: Perek["pesukim"] }>) => void
+		> = [];
+		mockLoad.mockImplementation(() =>
+			Promise.resolve(seferWithPerakim(1, [perek("א")])),
+		);
+		mockGetPerakimText.mockImplementation(() => {
 			if (pending) {
 				return new Promise((done) => pendingResolvers.push(done));
 			}
-			return Promise.resolve(seferWithPerakim(1, [perek("א")]));
+			return Promise.resolve({});
 		});
 		const otherUnit: ParashaBookUnit = {
 			...unitWithHaftara,
@@ -225,12 +239,15 @@ describe("ParashaLoadedSefer", () => {
 		expect(screen.getByLabelText("טוען תצוגת ספר...")).toBeInTheDocument();
 		await act(async () => {
 			for (const done of pendingResolvers) {
-				done(seferWithPerakim(401, [perek("א")]));
+				done({ 401: { pesukim: [] } });
 			}
 		});
 		expect(await screen.findByTestId("parasha-book")).toBeInTheDocument();
-		const perekById = capturedSeferProps.perekById as Map<number, Perek>;
-		expect(perekById.get(401)?.header).toBe("א");
+		const perekById = capturedSeferProps.perekById as Map<
+			number,
+			Pick<Perek, "pesukim">
+		>;
+		expect(perekById.get(401)?.pesukim).toEqual([]);
 	});
 
 	it.each([new Error("network"), new BookRequestError(503)])(

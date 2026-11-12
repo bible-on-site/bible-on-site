@@ -29,6 +29,9 @@ vi.mock("~/components/BulletinWhatsAppControls", () => ({
 		return <div data-testid="whatsapp-controls" />;
 	},
 }));
+vi.mock("~/components/BulletinJoinLinks", () => ({
+	BulletinJoinLinks: () => <div data-testid="join-links" />,
+}));
 vi.mock("~/server/daily-bulletins", () => ({
 	getDailyBulletin: mocks.read,
 	prepareDailyBulletin: mocks.prepare,

@@ -146,27 +146,6 @@ public partial class ArticlesViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Creates a view model for articles filtered by perek.
-    /// </summary>
-    public ArticlesViewModel(int perekId, string perekTitle) : this()
-    {
-        _perekId = perekId;
-        _perekTitle = perekTitle;
-    }
-
-    /// <summary>
-    /// Creates a view model for articles filtered by author.
-    /// </summary>
-    public static ArticlesViewModel ForAuthor(int authorId, string authorName)
-    {
-        return new ArticlesViewModel
-        {
-            AuthorId = authorId,
-            AuthorName = authorName
-        };
-    }
-
-    /// <summary>
     /// Sets the articles collection (useful for testing and initialization).
     /// </summary>
     public void SetArticles(IEnumerable<Article> articles)

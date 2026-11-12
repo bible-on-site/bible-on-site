@@ -25,13 +25,6 @@ public static class ReadingProgressEngine
     /// (null/0) or empty units return 0 so the indicator hides rather than
     /// inventing percentages.
     /// </summary>
-    public static double Fraction(
-        IReadOnlyList<ReadingProgressUnit> units,
-        int? totalWords,
-        int anchorUnitIndex) =>
-        Fraction(units, totalWords, anchorUnitIndex, 0, false);
-
-    /// <inheritdoc cref="Fraction(IReadOnlyList{ReadingProgressUnit}, int?, int)"/>
     /// <param name="insideUnitFraction">Share of the anchor unit's own words
     /// already passed — call sites that know only the item index pass 0 (the
     /// anchor's words count as they are scrolled past, not before).</param>
@@ -140,18 +133,15 @@ public static class ReadingProgressEngine
     }
 
     /// <summary>
-    /// Index of the first unit whose key addresses <paramref name="pasukNum"/>,
-    /// or -1. Pasuk units key "N"; note units key "N:idx" — the same lookup
-    /// anchors a verse in either list.
+    /// Index of the unit whose key is <paramref name="pasukNum"/>, or -1.
+    /// Pasuk units key "N".
     /// </summary>
     public static int IndexOfPasuk(IReadOnlyList<ReadingProgressUnit> units, int pasukNum)
     {
         var key = pasukNum.ToString(CultureInfo.InvariantCulture);
-        var notePrefix = key + ":";
         for (var i = 0; i < units.Count; i++)
         {
-            var unitKey = units[i].Key;
-            if (unitKey == key || unitKey.StartsWith(notePrefix, StringComparison.Ordinal))
+            if (units[i].Key == key)
             {
                 return i;
             }

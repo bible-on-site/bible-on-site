@@ -1406,8 +1406,8 @@ describe("family saves invalidate the website", () => {
 	it("carries the linked entry's change when a new person links to it", async () => {
 		queryOneMock.mockResolvedValue({ id: "type-1" });
 		queryMock
-			.mockResolvedValueOnce([{ unique_name: "משה" }])
-			.mockResolvedValueOnce([{ entity_type: "PERSON" }])
+			.mockResolvedValueOnce([{ id: "entry-1", unique_name: "משה" }])
+			.mockResolvedValueOnce([{ entry_id: "entry-1", entity_type: "PERSON" }])
 			.mockResolvedValueOnce([])
 			.mockResolvedValueOnce([]);
 

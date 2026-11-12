@@ -56,7 +56,6 @@ import {
 	assignEntity,
 	createEntry,
 	deleteEntry,
-	getEntries,
 	getEntry,
 	getEntryEntities,
 	getTanahpediaCategoryCounts,
@@ -177,15 +176,6 @@ describe("tanahpedia entry server functions", () => {
 			expect(String(sql)).toContain("WHERE e.entity_type = ?");
 			expect(String(sql)).not.toContain("tanahpedia_person");
 			expect(params).toEqual(["PERSON"]);
-		});
-	});
-
-	describe("getEntries", () => {
-		it("lists every entry ordered by title", async () => {
-			mocks.query.mockResolvedValue([{ id: "entry-1" }]);
-
-			await expect(getEntries()).resolves.toEqual([{ id: "entry-1" }]);
-			expect(mocks.query.mock.calls[0]?.[0]).toContain("ORDER BY title");
 		});
 	});
 
@@ -580,11 +570,16 @@ describe("tanahpedia entry server functions", () => {
 			});
 		}
 
-		/** `entryRelations` resolves the entry name + its relation tables. */
+		/** `entriesRelations` resolves each entry name + its relation tables. */
 		function mockEntryRelations(uniqueName: string) {
-			mocks.query.mockImplementation((sql: unknown) => {
+			mocks.query.mockImplementation((sql: unknown, params: unknown) => {
 				return String(sql).includes("unique_name FROM tanahpedia_entry")
-					? Promise.resolve([{ unique_name: uniqueName }])
+					? Promise.resolve(
+							(params as string[]).map((id) => ({
+								id,
+								unique_name: uniqueName,
+							})),
+						)
 					: Promise.resolve([]);
 			});
 		}
@@ -739,12 +734,17 @@ describe("tanahpedia entry server functions", () => {
 		});
 
 		it("also expires alias and disambiguation pages that lose a target on delete", async () => {
-			mocks.query.mockImplementation((sql: unknown) => {
+			mocks.query.mockImplementation((sql: unknown, params: unknown) => {
 				const text = String(sql);
 				if (text.includes("unique_name FROM tanahpedia_entry"))
-					return Promise.resolve([{ unique_name: "נמחק" }]);
+					return Promise.resolve(
+						(params as string[]).map((id) => ({ id, unique_name: "נמחק" })),
+					);
 				if (text.includes("tanahpedia_entry_synonym"))
-					return Promise.resolve([{ name: "כינוי-א" }, { name: "כינוי-ב" }]);
+					return Promise.resolve([
+						{ entry_id: "entry-1", name: "כינוי-א" },
+						{ entry_id: "entry-1", name: "כינוי-ב" },
+					]);
 				return Promise.resolve([]);
 			});
 			mocks.execute.mockResolvedValue({ affectedRows: 1 });

@@ -495,9 +495,9 @@ public class ReaderChromeTests
     [Fact]
     public void FullScreen_HidesBars_ShowsExit_AndNotifies()
     {
-        using var _ = new AppResources();
+        using var resources = new AppResources();
         var rig = new Rig();
-        var chrome = rig.CreateChrome();
+        _ = rig.CreateChrome();
         rig.ExitButton.IsVisible.Should().BeFalse("the exit button starts hidden");
 
         rig.BottomBar.RaiseFullScreen();
@@ -509,7 +509,6 @@ public class ReaderChromeTests
         rig.ExitButton.TranslationX.Should().Be(0, "entry resets the drag position");
         rig.ExitButton.TranslationY.Should().Be(0);
         rig.FullscreenChanges.Should().Equal(true);
-        chrome.IsFullScreen.Should().BeTrue();
     }
 
     [Fact]
@@ -531,9 +530,9 @@ public class ReaderChromeTests
     [Fact]
     public void ExitFullscreen_RestoresBars_AndNotifies()
     {
-        using var _ = new AppResources();
+        using var resources = new AppResources();
         var rig = new Rig();
-        var chrome = rig.CreateChrome();
+        _ = rig.CreateChrome();
         rig.BottomBar.RaiseFullScreen();
         rig.FullscreenChanges.Should().Equal(true);
 
@@ -544,7 +543,6 @@ public class ReaderChromeTests
         rig.BottomBar.IsVisible.Should().BeTrue();
         rig.Fan.IsVisible.Should().BeTrue();
         rig.FullscreenChanges.Should().Equal(true, false);
-        chrome.IsFullScreen.Should().BeFalse();
     }
 
     [Theory]
@@ -632,7 +630,6 @@ public class ReaderChromeTests
         rig.Fan.IsVisible.Should().BeFalse();
         rig.ExitButton.IsVisible.Should().BeTrue();
         rig.FullscreenChanges.Should().Equal(true);
-        chrome.IsFullScreen.Should().BeTrue();
 
         chrome.ToggleFullScreen();
 
@@ -641,26 +638,23 @@ public class ReaderChromeTests
         rig.BottomBar.IsVisible.Should().BeTrue();
         rig.Fan.IsVisible.Should().BeTrue();
         rig.FullscreenChanges.Should().Equal(true, false);
-        chrome.IsFullScreen.Should().BeFalse();
     }
 
     [Fact]
     public void FullScreen_WithoutStateHandler_StillTogglesCleanly()
     {
-        using var _ = new AppResources();
+        using var resources = new AppResources();
         var rig = new Rig();
-        var chrome = rig.CreateChrome(withFullscreenHandler: false);
+        _ = rig.CreateChrome(withFullscreenHandler: false);
 
         rig.BottomBar.RaiseFullScreen();
         rig.ExitButton.IsVisible.Should().BeTrue();
-        chrome.IsFullScreen.Should().BeTrue();
         rig.FullscreenChanges.Should().BeEmpty("no handler was wired");
 
         TapExit(rig.ExitButton);
 
         rig.ExitButton.IsVisible.Should().BeFalse();
         rig.Toolbar.IsVisible.Should().BeTrue();
-        chrome.IsFullScreen.Should().BeFalse();
     }
 
     [Fact]

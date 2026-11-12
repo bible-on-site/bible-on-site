@@ -52,98 +52,6 @@
 	color: #fff;
 	padding-bottom: 3em;
 }
-.page fieldset {
-	border: none;
-	margin: 0;
-	padding: 0;
-}
-.page .input-container {
-	position: relative;
-}
-.page input {
-	background: none;
-	border: none;
-	border-bottom: 1px solid #4a4a4a;
-	display: block;
-	direction: rtl;
-	text-align: right;
-	font-family: Tahoma, sans-serif;
-	font-size: 100%;
-	margin-top: 1em;
-	line-height: 1.5em;
-	outline: 0;
-	overflow: visible;
-	width: 100%;
-}
-.page input[type="email"],
-.page input[type="tel"] {
-	direction: ltr;
-	text-align: left;
-}
-.page input[type="submit"] {
-	background: initial;
-	background-color: #fff;
-	border: 1px solid #000;
-	color: #000;
-	cursor: pointer;
-	direction: initial;
-	display: initial;
-	font-family: Tahoma, sans-serif;
-	font-size: 1.1em;
-	letter-spacing: 0.1em;
-	line-height: initial;
-	margin: 0.8em 0 0.1em 0;
-	outline: initial;
-	overflow: initial;
-	padding: 0.5em 0.8em;
-	vertical-align: middle;
-	text-align: initial;
-	width: initial;
-}
-.page input + label {
-	animation: 0.2s;
-	animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-	animation-fill-mode: forwards;
-	border: 0;
-	bottom: 0;
-	box-sizing: border-box;
-	color: #003f93;
-	font-weight: bold;
-	font-size: 0.7em;
-	left: 0;
-	letter-spacing: 0.15em;
-	line-height: 1em;
-	pointer-events: none;
-	position: absolute;
-	right: 0;
-	text-align: right;
-	top: 0;
-}
-.page input:focus + label {
-	animation-name: input;
-}
-@keyframes input {
-	to {
-		opacity: 1;
-	}
-}
-.page input + label::after {
-	content: "";
-	height: 2px;
-	position: absolute;
-	bottom: 0;
-	right: 45%;
-	background: #003f93;
-	transition: 0.2s;
-	transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-	visibility: hidden;
-	width: 10px;
-}
-.page input:focus + label::after {
-	right: 0;
-	width: 100%;
-	visibility: visible;
-}
 .icon {
 	display: block;
 	margin: auto;
@@ -250,15 +158,5 @@
 @media screen and (min-width: 2560px) {
 	.alHaperekDivider {
 		background-image: url(/root/al-haperek-devider-xl.svg);
-	}
-}
-
-@media (prefers-color-scheme: dark) {
-	.page input + label {
-		color: var(--accent-300);
-	}
-
-	.page input + label::after {
-		background: var(--accent-300);
 	}
 }

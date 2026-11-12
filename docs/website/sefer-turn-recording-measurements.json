@@ -1,0 +1,206 @@
+{
+  "buildSourceCommit": "2c22d00af5acea0e575986fb5f064b9e572862c7",
+  "environment": {
+    "server": "Linux production Next.js, full CI commentary dataset (339701 notes)",
+    "browser": "Chromium 158.0.8127.18, Playwright 1.65.0 Linux, SwiftShader",
+    "host": "Docker Desktop on Windows",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "cpuRate": 4,
+    "chapter": 125,
+    "gesture": "toolbar",
+    "turns": 6,
+    "interactionDeadlineMs": 20000
+  },
+  "order": "heavy, light, light, heavy",
+  "categories": {
+    "heavy": "toplevel,devtools.timeline,blink.user_timing",
+    "light": "toplevel,blink.user_timing"
+  },
+  "measurement": "CDP Performance.getMetrics duration deltas and unchanged native turn probe",
+  "meanLayoutDurationMs": {
+    "heavy": 230.78,
+    "light": 185.306
+  },
+  "layoutDurationReductionPercent": 19.7,
+  "cases": [
+    {
+      "case": "1-heavy",
+      "costs": {
+        "LayoutDuration": 236.151,
+        "RecalcStyleDuration": 637.7660000000001,
+        "ScriptDuration": 775.266,
+        "TaskDuration": 4715.830000000001
+      },
+      "metrics": {
+        "responseMs": [
+          54.9,
+          52.2,
+          42.8,
+          43.2,
+          35.5,
+          59
+        ],
+        "responseP95Ms": 59,
+        "responseMaxMs": 59,
+        "frameGapMaxMs": 66.7,
+        "frameGapP95Ms": 50,
+        "firstTurn": {
+          "responseP95Ms": 54.9,
+          "frameGapMaxMs": 50,
+          "frameGapP95Ms": 33.4
+        },
+        "consecutiveTurns": {
+          "responseP95Ms": 59,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 50
+        }
+      },
+      "blocking": {
+        "blockingDurationMaxMs": 3.7,
+        "firstTurn": {
+          "blockingDurationMaxMs": 0
+        },
+        "consecutiveTurns": {
+          "blockingDurationMaxMs": 3.7
+        }
+      }
+    },
+    {
+      "case": "2-light",
+      "costs": {
+        "LayoutDuration": 180.04500000000002,
+        "RecalcStyleDuration": 597.176,
+        "ScriptDuration": 732.759,
+        "TaskDuration": 4348.267
+      },
+      "metrics": {
+        "responseMs": [
+          44.7,
+          71,
+          38.1,
+          40.4,
+          33.7,
+          47
+        ],
+        "responseP95Ms": 71,
+        "responseMaxMs": 71,
+        "frameGapMaxMs": 66.7,
+        "frameGapP95Ms": 50,
+        "firstTurn": {
+          "responseP95Ms": 44.7,
+          "frameGapMaxMs": 50.1,
+          "frameGapP95Ms": 50
+        },
+        "consecutiveTurns": {
+          "responseP95Ms": 71,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 50
+        }
+      },
+      "blocking": {
+        "blockingDurationMaxMs": 0,
+        "firstTurn": {
+          "blockingDurationMaxMs": 0
+        },
+        "consecutiveTurns": {
+          "blockingDurationMaxMs": 0
+        }
+      }
+    },
+    {
+      "case": "3-light",
+      "costs": {
+        "LayoutDuration": 190.56699999999998,
+        "RecalcStyleDuration": 630.351,
+        "ScriptDuration": 814.967,
+        "TaskDuration": 4631.506
+      },
+      "metrics": {
+        "responseMs": [
+          48.9,
+          68.7,
+          53.1,
+          55.3,
+          38.3,
+          59.2
+        ],
+        "responseP95Ms": 68.7,
+        "responseMaxMs": 68.7,
+        "frameGapMaxMs": 66.7,
+        "frameGapP95Ms": 50.1,
+        "firstTurn": {
+          "responseP95Ms": 48.9,
+          "frameGapMaxMs": 50.1,
+          "frameGapP95Ms": 49.9
+        },
+        "consecutiveTurns": {
+          "responseP95Ms": 68.7,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 50.1
+        }
+      },
+      "blocking": {
+        "blockingDurationMaxMs": 3.5,
+        "firstTurn": {
+          "blockingDurationMaxMs": 0
+        },
+        "consecutiveTurns": {
+          "blockingDurationMaxMs": 3.5
+        }
+      }
+    },
+    {
+      "case": "4-heavy",
+      "costs": {
+        "LayoutDuration": 225.409,
+        "RecalcStyleDuration": 585.546,
+        "ScriptDuration": 807.308,
+        "TaskDuration": 4653.869000000001
+      },
+      "metrics": {
+        "responseMs": [
+          60.8,
+          73.7,
+          41.3,
+          40.5,
+          40.5,
+          59.9
+        ],
+        "responseP95Ms": 73.7,
+        "responseMaxMs": 73.7,
+        "frameGapMaxMs": 66.7,
+        "frameGapP95Ms": 50,
+        "firstTurn": {
+          "responseP95Ms": 60.8,
+          "frameGapMaxMs": 50.1,
+          "frameGapP95Ms": 50
+        },
+        "consecutiveTurns": {
+          "responseP95Ms": 73.7,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 50
+        }
+      },
+      "blocking": {
+        "blockingDurationMaxMs": 0,
+        "firstTurn": {
+          "blockingDurationMaxMs": 0
+        },
+        "consecutiveTurns": {
+          "blockingDurationMaxMs": 0
+        }
+      }
+    }
+  ],
+  "localQualification": {
+    "passed": 88,
+    "existingConditionalSkips": 35,
+    "durationMinutes": 4.0,
+    "injectedStallControls": "both 250ms input and animation stalls detected",
+    "productionBuildSourceCommit": "2c22d00af5acea0e575986fb5f064b9e572862c7",
+    "testSource": "8a7b821319c49f022f2fde254172058bfc6fa51e plus the task-only qualification recording change"
+  }
+}

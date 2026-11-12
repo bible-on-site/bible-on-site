@@ -851,20 +851,6 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
         return GetUnitIdForPerek(perekId);
     }
 
-    /// <summary>
-    /// The parasha containing a search hit's canonical position, or null when
-    /// the pasuk sits outside every Torah range — used to keep a result
-    /// inside the selected reading instance.
-    /// </summary>
-    public async Task<int?> GetUnitIdForPasukAsync(int perekId, int pasukNum)
-    {
-        if (!_parashaService.IsLoaded)
-        {
-            await _parashaService.LoadAsync();
-        }
-        return _parashaService.GetParashaContainingPasuk(perekId, pasukNum)?.UnitId;
-    }
-
     #endregion
 
     #region Articles

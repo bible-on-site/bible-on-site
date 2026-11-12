@@ -40,6 +40,7 @@ describe("sitemap", () => {
 				"לוח",
 				"dailyBulletin",
 				"whatsappGroup",
+				"dailyBulletin/join/email",
 				"tos",
 				"app",
 				"contact",

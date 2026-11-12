@@ -282,7 +282,8 @@ public class PerekDataService
         var db = await _databaseService.GetDatabaseAsync();
 
         var segmentRows = await db.QueryAsync<PasukSegmentRow>(
-            "SELECT s.id AS segment_id, s.pasuk_id AS pasuk_id, s.segment_type AS segment_type, " +
+            "SELECT s.id AS segment_id, s.perek_id AS perek_id, s.pasuk_id AS pasuk_id, " +
+            "s.segment_type AS segment_type, " +
             "v.value AS value, o.qri_ktiv_offset AS qri_ktiv_offset " +
             "FROM tanah_pasuk_segment s " +
             "LEFT JOIN tanah_pasuk_segment_value v ON v.id = s.id " +
@@ -291,6 +292,56 @@ public class PerekDataService
             "ORDER BY s.pasuk_id, s.id",
             perekId);
 
+        return BuildPasukim(segmentRows);
+    }
+
+    /// <summary>
+    /// Loads pasukim for several perakim in one round-trip (e.g. the
+    /// Tanahpedia occurrences table, which cites pesukim across many perakim).
+    /// <paramref name="pasukIds"/> optionally narrows the read to the cited
+    /// pasuk numbers; it is a union across all requested perakim, so a perek
+    /// may get back a few uncited pesukim - callers look pesukim up by number.
+    /// </summary>
+    public virtual async Task<Dictionary<int, List<Pasuk>>> LoadPasukimAsync(
+        IReadOnlyCollection<int> perekIds, IReadOnlyCollection<int>? pasukIds)
+    {
+        var pasukimByPerek = new Dictionary<int, List<Pasuk>>();
+        if (perekIds.Count == 0)
+        {
+            return pasukimByPerek;
+        }
+
+        var db = await _databaseService.GetDatabaseAsync();
+
+        var args = perekIds.Cast<object>().ToList();
+        var pasukFilter = string.Empty;
+        if (pasukIds is { Count: > 0 })
+        {
+            pasukFilter = $" AND s.pasuk_id IN ({string.Join(",", pasukIds.Select(_ => "?"))})";
+            args.AddRange(pasukIds.Cast<object>());
+        }
+
+        var segmentRows = await db.QueryAsync<PasukSegmentRow>(
+            "SELECT s.id AS segment_id, s.perek_id AS perek_id, s.pasuk_id AS pasuk_id, " +
+            "s.segment_type AS segment_type, " +
+            "v.value AS value, o.qri_ktiv_offset AS qri_ktiv_offset " +
+            "FROM tanah_pasuk_segment s " +
+            "LEFT JOIN tanah_pasuk_segment_value v ON v.id = s.id " +
+            "LEFT JOIN tanah_pasuk_segment_qri_ktiv_offset o ON o.id = s.id " +
+            $"WHERE s.perek_id IN ({string.Join(",", perekIds.Select(_ => "?"))}){pasukFilter} " +
+            "ORDER BY s.perek_id, s.pasuk_id, s.id",
+            args.ToArray());
+
+        foreach (var perekRows in segmentRows.GroupBy(row => row.PerekId))
+        {
+            pasukimByPerek[perekRows.Key] = BuildPasukim(perekRows);
+        }
+
+        return pasukimByPerek;
+    }
+
+    private static List<Pasuk> BuildPasukim(IEnumerable<PasukSegmentRow> segmentRows)
+    {
         var pasukim = new List<Pasuk>();
         var currentPasukId = -1;
         var currentText = new StringBuilder();
@@ -541,6 +592,9 @@ public class PerekDataService
     {
         [Column("segment_id")]
         public int SegmentId { get; set; }
+
+        [Column("perek_id")]
+        public int PerekId { get; set; }
 
         [Column("pasuk_id")]
         public int PasukId { get; set; }

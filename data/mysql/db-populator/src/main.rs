@@ -83,6 +83,10 @@ struct Cli {
     )]
     tanahpedia_today_anniversary_month_day_upgrade_script: String,
 
+    /// Path to Tanahpedia normalized-name resolution key upgrade SQL file
+    #[arg(long, default_value = "../tanahpedia_alter_normalized_name.sql")]
+    tanahpedia_normalized_name_upgrade_script: String,
+
     /// Path to Tanahpedia lookup seed SQL file
     #[arg(long, default_value = "../tanahpedia_seed_data.sql")]
     tanahpedia_seed_script: String,
@@ -415,6 +419,7 @@ struct TanahpediaScripts {
     entry_entity_unique_upgrade: std::path::PathBuf,
     entry_synonym_upgrade: std::path::PathBuf,
     today_anniversary_month_day_upgrade: std::path::PathBuf,
+    normalized_name_upgrade: std::path::PathBuf,
     seed: std::path::PathBuf,
     incremental_lookups: std::path::PathBuf,
     legacy: std::path::PathBuf,
@@ -442,6 +447,7 @@ impl TanahpediaScripts {
             entry_synonym_upgrade: base_path.join(&cli.tanahpedia_entry_synonym_upgrade_script),
             today_anniversary_month_day_upgrade: base_path
                 .join(&cli.tanahpedia_today_anniversary_month_day_upgrade_script),
+            normalized_name_upgrade: base_path.join(&cli.tanahpedia_normalized_name_upgrade_script),
             seed: base_path.join(&cli.tanahpedia_seed_script),
             incremental_lookups: base_path.join(&cli.tanahpedia_incremental_lookups_script),
             legacy: base_path.join(&cli.tanahpedia_legacy_script),
@@ -512,7 +518,8 @@ async fn apply_tanahpedia_safe_upgrades(
     apply_entry_entity_unique_upgrade(conn, &scripts.entry_entity_unique_upgrade).await?;
     apply_entry_synonym_upgrade(conn, &scripts.entry_synonym_upgrade).await?;
     apply_today_anniversary_month_day_upgrade(conn, &scripts.today_anniversary_month_day_upgrade)
-        .await
+        .await?;
+    apply_normalized_name_upgrade(conn, &scripts.normalized_name_upgrade).await
 }
 
 async fn apply_tanahpedia_incremental_lookups(
@@ -679,6 +686,10 @@ async fn apply_daily_bulletin_upgrades(conn: &mut MySqlConnection, base_path: &P
         (
             "tanah_daily_bulletin_whatsapp_upgrade.sql",
             "daily-bulletin-whatsapp-upgrade",
+        ),
+        (
+            "tanah_daily_bulletin_join_upgrade.sql",
+            "daily-bulletin-join-upgrade",
         ),
     ] {
         execute_script(conn, &base_path.join("..").join(filename), label).await?;
@@ -953,6 +964,13 @@ async fn apply_entry_entity_unique_upgrade(
 
 async fn apply_entry_synonym_upgrade(conn: &mut MySqlConnection, script_path: &Path) -> Result<()> {
     execute_script(conn, script_path, "entry-synonym-upgrade").await
+}
+
+async fn apply_normalized_name_upgrade(
+    conn: &mut MySqlConnection,
+    script_path: &Path,
+) -> Result<()> {
+    execute_script(conn, script_path, "normalized-name-upgrade").await
 }
 
 async fn apply_column_add_if_missing(
@@ -1390,6 +1408,10 @@ SELECT 1";
             ),
         );
         assert_eq!(
+            scripts.normalized_name_upgrade,
+            PathBuf::from("/repo/data/mysql/db-populator/../tanahpedia_alter_normalized_name.sql"),
+        );
+        assert_eq!(
             scripts.incremental_lookups,
             PathBuf::from("/repo/data/mysql/db-populator/../tanahpedia_incremental_lookups.sql"),
         );
@@ -1649,6 +1671,17 @@ SELECT 1";
             apply_article_index_upgrade(&mut conn, base_path).await?;
             apply_article_index_upgrade(&mut conn, base_path).await?;
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(DISTINCT INDEX_NAME) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_article' AND INDEX_NAME IN ('idx_article_perek', 'idx_article_author')").fetch_one(&mut conn).await?, 2);
+            // The perek lookups order by priority, so the index must carry both
+            // columns and resolve the filter and the sort in one range scan.
+            assert_eq!(query_scalar::<MySql, String>("SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_article' AND INDEX_NAME = 'idx_article_perek'").fetch_one(&mut conn).await?, "perek_id,priority");
+
+            // Simulate the intermediate single-column index shipped before the
+            // priority column and upgrade it repeatedly.
+            raw_sql("ALTER TABLE tanah_article DROP INDEX idx_article_perek, ADD KEY idx_article_perek (perek_id);")
+                .execute(&mut conn).await?;
+            apply_article_index_upgrade(&mut conn, base_path).await?;
+            apply_article_index_upgrade(&mut conn, base_path).await?;
+            assert_eq!(query_scalar::<MySql, String>("SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tanah_article' AND INDEX_NAME = 'idx_article_perek'").fetch_one(&mut conn).await?, "perek_id,priority");
 
             // Simulate the pre-pasuk-count schema and upgrade it repeatedly;
             // the generated data file then fills the canonical bound for the

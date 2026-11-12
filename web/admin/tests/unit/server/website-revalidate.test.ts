@@ -17,14 +17,9 @@ vi.mock("@tanstack/react-start", () => ({
 import {
 	__resetRevalidateForTests,
 	articleChange,
-	articleInvalidation,
-	articlePath,
 	authorChange,
-	authorInvalidation,
-	authorPath,
 	dedicationChange,
 	getWebsiteRevalidationStatus,
-	lastRevalidationFailure,
 	mergeCoveringSpans,
 	moedChange,
 	pediaEntryChange,
@@ -178,7 +173,7 @@ describe("revalidateWebsite", () => {
 		expect(warnSpy).toHaveBeenCalled();
 		// Unconfigured still leaves unapplied work — the editor must see the
 		// stale content, flagged as a config gap rather than a failed post.
-		expect(lastRevalidationFailure()).toMatchObject({
+		expect((await getWebsiteRevalidationStatus()).lastFailure).toMatchObject({
 			requests: [{ tag: "articles" }],
 			unconfigured: true,
 		});
@@ -201,7 +196,7 @@ describe("revalidateWebsite", () => {
 		expect(fetchSpy).toHaveBeenCalledTimes(2);
 		expect(calledUrls()[0].searchParams.get("tag")).toBe("articles");
 		expect(calledUrls()[1].searchParams.get("tag")).toBe("authors");
-		expect(lastRevalidationFailure()).toBeNull();
+		expect((await getWebsiteRevalidationStatus()).lastFailure).toBeNull();
 	});
 
 	it("reports failure without throwing when the site rejects", async () => {
@@ -262,7 +257,7 @@ describe("revalidateWebsite", () => {
 
 			await flush(revalidateWebsite([{ tag: "authors" }, { path: "/929/3" }]));
 
-			const failure = lastRevalidationFailure();
+			const failure = (await getWebsiteRevalidationStatus()).lastFailure;
 			expect(failure?.requests).toEqual([{ path: "/929/3" }]);
 			expect(Number.isNaN(Date.parse(failure?.failedAt ?? ""))).toBe(false);
 		});
@@ -271,7 +266,7 @@ describe("revalidateWebsite", () => {
 			fetchSpy.mockResolvedValueOnce(new Response("no", { status: 500 }));
 			vi.spyOn(console, "error").mockImplementation(() => {});
 			await flush(revalidateWebsite([{ tag: "articles" }]));
-			expect(lastRevalidationFailure()).not.toBeNull();
+			expect((await getWebsiteRevalidationStatus()).lastFailure).not.toBeNull();
 
 			await flush(revalidateWebsite([{ tag: "authors" }]));
 
@@ -279,7 +274,7 @@ describe("revalidateWebsite", () => {
 			expect(fetchSpy).toHaveBeenCalledTimes(3);
 			expect(calledUrls()[1].searchParams.get("tag")).toBe("articles");
 			expect(calledUrls()[2].searchParams.get("tag")).toBe("authors");
-			expect(lastRevalidationFailure()).toBeNull();
+			expect((await getWebsiteRevalidationStatus()).lastFailure).toBeNull();
 		});
 
 		it("merges retried changes with the next flush's changes", async () => {
@@ -357,7 +352,7 @@ describe("revalidateWebsite", () => {
 		__resetRevalidateForTests();
 		await vi.advanceTimersByTimeAsync(FLUSH_MS);
 		expect(fetchSpy).not.toHaveBeenCalled();
-		expect(lastRevalidationFailure()).toBeNull();
+		expect((await getWebsiteRevalidationStatus()).lastFailure).toBeNull();
 	});
 });
 
@@ -475,19 +470,7 @@ describe("typed-change builders", () => {
 		});
 	});
 
-	it("invalidation helpers include urls only when given", () => {
-		expect(articleInvalidation()).toEqual([{ tag: "articles" }]);
-		expect(articleInvalidation("/929/1/2")).toEqual([
-			{ tag: "articles", urls: ["/929/1/2"] },
-		]);
-		expect(authorInvalidation()).toEqual([
-			{ tag: "authors" },
-			{ tag: "articles" },
-		]);
-		expect(authorInvalidation("/929/authors/x")).toEqual([
-			{ tag: "authors" },
-			{ tag: "articles", urls: ["/929/authors/x"] },
-		]);
+	it("builds pedia invalidation requests", () => {
 		expect(pediaInvalidation()).toEqual([
 			{ tag: "tanahpedia-entity-refs" },
 			{ path: "/pedia/[slug]", type: "page" },
@@ -521,19 +504,6 @@ describe("typed-change builders", () => {
 });
 
 describe("public path helpers", () => {
-	it("builds the article page path", () => {
-		expect(articlePath(5, 12)).toBe("/929/5/12");
-	});
-
-	it("percent-encodes author names and strips quote characters", () => {
-		expect(authorPath(`רש"י`)).toBe(
-			`/929/authors/${encodeURIComponent("רשי")}`,
-		);
-		expect(authorPath("  דוד  ")).toBe(
-			`/929/authors/${encodeURIComponent("דוד")}`,
-		);
-	});
-
 	it("builds the pedia entry path", () => {
 		expect(pediaEntryPath("משה")).toBe("/pedia/משה");
 	});

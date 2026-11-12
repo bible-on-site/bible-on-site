@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import sqlite3
 
+from db_lock import database_lock
 from recite import export_database
 
 
@@ -24,7 +25,10 @@ def recover_checkpoint(output, database, perek):
     manifest = json.loads((output / f"{perek}.json").read_text(encoding="utf-8"))
     if manifest["perekId"] != perek or manifest["alignmentStatus"] == "pending":
         raise ValueError("The requested chapter has no completed manifest")
-    export_database(output, database)
+    # Serialize with review overlays: export_database's replace would otherwise
+    # silently drop rows a concurrent overlay committed after its snapshot.
+    with database_lock(database):
+        export_database(output, database)
     core = {"version", "perekId", "audioUrl", "audioSha256", "textSha256",
             "durationMs", "alignmentStatus", "words"}
     provenance = {key: value for key, value in manifest.items() if key not in core}

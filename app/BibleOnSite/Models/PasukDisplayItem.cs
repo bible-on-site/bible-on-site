@@ -24,9 +24,6 @@ public sealed class PasukDisplayItem
     /// <summary>True for the second (repeated) copy in שניים מקרא mode.</summary>
     public bool IsRepeatedCopy { get; }
 
-    /// <summary>True for the primary copy that carries the pasuk marker.</summary>
-    public bool IsFirstCopy => !IsRepeatedCopy;
-
     /// <summary>
     /// True for the copy that carries the perushim: the only copy in normal mode,
     /// the repeated copy in שניים מקרא — so the rendered order is מקרא, מקרא,

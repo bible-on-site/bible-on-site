@@ -171,7 +171,7 @@ export function bidiRunsWidth(
 	return width;
 }
 
-/** Total advance width of `text` as drawn by {@link drawBidiText}. */
+/** Total advance width of `text` as drawn by {@link drawBidiRuns}. */
 export function bidiTextWidth(
 	font: PDFFont,
 	text: string,
@@ -202,19 +202,3 @@ export function drawBidiRuns(
 	}
 }
 
-/**
- * Draw `text` (logical order) left-to-right starting at `x`. Each bidi run
- * is measured and drawn identically, so alignment and truncation computed
- * with {@link bidiTextWidth} stay exact.
- */
-export function drawBidiText(
-	page: PDFPage,
-	text: string,
-	font: PDFFont,
-	size: number,
-	x: number,
-	y: number,
-	color: RGB,
-): void {
-	drawBidiRuns(page, visualTextRuns(text), font, size, x, y, color);
-}

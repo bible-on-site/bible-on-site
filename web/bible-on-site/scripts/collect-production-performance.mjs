@@ -177,10 +177,12 @@ export async function collectProductionPerformance(options) {
 		{ chromium },
 		{ default: getPort },
 		{ default: lighthouse, desktopConfig },
+		{ largestObservedTopLevelTask },
 	] = await Promise.all([
 		import("@playwright/test"),
 		import("get-port"),
 		import("lighthouse"),
+		import("./lighthouse-observed-task.mjs"),
 	]);
 	const reports = [];
 	const field = [];
@@ -236,10 +238,31 @@ export async function collectProductionPerformance(options) {
 						device === "desktop" ? desktopConfig : undefined,
 					);
 					if (!result?.lhr) throw new Error("Lighthouse returned no report");
+					// Observed trace timing of the largest top-level task. Like
+					// the CI fixture, a malformed trace must not cost the audit's
+					// report.
+					let observedTask = null;
+					let observedTaskError = null;
+					try {
+						observedTask = await largestObservedTopLevelTask(result.artifacts);
+					} catch (error) {
+						observedTaskError =
+							error instanceof Error ? error.message : String(error);
+						console.warn(
+							`Largest observed task extraction failed for ${url} (${device}, run ${run}):`,
+							error,
+						);
+					}
 					const report = saveLighthouseReport(
 						options.output,
 						result.lhr,
-						{ device, run, environment: "production-lab" },
+						{
+							device,
+							run,
+							environment: "production-lab",
+							largestObservedTask: observedTask ?? undefined,
+							largestObservedTaskError: observedTaskError ?? undefined,
+						},
 						result.report[1],
 					);
 					reports.push(report);

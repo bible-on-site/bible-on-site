@@ -376,11 +376,6 @@ public class PasukSegment
     public bool IsQriDifferentThanKtiv => Type == SegmentType.Qri && PairedOffset.HasValue;
 
     /// <summary>
-    /// Whether this ktiv differs from its qri (ktiv has a different spelling).
-    /// </summary>
-    public bool IsKtivDifferentThanQri => Type == SegmentType.Ktiv && PairedOffset.HasValue && PairedOffset.Value != 0;
-
-    /// <summary>
     /// Whether the segment ends with a maqaf (Hebrew hyphen).
     /// </summary>
     public bool EndsWithMaqaf => Value.Length > 0 && Value[^1] == '־';

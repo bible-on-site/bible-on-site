@@ -62,10 +62,7 @@ public static class SearchText
 
     public static string[] Tokens(string text) => Normalize(text).Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-    public static int Score(string text, string query) =>
-        ScoreNormalized(text, Normalize(query));
-
-    /// <summary><see cref="Score"/> with the query already normalized —
+    /// <summary>Scores <paramref name="text"/> against an already-normalized query —
     /// hot loops normalize the query once instead of per candidate.</summary>
     internal static int ScoreNormalized(string text, string normalizedQuery)
     {

@@ -69,7 +69,7 @@ CREATE TABLE `tanah_article` (
     -- tanah_article_content_hash_upgrade.sql.
     `content_hash` binary(16) GENERATED ALWAYS AS (UNHEX(MD5(CONCAT_WS(X'01', IFNULL(`name`, ''), IFNULL(`abstract`, ''), IFNULL(`content`, ''), `perek_id`, `author_id`)))) STORED,
     PRIMARY KEY (`id`),
-    KEY `idx_article_perek` (`perek_id`),
+    KEY `idx_article_perek` (`perek_id`, `priority`),
     KEY `idx_article_author` (`author_id`)
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 DEFAULT CHARSET = utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */

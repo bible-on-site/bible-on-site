@@ -523,9 +523,6 @@ describe("cached loader tag contracts", () => {
 			})),
 		});
 		const loaders = await import("../../../src/lib/dedications/loaders");
-		expect((await loaders.getHelekDedications(2)).map((d) => d.id)).toEqual([
-			12,
-		]);
 		expect((await loaders.getParashaDedications(4)).map((d) => d.id)).toEqual([
 			20,
 		]);
@@ -535,10 +532,6 @@ describe("cached loader tag contracts", () => {
 		expect(
 			(await loaders.getEntryDedications("entry-1")).map((d) => d.id),
 		).toEqual([22]);
-		expect(stampedTags("helek-dedications", "2")).toEqual([
-			"dedications",
-			"helek:2:dedications",
-		]);
 		expect(stampedTags("parasha-dedications", "4")).toEqual([
 			"dedications",
 			"parasha:4:dedications",

@@ -2,7 +2,7 @@
 
 Issue [#2997](https://github.com/bible-on-site/bible-on-site/issues/2997)
 tracks restoring the 300-second protected handover window. This document
-records the two latency changes and how to read their evidence. The original
+records the latency changes and how to read their evidence. The original
 90-second listener drain and its rationale are described in
 [deployment-readiness-2026-10-06](deployment-readiness-2026-10-06.md); the
 measured replacement below keeps its protections.
@@ -50,15 +50,52 @@ seconds — but no earlier than a 45-second floor and no later than the same
 the logger are injectable for tests; production uses `PORT` (default 3000) and
 procfs.
 
+## Early readiness probe
+
+The readiness warm-up (canonical data, search indexes, recitation package,
+page renderers, database and sanitizer checks inside `GET
+/api/health/ready`) is the dominant controllable startup cost — measured at
+~2.0–2.8 s of CPU on a developer machine for the data stages alone
+(`sefarim` Brotli+JSON load ~0.60 s, `getPasukIndex` ~0.73 s,
+`recitationResponse` ~0.65–1.36 s producing the ~8 MB package, DOMPurify
+~0.01 s), before page renders and database work. On the 0.5 vCPU task this
+is the bulk of the observed ~44 s cold-admission delta.
+
+Before this change the warm-up could not start until the first scheduled
+container check: Docker's `--start-interval=5s` fires the first probe
+seconds after the listener is already queueing requests, so the warm-up
+waited on a schedule instead of the socket. `start-server.mjs` now fires
+the same `GET /api/health/ready` as soon as `127.0.0.1:<port>` accepts a
+connection, retrying refused connections every 250 ms. The endpoint is
+authoritative and shares one in-flight check between concurrent callers —
+canonical data, indexes, recitation package, sanitizer, content query and
+page renders all run once — so the probe is only an early client of the
+warm the health check already drives; sequential checks still re-verify
+the database. Any HTTP response ends the probe, and `stop()` on child exit
+aborts a pending request so the wrapper never outlives its child (retry
+timers are unref'd for the same reason). The probe is best-effort: each
+distinct transport failure warns once as
+`Website readiness probe attempt failed: …`, probe defects never change
+the launcher exit status, and the container `HEALTHCHECK` stays
+authoritative. The first response logs
+
+- `Website readiness probe: HTTP <status> after <elapsed>ms`
+
+which separates launcher start, listener readiness and warm completion in
+CloudWatch — the startup-side counterpart of the drain lines above.
+
 ## Lifecycle timing evidence
 
-The launcher logs the two boundaries that were previously invisible:
+The launcher logs the boundaries that were previously invisible:
 
 - `Website draining cached DNS requests: forwarding SIGTERM after <quiet>ms
   without inbound connections, no earlier than <min>ms, or <drain>ms at most`
   — drain began.
 - `Website drain <reason> after <elapsed>ms; forwarding SIGTERM to server.js` —
   drain ended (`saw no inbound connections` or `reached the deadline`).
+- `Website readiness probe: HTTP <status> after <elapsed>ms` — the early
+  warm-up probe's first response; with container start and ECS health events
+  it separates launcher start, listener readiness and warm completion.
 
 Together with container start, ECS health and Cloud Map events these lines
 separate SIGTERM receipt, measured drain, forwarded shutdown and exit in
@@ -89,7 +126,12 @@ specific PR under the root `AGENTS.md` AWS rule.
 
 - Cloud Map A-record TTL (10s) and `HealthCheckCustomConfig` failure threshold
   (1) are already minimal; the ~30-second ECS-healthy→Cloud-Map-healthy gap is
-  AWS-internal health propagation, not a tunable on our side.
+  AWS-internal health propagation, not a tunable on our side. Confirmed
+  against AWS documentation: `FailureThreshold` multiplies a fixed
+  30-second interval before Cloud Map acts on an ECS health change
+  ([HealthCheckCustomConfig](https://docs.aws.amazon.com/cloud-map/latest/api/API_HealthCheckCustomConfig.html),
+  [aws/containers-roadmap#449](https://github.com/aws/containers-roadmap/issues/449)
+  — the interval itself is not configurable).
 - `MinimumHealthyPercent: 100` / `MaximumPercent: 200`, desired count,
   capacity, `StopTimeout: 120`, the deployment circuit breaker setting and all
   routing/protection behavior are unchanged.

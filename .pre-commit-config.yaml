@@ -50,7 +50,7 @@ repos:
   # https://github.com/rhysd/actionlint/issues/693
   # This Astral revision supports them and retains the existing Pyflakes checks.
   - repo: "https://github.com/astral-sh/actionlint"
-    rev: dbad7bbbc92988579c4050c3389de41e9762123a
+    rev: b524c8e879bd35356822b4506f62b6feab792eaf
     hooks:
       - id: actionlint
         priority: 10
@@ -71,7 +71,7 @@ repos:
   # no explanatory comment), RET502 (implicit-None returns mixed with returns —
   # the "Explicit returns mixed with implicit returns" finding).
   - repo: "https://github.com/astral-sh/ruff-pre-commit"
-    rev: v0.17.3
+    rev: v0.17.4
     hooks:
       - id: ruff-check
         args: [--select, "F,D2,BLE001,E722,S110,RET502"]

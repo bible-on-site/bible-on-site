@@ -21,7 +21,7 @@
     <Compile Include="../BibleOnSite.E2eCoverage/Recorder.cs" Link="Recorder.cs" />
     <ProjectReference Include="../devops/_build.csproj" />
     <ProjectReference Include="../devops.Tests.Probes/devops.Tests.Probes.csproj" ReferenceOutputAssembly="false" />
-    <PackageReference Include="xunit.v3" Version="4.0.2" />
+    <PackageReference Include="xunit.v3" Version="4.0.3" />
   </ItemGroup>
 
   <Target Name="CopyCoverageEndpointProbe" AfterTargets="Build">

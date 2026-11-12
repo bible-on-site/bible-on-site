@@ -2,8 +2,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { Browser } from "@playwright/test";
 
-/** Start before navigation so recording adds no setup wait before the input.
- * Keep the original failing sequence; a later replay may miss a sporadic stall.
+/** Keep original task/pause records without timeline layout instrumentation.
+ * Detailed timeline recording measurably adds layout work to qualification;
+ * the separate failure replay owns that recording and its CPU profile.
+ * Start before navigation so recording adds no setup wait before the input.
  */
 export async function startTurnQualificationTrace(browser: Browser) {
 	const client = await browser.newBrowserCDPSession();
@@ -12,7 +14,7 @@ export async function startTurnQualificationTrace(browser: Browser) {
 	);
 	try {
 		await client.send("Tracing.start", {
-			categories: "toplevel,devtools.timeline,blink.user_timing",
+			categories: "toplevel,blink.user_timing",
 			transferMode: "ReturnAsStream",
 		});
 	} catch (error) {

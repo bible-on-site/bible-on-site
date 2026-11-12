@@ -35,12 +35,11 @@ public sealed class PerekPilotTests(ITestOutputHelper output, MobileDeviceSessio
         var sourceTop = source.Frame.Location.Y;
         var sourceBottom = sourceTop + source.Frame.Size.Height;
         Page.Tap("PerekSource");
-        // The search bar slides in over several layout passes; a one-shot
-        // snapshot can land before the input exists or measure it mid-motion.
-        var (inputLocation, inputSize) = Page.WaitForStableFrame("PerekSearchInput");
-        Assert.InRange(inputLocation.Y + inputSize.Height / 2, sourceTop, sourceBottom);
         Page.WaitFor("SearchStatus", element => element.Text == "חיפושים אחרונים");
         Page.WaitFor("RecentSearches");
+        // The search bar slides in over several layout passes; measure its settled frame.
+        var (inputLocation, inputSize) = Page.WaitForStableFrame("PerekSearchInput");
+        Assert.InRange(inputLocation.Y + inputSize.Height / 2, sourceTop, sourceBottom);
         Assert.Empty(Page.RenderedElements("PerekHeader"));
         var searchPage = Page.RenderedElements("SearchPanel").First();
         var windowWidth = DriverTelemetry.WindowSize(Driver!).Width;
