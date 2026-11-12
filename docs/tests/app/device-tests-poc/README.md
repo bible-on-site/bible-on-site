@@ -6,7 +6,7 @@ outside `app/` on purpose (the app NuGet-cache key hashes every `app/*.csproj`).
 
 The runner (`Platforms/Android/Runner.cs`, `EntryPoints.cs`) is a trimmed,
 hand-written equivalent of the vendored dotnet/maui headless runner used by
-CommunityToolkit/Maui#3344 (~180 lines vs their ~70-file tree + source
+CommunityToolkit/Maui#3344 (~240 lines vs their ~70-file tree + source
 generator, which emits the same manifest entries).
 
 `Tests/` holds one parity test (assertions copied from

@@ -103,7 +103,7 @@ not job minutes.
 - `xharness android test`: **24 s wall** → install ~4 s + instrumentation ~16 s (process start + JIT + 4 s execution).
 - **7/7 pass**: converter parity (identical assertions to `PasukMarkerTextConverterTests`) 0.50 s; platform measure 1.27 s; real `ButtonHandler` 0.42 s; XAML inflate 0.68 s; DeviceInfo 0.06 s; UI-thread 0.03 s; AppInfo 0.001 s. Standard xUnit XML pulled off the device; XHarness exit 0.
 - Non-obvious requirements found by doing it: the `[Instrumentation]`/`[Activity]` manifest entries must be generated (missing → exit 82 `RETURN_CODE_NOT_SET`); Debug APKs ship no assemblies → `monodroid` aborts ("No assemblies found") — build Release or `EmbedAssembliesIntoApk`; results export needs the MediaStore path on API ≥ 30.
-- PoC used a hand-written ~180-line runner (no source generator, no visual runner) — proving the *minimal* adoption is much smaller than the full vendored tree.
+- PoC used a hand-written ~240-line runner (no source generator, no visual runner) — proving the *minimal* adoption is much smaller than the full vendored tree.
 
 **Not measured** (missing evidence, not claims): iOS device-test run (no macOS host locally); Windows device test (no maui-windows workload installed); our real app code inside a device test (PoC linked one self-contained production file, `PasukMarkerTextConverter.cs`); cold CI numbers for a device-test leg (extrapolate: build ≈ our existing app build, run ≈ minutes not tens-of-minutes).
 
@@ -189,7 +189,7 @@ The PoC source is committed under [`device-tests-poc/`](device-tests-poc/README.
 (research code, not in the solution and not built by CI — deliberately kept out of
 `app/` because the app NuGet-cache key hashes every `app/*.csproj`). It is a normal
 single-project MAUI app (`net10.0-android`, `UseMaui`, `IsTestProject=false`) plus:
-~180-line `Runner.cs` (TestDevice, HeadlessTestRunner extending
+~240-line `Runner.cs` (TestDevice, HeadlessTestRunner extending
 `AndroidApplicationEntryPoint`, `MauiTestActivity`, `MauiTestInstrumentation` with
 the MediaStore results export), 4 entry-point classes (`[Application]`,
 `[Activity MainLauncher]`, `[Instrumentation]`, `[Activity TestActivity]`), a
