@@ -31,6 +31,13 @@ import { pediaChangesForEntities } from "./paths";
  * normally records pairs the seed deploy already saw, but an entity
  * created after seeding has no claims — without recording the admin
  * removal, the next deploy would resurrect a deleted curated mapping.
+ *
+ * Rollout ordering: the mapping table predates this feature while the
+ * ledger ships in the same deploy. A set may tolerate a not-yet-created
+ * ledger — the stored row already blocks the guarded seed insert and the
+ * deploy claims every present pair when it runs. A removal cannot: an
+ * unclaimed delete is the exact resurrection vector, so it fails loudly
+ * until the ledger exists.
  */
 
 const STALE_MESSAGE =
@@ -126,11 +133,18 @@ export async function setEntityExternalReference(
 					[url, EXTERNAL_REFERENCE_SUBJECT_KIND, input.entityId, input.source],
 				);
 			}
-			await claimPair(conn, input.entityId, input.source);
+			try {
+				await claimPair(conn, input.entityId, input.source);
+			} catch (error) {
+				// The stored row already blocks the guarded seed insert and
+				// the deploy claims every present pair — a missing ledger
+				// only means the structure deploy has not run yet.
+				if (!isMissingMysqlSchema(error)) throw error;
+			}
 		});
 	} catch (error) {
 		if (isMissingMysqlSchema(error)) {
-			throw new Error("טבלת external_reference עדיין לא פרוסה");
+			throw new Error("טבלאות external_reference עדיין לא פרוסו");
 		}
 		throw error;
 	}
@@ -159,12 +173,14 @@ export async function removeEntityExternalReference(
 				[EXTERNAL_REFERENCE_SUBJECT_KIND, input.entityId, input.source],
 			);
 			// Claim inside the same commit: a deleted pair must stay deleted
-			// even when the pair was never seeded or claimed before.
+			// even when the pair was never seeded or claimed before. Unlike a
+			// set, removal cannot skip a missing ledger — an unclaimed delete
+			// is exactly what the guarded seed insert would resurrect.
 			await claimPair(conn, input.entityId, input.source);
 		});
 	} catch (error) {
 		if (isMissingMysqlSchema(error)) {
-			throw new Error("טבלת external_reference עדיין לא פרוסה");
+			throw new Error("טבלאות external_reference עדיין לא פרוסו");
 		}
 		throw error;
 	}

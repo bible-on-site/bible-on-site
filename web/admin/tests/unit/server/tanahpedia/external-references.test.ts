@@ -107,6 +107,24 @@ describe("setEntityExternalReference", () => {
 		);
 	});
 
+	it("still saves when the claim ledger is not deployed yet", async () => {
+		mockState("entity-1", null);
+		executeMock
+			.mockResolvedValueOnce(undefined)
+			.mockRejectedValueOnce({ code: "ER_NO_SUCH_TABLE" });
+
+		await expect(
+			setEntityExternalReference({
+				entityId: "entity-1",
+				source: "WIKIDATA",
+				url: "Q9181",
+				expectedUrl: null,
+			}),
+		).resolves.toEqual({
+			url: "https://www.wikidata.org/wiki/Q9181",
+		});
+	});
+
 	it("updates the row when the live URL matches the snapshot", async () => {
 		mockState("entity-1", "https://www.wikidata.org/wiki/Q9181");
 
@@ -234,6 +252,21 @@ describe("removeEntityExternalReference", () => {
 			expect.stringContaining("INSERT IGNORE INTO external_reference_seed"),
 			["TANAHPEDIA_ENTITY", "entity-1", "SEFARIA"],
 		);
+	});
+
+	it("refuses an unprotected removal while the ledger is missing", async () => {
+		mockState("entity-1", "https://www.sefaria.org/topics/abraham");
+		executeMock
+			.mockResolvedValueOnce(undefined)
+			.mockRejectedValueOnce({ code: "ER_NO_SUCH_TABLE" });
+
+		await expect(
+			removeEntityExternalReference({
+				entityId: "entity-1",
+				source: "SEFARIA",
+				expectedUrl: "https://www.sefaria.org/topics/abraham",
+			}),
+		).rejects.toThrow("טבלאות external_reference עדיין לא פרוסו");
 	});
 
 	it("rejects removal of an already-absent mapping", async () => {
