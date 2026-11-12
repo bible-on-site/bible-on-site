@@ -834,7 +834,54 @@ public class MasoraViewModelTests
 
         fixture.Preferences.QriynotEnabled.Should().BeFalse();
         fixture.Model.IsQriynotEnabled.Should().BeFalse();
+        fixture.Model.ShowHeaderPlayButton.Should().BeFalse(
+            "קריינות off hides the button even with audio installed");
         notifications.Should().Contain([nameof(fixture.Model.IsQriynotEnabled),
             nameof(fixture.Model.ShowHeaderPlayButton)]);
+    }
+
+    [Fact]
+    public async Task ToggleSelectedPasuk_WithoutUnit_OnlyTracksTheKey()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+
+        // No unit is displayed — the canonical key toggles but there are no
+        // rows to flag.
+        fixture.Model.ToggleSelectedPasuk(1, 1);
+
+        fixture.Model.SelectedPasukCount.Should().Be(1);
+        fixture.Model.IsPasukSelected(1, 1).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ClearSelected_WithoutUnit_DropsTheSelection()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        fixture.Model.ToggleSelectedPasuk(1, 1);
+        fixture.Model.SelectedPasukCount.Should().Be(1);
+
+        fixture.Model.ClearSelected();
+
+        fixture.Model.SelectedPasukCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task PreferencesChange_WithoutUnit_StillTrimsCheckedPerushim()
+    {
+        await using var fixture = new Fixture(extraPerushInserts:
+            ["INSERT INTO perush VALUES (2,'Ibn Ezra',2)", "INSERT INTO perush VALUES (3,'Ramban',3)"]);
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+        fixture.Model.ToggleCheckedPerush(1);
+        fixture.Model.ToggleCheckedPerush(2);
+        fixture.Model.ToggleCheckedPerush(3);
+        fixture.Model.Unit = null;
+
+        fixture.Preferences.InlineCommentaryLimit = 2;
+
+        fixture.Model.CheckedPerushim.Should().HaveCount(2,
+            "the inline limit trims even with no unit to repaint");
     }
 }

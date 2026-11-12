@@ -194,4 +194,36 @@ public class RecitationRangePlannerTests
 
         segments.Should().ContainSingle().Which.PerekId.Should().Be(9);
     }
+
+    [Fact]
+    public void SegmentsForSlices_EndClippedSlice_IsNotWholePerek()
+    {
+        var tracks = new Dictionary<int, RecitationTrack> { [5] = Track(5, "pending") };
+        var pasukim = CanonicalPerek();
+        // The slice spans the whole perek's pesukim but clips its last
+        // pasuk's segments — not a whole-perek read for the raw-file fallback.
+        var slices = new[] { Slice(5, startPasuk: 1, endPasuk: 3, endSegment: 1) };
+
+        var segments = RecitationRangePlanner.SegmentsForSlices(
+            slices, _ => pasukim, id => tracks.GetValueOrDefault(id),
+            tracks.ContainsKey, versePause: false);
+
+        segments.Should().BeEmpty(
+            "an unaligned track has no approved boundary for a segment-clipped tail");
+    }
+
+    [Fact]
+    public void SegmentsForSlices_StartClippedSlice_IsNotWholePerek()
+    {
+        var tracks = new Dictionary<int, RecitationTrack> { [5] = Track(5, "pending") };
+        var pasukim = CanonicalPerek();
+        // Same shape on the leading edge — the clip starts mid-pasuk.
+        var slices = new[] { Slice(5, startPasuk: 1, endPasuk: 3, startSegment: 2) };
+
+        var segments = RecitationRangePlanner.SegmentsForSlices(
+            slices, _ => pasukim, id => tracks.GetValueOrDefault(id),
+            tracks.ContainsKey, versePause: false);
+
+        segments.Should().BeEmpty();
+    }
 }

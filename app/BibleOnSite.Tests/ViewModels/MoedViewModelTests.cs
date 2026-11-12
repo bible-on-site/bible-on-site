@@ -691,6 +691,10 @@ public class MoedViewModelTests
         model.PerushimEmptyMessage.Should().Be("אין פרשנות למועד זה");
         // The pasuk row still loads — only commentary is absent.
         model.Rows.Where(r => r.Pasuk != null).Should().NotBeEmpty();
+        // A row whose perek has no notes chapter resolves to empty too.
+        model.GetPerushimForRow(3, 1).Should().BeEmpty();
+        model.GetPerushimForRow(3, 99).Should().BeEmpty(
+            "a pasuk position the moed does not cover also resolves to empty");
     }
 
     [Fact]
@@ -864,6 +868,102 @@ public class MoedViewModelTests
         // false, and the selector surfaces its empty state instead of rows.
         fixture.Model.Perushim.Should().BeEmpty();
         fixture.Model.HasPerushim.Should().BeFalse();
+        // While the pack copies the page shows the pending message, never a
+        // download button for an action already in flight.
+        fixture.Model.PerushimEmptyMessage.Should().Be("טוען פירושים...");
+
+        // Once initialization settled without notes, the empty state points
+        // at the download affordance instead.
+        await fixture.Notes.InitializeAsync();
+        await fixture.Model.LoadPerushimAsync(fixture.Model.Unit!);
+
+        fixture.Model.PerushimEmptyMessage.Should().Be("להוריד פירושים");
+        fixture.Model.ShowDownloadPerushimButton.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ToggleSelectedPasuk_HeaderPosition_OnlyTracksTheKey()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadBySlugAsync("first");
+
+        // Canonical (0,0) lands on header rows — they have no pasuk to flag,
+        // so the selection tracks the key without touching any row.
+        fixture.Model.ToggleSelectedPasuk(0, 0);
+        // A position no row carries toggles the key with an empty row sweep.
+        fixture.Model.ToggleSelectedPasuk(0, 5);
+
+        fixture.Model.SelectedPasukCount.Should().Be(2);
+        fixture.Model.Rows.Select(r => r.Pasuk).OfType<Pasuk>()
+            .Should().OnlyContain(pasuk => !pasuk.IsSelected);
+    }
+
+    [Fact]
+    public async Task LoadArticlesAsync_StaleOrMissingUnit_IsDiscarded()
+    {
+        var articles = new List<Article>
+        {
+            new() { Id = 7, Abstract = "a" },
+            new() { Id = 9, Abstract = "b" },
+        };
+        await using var fixture = new Fixture(articles: articles);
+        await fixture.Initialize();
+        await fixture.Model.LoadBySlugAsync("first");
+        fixture.Model.Articles.Should().HaveCount(2);
+
+        // A load resolving a moed that is no longer on screen keeps the
+        // current moed's articles untouched.
+        var other = fixture.MoedService.GetMoed(2)!;
+        await fixture.Model.LoadArticlesAsync(other);
+
+        fixture.Model.Articles.Should().HaveCount(2);
+        other.ArticlesCount.Should().Be(0, "the stale load never stamped its count");
+
+        // And an orphan load with nothing displayed resolves to nothing too.
+        var orphan = new MoedViewModel(fixture.MoedService,
+            new PerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object)),
+            fixture.Preferences, fixture.Catalog, fixture.Notes,
+            () => articles, _ => false, _ => null);
+        await orphan.LoadArticlesAsync(other);
+        orphan.Articles.Should().BeEmpty();
+        await orphan.LoadPerushimAsync(other);
+        orphan.Perushim.Should().BeEmpty(
+            "perushim for a moed that is not on screen stay unfilled");
+        var act = () => orphan.ToggleCheckedPerush(1);
+        act.Should().NotThrow("checking a perush with no unit just tracks the id");
+        var toggle = () => orphan.ToggleSelectedPasuk(1, 1);
+        toggle.Should().NotThrow("selecting a pasuk with no unit just tracks the key");
+    }
+
+    [Fact]
+    public async Task RefreshPreferences_WithoutUnit_StillTrimsCheckedPerushim()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadBySlugAsync("first");
+        fixture.Model.ToggleCheckedPerush(1);
+        fixture.Model.ToggleCheckedPerush(2);
+        fixture.Model.Unit = null;
+
+        fixture.Preferences.InlineCommentaryLimit = 1;
+
+        fixture.Model.CheckedPerushim.Should().HaveCount(1,
+            "shrinking the inline limit trims even with no unit to repaint");
+    }
+
+    [Fact]
+    public async Task RefreshRecitationAvailability_WithoutUnit_LeavesEverythingOff()
+    {
+        await using var fixture = new Fixture(
+            hasPerekAudio: _ => true,
+            getTrack: _ => new RecitationTrack(1, "u", "h", "t", 5000, "pending", []));
+        await fixture.Initialize();
+
+        var act = () => fixture.Model.RefreshRecitationAvailability();
+
+        act.Should().NotThrow();
+        fixture.Model.HasCurrentUnitRecitation.Should().BeFalse();
     }
 
     private static PerushimNotesService ExportableNotes(TestStorage storage) =>

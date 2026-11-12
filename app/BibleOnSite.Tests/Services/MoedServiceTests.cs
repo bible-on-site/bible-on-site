@@ -394,6 +394,78 @@ public class MoedServiceTests
     }
 
     [Fact]
+    public async Task Load_NullDataEnvelope_LeavesAnEmptyCatalogue()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport("{\"data\":null}");
+        var service = ServiceWith(http, storage);
+
+        await service.LoadWithRetryAsync();
+
+        service.IsLoaded.Should().BeFalse();
+        service.Moadim.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetMoedBySlugAsync_NullDataEnvelope_ResolvesAsUnavailable()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(Response);
+        var service = ServiceWith(http, storage);
+        await service.LoadWithRetryAsync();
+        http.Respond = _ => Task.FromResult(GraphQLTransport.JsonResponse("{\"data\":null}"));
+
+        (await service.GetMoedBySlugAsync("missing")).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task LoadWithRetry_NullJsonCache_StaysUnloaded()
+    {
+        await using var storage = new TestStorage();
+        var cacheFile = Path.Join(storage.FileSystem.Object.AppDataDirectory, "moadim_cache.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFile)!);
+        // A deserializable-but-null payload is not a corrupt file — it still
+        // carries no catalogue.
+        await File.WriteAllTextAsync(cacheFile, "null");
+        using var deadTransport = new GraphQLTransport();
+        deadTransport.Respond = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        var service = ServiceWith(deadTransport, storage);
+
+        await service.LoadWithRetryAsync();
+
+        service.IsLoaded.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Load_SparseMoedPayload_DefaultsItsOptionalLists()
+    {
+        // Fields the API may omit entirely — sections, per-range lists and
+        // articles — must not turn a published moed into a crash.
+        const string sparse = """
+            {"data":{"moadim":[
+                {"id":6,"slug":"sparse","name":"מועד דל","summary":null,"hebrewMonth":null,
+                 "dateLabel":null,"annualOrder":1,"published":true,
+                 "sections":[{"id":61,"label":"קריאה","position":1}]},
+                {"id":7,"slug":"barren","name":"מועד עקר","summary":null,"hebrewMonth":null,
+                 "dateLabel":null,"annualOrder":2,"published":true}
+            ]}}
+            """;
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(sparse);
+        var service = ServiceWith(http, storage);
+
+        await service.LoadWithRetryAsync();
+
+        var moed = service.GetMoedBySlug("sparse");
+        moed.Should().NotBeNull();
+        moed!.Sections.Should().ContainSingle();
+        moed.Sections[0].Ranges.Should().BeEmpty();
+        moed.ArticleIds.Should().BeEmpty();
+        // A moed whose payload omits the sections list entirely defaults to none.
+        service.GetMoedBySlug("barren")!.Sections.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task TryRefresh_SequentialAfterLoad_PerformsItsOwnFetch()
     {
         await using var storage = new TestStorage();
