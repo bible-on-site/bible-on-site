@@ -811,9 +811,6 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
             return;
         }
 
-        _perushNotesCache = new();
-        _perushChapter = chapter;
-
         // Order perushim by priority (Targum first, Rashi second, etc.)
         var orderedPerushim = perushIds
             .Select(id => perushById.GetValueOrDefault(id))
@@ -822,15 +819,11 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
             .Cast<Perush>()
             .ToList();
 
-        // Preserve checked perushim that are also available in the new perek.
-        // Set CheckedPerushim BEFORE Perushim so the CollectionView binding
-        // sees the correct checked state when it re-renders items.
-        var availableIds = new HashSet<int>(perushIds);
-        CheckedPerushim = CheckedPerushim.Where(id => availableIds.Contains(id)).Take(_preferencesService.InlineCommentaryLimit).ToList();
         // Stored per-perush reading metrics for the sheet badges (issue #2607)
         // — one batched read, decorated before the non-observable list is
-        // published so the badge binds once; a stale or superseded load drops
-        // out entirely rather than publishing half-decorated state.
+        // published so the badge binds once. A load that loses currency below
+        // mutates nothing observable: every write lives in the publish tail
+        // after the final check (#3310).
         if (!IsCurrentPerushimLoad(stamp, perekId))
         {
             return;
@@ -851,6 +844,17 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
                 perush.ReadingMetric = metric;
             }
         }
+
+        _perushNotesCache = new();
+        _perushChapter = chapter;
+
+        // Preserve checked perushim that are also available in the new perek —
+        // restricted to ids the catalog can render, so a notes-only id cannot
+        // keep an invisible check alive. Set CheckedPerushim BEFORE Perushim
+        // so the CollectionView binding sees the correct checked state when
+        // it re-renders items.
+        var availableIds = new HashSet<int>(orderedPerushim.Select(p => p.Id));
+        CheckedPerushim = CheckedPerushim.Where(id => availableIds.Contains(id)).Take(_preferencesService.InlineCommentaryLimit).ToList();
 
         Perushim = orderedPerushim;
 

@@ -927,4 +927,38 @@ public class PerekLoadingTests
             "the superseded load must not touch the visible note rows");
         pasuk.VisiblePerushNotes.Should().HaveCount(1);
     }
+
+    [Fact]
+    public async Task LoadPerushimAsync_WhenUserSelectsDuringInFlightLoad_KeepsOnlyRenderableChecks()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        var gated = new GatedMetricsNotesService(NotesDeliveryTests.Pad().Object, fixture.Storage.FileSystem.Object);
+        var vm = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), null,
+            fixture.Data, new PerushimCatalogService(fixture.Storage.FileSystem.Object),
+            gated, fixture.Navigator.Object, fixture.Storage.FileSystem.Object, null);
+        var pasuk = new Pasuk { PasukNum = 1, Text = "בראשית" };
+        var perek = BarePerek(1);
+        perek.Pasukim = [pasuk];
+        vm.Perek = perek;
+
+        var load = vm.LoadPerushimAsync(1);
+        await gated.MetricsEntered.Task;
+
+        // The user checks תרגום while the load is still parked at the metric
+        // read — and a stale sheet row fires an id this perek has no notes
+        // for, which nothing can ever render.
+        vm.ToggleCheckedPerush(2);
+        vm.ToggleCheckedPerush(42);
+        vm.CheckedPerushim.Should().Equal(2, 42);
+
+        gated.MetricsResult.SetResult(new Dictionary<int, ReadingMetric>());
+        await load;
+
+        vm.Perushim.Select(p => p.Id).Should().Equal(2, 1);
+        vm.CheckedPerushim.Should().Equal(new[] { 2 },
+            "publication keeps the mid-flight selection but drops checks that can never render");
+        pasuk.PerushNotes.Single().PerushId.Should().Be(2);
+        pasuk.VisiblePerushNotes.Should().HaveCount(1);
+    }
 }
