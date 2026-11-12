@@ -77,6 +77,25 @@ test("repairs the previously selected kernel primary without touching lookalike 
 	);
 });
 
+test("preserves an independent managed fallback and only replaces priority one", () => {
+	const contents =
+		"http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\n" +
+		"https://mirrors.kernel.org/ubuntu/\tpriority:2\n";
+	assert.equal(
+		preferUbuntuArchive(contents, primary),
+		`${primary}\tpriority:1\nhttps://mirrors.kernel.org/ubuntu/\tpriority:2\n`,
+	);
+	for (const metadata of [
+		"",
+		"\tpriority:2",
+		"\tpriority:10",
+		"\tpriority:1x",
+	]) {
+		const fallback = `https://mirrors.kernel.org/ubuntu/${metadata}\n`;
+		assert.equal(preferUbuntuArchive(fallback, primary), fallback);
+	}
+});
+
 async function fixture(t) {
 	const directory = await mkdtemp(join(tmpdir(), "ubuntu-apt-mirrors-"));
 	t.after(async () => {
@@ -154,7 +173,8 @@ test("rejects a stalled kernel mirror and selects complete Ubuntu metadata", asy
 	const calls = [];
 	const result = await selectUbuntuArchive("noble", async (url, { signal }) => {
 		calls.push({ url, signal });
-		if (url.includes("kernel.org")) throw new Error("connection timed out");
+		if (new URL(url).hostname === "mirrors.kernel.org")
+			throw new Error("connection timed out");
 		return new Response(signedMetadata);
 	});
 	assert.equal(result, primary);
@@ -174,7 +194,8 @@ test("rejects a stalled kernel mirror and selects complete Ubuntu metadata", asy
 test("uses the independent fallback when Ubuntu DNS fails", async () => {
 	assert.equal(
 		await selectUbuntuArchive("noble", async (url) => {
-			if (url.startsWith(primary)) throw new Error("ENOTFOUND");
+			if (new URL(url).hostname === "archive.ubuntu.com")
+				throw new Error("ENOTFOUND");
 			return new Response(signedMetadata);
 		}),
 		"https://mirrors.kernel.org/ubuntu/",
@@ -208,7 +229,7 @@ test("joins every parallel suite probe before choosing a fallback", async () => 
 	});
 	let completed = false;
 	const selection = selectUbuntuArchive("noble", async (url) => {
-		if (url.startsWith(primary)) {
+		if (new URL(url).hostname === "archive.ubuntu.com") {
 			if (url.includes("-updates/")) throw new Error("mirror incomplete");
 			await pending;
 		}

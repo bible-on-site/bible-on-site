@@ -10,6 +10,9 @@ const candidates = [
 	"https://mirrors.kernel.org/ubuntu/",
 ];
 const address = (line) => line.trimStart().split(/\s+/)[0];
+const managedPrimary = (line) =>
+	managedArchive.test(address(line)) &&
+	line.trim().split(/\s+/).slice(1).includes("priority:1");
 
 /** Preserve signed APT sources and fallback priorities; replace only our primary. */
 export function preferUbuntuArchive(contents, mirror) {
@@ -17,7 +20,7 @@ export function preferUbuntuArchive(contents, mirror) {
 		.split(/(?<=\n)/)
 		.map((line) => {
 			const uri = address(line);
-			return managedArchive.test(uri) ? line.replace(uri, mirror) : line;
+			return managedPrimary(line) ? line.replace(uri, mirror) : line;
 		})
 		.join("");
 }
@@ -82,10 +85,7 @@ export async function configureUbuntuAptMirrors(
 		);
 		return false;
 	}
-	if (
-		!contents.split(/\r?\n/).some((line) => managedArchive.test(address(line)))
-	)
-		return false;
+	if (!contents.split(/\r?\n/).some(managedPrimary)) return false;
 	const osRelease = options.codename
 		? null
 		: await readFile("/etc/os-release", "utf8");

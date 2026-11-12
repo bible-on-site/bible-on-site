@@ -32,6 +32,7 @@ internal sealed class CalendarSnapshot(IReadOnlyDictionary<string, CalendarSnaps
     {
         var timeout = TimeSpan.FromSeconds(45);
         var deadline = DateTime.UtcNow.Add(timeout);
+        WebDriverException? lastObservationFailure = null;
         while (DateTime.UtcNow < deadline)
         {
             try
@@ -39,11 +40,18 @@ internal sealed class CalendarSnapshot(IReadOnlyDictionary<string, CalendarSnaps
                 var snapshot = Capture(driver, platform, ids);
                 if (snapshot.IsReady) { return snapshot; }
             }
-            catch (StaleElementReferenceException) { }
-            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception)) { }
+            catch (StaleElementReferenceException exception)
+            {
+                lastObservationFailure = exception;
+            }
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
+            {
+                lastObservationFailure = exception;
+            }
             Thread.Sleep(200);
         }
-        throw new WebDriverTimeoutException($"Calendar labels {string.Join(", ", ids)} did not render within {timeout.TotalSeconds} seconds.");
+        throw new WebDriverTimeoutException(
+            $"Calendar labels {string.Join(", ", ids)} did not render within {timeout.TotalSeconds} seconds.", lastObservationFailure);
     }
 
     internal static CalendarSnapshot Capture(AppiumDriver driver, MobilePlatformAdapter platform, params string[] ids)
@@ -90,9 +98,13 @@ internal sealed class CalendarSnapshot(IReadOnlyDictionary<string, CalendarSnaps
             };
             if (!visible) { continue; }
             var value = (string?)node.Attribute("value");
-            var label = string.IsNullOrEmpty(value) ? (string?)node.Attribute("label") : value;
-            if (label is null) { throw new WebDriverException($"Calendar label {id} has no text."); }
-            matches.Add(new CalendarLabel(label.Trim(), Coordinate(node, "x"), Coordinate(node, "y"),
+            var semantic = (string?)node.Attribute("label");
+            var label = id == "MiniMonthDayText" ? semantic : string.IsNullOrEmpty(value) ? semantic : value;
+            if (label is null && id is not ("MiniMonthTitle" or "MiniMonthWeek"))
+            {
+                throw new WebDriverException($"Calendar label {id} has no text.");
+            }
+            matches.Add(new CalendarLabel(label?.Trim() ?? string.Empty, Coordinate(node, "x"), Coordinate(node, "y"),
                 Coordinate(node, "width"), Coordinate(node, "height")));
         }
         return new CalendarSnapshot(result.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray(), StringComparer.Ordinal), viewport);
