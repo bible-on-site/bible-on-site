@@ -1136,10 +1136,7 @@
       "attempt": 2,
       "runId": 41969126326,
       "jobId": 127085782226,
-      "expectedFailures": [
-        "all turns/blockingDurationMaxMs=50.1ms > 50ms",
-        "consecutive turns/blockingDurationMaxMs=50.1ms > 50ms"
-      ],
+      "expectedFailures": [],
       "chapter": 125,
       "mode": "leaf",
       "gesture": "drag",
@@ -3008,10 +3005,7 @@
       "attempt": 2,
       "runId": 41969126326,
       "jobId": 127085782226,
-      "expectedFailures": [
-        "all turns/blockingDurationMaxMs=85.6ms > 50ms",
-        "consecutive turns/blockingDurationMaxMs=85.6ms > 50ms"
-      ],
+      "expectedFailures": [],
       "chapter": 125,
       "mode": "pinned",
       "gesture": "toolbar",

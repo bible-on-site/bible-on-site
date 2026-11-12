@@ -73,6 +73,7 @@ env:
 
 jobs:
   publish:
+    timeout-minutes: 60
     name: Generate and publish calendar PDFs
     runs-on: ubuntu-latest
     defaults:

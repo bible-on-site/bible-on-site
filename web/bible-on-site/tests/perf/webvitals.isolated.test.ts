@@ -1,7 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { devices, type Page, type TestInfo } from "@playwright/test";
-import { reportBenchmark, webVitalsMeasure } from "../util/benchmark";
+import {
+	budgetedTimingBenchmarkEntry,
+	reportBenchmark,
+	webVitalsMeasure,
+} from "../util/benchmark";
 import { SeferPage } from "../util/playwright/page-objects/sefer-page";
 import { expect, test as testBase } from "../util/playwright/test-fixture";
 
@@ -168,13 +172,18 @@ const testWebVitals = async (
 		// CLS is a unitless ratio, all others are timing (milliseconds)
 		const measure = webVitalsMeasure(metricName);
 
-		// Export metric to benchmark file for historical tracking (Bencher format)
-		reportBenchmark({
-			name: `webvitals: ${metricName} (${testInfo.title}, ${device})`,
-			measure,
-			value: metric.measure,
-			upperValue: metric.max,
-		});
+		// Export metric to benchmark file for historical tracking (Bencher
+		// format). Timings normalize onto frame_budget_ratio against their
+		// own "good" budget: at 5-48ms with 8ms reporting granularity, a
+		// percentage of history alerts on runner noise (#2971).
+		reportBenchmark(
+			budgetedTimingBenchmarkEntry({
+				name: `webvitals: ${metricName} (${testInfo.title}, ${device})`,
+				measure,
+				value: metric.measure,
+				upperValue: metric.max,
+			}),
+		);
 		expect(metric.measure).toBeLessThan(metric.max);
 	}
 };
