@@ -14,7 +14,11 @@ const endpoint = new URL(process.env.S3_ENDPOINT || "http://localhost:4566");
 assert.ok(["localhost", "127.0.0.1", "[::1]"].includes(endpoint.hostname));
 assert.equal(endpoint.protocol, "http:");
 const client = new S3Client({
-	endpoint: endpoint.href, region: "il-central-1", forcePathStyle: true,
+	// The local RustFS server runs its default us-east-1 region and, since
+	// 1.0.5, rejects a CreateBucket LocationConstraint that differs from the
+	// configured server region — the SDK derives that constraint from this
+	// client region, so it must not claim a prod region.
+	endpoint: endpoint.href, region: "us-east-1", forcePathStyle: true,
 	credentials: { accessKeyId: "test", secretAccessKey: "test_1234" },
 });
 const Bucket = `recitation-test-${randomUUID()}`;
