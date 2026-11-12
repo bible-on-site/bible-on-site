@@ -136,15 +136,34 @@ export function ArchiveArea() {
 	}
 
 	/**
+	 * Resolves a folder by name inside a parent, paging through the parent's
+	 * listing. A same-named FILE must never be reused as a folder target.
+	 */
+	async function findFolder(
+		parentId: string,
+		name: string,
+	): Promise<string | null> {
+		let after = "";
+		for (;;) {
+			const listing: Directory = await api(undefined, parentId, after);
+			const found = listing.files.find(
+				(file) => file.kind === "folder" && file.filename === name,
+			);
+			if (found) return found.id;
+			if (!listing.nextCursor) return null;
+			after = listing.nextCursor;
+		}
+	}
+
+	/**
 	 * Walks a dropped entry into concrete upload items. Directories become real
-	 * archive folders (reusing a same-named folder in the displayed directory on
-	 * a 409), so nested content keeps its structure instead of being lost or
-	 * flattened. Names of folders that cannot be created are reported back.
+	 * archive folders (reusing a same-named folder on a 409), so nested content
+	 * keeps its structure instead of being lost or flattened. Names of folders
+	 * that cannot be created or resolved are reported back.
 	 */
 	async function collectEntry(
 		entry: FileSystemEntry,
 		parentId: string,
-		current: Directory,
 		items: UploadItem[],
 		skipped: string[],
 	): Promise<void> {
@@ -165,14 +184,15 @@ export function ArchiveArea() {
 				directory: parentId,
 			}));
 		} catch (e) {
-			const existing =
-				parentId === current.id
-					? current.files.find(
-							(file) => file.kind === "folder" && file.filename === entry.name,
-						)?.id
-					: undefined;
-			if ((e as { status?: number }).status === 409 && existing) {
-				directoryId = existing;
+			// A 409 means the name is taken; reuse it only when it is a folder.
+			if ((e as { status?: number }).status === 409) {
+				const existing = await findFolder(parentId, entry.name);
+				if (existing) {
+					directoryId = existing;
+				} else {
+					skipped.push(entry.name);
+					return;
+				}
 			} else {
 				skipped.push(entry.name);
 				return;
@@ -183,14 +203,14 @@ export function ArchiveArea() {
 			const batch = await entriesFromReader(reader);
 			if (!batch.length) break;
 			for (const child of batch)
-				await collectEntry(child, directoryId, current, items, skipped);
+				await collectEntry(child, directoryId, items, skipped);
 		}
 	}
 
 	async function collectDropped(
 		dataTransfer: DataTransfer,
 		current: Directory,
-	): Promise<{ items: UploadItem[]; skipped: string[] }> {
+	): Promise<{ items: UploadItem[]; skipped: string[]; hadEntries: boolean }> {
 		const items: UploadItem[] = [];
 		const skipped: string[] = [];
 		const entries: FileSystemEntry[] = [];
@@ -207,13 +227,13 @@ export function ArchiveArea() {
 			}
 		if (entries.length)
 			for (const entry of entries)
-				await collectEntry(entry, current.id, current, items, skipped);
+				await collectEntry(entry, current.id, items, skipped);
 		// Without entry support at all (no DataTransferItem list) fall back to
 		// the flat file list so plain file drops still upload.
 		else if (!items.length)
 			for (const file of Array.from(dataTransfer.files ?? []))
 				items.push({ file, directory: current.id });
-		return { items, skipped };
+		return { items, skipped, hadEntries: entries.length > 0 };
 	}
 
 	async function showPage(after: string, previous: string[]) {
@@ -358,23 +378,54 @@ export function ArchiveArea() {
 	}
 
 	async function handleDrop(event: React.DragEvent) {
+		// Non-file drops keep their default behavior (e.g. text into the
+		// folder-name input).
+		if (!fileDrag(event)) return;
 		event.preventDefault();
 		dragDepth.current = 0;
 		setDragging(false);
 		const { dataTransfer } = event;
 		if (!dataTransfer || !directory) return;
 		if (busy) {
-			if (fileDrag(event))
-				setError("יש להמתין לסיום הפעולה הנוכחית לפני גרירה נוספת");
+			setError("יש להמתין לסיום הפעולה הנוכחית לפני גרירה נוספת");
 			return;
 		}
 		setBusy(true);
 		setError("");
 		cancel.current = false;
-		const { items, skipped } = await collectDropped(dataTransfer, directory);
+		let items: UploadItem[] = [];
+		let skipped: string[] = [];
+		let hadEntries = false;
+		try {
+			({ items, skipped, hadEntries } = await collectDropped(
+				dataTransfer,
+				directory,
+			));
+		} catch (e) {
+			// An unreadable entry must not lock the controls: report it and
+			// refresh so folders created before the failure become visible.
+			setError((e as Error).message);
+			try {
+				await load(activeDirectory, "");
+			} catch (loadError) {
+				setError((loadError as Error).message);
+			} finally {
+				setBusy(false);
+			}
+			return;
+		}
 		if (items.length) {
 			await uploadPrepared(items);
 		} else {
+			// Entries without files (e.g. an empty dropped folder) still changed
+			// the archive — refresh so the new folder appears.
+			if (hadEntries) {
+				try {
+					await load(activeDirectory, "");
+				} catch (e) {
+					setError((e as Error).message);
+				}
+			}
 			setBusy(false);
 		}
 		if (skipped.length)

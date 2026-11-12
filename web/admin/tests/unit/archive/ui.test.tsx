@@ -312,6 +312,86 @@ it("uploads into a same-named existing folder when creation reports a conflict",
 	]);
 	expect(screen.queryByRole("alert")).toBeNull();
 });
+it("resolves a nested same-named folder through the parent's listing", async () => {
+	await mount();
+	(fetch as Mock)
+		.mockResolvedValueOnce(reply({ id: "dirA" }))
+		.mockResolvedValueOnce({
+			ok: false,
+			status: 409,
+			json: async () => ({ error: "conflict" }),
+		} as Response)
+		.mockResolvedValueOnce(
+			reply({
+				...directory,
+				files: [
+					{
+						id: "dirB",
+						filename: "עמוק",
+						size: 0,
+						status: "ready",
+						kind: "folder",
+					},
+				],
+			}),
+		);
+	await act(async () => {
+		fireEvent.drop(dropZone(), {
+			dataTransfer: dragData([
+				dirEntry("חומרים", [
+					dirEntry("עמוק", [fileEntry(new File(["x"], "deep.bin"))]),
+				]),
+			]),
+		});
+	});
+	await waitFor(() => expect(commandsSent("complete")).toHaveLength(1));
+	expect(commandsSent("mkdir")).toEqual([
+		{ action: "mkdir", name: "חומרים", directory: "home" },
+		{ action: "mkdir", name: "עמוק", directory: "dirA" },
+	]);
+	expect(commandsSent("start")).toEqual([
+		expect.objectContaining({ filename: "deep.bin", directory: "dirB" }),
+	]);
+});
+it("pages through the parent's listing to resolve a conflicting folder", async () => {
+	await mount();
+	(fetch as Mock)
+		.mockResolvedValueOnce({
+			ok: false,
+			status: 409,
+			json: async () => ({ error: "conflict" }),
+		} as Response)
+		.mockResolvedValueOnce(reply({ ...directory, nextCursor: "next" }))
+		.mockResolvedValueOnce(
+			reply({
+				...directory,
+				files: [
+					{
+						id: "dirB",
+						filename: "עמוק",
+						size: 0,
+						status: "ready",
+						kind: "folder",
+					},
+				],
+			}),
+		);
+	await act(async () => {
+		fireEvent.drop(dropZone(), {
+			dataTransfer: dragData([
+				dirEntry("עמוק", [fileEntry(new File(["x"], "deep.bin"))]),
+			]),
+		});
+	});
+	await waitFor(() => expect(commandsSent("complete")).toHaveLength(1));
+	expect(commandsSent("start")).toEqual([
+		expect.objectContaining({ filename: "deep.bin", directory: "dirB" }),
+	]);
+	const reads = (fetch as Mock).mock.calls.filter(([, o]) => !o?.method);
+	expect(
+		reads.some(([, o]) => o?.headers?.["X-Archive-After"] === "next"),
+	).toBe(true);
+});
 it("reports dropped folders it cannot create and still uploads loose files", async () => {
 	await mount();
 	(fetch as Mock).mockResolvedValueOnce({
@@ -334,6 +414,55 @@ it("reports dropped folders it cannot create and still uploads loose files", asy
 	expect(commandsSent("start")).toEqual([
 		expect.objectContaining({ filename: "ok.bin", directory: "home" }),
 	]);
+});
+it("creates and reveals an empty dropped folder", async () => {
+	await mount();
+	const before = (fetch as Mock).mock.calls.length;
+	await act(async () => {
+		fireEvent.drop(dropZone(), {
+			dataTransfer: dragData([dirEntry("ריקה", [])]),
+		});
+	});
+	expect(commandsSent("mkdir")).toEqual([
+		{ action: "mkdir", name: "ריקה", directory: "home" },
+	]);
+	const reads = (fetch as Mock).mock.calls
+		.slice(before)
+		.filter(([, options]) => !options?.method);
+	expect(reads.length).toBeGreaterThan(0);
+	expect(screen.queryByRole("alert")).toBeNull();
+	expect(screen.getByRole("button", { name: "רענון" })).toBeEnabled();
+});
+it("reports unreadable dropped entries and restores the controls", async () => {
+	await mount();
+	const before = (fetch as Mock).mock.calls.length;
+	const broken = {
+		isFile: true,
+		isDirectory: false,
+		name: "broken.bin",
+		file: (_resolve: unknown, reject: (e: Error) => void) =>
+			reject(new Error("cannot read")),
+	} as unknown as FileSystemEntry;
+	await act(async () => {
+		fireEvent.drop(dropZone(), { dataTransfer: dragData([broken]) });
+	});
+	expect(await screen.findByRole("alert")).toHaveTextContent("cannot read");
+	expect(commandsSent("start")).toHaveLength(0);
+	expect(screen.getByRole("button", { name: "רענון" })).toBeEnabled();
+	// Folders created before the failure become visible again.
+	const reads = (fetch as Mock).mock.calls
+		.slice(before)
+		.filter(([, options]) => !options?.method);
+	expect(reads.length).toBeGreaterThan(0);
+});
+it("lets text drops populate the folder-name input", async () => {
+	await mount();
+	const calls = (fetch as Mock).mock.calls.length;
+	const allowed = fireEvent.drop(screen.getByLabelText("שם תיקייה חדשה"), {
+		dataTransfer: { types: ["text/plain"], items: [], files: [] },
+	});
+	expect(allowed).toBe(true);
+	expect((fetch as Mock).mock.calls.length).toBe(calls);
 });
 it("falls back to item files and the flat file list when no entries exist", async () => {
 	await mount();
