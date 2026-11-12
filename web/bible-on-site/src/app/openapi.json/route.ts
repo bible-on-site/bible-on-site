@@ -15,8 +15,9 @@ const DOCUMENT = {
 		version: "1.0.0",
 		description:
 			"Anonymous read-only endpoints over the public learning corpus. " +
-			"זיכוי הרבים project — content may be indexed, used in AI answers " +
-			"and trained on (see /llms.txt and /robots.txt).",
+			"זיכוי הרבים project — content may be indexed and used in AI " +
+			"answers; model training is withheld pending a per-bucket " +
+			"decision (see /llms.txt and /robots.txt).",
 	},
 	servers: [{ url: SITE_ORIGIN }],
 	paths: {
@@ -56,38 +57,6 @@ const DOCUMENT = {
 				responses: {
 					"200": { description: "Search results (JSON)." },
 					"400": { description: "Invalid parameters." },
-					"503": { description: "Transient backend failure; retry." },
-				},
-			},
-		},
-		"/md/{path}": {
-			get: {
-				summary: "Markdown representation of a public page",
-				description:
-					"UTF-8 Markdown for any canonical public learning path, e.g. " +
-					"/md/929/1 or /md/פרשה/בראשית. The same document is served at " +
-					"<path>.md and via `Accept: text/markdown` on the canonical path.",
-				parameters: [
-					{
-						name: "path",
-						in: "path",
-						required: true,
-						// The catch-all keeps interior slashes: /md/929/1, not
-						// /md/929%2F1. allowReserved tells generators not to
-						// percent-encode the `/` separators inside the value.
-						allowReserved: true,
-						schema: { type: "string" },
-						description:
-							"Canonical path without the leading slash, slashes " +
-							"preserved (e.g. `929/1`, `פרשה/בראשית`, `pedia/אברהם`).",
-					},
-				],
-				responses: {
-					"200": {
-						description: "Markdown document.",
-						content: { "text/markdown": {} },
-					},
-					"404": { description: "Path outside the public corpus or missing." },
 					"503": { description: "Transient backend failure; retry." },
 				},
 			},

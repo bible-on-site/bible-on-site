@@ -92,9 +92,14 @@ describe("proxy", () => {
 			// (book chrome gets its own noindex handling above).
 			"/פרשה/בראשית/not-a-cover",
 			"/other/1",
-			"/%invalid/1",
 		])("leaves non-unit %s untouched", async (path) => {
-			expect(await proxy(makeRequest(path))).toBeUndefined();
+			const result = await proxy(makeRequest(path));
+			expect(result?.headers.get("location")).toBeNull();
+			expect(result?.headers.get("x-robots-tag")).toBeNull();
+		});
+
+		it("returns undefined for an undecodable path", async () => {
+			expect(await proxy(makeRequest("/%invalid/1"))).toBeUndefined();
 		});
 	});
 
@@ -204,146 +209,58 @@ describe("proxy", () => {
 		});
 	});
 
-	describe("markdown discovery headers (issue #3257)", () => {
+	describe("agent discovery headers (issue #3257)", () => {
 		it.each([
-			["/", "/.md"],
-			["/929", "/929.md"],
-			["/929/1", "/929/1.md"],
-			["/929/1/42", "/929/1/42.md"],
-			// Link headers carry the URI-encoded canonical path, the same
-			// spelling the sitemap uses.
-			["/929/1/רש%22י", `/929/1/${encodeURIComponent('רש"י')}.md`],
-			["/929/authors", "/929/authors.md"],
-			["/פרשה", `/${encodeURIComponent("פרשה")}.md`],
-			["/מסורה/7", `/${encodeURIComponent("מסורה")}/7.md`],
-			["/masora/7", "/masora/7.md"],
-			["/מועדים/פסח", `/${encodeURIComponent("מועדים")}/${encodeURIComponent("פסח")}.md`],
-			["/pedia", "/pedia.md"],
-			[`/pedia/${encodeURIComponent("אברהם")}`, `/pedia/${encodeURIComponent("אברהם")}.md`],
-		])("advertises the .md alternate + guides on %s", async (path, mdPath) => {
+			"/",
+			"/929",
+			"/929/1",
+			"/פרשה",
+			"/מסורה/7",
+			"/pedia",
+			"/dev/dashboard",
+			// Even a defunct `.md` path gets the same plain pass-through —
+			// there is no Markdown representation to discover (PR #3299
+			// review).
+			"/929/1.md",
+		])("advertises the agent guide + catalogs on %s", async (path) => {
 			const response = await proxy(makeRequest(path));
 			expect(response?.headers.get("x-middleware-next")).toBe("1");
-			expect(response?.headers.get("vary")).toContain("Accept");
 			const link = response?.headers.get("link") ?? "";
-			expect(link).toContain(`<${mdPath}>; rel="alternate"; type="text/markdown"`);
 			expect(link).toContain('</llms.txt>; rel="help"');
 			expect(link).toContain('rel="api-catalog"');
+			expect(link).toContain('</sitemap.xml>; rel="sitemap"');
+			// No alternate representation and no negotiation contract.
+			expect(link).not.toContain('rel="alternate"');
+			expect(response?.headers.get("vary")).toBeNull();
 		});
 
-		it("does not add corpus headers to non-corpus paths", async () => {
-			const response = await proxy(makeRequest("/api/search?q=x"));
-			expect(response).toBeUndefined();
-		});
-	});
-
-	describe("markdown negotiation + .md URLs (issue #3257)", () => {
-		it.each([
-			["/929/1.md", "/md/929/1"],
-			["/929.md", "/md/929"],
-			["/929/1/42.md", "/md/929/1/42"],
-			["/.md", "/md/"],
-			["/פרשה/בראשית.md", "/md/פרשה/בראשית"],
-			["/מסורה/3.md", "/md/מסורה/3"],
-			["/masora/3.md", "/md/masora/3"],
-			["/מועדים/פסח.md", "/md/מועדים/פסח"],
-			// rewrittenPath decodes the destination before comparing.
-			[`/pedia/${encodeURIComponent("אברהם")}.md`, "/md/pedia/אברהם"],
-			["/929/1.MD", "/md/929/1"],
-		])("rewrites explicit %s to the markdown route", async (path, dest) => {
-			const response = await proxy(makeRequest(path));
-			expect(rewrittenPath(response)).toBe(
-				dest === "/md/" ? "/md/" : dest,
-			);
-		});
-
-		it("rewrites a text/markdown-preferred canonical URL the same way", async () => {
-			const response = await proxy(
-				makeRequest("/929/1", { accept: "text/markdown" }),
-			);
-			expect(rewrittenPath(response)).toBe("/md/929/1");
-		});
-
-		it("does not rewrite markdown-tied or plain-Accept requests", async () => {
-			for (const accept of [
-				"text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
-				"text/markdown;q=0.5,text/html;q=1",
-				"*/*",
-				"application/json",
-				"text/*",
-			]) {
-				const response = await proxy(makeRequest("/929/1", { accept }));
-				expect(rewrittenPath(response)).toBeNull();
-				expect(response?.headers.get("x-middleware-next")).toBe("1");
-			}
-		});
-
-		it("keeps .md out of non-corpus and management paths", async () => {
-			for (const path of [
-				"/api/search.md",
-				"/dev/dashboard.md",
-				"/api/dev/x.md",
-				"/foo/bar.md",
-				"/929/930.md",
-				"/פרשה/55.md",
-			]) {
-				const response = await proxy(makeRequest(path));
-				expect(rewrittenPath(response)).toBeNull();
-			}
-		});
-
-		it("never rewrites non-GET requests even for .md or markdown Accept", async () => {
-			for (const method of ["POST", "PUT", "DELETE"]) {
-				expect(
-					rewrittenPath(await proxy(makeRequest("/929/1.md", { method }))),
-				).toBeNull();
-				expect(
-					rewrittenPath(
-						await proxy(
-							makeRequest("/929/1", { method, accept: "text/markdown" }),
-						),
-					),
-				).toBeNull();
-			}
-		});
-
-		it("serves .md through HEAD too", async () => {
-			const response = await proxy(makeRequest("/929/1.md", { method: "HEAD" }));
-			expect(rewrittenPath(response)).toBe("/md/929/1");
-		});
-
-		it("keeps parasha view-param variants on the noindex HTML path", async () => {
-			// A negotiated request must not bypass the X-Robots-Tag
-			// exclusion the variant page carries.
-			const response = await proxy(
-				makeRequest("/פרשה/בראשית?reading=weekday", {
-					accept: "text/markdown",
-				}),
-			);
-			expect(rewrittenPath(response)).toBeNull();
-			expect(response?.headers.get("x-robots-tag")).toBe("noindex, follow");
-		});
-
-		it("still serves the explicit .md document under view params", async () => {
-			// The .md URL is the canonical base document — the query does
-			// not select a variant for it.
-			const response = await proxy(
-				makeRequest("/פרשה/בראשית.md?reading=weekday"),
-			);
-			expect(rewrittenPath(response)).toBe("/md/פרשה/בראשית");
-		});
-
-		it("keeps the .md suffix on alias redirects", async () => {
-			const parasha = await proxy(makeRequest("/פרשה/1.md"));
-			expect(parasha?.status).toBe(308);
+		it("leaves API calls untouched", async () => {
+			expect(await proxy(makeRequest("/api/search?q=x"))).toBeUndefined();
 			expect(
-				decodeURIComponent(parasha?.headers.get("location") ?? ""),
-			).toBe("https://localhost/פרשה/בראשית.md");
+				await proxy(makeRequest("/api/tanahpedia/preview/moshe")),
+			).toBeUndefined();
+		});
 
-			const pedia = await proxy(makeRequest("/tanahpedia/person.md"));
-			expect(pedia?.status).toBe(308);
+		it("never rewrites or redirects for .md or a markdown Accept", async () => {
+			for (const path of ["/929/1.md", "/929/1", "/פרשה/בראשית.md"]) {
+				for (const accept of [undefined, "text/markdown", "*/*"]) {
+					const response = await proxy(
+						makeRequest(path, accept ? { accept } : {}),
+					);
+					expect(rewrittenPath(response)).toBeNull();
+					expect(response?.headers.get("location")).toBeNull();
+					expect(response?.headers.get("x-middleware-next")).toBe("1");
+				}
+			}
+		});
+
+		it("does not add discovery headers to writes or bypassed paths", async () => {
 			expect(
-				decodeURIComponent(pedia?.headers.get("location") ?? ""),
-			).toBe(`https://localhost/pedia/אישים.md`);
+				await proxy(makeRequest("/929/1", { method: "POST" })),
+			).toBeUndefined();
+			expect(
+				await proxy(makeRequest("/api/health")),
+			).toBeUndefined();
 		});
 	});
 
@@ -415,19 +332,21 @@ describe("proxy", () => {
 		it("passes through when no key is configured", async () => {
 			delete process.env.INDEXNOW_KEY;
 			const result = await proxy(makeRequest(`/${KEY}.txt`));
-			expect(result).toBeUndefined();
+			// A plain pass-through (discovery headers only) — the key body
+			// is never emitted.
+			expect(result?.headers.get("x-middleware-next")).toBe("1");
 		});
 
 		it("passes through for a different .txt path", async () => {
 			process.env.INDEXNOW_KEY = KEY;
 			const result = await proxy(makeRequest("/other.txt"));
-			expect(result).toBeUndefined();
+			expect(result?.headers.get("x-middleware-next")).toBe("1");
 		});
 
 		it("does not serve the key under a nested path", async () => {
 			process.env.INDEXNOW_KEY = KEY;
 			const result = await proxy(makeRequest(`/sub/${KEY}.txt`));
-			expect(result).toBeUndefined();
+			expect(result?.headers.get("x-middleware-next")).toBe("1");
 		});
 	});
 

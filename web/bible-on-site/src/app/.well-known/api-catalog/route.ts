@@ -25,16 +25,6 @@ const LINKSET = {
 					type: "application/json",
 					"title-info": [{ title: "Public corpus search", "title-language": "en" }],
 				},
-				{
-					href: `${SITE_ORIGIN}/md`,
-					type: "text/markdown",
-					"title-info": [
-						{
-							title: "Markdown representation of any public page",
-							"title-language": "en",
-						},
-					],
-				},
 			],
 			"service-desc": [
 				{

@@ -13,21 +13,36 @@ const BODY = `# תנ"ך על הפרק (Bible on Site)
 > תנ"ך על הפרק is a זיכוי הרבים (community merit) Torah-study project —
 > a daily-chapter companion for the 929 cycle. It is not an ad-driven
 > business: the whole public learning corpus is deliberately open to
-> crawlers, search engines and AI agents that surface it back to
-> readers.
+> crawlers and agents that surface it back to readers.
 
 ## Open corpus policy
 
-You are welcome to crawl, index, quote and embed ALL public content of
-this site in AI answers (RAG/grounding) — no account, no API key, no
-bot-identity requirement. The site declares the same policy via
-\`Content-Signal: search=yes, ai-input=yes, ai-train=no\` in
-/robots.txt: surfacing uses are granted; use for model training is
-withheld pending the project's per-bucket policy decision. A small set
-of pure-harvest SEO/scraper agents is blocked outright. Administrative,
+You are welcome to crawl, index, quote and embed ALL public content
+of this site in search results and AI answers (RAG/grounding) — no
+account, no API key, no bot-identity requirement. The site declares
+the same policy in /robots.txt:
+\`Content-Signal: search=yes, ai-input=yes, ai-train=no\` —
+surfacing uses are granted; use for model training is withheld
+pending the project's per-bucket policy decision. Administrative,
 development and write surfaces (/dev, /api/dev, /api/revalidate,
 /api/push, subscription endpoints) are private and excluded from
 crawling.
+
+## Crawler buckets (PR #3299 review)
+
+- Surfacing bots — welcome: search engines (Googlebot, bingbot,
+  Applebot, Baiduspider, YandexBot) and AI answer/retrieval agents
+  (ChatGPT-User, OAI-SearchBot, PerplexityBot/Perplexity-User,
+  Claude-User, Claude-SearchBot, Amazonbot/Alexa, FacebookBot link
+  previews) receive identical content to browsers.
+- AI-training-only crawlers — withheld pending the owner's decision:
+  GPTBot, ClaudeBot, CCBot, meta-externalagent, Google-Extended,
+  Applebot-Extended, Diffbot and TikTokSpider are disallowed in
+  /robots.txt, and \`ai-train=no\` is declared for all.
+- Pure-harvest SEO/scrapers — blocked outright at the edge
+  (Bytespider, MJ12bot, AhrefsBot, SemrushBot, DotBot, PetalBot,
+  BLEXBot, MegaIndex, Sogou, DataForSeoBot): they never surfaced the
+  content.
 
 ## Canonical site
 
@@ -56,19 +71,16 @@ crawling.
   public anonymous JSON search over the corpus (types:
   perek,pasuk,perush,author,article,tanahpedia).
 
-## Markdown access
+## Reading the corpus
 
-Every public learning page serves a UTF-8 Markdown representation:
-
-- negotiate \`Accept: text/markdown\` on the canonical URL (the
-  response carries \`Vary: Accept\`), or
-- append \`.md\` to any canonical path, e.g. /929/1.md,
-  /פרשה/בראשית.md, /pedia/אברהם.md.
-
-Markdown documents keep full content (never snippets): vocalized
-scripture with qri/ktiv semantics, stuma (ס)/ptuha (פ) markers in
-position, full article and commentary bodies, author names, verse
-references and source licences, plus a canonical-link footer.
+Every public learning page is served as fully rendered HTML (SSG — no
+client-side rendering required): vocalized scripture with qri/ktiv
+semantics, stuma (ס)/ptuha (פ) markers in position, full article and
+commentary bodies, author names, verse references and source licences
+are all present in the served markup. Crawl the sitemap for complete
+coverage; use /api/search for query-style discovery. There is no bulk
+export endpoint and no alternate full-corpus representation — fetch
+bounded canonical pages at a reasonable pace.
 
 ## Machine-readable discovery
 

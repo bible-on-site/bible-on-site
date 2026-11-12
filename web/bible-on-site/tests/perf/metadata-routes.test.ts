@@ -134,19 +134,40 @@ test.describe("Production metadata snapshots", () => {
 		const robots = readGeneratedBody("/robots.txt").toString("utf8");
 		expect(robots).toBe(
 			`# תנ"ך על הפרק is a זיכוי הרבים project: the public learning
-# corpus is open for indexing and AI input/retrieval.
+# corpus is open to crawlers that surface it — indexing it for
+# search or answering user questions with it.
 # Content Signals per contentsignals.org:
 #   search   - index the content and show links/snippets in results
 #   ai-input - use the content inside AI answers (RAG, grounding)
 #   ai-train - use the content to train or fine-tune models
-# ai-train is withheld pending a per-bucket policy decision
-# (PR #3299 review): surfacing uses are welcome, training is not
-# granted by default.
+# Surfacing uses (search, ai-input) are granted; ai-train is withheld
+# pending a per-bucket policy decision (PR #3299 review).
 User-agent: *
 Content-Signal: search=yes, ai-input=yes, ai-train=no
 Allow: /
 Allow: /api/search
 Disallow: /api/
+
+# Withheld bucket: AI-training-only crawlers. These agents harvest
+# content to train models — they neither index us for search nor
+# answer user questions with it. Pending the owner's decision each
+# stays disallowed; flipping one is a one-line change.
+# Their answer-side siblings (ChatGPT-User, OAI-SearchBot,
+# Claude-User, Claude-SearchBot, PerplexityBot, Perplexity-User,
+# Amazonbot, Applebot, FacebookBot) remain welcome above.
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: CCBot
+User-agent: meta-externalagent
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: Diffbot
+User-agent: TikTokSpider
+Disallow: /
+
+# Pure-harvest SEO/scraper bucket (Bytespider, MJ12bot, AhrefsBot,
+# SemrushBot, DotBot, PetalBot, BLEXBot, MegaIndex, Sogou,
+# DataForSeoBot): hard-blocked at the edge/proxy — they ignore robots.
 
 Sitemap: ${SITE_ORIGIN}/sitemap.xml
 `,

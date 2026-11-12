@@ -32,8 +32,6 @@ describe("/llms.txt (issue #3257)", () => {
 			"/מועדים/",
 			"/pedia/",
 			"/api/search",
-			"text/markdown",
-			".md",
 			"/.well-known/api-catalog",
 			"/openapi.json",
 			"/sitemap.xml",
@@ -41,6 +39,27 @@ describe("/llms.txt (issue #3257)", () => {
 		]) {
 			expect(body).toContain(fragment);
 		}
+	});
+
+	it("publishes the crawler buckets — surfacing welcome, training withheld", async () => {
+		const body = await llmsGET().text();
+		for (const fragment of [
+			"GPTBot",
+			"ClaudeBot",
+			"CCBot",
+			"meta-externalagent",
+			"Google-Extended",
+			"Applebot-Extended",
+			"OAI-SearchBot",
+			"Claude-SearchBot",
+			"Bytespider",
+		]) {
+			expect(body).toContain(fragment);
+		}
+		// No whole-corpus Markdown representation is advertised
+		// (PR #3299 review).
+		expect(body).not.toContain(".md`");
+		expect(body).not.toContain("Accept: text/markdown");
 	});
 
 	it("names the protected boundaries", async () => {
@@ -60,8 +79,7 @@ describe("/.well-known/api-catalog (RFC 9727)", () => {
 		};
 		expect(body.linkset[0].anchor).toBe("https://canonical.example");
 		const hrefs = body.linkset[0].item.map((item) => item.href);
-		expect(hrefs).toContain("https://canonical.example/api/search");
-		expect(hrefs).toContain("https://canonical.example/md");
+		expect(hrefs).toEqual(["https://canonical.example/api/search"]);
 	});
 
 	it("advertises only public endpoints — no private/admin APIs", async () => {
@@ -98,7 +116,6 @@ describe("/openapi.json", () => {
 		expect(Object.keys(doc.paths)).toEqual(
 			expect.arrayContaining([
 				"/api/search",
-				"/md/{path}",
 				"/llms.txt",
 				"/robots.txt",
 				"/sitemap.xml",
@@ -106,6 +123,7 @@ describe("/openapi.json", () => {
 				"/api/health",
 			]),
 		);
+		expect(Object.keys(doc.paths)).not.toContain("/md/{path}");
 		const json = JSON.stringify(doc);
 		for (const forbidden of ["/api/dev", "/api/revalidate", "/api/push"]) {
 			expect(json).not.toContain(forbidden);
