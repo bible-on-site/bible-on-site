@@ -34,7 +34,7 @@ def write_search_index(path: Path, slim: bool = True) -> None:
 
 def write_aab(path: Path, *, slim_index: bool = True, perushim: bool = True,
               on_demand: bool = True, base_payloads: dict | None = None,
-              recitations: int = 2) -> None:
+              recitations: int = 2, search_index: bool = True) -> None:
     workdir = Path(tempfile.mkdtemp())
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as bundle:
         bundle.writestr("base/manifest/AndroidManifest.xml", b"manifest")
@@ -46,9 +46,10 @@ def write_aab(path: Path, *, slim_index: bool = True, perushim: bool = True,
         if perushim:
             delivery = b"on-demand" if on_demand else b"install-time"
             bundle.writestr("perushim_notes/manifest/AndroidManifest.xml", b"dist:delivery " + delivery)
-            index_path = workdir / "index.sqlite"
-            write_search_index(index_path, slim=slim_index)
-            bundle.write(index_path, f"perushim_notes/assets/{SEARCH_INDEX}")
+            if search_index:
+                index_path = workdir / "index.sqlite"
+                write_search_index(index_path, slim=slim_index)
+                bundle.write(index_path, f"perushim_notes/assets/{SEARCH_INDEX}")
             bundle.writestr("perushim_notes/assets/sefaria-dump-5784-sivan-4.perushim_notes.sqlite", b"notes")
         for sefer in range(1, recitations + 1):
             delivery = b"on-demand" if on_demand else b"install-time"
@@ -104,6 +105,11 @@ class AuditAndroidAabSizeTests(unittest.TestCase):
     def test_missing_perushim_pack_is_rejected(self):
         write_aab(self.package, perushim=False)
         with self.assertRaisesRegex(ValueError, "perushim_notes"):
+            audit(self.package)
+
+    def test_missing_search_index_is_rejected(self):
+        write_aab(self.package, search_index=False)
+        with self.assertRaisesRegex(ValueError, "delivered search index"):
             audit(self.package)
 
     def test_fat_search_index_layout_is_rejected(self):

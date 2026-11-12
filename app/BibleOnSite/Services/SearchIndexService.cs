@@ -614,7 +614,22 @@ public sealed class SearchIndexService : IAsyncDisposable
             // serve the independently fingerprinted verses table.
             return _notes!.PeekDeliveredIndexPath();
         }
-        var deliveredPath = await _notes!.RestoreDeliveredIndexPathAsync();
+        // Peek before restoring: when the staged copy is gone and the pack
+        // would deliver the exact payload already rejected as the same fat
+        // layout, restoring it would re-copy ~300 MB on every index cycle
+        // for no possible gain. The marker check needs the working index to
+        // be current — a cleared one must still adopt the delivery.
+        var deliveredPath = _notes!.PeekDeliveredIndexPath();
+        if (deliveredPath == null)
+        {
+            if (stored == expected && await IsRejectedDeliveryAsync(expected))
+            {
+                _ready["notes"] = expected;
+                _notesDocumentsCarryText = true;
+                return null;
+            }
+            deliveredPath = await _notes.RestoreDeliveredIndexPathAsync();
+        }
         if (deliveredPath == null || string.Equals(deliveredPath, _indexPath, StringComparison.Ordinal))
         {
             return null;
@@ -651,6 +666,9 @@ public sealed class SearchIndexService : IAsyncDisposable
         {
             // The working index is already current and the staged file is the
             // same fat layout — a swap would not free the duplicated text.
+            // Record the rejection so this exact payload is never copied
+            // again once the caller deletes the staged copy.
+            RememberRejectedDelivery(expected, new FileInfo(deliveredPath).Length);
             _ready["notes"] = expected;
             _notesDocumentsCarryText = true;
             return deliveredPath;
@@ -667,6 +685,15 @@ public sealed class SearchIndexService : IAsyncDisposable
             _index = new SQLiteAsyncConnection(_indexPath);
             _ready.Clear();
             _notesDocumentsCarryText = deliveredCarriesText;
+            if (deliveredCarriesText)
+            {
+                // The pack still holds this exact fat payload — never stage it again.
+                RememberRejectedDelivery(expected, new FileInfo(_indexPath).Length);
+            }
+            else
+            {
+                ForgetRejectedDelivery();
+            }
             await OpenIndexAsync();
         }
         finally
@@ -686,6 +713,59 @@ public sealed class SearchIndexService : IAsyncDisposable
         var columns = await db.QueryAsync<PragmaColumn>(
             "SELECT name FROM pragma_table_info('notes_documents')");
         return columns.Any(column => column.Name == "Text");
+    }
+
+    /// <summary>
+    /// Marker for a delivered index already evaluated as the same fat layout
+    /// as the working index. Fingerprint plus byte size identify the payload,
+    /// so an identical redelivery is never restored again while a changed one
+    /// — e.g. the slim index for the same notes generation — still is.
+    /// shortcut: a different payload with the same byte size is not
+    /// re-evaluated — practically impossible for the ~4x fat-vs-slim delta;
+    /// widen the marker if payloads can ever change at equal size.
+    /// </summary>
+    private string RejectedDeliveryMarkerPath => _indexPath + ".delivered-fat";
+
+    private async Task<bool> IsRejectedDeliveryAsync(string expectedFingerprint)
+    {
+        string? marker = null;
+        try
+        {
+            marker = await File.ReadAllTextAsync(RejectedDeliveryMarkerPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+        var parts = marker.Trim().Split('|');
+        if (parts.Length != 2 || parts[0] != expectedFingerprint || !long.TryParse(parts[1], out var size))
+        {
+            return false;
+        }
+        return await _notes!.PeekDeliveredIndexSizeAsync() == size;
+    }
+
+    private void RememberRejectedDelivery(string fingerprint, long size)
+    {
+        try
+        {
+            File.WriteAllText(RejectedDeliveryMarkerPath, $"{fingerprint}|{size}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"Failed to record the rejected delivered search index: {ex.Message}");
+        }
+    }
+
+    private void ForgetRejectedDelivery()
+    {
+        try
+        {
+            File.Delete(RejectedDeliveryMarkerPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     /// <summary>

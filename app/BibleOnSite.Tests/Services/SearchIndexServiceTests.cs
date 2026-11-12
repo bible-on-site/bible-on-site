@@ -510,6 +510,94 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task FatDeliveryMatchingTheFatWorkingIndex_IsNeverCopiedTwice()
+    {
+        await using var storage = new TestStorage();
+        await using var pack = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "סימן מובהק")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var working = await storage.CreateDatabaseAsync("search.sqlite",
+            FatDeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await working.CloseAsync();
+        // The pack still carries the same fat layout — nothing to gain by
+        // restoring its ~300 MB staged copy again once evaluated.
+        var delivered = await pack.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            FatDeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await delivered.CloseAsync();
+        var delivery = NullPad();
+        delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pack.Root);
+        var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+        var filters = new HashSet<SearchFilter> { SearchFilter.Perush };
+        var books = new HashSet<int> { 1 };
+
+        (await index.SearchAsync("סימן", filters, books, 10, TestContext.Current.CancellationToken))
+            .Should().ContainSingle();
+        notes.DeliveredIndexCopyCount.Should().Be(1, "the first evaluation restores the staged copy once");
+
+        (await index.SearchAsync("סימן", filters, books, 10, TestContext.Current.CancellationToken))
+            .Should().ContainSingle();
+        notes.DeliveredIndexCopyCount.Should().Be(1,
+            "a payload already rejected as the same fat layout must not be re-copied every search");
+        File.Exists(Path.Join(storage.Root, PerushimNotesService.SearchIndexDbName))
+            .Should().BeFalse("the spent staged copy stays deleted — not a ~300 MB copy-delete loop");
+    }
+
+    [Fact]
+    public async Task RejectedFatDelivery_DoesNotBlockAChangedSlimRedelivery()
+    {
+        await using var storage = new TestStorage();
+        await using var pack = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "סימן מובהק")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var working = await storage.CreateDatabaseAsync("search.sqlite",
+            FatDeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await working.CloseAsync();
+        // A padded document keeps the fat payload strictly larger than the
+        // slim redelivery, so the rejection marker's size check differs.
+        var delivered = await pack.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            FatDeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}",
+                "סימן מובהק" + new string('א', 4096)));
+        await delivered.CloseAsync();
+        var delivery = NullPad();
+        delivery.Setup(service => service.TryGetAssetPathAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pack.Root);
+        var notes = PerushimNotesService.CreateForTesting(delivery.Object, storage.Root);
+        var cachePath = Path.Join(storage.Root, "search.sqlite");
+        var filters = new HashSet<SearchFilter> { SearchFilter.Perush };
+        var books = new HashSet<int> { 1 };
+        await using (var index = new SearchIndexService(perakim, notes, cachePath))
+        {
+            (await index.SearchAsync("סימן", filters, books, 10, TestContext.Current.CancellationToken))
+                .Should().ContainSingle();
+        }
+        // The pack is redelivered in the slim layout for the same generation —
+        // a different-sized payload the rejection marker must not suppress.
+        var slim = await pack.CreateDatabaseAsync("slim.sqlite",
+            DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await slim.CloseAsync();
+        File.Move(Path.Join(pack.Root, "slim.sqlite"),
+            Path.Join(pack.Root, PerushimNotesService.SearchIndexDbName), overwrite: true);
+
+        await using var upgraded = new SearchIndexService(perakim, notes, cachePath);
+        (await upgraded.SearchAsync("סימן", filters, books, 10, TestContext.Current.CancellationToken))
+            .Should().ContainSingle();
+        var inspection = new SQLite.SQLiteAsyncConnection(cachePath, SQLite.SQLiteOpenFlags.ReadOnly);
+        try
+        {
+            (await inspection.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM pragma_table_info('notes_documents') WHERE name = 'Text'"))
+                .Should().Be(0, "a changed delivery is re-evaluated and the slim index adopted");
+        }
+        finally { await inspection.CloseAsync(); }
+    }
+
+    [Fact]
     public async Task EvictedWorkingCache_RestoresTheAvailablePackIndexWithoutImportingNotes()
     {
         await using var storage = new TestStorage();

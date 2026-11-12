@@ -149,8 +149,11 @@ def audit(package: Path) -> dict:
             (info for info in archive.infolist()
              if info.filename == f"{PERUSHIM_PACK}/assets/{SEARCH_INDEX}"),
             None)
-        if index_entry is not None:
-            report["searchIndex"] = _audit_search_index(archive, index_entry)
+        if index_entry is None:
+            raise ValueError(
+                f"{PERUSHIM_PACK} lacks its delivered search index {SEARCH_INDEX} — "
+                "the pack installs but commentary search stays unavailable")
+        report["searchIndex"] = _audit_search_index(archive, index_entry)
     return report
 
 
