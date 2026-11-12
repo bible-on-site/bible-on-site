@@ -3,10 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const server = vi.hoisted(() => ({
 	links: [] as Record<string, unknown>[],
+	pathname: "/",
 }));
 
 vi.mock("@tanstack/react-router", () => ({
 	createRootRoute: (config: Record<string, unknown>) => config,
+	useRouterState: ({
+		select,
+	}: {
+		select: (state: { location: { pathname: string } }) => boolean;
+	}) => select({ location: { pathname: server.pathname } }),
 	HeadContent: () => null,
 	Link: (props: {
 		children?: React.ReactNode;
@@ -39,6 +45,7 @@ function renderRoot() {
 describe("RootDocument", () => {
 	beforeEach(() => {
 		server.links.length = 0;
+		server.pathname = "/";
 	});
 
 	it("renders the link-proposals nav entry for the proposals queue", () => {
@@ -73,3 +80,14 @@ describe("RootDocument", () => {
 		expect(screen.getByText("התנתק")).toBeInTheDocument();
 	});
 });
+
+it.each(["/archive", "/archive/authors/מחבר"])(
+	"hides all general admin navigation on %s",
+	(path) => {
+		server.links.length = 0;
+		server.pathname = path;
+		renderRoot();
+		expect(screen.queryByText("מאמרים")).not.toBeInTheDocument();
+		expect(server.links).toHaveLength(0);
+	},
+);

@@ -11,8 +11,12 @@
 -- Two entries let e2e prove the full render contract: a resolved decoration
 -- yields a dashed link, an unresolved one (יצחק has an entity but no entry)
 -- stays plain text with no anchor at all.
+--
+-- tanahpedia_* tables are CREATE IF NOT EXISTS and survive repopulation, so
+-- every fixture below uses INSERT IGNORE (the same idiom the populator applies
+-- to the Tanahpedia seed) to stay re-runnable.
 -- ---------------------------------------------------------------------------
-INSERT INTO tanahpedia_entry (id, unique_name, title, content)
+INSERT IGNORE INTO tanahpedia_entry (id, unique_name, title, content)
 VALUES
     (
         'e2e00000-0000-4000-8000-0000000000e1',
@@ -28,7 +32,7 @@ VALUES
     );
 
 -- Pasuk decoration on perek 1 pasuk 1 (בראשית א א): segment 2 is אֱלֹהִ֑ים.
-INSERT INTO tanahpedia_mention_decoration (
+INSERT IGNORE INTO tanahpedia_mention_decoration (
     id,
     source_kind,
     perek_id,
@@ -64,7 +68,7 @@ VALUES (
 -- surface are computed from the stored column so the fixture cannot drift.
 -- span_* are UTF-16 code-unit offsets; LOCATE/CHAR_LENGTH count characters,
 -- which coincides for this BMP-only fixture content.
-INSERT INTO tanahpedia_mention_decoration (
+INSERT IGNORE INTO tanahpedia_mention_decoration (
     id,
     source_kind,
     article_id,
@@ -95,7 +99,7 @@ SELECT 'e2e00000-0000-4000-8000-0000000000d2',
 FROM tanah_article a
 WHERE a.id = 1;
 
-INSERT INTO tanahpedia_mention_decoration (
+INSERT IGNORE INTO tanahpedia_mention_decoration (
     id,
     source_kind,
     article_id,
