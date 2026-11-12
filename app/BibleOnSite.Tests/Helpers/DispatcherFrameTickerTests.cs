@@ -19,7 +19,7 @@ public class DispatcherFrameTickerTests
         var interval = TimeSpan.FromMilliseconds(25);
         var ticks = 0;
 
-        var ticker = new DispatcherFrameTicker(dispatcher.Object, interval, () => ticks++);
+        _ = new DispatcherFrameTicker(dispatcher.Object, interval, () => ticks++);
 
         dispatcher.Verify(d => d.CreateTimer(), Times.Once);
         timer.VerifySet(t => t.Interval = interval);

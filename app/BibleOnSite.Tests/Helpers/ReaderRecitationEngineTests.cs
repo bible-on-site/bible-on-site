@@ -49,7 +49,7 @@ public class ReaderRecitationEngineTests
         public RecitationPlaybackState CurrentState { get; set; } = RecitationPlaybackState.Stopped;
         public TimeSpan Position { get; set; } = TimeSpan.Zero;
         public double Speed { get; set; }
-        public double Volume { get; set; }
+        public double Volume { get; set; } = 1;
         public bool HasSource => SourcePathValue != null;
         public string? SourcePathValue { get; private set; }
         public int PlayCount { get; private set; }
@@ -59,9 +59,9 @@ public class ReaderRecitationEngineTests
         public int Refreshes { get; private set; }
 
         /// <summary>When set, SeekToAsync throws it — a platform that cannot seek.</summary>
-        public Exception? SeekException { get; set; }
+        public Exception? SeekException;
         /// <summary>When set, SeekToAsync parks on it — a seek still in flight.</summary>
-        public TaskCompletionSource? SeekGate { get; set; }
+        public TaskCompletionSource? SeekGate;
 
         public void SetSourcePath(string? path) => SourcePathValue = path;
         public void Play() { PlayCount++; CurrentState = RecitationPlaybackState.Playing; }
@@ -120,9 +120,9 @@ public class ReaderRecitationEngineTests
         public int ClipCalls { get; private set; }
         public int Releases { get; private set; }
         /// <summary>When set, every decode parks on it — a clip still decoding.</summary>
-        public TaskCompletionSource? ClipGate { get; set; }
+        public TaskCompletionSource? ClipGate;
         /// <summary>When set, every decode throws it — a decoder failure.</summary>
-        public Exception? ClipException { get; set; }
+        public Exception? ClipException;
         /// <summary>Whether decodes honor the cancellation token (a lax decoder doesn't).</summary>
         public bool HonorCancellation { get; set; } = true;
         private async Task<byte[]> Clip(string audio, CancellationToken cancellationToken)
@@ -718,9 +718,10 @@ public class ReaderRecitationEngineTests
     {
         await using var rig = new Rig(new InMemoryPreferencesStorage());
         rig.Surface.Exists = false;
+        rig.Surface.Volume = 0.7;
 
         rig.Engine.PreferencesChanged();
 
-        rig.Surface.Volume.Should().Be(0);
+        rig.Surface.Volume.Should().Be(0.7, "no live player means nothing to push the preference onto");
     }
 }
