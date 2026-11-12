@@ -25,6 +25,12 @@ import { pediaChangesForEntities } from "./paths";
  * entity row is locked and the live URL must equal the snapshot — a
  * mismatch means another admin saved first, so the write is rejected
  * instead of silently overwriting newer data.
+ *
+ * Deploy ownership: every write also claims the pair in
+ * `external_reference_seed` inside the same transaction. The claim ledger
+ * normally records pairs the seed deploy already saw, but an entity
+ * created after seeding has no claims — without recording the admin
+ * removal, the next deploy would resurrect a deleted curated mapping.
  */
 
 const STALE_MESSAGE =
@@ -61,6 +67,20 @@ async function currentUrl(
 		[EXTERNAL_REFERENCE_SUBJECT_KIND, entityId, source],
 	);
 	return row?.url ?? null;
+}
+
+/** Marks the pair admin-owned so a deploy rerun can never reseed it. */
+async function claimPair(
+	conn: PoolConnection,
+	entityId: string,
+	source: ExternalReferenceSource,
+): Promise<void> {
+	await txExecute(
+		conn,
+		`INSERT IGNORE INTO external_reference_seed (subject_kind, subject_id, source)
+		 VALUES (?, ?, ?)`,
+		[EXTERNAL_REFERENCE_SUBJECT_KIND, entityId, source],
+	);
 }
 
 export interface SetEntityExternalReferenceInput {
@@ -106,6 +126,7 @@ export async function setEntityExternalReference(
 					[url, EXTERNAL_REFERENCE_SUBJECT_KIND, input.entityId, input.source],
 				);
 			}
+			await claimPair(conn, input.entityId, input.source);
 		});
 	} catch (error) {
 		if (isMissingMysqlSchema(error)) {
@@ -137,6 +158,9 @@ export async function removeEntityExternalReference(
 				 WHERE subject_kind = ? AND subject_id = ? AND source = ?`,
 				[EXTERNAL_REFERENCE_SUBJECT_KIND, input.entityId, input.source],
 			);
+			// Claim inside the same commit: a deleted pair must stay deleted
+			// even when the pair was never seeded or claimed before.
+			await claimPair(conn, input.entityId, input.source);
 		});
 	} catch (error) {
 		if (isMissingMysqlSchema(error)) {

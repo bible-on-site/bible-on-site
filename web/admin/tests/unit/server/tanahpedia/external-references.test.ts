@@ -91,6 +91,22 @@ describe("setEntityExternalReference", () => {
 		);
 	});
 
+	it("claims the pair so a deploy rerun cannot overwrite the write", async () => {
+		mockState("entity-1", null);
+
+		await setEntityExternalReference({
+			entityId: "entity-1",
+			source: "WIKIDATA",
+			url: "Q9181",
+			expectedUrl: null,
+		});
+
+		expect(executeMock).toHaveBeenCalledWith(
+			expect.stringContaining("INSERT IGNORE INTO external_reference_seed"),
+			["TANAHPEDIA_ENTITY", "entity-1", "WIKIDATA"],
+		);
+	});
+
 	it("updates the row when the live URL matches the snapshot", async () => {
 		mockState("entity-1", "https://www.wikidata.org/wiki/Q9181");
 
@@ -201,6 +217,21 @@ describe("removeEntityExternalReference", () => {
 
 		expect(executeMock).toHaveBeenCalledWith(
 			expect.stringContaining("DELETE FROM external_reference"),
+			["TANAHPEDIA_ENTITY", "entity-1", "SEFARIA"],
+		);
+	});
+
+	it("claims the pair in the same commit so a rerun cannot restore it", async () => {
+		mockState("entity-1", "https://www.sefaria.org/topics/abraham");
+
+		await removeEntityExternalReference({
+			entityId: "entity-1",
+			source: "SEFARIA",
+			expectedUrl: "https://www.sefaria.org/topics/abraham",
+		});
+
+		expect(executeMock).toHaveBeenCalledWith(
+			expect.stringContaining("INSERT IGNORE INTO external_reference_seed"),
 			["TANAHPEDIA_ENTITY", "entity-1", "SEFARIA"],
 		);
 	});

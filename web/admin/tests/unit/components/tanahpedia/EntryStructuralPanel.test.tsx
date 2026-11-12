@@ -590,6 +590,62 @@ describe("EntryStructuralPanel", () => {
 				);
 				expect(input).toHaveValue("Q42");
 			});
+
+			it("keeps another source's draft when a saved refresh returns", async () => {
+				const person = (externalReferences: unknown[]) => ({
+					linkId: "person-link",
+					entityId: "person-entity",
+					entityType: "PERSON",
+					displayName: "משה",
+					person: null,
+					place: null,
+					externalReferences,
+				});
+				// First fetch: the saved snapshot. Every later fetch: the
+				// committed Wikidata update — the English-Wikipedia row has no
+				// stored mapping in either.
+				getEntryStructuralContextMock.mockResolvedValue({
+					entryId: "entry-1",
+					linkedEntities: [
+						person([
+							{
+								source: "WIKIDATA",
+								url: "https://www.wikidata.org/wiki/Q42",
+							},
+						]),
+					],
+				});
+				getEntryStructuralContextMock.mockResolvedValueOnce({
+					entryId: "entry-1",
+					linkedEntities: [
+						person([
+							{
+								source: "WIKIDATA",
+								url: "https://www.wikidata.org/wiki/Q9181",
+							},
+						]),
+					],
+				});
+				renderPanel();
+				const card = await personCardElement();
+				const wikidata = sourceRow(card, "Wikidata");
+				const wikipediaEn = sourceRow(card, "ויקיפדיה (אנגלית)");
+
+				fireEvent.change(wikipediaEn.input, {
+					target: { value: "https://en.wikipedia.org/wiki/Abraham" },
+				});
+				fireEvent.change(wikidata.input, { target: { value: "Q42" } });
+				fireEvent.click(wikidata.row.getByRole("button", { name: "שמור" }));
+
+				await waitFor(() =>
+					expect(wikidata.input).toHaveValue(
+						"https://www.wikidata.org/wiki/Q42",
+					),
+				);
+				expect(wikipediaEn.input).toHaveValue(
+					"https://en.wikipedia.org/wiki/Abraham",
+				);
+			});
 		});
 	});
 

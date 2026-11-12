@@ -58,13 +58,35 @@ export function EntityExternalReferences({
 	} | null>(null);
 
 	// Re-sync drafts only when the stored mapping content actually changed —
-	// an unrelated refetch must not clobber an in-progress draft.
+	// an unrelated refetch must not clobber an in-progress draft. When a
+	// committed change does come back, reconcile per source: keep a dirty
+	// draft for a source whose stored mapping did not move, while rows whose
+	// stored value changed re-sync to the committed URL.
 	const signature = JSON.stringify(references);
 	const lastSignature = useRef(signature);
+	const lastReferences = useRef(references);
 	useEffect(() => {
 		if (signature === lastSignature.current) return;
 		lastSignature.current = signature;
-		setDrafts(draftsFor(references));
+		const prevSaved = new Map(
+			lastReferences.current.map((ref) => [ref.source, ref.url] as const),
+		);
+		lastReferences.current = references;
+		const nextSaved = new Map(
+			references.map((ref) => [ref.source, ref.url] as const),
+		);
+		setDrafts((prev) => {
+			const next = draftsFor(references);
+			for (const source of EXTERNAL_REFERENCE_SOURCES) {
+				const storedMoved =
+					(prevSaved.get(source) ?? null) !== (nextSaved.get(source) ?? null);
+				const dirty =
+					prev[source].trim() !== "" &&
+					prev[source].trim() !== (prevSaved.get(source) ?? null);
+				if (dirty && !storedMoved) next[source] = prev[source];
+			}
+			return next;
+		});
 		setRowError(null);
 	}, [references, signature]);
 
