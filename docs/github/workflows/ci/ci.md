@@ -5,6 +5,7 @@
 | [`ci.yml`](../../../../.github/workflows/ci.yml) | Main CI pipeline (detect, test, package, release, dispatch CD) |
 | [`app-mobile-e2e.yml`](../../../../.github/workflows/app-mobile-e2e.yml) | Native E2E orchestrator — resolves perushim input, plans runtime-balanced iOS shards, fans out Android and shared-build + planned iOS legs, merges iOS results |
 | [`app-mobile-e2e-runner.yml`](../../../../.github/workflows/app-mobile-e2e-runner.yml) | Reusable native leg — one Android `build-and-run`, one iOS `build`, or one iOS `prebuilt-run` shard |
+| [`app-mobile-e2e-ab.yml`](../../../../.github/workflows/app-mobile-e2e-ab.yml) | Dispatch-only iOS runner A/B (`xcode-27` vs `namespace-profile-mac-os`), #2635 — see [runbook](../../../devops/ios-runner-ab-experiment.md) |
 | [`shared-dockerize.yml`](../../../../.github/workflows/shared-dockerize.yml) | Docker image packaging |
 | [`app-package.yml`](../../../../.github/workflows/app-package.yml) | App packaging (MSIX, AAB, IPA + asset packs/payloads) |
 | [`shared-release.yml`](../../../../.github/workflows/shared-release.yml) | Release automation (tag, GitHub Release, trigger CD) |

@@ -114,7 +114,7 @@ export const MODULES = {
 		// package*.json, next.config.mjs, src/, public/, other build-time
 		// scripts/, and Docker/tsconfig inputs stay release-affecting.
 		ciOnlyPattern:
-			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|launch-e2e-server\.mts$|scripts\/coverage-gaps\.mjs$)/,
+			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|launch-e2e-server\.mts$|scripts\/coverage-gaps\.mjs$|scripts\/start-server-test-kit\.mjs$)/,
 	},
 	api: {
 		directory: "web/api",
@@ -309,6 +309,9 @@ export function isSchemaOnlyDataChange(files: string[]): boolean {
 		dataFiles.every(
 			(file) =>
 				/^data\/mysql\/tanahpedia_alter_[^/]+\.sql$/.test(file) ||
+				// Archive tables use the separately approved selective migration;
+				// adding them must not invoke the production data populator.
+				file === "data/mysql/private_archive_upgrade.sql" ||
 				bulletinMigrations.has(file) ||
 				// The bootstrap's migration-preservation tests accompany this
 				// additive upgrade; they must not trigger a production data rebuild.

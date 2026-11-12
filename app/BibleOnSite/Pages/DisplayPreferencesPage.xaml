@@ -314,6 +314,41 @@
                 </Border>
             </VerticalStackLayout>
 
+            <!-- ═══ תצוגת חלון (Windows only) ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <VerticalStackLayout.IsVisible>
+                    <OnPlatform x:TypeArguments="x:Boolean" Default="False">
+                        <On Platform="Windows" Value="true"/>
+                    </OnPlatform>
+                </VerticalStackLayout.IsVisible>
+                <Label Text="תצוגת חלון"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="10">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="תמיד מעל חלונות אחרים"
+                                   FontSize="16"
+                                   VerticalOptions="Center"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <Switch Grid.Column="1"
+                                    IsToggled="{Binding AlwaysOnTop}"
+                                    AutomationId="AlwaysOnTopSwitch"/>
+                        </Grid>
+                        <Label Text="במצב רגיל יישומים אחרים יכולים להופיע מעל החלון. בהפעלת האפשרות החלון נשאר מעליהם עד לכיבויה"
+                               FontSize="13"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"/>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+
             <!-- ═══ כפתור חזרה (Android only) ═══ -->
             <VerticalStackLayout Spacing="8"
                                  IsVisible="{OnPlatform Android=true, Default=false}">

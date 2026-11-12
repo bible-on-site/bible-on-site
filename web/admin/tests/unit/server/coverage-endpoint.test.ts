@@ -39,6 +39,7 @@ describe("/api/dev/coverage", () => {
 		appFetchMock.mockReset();
 		appFetchMock.mockImplementation(() => new Response("app"));
 		vi.stubEnv("SKIP_AUTH", "true");
+		vi.stubEnv("MEASURE_COV", "0");
 	});
 
 	afterEach(() => {

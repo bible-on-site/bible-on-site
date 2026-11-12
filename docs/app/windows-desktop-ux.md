@@ -80,6 +80,10 @@ returns to a transient overlay. The decision logic lives in
   connected display, otherwise it is clamped to the primary work area.
 - The normal (non-maximized) frame is tracked while running so a
   maximized close restores maximized with the previous normal rect.
+- Stacking is ordinary overlapped by default; the Windows-only
+  always-on-top opt-in (Preferences → תצוגה) is the single switch that
+  moves the window into the topmost band, applied immediately and
+  persisted (see increment 4).
 
 ## Layout rules
 
@@ -184,6 +188,46 @@ triggering needs a real pointer on tap-gesture rows):
   true; the Shell now clamps the drift while the remembered choice is
   collapsed (verified: restart restores the icon rail).
 
+## Audited defects addressed in increment 4
+
+Owner acceptance criteria for the newest pass: one Windows Back control
+whenever history exists, and ordinary window stacking by default behind a
+clearly labelled Windows-only always-on-top opt-in.
+
+- **Duplicate Back.** UIA dumps on a pushed page showed *two* enabled Back
+  buttons: the title-bar `TitleBarBackButton` and the native WinUI
+  `NavigationViewBackButton`. The earlier `BackChromePolicy` carve-out was
+  insufficient because `BackChrome.Apply` only writes
+  `BackButtonBehavior` while `Shell.GetNavBarIsVisible(page)` is true, and
+  every destination sets `NavBarIsVisible=false` — so the Shell toolbar
+  state that drives the native arrow was never touched. The suppression
+  now lives at the platform layer
+  (`DesktopWindowChrome.OnShellHandlerChanged`): once the Shell handler's
+  `NavigationView` materializes, MAUI's `Toolbar→IsBackButtonVisible`
+  binding is severed (`ClearValue`), the arrow is pinned
+  `Collapsed`, and a property-changed callback re-clamps any later
+  template/toolbar re-show — the same pattern already used for the pane
+  toggle. Verified on the running build: root shows only the disabled
+  title-bar Back; pushed Tanahpedia/Preferences pages show only the
+  enabled title-bar Back; returning to root disables it again. The
+  title-bar button, `Alt+Left` and mouse Back all still ride the shared
+  `RunBack()` ordering.
+- **Window stacking.** Windows had no always-on-top control at all and no
+  documented stacking contract. Ordinary overlapped stacking is now the
+  explicit default, and Preferences → תצוגה gained a Windows-only
+  **"תמיד מעל חלונות אחרים"** switch (off by default, persisted under the
+  non-synced `alwaysOnTop` key so it never leaks to other platforms or
+  reinstalls). WinUI 3 exposes no managed topmost API, so
+  `Platforms/Windows/WindowZOrder.cs` applies the choice with
+  `SetWindowPos`/`HWND_TOPMOST|HWND_NOTOPMOST` (`SWP_NOACTIVATE` — it never
+  steals focus or raises the window). `DesktopWindowChrome` applies the
+  stored value once the platform HWND exists, re-applies on every
+  `PreferencesChanged` (immediate toggle), and force re-asserts after a
+  presenter swap so fullscreen/presenter transitions restore the chosen
+  band. Verified at runtime via `WS_EX_TOPMOST`: absent key → not topmost;
+  `alwaysOnTop=True` → topmost after relaunch; `alwaysOnTop=False` →
+  ordinary stacking restored.
+
 ## Deferred
 
 - Per-page layout beyond column caps (learning calendar, corpus search
@@ -194,3 +238,18 @@ triggering needs a real pointer on tap-gesture rows):
   inside popups.
 - Windows display-scaling matrix (100/125/150/200%) and text-scaling
   verification; wheel-scroll audit of the reader carousel.
+- Preferences settings rows (`SettingsDisplayRow`, `SettingsPerekRow`,
+  `SettingsPacksRow`, `RecitationSettingsRow`, `SettingsSoundRow`,
+  `SettingsSupportRow`) are `TapGestureRecognizer` grids surfacing to UIA
+  as `ControlType.Pane` with no Invoke/Legacy pattern — not tab stops and
+  not keyboard-activatable, unlike the flyout rows fixed in increment 1.
+  They need the same button-ification pass (or an equivalent focusable
+  row control) to satisfy keyboard-only navigation on the settings pages.
+- Live verification of gesture-driven controls (settings rows, in-page
+  tap targets) from an automated session: `SendInput`/`mouse_event`/
+  `PostMessage` injection did not reach MAUI `TapGestureRecognizer`s or
+  `KeyboardAccelerator`s in the audit environment, and those rows expose
+  no UIA invoke pattern — so toggle/apply behavior on them was verified
+  at the persistence + platform-API level (`WS_EX_TOPMOST`, unit tests)
+  rather than by a synthesized pointer press. A physical-input pass is
+  still owed for the remaining gesture surfaces.
