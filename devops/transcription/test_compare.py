@@ -2,11 +2,10 @@
 
 from contextlib import redirect_stderr, redirect_stdout
 from io import BytesIO, StringIO, TextIOWrapper
+from itertools import product
 import json
 from pathlib import Path
-import random
 import runpy
-import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import unittest
@@ -54,6 +53,16 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(comparison_text('  תנ״ך\n ABC — שׁ  '), 'תנך abc שׁ')
         self.assertEqual(compare_text('תנ״ך ABC שׁ', 'תנ"ך abc שׁ')["word"]["edits"], 0)
 
+    def test_separator_punctuation_keeps_word_boundaries_and_quotes_keep_abbreviations(self):
+        for separator in ["-", "־", "–", "—", "/", ",", ".", "+"]:
+            with self.subTest(separator=separator):
+                result = compare_text("שלום" + separator + "עולם", "שלום עולם")
+                self.assertEqual(result["word"]["edits"], 0)
+                self.assertEqual(result["character"]["edits"], 0)
+        result = compare_text('“תנ״ך”', 'תנך')
+        self.assertEqual(result["word"]["edits"], 0)
+        self.assertEqual(result["character"]["edits"], 0)
+
     def test_known_edits_and_empty_denominators(self):
         self.assertEqual(edit_distance("kitten", "sitting"), 3)
         self.assertEqual(edit_distance(["a", "b", "c"], ["a", "c"]), 1)
@@ -66,11 +75,10 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(compare_text("מילה", "")["word"]["fraction_of_left"], 1)
 
     def test_distance_agrees_with_independent_dynamic_program(self):
-        rng = random.Random(7)
-        for _ in range(100):
-            left = [rng.choice("אבגד") for _ in range(rng.randrange(25))]
-            right = [rng.choice("אבגד") for _ in range(rng.randrange(25))]
-            self.assertEqual(edit_distance(left, right), ordinary_distance(left, right))
+        sequences = ["".join(tokens) for length in range(5) for tokens in product("אב", repeat=length)]
+        for left in sequences:
+            for right in sequences:
+                self.assertEqual(edit_distance(left, right), ordinary_distance(left, right))
 
     def test_lecture_sized_sequences_keep_an_exact_small_edit(self):
         left = [f"מילה{index}" for index in range(4000)]
@@ -103,10 +111,13 @@ class CompareExportTests(unittest.TestCase):
         self.assertEqual(result["bidi_controls"]["left"], 1)
 
     def test_cli_runs_without_loading_gpu_or_media_dependencies(self):
-        command = [sys.executable, "-m", "devops.transcription.compare", str(self.left), str(self.right)]
-        result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", check=False)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["word"]["edits"], 0)
+        unavailable = {name: None for name in ("ctranslate2", "faster_whisper", "av", "numpy")}
+        with patch.dict(sys.modules, unavailable), patch("sys.argv", ["compare", str(self.left), str(self.right)]):
+            sys.modules.pop("devops.transcription.compare", None)
+            with redirect_stdout(StringIO()) as stdout, self.assertRaises(SystemExit) as result:
+                runpy.run_module("devops.transcription.compare", run_name="__main__")
+        self.assertEqual(result.exception.code, 0)
+        self.assertEqual(json.loads(stdout.getvalue())["word"]["edits"], 0)
 
     def test_module_entry_handles_legacy_windows_console_encoding(self):
         stdout_bytes, stderr_bytes = BytesIO(), BytesIO()

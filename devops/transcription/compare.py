@@ -44,7 +44,7 @@ def compare_text(left: str, right: str) -> dict[str, object]:
     """Compare spelling after removing non-speech formatting, never Hebrew letters."""
     normalized_left, normalized_right = comparison_text(left), comparison_text(right)
     return {"comparison_kind": "output-disagreement", "reference_transcript": False,
-            "normalization": "NFKC, lowercase, punctuation/symbols and bidi controls removed; whitespace collapsed",
+            "normalization": "NFKC, lowercase; bidi controls and quotes removed; other punctuation/symbols separated; whitespace collapsed",
             "letters_and_diacritics_preserved": True,
             "bidi_controls": {"left": sum(c in BIDI_CONTROLS for c in left),
                               "right": sum(c in BIDI_CONTROLS for c in right)},

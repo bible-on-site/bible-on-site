@@ -197,9 +197,11 @@ The JSON report gives exact word/character Levenshtein edits, input lengths,
 the edit fraction relative to the left input, a symmetric distance divided by
 the longer input, and counts of bidi controls. Empty-left fractions are `null`;
 two empty inputs have symmetric distance zero. Comparison ignores timestamps,
-segment boundaries, punctuation/symbols, bidi controls and whitespace differences,
-then applies NFKC/lowercase normalization. All Hebrew letters, including vav and
-yod, diacritics and joiners remain significant. Neither output is treated as a
+segment boundaries and repeated whitespace. It applies NFKC/lowercase
+normalization, removes bidi controls and quotation marks, and turns other
+punctuation/symbols into word separators. Thus maqaf/hyphens retain word
+boundaries while quoted abbreviations stay one word. All Hebrew letters,
+including vav and yod, diacritics and joiners remain significant. Neither output is treated as a
 human reference: these are disagreement measurements, not WER or accuracy.
 
 ## Incremental diagnostic checkpoints
@@ -224,6 +226,8 @@ temperature even when a lower-temperature candidate is selected. It is not
 proof that the saved text came from that temperature.
 
 Events are `started`, `recognition_started`, `segment` and `finished`.
+The initial request records the requested random seed and decoding mode even
+when recognition is interrupted before an export exists.
 `pipeline_elapsed_seconds` starts at wrapper entry and includes setup, source
 retrieval, decoding, model loading and export. `recognition_elapsed_seconds`
 starts immediately before the native transcription call, excluding earlier

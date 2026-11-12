@@ -106,7 +106,7 @@ article content hash. Both complete original CLI runtimes above remain unchanged
 
 ## Automated checks
 
-All 106 tests pass with the real S3 SDK and media integrations enabled, with
+All 108 tests pass with the real S3 SDK and media integrations enabled, with
 99% branch-aware coverage and every production source line covered. Tests
 generate their own WAV/video/multi-track/corrupt-media fixtures. Real boto3
 transport is constrained to a loopback-only server; no production AWS identity,
@@ -133,7 +133,8 @@ letters were removed, including vav/yod; no diacritics or joiners were removed.
 These remain output disagreements, with no human reference for this lecture.
 The derived HTML now strips bidi controls and records their count, while raw
 segments stay unchanged for audit. The comparison command has regressions for
-direction controls, full/defective spelling and retained diacritics/joiners.
+direction controls, full/defective spelling, retained diacritics/joiners,
+word separators such as maqaf/hyphen and word-internal quotation marks.
 
 ### Decoder mechanism and controlled replay
 
@@ -183,6 +184,29 @@ separates an input difference from the same-input decoder instability above.
 It does not identify a more faithful original recording or a more accurate
 complete transcript. Remaining disagreements include actual word substitutions
 and name/spelling conventions. Listening and editorial review are required.
+
+### Complete seeded validation
+
+Both owner-selected recordings also completed through the ordinary checkpointed
+CLI with explicit FP16, seed 0 and the standard fallback mode. Both source
+hashes match the original runs, every article content hash was independently
+checked, and both manifest timestamp-warning lists are empty.
+
+| Input | Raw words | Raw segments | Raw bidi controls | Article bidi controls |
+| --- | ---: | ---: | ---: | ---: |
+| Opus | 3475 | 409 | 453 | 0 |
+| WebM | 3488 | 473 | 0 | 0 |
+
+These new complete outputs disagree by 160 words (4.60% relative to Opus) and
+359 characters (2.09%). A lower disagreement rate does not establish a lower
+error rate against the speaker. The native checkpoints retain all raw text;
+their completed manifests record the seed and decoding mode. Future interrupted
+checkpoints also record those settings in their initial request.
+
+The observed whole-command times were 650.250 and 824.563 seconds. A Codex
+desktop process appeared in the GPU PID inventory during both runs, so these
+are functional validations, not new exclusive-device throughput benchmarks.
+The original exclusive-GPU measurements above remain the timing reference.
 
 See [the pipeline guide](../../../devops/transcription/README.md) for commands,
 the archive access constraint, artifact schema and future draft handoff.

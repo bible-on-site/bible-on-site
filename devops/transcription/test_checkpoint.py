@@ -50,7 +50,7 @@ class CheckpointTests(unittest.TestCase):
         self.original = Engine.transcribe
         self.fake_module = SimpleNamespace(WhisperModel=Engine)
 
-    def invoke(self, ordinary=None, *, import_error=None):
+    def invoke(self, ordinary=None, *, import_error=None, arguments=None):
         if ordinary is None:
             def ordinary(argv):
                 segments, info = self.engine().transcribe("samples", beam_size=5)
@@ -64,7 +64,7 @@ class CheckpointTests(unittest.TestCase):
               patch.object(cp.importlib, "import_module", return_value=self.fake_module, side_effect=import_error),
               patch.object(cp, "ordinary_main", side_effect=ordinary) as cli,
               redirect_stdout(stdout), redirect_stderr(stderr)):
-            status = cp.main(["lecture.webm", "--offline"])
+            status = cp.main(arguments if arguments is not None else ["lecture.webm", "--offline"])
         return status, stderr.getvalue(), cli
 
     def rows(self):
@@ -83,8 +83,20 @@ class CheckpointTests(unittest.TestCase):
         self.assertTrue(rows[-1]["complete"])
         self.assertEqual(rows[-1]["exit_code"], 0)
         self.assertNotIn("aws_profile", rows[0]["request"])
+        self.assertEqual(rows[0]["request"]["random_seed"], 0)
+        self.assertEqual(rows[0]["request"]["decoding_mode"], "fallback")
         if os.name == "posix":
             self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+
+    def test_incomplete_checkpoint_records_requested_seed_and_decoding_mode(self):
+        arguments = ["lecture.webm", "--random-seed", "73", "--decoding-mode", "beam"]
+        status, _, cli = self.invoke(lambda argv: 1, arguments=arguments)
+        self.assertEqual(status, 1)
+        cli.assert_called_once_with(arguments)
+        request = self.rows()[0]["request"]
+        self.assertEqual(request["random_seed"], 73)
+        self.assertEqual(request["decoding_mode"], "beam")
+        self.assertFalse(self.rows()[-1]["complete"])
 
     def test_recording_is_lazy_and_clocks_include_different_overhead(self):
         target = StringIO()

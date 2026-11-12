@@ -63,6 +63,7 @@ def _run(argv, args, checkpoint: Checkpoint) -> int:
         "language": args.language, "compute_type": args.compute_type,
         "device_index": args.device_index, "audio_stream": args.audio_stream,
         "beam_size": args.beam_size, "offline": args.offline,
+        "random_seed": args.random_seed, "decoding_mode": args.decoding_mode,
     })
     exit_code = None
     whisper = None

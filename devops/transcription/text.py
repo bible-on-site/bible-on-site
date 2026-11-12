@@ -16,7 +16,14 @@ def strip_direction_controls(text: str) -> str:
 
 
 def comparison_text(text: str) -> str:
-    """Ignore punctuation and bidi formatting, preserving spelling and diacritics."""
+    """Normalize direction, quotes and separators, preserving spelling and diacritics."""
     text = strip_direction_controls(unicodedata.normalize("NFKC", text).lower())
-    return " ".join("".join(character for character in text
-                            if unicodedata.category(character)[0] not in {"P", "S"}).split())
+    characters = []
+    for character in text:
+        category = unicodedata.category(character)
+        # Quoted abbreviations such as tanakh stay one word; maqaf, hyphens
+        # and other separator punctuation must not glue adjacent words.
+        if character in {'"', "'", "\u05f3", "\u05f4"} or category in {"Pi", "Pf"}:
+            continue
+        characters.append(" " if category[0] in {"P", "S"} else character)
+    return " ".join("".join(characters).split())
