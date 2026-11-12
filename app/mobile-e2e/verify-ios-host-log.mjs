@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { arch, release } from "node:os";
-import { dirname, resolve } from "node:path";
+import { arch, homedir, release } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { iosHostLogArguments, startIosClassicHostLog, startNativeLog, stopNativeLogStreams } from "./native-logs.mjs";
@@ -65,28 +65,40 @@ export function observeIosHostLog(udid) {
 export async function verifyIosHostLog({ udid, artifact,
   execute = promisify(execFile), stream = startNativeLog, observe = observeIosHostLog,
   classicStream = startIosClassicHostLog, report = () => {}, signal,
-  observationWindow = () => AbortSignal.timeout(5000) }) {
+  observationWindow = () => AbortSignal.timeout(5000), home = homedir() }) {
   assert.match(udid, /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i);
   // Reserve the existing five-second observer stop cap inside the 45s check.
   const operationDeadline = AbortSignal.timeout(40000);
   const deadline = signal ? AbortSignal.any([operationDeadline, signal]) : operationDeadline;
   deadline.throwIfAborted();
   const stateQueries = [];
+  const devicePlist = join(home, "Library", "Developer", "CoreSimulator", "Devices", udid, "device.plist");
   const device = async () => {
-    // Full runtime enumeration exceeded five seconds in both hosted controls.
-    // Ask simctl for this exact device without enumerating unrelated devices.
-    const args = ["simctl", "list", "devices", udid, "--json"];
-    const started = performance.now();
-    try {
-      const { stdout } = await execute("xcrun", args, { timeout: 5000, signal: deadline });
-      return Object.values(JSON.parse(stdout).devices).flat().find(item => item.udid === udid);
-    } finally {
-      const query = { command: "xcrun", args, elapsedMs: performance.now() - started };
-      stateQueries.push(query);
-      report({ udid, stage: "target state query", at: new Date().toISOString(), ...query });
-    }
+    // Even UUID-filtered simctl listing blocks on service re-initialization
+    // after shutdown. Read only the owned device's persisted identity/state.
+    // CoreSimulator's numeric state mapping is also used by WebKit.
+    const command = "/usr/bin/plutil";
+    const reads = await Promise.allSettled(["UDID", "state"].map(async key => {
+      const args = ["-extract", key, "raw", "-o", "-", devicePlist];
+      const started = performance.now();
+      try {
+        return (await execute(command, args, { timeout: 5000, signal: deadline })).stdout.trim();
+      } finally {
+        const query = { command, args, elapsedMs: performance.now() - started };
+        stateQueries.push(query);
+        report({ udid, stage: "target state query", at: new Date().toISOString(), ...query });
+      }
+    }));
+    // Join both bounded reads even on error; neither child may outlive us.
+    for (const read of reads) if (read.status === "rejected") throw read.reason;
+    const [identity, numeric] = reads.map(read => read.value);
+    assert(identity.toUpperCase() === udid.toUpperCase() && /^[0-4]$/.test(numeric),
+      "Refuse shutdown: invalid persisted simulator identity or state.");
+    const numericState = Number(numeric);
+    return { udid: identity, numericState, source: devicePlist,
+      state: ["Creating", "Shutdown", "Booting", "Booted", "Shutting Down"][numericState] };
   };
-  const before = { state: (await device())?.state, at: new Date().toISOString() };
+  const before = { ...(await device()), at: new Date().toISOString() };
   assert.equal(before.state, "Booted", "Refuse shutdown without this job's booted simulator.");
   mkdirSync(dirname(artifact), { recursive: true });
   const evidence = observe(udid);
@@ -117,7 +129,7 @@ export async function verifyIosHostLog({ udid, artifact,
     await shutdown;
     request.completedAt = new Date().toISOString();
     enter("shutdown state verification");
-    after = { state: (await device())?.state, at: new Date().toISOString() };
+    after = { ...(await device()), at: new Date().toISOString() };
     assert.equal(after.state, "Shutdown");
     enter("observe service shutdown record");
     const window = observationWindow();

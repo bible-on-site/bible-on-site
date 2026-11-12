@@ -17,7 +17,7 @@ function fixture(t, state = "Booted", classic = false, event = "Shutdown request
   let onOutput;
   let classicOutput, classicArtifact;
   return { artifact, calls, get stopped() { return stopped && (!classic || classicStopped); }, options: {
-    udid, artifact,
+    udid, artifact, home: directory,
     async execute(command, args) {
       calls.push({ command, args });
       if (args[1] === "shutdown") {
@@ -26,7 +26,7 @@ function fixture(t, state = "Booted", classic = false, event = "Shutdown request
         writeFileSync(classic ? classicArtifact : artifact, log);
         (classic ? classicOutput : onOutput)(log);
       }
-      return { stdout: JSON.stringify({ devices: { ios: [{ udid: "foreign", state: "Booted" }, { udid, state }] } }) };
+      return { stdout: `${args[1] === "UDID" ? udid : ["Creating", "Shutdown", "Booting", "Booted", "Shutting Down"].indexOf(state)}\n` };
     },
     stream(command, args, path, options) {
       calls.push({ command, args });
@@ -53,11 +53,14 @@ test("validates the target transition and preserves correlated evidence before s
   assert.equal(result.stateTransitionVerified, true);
   assert.equal(result.before.state, "Booted");
   assert.equal(result.after.state, "Shutdown");
+  assert.equal(result.before.numericState, 3);
+  assert.equal(result.after.numericState, 1);
+  assert.equal(result.before.source, join(f.options.home, "Library", "Developer", "CoreSimulator", "Devices", udid, "device.plist"));
   assert(Number.isFinite(Date.parse(result.before.at)));
   assert(Number.isFinite(Date.parse(result.after.at)));
   assert.deepEqual(result.request.args, ["simctl", "shutdown", udid]);
   assert.equal(result.request.pid, null, "the injected command has no real child PID");
-  assert.equal(result.stateQueries.length, 2);
+  assert.equal(result.stateQueries.length, 4);
   assert(result.stateQueries.every(query => query.elapsedMs >= 0));
   assert(Number.isFinite(Date.parse(result.observation.startedAt)));
   assert(Number.isFinite(Date.parse(result.observation.endedAt)));
@@ -101,14 +104,17 @@ test("queries only the owned device within the unchanged command budget", async 
   const f = fixture(t);
   const execute = f.options.execute;
   f.options.execute = async (command, args, options) => {
-    if (args[1] === "list") {
-      assert.deepEqual(args, ["simctl", "list", "devices", udid, "--json"]);
+    if (command === "/usr/bin/plutil") {
+      assert(["UDID", "state"].includes(args[1]));
+      assert.deepEqual(args, ["-extract", args[1], "raw", "-o", "-",
+        join(f.options.home, "Library", "Developer", "CoreSimulator", "Devices", udid, "device.plist")]);
       assert.equal(options.timeout, 5000);
     }
     return execute(command, args, options);
   };
   await verifyIosHostLog(f.options);
-  assert.equal(f.calls.filter(call => call.args[1] === "list").length, 2);
+  assert.equal(f.calls.filter(call => call.command === "/usr/bin/plutil").length, 4);
+  assert(!f.calls.some(call => call.args[1] === "list"));
 });
 
 test("rejects a failed final state query and retains its timing without persisting success", async t => {
@@ -118,12 +124,12 @@ test("rejects a failed final state query and retains its timing without persisti
   let queries = 0;
   f.options.report = report => reports.push(report);
   f.options.execute = async (command, args, options) => {
-    if (args[1] === "list" && ++queries === 2) throw new Error("state query exceeded five seconds");
+    if (args[1] === "state" && ++queries === 2) throw new Error("state query exceeded five seconds");
     return execute(command, args, options);
   };
   await assert.rejects(verifyIosHostLog(f.options), /shutdown state verification: state query exceeded five seconds/);
   const timings = reports.filter(report => report.stage === "target state query");
-  assert.equal(timings.length, 2);
+  assert.equal(timings.length, 4);
   assert(timings.every(report => report.elapsedMs >= 0));
   assert(f.stopped);
   assert.throws(() => readFileSync(`${f.artifact}.measurement.json`), { code: "ENOENT" });
@@ -222,6 +228,32 @@ test("refuses an absent or already stopped target without starting an observer o
     assert(f.calls.every(call => call.args[1] !== "shutdown"));
   }
   await assert.rejects(verifyIosHostLog({ udid: "booted" }), /match/);
+});
+
+test("rejects foreign, malformed and transitional persisted state before issuing shutdown", async t => {
+  for (const [identity, numeric] of [["foreign", "3"], [udid, "3 trailing"], [udid, "3\nextra"],
+    [udid, "0"], [udid, "2"], [udid, "4"]]) {
+    const f = fixture(t);
+    f.options.execute = async (command, args) => ({ stdout: args[1] === "UDID" ? identity : numeric });
+    await assert.rejects(verifyIosHostLog(f.options), /Refuse shutdown/);
+    assert.equal(f.calls.length, 0);
+  }
+});
+
+test("joins the other bounded plist read before reporting a read failure", async t => {
+  const f = fixture(t);
+  let finishIdentity;
+  f.options.execute = async (command, args) => {
+    if (args[1] === "state") throw new Error("state read failed");
+    return new Promise(resolve => { finishIdentity = () => resolve({ stdout: udid }); });
+  };
+  let rejected = false;
+  const pending = verifyIosHostLog(f.options).catch(error => { rejected = true; throw error; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(rejected, false, "the owned identity read must still be joined");
+  finishIdentity();
+  await assert.rejects(pending, /state read failed/);
+  assert.equal(f.calls.length, 0);
 });
 
 test("closes the owned host observer when startup or shutdown observation fails", async t => {
