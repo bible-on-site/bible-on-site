@@ -138,6 +138,8 @@ With `ENABLE_EVENT_LOOP_DIAGNOSTICS=1` (`raw/trial0-*-diag.json`):
 Required pre-adoption fix (not applied in this change): detect the unsupported
 primitives on Bun and report them as explicitly unavailable rather than 0;
 external process metrics (as used here) remain the cross-runtime substitute.
+Tracked as a compatibility blocker in
+[#3351](https://github.com/bible-on-site/bible-on-site/issues/3351).
 
 ## Shutdown
 
