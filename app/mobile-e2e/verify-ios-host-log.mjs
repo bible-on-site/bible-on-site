@@ -71,10 +71,20 @@ export async function verifyIosHostLog({ udid, artifact,
   const operationDeadline = AbortSignal.timeout(40000);
   const deadline = signal ? AbortSignal.any([operationDeadline, signal]) : operationDeadline;
   deadline.throwIfAborted();
+  const stateQueries = [];
   const device = async () => {
-    const { stdout } = await execute("xcrun", ["simctl", "list", "devices", "--json"],
-      { timeout: 5000, signal: deadline });
-    return Object.values(JSON.parse(stdout).devices).flat().find(item => item.udid === udid);
+    // Full runtime enumeration exceeded five seconds in both hosted controls.
+    // Ask simctl for this exact device without enumerating unrelated devices.
+    const args = ["simctl", "list", "devices", udid, "--json"];
+    const started = performance.now();
+    try {
+      const { stdout } = await execute("xcrun", args, { timeout: 5000, signal: deadline });
+      return Object.values(JSON.parse(stdout).devices).flat().find(item => item.udid === udid);
+    } finally {
+      const query = { command: "xcrun", args, elapsedMs: performance.now() - started };
+      stateQueries.push(query);
+      report({ udid, stage: "target state query", at: new Date().toISOString(), ...query });
+    }
   };
   const before = { state: (await device())?.state, at: new Date().toISOString() };
   assert.equal(before.state, "Booted", "Refuse shutdown without this job's booted simulator.");
@@ -85,6 +95,8 @@ export async function verifyIosHostLog({ udid, artifact,
   const classicArtifact = `${artifact}.classic.log`;
   let classicObserver;
   let after, request;
+  let observation;
+  let observedInWindow = false;
   let stage;
   const enter = name => {
     stage = name;
@@ -109,26 +121,31 @@ export async function verifyIosHostLog({ udid, artifact,
     assert.equal(after.state, "Shutdown");
     enter("observe service shutdown record");
     const window = observationWindow();
-    try { await evidence.waitFor("shutdown", AbortSignal.any([deadline, window])); }
+    observation = { startedAt: new Date().toISOString() };
+    try {
+      await evidence.waitFor("shutdown", AbortSignal.any([deadline, window]));
+      observedInWindow = true;
+    }
     catch (error) {
       // Only absence at this fixed observation boundary is a measurement.
       // Overall deadline/cancellation, startup and reader failures still fail.
       if (deadline.aborted || !window.aborted || error !== window.reason || error.name !== "TimeoutError") throw error;
-    }
+    } finally { observation.endedAt = new Date().toISOString(); }
   } catch (cause) {
     throw new Error(`iOS host log verification failed during ${stage}: ${cause.message}`, { cause });
   } finally { await stopNativeLogStreams([observer, classicObserver]); }
-  signal?.throwIfAborted();
-  // Join the readers before assessing the retained bytes, including final EOF.
+  deadline.throwIfAborted();
+  // Drained bytes include cleanup diagnostics. Only the completed observation
+  // wait establishes whether a record arrived within its fixed window.
   const captures = { unified: readFileSync(artifact) };
   if (classicObserver) captures.classic = readFileSync(classicArtifact);
   const sources = Object.fromEntries(Object.entries(captures)
     .map(([source, bytes]) => [source, shutdownEvidence(bytes.toString("utf8"), udid).length]));
   const correlatedLines = Object.values(sources).reduce((sum, count) => sum + count, 0);
   const result = { kind: "ios-host-log-measurement/1", udid, stateTransitionVerified: true,
-    before, after, request, sources, correlatedLines,
-    lifecycleRecordStatus: correlatedLines > 0 ? "observed" : "not-observed",
-    limitation: correlatedLines > 0 ? null
+    before, after, request, stateQueries, observation, sources, correlatedLines,
+    lifecycleRecordStatus: observedInWindow ? "observed" : "not-observed",
+    limitation: observedInWindow ? null
       : "No service shutdown record observed in the fixed window; OS shutdown reason and requesting client are not established.",
     capturedBytes: Object.fromEntries(Object.entries(captures).map(([source, bytes]) => [source, bytes.length])),
     sourceSha: process.env.GITHUB_SHA ?? null, runId: process.env.GITHUB_RUN_ID ?? null,

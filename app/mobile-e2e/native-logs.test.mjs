@@ -74,7 +74,7 @@ for (const code of [0, 7]) {
   });
 }
 
-test("pending interaction captures only a bounded simulator frame without attaching to the app", async () => {
+test("captures only a bounded simulator frame during pending interactions without attaching to the app", async () => {
   const directory = mkdtempSync(join(tmpdir(), "mobile-native-frame-test-"));
   const artifact = join(directory, "native-interaction.png");
   const calls = [];
@@ -92,7 +92,7 @@ test("pending interaction captures only a bounded simulator frame without attach
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("a failed observation retains diagnostics without failing a successfully completed interaction", async () => {
+test("retains diagnostics after a failed observation without failing a completed interaction", async () => {
   const directory = mkdtempSync(join(tmpdir(), "mobile-native-frame-test-"));
   const artifact = join(directory, "native-interaction.png");
   const error = Object.assign(new Error("simulator probe failed"), { code: 143, killed: true });
@@ -157,7 +157,7 @@ for (const firstExit of [null, 7]) {
   });
 }
 
-test("automation logging stays on the explicit simulator and does not replace the app stream", () => {
+test("keeps automation logging on the explicit simulator without replacing the app stream", () => {
   const argumentsFor = nativeLogs.iosAutomationLogArguments ?? ((udid) => [
     "simctl", "spawn", udid, "log", "stream", "--style", "compact", "--level", "info",
     "--predicate", 'process == "BibleOnSite"',
@@ -173,7 +173,7 @@ test("automation logging stays on the explicit simulator and does not replace th
   }
 });
 
-test("host lifecycle logging remains independent of device RPCs and limits its process scope", () => {
+test("keeps host lifecycle logging independent of device RPCs and limits its process scope", () => {
   const args = nativeLogs.iosHostLogArguments();
   assert.deepEqual(args.slice(0, 6), ["stream", "--style", "compact", "--level", "info", "--predicate"]);
   const names = args[6].split(" OR ").map(term => {
@@ -187,7 +187,7 @@ test("host lifecycle logging remains independent of device RPCs and limits its p
   assert.ok(!args.includes("simctl"));
 });
 
-test("absent classic logs are recorded without launching a reader or creating host files", t => {
+test("records absent classic logs without launching a reader or creating host files", t => {
   const home = mkdtempSync(join(tmpdir(), "classic-host-absent-"));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const artifact = join(home, "capture.log");
@@ -199,7 +199,7 @@ test("absent classic logs are recorded without launching a reader or creating ho
   assert.equal(metadata.candidates.length, 2);
 });
 
-test("classic log fallback starts at the exact byte offset and ignores a directory candidate", t => {
+test("starts the classic fallback at the exact byte offset and ignores a directory candidate", t => {
   const home = mkdtempSync(join(tmpdir(), "classic-host-fallback-"));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   mkdirSync(join(home, "Library", "Logs", "CoreSimulator", "CoreSimulator.log"), { recursive: true });
@@ -223,7 +223,7 @@ test("classic log fallback starts at the exact byte offset and ignores a directo
   assert.equal(readFileSync(source, "utf8"), "previous לילה\n");
 });
 
-test("real classic reader preserves an append before spawn and excludes historical evidence",
+test("preserves an append before spawning the classic reader and excludes historical evidence",
   { skip: process.platform === "win32" }, async t => {
     const home = mkdtempSync(join(tmpdir(), "classic-host-live-"));
     t.after(() => rmSync(home, { recursive: true, force: true }));
@@ -231,7 +231,8 @@ test("real classic reader preserves an append before spawn and excludes historic
     mkdirSync(directory, { recursive: true });
     const source = join(directory, "CoreSimulator.log");
     const udid = "24E299B4-C77B-4426-AC2B-71243825F07C";
-    const event = `Nov 11 20:17:06 localhost com.apple.CoreSimulator.CoreSimulatorService[24253] <Debug>: Shutting down ${udid}`;
+    const event = ["Nov 11 20:17:06 localhost com.apple.CoreSimulator.CoreSimulatorService[24253]",
+      "<Debug>:", "Shutting down", udid].join(" ");
     writeFileSync(source, `historical ${event}\n`);
     const artifact = join(home, "capture.log");
     const evidence = observeIosHostLog(udid);
@@ -247,7 +248,7 @@ test("real classic reader preserves an append before spawn and excludes historic
     assert.equal(readFileSync(artifact, "utf8"), event);
   });
 
-test("an automation-start failure still closes the original stream", async () => {
+test("closes the original stream after an automation-start failure", async () => {
   await withStreamArtifact(async (artifact) => {
     const stream = startNativeLog(process.execPath,
       ["-e", "process.stdout.write('live log'); setInterval(() => {}, 1000)"], artifact);
@@ -264,7 +265,7 @@ test("an automation-start failure still closes the original stream", async () =>
   });
 });
 
-test("pipe observations persist immediate stdout and final stderr before stream completion", async () => {
+test("persists immediate stdout and final stderr before stream completion", async () => {
   await withStreamArtifact(async artifact => {
     let observed = "";
     const stream = startNativeLog(process.execPath, ["-e",
@@ -283,7 +284,7 @@ test("pipe observations persist immediate stdout and final stderr before stream 
   });
 });
 
-test("observer errors remain reportable after the owned child stops", async () => {
+test("reports observer errors after the owned child stops", async () => {
   await withStreamArtifact(async artifact => {
     const stream = startNativeLog(process.execPath,
       ["-e", "process.stdout.write('live log'); setInterval(() => {}, 1000)"], artifact,

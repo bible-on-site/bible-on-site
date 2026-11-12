@@ -57,6 +57,10 @@ test("validates the target transition and preserves correlated evidence before s
   assert(Number.isFinite(Date.parse(result.after.at)));
   assert.deepEqual(result.request.args, ["simctl", "shutdown", udid]);
   assert.equal(result.request.pid, null, "the injected command has no real child PID");
+  assert.equal(result.stateQueries.length, 2);
+  assert(result.stateQueries.every(query => query.elapsedMs >= 0));
+  assert(Number.isFinite(Date.parse(result.observation.startedAt)));
+  assert(Number.isFinite(Date.parse(result.observation.endedAt)));
   assert.equal(result.lifecycleRecordStatus, "observed");
   assert.equal(result.limitation, null);
   assert.equal(result.correlatedLines, 1);
@@ -69,7 +73,7 @@ test("validates the target transition and preserves correlated evidence before s
   assert.match(readFileSync(f.artifact, "utf8"), /Shutdown requested/);
 });
 
-test("classic evidence is retained independently when unified logging has no lifecycle event", async t => {
+test("retains classic evidence independently when unified logging has no lifecycle event", async t => {
   const f = fixture(t, "Booted", true);
   const result = await verifyIosHostLog(f.options);
   assert.equal(result.stateTransitionVerified, true);
@@ -80,7 +84,7 @@ test("classic evidence is retained independently when unified logging has no lif
   assert.match(readFileSync(`${f.artifact}.classic.log`, "utf8"), /Shutdown requested/);
 });
 
-test("a measured missing OS record is explicit and cannot claim lifecycle evidence", async t => {
+test("reports a missing OS record explicitly without claiming lifecycle evidence", async t => {
   const f = fixture(t, "Booted", true, "Activity for device");
   f.options.observationWindow = () => AbortSignal.abort(new DOMException("capture window ended", "TimeoutError"));
   const result = await verifyIosHostLog(f.options);
@@ -93,7 +97,90 @@ test("a measured missing OS record is explicit and cannot claim lifecycle eviden
   assert(f.stopped);
 });
 
-test("the overall deadline is never converted into an unavailable OS field", async t => {
+test("queries only the owned device within the unchanged command budget", async t => {
+  const f = fixture(t);
+  const execute = f.options.execute;
+  f.options.execute = async (command, args, options) => {
+    if (args[1] === "list") {
+      assert.deepEqual(args, ["simctl", "list", "devices", udid, "--json"]);
+      assert.equal(options.timeout, 5000);
+    }
+    return execute(command, args, options);
+  };
+  await verifyIosHostLog(f.options);
+  assert.equal(f.calls.filter(call => call.args[1] === "list").length, 2);
+});
+
+test("rejects a failed final state query and retains its timing without persisting success", async t => {
+  const f = fixture(t, "Booted", true);
+  const execute = f.options.execute;
+  const reports = [];
+  let queries = 0;
+  f.options.report = report => reports.push(report);
+  f.options.execute = async (command, args, options) => {
+    if (args[1] === "list" && ++queries === 2) throw new Error("state query exceeded five seconds");
+    return execute(command, args, options);
+  };
+  await assert.rejects(verifyIosHostLog(f.options), /shutdown state verification: state query exceeded five seconds/);
+  const timings = reports.filter(report => report.stage === "target state query");
+  assert.equal(timings.length, 2);
+  assert(timings.every(report => report.elapsedMs >= 0));
+  assert(f.stopped);
+  assert.throws(() => readFileSync(`${f.artifact}.measurement.json`), { code: "ENOENT" });
+});
+
+test("rejects shutdown command failures and joins both readers", async t => {
+  const f = fixture(t, "Booted", true);
+  const execute = f.options.execute;
+  f.options.execute = async (command, args, options) => {
+    if (args[1] === "shutdown") throw new Error("shutdown rejected");
+    return execute(command, args, options);
+  };
+  await assert.rejects(verifyIosHostLog(f.options), /owned simulator shutdown command: shutdown rejected/);
+  assert(f.stopped);
+  assert.throws(() => readFileSync(`${f.artifact}.measurement.json`), { code: "ENOENT" });
+});
+
+test("rejects operation expiry during reader cleanup without persisting success", async t => {
+  const f = fixture(t, "Booted", true);
+  const controller = new AbortController();
+  const timeout = AbortSignal.timeout.bind(AbortSignal);
+  t.mock.method(AbortSignal, "timeout", milliseconds => milliseconds === 40000
+    ? controller.signal : timeout(milliseconds));
+  const stream = f.options.stream;
+  f.options.stream = (...args) => {
+    const observer = stream(...args);
+    return { async stop() {
+      await observer.stop();
+      controller.abort(new DOMException("operation expired during cleanup", "TimeoutError"));
+    } };
+  };
+  await assert.rejects(verifyIosHostLog(f.options), /operation expired during cleanup/);
+  assert(f.stopped);
+  assert.throws(() => readFileSync(`${f.artifact}.measurement.json`), { code: "ENOENT" });
+});
+
+test("retains late records without claiming they arrived inside the observation window", async t => {
+  const f = fixture(t, "Booted", true, "Activity for device");
+  f.options.observationWindow = () => AbortSignal.abort(new DOMException("capture window ended", "TimeoutError"));
+  const stream = f.options.stream;
+  f.options.stream = (...args) => {
+    const observer = stream(...args);
+    return { async stop() {
+      const log = `${service} Shutdown requested for ${udid}\n`;
+      writeFileSync(f.artifact, log);
+      args[3].onOutput(log);
+      await observer.stop();
+    } };
+  };
+  const result = await verifyIosHostLog(f.options);
+  assert.equal(result.correlatedLines, 1, "retain drained bytes as diagnostics");
+  assert.equal(result.lifecycleRecordStatus, "not-observed");
+  assert.match(result.limitation, /No service shutdown record observed in the fixed window/);
+  assert(f.stopped);
+});
+
+test("rejects the overall deadline instead of reporting an unavailable OS field", async t => {
   const f = fixture(t, "Booted", true);
   const controller = new AbortController();
   f.options.signal = controller.signal;
@@ -106,7 +193,7 @@ test("the overall deadline is never converted into an unavailable OS field", asy
   assert(f.stopped);
 });
 
-test("cancellation before commands or during reader cleanup remains a failure", async t => {
+test("rejects cancellation before commands or during reader cleanup", async t => {
   const before = fixture(t);
   before.options.signal = AbortSignal.abort(new DOMException("cancelled", "AbortError"));
   await assert.rejects(verifyIosHostLog(before.options), /cancelled/);
@@ -137,7 +224,7 @@ test("refuses an absent or already stopped target without starting an observer o
   await assert.rejects(verifyIosHostLog({ udid: "booted" }), /match/);
 });
 
-test("missing startup or shutdown evidence still closes the owned host observer", async t => {
+test("closes the owned host observer when startup or shutdown observation fails", async t => {
   for (const failureAt of [1, 2]) {
     const f = fixture(t, "Booted", true);
     const stages = [];
@@ -157,13 +244,14 @@ test("missing startup or shutdown evidence still closes the owned host observer"
   }
 });
 
-test("shutdown evidence requires the lifecycle emitter, device identity and shutdown event", () => {
+test("requires the lifecycle emitter, device identity and shutdown event", () => {
   const valid = `${service} Shutting down ${udid.toLowerCase()}`;
   const requester = `2026-11-11 20:17:02.375 Df simctl[65397:1b938] Shutdown requested for ${udid}`;
   const guiRequest = requester.replace("simctl[", "Simulator[");
   const quotedService = `${requester} via ${service}`;
   const lookalike = valid.replace("CoreSimulatorService[", "CoreSimulatorServiceHelper[");
-  const legacy = `Nov 11 20:17:06 localhost com.apple.CoreSimulator.CoreSimulatorService[24253] <Debug>: Shutting down ${udid}`;
+  const legacy = ["Nov 11 20:17:06 localhost com.apple.CoreSimulator.CoreSimulatorService[24253]",
+    "<Debug>:", "Shutting down", udid].join(" ");
   const legacyRequester = legacy.replace("CoreSimulatorService[", "simctl[");
   const bareRequester = `2026-11-11 20:17:02.375 simctl[65397] ${service} Shutdown ${udid}`;
   assert.deepEqual(shutdownEvidence([
@@ -173,7 +261,7 @@ test("shutdown evidence requires the lifecycle emitter, device identity and shut
   ].join("\n"), udid), [valid, legacy]);
 });
 
-test("pipe observation retains early and split writes, unrelated events and cancellation without polling", async () => {
+test("retains early and split pipe writes, unrelated events and cancellation without polling", async () => {
   const evidence = observeIosHostLog(udid);
   evidence.write("Filtering the log data using process scope\n");
   await evidence.waitFor("startup", AbortSignal.timeout(5000));
@@ -189,7 +277,7 @@ test("pipe observation retains early and split writes, unrelated events and canc
   await assert.rejects(evidence.waitFor("shutdown", abort.signal), /canceled/);
 });
 
-test("a complete startup or shutdown record needs no trailing newline", async () => {
+test("observes complete startup or shutdown records without a trailing newline", async () => {
   const evidence = observeIosHostLog(udid);
   evidence.write("Filtering the log data using process scope");
   await evidence.waitFor("startup", AbortSignal.timeout(5000));
@@ -199,7 +287,7 @@ test("a complete startup or shutdown record needs no trailing newline", async ()
   await pending;
 });
 
-test("interleaved host readers keep fragmented records in separate buffers", async () => {
+test("keeps fragmented records in separate buffers for interleaved host readers", async () => {
   const evidence = observeIosHostLog(udid);
   evidence.write(`${service} Shutting do`, "unified");
   evidence.write("Nov 11 20:17:06 localhost simctl[65397] unrelated", "classic");
