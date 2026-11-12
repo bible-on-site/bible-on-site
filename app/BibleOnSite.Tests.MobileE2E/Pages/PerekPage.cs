@@ -17,10 +17,10 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public AppiumElement WaitFor(string automationId) => WaitFor(automationId, _ => true);
 
     public AppiumElement WaitFor(string automationId, Func<AppiumElement, bool> condition) =>
-        WaitFor(platform.AutomationId(automationId), condition);
+        WaitFor(platform.DisplayedAutomationId(automationId), condition);
 
     public AppiumElement WaitFor(string automationId, Func<AppiumElement, bool> condition, TimeSpan timeout) =>
-        WaitFor(platform.AutomationId(automationId), condition, timeout);
+        WaitFor(platform.DisplayedAutomationId(automationId), condition, timeout);
 
     public AppiumElement WaitFor(By locator) => WaitFor(locator, _ => true);
 
@@ -243,7 +243,10 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     {
         if (driver is IosSnapshotDriver snapshots)
         {
-            return snapshots.FindSnapshots(platform.AutomationId(automationId))
+            // Filter before WDA enriches each candidate with its native frame,
+            // text and visibility; otherwise offscreen cells trigger repeated
+            // accessibility snapshots. Keep the returned-state check as well.
+            return snapshots.FindSnapshots(platform.DisplayedAutomationId(automationId))
                 .Where(match => match.Snapshot.Displayed)
                 .Select(match => (match.Element, match.Snapshot.Text.Trim(),
                     (new System.Drawing.Point(Convert.ToInt32(match.Snapshot.X),
@@ -273,7 +276,7 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
 
     private string WaitForSpoken(string automationId, Func<string, bool> accept, TimeSpan timeout)
     {
-        var locator = platform.AutomationId(automationId);
+        var locator = platform.DisplayedAutomationId(automationId);
         var deadline = DateTime.UtcNow.Add(timeout);
         while (DateTime.UtcNow < deadline)
         {
