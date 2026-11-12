@@ -188,16 +188,29 @@ class LambdaParserSafetyTests(unittest.TestCase):
             self.assertLess(manifest.index(name), manifest.index("external_reference_data.sql"))
         structure = LAMBDA.preprocess_sql((ROOT / "data/mysql/external_reference_structure.sql").read_text(encoding="utf-8"))
         self.assertRegex(structure, r"CREATE TABLE IF NOT EXISTS `external_reference`")
+        self.assertRegex(structure, r"CREATE TABLE IF NOT EXISTS `external_reference_seed`")
         self.assertNotRegex(structure, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE)\b")
         path = ROOT / "data/mysql/external_reference_data.sql"
         VALIDATOR.validate_lambda_safe_comments(path)
         seed = LAMBDA.preprocess_sql(path.read_text(encoding="utf-8"))
-        # 2 session settings + PARSHAN rebuild (DELETE + INSERT) + entity upsert.
-        self.assertEqual(len(LAMBDA.parse_statements(seed)), 5)
+        # 2 session settings + PARSHAN rebuild (DELETE + INSERT) + guarded
+        # entity insert + entity-claim insert (#3330 admin-owned mappings).
+        self.assertEqual(len(LAMBDA.parse_statements(seed)), 6)
         # Only the regenerated PARSHAN rows are ever wiped.
         self.assertEqual([m.strip() for m in re.findall(r"(?im)^\s*DELETE\b.*$", seed)], ["DELETE FROM external_reference WHERE subject_kind = 'PARSHAN';"])
         self.assertNotRegex(seed, r"(?im)^\s*(?:DROP|TRUNCATE|CREATE)\b")
         self.assertNotIn("'TANAH_AUTHOR'", seed)
+        # Entity mappings are admin-owned: never upserted over an editor row,
+        # and skipped once claimed, so reruns cannot resurrect deletes.
+        self.assertNotIn("ON DUPLICATE KEY UPDATE", seed)
+        self.assertIn("external_reference_seed", seed)
+        entity_insert = next(
+            s for s in LAMBDA.parse_statements(seed)
+            if s.startswith("INSERT INTO external_reference")
+            and "TANAHPEDIA_ENTITY" in s
+        )
+        self.assertIn("NOT EXISTS", entity_insert)
+        self.assertIn("external_reference_seed", entity_insert)
 
     def test_mention_schema_is_in_manifest_and_remains_one_additive_statement(self):
         manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))

@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
 	createEntityMock,
+	deleteEntityExternalReferenceMock,
 	getEntryStructuralContextMock,
 	removeEntityMock,
 	replacePlaceIdentificationsMock,
@@ -17,8 +18,10 @@ const {
 	updatePersonMainNameMock,
 	updatePersonSexMock,
 	updateSayingDateMock,
+	upsertEntityExternalReferenceMock,
 } = vi.hoisted(() => ({
 	createEntityMock: vi.fn(),
+	deleteEntityExternalReferenceMock: vi.fn(),
 	getEntryStructuralContextMock: vi.fn(),
 	removeEntityMock: vi.fn(),
 	replacePlaceIdentificationsMock: vi.fn(),
@@ -26,6 +29,7 @@ const {
 	updatePersonMainNameMock: vi.fn(),
 	updatePersonSexMock: vi.fn(),
 	updateSayingDateMock: vi.fn(),
+	upsertEntityExternalReferenceMock: vi.fn(),
 }));
 
 vi.mock("~/server/tanahpedia/structural", () => ({
@@ -42,6 +46,11 @@ vi.mock("~/server/tanahpedia/structural", () => ({
 
 vi.mock("~/server/tanahpedia/entries", () => ({
 	removeEntity: removeEntityMock,
+}));
+
+vi.mock("~/server/tanahpedia/external-references", () => ({
+	upsertEntityExternalReference: upsertEntityExternalReferenceMock,
+	deleteEntityExternalReference: deleteEntityExternalReferenceMock,
 }));
 
 import { EntryStructuralPanel } from "~/components/tanahpedia/EntryStructuralPanel";
@@ -67,12 +76,14 @@ describe("EntryStructuralPanel", () => {
 		});
 		for (const mock of [
 			createEntityMock,
+			deleteEntityExternalReferenceMock,
 			removeEntityMock,
 			replacePlaceIdentificationsMock,
 			updateEntityDisplayNameMock,
 			updatePersonMainNameMock,
 			updatePersonSexMock,
 			updateSayingDateMock,
+			upsertEntityExternalReferenceMock,
 		]) {
 			mock.mockReset().mockResolvedValue({ ok: true });
 		}
@@ -184,6 +195,16 @@ describe("EntryStructuralPanel", () => {
 							sexRowId: "sex-row",
 						},
 						place: null,
+						externalReferences: [
+							{
+								source: "WIKIDATA",
+								url: "https://www.wikidata.org/wiki/Q9181",
+							},
+							{
+								source: "SEFARIA",
+								url: "https://www.sefaria.org/topics/abraham",
+							},
+						],
 					},
 					{
 						linkId: "place-link",
@@ -202,6 +223,7 @@ describe("EntryStructuralPanel", () => {
 								},
 							],
 						},
+						externalReferences: [],
 					},
 					{
 						linkId: "nation-link",
@@ -210,6 +232,7 @@ describe("EntryStructuralPanel", () => {
 						displayName: "ישראל",
 						person: null,
 						place: null,
+						externalReferences: [],
 					},
 				],
 			});
@@ -331,6 +354,7 @@ describe("EntryStructuralPanel", () => {
 							sexRowId: null,
 						},
 						place: null,
+						externalReferences: [],
 					},
 					{
 						linkId: "place-link",
@@ -349,6 +373,7 @@ describe("EntryStructuralPanel", () => {
 								},
 							],
 						},
+						externalReferences: [],
 					},
 				],
 			});
@@ -442,6 +467,130 @@ describe("EntryStructuralPanel", () => {
 
 			expect(removeEntityMock).not.toHaveBeenCalled();
 		});
+
+		describe("external identifiers", () => {
+			async function personCardElement() {
+				const id = await screen.findByText("person-entity");
+				const card = id.closest("div.rounded-lg");
+				if (!card) throw new Error("Expected person card");
+				return card as HTMLElement;
+			}
+
+			// The row of one source: its input plus the save/remove buttons that
+			// sit next to it inside the same flex container.
+			function sourceRow(card: HTMLElement, sourceLabel: string) {
+				const input = within(card).getByLabelText(sourceLabel);
+				const row = input.closest("div.flex");
+				if (!row) throw new Error("Expected source row");
+				return { input, row: within(row as HTMLElement) };
+			}
+
+			it("shows the section on every linked entity card with saved mappings", async () => {
+				renderPanel();
+				for (const entityId of [
+					"person-entity",
+					"place-entity",
+					"nation-entity",
+				]) {
+					const el = await screen.findByText(entityId);
+					const card = el.closest("div.rounded-lg") as HTMLElement;
+					expect(within(card).getByText(/מזהים חיצוניים/)).toBeInTheDocument();
+				}
+				const card = await personCardElement();
+				expect(sourceRow(card, "Wikidata").input).toHaveValue(
+					"https://www.wikidata.org/wiki/Q9181",
+				);
+				expect(sourceRow(card, "Sefaria").input).toHaveValue(
+					"https://www.sefaria.org/topics/abraham",
+				);
+				// The check-the-match link renders the saved URL with a readable id.
+				const open = sourceRow(card, "Wikidata").row.getByRole("link", {
+					name: /פתח Q9181/,
+				});
+				expect(open).toHaveAttribute(
+					"href",
+					"https://www.wikidata.org/wiki/Q9181",
+				);
+				expect(open).toHaveAttribute("target", "_blank");
+			});
+
+			it("adds a new mapping with a null snapshot", async () => {
+				renderPanel();
+				const { input, row } = sourceRow(
+					await personCardElement(),
+					"ויקיפדיה (אנגלית)",
+				);
+
+				fireEvent.change(input, {
+					target: { value: "https://en.wikipedia.org/wiki/Abraham" },
+				});
+				fireEvent.click(row.getByRole("button", { name: "שמור" }));
+
+				await waitFor(() =>
+					expect(upsertEntityExternalReferenceMock).toHaveBeenCalledWith({
+						data: {
+							entityId: "person-entity",
+							source: "WIKIPEDIA_EN",
+							url: "https://en.wikipedia.org/wiki/Abraham",
+							expectedUrl: null,
+						},
+					}),
+				);
+			});
+
+			it("updates an existing mapping with the loaded URL as snapshot", async () => {
+				renderPanel();
+				const { input, row } = sourceRow(await personCardElement(), "Wikidata");
+
+				fireEvent.change(input, { target: { value: "Q42" } });
+				fireEvent.click(row.getByRole("button", { name: "שמור" }));
+
+				await waitFor(() =>
+					expect(upsertEntityExternalReferenceMock).toHaveBeenCalledWith({
+						data: {
+							entityId: "person-entity",
+							source: "WIKIDATA",
+							url: "Q42",
+							expectedUrl: "https://www.wikidata.org/wiki/Q9181",
+						},
+					}),
+				);
+			});
+
+			it("removes a mapping with the loaded URL as snapshot", async () => {
+				renderPanel();
+				const { row } = sourceRow(await personCardElement(), "Wikidata");
+
+				fireEvent.click(row.getByRole("button", { name: "הסר" }));
+
+				await waitFor(() =>
+					expect(deleteEntityExternalReferenceMock).toHaveBeenCalledWith({
+						data: {
+							entityId: "person-entity",
+							source: "WIKIDATA",
+							expectedUrl: "https://www.wikidata.org/wiki/Q9181",
+						},
+					}),
+				);
+			});
+
+			it("keeps the draft and shows the error when a save fails", async () => {
+				upsertEntityExternalReferenceMock.mockRejectedValue(
+					new Error("המיפוי השתנה על ידי עורך אחר"),
+				);
+				renderPanel();
+				const card = await personCardElement();
+				const { input, row } = sourceRow(card, "Wikidata");
+
+				fireEvent.change(input, { target: { value: "Q42" } });
+				fireEvent.click(row.getByRole("button", { name: "שמור" }));
+
+				expect(await within(card).findByRole("alert")).toHaveTextContent(
+					"המיפוי השתנה על ידי עורך אחר",
+				);
+				expect(input).toHaveValue("Q42");
+			});
+		});
 	});
 
 	describe("loading failures", () => {
@@ -477,6 +626,7 @@ describe("EntryStructuralPanel", () => {
 					entityType: "SAYING",
 					displayName: "אמרה",
 					saying: { sayingId: "saying-1", sayingDate: 24480906 },
+					externalReferences: [],
 				},
 			],
 		});
@@ -513,6 +663,7 @@ describe("EntryStructuralPanel", () => {
 					entityType: "SAYING",
 					displayName: "אמרה",
 					saying: { sayingId: "saying-1", sayingDate: null },
+					externalReferences: [],
 				},
 			],
 		});

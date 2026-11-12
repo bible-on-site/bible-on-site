@@ -21,6 +21,7 @@ const PERSON_SQL = /FROM tanahpedia_person\s/;
 const PLACE_IDENT_SQL = /tanahpedia_place_identification/;
 const PLACE_SQL = /FROM tanahpedia_place\s/;
 const SAYING_SQL = /tanahpedia_saying/;
+const EXTERNAL_REF_SQL = /FROM external_reference/;
 
 function linkRow(entityType: string, entityId = "e1", linkId = "l1") {
 	return { linkId, entityId, entityType, displayName: `name-${entityId}` };
@@ -74,7 +75,8 @@ describe("loadEntryStructuralContext", () => {
 			sex: "MALE",
 			sexRowId: "s1",
 		});
-		expect(queryMock).toHaveBeenCalledTimes(4);
+		// links + external refs + persons + main names + sexes.
+		expect(queryMock).toHaveBeenCalledTimes(5);
 	});
 
 	it("batches several linked persons into one query per lookup", async () => {
@@ -111,8 +113,8 @@ describe("loadEntryStructuralContext", () => {
 			],
 		]);
 		const ctx = await loadEntryStructuralContext("entry-1");
-		// links + persons + main names + sexes: no per-entity fan-out.
-		expect(queryMock).toHaveBeenCalledTimes(4);
+		// links + external refs + persons + main names + sexes: no per-entity fan-out.
+		expect(queryMock).toHaveBeenCalledTimes(5);
 		expect(queryMock).toHaveBeenCalledWith(
 			expect.stringContaining("entity_id IN (?, ?, ?)"),
 			["e1", "e2", "e3"],
@@ -166,7 +168,7 @@ describe("loadEntryStructuralContext", () => {
 		]);
 		const ctx = await loadEntryStructuralContext("entry-1");
 		expect(ctx.linkedEntities[0].person).toBeUndefined();
-		expect(queryMock).toHaveBeenCalledTimes(2);
+		expect(queryMock).toHaveBeenCalledTimes(3);
 	});
 
 	it("nulls person details when the name and sex rows are missing", async () => {
@@ -193,7 +195,7 @@ describe("loadEntryStructuralContext", () => {
 		]);
 		const ctx = await loadEntryStructuralContext("entry-1");
 		expect(ctx.linkedEntities[0].place).toBeUndefined();
-		expect(queryMock).toHaveBeenCalledTimes(2);
+		expect(queryMock).toHaveBeenCalledTimes(3);
 	});
 
 	it("returns empty identifications when the place has none", async () => {
@@ -265,7 +267,7 @@ describe("loadEntryStructuralContext", () => {
 				},
 			],
 		});
-		expect(queryMock).toHaveBeenCalledTimes(3);
+		expect(queryMock).toHaveBeenCalledTimes(4);
 	});
 
 	it("loads the saying date for SAYING and PROPHECY entities", async () => {
@@ -291,7 +293,7 @@ describe("loadEntryStructuralContext", () => {
 			sayingId: "sy2",
 			sayingDate: null,
 		});
-		expect(queryMock).toHaveBeenCalledTimes(2);
+		expect(queryMock).toHaveBeenCalledTimes(3);
 	});
 
 	it("leaves saying undefined when there is no saying row", async () => {
@@ -322,14 +324,95 @@ describe("loadEntryStructuralContext", () => {
 			[SAYING_SQL, [{ entity_id: "e3", id: "sy1", saying_date: 57800000 }]],
 		]);
 		const ctx = await loadEntryStructuralContext("entry-1");
-		// links + persons + names + sexes + places + identifications + sayings.
-		expect(queryMock).toHaveBeenCalledTimes(7);
+		// links + external refs + persons + names + sexes + places +
+		// identifications + sayings.
+		expect(queryMock).toHaveBeenCalledTimes(8);
 		expect(ctx.linkedEntities).toHaveLength(4);
 		expect(ctx.linkedEntities[3]).toEqual({
 			linkId: "l4",
 			entityId: "e4",
 			entityType: "EVENT",
 			displayName: "name-e4",
+			externalReferences: [],
 		});
+	});
+
+	it("loads external references grouped per entity in one query", async () => {
+		mockQueries([
+			[
+				LINKS_SQL,
+				[linkRow("PERSON", "e1", "l1"), linkRow("PLACE", "e2", "l2")],
+			],
+			[
+				EXTERNAL_REF_SQL,
+				[
+					{
+						subject_id: "e1",
+						source: "WIKIDATA",
+						url: "https://www.wikidata.org/wiki/Q9181",
+					},
+					{
+						subject_id: "e1",
+						source: "SEFARIA",
+						url: "https://www.sefaria.org/topics/abraham",
+					},
+					{
+						subject_id: "e2",
+						source: "WIKIPEDIA_HE",
+						url: "https://he.wikipedia.org/wiki/x",
+					},
+					{ subject_id: "e2", source: "UNKNOWN_SOURCE", url: "https://x" },
+				],
+			],
+		]);
+		const ctx = await loadEntryStructuralContext("entry-1");
+		expect(queryMock).toHaveBeenCalledWith(
+			expect.stringContaining("subject_kind = ?"),
+			["TANAHPEDIA_ENTITY", "e1", "e2"],
+		);
+		// Unsupported sources are dropped; entities without rows get [].
+		expect(ctx.linkedEntities[0].externalReferences).toEqual([
+			{
+				source: "WIKIDATA",
+				url: "https://www.wikidata.org/wiki/Q9181",
+			},
+			{
+				source: "SEFARIA",
+				url: "https://www.sefaria.org/topics/abraham",
+			},
+		]);
+		expect(ctx.linkedEntities[1].externalReferences).toEqual([
+			{ source: "WIKIPEDIA_HE", url: "https://he.wikipedia.org/wiki/x" },
+		]);
+	});
+
+	it("reads missing external_reference table as no mappings", async () => {
+		mockQueries([[LINKS_SQL, [linkRow("PERSON")]]]);
+		queryMock.mockImplementation((sql: unknown) => {
+			const text = String(sql);
+			if (EXTERNAL_REF_SQL.test(text)) {
+				const error = new Error("table missing") as Error & {
+					code?: string;
+				};
+				error.code = "ER_NO_SUCH_TABLE";
+				return Promise.reject(error);
+			}
+			return Promise.resolve(LINKS_SQL.test(text) ? [linkRow("PERSON")] : []);
+		});
+		const ctx = await loadEntryStructuralContext("entry-1");
+		expect(ctx.linkedEntities[0].externalReferences).toEqual([]);
+	});
+
+	it("propagates external-reference failures that are not a missing table", async () => {
+		queryMock.mockImplementation((sql: unknown) => {
+			const text = String(sql);
+			if (EXTERNAL_REF_SQL.test(text)) {
+				return Promise.reject(new Error("connection lost"));
+			}
+			return Promise.resolve(LINKS_SQL.test(text) ? [linkRow("PERSON")] : []);
+		});
+		await expect(loadEntryStructuralContext("entry-1")).rejects.toThrow(
+			"connection lost",
+		);
 	});
 });
