@@ -87,9 +87,11 @@ public abstract class MobilePlatformAdapter
 
     /// <summary>
     /// Scrolls the page's scrollable surface one viewport down so a deeper
-    /// section (e.g. הסתר שם השם under תצוגה preferences) enters view. Goes
-    /// through the driver's own scroll command: a pointer drag that starts on
-    /// a Switch or Slider row revalues that control instead of scrolling.
+    /// section (e.g. הסתר שם השם under תצוגה preferences) enters view. Prefers
+    /// the driver's own scroll command — a pointer drag that starts on a
+    /// Switch or Slider row revalues that control instead of scrolling — and
+    /// falls back to a center-anchored drag only when the surface reports the
+    /// gesture cannot move it.
     /// </summary>
     public abstract void ScrollPageDown(AppiumDriver driver);
 
@@ -367,7 +369,11 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     public override void ScrollPageDown(AppiumDriver driver)
     {
         var window = DriverTelemetry.WindowSize(driver);
-        driver.ExecuteScript("mobile: scrollGesture", new Dictionary<string, object>
+        // The driver-level scroll gesture drives the scrollable surface itself.
+        // It returns false when the accessibility scroll action cannot move
+        // this surface — MauiScrollView does not answer it — in which case the
+        // injected drag takes over immediately (see ScrollTikkunDown).
+        var scrolled = driver.ExecuteScript("mobile: scrollGesture", new Dictionary<string, object>
         {
             ["left"] = 0,
             ["top"] = 0,
@@ -376,6 +382,27 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
             ["direction"] = "down",
             ["percent"] = 0.9,
         });
+        if (scrolled is not bool ok || !ok)
+        {
+            DragWindowDown(driver, window);
+        }
+    }
+
+    /// <summary>
+    /// Fallback for surfaces that ignore the accessibility scroll action: one
+    /// drag at horizontal center — off the trailing-edge Switch/Slider — from
+    /// the lower fifth of the window to the upper fifth.
+    /// </summary>
+    private static void DragWindowDown(AppiumDriver driver, System.Drawing.Size window)
+    {
+        var finger = new PointerInputDevice(PointerKind.Touch, "finger");
+        var sequence = new ActionSequence(finger, 0);
+        var x = window.Width / 2;
+        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x, window.Height * 4 / 5, TimeSpan.Zero));
+        sequence.AddAction(finger.CreatePointerDown(MouseButton.Left));
+        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x, window.Height / 5, TimeSpan.FromMilliseconds(350)));
+        sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
+        driver.PerformActions([sequence]);
     }
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         new AndroidTimedDriver(server, options);
