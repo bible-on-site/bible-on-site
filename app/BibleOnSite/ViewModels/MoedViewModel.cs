@@ -351,12 +351,10 @@ public partial class MoedViewModel : ObservableObject, IPerushimSheetViewModel /
         var playable = new HashSet<int>();
         if (Unit is { } unit && IsQriynotEnabled)
         {
-            foreach (var section in unit.Sections)
+            foreach (var section in unit.Sections
+                .Where(section => PlanSegmentsForSection(section).Count > 0))
             {
-                if (PlanSegmentsForSection(section).Count > 0)
-                {
-                    playable.Add(section.Id);
-                }
+                playable.Add(section.Id);
             }
         }
         foreach (var row in Rows.Where(row => row.IsSectionHeader))
