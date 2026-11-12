@@ -79,6 +79,7 @@ test.describe("פרשה reading root", () => {
 
 	test("legacy numeric and alias URLs permanent-redirect to canonical slugs", async ({
 		request,
+		baseURL,
 	}) => {
 		for (const [legacy, slug] of [
 			["/פרשה/1", "/פרשה/בראשית"],
@@ -93,9 +94,12 @@ test.describe("פרשה reading root", () => {
 			});
 			expect(response.status(), legacy).toBe(308);
 			const location = response.headers().location ?? "";
-			// The proxy emits a same-origin (relative) Location — resolve it.
+			// The proxy emits a same-origin (relative) Location — resolve it
+			// against the configured baseURL (the suite's per-worktree port).
 			expect(
-				decodeURIComponent(new URL(location, "http://127.0.0.1:3001").pathname),
+				decodeURIComponent(
+					new URL(location, baseURL ?? "http://localhost").pathname,
+				),
 				legacy,
 			).toBe(slug);
 		}

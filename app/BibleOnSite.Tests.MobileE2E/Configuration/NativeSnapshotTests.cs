@@ -225,8 +225,13 @@ public sealed class NativeSnapshotTests
         var next = Assert.Single(driver.FindSnapshots(MobileBy.AccessibilityId("PerekSource")));
         Assert.Equal("first", first.ConditionElement.Text);
         Assert.True(first.ConditionElement.Enabled);
+        Assert.True(first.ConditionElement.Displayed);
         Assert.Equal("next", next.ConditionElement.Text);
         Assert.False(next.ConditionElement.Enabled);
+        Assert.False(next.ConditionElement.Displayed);
+        Assert.DoesNotContain(DriverCommand.IsElementDisplayed, executor.Commands);
+        Assert.False(first.Element.Displayed);
+        Assert.Single(executor.Commands, command => command == DriverCommand.IsElementDisplayed);
     }
 
     [Fact]
@@ -391,6 +396,10 @@ public sealed class NativeSnapshotTests
                 }
             }
             else if (command.Name == DriverCommand.IsElementEnabled)
+            {
+                value = false;
+            }
+            else if (command.Name == DriverCommand.IsElementDisplayed)
             {
                 value = false;
             }
