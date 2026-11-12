@@ -142,17 +142,21 @@ public class FlyoutMenuState : ObservableObject
         };
         foreach (var (route, division) in AppRoutes.ReaderDivisions)
         {
-            map[route] = division switch
-            {
-                ReaderDivision.Perek => FlyoutDestination.AlHaperek,
-                ReaderDivision.Parasha => FlyoutDestination.Parasha,
-                ReaderDivision.Masora => FlyoutDestination.Masora,
-                ReaderDivision.Moed => FlyoutDestination.Moadim,
-                _ => FlyoutDestination.None,
-            };
+            map[route] = DestinationFor(division);
         }
         return map;
     }
+
+    /// <summary>The flyout destination a reader division's row highlights —
+    /// an unmapped division selects nothing rather than guessing.</summary>
+    internal static FlyoutDestination DestinationFor(ReaderDivision division) => division switch
+    {
+        ReaderDivision.Perek => FlyoutDestination.AlHaperek,
+        ReaderDivision.Parasha => FlyoutDestination.Parasha,
+        ReaderDivision.Masora => FlyoutDestination.Masora,
+        ReaderDivision.Moed => FlyoutDestination.Moadim,
+        _ => FlyoutDestination.None,
+    };
 
     private void OnPreferencesChanged(object? sender, EventArgs e) =>
         OnPropertyChanged(nameof(ShowMasoraEntry));

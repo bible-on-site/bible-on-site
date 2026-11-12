@@ -174,4 +174,24 @@ public class RecitationRangePlannerTests
         segments[0].Ranges![0].Start.Should().Be(Track(5).GetWords(2)[0].StartMs);
         segments[0].Ranges![1].End.Should().Be(Track(5).GetWords(3)[^1].EndMs);
     }
+
+    [Fact]
+    public void SegmentsForSlices_SliceWithNoApprovedWords_SkipsThatSlice()
+    {
+        var tracks = new Dictionary<int, RecitationTrack> { [5] = Track(5), [9] = Track(9) };
+        var pasukim = CanonicalPerek();
+        // The boundary starts past the pasuk's last canonical word — a unit
+        // edge on a break marker with no recited text produces no clip.
+        var slices = new[]
+        {
+            Slice(5, startPasuk: 1, endPasuk: 1, startSegment: 10),
+            Slice(9, startPasuk: 1, endPasuk: 3),
+        };
+
+        var segments = RecitationRangePlanner.SegmentsForSlices(
+            slices, _ => pasukim, id => tracks.GetValueOrDefault(id),
+            tracks.ContainsKey, versePause: false);
+
+        segments.Should().ContainSingle().Which.PerekId.Should().Be(9);
+    }
 }

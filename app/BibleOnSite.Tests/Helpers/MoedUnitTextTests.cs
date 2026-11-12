@@ -188,4 +188,51 @@ public class MoedUnitTextTests
         pesukim.Should().OnlyContain(r => r.ClipStartIndex == 0 && r.ClipEndIndex == int.MaxValue,
             "the moed API has no segment granularity — every row reads its whole pasuk");
     }
+
+    [Fact]
+    public void PerekSlicesForSection_TagsEachSliceWithItsRangeId()
+    {
+        // The slice carries the range row it decomposed from, so recitation
+        // clips planned from it can point back at the occurrence (#3261 review).
+        var section = Section(7, 1, "מפטיר", Range(11, 1, 1, 1, 2), Range(12, 1, 1, 1, 2));
+
+        var slices = MoedUnitText.PerekSlicesForSection(section);
+
+        // A deliberately repeated range keeps distinct identities per occurrence.
+        slices.Select(s => s.RangeId).Should().Equal(11, 12);
+    }
+
+    [Fact]
+    public async Task BuildRows_TagsPasukRowsWithRangeId_HeadersStayUntagged()
+    {
+        var moed = Moed(Section(7, 1, "קריאה", Range(11, 1, 1, 1, 2), Range(12, 1, 1, 1, 2)));
+
+        var rows = await MoedUnitText.BuildRowsAsync(moed,
+            LoaderFor((1, 4)), PerekSource, PerekInfo, fontFactor: 1.0);
+
+        // Each repeated occurrence's rows carry that occurrence's range id.
+        rows.Where(r => r.Pasuk != null).Select(r => r.RangeId)
+            .Should().Equal(11, 11, 12, 12);
+        // Headers have no range identity — the highlight lookup only matches pasuk rows.
+        rows.Where(r => r.Pasuk == null).Should().OnlyContain(r => r.RangeId == 0);
+    }
+
+    [Fact]
+    public void PasukRow_PassthroughsMirrorThePasuk_AndDefaultRangeIsUntagged()
+    {
+        var pasuk = PasukOf(3, Word("שלום"));
+
+        var row = MoedDisplayRow.PasukRow(7, pasuk, 42, 15, 10, 0, int.MaxValue);
+
+        row.SectionId.Should().Be(7);
+        row.RangeId.Should().Be(0, "the seven-argument overload leaves the row untagged");
+        row.PasukNum.Should().Be(3);
+        row.PasukNumHeb.Should().Be(pasuk.PasukNumHeb);
+        row.PerushNotes.Should().BeSameAs(pasuk.VisiblePerushNotes);
+
+        var header = MoedDisplayRow.SectionHeader(7, "כותרת", "מראי מקומות");
+        header.PasukNumHeb.Should().BeEmpty();
+        header.PerushNotes.Should().BeNull();
+        header.RangeId.Should().Be(0);
+    }
 }

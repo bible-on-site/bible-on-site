@@ -122,4 +122,19 @@ public class PressArmingTests
         PressArming.IsCandidate(row, current).Should().BeFalse();
         PressArming.IsCandidate(null, current).Should().BeFalse();
     }
+
+    [Fact]
+    public void IsCandidate_returns_true_only_for_the_current_masora_unit()
+    {
+        // The מסורה reader's unit header binds the MasoraUnit itself — arming
+        // matches by reference; equal-id units and pasuk rows never qualify.
+        var current = new MasoraUnit { UnitId = 1, Slug = "1", SeferName = "בראשית", Heading = "א" };
+        var adjacent = new MasoraUnit { UnitId = 1, Slug = "1", SeferName = "בראשית", Heading = "א" };
+        var row = new MasoraPasukRow(new Pasuk { PasukNum = 1, Text = "א" }, 1, 12);
+
+        PressArming.IsCandidate(current, current).Should().BeTrue();
+        PressArming.IsCandidate(adjacent, current).Should().BeFalse();
+        PressArming.IsCandidate(row, current).Should().BeFalse();
+        PressArming.IsCandidate(null, current).Should().BeFalse();
+    }
 }

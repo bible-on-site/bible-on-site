@@ -89,6 +89,8 @@ public partial class MoedViewModel : ObservableObject, IPerushimSheetViewModel /
 
     /// <summary>The moed's linked articles (range-linked union explicit, API order).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ArticlesCount))]
+    [NotifyPropertyChangedFor(nameof(HasArticles))]
     private List<Article> _articles = new();
 
     /// <summary>Used for article list selection highlight (rounded, theme-aware).</summary>
@@ -293,9 +295,10 @@ public partial class MoedViewModel : ObservableObject, IPerushimSheetViewModel /
         // selection after ClearSelected() only reaches the new moed's rows.
         if (oldValue is not null && !ReferenceEquals(oldValue, newValue))
         {
-            foreach (var pasuk in oldValue.Rows.Select(row => row.Pasuk).Where(pasuk => pasuk?.IsSelected == true))
+            foreach (var pasuk in oldValue.Rows.Select(row => row.Pasuk).OfType<Pasuk>()
+                .Where(pasuk => pasuk.IsSelected))
             {
-                pasuk!.IsSelected = false;
+                pasuk.IsSelected = false;
             }
         }
 
@@ -356,12 +359,9 @@ public partial class MoedViewModel : ObservableObject, IPerushimSheetViewModel /
                 }
             }
         }
-        foreach (var row in Rows)
+        foreach (var row in Rows.Where(row => row.IsSectionHeader))
         {
-            if (row.IsSectionHeader)
-            {
-                row.ShowPlayButton = playable.Contains(row.SectionId);
-            }
+            row.ShowPlayButton = playable.Contains(row.SectionId);
         }
     }
 
@@ -394,12 +394,12 @@ public partial class MoedViewModel : ObservableObject, IPerushimSheetViewModel /
         }
         SelectedPasukim = list;
 
-        foreach (var row in Rows)
+        foreach (var pasuk in Rows
+            .Where(row => row.PerekId == perekId && row.PasukNum == pasukNum)
+            .Select(row => row.Pasuk)
+            .OfType<Pasuk>())
         {
-            if (row.PerekId == perekId && row.PasukNum == pasukNum && row.Pasuk is { } pasuk)
-            {
-                pasuk.IsSelected = list.Contains(key);
-            }
+            pasuk.IsSelected = list.Contains(key);
         }
         OnPropertyChanged(nameof(SelectedPasukCount));
     }
@@ -407,9 +407,10 @@ public partial class MoedViewModel : ObservableObject, IPerushimSheetViewModel /
     /// <summary>Clears the whole selection.</summary>
     public void ClearSelected()
     {
-        foreach (var pasuk in Rows.Select(row => row.Pasuk).Where(pasuk => pasuk?.IsSelected == true))
+        foreach (var pasuk in Rows.Select(row => row.Pasuk).OfType<Pasuk>()
+            .Where(pasuk => pasuk.IsSelected))
         {
-            pasuk!.IsSelected = false;
+            pasuk.IsSelected = false;
         }
         SelectedPasukim = new List<(int PerekId, int PasukNum)>();
         OnPropertyChanged(nameof(SelectedPasukCount));

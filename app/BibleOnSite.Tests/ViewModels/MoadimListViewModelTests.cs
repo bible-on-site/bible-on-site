@@ -158,4 +158,15 @@ public class MoadimListViewModelTests
         // A failed navigation logs and stays on the landing — never crashes.
         await vm.OpenMoedCommand.ExecuteAsync(moed);
     }
+
+    [Fact]
+    public void DefaultCtor_BindsTheProductionSingletons()
+    {
+        // MoedService.Instance only stores FileSystem.Current at construction,
+        // so the parameterless page ctor resolves cleanly on the test host.
+        var vm = new MoadimListViewModel();
+
+        vm.Groups.Should().BeEmpty();
+        vm.IsLoading.Should().BeFalse();
+    }
 }

@@ -326,4 +326,12 @@ public class FlyoutMenuStateTests : IDisposable
     {
         FlyoutMenuState.DestinationForLocation(null).Should().Be(FlyoutDestination.None);
     }
+
+    [Fact]
+    public void DestinationFor_UnknownDivision_SelectsNothing()
+    {
+        // The switch deliberately maps only the four reader divisions — a
+        // division it does not know selects nothing rather than guessing.
+        FlyoutMenuState.DestinationFor((ReaderDivision)999).Should().Be(FlyoutDestination.None);
+    }
 }

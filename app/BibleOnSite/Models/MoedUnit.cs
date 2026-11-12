@@ -143,6 +143,14 @@ public sealed class MoedDisplayRow : INotifyPropertyChanged
     /// <summary>The section this row belongs to — recitation key scope.</summary>
     public int SectionId { get; init; }
 
+    /// <summary>
+    /// The DB range this row was emitted for — a section can repeat one
+    /// reading, and the recitation highlight must land on the occurrence
+    /// that is playing, not the first canonical match (#3261 review).
+    /// 0 on headers and rows built without range identity.
+    /// </summary>
+    public int RangeId { get; init; }
+
     /// <summary>The display pasuk for pasuk rows; null on headers.</summary>
     public Pasuk? Pasuk { get; init; }
 
@@ -201,9 +209,16 @@ public sealed class MoedDisplayRow : INotifyPropertyChanged
 
     public static MoedDisplayRow PasukRow(int sectionId, Pasuk pasuk, int perekId,
         double fontSize, double markerFontSize, int clipStartIndex, int clipEndIndex) =>
+        PasukRow(sectionId, pasuk, perekId, fontSize, markerFontSize,
+            clipStartIndex, clipEndIndex, 0);
+
+    public static MoedDisplayRow PasukRow(int sectionId, Pasuk pasuk, int perekId,
+        double fontSize, double markerFontSize, int clipStartIndex, int clipEndIndex,
+        int rangeId) =>
         new()
         {
             SectionId = sectionId,
+            RangeId = rangeId,
             Text = string.Empty,
             Pasuk = pasuk,
             PerekId = perekId,

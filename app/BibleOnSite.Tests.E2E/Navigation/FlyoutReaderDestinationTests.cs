@@ -78,13 +78,16 @@ public sealed class FlyoutReaderDestinationTests(OfflineReaderFixture fixture)
         // empty reader shell mid-load. TikkunText itself surfaces as soon
         // as the mode flips, but the drawable collapses the view to its
         // 8-unit padding until words layout — a tall bounding box is the
-        // realized-content signal there.
+        // realized-content signal there. The empty view still measures ~101
+        // units at first layout, so the bar must sit above that, not just
+        // above the collapsed padding.
+        const double realizedFlowHeight = 150;
         (await fixture.WaitForElementAsync(
             window => window.FindAllDescendants(fixture.CF.ByAutomationId("PasukText"))
                     .FirstOrDefault(element => !element.IsOffscreen && element.Name.Length > 0)
                 ?? window.FindAllDescendants(fixture.CF.ByAutomationId("TikkunText"))
                     .FirstOrDefault(element => !element.IsOffscreen
-                        && element.BoundingRectangle.Height > 40),
+                        && element.BoundingRectangle.Height > realizedFlowHeight),
             TimeSpan.FromSeconds(60)))
             .Should().NotBeNull("pasuk content must render in whichever reader mode is active");
         CaptureScreenshot("flyout-back-on-perek-reader.png");

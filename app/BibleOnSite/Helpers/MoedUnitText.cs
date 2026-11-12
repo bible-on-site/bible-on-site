@@ -21,7 +21,7 @@ public static class MoedUnitText
     /// </summary>
     public static List<MasoraUnitText.PerekSlice> PerekSlicesForSection(MoedSection section) =>
         section.Ranges.OrderBy(range => range.Position)
-            .SelectMany(MasoraUnitText.PerekSlicesForRange).ToList();
+            .SelectMany(range => MasoraUnitText.PerekSlicesForRange(range, range.Id)).ToList();
 
     /// <summary>
     /// Decomposes every section's ranges into per-perek slices in display
@@ -85,7 +85,7 @@ public static class MoedUnitText
                 SectionRefsText(section, perekSource, perekInfo)));
             foreach (var range in section.Ranges.OrderBy(range => range.Position))
             {
-                foreach (var slice in MasoraUnitText.PerekSlicesForRange(range))
+                foreach (var slice in MasoraUnitText.PerekSlicesForRange(range, range.Id))
                 {
                     if (!pasukimCache.TryGetValue(slice.PerekId, out var pasukim))
                     {
@@ -104,7 +104,8 @@ public static class MoedUnitText
                             ? pasuk
                             : MasoraUnitText.ClipPasuk(pasuk, startIndex, endIndex);
                         rows.Add(MoedDisplayRow.PasukRow(section.Id, clipped, slice.PerekId,
-                            fontSize, markerFontSize, startIndex ?? 0, endIndex ?? int.MaxValue));
+                            fontSize, markerFontSize, startIndex ?? 0, endIndex ?? int.MaxValue,
+                            slice.RangeId));
                     }
                 }
             }

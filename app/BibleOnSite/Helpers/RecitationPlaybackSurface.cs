@@ -14,6 +14,15 @@ public sealed record RecitationSegment(int PerekId, IReadOnlyList<Pasuk> Pasukim
     double? Start, double? End, IReadOnlyList<(double Start, double End)>? Ranges)
 {
     public int SectionId { get; init; }
+
+    /// <summary>
+    /// The DB range row this clip reads, when the unit carries range
+    /// identities (מועדים): one section can deliberately repeat a reading,
+    /// and identical canonical clips from the second occurrence must
+    /// highlight that occurrence's rows. 0 leaves the lookup scoped by
+    /// <see cref="SectionId"/> alone.
+    /// </summary>
+    public int RangeId { get; init; }
 }
 
 /// <summary>

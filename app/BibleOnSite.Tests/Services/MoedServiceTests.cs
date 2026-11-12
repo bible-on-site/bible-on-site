@@ -1,3 +1,4 @@
+using System.Net;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
 
@@ -234,5 +235,174 @@ public class MoedServiceTests
         await service.GetMoedBySlugAsync("chanuka");
 
         service.CatalogueRevision.Should().BeGreaterThan(loaded);
+    }
+
+    [Fact]
+    public async Task GetMoedBySlugAsync_ListHit_SkipsTheDetailCall()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(Response);
+        var service = ServiceWith(http, storage);
+        await service.LoadWithRetryAsync();
+        var calls = http.Requests.Count;
+
+        var moed = await service.GetMoedBySlugAsync("rosh-hashana");
+
+        moed!.Id.Should().Be(1);
+        http.Requests.Should().HaveCount(calls,
+            "a moed already present in the catalogue serves without a detail fetch");
+    }
+
+    [Fact]
+    public async Task GetMoedBySlugAsync_UnpublishedMerge_IsDiscarded()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(Response);
+        var service = ServiceWith(http, storage);
+        await service.LoadWithRetryAsync();
+        var unpublished = """
+            {"data":{"moed":{"id":9,"slug":"draft","name":"טיוטה","summary":null,
+             "hebrewMonth":"אדר","dateLabel":null,"annualOrder":9,"published":false,
+             "sections":[],"explicitArticleIds":[],"articles":[]}}}
+            """;
+        http.Respond = _ => Task.FromResult(GraphQLTransport.JsonResponse(unpublished));
+
+        var moed = await service.GetMoedBySlugAsync("draft");
+
+        moed.Should().BeNull("unpublished moedim are never cached");
+        service.GetMoed(9).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetMoedBySlugAsync_NullDetail_StaysUncached()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(Response);
+        var service = ServiceWith(http, storage);
+        await service.LoadWithRetryAsync();
+        http.Respond = _ => Task.FromResult(GraphQLTransport.JsonResponse("{\"data\":{\"moed\":null}}"));
+
+        var moed = await service.GetMoedBySlugAsync("missing");
+
+        moed.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task LoadWithRetry_PrefersFreshCatalogue_OverStaleCache()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(Response.Replace("ראש השנה", "מהמטמון"));
+        var seed = ServiceWith(http, storage);
+        await seed.LoadWithRetryAsync(); // writes the stale cache
+        http.Dispose();
+
+        using var http2 = new GraphQLTransport(Response);
+        var service = ServiceWith(http2, storage);
+        await service.LoadWithRetryAsync();
+
+        service.GetMoedBySlug("rosh-hashana")!.Name.Should().Be("ראש השנה",
+            "a successful API load replaces the on-disk catalogue");
+    }
+
+    [Fact]
+    public async Task LoadWithRetry_WhenApiDown_UsesCachedCatalogue()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(Response);
+        var seed = ServiceWith(http, storage);
+        await seed.LoadWithRetryAsync(); // writes the cache
+
+        using var deadTransport = new GraphQLTransport();
+        deadTransport.Respond = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        var service = ServiceWith(deadTransport, storage);
+        await service.LoadWithRetryAsync();
+
+        service.IsLoaded.Should().BeTrue();
+        service.IsFromCache.Should().BeTrue();
+        service.GetMoed(1).Should().NotBeNull("the disk cache carries the catalogue when the API is down");
+        service.GetMoedBySlug("rosh-hashana").Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task LoadWithRetry_CorruptCache_StaysEmptyAndIsRecoverable()
+    {
+        await using var storage = new TestStorage();
+        var cacheFile = Path.Join(storage.FileSystem.Object.AppDataDirectory, "moadim_cache.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFile)!);
+        await File.WriteAllTextAsync(cacheFile, "not-json{{{");
+        using var deadTransport = new GraphQLTransport();
+        deadTransport.Respond = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        var service = ServiceWith(deadTransport, storage);
+
+        await service.LoadWithRetryAsync();
+
+        service.IsLoaded.Should().BeFalse(
+            "a corrupt cache is swallowed — the list surfaces its unavailable state");
+
+        // Recovery: a working API repopulates even with the corrupt file.
+        deadTransport.Respond = _ => Task.FromResult(GraphQLTransport.JsonResponse(Response));
+        await service.TryRefreshAsync();
+        service.GetMoed(1).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task LoadWithRetry_NullCachePayload_StaysUnloaded()
+    {
+        await using var storage = new TestStorage();
+        var cacheFile = Path.Join(storage.FileSystem.Object.AppDataDirectory, "moadim_cache.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheFile)!);
+        await File.WriteAllTextAsync(cacheFile, "{\"moadim\":null}");
+        using var deadTransport = new GraphQLTransport();
+        deadTransport.Respond = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+        var service = ServiceWith(deadTransport, storage);
+
+        await service.LoadWithRetryAsync();
+
+        service.IsLoaded.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task LoadWithRetry_UnwritableCache_StillLoadsFromApi()
+    {
+        var fileSystem = new Moq.Mock<IFileSystem>();
+        fileSystem.SetupGet(f => f.AppDataDirectory).Throws(new IOException("no cache dir"));
+        fileSystem.SetupGet(f => f.CacheDirectory).Returns("cache");
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(Response);
+        var service = new MoedService(http.Client, fileSystem.Object);
+
+        await service.LoadWithRetryAsync();
+
+        service.IsLoaded.Should().BeTrue(
+            "cache-save failure is best-effort — the catalogue still serves");
+    }
+
+    [Fact]
+    public async Task TryRefresh_Failure_KeepsCatalogueLoaded()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(Response);
+        var service = ServiceWith(http, storage);
+        await service.LoadWithRetryAsync();
+        http.Respond = _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+
+        await service.TryRefreshAsync();
+
+        service.IsLoaded.Should().BeTrue();
+        service.GetMoed(1)!.Name.Should().Be("ראש השנה",
+            "a failed refresh must not corrupt the cached catalogue");
+    }
+
+    [Fact]
+    public async Task TryRefresh_SequentialAfterLoad_PerformsItsOwnFetch()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport(Response);
+        var service = ServiceWith(http, storage);
+        await service.LoadWithRetryAsync();
+
+        await service.TryRefreshAsync();
+
+        http.Requests.Should().HaveCount(2, "the completed load does not satisfy a later refresh");
     }
 }
