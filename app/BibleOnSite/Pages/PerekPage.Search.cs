@@ -324,7 +324,7 @@ public partial class PerekPage
             // in שניים מקרא (#2403); a pasuk hit keeps the first/marked copy.
             var item = list?.ItemsSource?.Cast<object>().OfType<PasukDisplayItem>()
                 .FirstOrDefault(display => display.PasukNum == pasukNum &&
-                    (matchTarget == null ? display.IsFirstCopy : display.IsLastCopy));
+                    (matchTarget == null ? !display.IsRepeatedCopy : display.IsLastCopy));
             if (list != null && item != null)
             {
                 bool landed;

@@ -61,7 +61,7 @@ the canonical corpus:
   slices; segment-clipped boundary pesukim keep their position with a
   suffix (`(התחלה)` opening mid-verse, `(סיום)` closing mid-verse,
   `(קטע)` for a lone excerpt).
-- `rangeContainsCoordinate` / `getMasoraUnitContaining` implement the
+- `rangeContainsCoordinate` implements the
   canonical-position → containing-unit direction. A bare
   `{ perekId, pasuk }` position resolves to the unit in which the pasuk
   _begins_ (segment-0 semantics); a position exactly on a break marker

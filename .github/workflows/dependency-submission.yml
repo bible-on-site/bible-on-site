@@ -29,6 +29,7 @@ permissions:
 
 jobs:
   submit-snapshots:
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -93,6 +94,7 @@ jobs:
 
   # Repository rules require this exact check name in merge-group/master runs.
   submit-nuget:
+    timeout-minutes: 60
     needs: submit-snapshots
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest

@@ -17,8 +17,14 @@ const notConfigured = () =>
 	NextResponse.json({ error: "Web push is not configured" }, { status: 404 });
 
 async function readJson(request: Request): Promise<unknown> {
-	const text = await request.text();
-	if (text.length > MAX_BODY_BYTES) return null;
+	let text: string;
+	try {
+		text = await request.text();
+	} catch {
+		console.warn("Push subscription body read failed");
+		return null;
+	}
+	if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) return null;
 	try {
 		return JSON.parse(text);
 	} catch {
@@ -52,8 +58,8 @@ export async function POST(request: Request) {
 	}
 	try {
 		await saveSubscription(subscription);
-	} catch (error) {
-		console.error("Failed to save push subscription", error);
+	} catch {
+		console.error("Failed to save push subscription");
 		return NextResponse.json({ error: "Unavailable" }, { status: 503 });
 	}
 	return NextResponse.json({ subscribed: true }, { status: 201 });
@@ -67,8 +73,8 @@ export async function DELETE(request: Request) {
 	}
 	try {
 		await deleteSubscription(endpoint);
-	} catch (error) {
-		console.error("Failed to delete push subscription", error);
+	} catch {
+		console.error("Failed to delete push subscription");
 		return NextResponse.json({ error: "Unavailable" }, { status: 503 });
 	}
 	return NextResponse.json({ subscribed: false });

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export function lighthouseBenchmarkName(path, device, name) {
@@ -70,7 +70,14 @@ export function collectEvidence(value) {
 
 export function summarizeLighthouse(
 	lhr,
-	{ device, run = 1, environment = "ci", knownIssues = [] },
+	{
+		device,
+		run = 1,
+		environment = "ci",
+		knownIssues = [],
+		largestObservedTask,
+		largestObservedTaskError,
+	},
 ) {
 	const metrics = Object.fromEntries(
 		Object.entries(METRICS).map(([name, id]) => [
@@ -133,9 +140,17 @@ export function summarizeLighthouse(
 				evidence: collectEvidence(lhr.audits[id].details),
 				details: lhr.audits[id].details,
 			})),
+		// Observed trace timing of the largest top-level task, before the
+		// Lantern cpuSlowdownMultiplier is applied. A modeled TBT of 0 can
+		// still sit one borderline observed task away from recurring; keep
+		// the record visible on every run, pass or fail. The error field
+		// records an extraction failure without losing the audit's evidence.
+		largestObservedTask,
+		largestObservedTaskError,
 	};
 }
 
+/** @returns {ReturnType<typeof summarizeLighthouse> & {rawReport: string, htmlReport?: string}} */
 export function saveLighthouseReport(directory, lhr, options, html) {
 	mkdirSync(directory, { recursive: true });
 	const summary = summarizeLighthouse(lhr, options);
@@ -157,6 +172,19 @@ export function saveLighthouseReport(directory, lhr, options, html) {
 		writeFileSync(join(directory, summary.htmlReport), html);
 	}
 	return summary;
+}
+
+/** Persist the original gatherer's data after every measured audit has ended. */
+export function saveLighthouseArtifacts(directory, bufferedArtifacts) {
+	mkdirSync(directory, { recursive: true });
+	for (const { rawReport, artifacts } of bufferedArtifacts) {
+		const filename = rawReport.replace(/\.json$/, ".artifacts.json");
+		writeFileSync(
+			join(directory, filename),
+			JSON.stringify({ rawReport, artifacts }),
+			{ flag: "wx" },
+		);
+	}
 }
 
 function median(values) {
@@ -208,6 +236,19 @@ export function performanceMarkdown(reports, field = [], assets = []) {
 				);
 			for (const warning of run.warnings)
 				lines.push(`- Run ${run.run} warning: ${cell(warning)}`);
+			// Every run reports its largest observed task, including failed
+			// and nonmedian samples the detailed section below would hide.
+			const observedTask = run.largestObservedTask;
+			if (observedTask) {
+				lines.push(
+					`- Run ${run.run} largest observed top-level task: ${number(observedTask.duration)}ms at ${number(observedTask.startTime)}ms; attributable to ${cell(observedTask.attributableUrl)}`,
+				);
+			}
+			if (run.largestObservedTaskError) {
+				lines.push(
+					`- Run ${run.run} largest observed task extraction failed: ${cell(run.largestObservedTaskError)}`,
+				);
+			}
 		}
 		const valid = runs
 			.filter((r) => !r.runtimeError && Number.isFinite(r.metrics.LCP))
@@ -273,6 +314,14 @@ export function performanceMarkdown(reports, field = [], assets = []) {
 			);
 	}
 	return `${lines.join("\n")}\n`;
+}
+
+/** Reports already indexed in this directory, e.g. by earlier worker attempts. */
+export function readPerformanceReports(directory) {
+	const index = JSON.parse(
+		readFileSync(join(directory, "summary.json"), "utf8"),
+	);
+	return Array.isArray(index?.reports) ? index.reports : [];
 }
 
 export function writePerformanceIndex(

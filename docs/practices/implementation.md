@@ -64,7 +64,7 @@ The following are currently expected and can be ignored:
 
 **Development:**
 
-- Use Playwright at http://localhost:3001 (`bun run dev` might be required if not already running)
+- Use Playwright against the suite's configured `baseURL` — locally it is a per-worktree port derived by `tests/util/playwright/server-endpoint.ts` (override with `WEB_PORT`), `:3001` on CI; the e2e MySQL database is likewise per-worktree (`DB_URL` rewritten to `tanah_test_<hash>` at config load); `bun run dev` (localhost:3001) is only needed for manual browsing, not for tests
 - **Prefer server components for content.** The rule of thumb:
   - **Content-rich components** (text, articles, sections) → **SSG/SSR only** for best SEO and AIO (AI Optimization)
   - **Interactive/glue components** (navigation, animation, scroll-to-section, menu close) → **Client components OK**

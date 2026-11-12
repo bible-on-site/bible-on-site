@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   deploy:
+    timeout-minutes: 60
     name: Deploy Data to Production RDS
     permissions:
       contents: read

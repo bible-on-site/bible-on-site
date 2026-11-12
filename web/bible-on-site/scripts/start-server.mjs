@@ -125,6 +125,85 @@ export async function inboundConnections(
 	return total;
 }
 
+const READINESS_PATH = "/api/health/ready";
+
+/**
+ * Fire the canonical warm-up as soon as the listener accepts instead of
+ * waiting for the first scheduled container check: the Docker
+ * `--start-interval` delays that check several seconds after the socket is
+ * already queueing requests, so the whole readiness warm-up (canonical data,
+ * search indexes, recitation package, page renderers) otherwise starts late.
+ * The endpoint is single-flight and authoritative — the probe is simply an
+ * early client of the same warm the health check drives, and its first
+ * response doubles as startup timing evidence in the container log.
+ * Connection refusals while the listener boots are retried; any HTTP
+ * response — ready or not — ends the probe because the warm was triggered.
+ * `stop` aborts a pending request so the wrapper never outlives its child.
+ */
+export function startReadinessProbe({
+	port,
+	request = fetch,
+	retryDelayMs = 250,
+	log = console.log,
+	warn = console.warn,
+	now = Date.now,
+	// unref keeps a pending retry from holding the wrapper open after the
+	// child has already exited.
+	sleep = (ms) =>
+		new Promise((resolve) => {
+			setTimeout(resolve, ms).unref();
+		}),
+} = {}) {
+	if (!Number.isSafeInteger(port) || port < 1 || port > 65_535)
+		throw new RangeError("Website port must be between 1 and 65535");
+	const controller = new AbortController();
+	const startedAt = now();
+	const reported = new Set();
+	let stopped = false;
+	const stop = () => {
+		stopped = true;
+		controller.abort();
+	};
+	const run = async () => {
+		const url = `http://127.0.0.1:${port}${READINESS_PATH}`;
+		while (!stopped) {
+			try {
+				const response = await request(url, {
+					signal: controller.signal,
+					// One-shot trigger: a pooled keep-alive socket would linger
+					// past the child's exit and delay the wrapper's own exit.
+					headers: { connection: "close" },
+				});
+				// Consume the small readiness JSON so the logged duration covers
+				// the complete handler, warm-up included.
+				await response.text();
+				if (stopped) return;
+				log(
+					`Website readiness probe: HTTP ${response.status} after ${now() - startedAt}ms`,
+				);
+				return;
+			} catch (error) {
+				if (stopped) return;
+				// Listener-boot refusals are the expected retry; report each
+				// distinct failure once so a stuck warm-up stays visible in the
+				// container log without flooding it every 250ms.
+				const signature = `${error} ${error?.cause ?? ""}`;
+				if (!reported.has(signature)) {
+					reported.add(signature);
+					warn("Website readiness probe attempt failed:", error);
+				}
+			}
+			await sleep(retryDelayMs);
+		}
+	};
+	run().catch((error) => {
+		// Best-effort trigger only: a probe defect must never take down the
+		// launcher — the container health check still drives the warm-up.
+		console.error("Website readiness probe stopped:", error);
+	});
+	return stop;
+}
+
 /**
  * Keep accepting requests while Cloud Map removal reaches cached DNS answers.
  * `minDrainMs` is the floor covering that propagation: quiet termination is
@@ -213,6 +292,7 @@ export function startServer({
 	};
 	const interrupt = () => forward("SIGINT");
 	const cleanup = () => {
+		stopProbe();
 		clearTimeout(drainTimer);
 		process.off("SIGTERM", terminate);
 		process.off("SIGINT", interrupt);
@@ -228,6 +308,11 @@ export function startServer({
 		cleanup();
 		process.exitCode = code ?? 128 + (constants.signals[signal] ?? 0);
 	});
+	// The first fetch can synchronously initialize its HTTP client while the
+	// child is already listening. Install signal and lifecycle handlers before
+	// starting it so an immediate stop still drains and reaps the child.
+	// Port 0 selects an ephemeral listener the probe cannot address.
+	const stopProbe = port > 0 ? startReadinessProbe({ port, log }) : () => {};
 	return child;
 }
 

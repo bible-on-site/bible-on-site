@@ -32,10 +32,3 @@ export function ScrollToSlug({
 
 	return null;
 }
-
-/**
- * @deprecated Use ScrollToSlug instead.  Kept for backward-compatibility.
- */
-export function ScrollToArticle() {
-	return <ScrollToSlug targetId="article-view" behavior="instant" />;
-}
