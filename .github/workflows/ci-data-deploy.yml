@@ -21,6 +21,7 @@ permissions:
 
 jobs:
   test:
+    timeout-minutes: 60
     name: Lambda restoration recovery
     runs-on: ubuntu-latest
     steps:
