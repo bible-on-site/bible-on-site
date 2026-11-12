@@ -67,6 +67,7 @@ permissions:
 
 jobs:
   trigger_cd:
+    timeout-minutes: 60
     name: Trigger CD Workflow
     needs: release
     # A rerun or overlapping CI build may have packaged an already released
@@ -94,6 +95,7 @@ jobs:
           client-payload: ${{ steps.dispatch_payload.outputs.client_payload }}
 
   release:
+    timeout-minutes: 60
     name: Release
     outputs:
       released: ${{ steps.mark_released.outputs.released }}

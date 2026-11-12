@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const archiveHttpMock = vi.hoisted(() => vi.fn());
+vi.mock("~/server/archive/http", () => ({
+	handleArchiveRequest: archiveHttpMock,
+}));
+
 const {
 	verifyServiceAccessTokenMock,
 	verifyIdTokenMock,
@@ -195,9 +200,7 @@ describe("admin server auth gate", () => {
 
 		expect(handlerFetchMock).not.toHaveBeenCalled();
 		expect(response.status).toBe(302);
-		expect(response.headers.get("location")).toBe(
-			"https://login.example.com/",
-		);
+		expect(response.headers.get("location")).toBe("https://login.example.com/");
 	});
 });
 
@@ -304,6 +307,73 @@ describe("admin server auth routes", () => {
 	});
 });
 
+describe("archive role boundary", () => {
+	beforeEach(() => {
+		vi.stubEnv("SKIP_AUTH", "false");
+		handlerFetchMock
+			.mockReset()
+			.mockResolvedValue(new Response("archive shell"));
+		verifyIdTokenMock.mockReset().mockResolvedValue(false);
+		verifyServiceAccessTokenMock.mockReset().mockResolvedValue(false);
+		parseCookieMock
+			.mockReset()
+			.mockImplementation((_header: string, name: string) =>
+				name === "archive_session" ? "author-token" : null,
+			);
+	});
+	afterEach(() => vi.unstubAllEnvs());
+	it.each([
+		"/",
+		"/articles",
+		"/archive-settings",
+		"/_serverFn/forged",
+		"/api/admin",
+	])("denies archivers direct access to %s", async (path) => {
+		const entry = await loadServer();
+		const response = await entry.fetch(
+			new Request(`https://admin.example${path}`, {
+				headers: {
+					cookie: "archive_session=author-token",
+					"x-tsr-serverFn": "true",
+				},
+			}),
+		);
+		expect(response.status).toBe(403);
+		expect(handlerFetchMock).not.toHaveBeenCalled();
+	});
+	it("serves only an empty private archive shell before login", async () => {
+		const entry = await loadServer();
+		const response = await entry.fetch(
+			new Request("https://admin.example/archive/authors/name"),
+		);
+		expect(response.status).toBe(200);
+		expect(response.headers.get("x-robots-tag")).toContain("noindex");
+		expect(response.headers.get("cache-control")).toContain("no-store");
+	});
+	it.each([
+		{ method: "POST", headers: undefined },
+		{ method: "GET", headers: { "x-tsr-serverFn": "true" } },
+	])(
+		"rejects server-function tunneling through archive pages",
+		async (options) => {
+			const entry = await loadServer();
+			const response = await entry.fetch(
+				new Request("https://admin.example/archive", options),
+			);
+			expect(response.status).toBe(405);
+			expect(handlerFetchMock).not.toHaveBeenCalled();
+		},
+	);
+	it("admin SSO still grants all ordinary admin pages", async () => {
+		parseCookieMock.mockReturnValue("sso");
+		verifyIdTokenMock.mockResolvedValue(true);
+		const entry = await loadServer();
+		expect(
+			(await entry.fetch(new Request("https://admin.example/articles"))).status,
+		).toBe(200);
+	});
+});
+
 describe("admin server coverage drain", () => {
 	beforeEach(() => {
 		handlerFetchMock.mockReset();
@@ -332,4 +402,51 @@ describe("admin server coverage drain", () => {
 		expect((globalThis as { __coverage__?: unknown }).__coverage__).toEqual({});
 		expect(handlerFetchMock).not.toHaveBeenCalled();
 	});
+});
+
+describe("archive HTTP dispatch and admin login return", () => {
+	beforeEach(() => {
+		vi.stubEnv("SKIP_AUTH", "false");
+		vi.stubEnv("MEASURE_COV", "0");
+		archiveHttpMock.mockReset().mockResolvedValue(new Response("archive"));
+		parseCookieMock
+			.mockReset()
+			.mockImplementation((_header: string, name: string) =>
+				name === "archive_admin_return" ? "1" : null,
+			);
+		exchangeCodeForTokensMock
+			.mockReset()
+			.mockResolvedValue({ id_token: "sso", expires_in: 3600 });
+		buildSessionCookieMock.mockReset().mockReturnValue("admin_session=sso");
+	});
+	afterEach(() => vi.unstubAllEnvs());
+	it.each(["/archive/api", "/archive/auth/login", "/archive/auth/callback"])(
+		"delegates %s to the archive boundary",
+		async (path) => {
+			const entry = await loadServer();
+			const request = new Request(`https://admin.example${path}`);
+			expect(await (await entry.fetch(request)).text()).toBe("archive");
+			expect(archiveHttpMock).toHaveBeenCalledWith(
+				request,
+				"https://admin.example",
+			);
+		},
+	);
+	it.each(["https", "http"])(
+		"returns an existing SSO admin to the archive after login over %s",
+		async (protocol) => {
+			const entry = await loadServer();
+			const response = await entry.fetch(
+				new Request(`${protocol}://admin.example/auth/callback?code=c`, {
+					headers: { cookie: "archive_admin_return=1" },
+				}),
+			);
+			expect(response.headers.get("location")).toBe("/archive");
+			const cleared = response.headers
+				.getSetCookie()
+				.find((value) => value.startsWith("archive_admin_return="));
+			expect(cleared).toContain("Max-Age=0");
+			expect(cleared?.includes("Secure")).toBe(protocol === "https");
+		},
+	);
 });

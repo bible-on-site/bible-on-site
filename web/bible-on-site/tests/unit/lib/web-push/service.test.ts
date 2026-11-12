@@ -198,5 +198,46 @@ describe("web-push service", () => {
 			expect(warn).toHaveBeenCalledTimes(2);
 			warn.mockRestore();
 		});
+
+		it("queries only the targeted subscription when an endpoint is given", async () => {
+			mockQuery.mockResolvedValueOnce([row(7)]);
+			mockSend.mockResolvedValue({});
+
+			const result = await sendDailyPerek(1, `${FCM}7`);
+
+			expect(mockQuery.mock.calls[0][0]).toContain("WHERE endpoint_hash = ?");
+			expect(mockQuery.mock.calls[0][1]).toEqual([
+				expect.stringMatching(/^[0-9a-f]{64}$/),
+			]);
+			expect(mockSend).toHaveBeenCalledTimes(1);
+			expect(result).toEqual({ sent: 1, removed: 0, failed: 0 });
+		});
+
+		it.each([500, null])(
+			"keeps subscription details out of delivery warnings (%s)",
+			async (statusCode) => {
+				mockQuery.mockResolvedValueOnce([row(7)]);
+				const error =
+					statusCode === null
+						? new Error(`Network failure for ${FCM}`)
+						: Object.assign(new MockWebPushError(statusCode), {
+								endpoint: FCM,
+								headers: { authorization: "private" },
+								body: "provider details",
+							});
+				mockSend.mockRejectedValue(error);
+				const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+				expect(await sendDailyPerek(1, FCM)).toEqual({
+					sent: 0,
+					removed: 0,
+					failed: 1,
+				});
+				expect(warn).toHaveBeenCalledWith("Web push delivery failed", {
+					statusCode,
+				});
+				warn.mockRestore();
+			},
+		);
 	});
 });
