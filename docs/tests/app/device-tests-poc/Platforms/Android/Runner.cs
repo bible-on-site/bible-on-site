@@ -22,21 +22,18 @@ class TestDevice : IDevice
     public string SystemName => DeviceInfo.Platform.ToString();
     public string SystemVersion => DeviceInfo.VersionString;
     public string Locale => CultureInfo.CurrentCulture.Name;
-    public static bool RunHeadless = false;
 }
 
 class HeadlessTestRunner : AndroidApplicationEntryPoint
 {
-    readonly HeadlessRunnerOptions _runnerOptions;
     readonly TestOptions _options;
     readonly string _resultsPath;
 
     public HeadlessTestRunner(HeadlessRunnerOptions runnerOptions, TestOptions options)
     {
-        _runnerOptions = runnerOptions;
         _options = options;
         var cache = Android.App.Application.Context.CacheDir!.AbsolutePath;
-        _resultsPath = Path.Combine(cache, _runnerOptions.TestResultsFilename);
+        _resultsPath = Path.Combine(cache, runnerOptions.TestResultsFilename);
     }
 
     protected override bool LogExcludedTests => true;
@@ -52,17 +49,23 @@ class HeadlessTestRunner : AndroidApplicationEntryPoint
             {
                 var path = Path.Combine(Android.App.Application.Context.CacheDir!.AbsolutePath, assembly.GetName().Name + ".dll");
                 if (!File.Exists(path))
+                {
                     File.Create(path).Close();
+                }
                 return new TestAssemblyInfo(assembly, path);
             });
 
+    // Intentionally empty: terminating the instrumentation process here would
+    // kill the app before XHarness pulls the results file.
     protected override void TerminateWithSuccess() { }
 
     protected override TestRunner GetTestRunner(LogWriter logWriter)
     {
         var testRunner = base.GetTestRunner(logWriter);
         if (_options.SkipCategories?.Count > 0)
+        {
             testRunner.SkipCategories(_options.SkipCategories);
+        }
         return testRunner;
     }
 
@@ -73,12 +76,16 @@ class HeadlessTestRunner : AndroidApplicationEntryPoint
         await RunAsync();
         TestsCompleted -= OnTestsCompleted;
         if (File.Exists(TestsResultsFinalPath))
+        {
             bundle.PutString("test-results-path", TestsResultsFinalPath);
+        }
         if (bundle.GetLong("return-code", -1) == -1)
+        {
             bundle.PutLong("return-code", 1);
+        }
         return bundle;
 
-        void OnTestsCompleted(object? sender, TestRunResult results)
+        void OnTestsCompleted(object? _, TestRunResult results)
         {
             var message =
                 $"Tests run: {results.ExecutedTests} " +
@@ -100,15 +107,19 @@ public abstract class MauiTestActivity : AndroidX.AppCompat.App.AppCompatActivit
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
+        _ = CompleteWhenThePassEndsAsync(EnsureTestPass());
+    }
+
+    // The pass is a static field so it survives activity recreation (rotation,
+    // process config changes): a recreated activity must await the same pass.
+    static Task<Bundle> EnsureTestPass()
+    {
         if (testPass is not null)
         {
             Android.Util.Log.Warn("DeviceTests", "The test activity was recreated; the running test pass continues in it.");
+            return testPass;
         }
-        else
-        {
-            testPass = Task.Run(async () => await MauiTestInstrumentation.Current.Services.GetRequiredService<HeadlessTestRunner>().RunTestsAsync());
-        }
-        _ = CompleteWhenThePassEndsAsync(testPass);
+        return testPass = Task.Run(async () => await MauiTestInstrumentation.Current.Services.GetRequiredService<HeadlessTestRunner>().RunTestsAsync());
     }
 
     async Task CompleteWhenThePassEndsAsync(Task<Bundle> pass)
@@ -155,9 +166,13 @@ public abstract class MauiTestInstrumentation : Instrumentation
     {
         base.CallApplicationOnCreate(app);
         if (app == null)
+        {
             _waitForApplication.SetException(new ArgumentNullException(nameof(app)));
+        }
         else
+        {
             _waitForApplication.SetResult(app);
+        }
     }
 
     public override async void OnStart()
@@ -169,7 +184,9 @@ public abstract class MauiTestInstrumentation : Instrumentation
         RunnerOptions = Services.GetRequiredService<HeadlessRunnerOptions>();
         var resultsFilename = Arguments?.GetString("results-file-name");
         if (!string.IsNullOrWhiteSpace(resultsFilename))
+        {
             RunnerOptions.TestResultsFilename = resultsFilename;
+        }
         var bundle = await RunTestsAsync();
         CopyFile(bundle);
         Finish(Result.Ok, bundle);
@@ -179,7 +196,9 @@ public abstract class MauiTestInstrumentation : Instrumentation
     {
         var resultsFile = bundle.GetString("test-results-path");
         if (resultsFile == null)
+        {
             return;
+        }
         var guid = Guid.NewGuid().ToString("N");
         var name = Path.GetFileName(resultsFile);
         var downloads = Android.OS.Environment.DirectoryDownloads!;
@@ -207,7 +226,9 @@ public abstract class MauiTestInstrumentation : Instrumentation
             intent.AddFlags(ActivityFlags.NewTask);
             var activity = StartActivitySync(intent);
             if (activity is not MauiTestActivity testActivity)
+            {
                 throw new InvalidOperationException($"Unexpected activity type '{activity?.GetType().FullName ?? "<null>"}'.");
+            }
             CurrentExecutionContext = activity;
             return testActivity.TaskCompletionSource.Task;
         }
