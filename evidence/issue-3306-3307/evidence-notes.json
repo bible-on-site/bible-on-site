@@ -1,0 +1,31 @@
+{
+  "device": "Android emulator (AVD bos_shots), app com.tanah.daily929 Debug build of issue/3306-perush-ux",
+  "method": "adb uiautomator dump + screencap; Hebrew typed through ADBKeyBoard broadcast IME; Back via KEYCODE_BACK",
+  "captures": [
+    {
+      "file": "3306-bereshit-picker-full-before.png",
+      "state": "bereshit alef, perushim sheet open, empty query",
+      "verified": "rows: targum onkelos, targum yonatan, rashi (full catalog, onkelos is the first row)"
+    },
+    {
+      "file": "3306-bereshit-picker-filtered-onkelos.png",
+      "state": "query אונקלוס typed into the picker search",
+      "verified": "uiautomator tree contains exactly one commentary row: תרגום אונקלוס; unrelated rows removed from the visible collection"
+    },
+    {
+      "file": "3307-focused-over-sheet-before.png",
+      "state": "pasuk ג double-tapped into focused view while the filtered sheet stays open",
+      "verified": "FocusedPasukOverlay + PerushimContentViewport both present; query אונקלוס still in the field"
+    },
+    {
+      "file": "3307-after-back-sheet-kept.png",
+      "state": "one KEYCODE_BACK",
+      "verified": "FocusedPasukOverlay absent; sheet still open on bereshit alef with the אונקלוס query and filtered row intact; no navigation"
+    },
+    {
+      "file": "3307-second-back-sheet-closed.png",
+      "state": "second KEYCODE_BACK",
+      "verified": "PerushimContentViewport absent; still on bereshit alef — the sheet dismisses through the normal path"
+    }
+  ]
+}
