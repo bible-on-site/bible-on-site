@@ -562,10 +562,16 @@ public class ReaderRecitationEngineTests
         rig.Surface.RaiseOpened();
         rig.Surface.RaiseState(RecitationPlaybackState.Playing);
 
+        rig.Surface.Position = TimeSpan.FromMilliseconds(500);
+        rig.Ticker.Tick();
+        var word = rig.Engine.HighlightedWord;
+        word.Should().NotBeNull();
+
         rig.Surface.CurrentState = RecitationPlaybackState.Paused;
         rig.Ticker.Tick();
 
-        rig.Engine.HighlightedWord.Should().BeNull();
+        rig.Engine.HighlightedWord.Should().BeSameAs(word,
+            "a paused tick must not clear the last highlighted word");
     }
 
     [Fact]
