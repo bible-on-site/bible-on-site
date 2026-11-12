@@ -25,7 +25,12 @@ import {
 	reportBenchmark,
 	webVitalsMeasure,
 } from "../util/benchmark";
+import {
+	webServerPort,
+	webServerUrl,
+} from "../util/playwright/server-endpoint";
 import { test as base, expect } from "../util/playwright/test-fixture";
+import { TestType } from "../util/playwright/types";
 
 type DeviceStrategy = "mobile" | "desktop";
 
@@ -498,8 +503,9 @@ const CATEGORY_THRESHOLDS: Record<DeviceStrategy, Record<string, number>> = {
 	},
 };
 
-// Use local dev server URL
-const BASE_URL = "http://127.0.0.1:3001";
+// The perf suite's server endpoint — the same per-worktree port the
+// Playwright webServer bound (issue #2881).
+const BASE_URL = webServerUrl(webServerPort(TestType.PERF));
 
 /**
  * Run Lighthouse audit using the Playwright-managed Chrome instance.

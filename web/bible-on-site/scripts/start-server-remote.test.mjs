@@ -61,7 +61,11 @@ test("a held remote connection keeps the real measured drain open until it close
 	// The hairpin connect to the runner's own external IPv4 has no kernel-level
 	// deadline: an environment that cannot route it (dropped SYN under CI load)
 	// would hang the test into the outer execFile kill without any TAP output.
-	await deadline(once(client, "connect"), 5_000, "external IPv4 connect");
+	await deadline(
+		once(client, "connect", { signal: t.signal }),
+		5_000,
+		"external IPv4 connect",
+	);
 	// Skip only when procfs provably exposes no socket rows — an environment
 	// where the drain metric cannot work at all (empty /proc/net/tcp tables,
 	// e.g. some WSL2 setups). A populated table with an invisible held

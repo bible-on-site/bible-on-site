@@ -12,6 +12,7 @@ const suites = [
 	"start-server-signals.test.mjs",
 	"start-server-lifecycle.test.mjs",
 	"start-server-probe.test.mjs",
+	"start-server-fixture.test.mjs",
 ];
 
 // A failing or execFile-killed suite still wrote a TAP stream to stdout — but

@@ -309,6 +309,9 @@ export function isSchemaOnlyDataChange(files: string[]): boolean {
 		dataFiles.every(
 			(file) =>
 				/^data\/mysql\/tanahpedia_alter_[^/]+\.sql$/.test(file) ||
+				// Archive tables use the separately approved selective migration;
+				// adding them must not invoke the production data populator.
+				file === "data/mysql/private_archive_upgrade.sql" ||
 				bulletinMigrations.has(file) ||
 				// The bootstrap's migration-preservation tests accompany this
 				// additive upgrade; they must not trigger a production data rebuild.
