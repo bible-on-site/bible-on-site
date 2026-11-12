@@ -61,6 +61,7 @@ beforeEach(() => {
 				],
 			};
 		if (command.action === "remove") directory = { ...directory, files: [] };
+		if (command.action === "mkdir") return reply({ id: "dir" }) as Response;
 		return reply({ ok: true }) as Response;
 	}) as Mock;
 	vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -74,6 +75,49 @@ function choose(name = "content.bin", content = "123456") {
 	fireEvent.change(screen.getByLabelText("בחירת קבצים להעלאה"), {
 		target: { files: [new File([content], name)] },
 	});
+}
+function dropZone() {
+	return screen.getByRole("region", { name: "הוספת קבצים לתיקייה" });
+}
+function fileEntry(file: File) {
+	return {
+		isFile: true,
+		isDirectory: false,
+		name: file.name,
+		file: (resolve: (file: File) => void) => resolve(file),
+	} as unknown as FileSystemEntry;
+}
+function dirEntry(name: string, children: FileSystemEntry[]) {
+	let read = false;
+	return {
+		isFile: false,
+		isDirectory: true,
+		name,
+		createReader: () => ({
+			readEntries: (resolve: (entries: FileSystemEntry[]) => void) => {
+				resolve(read ? [] : children);
+				read = true;
+			},
+		}),
+	} as unknown as FileSystemEntry;
+}
+function dragData(entries: FileSystemEntry[]) {
+	return {
+		items: entries.map((entry) => ({
+			kind: "file",
+			webkitGetAsEntry: () => entry,
+		})),
+		files: [],
+		types: ["Files"],
+		dropEffect: "",
+	};
+}
+function commandsSent(action: string) {
+	return (fetch as Mock).mock.calls
+		.map(([, options]) =>
+			typeof options?.body === "string" ? JSON.parse(options.body) : null,
+		)
+		.filter((body) => body?.action === action);
 }
 
 it("renders the private login when no session exists", async () => {
@@ -115,6 +159,204 @@ it("accepts empty files without sending multipart data", async () => {
 			([, options]) => options?.method === "PUT",
 		),
 	).toHaveLength(0);
+});
+it("uploads files dropped onto the panel into the displayed directory", async () => {
+	await mount();
+	const entries = [
+		fileEntry(new File(["aaa"], "first.bin")),
+		fileEntry(new File(["bbb"], "second.bin")),
+	];
+	await act(async () => {
+		fireEvent.drop(dropZone(), { dataTransfer: dragData(entries) });
+	});
+	await waitFor(() => expect(commandsSent("complete")).toHaveLength(2));
+	expect(commandsSent("start")).toEqual([
+		expect.objectContaining({ filename: "first.bin", directory: "home" }),
+		expect.objectContaining({ filename: "second.bin", directory: "home" }),
+	]);
+});
+it("highlights the panel while files are dragged over it and resets on leave or drop", async () => {
+	await mount();
+	const zone = dropZone();
+	const files = { dataTransfer: { types: ["Files"], dropEffect: "" } };
+	fireEvent.dragEnter(zone, files);
+	expect(
+		screen.getByText("שחררו כדי להעלות לתיקייה הנוכחית"),
+	).toBeVisible();
+	// A nested child fires another enter/leave pair without clearing the state.
+	fireEvent.dragEnter(zone, files);
+	fireEvent.dragLeave(zone, files);
+	expect(
+		screen.getByText("שחררו כדי להעלות לתיקייה הנוכחית"),
+	).toBeVisible();
+	fireEvent.dragLeave(zone, files);
+	expect(
+		screen.getByText(/אפשר לבחור או לגרור לכאן כמה קבצים יחד/),
+	).toBeVisible();
+	fireEvent.dragEnter(zone, files);
+	await act(async () => {
+		fireEvent.drop(zone, { dataTransfer: dragData([]) });
+	});
+	expect(
+		screen.getByText(/אפשר לבחור או לגרור לכאן כמה קבצים יחד/),
+	).toBeVisible();
+});
+it("ignores drags that do not carry files", async () => {
+	await mount();
+	const calls = (fetch as Mock).mock.calls.length;
+	fireEvent.dragEnter(dropZone(), {
+		dataTransfer: { types: ["text/plain"] },
+	});
+	await act(async () => {
+		fireEvent.drop(dropZone(), {
+			dataTransfer: { items: [], files: [], types: ["text/plain"] },
+		});
+	});
+	expect(screen.queryByText("שחררו כדי להעלות לתיקייה הנוכחית")).toBeNull();
+	expect((fetch as Mock).mock.calls.length).toBe(calls);
+});
+it("rejects new drops while another operation is still busy", async () => {
+	await mount();
+	let releaseStart: (response: Response) => void = () => {};
+	(fetch as Mock).mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				releaseStart = resolve;
+			}),
+	);
+	choose();
+	await screen.findByRole("button", { name: "ביטול ההעלאה" });
+	await act(async () => {
+		fireEvent.drop(dropZone(), {
+			dataTransfer: dragData([fileEntry(new File(["x"], "late.bin"))]),
+		});
+	});
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		"יש להמתין לסיום הפעולה הנוכחית",
+	);
+	expect(commandsSent("start")).toHaveLength(1);
+	await act(async () => {
+		releaseStart(reply({ id: "file", partSize: 4 }) as Response);
+	});
+	await screen.findByRole("link", { name: "הורדה" });
+});
+it("prevents the browser from opening files dropped anywhere on the page", async () => {
+	await mount();
+	expect(
+		fireEvent.dragOver(document.body, {
+			dataTransfer: { types: ["Files"] },
+		}),
+	).toBe(false);
+	expect(
+		fireEvent.drop(document.body, {
+			dataTransfer: { types: ["Files"], items: [], files: [] },
+		}),
+	).toBe(false);
+	// Non-file drags keep their default behavior (e.g. text into inputs).
+	expect(
+		fireEvent.dragOver(document.body, {
+			dataTransfer: { types: ["text/plain"] },
+		}),
+	).toBe(true);
+});
+it("creates archive folders for dropped directories and uploads nested files", async () => {
+	await mount();
+	const entries = [
+		dirEntry("חומרים", [
+			fileEntry(new File(["x"], "nested.bin")),
+			dirEntry("עמוק", [fileEntry(new File(["y"], "deep.bin"))]),
+		]),
+		fileEntry(new File(["z"], "loose.bin")),
+	];
+	await act(async () => {
+		fireEvent.drop(dropZone(), { dataTransfer: dragData(entries) });
+	});
+	await waitFor(() => expect(commandsSent("complete")).toHaveLength(3));
+	expect(commandsSent("mkdir")).toEqual([
+		{ action: "mkdir", name: "חומרים", directory: "home" },
+		{ action: "mkdir", name: "עמוק", directory: "dir" },
+	]);
+	expect(commandsSent("start")).toEqual([
+		expect.objectContaining({ filename: "nested.bin", directory: "dir" }),
+		expect.objectContaining({ filename: "deep.bin", directory: "dir" }),
+		expect.objectContaining({ filename: "loose.bin", directory: "home" }),
+	]);
+});
+it("uploads into a same-named existing folder when creation reports a conflict", async () => {
+	directory.files = [
+		{
+			id: "existing",
+			filename: "חומרים",
+			size: 0,
+			status: "ready",
+			kind: "folder",
+		},
+	];
+	render(<ArchiveArea />);
+	await screen.findByRole("button", { name: "פתיחת תיקייה חומרים" });
+	(fetch as Mock).mockResolvedValueOnce({
+		ok: false,
+		status: 409,
+		json: async () => ({ error: "conflict" }),
+	} as Response);
+	await act(async () => {
+		fireEvent.drop(dropZone(), {
+			dataTransfer: dragData([
+				dirEntry("חומרים", [fileEntry(new File(["x"], "nested.bin"))]),
+			]),
+		});
+	});
+	await waitFor(() => expect(commandsSent("complete")).toHaveLength(1));
+	expect(commandsSent("start")).toEqual([
+		expect.objectContaining({ filename: "nested.bin", directory: "existing" }),
+	]);
+	expect(screen.queryByRole("alert")).toBeNull();
+});
+it("reports dropped folders it cannot create and still uploads loose files", async () => {
+	await mount();
+	(fetch as Mock).mockResolvedValueOnce({
+		ok: false,
+		status: 403,
+		json: async () => ({ error: "denied" }),
+	} as Response);
+	await act(async () => {
+		fireEvent.drop(dropZone(), {
+			dataTransfer: dragData([
+				dirEntry("אסור", [fileEntry(new File(["x"], "nested.bin"))]),
+				fileEntry(new File(["y"], "ok.bin")),
+			]),
+		});
+	});
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		"לא ניתן ליצור את התיקיות: אסור",
+	);
+	await waitFor(() => expect(commandsSent("complete")).toHaveLength(1));
+	expect(commandsSent("start")).toEqual([
+		expect.objectContaining({ filename: "ok.bin", directory: "home" }),
+	]);
+});
+it("falls back to item files and the flat file list when no entries exist", async () => {
+	await mount();
+	await act(async () => {
+		fireEvent.drop(dropZone(), {
+			dataTransfer: {
+				items: [
+					{
+						kind: "file",
+						webkitGetAsEntry: () => null,
+						getAsFile: () => new File(["b"], "entryless.bin"),
+					},
+					{ kind: "string" },
+				],
+				files: [new File(["a"], "fallback.bin")],
+				types: ["Files"],
+			},
+		});
+	});
+	await waitFor(() => expect(commandsSent("complete")).toHaveLength(1));
+	expect(commandsSent("start")).toEqual([
+		expect.objectContaining({ filename: "entryless.bin", directory: "home" }),
+	]);
 });
 it("ignores empty file selections", async () => {
 	await mount();
