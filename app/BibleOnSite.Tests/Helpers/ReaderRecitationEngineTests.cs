@@ -63,6 +63,14 @@ public class ReaderRecitationEngineTests
         /// <summary>When set, SeekToAsync parks on it — a seek still in flight.</summary>
         public TaskCompletionSource? SeekGate;
 
+        public FakeSurface()
+        {
+            // Explicit initialization: Codacy's unassigned-field check only
+            // counts writes inside the declaring type.
+            SeekException = null;
+            SeekGate = null;
+        }
+
         public void SetSourcePath(string? path) => SourcePathValue = path;
         public void Play() { PlayCount++; CurrentState = RecitationPlaybackState.Playing; }
         public void Pause() { PauseCount++; CurrentState = RecitationPlaybackState.Paused; }
@@ -125,6 +133,15 @@ public class ReaderRecitationEngineTests
         public Exception? ClipException;
         /// <summary>Whether decodes honor the cancellation token (a lax decoder doesn't).</summary>
         public bool HonorCancellation { get; set; } = true;
+
+        public FakeDecoder()
+        {
+            // Explicit initialization: Codacy's unassigned-field check only
+            // counts writes inside the declaring type.
+            ClipGate = null;
+            ClipException = null;
+        }
+
         private async Task<byte[]> Clip(string audio, CancellationToken cancellationToken)
         {
             ClipCalls++;
