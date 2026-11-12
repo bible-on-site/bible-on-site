@@ -336,9 +336,11 @@ async function measureRoutes(
 		seo: { times: [], batches: [] },
 	};
 	for (let run = 0; run < RUNS; run++) {
+		// Relative URLs resolve against the configured baseURL, which carries
+		// the suite's per-worktree port (issue #2881).
 		for (const [key, url] of [
-			["dev", `http://localhost:3001/dev/sefer/${PEREK_ID}`],
-			["seo", `http://localhost:3001/929/${PEREK_ID}?book`],
+			["dev", `/dev/sefer/${PEREK_ID}`],
+			["seo", `/929/${PEREK_ID}?book`],
 		] as const) {
 			// `load` is sufficient and ~1s cheaper than `networkidle`:
 			// `.flipbook-toolbar` is rendered by React itself, so its

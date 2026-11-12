@@ -603,6 +603,7 @@ jobs:
       - name: Prepare Android emulator runtime and hardware acceleration
         if: inputs.platform == 'Android'
         run: |
+          sudo "$(command -v node)" "$GITHUB_WORKSPACE/devops/github/ci/ubuntu-apt-mirrors.mjs"
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y libpulse0
           sudo chmod 666 /dev/kvm

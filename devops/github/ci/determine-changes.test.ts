@@ -830,6 +830,47 @@ describe("isSchemaOnlyDataChange", () => {
 			true,
 		],
 		[
+			"private archive upgrade stays manual",
+			["data/mysql/private_archive_upgrade.sql"],
+			true,
+		],
+		[
+			"private archive upgrade with its admin and AWS implementation stays manual",
+			[
+				"data/mysql/private_archive_upgrade.sql",
+				"web/admin/src/server/archive/store.ts",
+				"devops/private-archive-db.mts",
+				"devops/aws/private-archive.yaml",
+			],
+			true,
+		],
+		[
+			"private archive upgrade cannot hide production content changes",
+			[
+				"data/mysql/private_archive_upgrade.sql",
+				"data/mysql/tanah_static_structure.sql",
+			],
+			false,
+		],
+		[
+			"private archive upgrade cannot hide data dependency changes",
+			["data/mysql/private_archive_upgrade.sql", "data/Cargo.lock"],
+			false,
+		],
+		[
+			"private archive upgrade cannot exempt bootstrap changes",
+			[
+				"data/mysql/private_archive_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+			],
+			false,
+		],
+		[
+			"private archive migration requires its exact path",
+			["data/mysql/nested/private_archive_upgrade.sql"],
+			false,
+		],
+		[
 			"multiple schema migrations",
 			[
 				"data/mysql/tanahpedia_alter_mention_decoration.sql",
@@ -1288,6 +1329,17 @@ describe("main", () => {
 		);
 		assert.deepEqual(changes.data, { module_changed: true, ci_changed: false });
 		assert.match(output, /^data_schema_only_changed=true$/m);
+	});
+
+	test("a private archive push emits manual deployment while retaining data checks", () => {
+		const { changes, output } = run(
+			"push",
+			({ base }) => ({ before: base }),
+			"data/mysql/private_archive_upgrade.sql",
+		);
+		assert.deepEqual(changes.data, { module_changed: true, ci_changed: false });
+		assert.match(output, /^data_schema_only_changed=true$/m);
+		assert.match(output, /^data_deploy_changed=false$/m);
 	});
 
 	test("a deleted schema migration stays manual without asserting the SQL still exists", () => {

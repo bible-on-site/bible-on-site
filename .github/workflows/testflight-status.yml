@@ -18,6 +18,7 @@ permissions:
 
 jobs:
   inspect:
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
