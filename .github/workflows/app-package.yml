@@ -88,6 +88,7 @@ env:
 
 jobs:
   package_windows:
+    timeout-minutes: 60
     name: Package Windows (MSIX)
     if: ${{ inputs.platform == 'Windows' || inputs.platform == 'All' }}
     runs-on: windows-latest
@@ -293,6 +294,7 @@ jobs:
         shell: pwsh
 
   package_android:
+    timeout-minutes: 60
     name: Package Android (AAB)
     if: ${{ always() && !cancelled() && !failure() && (inputs.platform == 'Android' || inputs.platform == 'All') }}
     runs-on: ubuntu-latest
@@ -510,6 +512,7 @@ jobs:
           fi
 
   package_ios:
+    timeout-minutes: 60
     name: Package iOS (IPA)
     if: ${{ always() && !cancelled() && !failure() && (inputs.platform == 'iOS' || inputs.platform == 'All') }}
     runs-on: xcode-27
