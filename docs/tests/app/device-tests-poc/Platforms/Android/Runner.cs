@@ -55,9 +55,11 @@ class HeadlessTestRunner : AndroidApplicationEntryPoint
                 return new TestAssemblyInfo(assembly, path);
             });
 
-    // Intentionally empty: terminating the instrumentation process here would
-    // kill the app before XHarness pulls the results file.
-    protected override void TerminateWithSuccess() { }
+    protected override void TerminateWithSuccess()
+    {
+        // Intentionally empty: terminating the instrumentation process here
+        // would kill the app before XHarness pulls the results file.
+    }
 
     protected override TestRunner GetTestRunner(LogWriter logWriter)
     {
@@ -72,20 +74,7 @@ class HeadlessTestRunner : AndroidApplicationEntryPoint
     public async Task<Bundle> RunTestsAsync()
     {
         var bundle = new Bundle();
-        TestsCompleted += OnTestsCompleted;
-        await RunAsync();
-        TestsCompleted -= OnTestsCompleted;
-        if (File.Exists(TestsResultsFinalPath))
-        {
-            bundle.PutString("test-results-path", TestsResultsFinalPath);
-        }
-        if (bundle.GetLong("return-code", -1) == -1)
-        {
-            bundle.PutLong("return-code", 1);
-        }
-        return bundle;
-
-        void OnTestsCompleted(object? _, TestRunResult results)
+        EventHandler<TestRunResult> onTestsCompleted = (_, results) =>
         {
             var message =
                 $"Tests run: {results.ExecutedTests} " +
@@ -95,7 +84,19 @@ class HeadlessTestRunner : AndroidApplicationEntryPoint
                 $"Ignored: {results.SkippedTests}";
             bundle.PutString("test-execution-summary", message);
             bundle.PutLong("return-code", results.FailedTests == 0 ? 0 : 1);
+        };
+        TestsCompleted += onTestsCompleted;
+        await RunAsync();
+        TestsCompleted -= onTestsCompleted;
+        if (File.Exists(TestsResultsFinalPath))
+        {
+            bundle.PutString("test-results-path", TestsResultsFinalPath);
         }
+        if (bundle.GetLong("return-code", -1) == -1)
+        {
+            bundle.PutLong("return-code", 1);
+        }
+        return bundle;
     }
 }
 
