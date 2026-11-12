@@ -31,12 +31,16 @@ def write_search_index(path: Path, notes_timestamp: int = 200, slim: bool = True
             # legacy fat layout.
             if slim:
                 db.executescript("""
-                    CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER, NoteIdx INTEGER);
+                    CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY,
+                        PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER,
+                        SeferId INTEGER, NoteIdx INTEGER);
                     INSERT INTO notes_documents VALUES (1,1,1,0,1,0);
                 """)
             else:
                 db.executescript("""
-                    CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER);
+                    CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY,
+                        Text TEXT, PerekId INTEGER, PasukNum INTEGER,
+                        PerushId INTEGER, SeferId INTEGER);
                     INSERT INTO notes_documents VALUES (1,'בראשית',1,1,0,1);
                 """)
             db.executescript("""
