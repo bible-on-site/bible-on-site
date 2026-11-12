@@ -62,6 +62,17 @@ content fingerprint, and archive digest — which rides the release beside the
 from the IPA (`cd-app.yml`, `xcrun altool --upload-asset-pack` on an Xcode 26+
 toolchain) — see reuse below.
 
+The perushim pack also carries `sefaria-dump-5784-sivan-4.hebrew_search.sqlite`,
+the prebuilt FTS5 index the device never rebuilds (#2222). Since #3309 its
+`notes_documents` table stores only each note's identity (perek, pasuk, perush,
+sefer, `note_idx`); hit bodies resolve from the compressed `note_blob` rows in
+the notes DB instead of duplicating ~250 MB of commentary text inside the
+index. `SearchIndexService` still reads the older fat layout when a legacy pack
+or cached index supplies it, and swaps a fat working index for the slim file
+once the pack redelivers. `audit_android_aab_size.py` gates the packaged AAB on
+this layout plus on-demand delivery for every asset pack, an optional-payload
+allowlist inside `base/`, and a compressed-size budget per module.
+
 ## Install paths
 
 - **Commentary** (`PerushimNotesService`): `InitializeAsync` copies the DB into

@@ -24,6 +24,11 @@ public sealed class SearchIndexService : IAsyncDisposable
     private bool _disposed;
     private readonly object _buildSync = new();
     private string? _stagedAwaitingNotes;
+    // Current-generation delivered indexes store note identity (NoteIdx) in
+    // notes_documents instead of a second copy of the text (#3309). Indexes
+    // delivered before that change still carry the text — read whichever layout
+    // the adopted file has. null = the notes table is not ready or unsniffed.
+    private bool? _notesDocumentsCarryText;
 
     // The e2e warmup gate: stays closed until the reader's first load settles.
     private static int _startupSettleSignaled;
@@ -276,6 +281,13 @@ public sealed class SearchIndexService : IAsyncDisposable
                     var fuzzy = await QueryAsync(table, string.Join(" AND ", clauses), books, limit, ordering);
                     rows = rows.Concat(fuzzy).DistinctBy(row => row.RowId).ToList();
                 }
+                if (table == "notes" && _notesDocumentsCarryText == false)
+                {
+                    await ResolveNoteBodiesAsync(rows, cancellationToken);
+                    // An indexed identity missing from the blob means a
+                    // corrupt pack — never surface a blank hit.
+                    rows.RemoveAll(row => row.Body.Length == 0);
+                }
                 hits.AddRange(rows.Select(row => new SearchHit(type, row.PerekId, row.PasukNum,
                     row.PerushId, row.Body, SearchText.ScoreNormalized(row.Body, normalizedQuery))));
             }
@@ -351,9 +363,46 @@ public sealed class SearchIndexService : IAsyncDisposable
             orderSql = $"{generationSql}, c.PerekId, c.PasukNum, {table}.rowid";
         }
         arguments.Add(limit);
-        return _index.QueryAsync<IndexRow>($"SELECT {table}.rowid AS RowId, c.PerekId, c.PasukNum, c.PerushId, c.Text AS Body FROM {table} " +
+        // Slim notes_documents carry NoteIdx instead of the duplicated text;
+        // the hit body is resolved from the notes blob afterwards (#3309).
+        var bodySql = table == "notes" && _notesDocumentsCarryText == false
+            ? "c.NoteIdx"
+            : "c.Text AS Body";
+        return _index.QueryAsync<IndexRow>($"SELECT {table}.rowid AS RowId, c.PerekId, c.PasukNum, c.PerushId, {bodySql} FROM {table} " +
             $"JOIN {table}_documents c ON c.rowid = {table}.rowid WHERE {table} MATCH ? AND c.SeferId IN ({placeholders}) " +
             $"ORDER BY {orderSql} LIMIT ?", arguments.ToArray());
+    }
+
+    /// <summary>
+    /// Fills `IndexRow.Body` for slim-layout notes hits: their documents rows
+    /// carry the note's identity instead of the text, so the body comes back
+    /// from the compressed perek blob — one blob per perek, shared by all hits
+    /// landing in it. The text path is identical to the delivered index's own
+    /// transform: `PlainText` over the decoded note content.
+    /// </summary>
+    private async Task ResolveNoteBodiesAsync(List<IndexRow> rows, CancellationToken cancellationToken)
+    {
+        if (_notes == null)
+        {
+            return;
+        }
+        // The perush names the reader path maps are irrelevant to hit bodies.
+        var unused = new Dictionary<int, Perush>();
+        foreach (var perek in rows.GroupBy(row => row.PerekId))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var notes = await _notes.LoadNotesForPerekAsync(perek.Key, unused);
+            var bodies = new Dictionary<(int Pasuk, int PerushId, int NoteIdx), string>();
+            foreach (var note in notes)
+            {
+                bodies[(note.Pasuk, note.PerushId, note.NoteIdx)] = note.NoteContent;
+            }
+            foreach (var row in perek)
+            {
+                row.Body = SearchText.PlainText(
+                    bodies.GetValueOrDefault((row.PasukNum, row.PerushId, row.NoteIdx), ""));
+            }
+        }
     }
 
     private async Task InitializeIndexAsync()
@@ -478,7 +527,14 @@ public sealed class SearchIndexService : IAsyncDisposable
                     var expected = await FingerprintAsync(connection, "build_timestamp");
                     CommentaryAvailable = await _index.ExecuteScalarAsync<string>(
                         "SELECT fingerprint FROM search_metadata WHERE name = 'notes'") == expected;
-                    if (CommentaryAvailable) { _ready["notes"] = expected; }
+                    if (CommentaryAvailable)
+                    {
+                        _ready["notes"] = expected;
+                        // TryAdoptDeliveredIndexAsync already sniffed the layout
+                        // on its paths; a surviving fat working index without a
+                        // staged file reaches this fallback.
+                        _notesDocumentsCarryText ??= await NotesDocumentsCarryTextAsync(_index);
+                    }
                     else { await ClearTableAsync("notes"); }
                 }
                 else
@@ -550,9 +606,10 @@ public sealed class SearchIndexService : IAsyncDisposable
         var expected = await FingerprintAsync(notesConnection, "build_timestamp");
         var stored = await _index.ExecuteScalarAsync<string>(
             "SELECT fingerprint FROM search_metadata WHERE name = 'notes'");
-        if (stored == expected)
+        if (stored == expected && !(await NotesDocumentsCarryTextAsync(_index)))
         {
             _ready["notes"] = expected;
+            _notesDocumentsCarryText = false;
             // Working index already matches — the staged copy can only still
             // serve the independently fingerprinted verses table.
             return _notes!.PeekDeliveredIndexPath();
@@ -562,14 +619,16 @@ public sealed class SearchIndexService : IAsyncDisposable
         {
             return null;
         }
-        // Read the staged file's fingerprint without disturbing _index.
+        // Read the staged file's fingerprint and layout without disturbing _index.
         string? deliveredFp = null;
+        var deliveredCarriesText = false;
         SQLiteAsyncConnection? delivered = null;
         try
         {
             delivered = new SQLiteAsyncConnection(deliveredPath, SQLiteOpenFlags.ReadOnly);
             deliveredFp = await delivered.ExecuteScalarAsync<string>(
                 "SELECT fingerprint FROM search_metadata WHERE name = 'notes'");
+            deliveredCarriesText = await NotesDocumentsCarryTextAsync(delivered);
         }
         catch (SQLiteException)
         {
@@ -588,6 +647,14 @@ public sealed class SearchIndexService : IAsyncDisposable
             // as a whole, but its verses table can still match this device.
             return deliveredPath;
         }
+        if (stored == expected && deliveredCarriesText)
+        {
+            // The working index is already current and the staged file is the
+            // same fat layout — a swap would not free the duplicated text.
+            _ready["notes"] = expected;
+            _notesDocumentsCarryText = true;
+            return deliveredPath;
+        }
 
         // Swap under both gates: a concurrent verses build/query may hold _index.
         await _gates["verses"].WaitAsync();
@@ -599,6 +666,7 @@ public sealed class SearchIndexService : IAsyncDisposable
             AtomicFile.Move(deliveredPath, _indexPath);
             _index = new SQLiteAsyncConnection(_indexPath);
             _ready.Clear();
+            _notesDocumentsCarryText = deliveredCarriesText;
             await OpenIndexAsync();
         }
         finally
@@ -606,6 +674,18 @@ public sealed class SearchIndexService : IAsyncDisposable
             _gates["verses"].Release();
         }
         return null;
+    }
+
+    /// <summary>
+    /// Whether `notes_documents` still stores the note text — the pre-#3309
+    /// layout. A working index that does gets replaced by a matching slim
+    /// staged file even when the generation fingerprint already agrees.
+    /// </summary>
+    private static async Task<bool> NotesDocumentsCarryTextAsync(SQLiteAsyncConnection db)
+    {
+        var columns = await db.QueryAsync<PragmaColumn>(
+            "SELECT name FROM pragma_table_info('notes_documents')");
+        return columns.Any(column => column.Name == "Text");
     }
 
     /// <summary>
@@ -754,6 +834,10 @@ public sealed class SearchIndexService : IAsyncDisposable
     private async Task ClearTableAsync(string table)
     {
         _ready.TryRemove(table, out _);
+        if (table == "notes")
+        {
+            _notesDocumentsCarryText = null;
+        }
         var stored = await _index.ExecuteScalarAsync<string>(
             "SELECT fingerprint FROM search_metadata WHERE name = ?", table);
         if (stored == null)
@@ -976,6 +1060,7 @@ public sealed class SearchIndexService : IAsyncDisposable
         public int PerekId { get; set; }
         public int PasukNum { get; set; }
         public int PerushId { get; set; }
+        public int NoteIdx { get; set; }
         public string Body { get; set; } = string.Empty;
     }
 
@@ -983,6 +1068,11 @@ public sealed class SearchIndexService : IAsyncDisposable
     {
         public long RowId { get; set; }
         public string Text { get; set; } = string.Empty;
+    }
+
+    private sealed class PragmaColumn
+    {
+        public string Name { get; set; } = string.Empty;
     }
 
     private sealed class VocabularyRow

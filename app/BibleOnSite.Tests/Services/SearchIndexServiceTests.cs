@@ -363,8 +363,24 @@ public class SearchIndexServiceTests
     }
 
     /// <summary>Minimal queryable index DB as the pipeline ships it: the
-    /// external-content FTS + documents tables + a fingerprint row.</summary>
+    /// external-content FTS + documents tables + a fingerprint row. The slim
+    /// documents schema carries the note's identity instead of its text —
+    /// hit bodies resolve from the notes blob (#3309).</summary>
     private static string[] DeliveredIndexStatements(string notesFingerprint, string markerDoc) =>
+    [
+        "CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)",
+        $"INSERT INTO search_metadata VALUES ('notes','{notesFingerprint}')",
+        "CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER, NoteIdx INTEGER)",
+        "INSERT INTO notes_documents VALUES (1,1,1,7,1,0)",
+        "CREATE VIRTUAL TABLE notes USING fts5(Text, content='notes_documents', content_rowid='rowid')",
+        $"INSERT INTO notes(rowid,Text) VALUES (1,'{markerDoc}')",
+        "CREATE VIRTUAL TABLE notes_vocab USING fts5vocab(notes, 'row')",
+    ];
+
+    /// <summary>The pre-#3309 delivered layout: documents rows stored the note
+    /// text itself. Older packs and retained working indexes still arrive in
+    /// this shape and must keep serving until replaced.</summary>
+    private static string[] FatDeliveredIndexStatements(string notesFingerprint, string markerDoc) =>
     [
         "CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)",
         $"INSERT INTO search_metadata VALUES ('notes','{notesFingerprint}')",
@@ -409,6 +425,86 @@ public class SearchIndexServiceTests
             var stored = await inspection.ExecuteScalarAsync<string>(
                 "SELECT fingerprint FROM search_metadata WHERE name = 'notes'");
             stored.Should().Be($"v4:42:n{SearchText.NormalizationVersion}");
+            (await inspection.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM pragma_table_info('notes_documents') WHERE name = 'Text'"))
+                .Should().Be(0, "the delivered layout keeps only the note's identity");
+        }
+        finally { await inspection.CloseAsync(); }
+    }
+
+    [Fact]
+    public async Task SlimDeliveredIndex_ResolvesHitBodiesFromTheNotesBlob()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        // The blob holds the only copy of the text; markup must be stripped
+        // exactly like the document text the fat layout used to store.
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "סימן <b>מובהק</b> &amp; נקי")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק נקי"));
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.Text.Should().Be("סימן מובהק & נקי");
+    }
+
+    [Fact]
+    public async Task FatWorkingIndex_KeepsServingStoredTextUntilTheSlimIndexArrives()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "בראשית")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        // A working index cached by the previous app generation — its
+        // documents still carry the text, so bodies come from the store, not
+        // the blob (whose content deliberately differs here).
+        var working = await storage.CreateDatabaseAsync("search.sqlite",
+            FatDeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await working.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.Text.Should().Be("סימן מובהק");
+    }
+
+    [Fact]
+    public async Task FatWorkingIndex_IsReplacedByTheMatchingSlimDeliveredIndex()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "סימן מובהק")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var working = await storage.CreateDatabaseAsync("search.sqlite",
+            FatDeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await working.CloseAsync();
+        // The pack redelivers the same generation in the slim layout.
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"));
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.Text.Should().Be("סימן מובהק");
+        var inspection = new SQLite.SQLiteAsyncConnection(Path.Join(storage.Root, "search.sqlite"), SQLite.SQLiteOpenFlags.ReadOnly);
+        try
+        {
+            (await inspection.ExecuteScalarAsync<int>(
+                    "SELECT COUNT(*) FROM pragma_table_info('notes_documents') WHERE name = 'Text'"))
+                .Should().Be(0, "the fat working index must be swapped out, not left consuming the duplicated text");
         }
         finally { await inspection.CloseAsync(); }
     }
@@ -1393,7 +1489,7 @@ public class SearchIndexServiceTests
         }
         var fixture = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
             "CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)",
-            "CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER)",
+            "CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER, NoteIdx INTEGER)",
             "CREATE VIRTUAL TABLE notes USING fts5(Text, content='notes_documents', content_rowid='rowid')",
             "CREATE VIRTUAL TABLE notes_vocab USING fts5vocab(notes, 'row')");
         await fixture.ExecuteAsync("INSERT INTO search_metadata VALUES ('notes', ?)",
@@ -1410,7 +1506,7 @@ public class SearchIndexServiceTests
                 {
                     var text = SearchText.PlainText(note.Content);
                     connection.Execute("INSERT INTO notes_documents VALUES (?, ?, ?, ?, ?, ?)",
-                        ++row, text, blob.PerekId, note.Pasuk, note.PerushId, perek.SeferId);
+                        ++row, blob.PerekId, note.Pasuk, note.PerushId, perek.SeferId, note.NoteIdx);
                     connection.Execute("INSERT INTO notes(rowid, Text) VALUES (?, ?)", row, SearchText.Normalize(text));
                 }
             }

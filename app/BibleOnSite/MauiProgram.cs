@@ -229,9 +229,6 @@ public static class MauiProgram
         builder.Services.AddTransient<PerekViewModel>();
         builder.Services.AddTransient<PreferencesViewModel>();
 
-        // Register Pages
-        builder.Services.AddTransient<MainPage>();
-
 #if DEBUG
         builder.Logging.AddDebug();
 #endif

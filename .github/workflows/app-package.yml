@@ -479,6 +479,13 @@ jobs:
       - name: Verify AAB DEX optimization metadata
         run: python app/devops/verify_android_dex_metadata.py --package "$(find app/.artifacts -name '*.aab' -print -quit)"
 
+      # #3309: gate the artifact Play receives — optional payloads must stay in
+      # their on-demand packs, the search index must keep the slim layout, and
+      # the base module must not cross its compressed budget. The JSON report
+      # keeps a machine-readable breakdown for the next size complaint.
+      - name: Audit AAB module sizes and asset-pack layout
+        run: python app/devops/audit_android_aab_size.py --package "$(find app/.artifacts -name '*.aab' -print -quit)" --json-out app/.artifacts/aab-size-report.json
+
       # #2970: the archive Play receives is this zip — its entries must be
       # symbol-bearing arm64 ELFs named after, and build-ID-matched to, the
       # bundled libraries. Verify the stored artifact, not just intermediates.
@@ -500,6 +507,7 @@ jobs:
           path: |
             ${{ env.APP_DIRECTORY }}/.artifacts/*.aab
             ${{ env.APP_DIRECTORY }}/.artifacts/*-native-symbols.zip
+            ${{ env.APP_DIRECTORY }}/.artifacts/aab-size-report.json
           retention-days: 30
           if-no-files-found: error
           include-hidden-files: true
