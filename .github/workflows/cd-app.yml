@@ -31,6 +31,7 @@ concurrency:
 
 jobs:
   deploy_google_play:
+    timeout-minutes: 60
     name: Deploy to Google Play (Internal Track)
     if: ${{ (github.event.client_payload.artifacts.android_artifact_name || github.event.client_payload.android_artifact_name) != '' }}
     permissions:
@@ -205,6 +206,7 @@ jobs:
           echo "**Status:** ${{ job.status == 'success' && 'Deployed ✅' || 'Failed ❌ — see the upload step log for the actionable cause' }}" >> $GITHUB_STEP_SUMMARY
 
   deploy_microsoft_store:
+    timeout-minutes: 60
     name: Deploy to Microsoft Store
     if: ${{ (github.event.client_payload.artifacts.windows_artifact_name || github.event.client_payload.windows_artifact_name) != '' }}
     permissions:
@@ -375,6 +377,7 @@ jobs:
           "**Status:** ${{ job.status == 'success' && 'Submitted ✅' || 'Failed ❌ — see the upload step log for the Partner Center error' }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
   deploy_app_store:
+    timeout-minutes: 60
     name: Deploy to App Store (TestFlight)
     if: ${{ ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
     permissions:
@@ -579,6 +582,7 @@ jobs:
   # record created after the TestFlight upload can still receive the notes.
   # No deployment record and no binary ever move in this job.
   publish_app_store_notes:
+    timeout-minutes: 60
     name: Publish Hebrew What's New to the App Store
     needs: deploy_app_store
     if: ${{ always() && needs.deploy_app_store.result == 'success' && needs.deploy_app_store.outputs.ref != '' && ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}

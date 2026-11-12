@@ -51,7 +51,7 @@ it.each(hosted.cases)(
 		expect(failures.length > 0).toBe(record.expectedFailure);
 		if (record.expectedFailure) {
 			expect(failures).toContain(
-				"first turn/blockingDurationMaxMs=187.9ms > 50ms",
+				"first turn/blockingDurationMaxMs=187.9ms > 100ms",
 			);
 			expect(
 				record.samples.longAnimationFrames.find(
@@ -122,10 +122,14 @@ it.each([...numbers.cases, ...kings.cases])(
 	},
 );
 
-function sample(blockingDuration: number, startTime: number): TurnSamples {
+function sample(
+	blockingDuration: number,
+	startTime: number,
+	duration = blockingDuration + 50,
+): TurnSamples {
 	const frame: TurnLongAnimationFrame = {
 		startTime,
-		duration: blockingDuration + 50,
+		duration,
 		blockingDuration,
 		firstUIEventTimestamp: startTime,
 		renderStart: startTime,
@@ -175,15 +179,60 @@ it("does not hide a block spanning the first-turn handoff", () => {
 	expect(failures).toHaveLength(3);
 });
 
-it("preserves the strict limit and supports genuinely absent long frames", () => {
+it("retains a pre-input browser pause as a diagnostic instead of turn blocking", () => {
+	// The original CI frame ended at 1859.5ms; the first trusted pointerdown
+	// arrived at 1860.2ms. First-turn blocking was 19ms, but the sequence
+	// incorrectly inherited this earlier 156.6ms setup pause.
+	const samples = sample(156.6, 1643, 216.5);
+	for (const input of samples.inputs) {
+		input.at += 1860.2;
+		input.firstMotion = (input.firstMotion as number) + 1860.2;
+		input.responseFrame = (input.responseFrame as number) + 1860.2;
+		input.settled = (input.settled as number) + 1860.2;
+	}
+	const original = structuredClone(samples);
+	const metrics = reduceTurnBlockingSamples(samples, 300, 2);
+	expect(metrics.blockingDurationMaxMs).toBe(0);
+	expect(metrics.beforeInput.blockingDurationMaxMs).toBe(156.6);
+	expect(turnBlockingBudgetFailures(metrics)).toEqual([]);
+	expect(samples).toEqual(original);
+});
+
+it.each([
+	["ends at the first input", 100, 350, false],
+	["overlaps the first input by one microsecond", 100, 349.999, true],
+	["starts at the final settlement", 1800, 0, true],
+	["overlaps the final settlement by one microsecond", 1799.999, 0, true],
+] as const)(
+	"keeps the full block when its frame %s",
+	(_phase, start, offset, active) => {
+		const samples = sample(200, start);
+		for (const input of samples.inputs) {
+			input.at += offset;
+			input.firstMotion = (input.firstMotion as number) + offset;
+			input.responseFrame = (input.responseFrame as number) + offset;
+			input.settled = (input.settled as number) + offset;
+		}
+		const metrics = reduceTurnBlockingSamples(samples, 300, 2);
+		expect(metrics.blockingDurationMaxMs).toBe(active ? 200 : 0);
+		expect(metrics.beforeInput.blockingDurationMaxMs).toBe(active ? 0 : 200);
+		expect(turnBlockingBudgetFailures(metrics).length > 0).toBe(active);
+	},
+);
+
+it("tolerates one stray frame per phase but keeps a single-stall bound", () => {
+	// #3082: a lone over-limit frame in a throttled batch is runner queueing
+	// noise, not systematic main-thread work; a single frame past twice the
+	// limit remains a real stall.
+	for (const blocking of [50, 50.001, 85.6, 100])
+		expect(
+			turnBlockingBudgetFailures(
+				reduceTurnBlockingSamples(sample(blocking, 100), 300, 2),
+			),
+		).toEqual([]);
 	expect(
 		turnBlockingBudgetFailures(
-			reduceTurnBlockingSamples(sample(50, 100), 300, 2),
-		),
-	).toEqual([]);
-	expect(
-		turnBlockingBudgetFailures(
-			reduceTurnBlockingSamples(sample(50.001, 100), 300, 2),
+			reduceTurnBlockingSamples(sample(100.001, 100), 300, 2),
 		),
 	).toHaveLength(2);
 	const samples = sample(0, 100);
@@ -192,6 +241,36 @@ it("preserves the strict limit and supports genuinely absent long frames", () =>
 		turnBlockingBudgetFailures(reduceTurnBlockingSamples(samples, 300, 2)),
 	).toEqual([]);
 });
+
+it.each([
+	// Two strays in the same turn: the phase they share reaches the count.
+	[100, 200, ["all turns", "first turn"]],
+	// Two strays in different turns: only the all-turns rollup reaches it.
+	[100, 1_100, ["all turns"]],
+] as const)(
+	"fails on repeated %sms+%sms blocking in phases %j",
+	(firstStart, secondStart, failingPhases) => {
+		const samples = sample(51, firstStart);
+		const stray = samples.longAnimationFrames?.[0];
+		if (!stray) throw new Error("fixture frame missing");
+		samples.longAnimationFrames?.push({
+			...stray,
+			startTime: secondStart,
+			firstUIEventTimestamp: secondStart,
+			renderStart: secondStart,
+			styleAndLayoutStart: secondStart,
+		});
+		const failures = turnBlockingBudgetFailures(
+			reduceTurnBlockingSamples(samples, 300, 2),
+		);
+		for (const phase of ["all turns", "first turn", "consecutive turns"]) {
+			const message = `${phase}/blockingFramesOverLimit=2 > 1`;
+			if ((failingPhases as readonly string[]).includes(phase))
+				expect(failures).toContain(message);
+			else expect(failures).not.toContain(message);
+		}
+	},
+);
 
 it.each([undefined, false])(
 	"rejects unsupported or missing browser evidence: %s",
