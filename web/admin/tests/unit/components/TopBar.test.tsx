@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 vi.mock("@tanstack/react-router", () => ({
@@ -16,6 +22,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import { TopBar } from "~/components/TopBar";
+import { setArchiveBusy } from "~/lib/archive-busy";
 
 const reply = (data: unknown, ok = true, status = ok ? 200 : 500) =>
 	({
@@ -115,6 +122,23 @@ describe("TopBar", () => {
 				expect.objectContaining({ method: "POST" }),
 			),
 		);
+	});
+
+	it("keeps the archive logout disabled while archive work is in flight", async () => {
+		(fetch as Mock).mockImplementation(async (url: string) =>
+			url === "/archive/api?session"
+				? reply({ isAdmin: false, username: "סופר" })
+				: reply({ url: "https://auth.example/logout" }),
+		);
+		renderBar();
+		const logout = await screen.findByRole("button", {
+			name: "יציאה מהחשבון",
+		});
+		expect(logout).toBeEnabled();
+		act(() => setArchiveBusy(true));
+		await waitFor(() => expect(logout).toBeDisabled());
+		act(() => setArchiveBusy(false));
+		await waitFor(() => expect(logout).toBeEnabled());
 	});
 
 	it("reports logout failures inline", async () => {

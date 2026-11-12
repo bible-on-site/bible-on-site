@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { useArchiveBusy } from "~/lib/archive-busy";
 
 const linkClass =
 	"text-gray-600 hover:text-blue-600 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200";
@@ -42,6 +43,11 @@ function useArchiveSession(enabled: boolean) {
 
 function ArchiveLogout({ admin }: { admin: boolean }) {
 	const [error, setError] = useState("");
+	// A mid-upload logout clears the session before cleanup can run, stranding
+	// the reservation. The archive page publishes its busy flag here so the
+	// action stays disabled until the operation settles (matches the removed
+	// in-page button, which was disabled while busy).
+	const busy = useArchiveBusy();
 	return (
 		<>
 			{error && (
@@ -51,7 +57,8 @@ function ArchiveLogout({ admin }: { admin: boolean }) {
 			)}
 			<button
 				type="button"
-				className="text-gray-500 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+				disabled={busy}
+				className="text-gray-500 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-wait"
 				onClick={() => {
 					setError("");
 					void fetch("/archive/api?logout", {

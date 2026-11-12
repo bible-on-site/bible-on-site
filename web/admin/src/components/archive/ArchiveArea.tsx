@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Directory } from "~/lib/archive";
+import { setArchiveBusy } from "~/lib/archive-busy";
 import styles from "./archive.module.css";
 
 function bytes(value: number) {
@@ -99,6 +100,14 @@ export function ArchiveArea() {
 			request.current?.abort();
 		};
 	}, [load]);
+
+	// Publish the operation flag so the shared top bar can hold its archive
+	// logout while work is in flight (a mid-upload sign-out would strand the
+	// reserved file behind expired cookies).
+	useEffect(() => {
+		setArchiveBusy(busy);
+		return () => setArchiveBusy(false);
+	}, [busy]);
 
 	async function showPage(after: string, previous: string[]) {
 		setBusy(true);

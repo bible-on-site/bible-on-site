@@ -184,6 +184,25 @@ it("cancels reservations after chunk errors, even if cleanup is temporarily unav
 		),
 	).toBe(true);
 });
+it("publishes the busy flag while an upload is in flight", async () => {
+	const { archiveBusy } = await import("~/lib/archive-busy");
+	await mount();
+	let releaseStart: (response: Response) => void = () => {};
+	(fetch as Mock).mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				releaseStart = resolve;
+			}),
+	);
+	choose();
+	await screen.findByRole("button", { name: "ביטול ההעלאה" });
+	expect(archiveBusy()).toBe(true);
+	await act(async () => {
+		releaseStart(reply({ id: "file", partSize: 4 }) as Response);
+	});
+	await screen.findByRole("link", { name: "הורדה" });
+	await waitFor(() => expect(archiveBusy()).toBe(false));
+});
 it("aborts an in-flight chunk when cancelled", async () => {
 	await mount();
 	(fetch as Mock)
