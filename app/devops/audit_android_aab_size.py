@@ -76,7 +76,8 @@ def _audit_search_index(archive: zipfile.ZipFile, info: zipfile.ZipInfo) -> dict
             "the notes database already holds compressed (#3309)."
         )
     with tempfile.TemporaryDirectory() as tmpdir:
-        extracted = Path(archive.extract(info, tmpdir))
+        extracted = Path(tmpdir) / "index.sqlite"
+        extracted.write_bytes(archive.read(info))
         with closing(sqlite3.connect(
                 f"file:{extracted.as_posix()}?mode=ro", uri=True)) as index:
             columns = {row[1] for row in index.execute("PRAGMA table_info(notes_documents)")}
