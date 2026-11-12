@@ -385,23 +385,43 @@ public class AppFixture : IAsyncLifetime
 
     /// <summary>
     /// Mirrors one redirected pipe into the console and the app log file.
-    /// Teardown pipe errors (closed/disposed readers) are expected; anything
-    /// else is recorded so a dead drain — which can leave the app blocked on
-    /// a full pipe — is reported instead of vanishing silently.
+    /// Closed/disposed pipe reads are expected at teardown, as is a write
+    /// landing on an already-disposed log. Any other failure — including an
+    /// <see cref="IOException"/> from the log write itself — is recorded so a
+    /// dead drain, which can leave the app blocked on a full pipe, fails the
+    /// run instead of vanishing silently.
     /// </summary>
     private void DrainPipe(StreamReader reader, string prefix, StreamWriter appLog) => _ = Task.Run(async () =>
     {
         try
         {
-            while (await reader.ReadLineAsync() is { } line)
+            while (true)
             {
-                Console.WriteLine($"{prefix} {line}");
-                lock (appLog) { appLog.WriteLine($"{prefix} {line}"); }
+                string? line;
+                try
+                {
+                    line = await reader.ReadLineAsync();
+                }
+                catch (Exception exception) when (exception is IOException or ObjectDisposedException)
+                {
+                    // The pipe closes when the app process exits at teardown.
+                    break;
+                }
+                if (line is null)
+                {
+                    break;
+                }
+                try
+                {
+                    Console.WriteLine($"{prefix} {line}");
+                    lock (appLog) { appLog.WriteLine($"{prefix} {line}"); }
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Teardown can dispose the log before the last line lands.
+                    break;
+                }
             }
-        }
-        catch (Exception exception) when (exception is IOException or ObjectDisposedException)
-        {
-            // The pipe closes when the app process exits at teardown.
         }
         catch (Exception exception)
         {
@@ -472,6 +492,14 @@ public class AppFixture : IAsyncLifetime
             using var appProcess = _appProcess;
             using var automation = _automation;
             using var appLog = _appLog;
+            if (_drainFailure is { } failure)
+            {
+                // A dead mid-run drain can leave the app blocked on a full
+                // pipe — fail the collection rather than let a passing test
+                // stay green.
+                throw new InvalidOperationException(
+                    "App output drain failed during the run.", failure);
+            }
         }
     }
 
