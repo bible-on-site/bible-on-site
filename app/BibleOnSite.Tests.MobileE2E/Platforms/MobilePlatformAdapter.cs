@@ -85,6 +85,14 @@ public abstract class MobilePlatformAdapter
     public abstract void GoBack(AppiumDriver driver);
     public virtual void DismissSearchSheet(AppiumDriver driver) => GoBack(driver);
 
+    /// <summary>
+    /// Scrolls the page's scrollable surface one viewport down so a deeper
+    /// section (e.g. הסתר שם השם under תצוגה preferences) enters view. Goes
+    /// through the driver's own scroll command: a pointer drag that starts on
+    /// a Switch or Slider row revalues that control instead of scrolling.
+    /// </summary>
+    public abstract void ScrollPageDown(AppiumDriver driver);
+
     public void RevealTrailingSearchChips(AppiumDriver driver)
     {
         var chips = driver.FindElement(AutomationId("SearchFilterChips"));
@@ -356,6 +364,19 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
         By.XPath($"//*[{string.Join(" or ", ids.Select(id => $"@resource-id='com.tanah.daily929:id/{id}'"))}]");
     public override By FlyoutButton => AutomationId("ReaderNavigationButton");
     public override void GoBack(AppiumDriver driver) => driver.Navigate().Back();
+    public override void ScrollPageDown(AppiumDriver driver)
+    {
+        var window = DriverTelemetry.WindowSize(driver);
+        driver.ExecuteScript("mobile: scrollGesture", new Dictionary<string, object>
+        {
+            ["left"] = 0,
+            ["top"] = 0,
+            ["width"] = window.Width,
+            ["height"] = window.Height,
+            ["direction"] = "down",
+            ["percent"] = 0.9,
+        });
+    }
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         new AndroidTimedDriver(server, options);
 }
@@ -471,6 +492,11 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     }
     private static bool PageChanged(AppiumDriver driver, string before) =>
         !string.Equals(driver.PageSource, before, StringComparison.Ordinal);
+    public override void ScrollPageDown(AppiumDriver driver) =>
+        driver.ExecuteScript("mobile: scroll", new Dictionary<string, object>
+        {
+            ["direction"] = "down",
+        });
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // The five-minute client budget fits inside the ten-minute per-test hang
         // guard, together with the scenario.

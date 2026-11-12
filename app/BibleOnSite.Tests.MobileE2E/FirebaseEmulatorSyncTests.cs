@@ -17,15 +17,20 @@ namespace BibleOnSite.Tests.MobileE2E;
 // MainActivity persists it as the marker file, so TerminateApp +
 // ActivateApp relaunches exercise the exact channel a process restart
 // uses. iOS re-declares the launch environment on every launchApp, so the
-// same scenario rides that channel instead. All assertions read the
-// committed backend state over the emulator REST surface
+// same scenario rides that channel instead — the platform trait still
+// routes the suite to Android legs only, because the workflow starts the
+// Emulator Suite (and exports MOBILE_FIREBASE_EMULATOR) exclusively on
+// Android; an iOS leg has no backend to bind and every scenario would
+// skip, which the shard-union validator rightly rejects as missing
+// evidence. All assertions read the committed backend state over the
+// emulator REST surface
 // (FirebaseEmulatorBackend), and each scenario wipes the disposable
 // database when it finishes. Auth accounts stay: the install's anonymous
 // identity must survive between scenarios, or its cached uid points at a
 // deleted account and the next assertions race token revalidation.
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
-[Trait("Platform", "Shared")]
+[Trait("Platform", "Android")]
 public sealed class FirebaseEmulatorSyncTests(ITestOutputHelper output, MobileDeviceSession session)
     : MobileDeviceTest(output, session)
 {
@@ -187,7 +192,9 @@ public sealed class FirebaseEmulatorSyncTests(ITestOutputHelper output, MobileDe
         Page.Tap(Platform.FlyoutButton);
         Page.Tap("FlyoutPreferences");
         Page.Tap("SettingsDisplayRow");
-        var toggle = Page.WaitFor("DivineNameMaskingSwitch");
+        // The switch sits near the bottom of the display-preferences
+        // ScrollView — a plain wait cannot reach it on a short viewport.
+        var toggle = Page.ScrollToVisible("DivineNameMaskingSwitch");
         var previous = Platform.IsChecked(toggle);
         Platform.Tap(Driver!, toggle);
         Page.WaitFor("DivineNameMaskingSwitch", element => Platform.IsChecked(element) == !previous);
