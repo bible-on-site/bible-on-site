@@ -1,5 +1,5 @@
 import type { PoolConnection } from "mysql2/promise";
-import { queryOne, transaction, txExecute } from "./db";
+import { query, queryOne, transaction, txExecute } from "./db";
 import {
 	currentTargets,
 	mergeChanges,
@@ -41,51 +41,77 @@ export function normalizeExpiry(value?: string | null): string | null {
 	return normalized;
 }
 
+/**
+ * Batched existence check: one query per referenced table via the same
+ * JSON_TABLE `IN` expansion as ./dedications (keeps each statement a pure
+ * literal, so no id set taints the SQL text). The validation loop then
+ * diffs the returned ids against the requested sequence to throw the same
+ * per-target error a sequential check would.
+ */
+const IN_IDS =
+	"IN (SELECT v FROM JSON_TABLE(?, '$[*]' COLUMNS (v INT PATH '$')) jt)";
+const IN_TEXT_IDS =
+	"IN (SELECT v FROM JSON_TABLE(?, '$[*]' COLUMNS (v CHAR(36) PATH '$')) jt)";
+
+async function existingIds(table: string, ids: number[]): Promise<Set<number>> {
+	if (!ids.length) return new Set();
+	const rows = await query<{ id: number }>(
+		`SELECT id FROM ${table} WHERE id ${IN_IDS}`,
+		[JSON.stringify([...new Set(ids)])],
+	);
+	return new Set(rows.map((r) => r.id));
+}
+
 export async function validateReferenceTargets(
 	targets: DedicationTargetInput[],
 ): Promise<void> {
 	const seferIds = targets
 		.filter((t) => t.kind === "sefer")
 		.map((t) => t.seferId ?? 0);
-	for (const id of seferIds) {
-		if (!(await queryOne("SELECT id FROM tanah_sefer WHERE id = ?", [id])))
-			throw new Error(`ספר ${id} לא קיים`);
-	}
 	const helekIds = targets
 		.filter((t) => t.kind === "helek")
 		.map((t) => t.helekId ?? 0);
+	const perekChecks = targets
+		.filter((t) => t.kind === "perek")
+		.flatMap((t) => [t.perekIdLow ?? 0, t.perekIdHigh ?? 0]);
+	const articleIds = targets
+		.filter((t) => t.kind === "article")
+		.map((t) => t.articleId ?? 0);
+	const entryTargets = targets.filter((t) => t.kind === "entry");
+	const entryIds = entryTargets.map((t) => t.entryId?.trim() ?? "");
+	const [seferFound, helekFound, perekFound, articleFound, entryFound] =
+		await Promise.all([
+			existingIds("tanah_sefer", seferIds),
+			existingIds("tanah_helek", helekIds),
+			existingIds("tanah_perek", perekChecks),
+			existingIds("tanah_article", articleIds),
+			entryIds.length
+				? query<{ id: string }>(
+						`SELECT id FROM tanahpedia_entry WHERE id ${IN_TEXT_IDS}`,
+						[JSON.stringify([...new Set(entryIds)])],
+					).then((rows) => new Set(rows.map((r) => r.id.toLowerCase())))
+				: new Set<string>(),
+		]);
+	for (const id of seferIds) {
+		if (!seferFound.has(id)) throw new Error(`ספר ${id} לא קיים`);
+	}
 	for (const id of helekIds) {
-		if (!(await queryOne("SELECT id FROM tanah_helek WHERE id = ?", [id])))
-			throw new Error(`חלק ${id} לא קיים`);
+		if (!helekFound.has(id)) throw new Error(`חלק ${id} לא קיים`);
 	}
 	for (const t of targets.filter((t) => t.kind === "perek")) {
-		if (
-			!(await queryOne("SELECT id FROM tanah_perek WHERE id = ?", [
-				t.perekIdLow,
-			]))
-		)
+		if (!perekFound.has(t.perekIdLow ?? 0))
 			throw new Error(`פרק ${t.perekIdLow} לא קיים`);
-		if (
-			!(await queryOne("SELECT id FROM tanah_perek WHERE id = ?", [
-				t.perekIdHigh,
-			]))
-		)
+		if (!perekFound.has(t.perekIdHigh ?? 0))
 			throw new Error(`פרק ${t.perekIdHigh} לא קיים`);
 	}
 	for (const t of targets.filter((t) => t.kind === "article")) {
-		if (
-			!(await queryOne("SELECT id FROM tanah_article WHERE id = ?", [
-				t.articleId,
-			]))
-		)
+		if (!articleFound.has(t.articleId ?? 0))
 			throw new Error(`מאמר ${t.articleId} לא קיים`);
 	}
-	for (const t of targets.filter((t) => t.kind === "entry")) {
-		if (
-			!(await queryOne("SELECT id FROM tanahpedia_entry WHERE id = ?", [
-				t.entryId?.trim(),
-			]))
-		) {
+	for (const t of entryTargets) {
+		// tanahpedia_entry.id is *_ci: SQL matches case-insensitively, so
+		// the returned-id diff must fold case the same way.
+		if (!entryFound.has((t.entryId?.trim() ?? "").toLowerCase())) {
 			throw new Error(`ערך תנכפדיה ${t.entryId} לא קיים`);
 		}
 	}

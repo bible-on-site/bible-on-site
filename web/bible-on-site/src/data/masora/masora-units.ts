@@ -5,7 +5,6 @@ import type {
 	ScriptureCoordinate,
 } from "@/lib/reading/contract";
 import { READING_CONTRACT_VERSION } from "@/lib/reading/contract";
-import { rangeContainsCoordinate } from "@/lib/reading/ranges";
 import { sefarim } from "../db/sefarim";
 import type { Perek, Sefarim, SefarimItem } from "../db/tanah-view-types";
 import { getPerekByPerekId } from "../perek-dto";
@@ -195,26 +194,6 @@ export function getMasoraFirstUnitBySefer(): ReadingUnit[] {
 		if (unit.order === 1) first.push(unit);
 	}
 	return first;
-}
-
-/**
- * Resolves a canonical position to the Masoretic unit containing it —
- * the contract's canonical-position -> containing-unit direction.
- * Segment-aware: a position exactly on a break marker belongs to the
- * unit that marker closes; a bare pasuk position resolves to the unit
- * where the pasuk begins (see rangeContainsCoordinate).
- */
-export function getMasoraUnitContaining(
-	coordinate: ScriptureCoordinate,
-): ReadingUnit | null {
-	for (const unit of getAllMasoraUnits()) {
-		if (
-			unit.ranges.some((range) => rangeContainsCoordinate(range, coordinate))
-		) {
-			return unit;
-		}
-	}
-	return null;
 }
 
 /** Previous/next units in canonical order (null at the corpus edges). */

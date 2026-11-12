@@ -27,10 +27,6 @@ public sealed class RecitationPlaybackCursor
     public bool BarIssued =>
         PlayingKey != null && !PlayingKey.StartsWith("word:", StringComparison.Ordinal);
 
-    /// <summary>Whether a bookmark for this perek waits for the next continuous Play.</summary>
-    public bool HasBookmarkFor(int perekId) =>
-        ResumePosition is { } point && point.PerekId == perekId;
-
     /// <summary>
     /// Opening a pasuk's focused view resumes its paused tap preview — a double
     /// tap's first press pauses it through the shared toggle, and the open must

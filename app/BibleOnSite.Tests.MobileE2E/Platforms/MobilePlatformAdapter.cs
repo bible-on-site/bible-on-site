@@ -83,7 +83,6 @@ public abstract class MobilePlatformAdapter
         return (element.Location, element.Size);
     }
     public abstract void GoBack(AppiumDriver driver);
-    public virtual void GoBackFromFocusedVerse(AppiumDriver driver) => GoBack(driver);
     public virtual void DismissSearchSheet(AppiumDriver driver) => GoBack(driver);
 
     public void RevealTrailingSearchChips(AppiumDriver driver)
@@ -293,7 +292,11 @@ public abstract class MobilePlatformAdapter
                 // Read-only geometry/text queries must not trigger XCTest's
                 // hit testing during a UI transition. CanTap still requests
                 // hittable explicitly when an interaction needs that check.
-                ["elementResponseAttributes"] = "rect,displayed,text,enabled"
+                ["elementResponseAttributes"] = "rect,displayed,text,enabled",
+                // This is a driver setting, not a capability. Passing it as a
+                // capability left WDA's default 2s animation wait active after
+                // every gesture. Explicit polls and settle loops verify state.
+                ["animationCoolOffTimeout"] = 0.5
             });
             // The instrumented e2e build never goes quiescent at launch: the
             // coverage recorder and the search-index warmup keep worker threads
@@ -301,13 +304,6 @@ public abstract class MobilePlatformAdapter
             // to launch app"). The suite's explicit WaitFor polling does the
             // real synchronization, so skipping the idle gate is safe.
             options.AddAdditionalAppiumOption("waitForQuiescence", false);
-            // WDA holds every interaction until the app idles for this long
-            // (default 2s). Scroll storms leave the app coasting between flicks,
-            // so each gesture burst absorbed most of that wait — appium logs
-            // showed /actions averaging 2.25s against it. Half a second still
-            // covers routine transitions (~300ms menu/page animations) while
-            // polls and settle loops do the real state verification.
-            options.AddAdditionalAppiumOption("animationCoolOffTimeout", 0.5);
             // The suite marker reaches the app through processArguments on the
             // session's own launch; per-scenario restarts pass it through
             // launchApp because XCUITest does not merge the two.
@@ -415,7 +411,6 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     public override void DismissSearchSheet(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SearchSheetDismissButton")));
     public override bool IsChecked(AppiumElement element) => element.GetAttribute("value") == "1";
     public override string? SemanticDescription(AppiumElement element) => element.GetAttribute("label");
-    public override void GoBackFromFocusedVerse(AppiumDriver driver) => Tap(driver, driver.FindElement(AutomationId("SelectionBackButton")));
     protected override By LocateAutomationId(string id) => MobileBy.AccessibilityId(id);
     // WDA re-snapshots every match to build a findElements response, so a
     // lookup costs matches x tree size; filter natively to return only targets.

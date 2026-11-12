@@ -1749,7 +1749,9 @@ describe("Sefer component", () => {
 		expect(screen.getByTestId("mock-flipbook")).toBeInTheDocument();
 	});
 
-	it("swaps a panel's article list for the Hebrew-date override (#3098)", () => {
+	it("swaps a panel's article list for the Hebrew-date override (#3098)", async () => {
+		const summaries = Promise.resolve({});
+		mockGetPerekSummariesBatch.mockReturnValueOnce(summaries);
 		const { useDailyArticleOverride } = jest.requireMock(
 			"@/app/929/[number]/components/use-daily-article-override",
 		) as { useDailyArticleOverride: jest.Mock };
@@ -1779,6 +1781,9 @@ describe("Sefer component", () => {
 			.filter((a): a is unknown[] => a !== undefined);
 		expect(articlesByPanel).toContainEqual(assigned);
 		expect(articlesByPanel).toContainEqual([]);
+		await act(async () => {
+			await summaries;
+		});
 	});
 
 	it("dispatches qa-widget-toggle from the toolbar button", () => {

@@ -1,3 +1,6 @@
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
 import { PerushimSection } from "@/app/929/[number]/components/PerushimSection";
 import perekStyles from "@/app/929/[number]/page.module.css";
@@ -9,6 +12,10 @@ import { UnitPerushimSection } from "@/app/components/reading/UnitPerushimSectio
 import { SharedUnitText } from "@/app/components/reading/UnitText";
 import { unitPerushHref } from "@/app/components/reading/unit-perush";
 import {
+	getParashaRangeArticles,
+	getParashaRangePerushim,
+} from "@/app/components/reading/unit-range-summaries";
+import {
 	DEFAULT_ALIYAH_SCHEME,
 	getStandaloneReading,
 	getUnitAliyahMarkers,
@@ -16,34 +23,23 @@ import {
 } from "@/data/parasha/parasha-aliyot";
 import { resolveParashaSegment } from "@/data/parasha/parasha-slugs";
 import {
-	PARASHA_DIVISION,
 	getAdjacentParashaUnits,
 	getAllParashaUnits,
 	getParashaEntry,
 	getParashaUnitById,
 	getParashaUnitsForSefer,
+	PARASHA_DIVISION,
 	parashaAuxiliaryRanges,
 	parashaRefSpan,
 	rangesRefSpans,
 } from "@/data/parasha/parasha-units";
 import { getPerekByPerekId } from "@/data/perek-dto";
-import { getArticleSummariesForRanges } from "@/lib/articles/service";
 import { getParashaDedications } from "@/lib/dedications/loaders";
-import { getPerushimForRanges } from "@/lib/perushim/service";
 import { canonicalPasukCount, rangePerekSources } from "@/lib/reading/queries";
 import { unitPerekIds } from "@/lib/reading/ranges";
-import {
-	COLLECTION_TAGS,
-	cachedPerKey,
-	parashaArticlesTag,
-	parashaPerushimTag,
-} from "@/lib/revalidate/tags";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { Suspense } from "react";
 import { AliyahLegend } from "./components/AliyahLegend";
 import { HaftaraSection } from "./components/HaftaraSection";
 import { ParashaSeferComposite } from "./components/ParashaSeferComposite";
@@ -59,42 +55,6 @@ export function generateStaticParams() {
 	// this shape (same convention as the pedia slug route).
 	return getAllParashaUnits().map((unit) => ({ unit: unit.slug }));
 }
-
-const getCachedRangePerushim = cachedPerKey(
-	"parasha-range-perushim",
-	(unitId: number, scope: "torah" | "haftara") => `${unitId}:${scope}`,
-	(key) => {
-		const [unitId, scope] = key.split(":");
-		return [
-			COLLECTION_TAGS.perushim,
-			parashaPerushimTag(Number(unitId), scope),
-		];
-	},
-	async (unitId: number, scope: "torah" | "haftara") => {
-		const unit = getParashaUnitById(unitId);
-		const ranges =
-			scope === "haftara" ? parashaAuxiliaryRanges(unit) : unit.ranges;
-		return getPerushimForRanges(ranges);
-	},
-);
-
-const getCachedRangeArticles = cachedPerKey(
-	"parasha-range-article-summaries",
-	(unitId: number, scope: "torah" | "haftara") => `${unitId}:${scope}`,
-	(key) => {
-		const [unitId, scope] = key.split(":");
-		return [
-			COLLECTION_TAGS.articles,
-			parashaArticlesTag(Number(unitId), scope),
-		];
-	},
-	async (unitId: number, scope: "torah" | "haftara") => {
-		const unit = getParashaUnitById(unitId);
-		const ranges =
-			scope === "haftara" ? parashaAuxiliaryRanges(unit) : unit.ranges;
-		return getArticleSummariesForRanges(ranges);
-	},
-);
 
 /** Perek ids covering every parasha of a sefer with its Haftarot — the
  * book view reads the whole sefer, so its entity refs arrive up front. */
@@ -167,10 +127,10 @@ export default async function ParashaUnitPage({
 		haftaraArticles,
 		entityRefsByPerek,
 	] = await Promise.all([
-		getCachedRangePerushim(unitId, "torah"),
-		getCachedRangeArticles(unitId, "torah"),
-		getCachedRangePerushim(unitId, "haftara"),
-		getCachedRangeArticles(unitId, "haftara"),
+		getParashaRangePerushim(unitId, "torah"),
+		getParashaRangeArticles(unitId, "torah"),
+		getParashaRangePerushim(unitId, "haftara"),
+		getParashaRangeArticles(unitId, "haftara"),
 		fetchAllEntityRefs(seferUnitsPerekIds(unit.seferName)),
 	]);
 	const { prev, next } = getAdjacentParashaUnits(unitId);

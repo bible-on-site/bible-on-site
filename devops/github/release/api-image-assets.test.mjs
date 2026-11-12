@@ -5,10 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { main, verifyAPIImageAssets } from "./api-image-assets.mjs";
-import {
-	apiImageArtifacts,
-	nativeImageArtifacts,
-} from "./release-provenance.mjs";
+import { nativeImageArtifacts } from "./release-provenance.mjs";
 
 const sourceRef = "a".repeat(40);
 function fixture(t, moduleName = "api") {
@@ -73,7 +70,6 @@ test("website archives retain their own module, CI provenance and canonical file
 		amd64: "bible-on-site-docker-10",
 		arm64: "bible-on-site-docker-10-arm64",
 	});
-	assert.throws(() => apiImageArtifacts(payload), /API platform/);
 	assert.throws(
 		() => verifyAPIImageAssets(release, { ...options, moduleName: "api" }),
 		/published canonical/,
@@ -119,7 +115,6 @@ test("admin archives bind their own module, CI provenance and canonical filename
 		amd64: "bible-on-site-admin-docker-10",
 		arm64: "bible-on-site-admin-docker-10-arm64",
 	});
-	assert.throws(() => apiImageArtifacts(payload), /API platform/);
 	assert.throws(
 		() => verifyAPIImageAssets(release, { ...options, moduleName: "api" }),
 		/published canonical/,
@@ -240,13 +235,13 @@ for (const platform of [0, 1]) {
 
 test("platform artifact names require the exact recorded CI run and module", (t) => {
 	const { payload } = fixture(t);
-	assert.deepEqual(apiImageArtifacts(payload), {
+	assert.deepEqual(nativeImageArtifacts(payload), {
 		amd64: payload.released_artifact_name,
 		arm64: payload.released_arm64_artifact_name,
 	});
-	assert.equal(apiImageArtifacts(undefined), undefined);
+	assert.equal(nativeImageArtifacts(undefined), undefined);
 	assert.equal(
-		apiImageArtifacts({ ...payload, released_arm64_artifact_name: undefined }),
+		nativeImageArtifacts({ ...payload, released_arm64_artifact_name: undefined }),
 		undefined,
 	);
 	for (const change of [
@@ -257,7 +252,7 @@ test("platform artifact names require the exact recorded CI run and module", (t)
 		{ released_arm64_artifact_name: null },
 	]) {
 		assert.throws(
-			() => apiImageArtifacts({ ...payload, ...change }),
+			() => nativeImageArtifacts({ ...payload, ...change }),
 			/published CI provenance/,
 		);
 	}

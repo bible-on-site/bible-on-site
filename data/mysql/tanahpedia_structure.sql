@@ -170,20 +170,28 @@ DROP TABLE IF EXISTS `tanahpedia_entry`;
 CREATE TABLE `tanahpedia_entry` (
     `id` char(36) NOT NULL,
     `unique_name` varchar(255) NOT NULL,
+    -- Mention-resolution key: unique_name with hyphens as spaces (the
+    -- pipeline's space-separated intended_name contract). Indexed so
+    -- tanahpedia_mention_decoration.intended_name joins stay sargable.
+    `normalized_name` varchar(255) GENERATED ALWAYS AS (REPLACE(`unique_name`, '-', ' ')) VIRTUAL COMMENT 'Mention-resolution key: unique_name with hyphens as spaces',
     `title` varchar(255) NOT NULL,
     `content` mediumtext,
     `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_entry_unique_name` (`unique_name`)
+    UNIQUE KEY `uk_entry_unique_name` (`unique_name`),
+    KEY `idx_entry_normalized_name` (`normalized_name`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 DROP TABLE IF EXISTS `tanahpedia_entry_synonym`;
 CREATE TABLE `tanahpedia_entry_synonym` (
     `id` char(36) NOT NULL,
     `name` varchar(255) NOT NULL,
+    -- Same mention-resolution contract as tanahpedia_entry.normalized_name.
+    `normalized_name` varchar(255) GENERATED ALWAYS AS (REPLACE(`name`, '-', ' ')) VIRTUAL COMMENT 'Mention-resolution key: name with hyphens as spaces',
     `entry_id` char(36) NOT NULL,
     PRIMARY KEY (`id`),
     KEY `idx_entry_synonym_name` (`name`),
+    KEY `idx_synonym_normalized_name` (`normalized_name`),
     KEY `idx_entry_synonym_entry` (`entry_id`),
     CONSTRAINT `fk_entry_synonym_entry` FOREIGN KEY (`entry_id`) REFERENCES `tanahpedia_entry` (`id`) ON DELETE CASCADE
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
