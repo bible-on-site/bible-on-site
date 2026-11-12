@@ -27,8 +27,6 @@ public sealed class AnalyticsService : IAnalyticsService
 		false;
 #endif
 
-	public void SetScreen(string screenName) => SetScreen(screenName, null);
-
 	public void SetScreen(string screenName, string? screenClassOverride)
 	{
 #if ANDROID || IOS
@@ -52,30 +50,6 @@ public sealed class AnalyticsService : IAnalyticsService
 		{
 		    #pragma warning restore S2221
 			System.Diagnostics.Debug.WriteLine($"[Analytics] SetScreen failed: {ex.Message}");
-		}
-#endif
-	}
-
-	public void LogSearch(string searchTerm)
-	{
-#if ANDROID || IOS
-		if (!IsAvailable)
-		{
-			return;
-		}
-
-		try
-		{
-			CrossFirebaseAnalytics.Current.LogEvent("search", new Dictionary<string, object>
-			{
-				["search_term"] = searchTerm ?? string.Empty
-			});
-		}
-		#pragma warning disable S2221 // Deliberate failure boundary: analytics event failure must never crash the reader
-		catch (Exception ex) //NOSONAR — analytics event failure must never crash the reader.
-		{
-		    #pragma warning restore S2221
-			System.Diagnostics.Debug.WriteLine($"[Analytics] LogSearch failed: {ex.Message}");
 		}
 #endif
 	}

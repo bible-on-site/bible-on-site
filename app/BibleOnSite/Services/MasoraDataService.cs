@@ -177,16 +177,6 @@ public class MasoraDataService
         return unit;
     }
 
-    /// <summary>The first unit of each sefer in canonical order (unit_order = 1).</summary>
-    public List<MasoraUnit> GetFirstUnitsBySefer()
-    {
-        if (_units == null)
-        {
-            return new List<MasoraUnit>();
-        }
-        return _units.Where(u => u.UnitOrder == 1).ToList();
-    }
-
     /// <summary>The unit's position in canonical order (-1 when missing).</summary>
     public int GetUnitIndex(int unitId) =>
         _unitIndexById != null && _unitIndexById.TryGetValue(unitId, out var index) ? index : -1;
@@ -203,12 +193,6 @@ public class MasoraDataService
         var next = index < _units.Count - 1 ? _units[index + 1] : null;
         return (prev, next);
     }
-
-    /// <summary>
-    /// The unit whose primary range contains the given perek's first pasuk —
-    /// used to position the reader when opening from the per-perek resume point.
-    /// </summary>
-    public MasoraUnit? GetUnitContainingPasuk(int perekId) => GetUnitContainingPasuk(perekId, 1);
 
     /// <summary>
     /// The unit whose primary range contains the given canonical pasuk.

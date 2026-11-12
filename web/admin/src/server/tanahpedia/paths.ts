@@ -21,43 +21,61 @@ interface EntryRelations {
 	refPerekIds: number[];
 }
 
-async function entryRelations(entryId: string): Promise<EntryRelations | null> {
-	const entry = await query<{ unique_name: string }>(
-		`SELECT unique_name FROM tanahpedia_entry WHERE id = ?`,
-		[entryId],
-	);
-	if (!entry[0]) return null;
-	const [entityTypes, synonymNames, refPerekIds] = await Promise.all([
-		query<{ entity_type: string }>(
-			`SELECT DISTINCT e.entity_type FROM tanahpedia_entry_entity ee
+/** Batched relations for every entry id, keyed by entry id. */
+async function entriesRelations(
+	entryIds: string[],
+): Promise<Map<string, EntryRelations>> {
+	const inList = placeholders(entryIds.length);
+	const [entries, entityTypeRows, synonymRows, perekRows] = await Promise.all([
+		query<{ id: string; unique_name: string }>(
+			`SELECT id, unique_name FROM tanahpedia_entry WHERE id IN (${inList})`,
+			entryIds,
+		),
+		query<{ entry_id: string; entity_type: string }>(
+			`SELECT DISTINCT ee.entry_id, e.entity_type FROM tanahpedia_entry_entity ee
 			 JOIN tanahpedia_entity e ON e.id = ee.entity_id
-			 WHERE ee.entry_id = ?`,
-			[entryId],
-		).then((rows) => rows.map((r) => r.entity_type)),
-		// Synonym names this entry renders under: direct aliases plus the
+			 WHERE ee.entry_id IN (${inList})`,
+			entryIds,
+		),
+		// Synonym names each entry renders under: direct aliases plus the
 		// disambiguation pages listing it as a target — deleting the entry
 		// cascades both link kinds, so those pages expire too.
-		query<{ name: string }>(
-			`SELECT name FROM tanahpedia_entry_synonym WHERE entry_id = ?
+		query<{ entry_id: string; name: string }>(
+			`SELECT entry_id, name FROM tanahpedia_entry_synonym WHERE entry_id IN (${inList})
 			 UNION
-			 SELECT s2.name FROM tanahpedia_entry_synonym_disambiguation d
+			 SELECT d.entry_id, s2.name FROM tanahpedia_entry_synonym_disambiguation d
 			 JOIN tanahpedia_entry_synonym s2 ON s2.id = d.synonym_id
-			 WHERE d.entry_id = ?`,
-			[entryId, entryId],
-		).then((rows) => rows.map((r) => r.name)),
-		query<{ perek_id: number }>(
-			`SELECT DISTINCT ets.perek_id FROM tanahpedia_entity_tanah_source ets
+			 WHERE d.entry_id IN (${inList})`,
+			[...entryIds, ...entryIds],
+		),
+		query<{ entry_id: string; perek_id: number }>(
+			`SELECT DISTINCT ee.entry_id, ets.perek_id FROM tanahpedia_entity_tanah_source ets
 			 JOIN tanahpedia_entry_entity ee ON ee.entity_id = ets.entity_id
-			 WHERE ee.entry_id = ?`,
-			[entryId],
-		).then((rows) => rows.map((r) => r.perek_id)),
+			 WHERE ee.entry_id IN (${inList})`,
+			entryIds,
+		),
 	]);
-	return {
-		uniqueName: entry[0].unique_name,
-		entityTypes,
-		synonymNames,
-		refPerekIds,
-	};
+	const relations = new Map<string, EntryRelations>(
+		entries.map((e) => [
+			e.id,
+			{
+				uniqueName: e.unique_name,
+				entityTypes: [],
+				synonymNames: [],
+				refPerekIds: [],
+			},
+		]),
+	);
+	for (const row of entityTypeRows) {
+		relations.get(row.entry_id)?.entityTypes.push(row.entity_type);
+	}
+	for (const row of synonymRows) {
+		relations.get(row.entry_id)?.synonymNames.push(row.name);
+	}
+	for (const row of perekRows) {
+		relations.get(row.entry_id)?.refPerekIds.push(row.perek_id);
+	}
+	return relations;
 }
 
 /**
@@ -68,9 +86,11 @@ async function entryRelations(entryId: string): Promise<EntryRelations | null> {
 export async function pediaChangesForEntryIds(
 	entryIds: string[],
 ): Promise<RevalidateRequest[]> {
+	if (entryIds.length === 0) return [];
+	const relations = await entriesRelations(entryIds);
 	const changes: EntityChange[] = [];
 	for (const entryId of entryIds) {
-		const rel = await entryRelations(entryId);
+		const rel = relations.get(entryId);
 		if (!rel) continue;
 		changes.push({
 			kind: "pedia-entry",

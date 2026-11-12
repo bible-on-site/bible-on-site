@@ -56,6 +56,15 @@ work records. A real 250ms input-handler stall is detected through response
 timing; a separate 250ms animation callback verifies the blocking guard. The
 animation control fails without collecting the final pending browser record.
 Frame/input sampling closes before that collection, so no measured window grows.
+Blocking qualification starts at the first trusted input and keeps its original
+collection boundary, including every gap between turns and post-settlement
+cleanup work. Frames overlapping the first input retain their full blocking
+duration. Frames wholly before it remain unchanged in the raw samples and are
+summarized separately as `beforeInput`. This corrects
+merge-group run `43000562356`, whose 156.6ms setup blocking frame ended at
+1859.5ms, before the first pointerdown at 1860.2ms. Its first-turn blocking was
+19ms. All historical bad-reader and injected-stall controls retain their original
+failure classification; response, cadence and blocking limits stay unchanged.
 Visibility is observed without filtering slow frames. Fixed-budget benchmark
 ratios have separate rendering/CPU namespaces and do not use a noisy relative
 threshold on zero blocking.
@@ -712,6 +721,24 @@ After a cadence failure, a separate sequence also captures a Chromium trace and
 CPU profile under `diagnostics/sefer-turn-traces`. These profiled samples are
 labelled diagnostic-only and never replace the failed qualification samples.
 Both sequences share the same native inputs and retain the original test deadline.
+
+Original qualification traces use `toplevel,blink.user_timing`. They retain
+task boundaries, scheduling pauses and the qualification markers. Detailed
+`devtools.timeline` instrumentation runs in the separate failure replay with
+its CPU profile. Passive browser long-animation-frame records continue to
+accompany the original native-input samples.
+
+A matched heavy/light/light/heavy comparison on the full commentary dataset
+found that detailed timeline recording increased layout measurement cost.
+At the original 4x CPU profile, six toolbar turns from chapter 125 recorded
+mean CDP `LayoutDuration` deltas of 230.780ms with detailed recording and
+185.306ms with the task-only recording, a 19.7% reduction. Both qualification
+markers and main-thread task records remained present in the lighter traces.
+These are local Linux/SwiftShader measurements on Docker Desktop, with the
+original 20s interaction deadline; retain their environment separately from
+hosted CI and hardware-rendered desktop qualification. The
+[matching measurements](sefer-turn-recording-measurements.json) include all
+four cases, native response/blocking samples and the recording categories.
 
 For the user's desktop Chrome/Edge profile, run the same matrix in a visible
 browser window on an active desktop:

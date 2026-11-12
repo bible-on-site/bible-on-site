@@ -190,6 +190,29 @@ public class PerekDataServiceTests
     }
 
     [Fact]
+    public async Task PasukimBatch_GroupsRowsByPerek_AndNarrowsToCitedPasukim()
+    {
+        await using var storage = new TestStorage();
+        var db = await storage.CreateDatabaseAsync(DbName, Schema);
+        await db.ExecuteAsync("INSERT INTO tanah_pasuk_segment VALUES (1,1,1,'qri'),(2,1,2,'qri'),(3,2,1,'qri'),(4,2,2,'qri'),(5,3,1,'qri')");
+        await db.ExecuteAsync("INSERT INTO tanah_pasuk_segment_value VALUES (1,'one'),(2,'two'),(3,'other1'),(4,'other2'),(5,'unasked')");
+        var service = new PerekDataService(new LocalDatabaseService(storage.FileSystem.Object));
+
+        var all = await service.LoadPasukimAsync([1, 2], null);
+        all.Keys.Should().BeEquivalentTo([1, 2]);
+        all[1].Select(v => v.PasukNum).Should().Equal(1, 2);
+        all[1][0].Text.Should().Be("one");
+        all[2].Select(v => v.PasukNum).Should().Equal(1, 2);
+
+        var cited = await service.LoadPasukimAsync([1, 2], [2]);
+        cited[1].Select(v => v.PasukNum).Should().Equal(2);
+        cited[2].Select(v => v.PasukNum).Should().Equal(2);
+
+        (await service.LoadPasukimAsync([99], null)).Should().BeEmpty();
+        (await service.LoadPasukimAsync([], null)).Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Load_WithEmptyDatabase_ReturnsDefaultTodayAndEmptyDictionary()
     {
         await using var storage = new TestStorage();

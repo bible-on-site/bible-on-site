@@ -54,14 +54,6 @@ export interface TanahpediaEntryEntity {
 
 export type TanahpediaEntryListItem = Omit<TanahpediaEntry, "content">;
 
-export const getEntries = createServerFn({ method: "GET" }).handler(
-	async () => {
-		return await query<TanahpediaEntryListItem>(
-			"SELECT id, unique_name, title, created_at, updated_at FROM tanahpedia_entry ORDER BY title",
-		);
-	},
-);
-
 /**
  * Filter entries by website category (entity type or subcategory) and/or search
  * (title / unique_name). Mirrors public tanahpedia category resolution.

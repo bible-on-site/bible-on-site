@@ -103,19 +103,38 @@ it("keeps live synonym resolution, row ambiguity isolation, and manual precedenc
 	mockQuery.mockResolvedValueOnce([]);
 	await getMentionReferencesForPereks([12, 927]);
 	const [sql] = mockQuery.mock.calls[0];
-	expect(sql).toContain("ANY_VALUE(ent.id) AS entityId");
-	expect(sql).toContain("ANY_VALUE(ent.title) AS entityName");
-	expect(sql).toContain("ANY_VALUE(ent.unique_name) AS entryUniqueName");
+	expect(sql).toContain("ent.id AS entityId");
+	expect(sql).toContain("ent.title AS entityName");
+	expect(sql).toContain("ent.unique_name AS entryUniqueName");
 	expect(sql).toContain("UNION ALL");
 	expect(sql).toContain("tanahpedia_entry_synonym");
-	expect(sql).toContain(
-		"REPLACE(names.resolvedName, '-', ' ') = d.intended_name",
-	);
+	// Sargable resolution on the indexed generated normalized_name columns.
+	expect(sql).toContain("e.normalized_name = d.intended_name");
+	expect(sql).toContain("s.normalized_name = d.intended_name");
+	expect(sql).not.toContain("REPLACE(");
 	expect(sql).toContain("d.source_kind = 'pasuk'");
 	expect(sql).toContain("d.acceptance IN ('auto', 'manual')");
-	expect(sql).toContain("GROUP BY d.id");
-	expect(sql).toContain("HAVING COUNT(DISTINCT names.entryId) <= 1");
+	expect(sql).toContain("HAVING COUNT(DISTINCT m.entry_id) <= 1");
 	expect(sql).toMatch(
 		/ORDER BY d\.perek_id,\s*pasukNumber, segmentStart, \(d\.acceptance = 'manual'\) DESC/,
 	);
+});
+
+it("falls back to the pre-migration REPLACE() join while normalized_name is absent", async () => {
+	const missingColumn = Object.assign(
+		new Error("Unknown column 'e.normalized_name' in 'where clause'"),
+		{ code: "ER_BAD_FIELD_ERROR" },
+	);
+	mockQuery.mockRejectedValueOnce(missingColumn).mockResolvedValueOnce([]);
+	await expect(getMentionReferencesForPereks([12, 927])).resolves.toEqual(
+		[],
+	);
+	expect(mockQuery).toHaveBeenCalledTimes(2);
+	const [fallbackSql, fallbackParams] = mockQuery.mock.calls[1];
+	expect(fallbackParams).toEqual(["12", "927"]);
+	expect(fallbackSql).toContain("d.perek_id AS perekId");
+	expect(fallbackSql).toContain(
+		"REPLACE(names.resolvedName, '-', ' ') = d.intended_name",
+	);
+	expect(fallbackSql).toContain("HAVING COUNT(DISTINCT names.entryId) <= 1");
 });

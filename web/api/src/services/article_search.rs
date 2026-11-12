@@ -13,7 +13,8 @@
 //!   re-indexed, and stale model epochs are folded back in;
 //! - full retrains — when drift crosses a threshold the whole basis is rebuilt
 //!   under a `GET_LOCK` advisory lock so concurrent API instances never train
-//!   in parallel.
+//!   in parallel. Queue drains take the same lock so replicas never duplicate
+//!   sync work or double-count attempts on the same rows.
 //!
 //! Ranking blends the semantic cosine score with a BM25-style lexical score so
 //! both meaning-level matches (synonyms via latent dimensions) and exact
@@ -511,11 +512,13 @@ async fn sync_article<C: ConnectionTrait>(
 }
 
 /// Drains the queue: syncs each pending article under the current model.
-/// Returns the number of articles whose content changed (drift count) — used
-/// to decide whether a full retrain is worthwhile.
-async fn drain_queue(
+/// The caller holds the cross-instance advisory lock; every statement here
+/// runs on that lock-owning session. Returns the number of articles whose
+/// content changed (drift count) — used to decide whether a full retrain is
+/// worthwhile.
+async fn drain_queue<C: ConnectionTrait>(
     index: &ArticleSearchIndex,
-    conn: &DatabaseConnection,
+    conn: &C,
 ) -> Result<usize, DbErr> {
     let pending = store::pending(conn, DRAIN_BATCH).await?;
     if pending.is_empty() {
@@ -606,6 +609,10 @@ async fn reconcile(conn: &DatabaseConnection) -> Result<usize, DbErr> {
 /// acquisition response, retrain, or release is interrupted by cancellation.
 struct RetainedSession<C>(Mutex<C>);
 
+/// The `article_search_retrain` named lock, held on its own session. It
+/// serializes retrains across API instances and gives the queue drain a
+/// single consumer per tick: every queue mutation issued through it lands
+/// on the lock-owning session.
 enum RetrainLock<'a> {
     MySql(RetainedSession<PoolConnection<MySql>>),
     Mock(&'a DatabaseConnection),
@@ -1063,10 +1070,37 @@ async fn worker_tick(index: &ArticleSearchIndex, tick: u32) {
             Err(err) => warn!(error = %err, "article search reconcile failed"),
         }
     }
-    let dirty = match drain_queue(index, index.conn()).await {
-        Ok(n) => n,
+    // The drain runs under the retrain advisory lock so concurrent API
+    // instances claim disjoint ticks instead of syncing the same pending
+    // rows and double-incrementing `attempts` on shared failures. A
+    // contended acquisition just skips this tick — the holder drains the
+    // same queue.
+    let dirty = match RetrainLock::acquire(index.conn()).await {
+        Ok(Some(lock)) => {
+            let result = drain_queue(index, &lock).await;
+            if let Err(err) = lock.release().await {
+                warn!(error = %err, "failed to release article-search queue lock");
+            }
+            match result {
+                Ok(n) => n,
+                Err(err) => {
+                    warn!(error = %err, "article search queue drain failed");
+                    return;
+                }
+            }
+        }
+        Ok(None) => {
+            // The lock holder drains (or retrains) this tick — but its doc
+            // writes keep the same model epoch, so refresh_if_stale would
+            // never see them. Fold them into our snapshot before skipping.
+            debug!("another instance holds the article-search lock; skipping drain");
+            if let Err(err) = index.load().await {
+                warn!(error = %err, "article search reload failed");
+            }
+            return;
+        }
         Err(err) => {
-            warn!(error = %err, "article search queue drain failed");
+            warn!(error = %err, "article search queue lock acquisition failed");
             return;
         }
     };
@@ -2804,9 +2838,10 @@ mod tests {
         };
         let conn = mock_conn()
             .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("acquired", 1_i64.into())])], // drain lock
                 vec![mock_row([("article_id", 7_i32.into())])],
                 vec![article()],
-                vec![mock_row([("acquired", 1_i64.into())])],
+                vec![mock_row([("acquired", 1_i64.into())])], // retrain lock
                 vec![article()],
                 vec![mock_row([
                     ("schema_version", store::SCHEMA_VERSION.into()),
@@ -2827,7 +2862,7 @@ mod tests {
                     last_insert_id: 0,
                     rows_affected: 1
                 };
-                5
+                6
             ])
             .into_connection();
         let index = index_on(conn);
@@ -2838,31 +2873,49 @@ mod tests {
 
     #[tokio::test]
     async fn worker_tick_sweeps_drains_and_folds_in() {
-        // Ordinary tick with an empty queue → nothing happens.
+        // Ordinary tick with an empty queue → nothing happens past the lock.
         let conn = mock_conn()
             .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("acquired", 1_i64.into())])],
                 vec![],
             ])
+            .append_exec_results([MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
             .into_connection();
         let index = index_on(conn);
         worker_tick(&index, 1).await;
 
-        // Sweep tick → reconcile queries, then the drain.
+        // Sweep tick → reconcile queries, then the drain under its lock.
         let conn = mock_conn()
             .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                vec![], // indexed hashes
-                vec![], // sweep hashes
-                vec![], // stale docs
-                vec![], // orphans
-                vec![], // pending
+                vec![],                                       // indexed hashes
+                vec![],                                       // sweep hashes
+                vec![],                                       // stale docs
+                vec![],                                       // orphans
+                vec![mock_row([("acquired", 1_i64.into())])], // drain lock
+                vec![],                                       // pending
             ])
+            .append_exec_results([MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
             .into_connection();
         let index = index_on(conn);
         worker_tick(&index, SWEEP_EVERY_TICKS).await;
 
-        // Drain failure logs and returns without touching reload logic.
+        // Drain failure logs and returns without touching reload logic — the
+        // lock is still released first.
         let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("acquired", 1_i64.into())])],
+            ])
             .append_query_errors([DbErr::Custom("queue gone".to_string())])
+            .append_exec_results([MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
             .into_connection();
         let index = index_on(conn);
         worker_tick(&index, 2).await;
@@ -2871,6 +2924,7 @@ mod tests {
         let model = toy_model();
         let conn = mock_conn()
             .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("acquired", 1_i64.into())])], // drain lock
                 vec![mock_row([("article_id", 7_i32.into())])], // pending
                 vec![mock_row([
                     ("id", 7_i32.into()),
@@ -2878,7 +2932,7 @@ mod tests {
                     ("abstract", Value::String(None)),
                     ("content", "beta".into()),
                 ])], // fetch
-                vec![mock_row([("acquired", 1_i64.into())])],   // retrain lock
+                vec![mock_row([("acquired", 1_i64.into())])], // retrain lock
                 vec![mock_row([
                     ("id", 7_i32.into()),
                     ("name", "alpha".into()),
@@ -2891,14 +2945,14 @@ mod tests {
                     ("model_epoch", 9_i32.into()),
                     ("model", serialize_model(&model).into()),
                 ])], // reload state
-                vec![],                                         // reload docs
+                vec![],                                       // reload docs
             ])
             .append_exec_results(vec![
                 MockExecResult {
                     last_insert_id: 0,
                     rows_affected: 1,
                 };
-                6
+                7
             ])
             .into_connection();
         let index = index_on(conn);
@@ -2908,6 +2962,7 @@ mod tests {
         // dirty=1 on a large index → under the ratio → fold-in reload only.
         let conn = mock_conn()
             .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("acquired", 1_i64.into())])], // drain lock
                 vec![mock_row([("article_id", 8_i32.into())])], // pending
                 vec![mock_row([
                     ("id", 8_i32.into()),
@@ -2921,20 +2976,120 @@ mod tests {
                     ("model_epoch", 2_i32.into()),
                     ("model", serialize_model(&toy_model()).into()),
                 ])], // fold-in load state
-                vec![],                                         // fold-in docs
+                vec![],                                       // fold-in docs
             ])
             .append_exec_results(vec![
                 MockExecResult {
                     last_insert_id: 0,
                     rows_affected: 1,
                 };
-                2
+                3
             ])
             .into_connection();
         let index = index_on(conn);
         let big: Vec<FixtureDoc> = (100..200).map(|id| (id, vec![(0, 1)], 10)).collect();
         *index.inner.write().await = make_snapshot(toy_model(), big);
         worker_tick(&index, 4).await;
+    }
+
+    #[tokio::test]
+    async fn worker_tick_drains_under_the_named_lock() {
+        // The queue statements are bracketed by GET_LOCK/RELEASE_LOCK so no
+        // second API instance can drain the same rows concurrently.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("acquired", 1_i64.into())])],
+                vec![],
+            ])
+            .append_exec_results([MockExecResult {
+                last_insert_id: 0,
+                rows_affected: 1,
+            }])
+            .into_connection();
+        let index = index_on(conn);
+        worker_tick(&index, 1).await;
+        let log = index.conn().clone().into_transaction_log();
+        let sql: Vec<String> = log
+            .iter()
+            .flat_map(|entry| entry.statements().iter().map(|s| s.sql.clone()))
+            .collect();
+        assert_eq!(sql.len(), 3, "acquire, pending read, release");
+        assert!(sql[0].contains("GET_LOCK"));
+        assert!(sql[1].contains("article_search_queue"));
+        assert!(sql[2].contains("RELEASE_LOCK"));
+    }
+
+    #[tokio::test]
+    async fn worker_tick_skips_the_drain_when_another_instance_holds_the_lock() {
+        // GET_LOCK denied → the queue is never read, but the tick still
+        // folds in whatever the lock holder synced (same-epoch doc writes
+        // are invisible to the epoch probe).
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("acquired", 0_i64.into())])],
+                vec![mock_row([
+                    ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("doc_count", 1_i32.into()),
+                    ("model_epoch", 1_i32.into()),
+                    ("model", serialize_model(&toy_model()).into()),
+                ])], // load_state
+                vec![mock_row([
+                    ("article_id", 7_i32.into()),
+                    ("model_epoch", 1_i32.into()),
+                    ("plain_len", 10_i32.into()),
+                    ("vector", serialize_vector(&[1.0]).into()),
+                    ("terms", serialize_terms(&[(0, 4)]).into()),
+                ])], // load_docs — written by the lock holder
+            ])
+            .into_connection();
+        let index = index_on(conn);
+        worker_tick(&index, 1).await;
+        assert_eq!(
+            index.doc_count().await,
+            1,
+            "the contender's same-epoch doc write must fold into our snapshot"
+        );
+        let log = index.conn().clone().into_transaction_log();
+        let sql: Vec<String> = log
+            .iter()
+            .flat_map(|entry| entry.statements().iter().map(|s| s.sql.clone()))
+            .collect();
+        assert!(sql[0].contains("GET_LOCK"));
+        assert!(
+            sql.iter().all(|s| !s.contains("article_search_queue")),
+            "a contended tick must not touch the queue"
+        );
+    }
+
+    #[tokio::test]
+    async fn worker_tick_survives_lock_acquisition_and_release_errors() {
+        // Acquisition error → warn and return before the queue is read.
+        let conn = mock_conn()
+            .append_query_errors([DbErr::Custom("lock probe lost".to_string())])
+            .into_connection();
+        let index = index_on(conn);
+        worker_tick(&index, 1).await;
+
+        // Release error → only a warn; the drained rows stay processed.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("acquired", 1_i64.into())])],
+                vec![],
+            ])
+            .append_exec_errors([DbErr::Custom("release lost".to_string())])
+            .into_connection();
+        let index = index_on(conn);
+        worker_tick(&index, 2).await;
+
+        // Contended tick whose fold-in reload fails → warn and return.
+        let conn = mock_conn()
+            .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                vec![mock_row([("acquired", 0_i64.into())])],
+            ])
+            .append_query_errors([DbErr::Custom("reload lost".to_string())])
+            .into_connection();
+        let index = index_on(conn);
+        worker_tick(&index, 3).await;
     }
 
     #[tokio::test]

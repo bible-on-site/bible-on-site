@@ -9,12 +9,12 @@ namespace BibleOnSite.Tests.ViewModels;
 
 public class ArticlesViewModelTests
 {
-    #region Constructor Tests
+    #region Filter Setup Tests
 
     [Fact]
-    public void Constructor_WithPerekId_ShouldSetPerekIdAndTitle()
+    public void PerekFilter_ShouldSetPerekIdAndTitle()
     {
-        var viewModel = new ArticlesViewModel(123, "בראשית א - 123");
+        var viewModel = new ArticlesViewModel { PerekId = 123, PerekTitle = "בראשית א - 123" };
 
         viewModel.PerekId.Should().Be(123);
         viewModel.PerekTitle.Should().Be("בראשית א - 123");
@@ -23,9 +23,9 @@ public class ArticlesViewModelTests
     }
 
     [Fact]
-    public void Constructor_WithAuthorId_ShouldSetAuthorIdAndName()
+    public void AuthorFilter_ShouldSetAuthorIdAndName()
     {
-        var viewModel = ArticlesViewModel.ForAuthor(5, "הרב משה לוי");
+        var viewModel = new ArticlesViewModel { AuthorId = 5, AuthorName = "הרב משה לוי" };
 
         viewModel.AuthorId.Should().Be(5);
         viewModel.AuthorName.Should().Be("הרב משה לוי");
@@ -40,7 +40,7 @@ public class ArticlesViewModelTests
     [Fact]
     public void IsFilterByPerek_WhenPerekIdSet_ShouldBeTrue()
     {
-        var viewModel = new ArticlesViewModel(123, "בראשית א");
+        var viewModel = new ArticlesViewModel { PerekId = 123, PerekTitle = "בראשית א" };
 
         viewModel.IsFilterByPerek.Should().BeTrue();
         viewModel.IsFilterByAuthor.Should().BeFalse();
@@ -49,7 +49,7 @@ public class ArticlesViewModelTests
     [Fact]
     public void IsFilterByAuthor_WhenAuthorIdSet_ShouldBeTrue()
     {
-        var viewModel = ArticlesViewModel.ForAuthor(5, "הרב משה");
+        var viewModel = new ArticlesViewModel { AuthorId = 5, AuthorName = "הרב משה" };
 
         viewModel.IsFilterByAuthor.Should().BeTrue();
         viewModel.IsFilterByPerek.Should().BeFalse();
@@ -62,7 +62,7 @@ public class ArticlesViewModelTests
     [Fact]
     public void DisplayTitle_WhenFilterByPerek_ShouldShowPerekTitle()
     {
-        var viewModel = new ArticlesViewModel(123, "בראשית א - 123");
+        var viewModel = new ArticlesViewModel { PerekId = 123, PerekTitle = "בראשית א - 123" };
 
         viewModel.DisplayTitle.Should().Be("מאמרים על בראשית א - 123");
     }
@@ -70,7 +70,7 @@ public class ArticlesViewModelTests
     [Fact]
     public void DisplayTitle_WhenFilterByAuthor_ShouldShowAuthorName()
     {
-        var viewModel = ArticlesViewModel.ForAuthor(5, "הרב משה לוי");
+        var viewModel = new ArticlesViewModel { AuthorId = 5, AuthorName = "הרב משה לוי" };
 
         viewModel.DisplayTitle.Should().Be("מאמרים של הרב משה לוי");
     }
@@ -78,7 +78,7 @@ public class ArticlesViewModelTests
     [Fact]
     public void DisplayTitle_WhenPerekTitleChanges_ShouldRaisePropertyChanged()
     {
-        var viewModel = new ArticlesViewModel(123, "בראשית א");
+        var viewModel = new ArticlesViewModel { PerekId = 123, PerekTitle = "בראשית א" };
         var changed = new List<string?>();
         viewModel.PropertyChanged += (_, args) => changed.Add(args.PropertyName);
 
@@ -95,7 +95,7 @@ public class ArticlesViewModelTests
     [Fact]
     public void SetArticles_ShouldUpdateArticlesCollection()
     {
-        var viewModel = new ArticlesViewModel(1, "Test");
+        var viewModel = new ArticlesViewModel { PerekId = 1, PerekTitle = "Test" };
         var articles = CreateTestArticles();
 
         viewModel.SetArticles(articles);
@@ -107,7 +107,7 @@ public class ArticlesViewModelTests
     [Fact]
     public void HasArticles_WhenEmpty_ShouldBeFalse()
     {
-        var viewModel = new ArticlesViewModel(1, "Test");
+        var viewModel = new ArticlesViewModel { PerekId = 1, PerekTitle = "Test" };
 
         viewModel.HasArticles.Should().BeFalse();
     }
@@ -115,7 +115,7 @@ public class ArticlesViewModelTests
     [Fact]
     public void SetArticles_ShouldClearPreviousArticles()
     {
-        var viewModel = new ArticlesViewModel(1, "Test");
+        var viewModel = new ArticlesViewModel { PerekId = 1, PerekTitle = "Test" };
         viewModel.SetArticles(CreateTestArticles());
         viewModel.Articles.Should().HaveCount(3);
 

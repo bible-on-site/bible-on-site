@@ -408,22 +408,6 @@ pub fn html_to_plain_text(html: &str) -> String {
     html_to_readable_segments(html).join(" ")
 }
 
-/// Whole-content words plus per-readable-block counts over authored HTML —
-/// the `*_metric` + `*_metric_block` pair. Word-free blocks are dropped so
-/// only units that consume reading time are stored; block_idx is the ordinal
-/// of the surviving block.
-pub fn count_html_blocks(html: &str) -> (i64, Vec<i64>) {
-    if html.is_empty() {
-        return (0, Vec::new());
-    }
-    let blocks: Vec<i64> = html_to_readable_segments(html)
-        .iter()
-        .map(|segment| count_text_words(segment))
-        .filter(|count| *count > 0)
-        .collect();
-    (blocks.iter().sum(), blocks)
-}
-
 // ---------------------------------------------------------------------------
 // Canonical-scripture counting (port of web/shared/reading-metrics/perek.ts)
 // ---------------------------------------------------------------------------
@@ -590,18 +574,6 @@ mod tests {
     #[test]
     fn strip_scripts_and_styles_is_noop_without_markup() {
         assert_eq!(strip_scripts_and_styles("plain text"), "plain text");
-    }
-
-    #[test]
-    fn count_html_blocks_counts_in_order_and_drops_word_free_blocks() {
-        assert_eq!(count_html_blocks(""), (0, vec![]));
-        assert_eq!(count_html_blocks("<p></p>"), (0, vec![]));
-        let html = "<p>אחת שתים</p><p>שלוש</p><ul><li>ארבע חמש</li></ul>";
-        assert_eq!(count_html_blocks(html), (5, vec![2, 1, 2]));
-        assert_eq!(
-            count_html_blocks("<p>אחת</p><p></p><p>שתים</p>").1,
-            vec![1, 1]
-        );
     }
 
     fn seg<'a>(segment_type: &'a str, value: &'a str) -> CorpusSegment<'a> {

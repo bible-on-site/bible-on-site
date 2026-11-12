@@ -457,20 +457,27 @@ public partial class TanahpediaEntryViewModel : ObservableObject
             var items = new List<TanahpediaOccurrenceItem>();
             var perekGroups = occurrences
                 .Where(o => o.PerekId >= 1 && o.PerekId <= 929 && o.PasukNumber >= 1)
-                .GroupBy(o => o.PerekId);
+                .GroupBy(o => o.PerekId)
+                .ToList();
+
+            // One batched read for every cited perek, narrowed to the cited
+            // pasuk numbers, instead of a whole-perek query per group.
+            Dictionary<int, List<Pasuk>> pasukimByPerek;
+            try
+            {
+                pasukimByPerek = await _perekData.LoadPasukimAsync(
+                    perekGroups.Select(g => g.Key).ToArray(),
+                    perekGroups.SelectMany(g => g.Select(o => o.PasukNumber)).Distinct().ToArray());
+            }
+            catch (Exception ex) when (ex is SQLiteException or IOException)
+            {
+                pasukimByPerek = [];
+            }
 
             foreach (var group in perekGroups)
             {
                 var source = _perekData.GetPerekSource(group.Key) ?? string.Empty;
-                List<Pasuk> pasukim;
-                try
-                {
-                    pasukim = await _perekData.LoadPasukimAsync(group.Key);
-                }
-                catch (Exception ex) when (ex is SQLiteException or IOException)
-                {
-                    pasukim = [];
-                }
+                var pasukim = pasukimByPerek.GetValueOrDefault(group.Key) ?? [];
 
                 // One row per pasuk - several source ranges on the same verse
                 // merge into a single citation, like the website's table.

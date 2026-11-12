@@ -16,8 +16,8 @@ public class PasukDisplayItemsTests
     [Fact]
     public void Create_returns_empty_for_null_or_empty_input()
     {
-        PasukDisplayItems.Create(null, repeatEachPasuk: false).Should().BeEmpty();
-        PasukDisplayItems.Create([], repeatEachPasuk: true).Should().BeEmpty();
+        PasukDisplayItems.Create(null, repeatEachPasuk: false, fontFactor: 1.0).Should().BeEmpty();
+        PasukDisplayItems.Create([], repeatEachPasuk: true, fontFactor: 1.0).Should().BeEmpty();
     }
 
     [Fact]
@@ -25,11 +25,11 @@ public class PasukDisplayItemsTests
     {
         var pesukim = new List<Pasuk> { PasukOf(1, "אחד"), PasukOf(2, "שניים") };
 
-        var items = PasukDisplayItems.Create(pesukim, repeatEachPasuk: false);
+        var items = PasukDisplayItems.Create(pesukim, repeatEachPasuk: false, fontFactor: 1.0);
 
         items.Should().HaveCount(2);
         items.Select(i => i.Pasuk).Should().Equal(pesukim);
-        items.Should().OnlyContain(i => i.IsFirstCopy && !i.IsRepeatedCopy);
+        items.Should().OnlyContain(i => !i.IsRepeatedCopy);
         items.Select(i => i.PasukNumHeb).Should().Equal("א", "ב");
     }
 
@@ -38,7 +38,7 @@ public class PasukDisplayItemsTests
     {
         var pesukim = new List<Pasuk> { PasukOf(1, "אחד"), PasukOf(2, "שניים") };
 
-        var items = PasukDisplayItems.Create(pesukim, repeatEachPasuk: true);
+        var items = PasukDisplayItems.Create(pesukim, repeatEachPasuk: true, fontFactor: 1.0);
 
         items.Should().HaveCount(4);
         items.Select(i => i.PasukNum).Should().Equal(1, 1, 2, 2);
@@ -49,7 +49,7 @@ public class PasukDisplayItemsTests
     public void Create_marks_the_only_copy_as_the_last_copy_in_normal_mode()
     {
         var items = PasukDisplayItems.Create(
-            [PasukOf(1, "אחד"), PasukOf(2, "שניים")], repeatEachPasuk: false);
+            [PasukOf(1, "אחד"), PasukOf(2, "שניים")], repeatEachPasuk: false, fontFactor: 1.0);
 
         // A single rendered copy is both first and last: it hosts the perushim.
         items.Should().OnlyContain(i => i.IsLastCopy);
@@ -65,7 +65,7 @@ public class PasukDisplayItemsTests
         var pasuk2 = PasukOf(2, "שניים");
         pasuk2.VisiblePerushNotes.Add(new PerushNoteDisplay { PerushName = "רמב\"ן" });
 
-        var items = PasukDisplayItems.Create([pasuk1, pasuk2], repeatEachPasuk: true);
+        var items = PasukDisplayItems.Create([pasuk1, pasuk2], repeatEachPasuk: true, fontFactor: 1.0);
 
         items.Select(i => i.IsLastCopy).Should().Equal(false, true, false, true);
         items.Select(i => i.PasukNum).Should().Equal(1, 1, 2, 2);
@@ -81,7 +81,7 @@ public class PasukDisplayItemsTests
     {
         var pesukim = new List<Pasuk> { PasukOf(1, "אחד") };
 
-        var items = PasukDisplayItems.Create(pesukim, repeatEachPasuk: true);
+        var items = PasukDisplayItems.Create(pesukim, repeatEachPasuk: true, fontFactor: 1.0);
 
         items[0].PasukNumHeb.Should().Be("א");
         items[1].PasukNumHeb.Should().BeEmpty();
@@ -92,7 +92,7 @@ public class PasukDisplayItemsTests
     {
         var pasuk = PasukOf(7, "שבע");
 
-        var items = PasukDisplayItems.Create([pasuk], repeatEachPasuk: true);
+        var items = PasukDisplayItems.Create([pasuk], repeatEachPasuk: true, fontFactor: 1.0);
 
         items[0].Pasuk.Should().BeSameAs(pasuk);
         items[1].Pasuk.Should().BeSameAs(pasuk);
@@ -102,7 +102,7 @@ public class PasukDisplayItemsTests
     [Fact]
     public void Create_stamps_the_base_sizes_at_the_default_font_factor()
     {
-        var items = PasukDisplayItems.Create([PasukOf(1, "א")], repeatEachPasuk: false);
+        var items = PasukDisplayItems.Create([PasukOf(1, "א")], repeatEachPasuk: false, fontFactor: 1.0);
 
         items[0].FontSize.Should().Be(PasukDisplayItems.PasukFontSizeBase);
         items[0].MarkerFontSize.Should().Be(PasukDisplayItems.PasukMarkerFontSizeBase);

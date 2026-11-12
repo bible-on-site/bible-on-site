@@ -20,7 +20,8 @@ from listening_review import (ReviewStore, digest_file, digest_json,
 from listening_round import load_review_evidence
 from listening_tail import INITIAL_SOURCE_METHOD, MACHINE_METHOD, verify_corrections
 from model_versions import ALIGN_MODEL, ALIGN_REVISION, ASR_MODEL, ASR_REVISION
-from recite import cached_transcript, export_database, write_json
+from db_lock import database_lock
+from recite import _export_database, cached_transcript, write_json
 from trusted import POLICY_VERSION, SOFT_WARNING, TRUSTED_PIPELINE, valid_score, verify_source, verify_warnings
 
 POLICY = "targeted-human-listening-v1"
@@ -199,7 +200,9 @@ def approve_chapter(manifest, report, cached, words, recording, duration_ms, cas
 
 def overlay_reviews(staged, database, withdrawn):
     """Withdraw only this policy's approvals, atomically with the validated overlay."""
-    with tempfile.TemporaryDirectory(dir=database.parent) as folder:
+    # The lock spans snapshot to replace so a concurrent exporter's committed
+    # rows cannot be silently overwritten; _export_database never re-locks it.
+    with database_lock(database), tempfile.TemporaryDirectory(dir=database.parent) as folder:
         temporary = Path(folder) / "recitation.sqlite"
         shutil.copy2(database, temporary)
         with closing(sqlite3.connect(temporary)) as db:
@@ -209,7 +212,7 @@ def overlay_reviews(staged, database, withdrawn):
                     raise ValueError("Cannot withdraw an independent prior approval")
                 db.execute("UPDATE recitation_track SET alignment_status='needs_review' WHERE perek_id=?", (pid,))
             db.commit()
-        export_database(staged, temporary)
+        _export_database(staged, temporary)
         temporary.replace(database)
 
 

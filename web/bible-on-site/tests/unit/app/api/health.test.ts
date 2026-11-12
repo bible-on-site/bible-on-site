@@ -90,6 +90,26 @@ describe("GET /api/health/ready", () => {
 		expect(mockPasukIndex).toHaveBeenCalledTimes(1);
 		expect(mockQuery).toHaveBeenCalledTimes(2);
 	});
+	test("shares one in-flight check between concurrent probes", async () => {
+		const { GET } = await import("@/app/api/health/ready/route");
+		let finish!: () => void;
+		mockQuery.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					finish = () => resolve([{ authorCount: 64, articleCount: 2681 }]);
+				}),
+		);
+		const first = GET();
+		const second = GET();
+		finish();
+		const [a, b] = await Promise.all([first, second]);
+		expect(a.status).toBe(200);
+		expect(b.status).toBe(200);
+		expect(mockQuery).toHaveBeenCalledTimes(1);
+		// The next sequential probe still re-verifies the database.
+		expect((await GET()).status).toBe(200);
+		expect(mockQuery).toHaveBeenCalledTimes(2);
+	});
 	test("requires complete search indexes before admission and recovers from preparation failure", async () => {
 		mockPasukIndex.mockImplementationOnce(() => {
 			throw new Error("Verse search index unavailable");

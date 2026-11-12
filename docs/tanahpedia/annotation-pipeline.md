@@ -109,14 +109,19 @@ Deliberately **no `entity_id`/`entry_id` FK** — the decoration must
 survive the target not existing (the issue's core requirement). The live
 resolver maps `intended_name` → `tanahpedia_entry.unique_name` (plus
 synonym aliases and disambiguation labels) at presentation time and only
-then derives the link target.
+then derives the link target. The join key is the indexed generated
+`normalized_name` column (`REPLACE(name, '-', ' ')`) on
+`tanahpedia_entry` and `tanahpedia_entry_synonym`
+(`data/mysql/tanahpedia_alter_normalized_name.sql`), so each decoration
+costs index lookups instead of a `REPLACE()` scan of the whole
+namespace.
 
 ### Live resolver sketch
 
 - Bulk indexed lookup per rendered unit: collect all `intended_name`s on
   the page → one `IN (...)` query over entry+synonym names → resolve to
   entry IDs → apply existing visibility/draft rules → emit the same
-  `PerekEntityReference` shape `getEntityReferencesForPerek` already
+  `PerekEntityReference` shape `getEntityReferencesForPereks` already
   returns, so the verse renderer needs no new affordance.
 - Invalidation hooks on entry create/rename/publish/unpublish/delete —
   piggyback on the existing content lifecycle rather than a static bake.
@@ -182,7 +187,7 @@ Shipped increments on `feat/2516-tanahpedia-annotation`:
 - Idempotent importer (`devops/import-tanahpedia-mentions.mts`)
   keyed on `dedupe_key` — re-runs never duplicate or clobber manual
   decisions.
-- Live resolver (`getMentionReferencesForPerek` in the Tanahpedia
+- Live resolver (`getMentionReferencesForPereks` in the Tanahpedia
   service) + merged refs + `tanahpedia-mention-refs` cache tag wired
   into entry-lifecycle invalidation; unit-tested including the
   create-entry-makes-link-appear lifecycle regression.

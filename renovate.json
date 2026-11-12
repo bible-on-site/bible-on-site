@@ -129,6 +129,20 @@
 			]
 		},
 		{
+			"description": "xcuitest-driver v13 requires peer appium ^4.0.0-beta.6 while the repo pins stable appium 3.9.0; on the v3 server every iOS E2E session fails at create-time with '(intermediate value).setPageLoadTimeout is not a function'. Hold below 13 until appium v4 is stable; see https://github.com/bible-on-site/bible-on-site/issues/2967",
+			"matchManagers": [
+				"npm",
+				"bun"
+			],
+			"matchFileNames": [
+				"app/mobile-e2e/package.json"
+			],
+			"matchPackageNames": [
+				"appium-xcuitest-driver"
+			],
+			"allowedVersions": "<13"
+		},
+		{
 			"description": "sprintf-js was removed via the scoped js-yaml@5.4.3 override under @istanbuljs/load-nyc-config (#1996). Keep that override until upstream load-nyc-config drops the js-yaml@3 chain.",
 			"matchManagers": [
 				"npm",

@@ -98,15 +98,6 @@ export function prepareQuery(query: string): PreparedQuery {
 	return { phrase, terms: phrase.length === 0 ? [] : phrase.split(" ") };
 }
 
-/**
- * Score `text` against `query`. Both are normalized inside; call
- * `scorePrepared` when the candidate text and query are already prepared
- * (hot loops over a pre-indexed corpus).
- */
-export function searchScore(text: string, query: string): number {
-	return scorePrepared(normalizeSearchText(text), prepareQuery(query));
-}
-
 /** Score raw `text` against a prepared query — normalizes the text only. */
 export function scorePreparedText(
 	text: string,

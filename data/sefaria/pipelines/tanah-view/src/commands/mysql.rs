@@ -242,6 +242,31 @@ fn hebdate_to_mysql_date(hebdate: i64) -> Result<String> {
     ))
 }
 
+fn validate_star_rise(star_rise: &str) -> Result<String> {
+    let parts: Vec<&str> = star_rise.split(':').collect();
+    ensure!(
+        matches!(parts.len(), 2 | 3),
+        "Invalid star_rise time format: {star_rise}"
+    );
+    let mut values = [0u8; 3];
+    let limits = [24u8, 60, 60];
+    for (i, part) in parts.iter().enumerate() {
+        ensure!(
+            part.len() == 2 && part.bytes().all(|b| b.is_ascii_digit()),
+            "Invalid star_rise time format: {star_rise}"
+        );
+        let v = part
+            .parse::<u8>()
+            .with_context(|| format!("Invalid star_rise time: {star_rise}"))?;
+        ensure!(v < limits[i], "star_rise time out of range: {star_rise}");
+        values[i] = v;
+    }
+    Ok(format!(
+        "{:02}:{:02}:{:02}",
+        values[0], values[1], values[2]
+    ))
+}
+
 fn generate_perek_date_sql(sql: &mut String, sefarim: &[Sefer]) -> Result<()> {
     sql.push_str("-- tanah_perek_date\n");
 
@@ -250,18 +275,12 @@ fn generate_perek_date_sql(sql: &mut String, sefarim: &[Sefer]) -> Result<()> {
     for perek in &all_perakim {
         for (cycle_idx, date_val) in perek.date.iter().enumerate() {
             let cycle = cycle_idx + 1;
-            let star_rise = perek
-                .star_rise
-                .get(cycle_idx)
-                .map(|s| s.as_str())
-                .unwrap_or("00:00");
-
-            // Format star_rise as TIME (HH:MM:SS)
-            let star_rise_time = if star_rise.len() == 5 {
-                format!("{}:00", star_rise)
-            } else {
-                star_rise.to_string()
-            };
+            let star_rise_time = validate_star_rise(
+                perek
+                    .star_rise
+                    .get(cycle_idx)
+                    .map_or("00:00", |s| s.as_str()),
+            )?;
 
             sql.push_str(&format!(
                 "INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise) VALUES ({}, {}, '{}', '{}', '{}');\n",
@@ -420,6 +439,57 @@ mod tests {
                 "Invalid date {invalid}"
             );
         }
+    }
+
+    #[test]
+    fn validate_star_rise_normalizes_valid_times() {
+        assert_eq!(validate_star_rise("05:30").unwrap(), "05:30:00");
+        assert_eq!(validate_star_rise("06:07:08").unwrap(), "06:07:08");
+        assert_eq!(validate_star_rise("00:00").unwrap(), "00:00:00");
+        assert_eq!(validate_star_rise("23:59:59").unwrap(), "23:59:59");
+    }
+
+    #[test]
+    fn validate_star_rise_rejects_invalid_times() {
+        for invalid in [
+            "",
+            "5:30",
+            "05:30:08x",
+            "05:30:60",
+            "05:60",
+            "24:00",
+            "05:30:08; DROP TABLE tanah_perek_date; --",
+            "05:30'; DROP TABLE x; --",
+            "05",
+            "05:30:08:01",
+            "05::08",
+            " 05:30",
+            "05:30 ",
+        ] {
+            assert!(
+                validate_star_rise(invalid).is_err(),
+                "star_rise {invalid:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_star_rise_fails_export_and_preserves_existing_file() {
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join(".output");
+        fs::create_dir_all(&parent).unwrap();
+        let dir = parent.join(format!("invalid_star_rise_{}", std::process::id()));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("tanah.sql");
+        fs::write(&path, "previous verified export").unwrap();
+        let mut sefarim = sample_sefarim();
+        sefarim[0].perakim.as_mut().unwrap()[0].star_rise[0] =
+            "05:30'; DROP TABLE tanah_perek_date; --".to_string();
+        assert!(generate_sql(&path, &sefarim, "invalid").is_err());
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "previous verified export"
+        );
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

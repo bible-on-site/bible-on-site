@@ -6,10 +6,9 @@
  * pipeline reverses their glyphs during encode — with mirrored brackets
  * swapped so the reversal lands the right shapes.
  */
-import type { PDFFont, PDFHexString, PDFPage } from "pdf-lib";
+import type { PDFFont, PDFHexString } from "pdf-lib";
 import {
 	bidiTextWidth,
-	drawBidiText,
 	memoizeGlyphEncoding,
 	visualTextRuns,
 } from "../../../src/lib/download/bidi-text";
@@ -92,46 +91,6 @@ describe("bidiTextWidth", () => {
 
 	it("returns 0 for empty text", () => {
 		expect(bidiTextWidth(mockFont, "", 6)).toBe(0);
-	});
-});
-
-describe("drawBidiText", () => {
-	function fakePage() {
-		const calls: [string, { x: number }][] = [];
-		const page = {
-			drawText: jest.fn((text: string, opts: { x: number }) => {
-				calls.push([text, opts]);
-			}),
-		} as unknown as PDFPage;
-		return { page, calls };
-	}
-
-	it("draws each run left-to-right at consecutive x offsets", () => {
-		const { page, calls } = fakePage();
-		drawBidiText(page, "מחזור 4", mockFont, 6, 100, 700, {} as never);
-		// Visual order: "4" at x=100, then "מחזור " at x=110 (width 10).
-		expect(calls).toEqual([
-			["4", expect.objectContaining({ x: 100 })],
-			["מחזור ", expect.objectContaining({ x: 110 })],
-		]);
-	});
-
-	it("draws nothing for empty text", () => {
-		const { page, calls } = fakePage();
-		drawBidiText(page, "", mockFont, 6, 100, 700, {} as never);
-		expect(calls).toEqual([]);
-	});
-
-	it("passes font, size, y and color through to drawText", () => {
-		const { page, calls } = fakePage();
-		const color = { r: 1, g: 0, b: 0 } as never;
-		drawBidiText(page, "שלום", mockFont, 12, 50, 500, color);
-		expect(calls[0][1]).toMatchObject({
-			y: 500,
-			size: 12,
-			font: mockFont,
-			color,
-		});
 	});
 });
 

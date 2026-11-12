@@ -14,6 +14,7 @@ import {
 	isPublishDocstringOnlyChange,
 	PUBLISH_SOURCE_PATH,
 } from "./publish-docstring.mts";
+import { parseRecoveryRequest } from "../release/recovery-request.mjs";
 
 interface ModuleRule {
 	directory: string;
@@ -113,7 +114,7 @@ export const MODULES = {
 		// package*.json, next.config.mjs, src/, public/, other build-time
 		// scripts/, and Docker/tsconfig inputs stay release-affecting.
 		ciOnlyPattern:
-			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|launch-e2e-server\.mts$|scripts\/coverage-gaps\.mjs$)/,
+			/^web\/bible-on-site\/(tests\/|.*\.(test|spec)\.[^/]+$|jest[^/]*\.[^/]*$|playwright[^/]*\.[^/]*$|\.covignore\.mjs$|shared\/typing\/coverage\.d\.ts$|launch-e2e-server\.mts$|scripts\/coverage-gaps\.mjs$|scripts\/start-server-test-kit\.mjs$)/,
 	},
 	api: {
 		directory: "web/api",
@@ -163,6 +164,8 @@ export const MODULES = {
 	admin: {
 		directory: "web/admin",
 		ciPaths: [
+			"devops/github/release/recovery-request.mjs",
+			"devops/github/release/recovery-request.test.mjs",
 			...NATIVE_IMAGE_CI_PATHS,
 			...RELEASE_CI_PATHS,
 			...E2E_IMPACT_CI_PATHS,
@@ -192,6 +195,8 @@ export const MODULES = {
 		directory: "web/bulletin",
 		// The release image also compiles the API's shared entities crate.
 		ciPaths: [
+			"devops/github/release/recovery-request.mjs",
+			"devops/github/release/recovery-request.test.mjs",
 			...RELEASE_CI_PATHS,
 			...DOCKER_BUILD_CI_PATHS,
 			"web/api/entities",
@@ -304,6 +309,9 @@ export function isSchemaOnlyDataChange(files: string[]): boolean {
 		dataFiles.every(
 			(file) =>
 				/^data\/mysql\/tanahpedia_alter_[^/]+\.sql$/.test(file) ||
+				// Archive tables use the separately approved selective migration;
+				// adding them must not invoke the production data populator.
+				file === "data/mysql/private_archive_upgrade.sql" ||
 				bulletinMigrations.has(file) ||
 				// The bootstrap's migration-preservation tests accompany this
 				// additive upgrade; they must not trigger a production data rebuild.
@@ -332,6 +340,26 @@ export function detectChanges(changedFiles: string[]): ModuleChanges {
 						(rule.ciOnlyPattern?.test(file) ?? false),
 				),
 			},
+		]),
+	) as ModuleChanges;
+}
+
+/** Recovery selects ordinary checks/packages for only the explicitly named services. */
+export function applyReleaseRecovery(
+	changes: ModuleChanges,
+	modules: readonly string[],
+): ModuleChanges {
+	if (
+		new Set(modules).size !== modules.length ||
+		modules.some((module) => module !== "admin" && module !== "bulletin")
+	)
+		throw new Error("Release recovery is limited to admin and bulletin");
+	return Object.fromEntries(
+		Object.entries(changes).map(([key, flags]) => [
+			key,
+			modules.includes(key)
+				? { module_changed: true, ci_changed: true }
+				: { ...flags },
 		]),
 	) as ModuleChanges;
 }
@@ -437,6 +465,12 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		);
 	}
 	const event = JSON.parse(readFileSync(GITHUB_EVENT_PATH, "utf8"));
+	const recoveryModules = parseRecoveryRequest({
+		eventName: GITHUB_EVENT_NAME,
+		ref: env.GITHUB_REF,
+		sha: env.GITHUB_SHA,
+		requested: event.inputs?.release_recovery ?? "none",
+	});
 	const context = changedFilesContext(
 		baseRevision(GITHUB_EVENT_NAME, event),
 		cwd,
@@ -449,7 +483,10 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 	const deliveryFiles = docOnly
 		? files.filter((file) => file !== PUBLISH_SOURCE_PATH)
 		: files;
-	const changes = detectChanges(deliveryFiles);
+	const changes = applyReleaseRecovery(
+		detectChanges(deliveryFiles),
+		recoveryModules,
+	);
 	if (docOnly) {
 		changes.data.ci_changed = true;
 		console.log(
@@ -473,6 +510,10 @@ export function main(env = process.env, cwd?: string): ModuleChanges {
 		`data_schema_only_changed=${!mergeGroup && isSchemaOnlyDataChange(deliveryFiles)}`,
 	);
 	lines.push(`data_deploy_changed=${!mergeGroup && isDataDeployChange(files)}`);
+	lines.push(`admin_release_recovery=${recoveryModules.includes("admin")}`);
+	lines.push(
+		`bulletin_release_recovery=${recoveryModules.includes("bulletin")}`,
+	);
 	console.log(lines.join("\n"));
 	appendFileSync(GITHUB_OUTPUT, `${lines.join("\n")}\n`);
 	return changes;

@@ -8,6 +8,7 @@ import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import { AppSection } from "../components/AppSection";
 import { ContactSection } from "../components/ContactSection";
+import { DailyBulletinSection } from "../components/DailyBulletinSection";
 import { Footer } from "../components/Footer";
 import { NumbersSection } from "../components/NumbersSection";
 import { ScrollToSection } from "../components/ScrollToSection";
@@ -15,21 +16,21 @@ import { TanahSefarimSection } from "../components/TanahSefarimSection";
 import { TosSection } from "../components/TosSection";
 import styles from "./page.module.css";
 
-// Sections are a closed list. Sections without a homepage block of their own
-// (donation, daily bulletin, WhatsApp group) scroll to the contact section,
-// which is where donations and subscriptions are currently arranged.
+// Sections are a closed list. The daily bulletin and WhatsApp group landing
+// pages scroll to the bulletin join section (#2941); donation still scrolls
+// to contact, where donations are arranged.
 const SECTIONS = {
 	dailyBulletin: {
 		title: "עלון יומי",
 		description:
-			'עלון יומי של תנ"ך על הפרק - לימוד הפרק היומי במייל, בטלגרם ובווטסאפ. ליצירת קשר והצטרפות.',
-		scrollTarget: "contact",
+			'עלון יומי של תנ"ך על הפרק - לימוד הפרק היומי במייל, בטלגרם ובווטסאפ. הצטרפו דרך האתר.',
+		scrollTarget: "bulletin",
 	},
 	whatsappGroup: {
 		title: "קבוצת ווטסאפ",
 		description:
-			'קבוצת הווטסאפ של תנ"ך על הפרק - העלון היומי ישירות לטלפון. ליצירת קשר והצטרפות.',
-		scrollTarget: "contact",
+			'קבוצת הווטסאפ של תנ"ך על הפרק - העלון היומי ישירות לטלפון. הצטרפו דרך האתר.',
+		scrollTarget: "bulletin-whatsapp",
 	},
 	tos: {
 		title: "תנאי שימוש",
@@ -153,6 +154,7 @@ export default async function Home({ params }: Props) {
 					</section>
 					<div className={styles.alHaperekDivider} />
 				</section>
+				<DailyBulletinSection />
 				<TanahSefarimSection dedications={dedications} />
 				<NumbersSection />
 				<AppSection />

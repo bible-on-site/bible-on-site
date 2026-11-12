@@ -18,6 +18,216 @@ const workflow = readFileSync(
 	new URL("../../../.github/workflows/shared-release.yml", import.meta.url),
 	"utf8",
 ).replace(/\r/g, "");
+const shell =
+	process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
+const ciWorkflow = readFileSync(
+	new URL("../../../.github/workflows/ci.yml", import.meta.url),
+	"utf8",
+).replace(/\r/g, "");
+function job(name) {
+	return ciWorkflow
+		.split(`  ${name}:\n`)[1]
+		.split(/\n {2}[a-z][a-z0-9_]*:\n/)[0];
+}
+
+test("manual recovery defaults off and only the two selected services may release", () => {
+	assert.match(
+		ciWorkflow,
+		/release_recovery:\n[\s\S]*?options: \["none", "admin", "bulletin", "admin-and-bulletin"\]\n {8}default: "none"/,
+	);
+	const determine = job("determine_changes");
+	assert.ok(
+		determine.indexOf("--preflight") <
+			determine.indexOf("Determine module changes"),
+	);
+	assert.match(determine, /actions: read/);
+	for (const module of ["admin", "bulletin"]) {
+		const release = job(`release_${module}`);
+		assert.match(release, /cross_module_ci.result == 'success'/);
+		assert.ok(release.includes(`needs.package_${module}.result == 'success'`));
+		assert.match(release, /is_master_branch == 'true'/);
+		assert.match(release, /github.event_name == 'workflow_dispatch'/);
+		assert.ok(release.includes(`${module}_release_recovery == 'true'`));
+		assert.match(release, /release_recovery_requested == 'true'/);
+		assert.match(release, /normal_master_ci_json:/);
+		assert.ok(
+			job(`package_${module}`).includes(`${module}_release_recovery == 'true'`),
+		);
+	}
+	for (const module of ["website", "api", "app", "data"]) {
+		const release = job(`release_${module}`);
+		assert.match(release, /github.event_name == 'push'/);
+		assert.doesNotMatch(release, /workflow_dispatch|release_recovery/);
+	}
+});
+
+test("recovery forces full admin E2E without globally forcing native or other suites", () => {
+	assert.match(
+		job("admin_ci"),
+		/FORCE_FULL_SUITE:.*admin_release_recovery == 'true'/,
+	);
+	assert.doesNotMatch(job("app_mobile_e2e"), /release_recovery/);
+	const globalFullSuite = ciWorkflow
+		.split("\n")
+		.find((line) => /^ {2}FORCE_FULL_SUITE:/.test(line));
+	assert.doesNotMatch(globalFullSuite, /release_recovery/);
+	assert.match(
+		job("bump_versions"),
+		/workflow_dispatch.*release_recovery_requested == 'true'/,
+	);
+});
+
+test("publication binds a separate receipt after archive verification and rechecks master before exposing it", () => {
+	assert.ok(
+		workflow.indexOf("sha256sum --check --status") <
+			workflow.indexOf("name: Create explicit recovery receipt"),
+	);
+	assert.ok(
+		workflow.indexOf("name: Create explicit recovery receipt") <
+			workflow.indexOf("name: Prepare Release"),
+	);
+	assert.match(workflow, /release-pinned-artifacts\.jsonl/);
+	assert.match(
+		workflow,
+		/steps.recovery_receipt.outputs.ARTIFACTS_JSON \|\| inputs.artifacts_json/,
+	);
+	assert.match(
+		workflow,
+		/NEW_PAYLOAD:.*steps.recovery_receipt.outputs.CD_PAYLOAD/,
+	);
+	assert.ok(
+		stepScript("Push Tag").indexOf("--assert-current") <
+			stepScript("Push Tag").indexOf("git push"),
+	);
+	assert.ok(
+		stepScript("Verify and publish complete release").indexOf(
+			"--assert-current",
+		) <
+			stepScript("Verify and publish complete release").indexOf(
+				"-F draft=false",
+			),
+	);
+});
+
+for (const module of ["admin", "bulletin"]) {
+	test(`recovery receipt shell hashes the extracted ${module} package separately from the pinned ZIP and keeps one nested dispatch field`, (t) => {
+		const root = mkdtempSync(join(tmpdir(), "recovery-workflow-"));
+		t.after(() => rmSync(root, { recursive: true, force: true }));
+		mkdirSync(join(root, "devops/github/release"), { recursive: true });
+		for (const file of ["recovery-request.mjs", "gh-api.mjs"])
+			copyFileSync(
+				new URL(`./${file}`, import.meta.url),
+				join(root, "devops/github/release", file),
+			);
+		mkdirSync(join(root, "assets"));
+		const name =
+			module === "admin"
+				? "bible-on-site-admin-v1.0.0.tar.gz"
+				: "bulletin-lambda-v1.0.0.zip";
+		const packageBytes = Buffer.from(`current-run ${module} package`);
+		writeFileSync(join(root, "assets", name), packageBytes);
+		const archive = {
+			id: 44,
+			name: `package-${module}`,
+			digest: `sha256:${"c".repeat(64)}`,
+		};
+		writeFileSync(
+			join(root, "release-pinned-artifacts.jsonl"),
+			`${JSON.stringify(archive)}\n`,
+		);
+		// Only API validation is substituted: the actual receipt writer streams
+		// and hashes the real package fixture, with no provider/network requests.
+		writeFileSync(
+			join(root, "pure-receipt.mjs"),
+			'import {readFileSync} from "node:fs"; import {writeRecoveryReceipt} from "./devops/github/release/recovery-request.mjs"; const args=process.argv.slice(2); console.log(JSON.stringify(await writeRecoveryReceipt(JSON.parse(readFileSync(args[args.indexOf("--input")+1],"utf8")),args[args.indexOf("--out")+1])));',
+		);
+		const source = "a".repeat(40);
+		const normal = {
+			runId: 9,
+			runAttempt: 1,
+			workflowId: 5,
+			workflowPath: ".github/workflows/ci.yml",
+			sha: source,
+		};
+		const payload = {
+			ref: source,
+			module_name: module,
+			module_directory: `web/${module}`,
+			module_version: "1.0.0",
+			ci_run_id: "10",
+			ci_run_attempt: "1",
+			released_artifact_name: archive.name,
+		};
+		const result = spawnSync(
+			shell,
+			[
+				"-e",
+				"-o",
+				"pipefail",
+				"-c",
+				`gh() { printf '%s\\n' '{"runId":10,"runAttempt":1,"workflowId":5}'; }\nnode() { command node pure-receipt.mjs "$@"; }\n${stepScript("Create explicit recovery receipt")}`,
+			],
+			{
+				cwd: root,
+				encoding: "utf8",
+				env: {
+					...process.env,
+					RUNNER_TEMP: root.replace(/\\/g, "/"),
+					GITHUB_OUTPUT: join(root, "output").replace(/\\/g, "/"),
+					GITHUB_REPOSITORY: "test/repo",
+					GITHUB_SHA: source,
+					GITHUB_RUN_ID: "10",
+					RELEASE_MODULE: module,
+					RELEASE_RECOVERY_MODULES: JSON.stringify([module]),
+					NORMAL_MASTER_CI: JSON.stringify(normal),
+					MODULE_DIRECTORY: `web/${module}`,
+					MODULE_VERSION: "1.0.0",
+					BASE_PAYLOAD: JSON.stringify(payload),
+					RELEASE_ARTIFACTS: JSON.stringify([
+						{
+							name: archive.name,
+							path: "assets",
+							glob: module === "admin" ? "*.tar.gz" : "*.zip",
+						},
+					]),
+				},
+			},
+		);
+		assert.equal(result.status, 0, result.stderr);
+		const receipt = JSON.parse(
+			readFileSync(join(root, `release-recovery-${module}.json`), "utf8"),
+		);
+		assert.deepEqual(receipt.artifact, archive);
+		assert.equal(receipt.releaseFile.name, name);
+		assert.equal(receipt.releaseFile.size, packageBytes.length);
+		assert.equal(
+			receipt.releaseFile.digest,
+			`sha256:${createHash("sha256").update(packageBytes).digest("hex")}`,
+		);
+		assert.notEqual(receipt.releaseFile.digest, archive.digest);
+		const outputs = Object.fromEntries(
+			readFileSync(join(root, "output"), "utf8")
+				.trim()
+				.split("\n")
+				.map((line) => {
+					const equals = line.indexOf("=");
+					return [line.slice(0, equals), line.slice(equals + 1)];
+				}),
+		);
+		const dispatch = JSON.parse(outputs.CD_PAYLOAD);
+		assert.equal(Object.keys(dispatch).length, 8);
+		assert.deepEqual(Object.keys(dispatch.recovery).sort(), [
+			"artifact",
+			"receipt",
+			"schemaVersion",
+		]);
+		assert.equal(dispatch.released_artifact_name, archive.name);
+		assert.equal(
+			JSON.parse(outputs.ARTIFACTS_JSON).at(-1).glob,
+			`release-recovery-${module}.json`,
+		);
+	});
+}
 function stepScript(name) {
 	const lines = workflow
 		.split(`      - name: ${name}\n`)[1]
@@ -36,8 +246,6 @@ function stepScript(name) {
 		.replace(/\$\{\{ github.sha \}\}/g, "a".repeat(40));
 }
 const script = stepScript("Check Tag");
-const shell =
-	process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
 for (const [status, bump, skip, releaseState, exit = 0] of [
 	["identical", false, false, "missing"],
 	["identical", false, true, "published"],
@@ -57,6 +265,7 @@ for (const [status, bump, skip, releaseState, exit = 0] of [
 		for (const file of [
 			"release-assets.mjs",
 			"release-provenance.mjs",
+			"recovery-request.mjs",
 			"gh-api.mjs",
 		])
 			copyFileSync(
@@ -146,6 +355,7 @@ for (const state of ["complete", "truncated", "unavailable", "invalid-id"]) {
 		for (const file of [
 			"release-assets.mjs",
 			"release-provenance.mjs",
+			"recovery-request.mjs",
 			"gh-api.mjs",
 		])
 			copyFileSync(
@@ -154,6 +364,7 @@ for (const state of ["complete", "truncated", "unavailable", "invalid-id"]) {
 			);
 		mkdirSync(join(root, "assets"));
 		writeFileSync(join(root, "assets/app.ipa"), "signed original binary");
+		writeFileSync(join(root, "event.json"), "{}");
 		const calls = join(root, "calls");
 		const releaseJson = {
 			id: 7,
@@ -188,6 +399,10 @@ for (const state of ["complete", "truncated", "unavailable", "invalid-id"]) {
 					GH_CALLS: calls,
 					RELEASE_STATE: state,
 					RELEASE_ID: state === "invalid-id" ? "7/../tags/other" : "7",
+					GITHUB_EVENT_PATH: join(root, "event.json"),
+					GITHUB_EVENT_NAME: "push",
+					RELEASE_MODULE: "app",
+					RELEASE_RECOVERY_MODULES: "[]",
 					RELEASE_JSON: JSON.stringify(releaseJson),
 					RELEASE_ARTIFACTS: JSON.stringify([
 						{ name: "original", path: "assets", glob: "*.ipa" },
@@ -233,13 +448,13 @@ for (const scenario of [
 		writeFileSync(zip, iosArtifactZip);
 		writeFileSync(
 			metadata,
-			JSON.stringify({
+			`${JSON.stringify({
 				id: 7,
 				name: "app-ios-v1.0.0",
 				expired: false,
 				digest: `sha256:${scenario === "bad-digest" ? "0".repeat(64) : createHash("sha256").update(iosArtifactZip).digest("hex")}`,
 				workflow_run: { id: 9, head_sha: "a".repeat(40) },
-			}) + "\n",
+			})}\n`,
 		);
 		let artifacts = [
 			{ name: "app-ios-v1.0.0", path: "stage/ios", glob: "*.ipa" },
@@ -257,9 +472,9 @@ for (const scenario of [
 			writeFileSync(join(root, "stage/ios/BibleOnSite.ipa"), "stale binary");
 		}
 		const download = stepScript("Download Artifacts")
-			.replace("${{ inputs.artifacts_json }}", JSON.stringify(artifacts))
+			.replace(/\$\{\{ inputs\.artifacts_json \}\}/, JSON.stringify(artifacts))
 			.replace(
-				"${{ steps.check_tag.outputs.CD_PAYLOAD || steps.build_payload.outputs.CD_PAYLOAD }}",
+				/\$\{\{ steps\.check_tag\.outputs\.CD_PAYLOAD \|\| steps\.build_payload\.outputs\.CD_PAYLOAD \}\}/,
 				JSON.stringify({ ci_run_id: "9", ci_run_attempt: 1 }),
 			);
 		const result = spawnSync(
