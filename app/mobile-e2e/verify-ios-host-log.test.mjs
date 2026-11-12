@@ -7,7 +7,7 @@ import { observeIosHostLog, shutdownEvidence, verifyIosHostLog } from "./verify-
 
 const udid = "24E299B4-C77B-4426-AC2B-71243825F07C";
 const service = "2026-11-11 20:17:06.012 Df com.apple.CoreSimulator.CoreSimulatorService[24253:28cfc]";
-function fixture(t, state = "Booted", classic = false) {
+function fixture(t, state = "Booted", classic = false, event = "Shutdown requested for") {
   const directory = mkdtempSync(join(tmpdir(), "host-shutdown-contract-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const artifact = join(directory, "host.log");
@@ -22,7 +22,7 @@ function fixture(t, state = "Booted", classic = false) {
       calls.push({ command, args });
       if (args[1] === "shutdown") {
         state = "Shutdown";
-        const log = `${service} Shutdown requested for ${udid}\n`;
+        const log = `${service} ${event} ${udid}\n`;
         writeFileSync(classic ? classicArtifact : artifact, log);
         (classic ? classicOutput : onOutput)(log);
       }
@@ -48,9 +48,21 @@ function fixture(t, state = "Booted", classic = false) {
 
 test("validates the target transition and preserves correlated evidence before stopping the observer", async t => {
   const f = fixture(t);
-  assert.deepEqual(await verifyIosHostLog(f.options), {
-    udid, shutdownVerified: true, correlatedLines: 1, sources: { unified: 1 },
-  });
+  const result = await verifyIosHostLog(f.options);
+  assert.equal(result.udid, udid);
+  assert.equal(result.stateTransitionVerified, true);
+  assert.equal(result.before.state, "Booted");
+  assert.equal(result.after.state, "Shutdown");
+  assert(Number.isFinite(Date.parse(result.before.at)));
+  assert(Number.isFinite(Date.parse(result.after.at)));
+  assert.deepEqual(result.request.args, ["simctl", "shutdown", udid]);
+  assert.equal(result.request.pid, null, "the injected command has no real child PID");
+  assert.equal(result.lifecycleRecordStatus, "observed");
+  assert.equal(result.limitation, null);
+  assert.equal(result.correlatedLines, 1);
+  assert.deepEqual(result.sources, { unified: 1 });
+  assert(result.capturedBytes.unified > 0);
+  assert.deepEqual(JSON.parse(readFileSync(`${f.artifact}.measurement.json`, "utf8")), result);
   assert(f.stopped);
   assert.deepEqual(f.calls.filter(call => call.args[1] === "shutdown"),
     [{ command: "xcrun", args: ["simctl", "shutdown", udid] }]);
@@ -59,11 +71,59 @@ test("validates the target transition and preserves correlated evidence before s
 
 test("classic evidence is retained independently when unified logging has no lifecycle event", async t => {
   const f = fixture(t, "Booted", true);
-  assert.deepEqual(await verifyIosHostLog(f.options), {
-    udid, shutdownVerified: true, correlatedLines: 1, sources: { unified: 0, classic: 1 },
-  });
+  const result = await verifyIosHostLog(f.options);
+  assert.equal(result.stateTransitionVerified, true);
+  assert.equal(result.lifecycleRecordStatus, "observed");
+  assert.equal(result.correlatedLines, 1);
+  assert.deepEqual(result.sources, { unified: 0, classic: 1 });
   assert(f.stopped);
   assert.match(readFileSync(`${f.artifact}.classic.log`, "utf8"), /Shutdown requested/);
+});
+
+test("a measured missing OS record is explicit and cannot claim lifecycle evidence", async t => {
+  const f = fixture(t, "Booted", true, "Activity for device");
+  f.options.observationWindow = () => AbortSignal.abort(new DOMException("capture window ended", "TimeoutError"));
+  const result = await verifyIosHostLog(f.options);
+  assert.equal(result.stateTransitionVerified, true);
+  assert.equal(result.lifecycleRecordStatus, "not-observed");
+  assert.match(result.limitation, /reason and requesting client are not established/);
+  assert.equal(result.correlatedLines, 0);
+  assert.deepEqual(result.sources, { unified: 0, classic: 0 });
+  assert(result.capturedBytes.unified > 0 && result.capturedBytes.classic > 0);
+  assert(f.stopped);
+});
+
+test("the overall deadline is never converted into an unavailable OS field", async t => {
+  const f = fixture(t, "Booted", true);
+  const controller = new AbortController();
+  f.options.signal = controller.signal;
+  f.options.observe = () => ({ write() {}, async waitFor(stage) {
+    if (stage !== "shutdown") return;
+    controller.abort(new DOMException("overall deadline", "TimeoutError"));
+    throw controller.signal.reason;
+  } });
+  await assert.rejects(verifyIosHostLog(f.options), /overall deadline/);
+  assert(f.stopped);
+});
+
+test("cancellation before commands or during reader cleanup remains a failure", async t => {
+  const before = fixture(t);
+  before.options.signal = AbortSignal.abort(new DOMException("cancelled", "AbortError"));
+  await assert.rejects(verifyIosHostLog(before.options), /cancelled/);
+  assert.equal(before.calls.length, 0);
+  const after = fixture(t, "Booted", true);
+  const controller = new AbortController();
+  after.options.signal = controller.signal;
+  const stream = after.options.stream;
+  after.options.stream = (...args) => {
+    const observer = stream(...args);
+    return { async stop() {
+      await observer.stop();
+      controller.abort(new DOMException("cancelled during cleanup", "AbortError"));
+    } };
+  };
+  await assert.rejects(verifyIosHostLog(after.options), /cancelled during cleanup/);
+  assert(after.stopped);
 });
 
 test("refuses an absent or already stopped target without starting an observer or shutting another device down", async t => {
@@ -86,7 +146,7 @@ test("missing startup or shutdown evidence still closes the owned host observer"
     f.options.observe = () => ({ write() {},
       async waitFor() { if (++observations === failureAt) throw new Error("evidence absent"); } });
     await assert.rejects(verifyIosHostLog(f.options), error => {
-      assert.match(error.message, failureAt === 1 ? /host logger startup/ : /device-correlated host shutdown event/);
+      assert.match(error.message, failureAt === 1 ? /host logger startup/ : /observe service shutdown record/);
       assert.equal(error.cause.message, "evidence absent");
       return true;
     });

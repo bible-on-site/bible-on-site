@@ -853,9 +853,9 @@ jobs:
           retention-days: 90
           if-no-files-found: error
       # PR/queue jobs do not save simulator-state caches. After their tests and
-      # coverage finish, verify host logging across one controlled shutdown of
+      # coverage finish, measure host logging across one controlled shutdown of
       # this job's exact device; no extra simulator boot or test retry is needed.
-      - name: Verify simulator host lifecycle capture
+      - name: Measure simulator host lifecycle evidence
         if: inputs.platform == 'iOS' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.pilot-ios.outcome == 'success' && steps.coverage-apply.outcome == 'success'
         run: node app/mobile-e2e/verify-ios-host-log.mjs
       # Captured post-test so the saved device keeps session warm-state, but

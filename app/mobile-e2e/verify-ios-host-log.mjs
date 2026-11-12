@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { arch, release } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -58,25 +59,32 @@ export function observeIosHostLog(udid) {
 
 // Called only after PR/queue tests and coverage finish. That job's simulator
 // is no longer needed, and those events never publish a simulator-state cache.
-// A real shutdown checks the available host log sources, not just their arguments.
+// Verify the real state transition and reader lifecycle, then measure what the
+// current OS logging configuration exposes. A missing vendor record is not
+// evidence of a failed shutdown, nor proof of its reason or requesting client.
 export async function verifyIosHostLog({ udid, artifact,
   execute = promisify(execFile), stream = startNativeLog, observe = observeIosHostLog,
-  classicStream = startIosClassicHostLog, report = () => {} }) {
+  classicStream = startIosClassicHostLog, report = () => {}, signal,
+  observationWindow = () => AbortSignal.timeout(5000) }) {
   assert.match(udid, /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i);
   // Reserve the existing five-second observer stop cap inside the 45s check.
-  const deadline = AbortSignal.timeout(40000);
+  const operationDeadline = AbortSignal.timeout(40000);
+  const deadline = signal ? AbortSignal.any([operationDeadline, signal]) : operationDeadline;
+  deadline.throwIfAborted();
   const device = async () => {
     const { stdout } = await execute("xcrun", ["simctl", "list", "devices", "--json"],
       { timeout: 5000, signal: deadline });
     return Object.values(JSON.parse(stdout).devices).flat().find(item => item.udid === udid);
   };
-  assert.equal((await device())?.state, "Booted", "Refuse shutdown without this job's booted simulator.");
+  const before = { state: (await device())?.state, at: new Date().toISOString() };
+  assert.equal(before.state, "Booted", "Refuse shutdown without this job's booted simulator.");
   mkdirSync(dirname(artifact), { recursive: true });
   const evidence = observe(udid);
   const observer = stream("/usr/bin/log", iosHostLogArguments(), artifact,
     { onOutput: chunk => evidence.write(chunk) });
   const classicArtifact = `${artifact}.classic.log`;
   let classicObserver;
+  let after, request;
   let stage;
   const enter = name => {
     stage = name;
@@ -89,19 +97,44 @@ export async function verifyIosHostLog({ udid, artifact,
     await evidence.waitFor("startup",
       AbortSignal.any([deadline, AbortSignal.timeout(5000)]));
     enter("owned simulator shutdown command");
-    await execute("xcrun", ["simctl", "shutdown", udid], { timeout: 30000, signal: deadline });
+    const args = ["simctl", "shutdown", udid];
+    const shutdown = execute("xcrun", args, { timeout: 30000, signal: deadline });
+    request = { command: "xcrun", args, pid: shutdown.child?.pid ?? null,
+      requestedAt: new Date().toISOString() };
+    report({ udid, stage, at: request.requestedAt, ...request });
+    await shutdown;
+    request.completedAt = new Date().toISOString();
     enter("shutdown state verification");
-    assert.equal((await device())?.state, "Shutdown");
-    enter("device-correlated host shutdown event");
-    await evidence.waitFor("shutdown",
-      AbortSignal.any([deadline, AbortSignal.timeout(5000)]));
-    const sources = { unified: shutdownEvidence(readFileSync(artifact, "utf8"), udid).length };
-    if (classicObserver) sources.classic = shutdownEvidence(readFileSync(classicArtifact, "utf8"), udid).length;
-    return { udid, shutdownVerified: true, sources,
-      correlatedLines: Object.values(sources).reduce((sum, count) => sum + count, 0) };
+    after = { state: (await device())?.state, at: new Date().toISOString() };
+    assert.equal(after.state, "Shutdown");
+    enter("observe service shutdown record");
+    const window = observationWindow();
+    try { await evidence.waitFor("shutdown", AbortSignal.any([deadline, window])); }
+    catch (error) {
+      // Only absence at this fixed observation boundary is a measurement.
+      // Overall deadline/cancellation, startup and reader failures still fail.
+      if (deadline.aborted || !window.aborted || error !== window.reason || error.name !== "TimeoutError") throw error;
+    }
   } catch (cause) {
     throw new Error(`iOS host log verification failed during ${stage}: ${cause.message}`, { cause });
   } finally { await stopNativeLogStreams([observer, classicObserver]); }
+  signal?.throwIfAborted();
+  // Join the readers before assessing the retained bytes, including final EOF.
+  const captures = { unified: readFileSync(artifact) };
+  if (classicObserver) captures.classic = readFileSync(classicArtifact);
+  const sources = Object.fromEntries(Object.entries(captures)
+    .map(([source, bytes]) => [source, shutdownEvidence(bytes.toString("utf8"), udid).length]));
+  const correlatedLines = Object.values(sources).reduce((sum, count) => sum + count, 0);
+  const result = { kind: "ios-host-log-measurement/1", udid, stateTransitionVerified: true,
+    before, after, request, sources, correlatedLines,
+    lifecycleRecordStatus: correlatedLines > 0 ? "observed" : "not-observed",
+    limitation: correlatedLines > 0 ? null
+      : "No service shutdown record observed in the fixed window; OS shutdown reason and requesting client are not established.",
+    capturedBytes: Object.fromEntries(Object.entries(captures).map(([source, bytes]) => [source, bytes.length])),
+    sourceSha: process.env.GITHUB_SHA ?? null, runId: process.env.GITHUB_RUN_ID ?? null,
+    host: { platform: process.platform, release: release(), arch: arch(), node: process.version } };
+  writeFileSync(`${artifact}.measurement.json`, JSON.stringify(result, null, 2));
+  return result;
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -111,14 +144,23 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   assert.equal(process.env.MOBILE_PLATFORM, "iOS");
   assert(process.env.MOBILE_E2E_ARTIFACTS);
   const artifact = resolve(process.env.MOBILE_E2E_ARTIFACTS, "simulator-host-shutdown-contract.log");
+  const cancellation = new AbortController();
+  const cancel = () => cancellation.abort(new DOMException("Host measurement cancelled", "AbortError"));
+  process.on("SIGINT", cancel);
+  process.on("SIGTERM", cancel);
   try {
-    console.log(JSON.stringify(await verifyIosHostLog({ udid: process.env.MOBILE_UDID,
-      artifact, report: event => console.log(JSON.stringify(event)) })));
+    const result = await verifyIosHostLog({ udid: process.env.MOBILE_UDID,
+      artifact, signal: cancellation.signal, report: event => console.log(JSON.stringify(event)) });
+    console.log(JSON.stringify(result));
+    if (result.limitation) console.log(`::notice::${result.limitation}`);
   } catch (error) {
     // Keep the short controlled capture visible even if artifact storage fails.
     for (const path of [artifact, `${artifact}.classic.log`, `${artifact}.classic.log.source.json`]) {
       if (existsSync(path)) console.error(`${path} (last 16 KiB):\n${readFileSync(path, "utf8").slice(-16384)}`);
     }
     throw error;
+  } finally {
+    process.removeListener("SIGINT", cancel);
+    process.removeListener("SIGTERM", cancel);
   }
 }
