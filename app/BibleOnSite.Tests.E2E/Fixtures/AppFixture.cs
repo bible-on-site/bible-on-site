@@ -28,6 +28,7 @@ public class AppFixture : IAsyncLifetime
     private Process? _appProcess;
     private Process? _apiProcess;
     private StreamWriter? _appLog;
+    private Exception? _drainFailure;
     private bool _weStartedApi;
     private DateTime _apiStartedAt;
 
@@ -195,12 +196,11 @@ public class AppFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         SetProcessDPIAware(); //NOSONAR — process DPI awareness has no managed API; synthetic-input coordinates must map to physical pixels.
-        // The default 2s connection timeout is shorter than the window in
-        // which a freshly launched WinUI app registers its UIA provider —
-        // every first query then throws UIA Timeout even though the window
-        // exists. Give the COM layer room to retry instead of failing the
-        // attach on a provider that is still spinning up.
-        _automation = new UIA3Automation { ConnectionTimeout = TimeSpan.FromSeconds(15) };
+        // Keep the default 2s connection timeout: a slow provider attach is
+        // retried by the caller's own budget — WaitForElementAsync already
+        // catches the UIA_TIMEOUT COMException FlaUI wraps — rather than
+        // letting one query block for fifteen seconds and mask a real stall.
+        _automation = new UIA3Automation();
 
         // Ensure API is running first (reuse if already running)
         if (RequiresApi)
@@ -262,30 +262,8 @@ public class AppFixture : IAsyncLifetime
         Directory.CreateDirectory(Path.GetDirectoryName(appLogPath)!);
         var appLog = new StreamWriter(appLogPath, append: false) { AutoFlush = true };
         _appLog = appLog;
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                while (await _appProcess.StandardOutput.ReadLineAsync() is { } line)
-                {
-                    Console.WriteLine($"[app] {line}");
-                    lock (appLog) { appLog.WriteLine($"[app] {line}"); }
-                }
-            }
-            catch { /* pipe closed at teardown */ }
-        });
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                while (await _appProcess.StandardError.ReadLineAsync() is { } line)
-                {
-                    Console.WriteLine($"[app:err] {line}");
-                    lock (appLog) { appLog.WriteLine($"[app:err] {line}"); }
-                }
-            }
-            catch { /* pipe closed at teardown */ }
-        });
+        DrainPipe(_appProcess.StandardOutput, "[app]", appLog);
+        DrainPipe(_appProcess.StandardError, "[app:err]", appLog);
 
         // dotnet run evaluates the project even with --no-build, so the app
         // process can spawn seconds after the launcher returns on a loaded
@@ -405,6 +383,33 @@ public class AppFixture : IAsyncLifetime
             lastException);
     }
 
+    /// <summary>
+    /// Mirrors one redirected pipe into the console and the app log file.
+    /// Teardown pipe errors (closed/disposed readers) are expected; anything
+    /// else is recorded so a dead drain — which can leave the app blocked on
+    /// a full pipe — is reported instead of vanishing silently.
+    /// </summary>
+    private void DrainPipe(StreamReader reader, string prefix, StreamWriter appLog) => _ = Task.Run(async () =>
+    {
+        try
+        {
+            while (await reader.ReadLineAsync() is { } line)
+            {
+                Console.WriteLine($"{prefix} {line}");
+                lock (appLog) { appLog.WriteLine($"{prefix} {line}"); }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException)
+        {
+            // The pipe closes when the app process exits at teardown.
+        }
+        catch (Exception exception)
+        {
+            _drainFailure = exception;
+            Console.WriteLine($"{prefix} drain failed: {exception}");
+        }
+    });
+
     public async ValueTask DisposeAsync()
     {
         try
@@ -453,6 +458,13 @@ public class AppFixture : IAsyncLifetime
         }
         finally
         {
+            if (_drainFailure is { } drainFailure)
+            {
+                // An undrained pipe can block app output mid-run — surface the
+                // recorded cause instead of leaving the stall unexplained.
+                Console.WriteLine($"[app] output drain failed during the run: {drainFailure}");
+                _appLog?.WriteLine($"[app] output drain failed during the run: {drainFailure}");
+            }
             // `using var` aliases keep the field lifetimes spanning
             // Initialize/Dispose while disposing in the original order:
             // automation, then app process, then API process.

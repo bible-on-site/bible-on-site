@@ -32,7 +32,7 @@ public sealed class TikkunFlowModeTests(TikkunModeFixture fixture)
     {
         // The fixture boots straight into תיקון קוראים on בראשית י — no
         // navigation, so the first painted flow surface is the live one.
-        var flow = await WaitForTikkunFlowAsync(TimeSpan.FromSeconds(45));
+        var flow = await WaitForTikkunFlowAsync(TimeSpan.FromSeconds(30));
         if (flow == null)
         {
             DumpTikkunDiagnostics("flow-fail.png");
@@ -253,12 +253,12 @@ public sealed class TikkunFlowModeTests(TikkunModeFixture fixture)
     }
 
     /// <summary>Polls until the word band shows directional mark-removal
-    /// evidence — erased niqqud/taamim are bright pixels over a dark
-    /// background, so stripping produces many bright→dark transitions and
-    /// nearly no dark→bright ones. A bare "pixels changed" gate is not
-    /// enough: a brightness/AA shift in the re-rendered frame produces
-    /// exactly that without removing a single mark (#3265). Chrome outside
-    /// the band is not the flow's repaint either.</summary>
+    /// evidence — erased niqqud/taamim collapse onto the background color, so
+    /// stripping produces many ink→background transitions and nearly none the
+    /// other way. A bare "pixels changed" gate is not enough: a brightness/AA
+    /// shift in the re-rendered frame produces exactly that without removing
+    /// a single mark (#3265). Chrome outside the band is not the flow's
+    /// repaint either.</summary>
     private static async Task<bool> WaitForRepaintAsync(AutomationElement element, System.Drawing.Bitmap before)
     {
         var deadline = DateTime.UtcNow.AddSeconds(10);
@@ -274,11 +274,14 @@ public sealed class TikkunFlowModeTests(TikkunModeFixture fixture)
         return false;
     }
 
-    /// <summary>Count of word-band pixels that were lit before and went dark —
-    /// the structural signature of marks actually being erased rather than the
-    /// frame just shifting intensity. Hidden niqqud dots are only a few px
-    /// wide, so every pixel is compared (no sampling stride), and only
-    /// background-level darkness counts as erased so antialiasing shimmer on
+    /// <summary>Count of word-band pixels that left the ink side and reached
+    /// the background — the structural signature of marks actually being
+    /// erased rather than the frame just shifting intensity. The direction is
+    /// read off the captured frame, not assumed: under a dark theme marks are
+    /// bright ink erased to dark; under a light theme they are dark ink
+    /// erased to light. Hidden niqqud dots are only a few px wide, so every
+    /// pixel is compared (no sampling stride), and only a real crossing into
+    /// background territory counts as erased so antialiasing shimmer on
     /// surviving glyphs cannot accumulate into a pass.</summary>
     private static int WordBandRemovedInk(System.Drawing.Bitmap after, System.Drawing.Bitmap before)
     {
@@ -299,6 +302,22 @@ public sealed class TikkunFlowModeTests(TikkunModeFixture fixture)
             System.Runtime.InteropServices.Marshal.Copy(dataB.Scan0, bytesB, 0, bytesB.Length);
             var stride = Math.Abs(dataA.Stride);
             var band = WordBand(after);
+            // Ink direction follows the captured background, not a theme
+            // assumption: a dark band means bright marks erased to dark; a
+            // light band means dark marks erased to light.
+            var lumaSum = 0L;
+            var lumaSamples = 0;
+            for (var y = band.Top; y < band.Bottom; y += 2)
+            {
+                var row = y * stride;
+                for (var x = band.Left; x < band.Right; x += 2)
+                {
+                    var px = row + x * 4;
+                    lumaSum += (bytesB[px] + bytesB[px + 1] + bytesB[px + 2]) / 3;
+                    lumaSamples++;
+                }
+            }
+            var inkIsBright = lumaSum / Math.Max(1, lumaSamples) < 128;
             var removed = 0;
             for (var y = band.Top; y < band.Bottom; y++)
             {
@@ -308,7 +327,9 @@ public sealed class TikkunFlowModeTests(TikkunModeFixture fixture)
                     var px = row + x * 4;
                     var lumaBefore = (bytesB[px] + bytesB[px + 1] + bytesB[px + 2]) / 3;
                     var lumaAfter = (bytesA[px] + bytesA[px + 1] + bytesA[px + 2]) / 3;
-                    if (lumaBefore > 110 && lumaAfter < 70)
+                    if (inkIsBright
+                        ? lumaBefore > 110 && lumaAfter < 70
+                        : lumaBefore < 145 && lumaAfter > 185)
                     {
                         removed++;
                     }
