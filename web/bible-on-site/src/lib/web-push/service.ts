@@ -99,12 +99,16 @@ export async function deleteSubscription(endpoint: string): Promise<void> {
 }
 
 /**
- * Send today's perek to every stored subscription. Subscriptions the push
- * service reports as gone (404/410) are deleted; other failures are logged and
- * counted so one bad endpoint never blocks the rest.
+ * Send today's perek to every stored subscription — or to only the
+ * subscription stored for `endpoint` when given, for the controlled
+ * one-browser delivery check run before the daily schedule is armed.
+ * Subscriptions the push service reports as gone (404/410) are deleted;
+ * other failures are logged and counted so one bad endpoint never blocks
+ * the rest.
  */
 export async function sendDailyPerek(
 	perekId: number,
+	endpoint?: string,
 ): Promise<DailySendResult> {
 	setVapidDetails(
 		process.env.VAPID_SUBJECT as string,
@@ -112,9 +116,14 @@ export async function sendDailyPerek(
 		process.env.VAPID_PRIVATE_KEY as string,
 	);
 	const payload = JSON.stringify(dailyPerekPayload(perekId));
-	const rows = await query<{ endpoint: string; p256dh: string; auth: string }>(
-		"SELECT endpoint, p256dh, auth FROM tanah_web_push_subscription",
-	);
+	const rows = endpoint
+		? await query<{ endpoint: string; p256dh: string; auth: string }>(
+				"SELECT endpoint, p256dh, auth FROM tanah_web_push_subscription WHERE endpoint_hash = ?",
+				[endpointHash(endpoint)],
+			)
+		: await query<{ endpoint: string; p256dh: string; auth: string }>(
+				"SELECT endpoint, p256dh, auth FROM tanah_web_push_subscription",
+			);
 	const result: DailySendResult = { sent: 0, removed: 0, failed: 0 };
 	for (let i = 0; i < rows.length; i += SEND_BATCH_SIZE) {
 		await Promise.all(
@@ -138,7 +147,11 @@ export async function sendDailyPerek(
 						result.removed++;
 						return;
 					}
-					console.warn("Web push delivery failed", error);
+					// Provider errors contain the subscription endpoint and response
+					// details. Keep those private while retaining the failure status.
+					console.warn("Web push delivery failed", {
+						statusCode: error instanceof WebPushError ? error.statusCode : null,
+					});
 					result.failed++;
 				}
 			}),
