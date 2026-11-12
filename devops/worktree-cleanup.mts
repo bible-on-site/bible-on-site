@@ -11,10 +11,15 @@
  * - Never touches the main checkout, the worktree the script runs from, or any
  *   ancestor worktree of it.
  * - Worktrees whose branch has an open PR (gh) are always kept.
- * - If `gh` or `git fetch` fails, the script degrades to keeping everything —
- *   it only deletes when it has positive evidence a worktree is done.
+ * - If `gh`, `git fetch`, or the remote-ref listing fails, no worktree is
+ *   removed at all — deletion requires positive evidence a worktree is done.
  * - A dirty worktree is removed only when every status line is recoverable
  *   (uncommitted deletions of tracked files, or generated churn).
+ * - Ignored files are invisible to a plain `git status`: a removal candidate
+ *   is kept when it contains any ignored path that is not recognizably
+ *   regenerable (e.g. .env files or local dumps Git cannot restore).
+ * - Debris dirs are only deleted when empty or when they provably hold files
+ *   tracked in the default branch — a random sibling folder is never touched.
  * - Branch refs are never deleted — removing a worktree loses no commits.
  *
  * Dry-run by default; pass --yes to apply.
@@ -46,6 +51,8 @@ export type Disposition =
 	| "protected"
 	| "open-pr"
 	| "real-dirty"
+	| "ignored-local"
+	| "remote-unknown"
 	| "detached-unmerged"
 	| "stale-fresh"
 	| "remove";
@@ -55,7 +62,9 @@ interface ClassifyInput {
 	isMain: boolean;
 	isProtected: boolean;
 	openPrBranches: Set<string>;
-	remoteBranchGone: boolean;
+	/** Closed/merged PR exists, or the branch had a remote upstream that is
+	 *  now deleted. Never-pushed local branches are NOT remote-done. */
+	remoteDone: boolean;
 	mergedIntoDefault: boolean;
 	idleBeyondThreshold: boolean;
 	statusLines: string[];
@@ -104,10 +113,10 @@ export function classify(input: ClassifyInput): Disposition {
 		return "detached-unmerged";
 	}
 	if (!clean && !benign) return "real-dirty";
-	// Stale = branch deleted on remote (post-merge cleanup), tip already in the
-	// default branch, or the checkout simply sat idle past the threshold. A
-	// fresh clean worktree on a live un-PR'd branch is left alone.
-	if (input.remoteBranchGone || input.mergedIntoDefault || input.idleBeyondThreshold)
+	// Stale = remote says the work is done (closed PR / deleted upstream), tip
+	// already in the default branch, or the checkout simply sat idle past the
+	// threshold. A fresh clean worktree on a live un-PR'd branch is left alone.
+	if (input.remoteDone || input.mergedIntoDefault || input.idleBeyondThreshold)
 		return "remove";
 	return "stale-fresh";
 }
@@ -121,19 +130,26 @@ function git(repo: string, args: string[]): string {
 	});
 }
 
-function tryGit(repo: string, args: string[]): string | null {
+function tryGit(repo: string, args: string[], input?: string): string | null {
 	try {
 		return execFileSync("git", ["-C", repo, ...args], {
 			encoding: "utf8",
 			maxBuffer: 64 * 1024 * 1024,
-			stdio: ["ignore", "pipe", "ignore"],
+			stdio: ["pipe", "pipe", "ignore"],
+			input,
 		});
 	} catch {
 		return null;
 	}
 }
 
-function openPrBranches(repo: string): Set<string> | null {
+interface PrStates {
+	open: Set<string>;
+	closed: Set<string>;
+}
+
+/** Branches with open vs. closed/merged PRs; null when gh is unavailable. */
+function prStates(repo: string): PrStates | null {
 	try {
 		const out = execFileSync(
 			"gh",
@@ -143,17 +159,21 @@ function openPrBranches(repo: string): Set<string> | null {
 				"--repo",
 				repoSlug(repo),
 				"--state",
-				"open",
+				"all",
 				"--limit",
-				"400",
+				"1000",
 				"--json",
-				"headRefName",
-				"--jq",
-				".[].headRefName",
+				"headRefName,state",
 			],
 			{ encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
 		);
-		return new Set(out.split("\n").map((s) => s.trim()).filter(Boolean));
+		const open = new Set<string>();
+		const closed = new Set<string>();
+		for (const pr of JSON.parse(out) as { headRefName: string; state: string }[]) {
+			(pr.state === "OPEN" ? open : closed).add(pr.headRefName);
+		}
+		for (const b of open) closed.delete(b); // an open PR always wins
+		return { open, closed };
 	} catch {
 		return null;
 	}
@@ -197,6 +217,29 @@ function newestTopLevelMtime(dir: string): number {
 	return newest;
 }
 
+/**
+ * Last-activity timestamp for a worktree: newest top-level entry mtime plus
+ * the gitdir's HEAD and reflog (updated by checkouts/commits). The index is
+ * deliberately excluded — `git status` refreshes it, so our own scan would
+ * mark every worktree as active.
+ */
+function lastActivityMs(wtPath: string): number {
+	let newest = newestTopLevelMtime(wtPath);
+	const gitDir = tryGit(wtPath, ["rev-parse", "--git-dir"])?.trim();
+	if (gitDir) {
+		const gd = resolve(wtPath, gitDir);
+		for (const f of ["HEAD", join("logs", "HEAD")]) {
+			try {
+				const m = statSync(join(gd, f)).mtimeMs;
+				if (m > newest) newest = m;
+			} catch {
+				/* file missing */
+			}
+		}
+	}
+	return newest;
+}
+
 /** Directories with heavy names inside `root`, searched to `depth` levels. */
 function* heavyDirs(root: string, depth: number): Generator<string> {
 	if (depth < 0) return;
@@ -229,6 +272,118 @@ function isTracked(wtPath: string, absDir: string, relTo: string): boolean {
 	const rel = absDir.slice(relTo.length + 1).split(sep).join("/");
 	const out = tryGit(wtPath, ["ls-files", "--", rel]);
 	return out !== null && out.trim().length > 0;
+}
+
+/** Ignored names that are reproducible build/tool output, so deleting the
+ *  worktree that contains them loses nothing. Anything else ignored
+ *  (.env, dumps, notes) makes the worktree non-removable. */
+const REGENERABLE_NAMES = new Set([
+	...HEAVY_DIRS,
+	".venv",
+	"venv",
+	"__pycache__",
+	".pytest_cache",
+	".mypy_cache",
+	".ruff_cache",
+	".turbo",
+	".cache",
+	".parcel-cache",
+	".gradle",
+	"htmlcov",
+	".nyc_output",
+	".hypothesis",
+	".dart_tool",
+]);
+const REGENERABLE_FILE_RE =
+	/\.(tsbuildinfo|py[co]|log|tmp|swp|swo)$|^(Thumbs\.db|\.DS_Store|desktop\.ini)$/i;
+
+/** Porcelain `--ignored` path → true when it is provably regenerable. */
+export function isRegenerableIgnored(ignoredPath: string): boolean {
+	const p = ignoredPath.replace(/^"|"$/g, "").replace(/\/+$/, "");
+	return (
+		p.split("/").some((s) => REGENERABLE_NAMES.has(s)) ||
+		REGENERABLE_FILE_RE.test(p)
+	);
+}
+
+/** Split `git status --porcelain --ignored` output into tracked changes and
+ *  ignored paths (`!!` entries, prefix stripped). */
+export function splitStatus(porcelain: string): {
+	changes: string[];
+	ignored: string[];
+} {
+	const changes: string[] = [];
+	const ignored: string[] = [];
+	for (const l of porcelain.split("\n").filter(Boolean)) {
+		if (l.startsWith("!!")) ignored.push(l.slice(3));
+		else changes.push(l);
+	}
+	return { changes, ignored };
+}
+
+/** repo-relative path → blob sha for every file in `ref`'s tree; null on
+ *  failure (shallow or missing ref). */
+export function trackedFiles(
+	repo: string,
+	ref: string,
+): Map<string, string> | null {
+	const out = tryGit(repo, ["ls-tree", "-r", "-z", ref]);
+	if (out === null) return null;
+	const m = new Map<string, string>();
+	for (const rec of out.split("\0")) {
+		const t = rec.indexOf("\t");
+		if (t < 0) continue;
+		m.set(rec.slice(t + 1), rec.slice(rec.lastIndexOf(" ", t) + 1, t));
+	}
+	return m;
+}
+
+/**
+ * True when `root` holds at least one file whose path AND content hash match
+ * a blob in `tracked` — positive evidence the dir is a checkout remnant. A
+ * path alone is not enough: caches like `.ruff_cache` contain their own
+ * `.gitignore`, which collides with tracked names. Returns false on a `.git`
+ * anywhere inside (foreign repo or live worktree) and on budget exhaustion.
+ */
+export function containsTrackedContent(
+	repo: string,
+	root: string,
+	tracked: ReadonlyMap<string, string>,
+	maxEntries = 5000,
+): boolean {
+	const candidates: [string, string][] = []; // [relpath, abspath]
+	const stack = [""];
+	let seen = 0;
+	while (stack.length) {
+		const rel = stack.pop() as string;
+		let entries;
+		try {
+			entries = readdirSync(join(root, rel), { withFileTypes: true });
+		} catch {
+			continue;
+		}
+		for (const e of entries) {
+			if (++seen > maxEntries) return false;
+			if (e.name === ".git") return false;
+			const rp = rel ? `${rel}/${e.name}` : e.name;
+			if (e.isDirectory()) stack.push(rp);
+			else if (tracked.has(rp)) candidates.push([rp, join(root, rp)]);
+		}
+	}
+	if (candidates.length === 0) return false;
+	const slice = candidates.slice(0, 200);
+	const out = tryGit(
+		repo,
+		["hash-object", "--stdin-paths"],
+		slice.map(([, abs]) => abs).join("\n"),
+	);
+	if (out === null) return false;
+	const hashes = out
+		.split("\n")
+		.map((s) => s.trim())
+		.filter(Boolean);
+	if (hashes.length !== slice.length) return false; // cannot align safely
+	return slice.some(([rel], i) => tracked.get(rel) === hashes[i]);
 }
 
 // ---------- CLI ----------
@@ -317,22 +472,30 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 		errors: [],
 	};
 	const fetched = tryGit(repo, ["fetch", "--prune"]) !== null;
-	if (!fetched) log(`[${repo}] fetch failed — treating all remote branches as present`);
+	if (!fetched) log(`[${repo}] fetch failed — keeping all worktrees`);
 
 	const porcelain = git(repo, ["worktree", "list", "--porcelain"]);
 	const worktrees = parseWorktrees(porcelain);
 	const registered = new Set(worktrees.map((w) => resolve(w.path)));
 	const mainPath = registered.size ? worktrees[0].path : repo;
 
-	const openPrs = openPrBranches(repo);
-	if (openPrs === null) log(`[${repo}] gh unavailable — treating all branches as open PRs`);
+	const prs = prStates(repo);
+	if (prs === null) log(`[${repo}] gh unavailable — keeping all worktrees`);
+	const prsSafe = prs ?? { open: new Set<string>(), closed: new Set<string>() };
 
+	const remoteOut = tryGit(repo, ["branch", "-r", "--format=%(refname:strip=3)"]);
+	if (remoteOut === null)
+		log(`[${repo}] remote ref listing failed — keeping all worktrees`);
 	const remoteBranches = new Set<string>(
-		(tryGit(repo, ["branch", "-r", "--format=%(refname:strip=3)"]) ?? "")
+		(remoteOut ?? "")
 			.split("\n")
 			.map((s) => s.trim())
 			.filter((b) => b && b !== "HEAD"),
 	);
+
+	// Worktree removal is only enabled when every remote signal succeeded —
+	// stale or missing remote state must never look like "the work is done".
+	const remoteOk = fetched && prs !== null && remoteOut !== null;
 
 	const defaultRef = (
 		tryGit(repo, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]) ??
@@ -358,25 +521,43 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 	const containers = new Set<string>();
 	for (const wt of worktrees) containers.add(dirname(resolve(wt.path)));
 
+	const hasUpstream = (b: string) =>
+		(tryGit(repo, ["config", "--get", `branch.${b}.remote`]) ?? "").trim() !== "";
+
 	for (const wt of worktrees.slice(1)) {
 		const wpath = resolve(wt.path);
 		if (!existsSync(wpath)) continue; // pruned below
-		const status = tryGit(wpath, ["status", "--porcelain"]) ?? "ERROR";
-		const statusLines = status.split("\n").filter(Boolean);
-		const merged =
-			tryGit(wpath, ["merge-base", "--is-ancestor", "HEAD", defaultRef]) !== null;
-		const disp = classify({
-			wt,
-			isMain: wpath === resolve(mainPath),
-			isProtected: isProtectedPath(wpath),
-			openPrBranches: openPrs ?? new Set(wt.branch ? [wt.branch] : []),
-			remoteBranchGone: wt.branch !== null && !remoteBranches.has(wt.branch),
-			mergedIntoDefault: merged,
-			idleBeyondThreshold:
-				now - newestTopLevelMtime(wpath) >= cli.debrisDays * 86400_000,
-			statusLines: status === "ERROR" ? ["?"] : statusLines,
-			benignDirtyRe: benignRe,
-		});
+		const { changes, ignored } = splitStatus(
+			tryGit(wpath, ["status", "--porcelain", "--ignored"]) ?? "ERROR",
+		);
+		let disp: Disposition;
+		if (!remoteOk) {
+			disp =
+				wpath === resolve(mainPath) || isProtectedPath(wpath)
+					? "protected"
+					: "remote-unknown";
+		} else {
+			const merged =
+				tryGit(wpath, ["merge-base", "--is-ancestor", "HEAD", defaultRef]) !==
+				null;
+			disp = classify({
+				wt,
+				isMain: wpath === resolve(mainPath),
+				isProtected: isProtectedPath(wpath),
+				openPrBranches: prsSafe.open,
+				remoteDone:
+					wt.branch !== null &&
+					(prsSafe.closed.has(wt.branch) ||
+						(hasUpstream(wt.branch) && !remoteBranches.has(wt.branch))),
+				mergedIntoDefault: merged,
+				idleBeyondThreshold:
+					now - lastActivityMs(wpath) >= cli.idleDays * 86400_000,
+				statusLines: changes,
+				benignDirtyRe: benignRe,
+			});
+			if (disp === "remove" && ignored.some((p) => !isRegenerableIgnored(p)))
+				disp = "ignored-local";
+		}
 		if (disp === "remove") {
 			if (cli.yes) {
 				if (tryGit(repo, ["worktree", "remove", wpath]) === null)
@@ -388,9 +569,13 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 			report.kept.push([wpath, disp]);
 		}
 	}
-	tryGit(repo, ["worktree", "prune", "-v"]);
+	// prune -n in dry-run: dropping stale registrations is a mutation too.
+	tryGit(repo, ["worktree", "prune", "-v", ...(cli.yes ? [] : ["-n"])]);
 
-	// Sweep unregistered debris dirs inside worktree bucket dirs.
+	// Sweep unregistered debris dirs inside worktree bucket dirs — but only
+	// empty dirs or dirs provably holding files tracked in the default branch
+	// (checkout remnants). Anything else could be an unrelated user folder.
+	const trackedSet = trackedFiles(repo, defaultRef);
 	for (const dir of containers) {
 		if (!existsSync(dir)) continue;
 		const isWt = [...registered].some((p) => resolve(p) === dir);
@@ -405,9 +590,14 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 			// containers like hfb-wt/hfb-wt) is not debris.
 			if ([...registered].some((p) => p.startsWith(rchild + sep))) continue;
 			if (existsSync(join(child, ".git"))) continue; // foreign repo, not ours
-			const idleMs = now - newestTopLevelMtime(child);
 			const empty = readdirSync(child).length === 0;
-			if (!empty && idleMs < cli.debrisDays * 86400_000) continue;
+			if (!empty) {
+				const idleMs = now - newestTopLevelMtime(child);
+				const proven =
+					trackedSet !== null &&
+					containsTrackedContent(repo, child, trackedSet);
+				if (idleMs < cli.debrisDays * 86400_000 || !proven) continue;
+			}
 			if (cli.yes) rmrf(child);
 			report.debris.push(child);
 		}
@@ -417,7 +607,7 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 	if (cli.heavy) {
 		for (const [wpath, disp] of report.kept) {
 			if (disp === "protected") continue;
-			const idleMs = now - newestTopLevelMtime(wpath);
+			const idleMs = now - lastActivityMs(wpath);
 			if (idleMs < cli.idleDays * 86400_000) continue;
 			for (const d of heavyDirs(wpath, 3)) {
 				if (isTracked(wpath, d, wpath)) continue;

@@ -1,10 +1,23 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import {
+	mkdirSync,
+	mkdtempSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
 	classify,
+	containsTrackedContent,
 	isBenignDirty,
+	isRegenerableIgnored,
 	parseWorktrees,
+	splitStatus,
 	sweepableContainer,
+	trackedFiles,
 } from "./worktree-cleanup.mts";
 
 const PORCELAIN = `worktree C:/repo/main
@@ -38,7 +51,7 @@ const base = {
 	isMain: false,
 	isProtected: false,
 	openPrBranches: new Set<string>(),
-	remoteBranchGone: true,
+	remoteDone: true,
 	mergedIntoDefault: false,
 	idleBeyondThreshold: false,
 	statusLines: [] as string[],
@@ -57,22 +70,22 @@ describe("classify", () => {
 			"open-pr",
 		);
 	});
-	it("removes clean worktrees whose remote branch is gone", () => {
+	it("removes clean worktrees whose remote work is done", () => {
 		assert.equal(classify({ ...base, wt: wt("gone") }), "remove");
 	});
 	it("removes worktrees merged into default or past idle threshold", () => {
 		assert.equal(
-			classify({ ...base, wt: wt("b"), remoteBranchGone: false, mergedIntoDefault: true }),
+			classify({ ...base, wt: wt("b"), remoteDone: false, mergedIntoDefault: true }),
 			"remove",
 		);
 		assert.equal(
-			classify({ ...base, wt: wt("b"), remoteBranchGone: false, idleBeyondThreshold: true }),
+			classify({ ...base, wt: wt("b"), remoteDone: false, idleBeyondThreshold: true }),
 			"remove",
 		);
 	});
 	it("keeps fresh clean worktrees on live un-PR'd branches", () => {
 		assert.equal(
-			classify({ ...base, wt: wt("new-work"), remoteBranchGone: false }),
+			classify({ ...base, wt: wt("new-work"), remoteDone: false }),
 			"stale-fresh",
 		);
 	});
@@ -122,5 +135,75 @@ describe("sweepableContainer", () => {
 		assert.equal(sweepableContainer("/w", reg, false), true);
 		assert.equal(sweepableContainer("/x/bos-wt", new Set(["/x/bos-wt/a"]), false), true);
 		assert.equal(sweepableContainer("/tmp", new Set(["/tmp/one-wt"]), false), false);
+	});
+});
+
+describe("splitStatus", () => {
+	it("separates changes from ignored entries", () => {
+		const { changes, ignored } = splitStatus(
+			" M src/x.ts\n D docs/a.md\n?? new\n!! node_modules/\n!! .env\n",
+		);
+		assert.deepEqual(changes, [" M src/x.ts", " D docs/a.md", "?? new"]);
+		assert.deepEqual(ignored, ["node_modules/", ".env"]);
+	});
+});
+
+describe("isRegenerableIgnored", () => {
+	it("accepts build output, caches and generated files", () => {
+		for (const p of [
+			"node_modules/",
+			"app/node_modules/",
+			"website/.next/",
+			"api/target/",
+			"devops/.venv/",
+			"a/b/__pycache__/",
+			"tsconfig.tsbuildinfo",
+			"debug.log",
+		])
+			assert.ok(isRegenerableIgnored(p), p);
+	});
+	it("rejects secrets, dumps and user files", () => {
+		for (const p of [".env", "website/.env.local", "data/mysql/dump.sql", "notes.md", ".idea/"])
+			assert.ok(!isRegenerableIgnored(p), p);
+	});
+});
+
+describe("containsTrackedContent", () => {
+	it("requires matching blob hashes, not just matching paths", () => {
+		const repo = mkdtempSync(join(tmpdir(), "wt-repo-"));
+		const root = mkdtempSync(join(tmpdir(), "wt-debris-"));
+		const git = (args: string[]) =>
+			execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+		try {
+			git(["init", "-q"]);
+			mkdirSync(join(repo, "data"), { recursive: true });
+			writeFileSync(join(repo, "data", "a.sql"), "tracked-content");
+			writeFileSync(join(repo, ".gitignore"), "*.log\n");
+			git(["add", "."]);
+			git(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "x"]);
+			const tracked = trackedFiles(repo, "HEAD");
+			assert.ok(tracked !== null && tracked.size === 2);
+
+			// A remnant holding an identical tracked file is debris.
+			mkdirSync(join(root, "data"), { recursive: true });
+			writeFileSync(join(root, "data", "a.sql"), "tracked-content");
+			assert.equal(containsTrackedContent(repo, root, tracked), true);
+
+			// Same path, different content (a name collision) is not evidence.
+			writeFileSync(join(root, "data", "a.sql"), "user-edited");
+			assert.equal(containsTrackedContent(repo, root, tracked), false);
+
+			// An unrelated folder with only untracked names is not evidence.
+			mkdirSync(join(root, "notes"), { recursive: true });
+			writeFileSync(join(root, "notes", "mine.md"), "x");
+			assert.equal(containsTrackedContent(repo, root, tracked), false);
+
+			// A .git anywhere inside means foreign repo / live worktree.
+			mkdirSync(join(root, "sub", ".git"), { recursive: true });
+			assert.equal(containsTrackedContent(repo, root, tracked), false);
+		} finally {
+			rmSync(repo, { recursive: true, force: true });
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });
