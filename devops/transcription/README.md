@@ -187,10 +187,10 @@ improvement. The full pinned Hebrew model, beam 5, previous-text context and
 complete audio remain the defaults; no faster model or automatic precision
 change was introduced. See the [RCA and measured limits](../../docs/evidence/transcription/README.md#text-disagreement-root-cause).
 
-Compare two complete exports without GPU dependencies:
+From `devops/`, compare two complete exports without GPU dependencies:
 
 ```powershell
-python -m devops.transcription.compare output/opus/transcript.json output/webm/transcript.json
+bun run transcription:compare ../output/opus/transcript.json ../output/webm/transcript.json
 ```
 
 The JSON report gives exact word/character Levenshtein edits, input lengths,
