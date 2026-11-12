@@ -231,12 +231,9 @@ test("preserves an append before spawning the classic reader and excludes histor
     mkdirSync(directory, { recursive: true });
     const source = join(directory, "CoreSimulator.log");
     const udid = "24E299B4-C77B-4426-AC2B-71243825F07C";
-    // All-literal join plus concat, not one interpolated literal: Codacy flags
-    // tag-looking fixture pieces and variables inside a single literal/join.
-    const record = ["Nov 11 20:17:06 localhost com.apple.CoreSimulator.CoreSimulatorService[24253]",
-      "<Debug>:", "Shutting down"].join(" ");
-    const event = record + " " + udid;
-    writeFileSync(source, "historical " + event + "\n");
+    const event = ["Nov 11 20:17:06 localhost com.apple.CoreSimulator.CoreSimulatorService[24253]",
+      "<Debug>:", "Shutting down", udid].join(" ");
+    writeFileSync(source, `historical ${event}\n`);
     const artifact = join(home, "capture.log");
     const evidence = observeIosHostLog(udid);
     const observer = nativeLogs.startIosClassicHostLog(artifact, { home,
