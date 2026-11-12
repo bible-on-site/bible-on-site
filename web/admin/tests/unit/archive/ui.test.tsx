@@ -225,11 +225,20 @@ it("reports deletion and refresh errors", async () => {
 		expect(screen.getByRole("alert")).toHaveTextContent("refresh failed"),
 	);
 });
-it("reports logout failures", async () => {
+it("leaves account actions to the shared top bar", async () => {
 	await mount();
-	(fetch as Mock).mockRejectedValueOnce(new Error("logout failed"));
-	fireEvent.click(screen.getByRole("button", { name: "יציאה מהחשבון" }));
-	expect(await screen.findByRole("alert")).toHaveTextContent("logout failed");
+	expect(
+		screen.queryByRole("button", { name: "יציאה מהחשבון" }),
+	).not.toBeInTheDocument();
+	expect(
+		screen.queryByRole("link", { name: "חזרה לניהול" }),
+	).not.toBeInTheDocument();
+});
+it("links the quota summary to the storage settings for administrators", async () => {
+	await mount();
+	expect(
+		screen.getByRole("link", { name: /מכסה עבור מחבר א/ }),
+	).toHaveAttribute("href", "/archive-settings");
 });
 it("handles refresh failure after an upload and cancels active work on unmount", async () => {
 	await mount();

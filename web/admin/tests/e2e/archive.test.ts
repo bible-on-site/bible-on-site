@@ -3,7 +3,7 @@ import { expect, test } from "../util/test-fixture";
 test("archive login is excluded from crawlers and requires login", async ({
 	page,
 }, testInfo) => {
-	await page.route("**/archive/api", (route) =>
+	await page.route("**/archive/api**", (route) =>
 		route.fulfill({ status: 401, json: { error: "login" } }),
 	);
 	const response = await page.goto("/archive");
@@ -15,7 +15,11 @@ test("archive login is excluded from crawlers and requires login", async ({
 	await expect(
 		page.getByRole("link", { name: "כניסה לחשבון" }),
 	).toHaveAttribute("href", "/archive/auth/login");
-	// Local launcher uses the existing administrator dev session.
+	// The shared top bar stays visible, without admin navigation.
+	await expect(page.getByRole("link", { name: "ארכיון" })).toBeVisible();
+	await expect(
+		page.getByRole("link", { name: "מאמרים", exact: true }),
+	).toHaveCount(0);
 	await page.screenshot({
 		path: testInfo.outputPath("archive-login.png"),
 		fullPage: true,
@@ -46,6 +50,10 @@ test("upload directory accepts arbitrary files and shows completed files", async
 		if (request.method() === "GET") {
 			if (loggedOut)
 				return route.fulfill({ status: 401, json: { error: "login" } });
+			if (new URL(request.url()).searchParams.has("session"))
+				return route.fulfill({
+					json: { isAdmin: false, username: "משתמש לדוגמה" },
+				});
 			if (initialListing) {
 				expect(request.headers()["x-archive-path"] || "").toBe("");
 				initialListing = false;
@@ -104,6 +112,9 @@ test("upload directory accepts arbitrary files and shows completed files", async
 	await expect(
 		page.getByRole("button", { name: "מחיקה", exact: true }),
 	).toHaveCount(0);
+	// Archivers keep the shared bar with only their archive destination.
+	await expect(page.getByRole("link", { name: "ארכיון" })).toBeVisible();
+	await expect(page.getByText("שלום, משתמש לדוגמה")).toBeVisible();
 	await expect(
 		page.getByRole("link", { name: "מאמרים", exact: true }),
 	).toHaveCount(0);
@@ -146,8 +157,13 @@ test("administrators browse root and named author homes", async ({
 		createdAt: "2026-11-10",
 		updatedAt: "2026-11-10 00:00:00.000000",
 	});
-	await page.route("**/archive/api", (route) => {
-		const headers = route.request().headers();
+	await page.route("**/archive/api**", (route) => {
+		const request = route.request();
+		if (new URL(request.url()).searchParams.has("session"))
+			return route.fulfill({
+				json: { isAdmin: true, username: "מנהל" },
+			});
+		const headers = request.headers();
 		const path = decodeURIComponent(headers["x-archive-path"] || "");
 		const id =
 			headers["x-archive-directory"] ||
@@ -197,7 +213,17 @@ test("administrators browse root and named author homes", async ({
 		});
 	});
 	await page.goto("/archive");
-	await expect(page.getByRole("link", { name: "חזרה לניהול" })).toBeVisible();
+	// Administrators keep the full shared navigation on the archive root.
+	await expect(page.getByRole("link", { name: "מאמרים" })).toBeVisible();
+	const archiveNav = page.getByRole("link", { name: "ארכיון" });
+	await expect(archiveNav).toBeVisible();
+	await expect(archiveNav).toHaveClass(/font-semibold/);
+	await expect(
+		page.getByRole("button", { name: "התנתק", exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("link", { name: "מכסה עבור מנהל" }),
+	).toHaveAttribute("href", "/archive-settings");
 	await expect(
 		page.getByRole("button", { name: "פתיחת תיקייה authors" }),
 	).toBeVisible();
@@ -207,6 +233,8 @@ test("administrators browse root and named author homes", async ({
 	});
 	await page.getByRole("button", { name: "פתיחת תיקייה authors" }).click();
 	await page.getByRole("button", { name: "פתיחת תיקייה מחבר לדוגמה" }).click();
+	// The shared bar stays active on nested directory pages.
+	await expect(archiveNav).toHaveClass(/font-semibold/);
 	await expect(
 		page.getByText("חומרי לימוד.pdf", { exact: true }),
 	).toBeVisible();

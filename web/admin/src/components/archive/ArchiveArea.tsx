@@ -22,27 +22,24 @@ async function api(data?: Record<string, unknown>, directory = "", after = "") {
 		window.location.pathname === "/archive/"
 			? "/archive"
 			: window.location.pathname;
-	const response = await fetch(
-		data?.action === "logout" ? "/archive/api?logout" : "/archive/api",
-		{
-			cache: "no-store",
-			headers: {
-				"X-Archive-Directory": directory,
-				"X-Archive-After": after,
-				"X-Archive-Path":
-					!directory && pathname.startsWith("/archive/")
-						? encodeURIComponent(decodeURIComponent(pathname.slice(8)))
-						: "",
-			},
-			...(data
-				? {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify(data),
-					}
-				: {}),
+	const response = await fetch("/archive/api", {
+		cache: "no-store",
+		headers: {
+			"X-Archive-Directory": directory,
+			"X-Archive-After": after,
+			"X-Archive-Path":
+				!directory && pathname.startsWith("/archive/")
+					? encodeURIComponent(decodeURIComponent(pathname.slice(8)))
+					: "",
 		},
-	);
+		...(data
+			? {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(data),
+				}
+			: {}),
+	});
 	const result = await response.json();
 	if (!response.ok)
 		throw Object.assign(new Error(result.error), { status: response.status });
@@ -243,30 +240,6 @@ export function ArchiveArea() {
 		);
 	return (
 		<>
-			<div className={styles.toolbar}>
-				{directory?.isAdmin && (
-					<span>
-						<a href="/">חזרה לניהול</a> ·{" "}
-						<a href="/archive-settings">מכסות אחסון</a>
-					</span>
-				)}
-				<span>
-					שלום, <b>{directory?.username ?? ""}</b>
-				</span>
-				<button
-					type="button"
-					disabled={busy}
-					onClick={() => {
-						void api({ action: "logout" })
-							.then((result) => {
-								window.location.assign(result.url);
-							})
-							.catch((e: Error) => setError(e.message));
-					}}
-				>
-					יציאה מהחשבון
-				</button>
-			</div>
 			{error && (
 				<p className={styles.error} role="alert">
 					{error}{" "}
@@ -303,7 +276,7 @@ export function ArchiveArea() {
 						<div className={styles.toolbar}>
 							<strong>נפח אחסון</strong>
 							{directory.isAdmin && (
-								<span>מכסה עבור {directory.quotaName}</span>
+								<a href="/archive-settings">מכסה עבור {directory.quotaName}</a>
 							)}
 							<span>
 								{bytes(directory.allocated)} מתוך {bytes(directory.quota)} GB
