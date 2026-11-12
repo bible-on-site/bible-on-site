@@ -824,20 +824,29 @@ public class PerekLoadingTests
     }
 
     /// <summary>
-    /// A notes service whose batched perush-metric read pauses mid-flight, so
-    /// a test can move the perek on while the decoration await is suspended.
+    /// A notes service whose first batched perush-metric read pauses mid-flight,
+    /// so a test can move the perek on — or fire a newer same-perek reload —
+    /// while the first load's decoration await is suspended.
     /// </summary>
     private sealed class GatedMetricsNotesService(
         IPadDeliveryService pad, Microsoft.Maui.Storage.IFileSystem fileSystem)
         : PerushimNotesService(pad, fileSystem)
     {
+        private int _calls;
+
         public TaskCompletionSource<int> MetricsEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource<IReadOnlyDictionary<int, ReadingMetric>> MetricsResult { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public override Task<IReadOnlyDictionary<int, ReadingMetric>> GetPerushMetricsForPerekAsync(int perekId)
         {
-            MetricsEntered.TrySetResult(perekId);
-            return MetricsResult.Task;
+            // Only the first metric read parks — a superseding reload must be
+            // able to complete while the parked load still waits.
+            if (Interlocked.Increment(ref _calls) == 1)
+            {
+                MetricsEntered.TrySetResult(perekId);
+                return MetricsResult.Task;
+            }
+            return base.GetPerushMetricsForPerekAsync(perekId);
         }
     }
 
@@ -870,5 +879,52 @@ public class PerekLoadingTests
         await load;
 
         vm.Perushim.Should().BeEmpty("a stale load discards its results before publication");
+    }
+
+    [Fact]
+    public async Task LoadPerushimAsync_WhenASamePerekReloadSupersedes_DropsTheOlderLoadsWrites()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        var gated = new GatedMetricsNotesService(NotesDeliveryTests.Pad().Object, fixture.Storage.FileSystem.Object);
+        var vm = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), null,
+            fixture.Data, new PerushimCatalogService(fixture.Storage.FileSystem.Object),
+            gated, fixture.Navigator.Object, fixture.Storage.FileSystem.Object, null);
+        var pasuk = new Pasuk { PasukNum = 1, Text = "בראשית" };
+        var perek = BarePerek(1);
+        perek.Pasukim = [pasuk];
+        vm.Perek = perek;
+
+        // Load #1 suspends inside the batched metric read.
+        var stale = vm.LoadPerushimAsync(1);
+        await gated.MetricsEntered.Task;
+
+        // The post-upgrade notes materialization completing (the page's
+        // OperationCompleted hook) or a carousel resnap fires a second load
+        // for the SAME perek — it must own publication from here on (#3310).
+        await vm.LoadPerushimAsync(1);
+        var perushim = vm.Perushim;
+        perushim.Select(p => p.Id).Should().Equal(2, 1);
+
+        // The user selects תרגום (id 2) — the reported crash step.
+        vm.ToggleCheckedPerush(2);
+        var checkedList = vm.CheckedPerushim;
+        checkedList.Should().Equal(2);
+        pasuk.PerushNotes.Should().HaveCount(1);
+        var notes = pasuk.PerushNotes;
+
+        // Load #1 finally resumes — a superseded same-perek load must not
+        // republish the catalog, the checked ids or the pasuk note rows over
+        // the state the newer load and the user selection just produced.
+        gated.MetricsResult.SetResult(new Dictionary<int, ReadingMetric>());
+        await stale;
+
+        vm.Perushim.Should().BeSameAs(perushim,
+            "the superseded load must not swap the bound perushim list");
+        vm.CheckedPerushim.Should().BeSameAs(checkedList,
+            "the superseded load must not rewrite the user's selection list");
+        pasuk.PerushNotes.Should().BeSameAs(notes,
+            "the superseded load must not touch the visible note rows");
+        pasuk.VisiblePerushNotes.Should().HaveCount(1);
     }
 }
