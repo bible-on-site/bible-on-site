@@ -185,12 +185,16 @@ dotnet build -c Release -p:AndroidPackageFormat=apk -p:RunAOTCompilation=false
   --output-directory ./results --device-id emulator-5554 --timeout 00:05:00
 ```
 
-The PoC is a normal single-project MAUI app (`net10.0-android`, `UseMaui`,
-`IsTestProject=false`) plus: ~180-line `Runner.cs` (TestDevice, HeadlessTestRunner
-extending `AndroidApplicationEntryPoint`, `MauiTestActivity`, `MauiTestInstrumentation`
-with the MediaStore results export), 4 entry-point classes (`[Application]`,
+The PoC source is committed under [`device-tests-poc/`](device-tests-poc/README.md)
+(research code, not in the solution and not built by CI — deliberately kept out of
+`app/` because the app NuGet-cache key hashes every `app/*.csproj`). It is a normal
+single-project MAUI app (`net10.0-android`, `UseMaui`, `IsTestProject=false`) plus:
+~180-line `Runner.cs` (TestDevice, HeadlessTestRunner extending
+`AndroidApplicationEntryPoint`, `MauiTestActivity`, `MauiTestInstrumentation` with
+the MediaStore results export), 4 entry-point classes (`[Application]`,
 `[Activity MainLauncher]`, `[Instrumentation]`, `[Activity TestActivity]`), a
 `MauiProgram` registering `TestOptions`/`HeadlessRunnerOptions`/`HeadlessTestRunner`
-in DI, `Linked/PasukMarkerTextConverter.cs` (verbatim copy of the production file the
-portable suite links) and `Tests/DeviceTests.cs` (1 parity + 6 device-only tests).
-Upstream's generated code produces the same manifest entries via source generator.
+in DI, a `<Compile Include>` link to the production `PasukMarkerTextConverter.cs`
+(the same file the portable suite links — linked, not copied) and
+`Tests/DeviceTests.cs` (1 parity + 6 device-only tests). Upstream's generated code
+produces the same manifest entries via source generator.
