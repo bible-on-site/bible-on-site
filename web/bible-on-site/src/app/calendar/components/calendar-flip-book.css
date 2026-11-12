@@ -266,6 +266,52 @@
 	gap: 1%;
 }
 
+/* ---------- month sheet card back ---------- */
+
+/* The decorative face beneath each month grid: the printed card back of a
+   spiral calendar's month divider — visible under the sheet and while it
+   lifts over the binding. Tonal, not interactive. */
+.cal-sheet-back {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	min-height: 100%;
+	container-type: inline-size;
+	padding: 11% 8% 10%;
+	box-sizing: border-box;
+	background:
+		radial-gradient(
+			ellipse at 50% 0%,
+			var(--surface-elevated) 0%,
+			var(--surface-muted) 75%
+		);
+	border-top: 2cqw solid var(--border-subtle);
+}
+
+.cal-sheet-back__tab {
+	margin-top: 6%;
+	padding: 0.35em 1.1em;
+	border: 1px solid var(--border-subtle);
+	border-radius: 999px;
+	font-size: 3.6cqw;
+	font-weight: 700;
+	color: var(--muted-text);
+	white-space: nowrap;
+}
+
+.cal-sheet-back__rule {
+	margin-top: 8%;
+	width: 62%;
+	height: 3px;
+	border-radius: 999px;
+	background: linear-gradient(
+		90deg,
+		transparent,
+		var(--border-subtle) 20% 80%,
+		transparent
+	);
+}
+
 /* Bottom-edge turn affordance: sits inside the engine's bottom 22%
    turn zone and visually marks where a drag turns the page. */
 .cal-sheet__grip {

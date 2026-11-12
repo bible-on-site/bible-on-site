@@ -106,6 +106,22 @@ export function FlipMonthSheet({
 }
 
 /**
+ * The card-back face paired with a month sheet (#2993): the decorative
+ * divider a reader sees beneath the month grid and while the sheet lifts
+ * over the spiral binding — the physical calendar's printed card backing.
+ * It carries no interactive content, so the reader-facing face stays
+ * decorative; the month caption keeps the transient face identifiable.
+ */
+export function FlipMonthSheetBack({ entry }: { entry: FlipMonthEntry }) {
+	return (
+		<div className="cal-sheet-back" aria-hidden="true">
+			<span className="cal-sheet-back__tab">{getMonthLabel(entry.ref)}</span>
+			<span className="cal-sheet-back__rule" />
+		</div>
+	);
+}
+
+/**
  * Appends inert trailing blanks so every month fills complete weeks — the
  * grid then stretches its rows evenly across the page.
  */
@@ -177,10 +193,10 @@ function SheetCell({
 		);
 	}
 
-	// Dimmed out-of-cycle cells keep the established date-only look — their
-	// assignment belongs to another selected cycle, exactly like the calendar
-	// PDFs and the overview grid, which print no label on dimmed cells (#2975).
-	const source = dimmed ? "" : getDaySourceLabel(day);
+	// Dimmed out-of-cycle cells returned early above, so this button always
+	// belongs to the selected cycle and prints its perek label — exactly like
+	// the calendar PDFs and the overview grid (#2975).
+	const source = getDaySourceLabel(day);
 	const perekId = day.perekId;
 	return (
 		<button

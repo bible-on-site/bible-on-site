@@ -15,7 +15,7 @@ import {
 	CalendarPdfDownload,
 	type CalendarPdfRequest,
 } from "./CalendarPdfDownload";
-import { FlipMonthSheet } from "./FlipMonthSheet";
+import { FlipMonthSheet, FlipMonthSheetBack } from "./FlipMonthSheet";
 import {
 	buildFlipPageSemantics,
 	clampMonthToFlipScope,
@@ -29,14 +29,19 @@ import "html-flip-book-react/styles.css";
 import "./calendar-flip-book.css";
 
 /**
- * Vertical spiral "Sefer-style" calendar book (#2993): one readable month per
- * face, bound at the top with the upstream flip engine's vertical axis. The
- * component is loaded lazily by LearningCalendar only when the flipping
- * presentation is selected, so overview visitors never pay for the engine.
+ * Vertical spiral "Sefer-style" calendar book (#2993): one readable month
+ * sheet per visible face, bound at the top with the upstream flip engine's
+ * vertical axis. The component is loaded lazily by LearningCalendar only
+ * when the flipping presentation is selected, so overview visitors never
+ * pay for the engine.
  *
  * Page layout mirrors a physical spiral calendar:
- *   0 front cover · 1 blank endpaper · 2 title page · 3… month sheets ·
- *   penultimate blank endpaper · last back cover.
+ *   0 front cover · 1 blank endpaper · 2 title page · 3… month pairs
+ *   (readable sheet + card back) · penultimate blank endpaper · last back
+ *   cover.
+ * Every month owns a whole visible pair like the Sefer reader's perakim —
+ * a leaf turn advances two page indices, so a single face per month would
+ * strand every second month under the turned stack (#2993 review).
  * History is disabled (`enableHistory={false}`): the host owns the `?month=`
  * query contract through `onMonthChange`/`jumpRequest`, so no stale `#page`
  * hashes or duplicate history entries appear.
@@ -107,17 +112,21 @@ export function CalendarFlipBook({
 	);
 
 	const pages = useMemo(() => {
-		const monthPages = months.map((entry) => (
+		const monthPages = months.flatMap((entry) => [
 			<FlipMonthSheet
-				key={`${entry.ref.year}-${entry.ref.month}`}
+				key={`sheet-${entry.ref.year}-${entry.ref.month}`}
 				entry={entry}
 				todayDateNumber={todayDateNumber}
 				onOpen={onOpenPerek}
 				dayAriaLabel={dayAriaLabel}
 				mergedDayAriaLabel={mergedDayAriaLabel}
 				isDimmed={isDimmed}
-			/>
-		));
+			/>,
+			<FlipMonthSheetBack
+				key={`back-${entry.ref.year}-${entry.ref.month}`}
+				entry={entry}
+			/>,
+		]);
 		return [
 			<section
 				key="cal-front-cover"
@@ -183,6 +192,8 @@ export function CalendarFlipBook({
 	 */
 	const syncPageExposure = useCallback(() => {
 		const root = containerRef.current;
+		/* istanbul ignore next -- defensive: the callback only fires after
+		   mount, when the wrapper ref is already attached */
 		if (!root) {
 			return;
 		}

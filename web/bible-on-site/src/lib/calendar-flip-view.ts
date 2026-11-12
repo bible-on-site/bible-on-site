@@ -17,7 +17,10 @@ export function getStoredCalendarFlipView(): CalendarFlipView | null {
 	try {
 		const raw = localStorage.getItem(CALENDAR_FLIP_VIEW_STORAGE_KEY);
 		return raw === "flip" || raw === "overview" ? raw : null;
-	} catch {
+	} catch (error) {
+		// Storage can be denied (private mode, policy); the preference is
+		// optional so falling back to the default is nonfatal — still logged.
+		console.warn("Failed to read the calendar presentation preference", error);
 		return null;
 	}
 }
@@ -25,7 +28,9 @@ export function getStoredCalendarFlipView(): CalendarFlipView | null {
 export function setStoredCalendarFlipView(view: CalendarFlipView): void {
 	try {
 		localStorage.setItem(CALENDAR_FLIP_VIEW_STORAGE_KEY, view);
-	} catch {
-		/* quota / private mode */
+	} catch (error) {
+		// Quota / private mode: the session preference still applies in
+		// memory; the failure stays diagnosable instead of silent.
+		console.warn("Failed to persist the calendar presentation preference", error);
 	}
 }

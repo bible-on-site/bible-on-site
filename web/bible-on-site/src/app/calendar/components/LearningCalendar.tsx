@@ -516,18 +516,20 @@ export function LearningCalendar({
 		};
 	}, [viewed, viewMode, resolvedCycle, pdfManifestUrl]);
 
+	// The overview grids stay unmounted while the flip book shows — do not
+	// compute their schedules for a hidden presentation (#2993 review).
 	const yearMonths = useMemo(
 		() =>
-			viewMode === "year"
+			viewMode === "year" && !flipPresentation
 				? visibleCalendarMonths(viewed.year, window).map((month) =>
 						buildVisibleCalendarMonth(viewed.year, month, window),
 					)
 				: [],
-		[viewMode, viewed.year, window],
+		[viewMode, viewed.year, window, flipPresentation],
 	);
 
 	const cycleMonths = useMemo(() => {
-		if (viewMode !== "cycle") {
+		if (viewMode !== "cycle" || flipPresentation) {
 			return [] as CalendarMonth[];
 		}
 		const cycle = getCycle(resolvedCycle);
@@ -549,7 +551,7 @@ export function LearningCalendar({
 			ref = nextMonth(ref);
 		}
 		return months;
-	}, [viewMode, resolvedCycle, window]);
+	}, [viewMode, resolvedCycle, window, flipPresentation]);
 
 	/** Saturday dates swallowed by Friday's merged block in `cells`. */
 	const mergedSaturdays = useMemo(() => {

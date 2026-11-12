@@ -47,18 +47,24 @@ export interface FlipMonthEntry {
 /**
  * Chrome faces wrapped around the month sheets, matching the physical book:
  * front cover, blank endpaper, title page … months … blank endpaper, back
- * cover. Month sheets always start at this page index.
+ * cover. The first month's readable face always sits at this page index.
  */
 export const FLIP_MONTH_PAGE_OFFSET = 3;
 
-/** Total page count of a book holding `monthCount` month sheets. */
+/**
+ * Each month owns a whole visible pair — its readable sheet face plus the
+ * companion card-back face beneath it — exactly like the Sefer reader's
+ * two faces per perek. A leaf turn advances two page indices, so packing
+ * months onto single faces would make every second month unreachable as
+ * the top readable sheet.
+ */
 export function flipBookPageCount(monthCount: number): number {
-	return monthCount + 5;
+	return monthCount * 2 + 5;
 }
 
-/** Page index of the month sheet at `position` (0-based, chronological). */
+/** Page index of the readable sheet face at `position` (0-based). */
 export function flipMonthPageIndex(position: number): number {
-	return FLIP_MONTH_PAGE_OFFSET + position;
+	return FLIP_MONTH_PAGE_OFFSET + position * 2;
 }
 
 /**
@@ -129,12 +135,16 @@ export function flipPageIndexForMonth(
 	return position < 0 ? -1 : flipMonthPageIndex(position);
 }
 
-/** MonthRef shown on a book page index, or null for chrome faces. */
+/**
+ * MonthRef shown on a book page index, or null for chrome faces. Both faces
+ * of a month pair resolve to the same month: the readable sheet at
+ * `flipMonthPageIndex(position)` and the card back at `+1`.
+ */
 export function flipMonthAtPageIndex(
 	months: FlipMonthEntry[],
 	pageIndex: number,
 ): MonthRef | null {
-	const position = pageIndex - FLIP_MONTH_PAGE_OFFSET;
+	const position = Math.floor((pageIndex - FLIP_MONTH_PAGE_OFFSET) / 2);
 	return position >= 0 && position < months.length
 		? months[position].ref
 		: null;
@@ -191,17 +201,23 @@ const CHROME_TITLES = [
 	"לוח לימוד יומי",
 ] as const;
 
-function isMonthPage(pageIndex: number, monthCount: number): boolean {
+/**
+ * True only for the readable sheet face of each month pair; the companion
+ * card-back face right after it reports empty semantics, so the page
+ * indicator and jump control always target the readable face.
+ */
+function isMonthSheetPage(pageIndex: number, monthCount: number): boolean {
 	return (
 		pageIndex >= FLIP_MONTH_PAGE_OFFSET &&
-		pageIndex < FLIP_MONTH_PAGE_OFFSET + monthCount
+		pageIndex < FLIP_MONTH_PAGE_OFFSET + monthCount * 2 &&
+		(pageIndex - FLIP_MONTH_PAGE_OFFSET) % 2 === 0
 	);
 }
 
 /**
  * Page semantics for the toolbar indicator/jump and engine page metadata.
- * Chrome faces report empty semantic names so the indicator falls back to the
- * neighbouring month label.
+ * Chrome and card-back faces report empty semantic names so the indicator
+ * falls back to the neighbouring month label.
  */
 export function buildFlipPageSemantics(
 	months: FlipMonthEntry[],
@@ -215,13 +231,15 @@ export function buildFlipPageSemantics(
 	});
 	return {
 		indexToSemanticName: (pageIndex) =>
-			isMonthPage(pageIndex, months.length)
-				? months[pageIndex - FLIP_MONTH_PAGE_OFFSET].semanticName
+			isMonthSheetPage(pageIndex, months.length)
+				? months[(pageIndex - FLIP_MONTH_PAGE_OFFSET) / 2].semanticName
 				: "",
 		semanticNameToIndex: (semanticName) => nameToPage.get(semanticName) ?? null,
 		indexToTitle: (pageIndex) => {
-			if (isMonthPage(pageIndex, months.length)) {
-				return getMonthLabel(months[pageIndex - FLIP_MONTH_PAGE_OFFSET].ref);
+			if (isMonthSheetPage(pageIndex, months.length)) {
+				return getMonthLabel(
+					months[(pageIndex - FLIP_MONTH_PAGE_OFFSET) / 2].ref,
+				);
 			}
 			if (pageIndex === pagesCount - 2) {
 				return "";

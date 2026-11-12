@@ -82,13 +82,17 @@ describe("flip-month-data", () => {
 	describe("page index math", () => {
 		const months = buildYearFlipMonths(5785, testWindow);
 
-		it("maps month positions to pages after the three chrome faces", () => {
+		it("maps month positions to readable faces two pages apart", () => {
+			// Each month owns a whole visible pair (readable face + card back),
+			// so consecutive months sit two page indices apart — a leaf turn
+			// never strands a month under the turned stack.
 			expect(flipMonthPageIndex(0)).toBe(3);
-			expect(flipMonthPageIndex(11)).toBe(14);
-			expect(flipBookPageCount(12)).toBe(17);
+			expect(flipMonthPageIndex(1)).toBe(5);
+			expect(flipMonthPageIndex(11)).toBe(25);
+			expect(flipBookPageCount(12)).toBe(29);
 		});
 
-		it("resolves a month ref to its page index", () => {
+		it("resolves a month ref to its readable face index", () => {
 			expect(flipPageIndexForMonth(months, { year: 5785, month: 7 })).toBe(
 				flipMonthPageIndex(months.findIndex((m) => m.ref.month === 7)),
 			);
@@ -104,13 +108,22 @@ describe("flip-month-data", () => {
 				year: 5785,
 				month: 1,
 			});
-			expect(flipMonthAtPageIndex(months, 14)).toEqual({
+			// The card-back face of a pair resolves to the same month.
+			expect(flipMonthAtPageIndex(months, 4)).toEqual({
+				year: 5785,
+				month: 1,
+			});
+			expect(flipMonthAtPageIndex(months, 5)).toEqual({
+				year: 5785,
+				month: 2,
+			});
+			expect(flipMonthAtPageIndex(months, 26)).toEqual({
 				year: 5785,
 				month: 12,
 			});
 			expect(flipMonthAtPageIndex(months, 0)).toBeNull();
-			expect(flipMonthAtPageIndex(months, 15)).toBeNull(); // back interior
-			expect(flipMonthAtPageIndex(months, 16)).toBeNull(); // back cover
+			expect(flipMonthAtPageIndex(months, 27)).toBeNull(); // back interior
+			expect(flipMonthAtPageIndex(months, 28)).toBeNull(); // back cover
 			expect(flipMonthAtPageIndex(months, 99)).toBeNull();
 		});
 	});
@@ -138,19 +151,28 @@ describe("flip-month-data", () => {
 
 	describe("initialTurnedLeavesForPage", () => {
 		it("opens on the cover spread for page 0", () => {
-			expect(initialTurnedLeavesForPage(0, 17)).toEqual([]);
+			expect(initialTurnedLeavesForPage(0, 29)).toEqual([]);
 		});
 
 		it("turns leaves so the spread contains the requested page", () => {
-			// Page 3 (first month, leaf 1 back) needs leaves 0 and 1 turned.
-			expect(initialTurnedLeavesForPage(3, 17)).toEqual([0, 1]);
-			// Page 4 shares the same spread as page 3.
-			expect(initialTurnedLeavesForPage(4, 17)).toEqual([0, 1]);
-			// Page 5 (next spread) turns leaf 2 as well.
-			expect(initialTurnedLeavesForPage(5, 17)).toEqual([0, 1, 2]);
+			// Page 3 (first month sheet, leaf 1 back) needs leaves 0 and 1
+			// turned; page 4 (its card back) shares the same spread.
+			expect(initialTurnedLeavesForPage(3, 29)).toEqual([0, 1]);
+			expect(initialTurnedLeavesForPage(4, 29)).toEqual([0, 1]);
+			// Page 5 (second month sheet) turns leaf 2 as well.
+			expect(initialTurnedLeavesForPage(5, 29)).toEqual([0, 1, 2]);
 		});
 
-		it("reaches the last page of an even-page-count book", () => {
+		it("reaches the last page of an odd-page-count book", () => {
+			// 12 months → 29 pages: the back cover sits at index 28.
+			const leaves = initialTurnedLeavesForPage(28, 29);
+			expect(leaves).toHaveLength(14);
+			expect(leaves[leaves.length - 1]).toBe(13);
+		});
+
+		it("lands on the final leaf of an even-page-count book", () => {
+			// The generic helper also covers even counts (e.g. a future
+			// layout change): the last odd index maps to the final leaf.
 			const leaves = initialTurnedLeavesForPage(17, 18);
 			expect(leaves).toHaveLength(9);
 			expect(leaves[leaves.length - 1]).toBe(8);
@@ -160,7 +182,10 @@ describe("flip-month-data", () => {
 	describe("buildFlipPageSemantics", () => {
 		it("names month pages uniquely inside a cycle book", () => {
 			const months = buildCycleFlipMonths(4, testWindow);
-			const semantics = buildFlipPageSemantics(months, 48);
+			const semantics = buildFlipPageSemantics(
+				months,
+				flipBookPageCount(months.length),
+			);
 			const names = months.map((m) => m.semanticName);
 			expect(new Set(names).size).toBe(names.length);
 			// First month sheet sits at page index 3.
@@ -170,20 +195,30 @@ describe("flip-month-data", () => {
 
 		it("uses bare month names inside a year book", () => {
 			const months = buildYearFlipMonths(5785, testWindow);
-			const semantics = buildFlipPageSemantics(months, 17);
+			const semantics = buildFlipPageSemantics(months, 29);
 			expect(semantics.indexToSemanticName(3)).toBe(months[0].semanticName);
 			expect(semantics.indexToSemanticName(3)).not.toContain("ה'");
+			// Second month sheet sits two faces later (sheet + card back).
+			expect(semantics.indexToSemanticName(5)).toBe(months[1].semanticName);
+		});
+
+		it("keeps companion card-back faces semantically empty", () => {
+			const months = buildYearFlipMonths(5785, testWindow);
+			const semantics = buildFlipPageSemantics(months, 29);
+			// Page 4 is the card back under the first month sheet.
+			expect(semantics.indexToSemanticName(4)).toBe("");
+			expect(semantics.indexToTitle(4)).toBe("");
 		});
 
 		it("reports titles for month and chrome pages", () => {
 			const months = buildYearFlipMonths(5785, testWindow);
-			const semantics = buildFlipPageSemantics(months, 17);
+			const semantics = buildFlipPageSemantics(months, 29);
 			expect(semantics.indexToTitle(3)).toBe(
 				getMonthLabel(months[0].ref),
 			);
 			expect(semantics.indexToTitle(0)).toBe("עטיפה קדמית");
-			expect(semantics.indexToTitle(16)).toBe("עטיפה אחורית");
-			expect(semantics.indexToTitle(15)).toBe("");
+			expect(semantics.indexToTitle(28)).toBe("עטיפה אחורית");
+			expect(semantics.indexToTitle(27)).toBe("");
 			expect(semantics.indexToSemanticName(0)).toBe("");
 			expect(semantics.semanticNameToIndex("לא קיים")).toBeNull();
 		});
