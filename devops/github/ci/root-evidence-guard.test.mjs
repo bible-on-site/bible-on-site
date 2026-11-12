@@ -60,6 +60,10 @@ test("path matching is anchored to the repository root only", () => {
 			"evidence-note.md",
 			"x-evidence/shot.png",
 			"devops/evidence2.ts",
+			// Git paths may carry leading whitespace — this is not a root
+			// `evidence/` path and must never be flagged as one.
+			" evidence/shot.png",
+			"evidence /shot.png",
 		]),
 		[],
 	);
@@ -163,6 +167,25 @@ test("removing the /evidence/ .gitignore anchor is a finding on its own", () => 
 		assert.equal(runGuard(dir).status, 1);
 	} finally {
 		rmSync(dir, { recursive: true, force: true });
+	}
+});
+
+test("gitignore whitespace semantics — leading space is inert, trailing is fine", () => {
+	// ` /evidence/` never matches `evidence/` in gitignore terms, so the
+	// anchor check must not accept it.
+	const inert = fixtureRepo(["AGENTS.md"], { gitignore: " /evidence/\n" });
+	try {
+		assert.match(findMissingIgnoreRule(inert), /anchors `\/evidence\/`/);
+	} finally {
+		rmSync(inert, { recursive: true, force: true });
+	}
+	// Trailing whitespace is stripped by gitignore, so `/evidence/ \t` is
+	// still a live anchor and must pass.
+	const live = fixtureRepo(["AGENTS.md"], { gitignore: "/evidence/ \t\n" });
+	try {
+		assert.equal(findMissingIgnoreRule(live), null);
+	} finally {
+		rmSync(live, { recursive: true, force: true });
 	}
 });
 

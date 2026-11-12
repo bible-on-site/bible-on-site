@@ -61,10 +61,10 @@ export function repoTopLevel(root) {
 
 /** Every path in the git index — tracked, staged or force-added. */
 export function listTrackedPaths(root) {
-	return runGit(root, ["ls-files", "-z"])
-		.split("\0")
-		.map((p) => p.trim())
-		.filter(Boolean);
+	// `-z` output is verbatim: never trim — git paths may legitimately
+	// begin or end with whitespace, and trimming ` evidence/x` would
+	// falsely flag it as a root evidence path.
+	return runGit(root, ["ls-files", "-z"]).split("\0").filter(Boolean);
 }
 
 /**
@@ -84,7 +84,10 @@ export function findMissingIgnoreRule(root) {
 	if (!existsSync(file)) return "root .gitignore is missing entirely";
 	const anchored = readFileSync(file, "utf8")
 		.split("\n")
-		.some((line) => line.trim() === `/${FORBIDDEN_ROOT}/`);
+		// gitignore ignores *trailing* whitespace but leading whitespace is
+		// significant — ` /evidence/` is an inert pattern that must not
+		// satisfy the anchor check.
+		.some((line) => line.trimEnd() === `/${FORBIDDEN_ROOT}/`);
 	return anchored
 		? null
 		: "root .gitignore no longer anchors `/evidence/` — restore the ignore entry as first-line protection";
