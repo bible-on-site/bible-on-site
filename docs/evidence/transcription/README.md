@@ -39,7 +39,7 @@ The model is `ivrit-ai/whisper-large-v3-ct2` at
 `e9ed4a4a98d761b0f617d668303de2c514236c66`. Its downloaded model file was
 verified against the published SHA-256
 `765965efd777190f76e8b337520056f00d68e48bb99b2f95d28670b2364a02ce`.
-All final runs used cached weights with `--offline`, the full model, beam 5,
+The original unseeded runs used cached weights with `--offline`, the full model, beam 5,
 native long-form decoding, previous-text context, standard temperature fallback,
 and no VAD trimming or precision/model fallback.
 
@@ -106,12 +106,83 @@ article content hash. Both complete original CLI runtimes above remain unchanged
 
 ## Automated checks
 
-All 91 tests pass with the real S3 SDK and media integrations enabled, with
+All 106 tests pass with the real S3 SDK and media integrations enabled, with
 99% branch-aware coverage and every production source line covered. Tests
 generate their own WAV/video/multi-track/corrupt-media fixtures. Real boto3
 transport is constrained to a loopback-only server; no production AWS identity,
 endpoint, bucket or archive file is used. Existing CI routing tests also pass
 (190 cases), including local-tool deployment isolation.
+
+## Text disagreement root cause
+
+The initial punctuation-only comparison of the two complete lecture outputs
+reported 598 word edits (17.22%). That overstated spoken-text disagreement:
+the Opus result contains 453 invisible `U+202B RIGHT-TO-LEFT EMBEDDING` controls,
+and WebM contains none. They begin at 584.22 seconds in the Opus recognition.
+Of the original alignment's substitutions, 426 differed only in direction
+formatting. Re-aligning after stripping those controls gives:
+
+| Complete-output comparison | Word edits | Character edits |
+| --- | ---: | ---: |
+| Punctuation removed, bidi controls retained | 598 / 3472 (17.22%) | 891 / 17598 (5.06%) |
+| Punctuation and bidi controls removed | 170 / 3472 (4.90%) | 442 / 17145 (2.58%) |
+
+Percentages use the Opus input as denominator. Exact edit counts were checked
+with independent bit-vector and ordinary dynamic-program algorithms. No Hebrew
+letters were removed, including vav/yod; no diacritics or joiners were removed.
+These remain output disagreements, with no human reference for this lecture.
+The derived HTML now strips bidi controls and records their count, while raw
+segments stay unchanged for audit. The comparison command has regressions for
+direction controls, full/defective spelling and retained diacritics/joiners.
+
+### Decoder mechanism and controlled replay
+
+The [pinned faster-whisper decoder](https://github.com/SYSTRAN/faster-whisper/blob/v1.2.1/faster_whisper/transcribe.py)
+switches from beam search to sampling when compression or log-probability
+heuristics reject a candidate. In the controlled lecture excerpt, a normal
+high-probability candidate had compression ratio 2.4646, above the generic 2.4
+threshold, while its average log probability was -0.1633, well above the -1.0
+threshold. Compression alone triggered fallback. This is evidence of a heuristic
+trigger on this excerpt, not a calibrated assessment of speech correctness.
+
+Two calls with exactly the same decoded samples, previous-token prompt, model,
+FP16 compute type and default options produced different text. Their first
+beam-search window matched; subsequent sampling attempts and selected words
+differed. Temperature-triggered context resets were followed by a new window
+emitting bidi controls. In beam-only replay, context was retained and that
+window emitted no bidi controls. The native decoder also reports the last
+tried temperature after exhausting fallback, even when its selected candidate
+came from another temperature; recorded temperatures must be interpreted that
+way. Whole-recording context and timestamp choices can propagate a local change.
+
+| Same 60-second excerpt and fixed previous-token prompt | Observation |
+| --- | --- |
+| Standard fallback, two calls without seeding | Different raw text hashes; 6 versus 8 generation attempts |
+| Beam 5, temperature zero, two calls | Identical raw text hashes; 3 generation attempts each |
+| Standard fallback, seed 0 before workers, two fresh processes | Identical raw text hashes; 7 generation attempts each |
+| Beam 10, patience 2, temperature zero | Changed word choices; no reference-based accuracy advantage established |
+
+[CTranslate2's native RNG implementation](https://github.com/OpenNMT/CTranslate2/blob/v4.9.0/src/random.cc)
+initializes thread-local generators once. The command now sets and records a
+default seed of zero before worker creation; this is a reproducibility control,
+not a promise of identical results from reused workers or different hardware.
+Beam-only decoding is an explicit option. Standard fallback and beam 5 remain
+the defaults because stability and a larger beam do not establish accuracy.
+The full Hebrew model remains pinned; the
+[publisher's benchmark](https://huggingface.co/spaces/ivrit-ai/hebrew-transcription-leaderboard/blob/main/benchmark.csv)
+supports the corresponding full model on long-form Hebrew. Its results are not
+an accuracy measurement for the supplied lecture.
+
+### Input contribution and quality limit
+
+The two source recordings also differ: 3362 encoded audio packets are unequal.
+Strict decoding yields equal lengths and no timing offset, but only 87.41% of
+float samples are exactly equal. The aligned RMS difference is 0.000413 versus
+Opus signal RMS 0.062966; 0.90% of samples differ by more than 0.0001. This
+separates an input difference from the same-input decoder instability above.
+It does not identify a more faithful original recording or a more accurate
+complete transcript. Remaining disagreements include actual word substitutions
+and name/spelling conventions. Listening and editorial review are required.
 
 See [the pipeline guide](../../../devops/transcription/README.md) for commands,
 the archive access constraint, artifact schema and future draft handoff.

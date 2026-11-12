@@ -142,8 +142,12 @@ absent by these checks.
 Paragraphs break on a 1.5-second pause or at segment boundaries when another
 segment would exceed 900 characters. Adjust `--paragraph-pause` and
 `--max-paragraph-characters` as needed; a single long segment is kept intact.
-Display text normalizes authored Hebrew quotes/apostrophes/hyphens to ASCII and
-collapses whitespace. Raw recognized text remains unchanged in `transcript.json`.
+Display text normalizes authored Hebrew quotes/apostrophes/hyphens to ASCII,
+collapses whitespace and removes Unicode `Bidi_Control` characters emitted by
+the model. The preview's `dir` attribute supplies direction. Hebrew letters,
+diacritics and joiners are preserved. `formatting.bidi_controls_removed` records
+the body control count; raw recognized text remains unchanged in
+`transcript.json`.
 The default language is Hebrew; `--language en` or `--language auto` is explicit.
 The title defaults to the source filename without its extension.
 
@@ -162,6 +166,42 @@ review warnings.
 Exports contain private source names and speech; keep them in local ignored
 `.outputs/` storage and apply the recording's access restrictions when sharing.
 
+## Reproducible decoding and output comparison
+
+The initial native random seed defaults to `0` and is recorded in model
+provenance. Choose another with `--random-seed NUMBER` (0 through 4294967294).
+It is set before creating CUDA/model workers: CTranslate2 caches random
+generators per native thread. Resetting the global seed after workers have
+already sampled does not reset those generators. Separate fresh CLI processes
+reproduced the same fallback excerpt byte for byte on the tested runtime.
+Repeated calls on an already-loaded library instance consume its RNG state;
+the seed does not promise equality across hardware, runtimes or compute types.
+It also does not establish recognition accuracy.
+
+`--decoding-mode fallback` remains the default: beam search followed by the
+standard temperature fallback when its heuristics reject a candidate.
+`--decoding-mode beam` explicitly restricts decoding to temperature zero with
+the selected `--beam-size`. Beam-only repeats were stable in the controlled
+test, while increasing the beam changed words without establishing an accuracy
+improvement. The full pinned Hebrew model, beam 5, previous-text context and
+complete audio remain the defaults; no faster model or automatic precision
+change was introduced. See the [RCA and measured limits](../../docs/evidence/transcription/README.md#text-disagreement-root-cause).
+
+Compare two complete exports without GPU dependencies:
+
+```powershell
+python -m devops.transcription.compare output/opus/transcript.json output/webm/transcript.json
+```
+
+The JSON report gives exact word/character Levenshtein edits, input lengths,
+the edit fraction relative to the left input, a symmetric distance divided by
+the longer input, and counts of bidi controls. Empty-left fractions are `null`;
+two empty inputs have symmetric distance zero. Comparison ignores timestamps,
+segment boundaries, punctuation/symbols, bidi controls and whitespace differences,
+then applies NFKC/lowercase normalization. All Hebrew letters, including vav and
+yod, diacritics and joiners remain significant. Neither output is treated as a
+human reference: these are disagreement measurements, not WER or accuracy.
+
 ## Incremental diagnostic checkpoints
 
 The checkpoint entry point runs the same CLI and flushes each ready native
@@ -179,6 +219,9 @@ and info unchanged, and restores the native method on exit. It preserves raw
 segment text/timestamps and native diagnostics, including tokens, temperature,
 log probability, compression ratio and no-speech score. These are uncalibrated
 model diagnostics, not correctness probabilities.
+In faster-whisper 1.2.1, reported fallback temperature can be the final tried
+temperature even when a lower-temperature candidate is selected. It is not
+proof that the saved text came from that temperature.
 
 Events are `started`, `recognition_started`, `segment` and `finished`.
 `pipeline_elapsed_seconds` starts at wrapper entry and includes setup, source

@@ -26,6 +26,8 @@ class ModelConfigTests(unittest.TestCase):
         self.assertEqual(config.revision, DEFAULT_REVISION)
         self.assertEqual(config.language, "he")
         self.assertEqual(config.compute_type, "float32")
+        self.assertEqual(config.random_seed, 0)
+        self.assertEqual(config.decoding_mode, "fallback")
         with self.assertRaises(FrozenInstanceError):
             config.language = "en"
 
@@ -47,6 +49,11 @@ class ModelConfigTests(unittest.TestCase):
             {"beam_size": 0},
             {"beam_size": True},
             {"beam_size": 1.5},
+            {"random_seed": -1},
+            {"random_seed": True},
+            {"random_seed": 1.2},
+            {"random_seed": 2**32 - 1},
+            {"decoding_mode": "sampling"},
             {"audio_stream": -1},
             {"audio_stream": True},
             {"audio_stream": 0.5},
@@ -85,6 +92,7 @@ class LocalTranscriberTests(unittest.TestCase):
         ]
         self.engine.transcribe.return_value = (iter(self.recognized), self.info)
         self.ctranslate = SimpleNamespace(
+            set_random_seed=MagicMock(),
             get_cuda_device_count=MagicMock(return_value=1),
             get_supported_compute_types=MagicMock(return_value={"float16", "float32", "int8_float16"}),
             __version__="ct2-test",
@@ -104,6 +112,25 @@ class LocalTranscriberTests(unittest.TestCase):
         self.ctranslate.get_cuda_device_count.assert_not_called()
         self.hub.snapshot_download.assert_not_called()
         self.whisper.WhisperModel.assert_not_called()
+
+    def test_native_seed_is_set_before_cuda_and_model_workers_are_created(self):
+        sequence = MagicMock()
+        sequence.attach_mock(self.ctranslate.set_random_seed, "seed")
+        sequence.attach_mock(self.ctranslate.get_cuda_device_count, "cuda")
+        sequence.attach_mock(self.whisper.WhisperModel, "model")
+        result = LocalTranscriber(ModelConfig(random_seed=47)).transcribe(Path("lecture.opus"))
+        self.ctranslate.set_random_seed.assert_called_once_with(47)
+        calls = [entry[0] for entry in sequence.mock_calls]
+        self.assertLess(calls.index("seed"), calls.index("cuda"))
+        self.assertLess(calls.index("cuda"), calls.index("model"))
+        self.assertEqual(result.model["random_seed"], 47)
+        self.assertEqual(result.model["decoding_mode"], "fallback")
+
+    def test_beam_only_mode_is_explicit_and_recorded(self):
+        result = LocalTranscriber(ModelConfig(decoding_mode="beam")).transcribe(Path("lecture.opus"))
+        self.assertEqual(self.engine.transcribe.call_args.kwargs["temperature"], (0.0,))
+        self.assertEqual(result.model["temperature"], (0.0,))
+        self.assertEqual(result.model["decoding_mode"], "beam")
 
     def test_pinned_snapshot_and_cuda_settings_are_forwarded(self):
         config = ModelConfig(model_cache="chosen-cache", local_files_only=True)

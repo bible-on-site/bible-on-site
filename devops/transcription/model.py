@@ -30,6 +30,8 @@ class ModelConfig:
     device_index: int = 0
     compute_type: str = "float32"
     beam_size: int = 5
+    random_seed: int = 0
+    decoding_mode: str = "fallback"
     local_files_only: bool = False
     model_cache: str | None = None
     audio_stream: int | None = None
@@ -50,6 +52,11 @@ class ModelConfig:
             raise ValueError("Choose an explicit CUDA compute type: float16, float32, int8_float16 or int8_float32.")
         if isinstance(self.beam_size, bool) or not isinstance(self.beam_size, int) or self.beam_size < 1:
             raise ValueError("Beam size must be a positive integer.")
+        if (isinstance(self.random_seed, bool) or not isinstance(self.random_seed, int)
+                or not 0 <= self.random_seed < 2**32 - 1):
+            raise ValueError("Random seed must be an integer from 0 to 4294967294.")
+        if self.decoding_mode not in {"fallback", "beam"}:
+            raise ValueError("Decoding mode must be fallback or beam.")
         if self.audio_stream is not None and (
             isinstance(self.audio_stream, bool)
             or not isinstance(self.audio_stream, int)
@@ -97,6 +104,9 @@ class LocalTranscriber:
                 "CTranslate2 could not be imported. See devops/transcription/README.md."
             ) from error
         try:
+            # Native worker RNGs initialize once; seed before creating CUDA/model workers.
+            # Repeated calls on an already-loaded engine consume that RNG state.
+            ctranslate2.set_random_seed(self.config.random_seed)
             count = ctranslate2.get_cuda_device_count()
             if self.config.device_index >= count:
                 raise RuntimeError(
@@ -155,7 +165,7 @@ class LocalTranscriber:
             "task": "transcribe",
             "beam_size": self.config.beam_size,
             "best_of": 5,
-            "temperature": (0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
+            "temperature": (0.0, 0.2, 0.4, 0.6, 0.8, 1.0) if self.config.decoding_mode == "fallback" else (0.0,),
             "compression_ratio_threshold": 2.4,
             "log_prob_threshold": -1.0,
             "no_speech_threshold": 0.6,
@@ -180,6 +190,8 @@ class LocalTranscriber:
                 "device": "cuda",
                 "device_index": self.config.device_index,
                 "compute_type": self.config.compute_type,
+                "random_seed": self.config.random_seed,
+                "decoding_mode": self.config.decoding_mode,
                 "runtime_versions": dict(self._runtime_versions),
                 "audio": dict(decoded.metadata),
                 **options,

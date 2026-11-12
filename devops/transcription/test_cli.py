@@ -29,6 +29,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(config.language, "he")
         self.assertEqual(config.revision, DEFAULT_REVISION)
         self.assertFalse(config.local_files_only)
+        self.assertEqual(config.random_seed, 0)
+        self.assertEqual(config.decoding_mode, "fallback")
         self.assertEqual(execute.call_args.args, ("recording.mp3", Path(".outputs/transcription")))
 
     def test_explicit_s3_configuration_and_offline_model(self):
@@ -37,6 +39,7 @@ class CliTests(unittest.TestCase):
                      "--model-revision", "a" * 40, "--language", "auto", "--device-index", "1",
                      "--compute-type", "int8_float16", "--beam-size", "3", "--model-cache", "cache",
                      "--audio-stream", "1",
+                     "--random-seed", "23", "--decoding-mode", "beam",
                      "--offline", "--paragraph-pause", "2.0", "--max-paragraph-characters", "500"]
         status, _, _, execute = self.invoke(arguments)
         self.assertEqual(status, 0)
@@ -46,6 +49,8 @@ class CliTests(unittest.TestCase):
         self.assertEqual(config.model_cache, "cache")
         self.assertEqual(config.audio_stream, 1)
         self.assertTrue(config.local_files_only)
+        self.assertEqual(config.random_seed, 23)
+        self.assertEqual(config.decoding_mode, "beam")
         self.assertEqual(execute.call_args.kwargs["aws_profile"], "reader")
         options = execute.call_args.kwargs["options"]
         self.assertEqual((options.title, options.paragraph_pause, options.max_paragraph_characters),
@@ -60,7 +65,8 @@ class CliTests(unittest.TestCase):
 
     def test_invalid_options_fail_before_pipeline(self):
         for arguments in [["--paragraph-pause", "nan"], ["--beam-size", "0"],
-                          ["--title", " "], ["--model-revision", "main"]]:
+                          ["--title", " "], ["--model-revision", "main"],
+                          ["--random-seed", "-1"], ["--random-seed", "4294967295"]]:
             with self.subTest(arguments=arguments):
                 status, _, stderr, execute = self.invoke(["a.mp3", *arguments])
                 self.assertEqual(status, 1)

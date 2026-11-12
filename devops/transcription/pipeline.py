@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from .model import LocalTranscriber, ModelConfig, Transcript
 from .sources import SourceFile, materialize_source
+from .text import BIDI_CONTROLS, strip_direction_controls
 
 
 # Well below native ASR timestamp resolution; raw estimates remain untouched.
@@ -43,7 +44,7 @@ class ExportOptions:
             raise ValueError("paragraph_pause must be finite and greater than zero")
         if self.max_paragraph_characters < 1:
             raise ValueError("max_paragraph_characters must be greater than zero")
-        if self.title is not None and not self.title.strip():
+        if self.title is not None and not normalize_display(self.title):
             raise ValueError("title must contain text")
 
 
@@ -65,7 +66,7 @@ class ExportResult:
 
 def normalize_display(text: str) -> str:
     """Apply authored-Hebrew punctuation policy without changing raw ASR data."""
-    return " ".join(text.translate(str.maketrans({
+    return " ".join(strip_direction_controls(text).translate(str.maketrans({
         "\u05f4": '"', "\u201c": '"', "\u201d": '"',
         "\u05f3": "'", "\u2018": "'", "\u2019": "'",
         "\u05be": "-", "\u2010": "-", "\u2011": "-", "\u2013": "-", "\u2014": "-",
@@ -100,7 +101,7 @@ def validate_transcript(transcript: Transcript) -> list[dict[str, object]]:
             warnings.append({"code": "timestamp-beyond-recording", "segment_index": index})
         previous_start = segment.start
         previous_end = max(previous_end, segment.end)
-    if not any(segment.text.strip() for segment in transcript.segments):
+    if not any(normalize_display(segment.text) for segment in transcript.segments):
         raise ValueError("No speech recognized; no article was exported")
     return warnings
 
@@ -108,6 +109,9 @@ def validate_transcript(transcript: Transcript) -> list[dict[str, object]]:
 def build_article(transcript: Transcript, title: str, options: ExportOptions) -> ArticleCandidate:
     """Group escaped speech into paragraphs accepted by admin's HTML source mode."""
     validate_transcript(transcript)
+    title = normalize_display(title)
+    if not title:
+        raise ValueError("title must contain text")
     paragraphs: list[str] = []
     current = ""
     previous_end = 0.0
@@ -124,7 +128,7 @@ def build_article(transcript: Transcript, title: str, options: ExportOptions) ->
     if current:
         paragraphs.append(current)
     content = "\n".join(f"<p>{escape(paragraph)}</p>" for paragraph in paragraphs) + "\n"
-    return ArticleCandidate(title=normalize_display(title), content=content)
+    return ArticleCandidate(title=title, content=content)
 
 
 def preview_document(article: ArticleCandidate, language: str) -> str:
@@ -173,7 +177,8 @@ def export_transcript(source: SourceFile, transcript: Transcript, output_dir: Pa
                           "segments": [asdict(segment) for segment in transcript.segments]},
         "article": {"title": article.title, "content_file": "article.html",
                     "content_sha256": hashlib.sha256(article.content.encode("utf-8")).hexdigest()},
-        "formatting": asdict(options),
+        "formatting": {**asdict(options), "bidi_controls_removed": sum(
+            character in BIDI_CONTROLS for segment in transcript.segments for character in segment.text)},
         "artifacts": {"preview": "preview.html", "transcript": "transcript.json"},
     }
     # Serialize first, so malformed model/source metadata cannot leave a partial

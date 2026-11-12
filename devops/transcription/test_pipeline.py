@@ -77,6 +77,19 @@ class ArticleTests(unittest.TestCase):
         self.assertEqual(article.title, 'תנ"ך')
         self.assertEqual(transcript.segments[0].text, raw)
 
+    def test_direction_controls_are_removed_without_changing_hebrew_spelling(self):
+        raw = "\u202bהייתה \u200fשלום\u202c"
+        article = build_article(recognized(Segment(0, 1, raw)), "\u2067כותרת\u2069", ExportOptions())
+        self.assertEqual(article.content, "<p>הייתה שלום</p>\n")
+        self.assertEqual(article.title, "כותרת")
+        self.assertEqual(normalize_display("א\u200cב שׁ"), "א\u200cב שׁ")
+        with self.assertRaisesRegex(ValueError, "No speech"):
+            build_article(recognized(Segment(0, 1, "\u202b\u202c")), "כותרת", ExportOptions())
+        with self.assertRaisesRegex(ValueError, "title must contain text"):
+            ExportOptions(title="\u202b\u202c")
+        with self.assertRaisesRegex(ValueError, "title must contain text"):
+            build_article(recognized(), "\u202b\u202c", ExportOptions())
+
     def test_preview_direction_language_and_inert_policy(self):
         for language, direction in [("he", "rtl"), ("en", "ltr")]:
             with self.subTest(language=language):
@@ -142,6 +155,14 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(list(self.output.iterdir()), [result.directory])
         if os.name == "posix":
             self.assertEqual(result.directory.stat().st_mode & 0o777, 0o700)
+
+    def test_direction_cleanup_is_recorded_and_raw_evidence_is_preserved(self):
+        raw = "\u202bהייתה \u202bשלום"
+        result = export_transcript(self.source, recognized(Segment(0, 1, raw)), self.output, ExportOptions())
+        manifest = json.loads((result.directory / "transcript.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["transcription"]["segments"][0]["text"], raw)
+        self.assertEqual(manifest["formatting"]["bidi_controls_removed"], 2)
+        self.assertEqual(result.article.content, "<p>הייתה שלום</p>\n")
 
     def test_repeated_runs_never_overwrite_and_input_names_cannot_escape(self):
         source = replace(self.source, filename="../../CON.mp3")

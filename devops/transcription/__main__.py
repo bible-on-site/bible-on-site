@@ -24,6 +24,10 @@ def parser() -> argparse.ArgumentParser:
     cli.add_argument("--device-index", type=int, default=defaults.device_index)
     cli.add_argument("--compute-type", choices=["float16", "float32", "int8_float16", "int8_float32"], default=defaults.compute_type)
     cli.add_argument("--beam-size", type=int, default=defaults.beam_size)
+    cli.add_argument("--random-seed", type=int, default=defaults.random_seed,
+                     help="Seed native workers before loading (default: 0); does not imply accuracy")
+    cli.add_argument("--decoding-mode", choices=["fallback", "beam"], default=defaults.decoding_mode,
+                     help="Standard temperature fallback, or beam-only decoding (default: fallback)")
     cli.add_argument("--model-cache", help="Hugging Face cache directory")
     cli.add_argument("--offline", action="store_true", help="Require cached model weights; never download models")
     cli.add_argument("--paragraph-pause", type=float, default=1.5, metavar="SECONDS")
@@ -44,6 +48,7 @@ def main(argv: list[str] | None = None) -> int:
         config_args = {"model": args.model, "language": args.language,
                        "device_index": args.device_index, "compute_type": args.compute_type,
                        "beam_size": args.beam_size, "local_files_only": args.offline,
+                       "random_seed": args.random_seed, "decoding_mode": args.decoding_mode,
                        "model_cache": args.model_cache, "audio_stream": args.audio_stream}
         if args.model_revision is not None:
             config_args["revision"] = args.model_revision
