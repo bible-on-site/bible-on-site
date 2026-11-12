@@ -1,6 +1,7 @@
 /** @jest-environment node */
 import { writeBenchmark } from "../../../scripts/benchmark-store.cjs";
 import {
+	budgetedTimingBenchmarkEntry,
 	getLighthouseMeasure,
 	reportFrameBlockingBenchmark,
 	webVitalsMeasure,
@@ -56,6 +57,66 @@ describe("webVitalsMeasure", () => {
 		"maps the %s timing metric to time_ms",
 		(name) => {
 			expect(webVitalsMeasure(name)).toBe("time_ms");
+		},
+	);
+});
+
+describe("budgetedTimingBenchmarkEntry", () => {
+	it.each([
+		["INP", 16, 200, 0.08],
+		["TTFB", 5.7, 800, 0.007125],
+		["FCP", 96, 1800, 96 / 1800],
+		["LCP", 104, 2500, 104 / 2500],
+	] as const)(
+		"normalizes %s of %sms onto the static bound of its %sms web budget",
+		(name, value, budget, expectedRatio) => {
+			// #2971: an 8ms-quantized single-digit-ms timing makes any
+			// percentage-of-history boundary fire on runner noise; the static
+			// bound keeps the test's own "good" budget as the alert limit.
+			const entry = budgetedTimingBenchmarkEntry({
+				name: `webvitals: ${name}`,
+				measure: "time_ms",
+				value,
+				upperValue: budget,
+			});
+			expect(entry.measure).toBe("frame_budget_ratio");
+			expect(entry.value).toBeCloseTo(expectedRatio, 12);
+			expect(entry.upperValue).toBe(1);
+		},
+	);
+
+	it("keeps non-timing measures on their dedicated measures", () => {
+		const cls = budgetedTimingBenchmarkEntry({
+			name: "webvitals: CLS",
+			measure: "cls_ratio",
+			value: 0.02,
+			upperValue: 0.1,
+		});
+		expect(cls).toEqual({
+			name: "webvitals: CLS",
+			measure: "cls_ratio",
+			value: 0.02,
+			upperValue: 0.1,
+		});
+	});
+
+	it.each([
+		["missing", undefined],
+		["zero", 0],
+		["negative", -1],
+		["non-finite", Number.NaN],
+	])(
+		"leaves a timing entry untouched when the budget is %s",
+		(_label, upperValue) => {
+			const entry = budgetedTimingBenchmarkEntry({
+				name: "t",
+				measure: "time_ms",
+				value: 12,
+				upperValue,
+			});
+			expect(entry.measure).toBe("time_ms");
+			expect(entry.value).toBe(12);
+			expect(entry.upperValue).toBe(upperValue);
 		},
 	);
 });
