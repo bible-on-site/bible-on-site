@@ -40,6 +40,14 @@ on:
       perushim_notes_sqlite_artifact:
         type: string
         default: ""
+      publish_caches:
+        # A/B experiment legs (#2635) pass false: they must not write shared
+        # Actions caches — a namespace-captured simulator state saved under
+        # the shared key could be restored by xcode-27 legs and master runs.
+        # Restores still run, so both legs keep the same cache-read policy.
+        description: "false disables every Actions cache save and the iOS simulator-state capture that feeds it"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -423,7 +431,7 @@ jobs:
       # bun install --frozen-lockfile is done, so node_modules is frozen. Background cache publication
       # finishes at the wait-all gate before device tests.
       - name: Save node_modules
-        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && (github.ref == 'refs/heads/master' && steps.node-modules-cache.outputs.cache-hit != 'true')
+        if: inputs.mode != 'build' && inputs.mode != 'release-smoke' && (github.ref == 'refs/heads/master' && steps.node-modules-cache.outputs.cache-hit != 'true') && inputs.publish_caches
         background: true
         uses: actions/cache/save@v6
         with:
@@ -490,7 +498,7 @@ jobs:
       # Background like the other cache saves: compression and upload stay off
       # the build's critical path; the wait-all gate still bounds it.
       - name: Save MAUI workload packs
-        if: inputs.mode != 'prebuilt-run' && (github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.workload-cache.outputs.cache-hit != 'true')
+        if: inputs.mode != 'prebuilt-run' && (github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.workload-cache.outputs.cache-hit != 'true') && inputs.publish_caches
         background: true
         uses: actions/cache/save@v6
         with:
@@ -577,7 +585,7 @@ jobs:
           if-no-files-found: error
 
       - name: Save iOS obj intermediates
-        if: inputs.mode != 'prebuilt-run' && (inputs.platform == 'iOS' && github.ref == 'refs/heads/master' && steps.obj-cache.outputs.cache-hit != 'true')
+        if: inputs.mode != 'prebuilt-run' && (inputs.platform == 'iOS' && github.ref == 'refs/heads/master' && steps.obj-cache.outputs.cache-hit != 'true') && inputs.publish_caches
         uses: actions/cache/save@v6
         with:
           path: |
@@ -586,7 +594,7 @@ jobs:
           key: ios-e2e-obj-${{ steps.toolchain.outputs.id }}-${{ github.sha }}
 
       - name: Save NuGet packages
-        if: inputs.mode != 'prebuilt-run' && (github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true')
+        if: inputs.mode != 'prebuilt-run' && (github.ref == 'refs/heads/master' && steps.nuget-cache.outputs.cache-hit != 'true') && inputs.publish_caches
         uses: actions/cache/save@v6
         with:
           path: ~/.nuget/packages
@@ -595,6 +603,7 @@ jobs:
       - name: Prepare Android emulator runtime and hardware acceleration
         if: inputs.platform == 'Android'
         run: |
+          sudo "$(command -v node)" "$GITHUB_WORKSPACE/devops/github/ci/ubuntu-apt-mirrors.mjs"
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y libpulse0
           sudo chmod 666 /dev/kvm
@@ -698,7 +707,7 @@ jobs:
       # Caches are written from push/workflow_dispatch runs: default-branch runs
       # publish for every PR, while PR and merge-queue runs only restore.
       - name: Save clean AVD snapshot
-        if: inputs.platform == 'Android' && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.sdk-key.outputs.resolved == 'true' && steps.avd-cache.outputs.cache-hit != 'true' && steps.snapshot-files.outputs.saved == 'true'
+        if: inputs.platform == 'Android' && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.sdk-key.outputs.resolved == 'true' && steps.avd-cache.outputs.cache-hit != 'true' && steps.snapshot-files.outputs.saved == 'true' && inputs.publish_caches
         uses: actions/cache/save@v6
         with:
           path: ${{ steps.sdk-key.outputs.avd-home }}
@@ -771,7 +780,7 @@ jobs:
           fi
 
       - name: Save Android SDK packages
-        if: inputs.platform == 'Android' && always() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.sdk-key.outputs.resolved == 'true' && steps.sdk-cache.outputs.cache-hit != 'true' && steps.device-ready.outputs.ready == 'true'
+        if: inputs.platform == 'Android' && always() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.sdk-key.outputs.resolved == 'true' && steps.sdk-cache.outputs.cache-hit != 'true' && steps.device-ready.outputs.ready == 'true' && inputs.publish_caches
         uses: actions/cache/save@v6
         with:
           path: |
@@ -848,12 +857,12 @@ jobs:
       # the directory is a consistent Shutdown image. A device that does not
       # match the resolved UDID is never captured under its key.
       - name: Quiesce iOS simulator for state capture
-        if: inputs.mode != 'build' && (inputs.platform == 'iOS' && always() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.ios-device.outputs.udid != '' && steps.ios-sim-cache.outputs.cache-hit != 'true' && steps.simulator.outcome == 'success')
+        if: inputs.mode != 'build' && (inputs.platform == 'iOS' && always() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.ios-device.outputs.udid != '' && steps.ios-sim-cache.outputs.cache-hit != 'true' && steps.simulator.outcome == 'success' && inputs.publish_caches)
         id: ios-sim-quiesce
         run: node app/mobile-e2e/ios-sim-state.mjs quiesce "${{ steps.ios-device.outputs.udid }}"
 
       - name: Save iOS simulator state
-        if: inputs.mode != 'build' && (inputs.platform == 'iOS' && always() && steps.ios-sim-quiesce.outputs.saved == 'true')
+        if: inputs.mode != 'build' && (inputs.platform == 'iOS' && always() && steps.ios-sim-quiesce.outputs.saved == 'true' && inputs.publish_caches)
         uses: actions/cache/save@v6
         with:
           path: ~/Library/Developer/CoreSimulator/Devices/${{ steps.ios-device.outputs.udid }}

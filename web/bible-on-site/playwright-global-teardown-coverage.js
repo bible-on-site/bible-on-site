@@ -1,8 +1,6 @@
 import { addCoverageReport } from "monocart-reporter";
 import { sanitizeCoverage } from "./tests/util/coverage/sanitize-coverage";
 
-const WEB_SERVER_URL = "http://127.0.0.1:3001";
-
 /**
  * Drains the dev server's remaining `global.__coverage__` one last time.
  *
@@ -20,11 +18,19 @@ const WEB_SERVER_URL = "http://127.0.0.1:3001";
  */
 const globalTeardown = async (config) => {
 	let coverageData;
+	// The configured server URL carries the suite's per-worktree port (#2881).
+	const webServerUrl = config.projects?.[0]?.use?.baseURL;
+	if (!webServerUrl) {
+		console.warn(
+			"[coverage] No baseURL configured; residual server coverage will not be collected.",
+		);
+		return;
+	}
 	try {
 		// Loopback drain of the dev server's coverage counters — the hardcoded
 		// 127.0.0.1 playwright webServer never leaves this machine.
 		// nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request
-		const res = await fetch(`${WEB_SERVER_URL}/api/dev/coverage`);
+		const res = await fetch(`${webServerUrl}/api/dev/coverage`);
 		if (!res.ok) {
 			console.warn(
 				`[coverage] Server coverage drain returned ${res.status}. ` +
@@ -38,7 +44,7 @@ const globalTeardown = async (config) => {
 		// (reuseExistingServer may attach to a production server without the
 		// dev-only /api/dev/coverage route).
 		console.warn(
-			`[coverage] Could not reach ${WEB_SERVER_URL}/api/dev/coverage. ` +
+			`[coverage] Could not reach ${webServerUrl}/api/dev/coverage. ` +
 				"Residual server coverage will not be collected.",
 		);
 		return;

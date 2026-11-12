@@ -518,7 +518,11 @@ describe("detectChanges", () => {
 		"web/bible-on-site/tests/perf/build-size.test.ts",
 		"web/bible-on-site/tests/util/coverage/merge-coverage.mts",
 		// Colocated *.test.* / *.spec.* files anywhere in the module.
-		"web/bible-on-site/scripts/start-server.test.mjs",
+		"web/bible-on-site/scripts/start-server-drain.test.mjs",
+		"web/bible-on-site/scripts/start-server-remote.test.mjs",
+		"web/bible-on-site/scripts/start-server-signals.test.mjs",
+		"web/bible-on-site/scripts/start-server-lifecycle.test.mjs",
+		"web/bible-on-site/scripts/start-server-probe.test.mjs",
 		"web/bible-on-site/scripts/verify-public-content.test.mjs",
 		"web/bible-on-site/src/lib/search/service.spec.ts",
 		// The jest harness.
@@ -540,6 +544,8 @@ describe("detectChanges", () => {
 		"web/bible-on-site/shared/typing/coverage.d.ts",
 		// Standalone report inspection never ships in the website.
 		"web/bible-on-site/scripts/coverage-gaps.mjs",
+		// Shared fixture module for the node:test launcher suites.
+		"web/bible-on-site/scripts/start-server-test-kit.mjs",
 	]) {
 		test(`${path} runs website checks without a release`, () => {
 			assert.deepEqual(changed([path], "website"), [
@@ -821,6 +827,47 @@ describe("isSchemaOnlyDataChange", () => {
 				".github/workflows/ci.yml",
 			],
 			true,
+		],
+		[
+			"private archive upgrade stays manual",
+			["data/mysql/private_archive_upgrade.sql"],
+			true,
+		],
+		[
+			"private archive upgrade with its admin and AWS implementation stays manual",
+			[
+				"data/mysql/private_archive_upgrade.sql",
+				"web/admin/src/server/archive/store.ts",
+				"devops/private-archive-db.mts",
+				"devops/aws/private-archive.yaml",
+			],
+			true,
+		],
+		[
+			"private archive upgrade cannot hide production content changes",
+			[
+				"data/mysql/private_archive_upgrade.sql",
+				"data/mysql/tanah_static_structure.sql",
+			],
+			false,
+		],
+		[
+			"private archive upgrade cannot hide data dependency changes",
+			["data/mysql/private_archive_upgrade.sql", "data/Cargo.lock"],
+			false,
+		],
+		[
+			"private archive upgrade cannot exempt bootstrap changes",
+			[
+				"data/mysql/private_archive_upgrade.sql",
+				"data/mysql/db-populator/src/main.rs",
+			],
+			false,
+		],
+		[
+			"private archive migration requires its exact path",
+			["data/mysql/nested/private_archive_upgrade.sql"],
+			false,
 		],
 		[
 			"multiple schema migrations",
@@ -1281,6 +1328,17 @@ describe("main", () => {
 		);
 		assert.deepEqual(changes.data, { module_changed: true, ci_changed: false });
 		assert.match(output, /^data_schema_only_changed=true$/m);
+	});
+
+	test("a private archive push emits manual deployment while retaining data checks", () => {
+		const { changes, output } = run(
+			"push",
+			({ base }) => ({ before: base }),
+			"data/mysql/private_archive_upgrade.sql",
+		);
+		assert.deepEqual(changes.data, { module_changed: true, ci_changed: false });
+		assert.match(output, /^data_schema_only_changed=true$/m);
+		assert.match(output, /^data_deploy_changed=false$/m);
 	});
 
 	test("a deleted schema migration stays manual without asserting the SQL still exists", () => {

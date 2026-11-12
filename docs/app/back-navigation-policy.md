@@ -135,6 +135,13 @@ Rules:
   system Back).
 - Windows never shows a capsule Back (`ShowCapsuleBack`): the title bar
   owns Back there, so an in-content button would be a second Windows Back.
+  The native WinUI `NavigationView` back arrow is suppressed at the
+  platform layer for the same reason — `DesktopWindowChrome` severs
+  MAUI's `Toolbar→IsBackButtonVisible` binding and pins the arrow
+  `Collapsed` (every page hides the Shell nav bar, so the
+  `ShowNavBarBack` carve-out alone could not reach it). The window
+  title-bar `TitleBarBackButton` is therefore the single Windows Back
+  control whenever navigation history exists (#2766).
 - `#2460` owns the exit-confirmation/blank-screen policy; this change does
   not alter it.
 

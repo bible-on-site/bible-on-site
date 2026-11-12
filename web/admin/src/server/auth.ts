@@ -66,8 +66,7 @@ export async function exchangeCodeForTokens(
 	});
 
 	if (!response.ok) {
-		const text = await response.text();
-		throw new Error(`Token exchange failed: ${response.status} ${text}`);
+		throw new Error(`Token exchange failed: ${response.status}`);
 	}
 
 	return response.json();
@@ -79,13 +78,13 @@ export async function exchangeCodeForTokens(
  */
 export async function verifyIdTokenClaims(
 	token: string,
-): Promise<{ sub?: string; email?: string } | null> {
+): Promise<{ sub?: string; email?: string; name?: string } | null> {
 	try {
 		const { payload } = await jwtVerify(token, jwks, {
 			issuer: ISSUER,
 			audience: COGNITO_CLIENT_ID,
 		});
-		return payload;
+		return payload.token_use === "id" ? payload : null;
 	} catch {
 		return null;
 	}
