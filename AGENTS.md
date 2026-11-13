@@ -50,10 +50,10 @@ When a change affects user-visible UI, show before/after evidence in the pull re
 
 Publish validation evidence only through pull-request descriptions/comments, issue attachments, CI artifacts or commit permalinks — never the repository-root `evidence/` directory, which CI rejects (#3319). Module-scoped evidence such as `docs/evidence/` remains allowed.
 
-# AWS Change Approval
+# Pull Request Merge Authorization
 
-Never merge an AWS-related pull request without Dorad's explicit approval of that specific pull request and its current AWS-impacting changes. This includes infrastructure/IaC, IAM and networking, DNS/CDN/cache behavior, S3 access and public asset URLs, deployment workflows, production resource settings, and cost optimizations.
+Dorad grants Codex standing authorization to merge pull requests in this repository without requesting separate or per-PR approval. This includes AWS-related pull requests and subsequent revisions of their AWS-impacting changes. This merge authorization supersedes older per-PR AWS merge-approval requirements and auto-merge restrictions in repository documentation. Honor any explicit user request to review a particular task or pull request before merging.
 
-An investigation/optimization request, approval of another change, green CI, a bot recommendation, or auto-merge is not merge approval. Prepare, validate and push the change, present its production and backward-compatibility impact with rollback, and wait for explicit approval. Do not enable auto-merge or bypass this requirement. Material AWS-impacting changes after approval require renewed approval.
+AWS-related pull requests include infrastructure/IaC, IAM and networking, DNS/CDN/cache behavior, S3 access and public asset URLs, deployment workflows, production resource settings, and cost optimizations. Validate and push the changes, address actionable review feedback, and explain their production and backward-compatibility impact with rollback. Codex may merge them directly or use auto-merge under repository policy without additional approval from Dorad.
 
 Production stability and backward compatibility of existing public and crawled URLs take priority over cost savings. Apply live AWS changes only within the user's explicit authorization, after verifying the target account, current state, validation and rollback.
