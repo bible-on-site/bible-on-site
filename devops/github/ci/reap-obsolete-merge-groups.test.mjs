@@ -75,7 +75,7 @@ test("ungrouped queue entries carry no commits without failing the reap",async()
  ]){const g=fixture();g.state.queueNodes=[node(sha("c"),sha("b"),20),broken];await assert.rejects(call(g,{dryRun:false}),/QUEUE_TOPOLOGY|UNKNOWN_QUEUE_HEAD/);assert.deepEqual(g.state.cancels,[]);}
 });
 
-test("an unmergeable entry can retain its base without a merge-group head", async () => {
+test("accepts an unmergeable entry retaining its base without a merge-group head", async () => {
  const f = fixture();
  f.state.queueNodes = [
   node(sha("c"), sha("b"), 20),
@@ -89,7 +89,7 @@ test("an unmergeable entry can retain its base without a merge-group head", asyn
  assert.deepEqual(f.state.cancels, [1]);
 });
 
-test("an unmergeable entry's retained base protects its CI run", async () => {
+test("preserves a CI run referenced by an unmergeable base", async () => {
  const f = fixture();
  f.state.queueNodes = [
   {...ungrouped(), state: "UNMERGEABLE", baseCommit: {oid: sha("a")}},
@@ -99,7 +99,7 @@ test("an unmergeable entry's retained base protects its CI run", async () => {
  assert.deepEqual(f.state.cancels, []);
 });
 
-test("a retained unmergeable base appearing at the second fence prevents cancellation", async () => {
+test("prevents cancellation when an unmergeable base appears at the second fence", async () => {
  const f = fixture();
  const read = f.api.getQueue;
  let reads = 0;
@@ -117,7 +117,7 @@ test("a retained unmergeable base appearing at the second fence prevents cancell
  assert.deepEqual(f.state.journal, []);
 });
 
-test("malformed unmergeable commits still prevent any cancellation", async () => {
+test("rejects malformed unmergeable commits before any cancellation", async () => {
  for (const commits of [
   {headCommit: null, baseCommit: {oid: "invalid"}},
   {headCommit: {oid: sha("c")}, baseCommit: null},
