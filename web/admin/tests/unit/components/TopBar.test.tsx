@@ -35,11 +35,14 @@ function renderBar(archive = true) {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});
-	return render(
-		<QueryClientProvider client={client}>
-			<TopBar archive={archive} />
-		</QueryClientProvider>,
-	);
+	return {
+		...render(
+			<QueryClientProvider client={client}>
+				<TopBar archive={archive} />
+			</QueryClientProvider>,
+		),
+		client,
+	};
 }
 
 describe("TopBar", () => {
@@ -168,8 +171,13 @@ describe("TopBar", () => {
 		(fetch as Mock).mockResolvedValue(
 			reply({ error: "session unavailable" }, false),
 		);
-		renderBar();
-		await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+		const { client } = renderBar();
+		await waitFor(() =>
+			expect(client.getQueryState(["archive", "session"])).toMatchObject({
+				status: "error",
+				error: new Error("session unavailable"),
+			}),
+		);
 		expect(
 			screen.queryByRole("link", { name: "מאמרים" }),
 		).not.toBeInTheDocument();
