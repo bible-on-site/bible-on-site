@@ -3340,6 +3340,10 @@ jobs:
     name: Database backup recovery
     uses: ./.github/workflows/ci-db-backup.yml
 
+  transcription_ci:
+    name: Local transcription
+    uses: ./.github/workflows/ci-transcription.yml
+
   cross_module_ci:
     timeout-minutes: 10
     name: Cross Module CI
@@ -3371,6 +3375,7 @@ jobs:
         recitation_ci,
         deploy_verifier,
         database_backups,
+        transcription_ci,
         perushim_data,
         determine_baseline_availability,
         determine_docker_image_availability,
@@ -3401,6 +3406,11 @@ jobs:
 
           if [ "${{ needs.database_backups.result }}" != "success" ]; then
             echo "Database backup and restore validation did not pass."
+            exit 1
+          fi
+
+          if [ "${{ needs.transcription_ci.result }}" != "success" ]; then
+            echo "Local transcription validation did not pass."
             exit 1
           fi
 
@@ -3823,6 +3833,12 @@ jobs:
         with:
           name: database-backup-coverage-${{ github.run_id }}
           path: .coverage/db-backup
+
+      - name: Restore transcription coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: transcription-coverage-${{ github.run_id }}
+          path: .coverage/transcription
 
       - name: Measure release and image-publisher regression coverage
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
