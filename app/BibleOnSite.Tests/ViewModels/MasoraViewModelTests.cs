@@ -9,6 +9,30 @@ namespace BibleOnSite.Tests.ViewModels;
 
 public class MasoraViewModelTests
 {
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    public async Task HeaderPlayButton_RequiresBothEnabledRecitationAndPlayableAudio(bool enabled, bool audio, bool visible)
+    {
+        await using var fixture = new Fixture();
+        fixture.Model.IsQriynotEnabled = enabled;
+        fixture.Model.HasCurrentUnitRecitation = audio;
+        fixture.Model.ShowHeaderPlayButton.Should().Be(visible);
+    }
+
+    [Fact]
+    public async Task SelectionBeforeAUnitLoads_CanBeToggledAndCleared()
+    {
+        await using var fixture = new Fixture();
+        fixture.Model.Unit.Should().BeNull();
+        fixture.Model.ToggleSelectedPasuk(1, 1);
+        fixture.Model.SelectedPasukCount.Should().Be(1);
+        fixture.Model.ClearSelected();
+        fixture.Model.SelectedPasukCount.Should().Be(0);
+    }
+
     private const string BibleDb = "sefaria-dump-5784-sivan-4.tanah_view.sqlite";
 
     private sealed class Fixture : IAsyncDisposable

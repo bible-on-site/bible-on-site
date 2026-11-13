@@ -158,6 +158,33 @@ public class RecitationRangePlannerTests
     }
 
     [Fact]
+    public void SegmentsForSlices_WholeVerseSpanWithAPartialWordBoundary_RequiresAlignment()
+    {
+        var segments = RecitationRangePlanner.SegmentsForSlices(
+            [Slice(5, startPasuk: 1, endPasuk: 3, startSegment: 1)],
+            _ => CanonicalPerek(),
+            id => Track(id, "unaligned"),
+            _ => true,
+            versePause: false);
+
+        segments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SegmentsForSlices_MissingCanonicalTextOrDownloadedAudio_SkipsThatSlice()
+    {
+        var pasukim = CanonicalPerek();
+        var segments = RecitationRangePlanner.SegmentsForSlices(
+            [Slice(1, 1, 3), Slice(2, 1, 3), Slice(3, 1, 3)],
+            id => id == 1 ? null : pasukim,
+            id => Track(id),
+            id => id == 3,
+            versePause: false);
+
+        segments.Should().ContainSingle().Which.PerekId.Should().Be(3);
+    }
+
+    [Fact]
     public void SegmentsForSlices_VersePause_GroupsRangesPerPasukInsideSlice()
     {
         var tracks = new Dictionary<int, RecitationTrack> { [5] = Track(5) };
