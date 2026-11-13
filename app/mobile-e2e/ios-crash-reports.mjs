@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 // reports alone cannot distinguish that from an application failure. The
 // runner belongs to this job; retain only relevant reports from this run.
 const processNames = ["BibleOnSite", "WebDriverAgent", "WebDriverAgentRunner", "CoreSimulatorService",
-  "Simulator", "simulatord", "SpringBoard", "backboardd", "testmanagerd",
+  "com.apple.CoreSimulator.CoreSimulatorService", "DeviceHub", "Simulator", "simulatord", "SpringBoard", "backboardd", "testmanagerd",
   "runningboardd", "launchd_sim", "JetsamEvent"];
 
 export function copyIosCrashReports(directories, artifacts, runStarted) {

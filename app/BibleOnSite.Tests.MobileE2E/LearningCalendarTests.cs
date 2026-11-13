@@ -1,6 +1,4 @@
-using BibleOnSite.Tests.MobileE2E.Platforms;
-using OpenQA.Selenium;
-using OpenQA.Selenium.Appium;
+using BibleOnSite.Tests.MobileE2E.Pages;
 using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E;
@@ -29,9 +27,9 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
     [Fact]
     public void YearViewWeekRowsFillTheirMiniMonth() => Scenario(() =>
     {
-        OpenCalendarIn("CalendarViewYear");
-        var title = Page.WaitFor("MiniMonthTitle");
-        var week = Page.WaitFor("MiniMonthWeek");
+        var calendar = OpenCalendarIn("CalendarViewYear");
+        var title = calendar.FirstInViewport("MiniMonthTitle").Frame;
+        var week = calendar.FirstInViewport("MiniMonthWeek").Frame;
         Assert.True(
             week.Size.Width >= title.Size.Width * 0.9,
             $"Week row is {week.Size.Width}px wide inside a {title.Size.Width}px mini-month — " +
@@ -41,15 +39,13 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
     [Fact]
     public void YearViewDayCellsAlignWithWeekdayColumns() => Scenario(() =>
     {
-        OpenCalendarIn("CalendarViewYear");
-        AssertDayCellsFillWeekdayColumns();
+        AssertDayCellsFillWeekdayColumns(OpenCalendarIn("CalendarViewYear"));
     });
 
     [Fact]
     public void CycleViewDayCellsAlignWithWeekdayColumns() => Scenario(() =>
     {
-        OpenCalendarIn("CalendarViewCycle");
-        AssertDayCellsFillWeekdayColumns();
+        AssertDayCellsFillWeekdayColumns(OpenCalendarIn("CalendarViewCycle"));
     });
 
     // #2975: a mini cell's source must be a rendered label — the day's semantic
@@ -59,61 +55,55 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
     [Fact]
     public void YearViewDayCellsShowPerekSources() => Scenario(() =>
     {
-        OpenCalendarIn("CalendarViewYear");
-        AssertMiniCellsShowSources();
+        AssertMiniCellsShowSources(OpenCalendarIn("CalendarViewYear", "MiniMonthDaySource", "MiniMonthReviewBadge"));
     });
 
     [Fact]
     public void CycleViewDayCellsShowPerekSources() => Scenario(() =>
     {
-        OpenCalendarIn("CalendarViewCycle");
-        AssertMiniCellsShowSources();
+        AssertMiniCellsShowSources(OpenCalendarIn("CalendarViewCycle", "MiniMonthDaySource", "MiniMonthReviewBadge"));
     });
 
-    private void AssertMiniCellsShowSources()
+    private static void AssertMiniCellsShowSources(CalendarSnapshot calendar)
     {
-        var source = Page.WaitFor("MiniMonthDaySource", element => element.Displayed);
+        var source = calendar.FirstInViewport("MiniMonthDaySource");
         Assert.False(
             string.IsNullOrWhiteSpace(source.Text),
             "A mini-cell source label rendered but carried no text.");
 
-        var badge = Page.WaitFor("MiniMonthReviewBadge", element => element.Displayed);
+        var badge = calendar.FirstInViewport("MiniMonthReviewBadge");
         Assert.Equal("חזרה", badge.Text);
 
         // The taller cells must still land centered under their weekday columns.
-        AssertDayCellsFillWeekdayColumns();
+        AssertDayCellsFillWeekdayColumns(calendar);
     }
 
-    private void OpenCalendarIn(string viewButton)
+    private CalendarSnapshot OpenCalendarIn(string viewButton, params string[] extraIds)
     {
         Assert.NotEmpty(Page.FirstPasuk);
         Page.Tap(Platform.FlyoutButton);
         Page.Tap("FlyoutLearningCalendar");
         Page.Tap(viewButton);
-        Page.WaitFor("MiniMonthTitle", element => element.Displayed);
+        return CalendarSnapshot.WaitFor(Driver!, Platform,
+            ["MiniMonthTitle", "MiniMonthWeek", "MiniMonthWeekday", "MiniMonthDayText", .. extraIds]);
     }
 
-    private void AssertDayCellsFillWeekdayColumns()
+    private static void AssertDayCellsFillWeekdayColumns(CalendarSnapshot calendar)
     {
-        var title = Page.WaitFor("MiniMonthTitle");
-        var week = Page.WaitFor("MiniMonthWeek");
+        var title = calendar.FirstInViewport("MiniMonthTitle").Frame;
+        var week = calendar.FirstInViewport("MiniMonthWeek").Frame;
         Assert.True(
             week.Size.Width >= title.Size.Width * 0.9,
             $"Week row is {week.Size.Width}px wide inside a {title.Size.Width}px mini-month — " +
                 "the collapsed-column regression renders roughly a third of the section width.");
 
-        // BindableLayout fills each section asynchronously after its title
-        // shows; a snapshot taken mid-realization can report a template level
-        // before its children exist. Wait for one rendered header and day
-        // label before the batch reads below. On iOS every lookup rescans the
-        // accessibility tree (~20s for the ~90 day labels), so the count of
-        // distinct element queries here directly costs shard wall clock.
-        Page.WaitFor("MiniMonthWeekday", element => element.Displayed);
-        Page.WaitFor("MiniMonthDayText", element => element.Displayed);
+        // Readiness and all labels came from the same fresh native tree,
+        // after BindableLayout realized headers and days. No per-label native
+        // enrichment or property queries run between these assertions.
 
         // Any rendered header row gives the same seven column positions: every
         // mini-month is built from the identical template on one shared width.
-        var headerRow = Page.RenderedElements("MiniMonthWeekday", element => element.Text)
+        var headerRow = calendar.Rendered("MiniMonthWeekday")
             .GroupBy(header => header.Frame.Location.Y)
             .OrderBy(group => group.Key)
             .Select(group => group.ToArray())
@@ -140,8 +130,7 @@ public sealed class LearningCalendarTests(ITestOutputHelper output, MobileDevice
         // a whole month exercises all seven — a collapsed right-side strip maps
         // every cell onto one or two columns instead. The label is centered in
         // its cell, so its frame marks the cell's column.
-        var dayLabels = Page.RenderedElements("MiniMonthDayText",
-                element => Platform.SemanticDescription(element) ?? string.Empty)
+        var dayLabels = calendar.Rendered("MiniMonthDayText")
             .Select(day => (Description: day.Text, day.Frame))
             .ToArray();
         Assert.NotEmpty(dayLabels);
