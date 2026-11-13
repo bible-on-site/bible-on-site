@@ -663,6 +663,85 @@ describe("perushim service", () => {
 				expect(result[0].perekId).toBe(100);
 			});
 
+			it("joins note metrics into each note's word count", async () => {
+				mockQuery.mockResolvedValue([
+					{
+						perek_id: 1,
+						pasuk: 30,
+						note_idx: 0,
+						note_content: "note-a",
+						word_count: 42,
+					},
+					// A note without a metric row keeps wordCount absent.
+					{
+						perek_id: 2,
+						pasuk: 4,
+						note_idx: 1,
+						note_content: "note-b",
+						word_count: null,
+					},
+				]);
+
+				const result = await getPerushNotesForRanges(1, crossPerekRanges);
+				expect(mockQuery).toHaveBeenCalledTimes(1);
+				expect(mockQuery.mock.calls[0][0]).toContain(
+					"LEFT JOIN tanah_note_metric",
+				);
+				expect(result[0].wordCount).toBe(42);
+				expect(result[1].wordCount).toBeUndefined();
+			});
+
+			it("falls back to the plain query when the metrics schema is missing", async () => {
+				for (const schemaError of [
+					Object.assign(new Error("no table"), {
+						code: "ER_NO_SUCH_TABLE",
+					}),
+					Object.assign(new Error("no column"), {
+						code: "ER_BAD_FIELD_ERROR",
+					}),
+					Object.assign(new Error("errno"), { errno: 1146 }),
+					Object.assign(new Error("errno"), { errno: 1054 }),
+				]) {
+					mockQuery.mockReset();
+					mockQuery
+						.mockRejectedValueOnce(schemaError)
+						.mockResolvedValueOnce([
+							{
+								perek_id: 1,
+								pasuk: 30,
+								note_idx: 0,
+								note_content: "note-a",
+							},
+						]);
+
+					const result = await getPerushNotesForRanges(
+						1,
+						crossPerekRanges,
+					);
+					expect(mockQuery).toHaveBeenCalledTimes(2);
+					expect(mockQuery.mock.calls[0][0]).toContain(
+						"tanah_note_metric",
+					);
+					expect(mockQuery.mock.calls[1][0]).not.toContain(
+						"tanah_note_metric",
+					);
+					expect(result).toHaveLength(1);
+					expect(result[0].wordCount).toBeUndefined();
+				}
+			});
+
+			it("rethrows non-schema failures without falling back", async () => {
+				mockQuery.mockRejectedValue(
+					Object.assign(new Error("denied"), {
+						code: "ER_ACCESS_DENIED_ERROR",
+					}),
+				);
+				await expect(
+					getPerushNotesForRanges(1, crossPerekRanges),
+				).rejects.toThrow("denied");
+				expect(mockQuery).toHaveBeenCalledTimes(1);
+			});
+
 			it("rethrows on failure so a false empty is never cached", async () => {
 				mockQuery.mockRejectedValue(new Error("DB error"));
 				await expect(
