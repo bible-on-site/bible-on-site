@@ -11,9 +11,11 @@ public enum TriCheckState
 /// <summary>
 /// A checkbox that can also render the indeterminate "some children selected"
 /// state, for the בחר הכל rows over the kind and sefer option sets (#2454). A tap
-/// checks everything unless the set is already fully checked.
+/// checks everything unless the set is already fully checked. Derives from
+/// <see cref="TappableView"/> so Windows treats it as a native invokable
+/// control (Tab focus, Enter/Space, UIA Invoke) rather than a gesture-only box.
 /// </summary>
-public sealed class TriStateCheckBox : ContentView
+public sealed class TriStateCheckBox : TappableView
 {
     /// <summary>Touch-target height shared by every filter row control.</summary>
     public static double RowHeight => 44;
@@ -91,9 +93,7 @@ public sealed class TriStateCheckBox : ContentView
         // Same hit target the row checkboxes use (44×44 via the CheckBox style).
         WidthRequest = RowWidth;
         HeightRequest = RowHeight;
-        var tap = new TapGestureRecognizer();
-        tap.Tapped += (_, _) => Toggle();
-        GestureRecognizers.Add(tap);
+        Activated += (_, _) => Toggle();
         ApplyState();
     }
 

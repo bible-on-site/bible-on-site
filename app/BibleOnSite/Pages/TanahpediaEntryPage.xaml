@@ -98,19 +98,19 @@
                                     IsVisible="{Binding HasEntities}">
                             <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="models:TanahpediaLinkedEntity">
-                                    <Border Padding="10,4"
-                                            Margin="0,0,8,8"
-                                            StrokeShape="RoundRectangle 14"
-                                            Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
-                                            StrokeThickness="1">
-                                        <Border.GestureRecognizers>
-                                            <TapGestureRecognizer Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntityCategoryCommand}"
-                                                                  CommandParameter="{Binding .}"/>
-                                        </Border.GestureRecognizers>
-                                        <Label Text="{Binding EntityType, Converter={StaticResource TanahpediaCategoryLabelConverter}}"
-                                               FontSize="13"
-                                               TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
-                                    </Border>
+                                    <controls:TappableView Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntityCategoryCommand}"
+                                                           CommandParameter="{Binding .}"
+                                                           SemanticProperties.Description="{Binding EntityType, Converter={StaticResource TanahpediaCategoryLabelConverter}}">
+                                        <Border Padding="10,4"
+                                                Margin="0,0,8,8"
+                                                StrokeShape="RoundRectangle 14"
+                                                Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                                                StrokeThickness="1">
+                                            <Label Text="{Binding EntityType, Converter={StaticResource TanahpediaCategoryLabelConverter}}"
+                                                   FontSize="13"
+                                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
+                                        </Border>
+                                    </controls:TappableView>
                                 </DataTemplate>
                             </BindableLayout.ItemTemplate>
                         </FlexLayout>
@@ -161,12 +161,11 @@
                                                  BindableLayout.ItemsSource="{Binding Occurrences}">
                                 <BindableLayout.ItemTemplate>
                                     <DataTemplate x:DataType="viewmodels:TanahpediaOccurrenceItem">
+                                        <controls:TappableView Activated="OnOccurrenceTapped"
+                                                               SemanticProperties.Description="{Binding Citation}">
                                         <Grid ColumnDefinitions="Auto,*"
                                               ColumnSpacing="12"
                                               Padding="0,4">
-                                            <Grid.GestureRecognizers>
-                                                <TapGestureRecognizer Tapped="OnOccurrenceTapped"/>
-                                            </Grid.GestureRecognizers>
                                             <Label Text="{Binding Citation}"
                                                    FontSize="14"
                                                    FontAttributes="Bold"
@@ -181,6 +180,7 @@
                                                    LineBreakMode="TailTruncation"
                                                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
                                         </Grid>
+                                        </controls:TappableView>
                                     </DataTemplate>
                                 </BindableLayout.ItemTemplate>
                             </VerticalStackLayout>
@@ -205,15 +205,14 @@
                             <DataTemplate x:DataType="models:TanahpediaSynonymTarget">
                                 <HorizontalStackLayout Spacing="4"
                                                        Margin="0,2">
-                                    <Label Text="{Binding Title}"
-                                           FontSize="16"
-                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
-                                           TextDecorations="Underline">
-                                        <Label.GestureRecognizers>
-                                            <TapGestureRecognizer Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"
-                                                                  CommandParameter="{Binding UniqueName}"/>
-                                        </Label.GestureRecognizers>
-                                    </Label>
+                                    <controls:TappableView Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"
+                                                           CommandParameter="{Binding UniqueName}"
+                                                           SemanticProperties.Description="{Binding Title}">
+                                        <Label Text="{Binding Title}"
+                                               FontSize="16"
+                                               TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                                               TextDecorations="Underline"/>
+                                    </controls:TappableView>
                                     <Label Text="{Binding Label, StringFormat=' - {0}'}"
                                            FontSize="14"
                                            IsVisible="{Binding Label, Converter={StaticResource StringNotEmptyConverter}}"

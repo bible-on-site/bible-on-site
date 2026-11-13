@@ -62,6 +62,9 @@
                               SelectionMode="None">
                      <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="models:Author">
+                                   <controls:TappableView Activated="OnAuthorTapped"
+                                                          CommandParameter="{Binding .}"
+                                                          SemanticProperties.Description="{Binding Name}">
                                    <Border Padding="0"
                                            Margin="4"
                                            StrokeShape="RoundRectangle 12"
@@ -70,10 +73,6 @@
                                           <Border.Shadow>
                                                  <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
                                           </Border.Shadow>
-                                          <Border.GestureRecognizers>
-                                                 <TapGestureRecognizer Tapped="OnAuthorTapped"
-                                                                       CommandParameter="{Binding .}"/>
-                                          </Border.GestureRecognizers>
                                           <Grid RowDefinitions="Auto,Auto,Auto,*"
                                                 Padding="8"
                                                 InputTransparent="True">
@@ -121,6 +120,7 @@
                                                         Margin="0,4,0,8"/>
                                           </Grid>
                                    </Border>
+                                   </controls:TappableView>
                             </DataTemplate>
                      </CollectionView.ItemTemplate>
               </CollectionView>
