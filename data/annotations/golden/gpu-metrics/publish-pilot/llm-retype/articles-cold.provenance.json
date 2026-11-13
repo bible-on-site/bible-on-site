@@ -1,0 +1,85 @@
+{
+ "schema": 1,
+ "rows_sha256": "eb84a6939528deac5ed474ca2c3c63183e876ec41c70d9362b331b11594568de",
+ "candidate": {
+  "name": "dictalm-3-1.7b-retype",
+  "hf_repo": "dicta-il/DictaLM-3.0-1.7B-Instruct",
+  "revision": "5add44d6941d6ffb9eb6cc6b516f9fb4fd472494",
+  "license": "Apache-2.0"
+ },
+ "engine": "llm-retype",
+ "model_revision": "dictalm-3-1.7b-retype@5add44d6+local-retype-v3+target-key-v1+e687bd40eb89",
+ "limits": {
+  "max_articles": 3
+ },
+ "execution": {
+  "device": "cuda:0",
+  "dtype": "bfloat16",
+  "tf32": false,
+  "torch": "2.14.1+cu126",
+  "cuda_runtime": "12.6",
+  "gpu_name": "NVIDIA GeForce RTX 4070 Laptop GPU",
+  "gpu_total_memory_bytes": 8585216000,
+  "gpu_compute_capability": [
+   8,
+   9
+  ],
+  "transformers": "5.22.2",
+  "tokenizers": "0.23.3",
+  "bitsandbytes": "0.50.2",
+  "quantization": null,
+  "output_normalization_version": "target-key-v1",
+  "structured_output": {
+   "backend": "lm-format-enforcer",
+   "library_pin": "0.11.3",
+   "output_normalization_version": "target-key-v1",
+   "adapter_version": "transformers5-core-v2-config",
+   "library_version": "0.11.3",
+   "grammar_version": "json-schema-v1",
+   "schema_sha256": "1a0be4228a050535c8a8fa9e3529eae6abbbaa8b6bb1ff11026ba6d0478ff294",
+   "alphabet": "ascii+hebrew+source-v1",
+   "field_order": true,
+   "max_consecutive_whitespaces": 2
+  }
+ },
+ "model_loaded_this_run": true,
+ "inference_runtime": {
+  "torch": "2.14.1+cu126",
+  "transformers": "5.22.2",
+  "tokenizers": "0.23.3",
+  "bitsandbytes": "0.50.2",
+  "cuda_runtime": "12.6",
+  "gpu_name": "NVIDIA GeForce RTX 4070 Laptop GPU",
+  "gpu_compute_capability": [
+   8,
+   9
+  ]
+ },
+ "inference_stats_this_run": {
+  "model_load_seconds": 5.081,
+  "generation_seconds": 11.034,
+  "generated_requests": 3,
+  "input_tokens": 1427,
+  "output_tokens": 245,
+  "cuda_peak_allocated_bytes": 3544727040
+ },
+ "request_cache": {
+  "model_calls": 3,
+  "hits": 0
+ },
+ "detection": {
+  "pasuk": "morphhb-lexical-baseline@3d15126f+aligned2+names2+contract1",
+  "article": "morphhb-gazetteer@3d15126f+aligned2+names2+contract1"
+ },
+ "diagnostics": {
+  "accept": 10,
+  "reject": 1
+ },
+ "failure_history": {},
+ "complete_valid_responses": true,
+ "checkpoint": {
+  "config": "4d2fa70d1625aabf0390b1c245bed1dcbb9fbfe6647bb06b929a0974f6dff051",
+  "hits": 0,
+  "misses": 3
+ }
+}

@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "verified_against_git_commit": "b52f745d1c40277e79f18cd5a80835d8837784d7",
+  "canonicalization": {
+    "parse": "json.loads",
+    "serialize": "json.dumps",
+    "ensure_ascii": false,
+    "sort_keys": true,
+    "separators": [
+      ",",
+      ":"
+    ],
+    "encoding": "utf-8",
+    "trailing_newline": false
+  },
+  "note": "Measured byte hashes preserve the actual input files. Validation inputs used Windows CRLF; Git stores LF. Parsed payload equality was verified against the pinned commit before canonical fingerprints were computed.",
+  "inputs": {
+    "development": {
+      "pesukim.json": {
+        "source_path": "data/annotations/golden/pesukim.json",
+        "measured_byte_sha256": "b4825761f08a4ed8b0fca8054429bf0ece0e6f8dcbe73111cedfdf369c551b26",
+        "committed_byte_sha256": "b4825761f08a4ed8b0fca8054429bf0ece0e6f8dcbe73111cedfdf369c551b26",
+        "canonical_json_sha256": "b9ebf2664ccea9cb3ef51cab0fd9ff4f58a9d5f9f264177456e3be81227615a8",
+        "parsed_payload_matches_committed": true,
+        "measured_line_endings": "LF",
+        "committed_line_endings": "LF"
+      },
+      "articles.json": {
+        "source_path": "data/annotations/golden/articles.json",
+        "measured_byte_sha256": "7e27d0c9209a4a59d52b6d5c58f1f3c7887de899af3aa13524a9be8abc5bc292",
+        "committed_byte_sha256": "7e27d0c9209a4a59d52b6d5c58f1f3c7887de899af3aa13524a9be8abc5bc292",
+        "canonical_json_sha256": "9b7afc1a3affa1ca45037ce5d0ce13d279468ef467c99947636e4bdfe84b8138",
+        "parsed_payload_matches_committed": true,
+        "measured_line_endings": "LF",
+        "committed_line_endings": "LF"
+      }
+    },
+    "validation": {
+      "pesukim.json": {
+        "source_path": "data/annotations/golden/validation/pesukim.json",
+        "measured_byte_sha256": "f3d6e14e3e9ab55608388868e20bcbea433220b74bb901188685a18236ecba50",
+        "committed_byte_sha256": "7941f53ebf86d9a9dfb60b4bc157e5d4bbc5f1c79be03ec472771194a33b4fb8",
+        "canonical_json_sha256": "4ee1fda3ea292f3d310b1af0dbd3c851c8af20117c608455593544ec74f7c9e4",
+        "parsed_payload_matches_committed": true,
+        "measured_line_endings": "CRLF",
+        "committed_line_endings": "LF"
+      },
+      "articles.json": {
+        "source_path": "data/annotations/golden/validation/articles.json",
+        "measured_byte_sha256": "8459d1ee6fc36e0d48c2c0af70e6944415a83c173aea9081cc0f379a41f07f3a",
+        "committed_byte_sha256": "eec514de0ec345c6f8b87b06c1fe891782deea06b92e9ea2b55285cfa4322d8a",
+        "canonical_json_sha256": "6704c5c5632a0d340cfca528010d6e41d9e2f66b2e904c034e6ea4a9ef9a122c",
+        "parsed_payload_matches_committed": true,
+        "measured_line_endings": "CRLF",
+        "committed_line_endings": "LF"
+      }
+    }
+  },
+  "reports": {
+    "development/dictabert-ner-retype.json": {
+      "report_sha256": "51332a7bf5a34090fd028176ec364627bd99bcad69088958e29c4e6c9f3e42f7",
+      "gold_sha256": {
+        "pesukim.json": "b4825761f08a4ed8b0fca8054429bf0ece0e6f8dcbe73111cedfdf369c551b26",
+        "articles.json": "7e27d0c9209a4a59d52b6d5c58f1f3c7887de899af3aa13524a9be8abc5bc292"
+      }
+    },
+    "development/dictabert-large-ner-retype.json": {
+      "report_sha256": "ba1c62dfc9e4c781986f16a284cfbf5ae642b9b0ae3df9518af82b1413bde0de",
+      "gold_sha256": {
+        "pesukim.json": "b4825761f08a4ed8b0fca8054429bf0ece0e6f8dcbe73111cedfdf369c551b26",
+        "articles.json": "7e27d0c9209a4a59d52b6d5c58f1f3c7887de899af3aa13524a9be8abc5bc292"
+      }
+    },
+    "validation/dictabert-ner-retype.json": {
+      "report_sha256": "b69f22054d1c46c03e4083d273c3f9fda93e063efe72fcc9a2e17e981005502e",
+      "gold_sha256": {
+        "pesukim.json": "f3d6e14e3e9ab55608388868e20bcbea433220b74bb901188685a18236ecba50",
+        "articles.json": "8459d1ee6fc36e0d48c2c0af70e6944415a83c173aea9081cc0f379a41f07f3a"
+      }
+    },
+    "validation/dictabert-large-ner-retype.json": {
+      "report_sha256": "9bda3a8af89a7275d014b4fff57634224c65518d5a68a4be6420432045fb05ed",
+      "gold_sha256": {
+        "pesukim.json": "f3d6e14e3e9ab55608388868e20bcbea433220b74bb901188685a18236ecba50",
+        "articles.json": "8459d1ee6fc36e0d48c2c0af70e6944415a83c173aea9081cc0f379a41f07f3a"
+      }
+    }
+  }
+}
