@@ -21,6 +21,7 @@ import {
 } from "html-flip-book-react/toolbar";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { stopRecitation } from "@/app/929/[number]/components/RecitationPlayer";
 import { BookshelfModal } from "@/app/components/Bookshelf";
 import { FlipBook } from "@/app/components/reading/FlipBook";
 import { getSeferColor } from "@/data/sefer-colors";
@@ -191,6 +192,9 @@ export function UnitSeferBook({
 				<div className={seferStyles.bookArea}>
 					<FlipBook
 						handlers={{
+							// Turning a page stops any playing recitation, matching
+							// the /929 book's onPageFlipping behavior.
+							onPageFlipping: stopRecitation,
 							onPageFlipped: () => {
 								const pageIndex =
 									flipBookRef.current?.getCurrentPageIndex();

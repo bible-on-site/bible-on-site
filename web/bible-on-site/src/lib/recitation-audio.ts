@@ -4,6 +4,10 @@ type Plan = {
 	pauseMs: number;
 	leadMs: number;
 	ended: () => void;
+	/** Index of `ranges[0]` within the caller's original range list — a
+	 * paused plan is trimmed, so its first range keeps its original
+	 * ordinal for callers tracking which interval is playing. */
+	baseIndex: number;
 };
 type ScheduledRange = Range & { startsAt: number; endsAt: number };
 
@@ -185,7 +189,13 @@ export class RecitationAudio {
 			)
 		)
 			throw new Error("Clip outside decoded recording");
-		this.schedule(buffer, { ranges: intervals, pauseMs, leadMs: 0, ended });
+		this.schedule(buffer, {
+			ranges: intervals,
+			pauseMs,
+			leadMs: 0,
+			ended,
+			baseIndex: 0,
+		});
 		return true;
 	}
 
@@ -230,6 +240,25 @@ export class RecitationAudio {
 		return this.play(0, undefined, ended);
 	}
 
+	/**
+	 * Index of the currently playing range within the caller's original
+	 * list — survives pause/resume trimming (`baseIndex`). Needed when
+	 * identical timestamps repeat: the recording position alone cannot
+	 * tell two equal ranges apart. Null during a deliberate verse pause.
+	 */
+	get positionRangeIndex(): number | null {
+		const plan = this.activePlan;
+		if (!plan)
+			return this.pausedPlan && this.pausedPlan.leadMs === 0
+				? this.pausedPlan.baseIndex
+				: null;
+		const now = this.context.currentTime;
+		const index = plan.scheduled.findIndex(
+			(r) => now >= r.startsAt && now < r.endsAt,
+		);
+		return index < 0 ? null : plan.baseIndex + index;
+	}
+
 	/** Original recording position, or null during a deliberate verse pause. */
 	get positionMs(): number | null {
 		const plan = this.activePlan;
@@ -265,6 +294,7 @@ export class RecitationAudio {
 			leadMs: Math.max(0, (range.startsAt - now) * 1000),
 			pauseMs: plan.pauseMs,
 			ended: plan.ended,
+			baseIndex: plan.baseIndex + index,
 		};
 	}
 
