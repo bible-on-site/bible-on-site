@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Directory } from "~/lib/archive";
+import { setArchiveBusy } from "~/lib/archive-busy";
 import styles from "./archive.module.css";
 
 function bytes(value: number) {
@@ -22,31 +23,33 @@ async function api(data?: Record<string, unknown>, directory = "", after = "") {
 		window.location.pathname === "/archive/"
 			? "/archive"
 			: window.location.pathname;
-	const response = await fetch(
-		data?.action === "logout" ? "/archive/api?logout" : "/archive/api",
-		{
-			cache: "no-store",
-			headers: {
-				"X-Archive-Directory": directory,
-				"X-Archive-After": after,
-				"X-Archive-Path":
-					!directory && pathname.startsWith("/archive/")
-						? encodeURIComponent(decodeURIComponent(pathname.slice(8)))
-						: "",
-			},
-			...(data
-				? {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify(data),
-					}
-				: {}),
+	const response = await fetch("/archive/api", {
+		cache: "no-store",
+		headers: {
+			"X-Archive-Directory": directory,
+			"X-Archive-After": after,
+			"X-Archive-Path":
+				!directory && pathname.startsWith("/archive/")
+					? encodeURIComponent(decodeURIComponent(pathname.slice(8)))
+					: "",
 		},
-	);
+		...(data
+			? {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(data),
+				}
+			: {}),
+	});
 	const result = await response.json();
 	if (!response.ok)
 		throw Object.assign(new Error(result.error), { status: response.status });
 	return result;
+}
+
+interface UploadItem {
+	file: File;
+	directory: string;
 }
 
 export function ArchiveArea() {
@@ -54,6 +57,8 @@ export function ArchiveArea() {
 	const [directory, setDirectory] = useState<Directory | null>(null);
 	const [error, setError] = useState("");
 	const [busy, setBusy] = useState(false);
+	const [dragging, setDragging] = useState(false);
+	const dragDepth = useRef(0);
 	const [cursor, setCursor] = useState("");
 	const [history, setHistory] = useState<string[]>([]);
 	const [activeDirectory, setActiveDirectory] = useState("");
@@ -103,6 +108,157 @@ export function ArchiveArea() {
 		};
 	}, [load]);
 
+	// Publish the operation flag so the shared top bar can hold its archive
+	// logout while work is in flight (a mid-upload sign-out would strand the
+	// reserved file behind expired cookies).
+	useEffect(() => {
+		setArchiveBusy(busy);
+		return () => setArchiveBusy(false);
+	}, [busy]);
+
+	// Keep the browser from opening files dropped anywhere on the archive page
+	// (a section-level drop only covers the target itself). Text dragging into
+	// form inputs stays untouched.
+	useEffect(() => {
+		const prevent = (event: Event) => {
+			if ((event as DragEvent).dataTransfer?.types.includes("Files"))
+				event.preventDefault();
+		};
+		window.addEventListener("dragover", prevent);
+		window.addEventListener("drop", prevent);
+		return () => {
+			window.removeEventListener("dragover", prevent);
+			window.removeEventListener("drop", prevent);
+		};
+	}, []);
+
+	function fileFromEntry(entry: FileSystemFileEntry): Promise<File> {
+		return new Promise((resolve, reject) => entry.file(resolve, reject));
+	}
+	function entriesFromReader(
+		reader: FileSystemDirectoryReader,
+	): Promise<FileSystemEntry[]> {
+		return new Promise((resolve, reject) =>
+			reader.readEntries(resolve, reject),
+		);
+	}
+
+	/**
+	 * Resolves a folder by name inside a parent, paging through the parent's
+	 * listing. A same-named FILE must never be reused as a folder target.
+	 */
+	async function findFolder(
+		parentId: string,
+		name: string,
+	): Promise<string | null> {
+		let after = "";
+		for (;;) {
+			const listing: Directory = await api(undefined, parentId, after);
+			const found = listing.files.find(
+				(file) => file.kind === "folder" && file.filename === name,
+			);
+			if (found) return found.id;
+			if (!listing.nextCursor) return null;
+			after = listing.nextCursor;
+		}
+	}
+
+	/**
+	 * Walks a dropped entry into concrete upload items. Directories become real
+	 * archive folders (reusing a same-named folder on a 409), so nested content
+	 * keeps its structure instead of being lost or flattened. Names of folders
+	 * that cannot be created go to `skipped`; names whose existing-folder
+	 * lookup failed go to `unresolved`. Either way the rest of the drop keeps
+	 * collecting, so one bad folder never discards its sibling uploads.
+	 */
+	async function collectEntry(
+		entry: FileSystemEntry,
+		parentId: string,
+		items: UploadItem[],
+		skipped: string[],
+		unresolved: string[],
+	): Promise<void> {
+		if (cancel.current) return;
+		if (entry.isFile) {
+			items.push({
+				file: await fileFromEntry(entry as FileSystemFileEntry),
+				directory: parentId,
+			});
+			return;
+		}
+		if (!entry.isDirectory) return;
+		let directoryId: string;
+		try {
+			({ id: directoryId } = await api({
+				action: "mkdir",
+				name: entry.name,
+				directory: parentId,
+			}));
+		} catch (e) {
+			// A 409 means the name is taken; reuse it only when it is a folder.
+			if ((e as { status?: number }).status === 409) {
+				try {
+					const existing = await findFolder(parentId, entry.name);
+					if (!existing) {
+						skipped.push(entry.name);
+						return;
+					}
+					directoryId = existing;
+				} catch {
+					// The parent listing failed, so the conflict cannot be
+					// resolved — report this folder and keep collecting.
+					unresolved.push(entry.name);
+					return;
+				}
+			} else {
+				skipped.push(entry.name);
+				return;
+			}
+		}
+		const reader = (entry as FileSystemDirectoryEntry).createReader();
+		for (;;) {
+			const batch = await entriesFromReader(reader);
+			if (!batch.length) break;
+			for (const child of batch)
+				await collectEntry(child, directoryId, items, skipped, unresolved);
+		}
+	}
+
+	async function collectDropped(
+		dataTransfer: DataTransfer,
+		current: Directory,
+	): Promise<{
+		items: UploadItem[];
+		skipped: string[];
+		unresolved: string[];
+		hadEntries: boolean;
+	}> {
+		const items: UploadItem[] = [];
+		const skipped: string[] = [];
+		const unresolved: string[] = [];
+		const entries: FileSystemEntry[] = [];
+		for (const item of Array.from(dataTransfer.items ?? []))
+			if (item.kind === "file") {
+				const entry = item.webkitGetAsEntry?.();
+				if (entry) entries.push(entry);
+				else {
+					// Entry-less file items (no webkitGetAsEntry support) upload
+					// straight into the displayed directory.
+					const file = item.getAsFile?.();
+					if (file) items.push({ file, directory: current.id });
+				}
+			}
+		if (entries.length)
+			for (const entry of entries)
+				await collectEntry(entry, current.id, items, skipped, unresolved);
+		// Without entry support at all (no DataTransferItem list) fall back to
+		// the flat file list so plain file drops still upload.
+		else if (!items.length)
+			for (const file of Array.from(dataTransfer.files ?? []))
+				items.push({ file, directory: current.id });
+		return { items, skipped, unresolved, hadEntries: entries.length > 0 };
+	}
+
 	async function showPage(after: string, previous: string[]) {
 		setBusy(true);
 		setError("");
@@ -145,25 +301,34 @@ export function ArchiveArea() {
 		}
 	}
 
-	async function upload(files: FileList | null) {
-		if (!files?.length) return;
+	async function upload(files: FileList | File[] | null) {
+		if (!files?.length || busy) return;
 		setBusy(true);
 		setError("");
 		cancel.current = false;
+		await uploadPrepared(
+			Array.from(files).map((file) => ({
+				file,
+				directory: activeDirectory,
+			})),
+		);
+	}
+
+	async function uploadPrepared(items: UploadItem[]) {
 		try {
-			for (const file of Array.from(files)) {
+			for (const item of items) {
 				if (cancel.current) break;
-				setProgress({ filename: file.name, percent: 0 });
+				setProgress({ filename: item.file.name, percent: 0 });
 				const started = await api({
 					action: "start",
-					filename: file.name,
-					size: file.size,
-					directory: activeDirectory,
+					filename: item.file.name,
+					size: item.file.size,
+					directory: item.directory,
 				});
 				try {
 					for (
 						let offset = 0, part = 1;
-						offset < file.size;
+						offset < item.file.size;
 						offset += started.partSize, part++
 					) {
 						if (cancel.current) throw new Error("ההעלאה בוטלה");
@@ -174,15 +339,15 @@ export function ArchiveArea() {
 								"X-Upload-Id": started.id,
 								"X-Upload-Part": String(part),
 							},
-							body: file.slice(offset, offset + started.partSize),
+							body: item.file.slice(offset, offset + started.partSize),
 							signal: request.current.signal,
 						});
 						if (!response.ok) throw new Error((await response.json()).error);
 						setProgress({
-							filename: file.name,
+							filename: item.file.name,
 							percent: Math.round(
-								(100 * Math.min(offset + started.partSize, file.size)) /
-									file.size,
+								(100 * Math.min(offset + started.partSize, item.file.size)) /
+									item.file.size,
 							),
 						});
 					}
@@ -207,6 +372,96 @@ export function ArchiveArea() {
 				setBusy(false);
 			}
 		}
+	}
+
+	function fileDrag(event: React.DragEvent) {
+		return event.dataTransfer?.types.includes("Files") === true;
+	}
+
+	function handleDragEnter(event: React.DragEvent) {
+		if (!fileDrag(event)) return;
+		event.preventDefault();
+		dragDepth.current++;
+		setDragging(true);
+	}
+
+	function handleDragOver(event: React.DragEvent) {
+		if (!fileDrag(event)) return;
+		event.preventDefault();
+		event.dataTransfer.dropEffect = "copy";
+	}
+
+	function handleDragLeave(event: React.DragEvent) {
+		if (!fileDrag(event)) return;
+		event.preventDefault();
+		if (--dragDepth.current <= 0) {
+			dragDepth.current = 0;
+			setDragging(false);
+		}
+	}
+
+	async function handleDrop(event: React.DragEvent) {
+		// Non-file drops keep their default behavior (e.g. text into the
+		// folder-name input).
+		if (!fileDrag(event)) return;
+		event.preventDefault();
+		dragDepth.current = 0;
+		setDragging(false);
+		const { dataTransfer } = event;
+		if (!dataTransfer || !directory) return;
+		if (busy) {
+			setError("יש להמתין לסיום הפעולה הנוכחית לפני גרירה נוספת");
+			return;
+		}
+		setBusy(true);
+		setError("");
+		cancel.current = false;
+		let items: UploadItem[] = [];
+		let skipped: string[] = [];
+		let unresolved: string[] = [];
+		let hadEntries = false;
+		try {
+			({ items, skipped, unresolved, hadEntries } = await collectDropped(
+				dataTransfer,
+				directory,
+			));
+		} catch (e) {
+			// An unreadable entry must not lock the controls: report it and
+			// refresh so folders created before the failure become visible.
+			setError((e as Error).message);
+			try {
+				await load(activeDirectory, "");
+			} catch (loadError) {
+				setError((loadError as Error).message);
+			} finally {
+				setBusy(false);
+			}
+			return;
+		}
+		if (items.length) {
+			await uploadPrepared(items);
+		} else {
+			// Entries without files (e.g. an empty dropped folder) still changed
+			// the archive — refresh so the new folder appears.
+			if (hadEntries) {
+				try {
+					await load(activeDirectory, "");
+				} catch (e) {
+					setError((e as Error).message);
+				}
+			}
+			setBusy(false);
+		}
+		const problems = [
+			...(skipped.length
+				? [`לא ניתן ליצור את התיקיות: ${skipped.join(", ")}`]
+				: []),
+			...(unresolved.length
+				? [`לא ניתן לאתר את התיקיות הקיימות: ${unresolved.join(", ")}`]
+				: []),
+		];
+		if (problems.length)
+			setError((current) => [current, ...problems].filter(Boolean).join(". "));
 	}
 
 	async function remove(id: string) {
@@ -243,30 +498,6 @@ export function ArchiveArea() {
 		);
 	return (
 		<>
-			<div className={styles.toolbar}>
-				{directory?.isAdmin && (
-					<span>
-						<a href="/">חזרה לניהול</a> ·{" "}
-						<a href="/archive-settings">מכסות אחסון</a>
-					</span>
-				)}
-				<span>
-					שלום, <b>{directory?.username ?? ""}</b>
-				</span>
-				<button
-					type="button"
-					disabled={busy}
-					onClick={() => {
-						void api({ action: "logout" })
-							.then((result) => {
-								window.location.assign(result.url);
-							})
-							.catch((e: Error) => setError(e.message));
-					}}
-				>
-					יציאה מהחשבון
-				</button>
-			</div>
 			{error && (
 				<p className={styles.error} role="alert">
 					{error}{" "}
@@ -303,7 +534,7 @@ export function ArchiveArea() {
 						<div className={styles.toolbar}>
 							<strong>נפח אחסון</strong>
 							{directory.isAdmin && (
-								<span>מכסה עבור {directory.quotaName}</span>
+								<a href="/archive-settings">מכסה עבור {directory.quotaName}</a>
 							)}
 							<span>
 								{bytes(directory.allocated)} מתוך {bytes(directory.quota)} GB
@@ -319,9 +550,20 @@ export function ArchiveArea() {
 							הנפח כולל קבצים בתהליך העלאה. כל סוגי הקבצים מתקבלים.
 						</p>
 					</section>
-					<section className={`${styles.card} ${styles.drop}`}>
+					<section
+						className={`${styles.card} ${styles.drop} ${dragging ? styles.dragging : ""}`}
+						aria-label="הוספת קבצים לתיקייה"
+						onDragEnter={handleDragEnter}
+						onDragOver={handleDragOver}
+						onDragLeave={handleDragLeave}
+						onDrop={handleDrop}
+					>
 						<h2>הוספת קבצים לתיקייה</h2>
-						<p>אפשר לבחור כמה קבצים יחד, מכל סוג.</p>
+						<p>
+							{dragging
+								? "שחררו כדי להעלות לתיקייה הנוכחית"
+								: "אפשר לבחור או לגרור לכאן כמה קבצים יחד, מכל סוג - גם תיקיות."}
+						</p>
 						<label className={styles.primary}>
 							בחירת קבצים
 							<input

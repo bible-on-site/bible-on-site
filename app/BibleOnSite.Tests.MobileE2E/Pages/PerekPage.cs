@@ -54,15 +54,21 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         throw new WebDriverTimeoutException($"No visible element matching {locator} met the condition within {timeout.TotalSeconds} seconds.");
     }
 
-    public string Source => ReaderText("PerekSource");
-    public string FirstPasuk => ReaderText("PasukText");
+    public string Source => WaitForText("PerekSource");
+    public string FirstPasuk => WaitForText("PasukText");
 
-    // iOS already captured the label with the accepted native snapshot. Reading
-    // the returned live element again can race carousel recycling. Android keeps
-    // its visible Text contract rather than substituting a semantic description.
-    private string ReaderText(string automationId) => driver is IosSnapshotDriver
-        ? WaitForSpoken(automationId, text => !string.IsNullOrWhiteSpace(text))
-        : WaitFor(automationId, element => !string.IsNullOrWhiteSpace(element.Text)).Text;
+    private string WaitForText(string automationId)
+    {
+        string text = string.Empty;
+        // Capture the accepted observation. Reading the returned live element
+        // again can race collection recycling after a scroll on iOS.
+        WaitFor(automationId, element =>
+        {
+            text = element.Text;
+            return !string.IsNullOrWhiteSpace(text);
+        });
+        return text;
+    }
 
     /// <summary>
     /// Waits until no element matching the automation id is displayed with its

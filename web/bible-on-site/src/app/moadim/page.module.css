@@ -5,6 +5,19 @@
 	font-family: inherit;
 }
 
+/* Hero row: on roomy screens the heading+intro sit beside the wheel in
+   one row (RTL — text column first, wheel second). Narrow or short
+   viewports (also large browser zoom, which shrinks CSS px) fall back to
+   the stacked flow where the index scrolls naturally. */
+.heroRow {
+	display: flex;
+	flex-direction: column;
+}
+
+.heroText {
+	min-width: 0;
+}
+
 .heading {
 	font-size: 1.8rem;
 	font-weight: 700;
@@ -70,6 +83,7 @@
 
 .hubTitle {
 	fill: var(--pasuk-num-color, #1c2c5d);
+	font-family: inherit;
 	font-size: 40px;
 	font-weight: 700;
 }
@@ -83,8 +97,13 @@
 	stroke-width: 2;
 }
 
+/* Month band labels — shared UI font on the SVG text itself, not a
+   separate decorative face (#3254): `inherit` resolves to the .wheel →
+   body UI stack, so Hebrew glyphs follow the same family as the rest of
+   the interface. */
 .monthLabel {
 	fill: hsl(var(--moed-h, 218) 64% 20%);
+	font-family: inherit;
 	font-size: 34px;
 	font-weight: 800;
 	letter-spacing: 0.5px;
@@ -119,6 +138,7 @@
 
 .moedName {
 	fill: hsl(var(--moed-h, 218) 58% 26%);
+	font-family: inherit;
 	font-size: 21px;
 	font-weight: 600;
 	pointer-events: none;
@@ -126,6 +146,7 @@
 
 .moedDate {
 	fill: hsl(var(--moed-h, 218) 44% 38%);
+	font-family: inherit;
 	font-size: 15px;
 	font-weight: 400;
 }
@@ -353,6 +374,38 @@
 		to {
 			opacity: 1;
 		}
+	}
+}
+
+/* Two-column hero on roomy screens (#3254): heading+intro at inline-start
+   (the right, RTL), wheel fills the rest and caps against the viewport
+   height so the whole circle sits under the top bar on entry. The
+   min-height arm keeps very short viewports — and browser zoom that
+   shrinks CSS px — on the stacked layout instead of a cramped row. */
+@media (min-width: 900px) and (min-height: 620px) {
+	.heroRow {
+		flex-direction: row;
+		align-items: center;
+		gap: 40px;
+	}
+
+	.heroText {
+		flex: 0 0 clamp(240px, 26%, 340px);
+	}
+
+	.intro {
+		margin-bottom: 0;
+	}
+
+	.wheelNav {
+		flex: 1 1 0;
+		width: auto;
+		margin: 0;
+	}
+
+	.wheel {
+		width: min(100%, calc(100vh - 160px));
+		margin: 0 auto;
 	}
 }
 

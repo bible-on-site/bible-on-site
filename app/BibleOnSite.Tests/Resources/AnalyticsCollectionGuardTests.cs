@@ -111,7 +111,11 @@ public class AnalyticsCollectionGuardTests
         var policy = XDocument.Load(Path.Join(AppRoot, "Pages", "TosPage.xaml"));
         var policyLink = Assert.Single(policy.Descendants()
             .Where(e => e.Attribute("AutomationId")?.Value == "PrivacyPolicyLink"));
-        Assert.Contains(policyLink.Descendants(), e => e.Attribute("Tapped")?.Value == "OnPrivacyPolicyTapped");
+        // TappableView wires the handler through Activated rather than a
+        // TapGestureRecognizer's Tapped; accept it on the link element or a descendant.
+        Assert.Contains(policyLink.DescendantsAndSelf(), e =>
+            e.Attribute("Activated")?.Value == "OnPrivacyPolicyTapped" ||
+            e.Attribute("Tapped")?.Value == "OnPrivacyPolicyTapped");
     }
 
     [Fact]

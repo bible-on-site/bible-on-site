@@ -74,6 +74,60 @@ test("ungrouped queue entries carry no commits without failing the reap",async()
   {...ungrouped(),position:2,state:"AWAITING_CHECKS"},
  ]){const g=fixture();g.state.queueNodes=[node(sha("c"),sha("b"),20),broken];await assert.rejects(call(g,{dryRun:false}),/QUEUE_TOPOLOGY|UNKNOWN_QUEUE_HEAD/);assert.deepEqual(g.state.cancels,[]);}
 });
+
+test("accepts an unmergeable entry retaining its base without a merge-group head", async () => {
+ const f = fixture();
+ f.state.queueNodes = [
+  node(sha("c"), sha("b"), 20),
+  {...ungrouped(21, 2), state: "UNMERGEABLE", baseCommit: {oid: sha("c")}},
+  {...node(sha("d"), sha("c"), 22), position: 3},
+  ungrouped(23, 4),
+ ];
+ const result = await call(f, {dryRun: false});
+ assert.equal(result.complete, true);
+ assert.equal(result.actions[0].outcome, "cancelled");
+ assert.deepEqual(f.state.cancels, [1]);
+});
+
+test("preserves a CI run referenced by an unmergeable base", async () => {
+ const f = fixture();
+ f.state.queueNodes = [
+  {...ungrouped(), state: "UNMERGEABLE", baseCommit: {oid: sha("a")}},
+ ];
+ const result = await call(f, {dryRun: false});
+ assert.equal(result.actions[0].reason, "current-queue-reference");
+ assert.deepEqual(f.state.cancels, []);
+});
+
+test("prevents cancellation when an unmergeable base appears at the second fence", async () => {
+ const f = fixture();
+ const read = f.api.getQueue;
+ let reads = 0;
+ f.api.getQueue = async () => {
+  if (++reads === 3) {
+   f.state.queueNodes = [
+    {...ungrouped(), state: "UNMERGEABLE", baseCommit: {oid: sha("a")}},
+   ];
+  }
+  return read();
+ };
+ const result = await call(f, {dryRun: false});
+ assert.equal(result.actions[0].reason, "current-queue-reference");
+ assert.deepEqual(f.state.cancels, []);
+ assert.deepEqual(f.state.journal, []);
+});
+
+test("rejects malformed unmergeable commits before any cancellation", async () => {
+ for (const commits of [
+  {headCommit: null, baseCommit: {oid: "invalid"}},
+  {headCommit: {oid: sha("c")}, baseCommit: null},
+ ]) {
+  const f = fixture();
+  f.state.queueNodes = [{...ungrouped(), state: "UNMERGEABLE", ...commits}];
+  await assert.rejects(call(f, {dryRun: false}), /QUEUE_TOPOLOGY|UNKNOWN_QUEUE_HEAD/);
+  assert.deepEqual(f.state.cancels, []);
+ }
+});
 test("unrelated events and refs are ignored",async()=>{
  const f=fixture();f.payload.workflow_run.event="pull_request";assert.equal((await call(f)).ignored,"unrelated-event");
  const g=fixture();const r=await reap({eventName:"delete",payload:{repository:repo(),ref_type:"branch",ref:"feature/master"},api:g.api,dryRun:false});assert.equal(r.ignored,"unrelated-ref");assert.deepEqual(g.state.cancels,[]);

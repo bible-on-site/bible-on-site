@@ -1036,9 +1036,17 @@ test("scripture controls render inertly without a provider and on the server", a
 			</RecitationWordControl>
 			<RecitationPasukControl pasuk={1}>א</RecitationPasukControl>
 			<RecitationVerse pasuk={1}>בראשית א</RecitationVerse>
+			<RecitationLink
+				perek={1}
+				link={<a href="/pedia/example">בראשית</a>}
+			>
+				בְּרֵאשִׁית
+			</RecitationLink>
 		</>,
 	);
 	expect(screen.queryByRole("button")).toBeNull();
+	// No provider at all — the link always keeps its anchor.
+	expect(screen.getByRole("link", { name: "בראשית" })).toBeTruthy();
 	expect(screen.getByText("בראשית א")).toHaveAttribute(
 		"data-sefer-pasuk",
 		"1",
@@ -1087,4 +1095,32 @@ test("verse highlights advance beyond the clicked control and stop cancels the a
 	expect(frames.size).toBe(0);
 	view.unmount();
 	expect(frames.size).toBe(0);
+});
+
+test("perek-scoped controls resolve against the chapter player's pasuk keys", async () => {
+	render(
+		<RecitationPlayer hasRecording perekId={1} pesukim={pesukim}>
+			<RecitationHeader title="פרק" />
+			<RecitationPasukControl pasuk={1} perek={7}>
+				א
+			</RecitationPasukControl>
+			<RecitationLink
+				perek={1}
+				link={<a href="/pedia/example">בראשית</a>}
+			>
+				<RecitationWordControl pasuk={1} segment={1}>
+					בְּרֵאשִׁית
+				</RecitationWordControl>
+			</RecitationLink>
+		</RecitationPlayer>,
+	);
+	// Listening is off — the perek-scoped link keeps its anchor (the
+	// chapter context has no per-perek `enabledFor`, so `enabled` rules).
+	expect(screen.getByRole("link", { name: "בראשית" })).toBeTruthy();
+	fireEvent.click(screen.getByRole("button", { name: "מצב הקראה" }));
+	await screen.findByRole("button", { name: "השמעת כל הפרק" });
+	expect(screen.queryByRole("link", { name: "בראשית" })).toBeNull();
+	// "7:1" has no manifest range — the pasuk control stays inert even
+	// though listening mode is on.
+	expect(screen.queryByRole("button", { name: "השמעת פסוק א" })).toBeNull();
 });

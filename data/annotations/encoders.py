@@ -43,8 +43,10 @@ artifact, not a CI gate.
 
 import collections
 import hashlib
+import importlib.metadata
 import json
 from pathlib import Path
+import re
 import sys
 import time
 import tracemalloc
@@ -577,7 +579,120 @@ def retype_article_rows(content, rows, entities_fn, model_revision=None):
     return out
 
 
-def load_entities_fn(spec):
+def normalize_execution(device="cpu", dtype="float32", torch_module=None):
+    """Resolve explicit inference settings before weights or corpus are loaded.
+
+    CPU/fp32 is the compatibility default and needs no optional imports, so
+    a cached publish run remains usable without torch. ``auto`` resolves to
+    an actual device before checkpoint hashing; an explicit CUDA request
+    never silently falls back to CPU. Reduced precision is always opt-in.
+    """
+    if dtype not in ("float32", "float16", "bfloat16"):
+        raise ValueError("dtype must be float32, float16, or bfloat16")
+    if not isinstance(device, str) or not re.fullmatch(
+        r"cpu|auto|cuda(?::[0-9]+)?", device
+    ):
+        raise ValueError("device must be cpu, auto, cuda, or cuda:N")
+    if device != "cpu":
+        if torch_module is None:
+            try:
+                import torch as torch_module
+            except ImportError as exc:
+                raise RuntimeError(
+                    "CUDA/auto selection needs a CUDA-enabled torch install; "
+                    "see requirements-encoders.txt"
+                ) from exc
+        available = torch_module.cuda.is_available()
+        if device == "auto":
+            device = "cuda:0" if available else "cpu"
+        elif not available:
+            raise RuntimeError(
+                "CUDA was requested but torch.cuda.is_available() is false; "
+                "check the NVIDIA driver and CUDA-enabled torch wheel"
+            )
+        if device.startswith("cuda"):
+            index = int(device.split(":", 1)[1]) if ":" in device else 0
+            if index >= torch_module.cuda.device_count():
+                raise RuntimeError(f"CUDA device {index} is not available")
+            device = f"cuda:{index}"
+            if dtype == "bfloat16":
+                with torch_module.cuda.device(index):
+                    if not torch_module.cuda.is_bf16_supported():
+                        raise RuntimeError(
+                            f"{device} does not support bfloat16 inference"
+                        )
+    if device == "cpu" and dtype != "float32":
+        raise ValueError("CPU inference requires float32; choose CUDA for reduced precision")
+    return {"device": device, "dtype": dtype, "tf32": False}
+
+
+def add_execution_arguments(parser):
+    """Shared CLI settings: CPU/fp32 preserves the measured baseline."""
+    parser.add_argument(
+        "--device", default="cpu", metavar="DEVICE",
+        help="cpu (default), cuda, cuda:N, or auto; CUDA never falls back",
+    )
+    parser.add_argument(
+        "--dtype", default="float32",
+        choices=("float32", "float16", "bfloat16"),
+        help="inference precision (default: float32, TF32 disabled)",
+    )
+
+
+def execution_provenance(execution, torch_module):
+    """Record the actual backend separately from the model's content SHA."""
+    result = dict(
+        execution,
+        torch=torch_module.__version__,
+        cuda_runtime=torch_module.version.cuda,
+    )
+    if execution["device"].startswith("cuda"):
+        index = int(execution["device"].split(":")[1])
+        properties = torch_module.cuda.get_device_properties(index)
+        result.update(
+            gpu_name=properties.name,
+            gpu_total_memory_bytes=properties.total_memory,
+            gpu_compute_capability=list(torch_module.cuda.get_device_capability(index)),
+        )
+    return result
+
+
+def validate_model_runtime(execution, torch_module):
+    """Reject the measured native CPU crash before any weights are loaded."""
+    if (execution["device"] == "cpu" and sys.platform == "win32"
+            and torch_module.__version__ == "2.14.1+cu126"):
+        raise RuntimeError(
+            "torch 2.14.1+cu126 has a measured native CPU access violation on Windows; "
+            "use the separate CPU-only torch 2.15.0+cpu environment described in "
+            "data/annotations/README.md, or select --device cuda:0 in the CUDA environment"
+        )
+
+
+def runtime_signature(execution=None):
+    """Backend identity for caches; CPU metadata does not import torch.
+
+    Library upgrades and GPU architectures can change floating-point votes
+    despite identical weights. Recompute instead of attributing old cached
+    predictions to a different producing environment.
+    """
+    versions = {}
+    for package in ("torch", "transformers", "tokenizers", "bitsandbytes"):
+        try:
+            versions[package] = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            versions[package] = None
+    if execution and execution["device"].startswith("cuda"):
+        import torch
+        index = int(execution["device"].split(":")[1])
+        versions.update(
+            cuda_runtime=torch.version.cuda,
+            gpu_name=torch.cuda.get_device_properties(index).name,
+            gpu_compute_capability=list(torch.cuda.get_device_capability(index)),
+        )
+    return versions
+
+
+def load_entities_fn(spec, *, device="cpu", dtype="float32"):
     """Build the real inference callable for a runnable candidate spec.
 
     Imported lazily: CI never installs torch/transformers, and the unit
@@ -585,7 +700,9 @@ def load_entities_fn(spec):
     the model card's WordPiece-decoder workaround so decoded `word`
     fields stay readable (spans come from char offsets either way).
     """
+    execution = normalize_execution(device, dtype)
     try:
+        import torch
         from transformers import pipeline
         from tokenizers.decoders import WordPiece
     except ImportError as exc:
@@ -593,21 +710,35 @@ def load_entities_fn(spec):
             "encoder evaluation needs torch + transformers — see "
             "requirements-encoders.txt for the pinned install commands"
         ) from exc
+    validate_model_runtime(execution, torch)
+    if execution["device"].startswith("cuda"):
+        # Keep FP32 quality comparable with the measured CPU baseline.
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.backends.cudnn.allow_tf32 = False
+        torch.set_float32_matmul_precision("highest")
     pipe = pipeline(
         spec["kind"],
         model=spec["hf_repo"],
         revision=spec["revision"],
         aggregation_strategy="simple",
+        device=execution["device"],
+        dtype=getattr(torch, execution["dtype"]),
     )
+    if str(pipe.device) != execution["device"]:
+        raise RuntimeError(
+            f"requested {execution['device']} but model loaded on {pipe.device}"
+        )
+    pipe.model.eval()
     pipe.tokenizer.backend_tokenizer.decoder = WordPiece()
 
     def entities_fn(text):
         return pipe(text)
 
+    entities_fn.execution = execution_provenance(execution, torch)
     return entities_fn
 
 
-def lazy_entities_fn(spec):
+def lazy_entities_fn(spec, *, device="cpu", dtype="float32"):
     """Defer `load_entities_fn` until the first inference call.
 
     A publish run whose checkpoint covers every unit never touches the
@@ -615,30 +746,51 @@ def lazy_entities_fn(spec):
     first call builds the real pipeline once and memoizes it.
     """
     loaded = None
+    execution = normalize_execution(device, dtype)
 
     def entities_fn(text):
         nonlocal loaded
         # `not loaded`: the built pipeline callable is always truthy.
         if not loaded:
-            loaded = load_entities_fn(spec)
+            loaded = load_entities_fn(
+                spec, device=execution["device"], dtype=execution["dtype"]
+            )
+            entities_fn.execution = loaded.execution
+            entities_fn.model_loaded = True
         return loaded(text)
 
+    entities_fn.execution = execution
+    entities_fn.model_loaded = False
     return entities_fn
 
 
 def spec_revision_tag(spec):
-    """model_revision stamp, matching the baseline's name@sha+contract form."""
-    return f"{spec['name']}@{spec['revision'][:8]}+contract1"
+    """Pin the detector as well as the encoder for hybrid emitted rows."""
+    detector = ""
+    if spec.get("mode") == "retype":
+        digest = hashlib.sha256(json.dumps(
+            [baseline.MODEL_REVISION, baseline_articles.MODEL_REVISION]
+        ).encode("utf-8")).hexdigest()[:8]
+        detector = f"+detect{digest}"
+    return f"{spec['name']}@{spec['revision'][:8]}{detector}+contract1"
 
 
-def evaluate_candidate(spec, gold_dir=ge.GOLDEN_DIR):
+def evaluate_candidate(spec, gold_dir=ge.GOLDEN_DIR, *, device="cpu", dtype="float32"):
     """Run one runnable candidate through both golden domains.
 
     Returns the full report (runtime included — the issue's cost
     metrics) plus environment provenance; `spec` supplies the row
     contract's model_revision tag.
     """
-    entities_fn = load_entities_fn(spec)
+    entities_fn = load_entities_fn(spec, device=device, dtype=dtype)
+    import torch
+    cuda_device = (
+        entities_fn.execution["device"]
+        if entities_fn.execution["device"].startswith("cuda") else None
+    )
+    if cuda_device:
+        torch.cuda.synchronize(cuda_device)
+        torch.cuda.reset_peak_memory_stats(cuda_device)
     sefarim = baseline.load_canonical()
     gazetteer, held, word_counts, tagged_counts = (
         baseline_articles.build_gazetteer_from_corpus(sefarim)
@@ -718,6 +870,9 @@ def evaluate_candidate(spec, gold_dir=ge.GOLDEN_DIR):
     _, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     timing["peak_tracemalloc_kib"] = round(peak / 1024, 1)
+    if cuda_device:
+        torch.cuda.synchronize(cuda_device)
+        timing["peak_cuda_allocated_bytes"] = torch.cuda.max_memory_allocated(cuda_device)
     report["runtime"] = timing
 
     env = {}
@@ -734,6 +889,7 @@ def evaluate_candidate(spec, gold_dir=ge.GOLDEN_DIR):
         "license": spec["license"],
     }
     report["environment"] = env
+    report["execution"] = entities_fn.execution
     return report
 
 
@@ -776,6 +932,7 @@ def main():
         "(record the comparison at golden/encoder-metrics)",
     )
     parser.add_argument("--gold-dir", type=Path, default=ge.GOLDEN_DIR)
+    add_execution_arguments(parser)
     args = parser.parse_args()
 
     if args.list:
@@ -795,11 +952,18 @@ def main():
     ]
     if not selected:
         parser.error("no runnable candidate selected (see --list)")
+    try:
+        execution = normalize_execution(args.device, args.dtype)
+    except (ValueError, RuntimeError) as exc:
+        parser.error(str(exc))
     if args.out:
         args.out.mkdir(parents=True, exist_ok=True)
     for spec in selected:
         print(f"=== {spec['name']} ({spec['hf_repo']}) ===")
-        report = evaluate_candidate(spec, args.gold_dir)
+        report = evaluate_candidate(
+            spec, args.gold_dir,
+            device=execution["device"], dtype=execution["dtype"],
+        )
         print_summary(spec["name"], report)
         if args.out:
             path = args.out / f"{spec['name']}.json"

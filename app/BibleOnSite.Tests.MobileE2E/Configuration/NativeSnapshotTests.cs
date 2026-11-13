@@ -112,6 +112,22 @@ public sealed class NativeSnapshotTests
         Assert.DoesNotContain(DriverCommand.GetElementText, executor.Commands);
     }
 
+    [Theory]
+    [InlineData("PerekSource", "בראשית א")]
+    [InlineData("PasukText", "א בראשית ברא")]
+    public void ReaderTextUsesTheCurrentSnapshotWhenTheNativeElementIsRecycled(string automationId, string text)
+    {
+        var executor = new SnapshotExecutor([Entry(text), Entry(text + " fresh")]) { StaleOnText = true };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var page = new PerekPage(driver, new IosPlatformAdapter());
+        string Read() => automationId == "PerekSource" ? page.Source : page.FirstPasuk;
+
+        Assert.Equal(text, Read());
+        Assert.Equal(text + " fresh", Read());
+        Assert.Equal(2, executor.Lookups);
+        Assert.DoesNotContain(DriverCommand.GetElementText, executor.Commands);
+    }
+
     [Fact]
     public void ReadOnlySearchGeometryNeedsNoNativeHitTestOrPropertyRequests()
     {
@@ -388,7 +404,7 @@ public sealed class NativeSnapshotTests
                 if (StaleOnText)
                 {
                     status = WebDriverResult.ObsoleteElement;
-                    value = new Dictionary<string, object> { ["message"] = "The native element was replaced after the snapshot." };
+                    value = new Dictionary<string, object> { ["message"] = "The native element was recycled after lookup." };
                 }
                 else
                 {
