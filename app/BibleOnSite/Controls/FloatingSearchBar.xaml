@@ -64,38 +64,43 @@
    </Grid.HorizontalOptions>
    <ScrollView Orientation="Horizontal" HorizontalScrollBarVisibility="Never" AutomationId="SearchFilterChips">
     <HorizontalStackLayout Padding="16,8" Spacing="8">
-     <Border Style="{StaticResource FilterChip}" AutomationId="SearchKindsTab">
-      <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnKindsTabClicked"/></Border.GestureRecognizers>
-      <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
-       <Label x:Name="KindsChipText" Text="מה לחפש" AutomationId="SearchKindsSummary" Style="{StaticResource ChipText}"/>
-       <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
-      </Grid>
-     </Border>
-     <Border Style="{StaticResource FilterChip}" AutomationId="SearchBooksTab">
-      <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnBooksTabClicked"/></Border.GestureRecognizers>
-      <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
-       <Label x:Name="BooksChipText" Text="היכן לחפש" AutomationId="SearchBooksSummary" Style="{StaticResource ChipText}"/>
-       <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
-      </Grid>
-     </Border>
-     <Border Style="{StaticResource FilterChip}" AutomationId="SearchOptionsTab">
-      <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnOptionsTabClicked"/></Border.GestureRecognizers>
-      <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
-       <Label x:Name="OptionsChipText" Text="הגדרות נוספות" AutomationId="SearchOptionsSummary" Style="{StaticResource ChipText}"/>
-       <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
-      </Grid>
-     </Border>
-     <Border x:Name="ClearAllChip" Style="{StaticResource FilterChip}" AutomationId="SearchClearAll" IsVisible="False">
-      <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnClearAllClicked"/></Border.GestureRecognizers>
-      <Label Text="נקה הכל" Style="{StaticResource ChipText}" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
-     </Border>
+     <controls:TappableView AutomationId="SearchKindsTab" Activated="OnKindsTabClicked">
+      <Border Style="{StaticResource FilterChip}">
+       <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
+        <Label x:Name="KindsChipText" Text="מה לחפש" AutomationId="SearchKindsSummary" Style="{StaticResource ChipText}"/>
+        <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
+       </Grid>
+      </Border>
+     </controls:TappableView>
+     <controls:TappableView AutomationId="SearchBooksTab" Activated="OnBooksTabClicked">
+      <Border Style="{StaticResource FilterChip}">
+       <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
+        <Label x:Name="BooksChipText" Text="היכן לחפש" AutomationId="SearchBooksSummary" Style="{StaticResource ChipText}"/>
+        <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
+       </Grid>
+      </Border>
+     </controls:TappableView>
+     <controls:TappableView AutomationId="SearchOptionsTab" Activated="OnOptionsTabClicked">
+      <Border Style="{StaticResource FilterChip}">
+       <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
+        <Label x:Name="OptionsChipText" Text="הגדרות נוספות" AutomationId="SearchOptionsSummary" Style="{StaticResource ChipText}"/>
+        <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
+       </Grid>
+      </Border>
+     </controls:TappableView>
+     <controls:TappableView x:Name="ClearAllChip" AutomationId="SearchClearAll" IsVisible="False" Activated="OnClearAllClicked">
+      <Border Style="{StaticResource FilterChip}">
+       <Label Text="נקה הכל" Style="{StaticResource ChipText}" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
+      </Border>
+     </controls:TappableView>
     </HorizontalStackLayout>
    </ScrollView>
-   <Grid Grid.Row="1" Padding="16,4,16,8" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6" AutomationId="SearchSortButton">
-    <Grid.GestureRecognizers><TapGestureRecognizer Tapped="OnSortClicked"/></Grid.GestureRecognizers>
-    <Label x:Name="SortLabel" Text="הכי רלוונטי" Style="{StaticResource ChipText}"/>
-    <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
-   </Grid>
+   <controls:TappableView Grid.Row="1" AutomationId="SearchSortButton" Activated="OnSortClicked">
+    <Grid Padding="16,4,16,8" ColumnDefinitions="Auto,Auto,*" ColumnSpacing="6">
+     <Label x:Name="SortLabel" Text="הכי רלוונטי" Style="{StaticResource ChipText}"/>
+     <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
+    </Grid>
+   </controls:TappableView>
    <VerticalStackLayout Grid.Row="2" Padding="16,4" Spacing="4">
     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
      <ActivityIndicator IsRunning="{Binding IsLoading}" IsVisible="{Binding IsLoading}" WidthRequest="22" HeightRequest="22"/>
@@ -107,13 +112,11 @@
     <HorizontalStackLayout x:Name="PerushimDownloadLink" IsVisible="False" Spacing="6">
      <Label Text="{x:Static fonts:FluentUI.info_16_regular}" FontFamily="FluentIcons" FontSize="14"
       TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}" VerticalOptions="Center"/>
-     <Label Text="הורדת חבילת הפירושים" FontSize="13" TextDecorations="Underline" AutomationId="DownloadPerushimLink"
-      TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
-      VerticalOptions="Center">
-      <Label.GestureRecognizers>
-       <TapGestureRecognizer Tapped="OnPerushimDownloadLinkTapped"/>
-      </Label.GestureRecognizers>
-     </Label>
+     <controls:TappableView Activated="OnPerushimDownloadLinkTapped" AutomationId="DownloadPerushimLink">
+      <Label Text="הורדת חבילת הפירושים" FontSize="13" TextDecorations="Underline"
+       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+       VerticalOptions="Center"/>
+     </controls:TappableView>
     </HorizontalStackLayout>
    </VerticalStackLayout>
    <CollectionView Grid.Row="3" x:Name="RecentList" AutomationId="RecentSearches" SelectionMode="Single" SelectionChanged="OnRecentSelected">

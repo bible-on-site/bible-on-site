@@ -94,12 +94,11 @@
                      </CollectionView.ItemsLayout>
                      <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="models:Article">
-                                   <controls:ArticleCard Article="{Binding .}" ShowPerekSource="True">
-                                          <controls:ArticleCard.GestureRecognizers>
-                                                 <TapGestureRecognizer Tapped="OnArticleTapped"
-                                                                       CommandParameter="{Binding .}"/>
-                                          </controls:ArticleCard.GestureRecognizers>
-                                   </controls:ArticleCard>
+                                   <controls:TappableView Activated="OnArticleTapped"
+                                                          CommandParameter="{Binding .}"
+                                                          SemanticProperties.Description="{Binding Name}">
+                                          <controls:ArticleCard Article="{Binding .}" ShowPerekSource="True"/>
+                                   </controls:TappableView>
                             </DataTemplate>
                      </CollectionView.ItemTemplate>
               </CollectionView>

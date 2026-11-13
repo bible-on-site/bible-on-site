@@ -69,14 +69,13 @@
                                 Stroke="Transparent"
                                 Padding="12"
                                 HorizontalOptions="End">
-                            <Label Text="לחצו כאן"
-                                   FontSize="15"
-                                   TextColor="#1E88E5"
-                                   TextDecorations="Underline">
-                                <Label.GestureRecognizers>
-                                    <TapGestureRecognizer Tapped="OnWhatsAppTapped"/>
-                                </Label.GestureRecognizers>
-                            </Label>
+                            <controls:TappableView Activated="OnWhatsAppTapped"
+                                                   SemanticProperties.Description="פתיחת שיחת ווטסאפ">
+                                <Label Text="לחצו כאן"
+                                       FontSize="15"
+                                       TextColor="#1E88E5"
+                                       TextDecorations="Underline"/>
+                            </controls:TappableView>
                         </Border>
                     </VerticalStackLayout>
                 </VerticalStackLayout>
@@ -124,14 +123,13 @@
                                 Stroke="Transparent"
                                 Padding="12"
                                 HorizontalOptions="End">
-                            <Label Text="@BibleOnSite"
-                                   FontSize="15"
-                                   TextColor="#1E88E5"
-                                   TextDecorations="Underline">
-                                <Label.GestureRecognizers>
-                                    <TapGestureRecognizer Tapped="OnTelegramTapped"/>
-                                </Label.GestureRecognizers>
-                            </Label>
+                            <controls:TappableView Activated="OnTelegramTapped"
+                                                   SemanticProperties.Description="פתיחת ערוץ הטלגרם">
+                                <Label Text="@BibleOnSite"
+                                       FontSize="15"
+                                       TextColor="#1E88E5"
+                                       TextDecorations="Underline"/>
+                            </controls:TappableView>
                         </Border>
                     </VerticalStackLayout>
                 </VerticalStackLayout>
@@ -157,15 +155,15 @@
                     </Grid>
                     <!-- Content -->
                     <VerticalStackLayout Padding="24" BackgroundColor="White">
-                        <Label Text="tanah.site@gmail.com"
-                               FontSize="16"
-                               TextColor="#1E88E5"
-                               TextDecorations="Underline"
-                               HorizontalOptions="Center">
-                            <Label.GestureRecognizers>
-                                <TapGestureRecognizer Tapped="OnEmailTapped"/>
-                            </Label.GestureRecognizers>
-                        </Label>
+                        <controls:TappableView Activated="OnEmailTapped"
+                                               HorizontalOptions="Center"
+                                               SemanticProperties.Description="שליחת דואר אלקטרוני">
+                            <Label Text="tanah.site@gmail.com"
+                                   FontSize="16"
+                                   TextColor="#1E88E5"
+                                   TextDecorations="Underline"
+                                   HorizontalOptions="Center"/>
+                        </controls:TappableView>
                     </VerticalStackLayout>
                 </VerticalStackLayout>
             </Border>

@@ -56,14 +56,12 @@
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                <Label Text="למדיניות הפרטיות המלאה: יצירת קשר, זכויות עיון ותיקון, תקופות שמירה וקישורים למדיניות ספקי השירותים"
-                       FontSize="14" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}" TextDecorations="Underline"
-                       SemanticProperties.Description="פתיחת מדיניות הפרטיות המלאה באתר התכנית"
-                       AutomationId="PrivacyPolicyLink">
-                    <Label.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnPrivacyPolicyTapped"/>
-                    </Label.GestureRecognizers>
-                </Label>
+                <controls:TappableView Activated="OnPrivacyPolicyTapped"
+                                       SemanticProperties.Description="פתיחת מדיניות הפרטיות המלאה באתר התכנית"
+                                       AutomationId="PrivacyPolicyLink">
+                    <Label Text="למדיניות הפרטיות המלאה: יצירת קשר, זכויות עיון ותיקון, תקופות שמירה וקישורים למדיניות ספקי השירותים"
+                           FontSize="14" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}" TextDecorations="Underline"/>
+                </controls:TappableView>
             </VerticalStackLayout>
 
             <!-- Accessibility Statement Section -->
@@ -76,16 +74,14 @@
                        FontSize="14"
                        LineHeight="1.4"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                <Label Text="לצפייה בהצהרת הנגישות"
-                       FontSize="14"
-                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
-                       TextDecorations="Underline"
-                       SemanticProperties.Description="פתיחת הצהרת הנגישות באתר התכנית"
-                       AutomationId="AccessibilityStatementLink">
-                    <Label.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnAccessibilityStatementTapped"/>
-                    </Label.GestureRecognizers>
-                </Label>
+                <controls:TappableView Activated="OnAccessibilityStatementTapped"
+                                       SemanticProperties.Description="פתיחת הצהרת הנגישות באתר התכנית"
+                                       AutomationId="AccessibilityStatementLink">
+                    <Label Text="לצפייה בהצהרת הנגישות"
+                           FontSize="14"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                           TextDecorations="Underline"/>
+                </controls:TappableView>
             </VerticalStackLayout>
 
             <!-- Divider -->
@@ -165,14 +161,13 @@
                     <Label Text="המפרשים על הפרק באדיבות"
                            FontSize="14"
                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                    <Label Text="ספאריה"
-                           FontSize="14"
-                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
-                           TextDecorations="Underline">
-                        <Label.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnSefariaTapped"/>
-                        </Label.GestureRecognizers>
-                    </Label>
+                    <controls:TappableView Activated="OnSefariaTapped"
+                                           SemanticProperties.Description="פתיחת אתר ספאריה">
+                        <Label Text="ספאריה"
+                               FontSize="14"
+                               TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                               TextDecorations="Underline"/>
+                    </controls:TappableView>
                 </HorizontalStackLayout>
                 <Label Text=". שימוש חוזר על פי תנאי השימוש שלהם."
                        FontSize="14"
@@ -182,14 +177,13 @@
                     <Label Text="הפרקים המוקלטים באדיבות"
                            FontSize="14"
                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                    <Label Text="הרב דן בארי"
-                           FontSize="14"
-                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
-                           TextDecorations="Underline">
-                        <Label.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnDanBarryTapped"/>
-                        </Label.GestureRecognizers>
-                    </Label>
+                    <controls:TappableView Activated="OnDanBarryTapped"
+                                           SemanticProperties.Description="פתיחת אתר הרב דן בארי">
+                        <Label Text="הרב דן בארי"
+                               FontSize="14"
+                               TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                               TextDecorations="Underline"/>
+                    </controls:TappableView>
                 </HorizontalStackLayout>
                 <Label Text=". שימוש חוזר על פי תנאי השימוש שיציב."
                        FontSize="14"

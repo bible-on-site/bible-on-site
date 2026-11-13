@@ -66,6 +66,9 @@ public static class MauiProgram
                 // Native Button host gives flyout rows keyboard focus,
                 // Enter/Space activation and hover/focus visuals (#2766).
                 handlers.AddHandler<FlyoutMenuRow, FlyoutMenuRowHandler>();
+                // Every gesture-only tappable row/card/chip/link gets the
+                // same Button host: tab stop + Enter/Space + UIA Invoke (#3252).
+                handlers.AddHandler<TappableView, TappableViewHandler>();
                 // The draggable exit-fullscreen circle gets the same
                 // treatment: tab stop + Enter/Space + UIA button role (#2766).
                 handlers.AddHandler<ReaderExitFullscreenButton, ReaderExitFullscreenButtonHandler>();
