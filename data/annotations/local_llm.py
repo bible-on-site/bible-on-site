@@ -366,6 +366,7 @@ def load_generate_fn(spec=None, *, device="cuda:0", dtype="bfloat16"):
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     execution = encoders.normalize_execution(device, dtype, torch_module=torch)
+    encoders.validate_model_runtime(execution, torch)
     quantization = spec.get("quantization")
     if quantization and (quantization != "nf4-double" or not execution["device"].startswith("cuda")
                          or execution["dtype"] != "bfloat16"):
@@ -534,8 +535,8 @@ def retype_article_rows(content, rows, generate_fn, model_revision="local-llm"):
     return result
 
 
-def _evaluation_execution(spec, device, dtype):
-    """Resolve execution settings and installed evaluation package versions."""
+def execution_profile(spec, device, dtype):
+    """Share execution settings and installed package versions across entrypoints."""
     execution = encoders.normalize_execution(device, dtype)
     packages = ["torch", "transformers"]
     if spec.get("quantization"):
@@ -564,7 +565,7 @@ def evaluate_candidate(*, spec=None, device="cuda:0", dtype="bfloat16", cache_di
     """Compare the pinned generative retype model using the existing scorer."""
     if spec is None:
         spec = CANDIDATE
-    execution = _evaluation_execution(spec, device, dtype)
+    execution = execution_profile(spec, device, dtype)
     revision = revision_tag(spec, execution=execution, constrained_json=constrained_json)
     loaded = None
     if generate_fn is None:

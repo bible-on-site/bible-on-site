@@ -473,6 +473,31 @@ def fake_torch(available=True):
 
 
 class TestExecutionSelection(unittest.TestCase):
+    def test_known_windows_cuda_wheel_cpu_crash_fails_before_loading_weights(self):
+        backend = fake_torch()
+        backend.__version__ = "2.14.1+cu126"
+        factory = mock.Mock()
+        modules = {
+            "torch": backend, "transformers": SimpleNamespace(pipeline=factory),
+            "tokenizers": SimpleNamespace(),
+            "tokenizers.decoders": SimpleNamespace(WordPiece=mock.Mock()),
+        }
+        with mock.patch.dict(encoders.sys.modules, modules), mock.patch.object(encoders.sys, "platform", "win32"):
+            with self.assertRaisesRegex(RuntimeError, "CPU-only torch 2.15.0"):
+                encoders.load_entities_fn(encoders.CANDIDATES[0])
+        factory.assert_not_called()
+
+    def test_compatibility_guard_leaves_other_platforms_and_valid_profiles_unchanged(self):
+        backend = fake_torch()
+        backend.__version__ = "2.14.1+cu126"
+        with mock.patch.object(encoders.sys, "platform", "win32"):
+            encoders.validate_model_runtime({"device": "cuda:0"}, backend)
+            backend.__version__ = "2.15.0+cpu"
+            encoders.validate_model_runtime({"device": "cpu"}, backend)
+        backend.__version__ = "2.14.1+cu126"
+        with mock.patch.object(encoders.sys, "platform", "linux"):
+            encoders.validate_model_runtime({"device": "cpu"}, backend)
+
     def test_cpu_default_needs_no_optional_dependencies(self):
         with mock.patch.dict(encoders.sys.modules, {"torch": None}):
             self.assertEqual(

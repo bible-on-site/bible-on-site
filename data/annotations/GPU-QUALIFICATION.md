@@ -1,21 +1,12 @@
 # Local GPU reference qualification
 
-Measured on 2026-11-11. **Classifier qualification is complete; final LLM
-qualification and the classifier-versus-LLM selection are in progress.**
-The tables below contain measured classifier results only. They must not be
-read as an LLM comparison or a production-accuracy claim.
-
-Checkpoint remaining work:
-
-- Complete the schema-enforced DictaLM and Qwen validation runs for retyping
-  and independent detection in both domains.
-- Select the strongest measured profile per domain using correct-link
-  metrics, retaining raw responses, failures and generation provenance.
-- Validate a bounded cold run and checkpoint resume with the selected current
-  profile before recommending a corpus generation command.
-
-The implementation and classifier evidence are pushed for review. No
-production import or final LLM model promotion is part of this checkpoint.
+Measured on 2026-11-11 and 2026-11-13. **Local GPU execution, provisional
+model comparison and bounded cold/resume checks are complete.** DictaBERT
+base remains the compatibility default; the tested LLMs do not consistently
+beat it across both domains and splits. LLM modes remain opt-in for local
+evaluation and review. These measurements do not qualify automatic bulk
+publication, particularly for broader article references. No production
+import was performed.
 
 ## Inputs and scoring
 
@@ -84,11 +75,64 @@ detector's vocabulary ceiling.
 
 DictaBERT base is the stronger classifier in these measurements: it beats
 large on verse and broad article validation, ties the development article
-score and uses less GPU memory. **The final pipeline choice remains pending
-the local LLM retyping and independent-detection results.** No LLM result or
-quality threshold has been inferred from classifier performance.
+score and uses less GPU memory. The separate LLM measurements below inform
+the default decision; no LLM score is inferred from classifier performance.
 
-## LLM protocol qualification
+## LLM measurements and model choice
+
+Both generative candidates were tested on validation with schema-enforced
+retyping and independent detection. Retyping was also checked on development.
+The independent detectors had incomplete valid responses on validation and
+were not advanced to additional development runs. Every validation case was
+attempted; suppressed invalid/held outputs count as missing emitted links.
+These are end-to-end pipeline scores, not isolated semantic scores that
+exclude protocol failures.
+
+| Split | Domain | Profile | Link precision | Link recall | Link F1 | Strict link F1 |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| Development | Verse | DictaLM 1.7B retype | 0.641026 | 0.602410 | 0.621118 | 0.583851 |
+| Development | Article | DictaLM 1.7B retype | 0.684211 | 0.619048 | 0.650000 | 0.650000 |
+| Development | Verse | Qwen3-8B retype | 0.828571 | 0.698795 | 0.758170 | 0.679739 |
+| Development | Article | Qwen3-8B retype | 0.647059 | 0.523810 | 0.578947 | 0.578947 |
+| Validation | Verse | DictaLM 1.7B detect | 0.000000 | 0.000000 | 0.000000 | 0.000000 |
+| Validation | Article | DictaLM 1.7B detect | 0.000000 | 0.000000 | 0.000000 | 0.000000 |
+| Validation | Verse | DictaLM 1.7B retype | 0.840000 | 0.797468 | 0.818182 | 0.766234 |
+| Validation | Article | DictaLM 1.7B retype | 0.666667 | 0.296296 | 0.410256 | 0.410256 |
+| Validation | Verse | Qwen3-8B detect | 0.492308 | 0.405063 | 0.444444 | 0.375000 |
+| Validation | Article | Qwen3-8B detect | 0.500000 | 0.407407 | 0.448980 | 0.448980 |
+| Validation | Verse | Qwen3-8B retype | 0.853333 | 0.810127 | 0.831169 | 0.766234 |
+| Validation | Article | Qwen3-8B retype | 0.333333 | 0.148148 | 0.205128 | 0.205128 |
+
+The model choice has a material tradeoff. Base wins the frozen validation
+verses (F1 0.857143), whereas Qwen retyping improves the difficult development
+verses (0.758170 versus 0.618182). Base is also strongest on development
+articles (0.800000). This does not support replacing the default everywhere
+or claiming one universally best Hebrew model from these provisional sets.
+
+On broader validation articles, DictaLM retyping emits 8 correct links out
+of 12 rendered predictions against 27 expected mentions. Base has 8/13/27;
+Qwen independent detection has 11/22/27. Qwen's higher article F1 therefore
+comes with only 50% correct-link precision. Retain the classifier default,
+use LLM outputs as review candidates, and require a new human-reviewed
+holdout before any automatic model promotion. Retyping still cannot recover
+mentions outside the lexical detector's candidate set.
+
+Structured output improves format control, but cannot ensure correct bounds,
+non-overlap, target names or semantic types. The retained request counts are:
+
+| Split | Profile | Responses | Valid responses | Invalid responses |
+| --- | --- | ---: | ---: | ---: |
+| Development | DictaLM retype | 32 | 32 | 0 |
+| Development | Qwen retype | 32 | 30 | 2 |
+| Validation | DictaLM detect | 42 | 17 | 25 |
+| Validation | DictaLM retype | 30 | 30 | 0 |
+| Validation | Qwen detect | 42 | 38 | 4 |
+| Validation | Qwen retype | 30 | 30 | 0 |
+
+Invalid outputs and their reasons remain in the evidence. They were not
+repaired by guessing source coordinates or by changing gold labels.
+
+### Protocol history and exact-response replay
 
 The initial **unconstrained DictaLM** probes failed the strict output
 protocol: **0 of 12 responses across 8 contexts** passed validation. An
@@ -98,19 +142,16 @@ benchmark results. Invalid responses were suppressed; their failure does
 not establish the model's semantic precision or recall.
 
 The full semantic comparison was not completed for that unconstrained
-configuration. The first schema-enforced Qwen protocol likewise failed
-validation on most requests because it required the model to copy exact
-source surfaces. This is a protocol failure, not a completed semantic
-qualification result.
+configuration. Earlier protocols that required exact surface copying were
+replaced with source indices and candidate IDs before the final comparisons.
 
 The revised lean protocol derives source surfaces directly from validated
 indices in code. Retyping preserves existing spans using the supplied
 candidate ID; independent detection returns original unit indices. The
 model no longer has to reproduce niqqud or other exact source bytes in its
-response. The current prompt versions are `local-retype-v3` and
-`local-detect-v2`. **Their schema-enforced qualification and the final model
-selection are still in progress.** Their measurements must be recorded
-separately; no completed final LLM quality result is claimed here.
+response. The final prompt versions are `local-retype-v3` and
+`local-detect-v2`, with `target-key-v1` normalization. Their results above
+are separate from the initial unconstrained probes.
 
 The `target-key-v1` postprocessor also accepts vocalized model target names
 and removes only marks and formatting to produce the target key. It preserves
@@ -119,19 +160,34 @@ type. Source surfaces remain exact. This change has its own cache/provenance
 version and does not change prompts, schemas or generation. Earlier actual
 GPU responses may therefore be reprocessed on CPU only when their exact
 messages, model profile and schema match; captured responses and newly
-generated requests must be reported separately.
+generated requests must be reported separately. The final archive retains
+208 returned responses: 180 newly generated GPU responses and 28 exact
+captured Qwen detection responses reprocessed on CPU. No new model call is
+attributed to replay. Per-request messages, output hashes, generation
+revision and original raw/quarantine proofs make the distinction auditable.
 
 ## Hardware and raw runtimes
 
 - NVIDIA GeForce RTX 4070 Laptop GPU, 8,585,216,000 bytes reported VRAM,
   compute capability 8.9; NVIDIA driver 566.07.
 - CUDA runtime 12.6; `torch==2.14.1+cu126`, `transformers==5.22.2`.
-- Explicit `cuda:0`, `float32`; TF32 disabled.
+- Classifiers use explicit `cuda:0`, `float32`; TF32 is disabled.
 - Base model: `dicta-il/dictabert-ner`, revision
   `05ed61bc99437b13bc2bdef8154c52f8b44eaad6`.
 - Large model: `dicta-il/dictabert-large-ner`, revision
   `ac70130828d5a6811c2dc451e2255424c96f0eb0`.
 - Both classifier model cards declare CC-BY-4.0; retain attribution.
+- DictaLM: `dicta-il/DictaLM-3.0-1.7B-Instruct`, revision
+  `5add44d6941d6ffb9eb6cc6b516f9fb4fd472494`, BF16.
+- Qwen: `Qwen/Qwen3-8B`, revision
+  `b968826d9c46dd6066d109eabc6255188de91218`, NF4 double quantization with
+  BF16 compute and `enable_thinking=False`. Its explicit device map keeps
+  the model on CUDA without CPU offload. Both LLM cards declare Apache-2.0.
+
+Both LLM profiles fit the tested 8 GiB GPU. Peak PyTorch CUDA allocation
+across the recorded runs was 3461.2 MiB for DictaLM and 6150.5 MiB for Qwen;
+these exclude driver/process overhead. BF16 versus NF4 compares deployable
+profiles, not parameter count in isolation.
 
 | Split | Classifier | Recorded verse seconds | Recorded article seconds | Peak CUDA allocation, MiB |
 | --- | --- | ---: | ---: | ---: |
@@ -146,15 +202,25 @@ the predictor on whole chapters before selecting scored verses; the LLM
 harness restricts inference to selected test verses. Repeated chapters,
 initialization, allocator state and CPU preparation also differ. Peak CUDA
 allocation measures PyTorch allocations, not total process/device usage.
+LLM report timings additionally mix replay, cache activity and new generation;
+their `actual_new_gpu_stats` separate new model work. Do not use these mixed
+wall times as a throughput comparison.
 
-A supplemental CPU/GPU consistency comparison did not complete: the same
-Windows CUDA-wheel environment loaded DictaBERT on explicit CPU/FP32, but
-terminated with native access violation `0xC0000005` during BERT forward
-execution. One diagnostic retry with a Python fault trace confirmed the
-forward-path failure. CUDA was masked for both attempts, and no complete CPU
-split was produced. The tables above remain actual GPU measurements; they
-do not establish prediction equivalence with CPU. This observation is scoped
-to the tested Windows environment, not every CPU installation.
+A supplemental CPU/GPU consistency comparison initially failed with native
+access violation `0xC0000005` in the Windows CUDA-wheel environment during
+CPU BERT inference. Explicit eager attention was not a reliable fix and was
+not retained. The adapter now rejects that known `torch==2.14.1+cu126` /
+Windows / CPU combination before loading weights.
+
+On 2026-11-13, a separate CPU-only environment using `torch==2.15.0+cpu` and
+the same `transformers==5.22.2` completed both splits with unmodified model
+adapters, FP32, two CPU math threads and one interop thread. CUDA was masked
+and remained uninitialized. All aggregate counts, metrics, per-case results
+and per-category results matched the base GPU classifier reports exactly
+across 40 verse cases and 24 article cases. This establishes equivalence of
+these recorded outputs, not arbitrary tensor/logit equality or every input.
+The raw CPU reports and comparison are retained under
+[`cpu-profile-2-15`](golden/gpu-metrics/cpu-profile-2-15).
 
 ## Source alignment and target-name audit
 
@@ -185,6 +251,29 @@ models across the full scripture corpus:
 These invariants prevent source-offset and malformed-name errors; they
 do not establish that every detected mention has the correct semantic type.
 
+## Cold/resume publisher checks
+
+All three engines completed real bounded CLI runs and subsequent checkpoint
+resumes. Every resumed row file was byte-identical, every source unit was a
+checkpoint hit, and no model weights were loaded on resume. Verse surfaces
+were checked against canonical segments; article surfaces and content hashes
+were checked against the original fixture, including UTF-16 offsets.
+
+| Engine | Input | Source units | Output rows | Warm units computed |
+| --- | --- | ---: | ---: | ---: |
+| DictaBERT base classifier | First two canonical chapters | 2 | 21 | 0 |
+| DictaBERT base classifier | Synthetic article fixtures | 3 | 11 | 0 |
+| DictaLM retype | Synthetic article fixtures | 3 | 11 | 0 |
+| Qwen independent detection | Synthetic article fixture | 1 | 3 | 0 |
+
+The [pilot manifest](golden/gpu-metrics/publish-pilot/manifest.json) links
+the exact row files and cold/warm provenance. Their profile IDs match the
+corresponding qualification reports. Retyping evaluation and publication now
+share the same execution recipe; older publisher-only profile IDs recompute
+instead of silently sharing incompatible checkpoints. These small CLI checks
+verify integration and source fidelity; they do not promote an LLM's semantic
+accuracy. The article inputs are test fixtures and were never imported.
+
 ## Reproduction and raw reports
 
 Run from the repository root using an isolated environment installed with
@@ -205,9 +294,35 @@ python data/annotations/encoders.py \
   --device cuda:0 --dtype float32 \
   --gold-dir data/annotations/golden/validation \
   --out .cache/gpu-metrics/validation
+
+python data/annotations/local_llm.py \
+  --model dictalm-3-1.7b-retype --device cuda:0 --dtype bfloat16 \
+  --constrained-json --gold-dir data/annotations/golden/validation \
+  --cache-dir .cache/llm-requests --out .cache/dictalm-retype-validation.json
+
+python data/annotations/local_llm.py \
+  --model qwen3-8b-retype --device cuda:0 --dtype bfloat16 \
+  --constrained-json --gold-dir data/annotations/golden/validation \
+  --cache-dir .cache/llm-requests --out .cache/qwen-retype-validation.json
+
+python data/annotations/llm_detect.py \
+  --model dictalm-3-1.7b-retype --device cuda:0 --dtype bfloat16 \
+  --constrained-json --gold-dir data/annotations/golden/validation \
+  --cache-dir .cache/llm-requests --out .cache/dictalm-detect-validation.json
+
+python data/annotations/llm_detect.py \
+  --model qwen3-8b-retype --device cuda:0 --dtype bfloat16 \
+  --constrained-json --gold-dir data/annotations/golden/validation \
+  --cache-dir .cache/llm-requests --out .cache/qwen-detect-validation.json
 ```
 
-The raw classifier reports are retained under
+For the two development retyping runs, use the same commands with
+`--gold-dir data/annotations/golden` and separate output names. Fresh runs
+generate every request; the retained Qwen detection report instead separates
+28 exact captured responses from 14 new GPU generations. Neither method
+changes the semantic scorer or uses gold labels in a prompt.
+
+The readable reports are retained under
 [`golden/gpu-metrics`](golden/gpu-metrics). Relative to that root, the measured
 files are:
 
@@ -217,6 +332,12 @@ files are:
 | `development/dictabert-large-ner-retype.json` | Large classifier, development split |
 | `validation/dictabert-ner-retype.json` | Base classifier, validation split |
 | `validation/dictabert-large-ner-retype.json` | Large classifier, validation split |
+| `development/dictalm-3-1.7b-retype-json.json` | DictaLM retype, development split |
+| `development/qwen3-8b-retype-json.json` | Qwen retype, development split |
+| `validation/dictalm-3-1.7b-detect-json.json` | DictaLM independent detection, validation split |
+| `validation/dictalm-3-1.7b-retype-json.json` | DictaLM retype, validation split |
+| `validation/qwen3-8b-detect-json.json` | Qwen independent detection, validation split |
+| `validation/qwen3-8b-retype-json.json` | Qwen retype, validation split |
 
 Each recorded report contains candidate revision, actual device/precision,
 runtime versions, GPU details, per-case/category counts and metrics. This
@@ -225,11 +346,28 @@ session's reports additionally record the split and gold-file digests in
 the commands above recreate the measurements and use the same file names.
 Routine CI does not fetch model weights or execute these real-model runs.
 
+The [evidence manifest](golden/gpu-metrics/qualification-evidence-manifest.json)
+records original and readable-view report hashes and the deterministic, zero-mtime
+[`qualification-request-evidence.json.gz`](golden/gpu-metrics/qualification-request-evidence.json.gz)
+archive. Decompress it as JSON: each `entries` item stores a portable path,
+SHA-256, byte count and base64-encoded exact original bytes. `path_map`
+resolves report/evidence references without absolute host paths. The archive
+contains complete messages and raw model outputs, original captured and
+quarantined responses, validation reasons and unchanged measured reports.
+Readable LLM report views label request digests `request_sha256`; only that
+metadata label differs from the original `request_key`. This describes the
+value accurately and avoids treating a computed digest as an API credential.
+The original report bytes stay in the archive, and the manifest records the
+exact projection and both hashes. Classifier and CPU reports are unchanged.
+`test_qualification_evidence.py` independently checks the hashes, exact
+request/model identities, replay/new-generation counts, CPU comparisons and
+publisher resume proofs without loading a model.
+
 The byte digests in the original reports are preserved. The Windows
 validation input files used CRLF line endings while Git stores LF; their
 parsed JSON payloads were checked against the committed labels and are
 identical. The companion [`gold-inputs.json`](golden/gpu-metrics/gold-inputs.json)
-records the measured byte hashes from all four reports, the committed
+records the measured byte hashes from the four classifier reports, the committed
 byte hashes, canonical parsed-JSON hashes and the exact commit checked.
 Folder-local Git attributes preserve raw report bytes when they are staged.
 For a cross-platform label check, hash UTF-8 JSON serialized with
@@ -250,6 +388,6 @@ python data/annotations/golden_eval.py --check
 ```
 
 Those checks validate source alignment, span contracts, fake-provider
-inference behavior, checkpoint/provenance rules and the recorded lexical
-baseline. They are separate from the real GPU evidence above and from
-the pending final LLM qualification.
+inference behavior, checkpoint/provenance rules, the recorded lexical
+baseline and the integrity of the retained real-model evidence. Model
+execution remains a separate local qualification step.

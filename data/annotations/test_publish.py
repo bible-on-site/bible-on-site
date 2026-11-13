@@ -711,6 +711,41 @@ class TestLlmEngines(unittest.TestCase):
 
 
 class TestMain(unittest.TestCase):
+    def test_publisher_uses_the_same_llm_profile_identity_as_the_benchmark(self):
+        base_execution = {"device": "cuda:0", "dtype": "bfloat16", "tf32": False}
+
+        def unused(_messages):
+            raise AssertionError("empty input must not load model weights")
+
+        for engine in ("llm-retype", "llm-detect"):
+            for name, candidate in publish.local_llm.MODEL_CANDIDATES.items():
+                with self.subTest(engine=engine, model=name), tempfile.TemporaryDirectory() as tmp:
+                    out = Path(tmp) / "rows.json"
+                    argv = ["publish.py", "--pasuk-out", str(out), "--engine", engine,
+                            "--llm-model", name, "--device", "cuda:0", "--dtype", "bfloat16",
+                            "--constrained-json"]
+                    with (
+                        mock.patch.object(publish.sys, "argv", argv),
+                        mock.patch.object(publish.baseline, "load_canonical", return_value=[]),
+                        mock.patch.object(publish.baseline, "load_lexicon", return_value={}),
+                        mock.patch.object(publish.encoders, "normalize_execution",
+                                          side_effect=lambda *_args, **_kwargs: dict(base_execution)),
+                        mock.patch.object(publish.encoders, "runtime_signature", return_value={"torch": "test"}),
+                        mock.patch.object(publish.local_llm.importlib.metadata, "version",
+                                          side_effect=lambda package: f"{package}-test"),
+                        mock.patch.object(publish, "lazy_generate_fn", return_value=unused),
+                        contextlib.redirect_stdout(io.StringIO()),
+                    ):
+                        publish.main()
+                        if engine == "llm-retype":
+                            execution = publish.local_llm.execution_profile(candidate, "cuda:0", "bfloat16")
+                            expected = publish.local_llm.revision_tag(candidate, execution, constrained_json=True)
+                        else:
+                            spec = publish.llm_detect.detection_spec(candidate)
+                            expected = publish.llm_detect.revision_tag(base_execution, spec, constrained_json=True)
+                    record = json.loads(Path(f"{out}.provenance.json").read_bytes())
+                    self.assertEqual(record["model_revision"], expected)
+
     def test_quantized_model_rejects_cpu_before_model_or_source_loading(self):
         argv = ["publish.py", "--pasuk-out", "unused.json", "--engine", "llm-detect",
                 "--llm-model", "qwen3-8b-retype"]

@@ -290,6 +290,18 @@ class TestProvenanceAndCache(unittest.TestCase):
 
 
 class TestLocalLoading(unittest.TestCase):
+    def test_known_windows_cuda_wheel_cpu_crash_is_rejected_before_model_or_tokenizer_load(self):
+        loaders = types.SimpleNamespace(
+            AutoTokenizer=types.SimpleNamespace(from_pretrained=mock.Mock()),
+            AutoModelForCausalLM=types.SimpleNamespace(from_pretrained=mock.Mock()))
+        torch = types.SimpleNamespace(__version__="2.14.1+cu126")
+        with (mock.patch.dict("sys.modules", torch=torch, transformers=loaders),
+              mock.patch.object(llm.encoders.sys, "platform", "win32")):
+            with self.assertRaisesRegex(RuntimeError, "CPU-only torch 2.15.0"):
+                llm.load_generate_fn(device="cpu", dtype="float32")
+        loaders.AutoTokenizer.from_pretrained.assert_not_called()
+        loaders.AutoModelForCausalLM.from_pretrained.assert_not_called()
+
     def test_qwen_nf4_load_is_single_gpu_and_thinking_is_explicitly_disabled(self):
         tensor = mock.Mock()
         tensor.shape = [1, 5]
@@ -331,7 +343,8 @@ class TestLocalLoading(unittest.TestCase):
                           {"device": "cuda:0", "dtype": "float32"}]:
             transformers = types.SimpleNamespace(AutoTokenizer=mock.Mock(), AutoModelForCausalLM=mock.Mock())
             with self.subTest(execution=execution), \
-                    mock.patch.dict("sys.modules", torch=types.SimpleNamespace(), transformers=transformers), \
+                    mock.patch.dict("sys.modules", torch=types.SimpleNamespace(__version__="test-torch"),
+                                    transformers=transformers), \
                     mock.patch.object(llm.encoders, "normalize_execution", return_value=execution):
                 with self.assertRaisesRegex(ValueError, "explicit CUDA"):
                     llm.load_generate_fn(llm.MODEL_CANDIDATES["qwen3-8b-retype"])
@@ -356,7 +369,7 @@ class TestLocalLoading(unittest.TestCase):
         transformers = types.SimpleNamespace(
             AutoTokenizer=types.SimpleNamespace(from_pretrained=mock.Mock(return_value=tokenizer)),
             AutoModelForCausalLM=types.SimpleNamespace(from_pretrained=mock.Mock(return_value=model)))
-        torch = types.SimpleNamespace(float32="fp32", inference_mode=contextlib.nullcontext)
+        torch = types.SimpleNamespace(__version__="test-torch", float32="fp32", inference_mode=contextlib.nullcontext)
         execution = {"device": "cpu", "dtype": "float32", "tf32": False}
         with mock.patch.dict("sys.modules", torch=torch, transformers=transformers), \
                 mock.patch.object(llm.encoders, "normalize_execution", return_value=execution), \
@@ -444,7 +457,8 @@ class TestResponseGrammar(unittest.TestCase):
         prefixes = [object(), object()]
         prefix_builder = mock.Mock(side_effect=prefixes)
         modules = {
-            "torch": types.SimpleNamespace(float32="fp32", inference_mode=contextlib.nullcontext),
+            "torch": types.SimpleNamespace(__version__="test-torch", float32="fp32",
+                                           inference_mode=contextlib.nullcontext),
             "transformers": loaders,
             "lmformatenforcer": types.SimpleNamespace(CharacterLevelParserConfig=configs, JsonSchemaParser=parsers),
             "lmformatenforcer.consts": types.SimpleNamespace(COMPLETE_ALPHABET='abc123 {}"'),

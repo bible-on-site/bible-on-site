@@ -5,6 +5,12 @@ existence. The website resolves names against live published entries in bulk;
 it never invokes a model while rendering. Canonical text and article HTML stay
 unchanged. Generation writes local artifacts; import is a separate operation.
 
+The [completed GPU comparison](GPU-QUALIFICATION.md) retains DictaBERT base
+as the default. Qwen retyping helps some difficult verse cases but does not
+consistently beat the classifier across the frozen splits and article cases.
+Broader article results remain review candidates, with no automatic bulk
+publication qualification. The report includes raw outputs and failures.
+
 ## GPU environment
 
 Use an isolated Python 3.12 environment. The tested CUDA 12.6 profile works with
@@ -23,6 +29,14 @@ to use a GPU. Model snapshots are pinned to full content revisions. Keep the
 official `chat_template.jinja` with the tokenizer when prefetching LLM files. Set
 `HF_HOME` to a suitable local cache; after download `HF_HUB_OFFLINE=1` makes
 the benchmark entirely offline. No paid API or remote inference service is used.
+
+For CPU inference, use a separate environment with `torch==2.15.0+cpu` from
+the official CPU wheel index, then install `requirements-encoders.txt`.
+Its DictaBERT base counts and metrics match the GPU FP32 reports on both
+curated splits. The Windows `torch==2.14.1+cu126` build is qualified for CUDA;
+CPU inference in that build hit native access violations and now fails with
+an explanatory error before loading weights. The CPU profile and CUDA profile
+remain separate so the older GPU driver can keep its compatible CUDA wheel.
 
 ## Reproducible comparison
 
@@ -52,6 +66,8 @@ types and JSON are validated; uncertain/conflicting results remain suppressed.
 The model selects source indices or supplied candidate IDs. Code derives exact
 surface text and preserves original coordinates; the model cannot rewrite them.
 `--constrained-json` enforces required fields and legal values during generation.
+Post-generation validation still checks source bounds, overlap and field
+relationships; constrained JSON alone does not establish accuracy.
 Target keys use the separately versioned `target-key-v1` normalization: remove
 niqqud, cantillation and zero-width formatting, turn word separators into spaces,
 and collapse whitespace. Hebrew letters, attached prefixes and suffixes remain
@@ -63,7 +79,7 @@ Existing anchors, scripts and styles are excluded from article annotations.
 ## Produce resumable local rows
 
 ```powershell
-python data/annotations/publish.py --device cuda:0 --dtype float32 --pasuk-out .cache/mentions-pasuk.json --checkpoint-dir .cache/mentions-publish
+python data/annotations/publish.py --device cuda:0 --dtype float32 --max-perakim 2 --pasuk-out .cache/mentions-pasuk.json --checkpoint-dir .cache/mentions-publish
 python data/annotations/publish.py --engine llm-detect --llm-model qwen3-8b-retype --device cuda:0 --dtype bfloat16 --constrained-json --max-perakim 1 --pasuk-out .cache/mentions-pilot.json --checkpoint-dir .cache/mentions-pilot
 ```
 

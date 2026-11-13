@@ -657,6 +657,17 @@ def execution_provenance(execution, torch_module):
     return result
 
 
+def validate_model_runtime(execution, torch_module):
+    """Reject the measured native CPU crash before any weights are loaded."""
+    if (execution["device"] == "cpu" and sys.platform == "win32"
+            and torch_module.__version__ == "2.14.1+cu126"):
+        raise RuntimeError(
+            "torch 2.14.1+cu126 has a measured native CPU access violation on Windows; "
+            "use the separate CPU-only torch 2.15.0+cpu environment described in "
+            "data/annotations/README.md, or select --device cuda:0 in the CUDA environment"
+        )
+
+
 def runtime_signature(execution=None):
     """Backend identity for caches; CPU metadata does not import torch.
 
@@ -699,6 +710,7 @@ def load_entities_fn(spec, *, device="cpu", dtype="float32"):
             "encoder evaluation needs torch + transformers — see "
             "requirements-encoders.txt for the pinned install commands"
         ) from exc
+    validate_model_runtime(execution, torch)
     if execution["device"].startswith("cuda"):
         # Keep FP32 quality comparable with the measured CPU baseline.
         torch.backends.cuda.matmul.allow_tf32 = False

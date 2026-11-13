@@ -623,6 +623,8 @@ def main():
                 revision = llm_detect.revision_tag(execution, spec, constrained_json=args.constrained_json)
                 response_schema = llm_detect.DETECT_RESPONSE_SCHEMA
             else:
+                # Use the evaluator's execution recipe for the same profile ID.
+                execution = local_llm.execution_profile(spec, execution["device"], execution["dtype"])
                 revision = local_llm.revision_tag(spec, execution, constrained_json=args.constrained_json)
                 response_schema = local_llm.RETYPE_RESPONSE_SCHEMA
             generate_fn = (lazy_generate_fn(spec, execution, response_schema=response_schema)
