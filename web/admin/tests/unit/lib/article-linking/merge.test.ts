@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { planProposalApply } from "~/lib/article-linking/merge";
 import type {
-	AuthorTarget,
 	DedicationLinkTarget,
+	LinkProposal,
 	PasukCoordinate,
 	ProposalTarget,
 } from "~/lib/article-linking/types";
+import { AUTHOR_ATTRIBUTION_POLICY_REASON } from "~/lib/article-linking/validate";
 import { snapshot } from "./fixture";
 
 const base = {
@@ -286,39 +287,6 @@ describe("planProposalApply", () => {
 			expect(plan.input.authorId).toBeUndefined();
 		});
 
-		it("refuses a redundant author replace", () => {
-			const plan = planProposalApply(
-				{
-					...base,
-					relationshipKey: "author",
-					action: "replace",
-					target: { authorId: 2 },
-				},
-				snapshot,
-				hash,
-				reviewer,
-			);
-			expect(plan.kind).toBe("cannot-apply");
-		});
-
-		it("plans an author replace for a different author", () => {
-			const plan = planProposalApply(
-				{
-					...base,
-					relationshipKey: "author",
-					action: "replace",
-					target: { authorId: 9 },
-				},
-				snapshot,
-				hash,
-				reviewer,
-			);
-			expect(plan.kind).toBe("article-mutation");
-			if (plan.kind !== "article-mutation") return;
-			expect(plan.input.authorId).toBe(9);
-			expect(plan.input.perekId).toBeUndefined();
-		});
-
 		it("refuses a primaryPerek add — replace only", () => {
 			const plan = planProposalApply(
 				{
@@ -372,29 +340,28 @@ describe("planProposalApply", () => {
 				reason: "already the current perek",
 			});
 		});
+	});
 
-		it("refuses an author add — replace only", () => {
+	describe("for legacy author proposals", () => {
+		it.each<{
+			action: LinkProposal["action"];
+			target: ProposalTarget;
+			reviewPatch: ProposalTarget | null;
+		}>([
+			{ action: "replace", target: { authorId: 2 }, reviewPatch: null },
+			{ action: "replace", target: { authorId: 9 }, reviewPatch: null },
+			{
+				action: "replace",
+				target: { authorId: 9 },
+				reviewPatch: { authorId: 7 },
+			},
+			{ action: "clear", target: {} as ProposalTarget, reviewPatch: null },
+		])("never plans an attribution write: %j", (proposal) => {
 			const plan = planProposalApply(
 				{
 					...base,
 					relationshipKey: "author",
-					action: "clear",
-					target: {} as ProposalTarget,
-				},
-				snapshot,
-				hash,
-				reviewer,
-			);
-			expect(plan.kind).toBe("cannot-apply");
-		});
-
-		it("refuses an author replace without an authorId", () => {
-			const plan = planProposalApply(
-				{
-					...base,
-					relationshipKey: "author",
-					action: "replace",
-					target: { authorId: "הרב קוק" } as unknown as AuthorTarget,
+					...proposal,
 				},
 				snapshot,
 				hash,
@@ -402,7 +369,7 @@ describe("planProposalApply", () => {
 			);
 			expect(plan).toEqual({
 				kind: "cannot-apply",
-				reason: "no authorId target",
+				reason: AUTHOR_ATTRIBUTION_POLICY_REASON,
 			});
 		});
 	});

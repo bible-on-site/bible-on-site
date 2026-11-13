@@ -84,6 +84,13 @@ authoritative. The first response logs
 which separates launcher start, listener readiness and warm completion in
 CloudWatch — the startup-side counterpart of the drain lines above.
 
+The launcher registers SIGTERM and SIGINT handlers before spawning the server
+and starting the readiness probe. Initializing the first HTTP client can block
+the wrapper synchronously while the child is already listening; a shutdown
+signal in that window must still reach the existing drain or interrupt path.
+Startup failures remove the handlers. This ordering preserves the drain floor,
+quiet window, deadline and readiness schedule described above.
+
 ## Lifecycle timing evidence
 
 The launcher logs the boundaries that were previously invisible:
