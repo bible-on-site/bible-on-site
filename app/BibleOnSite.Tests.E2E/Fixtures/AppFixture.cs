@@ -484,16 +484,21 @@ public class AppFixture : IAsyncLifetime
             using var apiProcess = _apiProcess;
             using var appProcess = _appProcess;
             using var automation = _automation;
-            using var appLog = _appLog;
-            if (_drainFailure is { } failure)
+            try
             {
-                // A dead mid-run drain can leave the app blocked on a full
-                // pipe — fail the collection rather than let a passing test
-                // stay green. The failing log sink must not be used again:
-                // the exception carries the original cause to the test runner.
-                throw new InvalidOperationException(
-                    "App output drain failed during the run.", failure);
+                _appLog?.Dispose();
             }
+            catch (IOException) when (_drainFailure is not null)
+            {
+                // Flushing the failed sink must not hide the original drain
+                // failure or prevent the remaining resources from disposing.
+            }
+        }
+        if (_drainFailure is { } failure)
+        {
+            // Surface the retained cause after cleanup has completed.
+            throw new InvalidOperationException(
+                "App output drain failed during the run.", failure);
         }
     }
 

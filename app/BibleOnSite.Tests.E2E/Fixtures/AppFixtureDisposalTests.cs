@@ -8,19 +8,25 @@ public class FixtureCleanupCollection;
 [Collection("Fixture cleanup")]
 public class AppFixtureDisposalTests
 {
-    private sealed class FailedLogWriter() : StreamWriter(new MemoryStream())
+    private sealed class FailedLogWriter(bool failOnDispose) : StreamWriter(new MemoryStream())
     {
         public bool WasDisposed { get; private set; }
-        public override void WriteLine(string? value) => throw new IOException("log disk unavailable");
+        public override void WriteLine(string? value) => throw new IOException($"log disk unavailable: {value}");
         protected override void Dispose(bool disposing)
         {
             WasDisposed = true;
             base.Dispose(disposing);
+            if (failOnDispose)
+            {
+                throw new IOException("log flush unavailable");
+            }
         }
     }
 
-    [Fact]
-    public async Task DisposeAsync_WhenTheLogSinkFailed_DisposesItAndPreservesTheDrainCause()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DisposeAsync_WhenTheLogSinkFailed_DisposesItAndPreservesTheDrainCause(bool failOnDispose)
     {
         var previous = Environment.GetEnvironmentVariable("E2E_COVERAGE");
         Environment.SetEnvironmentVariable("E2E_COVERAGE", "0");
@@ -28,7 +34,7 @@ public class AppFixtureDisposalTests
         {
             var fixture = new AppFixture();
             var original = new IOException("original drain failure");
-            var log = new FailedLogWriter();
+            var log = new FailedLogWriter(failOnDispose);
             const BindingFlags fields = BindingFlags.Instance | BindingFlags.NonPublic;
             typeof(AppFixture).GetField("_drainFailure", fields)!.SetValue(fixture, original);
             typeof(AppFixture).GetField("_appLog", fields)!.SetValue(fixture, log);
