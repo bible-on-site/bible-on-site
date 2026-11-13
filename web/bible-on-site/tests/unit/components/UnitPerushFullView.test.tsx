@@ -13,6 +13,13 @@ jest.mock("isomorphic-dompurify", () => ({
 	default: { sanitize: (html: string) => html },
 }));
 
+// Note: every .module.css specifier maps to the same object-proxy module
+// in jest, so only the last-registered mock below is effective for all of
+// them (unit-book.module.css, last, keeps the prior behavior).
+jest.mock("@/app/929/[number]/[slug]/page.module.css", () => ({
+	readingTime: "readingTime",
+}));
+
 jest.mock("@/app/929/[number]/components/perushim-section.module.css", () => ({
 	perushimSection: "perushimSection",
 	fullViewHeader: "fullViewHeader",
@@ -43,13 +50,19 @@ import type { RangedPerushNote } from "../../../src/lib/perushim";
 
 const BOOK_KEY = "8:torah";
 
-function note(perekId: number, pasuk: number, noteIdx = 0): RangedPerushNote {
+function note(
+	perekId: number,
+	pasuk: number,
+	noteIdx = 0,
+	wordCount?: number,
+): RangedPerushNote {
 	return {
 		perekId,
 		pasuk,
 		noteIdx,
 		// nosemgrep -- numeric-only fixture values, no user input
 		noteContent: `<p>note ${perekId}-${pasuk}-${noteIdx}</p>`,
+		...(wordCount != null && { wordCount }),
 	};
 }
 
@@ -187,5 +200,48 @@ describe("UnitPerushFullView", () => {
 	it("renders sanitized note HTML", () => {
 		renderView([{ ...note(1, 1), noteContent: "<b>bold</b>" }]);
 		expect(document.querySelector("b")?.textContent).toBe("bold");
+	});
+
+	describe("reading metrics", () => {
+		beforeEach(() => {
+			// jsdom has no ResizeObserver — the mounted ReadingProgress
+			// constructs one when units are present.
+			global.ResizeObserver = jest.fn(() => ({
+				observe: jest.fn(),
+				unobserve: jest.fn(),
+				disconnect: jest.fn(),
+			})) as unknown as typeof ResizeObserver;
+		});
+
+		afterEach(() => {
+			delete (global as { ResizeObserver?: unknown }).ResizeObserver;
+		});
+
+		it("marks each note element with its progress-unit key", () => {
+			const { container } = renderView([
+				note(1, 5, 0, 30),
+				note(1, 5, 1, 40),
+				note(2, 5, 0, 50),
+			]);
+			const keys = [
+				...container.querySelectorAll("[data-reading-unit]"),
+			].map((el) => el.getAttribute("data-reading-unit"));
+			expect(keys).toEqual(["1:5:0", "1:5:1", "2:5:0"]);
+		});
+
+		it("renders the reading-time badge and progress bar when every note count is known", () => {
+			renderView([note(1, 1, 0, 220), note(1, 2, 0, 220)]);
+			// 440 words → 120s → the shared badge's "2 דקות" label.
+			expect(
+				screen.getByText(/זמן קריאה משוער: 2 דקות/),
+			).toBeInTheDocument();
+			expect(screen.getByRole("progressbar")).toBeInTheDocument();
+		});
+
+		it("omits badge and progress when any note count is unknown", () => {
+			renderView([note(1, 1, 0, 220), note(1, 2)]);
+			expect(screen.queryByText(/זמן קריאה משוער/)).toBeNull();
+			expect(screen.queryByRole("progressbar")).toBeNull();
+		});
 	});
 });

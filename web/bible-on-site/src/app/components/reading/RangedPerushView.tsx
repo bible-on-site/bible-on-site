@@ -5,8 +5,12 @@ import DOMPurify from "isomorphic-dompurify";
 import { useMemo } from "react";
 import { demoteHeadings } from "@/lib/html-headings";
 import type { RangedPerushNote } from "@/lib/perushim";
+import { rangedNotesReadingMetrics } from "@/lib/perushim/ranged-metrics";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { ShareButton } from "@/app/929/[number]/components/ShareButton";
 import styles from "@/app/929/[number]/components/perushim-section.module.css";
+import pageStyles from "@/app/929/[number]/[slug]/page.module.css";
 import unitStyles from "./unit-perushim.module.css";
 
 interface PasukGroup {
@@ -77,6 +81,13 @@ export function RangedPerushView({
 		return { groups: result, multiPerek: perekIds.size > 1 };
 	}, [notes]);
 
+	// Persisted note metrics (#3108): an unknown count anywhere in the
+	// range leaves metric/units absent — no badge, no progress bar.
+	const { metric, units } = useMemo(
+		() => rangedNotesReadingMetrics(notes),
+		[notes],
+	);
+
 	return (
 		<section
 			className={`${styles.perushimSection} ${unitStyles.rangedPerushSection}`}
@@ -91,6 +102,10 @@ export function RangedPerushView({
 				<div className={styles.fullViewTitle}>
 					<h2 className={styles.sectionTitle}>{name}</h2>
 					<span className={styles.parshanSubtitle}>{parshanName}</span>
+					<ReadingTime
+						estimatedSeconds={metric?.estimatedSeconds}
+						className={pageStyles.readingTime}
+					/>
 				</div>
 				{sharePath && (
 					<ShareButton
@@ -101,6 +116,16 @@ export function RangedPerushView({
 			</header>
 
 			<div className={styles.notesContainer}>
+				{/* The notes container is its own nested scroller — the bar
+				 * sticks to its top edge and measures the note elements it
+				 * scrolls past, keyed by `data-reading-unit`. */}
+				<ReadingProgress
+					units={units}
+					scroller={`.${styles.notesContainer}`}
+					content={`.${styles.notesContainer}`}
+					unitSelector='[data-reading-unit="{key}"]'
+					stickyTop="0px"
+				/>
 				{groups.length === 0 ? (
 					<p className={styles.emptyMessage}>{emptyMessage}</p>
 				) : (
@@ -129,6 +154,7 @@ export function RangedPerushView({
 									<div
 										key={`${note.perekId}-${note.pasuk}-${note.noteIdx}`}
 										className={styles.noteContent}
+										data-reading-unit={`${note.perekId}:${note.pasuk}:${note.noteIdx}`}
 										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 										dangerouslySetInnerHTML={{
 											__html: DOMPurify.sanitize(demoteHeadings(note.noteContent)),
