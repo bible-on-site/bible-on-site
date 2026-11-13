@@ -907,23 +907,51 @@ public partial class ParashaPage
     {
         // Topmost transient surfaces own Back first (#2766): fullscreen,
         // then the unit picker and the open fan menu previously fell
-        // through to page navigation while still visible.
-        if (ExitFullScreenButton.IsVisible)
-        { _chrome.ExitFullScreen(); return true; }
-        if (ParashaUnitPickerPopup.IsVisible)
-        { ParashaUnitPickerPopup.Hide(); return true; }
-        if (FanMenu.IsOpen)
-        { _ = FanMenu.CloseAsync(); return true; }
-        if (ReaderMenuOverlay.IsOpen)
-        { ReaderMenuOverlay.Close(); return true; }
-        if (PerushimPanel.IsOpen)
-        { PerushimPanel.CloseImmediate(); return true; }
-        if (ChapterSearch.IsSearchOpen) { ChapterSearch.HandleBack(); return true; }
-        // Whatever keeps the selection bar up also owns Back — including a clip
-        // playing with nothing selected, which stops instead of navigating.
-        if (ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount, _unitRecitationSelection,
-                _focusedPasuk != null, _recitationCursor.PlayingKey != null))
-        { ClearAllSelections(); return true; }
-        return false;
+        // through to page navigation while still visible. The shared policy
+        // ranks them foreground-first, so a surface hidden beneath a higher
+        // overlay cannot intercept the press meant for it — the perushim
+        // sheet covered by the focused pasuk must not swallow the first Back
+        // (the sheet keeps its state; #3307).
+        var owner = ReaderBackPolicy.Resolve(
+            exitFullScreenVisible: ExitFullScreenButton.IsVisible,
+            unitPickerOpen: ParashaUnitPickerPopup.IsVisible,
+            fanMenuOpen: FanMenu.IsOpen,
+            menuOverlayOpen: ReaderMenuOverlay.IsOpen,
+            chapterSearchOpen: ChapterSearch.IsSearchOpen,
+            focusedPasuk: _focusedPasuk != null,
+            perushimSheetOpen: PerushimPanel.IsOpen,
+            selectionSurfacesActive: ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
+                _unitRecitationSelection, focusedPasuk: false, _recitationCursor.PlayingKey != null));
+        switch (owner)
+        {
+            case ReaderBackSurface.ExitFullScreen:
+                _chrome.ExitFullScreen();
+                return true;
+            case ReaderBackSurface.UnitPicker:
+                ParashaUnitPickerPopup.Hide();
+                return true;
+            case ReaderBackSurface.FanMenu:
+                _ = FanMenu.CloseAsync();
+                return true;
+            case ReaderBackSurface.MenuOverlay:
+                ReaderMenuOverlay.Close();
+                return true;
+            case ReaderBackSurface.ChapterSearch:
+                ChapterSearch.HandleBack();
+                return true;
+            case ReaderBackSurface.PerushimSheet:
+                PerushimPanel.CloseImmediate();
+                return true;
+            case ReaderBackSurface.FocusedPasuk:
+            case ReaderBackSurface.SelectionSurfaces:
+                // Whatever keeps the selection bar up also owns Back —
+                // including a clip playing with nothing selected, which stops
+                // instead of navigating. Leaving the focused pasuk keeps its
+                // playback going under the same focused-view rule.
+                ClearAllSelections();
+                return true;
+            default:
+                return false;
+        }
     }
 }
