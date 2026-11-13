@@ -601,7 +601,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         || ChapterSearch.IsSearchOpen
         || ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
             _unitRecitationSelection, _focusedPasuk != null,
-            _recitationCursor.PlayingKey != null);
+            Recitation.Cursor.PlayingKey != null);
 
     private void OnUnitPickerClicked(object? sender, EventArgs e)
     {

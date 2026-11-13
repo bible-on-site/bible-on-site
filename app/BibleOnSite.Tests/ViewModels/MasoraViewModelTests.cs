@@ -9,6 +9,30 @@ namespace BibleOnSite.Tests.ViewModels;
 
 public class MasoraViewModelTests
 {
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    public async Task HeaderPlayButton_RequiresBothEnabledRecitationAndPlayableAudio(bool enabled, bool audio, bool visible)
+    {
+        await using var fixture = new Fixture();
+        fixture.Model.IsQriynotEnabled = enabled;
+        fixture.Model.HasCurrentUnitRecitation = audio;
+        fixture.Model.ShowHeaderPlayButton.Should().Be(visible);
+    }
+
+    [Fact]
+    public async Task SelectionBeforeAUnitLoads_CanBeToggledAndCleared()
+    {
+        await using var fixture = new Fixture();
+        fixture.Model.Unit.Should().BeNull();
+        fixture.Model.ToggleSelectedPasuk(1, 1);
+        fixture.Model.SelectedPasukCount.Should().Be(1);
+        fixture.Model.ClearSelected();
+        fixture.Model.SelectedPasukCount.Should().Be(0);
+    }
+
     private const string BibleDb = "sefaria-dump-5784-sivan-4.tanah_view.sqlite";
 
     private sealed class Fixture : IAsyncDisposable
@@ -27,7 +51,8 @@ public class MasoraViewModelTests
             bool includeCatalog = true, bool includeNotes = true, bool nullArticlesLoader = false,
             string[]? extraPerushInserts = null,
             Func<int, Task<List<Article>>>? articlesLoader = null,
-            Func<LocalDatabaseService, PerekDataService>? perekDataServiceFactory = null)
+            Func<LocalDatabaseService, PerekDataService>? perekDataServiceFactory = null,
+            Func<int, bool>? hasPerekAudio = null, Func<int, RecitationTrack?>? getTrack = null)
         {
             _includeCatalog = includeCatalog;
             _includeNotes = includeNotes;
@@ -52,7 +77,12 @@ public class MasoraViewModelTests
                 catalog,
                 notes,
                 nullArticlesLoader ? null
-                    : articlesLoader ?? (_ => Task.FromResult(articles ?? new List<Article>())));
+                    : articlesLoader ?? (_ => Task.FromResult(articles ?? new List<Article>())),
+                null, null, null,
+                // Never touch RecitationService.Instance — its lazy filesystem
+                // singleton has no host in a unit-test process.
+                hasPerekAudio ?? (_ => false),
+                getTrack ?? (_ => null));
         }
 
         public async Task Initialize()
@@ -409,6 +439,11 @@ public class MasoraViewModelTests
         unit2.Rows.Should().NotBeEmpty();
         unit3.Rows.Should().NotBeEmpty();
 
+        // Recitation queries canonical pasukim for every perek a loaded
+        // unit covers — a preloaded-only perek must not come back null.
+        fixture.Model.GetLoadedPasukim(51).Should().NotBeNullOrEmpty();
+        fixture.Model.GetLoadedPasukim(999).Should().BeNull();
+
         // Everything already loaded → nothing left to do.
         await fixture.Model.PreloadAdjacentRowsAsync(1);
     }
@@ -659,5 +694,155 @@ public class MasoraViewModelTests
 
         fixture.Model.PerushimSelectionStatus.Should().Be("נבחרו 1 מתוך 5");
         fixture.Model.PerushimLimitReached.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task UnitSwitch_ClearsSelectionFlagsOnLeftUnitRows()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        var unit1 = fixture.Model.Unit!;
+        fixture.Model.ToggleSelectedPasuk(1, 1);
+        unit1.Rows[0].Pasuk.IsSelected.Should().BeTrue();
+
+        await fixture.Model.NavigateToUnitAsync(2);
+
+        // ClearSelected() can only reach the displayed unit's rows — the flag
+        // on the left unit's cached rows must be cleared by the unit change
+        // itself, or navigating back shows a phantom selection.
+        unit1.Rows[0].Pasuk.IsSelected.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RefreshRecitationAvailability_UnalignedTrack_OnlyWholePerekCoverageShowsButton()
+    {
+        // An unaligned track has no approved boundary — only whole-perek
+        // slices can play, so a unit clipped to a partial perek must not
+        // offer a dead play button.
+        RecitationTrack unaligned = new(1, "https://example.com/recordings/1_record.mp3",
+            new string('a', 64), new string('b', 64), 5000, "pending", []);
+        await using var fixture = new Fixture(
+            hasPerekAudio: _ => true, getTrack: _ => unaligned);
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1); // unit 1 ends mid-pasuk 1 — partial slice
+
+        fixture.Model.HasCurrentUnitRecitation.Should().BeFalse();
+        fixture.Model.ShowHeaderPlayButton.Should().BeFalse();
+
+        await fixture.Model.NavigateToUnitAsync(3); // unit 3 covers perek 51 whole
+
+        fixture.Model.HasCurrentUnitRecitation.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task LoadedPasukim_CachesFullPerekForRecitationBounds()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        // Unit 1 clips its display rows mid-pasuk, but recitation bounds
+        // checks need the whole canonical perek — the cache keeps it.
+        var pasukim = fixture.Model.GetLoadedPasukim(1);
+
+        pasukim.Should().HaveCount(2);
+        pasukim!.SelectMany(p => p.Segments).Select(s => s.Value)
+            .Should().Equal("א", "ב", "ס", "ג", "ד");
+    }
+
+    [Fact]
+    public async Task ToggleSelectedPasuk_TogglesCanonicalKeyAndRowFlag()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+        var row = fixture.Model.Unit!.Rows[0];
+
+        fixture.Model.ToggleSelectedPasuk(row.PerekId, row.PasukNum);
+
+        fixture.Model.SelectedPasukCount.Should().Be(1);
+        fixture.Model.IsPasukSelected(row.PerekId, row.PasukNum).Should().BeTrue();
+        row.Pasuk.IsSelected.Should().BeTrue();
+
+        // A second toggle on the same canonical key removes it once — a pasuk
+        // repeated across ranges toggles once, not once per row.
+        fixture.Model.ToggleSelectedPasuk(row.PerekId, row.PasukNum);
+
+        fixture.Model.SelectedPasukCount.Should().Be(0);
+        fixture.Model.IsPasukSelected(row.PerekId, row.PasukNum).Should().BeFalse();
+        row.Pasuk.IsSelected.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ClearSelected_DropsEverySelectionAndRowFlag()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(2); // unit 2 spans two perakim — two rows
+        var rows = fixture.Model.Unit!.Rows;
+
+        fixture.Model.ToggleSelectedPasuk(rows[0].PerekId, rows[0].PasukNum);
+        fixture.Model.ToggleSelectedPasuk(rows[1].PerekId, rows[1].PasukNum);
+        fixture.Model.SelectedPasukCount.Should().Be(2);
+
+        fixture.Model.ClearSelected();
+
+        fixture.Model.SelectedPasukCount.Should().Be(0);
+        rows.Should().OnlyContain(r => !r.Pasuk.IsSelected);
+    }
+
+    [Fact]
+    public async Task GetSelectedPesukim_ReturnsSelectedRowsInReaderOrder()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(2);
+        var rows = fixture.Model.Unit!.Rows;
+
+        // Select in reverse order — the result still follows the reader's row order.
+        fixture.Model.ToggleSelectedPasuk(rows[1].PerekId, rows[1].PasukNum);
+        fixture.Model.ToggleSelectedPasuk(rows[0].PerekId, rows[0].PasukNum);
+
+        var selected = fixture.Model.GetSelectedPesukim();
+
+        selected.Select(s => s.PerekId).Should().Equal(rows[0].PerekId, rows[1].PerekId);
+        selected.Select(s => s.Pasuk).Should().Equal(rows[0].Pasuk, rows[1].Pasuk);
+    }
+
+    [Fact]
+    public async Task GetSelectedPesukim_WithoutSelectionOrUnit_ReturnsEmpty()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        fixture.Model.GetSelectedPesukim().Should().BeEmpty("nothing is selected");
+
+        fixture.Model.ToggleSelectedPasuk(1, 1);
+        fixture.Model.Unit = null;
+
+        fixture.Model.GetSelectedPesukim().Should().BeEmpty("no unit is displayed");
+    }
+
+    [Fact]
+    public async Task IsQriynotEnabled_Setter_WritesPreferenceAndNotifies()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        var notifications = new List<string>();
+        fixture.Model.PropertyChanged += (_, e) => notifications.Add(e.PropertyName!);
+
+        // Same value — an early return writes nothing and notifies nothing.
+        fixture.Model.IsQriynotEnabled = true;
+        notifications.Should().BeEmpty();
+
+        fixture.Model.IsQriynotEnabled = false;
+
+        fixture.Preferences.QriynotEnabled.Should().BeFalse();
+        fixture.Model.IsQriynotEnabled.Should().BeFalse();
+        notifications.Should().Contain([nameof(fixture.Model.IsQriynotEnabled),
+            nameof(fixture.Model.ShowHeaderPlayButton)]);
     }
 }
