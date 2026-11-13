@@ -856,6 +856,47 @@ public class PerekLoadingTests
     };
 
     [Fact]
+    public async Task LoadPerushimAsync_WhenNavigationInvalidatesAQueuedChapterRead_KeepsPublishedState()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Notes.InitializeAsync();
+        var catalog = new PerushimCatalogService(fixture.Storage.FileSystem.Object);
+        await catalog.InitializeAsync();
+        var vm = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), null,
+            fixture.Data, catalog, fixture.Notes, fixture.Navigator.Object, fixture.Storage.FileSystem.Object, null);
+        vm.Perek = BarePerek(1);
+        vm.CheckedPerushim = [42];
+        var published = vm.Perushim;
+        var checkedIds = vm.CheckedPerushim;
+        var connection = (await fixture.Notes.GetSearchConnectionAsync())!;
+        using var release = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var blocker = connection.RunInTransactionAsync(_ =>
+        {
+            entered.SetResult();
+            release.Wait(TestContext.Current.CancellationToken);
+        });
+        await entered.Task;
+        Task load;
+        try
+        {
+            load = vm.LoadPerushimAsync(1);
+            load.IsCompleted.Should().BeFalse("the chapter read is queued behind the held SQLite connection");
+            vm.InvalidatePendingLoads();
+        }
+        finally
+        {
+            release.Set();
+        }
+        await blocker;
+        await load;
+
+        vm.Perushim.Should().BeSameAs(published);
+        vm.CheckedPerushim.Should().BeSameAs(checkedIds);
+    }
+
+    [Fact]
     public async Task LoadPerushimAsync_WhenPerekMovesOnDuringMetricRead_DiscardsTheLoad()
     {
         await using var fixture = new Fixture();

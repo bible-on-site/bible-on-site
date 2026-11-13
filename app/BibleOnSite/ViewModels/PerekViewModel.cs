@@ -824,11 +824,6 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
         // published so the badge binds once. A load that loses currency below
         // mutates nothing observable: every write lives in the publish tail
         // after the final check (#3310).
-        if (!IsCurrentPerushimLoad(stamp, perekId))
-        {
-            return;
-        }
-
         var metrics = await _notesService.GetPerushMetricsForPerekAsync(perekId);
         // The metric await added a second suspension — a swipe or a newer
         // same-perek reload during it must still discard this load's results
