@@ -120,6 +120,193 @@ function commandsSent(action: string) {
 		.filter((body) => body?.action === action);
 }
 
+it("ignores text drag-over and drag-leave without clearing a file highlight", async () => {
+	await mount();
+	const zone = dropZone();
+	const files = { dataTransfer: { types: ["Files"], dropEffect: "" } };
+	fireEvent.dragEnter(zone, files);
+	fireEvent.dragOver(zone, files);
+	expect(files.dataTransfer.dropEffect).toBe("copy");
+	const text = { dataTransfer: { types: ["text/plain"] } };
+	expect(fireEvent.dragOver(zone, text)).toBe(true);
+	expect(fireEvent.dragLeave(zone, text)).toBe(true);
+	expect(screen.getByText("שחררו כדי להעלות לתיקייה הנוכחית")).toBeVisible();
+	fireEvent.dragLeave(zone, files);
+	fireEvent.dragLeave(zone, files);
+	expect(screen.queryByText("שחררו כדי להעלות לתיקייה הנוכחית")).toBeNull();
+});
+
+it("does not reuse a same-named file as a dropped folder", async () => {
+	await mount();
+	(fetch as Mock)
+		.mockResolvedValueOnce({
+			...reply({ error: "conflict" }, false),
+			status: 409,
+		})
+		.mockResolvedValueOnce(
+			reply({
+				...directory,
+				files: [
+					{
+						id: "file",
+						filename: "taken",
+						kind: "file",
+						size: 1,
+						status: "ready",
+					},
+					{
+						id: "other",
+						filename: "different",
+						kind: "folder",
+						size: 0,
+						status: "ready",
+					},
+				],
+			}),
+		);
+	await act(async () =>
+		fireEvent.drop(dropZone(), {
+			dataTransfer: dragData([
+				dirEntry("taken", [fileEntry(new File(["x"], "nested.bin"))]),
+			]),
+		}),
+	);
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		"לא ניתן ליצור את התיקיות: taken",
+	);
+	expect(commandsSent("start")).toHaveLength(0);
+	expect(screen.getByRole("button", { name: "רענון" })).toBeEnabled();
+});
+
+it("uploads a flat file list when the browser has no entry API", async () => {
+	await mount();
+	await act(async () =>
+		fireEvent.drop(dropZone(), {
+			dataTransfer: { types: ["Files"], files: [new File(["x"], "flat.bin")] },
+		}),
+	);
+	expect(commandsSent("start")).toEqual([
+		expect.objectContaining({ filename: "flat.bin", directory: "home" }),
+	]);
+	expect(commandsSent("complete")).toHaveLength(1);
+});
+
+it("ignores unreadable item handles and empty file lists", async () => {
+	await mount();
+	await act(async () =>
+		fireEvent.drop(dropZone(), {
+			dataTransfer: {
+				types: ["Files"],
+				items: [{ kind: "file" }, { kind: "file", getAsFile: () => null }],
+			},
+		}),
+	);
+	expect(commandsSent("start")).toHaveLength(0);
+	expect(screen.getByRole("button", { name: "רענון" })).toBeEnabled();
+});
+
+it("ignores entries that are neither files nor directories", async () => {
+	await mount();
+	await act(async () =>
+		fireEvent.drop(dropZone(), {
+			dataTransfer: dragData([
+				{ isFile: false, isDirectory: false } as FileSystemEntry,
+			]),
+		}),
+	);
+	expect(commandsSent("mkdir")).toHaveLength(0);
+	expect(commandsSent("start")).toHaveLength(0);
+	expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it("restores controls when reading a dropped directory and refreshing both fail", async () => {
+	await mount();
+	const broken = {
+		isFile: false,
+		isDirectory: true,
+		name: "broken",
+		createReader: () => ({
+			readEntries: (_resolve: unknown, reject: (error: Error) => void) =>
+				reject(new Error("cannot read directory")),
+		}),
+	} as unknown as FileSystemEntry;
+	(fetch as Mock)
+		.mockResolvedValueOnce(reply({ id: "new-folder" }))
+		.mockRejectedValueOnce(new Error("refresh failed"));
+	await act(async () =>
+		fireEvent.drop(dropZone(), { dataTransfer: dragData([broken]) }),
+	);
+	expect(await screen.findByRole("alert")).toHaveTextContent("refresh failed");
+	expect(commandsSent("start")).toHaveLength(0);
+	expect(screen.getByRole("button", { name: "רענון" })).toBeEnabled();
+});
+
+it("reports refresh failure after creating an empty dropped folder", async () => {
+	await mount();
+	(fetch as Mock)
+		.mockResolvedValueOnce(reply({ id: "new-folder" }))
+		.mockRejectedValueOnce(new Error("refresh failed"));
+	await act(async () =>
+		fireEvent.drop(dropZone(), {
+			dataTransfer: dragData([dirEntry("empty", [])]),
+		}),
+	);
+	expect(await screen.findByRole("alert")).toHaveTextContent("refresh failed");
+	expect(screen.getByRole("button", { name: "רענון" })).toBeEnabled();
+});
+
+it("reports both the upload error and a skipped dropped folder", async () => {
+	await mount();
+	(fetch as Mock)
+		.mockResolvedValueOnce({
+			...reply({ error: "denied" }, false),
+			status: 403,
+		})
+		.mockRejectedValueOnce(new Error("upload unavailable"));
+	await act(async () =>
+		fireEvent.drop(dropZone(), {
+			dataTransfer: dragData([
+				dirEntry("denied", []),
+				fileEntry(new File(["x"], "loose.bin")),
+			]),
+		}),
+	);
+	expect(await screen.findByRole("alert")).toHaveTextContent(
+		"upload unavailable",
+	);
+	expect(screen.getByRole("alert")).toHaveTextContent(
+		"לא ניתן ליצור את התיקיות: denied",
+	);
+	expect(screen.getByRole("button", { name: "רענון" })).toBeEnabled();
+});
+
+it("stops collecting sibling entries after unmount during a directory read", async () => {
+	let finishRead: (entries: FileSystemEntry[]) => void = () => {};
+	let read = false;
+	const view = render(<ArchiveArea />);
+	await screen.findByRole("region", { name: "הוספת קבצים לתיקייה" });
+	const pending = {
+		isFile: false,
+		isDirectory: true,
+		name: "pending",
+		createReader: () => ({
+			readEntries: (resolve: typeof finishRead) => {
+				if (read) resolve([]);
+				else {
+					read = true;
+					finishRead = resolve;
+				}
+			},
+		}),
+	} as unknown as FileSystemEntry;
+	await act(async () =>
+		fireEvent.drop(dropZone(), { dataTransfer: dragData([pending]) }),
+	);
+	view.unmount();
+	await act(async () => finishRead([fileEntry(new File(["x"], "late.bin"))]));
+	expect(commandsSent("start")).toHaveLength(0);
+});
+
 it("renders the private login when no session exists", async () => {
 	(fetch as Mock).mockResolvedValueOnce({
 		ok: false,
@@ -180,15 +367,11 @@ it("highlights the panel while files are dragged over it and resets on leave or 
 	const zone = dropZone();
 	const files = { dataTransfer: { types: ["Files"], dropEffect: "" } };
 	fireEvent.dragEnter(zone, files);
-	expect(
-		screen.getByText("שחררו כדי להעלות לתיקייה הנוכחית"),
-	).toBeVisible();
+	expect(screen.getByText("שחררו כדי להעלות לתיקייה הנוכחית")).toBeVisible();
 	// A nested child fires another enter/leave pair without clearing the state.
 	fireEvent.dragEnter(zone, files);
 	fireEvent.dragLeave(zone, files);
-	expect(
-		screen.getByText("שחררו כדי להעלות לתיקייה הנוכחית"),
-	).toBeVisible();
+	expect(screen.getByText("שחררו כדי להעלות לתיקייה הנוכחית")).toBeVisible();
 	fireEvent.dragLeave(zone, files);
 	expect(
 		screen.getByText(/אפשר לבחור או לגרור לכאן כמה קבצים יחד/),

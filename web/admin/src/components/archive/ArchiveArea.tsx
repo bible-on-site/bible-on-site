@@ -132,7 +132,9 @@ export function ArchiveArea() {
 	function entriesFromReader(
 		reader: FileSystemDirectoryReader,
 	): Promise<FileSystemEntry[]> {
-		return new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+		return new Promise((resolve, reject) =>
+			reader.readEntries(resolve, reject),
+		);
 	}
 
 	/**
@@ -452,7 +454,8 @@ export function ArchiveArea() {
 				? [`לא ניתן לאתר את התיקיות הקיימות: ${unresolved.join(", ")}`]
 				: []),
 		];
-		if (problems.length) setError((current) => current || problems.join(". "));
+		if (problems.length)
+			setError((current) => [current, ...problems].filter(Boolean).join(". "));
 	}
 
 	async function remove(id: string) {
