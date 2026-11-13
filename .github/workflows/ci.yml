@@ -187,6 +187,26 @@ jobs:
           bun run test:workflow-timeouts
           bun run verify:workflow-timeouts
 
+  root_evidence_guard:
+    timeout-minutes: 5
+    name: Root evidence guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-js
+        with:
+          module: devops
+          directory: devops
+      # Unconditional index scan, independent of determine_changes (#3319):
+      # a PR that only adds root evidence must fail here.
+      - name: Reject tracked repository-root evidence
+        working-directory: devops
+        run: |
+          bun run test:root-evidence-guard
+          bun run verify:root-evidence-guard
+
   setup_env:
     timeout-minutes: 60
     name: Setup Environment Variables
@@ -3327,6 +3347,7 @@ jobs:
     needs:
       [
         workflow_timeouts,
+        root_evidence_guard,
         setup_env,
         determine_changes,
         website_performance,
@@ -3370,6 +3391,11 @@ jobs:
         run: |
           if [ "${{ needs.workflow_timeouts.result }}" != "success" ]; then
             echo "Workflow timeout policy did not pass."
+            exit 1
+          fi
+
+          if [ "${{ needs.root_evidence_guard.result }}" != "success" ]; then
+            echo "Root evidence guard did not pass."
             exit 1
           fi
 
