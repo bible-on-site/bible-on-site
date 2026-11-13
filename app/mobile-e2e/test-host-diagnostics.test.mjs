@@ -278,6 +278,17 @@ test("returned capture errors preserve structured diagnostics in the acknowledge
   await assert.rejects(monitor.stop(), failure => failure instanceof AggregateError && failure.errors.some(item => item.message === error.message));
 });
 
+test("a deadline-limited capture acknowledges expired without failing the monitor", { timeout: 5000 }, async t => {
+  const directory = await fixture(t); const acknowledged = deferred();
+  // samplePinnedIosApp reports `expired` when the request's deadline has
+  // already passed before sampling can run: the monitor must not count that
+  // budget enforcement as a diagnostics failure (#2635).
+  const monitor = scenarioMonitor(t, directory, async () => ({ status: "expired" }), { observe: acknowledged.resolve });
+  await publishFailure(directory, failureRequest()); await monitor.notify(failureId); await acknowledged.promise;
+  await monitor.stop();
+  assert.equal(JSON.parse(await readFile(join(directory, `${failureId}.ack.json`), "utf8")).status, "expired");
+});
+
 for (const [label, values, status] of [
   ["expired", { failedAtUtc: "1970-01-01T00:00:00.000Z", deadlineUtc: "1970-01-01T00:00:15.000Z" }, "expired"],
   ["missing session", { sessionId: null }, "unknown"],
