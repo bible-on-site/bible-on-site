@@ -65,6 +65,35 @@ describe("setEntityExternalReference", () => {
 		transactionMock.mockReset();
 	});
 
+	it("reports an undeployed mapping table before writing", async () => {
+		queryOneMock
+			.mockResolvedValueOnce({ id: "entity-1" })
+			.mockRejectedValueOnce({ code: "ER_NO_SUCH_TABLE" });
+		await expect(
+			setEntityExternalReference({
+				entityId: "entity-1",
+				source: "WIKIDATA",
+				url: "Q42",
+				expectedUrl: null,
+			}),
+		).rejects.toThrow("טבלאות external_reference עדיין לא פרוסו");
+		expect(executeMock).not.toHaveBeenCalled();
+	});
+
+	it("propagates a ledger write failure instead of accepting an unclaimed edit", async () => {
+		mockState("entity-1", null);
+		const failure = new Error("ledger write failed");
+		executeMock.mockResolvedValueOnce(undefined).mockRejectedValueOnce(failure);
+		await expect(
+			setEntityExternalReference({
+				entityId: "entity-1",
+				source: "WIKIDATA",
+				url: "Q42",
+				expectedUrl: null,
+			}),
+		).rejects.toBe(failure);
+	});
+
 	it("inserts a normalized Wikidata mapping when none exists", async () => {
 		mockState("entity-1", null);
 
@@ -302,6 +331,19 @@ describe("server functions", () => {
 		queryMock.mockReset().mockResolvedValue([]);
 		queryOneMock.mockReset();
 		transactionMock.mockReset();
+	});
+
+	it("rejects a removal without a loaded snapshot", async () => {
+		mockState("entity-1", "https://www.wikidata.org/wiki/Q42");
+		await expect(
+			deleteEntityExternalReference({
+				data: {
+					entityId: "entity-1",
+					source: "WIKIDATA",
+				},
+			}),
+		).rejects.toThrow("המיפוי השתנה על ידי עורך אחר");
+		expect(executeMock).not.toHaveBeenCalled();
 	});
 
 	it("rejects an unsupported source", async () => {

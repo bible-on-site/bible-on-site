@@ -107,6 +107,14 @@ describe("normalizeExternalReferenceUrl", () => {
 	});
 
 	describe("when the source is SEFARIA", () => {
+		it("accepts a topic on the canonical www host", () => {
+			expect(
+				normalizeExternalReferenceUrl(
+					"SEFARIA",
+					"https://www.sefaria.org/topics/abraham",
+				),
+			).toBe("https://www.sefaria.org/topics/abraham");
+		});
 		it("canonicalizes the host and keeps the topic path", () => {
 			expect(
 				normalizeExternalReferenceUrl(

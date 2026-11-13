@@ -591,6 +591,40 @@ describe("EntryStructuralPanel", () => {
 				expect(input).toHaveValue("Q42");
 			});
 
+			it("keeps a draft when a save rejects with a plain message", async () => {
+				upsertEntityExternalReferenceMock.mockRejectedValue("save unavailable");
+				renderPanel();
+				const card = await personCardElement();
+				const { input, row } = sourceRow(card, "Wikidata");
+				fireEvent.change(input, { target: { value: "Q42" } });
+				fireEvent.click(row.getByRole("button", { name: "שמור" }));
+				expect(await within(card).findByRole("alert")).toHaveTextContent(
+					"save unavailable",
+				);
+				expect(input).toHaveValue("Q42");
+			});
+
+			it.each([new Error("remove unavailable"), "remove unavailable"])(
+				"keeps a stored mapping when removal fails: %s",
+				async (failure) => {
+					deleteEntityExternalReferenceMock.mockRejectedValue(failure);
+					renderPanel();
+					const card = await personCardElement();
+					const { input, row } = sourceRow(card, "Wikidata");
+					fireEvent.click(row.getByRole("button", { name: "הסר" }));
+					expect(await within(card).findByRole("alert")).toHaveTextContent(
+						"remove unavailable",
+					);
+					expect(input).toHaveValue("https://www.wikidata.org/wiki/Q9181");
+					expect(
+						row.getByRole("link", { name: /פתח Q9181/ }),
+					).toBeInTheDocument();
+					await waitFor(() =>
+						expect(row.getByRole("button", { name: "הסר" })).toBeEnabled(),
+					);
+				},
+			);
+
 			it("keeps another source's draft when a saved refresh returns", async () => {
 				const person = (externalReferences: unknown[]) => ({
 					linkId: "person-link",
