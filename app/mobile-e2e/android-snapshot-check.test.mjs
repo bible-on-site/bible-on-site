@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
@@ -401,6 +402,81 @@ const watchdogIdentity = () => ({ pid: "6722", state: "S", startTime: "75000",
 const watchdogRow = "6722 " + watchdogArgs.join(" ");
 const zombieOwner = () => ({ pid: "6345", state: "Z", startTime: "74451", exited: true });
 
+for (const identity of [
+	{ pid: "6722", exited: true },
+	{ pid: "6722", state: "Z", startTime: "75000", exited: true },
+]) {
+	test("a watchdog already exited at its first inspection waits for fresh absence: " + (identity.state ?? "gone"), async (t) => {
+		const { avdDir, options } = fixture(t);
+		const lock = join(avdDir, "snapshot.lock.lock");
+		writeFileSync(lock, "6345");
+		let polls = 0, clock = 0, absenceChecks = 0;
+		const commands = [];
+		assert.equal(await confirmSaved({ ...options, owners: [shutdownOwner],
+			now: () => clock,
+			sleep: async (duration) => {
+				assert.equal(readFileSync(lock, "utf8"), "6345");
+				assert.equal(duration, 2000);
+				clock += duration;
+			},
+			execute: async (command) => {
+				commands.push(command);
+				if (command === "ps") return { stdout: ++polls === 1 ? watchdogRow : "9 node confirm.mjs" };
+				absenceChecks += 1;
+				return { stdout: "List of devices attached\n\n" };
+			},
+			inspectProcess: (pid) => pid === "6345" ? zombieOwner() : identity,
+		}), true);
+		assert.equal(polls, 2);
+		assert.equal(absenceChecks, 1);
+		assert.equal(clock, 2000);
+		assert.equal(existsSync(lock), false);
+		assert.deepEqual(commands, ["ps", "ps", "/adb"]);
+	});
+}
+
+test("native helper exit between process snapshot and identity lookup cannot fail confirmation", { skip: process.platform !== "linux", timeout: 5000 }, async (t) => {
+	const { avdDir, options } = fixture(t);
+	const lock = join(avdDir, "snapshot.lock.lock");
+	writeFileSync(lock, "native-owner");
+	async function startProcess(title) {
+		const child = spawn(process.execPath, ["--eval",
+			`process.title = ${JSON.stringify(title)}; process.on('disconnect', () => process.exit(0)); process.send('ready');`,
+		], { stdio: ["ignore", "ignore", "inherit", "ipc"] });
+		const exited = once(child, "exit");
+		const stop = async () => { if (child.connected) child.disconnect(); await exited; };
+		t.after(stop);
+		await once(child, "message");
+		return { pid: String(child.pid), stop };
+	}
+	const owner = await startProcess("qemu-system-x86_64 -avd mobile_e2e -port 5554");
+	const identity = linuxProcessIdentity(owner.pid);
+	const receipt = { ...identity, command: owner.pid + " " + identity.command, launcher: sdkLauncher };
+	const helper = await startProcess(sdkLauncher.path + " -kill " + owner.pid + " -sleep 20");
+	const snapshot = helper.pid + " " + readFileSync("/proc/" + helper.pid + "/cmdline", "utf8").split("\0").filter(Boolean).join(" ");
+	await owner.stop();
+	let polls = 0, clock = 0;
+	assert.equal(await confirmSaved({ ...options, owners: [receipt],
+		now: () => clock,
+		sleep: async (duration) => { assert.equal(existsSync(lock), true); clock += duration; },
+		execute: async (command) => {
+			if (command === "ps") {
+				if (++polls === 1) {
+					await helper.stop();
+					assert.equal(linuxProcessIdentity(helper.pid).exited, true);
+					return { stdout: snapshot };
+				}
+				return { stdout: process.pid + " " + process.execPath };
+			}
+			assert.equal(command, "/adb");
+			return { stdout: "List of devices attached\n\n" };
+		},
+	}), true);
+	assert.equal(polls, 2);
+	assert.equal(clock, 2000);
+	assert.equal(existsSync(lock), false);
+});
+
 test("verified shutdown watchdog and zombie rows wait for process and ADB absence", async (t) => {
 	const { avdDir, options } = fixture(t);
 	const lock = join(avdDir, "snapshot.lock.lock");
@@ -442,7 +518,6 @@ for (const [name, row, owner, identity, target] of [
 	["foreign kernel target", watchdogRow, shutdownOwner, { ...watchdogIdentity(), arguments: [sdkLauncher.path, "-kill", "9999", "-sleep", "20"] }, zombieOwner()],
 	["coalesced kernel argument", watchdogRow, shutdownOwner, { ...watchdogIdentity(), arguments: [sdkLauncher.path, "-kill 6345 -sleep 20"] }, zombieOwner()],
 	["extra empty kernel argument", watchdogRow, shutdownOwner, { ...watchdogIdentity(), arguments: [...watchdogArgs, ""] }, zombieOwner()],
-	["unverified exited helper", watchdogRow, shutdownOwner, { pid: "6722", state: "Z", startTime: "75000", exited: true }, zombieOwner()],
 	["unrecorded helper argv teardown", watchdogRow, shutdownOwner, { ...watchdogIdentity(), arguments: [], command: "" }, zombieOwner()],
 	["reused target PID", watchdogRow, shutdownOwner, watchdogIdentity(), { ...zombieOwner(), startTime: "74452" }],
 	["unreadable helper", watchdogRow, shutdownOwner, null, zombieOwner()],
@@ -477,6 +552,30 @@ test("a verified shutdown watchdog cannot become a reused or repurposed process"
 			inspectProcess: (pid) => pid === "6345" ? zombieOwner() : polls === 1 ? watchdogIdentity() : identity,
 		}), /reused|Cannot verify/);
 		assert.equal(clock, 2000);
+	}
+});
+
+test("an initially exited watchdog cannot authorize a subsequently reused live PID", async (t) => {
+	for (const first of [{ pid: "6722", exited: true },
+		{ pid: "6722", state: "Z", startTime: "75000", exited: true }]) {
+		const { avdDir, options } = fixture(t);
+		const lock = join(avdDir, "snapshot.lock.lock");
+		writeFileSync(lock, "6345");
+		let polls = 0, clock = 0;
+		const commands = [];
+		await assert.rejects(confirmSaved({ ...options, owners: [shutdownOwner],
+			now: () => clock, sleep: async (duration) => { clock += duration; },
+			execute: async (command) => {
+				commands.push(command);
+				polls += 1;
+				return { stdout: watchdogRow };
+			},
+			inspectProcess: (pid) => pid === "6345" ? zombieOwner() : polls === 1 ? first :
+				{ ...watchdogIdentity(), startTime: "75001" },
+		}), /PID was reused/);
+		assert.equal(clock, 2000);
+		assert.deepEqual(commands, ["ps", "ps"]);
+		assert.equal(readFileSync(lock, "utf8"), "6345");
 	}
 });
 
