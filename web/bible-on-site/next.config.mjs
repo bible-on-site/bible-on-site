@@ -54,7 +54,16 @@ const nextConfig = {
 	// Route handlers and SSR have separate bundle runtimes. Use Node's shared
 	// module cache so readiness warms the same sanitizer used by public pages,
 	// rather than constructing a second JSDOM window on their first request.
-	serverExternalPackages: ["isomorphic-dompurify"],
+	// The Web Worker audio decoders ship a node entry whose dynamic worker
+	// import Turbopack cannot bundle for the SSR layer (#3259). Playback only
+	// runs in the browser, so keep them external on the server instead of
+	// forcing `ssr: false` on components whose children must still render
+	// server-side for SEO.
+	serverExternalPackages: [
+		"isomorphic-dompurify",
+		"mpg123-decoder",
+		"ogg-opus-decoder",
+	],
 	// Route-cache keys are built from decoded pathnames, so quoted Hebrew slugs
 	// like רש"י produce filenames NTFS rejects. The handler subclasses the
 	// default filesystem cache and encodes unsafe filesystem path segments,

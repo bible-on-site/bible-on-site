@@ -132,6 +132,21 @@ export function unitPerekSlices(
 	return rangesPerekSlices(allRanges, pasukCount);
 }
 
+/** Distinct perek ids an ordered range list overlaps, in canonical order. */
+export function rangesPerekIds(ranges: ScriptureRange[]): number[] {
+	const ids = new Set<number>();
+	for (const range of ranges) {
+		for (
+			let perekId = range.start.perekId;
+			perekId <= range.end.perekId;
+			perekId++
+		) {
+			ids.add(perekId);
+		}
+	}
+	return [...ids];
+}
+
 /** Distinct perek ids a unit's ranges overlap, in first-appearance order. */
 export function unitPerekIds(
 	unit: ReadingUnit,
