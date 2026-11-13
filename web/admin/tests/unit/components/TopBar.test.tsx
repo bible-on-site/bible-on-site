@@ -155,6 +155,27 @@ describe("TopBar", () => {
 		expect(await screen.findByRole("alert")).toHaveTextContent("logout failed");
 	});
 
+	it("keeps logout available without an empty archiver greeting", async () => {
+		(fetch as Mock).mockResolvedValue(reply({ isAdmin: false, username: "" }));
+		renderBar();
+		expect(
+			await screen.findByRole("button", { name: "יציאה מהחשבון" }),
+		).toBeEnabled();
+		expect(screen.queryByText(/שלום,/)).not.toBeInTheDocument();
+	});
+
+	it("keeps privileged links hidden when session lookup fails", async () => {
+		(fetch as Mock).mockResolvedValue(
+			reply({ error: "session unavailable" }, false),
+		);
+		renderBar();
+		await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+		expect(
+			screen.queryByRole("link", { name: "מאמרים" }),
+		).not.toBeInTheDocument();
+		expect(screen.queryByRole("button")).not.toBeInTheDocument();
+	});
+
 	it("leaves logged-out visitors on the brand bar only", async () => {
 		renderBar();
 
