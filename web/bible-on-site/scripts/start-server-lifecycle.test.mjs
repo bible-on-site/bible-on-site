@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { startServer } from "./start-server.mjs";
 import {
 	boundServer,
+	eventLoopMarkerMs,
 	fixture,
 	freePort,
 	httpServer,
@@ -93,7 +94,10 @@ test("the launcher probes readiness as soon as the listener accepts", {
 	// The fixture answers every path, so the probe's first response is the
 	// warm-up trigger plus startup timing evidence — long before any
 	// simulated container check could arrive.
-	await server.waitFor("Website readiness probe: HTTP 200");
+	await server.waitFor(
+		"Website readiness probe: HTTP 200",
+		eventLoopMarkerMs,
+	);
 	server.wrapper.kill("SIGINT");
 	// boundServer has no SIGINT handler, so the child dies by the signal. POSIX
 	// forwards SIGINT through the wrapper and reports 128+SIGINT; Windows
