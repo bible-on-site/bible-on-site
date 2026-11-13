@@ -122,4 +122,27 @@ public class PressArmingTests
         PressArming.IsCandidate(row, current).Should().BeFalse();
         PressArming.IsCandidate(null, current).Should().BeFalse();
     }
+
+    private static MasoraUnit CreateMasoraUnit(int unitId) => new()
+    {
+        UnitId = unitId,
+        Slug = unitId.ToString(),
+        SeferId = 1,
+        SeferName = "בראשית",
+        UnitOrder = unitId,
+        Heading = "בראשית"
+    };
+
+    [Fact]
+    public void IsCandidate_returns_true_only_for_the_current_masora_unit()
+    {
+        // The מסורה reader's unit header binds the carousel's MasoraUnit —
+        // arming matches the live unit by reference, never an equal id (#3260).
+        var current = CreateMasoraUnit(1);
+        var adjacent = CreateMasoraUnit(1);
+
+        PressArming.IsCandidate(current, current).Should().BeTrue();
+        PressArming.IsCandidate(adjacent, current).Should().BeFalse();
+        PressArming.IsCandidate(null, current).Should().BeFalse();
+    }
 }
