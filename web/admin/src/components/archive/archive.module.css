@@ -82,6 +82,13 @@
 .drop {
 	text-align: center;
 	border-style: dashed;
+	transition:
+		border-color 0.15s ease,
+		background-color 0.15s ease;
+}
+.dragging {
+	border-color: var(--link-accent);
+	background: var(--surface-muted);
 }
 .area meter,
 .area progress {
