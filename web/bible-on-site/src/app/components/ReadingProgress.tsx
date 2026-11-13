@@ -36,7 +36,10 @@ interface ReadingProgressProps {
 	/**
 	 * Selector for the measured content root inside the scope — the
 	 * element that wraps exactly the counted text (perek pesukim, article
-	 * body, note list, entry body).
+	 * body, note list, entry body). May name the scroller itself when the
+	 * scrollable body is the counted text (nested perush scrollers); the
+	 * drift detector then keys on scrollHeight, so plain scrolling never
+	 * registers as a layout change.
 	 */
 	content: string;
 	/**
@@ -150,12 +153,25 @@ export function ReadingProgress({
 		let positioned: PositionedUnit[] = [];
 		/** Content-root top from the last measure — a cheap drift detector. */
 		let measuredTop = Number.NaN;
+		/**
+		 * Content scroll height from the last measure — the drift signal
+		 * when the content root IS the scroller, whose own top is the
+		 * scroll position rather than a layout coordinate.
+		 */
+		let measuredScrollHeight = Number.NaN;
 		let frame = 0;
 		let disposed = false;
 
 		const measure = () => {
 			const geo = geometry();
-			measuredTop = geo.toContentY(contentEl.getBoundingClientRect().top);
+			measuredScrollHeight = geo.scrollHeight;
+			// A content root identical to the scroller anchors at its own
+			// origin; reading its rect would yield scrollTop, and the drift
+			// detector below keys on scrollHeight for that configuration.
+			measuredTop =
+				contentEl === scrollerEl
+					? 0
+					: geo.toContentY(contentEl.getBoundingClientRect().top);
 			const geos: {
 				top: number;
 				bottom: number;
@@ -238,9 +254,19 @@ export function ReadingProgress({
 			if (!fillRef.current || !barRef.current) return;
 			const geo = geometry();
 			// Layout drift above the content (late images, font swap,
-			// header growth) invalidates the cached axis silently.
-			const top = geo.toContentY(contentEl.getBoundingClientRect().top);
-			if (Math.abs(top - measuredTop) > 0.5) measure();
+			// header growth) invalidates the cached axis silently. When
+			// the content root is the scroller itself there is no content
+			// above to drift — inner growth (async notes, late images)
+			// shows up as scrollHeight instead, so plain scrolling never
+			// triggers a remeasure.
+			const drifted =
+				contentEl === scrollerEl
+					? Math.abs(geo.scrollHeight - measuredScrollHeight) > 0.5
+					: Math.abs(
+							geo.toContentY(contentEl.getBoundingClientRect().top) -
+								measuredTop,
+						) > 0.5;
+			if (drifted) measure();
 			// The anchor sweeps the *counted content* extent — nav/perushim
 			// sections below the text can not hold the bar short of 100%, and
 			// reaching the last counted unit completes it even when more

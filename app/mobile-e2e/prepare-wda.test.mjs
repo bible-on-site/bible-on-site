@@ -60,3 +60,36 @@ test("keeps retrying when the download exits cleanly but the marker never lands"
     /never completed/);
   assert.equal(calls.spawns, 3);
 });
+
+// A timed-out child stays alive briefly while its half-extraction is still
+// writing, so `reset` can throw ENOTEMPTY on the next attempt — that must
+// cost one attempt, not abort the whole loop (observed on the iOS shards:
+// spawnSync ETIMEDOUT followed by a fatal rmSync ENOTEMPTY on attempt two).
+test("treats a reset failure as a failed attempt and keeps retrying", () => {
+  const calls = { spawns: 0, resets: 0, done: false };
+  runUntilComplete(
+    () => {
+      calls.spawns++;
+      calls.done = true;
+    },
+    () => calls.done,
+    () => {
+      calls.resets++;
+      if (calls.resets < 3) throw new Error("ENOTEMPTY");
+    });
+  assert.deepEqual(calls, { spawns: 1, resets: 3, done: true });
+});
+
+test("reports the reset error when cleanup never succeeds", () => {
+  const calls = { spawns: 0, resets: 0 };
+  assert.throws(
+    () => runUntilComplete(
+      () => calls.spawns++,
+      () => false,
+      () => {
+        calls.resets++;
+        throw new Error("ENOTEMPTY: directory not empty");
+      }),
+    /ENOTEMPTY/);
+  assert.deepEqual(calls, { spawns: 0, resets: 3 });
+});
