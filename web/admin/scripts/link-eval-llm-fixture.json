@@ -1,0 +1,295 @@
+{
+ "model": "eval-fixture-llm-v1",
+ "promptTokens": 2400,
+ "completionTokens": 350,
+ "note": "Deterministic emulated LLM output for the representative-set eval (no live provider call). Realistic proposals demonstrate the recall the deterministic engine cannot reach (context-free citations, moed/date semantics); the adversarial entries deliberately exercise the validator's hold paths on real article context. Every evidence quote is a verbatim substring of the article's plain-text view.",
+ "byArticle": {
+  "2199": {
+   "proposals": [
+    {
+     "relationshipKey": "moadim",
+     "action": "add",
+     "target": { "moedName": "תשעה באב" },
+     "evidence": [{ "quote": "לימוד לתשעה באב" }],
+     "rationale": "המאמר כולו מוקדש ללימוד תשעה באב",
+     "confidence": 0.85
+    },
+    {
+     "relationshipKey": "mentionAnnotations",
+     "action": "add",
+     "target": { "intendedName": "איכה" },
+     "evidence": [{ "quote": "מגילת איכה" }],
+     "rationale": "adversarial: read-only relationship — must not be proposable",
+     "confidence": 0.3
+    }
+   ],
+   "abstentions": [
+    {
+     "relationshipKey": "coveringSources",
+     "reason": "מאמר-שער המפנה למאמרים אחרים; אינו מכסה פסוקים בעצמו"
+    }
+   ]
+  },
+  "2860": {
+   "proposals": [
+    {
+     "relationshipKey": "moadim",
+     "action": "add",
+     "target": { "moedName": "יום העצמאות" },
+     "evidence": [{ "quote": "מאמרים ליום העצמאות" }],
+     "rationale": "דף אוסף מאמרים ליום העצמאות",
+     "confidence": 0.85
+    },
+    {
+     "relationshipKey": "recurringHebrewDate",
+     "action": "add",
+     "target": { "month": "אייר", "day": 5 },
+     "evidence": [{ "quote": "ליום העצמאות" }],
+     "rationale": "המאמר משובץ כבר לה' באייר — המפתח תלוי-סכמה",
+     "confidence": 0.7
+    },
+    {
+     "relationshipKey": "dedicationAssignments",
+     "action": "add",
+     "target": { "dedicationId": 999 },
+     "rationale": "adversarial: fabricated dedication id — must be held",
+     "confidence": 0.2
+    }
+   ],
+   "abstentions": [
+    {
+     "relationshipKey": "coveringSources",
+     "reason": "ציטוטי הפרקים ברשימה מתארים מאמרים מקושרים, לא כיסוי של מאמר זה"
+    }
+   ]
+  },
+  "2243": {
+   "proposals": [
+    {
+     "relationshipKey": "coveringSources",
+     "action": "add",
+     "target": {
+      "citations": [
+       { "sefer": "בראשית", "perek": "יח", "pasuk": "כג" },
+       { "sefer": "בראשית", "perek": "יח", "pasuk": "כד" },
+       { "sefer": "בראשית", "perek": "יח", "pasuk": "כה" },
+       { "sefer": "בראשית", "perek": "יח", "pasuk": "כו" },
+       { "sefer": "בראשית", "perek": "יח", "pasuk": "כז" },
+       { "sefer": "בראשית", "perek": "יח", "pasuk": "כח" },
+       { "sefer": "בראשית", "perek": "יח", "pasuk": "כט" },
+       { "sefer": "בראשית", "perek": "יח", "pasuk": "ל" },
+       { "sefer": "בראשית", "perek": "יח", "pasuk": "לא" },
+       { "sefer": "בראשית", "perek": "יח", "pasuk": "לב" },
+       { "sefer": "בראשית", "perek": "יח", "pasuk": "לג" },
+       { "sefer": "בראשית", "perek": "יד", "pasuk": "יד" }
+      ]
+     },
+     "evidence": [
+      { "quote": "יח, כג-לג" },
+      { "quote": "יח, כד" },
+      { "quote": "יח, כו" },
+      { "quote": "יד, יד" },
+      { "quote": "פסוק כט" },
+      { "quote": "פסוקים ל, לב" },
+      { "quote": "פסוקים כז, לא" }
+     ],
+     "rationale": "המאמר דן בפסקאת התפילה של אברהם על סדום (בראשית יח כג-לג) ומצטט את ראב\"ע על בראשית יד יד; ציטוטים ללא שם ספר מתייחסים לפרק הראשי",
+     "confidence": 0.9
+    }
+   ]
+  },
+  "287": {
+   "proposals": [
+    {
+     "relationshipKey": "coveringSources",
+     "action": "add",
+     "target": {
+      "citations": [
+       { "sefer": "בראשית", "perek": "נה", "pasuk": "א" }
+      ]
+     },
+     "evidence": [{ "quote": "ויקרא יב, ב" }],
+     "rationale": "adversarial: בראשית נה does not exist — hallucinated perek",
+     "confidence": 0.2
+    },
+    {
+     "relationshipKey": "coveringSources",
+     "action": "add",
+     "target": {
+      "citations": [
+       { "sefer": "ויקרא", "perek": "יב", "pasuk": "צט" }
+      ]
+     },
+     "evidence": [{ "quote": "ויקרא יב, ב" }],
+     "rationale": "adversarial: pasuk 99 out of range for ויקרא יב",
+     "confidence": 0.15
+    }
+   ]
+  },
+  "336": {
+   "proposals": [
+    {
+     "relationshipKey": "coveringSources",
+     "action": "add",
+     "target": {
+      "citations": [
+       { "sefer": "במדבר", "perek": "ח", "pasuk": "א" },
+       { "sefer": "במדבר", "perek": "ח", "pasuk": "ב" },
+       { "sefer": "במדבר", "perek": "ח", "pasuk": "ג" },
+       { "sefer": "במדבר", "perek": "ח", "pasuk": "ד" }
+      ]
+     },
+     "evidence": [{ "quote": "מצוות הדלקת הנרות" }],
+     "rationale": "המאמר דן במצוות הדלקת נרות המנורה — במדבר ח א-ד; הספר אינו נקוב אך ההקשר חד-משמעי",
+     "confidence": 0.75
+    }
+   ]
+  },
+  "452": {
+   "proposals": [],
+   "abstentions": [
+    {
+     "relationshipKey": "coveringSources",
+     "reason": "אין ציטוטים מפורשים עם עוגן פסוקי במאמר"
+    }
+   ]
+  },
+  "585": {
+   "proposals": [],
+   "abstentions": [
+    {
+     "relationshipKey": "coveringSources",
+     "reason": "מאמר-שער של כותרת בלבד ללא תוכן ניתן לניתוח — אין ראיות"
+    }
+   ]
+  },
+  "674": {
+   "proposals": [
+    {
+     "relationshipKey": "coveringSources",
+     "action": "add",
+     "target": {
+      "citations": [
+       { "sefer": "מלכים", "perek": "א", "pasuk": "א" }
+      ]
+     },
+     "rationale": "adversarial: 'מלכים' without א/ב is ambiguous between two books",
+     "confidence": 0.3
+    }
+   ]
+  },
+  "743": {
+   "proposals": []
+  },
+  "839": {
+   "proposals": [
+    {
+     "relationshipKey": "coveringSources",
+     "action": "add",
+     "target": {
+      "citations": [
+       { "sefer": "שמואל", "additional": "ב", "perek": "ו", "pasuk": "ט" }
+      ]
+     },
+     "evidence": [{ "quote": "פסוק שאינו מופיע כלל בגוף המאמר" }],
+     "rationale": "adversarial: fabricated evidence quote — must fail anchoring",
+     "confidence": 0.25
+    }
+   ]
+  },
+  "1114": {
+   "proposals": [
+    {
+     "relationshipKey": "coveringSources",
+     "action": "add",
+     "target": {
+      "citations": [
+       { "sefer": "מלכים", "additional": "ב", "perek": "ד", "pasuk": "מג" },
+       { "sefer": "מלכים", "additional": "ב", "perek": "ד", "pasuk": "מד" }
+      ]
+     },
+     "evidence": [{ "quote": "מלכים ב ד מג-מד" }],
+     "rationale": "פסקת אלישע והלחם — כיסוי ראשי",
+     "confidence": 0.9,
+     "status": "approved",
+     "reviewer": "forged-model-field"
+    },
+    {
+     "relationshipKey": "entryLinks",
+     "action": "add",
+     "target": { "entryId": "abc" },
+     "rationale": "adversarial: relationship key not in the registry",
+     "confidence": 0.2
+    }
+   ]
+  },
+  "1602": {
+   "proposals": [
+    {
+     "relationshipKey": "coveringSources",
+     "action": "add",
+     "target": {
+      "citations": [
+       { "sefer": "הושע", "perek": "ג", "pasuk": "א" },
+       { "sefer": "הושע", "perek": "ג", "pasuk": "ג" }
+      ]
+     },
+     "evidence": [{ "quote": "הושע ג א,ג" }],
+     "rationale": "ציטוט הושע ג א,ג — פרק ג' פסוקים א ו-ג",
+     "confidence": 0.85
+    }
+   ]
+  },
+  "1635": {
+   "proposals": []
+  },
+  "1999": {
+   "proposals": []
+  },
+  "2005": {
+   "proposals": [
+    {
+     "relationshipKey": "recurringHebrewDate",
+     "action": "add",
+     "target": { "month": "תשרי", "day": 10 },
+     "evidence": [{ "quote": "יום הכיפורים" }],
+     "rationale": "מועד יום הכיפורים — י' תשרי; המפתח תלוי-סכמה",
+     "confidence": 0.8
+    }
+   ]
+  },
+  "2148": {
+   "proposals": [
+    {
+     "relationshipKey": "coveringSources",
+     "action": "add",
+     "target": {
+      "citations": [
+       { "sefer": "תהילים", "perek": "צא", "pasuk": "א" },
+       { "sefer": "תהילים", "perek": "צא", "pasuk": "ב" },
+       { "sefer": "תהילים", "perek": "צא", "pasuk": "ג" },
+       { "sefer": "תהילים", "perek": "צא", "pasuk": "ט" },
+       { "sefer": "תהילים", "perek": "צא", "pasuk": "י" },
+       { "sefer": "תהילים", "perek": "צא", "pasuk": "יא" },
+       { "sefer": "תהילים", "perek": "צא", "pasuk": "יד" },
+       { "sefer": "תהילים", "perek": "צא", "pasuk": "טו" },
+       { "sefer": "תהילים", "perek": "צא", "pasuk": "טז" }
+      ]
+     },
+     "evidence": [
+      { "quote": "תהילים צא א-ב" },
+      { "quote": "תהילים צא יד-טז" }
+     ],
+     "rationale": "המאמר הוא פירוש מלא על תהלים צא — כיסוי כל הפסוקים הנדונים",
+     "confidence": 0.95
+    }
+   ]
+  },
+  "225": {
+   "proposals": []
+  },
+  "2553": {
+   "proposals": []
+  }
+ }
+}
