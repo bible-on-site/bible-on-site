@@ -5,13 +5,15 @@
  * repeated pesukim render text again without emitting a second anchor
  * id, and mid-pasuk range bounds clip at segment level.
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { RecitationTextContext } from "../../../../src/app/929/[number]/components/RecitationPlayer";
 import {
 	UnitTextBody,
 	type UnitTextPerek,
 } from "../../../../src/app/components/reading/UnitTextBody";
 import type { Pasuk } from "../../../../src/data/db/tanah-view-types";
 import type { ScriptureRange } from "../../../../src/lib/reading/contract";
+import type { PerekEntityReference } from "../../../../src/lib/tanahpedia/service";
 
 const recordingTimeFrame = { from: "00:00:00", to: "00:00:00" };
 
@@ -141,5 +143,84 @@ describe("UnitTextBody", () => {
 		// Pasuk 2:1 ends mid-pasuk — only its first segment renders.
 		expect(screen.getByText("ב1ראשון")).toBeTruthy();
 		expect(screen.queryByText("ב1שני")).toBeNull();
+	});
+
+	it("wraps words in recitation controls carrying the rendered copy ordinal", () => {
+		const play = jest.fn();
+		const word = {
+			pasuk: 3,
+			segment: 1,
+			text: "א3ראשון",
+			startMs: 0,
+			endMs: 100,
+		};
+		render(
+			<RecitationTextContext.Provider
+				value={{
+					enabled: true,
+					wordByKey: new Map([["1:3:1", word]]),
+					rangesByPasuk: new Map(),
+					subscribeActive: () => () => {},
+					isActive: () => false,
+					play,
+				}}
+			>
+				<UnitTextBody
+					ranges={[
+						{ start: { perekId: 1, pasuk: 3 }, end: { perekId: 1, pasuk: 3 } },
+						// The repeated pasuk's second copy carries occurrence 1.
+						{ start: { perekId: 1, pasuk: 3 }, end: { perekId: 1, pasuk: 3 } },
+					]}
+					entityRefsByPerek={{}}
+					pasukCount={pasukCount}
+					resolvePerek={resolvePerek}
+					recitationWords
+				/>
+			</RecitationTextContext.Provider>,
+		);
+		const copies = screen.getAllByRole("button", {
+			name: "השמעת המילה א3ראשון",
+		});
+		expect(copies).toHaveLength(2);
+		fireEvent.click(copies[1]);
+		expect(play).toHaveBeenCalledWith(0, 100, 1, 1);
+	});
+
+	it("keeps entity links out of listening mode while recitation words are on", () => {
+		const ref: PerekEntityReference = {
+			entityId: "e1",
+			entityName: "אלוהים",
+			entityType: "PERSON",
+			entryUniqueName: "אלוהים",
+			pasukNumber: 3,
+			segmentStart: null,
+			segmentEnd: null,
+		};
+		const { container } = render(
+			<RecitationTextContext.Provider
+				value={{
+					enabled: true,
+					wordByKey: new Map(),
+					rangesByPasuk: new Map(),
+					subscribeActive: () => () => {},
+					isActive: () => false,
+					play: jest.fn(),
+				}}
+			>
+				<UnitTextBody
+					ranges={[
+						{ start: { perekId: 1, pasuk: 3 }, end: { perekId: 1, pasuk: 3 } },
+					]}
+					entityRefsByPerek={{ 1: [ref] }}
+					pasukCount={pasukCount}
+					resolvePerek={resolvePerek}
+					recitationWords
+				/>
+			</RecitationTextContext.Provider>,
+		);
+		// The entity link unwraps while listening so interactive elements
+		// never nest — the same RecitationLink swap the /929 reader uses.
+		expect(container.querySelector("[data-entry='אלוהים']")).toBeNull();
+		expect(container.textContent).toContain("א3ראשון");
 	});
 });
