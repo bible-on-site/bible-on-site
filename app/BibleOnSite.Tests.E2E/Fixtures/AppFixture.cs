@@ -423,7 +423,7 @@ public class AppFixture : IAsyncLifetime
                 }
             }
         }
-        catch (Exception exception)
+        catch (Exception exception) //NOSONAR — background drain failures must be retained and fail fixture teardown.
         {
             _drainFailure = exception;
             Console.WriteLine($"{prefix} drain failed: {exception}");
@@ -478,13 +478,6 @@ public class AppFixture : IAsyncLifetime
         }
         finally
         {
-            if (_drainFailure is { } drainFailure)
-            {
-                // An undrained pipe can block app output mid-run — surface the
-                // recorded cause instead of leaving the stall unexplained.
-                Console.WriteLine($"[app] output drain failed during the run: {drainFailure}");
-                _appLog?.WriteLine($"[app] output drain failed during the run: {drainFailure}");
-            }
             // `using var` aliases keep the field lifetimes spanning
             // Initialize/Dispose while disposing in the original order:
             // automation, then app process, then API process.
@@ -496,7 +489,8 @@ public class AppFixture : IAsyncLifetime
             {
                 // A dead mid-run drain can leave the app blocked on a full
                 // pipe — fail the collection rather than let a passing test
-                // stay green.
+                // stay green. The failing log sink must not be used again:
+                // the exception carries the original cause to the test runner.
                 throw new InvalidOperationException(
                     "App output drain failed during the run.", failure);
             }

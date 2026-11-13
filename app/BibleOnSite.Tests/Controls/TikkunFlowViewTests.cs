@@ -322,6 +322,27 @@ public class TikkunFlowViewTests
     }
 
     [Fact]
+    public void repainting_hidden_marks_reuses_stripped_text_without_changing_geometry()
+    {
+        WithInlineDispatcher(() =>
+        {
+            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "בָּרָ֣א בָּרָ֣א")], HideMarks = true };
+            var canvas = MeasuringCanvas();
+            var drawn = CaptureDraws(canvas);
+            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+            var first = drawn.ToArray();
+            var measures = canvas.Invocations.Count(i => i.Method.Name == nameof(ICanvas.GetStringSize));
+            drawn.Clear();
+
+            view.Drawable.Draw(canvas.Object, new RectF(0, 0, 360, 600));
+
+            drawn.Should().Equal(first);
+            drawn.Should().Contain(d => d.Text == "ברא");
+            canvas.Invocations.Count(i => i.Method.Name == nameof(ICanvas.GetStringSize)).Should().Be(measures);
+        });
+    }
+
+    [Fact]
     public void showing_marks_again_restores_the_full_text_and_geometry()
     {
         WithInlineDispatcher(() =>
