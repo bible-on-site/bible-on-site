@@ -12,6 +12,7 @@ import type {
 	PasukCoordinate,
 	ProposalTarget,
 } from "./types";
+import { AUTHOR_ATTRIBUTION_POLICY_REASON } from "./validate";
 
 /** Mirrors the API's UpdateArticleRelationshipsInput (camelCase wire). */
 export interface CoveringSourceInput {
@@ -203,26 +204,8 @@ export function planProposalApply(
 				input: { ...freshness(source, snapshot, contentHash), perekId },
 			};
 		}
-		case "author": {
-			if (proposal.action !== "replace") {
-				return {
-					kind: "cannot-apply",
-					reason: `author supports replace only, not ${proposal.action}`,
-				};
-			}
-			const authorId = (target as { authorId?: number }).authorId;
-			if (!Number.isInteger(authorId)) {
-				return { kind: "cannot-apply", reason: "no authorId target" };
-			}
-			if (authorId === snapshot.authorId) {
-				return { kind: "cannot-apply", reason: "already the current author" };
-			}
-			return {
-				kind: "article-mutation",
-				resultingSet: snapshot.coveringSources,
-				input: { ...freshness(source, snapshot, contentHash), authorId },
-			};
-		}
+		case "author":
+			return { kind: "cannot-apply", reason: AUTHOR_ATTRIBUTION_POLICY_REASON };
 		case "coveringSources":
 			return planCovering(
 				proposal.action,

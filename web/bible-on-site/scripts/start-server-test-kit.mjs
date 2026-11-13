@@ -42,6 +42,14 @@ if (process.env.MEASURE_FILE) {
 	const metric = process.env.MEASURE_FILE;
 	options.measure = async () => Number(await readFile(metric, "utf8"));
 }
+if (process.env.START_SERVER_TEST_PROBE_SIGNAL) {
+	const request = globalThis.fetch;
+	globalThis.fetch = (...args) => {
+		globalThis.fetch = request;
+		process.kill(process.pid, process.env.START_SERVER_TEST_PROBE_SIGNAL);
+		return request(...args);
+	};
+}
 ${options.beforeStart ?? ""}
 startServer(options);
 `,
@@ -61,12 +69,15 @@ startServer(options);
 			String(options.port ?? 0),
 		],
 		{
-			// Own the descendant tree even when no child PID was announced.
-			detached: process.platform !== "win32",
 			stdio: ["ignore", "pipe", "pipe"],
+			// Own the whole process group even when the launcher exits before
+			// its server and no child PID was announced, so a failed
+			// assertion cannot leave CI waiting on pipes.
+			detached: process.platform !== "win32",
 			env: {
 				...process.env,
 				MEASURE_FILE: options.measure === false ? "" : measureFile,
+				START_SERVER_TEST_PROBE_SIGNAL: options.signalDuringProbe ?? "",
 				...options.env,
 			},
 		},
@@ -88,23 +99,19 @@ startServer(options);
 	t.after(async () => {
 		// EOF proves only that the wrapper and its captured output closed.
 		// A descendant can close its output and keep serving after that point.
-		if (process.platform !== "win32") {
+		const killOwned = (pid) => {
 			try {
-				process.kill(-wrapper.pid, "SIGKILL");
+				process.kill(pid, "SIGKILL");
 			} catch (error) {
 				if (error.code !== "ESRCH") throw error;
 			}
+		};
+		if (process.platform !== "win32" && wrapper.pid) {
+			killOwned(-wrapper.pid);
 		} else {
-			if (wrapper.exitCode === null && wrapper.signalCode === null) {
+			if (wrapper.exitCode === null && wrapper.signalCode === null)
 				wrapper.kill("SIGKILL");
-			}
-			if (serverPid) {
-				try {
-					process.kill(serverPid, "SIGKILL");
-				} catch (error) {
-					if (error.code !== "ESRCH") throw error;
-				}
-			}
+			if (serverPid) killOwned(serverPid);
 		}
 		// Teardown observes real EOF even if the test-facing wait was aborted.
 		await closed;
