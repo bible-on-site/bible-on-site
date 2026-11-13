@@ -92,6 +92,27 @@ public sealed class NativeSnapshotTests
     }
 
     [Theory]
+    [InlineData("PerekSource", false)]
+    [InlineData("PasukText", false)]
+    [InlineData("PerekSource", true)]
+    [InlineData("PasukText", true)]
+    public void ReaderTextUsesTheAcceptedSnapshotEvenWhenItsNativeElementHasBeenReplaced(string automationId, bool startsEmpty)
+    {
+        var ready = Entry("captured text");
+        var executor = new SnapshotExecutor(startsEmpty ? [Entry(" "), ready] : [ready])
+        {
+            StaleOnText = true
+        };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var page = new PerekPage(driver, new IosPlatformAdapter());
+
+        Assert.Equal("captured text", automationId == "PerekSource" ? page.Source : page.FirstPasuk);
+        Assert.Equal(startsEmpty ? 2 : 1, executor.Lookups);
+        Assert.Equal(automationId, executor.LastParameters!["value"]);
+        Assert.DoesNotContain(DriverCommand.GetElementText, executor.Commands);
+    }
+
+    [Theory]
     [InlineData("PerekSource", "בראשית א")]
     [InlineData("PasukText", "א בראשית ברא")]
     public void ReaderTextUsesTheCurrentSnapshotWhenTheNativeElementIsRecycled(string automationId, string text)
