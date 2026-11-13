@@ -764,6 +764,49 @@ it("cancels reservations after chunk errors, even if cleanup is temporarily unav
 		),
 	).toBe(true);
 });
+it("publishes the busy flag while an upload is in flight", async () => {
+	const { archiveBusy } = await import("~/lib/archive-busy");
+	await mount();
+	let releaseStart: (response: Response) => void = () => {};
+	(fetch as Mock).mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				releaseStart = resolve;
+			}),
+	);
+	choose();
+	await screen.findByRole("button", { name: "ביטול ההעלאה" });
+	expect(archiveBusy()).toBe(true);
+	await act(async () => {
+		releaseStart(reply({ id: "file", partSize: 4 }) as Response);
+	});
+	await screen.findByRole("link", { name: "הורדה" });
+	await waitFor(() => expect(archiveBusy()).toBe(false));
+});
+
+it("keeps shared logout busy while a dropped folder is still being read", async () => {
+	const { archiveBusy } = await import("~/lib/archive-busy");
+	await mount();
+	let finishRead: (entries: FileSystemEntry[]) => void = () => {};
+	const pending = {
+		isFile: false,
+		isDirectory: true,
+		name: "pending",
+		createReader: () => ({
+			readEntries: (resolve: typeof finishRead) => {
+				finishRead = resolve;
+			},
+		}),
+	} as unknown as FileSystemEntry;
+	await act(async () => {
+		fireEvent.drop(dropZone(), { dataTransfer: dragData([pending]) });
+	});
+	expect(archiveBusy()).toBe(true);
+	expect(commandsSent("start")).toHaveLength(0);
+	await act(async () => finishRead([]));
+	expect(archiveBusy()).toBe(false);
+	expect(screen.getByRole("button", { name: "רענון" })).toBeEnabled();
+});
 it("aborts an in-flight chunk when cancelled", async () => {
 	await mount();
 	(fetch as Mock)
@@ -805,11 +848,20 @@ it("reports deletion and refresh errors", async () => {
 		expect(screen.getByRole("alert")).toHaveTextContent("refresh failed"),
 	);
 });
-it("reports logout failures", async () => {
+it("leaves account actions to the shared top bar", async () => {
 	await mount();
-	(fetch as Mock).mockRejectedValueOnce(new Error("logout failed"));
-	fireEvent.click(screen.getByRole("button", { name: "יציאה מהחשבון" }));
-	expect(await screen.findByRole("alert")).toHaveTextContent("logout failed");
+	expect(
+		screen.queryByRole("button", { name: "יציאה מהחשבון" }),
+	).not.toBeInTheDocument();
+	expect(
+		screen.queryByRole("link", { name: "חזרה לניהול" }),
+	).not.toBeInTheDocument();
+});
+it("links the quota summary to the storage settings for administrators", async () => {
+	await mount();
+	expect(
+		screen.getByRole("link", { name: /מכסה עבור מחבר א/ }),
+	).toHaveAttribute("href", "/archive-settings");
 });
 it("handles refresh failure after an upload and cancels active work on unmount", async () => {
 	await mount();
