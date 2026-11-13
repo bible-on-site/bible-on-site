@@ -9,4 +9,6 @@ public interface IRecitationAudioDecoder
         CancellationToken cancellationToken, double pauseMs);
     /// <summary>Decode the entire source file; used where the native player lacks the container's demuxer.</summary>
     Task<byte[]> CreateChapterAsync(string audio, CancellationToken cancellationToken);
+    /// <summary>Drop decoder-held source state; the decoder stays usable and re-initializes on next use.</summary>
+    Task ReleaseAsync();
 }
