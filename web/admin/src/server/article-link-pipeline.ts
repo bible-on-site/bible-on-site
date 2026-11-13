@@ -375,6 +375,27 @@ const PROPOSAL_SELECT = `SELECT p.*, LOWER(HEX(a.content_hash)) AS live_hash
 	 FROM tanah_article_link_proposal p
 	 JOIN tanah_article a ON a.id = p.article_id`;
 
+/** Same rows when the article content-hash upgrade is not deployed yet. */
+const PROPOSAL_SELECT_NO_HASH = `SELECT p.*, NULL AS live_hash
+	 FROM tanah_article_link_proposal p`;
+
+/** Query proposals with the freshness join, degrading to no-hash rows when
+ *  tanah_article.content_hash is undeployed (ER_BAD_FIELD_ERROR). */
+async function queryProposals(
+	suffix: string,
+	params: unknown[],
+): Promise<ProposalRow[]> {
+	try {
+		return await query<ProposalRow>(`${PROPOSAL_SELECT} ${suffix}`, params);
+	} catch (error) {
+		if (!isCoveringSourceSchemaMissing(error)) throw error;
+		return await query<ProposalRow>(
+			`${PROPOSAL_SELECT_NO_HASH} ${suffix}`,
+			params,
+		);
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Generation
 // ---------------------------------------------------------------------------
@@ -825,8 +846,8 @@ export async function listProposals(
 	}
 	const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
 	const limit = Math.min(Math.max(data.limit ?? 200, 1), 500);
-	const rows = await query<ProposalRow>(
-		`${PROPOSAL_SELECT} ${where}
+	const rows = await queryProposals(
+		`${where}
 			 ORDER BY p.created_at DESC, p.id LIMIT ?`,
 		[...params, limit],
 	);
@@ -844,9 +865,8 @@ export async function getProposalDetail(
 	id: string,
 ): Promise<LinkProposalDetail | null> {
 	await ensureLinkSchema();
-	const row = await queryOne<ProposalRow>(`${PROPOSAL_SELECT} WHERE p.id = ?`, [
-		id,
-	]);
+	const rows = await queryProposals("WHERE p.id = ?", [id]);
+	const row = rows[0];
 	if (!row) return null;
 	const article = await queryOne<{ name: string }>(
 		"SELECT name FROM tanah_article WHERE id = ?",

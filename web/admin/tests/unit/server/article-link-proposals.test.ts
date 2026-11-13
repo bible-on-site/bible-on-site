@@ -113,7 +113,12 @@ function dispatchQuery(sql: string): unknown[] {
 	if (sql.includes("tanah_article_covering_source"))
 		return [{ perekId: 1, pasuk: 1 }];
 	if (sql.includes("tanah_article_dedication")) return [];
-	if (sql.includes("tanah_article_link_proposal")) return proposalRows;
+	if (sql.includes("tanah_article_link_proposal"))
+		return sql.includes("WHERE p.id = ?")
+			? proposalRow
+				? [proposalRow]
+				: []
+			: proposalRows;
 	if (sql.includes("tanah_article_link_checkpoint")) return [];
 	if (sql.includes("FROM tanah_article WHERE id")) return [];
 	return [];
@@ -1190,6 +1195,56 @@ describe("article link proposals server", () => {
 			const rows = await listLinkProposals({ data: {} });
 			expect(rows).toHaveLength(1);
 			expect(rows[0].target).toEqual({});
+		});
+
+		it("lists proposals when the article content-hash column is undeployed", async () => {
+			const schemaErr = Object.assign(
+				new Error("Unknown column 'a.content_hash'"),
+				{ code: "ER_BAD_FIELD_ERROR" },
+			);
+			proposalRows = [makeProposalRow({ live_hash: undefined })];
+			mocks.query.mockImplementation(async (sql: string) => {
+				if (sql.includes("HEX(a.content_hash)")) throw schemaErr;
+				return dispatchQuery(sql);
+			});
+			const rows = await listLinkProposals({ data: {} });
+			expect(rows).toHaveLength(1);
+			expect(rows[0].staleNow).toBe(false);
+			expect(
+				mocks.query.mock.calls.some((c) =>
+					String(c[0]).includes("NULL AS live_hash"),
+				),
+			).toBe(true);
+		});
+
+		it("returns the detail view when the article content-hash column is undeployed", async () => {
+			const schemaErr = Object.assign(
+				new Error("Unknown column 'a.content_hash'"),
+				{ code: "ER_BAD_FIELD_ERROR" },
+			);
+			proposalRow = makeProposalRow();
+			mocks.query.mockImplementation(async (sql: string) => {
+				if (sql.includes("HEX(a.content_hash)")) throw schemaErr;
+				return dispatchQuery(sql);
+			});
+			mocks.queryOne.mockImplementation(async (sql: string) => {
+				if (sql.includes("AS h FROM tanah_article")) throw schemaErr;
+				return dispatchQueryOne(sql);
+			});
+			const detail = await getLinkProposal({ data: "prop-1" });
+			expect(detail?.proposal.id).toBe("prop-1");
+			expect(detail?.liveContentHash).toBe("");
+		});
+
+		it("rethrows non-schema errors from the proposal listing query", async () => {
+			mocks.query.mockImplementation(async (sql: string) => {
+				if (sql.includes("tanah_article_link_proposal"))
+					throw new Error("list boom");
+				return dispatchQuery(sql);
+			});
+			await expect(listLinkProposals({ data: {} })).rejects.toThrow(
+				"list boom",
+			);
 		});
 	});
 
