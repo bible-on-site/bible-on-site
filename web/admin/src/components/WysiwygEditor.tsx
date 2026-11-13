@@ -1,17 +1,9 @@
-import BulletList from "@tiptap/extension-bullet-list";
-import Image from "@tiptap/extension-image";
-import Italic from "@tiptap/extension-italic";
-import ListItem from "@tiptap/extension-list-item";
-import Placeholder from "@tiptap/extension-placeholder";
 import { type Editor, EditorContent, useEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
 import DOMPurify from "dompurify";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-	ADMIN_EDITOR_SHORTCUT_EXTRAS_KEY,
-	adminEditorShortcutsExtension,
-} from "./editor/adminEditorShortcuts";
+import { createAdminEditorExtensions } from "./editor/adminEditorExtensions";
+import { ADMIN_EDITOR_SHORTCUT_EXTRAS_KEY } from "./editor/adminEditorShortcuts";
 import {
 	canRemoveFootnote,
 	insertFootnoteAtSelection,
@@ -19,33 +11,21 @@ import {
 	removeFootnoteAtSelection,
 } from "./editor/adminFootnoteCommands";
 import {
-	AdminFootnoteDocument,
-	adminFootnoteExtensions,
-} from "./editor/adminFootnoteExtensions";
-import {
 	toEditorFootnoteHtml,
 	toStoredFootnoteHtml,
 } from "./editor/adminFootnoteMigration";
 import {
-	AdminLink,
 	type AdminLinkType,
 	buildLinkHref,
 	inferLinkType,
 	type TipTapLinkMarkAttrs,
 } from "./editor/adminLinkExtension";
-import { AdminOrderedList } from "./editor/adminOrderedListExtension";
 import { EditorShortcutModal } from "./editor/EditorShortcutModal";
 import {
 	type EntryLinkOption,
 	EntryLinkPicker,
 	type EntrySearch,
 } from "./editor/EntryLinkPicker";
-
-const ItalicNoShortcut = Italic.extend({
-	addKeyboardShortcuts() {
-		return {};
-	},
-});
 
 type EditorMode = "visual" | "preview" | "source";
 
@@ -110,28 +90,7 @@ export function WysiwygEditor({
 	}, [content]);
 
 	const extensions = useMemo(
-		() => [
-			StarterKit.configure({
-				heading: { levels: [1, 2, 3, 4, 5, 6] },
-				italic: false,
-				orderedList: false,
-				bulletList: false,
-				listItem: false,
-				document: false,
-				/* StarterKit v3 bundles Link; AdminLink replaces it. */
-				link: false,
-			}),
-			AdminFootnoteDocument,
-			ListItem,
-			BulletList,
-			AdminOrderedList,
-			ItalicNoShortcut,
-			Image,
-			AdminLink.configure({ openOnClick: false }),
-			Placeholder.configure({ placeholder }),
-			adminEditorShortcutsExtension,
-			...adminFootnoteExtensions,
-		],
+		() => createAdminEditorExtensions(placeholder),
 		[placeholder],
 	);
 
