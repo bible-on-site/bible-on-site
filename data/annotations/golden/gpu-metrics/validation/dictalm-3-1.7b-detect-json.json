@@ -1,0 +1,2774 @@
+{
+  "schema": 1,
+  "candidate": {
+    "name": "dictalm-3-1.7b-detect",
+    "hf_repo": "dicta-il/DictaLM-3.0-1.7B-Instruct",
+    "revision": "5add44d6941d6ffb9eb6cc6b516f9fb4fd472494",
+    "license": "Apache-2.0"
+  },
+  "execution": {
+    "device": "cuda:0",
+    "dtype": "bfloat16",
+    "tf32": false,
+    "torch": "2.14.1+cu126",
+    "cuda_runtime": "12.6",
+    "gpu_name": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "gpu_total_memory_bytes": 8585216000,
+    "gpu_compute_capability": [
+      8,
+      9
+    ],
+    "transformers": "5.22.2",
+    "tokenizers": "0.23.3",
+    "bitsandbytes": "0.50.2",
+    "quantization": null,
+    "output_normalization_version": "target-key-v1",
+    "structured_output": {
+      "backend": "lm-format-enforcer",
+      "library_pin": "0.11.3",
+      "output_normalization_version": "target-key-v1",
+      "adapter_version": "transformers5-core-v2-config",
+      "library_version": "0.11.3",
+      "grammar_version": "json-schema-v1",
+      "schema_sha256": "cd72a56d34ede46cc2077283f714dda77fdd1919c0d15d85f69819b6c7bc8da7",
+      "alphabet": "ascii+hebrew+source-v1",
+      "field_order": true,
+      "max_consecutive_whitespaces": 2
+    }
+  },
+  "output_normalization_version": "target-key-v1",
+  "prompt_version": "local-detect-v2",
+  "model_revision": "dictalm-3-1.7b-detect@5add44d6+local-detect-v2+target-key-v1+3d3c3b13a75a",
+  "structured_output": {
+    "backend": "lm-format-enforcer",
+    "library_pin": "0.11.3",
+    "output_normalization_version": "target-key-v1",
+    "adapter_version": "transformers5-core-v2-config",
+    "library_version": "0.11.3",
+    "grammar_version": "json-schema-v1",
+    "schema_sha256": "cd72a56d34ede46cc2077283f714dda77fdd1919c0d15d85f69819b6c7bc8da7",
+    "alphabet": "ascii+hebrew+source-v1",
+    "field_order": true,
+    "max_consecutive_whitespaces": 2
+  },
+  "pasuk": {
+    "model_revision": "dictalm-3-1.7b-detect@5add44d6+local-detect-v2+target-key-v1+3d3c3b13a75a",
+    "cases": 20,
+    "gold_auto": 79,
+    "gold_held": 0,
+    "predictions": 45,
+    "counts": {
+      "fp": 37,
+      "fn": 79,
+      "gold_auto": 79,
+      "gold_held": 0,
+      "partial": 22,
+      "held_noise": 8
+    },
+    "metrics": {
+      "link_precision": 0.0,
+      "link_recall": 0.0,
+      "link_f1": 0.0,
+      "link_precision_strict": 0.0,
+      "link_recall_strict": 0.0,
+      "link_f1_strict": 0.0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0,
+      "detection_recall": 0.0,
+      "type_accuracy": null,
+      "type_accuracy_strict": null,
+      "name_accuracy": null,
+      "name_accuracy_strict": null,
+      "span_exactness": 0.0,
+      "suppression": null
+    },
+    "per_category": {
+      "ambiguity": {
+        "counts": {
+          "fn": 13,
+          "gold_auto": 13,
+          "gold_held": 0,
+          "partial": 3,
+          "held_noise": 2,
+          "fp": 4
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        }
+      },
+      "animal": {
+        "counts": {
+          "fp": 6,
+          "held_noise": 6,
+          "fn": 4,
+          "gold_auto": 4,
+          "gold_held": 0,
+          "partial": 4
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        }
+      },
+      "divine-name": {
+        "counts": {
+          "fp": 14,
+          "held_noise": 6,
+          "fn": 7,
+          "gold_auto": 7,
+          "gold_held": 0,
+          "partial": 7
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        }
+      },
+      "lineage": {
+        "counts": {
+          "fp": 7,
+          "fn": 20,
+          "gold_auto": 20,
+          "gold_held": 0,
+          "partial": 5
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        }
+      },
+      "nation": {
+        "counts": {
+          "fp": 11,
+          "fn": 26,
+          "gold_auto": 26,
+          "gold_held": 0,
+          "partial": 7,
+          "held_noise": 2
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        }
+      },
+      "ordinary-nouns": {
+        "counts": {
+          "gold_auto": 0,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": null,
+          "link_f1": null,
+          "link_precision_strict": null,
+          "link_recall_strict": null,
+          "link_f1_strict": null,
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "detection_recall": null,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      },
+      "person": {
+        "counts": {
+          "fp": 18,
+          "fn": 35,
+          "gold_auto": 35,
+          "gold_held": 0,
+          "partial": 11,
+          "held_noise": 2
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        }
+      },
+      "places": {
+        "counts": {
+          "fp": 16,
+          "fn": 29,
+          "gold_auto": 29,
+          "gold_held": 0,
+          "partial": 8
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        }
+      },
+      "prefixes": {
+        "counts": {
+          "fp": 4,
+          "fn": 23,
+          "gold_auto": 23,
+          "gold_held": 0,
+          "partial": 2
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        }
+      },
+      "qri-ktiv": {
+        "counts": {
+          "fp": 2,
+          "fn": 2,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 2
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        }
+      },
+      "renaming": {
+        "counts": {
+          "fp": 1,
+          "fn": 8,
+          "gold_auto": 8,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      },
+      "repeated-mention": {
+        "counts": {
+          "fn": 11,
+          "gold_auto": 11,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      },
+      "spelling": {
+        "counts": {
+          "fn": 22,
+          "gold_auto": 22,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      }
+    },
+    "per_case": {
+      "validation-0-None-2-14": {
+        "counts": {
+          "fp": 6,
+          "fn": 3,
+          "gold_auto": 3,
+          "gold_held": 0,
+          "partial": 3
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        },
+        "partials": [
+          {
+            "pred_span": [
+              2,
+              4
+            ],
+            "pred_surface": "הַשְּׁלִישִׁי֙ חִדֶּ֔קֶל",
+            "pred_name": "נהר",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              3,
+              4
+            ],
+            "gold_text": "חדקל",
+            "gold_name": "חדקל",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              6,
+              8
+            ],
+            "pred_surface": "קִדְמַ֣ת אַשּׁ֑וּר",
+            "pred_name": "חדקל",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              7,
+              8
+            ],
+            "gold_text": "אשור",
+            "gold_name": "אשור",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              10,
+              12
+            ],
+            "pred_surface": "ה֥וּא פְרָֽת׃",
+            "pred_name": "נהר",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              11,
+              12
+            ],
+            "gold_text": "פרת",
+            "gold_name": "פרת",
+            "gold_expected": "auto"
+          }
+        ],
+        "predictions": 6
+      },
+      "validation-0-None-3-1": {
+        "counts": {
+          "fp": 6,
+          "held_noise": 6,
+          "fn": 4,
+          "gold_auto": 4,
+          "gold_held": 0,
+          "partial": 4
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        },
+        "partials": [
+          {
+            "pred_span": [
+              0,
+              2
+            ],
+            "pred_surface": "וְהַנָּחָשׁ֙ הָיָ֣ה",
+            "pred_name": "נחושת",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              0,
+              1
+            ],
+            "gold_text": "והנחש",
+            "gold_name": "נחש",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              8,
+              11
+            ],
+            "pred_surface": "יְהוָ֣ה אֱלֹהִ֑ים וַיֹּ֙אמֶר֙",
+            "pred_name": "נחושת",
+            "pred_acceptance": "held",
+            "gold_span": [
+              8,
+              9
+            ],
+            "gold_text": "יהוה",
+            "gold_name": "יהוה",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              8,
+              13
+            ],
+            "pred_surface": "יְהוָ֣ה אֱלֹהִ֑ים וַיֹּ֙אמֶר֙ אֶל־ הָ֣אִשָּׁ֔ה",
+            "pred_name": "יהוה אלוהים",
+            "pred_acceptance": "held",
+            "gold_span": [
+              8,
+              9
+            ],
+            "gold_text": "יהוה",
+            "gold_name": "יהוה",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              15,
+              17
+            ],
+            "pred_surface": "אָמַ֣ר אֱלֹהִ֔ים",
+            "pred_name": "יהוה אלוהים",
+            "pred_acceptance": "held",
+            "gold_span": [
+              16,
+              17
+            ],
+            "gold_text": "אלהים",
+            "gold_name": "אלהים",
+            "gold_expected": "auto"
+          }
+        ],
+        "predictions": 12
+      },
+      "validation-1-None-31-2": {
+        "counts": {
+          "fp": 5,
+          "fn": 4,
+          "gold_auto": 4,
+          "gold_held": 0,
+          "partial": 4
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        },
+        "partials": [
+          {
+            "pred_span": [
+              2,
+              4
+            ],
+            "pred_surface": "בְשֵׁ֑ם בְּצַלְאֵ֛ל",
+            "pred_name": "בצלאל",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              3,
+              4
+            ],
+            "gold_text": "בצלאל",
+            "gold_name": "בצלאל",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              4,
+              6
+            ],
+            "pred_surface": "בֶּן־ אוּרִ֥י",
+            "pred_name": "בן",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              5,
+              6
+            ],
+            "gold_text": "אורי",
+            "gold_name": "אורי",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              6,
+              8
+            ],
+            "pred_surface": "בֶן־ ח֖וּר",
+            "pred_name": "חור",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              7,
+              8
+            ],
+            "gold_text": "חור",
+            "gold_name": "חור",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              8,
+              10
+            ],
+            "pred_surface": "לְמַטֵּ֥ה יְהוּדָֽה׃",
+            "pred_name": "למטה",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              9,
+              10
+            ],
+            "gold_text": "יהודה",
+            "gold_name": "יהודה",
+            "gold_expected": "auto"
+          }
+        ],
+        "predictions": 5
+      },
+      "validation-3-None-13-16": {
+        "counts": {
+          "fp": 1,
+          "fn": 5,
+          "gold_auto": 5,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 1
+      },
+      "validation-4-None-34-1": {
+        "counts": {
+          "fn": 8,
+          "gold_auto": 8,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-5-None-2-1": {
+        "counts": {
+          "fp": 2,
+          "fn": 5,
+          "gold_auto": 5,
+          "gold_held": 0,
+          "partial": 2
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        },
+        "partials": [
+          {
+            "pred_span": [
+              16,
+              21
+            ],
+            "pred_surface": "יְרִיח֑וֹ וַיֵּ֨לְכ֜וּ וַ֠יָּבֹאוּ בֵּית־ אִשָּׁ֥ה",
+            "pred_name": "רחבה",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              16,
+              17
+            ],
+            "gold_text": "יריחו",
+            "gold_name": "יריחו",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              21,
+              26
+            ],
+            "pred_surface": "זוֹנָ֛ה וּשְׁמָ֥הּ רָחָ֖ב וַיִּשְׁכְּבוּ־ שָֽׁמָּה׃",
+            "pred_name": "רחבה",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              23,
+              24
+            ],
+            "gold_text": "רחב",
+            "gold_name": "רחב",
+            "gold_expected": "auto"
+          }
+        ],
+        "predictions": 2
+      },
+      "validation-6-None-4-4": {
+        "counts": {
+          "fn": 3,
+          "gold_auto": 3,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-7-0-3-10": {
+        "counts": {
+          "fn": 4,
+          "gold_auto": 4,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-8-1-5-1": {
+        "counts": {
+          "held_noise": 2,
+          "fp": 4,
+          "fn": 4,
+          "gold_auto": 4,
+          "gold_held": 0,
+          "partial": 3
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        },
+        "partials": [
+          {
+            "pred_span": [
+              0,
+              11
+            ],
+            "pred_surface": "וְ֠נַעֲמָן שַׂר־ צְבָ֨א מֶֽלֶךְ־ אֲרָ֜ם הָיָ֣ה אִישׁ֩ גָּד֨וֹל לִפְנֵ֤י אֲדֹנָיו֙ וּנְשֻׂ֣א",
+            "pred_name": "נעמן שר צבא מלך ארם היה איש גדול לפני אדניו ונשא פנים כי בו נתן יהו",
+            "pred_acceptance": "held",
+            "gold_span": [
+              0,
+              1
+            ],
+            "gold_text": "ונעמן",
+            "gold_name": "נעמן",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              15,
+              17
+            ],
+            "pred_surface": "יְהוָ֥ה תְּשׁוּעָ֖ה",
+            "pred_name": "יהוה",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              15,
+              16
+            ],
+            "gold_text": "יהוה",
+            "gold_name": "יהוה",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              17,
+              22
+            ],
+            "pred_surface": "לַאֲרָ֑ם וְהָאִ֗ישׁ הָיָ֛ה גִּבּ֥וֹר חַ֖יִל",
+            "pred_name": "ארם",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              17,
+              18
+            ],
+            "gold_text": "לארם",
+            "gold_name": "ארם",
+            "gold_expected": "auto"
+          }
+        ],
+        "predictions": 6
+      },
+      "validation-8-1-20-4": {
+        "counts": {
+          "fp": 2,
+          "fn": 2,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 2
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        },
+        "partials": [
+          {
+            "pred_span": [
+              0,
+              2
+            ],
+            "pred_surface": "וַיְהִ֣י יְשַׁעְיָ֔הוּ",
+            "pred_name": "ישעיהו",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              1,
+              2
+            ],
+            "gold_text": "ישעיהו",
+            "gold_name": "ישעיהו",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              2,
+              12
+            ],
+            "pred_surface": "לֹ֣א יָצָ֔א העיר חָצֵ֖ר הַתִּֽיכֹנָ֑ה וּדְבַר־ יְהוָ֔ה הָיָ֥ה אֵלָ֖יו לֵאמֹֽר׃",
+            "pred_name": "יהוה",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              8,
+              9
+            ],
+            "gold_text": "יהוה",
+            "gold_name": "יהוה",
+            "gold_expected": "auto"
+          }
+        ],
+        "predictions": 2
+      },
+      "validation-10-None-1-1": {
+        "counts": {
+          "fn": 4,
+          "gold_auto": 4,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-11-None-1-3": {
+        "counts": {
+          "fn": 6,
+          "gold_auto": 6,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-16-None-1-1": {
+        "counts": {
+          "fp": 1,
+          "fn": 3,
+          "gold_auto": 3,
+          "gold_held": 0,
+          "partial": 1
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        },
+        "partials": [
+          {
+            "pred_span": [
+              0,
+              8
+            ],
+            "pred_surface": "וַֽיְהִי֙ דְּבַר־ יְהוָ֔ה אֶל־ יוֹנָ֥ה בֶן־ אֲמִתַּ֖י לֵאמֹֽר׃",
+            "pred_name": "יונה בן אמתי",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              2,
+              3
+            ],
+            "gold_text": "יהוה",
+            "gold_name": "יהוה",
+            "gold_expected": "auto"
+          }
+        ],
+        "predictions": 1
+      },
+      "validation-28-None-4-13": {
+        "counts": {
+          "fn": 3,
+          "gold_auto": 3,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-31-None-2-7": {
+        "counts": {
+          "fn": 3,
+          "gold_auto": 3,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-33-0-1-1": {
+        "counts": {
+          "fn": 7,
+          "gold_auto": 7,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-25-None-1-1": {
+        "counts": {
+          "fp": 1,
+          "fn": 3,
+          "gold_auto": 3,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 1
+      },
+      "validation-25-None-15-1": {
+        "counts": {
+          "gold_auto": 0,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": null,
+          "link_f1": null,
+          "link_precision_strict": null,
+          "link_recall_strict": null,
+          "link_f1_strict": null,
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "detection_recall": null,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-26-None-1-1": {
+        "counts": {
+          "fp": 8,
+          "fn": 3,
+          "gold_auto": 3,
+          "gold_held": 0,
+          "partial": 3
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        },
+        "partials": [
+          {
+            "pred_span": [
+              2,
+              4
+            ],
+            "pred_surface": "בְאֶֽרֶץ־ ע֖וּץ",
+            "pred_name": "איש",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              3,
+              4
+            ],
+            "gold_text": "עוץ",
+            "gold_name": "עוץ",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              4,
+              6
+            ],
+            "pred_surface": "אִיּ֣וֹב שְׁמ֑וֹ",
+            "pred_name": "ארץ עוץ",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              4,
+              5
+            ],
+            "gold_text": "איוב",
+            "gold_name": "איוב",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              12,
+              14
+            ],
+            "pred_surface": "אֱלֹהִ֖ים וְסָ֥ר",
+            "pred_name": "האיש",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              12,
+              13
+            ],
+            "gold_text": "אלהים",
+            "gold_name": "אלהים",
+            "gold_expected": "auto"
+          }
+        ],
+        "predictions": 8
+      },
+      "validation-32-None-1-6": {
+        "counts": {
+          "fp": 1,
+          "fn": 5,
+          "gold_auto": 5,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 1
+      }
+    }
+  },
+  "runtime": {
+    "pasuk_seconds": 284.629,
+    "article_seconds": 65.448,
+    "model_calls": 42,
+    "cache_hits": 0,
+    "domain_times_include_model_load": false,
+    "generation_seconds": 348.261,
+    "generated_requests": 42,
+    "input_tokens": 24698,
+    "output_tokens": 6723,
+    "cache_miss_backend_returns": 42,
+    "actual_new_gpu_requests": 42,
+    "shared_model_load_seconds": 7.153,
+    "qualification_wall_seconds": 350.738,
+    "peak_cuda_allocated_bytes": 3593229312,
+    "timing_interpretation": "Mixed replay/cache/new generation; not pure GPU throughput."
+  },
+  "article": {
+    "model_revision": "dictalm-3-1.7b-detect@5add44d6+local-detect-v2+target-key-v1+3d3c3b13a75a",
+    "cases": 12,
+    "gold_auto": 27,
+    "gold_held": 2,
+    "predictions": 5,
+    "counts": {
+      "fp": 4,
+      "fn": 26,
+      "gold_auto": 27,
+      "gold_held": 2,
+      "partial": 3,
+      "suppressed_ok": 2,
+      "tp": 1,
+      "type_hit": 0,
+      "type_strict_hit": 0,
+      "name_hit": 0,
+      "name_strict_hit": 0,
+      "link_hit": 0,
+      "link_strict_hit": 0
+    },
+    "metrics": {
+      "link_precision": 0.0,
+      "link_recall": 0.0,
+      "link_f1": 0.0,
+      "link_precision_strict": 0.0,
+      "link_recall_strict": 0.0,
+      "link_f1_strict": 0.0,
+      "precision": 0.2,
+      "recall": 0.037037,
+      "f1": 0.0625,
+      "detection_recall": 0.037037,
+      "type_accuracy": 0.0,
+      "type_accuracy_strict": 0.0,
+      "name_accuracy": 0.0,
+      "name_accuracy_strict": 0.0,
+      "span_exactness": 0.25,
+      "suppression": 1.0
+    },
+    "per_category": {
+      "ambiguity": {
+        "counts": {
+          "fn": 3,
+          "gold_auto": 3,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      },
+      "anchors": {
+        "counts": {
+          "gold_auto": 0,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": null,
+          "link_f1": null,
+          "link_precision_strict": null,
+          "link_recall_strict": null,
+          "link_f1_strict": null,
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "detection_recall": null,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      },
+      "animal": {
+        "counts": {
+          "fn": 2,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      },
+      "astronomical-object": {
+        "counts": {
+          "fn": 3,
+          "gold_auto": 3,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      },
+      "coverage-gap": {
+        "counts": {
+          "fn": 2,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      },
+      "event": {
+        "counts": {
+          "fn": 5,
+          "gold_auto": 5,
+          "gold_held": 0,
+          "partial": 2,
+          "fp": 2
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        }
+      },
+      "homographs": {
+        "counts": {
+          "fn": 3,
+          "suppressed_ok": 1,
+          "gold_auto": 3,
+          "gold_held": 1,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": 1.0
+        }
+      },
+      "multi-word": {
+        "counts": {
+          "fn": 15,
+          "suppressed_ok": 1,
+          "gold_auto": 16,
+          "gold_held": 1,
+          "partial": 2,
+          "tp": 1,
+          "type_hit": 0,
+          "type_strict_hit": 0,
+          "name_hit": 0,
+          "name_strict_hit": 0,
+          "link_hit": 0,
+          "link_strict_hit": 0,
+          "fp": 3
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.25,
+          "recall": 0.0625,
+          "f1": 0.1,
+          "detection_recall": 0.0625,
+          "type_accuracy": 0.0,
+          "type_accuracy_strict": 0.0,
+          "name_accuracy": 0.0,
+          "name_accuracy_strict": 0.0,
+          "span_exactness": 0.333333,
+          "suppression": 1.0
+        }
+      },
+      "nation": {
+        "counts": {
+          "fn": 6,
+          "gold_auto": 6,
+          "gold_held": 1,
+          "partial": 0,
+          "suppressed_ok": 1
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": 1.0
+        }
+      },
+      "object": {
+        "counts": {
+          "fn": 2,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      },
+      "ordinary-nouns": {
+        "counts": {
+          "gold_auto": 0,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": null,
+          "link_f1": null,
+          "link_precision_strict": null,
+          "link_recall_strict": null,
+          "link_f1_strict": null,
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "detection_recall": null,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      },
+      "person": {
+        "counts": {
+          "fp": 1,
+          "fn": 6,
+          "gold_auto": 6,
+          "gold_held": 1,
+          "partial": 1,
+          "suppressed_ok": 1
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": 1.0
+        }
+      },
+      "places": {
+        "counts": {
+          "fp": 1,
+          "fn": 6,
+          "gold_auto": 6,
+          "gold_held": 1,
+          "partial": 1,
+          "suppressed_ok": 1
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": 1.0
+        }
+      },
+      "plant": {
+        "counts": {
+          "fn": 2,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      },
+      "prefixes": {
+        "counts": {
+          "fp": 1,
+          "fn": 8,
+          "gold_auto": 8,
+          "gold_held": 1,
+          "partial": 1,
+          "suppressed_ok": 1
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": 1.0
+        }
+      },
+      "prophecy": {
+        "counts": {
+          "fn": 2,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      },
+      "quoted-scripture": {
+        "counts": {
+          "fp": 2,
+          "fn": 2,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 2
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        }
+      },
+      "saying": {
+        "counts": {
+          "fp": 2,
+          "fn": 2,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 2
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        }
+      },
+      "sefer": {
+        "counts": {
+          "fn": 5,
+          "gold_auto": 6,
+          "gold_held": 0,
+          "partial": 0,
+          "tp": 1,
+          "type_hit": 0,
+          "type_strict_hit": 0,
+          "name_hit": 0,
+          "name_strict_hit": 0,
+          "link_hit": 0,
+          "link_strict_hit": 0,
+          "fp": 1
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.5,
+          "recall": 0.166667,
+          "f1": 0.25,
+          "detection_recall": 0.166667,
+          "type_accuracy": 0.0,
+          "type_accuracy_strict": 0.0,
+          "name_accuracy": 0.0,
+          "name_accuracy_strict": 0.0,
+          "span_exactness": 1.0,
+          "suppression": null
+        }
+      },
+      "skip-zones": {
+        "counts": {
+          "gold_auto": 0,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": null,
+          "link_f1": null,
+          "link_precision_strict": null,
+          "link_recall_strict": null,
+          "link_f1_strict": null,
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "detection_recall": null,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      },
+      "utf16": {
+        "counts": {
+          "gold_auto": 0,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": null,
+          "link_f1": null,
+          "link_precision_strict": null,
+          "link_recall_strict": null,
+          "link_f1_strict": null,
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "detection_recall": null,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        }
+      },
+      "war": {
+        "counts": {
+          "tp": 1,
+          "type_hit": 0,
+          "type_strict_hit": 0,
+          "name_hit": 0,
+          "name_strict_hit": 0,
+          "link_hit": 0,
+          "link_strict_hit": 0,
+          "fp": 1,
+          "fn": 1,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.5,
+          "recall": 0.5,
+          "f1": 0.5,
+          "detection_recall": 0.5,
+          "type_accuracy": 0.0,
+          "type_accuracy_strict": 0.0,
+          "name_accuracy": 0.0,
+          "name_accuracy_strict": 0.0,
+          "span_exactness": 1.0,
+          "suppression": null
+        }
+      }
+    },
+    "per_case": {
+      "validation-article-leaders": {
+        "counts": {
+          "fp": 1,
+          "fn": 3,
+          "gold_auto": 3,
+          "gold_held": 0,
+          "partial": 1
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        },
+        "partials": [
+          {
+            "pred_span": [
+              3,
+              23
+            ],
+            "pred_surface": "דבורה וברק עלו לתבור",
+            "pred_name": "דבורה וברק",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              3,
+              8
+            ],
+            "gold_text": "דבורה",
+            "gold_name": "דבורה",
+            "gold_expected": "auto"
+          }
+        ],
+        "predictions": 1
+      },
+      "validation-article-nation": {
+        "counts": {
+          "fn": 3,
+          "gold_auto": 3,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-article-territory": {
+        "counts": {
+          "fn": 3,
+          "suppressed_ok": 1,
+          "gold_auto": 3,
+          "gold_held": 1,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": 1.0
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-article-prayer": {
+        "counts": {
+          "fn": 3,
+          "suppressed_ok": 1,
+          "gold_auto": 3,
+          "gold_held": 1,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": 1.0
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-article-rabbinic": {
+        "counts": {
+          "fn": 2,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-article-living-kinds": {
+        "counts": {
+          "fn": 2,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-article-objects": {
+        "counts": {
+          "fn": 2,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-article-creation": {
+        "counts": {
+          "fn": 3,
+          "gold_auto": 3,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-article-war": {
+        "counts": {
+          "tp": 1,
+          "type_hit": 0,
+          "type_strict_hit": 0,
+          "name_hit": 0,
+          "name_strict_hit": 0,
+          "link_hit": 0,
+          "link_strict_hit": 0,
+          "fp": 1,
+          "fn": 1,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.5,
+          "recall": 0.5,
+          "f1": 0.5,
+          "detection_recall": 0.5,
+          "type_accuracy": 0.0,
+          "type_accuracy_strict": 0.0,
+          "name_accuracy": 0.0,
+          "name_accuracy_strict": 0.0,
+          "span_exactness": 1.0,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 2
+      },
+      "validation-article-saying": {
+        "counts": {
+          "fp": 2,
+          "fn": 2,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 2
+        },
+        "metrics": {
+          "link_precision": 0.0,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": 0.0,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": 0.0,
+          "suppression": null
+        },
+        "partials": [
+          {
+            "pred_span": [
+              3,
+              22
+            ],
+            "pred_surface": "על יציאת מצרים נאמר",
+            "pred_name": "יציאת מצרים",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              6,
+              17
+            ],
+            "gold_text": "יציאת מצרים",
+            "gold_name": "יציאת מצרים",
+            "gold_expected": "auto"
+          },
+          {
+            "pred_span": [
+              27,
+              30
+            ],
+            "pred_surface": "שלח",
+            "pred_name": "אדם",
+            "pred_acceptance": "auto",
+            "gold_span": [
+              27,
+              37
+            ],
+            "gold_text": "שלח את עמי",
+            "gold_name": "שלח את עמי",
+            "gold_expected": "auto"
+          }
+        ],
+        "predictions": 2
+      },
+      "validation-article-prophecy": {
+        "counts": {
+          "fn": 2,
+          "gold_auto": 2,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": 0.0,
+          "link_f1": 0.0,
+          "link_precision_strict": null,
+          "link_recall_strict": 0.0,
+          "link_f1_strict": 0.0,
+          "precision": null,
+          "recall": 0.0,
+          "f1": 0.0,
+          "detection_recall": 0.0,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      },
+      "validation-article-excluded": {
+        "counts": {
+          "gold_auto": 0,
+          "gold_held": 0,
+          "partial": 0
+        },
+        "metrics": {
+          "link_precision": null,
+          "link_recall": null,
+          "link_f1": null,
+          "link_precision_strict": null,
+          "link_recall_strict": null,
+          "link_f1_strict": null,
+          "precision": null,
+          "recall": null,
+          "f1": null,
+          "detection_recall": null,
+          "type_accuracy": null,
+          "type_accuracy_strict": null,
+          "name_accuracy": null,
+          "name_accuracy_strict": null,
+          "span_exactness": null,
+          "suppression": null
+        },
+        "partials": [],
+        "predictions": 0
+      }
+    }
+  },
+  "diagnostics": {
+    "chunks": 42,
+    "valid_response_chunks": 17,
+    "conflicting_mentions": 8,
+    "invalid_response_chunks": 25,
+    "invalid_response:invalid normalized Hebrew intended name": 6,
+    "invalid_response:mention indices are noncontiguous or overlap": 9,
+    "invalid_response:invalid mention bounds": 9,
+    "invalid_response:OTHER requires an empty intended name": 1
+  },
+  "complete_valid_responses": false,
+  "environment": {
+    "device": "cuda:0",
+    "dtype": "bfloat16",
+    "tf32": false,
+    "torch": "2.14.1+cu126",
+    "cuda_runtime": "12.6",
+    "gpu_name": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "gpu_total_memory_bytes": 8585216000,
+    "gpu_compute_capability": [
+      8,
+      9
+    ],
+    "transformers": "5.22.2",
+    "tokenizers": "0.23.3",
+    "bitsandbytes": "0.50.2",
+    "quantization": null,
+    "output_normalization_version": "target-key-v1"
+  },
+  "qualification": {
+    "split": "validation",
+    "gold_sha256": {
+      "pesukim.json": "f3d6e14e3e9ab55608388868e20bcbea433220b74bb901188685a18236ecba50",
+      "articles.json": "8459d1ee6fc36e0d48c2c0af70e6944415a83c173aea9081cc0f379a41f07f3a"
+    },
+    "postprocessor_revision": "target-key-v1",
+    "current_cache_revision": "dictalm-3-1.7b-detect@5add44d6+local-detect-v2+target-key-v1+3d3c3b13a75a",
+    "old_replay_enabled": false,
+    "captured_source_generation_revision": null,
+    "actual_new_gpu_stats": {
+      "generation_seconds": 348.261,
+      "generated_requests": 42,
+      "input_tokens": 24698,
+      "output_tokens": 6723
+    },
+    "known_invalid_policy": "qualification-only raw evidence replay",
+    "no_inference_runtime_claim_for_replayed_rows": true,
+    "returned_response_sources": {
+      "new_gpu_generation": 42
+    },
+    "actual_generation_profiles": {
+      "dictalm-3-1.7b-detect@5add44d6+local-detect-v2+target-key-v1+3d3c3b13a75a": 42
+    },
+    "distinct_old_captured_request_keys": [],
+    "distinct_failed_qualification_replay_keys": [],
+    "request_evidence": [
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/6caf919904041e06bcffb9bf262ccb80473e5b7726268c25beab1ba18c76f56d.7ef2549919e2440eaf5fbe3e97b7e0a4.json",
+        "sha256": "dbbd64bea29aa4bc8137996e49eb2379716800b4bf6f73ef70a1df9db25a2574",
+        "request_sha256": "6caf919904041e06bcffb9bf262ccb80473e5b7726268c25beab1ba18c76f56d",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/c0814fd684bc2592b82e08deddc696581d531586974a1358070fd9de3854051a.bfa0f932f79d41b29a866c270dc6ba7a.json",
+        "sha256": "39961cbb78b736fb412f022011dc860c48f8565ec251ff5fae3dcd245482d609",
+        "request_sha256": "c0814fd684bc2592b82e08deddc696581d531586974a1358070fd9de3854051a",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/ac25ab2d638ce95a9bfc768b14ced056fb6a59592fc96696d296d806b9e4eee3.fa0b5c56eec748e28336a0651e79bc2c.json",
+        "sha256": "e088c9d9784c6c697175a7551371046303c678f8d5557df693c2e934d16c485e",
+        "request_sha256": "ac25ab2d638ce95a9bfc768b14ced056fb6a59592fc96696d296d806b9e4eee3",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/ccab439c934bf10d7f60c8ec005856b5c030505c06b28fd519536c00f71a92c6.98a2d46292ff4fb0b6085f50085d083d.json",
+        "sha256": "165e24bd6427ba26a36a2c78b967b0ffca07a5a64a79253d46724fcdbd00be1b",
+        "request_sha256": "ccab439c934bf10d7f60c8ec005856b5c030505c06b28fd519536c00f71a92c6",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/b41ce4ede426487a68aa3508c5b4b3fba033cf5c1cbdb0637c248558b5e614c4.0f5255f3bfdd48b880c23558485903dc.json",
+        "sha256": "5d19db3b3625f67f1553ccbf0234d66f45dcda87cb33b04a16a00765461ec253",
+        "request_sha256": "b41ce4ede426487a68aa3508c5b4b3fba033cf5c1cbdb0637c248558b5e614c4",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/e091e0057e2d37545f9bf6da809421da12bfaf99fdbbec5033eae990b28a129f.fc866aad35e4468c97814f65bc0ffd0b.json",
+        "sha256": "4e0fa12225a18b08b17ac7f0d1432420d9c67f8e6d800938a01d20a09fb7a357",
+        "request_sha256": "e091e0057e2d37545f9bf6da809421da12bfaf99fdbbec5033eae990b28a129f",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/9b595750f45d92540fa226dd43f9f909c7ba75d2ded673ac5add7b93b2f8e4c1.772c5ae8cca74a66bcb1a7ef7f984df8.json",
+        "sha256": "354cdb68b92be3fdf3ab4aeb32a8c44b2784ef2aafedca99c03c29812d6a16c7",
+        "request_sha256": "9b595750f45d92540fa226dd43f9f909c7ba75d2ded673ac5add7b93b2f8e4c1",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/ef631f39c58981a330b2e254313ef004059f6e35ed806a83f036b3050dc712ac.8835e023e5d647d9bfc9c0b0dd54b54b.json",
+        "sha256": "ab8785220744a84520d6dd6142f830095d3a7af6a6e76223d5befeedf49032c5",
+        "request_sha256": "ef631f39c58981a330b2e254313ef004059f6e35ed806a83f036b3050dc712ac",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/3ce51c1718c721e8f579db14989ba79e8aa6c594e05fcf7ef7beabe667ebec1b.dbea8212951f412c91cab5a94e0a3531.json",
+        "sha256": "4a654d6368bbe0342e26f2e56e4e04759b6305493223c0a8d688c84c291c810c",
+        "request_sha256": "3ce51c1718c721e8f579db14989ba79e8aa6c594e05fcf7ef7beabe667ebec1b",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/9bb06d8e062d789fe64ca572d504894cf57eb27defca258fcb69a2bd9e410649.f28b99e373b74030b3a62d7128476467.json",
+        "sha256": "5f72b6465c1a2574b5e962de08717698459291d1e7dd73b607e7ba1ea43b0493",
+        "request_sha256": "9bb06d8e062d789fe64ca572d504894cf57eb27defca258fcb69a2bd9e410649",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/a938b25e4cfac42c49155af15bda70b4436ea934e266894000bfcedfbe5e7bfe.2b3ec8e32e384032b781c7f9d0faa0d9.json",
+        "sha256": "6c9650a1bda727c03abe07a85d38fc07e7f4469fe936ecde442ebecc6a3b02ce",
+        "request_sha256": "a938b25e4cfac42c49155af15bda70b4436ea934e266894000bfcedfbe5e7bfe",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/a44117726b193f8a3b80e234da0182828fcbda4ae4334c3b1c09d114b7f14bd9.390912cc6f4f4adfa811527b3909515b.json",
+        "sha256": "a0f70873706b6cfb436a61e23dc86f7234656dafe30b65bdbda267ca41408ac2",
+        "request_sha256": "a44117726b193f8a3b80e234da0182828fcbda4ae4334c3b1c09d114b7f14bd9",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/d37fe10dfd886af983ab4ffe56317ebf0df151594c9253f2a91ac5a075f97792.9233109d1d02474db3159df60003909b.json",
+        "sha256": "d49b370f010be88a2e1fb85f105f125d9e177e89e403d30f9a52509d9658e414",
+        "request_sha256": "d37fe10dfd886af983ab4ffe56317ebf0df151594c9253f2a91ac5a075f97792",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/fb7961a2d2d4be2d9f48731a3ab95eb3d1ae9fe10321ff19c9041262de373e6e.48be2bf0a75d40b88b219172d7111e05.json",
+        "sha256": "8728f46966bc35681f72d32fddbf0e379fa308b8cd598a87338f0f55e252c796",
+        "request_sha256": "fb7961a2d2d4be2d9f48731a3ab95eb3d1ae9fe10321ff19c9041262de373e6e",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/ca1808904df84c6217de595518152723999793d3a1248d0b3dd3a0253b841093.6a9ddbe42a7540d2b2291524994ddfac.json",
+        "sha256": "b1abbaaacd8533711fcfd91fc71f9045d22c6d410370d97e08f82fb765bbb76b",
+        "request_sha256": "ca1808904df84c6217de595518152723999793d3a1248d0b3dd3a0253b841093",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/48f23ec8684df544d968b0c710056cce5e96bc8239eb0f005c544dd8f31cc2c5.91dec3c150a3428b8cd8b723855cfd46.json",
+        "sha256": "8b7a5b261bab31d93aedaffa71414abdc65fd0a4f3234559e9b2c6863592cba6",
+        "request_sha256": "48f23ec8684df544d968b0c710056cce5e96bc8239eb0f005c544dd8f31cc2c5",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/686bf2d7841616c0b9e93ffe9ea55e5cb98bc8ea6993c7347be62fb995e500bd.64f866439f31465998e9760daa1f4614.json",
+        "sha256": "cfd12bb14d1b1781d30074fc9620a2225420e15cbac687b560d5b8925a773a56",
+        "request_sha256": "686bf2d7841616c0b9e93ffe9ea55e5cb98bc8ea6993c7347be62fb995e500bd",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/22aa09dd4a78bfa6ac698e1f6148be81d82fa223d578dccb18f45b55ee853319.af36c2db94814497a93ff725fb685b2f.json",
+        "sha256": "2a1b4e5ab6c043752aea2d191c03ea856779300673192de121f6a88fdf3441af",
+        "request_sha256": "22aa09dd4a78bfa6ac698e1f6148be81d82fa223d578dccb18f45b55ee853319",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/b9f24031f0df45d77a08879a58fc95f7426027be2030dac7423c65e49c811778.4a21c03ddf404c119493ae5c119e1d84.json",
+        "sha256": "d0543bc60acb3afa3f05a0dd847f954c06a81590104eb5fb05069cbfebf40db0",
+        "request_sha256": "b9f24031f0df45d77a08879a58fc95f7426027be2030dac7423c65e49c811778",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/743ca83e660d758c98c508506101fb8ca2ba43560230e6a5fccdcf4dcc3a96e8.d3a5f547c6c6401db19b6874b82c200b.json",
+        "sha256": "a29141da1776109bb5a1c4eda2c2ffe796fc0d19827586629c0beeb06b799bb4",
+        "request_sha256": "743ca83e660d758c98c508506101fb8ca2ba43560230e6a5fccdcf4dcc3a96e8",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/834f397184477fb316b8b3becb8f7d290b63b4b9ea9077676851d37bb17de23e.026bdda2f2214b05a5edd8a1398ea224.json",
+        "sha256": "b0d6fdda32da478a021c85413a35ca2c45676438c2abf94a23567872e7727fb1",
+        "request_sha256": "834f397184477fb316b8b3becb8f7d290b63b4b9ea9077676851d37bb17de23e",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/d831c495535797a1cc1e90c7945c259f689bd1889a56943affa1c588ac090473.b026a9b0c6e740c583cc66eb00e1e8d5.json",
+        "sha256": "c7514f008501b6c439919d52bee6aed79a7e24cf7fe65411e3b4313772909a5c",
+        "request_sha256": "d831c495535797a1cc1e90c7945c259f689bd1889a56943affa1c588ac090473",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/b91b7f3ad0979973ff8f2fdc9ed12b4f7aacf86cc4a5b8410b94b9e9cc887b9b.c713076c7fe64ae19c824be7824f379a.json",
+        "sha256": "3d4927c9ebf52c548fcbbf5d166bf295b46a66505f1a4a731b657fb5571d54a0",
+        "request_sha256": "b91b7f3ad0979973ff8f2fdc9ed12b4f7aacf86cc4a5b8410b94b9e9cc887b9b",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/3070e0c339ebf6a81b339def236b5f82b12f964076b2aa8849cb1cafe3a8c2aa.a6b2af24733b476fa20af9e8edb5f22d.json",
+        "sha256": "56d8e441f6993dc82ec0e1144e7ea977760f1b671a8482eaef4052d2c9cab908",
+        "request_sha256": "3070e0c339ebf6a81b339def236b5f82b12f964076b2aa8849cb1cafe3a8c2aa",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/790f995014ac1d81593cece0305b86364387e4f743e73a8f8bb3df86e3bd438c.63a64487634849b284820172c5a98afb.json",
+        "sha256": "624ea3f227c64469f8fd91767313f65a5cafc0b6ef918be025e232a0884e09eb",
+        "request_sha256": "790f995014ac1d81593cece0305b86364387e4f743e73a8f8bb3df86e3bd438c",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/2c03501f340d0137120d6f57cfb12d313ca4b3329ff5a12002e45ee237cccf24.9f5300708e99490c9aeade14dc4474c9.json",
+        "sha256": "343f956c26e92775e7e866539af9ebf1daaadbaffdac8aa4b923887bfc056c75",
+        "request_sha256": "2c03501f340d0137120d6f57cfb12d313ca4b3329ff5a12002e45ee237cccf24",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/c9de04cc360587b386e2bb90443c4b354761a3110fdcf079730674042d861535.454b1d2bde8746219c88cd682eba1c59.json",
+        "sha256": "47593d19ca2809245a4ff4d1224d47f59d9919bfa1918293d1f7a5270c6e6391",
+        "request_sha256": "c9de04cc360587b386e2bb90443c4b354761a3110fdcf079730674042d861535",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/162cc694a16e5acbf19e8868caa4ffd61058a052dd807a3c361df3472ed966a5.b9ca8874c77043f2b85a53de7dfee8a7.json",
+        "sha256": "fff01d31a0b3aa0b1d5760309125ce86ea94d6ea02de9c95c330b2a8bc5b2005",
+        "request_sha256": "162cc694a16e5acbf19e8868caa4ffd61058a052dd807a3c361df3472ed966a5",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/d4912bc0596e6ac4f55714410850dcfa22b35583f5f48678861a394c34a8f914.8d6c475a77044623ba8de2bcae919977.json",
+        "sha256": "6b0e5e6cecadf7e1b972e5122424dc642026b35cc4dd1340d697c0daa931bd4a",
+        "request_sha256": "d4912bc0596e6ac4f55714410850dcfa22b35583f5f48678861a394c34a8f914",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/cf326fa5b0d3e07cdb9eff1d92b0eb17265cfcdf83ca73abb1f659bf4e6d65d0.2123721286914f6eb40bd369c64ab5e2.json",
+        "sha256": "d88785c1c8b76b8ce067bdb52113a31890657f8b470a9251d91d371e890cc459",
+        "request_sha256": "cf326fa5b0d3e07cdb9eff1d92b0eb17265cfcdf83ca73abb1f659bf4e6d65d0",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/95ab499c7f3151a43b2b03f54417891e97de8ce9e2d305e240e6b44efcade316.aaa1945e6b974f298f95c23dece78a58.json",
+        "sha256": "938e7b35f871eab1d2b5fc5b9daf4ebf48c252c93f4447a7ff3eecb7d4acf36f",
+        "request_sha256": "95ab499c7f3151a43b2b03f54417891e97de8ce9e2d305e240e6b44efcade316",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/93d66387215aff77697d8e6d9a1431a4b2cd75634fc1ddcf1a867b3c5bc04a85.c3e3ffc83a2149c59546c928ba5d9e04.json",
+        "sha256": "f1c401c00c8fea054429dc4b1db886c007449c1db8ceb1ad1e078a48b440183b",
+        "request_sha256": "93d66387215aff77697d8e6d9a1431a4b2cd75634fc1ddcf1a867b3c5bc04a85",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/814b792f3d0123a8e2d93bb424a45843190b0d8e04826909280e0f18809b1387.8220f20359e6496d87d2b35073f62a8b.json",
+        "sha256": "2b6faf39b5d4dba7ebc0e993a54006e8edd2ae0f62245fce4b18111a8ce1adf3",
+        "request_sha256": "814b792f3d0123a8e2d93bb424a45843190b0d8e04826909280e0f18809b1387",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/94a1aa3984be75e3841961aa7f7fe32039f79b467a66e25c5b07c21a6e119379.6afef4a86c664821baff801d7b84d4d9.json",
+        "sha256": "ed6d8cb67d1d60e08802c7599a829d93a98065f2b905286de5c8083ead1a685b",
+        "request_sha256": "94a1aa3984be75e3841961aa7f7fe32039f79b467a66e25c5b07c21a6e119379",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/443e1bec1e2c371c654ced967383937138bf998f05bdba1210af81b572dd9db9.7bf03ce10cff4f1294b8a232cc010435.json",
+        "sha256": "eb4d90b1f1718be1d33da6367d2092b097c4d3ab01ff842d76ad84130bffc6d4",
+        "request_sha256": "443e1bec1e2c371c654ced967383937138bf998f05bdba1210af81b572dd9db9",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/9e7017acd77edaaa3485f8c073a485c5cbfd2338fabf8faa1824e414ca896751.04d7c78f53d041f093c5836c2c701c56.json",
+        "sha256": "4fab7d4d5607e55afd4ba6a379269b7b6ddb7db4a0240832f93750dec6137dac",
+        "request_sha256": "9e7017acd77edaaa3485f8c073a485c5cbfd2338fabf8faa1824e414ca896751",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/49cd9110ee5f3b9bcb2b70a8eb61f852f7484d24f2ec8797a61e733d87609ef9.f0c88c20a2104452953ed350f2545502.json",
+        "sha256": "9914f9414c120947074c8cf5d2a49a4f7def156b2bbb796edb2e93a2d31b9db5",
+        "request_sha256": "49cd9110ee5f3b9bcb2b70a8eb61f852f7484d24f2ec8797a61e733d87609ef9",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/bdf643f663d4e2a9404b6a79d25959cd34999fd1921c582a642235e97c014489.48417e2645f04a7aa4a9b95248329a48.json",
+        "sha256": "4c606b88cdde97f0a8531f215efdd406ea0dbb6de8ba4f717e072945765eb9b2",
+        "request_sha256": "bdf643f663d4e2a9404b6a79d25959cd34999fd1921c582a642235e97c014489",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/a5f2a02657c7dd0c2cf01faee51fbadccfcb0ee2b516cb6baf57c6c8667a2e1a.66db9e5d2f624875ad6803da00d7e57b.json",
+        "sha256": "12926623a5d390a408ff7294a243fd4bb339dd38f405cda3273a1f7ab29a9f2a",
+        "request_sha256": "a5f2a02657c7dd0c2cf01faee51fbadccfcb0ee2b516cb6baf57c6c8667a2e1a",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/f6e29ba07f27f45b7fb8336ebcf9d897826a8a62869cb1cf6bf95a493ee516ca.9fd5e7751deb414a99bbde5f6e927625.json",
+        "sha256": "861fc81e200e759a77dc421312899366da560bccdd2f2652375f6e03f764c41b",
+        "request_sha256": "f6e29ba07f27f45b7fb8336ebcf9d897826a8a62869cb1cf6bf95a493ee516ca",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/7c530f4f2729defe2fb5ddd6a4de1913082cc2dd45b072b83c7e01583218016c.b3958236dc614bdab9faa8eab8b02db2.json",
+        "sha256": "8dde7122ec562cc8de5ce1bc2619a2d372d36745ba1d7f8781c316ae9f5a7143",
+        "request_sha256": "7c530f4f2729defe2fb5ddd6a4de1913082cc2dd45b072b83c7e01583218016c",
+        "source": "new_gpu_generation"
+      },
+      {
+        "path": "qualification-request-evidence/dictalm-3-1.7b-retype/detect/ec024259dbb912ec966361725b0fc8995c0eef23fd9cc0514636bf92f147188d.dec3db4e84644ef5a01184e9d226607f.json",
+        "sha256": "fdb6a16d368758a114f3186ee6205d76f8c07a9d174ad7f9164f4dd8829f9c0e",
+        "request_sha256": "ec024259dbb912ec966361725b0fc8995c0eef23fd9cc0514636bf92f147188d",
+        "source": "new_gpu_generation"
+      }
+    ],
+    "invalid_response_evidence": [
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/e091e0057e2d37545f9bf6da809421da12bfaf99fdbbec5033eae990b28a129f.fc866aad35e4468c97814f65bc0ffd0b.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/9b595750f45d92540fa226dd43f9f909c7ba75d2ded673ac5add7b93b2f8e4c1.772c5ae8cca74a66bcb1a7ef7f984df8.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/ef631f39c58981a330b2e254313ef004059f6e35ed806a83f036b3050dc712ac.8835e023e5d647d9bfc9c0b0dd54b54b.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/3ce51c1718c721e8f579db14989ba79e8aa6c594e05fcf7ef7beabe667ebec1b.dbea8212951f412c91cab5a94e0a3531.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/a938b25e4cfac42c49155af15bda70b4436ea934e266894000bfcedfbe5e7bfe.2b3ec8e32e384032b781c7f9d0faa0d9.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/a44117726b193f8a3b80e234da0182828fcbda4ae4334c3b1c09d114b7f14bd9.390912cc6f4f4adfa811527b3909515b.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/48f23ec8684df544d968b0c710056cce5e96bc8239eb0f005c544dd8f31cc2c5.91dec3c150a3428b8cd8b723855cfd46.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/686bf2d7841616c0b9e93ffe9ea55e5cb98bc8ea6993c7347be62fb995e500bd.64f866439f31465998e9760daa1f4614.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/22aa09dd4a78bfa6ac698e1f6148be81d82fa223d578dccb18f45b55ee853319.af36c2db94814497a93ff725fb685b2f.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/743ca83e660d758c98c508506101fb8ca2ba43560230e6a5fccdcf4dcc3a96e8.d3a5f547c6c6401db19b6874b82c200b.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/834f397184477fb316b8b3becb8f7d290b63b4b9ea9077676851d37bb17de23e.026bdda2f2214b05a5edd8a1398ea224.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/d831c495535797a1cc1e90c7945c259f689bd1889a56943affa1c588ac090473.b026a9b0c6e740c583cc66eb00e1e8d5.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/b91b7f3ad0979973ff8f2fdc9ed12b4f7aacf86cc4a5b8410b94b9e9cc887b9b.c713076c7fe64ae19c824be7824f379a.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/3070e0c339ebf6a81b339def236b5f82b12f964076b2aa8849cb1cafe3a8c2aa.a6b2af24733b476fa20af9e8edb5f22d.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/790f995014ac1d81593cece0305b86364387e4f743e73a8f8bb3df86e3bd438c.63a64487634849b284820172c5a98afb.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/c9de04cc360587b386e2bb90443c4b354761a3110fdcf079730674042d861535.454b1d2bde8746219c88cd682eba1c59.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/95ab499c7f3151a43b2b03f54417891e97de8ce9e2d305e240e6b44efcade316.aaa1945e6b974f298f95c23dece78a58.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/93d66387215aff77697d8e6d9a1431a4b2cd75634fc1ddcf1a867b3c5bc04a85.c3e3ffc83a2149c59546c928ba5d9e04.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/814b792f3d0123a8e2d93bb424a45843190b0d8e04826909280e0f18809b1387.8220f20359e6496d87d2b35073f62a8b.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/94a1aa3984be75e3841961aa7f7fe32039f79b467a66e25c5b07c21a6e119379.6afef4a86c664821baff801d7b84d4d9.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/443e1bec1e2c371c654ced967383937138bf998f05bdba1210af81b572dd9db9.7bf03ce10cff4f1294b8a232cc010435.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/9e7017acd77edaaa3485f8c073a485c5cbfd2338fabf8faa1824e414ca896751.04d7c78f53d041f093c5836c2c701c56.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/49cd9110ee5f3b9bcb2b70a8eb61f852f7484d24f2ec8797a61e733d87609ef9.f0c88c20a2104452953ed350f2545502.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/7c530f4f2729defe2fb5ddd6a4de1913082cc2dd45b072b83c7e01583218016c.b3958236dc614bdab9faa8eab8b02db2.validation.json",
+      "qualification-request-evidence/dictalm-3-1.7b-retype/detect/ec024259dbb912ec966361725b0fc8995c0eef23fd9cc0514636bf92f147188d.dec3db4e84644ef5a01184e9d226607f.validation.json"
+    ]
+  }
+}
