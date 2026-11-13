@@ -31,14 +31,11 @@ public static class AccessibleContentText
 
 	private static void Collect(Element node, List<string> parts)
 	{
-		if (node is IVisualTreeElement visual)
+		foreach (var child in ((IVisualTreeElement)node).GetVisualChildren())
 		{
-			foreach (var child in visual.GetVisualChildren())
+			if (child is Element element)
 			{
-				if (child is Element element)
-				{
-					CollectElement(element, parts);
-				}
+				CollectElement(element, parts);
 			}
 		}
 	}

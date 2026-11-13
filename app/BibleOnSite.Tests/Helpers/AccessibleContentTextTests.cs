@@ -1,5 +1,6 @@
 using BibleOnSite.Controls;
 using BibleOnSite.Helpers;
+using Microsoft.Maui;
 using Microsoft.Maui.Controls;
 
 namespace BibleOnSite.Tests.Helpers;
@@ -135,5 +136,43 @@ public class AccessibleContentTextTests
         };
 
         AccessibleContentText.ComposeName(view).Should().Be("מה לחפש");
+    }
+
+    [Fact]
+    public void ComposeName_ReturnsEmptyForNonVisualElement() =>
+        AccessibleContentText.ComposeName(new NonVisualElement()).Should().BeEmpty();
+
+    [Fact]
+    public void ComposeName_IgnoresNativeVisualChildrenAndKeepsReadableSiblings()
+    {
+        var root = new VisualRoot(new NativeVisualNode(), new NonVisualElement(), new Label { Text = "כותרת" });
+
+        AccessibleContentText.ComposeName(root).Should().Be("כותרת");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void ComposeName_ReturnsEmptyForLabelWithoutTextOrFormatting(string? text)
+    {
+        var root = new TappableView { Content = new Label { Text = text } };
+
+        AccessibleContentText.ComposeName(root).Should().BeEmpty();
+    }
+
+    private sealed class NonVisualElement : Element;
+
+    private sealed class VisualRoot(params IVisualTreeElement[] children) : Element, IVisualTreeElement
+    {
+        public IReadOnlyList<IVisualTreeElement> GetVisualChildren() => children;
+
+        public IVisualTreeElement? GetVisualParent() => null;
+    }
+
+    private sealed class NativeVisualNode : IVisualTreeElement
+    {
+        public IReadOnlyList<IVisualTreeElement> GetVisualChildren() => [];
+
+        public IVisualTreeElement? GetVisualParent() => null;
     }
 }

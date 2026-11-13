@@ -16,8 +16,11 @@ const directory = dirname(fileURLToPath(import.meta.url));
 export function runUntilComplete(spawn, isComplete, reset, attempts = 3) {
   let failure;
   for (let attempt = 1; attempt <= attempts && !isComplete(); attempt++) {
-    reset();
     try {
+      // A timed-out child keeps running briefly as an orphan, so `reset` can
+      // itself fail on a directory the orphan is still writing — that is a
+      // failed attempt, not a reason to abort the remaining retries.
+      reset();
       spawn();
       failure = undefined;
     } catch (error) {
@@ -46,7 +49,11 @@ export function prepareWda() {
       "driver", "run", "xcuitest", "download-wda", "--", `--outdir=${destination}`,
       "--kind=sim", "--platform=iOS"], { cwd: directory, stdio: "inherit", timeout: 300000, windowsHide: true }),
     () => existsSync(marker),
-    () => rmSync(destination, { recursive: true, force: true }));
+    // Bounded rm retries bridge the window where a timed-out child is still
+    // finishing/cleaning its half-extraction (ENOTEMPTY while it writes —
+    // observed ~3s on the iOS shards). Linear backoff caps this at ~11s per
+    // reset; beyond that the attempt fails honestly instead of stalling.
+    () => rmSync(destination, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }));
   if (!existsSync(marker)) {
     throw new Error(`The prebuilt iOS simulator agent is missing: ${app}`);
   }
