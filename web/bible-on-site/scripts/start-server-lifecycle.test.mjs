@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { boundServer, fixture, freePort } from "./start-server-test-kit.mjs";
+import {
+	boundServer,
+	eventLoopMarkerMs,
+	fixture,
+	freePort,
+} from "./start-server-test-kit.mjs";
 
 test("the launcher probes readiness as soon as the listener accepts", {
 	timeout: 15_000,
@@ -16,7 +21,10 @@ test("the launcher probes readiness as soon as the listener accepts", {
 	// The fixture answers every path, so the probe's first response is the
 	// warm-up trigger plus startup timing evidence — long before any
 	// simulated container check could arrive.
-	await server.waitFor("Website readiness probe: HTTP 200");
+	await server.waitFor(
+		"Website readiness probe: HTTP 200",
+		eventLoopMarkerMs,
+	);
 	server.wrapper.kill("SIGINT");
 	// boundServer has no SIGINT handler, so the child dies by the signal. POSIX
 	// forwards SIGINT through the wrapper and reports 128+SIGINT; Windows
