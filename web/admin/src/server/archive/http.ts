@@ -80,6 +80,13 @@ async function api(
 	const user = (await currentAdmin(request)) || (await currentArchiver(jar));
 	if (!user) throw new UploadError("יש להיכנס לחשבון", 401);
 	if (request.method === "GET") {
+		// Lightweight role lookup for the shared archive top bar — intentionally
+		// skips directory resolution and listing work.
+		if (url.searchParams.has("session"))
+			return Response.json({
+				isAdmin: user.role === "admin",
+				username: user.name || user.username,
+			});
 		const id = url.searchParams.get("download");
 		if (!id) {
 			const directoryId = request.headers.get("X-Archive-Directory") || "";
