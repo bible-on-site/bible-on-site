@@ -80,14 +80,15 @@
                      BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
                      Margin="0,4,0,0"/>
         </VerticalStackLayout>
-        <!-- Scrollable content area for perushim list -->
+        <!-- Scrollable content area for perushim list — the rows bind the
+             name-filtered view so search narrows the picker in place (#3306). -->
         <CollectionView x:Name="PerushimCollection" Grid.Row="1" Margin="16,8,16,0"
-                        ItemsSource="{Binding Perushim}"
+                        ItemsSource="{Binding FilteredPerushim}"
                         VerticalScrollBarVisibility="Never"
                         SelectionMode="None"
                         VerticalOptions="Fill">
                 <CollectionView.Triggers>
-                    <DataTrigger TargetType="CollectionView" Binding="{Binding Perushim.Count}" Value="0">
+                    <DataTrigger TargetType="CollectionView" Binding="{Binding FilteredPerushim.Count}" Value="0">
                         <Setter Property="IsVisible" Value="False"/>
                     </DataTrigger>
                 </CollectionView.Triggers>
@@ -149,7 +150,7 @@
              native measurement/overflow and its nested scroll indicator. -->
         <ScrollView x:Name="PerushimEmptyState" AutomationId="PerushimEmptyState"
                     Grid.Row="1" Margin="16,8,16,0"
-                    IsVisible="{Binding Perushim.Count, Converter={StaticResource ZeroToTrueConverter}}"
+                    IsVisible="{Binding FilteredPerushim.Count, Converter={StaticResource ZeroToTrueConverter}}"
                     VerticalScrollBarVisibility="Never">
             <VerticalStackLayout Spacing="8" Padding="0,8,0,102">
                 <Label Text="📚" FontSize="32" HorizontalTextAlignment="Center"
