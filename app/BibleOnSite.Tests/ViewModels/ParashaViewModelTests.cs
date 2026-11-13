@@ -452,7 +452,7 @@ public class ParashaViewModelTests
         fixture.Model.HasPerushim.Should().BeTrue();
         fixture.Model.FilteredPerushim.Should().NotBeEmpty();
 
-        // The selection-menu search narrows the list without hiding entries.
+        // The selection-menu search narrows the bound rows to the match (#3306).
         fixture.Model.PerushNameFilter = "Ramb";
         fixture.Model.FilteredPerushim.Select(p => p.Name).Should().Equal("Ramban");
         fixture.Model.PerushimEmptyMessage.Should().Be("לא נמצאו פירושים תואמים");

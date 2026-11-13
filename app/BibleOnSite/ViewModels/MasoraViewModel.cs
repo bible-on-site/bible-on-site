@@ -198,15 +198,16 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
     /// <summary>Whether the current unit has any overlapping articles.</summary>
     public bool HasArticles => ArticlesCount > 0;
 
-    /// <summary>Find commentary names in the selection menu — scrolls to the
-    /// first match rather than hiding the rest.</summary>
+    /// <summary>Find commentary names in the selection menu — narrows the
+    /// visible picker rows to matching perushim (#3306).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FilteredPerushim))]
     [NotifyPropertyChangedFor(nameof(PerushimEmptyMessage))]
     private string _perushNameFilter = string.Empty;
 
-    /// <summary>Perushim matching <see cref="PerushNameFilter"/> — the list
-    /// shows all of <see cref="Perushim"/>; this drives search scroll-to.</summary>
+    /// <summary>Perushim matching <see cref="PerushNameFilter"/> — the picker
+    /// rows bind this, so typing filters the list in place; an empty filter
+    /// restores all of <see cref="Perushim"/>.</summary>
     public List<Perush> FilteredPerushim
     {
         get

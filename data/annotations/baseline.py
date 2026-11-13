@@ -9,6 +9,7 @@ No entry lookups anywhere — the candidate universe is the tagged token
 stream itself, per the issue's non-gating requirement.
 """
 
+import collections
 import hashlib
 import json
 from pathlib import Path
@@ -19,9 +20,11 @@ CANONICAL = (
     ROOT / "web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json"
 )
 LEXICON = Path(__file__).with_name("morphhb-proper-nouns.json.gz")
-MODEL_REVISION = "morphhb-lexical-baseline@3d15126f+contract1"
+MODEL_REVISION = "morphhb-lexical-baseline@3d15126f+aligned2+names2+contract1"
 
 DIACRITICS = re.compile("[\u0591-\u05bd\u05bf-\u05c7]")
+ZERO_WIDTH = re.compile("[\u200b\u200c\u200d\ufeff]")
+FINAL_LETTERS = str.maketrans("כמנפצ", "ךםןףץ")
 
 # morphhb book file -> (canonical sefer index, additionals index).
 # The canonical dump folds the split books into one sefer each:
@@ -69,12 +72,54 @@ def strip_diacritics(text):
 
 def normalize_name(text):
     """Surface -> normalized intended name: no vowels/taamim, maqaf as space."""
-    return " ".join(strip_diacritics(text).split())
+    return " ".join(ZERO_WIDTH.sub("", strip_diacritics(text)).split())
 
 
 def text_segments(pasuk):
     """Canonical text-bearing segment indices (qri + ktiv)."""
     return [i for i, s in enumerate(pasuk["segments"]) if s["type"] in ("qri", "ktiv")]
+
+
+def surface_key(text):
+    """Compare Hebrew source letters without morphology separators or marks.
+
+    This is an alignment view only. It deliberately preserves consonantal
+    spelling: a different qri/ktiv spelling is not evidence of the same span.
+    Stored canonical text is never rewritten.
+    """
+    return "".join(char for char in text if "א" <= char <= "ת")
+
+
+def aligned_token_segments(pasuk, tokens):
+    """Validate positional matches, then recover unique in-verse matches.
+
+    The morphology and canonical sources do not always count words/verses
+    identically. Never transfer an annotation onto a different word merely
+    because its index exists. Ambiguous or absent matches are omitted; there
+    is no fuzzy spelling match or search across verse boundaries.
+    """
+    indices = text_segments(pasuk)
+    keys = {index: surface_key(pasuk["segments"][index].get("value", ""))
+            for index in indices}
+    aligned = {}
+    used = set()
+    pending = []
+    for token in tokens:
+        word, _, surface, _ = token
+        wanted = surface_key(surface)
+        index = indices[word] if 0 <= word < len(indices) else None
+        if wanted and index is not None and keys[index] == wanted and index not in used:
+            aligned[word] = index
+            used.add(index)
+        else:
+            pending.append((word, wanted))
+    for word, wanted in pending:
+        matches = [index for index in indices
+                   if wanted and keys[index] == wanted and index not in used]
+        if len(matches) == 1:
+            aligned[word] = matches[0]
+            used.add(matches[0])
+    return aligned
 
 
 # Inseparable-prefix letters, stripped for intended-name normalization.
@@ -89,8 +134,67 @@ def strip_prefix_parts(surface):
     return "/".join(parts)
 
 
+def preferred_lemma_names(lexicon):
+    """Attested unsuffixed name forms from the same pinned morphology data.
+
+    The runtime index is cached on the loaded lexicon only; it is never
+    written to the artifact or derived from entries or evaluation labels.
+    A tied vote supplies no preferred form, so ambiguity cannot invent a
+    canonical spelling. Compound components keep their '+' marker in the
+    key: an unsuffixed tail must never rename the suffixed head merely
+    because morphology assigns the same root ID to both. This is used
+    only to remove inflectional suffixes.
+    """
+    cache_key = "_runtime_preferred_component_names_v2"
+    if cache_key not in lexicon:
+        votes = collections.defaultdict(collections.Counter)
+        for book in lexicon.get("books", {}).values():
+            for chapter in book.values():
+                for tokens in chapter.values():
+                    for _, lemma, surface, _ in tokens:
+                        form = strip_prefix_parts(surface)
+                        name = normalize_name(form)
+                        if "/" not in form and name:
+                            votes[component_lemma(lemma)][name] += 1
+        preferred = {}
+        for lemma, forms in votes.items():
+            ranked = forms.most_common(2)
+            if len(ranked) == 1 or ranked[0][1] > ranked[1][1]:
+                preferred[lemma] = ranked[0][0]
+        lexicon[cache_key] = preferred
+    return lexicon[cache_key]
+
+
+def intended_token_name(token, lemma_names):
+    """Return (clean intended name, uncertain suffix) without changing source.
+
+    Morphology marks attached suffixes with '/'. Prefer an attested clean
+    form of the same lemma (e.g. מצרים for מצרימ/ה). Otherwise directive-ה
+    is removable and final Hebrew letters are restored at the new word end.
+    Other unattested suffix forms are held rather than auto-linking a guess.
+    """
+    _, lemma, surface, _ = token
+    parts = strip_prefix_parts(surface).split("/")
+    stem = normalize_name(parts[0])
+    if len(parts) == 1:
+        return stem, False
+    preferred = lemma_names.get(component_lemma(lemma))
+    if preferred:
+        return preferred, False
+    if stem:
+        stem = stem[:-1] + stem[-1].translate(FINAL_LETTERS)
+    suffix = "/".join(normalize_name(part) for part in parts[1:])
+    return stem, suffix != "ה"
+
+
+def component_lemma(lemma):
+    """Morphology ID for name normalization, retaining compound position."""
+    return lemma.split("/")[-1]
+
+
 def base_lemma(lemma):
-    return lemma.split("/")[-1].rstrip("+")
+    """Root ID for classification, where compound position is irrelevant."""
+    return component_lemma(lemma).rstrip("+")
 
 
 def assemble(tokens):
@@ -140,21 +244,32 @@ def decorations_for_perek(perek, chapter_tokens, lexicon):
     (1-based within that book file — additionals keep their own numbering).
     """
     rows = []
+    lemma_names = preferred_lemma_names(lexicon)
     for pasuk_number, pasuk in enumerate(perek["pesukim"], start=1):
         tokens = chapter_tokens.get(str(pasuk_number), [])
         if not tokens:
             continue
         seg_index = text_segments(pasuk)
-        word_to_seg = {w: seg_index[w] for w in range(len(seg_index))}
+        word_to_seg = aligned_token_segments(pasuk, tokens)
         pasuk_texts = {i: s.get("value", "") for i, s in enumerate(pasuk["segments"])}
         source_hash = hashlib.sha256(
             json.dumps(pasuk["segments"], ensure_ascii=False).encode("utf-8")
         ).hexdigest()
         for group in assemble(tokens):
             segs = [word_to_seg[t[0]] for t in group if t[0] in word_to_seg]
-            if not segs:
+            # A partially mapped or noncontiguous compound is not a valid
+            # mention. Publishing a fragment would silently change its name.
+            if len(segs) != len(group) or segs != sorted(segs):
                 continue
-            surface = " ".join(strip_prefix_parts(t[2]) for t in group)
+            positions = [seg_index.index(index) for index in segs]
+            if positions != list(range(positions[0], positions[0] + len(positions))):
+                continue
+            surface = " ".join(s.get("value", "")
+                               for s in pasuk["segments"][min(segs):max(segs) + 1])
+            names = [intended_token_name(token, lemma_names) for token in group]
+            intended_name = normalize_name(" ".join(name for name, _ in names))
+            if not intended_name:
+                continue
             rows.append(
                 {
                     "source_kind": "pasuk",
@@ -163,13 +278,11 @@ def decorations_for_perek(perek, chapter_tokens, lexicon):
                     "segment_start": min(segs),
                     "segment_end": max(segs),
                     "surface": surface,
-                    "intended_name": normalize_name(
-                        " ".join(strip_prefix_parts(t[2]) for t in group)
-                    ),
+                    "intended_name": intended_name,
                     "entity_type": classify(group, pasuk_texts, word_to_seg),
                     "disambiguation": None,
                     "confidence": None,
-                    "acceptance": "auto",
+                    "acceptance": "held" if any(uncertain for _, uncertain in names) else "auto",
                     "model_revision": MODEL_REVISION,
                     "source_hash": source_hash,
                 }
