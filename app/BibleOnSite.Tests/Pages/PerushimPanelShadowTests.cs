@@ -82,10 +82,24 @@ public class PerushimPanelShadowTests
     [Fact]
     public void Perush_row_supports_tapping_the_name_and_remaining_row_area()
     {
-        var row = Sheet.Descendants(Maui + "DataTemplate").Single().Element(Maui + "Grid")!;
-        var gestures = row.Element(Maui + "Grid.GestureRecognizers");
-        gestures.Should().NotBeNull("the complete perush row must toggle selection");
-        gestures!.Elements(Maui + "TapGestureRecognizer").Should().ContainSingle();
+        XNamespace controls = "clr-namespace:BibleOnSite.Controls";
+        var row = Sheet.Descendants(Maui + "DataTemplate").Single().Element(controls + "TappableView");
+        row.Should().NotBeNull("the complete perush row toggles selection through the accessible tappable host (#3252)");
+        ((string?)row!.Attribute("Activated")).Should().Be("OnPerushRowTapped");
+        row.Element(controls + "TappableView.IsEnabled").Should().NotBeNull(
+            "an over-limit perush stays visible but cannot be toggled");
+    }
+
+    [Fact]
+    public void Perush_checkbox_is_a_display_only_indicator_inside_the_row()
+    {
+        var checkBox = Sheet.Descendants(Maui + "DataTemplate").Single().Descendants(Maui + "CheckBox")
+            .Single(e => (string?)e.Attribute("AutomationId") == "PerushCheckBox");
+        ((string?)checkBox.Attribute("InputTransparent")).Should().Be("True",
+            "an interactive CheckBox inside the row's WinUI Button would double-toggle: " +
+            "CheckedChanged plus the Button's Click, which fires even for pointer input the child handled");
+        ((string?)checkBox.Attribute("CheckedChanged")).Should().Be("OnPerushCheckboxChanged",
+            "the bound display still reconciles through the same handler");
     }
     private static string FindAppRoot()
     {

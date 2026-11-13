@@ -47,13 +47,11 @@
 
                         <!-- עוצמה: navigates to שמע with the קריינות channel in view —
                              one shared setting, no second slider here. -->
+                        <controls:TappableView AutomationId="RecitationVolumeShortcut"
+                                               SemanticProperties.Description="עוצמה"
+                                               Command="{Binding OpenSoundCommand}">
                         <Grid ColumnDefinitions="Auto,*,Auto"
-                              Padding="0,6"
-                              AutomationId="RecitationVolumeShortcut"
-                              SemanticProperties.Description="עוצמה">
-                            <Grid.GestureRecognizers>
-                                <TapGestureRecognizer Command="{Binding OpenSoundCommand}"/>
-                            </Grid.GestureRecognizers>
+                              Padding="0,6">
                             <Label Text="{x:Static fonts:FluentUI.speaker_2_24_regular}"
                                    FontFamily="FluentIcons"
                                    FontSize="22"
@@ -75,6 +73,7 @@
                                    TextColor="{StaticResource Gray400}"
                                    VerticalOptions="Center"/>
                         </Grid>
+                        </controls:TappableView>
                     </VerticalStackLayout>
                 </Border>
             </VerticalStackLayout>
@@ -92,12 +91,10 @@
                         Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
                         StrokeThickness="1"
                         BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
-                    <Grid ColumnDefinitions="Auto,*,Auto"
-                          AutomationId="RecitationInstallRow"
-                          SemanticProperties.Description="התקנת הקלטות">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Command="{Binding OpenExtensionPacksCommand}"/>
-                        </Grid.GestureRecognizers>
+                    <controls:TappableView AutomationId="RecitationInstallRow"
+                                           SemanticProperties.Description="התקנת הקלטות"
+                                           Command="{Binding OpenExtensionPacksCommand}">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
                         <Label Text="{x:Static fonts:FluentUI.arrow_download_24_regular}"
                                FontFamily="FluentIcons"
                                FontSize="22"
@@ -120,6 +117,7 @@
                                TextColor="{StaticResource Gray400}"
                                VerticalOptions="Center"/>
                     </Grid>
+                    </controls:TappableView>
                 </Border>
             </VerticalStackLayout>
         </VerticalStackLayout>

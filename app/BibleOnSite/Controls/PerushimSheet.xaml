@@ -94,21 +94,25 @@
                 </CollectionView.Triggers>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:Perush">
-                    <Grid Padding="4,2" ColumnDefinitions="Auto,*" x:Name="PerushRow">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnPerushRowTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Grid.IsEnabled>
+                    <controls:TappableView Activated="OnPerushRowTapped" x:Name="PerushTappable">
+                        <controls:TappableView.IsEnabled>
                             <MultiBinding Converter="{StaticResource PerushEnabledConverter}" Mode="OneWay">
                                 <Binding Path="Id"/>
                                 <Binding Path="BindingContext.CheckedPerushim" Source="{x:Reference SheetRoot}"/>
                                 <Binding Path="BindingContext.InlineCommentaryLimit" Source="{x:Reference SheetRoot}"/>
                             </MultiBinding>
-                        </Grid.IsEnabled>
+                        </controls:TappableView.IsEnabled>
+                    <Grid Padding="4,2" ColumnDefinitions="Auto,*" x:Name="PerushRow">
+                        <!-- Display-only state indicator like the reader
+                             menu rows: an interactive CheckBox inside the
+                             row would double-toggle — its own CheckedChanged
+                             plus the row Button's Click, which WinUI raises
+                             even for pointer input the child handled. -->
                         <CheckBox Grid.Column="0"
                                   AutomationId="PerushCheckBox"
                                   VerticalOptions="Center"
                                   Margin="0,0,8,0"
+                                  InputTransparent="True"
                                   CheckedChanged="OnPerushCheckboxChanged">
                             <CheckBox.IsChecked>
                                 <MultiBinding Converter="{StaticResource PerushCheckedConverter}" Mode="OneWay">
@@ -123,7 +127,7 @@
                                    FlowDirection="RightToLeft">
                                 <Label.Triggers>
                                     <DataTrigger TargetType="Label"
-                                                 Binding="{Binding IsEnabled, Source={x:Reference PerushRow}}"
+                                                 Binding="{Binding IsEnabled, Source={x:Reference PerushTappable}}"
                                                  Value="False">
                                         <Setter Property="Opacity" Value="0.4"/>
                                     </DataTrigger>
@@ -138,6 +142,7 @@
                                    TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
                         </VerticalStackLayout>
                     </Grid>
+                    </controls:TappableView>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
             <CollectionView.Footer>
