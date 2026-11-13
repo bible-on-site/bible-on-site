@@ -63,6 +63,14 @@ interface SeferPanelProps {
 	hebrewDateStr: string;
 	/** Article ID or perush name selected by the current book route. */
 	initialSlug?: string;
+	/** Dynamically expand a perush (by name) or article (by numeric id string) — set by QA navigation */
+	expandSlug?: string;
+	/** Change token to re-trigger expansion even with the same slug */
+	expandToken?: number;
+	/** Target note pasuk for scrolling after perush expansion */
+	expandNotePasuk?: number;
+	/** Target note index for scrolling after perush expansion */
+	expandNoteIdx?: number;
 	onNavigate?: (slug?: string) => void;
 	/** Title parts of this page's perek, for the perush document title. */
 	perekTitleParts?: SeferPerekTitle;
@@ -131,6 +139,10 @@ export const SeferPanel = memo(function SeferPanel({
 	seferName = "",
 	hebrewDateStr,
 	initialSlug,
+	expandSlug,
+	expandToken,
+	expandNotePasuk,
+	expandNoteIdx,
 	onNavigate,
 	perekTitleParts,
 	onContentTitle,
@@ -572,6 +584,38 @@ export const SeferPanel = memo(function SeferPanel({
 		[onNavigate, perekId],
 	);
 
+	// Dynamically expand a perush or article when QA navigation sets expandSlug
+	const lastExpandToken = useRef<number>(0);
+	const pendingScrollNote = useRef<string | null>(null);
+
+	useEffect(() => {
+		if (
+			!expandSlug ||
+			expandToken == null ||
+			expandToken === lastExpandToken.current
+		)
+			return;
+		lastExpandToken.current = expandToken;
+
+		// Compute the scroll target id before triggering expansion
+		pendingScrollNote.current =
+			expandNotePasuk != null && expandNoteIdx != null
+				? `book-note-${toLetters(expandNotePasuk)}-${expandNoteIdx + 1}`
+				: null;
+
+		navigate(expandSlug);
+	}, [expandSlug, expandToken, expandNotePasuk, expandNoteIdx, navigate]);
+
+	// After a perush expands, scroll to the target note if one is pending
+	useEffect(() => {
+		if (!deepPerush || !pendingScrollNote.current) return;
+		const noteId = pendingScrollNote.current;
+		pendingScrollNote.current = null;
+		requestAnimationFrame(() => {
+			const el = document.getElementById(noteId);
+			el?.scrollIntoView({ behavior: "smooth", block: "center" });
+		});
+	}, [deepPerush]);
 	// חזרה למאמרים always lands on the articles grid — from the embedded view
 	// and from article fullscreen alike (#2786). The card it came from gets
 	// focus once the overlay clears.
@@ -812,6 +856,7 @@ export const SeferPanel = memo(function SeferPanel({
 											{notes.map((note) => (
 												<div
 													key={`${note.pasuk}-${note.noteIdx}`}
+													id={`book-note-${toLetters(note.pasuk)}-${note.noteIdx + 1}`}
 													className={styles.noteContent}
 													data-reading-unit={`${perush.id}:${note.pasuk}:${note.noteIdx}`}
 													// nosemgrep -- DOMPurify-sanitized note HTML
