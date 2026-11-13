@@ -7,12 +7,14 @@ applyTo: ".github/workflows/**, docs/aws/**, devops/deploy/**, web/api/Dockerfil
 
 ## AWS
 
-### Explicit Approval
+### Merge Authorization And Live Changes
 
-- Never merge an AWS-related PR or enable auto-merge without Dorad's explicit
-  approval of that specific PR and its current AWS-impacting changes. Green CI,
-  a cost audit, or approval of another PR does not qualify. Material AWS changes
-  after approval need renewed approval. See the root `AGENTS.md` rule.
+- Dorad grants Codex standing authorization to merge AWS-related PRs, including
+  later revisions, without separate or per-PR approval. Direct merge and
+  auto-merge remain subject to repository policy, validation and review.
+  Honor explicit requests to review before merging. See root `AGENTS.md`.
+- Live AWS writes still require explicit authorization for their current scope;
+  merging a PR does not itself authorize additional manual production changes.
 - Production uptime and existing public/crawled URLs take priority over savings.
   Verify account/region, live state, compatibility tests and rollback before any
   authorized live write. Reference templates are not evidence of live state.
@@ -25,7 +27,7 @@ applyTo: ".github/workflows/**, docs/aws/**, devops/deploy/**, web/api/Dockerfil
   manual on-demand recovery are in `docs/aws/admin-spot-rollout.md`. Keep public
   website/API capacity and routing unchanged. Spot has no automatic on-demand
   fallback: preserve a tested recovery path. No shutdown schedule is implied.
-- The remaining #2576 migrations stay gated behind that per-PR approval:
+- Live execution of the remaining #2576 migrations requires explicit authorization:
   db-populator Lambda redeploy and SSM endpoint removal, any CDN/OAC change to
   the public assets bucket, ARM64 service images (#2562), nginx router
   replacement or resize (#2561), edge caching in front of the router (#2508),
