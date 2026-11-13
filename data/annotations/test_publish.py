@@ -167,6 +167,10 @@ def contract_row(**overrides):
     """Minimal contract-shaped decoration row for checkpoint tests."""
     row = {
         "source_kind": "pasuk",
+        "perek_id": 1,
+        "pasuk_number": 1,
+        "segment_start": 0,
+        "segment_end": 0,
         "surface": "אברם",
         "intended_name": "אברם",
         "entity_type": "PERSON",
@@ -174,8 +178,10 @@ def contract_row(**overrides):
         "confidence": None,
         "acceptance": "auto",
         "model_revision": "test@1",
-        "source_hash": "src",
+        "source_hash": "a" * 64,
     }
+    if overrides.get("source_kind") == "article":
+        row.update(article_id=1, span_start=0, span_end=3, content_hash="b" * 64)
     return row | overrides
 
 
@@ -193,6 +199,43 @@ class TestCheckpointStore(unittest.TestCase):
                 store.load("perek-1", "src"), [contract_row()]
             )
             self.assertEqual((store.hits, store.misses), (1, 0))
+
+    def test_corrupt_coordinates_and_enums_are_cache_misses(self):
+        bad = [contract_row(segment_start=True), contract_row(segment_end=-1),
+               contract_row(entity_type=[]), contract_row(acceptance="publish"),
+               contract_row(source_hash="not-a-hash"), contract_row(confidence=float("nan")),
+               contract_row(source_kind="article", span_start=5, span_end=2)]
+        missing = contract_row()
+        del missing["pasuk_number"]
+        bad.append(missing)
+        with tempfile.TemporaryDirectory() as tmp:
+            for row in bad:
+                with self.subTest(row=row):
+                    store = self.store(tmp)
+                    store.save("perek-1", "src", [row])
+                    self.assertIsNone(store.load("perek-1", "src"))
+
+    def test_diagnostics_roundtrip_and_corrupt_diagnostics_miss(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.store(tmp)
+            store.save("perek-1", "src", [contract_row()], {"valid_response_chunks": 2})
+            self.assertIsNotNone(store.load("perek-1", "src"))
+            self.assertEqual(store.last_diagnostics, {"valid_response_chunks": 2})
+            store.save("perek-1", "src", [contract_row()], {"invalid_response_chunks": True})
+            self.assertIsNone(store.load("perek-1", "src"))
+
+    def test_legacy_incomplete_record_is_a_retryable_miss_with_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = self.store(tmp)
+            store.save("perek-1", "src", [], {"invalid_response_chunks": 2})
+            path = store.dir / "perek-1.json"
+            legacy = json.loads(path.read_text(encoding="utf-8"))
+            del legacy["failure_history"]
+            path.write_text(json.dumps(legacy), encoding="utf-8")
+            resumed = self.store(tmp)
+            self.assertIsNone(resumed.load("perek-1", "src"))
+            self.assertEqual((resumed.hits, resumed.misses), (0, 1))
+            self.assertEqual(resumed.failure_history["invalid_response_chunks"], 2)
 
     def test_source_mismatch_is_a_miss(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -515,7 +558,313 @@ class TestArticleRows(unittest.TestCase):
         entities_fn.assert_not_called()
 
 
+class TestLlmEngines(unittest.TestCase):
+    def corpus(self):
+        return [{"perakim": [
+            {"perekId": 1, "pesukim": [pasuk(["אריה", "שאג"])]},
+            {"perekId": 2, "pesukim": [pasuk(["דוב", "הלך"])]},
+        ]}]
+
+    def detector(self, messages):
+        units = json.loads(messages[-1]["content"])["units"]
+        word = units[0]
+        return json.dumps({"mentions": [{"start": word["index"], "end": word["index"],
+            "intended_name": word["text"], "entity_type": "ANIMAL"}]})
+
+    def retyper(self, messages):
+        candidates = json.loads(messages[-1]["content"])["candidates"]
+        return json.dumps({"decisions": [{"id": candidate["id"],
+            "intended_name": candidate["intended_name"], "entity_type": "PLACE", "decision": "accept"}
+            for candidate in candidates]})
+
+    def test_independent_detection_bypasses_lexical_gate_and_respects_unit_limits(self):
+        seen = []
+        def generate(messages):
+            seen.append(messages)
+            return self.detector(messages)
+        with mock.patch.object(publish.baseline, "decorations_for_perek", side_effect=AssertionError("lexical gate")):
+            rows = publish.pasuk_rows(self.corpus(), None, engine="llm-detect",
+                generate_fn=generate, model_revision="detect@1", max_perakim=1)
+        self.assertEqual(len(seen), 1)
+        self.assertEqual([(row["perek_id"], row["entity_type"]) for row in rows], [(1, "ANIMAL")])
+        self.assertEqual(rows[0]["model_revision"], "detect@1")
+
+    def test_detect_checkpoint_skips_generation_and_replays_diagnostics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cold_stats = publish.collections.Counter()
+            cold = publish.pasuk_rows(self.corpus(), None, engine="llm-detect",
+                generate_fn=self.detector, model_revision="detect@1", max_perakim=1,
+                checkpoint=publish.CheckpointStore(tmp, "pasuk", "cfg"), diagnostics=cold_stats)
+            warm_stats = publish.collections.Counter()
+            forbidden = mock.Mock(spec=[], side_effect=AssertionError("cached model call"))
+            warm = publish.pasuk_rows(self.corpus(), None, engine="llm-detect",
+                generate_fn=forbidden, model_revision="detect@1", max_perakim=1,
+                checkpoint=publish.CheckpointStore(tmp, "pasuk", "cfg"), diagnostics=warm_stats)
+        self.assertEqual(cold, warm)
+        self.assertEqual(cold_stats, warm_stats)
+        self.assertEqual(warm_stats["valid_response_chunks"], 1)
+        forbidden.assert_not_called()
+
+    def test_increasing_unit_limit_resumes_only_the_new_perek(self):
+        calls = []
+        def generate(messages):
+            calls.append(messages)
+            return self.detector(messages)
+        with tempfile.TemporaryDirectory() as tmp:
+            publish.pasuk_rows(self.corpus(), None, engine="llm-detect", generate_fn=generate,
+                model_revision="detect@1", max_perakim=1,
+                checkpoint=publish.CheckpointStore(tmp, "pasuk", "cfg"))
+            calls.clear()
+            store = publish.CheckpointStore(tmp, "pasuk", "cfg")
+            rows = publish.pasuk_rows(self.corpus(), None, engine="llm-detect", generate_fn=generate,
+                model_revision="detect@1", max_perakim=2, checkpoint=store)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual((store.hits, store.misses), (1, 1))
+        self.assertEqual([row["perek_id"] for row in rows], [1, 2])
+
+    def test_failed_detection_retries_on_resume_and_retains_quarantined_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            calls = []
+            def transient(messages):
+                calls.append(1)
+                return "invalid" if len(calls) == 1 else self.detector(messages)
+
+            request_dir = Path(tmp) / "requests"
+            first_cache = publish.local_llm.CachedGenerator(transient, request_dir, "detect@1")
+            first_store = publish.CheckpointStore(tmp, "pasuk", "cfg")
+            failed_stats = publish.collections.Counter()
+            failed = publish.pasuk_rows(self.corpus(), None, engine="llm-detect",
+                generate_fn=first_cache, model_revision="detect@1", max_perakim=1,
+                checkpoint=first_store, diagnostics=failed_stats)
+            self.assertEqual(failed, [])
+            self.assertEqual(failed_stats["invalid_response_chunks"], 1)
+            second_cache = publish.local_llm.CachedGenerator(transient, request_dir, "detect@1")
+            second_store = publish.CheckpointStore(tmp, "pasuk", "cfg")
+            recovered_stats = publish.collections.Counter()
+            recovered = publish.pasuk_rows(self.corpus(), None, engine="llm-detect",
+                generate_fn=second_cache, model_revision="detect@1", max_perakim=1,
+                checkpoint=second_store, diagnostics=recovered_stats)
+            self.assertEqual(recovered[0]["entity_type"], "ANIMAL")
+            self.assertEqual((second_store.hits, second_store.misses), (0, 1))
+            self.assertEqual(recovered_stats["invalid_response_chunks"], 0)
+            self.assertEqual(second_store.failure_history["invalid_response_chunks"], 1)
+            self.assertEqual(len(calls), 2)
+            self.assertTrue(list((request_dir / "invalid").glob("*.reason.json")))
+            output = Path(tmp) / "rows.json"
+            output.write_text(json.dumps(recovered), encoding="utf-8")
+            publish.write_provenance(output, spec=None, execution=None, entities_fn=second_cache,
+                checkpoint=second_store, runtime={}, engine="llm-detect", diagnostics=recovered_stats)
+            provenance = json.loads(Path(f"{output}.provenance.json").read_text(encoding="utf-8"))
+            self.assertTrue(provenance["complete_valid_responses"])
+            self.assertEqual(provenance["failure_history"]["invalid_response_chunks"], 1)
+            warm_store = publish.CheckpointStore(tmp, "pasuk", "cfg")
+            warm = publish.pasuk_rows(self.corpus(), None, engine="llm-detect",
+                generate_fn=lambda _: self.fail("valid unit should stay cached"),
+                model_revision="detect@1", max_perakim=1, checkpoint=warm_store)
+            self.assertEqual(warm, recovered)
+            self.assertEqual(warm_store.hits, 1)
+            self.assertEqual(warm_store.failure_history["invalid_response_chunks"], 1)
+            self.assertEqual(len(calls), 2)
+
+    def test_llm_retype_changes_only_supplied_candidates_and_collects_diagnostics(self):
+        corpus, lexicon = fake_corpus()
+        def generate(messages):
+            return self.retyper(messages)
+        generate.diagnostics = publish.collections.Counter()
+        diagnostics = publish.collections.Counter()
+        rows = publish.pasuk_rows(corpus, lexicon, engine="llm-retype", generate_fn=generate,
+                                   model_revision="llm@1", diagnostics=diagnostics)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["entity_type"], "PLACE")
+        self.assertEqual(rows[0]["surface"], "אַבְרָ֔ם")
+        self.assertEqual(diagnostics["accept"], 1)
+
+    def test_article_detection_needs_no_gazetteer_and_stops_at_limit(self):
+        with mock.patch.object(publish.baseline_articles, "decorations_for_article", side_effect=AssertionError("gazetteer gate")):
+            rows = publish.article_rows([(1, "<p>אריה</p>"), (2, "<p>דוב</p>")], None,
+                engine="llm-detect", generate_fn=self.detector, model_revision="detect@1", max_articles=1)
+        self.assertEqual([row["article_id"] for row in rows], [1])
+        self.assertEqual(rows[0]["entity_type"], "ANIMAL")
+
+    def test_invalid_engines_generators_and_limits_fail_before_work(self):
+        for kwargs in ({"engine": "unknown"}, {"engine": "llm-detect"},
+                       {"max_perakim": 0}, {"max_perakim": True}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                publish.pasuk_rows([], None, **kwargs)
+
+    def test_lazy_generator_keeps_weights_unloaded_until_request_or_token_count(self):
+        spec = publish.local_llm.CANDIDATE
+        execution = {"device": "cpu", "dtype": "float32", "tf32": False}
+        loaded = mock.Mock()
+        loaded.execution = execution
+        loaded.stats = {"generated_requests": 0}
+        loaded.count_input_tokens.return_value = 40
+        loaded.return_value = "response"
+        with mock.patch.object(publish.local_llm, "load_generate_fn", return_value=loaded) as load:
+            generate = publish.lazy_generate_fn(spec, execution)
+            load.assert_not_called()
+            self.assertFalse(generate.model_loaded)
+            self.assertEqual(generate.count_input_tokens([]), 40)
+            self.assertEqual(generate([]), "response")
+            load.assert_called_once_with(spec, device="cpu", dtype="float32")
+            self.assertTrue(generate.model_loaded)
+
+
 class TestMain(unittest.TestCase):
+    def test_publisher_uses_the_same_llm_profile_identity_as_the_benchmark(self):
+        base_execution = {"device": "cuda:0", "dtype": "bfloat16", "tf32": False}
+
+        def unused(_messages):
+            raise AssertionError("empty input must not load model weights")
+
+        for engine in ("llm-retype", "llm-detect"):
+            for name, candidate in publish.local_llm.MODEL_CANDIDATES.items():
+                with self.subTest(engine=engine, model=name), tempfile.TemporaryDirectory() as tmp:
+                    out = Path(tmp) / "rows.json"
+                    argv = ["publish.py", "--pasuk-out", str(out), "--engine", engine,
+                            "--llm-model", name, "--device", "cuda:0", "--dtype", "bfloat16",
+                            "--constrained-json"]
+                    with (
+                        mock.patch.object(publish.sys, "argv", argv),
+                        mock.patch.object(publish.baseline, "load_canonical", return_value=[]),
+                        mock.patch.object(publish.baseline, "load_lexicon", return_value={}),
+                        mock.patch.object(publish.encoders, "normalize_execution",
+                                          side_effect=lambda *_args, **_kwargs: dict(base_execution)),
+                        mock.patch.object(publish.encoders, "runtime_signature", return_value={"torch": "test"}),
+                        mock.patch.object(publish.local_llm.importlib.metadata, "version",
+                                          side_effect=lambda package: f"{package}-test"),
+                        mock.patch.object(publish, "lazy_generate_fn", return_value=unused),
+                        contextlib.redirect_stdout(io.StringIO()),
+                    ):
+                        publish.main()
+                        if engine == "llm-retype":
+                            execution = publish.local_llm.execution_profile(candidate, "cuda:0", "bfloat16")
+                            expected = publish.local_llm.revision_tag(candidate, execution, constrained_json=True)
+                        else:
+                            spec = publish.llm_detect.detection_spec(candidate)
+                            expected = publish.llm_detect.revision_tag(base_execution, spec, constrained_json=True)
+                    record = json.loads(Path(f"{out}.provenance.json").read_bytes())
+                    self.assertEqual(record["model_revision"], expected)
+
+    def test_quantized_model_rejects_cpu_before_model_or_source_loading(self):
+        argv = ["publish.py", "--pasuk-out", "unused.json", "--engine", "llm-detect",
+                "--llm-model", "qwen3-8b-retype"]
+        with (
+            mock.patch.object(publish.sys, "argv", argv),
+            mock.patch.object(publish.baseline, "load_canonical") as corpus,
+            mock.patch.object(publish, "lazy_generate_fn") as load,
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            with self.assertRaises(SystemExit):
+                publish.main()
+        corpus.assert_not_called()
+        load.assert_not_called()
+
+    def test_llm_detect_cli_writes_contract_rows_and_engine_provenance_without_lexicon(self):
+        execution = {"device": "cpu", "dtype": "float32", "tf32": False}
+        generate = TestLlmEngines().detector
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "rows.json"
+            argv = ["publish.py", "--pasuk-out", str(out), "--engine", "llm-detect",
+                    "--max-perakim", "1", "--checkpoint-dir", str(Path(tmp) / "cache")]
+            with (
+                mock.patch.object(publish.sys, "argv", argv),
+                mock.patch.object(publish.baseline, "load_canonical", return_value=TestLlmEngines().corpus()),
+                mock.patch.object(publish.baseline, "load_lexicon", side_effect=AssertionError("lexicon gate")),
+                mock.patch.object(publish.encoders, "normalize_execution", return_value=execution),
+                mock.patch.object(publish.encoders, "runtime_signature", return_value={"torch": "test"}),
+                mock.patch.object(publish, "lazy_generate_fn", return_value=generate),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                publish.main()
+            rows = json.loads(out.read_text(encoding="utf-8"))
+            provenance = json.loads(Path(f"{out}.provenance.json").read_text(encoding="utf-8"))
+        self.assertTrue(publish._valid_rows(rows))
+        self.assertEqual(provenance["engine"], "llm-detect")
+        self.assertEqual(provenance["limits"], {"max_perakim": 1})
+        self.assertTrue(provenance["candidate"]["name"].endswith("-detect"))
+        self.assertTrue(provenance["complete_valid_responses"])
+
+    def test_llm_engine_rejects_lexical_only_flag(self):
+        argv = ["publish.py", "--pasuk-out", "unused.json", "--engine", "llm-detect", "--no-retype"]
+        with mock.patch.object(publish.sys, "argv", argv), contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                publish.main()
+
+    def run_fake_encoder(self, tmp, device="cuda:0", dtype="float32", runtime="v1"):
+        out = Path(tmp) / "rows.json"
+        execution = {"device": device, "dtype": dtype, "tf32": False}
+        entities_fn = mock.Mock(return_value=[])
+        entities_fn.execution = dict(execution, gpu_name="test GPU")
+        entities_fn.model_loaded = True
+        sefarim, lexicon = fake_corpus()
+        argv = [
+            "publish.py", "--pasuk-out", str(out),
+            "--checkpoint-dir", str(Path(tmp) / "cache"),
+            "--device", device, "--dtype", dtype,
+        ]
+        with (
+            mock.patch.object(publish.sys, "argv", argv),
+            mock.patch.object(publish.baseline, "load_canonical", return_value=sefarim),
+            mock.patch.object(publish.baseline, "load_lexicon", return_value=lexicon),
+            mock.patch.object(publish.encoders, "normalize_execution", return_value=execution),
+            mock.patch.object(publish.encoders, "runtime_signature", return_value={"torch": runtime}),
+            mock.patch.object(publish.encoders, "lazy_entities_fn", return_value=entities_fn) as lazy,
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            publish.main()
+        lazy.assert_called_once_with(
+            publish.resolve_retype_spec(publish.RETYPE_DEFAULT), device=device, dtype=dtype
+        )
+        return out, entities_fn
+
+    def test_device_and_precision_changes_invalidate_checkpoint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out, cold = self.run_fake_encoder(tmp)
+            cold.assert_called_once()
+            cold_bytes = out.read_bytes()
+            _, warm = self.run_fake_encoder(tmp)
+            warm.assert_not_called()
+            self.assertEqual(out.read_bytes(), cold_bytes)
+            _, cpu = self.run_fake_encoder(tmp, device="cpu")
+            cpu.assert_called_once()
+            _, reduced = self.run_fake_encoder(tmp, dtype="float16")
+            reduced.assert_called_once()
+            _, upgraded = self.run_fake_encoder(tmp, dtype="float16", runtime="v2")
+            upgraded.assert_called_once()
+
+    def test_provenance_pins_model_backend_and_rows_digest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out, _ = self.run_fake_encoder(tmp)
+            provenance = json.loads(
+                Path(f"{out}.provenance.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(provenance["rows_sha256"], hashlib.sha256(out.read_bytes()).hexdigest())
+        self.assertEqual(
+            provenance["candidate"]["revision"],
+            publish.resolve_retype_spec(publish.RETYPE_DEFAULT)["revision"],
+        )
+        self.assertEqual(provenance["execution"]["device"], "cuda:0")
+        self.assertEqual(provenance["execution"]["dtype"], "float32")
+        self.assertFalse(provenance["execution"]["tf32"])
+        self.assertTrue(provenance["model_loaded_this_run"])
+        self.assertEqual(provenance["inference_runtime"], {"torch": "v1"})
+        self.assertEqual(provenance["checkpoint"]["misses"], 1)
+
+    def test_cuda_error_precedes_corpus_loading_or_weight_download(self):
+        argv = ["publish.py", "--pasuk-out", "unused.json", "--device", "cuda"]
+        with (
+            mock.patch.object(publish.sys, "argv", argv),
+            mock.patch.object(publish.encoders, "normalize_execution", side_effect=RuntimeError("CUDA unavailable")),
+            mock.patch.object(publish.baseline, "load_canonical") as corpus,
+            mock.patch.object(publish.encoders, "lazy_entities_fn") as lazy,
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            with self.assertRaises(SystemExit):
+                publish.main()
+        corpus.assert_not_called()
+        lazy.assert_not_called()
+
     def test_article_out_requires_articles_input(self):
         argv = ["publish.py", "--article-out", "x.json"]
         with mock.patch.object(publish.sys, "argv", argv):

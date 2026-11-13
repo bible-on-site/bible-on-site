@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
 	mkdirSync,
 	mkdtempSync,
@@ -1748,8 +1749,16 @@ fi
 	});
 });
 
-const publisherSource = readFileSync(
+const livePublisherSource = readFileSync(
 	new URL("../../../data/annotations/publish.py", import.meta.url),
+	"utf8",
+);
+// Frozen historical input from 4c99f0eff051eb050db713e989c2ea3107c58d9a.
+// The production proof deliberately pins this exact body. New publisher
+// implementations must fail closed until independently audited; building
+// positive fixtures from today's live source would contradict that contract.
+const publisherSource = readFileSync(
+	new URL("./fixtures/publish-audited-body.py.fixture", import.meta.url),
 	"utf8",
 ).replace(
 	"node devops/export-tanahpedia-articles.mts",
@@ -1783,6 +1792,13 @@ function astDocProof(before: string, after: string): boolean {
 }
 
 describe("publisher docstring AST proof", () => {
+	test("historical fixture retains the exact independently audited body", () => {
+		assert.equal(
+			createHash("sha256").update("\0").update(publisherBody).digest("hex"),
+			"5501f7b400931ef2ddd959a0ce4e49184e66c90e60c80604ec230266aca9b107",
+		);
+	});
+
 	test("actual publisher help documents commands from the repository root", () => {
 		const root = fileURLToPath(new URL("../../../", import.meta.url));
 		const help = execFileSync(
@@ -1954,6 +1970,24 @@ function publisherFixture(
 }
 
 describe("publisher docstring release routing", () => {
+	test("keeps normal delivery for a doc edit on the live unaudited publisher body", (t) => {
+		const liveDocEnd = livePublisherSource.indexOf('\n"""') + 4;
+		assert.ok(liveDocEnd > 3);
+		const fixture = publisherFixture(t, {
+			before: livePublisherSource,
+			after: '"""Updated documentation for the current publisher."""' +
+				livePublisherSource.slice(liveDocEnd),
+		});
+		assert.equal(
+			isPublishDocstringOnlyChange({ ...fixture, cwd: fixture.clone }),
+			false,
+		);
+		assert.deepEqual(fixture.run().changes.data, {
+			module_changed: true,
+			ci_changed: false,
+		});
+	});
+
 	test("uses immutable base/head blobs in a shallow checkout and selects checks only", (t) => {
 		const fixture = publisherFixture(t);
 		assert.equal(fixture.git("rev-parse", "--is-shallow-repository"), "true");
