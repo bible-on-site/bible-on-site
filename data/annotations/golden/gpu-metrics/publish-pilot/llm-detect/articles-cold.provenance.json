@@ -1,0 +1,88 @@
+{
+ "schema": 1,
+ "rows_sha256": "1dd7512263c4c1c227584c68f6acfde3657efa4ae926a02a0883660d320ca50b",
+ "candidate": {
+  "name": "qwen3-8b-detect",
+  "hf_repo": "Qwen/Qwen3-8B",
+  "revision": "b968826d9c46dd6066d109eabc6255188de91218",
+  "license": "Apache-2.0",
+  "quantization": "nf4-double",
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  }
+ },
+ "engine": "llm-detect",
+ "model_revision": "qwen3-8b-detect@b968826d+local-detect-v2+target-key-v1+18907f373d24",
+ "limits": {
+  "max_articles": 1
+ },
+ "execution": {
+  "device": "cuda:0",
+  "dtype": "bfloat16",
+  "tf32": false,
+  "torch": "2.14.1+cu126",
+  "cuda_runtime": "12.6",
+  "gpu_name": "NVIDIA GeForce RTX 4070 Laptop GPU",
+  "gpu_total_memory_bytes": 8585216000,
+  "gpu_compute_capability": [
+   8,
+   9
+  ],
+  "transformers": "5.22.2",
+  "tokenizers": "0.23.3",
+  "bitsandbytes": "0.50.2",
+  "quantization": "nf4-double",
+  "output_normalization_version": "target-key-v1",
+  "structured_output": {
+   "backend": "lm-format-enforcer",
+   "library_pin": "0.11.3",
+   "output_normalization_version": "target-key-v1",
+   "adapter_version": "transformers5-core-v2-config",
+   "library_version": "0.11.3",
+   "grammar_version": "json-schema-v1",
+   "schema_sha256": "cd72a56d34ede46cc2077283f714dda77fdd1919c0d15d85f69819b6c7bc8da7",
+   "alphabet": "ascii+hebrew+source-v1",
+   "field_order": true,
+   "max_consecutive_whitespaces": 2
+  }
+ },
+ "model_loaded_this_run": true,
+ "inference_runtime": {
+  "torch": "2.14.1+cu126",
+  "transformers": "5.22.2",
+  "tokenizers": "0.23.3",
+  "bitsandbytes": "0.50.2",
+  "cuda_runtime": "12.6",
+  "gpu_name": "NVIDIA GeForce RTX 4070 Laptop GPU",
+  "gpu_compute_capability": [
+   8,
+   9
+  ]
+ },
+ "inference_stats_this_run": {
+  "model_load_seconds": 24.01,
+  "generation_seconds": 6.89,
+  "generated_requests": 1,
+  "input_tokens": 349,
+  "output_tokens": 66,
+  "cuda_peak_allocated_bytes": 6283979776
+ },
+ "request_cache": {
+  "model_calls": 1,
+  "hits": 0
+ },
+ "detection": {
+  "prompt_version": "local-detect-v2"
+ },
+ "diagnostics": {
+  "chunks": 1,
+  "valid_response_chunks": 1
+ },
+ "failure_history": {},
+ "complete_valid_responses": true,
+ "checkpoint": {
+  "config": "029c7e31038873bf0eda6a731b33a7eec980a195807ee87c35be55788a6ff384",
+  "hits": 0,
+  "misses": 1
+ }
+}

@@ -30,7 +30,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import baseline
 
-MODEL_REVISION = "morphhb-gazetteer@3d15126f+contract1"
+MODEL_REVISION = "morphhb-gazetteer@3d15126f+aligned2+names2+contract1"
 
 # Elements whose text must never be decorated: an anchor interior would
 # nest links, and script/style bodies are not visible prose.
@@ -131,16 +131,23 @@ def held_names(decorations, word_counts):
     overwhelmingly read as ordinary words in commentary prose, so their
     matches emit `held` diagnostics — persisted for triage, never rendered
     — instead of `auto` decorations. Measured on the canonical corpus:
-    pure names keep corpus <= tagged; homographs are dominated.
+    pure names keep corpus <= tagged; homographs are dominated. Names whose
+    only source annotations are uncertain also stay held: building a
+    gazetteer must not promote a held morphology guess into an auto link.
     """
     tagged = collections.Counter(row["intended_name"] for row in decorations)
-    return {
+    held = {
         name
         for name, n in tagged.items()
         if " " not in name
         and len(name) >= MIN_NAME_LENGTH
         and word_counts.get(name, 0) > n
     }
+    confirmed = {
+        row["intended_name"] for row in decorations
+        if row.get("acceptance", "auto") in {"auto", "manual"}
+    }
+    return held | (set(tagged) - confirmed)
 
 
 def iter_text_runs(html):
