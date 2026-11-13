@@ -499,16 +499,35 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
     {
         // Topmost transient surfaces own Back first (#2766): fullscreen,
         // then the unit picker and the open fan menu previously fell
-        // through to page navigation while still visible.
-        if (ExitFullScreenButton.IsVisible)
-        { _chrome.ExitFullScreen(); return true; }
-        if (MasoraUnitPickerPopup.IsVisible)
-        { MasoraUnitPickerPopup.Hide(); return true; }
-        if (FanMenu.IsOpen)
-        { _ = FanMenu.CloseAsync(); return true; }
-        if (PerushimPanel.IsOpen)
-        { PerushimPanel.CloseImmediate(); return true; }
-        return false;
+        // through to page navigation while still visible. The shared policy
+        // ranks them foreground-first — the masora reader has no search or
+        // focused-pasuk overlay, so those ranks never fire here (#3307).
+        var owner = ReaderBackPolicy.Resolve(
+            exitFullScreenVisible: ExitFullScreenButton.IsVisible,
+            unitPickerOpen: MasoraUnitPickerPopup.IsVisible,
+            fanMenuOpen: FanMenu.IsOpen,
+            menuOverlayOpen: false,
+            chapterSearchOpen: false,
+            focusedPasuk: false,
+            perushimSheetOpen: PerushimPanel.IsOpen,
+            selectionSurfacesActive: false);
+        switch (owner)
+        {
+            case ReaderBackSurface.ExitFullScreen:
+                _chrome.ExitFullScreen();
+                return true;
+            case ReaderBackSurface.UnitPicker:
+                MasoraUnitPickerPopup.Hide();
+                return true;
+            case ReaderBackSurface.FanMenu:
+                _ = FanMenu.CloseAsync();
+                return true;
+            case ReaderBackSurface.PerushimSheet:
+                PerushimPanel.CloseImmediate();
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>

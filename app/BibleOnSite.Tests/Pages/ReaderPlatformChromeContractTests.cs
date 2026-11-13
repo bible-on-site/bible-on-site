@@ -98,6 +98,21 @@ public class ReaderPlatformChromeContractTests
             "each division declares which transient surfaces keep Back alive");
     }
 
+    // — The ownership ordering is shared; only the actions stay per page ———
+
+    [Theory]
+    [InlineData("PerekPage.Recitation.cs")]
+    [InlineData("ParashaPage.Recitation.cs")]
+    [InlineData("MasoraPage.xaml.cs")]
+    public void Reader_ranks_back_surfaces_through_the_shared_policy(string codeFile)
+    {
+        var code = CodeBehind(codeFile);
+        code.Should().Contain("ReaderBackPolicy.Resolve(",
+            "foreground-first surface ownership is the shared, unit-tested policy (#3307)");
+        code.Should().Contain("perushimSheetOpen:",
+            "the sheet's open state is a rank input — a covered sheet must not intercept Back ahead of the focused pasuk");
+    }
+
     // — iOS history refresh on realized lists, on every reader —————————————
 
     [Theory]
