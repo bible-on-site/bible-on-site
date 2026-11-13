@@ -4,6 +4,7 @@ import { Footnote, FootnoteReference, Footnotes } from "tiptap-footnotes";
 import { hebrewNumeral } from "./adminHebrew";
 
 const REFNUM_ATTR = "data-reference-number";
+const REF_CLASS = "footnote-ref";
 
 /**
  * `tiptap-footnotes` keeps the footnote list as a single trailing block, so the
@@ -16,21 +17,41 @@ export const AdminFootnoteDocument = Document.extend({
 /**
  * Upstream renders the marker as a decimal number; tanahpedia uses Hebrew
  * letters (א ב ג) so the reference matches the counter of the footnote list.
- * The numeric value stays in `data-reference-number`, which is what the
- * extension parses back, so only the visible glyph changes.
+ *
+ * Since tiptap-footnotes v4 the number lives only on `node.attrs`
+ * (`referenceNumber` is `rendered: false`), and the parser accepts a `sup`
+ * solely when its first child is `a.footnote-ref`. The class, `href` and
+ * `data-reference-number` must all be emitted here: a reference serialized
+ * without them no longer parses on reopen, and the mount sync then drops its
+ * footnote body. A reference with no number yet (just inserted, before the
+ * sync assigns one) renders without the derived attributes instead of
+ * emitting `undefined`/`NaN` markup.
  */
 export const AdminFootnoteReference = FootnoteReference.extend({
-	renderHTML({ HTMLAttributes }) {
-		const { referenceNumber, ...attributes } = HTMLAttributes;
-		/* Upstream merges `this.options.HTMLAttributes` here, but the node declares
-		   no options, so that read throws once the node is rendered by the schema. */
-		const attrs = mergeAttributes(attributes);
-		attrs[REFNUM_ATTR] = referenceNumber;
-		attrs.role = "doc-noteref";
+	renderHTML({ node, HTMLAttributes }) {
+		const number = node.attrs.referenceNumber as string | null;
+		const numeric = Number(number);
 		return [
 			"sup",
-			{ id: `fnref:${referenceNumber}` },
-			["a", attrs, hebrewNumeral(Number(referenceNumber))],
+			{ id: number ? `fnref:${number}` : undefined },
+			[
+				"a",
+				mergeAttributes(
+					{ class: REF_CLASS },
+					this.options.HTMLAttributes,
+					HTMLAttributes,
+					{
+						href: number ? `#fn:${number}` : undefined,
+						[REFNUM_ATTR]: number ?? undefined,
+						role: "doc-noteref",
+					},
+				),
+				number == null
+					? ""
+					: Number.isFinite(numeric)
+						? hebrewNumeral(numeric)
+						: number,
+			],
 		];
 	},
 });

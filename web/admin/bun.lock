@@ -35,7 +35,7 @@
         "parse5": "8.1.1",
         "react": "19.3.1",
         "react-dom": "19.3.1",
-        "tiptap-footnotes": "3.0.1",
+        "tiptap-footnotes": "4.0.1",
       },
       "devDependencies": {
         "@biomejs/biome": "2.6.6",
@@ -984,7 +984,7 @@
 
     "tinyrainbow": ["tinyrainbow@3.2.0", "", {}, "sha512-LgO3D9yZJjApUiuUfl9iFAwrtaX4+lok3wJIqttGoKCHlWUqHqbQpnxCf82L8FjgKsh4iGo78hqJwgL8F6To2A=="],
 
-    "tiptap-footnotes": ["tiptap-footnotes@3.0.1", "", { "peerDependencies": { "@tiptap/core": "^3.0.0", "@tiptap/extension-list-item": "^3.0.0", "@tiptap/extension-ordered-list": "^3.0.0", "@tiptap/pm": "^3.0.0" } }, "sha512-JeQav5spy5/gEDHnwbkJrzPB46Lvn9SxefhKCcQKsUopzzqYtjaA2oTO+QxVixRJ88wLAa5KexaCIzvY6hMiSQ=="],
+    "tiptap-footnotes": ["tiptap-footnotes@4.0.1", "", { "peerDependencies": { "@tiptap/core": "^3.0.0", "@tiptap/pm": "^3.0.0" } }, "sha512-wp7Bg7H6Wtju4JBo9NoNOTw/8lv3zOTRITWelEf6+GzwxvHlTLh1RZpjKtiFeDgnQRYcgRK5G55CxzZ+U1FR6Q=="],
 
     "tldts": ["tldts@7.4.19", "", { "dependencies": { "tldts-core": "^7.4.19" }, "bin": { "tldts": "bin/cli.js" } }, "sha512-48dH6aSpQnpbzDUc4vIQZ1VjB8tkK+e8c1yx05/SZK+rkssgjEOlxDd/yU8/a4vGYQ9vRgJr9dwMq9TJ0b3X2Q=="],
 
