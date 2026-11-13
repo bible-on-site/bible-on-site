@@ -5,6 +5,10 @@ import {
 	setSeferDocumentTitle,
 } from "@/app/929/[number]/components/sefer-document-title";
 import seferStyles from "@/app/929/[number]/components/sefer.module.css";
+import {
+	RangeRecitationControls,
+	RangeRecitationPlayer,
+} from "@/app/components/reading/RangeRecitationPlayer";
 import { UnitBlankPageContent } from "@/app/components/reading/UnitBlankPageContent";
 import { UnitSeferBook } from "@/app/components/reading/UnitSeferBook";
 import { UnitTextBody } from "@/app/components/reading/UnitTextBody";
@@ -29,6 +33,7 @@ import {
 } from "@/data/parasha/parasha-slugs";
 import type { ArticleSummary } from "@/lib/articles";
 import type { RangePerushSummary } from "@/lib/perushim";
+import { rangesPerekIds } from "@/lib/reading/ranges";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import { toLetters } from "gematry";
@@ -73,7 +78,7 @@ const ParashaSefer = (props: {
 	currentUnitId: number;
 	entityRefsByPerek: Record<number, PerekEntityReference[]>;
 	perekSources: Record<number, string>;
-	perekById: Map<number, Pick<Perek, "pesukim">>;
+	perekById: Map<number, Pick<Perek, "pesukim" | "recitation">>;
 	/** Current unit's SSG carousel data, per scope (other units load lazily). */
 	articles: ArticleSummary[];
 	perushim: RangePerushSummary[];
@@ -233,59 +238,89 @@ const ParashaSefer = (props: {
 				};
 				const torahKey = unitBookKey(unit.unitId, "torah");
 				const haftaraKey = unitBookKey(unit.unitId, "haftara");
+				// Every perek a reading's ranges touch — range playback loads
+				// and validates each one's manifest (issue #3259).
+				const recitationPerakim = (
+					readRanges: typeof unit.ranges,
+				): {
+					perekId: number;
+					pesukim: Perek["pesukim"];
+					hasRecording: boolean;
+				}[] =>
+					rangesPerekIds(readRanges).flatMap((perekId) => {
+						const perek = perekById.get(perekId);
+						return perek
+							? [
+									{
+										perekId,
+										pesukim: perek.pesukim,
+										hasRecording: Boolean(perek.recitation),
+									},
+								]
+							: [];
+					});
 				return [
 					<React.Fragment key={`parasha-${unit.unitId}`}>
 						<section
 							className={`${seferStyles.pageContentPage} flipbook-page-bounded`}
 							data-sefer-unit-text={torahKey}
 						>
-							<div className={seferStyles.pageHeaderRight}>
-								<div className={seferStyles.pageHeaderRow}>
-									<span className={seferStyles.pageHeaderSefer}>
-										{seferName}
-									</span>
-									<span className={seferStyles.pageHeaderPerek}>
-										{toLetters(unit.order)}
-									</span>
-								</div>
-							</div>
-							<div className={seferStyles.pageHeaderLeft}>
-								<span>{`פרשת ${unit.name}`}</span>
-								<span>{unit.refSpan}</span>
-							</div>
-							{/* The parasha's dedication once at whole-parasha level —
-						never repeated per constituent perek (#2731). */}
-							{(dedicationsByUnit?.[unit.unitId] ?? []).map((line, index) => (
-								// biome-ignore lint/suspicious/noArrayIndexKey: dedication lines are positionally stable
-								<p key={index} className={seferStyles.perekDedication}>
-									{line}
-								</p>
-							))}
-							{/* Pasuk-numeral clicks navigate the facing open perush;
-						the delegated handler no-ops everywhere else. */}
-							{/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: delegated pasuk-number navigation — the real targets carry data-pasuk-num and are pointer-only text numerals */}
-							<div
-								className={seferStyles.perekTextScrollWrapper}
-								onClick={(event) =>
-									handleUnitTextPasukClick(torahKey, event.target)
-								}
+							<RangeRecitationPlayer
+								ranges={unit.ranges}
+								perakim={recitationPerakim(unit.ranges)}
 							>
-								<article className={seferStyles.perekText}>
-									<UnitTextBody
-										ranges={unit.ranges}
-										entityRefsByPerek={entityRefsByPerek}
-										pasukCount={pasukCount}
-										resolvePerek={resolvePerek}
-										/* Book-side anchors carry a unit-unique scope so they
-										 * never duplicate the flat page's canonical
-										 * pasuk-{perek}-{pasuk} ids. */
-										anchorScope={`book-${unit.unitId}`}
-										boundaryMarkers={unitBoundaryMarkers(unit)}
-										emphasisMarkerKey={unit.aliyahEmphasisKey}
-										modestPerekLabels
+								<div className={seferStyles.pageHeaderRight}>
+									<div className={seferStyles.pageHeaderRow}>
+										<span className={seferStyles.pageHeaderSefer}>
+											{seferName}
+										</span>
+										<span className={seferStyles.pageHeaderPerek}>
+											{toLetters(unit.order)}
+										</span>
+									</div>
+								</div>
+								<div className={seferStyles.pageHeaderLeft}>
+									<span>{`פרשת ${unit.name}`}</span>
+									<RangeRecitationControls
+										playLabel={`השמעת קריאת התורה של פרשת ${unit.name}`}
 									/>
-								</article>
-							</div>
+									<span>{unit.refSpan}</span>
+								</div>
+								{/* The parasha's dedication once at whole-parasha level —
+						never repeated per constituent perek (#2731). */}
+								{(dedicationsByUnit?.[unit.unitId] ?? []).map((line, index) => (
+									// biome-ignore lint/suspicious/noArrayIndexKey: dedication lines are positionally stable
+									<p key={index} className={seferStyles.perekDedication}>
+										{line}
+									</p>
+								))}
+								{/* Pasuk-numeral clicks navigate the facing open perush;
+						the delegated handler no-ops everywhere else. */}
+								{/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: delegated pasuk-number navigation — the real targets carry data-pasuk-num and are pointer-only text numerals */}
+								<div
+									className={seferStyles.perekTextScrollWrapper}
+									onClick={(event) =>
+										handleUnitTextPasukClick(torahKey, event.target)
+									}
+								>
+									<article className={seferStyles.perekText}>
+										<UnitTextBody
+											ranges={unit.ranges}
+											entityRefsByPerek={entityRefsByPerek}
+											pasukCount={pasukCount}
+											resolvePerek={resolvePerek}
+											/* Book-side anchors carry a unit-unique scope so they
+											 * never duplicate the flat page's canonical
+											 * pasuk-{perek}-{pasuk} ids. */
+											anchorScope={`book-${unit.unitId}`}
+											boundaryMarkers={unitBoundaryMarkers(unit)}
+											emphasisMarkerKey={unit.aliyahEmphasisKey}
+											modestPerekLabels
+											recitationWords
+										/>
+									</article>
+								</div>
+							</RangeRecitationPlayer>
 						</section>
 					</React.Fragment>,
 					<React.Fragment key={`haftara-${unit.unitId}`}>
@@ -318,32 +353,41 @@ const ParashaSefer = (props: {
 										key={haftaraReading.id}
 										className={unitPageStyles.haftaraVariant}
 									>
-										<h3 className={unitPageStyles.haftaraVariantHeading}>
-											{`הפטרה - ${haftaraReading.label}`}
-										</h3>
-										<p className={unitPageStyles.haftaraRef}>
-											{haftaraReading.refSpan}
-										</p>
-										<article className={seferStyles.perekText}>
-											<UnitTextBody
-												ranges={haftaraReading.ranges}
-												entityRefsByPerek={entityRefsByPerek}
-												pasukCount={pasukCount}
-												resolvePerek={resolvePerek}
-												/* Same unit-unique book scope as the Torah
-												 * page, extended per variant so several
-												 * Haftarot on one page stay distinct — and
-												 * neither collides with the flat page's
-												 * {auxId}-suffixed anchors. */
-												anchorScope={`book-${unit.unitId}-${haftaraReading.id}`}
-												modestPerekLabels
-											/>
-										</article>
-										{haftaraReading.note && (
-											<p className={unitPageStyles.haftaraNote}>
-												{haftaraReading.note}
+										<RangeRecitationPlayer
+											ranges={haftaraReading.ranges}
+											perakim={recitationPerakim(haftaraReading.ranges)}
+										>
+											<h3 className={unitPageStyles.haftaraVariantHeading}>
+												{`הפטרה - ${haftaraReading.label}`}
+												<RangeRecitationControls
+													playLabel={`השמעת ההפטרה - ${haftaraReading.label}`}
+												/>
+											</h3>
+											<p className={unitPageStyles.haftaraRef}>
+												{haftaraReading.refSpan}
 											</p>
-										)}
+											<article className={seferStyles.perekText}>
+												<UnitTextBody
+													ranges={haftaraReading.ranges}
+													entityRefsByPerek={entityRefsByPerek}
+													pasukCount={pasukCount}
+													resolvePerek={resolvePerek}
+													/* Same unit-unique book scope as the Torah
+													 * page, extended per variant so several
+													 * Haftarot on one page stay distinct — and
+													 * neither collides with the flat page's
+													 * {auxId}-suffixed anchors. */
+													anchorScope={`book-${unit.unitId}-${haftaraReading.id}`}
+													modestPerekLabels
+													recitationWords
+												/>
+											</article>
+											{haftaraReading.note && (
+												<p className={unitPageStyles.haftaraNote}>
+													{haftaraReading.note}
+												</p>
+											)}
+										</RangeRecitationPlayer>
 									</div>
 								))}
 								{unit.notes.length > 0 && (

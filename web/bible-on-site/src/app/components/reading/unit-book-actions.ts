@@ -1,6 +1,6 @@
 "use server";
 
-import type { Pasuk } from "@/data/db/tanah-view-types";
+import type { Pasuk, RecitationRecording } from "@/data/db/tanah-view-types";
 import { getMasoraUnitById } from "@/data/masora/masora-units";
 import {
 	getParashaUnitById,
@@ -154,12 +154,18 @@ export async function getUnitBookPerushNotes(
  */
 export async function getPerakimText(
 	perekIds: number[],
-): Promise<Record<number, { pesukim: Pasuk[] }>> {
-	const result: Record<number, { pesukim: Pasuk[] }> = {};
+): Promise<
+	Record<number, { pesukim: Pasuk[]; recitation?: RecitationRecording }>
+> {
+	const result: Record<
+		number,
+		{ pesukim: Pasuk[]; recitation?: RecitationRecording }
+	> = {};
 	for (const perekId of new Set(perekIds.slice(0, LAST_PEREK_ID))) {
 		if (!Number.isInteger(perekId) || perekId < 1 || perekId > LAST_PEREK_ID)
 			continue;
-		result[perekId] = { pesukim: getPerekByPerekId(perekId).pesukim };
+		const perek = getPerekByPerekId(perekId);
+		result[perekId] = { pesukim: perek.pesukim, recitation: perek.recitation };
 	}
 	return result;
 }
