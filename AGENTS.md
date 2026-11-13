@@ -52,7 +52,7 @@ Publish validation evidence only through pull-request descriptions/comments, iss
 
 # Pull Request Merge Authorization
 
-Dorad grants Codex standing authorization to merge pull requests in this repository without requesting separate or per-PR approval. This includes AWS-related pull requests and subsequent revisions of their AWS-impacting changes. Honor any explicit user request to review a particular task or pull request before merging.
+Dorad grants Codex standing authorization to merge pull requests in this repository without requesting separate or per-PR approval. This includes AWS-related pull requests and subsequent revisions of their AWS-impacting changes. This merge authorization supersedes older per-PR AWS merge-approval requirements and auto-merge restrictions in repository documentation. Honor any explicit user request to review a particular task or pull request before merging.
 
 AWS-related pull requests include infrastructure/IaC, IAM and networking, DNS/CDN/cache behavior, S3 access and public asset URLs, deployment workflows, production resource settings, and cost optimizations. Validate and push the changes, address actionable review feedback, and explain their production and backward-compatibility impact with rollback. Codex may merge them directly or use auto-merge under repository policy without additional approval from Dorad.
 
