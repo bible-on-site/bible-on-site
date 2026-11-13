@@ -36,15 +36,14 @@ const readManifest = (): Manifest =>
 	JSON.parse(readFileSync(manifestPath, "utf-8")) as Manifest;
 
 const mocks = vi.hoisted(() => ({
-	llmCaller: null as null | ((params: {
-		system: string;
-		user: string;
-	}) => Promise<{
-		content: string;
-		model: string;
-		promptTokens: number | null;
-		completionTokens: number | null;
-	}>),
+	llmCaller: null as
+		| null
+		| ((params: { system: string; user: string }) => Promise<{
+				content: string;
+				model: string;
+				promptTokens: number | null;
+				completionTokens: number | null;
+		  }>),
 	runGeneration: vi.fn(),
 	callOpenAi: vi.fn(),
 }));

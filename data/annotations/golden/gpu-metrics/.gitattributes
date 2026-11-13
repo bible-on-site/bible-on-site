@@ -1,0 +1,3 @@
+# Qualification records are raw measured artifacts; retain their exact bytes.
+# Recorded CRLF is valid; ordinary trailing-space checks remain enabled.
+*.json -text whitespace=cr-at-eol

@@ -1,0 +1,6 @@
+# Optional CUDA 12/cuDNN 9 libraries for hosts without a system installation.
+# Add nvidia/{cublas,cudnn,cuda_nvrtc}/bin to PATH before starting Python on Windows.
+nvidia-cublas-cu12==12.9.2.10; sys_platform == "win32"
+nvidia-cublas-cu12==12.9.3.13; sys_platform == "linux"
+nvidia-cudnn-cu12==9.28.1.4
+nvidia-cuda-nvrtc-cu12==12.9.86

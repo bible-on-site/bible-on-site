@@ -46,7 +46,7 @@ SELECT 4, 'סוכות', 'סוכות', 'חג הסוכות - זמן שמחתנו, 
 WHERE NOT EXISTS (SELECT 1 FROM tanah_moed WHERE slug = 'סוכות' OR id = 4);
 
 INSERT INTO tanah_moed (id, slug, name, summary, hebrew_month, date_label, annual_order, published)
-SELECT 5, 'שמיני-עצרת-ושמחת-תורה', 'שמיני עצרת ושמחת תורה', 'שמיני עצרת ושמחת תורה - סיום הקריאה והתחלתה מחדש.', 'תשרי', 'כ''ב-כ''ג בתשרי', 5, TRUE FROM DUAL
+SELECT 5, 'שמיני-עצרת-ושמחת-תורה', 'שמיני עצרת ושמחת תורה', 'שמיני עצרת ושמחת תורה - סיום הקריאה והתחלתה מחדש.', 'תשרי', 'כ''ב בתשרי', 5, TRUE FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM tanah_moed WHERE slug = 'שמיני-עצרת-ושמחת-תורה' OR id = 5);
 
 INSERT INTO tanah_moed (id, slug, name, summary, hebrew_month, date_label, annual_order, published)
@@ -252,3 +252,491 @@ JOIN tanah_moed m ON m.id = s.moed_id
 SET s.label = 'הפטרה'
 WHERE m.slug = 'יום-העצמאות'
   AND s.label = 'הפטרה - כאשר נהוג לקרוא';
+
+-- ---------------------------------------------------------------------------
+-- Catalogue update (#3254): three new published moadim, two retirements,
+-- the Israel date for שמיני עצרת ושמחת תורה, and the missing Torah and
+-- maftir and historical reading sections.
+--
+-- Every statement is guarded and repeat-safe: UPDATEs only fire while the
+-- old seeded value is still present, section inserts only fire while the
+-- labelled section is absent, and range inserts only fire while the
+-- labelled section has no ranges. Editorial edits made through the admin
+-- after these statements have run are never rewritten by a redeploy.
+--
+-- Annual ordering follows the Hebrew year including unpublished rows, so a
+-- retired moed that is ever republished lands back in its dated slot.
+-- ---------------------------------------------------------------------------
+
+-- The Israel date for שמיני עצרת ושמחת תורה is כב תשרי alone.
+UPDATE tanah_moed
+SET date_label = 'כ''ב בתשרי'
+WHERE slug = 'שמיני-עצרת-ושמחת-תורה'
+  AND date_label = 'כ''ב-כ''ג בתשרי';
+
+-- Retire לג בעומר and טו בשבט from the published catalogue. The rows and
+-- their sections stay in place as the unpublished archive.
+UPDATE tanah_moed SET published = FALSE WHERE slug = 'לג-בעומר' AND published = TRUE;
+UPDATE tanah_moed SET published = FALSE WHERE slug = 'טו-בשבט' AND published = TRUE;
+
+-- Annual order shifts, descending so the unique annual_order key never
+-- sees a transient duplicate. Every UPDATE is guarded by the old seeded
+-- order still being present.
+UPDATE tanah_moed SET annual_order = 16 WHERE slug = 'תשעה-באב' AND annual_order = 14;
+UPDATE tanah_moed SET annual_order = 15 WHERE slug = 'שבעה-עשר-בתמוז' AND annual_order = 13;
+UPDATE tanah_moed SET annual_order = 14 WHERE slug = 'שבועות' AND annual_order = 12;
+UPDATE tanah_moed SET annual_order = 12 WHERE slug = 'לג-בעומר' AND annual_order = 11;
+UPDATE tanah_moed SET annual_order = 11 WHERE slug = 'יום-העצמאות' AND annual_order = 10;
+UPDATE tanah_moed SET annual_order = 10 WHERE slug = 'פסח' AND annual_order = 9;
+UPDATE tanah_moed SET annual_order = 9 WHERE slug = 'פורים' AND annual_order = 8;
+UPDATE tanah_moed SET annual_order = 8 WHERE slug = 'טו-בשבט' AND annual_order = 7;
+
+-- The three new published moadim, slotted into their dated positions.
+INSERT INTO tanah_moed (id, slug, name, summary, hebrew_month, date_label, annual_order, published)
+SELECT 15, 'עשרה-בטבת', 'עשרה בטבת', 'צום עשרה בטבת - יום תחילת המצור על ירושלים בימי בית ראשון, אחד מארבעת הצומות על החורבן.', 'טבת', 'י'' בטבת', 7, TRUE FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM tanah_moed WHERE slug = 'עשרה-בטבת' OR id = 15);
+
+INSERT INTO tanah_moed (id, slug, name, summary, hebrew_month, date_label, annual_order, published)
+SELECT 16, 'יום-ירושלים', 'יום ירושלים', 'יום ירושלים - כ''ח באייר, יום שחרור ירושלים ואיחודה במלחמת ששת הימים.', 'אייר', 'כ''ח באייר', 13, TRUE FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM tanah_moed WHERE slug = 'יום-ירושלים' OR id = 16);
+
+INSERT INTO tanah_moed (id, slug, name, summary, hebrew_month, date_label, annual_order, published)
+SELECT 17, 'טו-באב', 'ט"ו באב', 'ט"ו באב - יום טוב לישראל בימי המשנה, חג האהבה והשידוכים בכרמים.', 'אב', 'ט''ו באב', 17, TRUE FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM tanah_moed WHERE slug = 'טו-באב' OR id = 17);
+
+-- Section reordering: the seeded haftarah and megillah sections move to
+-- their place after the new Torah sections, keeping the ceremony order.
+-- Each UPDATE is guarded by slug and label and the old position, so the
+-- block stays a no-op on redeploy and after any later admin reorder.
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 4 WHERE m.slug = 'ראש-השנה' AND s.label = 'הפטרת יום ב''' AND s.position = 2;
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 2 WHERE m.slug = 'ראש-השנה' AND s.label = 'הפטרת יום א''' AND s.position = 1;
+
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 2 WHERE m.slug = 'צום-גדליה' AND s.label = 'הפטרת מנחה - אשכנזים' AND s.position = 1;
+
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 4 WHERE m.slug = 'יום-כיפור' AND s.label = 'הפטרת מנחה' AND s.position = 2;
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 2 WHERE m.slug = 'יום-כיפור' AND s.label = 'הפטרת שחרית' AND s.position = 1;
+
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 6 WHERE m.slug = 'סוכות' AND s.label = 'הפטרת שבת חול המועד - תימנים' AND s.position = 4;
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 5 WHERE m.slug = 'סוכות' AND s.label = 'הפטרת שבת חול המועד - ספרדים ואשכנזים' AND s.position = 3;
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 3 WHERE m.slug = 'סוכות' AND s.label = 'הפטרת יום א'' - תימנים' AND s.position = 2;
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 2 WHERE m.slug = 'סוכות' AND s.label = 'הפטרת יום א'' - ספרדים ואשכנזים' AND s.position = 1;
+
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 10 WHERE m.slug = 'חנוכה' AND s.label = 'הפטרת שבת חנוכה ב''' AND s.position = 2;
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 9 WHERE m.slug = 'חנוכה' AND s.label = 'הפטרת שבת חנוכה א''' AND s.position = 1;
+
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 2 WHERE m.slug = 'פורים' AND s.label = 'מגילת אסתר' AND s.position = 1;
+
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 8 WHERE m.slug = 'פסח' AND s.label = 'הפטרת שביעי של פסח' AND s.position = 5;
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 6 WHERE m.slug = 'פסח' AND s.label = 'הפטרת שבת חול המועד - תימנים' AND s.position = 4;
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 5 WHERE m.slug = 'פסח' AND s.label = 'הפטרת שבת חול המועד - ספרדים ואשכנזים' AND s.position = 3;
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 3 WHERE m.slug = 'פסח' AND s.label = 'הפטרת יום א'' - ספרדים ותימנים' AND s.position = 2;
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 2 WHERE m.slug = 'פסח' AND s.label = 'הפטרת יום א'' - אשכנזים' AND s.position = 1;
+
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 3 WHERE m.slug = 'שבועות' AND s.label = 'מגילת רות' AND s.position = 1;
+
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 2 WHERE m.slug = 'שבעה-עשר-בתמוז' AND s.label = 'הפטרת מנחה - אשכנזים' AND s.position = 1;
+
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 6 WHERE m.slug = 'תשעה-באב' AND s.label = 'הפטרת מנחה - אשכנזים' AND s.position = 5;
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 5 WHERE m.slug = 'תשעה-באב' AND s.label = 'הפטרת מנחה - ספרדים ותימנים' AND s.position = 4;
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 4 WHERE m.slug = 'תשעה-באב' AND s.label = 'הפטרת שחרית - תימנים' AND s.position = 3;
+UPDATE tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+SET s.position = 3 WHERE m.slug = 'תשעה-באב' AND s.label = 'הפטרת שחרית - ספרדים ואשכנזים' AND s.position = 2;
+
+-- New sections: one guarded insert per labelled section. The position guard
+-- keeps redeploys idempotent and never rewrites an admin-renamed section.
+-- A renamed section still occupies its (moed_id, position) slot, so guarding
+-- on label would reinsert the old label and collide with
+-- uk_moed_section_position — guarding on position skips instead.
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה ומפטיר - יום א''', 1 FROM tanah_moed m
+WHERE m.slug = 'ראש-השנה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 1);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה ומפטיר - יום ב''', 3 FROM tanah_moed m
+WHERE m.slug = 'ראש-השנה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 3);
+
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - ויחל (שחרית ומנחה)', 1 FROM tanah_moed m
+WHERE m.slug = 'צום-גדליה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 1);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'סיפור הרצח - ירמיהו מ-מא', 3 FROM tanah_moed m
+WHERE m.slug = 'צום-גדליה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 3);
+
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה ומפטיר - שחרית', 1 FROM tanah_moed m
+WHERE m.slug = 'יום-כיפור'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 1);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - מנחה', 3 FROM tanah_moed m
+WHERE m.slug = 'יום-כיפור'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 3);
+
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה ומפטיר - יום א''', 1 FROM tanah_moed m
+WHERE m.slug = 'סוכות'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 1);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - שבת חול המועד', 4 FROM tanah_moed m
+WHERE m.slug = 'סוכות'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 4);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - הושענא רבה', 7 FROM tanah_moed m
+WHERE m.slug = 'סוכות'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 7);
+
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - וזאת הברכה ובראשית', 1 FROM tanah_moed m
+WHERE m.slug = 'שמיני-עצרת-ושמחת-תורה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 1);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'מפטיר', 2 FROM tanah_moed m
+WHERE m.slug = 'שמיני-עצרת-ושמחת-תורה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 2);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'הפטרה', 3 FROM tanah_moed m
+WHERE m.slug = 'שמיני-עצרת-ושמחת-תורה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 3);
+
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - יום א''', 1 FROM tanah_moed m
+WHERE m.slug = 'חנוכה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 1);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - יום ב''', 2 FROM tanah_moed m
+WHERE m.slug = 'חנוכה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 2);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - יום ג''', 3 FROM tanah_moed m
+WHERE m.slug = 'חנוכה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 3);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - יום ד''', 4 FROM tanah_moed m
+WHERE m.slug = 'חנוכה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 4);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - יום ה''', 5 FROM tanah_moed m
+WHERE m.slug = 'חנוכה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 5);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - יום ו''', 6 FROM tanah_moed m
+WHERE m.slug = 'חנוכה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 6);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - יום ז''', 7 FROM tanah_moed m
+WHERE m.slug = 'חנוכה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 7);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - יום ח''', 8 FROM tanah_moed m
+WHERE m.slug = 'חנוכה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 8);
+
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - ויבא עמלק', 1 FROM tanah_moed m
+WHERE m.slug = 'פורים'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 1);
+
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה ומפטיר - יום א''', 1 FROM tanah_moed m
+WHERE m.slug = 'פסח'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 1);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה ומפטיר - שבת חול המועד', 4 FROM tanah_moed m
+WHERE m.slug = 'פסח'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 4);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה ומפטיר - שביעי של פסח', 7 FROM tanah_moed m
+WHERE m.slug = 'פסח'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 7);
+
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה ומפטיר', 1 FROM tanah_moed m
+WHERE m.slug = 'שבועות'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 1);
+
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - ויחל (שחרית ומנחה)', 1 FROM tanah_moed m
+WHERE m.slug = 'שבעה-עשר-בתמוז'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 1);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'הקשר היסטורי - מלכים ב כה', 3 FROM tanah_moed m
+WHERE m.slug = 'שבעה-עשר-בתמוז'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 3);
+
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - כי תוליד', 2 FROM tanah_moed m
+WHERE m.slug = 'תשעה-באב'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 2);
+
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'קריאת התורה - ויחל (שחרית ומנחה)', 1 FROM tanah_moed m
+WHERE m.slug = 'עשרה-בטבת'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 1);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'הפטרת מנחה - אשכנזים', 2 FROM tanah_moed m
+WHERE m.slug = 'עשרה-בטבת'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 2);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'הקשר היסטורי', 3 FROM tanah_moed m
+WHERE m.slug = 'עשרה-בטבת'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 3);
+
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'תהלים קכב - שמחתי באומרים לי', 1 FROM tanah_moed m
+WHERE m.slug = 'יום-ירושלים'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 1);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'ישעיהו סב - למען ציון', 2 FROM tanah_moed m
+WHERE m.slug = 'יום-ירושלים'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 2);
+
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'שופטים כא - בנות שילה', 1 FROM tanah_moed m
+WHERE m.slug = 'טו-באב'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 1);
+INSERT INTO tanah_moed_section (moed_id, label, position)
+SELECT m.id, 'משלי לא - שקר החן', 2 FROM tanah_moed m
+WHERE m.slug = 'טו-באב'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_section s WHERE s.moed_id = m.id AND s.position = 2);
+
+-- New ranges: each insert targets its section by slug and label and only
+-- fires while that section has no ranges at all, so curated range edits
+-- are never duplicated or overwritten.
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, seed.position, seed.ps, seed.vs, seed.pe, seed.ve
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+JOIN (SELECT 1 AS position, 21 AS ps, 1 AS vs, 21 AS pe, 34 AS ve UNION ALL
+      SELECT 2, 146, 1, 146, 6) seed ON TRUE
+WHERE m.slug = 'ראש-השנה' AND s.label = 'קריאת התורה ומפטיר - יום א'''
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, seed.position, seed.ps, seed.vs, seed.pe, seed.ve
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+JOIN (SELECT 1 AS position, 22 AS ps, 1 AS vs, 22 AS pe, 24 AS ve UNION ALL
+      SELECT 2, 146, 1, 146, 6) seed ON TRUE
+WHERE m.slug = 'ראש-השנה' AND s.label = 'קריאת התורה ומפטיר - יום ב'''
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, seed.position, seed.ps, seed.vs, seed.pe, seed.ve
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+JOIN (SELECT 1 AS position, 82 AS ps, 11 AS vs, 82 AS pe, 14 AS ve UNION ALL
+      SELECT 2, 84, 1, 84, 10) seed ON TRUE
+WHERE m.slug = 'צום-גדליה' AND s.label = 'קריאת התורה - ויחל (שחרית ומנחה)'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 440, 1, 441, 18
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'צום-גדליה' AND s.label = 'סיפור הרצח - ירמיהו מ-מא'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, seed.position, seed.ps, seed.vs, seed.pe, seed.ve
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+JOIN (SELECT 1 AS position, 106 AS ps, 1 AS vs, 106 AS pe, 34 AS ve UNION ALL
+      SELECT 2, 146, 7, 146, 11) seed ON TRUE
+WHERE m.slug = 'יום-כיפור' AND s.label = 'קריאת התורה ומפטיר - שחרית'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 108, 1, 108, 30
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'יום-כיפור' AND s.label = 'קריאת התורה - מנחה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, seed.position, seed.ps, seed.vs, seed.pe, seed.ve
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+JOIN (SELECT 1 AS position, 112 AS ps, 26 AS vs, 113 AS pe, 44 AS ve UNION ALL
+      SELECT 2, 146, 12, 146, 16) seed ON TRUE
+WHERE m.slug = 'סוכות' AND s.label = 'קריאת התורה ומפטיר - יום א'''
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 83, 12, 84, 15
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'סוכות' AND s.label = 'קריאת התורה - שבת חול המועד'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 146, 26, 146, 31
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'סוכות' AND s.label = 'קריאת התורה - הושענא רבה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, seed.position, seed.ps, seed.vs, seed.pe, seed.ve
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+JOIN (SELECT 1 AS position, 186 AS ps, 1 AS vs, 187 AS pe, 12 AS ve UNION ALL
+      SELECT 2, 1, 1, 2, 3) seed ON TRUE
+WHERE m.slug = 'שמיני-עצרת-ושמחת-תורה' AND s.label = 'קריאת התורה - וזאת הברכה ובראשית'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 146, 35, 147, 1
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'שמיני-עצרת-ושמחת-תורה' AND s.label = 'מפטיר'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 188, 1, 188, 18
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'שמיני-עצרת-ושמחת-תורה' AND s.label = 'הפטרה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 124, 1, 124, 23
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'חנוכה' AND s.label = 'קריאת התורה - יום א'''
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 124, 24, 124, 35
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'חנוכה' AND s.label = 'קריאת התורה - יום ב'''
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 124, 36, 124, 47
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'חנוכה' AND s.label = 'קריאת התורה - יום ג'''
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 124, 48, 124, 59
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'חנוכה' AND s.label = 'קריאת התורה - יום ד'''
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 124, 60, 124, 71
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'חנוכה' AND s.label = 'קריאת התורה - יום ה'''
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 124, 72, 124, 83
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'חנוכה' AND s.label = 'קריאת התורה - יום ו'''
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 124, 84, 124, 89
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'חנוכה' AND s.label = 'קריאת התורה - יום ז'''
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 125, 1, 125, 4
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'חנוכה' AND s.label = 'קריאת התורה - יום ח'''
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 67, 8, 67, 16
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'פורים' AND s.label = 'קריאת התורה - ויבא עמלק'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, seed.position, seed.ps, seed.vs, seed.pe, seed.ve
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+JOIN (SELECT 1 AS position, 62 AS ps, 21 AS vs, 62 AS pe, 51 AS ve UNION ALL
+      SELECT 2, 145, 16, 145, 25) seed ON TRUE
+WHERE m.slug = 'פסח' AND s.label = 'קריאת התורה ומפטיר - יום א'''
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, seed.position, seed.ps, seed.vs, seed.pe, seed.ve
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+JOIN (SELECT 1 AS position, 83 AS ps, 12 AS vs, 84 AS pe, 26 AS ve UNION ALL
+      SELECT 2, 145, 19, 145, 25) seed ON TRUE
+WHERE m.slug = 'פסח' AND s.label = 'קריאת התורה ומפטיר - שבת חול המועד'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, seed.position, seed.ps, seed.vs, seed.pe, seed.ve
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+JOIN (SELECT 1 AS position, 63 AS ps, 17 AS vs, 65 AS pe, 26 AS ve UNION ALL
+      SELECT 2, 145, 19, 145, 25) seed ON TRUE
+WHERE m.slug = 'פסח' AND s.label = 'קריאת התורה ומפטיר - שביעי של פסח'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, seed.position, seed.ps, seed.vs, seed.pe, seed.ve
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+JOIN (SELECT 1 AS position, 69 AS ps, 1 AS vs, 70 AS pe, 23 AS ve UNION ALL
+      SELECT 2, 145, 26, 145, 31) seed ON TRUE
+WHERE m.slug = 'שבועות' AND s.label = 'קריאת התורה ומפטיר'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, seed.position, seed.ps, seed.vs, seed.pe, seed.ve
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+JOIN (SELECT 1 AS position, 82 AS ps, 11 AS vs, 82 AS pe, 14 AS ve UNION ALL
+      SELECT 2, 84, 1, 84, 10) seed ON TRUE
+WHERE m.slug = 'שבעה-עשר-בתמוז' AND s.label = 'קריאת התורה - ויחל (שחרית ומנחה)'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 334, 3, 334, 9
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'שבעה-עשר-בתמוז' AND s.label = 'הקשר היסטורי - מלכים ב כה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 157, 25, 157, 40
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'תשעה-באב' AND s.label = 'קריאת התורה - כי תוליד'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, seed.position, seed.ps, seed.vs, seed.pe, seed.ve
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+JOIN (SELECT 1 AS position, 82 AS ps, 11 AS vs, 82 AS pe, 14 AS ve UNION ALL
+      SELECT 2, 84, 1, 84, 10) seed ON TRUE
+WHERE m.slug = 'עשרה-בטבת' AND s.label = 'קריאת התורה - ויחל (שחרית ומנחה)'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 389, 6, 390, 8
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'עשרה-בטבת' AND s.label = 'הפטרת מנחה - אשכנזים'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, seed.position, seed.ps, seed.vs, seed.pe, seed.ve
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+JOIN (SELECT 1 AS position, 334 AS ps, 1 AS vs, 334 AS pe, 3 AS ve UNION ALL
+      SELECT 2, 476, 1, 476, 2) seed ON TRUE
+WHERE m.slug = 'עשרה-בטבת' AND s.label = 'הקשר היסטורי'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 689, 1, 689, 9
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'יום-ירושלים' AND s.label = 'תהלים קכב - שמחתי באומרים לי'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 396, 1, 396, 7
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'יום-ירושלים' AND s.label = 'ישעיהו סב - למען ציון'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 232, 15, 232, 25
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'טו-באב' AND s.label = 'שופטים כא - בנות שילה'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);
+INSERT INTO tanah_moed_range (section_id, position, perek_id_start, pasuk_start, perek_id_end, pasuk_end)
+SELECT s.id, 1, 748, 30, 748, 30
+FROM tanah_moed_section s JOIN tanah_moed m ON m.id = s.moed_id
+WHERE m.slug = 'טו-באב' AND s.label = 'משלי לא - שקר החן'
+AND NOT EXISTS (SELECT 1 FROM tanah_moed_range r WHERE r.section_id = s.id);

@@ -1,0 +1,341 @@
+{
+  "version": 1,
+  "domain": "article",
+  "description": "Frozen independent provisional validation labels. See README.md; labels must receive human review before production claims.",
+  "curation": {
+    "status": "agent-curated-provisional",
+    "human_reviewed": false,
+    "frozen_before_model_comparison": true,
+    "curated_at": "2026-11-11",
+    "scope": "Independent coverage checks, not a random corpus sample or a claim of production accuracy. PERSON for divine names follows the existing benchmark convention. Explicit alternatives record legitimate spelling or nation/territory ambiguity."
+  },
+  "categories": {
+    "ambiguity": "ambiguity",
+    "anchors": "anchors",
+    "animal": "animal",
+    "astronomical-object": "astronomical object",
+    "coverage-gap": "coverage gap",
+    "event": "event",
+    "homographs": "homographs",
+    "multi-word": "multi word",
+    "nation": "nation",
+    "object": "object",
+    "ordinary-nouns": "ordinary nouns",
+    "person": "person",
+    "places": "places",
+    "plant": "plant",
+    "prefixes": "prefixes",
+    "prophecy": "prophecy",
+    "quoted-scripture": "quoted scripture",
+    "saying": "saying",
+    "sefer": "sefer",
+    "skip-zones": "skip zones",
+    "utf16": "utf16",
+    "war": "war"
+  },
+  "cases": [
+    {
+      "id": "validation-article-leaders",
+      "article_id": 9501,
+      "categories": [
+        "person",
+        "prefixes",
+        "places"
+      ],
+      "content": "<p>דבורה וברק עלו לתבור.</p>",
+      "mentions": [
+        {
+          "surface": "דבורה",
+          "name": "דבורה",
+          "type": "PERSON"
+        },
+        {
+          "surface": "וברק",
+          "name": "ברק",
+          "type": "PERSON"
+        },
+        {
+          "surface": "לתבור",
+          "name": "תבור",
+          "type": "PLACE"
+        }
+      ]
+    },
+    {
+      "id": "validation-article-nation",
+      "article_id": 9502,
+      "categories": [
+        "ambiguity",
+        "nation"
+      ],
+      "content": "<p>גדעון היכה את מדין, אך מדין שבפסוק היא האומה.</p>",
+      "mentions": [
+        {
+          "surface": "גדעון",
+          "name": "גדעון",
+          "type": "PERSON"
+        },
+        {
+          "surface": "מדין",
+          "name": "מדין",
+          "type": "NATION",
+          "type_alternates": [
+            "PLACE"
+          ]
+        },
+        {
+          "surface": "מדין",
+          "name": "מדין",
+          "type": "NATION",
+          "occurrence": 1,
+          "type_alternates": [
+            "PLACE"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "validation-article-territory",
+      "article_id": 9503,
+      "categories": [
+        "nation",
+        "multi-word",
+        "prefixes"
+      ],
+      "content": "<p>בני יהודה יצאו מחברון אל באר שבע.</p>",
+      "mentions": [
+        {
+          "surface": "יהודה",
+          "name": "יהודה",
+          "type": "NATION"
+        },
+        {
+          "surface": "מחברון",
+          "name": "חברון",
+          "type": "PLACE"
+        },
+        {
+          "surface": "באר שבע",
+          "name": "באר שבע",
+          "type": "PLACE"
+        },
+        {
+          "surface": "אל",
+          "name": "אל",
+          "type": "PERSON",
+          "expected": "held"
+        }
+      ]
+    },
+    {
+      "id": "validation-article-prayer",
+      "article_id": 9504,
+      "categories": [
+        "person",
+        "places",
+        "homographs"
+      ],
+      "content": "<p>חנה התפללה בשילה, ושמואל נשאר שם.</p>",
+      "mentions": [
+        {
+          "surface": "חנה",
+          "name": "חנה",
+          "type": "PERSON"
+        },
+        {
+          "surface": "בשילה",
+          "name": "שילה",
+          "type": "PLACE",
+          "name_alternates": [
+            "שלה"
+          ]
+        },
+        {
+          "surface": "ושמואל",
+          "name": "שמואל",
+          "type": "PERSON"
+        },
+        {
+          "surface": "שם",
+          "name": "שם",
+          "type": "PERSON",
+          "expected": "held"
+        }
+      ]
+    },
+    {
+      "id": "validation-article-rabbinic",
+      "article_id": 9505,
+      "categories": [
+        "coverage-gap",
+        "multi-word",
+        "sefer"
+      ],
+      "content": "<p>רבי עקיבא למד תורה.</p>",
+      "mentions": [
+        {
+          "surface": "רבי עקיבא",
+          "name": "רבי עקיבא",
+          "type": "PERSON",
+          "name_alternates": [
+            "עקיבא"
+          ]
+        },
+        {
+          "surface": "תורה",
+          "name": "תורה",
+          "type": "SEFER"
+        }
+      ]
+    },
+    {
+      "id": "validation-article-living-kinds",
+      "article_id": 9506,
+      "categories": [
+        "animal",
+        "plant",
+        "prefixes"
+      ],
+      "content": "<p>הנחש הסתתר ליד התאנה.</p>",
+      "mentions": [
+        {
+          "surface": "הנחש",
+          "name": "נחש",
+          "type": "ANIMAL"
+        },
+        {
+          "surface": "התאנה",
+          "name": "תאנה",
+          "type": "PLANT"
+        }
+      ]
+    },
+    {
+      "id": "validation-article-objects",
+      "article_id": 9507,
+      "categories": [
+        "object",
+        "multi-word"
+      ],
+      "content": "<p>המנורה עמדה ליד ארון הברית.</p>",
+      "mentions": [
+        {
+          "surface": "המנורה",
+          "name": "מנורה",
+          "type": "TEMPLE_TOOL"
+        },
+        {
+          "surface": "ארון הברית",
+          "name": "ארון הברית",
+          "type": "OBJECT"
+        }
+      ]
+    },
+    {
+      "id": "validation-article-creation",
+      "article_id": 9508,
+      "categories": [
+        "astronomical-object",
+        "event",
+        "multi-word"
+      ],
+      "content": "<p>השמש והירח נזכרים בבריאת העולם.</p>",
+      "mentions": [
+        {
+          "surface": "השמש",
+          "name": "שמש",
+          "type": "ASTRONOMICAL_OBJECT"
+        },
+        {
+          "surface": "והירח",
+          "name": "ירח",
+          "type": "ASTRONOMICAL_OBJECT"
+        },
+        {
+          "surface": "בבריאת העולם",
+          "name": "בריאת העולם",
+          "type": "EVENT"
+        }
+      ]
+    },
+    {
+      "id": "validation-article-war",
+      "article_id": 9509,
+      "categories": [
+        "war",
+        "sefer",
+        "multi-word"
+      ],
+      "content": "<p>מלחמת עמלק מתוארת בספר שמות.</p>",
+      "mentions": [
+        {
+          "surface": "מלחמת עמלק",
+          "name": "מלחמת עמלק",
+          "type": "WAR"
+        },
+        {
+          "surface": "שמות",
+          "name": "שמות",
+          "type": "SEFER"
+        }
+      ]
+    },
+    {
+      "id": "validation-article-saying",
+      "article_id": 9510,
+      "categories": [
+        "event",
+        "saying",
+        "multi-word",
+        "quoted-scripture"
+      ],
+      "content": "<p>על יציאת מצרים נאמר: <q>שלח את עמי</q>.</p>",
+      "mentions": [
+        {
+          "surface": "יציאת מצרים",
+          "name": "יציאת מצרים",
+          "type": "EVENT"
+        },
+        {
+          "surface": "שלח את עמי",
+          "name": "שלח את עמי",
+          "type": "SAYING"
+        }
+      ]
+    },
+    {
+      "id": "validation-article-prophecy",
+      "article_id": 9511,
+      "categories": [
+        "prophecy",
+        "sefer",
+        "multi-word"
+      ],
+      "content": "<p>חזון העצמות היבשות הוא נבואה בספר יחזקאל.</p>",
+      "mentions": [
+        {
+          "surface": "חזון העצמות היבשות",
+          "name": "חזון העצמות היבשות",
+          "type": "PROPHECY"
+        },
+        {
+          "surface": "יחזקאל",
+          "name": "יחזקאל",
+          "type": "SEFER"
+        }
+      ]
+    },
+    {
+      "id": "validation-article-excluded",
+      "article_id": 9512,
+      "categories": [
+        "ordinary-nouns",
+        "anchors",
+        "skip-zones",
+        "utf16"
+      ],
+      "content": "<p>😀 <a href='/pedia/משה'>משה</a> הניח את הכלי על השולחן.</p><script>רות</script><style>.דוד{color:red}</style>",
+      "mentions": []
+    }
+  ]
+}

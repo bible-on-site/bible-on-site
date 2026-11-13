@@ -347,11 +347,16 @@ public class TanahpediaFamilyTreeView : ContentView
 
         if (card.IsLink)
         {
-            border.GestureRecognizers.Add(new TapGestureRecognizer
+            // Border visuals stay untouched; the wrapper supplies the
+            // Windows Button/UIA peer and the tap on touch platforms (#3252).
+            var tappable = new TappableView
             {
                 Command = EntryTappedCommand,
                 CommandParameter = card.EntryUniqueName,
-            });
+                Content = border,
+            };
+            SemanticProperties.SetDescription(tappable, card.DisplayName);
+            return tappable;
         }
         return border;
     }
