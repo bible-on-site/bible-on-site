@@ -1205,11 +1205,13 @@ export function summarizeRun(rec) {
 	return out;
 }
 
-export function readJson(file) {
+function readJsonText(file) {
 	const bytes = readFileSync(file);
-	return JSON.parse(
-		(file.endsWith(".gz") ? zlib.gunzipSync(bytes) : bytes).toString("utf8"),
-	);
+	return (file.endsWith(".gz") ? zlib.gunzipSync(bytes) : bytes).toString("utf8");
+}
+
+export function readJson(file) {
+	return JSON.parse(readJsonText(file));
 }
 
 function writeJson(file, value) {
@@ -1464,7 +1466,7 @@ export function cmdSanitize(args) {
 	// Guard: no absolute local path may survive.
 	let leaks = 0;
 	for (const f of readdirSync(dir).filter((f) => /\.json(?:\.gz)?$/.test(f))) {
-		const s = JSON.stringify(readJson(path.join(dir, f)));
+		const s = readJsonText(path.join(dir, f));
 		for (const m of s.matchAll(/[A-Za-z]:[\\/]+Users[\\/]+[^"\\/\s]+/g)) {
 			leaks++;
 			console.warn(`possible local path in ${f}: ${m[0]}`);
