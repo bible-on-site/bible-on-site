@@ -218,9 +218,12 @@ entries, including `snapshot.lock.lock`; snapshot payload and configuration stay
 intact. These locks contain host-local ownership state, so importing a PID from
 another runner can prevent a valid snapshot from booting. Active or unknown
 ownership blocks cleanup and cache publication. Shutdown keeps its existing
-deadlines and signals only validated emulator PIDs. When manifest resolution
-fails, both keys degrade to
-`unresolved`, which always misses and never saves — the run falls back to the
+deadlines and signals only validated emulator PIDs. An SDK shutdown watchdog
+that exits between the process snapshot and its first native identity lookup
+is retained only as a reason to wait for a fresh process/ADB absence check.
+It is never signalled, and its PID cannot authorize a subsequently reused live
+process. The real-process Linux regression exercises that exit race. When
+manifest resolution fails, both keys degrade to `unresolved`, which always misses and never saves — the run falls back to the
 original download path. Maintenance: bump `AVD_SNAPSHOT_RECIPE` when boot
 options, device profile, readiness flow or the runner-action version change;
 bump nothing else by hand — emulator and system-image updates rotate keys on

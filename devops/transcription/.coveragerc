@@ -1,0 +1,10 @@
+[run]
+branch = True
+data_file = .coverage/transcription/.coverage
+source = devops/transcription
+omit =
+    */test_*.py
+
+[report]
+fail_under = 95
+show_missing = True
