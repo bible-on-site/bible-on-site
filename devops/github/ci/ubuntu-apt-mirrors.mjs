@@ -3,18 +3,17 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MIRROR_LIST = "/etc/apt/apt-mirrors.txt";
-const replacedArchive =
-	/^https?:\/\/(?:azure\.archive\.ubuntu\.com|mirrors\.kernel\.org)\/ubuntu\/?$/;
-const mirror = "https://archive.ubuntu.com/ubuntu/";
+const azureArchive = /^https?:\/\/azure\.archive\.ubuntu\.com\/ubuntu\/?$/;
+const mirror = "https://mirrors.kernel.org/ubuntu/";
 const address = (line) => line.trimStart().split(/\s+/)[0];
 
-/** Prefer the canonical archive over Azure and the unreachable custom mirror. */
+/** Keep the runner's primary Ubuntu mirror independent of ubuntu.com DNS. */
 export function preferUbuntuArchive(contents) {
 	return contents
 		.split(/(?<=\n)/)
 		.map((line) => {
 			const uri = address(line);
-			return replacedArchive.test(uri) ? line.replace(uri, mirror) : line;
+			return azureArchive.test(uri) ? line.replace(uri, mirror) : line;
 		})
 		.join("");
 }
@@ -36,7 +35,7 @@ export async function configureUbuntuAptMirrors(file = MIRROR_LIST) {
 	const next = preferUbuntuArchive(contents);
 	if (next === contents) return false;
 	await writeFile(file, next);
-	console.log("Runner APT now prefers the canonical Ubuntu archive");
+	console.log("Runner APT now prefers the kernel.org Ubuntu mirror");
 	return true;
 }
 

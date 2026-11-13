@@ -15,16 +15,16 @@ const mirrors =
 	"https://archive.ubuntu.com/ubuntu/\tpriority:2\n" +
 	"https://security.ubuntu.com/ubuntu/\tpriority:3\n";
 const mirrored =
-	"https://archive.ubuntu.com/ubuntu/\tpriority:1\n" +
+	"https://mirrors.kernel.org/ubuntu/\tpriority:1\n" +
 	"https://archive.ubuntu.com/ubuntu/\tpriority:2\n" +
 	"https://security.ubuntu.com/ubuntu/\tpriority:3\n";
 
-test("uses the canonical Ubuntu archive while retaining every mirror priority", () => {
+test("uses an independent Ubuntu mirror while retaining every mirror priority", () => {
 	assert.equal(preferUbuntuArchive(mirrors), mirrored);
 	assert.equal(preferUbuntuArchive(mirrored), mirrored);
 });
 
-test("replaces exact Azure URLs and preserves fallback URLs, comments and line endings", () => {
+test("replaces only exact Azure URLs and preserves fallback URLs, comments and line endings", () => {
 	const untouched =
 		"# http://azure.archive.ubuntu.com/ubuntu/\r\n" +
 		"https://azure.archive.ubuntu.com.example.org/ubuntu/ priority:4\r\n" +
@@ -35,8 +35,8 @@ test("replaces exact Azure URLs and preserves fallback URLs, comments and line e
 				"https://azure.archive.ubuntu.com/ubuntu/ priority:1\r\n" +
 				untouched,
 		),
-		"  https://archive.ubuntu.com/ubuntu/ priority:1\r\n" +
-			"https://archive.ubuntu.com/ubuntu/ priority:1\r\n" +
+		"  https://mirrors.kernel.org/ubuntu/ priority:1\r\n" +
+			"https://mirrors.kernel.org/ubuntu/ priority:1\r\n" +
 			untouched,
 	);
 });
@@ -54,19 +54,7 @@ test("keeps a sole Azure entry and upgrades HTTP delivery to HTTPS", () => {
 	]) {
 		assert.equal(
 			preferUbuntuArchive(`${uri}\tpriority:1\n`),
-			"https://archive.ubuntu.com/ubuntu/\tpriority:1\n",
-		);
-	}
-});
-
-test("removes the failing legacy custom mirror instead of leaving it ahead of the healthy fallback", () => {
-	for (const uri of [
-		"https://mirrors.kernel.org/ubuntu/",
-		"http://mirrors.kernel.org/ubuntu",
-	]) {
-		assert.equal(
-			preferUbuntuArchive(`${uri}\tpriority:1\n`),
-			"https://archive.ubuntu.com/ubuntu/\tpriority:1\n",
+			"https://mirrors.kernel.org/ubuntu/\tpriority:1\n",
 		);
 	}
 });
@@ -103,7 +91,7 @@ test("updates only the mirror file, preserves permissions and skips repeated wri
 	assert.equal((await stat(file)).mtimeMs, modified);
 	assert.equal(await readFile(sources, "utf8"), signedSources);
 	assert.deepEqual(logs, [
-		["Runner APT now prefers the canonical Ubuntu archive"],
+		["Runner APT now prefers the kernel.org Ubuntu mirror"],
 	]);
 });
 
@@ -141,7 +129,7 @@ test("configures the mirror list through the same CLI used by CI", async (t) => 
 	assert.equal(result.stderr, "");
 	assert.equal(
 		result.stdout.trim(),
-		"Runner APT now prefers the canonical Ubuntu archive",
+		"Runner APT now prefers the kernel.org Ubuntu mirror",
 	);
 	assert.equal(await readFile(file, "utf8"), mirrored);
 });
