@@ -34,7 +34,16 @@ public sealed class RecitationPlaybackCursor
     /// only this pasuk's own preview qualifies (a paused chapter stays paused).
     /// </summary>
     public bool ResumesOnPasukFocus(int perekId, int pasukNum, bool alreadyPlaying) =>
-        !alreadyPlaying && PlayingKey == $"pasuk:{perekId}:{pasukNum}";
+        ResumesOnPasukFocus($"pasuk:{perekId}:{pasukNum}", alreadyPlaying);
+
+    /// <summary>
+    /// Same rule for readers whose pasuk keys carry a clip suffix — a Masoretic
+    /// unit boundary row keys its clip as <c>pasuk:p:n:clipStart</c>, and any of
+    /// that pasuk's unit clips qualifies (#3260).
+    /// </summary>
+    public bool ResumesOnPasukFocus(string playingKeyPrefix, bool alreadyPlaying) =>
+        !alreadyPlaying && PlayingKey is { } key &&
+        (key == playingKeyPrefix || key.StartsWith(playingKeyPrefix + ":", StringComparison.Ordinal));
 
     /// <summary>Marks the new playback identity once its clip is prepared.</summary>
     public void Begin(string key, bool continuous)

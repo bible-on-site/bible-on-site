@@ -91,6 +91,22 @@ public sealed class NativeSnapshotTests
         Assert.Single(executor.Commands, command => command == DriverCommand.IsElementEnabled);
     }
 
+    [Theory]
+    [InlineData("PerekSource", "בראשית א")]
+    [InlineData("PasukText", "א בראשית ברא")]
+    public void ReaderTextUsesTheCurrentSnapshotWhenTheNativeElementIsRecycled(string automationId, string text)
+    {
+        var executor = new SnapshotExecutor([Entry(text), Entry(text + " fresh")]) { StaleOnText = true };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var page = new PerekPage(driver, new IosPlatformAdapter());
+        string Read() => automationId == "PerekSource" ? page.Source : page.FirstPasuk;
+
+        Assert.Equal(text, Read());
+        Assert.Equal(text + " fresh", Read());
+        Assert.Equal(2, executor.Lookups);
+        Assert.DoesNotContain(DriverCommand.GetElementText, executor.Commands);
+    }
+
     [Fact]
     public void ReadOnlySearchGeometryNeedsNoNativeHitTestOrPropertyRequests()
     {
@@ -312,6 +328,7 @@ public sealed class NativeSnapshotTests
         public int Lookups { get; private set; }
         public Dictionary<string, object?>? LastParameters { get; private set; }
         public bool Stale { get; init; }
+        public bool StaleOnText { get; init; }
         public int TimeoutOnLookup { get; init; }
         public string TimeoutMessage { get; init; } = "The element observation timed out.";
         public string Orientation { get; set; } = "PORTRAIT";
@@ -363,7 +380,15 @@ public sealed class NativeSnapshotTests
             }
             else if (command.Name == DriverCommand.GetElementText)
             {
-                value = "live text after lookup";
+                if (StaleOnText)
+                {
+                    status = WebDriverResult.ObsoleteElement;
+                    value = new Dictionary<string, object> { ["message"] = "The native element was recycled after lookup." };
+                }
+                else
+                {
+                    value = "live text after lookup";
+                }
             }
             else if (command.Name == DriverCommand.IsElementEnabled)
             {

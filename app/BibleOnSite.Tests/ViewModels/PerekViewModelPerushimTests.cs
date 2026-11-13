@@ -309,6 +309,136 @@ public class PerekViewModelPerushimTests
 
     #endregion
 
+    #region PerushNameFilter — picker rows (#3306)
+
+    [Fact]
+    public void PerushNameFilter_NarrowsRowsToMatchingNames_TheReportedCase()
+    {
+        // The report: typing אונקלוס left every commentary visible because the
+        // list only scrolled to the first match. FilteredPerushim is what the
+        // picker's rows bind — unrelated names must leave the collection.
+        var vm = CreateViewModelWithFullPicker();
+
+        vm.PerushNameFilter = "אונקלוס";
+
+        vm.FilteredPerushim.Select(p => p.Name).Should().Equal("תרגום אונקלוס");
+    }
+
+    [Fact]
+    public void PerushNameFilter_KeepsLaterMatchesAndTheirOriginalOrder()
+    {
+        var vm = CreateViewModelWithFullPicker();
+
+        vm.PerushNameFilter = "תרגום";
+
+        vm.FilteredPerushim.Select(p => p.Name)
+            .Should().Equal("תרגום אונקלוס", "תרגום יונתן");
+    }
+
+    [Fact]
+    public void PerushNameFilter_MatchesPartialAndNormalizedInput()
+    {
+        var vm = CreateViewModelWithFullPicker();
+
+        // A suffix of a name still matches — the filter is a containment check.
+        vm.PerushNameFilter = "סעדיה";
+        vm.FilteredPerushim.Select(p => p.Name).Should().Equal("ר' סעדיה גאון");
+
+        // Niqqud and quote variants normalize away on both sides.
+        vm.PerushNameFilter = "רשי";
+        vm.FilteredPerushim.Select(p => p.Name).Should().Equal("רש\"י");
+        vm.PerushNameFilter = "רַשִּׁי";
+        vm.FilteredPerushim.Select(p => p.Name).Should().Equal("רש\"י");
+    }
+
+    [Fact]
+    public void PerushNameFilter_WhitespaceRestoresTheFullList()
+    {
+        var vm = CreateViewModelWithFullPicker();
+        var all = vm.Perushim;
+
+        vm.PerushNameFilter = "   ";
+        vm.FilteredPerushim.Should().Equal(all);
+
+        vm.PerushNameFilter = "אונקלוס";
+        vm.FilteredPerushim.Should().HaveCount(1);
+
+        vm.PerushNameFilter = string.Empty;
+        vm.FilteredPerushim.Should().Equal(all, "clearing the query restores every row");
+    }
+
+    [Fact]
+    public void PerushNameFilter_RaisesFilteredPerushimChangedSoRowsRebind()
+    {
+        var vm = CreateViewModelWithFullPicker();
+        var changed = new List<string>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName ?? string.Empty);
+
+        vm.PerushNameFilter = "אונקלוס";
+
+        changed.Should().Contain(nameof(PerekViewModel.FilteredPerushim),
+            "the picker rows rebind only when the filter republishes the collection");
+        changed.Should().Contain(nameof(PerekViewModel.PerushimEmptyMessage));
+    }
+
+    [Fact]
+    public void PerushNameFilter_MissShowsTheNoResultsStateWithoutTheDownloadPrompt()
+    {
+        // A name-search miss inside an installed package must say "no matches"
+        // — never suggest downloading an already-installed package (#3306).
+        var vm = CreateViewModelWithFullPicker();
+
+        vm.PerushNameFilter = "אין פירוש כזה";
+
+        vm.FilteredPerushim.Should().BeEmpty();
+        vm.PerushimEmptyMessage.Should().Be("לא נמצאו פירושים תואמים");
+        vm.ShowDownloadPerushimButton.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PerushNameFilter_PreservesHiddenSelectionsAndTheLimit()
+    {
+        var vm = CreateViewModelWithFullPicker();
+        vm.ToggleCheckedPerush(1); // תרגום אונקלוס
+        vm.ToggleCheckedPerush(3); // רש"י
+
+        vm.PerushNameFilter = "יונתן";
+
+        // Hidden checked rows still count toward the limit and the counter.
+        vm.CheckedPerushim.Should().Equal(1, 3);
+        vm.PerushimSelectionStatus.Should().Be("נבחרו 2 מתוך 5");
+
+        // Toggling a visible row acts on that perush, not the row position.
+        vm.ToggleCheckedPerush(2); // תרגום יונתן
+        vm.CheckedPerushim.Should().Equal(1, 3, 2);
+
+        // Clearing the filter shows every row with its checked state intact.
+        vm.PerushNameFilter = string.Empty;
+        vm.FilteredPerushim.Should().HaveCount(4);
+        vm.IsPerushChecked(1).Should().BeTrue();
+        vm.IsPerushChecked(3).Should().BeTrue();
+        vm.IsPerushChecked(2).Should().BeTrue();
+    }
+
+    [Fact]
+    public void PerushNameFilter_HiddenCheckedRowsStillConsumeLimitSlots()
+    {
+        var vm = CreateViewModelWithFullPicker();
+        GetPreferences(vm).InlineCommentaryLimit = 2;
+        vm.ToggleCheckedPerush(1);
+        vm.ToggleCheckedPerush(3);
+
+        // רש"י is hidden by the filter yet still holds a slot — a fourth
+        // visible perush cannot be checked past the limit.
+        vm.PerushNameFilter = "יונתן";
+        vm.ToggleCheckedPerush(2);
+
+        vm.IsPerushChecked(2).Should().BeFalse();
+        vm.PerushimLimitReached.Should().BeTrue();
+    }
+
+    #endregion
+
     #region Helpers
 
     private static PerekViewModel CreateViewModel(Func<int, Perek?> loader)
@@ -331,6 +461,26 @@ public class PerekViewModelPerushimTests
             new() { Id = 2, Name = "אבן עזרא", Priority = 200 },
         };
 
+        return vm;
+    }
+
+    /// <summary>
+    /// The report's picker (#3306): an installed notes package and the
+    /// commentaries the screenshot showed — the targumim first, then רש"י
+    /// and ר' סעדיה גאון.
+    /// </summary>
+    private static PerekViewModel CreateViewModelWithFullPicker()
+    {
+        var vm = CreateViewModelWithPerushim();
+        vm.Perushim = new List<Perush>
+        {
+            new() { Id = 1, Name = "תרגום אונקלוס", Priority = 10 },
+            new() { Id = 2, Name = "תרגום יונתן", Priority = 20 },
+            new() { Id = 3, Name = "רש\"י", Priority = 100 },
+            new() { Id = 4, Name = "ר' סעדיה גאון", Priority = 300 },
+        };
+        vm.PerushimCatalogAvailable = true;
+        vm.PerushimNotesAvailable = true;
         return vm;
     }
 

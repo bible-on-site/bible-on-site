@@ -1,0 +1,875 @@
+{
+  "version": 1,
+  "domain": "pasuk",
+  "description": "Frozen independent provisional validation labels. See README.md; labels must receive human review before production claims.",
+  "curation": {
+    "status": "agent-curated-provisional",
+    "human_reviewed": false,
+    "frozen_before_model_comparison": true,
+    "curated_at": "2026-11-11",
+    "scope": "Independent coverage checks, not a random corpus sample or a claim of production accuracy. PERSON for divine names follows the existing benchmark convention. Explicit alternatives record legitimate spelling or nation/territory ambiguity."
+  },
+  "categories": {
+    "ambiguity": "ambiguity",
+    "animal": "animal",
+    "divine-name": "divine name",
+    "lineage": "lineage",
+    "nation": "nation",
+    "ordinary-nouns": "ordinary nouns",
+    "person": "person",
+    "places": "places",
+    "prefixes": "prefixes",
+    "qri-ktiv": "qri ktiv",
+    "renaming": "renaming",
+    "repeated-mention": "repeated mention",
+    "spelling": "spelling"
+  },
+  "cases": [
+    {
+      "id": "validation-0-None-2-14",
+      "sefer": 0,
+      "perek": 2,
+      "pasuk": 14,
+      "categories": [
+        "places"
+      ],
+      "mentions": [
+        {
+          "start": 3,
+          "end": 3,
+          "text": "חדקל",
+          "name": "חדקל",
+          "type": "PLACE"
+        },
+        {
+          "start": 7,
+          "end": 7,
+          "text": "אשור",
+          "name": "אשור",
+          "type": "PLACE",
+          "type_alternates": [
+            "NATION"
+          ]
+        },
+        {
+          "start": 11,
+          "end": 11,
+          "text": "פרת",
+          "name": "פרת",
+          "type": "PLACE"
+        }
+      ]
+    },
+    {
+      "id": "validation-0-None-3-1",
+      "sefer": 0,
+      "perek": 3,
+      "pasuk": 1,
+      "categories": [
+        "animal",
+        "divine-name"
+      ],
+      "mentions": [
+        {
+          "start": 0,
+          "end": 0,
+          "text": "והנחש",
+          "name": "נחש",
+          "type": "ANIMAL"
+        },
+        {
+          "start": 8,
+          "end": 8,
+          "text": "יהוה",
+          "name": "יהוה",
+          "type": "PERSON"
+        },
+        {
+          "start": 9,
+          "end": 9,
+          "text": "אלהים",
+          "name": "אלהים",
+          "type": "PERSON"
+        },
+        {
+          "start": 16,
+          "end": 16,
+          "text": "אלהים",
+          "name": "אלהים",
+          "type": "PERSON"
+        }
+      ]
+    },
+    {
+      "id": "validation-1-None-31-2",
+      "sefer": 1,
+      "perek": 31,
+      "pasuk": 2,
+      "categories": [
+        "lineage",
+        "nation"
+      ],
+      "mentions": [
+        {
+          "start": 3,
+          "end": 3,
+          "text": "בצלאל",
+          "name": "בצלאל",
+          "type": "PERSON"
+        },
+        {
+          "start": 5,
+          "end": 5,
+          "text": "אורי",
+          "name": "אורי",
+          "type": "PERSON"
+        },
+        {
+          "start": 7,
+          "end": 7,
+          "text": "חור",
+          "name": "חור",
+          "type": "PERSON"
+        },
+        {
+          "start": 9,
+          "end": 9,
+          "text": "יהודה",
+          "name": "יהודה",
+          "type": "NATION"
+        }
+      ]
+    },
+    {
+      "id": "validation-3-None-13-16",
+      "sefer": 3,
+      "perek": 13,
+      "pasuk": 16,
+      "categories": [
+        "renaming",
+        "prefixes"
+      ],
+      "mentions": [
+        {
+          "start": 5,
+          "end": 5,
+          "text": "משה",
+          "name": "משה",
+          "type": "PERSON"
+        },
+        {
+          "start": 10,
+          "end": 10,
+          "text": "משה",
+          "name": "משה",
+          "type": "PERSON"
+        },
+        {
+          "start": 11,
+          "end": 11,
+          "text": "להושע",
+          "name": "הושע",
+          "type": "PERSON"
+        },
+        {
+          "start": 13,
+          "end": 13,
+          "text": "נון",
+          "name": "נון",
+          "type": "PERSON"
+        },
+        {
+          "start": 14,
+          "end": 14,
+          "text": "יהושע",
+          "name": "יהושע",
+          "type": "PERSON"
+        }
+      ]
+    },
+    {
+      "id": "validation-4-None-34-1",
+      "sefer": 4,
+      "perek": 34,
+      "pasuk": 1,
+      "categories": [
+        "places",
+        "prefixes",
+        "spelling"
+      ],
+      "mentions": [
+        {
+          "start": 1,
+          "end": 1,
+          "text": "משה",
+          "name": "משה",
+          "type": "PERSON"
+        },
+        {
+          "start": 3,
+          "end": 3,
+          "text": "מואב",
+          "name": "מואב",
+          "type": "PLACE",
+          "type_alternates": [
+            "NATION"
+          ]
+        },
+        {
+          "start": 6,
+          "end": 6,
+          "text": "נבו",
+          "name": "נבו",
+          "type": "PLACE"
+        },
+        {
+          "start": 8,
+          "end": 8,
+          "text": "הפסגה",
+          "name": "פסגה",
+          "type": "PLACE"
+        },
+        {
+          "start": 12,
+          "end": 12,
+          "text": "ירחו",
+          "name": "יריחו",
+          "type": "PLACE",
+          "name_alternates": [
+            "ירחו"
+          ]
+        },
+        {
+          "start": 14,
+          "end": 14,
+          "text": "יהוה",
+          "name": "יהוה",
+          "type": "PERSON"
+        },
+        {
+          "start": 19,
+          "end": 19,
+          "text": "הגלעד",
+          "name": "גלעד",
+          "type": "PLACE"
+        },
+        {
+          "start": 21,
+          "end": 21,
+          "text": "דן",
+          "name": "דן",
+          "type": "PLACE",
+          "type_alternates": [
+            "NATION"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "validation-5-None-2-1",
+      "sefer": 5,
+      "perek": 2,
+      "pasuk": 1,
+      "categories": [
+        "places",
+        "person",
+        "prefixes"
+      ],
+      "mentions": [
+        {
+          "start": 1,
+          "end": 1,
+          "text": "יהושע",
+          "name": "יהושע",
+          "type": "PERSON"
+        },
+        {
+          "start": 3,
+          "end": 3,
+          "text": "נון",
+          "name": "נון",
+          "type": "PERSON"
+        },
+        {
+          "start": 5,
+          "end": 5,
+          "text": "השטים",
+          "name": "שטים",
+          "type": "PLACE"
+        },
+        {
+          "start": 16,
+          "end": 16,
+          "text": "יריחו",
+          "name": "יריחו",
+          "type": "PLACE"
+        },
+        {
+          "start": 23,
+          "end": 23,
+          "text": "רחב",
+          "name": "רחב",
+          "type": "PERSON"
+        }
+      ]
+    },
+    {
+      "id": "validation-6-None-4-4",
+      "sefer": 6,
+      "perek": 4,
+      "pasuk": 4,
+      "categories": [
+        "person",
+        "nation",
+        "ambiguity"
+      ],
+      "mentions": [
+        {
+          "start": 0,
+          "end": 0,
+          "text": "ודבורה",
+          "name": "דבורה",
+          "type": "PERSON"
+        },
+        {
+          "start": 4,
+          "end": 4,
+          "text": "לפידות",
+          "name": "לפידות",
+          "type": "PERSON"
+        },
+        {
+          "start": 8,
+          "end": 8,
+          "text": "ישראל",
+          "name": "ישראל",
+          "type": "NATION"
+        }
+      ]
+    },
+    {
+      "id": "validation-7-0-3-10",
+      "sefer": 7,
+      "perek": 3,
+      "pasuk": 10,
+      "categories": [
+        "person",
+        "repeated-mention"
+      ],
+      "mentions": [
+        {
+          "start": 1,
+          "end": 1,
+          "text": "יהוה",
+          "name": "יהוה",
+          "type": "PERSON"
+        },
+        {
+          "start": 6,
+          "end": 6,
+          "text": "שמואל",
+          "name": "שמואל",
+          "type": "PERSON"
+        },
+        {
+          "start": 7,
+          "end": 7,
+          "text": "שמואל",
+          "name": "שמואל",
+          "type": "PERSON"
+        },
+        {
+          "start": 9,
+          "end": 9,
+          "text": "שמואל",
+          "name": "שמואל",
+          "type": "PERSON"
+        }
+      ],
+      "additional": 0
+    },
+    {
+      "id": "validation-8-1-5-1",
+      "sefer": 8,
+      "perek": 5,
+      "pasuk": 1,
+      "categories": [
+        "person",
+        "nation",
+        "ambiguity"
+      ],
+      "mentions": [
+        {
+          "start": 0,
+          "end": 0,
+          "text": "ונעמן",
+          "name": "נעמן",
+          "type": "PERSON"
+        },
+        {
+          "start": 4,
+          "end": 4,
+          "text": "ארם",
+          "name": "ארם",
+          "type": "NATION",
+          "type_alternates": [
+            "PLACE"
+          ]
+        },
+        {
+          "start": 15,
+          "end": 15,
+          "text": "יהוה",
+          "name": "יהוה",
+          "type": "PERSON"
+        },
+        {
+          "start": 17,
+          "end": 17,
+          "text": "לארם",
+          "name": "ארם",
+          "type": "NATION",
+          "type_alternates": [
+            "PLACE"
+          ]
+        }
+      ],
+      "additional": 1
+    },
+    {
+      "id": "validation-8-1-20-4",
+      "sefer": 8,
+      "perek": 20,
+      "pasuk": 4,
+      "categories": [
+        "qri-ktiv",
+        "person"
+      ],
+      "mentions": [
+        {
+          "start": 1,
+          "end": 1,
+          "text": "ישעיהו",
+          "name": "ישעיהו",
+          "type": "PERSON"
+        },
+        {
+          "start": 8,
+          "end": 8,
+          "text": "יהוה",
+          "name": "יהוה",
+          "type": "PERSON"
+        }
+      ],
+      "additional": 1
+    },
+    {
+      "id": "validation-10-None-1-1",
+      "sefer": 10,
+      "perek": 1,
+      "pasuk": 1,
+      "categories": [
+        "lineage",
+        "places",
+        "spelling"
+      ],
+      "mentions": [
+        {
+          "start": 1,
+          "end": 1,
+          "text": "ירמיהו",
+          "name": "ירמיהו",
+          "type": "PERSON"
+        },
+        {
+          "start": 3,
+          "end": 3,
+          "text": "חלקיהו",
+          "name": "חלקיהו",
+          "type": "PERSON"
+        },
+        {
+          "start": 7,
+          "end": 7,
+          "text": "בענתות",
+          "name": "ענתות",
+          "type": "PLACE"
+        },
+        {
+          "start": 9,
+          "end": 9,
+          "text": "בנימן",
+          "name": "בנימין",
+          "type": "PLACE",
+          "type_alternates": [
+            "NATION"
+          ],
+          "name_alternates": [
+            "בנימן"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "validation-11-None-1-3",
+      "sefer": 11,
+      "perek": 1,
+      "pasuk": 3,
+      "categories": [
+        "lineage",
+        "places",
+        "ambiguity"
+      ],
+      "mentions": [
+        {
+          "start": 3,
+          "end": 3,
+          "text": "יהוה",
+          "name": "יהוה",
+          "type": "PERSON"
+        },
+        {
+          "start": 5,
+          "end": 5,
+          "text": "יחזקאל",
+          "name": "יחזקאל",
+          "type": "PERSON"
+        },
+        {
+          "start": 7,
+          "end": 7,
+          "text": "בוזי",
+          "name": "בוזי",
+          "type": "PERSON"
+        },
+        {
+          "start": 10,
+          "end": 10,
+          "text": "כשדים",
+          "name": "כשדים",
+          "type": "PLACE",
+          "type_alternates": [
+            "NATION"
+          ]
+        },
+        {
+          "start": 13,
+          "end": 13,
+          "text": "כבר",
+          "name": "כבר",
+          "type": "PLACE"
+        },
+        {
+          "start": 18,
+          "end": 18,
+          "text": "יהוה",
+          "name": "יהוה",
+          "type": "PERSON"
+        }
+      ]
+    },
+    {
+      "id": "validation-16-None-1-1",
+      "sefer": 16,
+      "perek": 1,
+      "pasuk": 1,
+      "categories": [
+        "lineage",
+        "person"
+      ],
+      "mentions": [
+        {
+          "start": 2,
+          "end": 2,
+          "text": "יהוה",
+          "name": "יהוה",
+          "type": "PERSON"
+        },
+        {
+          "start": 4,
+          "end": 4,
+          "text": "יונה",
+          "name": "יונה",
+          "type": "PERSON"
+        },
+        {
+          "start": 6,
+          "end": 6,
+          "text": "אמתי",
+          "name": "אמתי",
+          "type": "PERSON"
+        }
+      ]
+    },
+    {
+      "id": "validation-28-None-4-13",
+      "sefer": 28,
+      "perek": 4,
+      "pasuk": 13,
+      "categories": [
+        "person",
+        "spelling"
+      ],
+      "mentions": [
+        {
+          "start": 1,
+          "end": 1,
+          "text": "בעז",
+          "name": "בועז",
+          "type": "PERSON",
+          "name_alternates": [
+            "בעז"
+          ]
+        },
+        {
+          "start": 3,
+          "end": 3,
+          "text": "רות",
+          "name": "רות",
+          "type": "PERSON"
+        },
+        {
+          "start": 10,
+          "end": 10,
+          "text": "יהוה",
+          "name": "יהוה",
+          "type": "PERSON"
+        }
+      ]
+    },
+    {
+      "id": "validation-31-None-2-7",
+      "sefer": 31,
+      "perek": 2,
+      "pasuk": 7,
+      "categories": [
+        "renaming",
+        "person"
+      ],
+      "mentions": [
+        {
+          "start": 3,
+          "end": 3,
+          "text": "הדסה",
+          "name": "הדסה",
+          "type": "PERSON"
+        },
+        {
+          "start": 5,
+          "end": 5,
+          "text": "אסתר",
+          "name": "אסתר",
+          "type": "PERSON"
+        },
+        {
+          "start": 22,
+          "end": 22,
+          "text": "מרדכי",
+          "name": "מרדכי",
+          "type": "PERSON"
+        }
+      ]
+    },
+    {
+      "id": "validation-33-0-1-1",
+      "sefer": 33,
+      "perek": 1,
+      "pasuk": 1,
+      "categories": [
+        "nation",
+        "spelling",
+        "repeated-mention"
+      ],
+      "mentions": [
+        {
+          "start": 2,
+          "end": 2,
+          "text": "לכורש",
+          "name": "כורש",
+          "type": "PERSON"
+        },
+        {
+          "start": 4,
+          "end": 4,
+          "text": "פרס",
+          "name": "פרס",
+          "type": "NATION",
+          "type_alternates": [
+            "PLACE"
+          ]
+        },
+        {
+          "start": 7,
+          "end": 7,
+          "text": "יהוה",
+          "name": "יהוה",
+          "type": "PERSON"
+        },
+        {
+          "start": 9,
+          "end": 9,
+          "text": "ירמיה",
+          "name": "ירמיהו",
+          "type": "PERSON",
+          "name_alternates": [
+            "ירמיה"
+          ]
+        },
+        {
+          "start": 11,
+          "end": 11,
+          "text": "יהוה",
+          "name": "יהוה",
+          "type": "PERSON"
+        },
+        {
+          "start": 14,
+          "end": 14,
+          "text": "כרש",
+          "name": "כורש",
+          "type": "PERSON",
+          "name_alternates": [
+            "כרש"
+          ]
+        },
+        {
+          "start": 16,
+          "end": 16,
+          "text": "פרס",
+          "name": "פרס",
+          "type": "NATION",
+          "type_alternates": [
+            "PLACE"
+          ]
+        }
+      ],
+      "additional": 0
+    },
+    {
+      "id": "validation-25-None-1-1",
+      "sefer": 25,
+      "perek": 1,
+      "pasuk": 1,
+      "categories": [
+        "lineage",
+        "nation"
+      ],
+      "mentions": [
+        {
+          "start": 1,
+          "end": 1,
+          "text": "שלמה",
+          "name": "שלמה",
+          "type": "PERSON"
+        },
+        {
+          "start": 3,
+          "end": 3,
+          "text": "דוד",
+          "name": "דוד",
+          "type": "PERSON"
+        },
+        {
+          "start": 5,
+          "end": 5,
+          "text": "ישראל",
+          "name": "ישראל",
+          "type": "NATION"
+        }
+      ]
+    },
+    {
+      "id": "validation-25-None-15-1",
+      "sefer": 25,
+      "perek": 15,
+      "pasuk": 1,
+      "categories": [
+        "ordinary-nouns"
+      ],
+      "mentions": []
+    },
+    {
+      "id": "validation-26-None-1-1",
+      "sefer": 26,
+      "perek": 1,
+      "pasuk": 1,
+      "categories": [
+        "places",
+        "person",
+        "divine-name"
+      ],
+      "mentions": [
+        {
+          "start": 3,
+          "end": 3,
+          "text": "עוץ",
+          "name": "עוץ",
+          "type": "PLACE"
+        },
+        {
+          "start": 4,
+          "end": 4,
+          "text": "איוב",
+          "name": "איוב",
+          "type": "PERSON"
+        },
+        {
+          "start": 12,
+          "end": 12,
+          "text": "אלהים",
+          "name": "אלהים",
+          "type": "PERSON"
+        }
+      ]
+    },
+    {
+      "id": "validation-32-None-1-6",
+      "sefer": 32,
+      "perek": 1,
+      "pasuk": 6,
+      "categories": [
+        "nation",
+        "person",
+        "prefixes"
+      ],
+      "mentions": [
+        {
+          "start": 3,
+          "end": 3,
+          "text": "יהודה",
+          "name": "יהודה",
+          "type": "NATION"
+        },
+        {
+          "start": 4,
+          "end": 4,
+          "text": "דניאל",
+          "name": "דניאל",
+          "type": "PERSON"
+        },
+        {
+          "start": 5,
+          "end": 5,
+          "text": "חנניה",
+          "name": "חנניה",
+          "type": "PERSON"
+        },
+        {
+          "start": 6,
+          "end": 6,
+          "text": "מישאל",
+          "name": "מישאל",
+          "type": "PERSON"
+        },
+        {
+          "start": 7,
+          "end": 7,
+          "text": "ועזריה",
+          "name": "עזריה",
+          "type": "PERSON"
+        }
+      ]
+    }
+  ],
+  "canonical_sha256": "56ce4cafad47f2758e0202a9d5df979d5f46375e29420b706eb1b668e13da8e3"
+}

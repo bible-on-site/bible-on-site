@@ -11,9 +11,11 @@ import { writeBenchmark } from "../../scripts/benchmark-store.cjs";
  * - `size_mb`: File/directory sizes in megabytes (standalone bundle, .next dir)
  * - `score`: Pass/fail or 0-1 scores (audit scores, category scores)
  * - `ratio`: Ratios/proportions (sefer flip 929-vs-dev ratio)
- * - `frame_budget_ratio`: Blocking/response time divided by its existing browser
- *   test budget. A static bound of 1 preserves that budget even when healthy
- *   blocking time is zero or close to zero, including Lighthouse TBT.
+ * - `frame_budget_ratio`: Blocking/response time divided by its existing
+ *   budget. A static bound of 1 preserves that budget even when healthy
+ *   blocking time is zero or close to zero: Lighthouse TBT and the small
+ *   interaction/response audits (server-response-time, max-potential-fid)
+ *   whose ms scale sits under percentage-threshold runner noise (#2971).
  * - `cls_ratio`: Cumulative Layout Shift. CLS gets its own measure so the
  *   Bencher threshold can use a static bound: a percentage threshold on a
  *   zero CLS baseline collapses the upper boundary limit to 0 and alerts on

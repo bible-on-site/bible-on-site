@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	AUTHOR_ATTRIBUTION_POLICY_REASON,
 	normalizeTarget,
 	type RawModelOutput,
 	validateModelOutput,
@@ -35,21 +36,34 @@ describe("validateModelOutput", () => {
 			});
 			expect(drafts[0].evidence[0].spanStart).not.toBeNull();
 		});
+	});
 
-		it("produces a pending author replace with a catalogue author", () => {
-			const { drafts } = validate({
+	it("abstains from authorship even for a catalogue author with anchored evidence", () => {
+		const { drafts, abstentions } = validateModelOutput(
+			{
 				proposals: [
 					{
 						relationshipKey: "author",
 						action: "replace",
-						target: { authorId: 2 },
-						evidence: [{ quote: "המאמר" }],
+						target: { authorId: 7 },
+						evidence: [{ quote: "מאת מחבר אחר" }],
+						confidence: 1,
 					},
 				],
-			});
-			// authorId 2 IS the current author in the fixture snapshot → held.
-			expect(drafts[0].status).toBe("held");
-		});
+			},
+			{
+				catalogue: {
+					...catalogue,
+					authors: [...catalogue.authors, { id: 7, name: "מחבר אחר" }],
+				},
+				plainText: "מאת מחבר אחר",
+				snapshot,
+			},
+		);
+		expect(drafts).toEqual([]);
+		expect(abstentions).toEqual([
+			{ relationshipKey: "author", reason: AUTHOR_ATTRIBUTION_POLICY_REASON },
+		]);
 	});
 
 	describe("with hallucinated or invalid targets", () => {
@@ -274,7 +288,14 @@ describe("validateModelOutput", () => {
 			});
 		});
 
-		it("skips evidence items without a usable quote", () => {
+		it.each([
+			{ description: "omitted evidence", evidence: undefined },
+			{ description: "an empty evidence list", evidence: [] },
+			{
+				description: "evidence without usable quotes",
+				evidence: [{ quote: 42 as unknown as string }, {}, { quote: "" }],
+			},
+		])("holds a proposal with $description", ({ evidence }) => {
 			const { drafts } = validate({
 				proposals: [
 					{
@@ -283,12 +304,13 @@ describe("validateModelOutput", () => {
 						target: {
 							citations: [{ sefer: "בראשית", perek: "יח", pasuk: "ב" }],
 						},
-						evidence: [{ quote: 42 as unknown as string }, {}, { quote: "" }],
+						evidence,
 					},
 				],
 			});
-			expect(drafts[0].status).toBe("pending");
+			expect(drafts[0].status).toBe("held");
 			expect(drafts[0].evidence).toHaveLength(0);
+			expect(drafts[0].conflict).toContain("no anchored evidence");
 		});
 
 		it("plans a pending coveringSources remove as a set-merge intent", () => {
@@ -466,30 +488,24 @@ describe("normalizeTarget", () => {
 	});
 
 	describe("for author", () => {
-		it("accepts a Hebrew-numeral author id", () => {
+		it.each([
+			{ authorId: 2 },
+			{ authorId: 7 },
+			{ authorId: "ז" },
+			{ id: 7 },
+			{ authorId: 99 },
+			{},
+		])("refuses author proposals and review patches: %j", (target) => {
 			const out = normalizeTarget(
 				"author",
-				{ authorId: "ז" },
+				target,
 				{
 					...catalogue,
 					authors: [...catalogue.authors, { id: 7, name: "רש" }],
 				},
 				snapshot,
 			);
-			expect(out.target).toEqual({ authorId: 7 });
-			expect(out.label).toBe("רש");
-		});
-
-		it("holds an author outside the catalogue", () => {
-			expect(norm("author", { authorId: 99 }).heldReason).toContain(
-				"not in catalogue",
-			);
-		});
-
-		it("holds the current author", () => {
-			expect(norm("author", { id: 2 }).heldReason).toContain(
-				"already the current author",
-			);
+			expect(out).toEqual({ heldReason: AUTHOR_ATTRIBUTION_POLICY_REASON });
 		});
 	});
 

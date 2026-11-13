@@ -45,15 +45,14 @@
             </CollectionView.GroupHeaderTemplate>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:ParashaUnit">
+                    <controls:TappableView Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:ParashaListViewModel}}, Path=OpenParashaCommand}"
+                                           CommandParameter="{Binding .}"
+                                           SemanticProperties.Description="{Binding Heading}">
                     <Border Padding="12,10"
                             Margin="0,3"
                             StrokeShape="RoundRectangle 8"
                             Stroke="Transparent"
                             BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
-                        <Border.GestureRecognizers>
-                            <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:ParashaListViewModel}}, Path=OpenParashaCommand}"
-                                                  CommandParameter="{Binding .}"/>
-                        </Border.GestureRecognizers>
                         <Grid ColumnDefinitions="*,Auto" InputTransparent="True">
                             <Label Grid.Column="0"
                                    Text="{Binding Heading}"
@@ -68,6 +67,7 @@
                                    VerticalOptions="Center"/>
                         </Grid>
                     </Border>
+                    </controls:TappableView>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>

@@ -104,6 +104,13 @@ load, and the page-render warm is awaited together with the query instead of
 behind it — all gates are unchanged, the same check still runs once per
 admission and the database is still re-verified on every sequential probe.
 
+The launcher registers SIGTERM and SIGINT handlers before spawning the server
+and starting the readiness probe. Initializing the first HTTP client can block
+the wrapper synchronously while the child is already listening; a shutdown
+signal in that window must still reach the existing drain or interrupt path.
+Startup failures remove the handlers. This ordering preserves the drain floor,
+quiet window, deadline and readiness schedule described above.
+
 ## Lifecycle timing evidence
 
 The launcher logs the boundaries that were previously invisible:

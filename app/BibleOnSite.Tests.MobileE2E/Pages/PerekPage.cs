@@ -54,8 +54,21 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
         throw new WebDriverTimeoutException($"No visible element matching {locator} met the condition within {timeout.TotalSeconds} seconds.");
     }
 
-    public string Source => WaitFor("PerekSource", element => !string.IsNullOrWhiteSpace(element.Text)).Text;
-    public string FirstPasuk => WaitFor("PasukText", element => !string.IsNullOrWhiteSpace(element.Text)).Text;
+    public string Source => WaitForText("PerekSource");
+    public string FirstPasuk => WaitForText("PasukText");
+
+    private string WaitForText(string automationId)
+    {
+        string text = string.Empty;
+        // Capture the accepted observation. Reading the returned live element
+        // again can race collection recycling after a scroll on iOS.
+        WaitFor(automationId, element =>
+        {
+            text = element.Text;
+            return !string.IsNullOrWhiteSpace(text);
+        });
+        return text;
+    }
 
     /// <summary>
     /// Waits until no element matching the automation id is displayed with its
