@@ -5,6 +5,8 @@ import net from "node:net";
 import { test } from "node:test";
 import {
 	boundServer,
+	deadline,
+	eventLoopMarkerMs,
 	externalIPv4,
 	fixture,
 	freePort,
@@ -52,8 +54,18 @@ test("a held remote connection keeps the real measured drain open until it close
 	});
 	await server.waitFor("READY ");
 	const client = net.connect(port, externalIPv4());
+	// Register cleanup before any await: a pending connect outliving its
+	// deadline rejection would otherwise keep node:test alive until the
+	// outer execFile kill.
 	t.after(() => client.destroy());
-	await once(client, "connect", { signal: t.signal });
+	// The hairpin connect to the runner's own external IPv4 has no kernel-level
+	// deadline: an environment that cannot route it (dropped SYN under CI load)
+	// would hang the test into the outer execFile kill without any TAP output.
+	await deadline(
+		once(client, "connect", { signal: t.signal }),
+		5_000,
+		"external IPv4 connect",
+	);
 	// Skip only when procfs provably exposes no socket rows — an environment
 	// where the drain metric cannot work at all (empty /proc/net/tcp tables,
 	// e.g. some WSL2 setups). A populated table with an invisible held
@@ -63,7 +75,7 @@ test("a held remote connection keeps the real measured drain open until it close
 		return;
 	}
 	server.wrapper.kill("SIGTERM");
-	await server.waitFor("Website draining");
+	await server.waitFor("Website draining", eventLoopMarkerMs);
 	await sleep(1_200);
 	assert.equal(
 		server.wrapper.exitCode,
@@ -71,6 +83,12 @@ test("a held remote connection keeps the real measured drain open until it close
 		"an open remote connection must hold the drain",
 	);
 	client.destroy();
-	assert.deepEqual(await server.exited, [143, null]);
+	// The drain exits ~500ms after the close is observed (quietMs 500, pollMs
+	// 100); a server-side socket that lingers in a counted state keeps it open
+	// up to drainMs 90s, so bound the wait rather than the fixture.
+	assert.deepEqual(
+		await deadline(server.exited, 5_000, "wrapper exit after client close"),
+		[143, null],
+	);
 	assert.match(server.output(), /saw no inbound connections/);
 });
