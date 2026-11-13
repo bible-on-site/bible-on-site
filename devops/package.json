@@ -24,6 +24,8 @@
 		"test:cargo-make-zip-guard": "node --test github/ci/cargo-make-zip-guard.test.mjs",
 		"verify:dependency-snapshots": "node github/ci/dependency-snapshots.mjs",
 		"verify:cargo-make-zip": "node github/ci/cargo-make-zip-guard.mjs",
+		"test:root-evidence-guard": "node --test github/ci/root-evidence-guard.test.mjs",
+		"verify:root-evidence-guard": "node github/ci/root-evidence-guard.mjs",
 		"bump:module-versions": "node ./github/ci/bump-module-versions.ts",
 		"deploy": "echo 'Use deploy:ecr, deploy:data, or deploy:bulletin' && exit 1",
 		"deploy:ecr": "node ./deploy/ecr-deploy/index.mts",
