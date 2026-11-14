@@ -573,9 +573,15 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
     /// <summary>
     /// Orphans every in-flight load attempt. Navigation paths that set the
     /// perek directly (carousel swipe, prev/next, app link) call this so a
-    /// detached attempt's late writes cannot replace the newer perek.
+    /// detached attempt's late writes cannot replace the newer perek. The
+    /// perushim generation moves with it — a direct navigation is also a new
+    /// owner of the commentary pipeline.
     /// </summary>
-    public void InvalidatePendingLoads() => Interlocked.Increment(ref _loadGeneration);
+    public void InvalidatePendingLoads()
+    {
+        Interlocked.Increment(ref _loadGeneration);
+        Interlocked.Increment(ref _perushimLoadGeneration);
+    }
 
     /// <summary>
     /// Stamp of the newest reader load/navigation. A caller holding the stamp a
@@ -718,6 +724,14 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
     /// </summary>
     public async Task LoadPerushimAsync(int perekId)
     {
+        // Swipes, navigations and the notes-materialization completion hook all
+        // fire overlapping loads — possibly for the same perek — and every one
+        // suspends at catalog init, notes init, chapter decode and the metric
+        // read. The newest call owns publication: a superseded load resuming
+        // late must not republish the catalog, the checked ids or the pasuk
+        // note rows over state the newer load (or the user's selection)
+        // already produced (#3310).
+        var stamp = Interlocked.Increment(ref _perushimLoadGeneration);
         if (TryApplySyntheticPerushimForE2e(perekId)) { return; }
 
         await _catalogService.InitializeAsync();
@@ -737,6 +751,11 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
             await _notesService.InitializeAsync();
         }
 
+        if (!IsCurrentPerushimLoad(stamp, perekId))
+        {
+            return;
+        }
+
         PerushimCatalogAvailable = _catalogService.IsAvailable;
         PerushimNotesAvailable = _notesService.IsAvailable;
         PerushimNotesPending = notesMaterializing && !PerushimNotesAvailable;
@@ -745,11 +764,6 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
 
         if (!PerushimNotesAvailable || !PerushimCatalogAvailable)
         {
-            // A stale load must not wipe the perushim of the perek now on screen.
-            if (IsStalePerushimLoad(perekId))
-            {
-                return;
-            }
             _perushChapter = null;
             _perushNotesCache = new List<PerekPerushNote>();
             // Set CheckedPerushim BEFORE Perushim so the CollectionView sees correct state
@@ -783,7 +797,7 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
             perushById = perushIds.Count == 0 ? new() : await _catalogService.GetPerushimByIdsAsync(perushIds);
         }
 
-        if (IsStalePerushimLoad(perekId))
+        if (!IsCurrentPerushimLoad(stamp, perekId))
         {
             return;
         }
@@ -798,9 +812,6 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
             return;
         }
 
-        _perushNotesCache = new();
-        _perushChapter = chapter;
-
         // Order perushim by priority (Targum first, Rashi second, etc.)
         var orderedPerushim = perushIds
             .Select(id => perushById.GetValueOrDefault(id))
@@ -809,31 +820,37 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
             .Cast<Perush>()
             .ToList();
 
-        // Preserve checked perushim that are also available in the new perek.
-        // Set CheckedPerushim BEFORE Perushim so the CollectionView binding
-        // sees the correct checked state when it re-renders items.
-        var availableIds = new HashSet<int>(perushIds);
-        CheckedPerushim = CheckedPerushim.Where(id => availableIds.Contains(id)).Take(_preferencesService.InlineCommentaryLimit).ToList();
         // Stored per-perush reading metrics for the sheet badges (issue #2607)
         // — one batched read, decorated before the non-observable list is
-        // published so the badge binds once; a stale swipe skips decorating.
-        if (!IsStalePerushimLoad(perekId))
+        // published so the badge binds once. A load that loses currency below
+        // mutates nothing observable: every write lives in the publish tail
+        // after the final check (#3310).
+        var metrics = await _notesService.GetPerushMetricsForPerekAsync(perekId);
+        // The metric await added a second suspension — a swipe or a newer
+        // same-perek reload during it must still discard this load's results
+        // before publication.
+        if (!IsCurrentPerushimLoad(stamp, perekId))
         {
-            var metrics = await _notesService.GetPerushMetricsForPerekAsync(perekId);
-            // The metric await added a second suspension — a swipe during it
-            // must still discard this load's results before publication.
-            if (IsStalePerushimLoad(perekId))
+            return;
+        }
+        foreach (var perush in orderedPerushim)
+        {
+            if (metrics.TryGetValue(perush.Id, out var metric))
             {
-                return;
-            }
-            foreach (var perush in orderedPerushim)
-            {
-                if (metrics.TryGetValue(perush.Id, out var metric))
-                {
-                    perush.ReadingMetric = metric;
-                }
+                perush.ReadingMetric = metric;
             }
         }
+
+        _perushNotesCache = new();
+        _perushChapter = chapter;
+
+        // Preserve checked perushim that are also available in the new perek —
+        // restricted to ids the catalog can render, so a notes-only id cannot
+        // keep an invisible check alive. Set CheckedPerushim BEFORE Perushim
+        // so the CollectionView binding sees the correct checked state when
+        // it re-renders items.
+        var availableIds = new HashSet<int>(orderedPerushim.Select(p => p.Id));
+        CheckedPerushim = CheckedPerushim.Where(id => availableIds.Contains(id)).Take(_preferencesService.InlineCommentaryLimit).ToList();
 
         Perushim = orderedPerushim;
 
@@ -843,10 +860,29 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
     }
 
     /// <summary>
+    /// Currency of the freshest perushim load. <see cref="IsStalePerushimLoad"/>
+    /// rejects a load whose perek moved on, but two overlapping loads for the
+    /// SAME perek — a carousel resnap beside the notes-materialization
+    /// completion reload, or a navigation beside the initial load — both pass
+    /// that check, so whichever resumed last published last and could swap
+    /// bound lists and note rows mid-selection (#3310). The newest call's
+    /// stamp must match before any observable write.
+    /// </summary>
+    private long _perushimLoadGeneration;
+
+    /// <summary>
     /// Swiping fires a LoadPerushimAsync per perek without awaiting it; a slower, older load
     /// must not overwrite the perushim and inline notes of the perek now on screen.
     /// </summary>
     private bool IsStalePerushimLoad(int perekId) => Perek != null && Perek.PerekId != perekId;
+
+    /// <summary>
+    /// True while the load holding <paramref name="stamp"/> still owns the
+    /// perushim pipeline: no newer load call superseded it and the perek it
+    /// loaded for is still the one on screen.
+    /// </summary>
+    private bool IsCurrentPerushimLoad(long stamp, int perekId) =>
+        stamp == Interlocked.Read(ref _perushimLoadGeneration) && !IsStalePerushimLoad(perekId);
 
     // E2E hook (BIBLE_E2E_PERUSHIM=1): fabricate notes so the HtmlView
     // commentary path is exercised in CI, where no asset pack exists. Excluded
