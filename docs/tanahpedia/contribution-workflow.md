@@ -183,6 +183,11 @@ name-write effect. Contextual adapters can perform authoritative lookups inside
 the migration transaction; storage failures abort the CD pass rather than mark
 individual PRs incompatible.
 
+If the boot migration encounters a transient storage failure, ordinary production
+requests (including health checks) re-enter its startup guard. An in-flight or
+successful pass remains shared, and the comparison-recovery worker starts after
+the migration succeeds; a temporary database outage does not require redeploying.
+
 The v2-to-v3 adapter captures the structured target fact for source attachments.
 Its fields and human reference labels appear in the changes view. A merge checks
 that fact again before writing. Free-text evidence in the Description remains

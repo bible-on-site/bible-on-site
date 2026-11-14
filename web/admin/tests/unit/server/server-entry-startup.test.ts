@@ -78,6 +78,13 @@ describe("admin startup integration", () => {
 		await loadEntry();
 		expect(ensureContributionMigrationsStarted).toHaveBeenCalledOnce();
 	});
+	it("re-enters the guarded production migration startup on requests so transient boot failures recover", async () => {
+		vi.stubEnv("NODE_ENV", "production");
+		const entry = await loadEntry();
+		vi.mocked(ensureContributionMigrationsStarted).mockClear();
+		expect((await entry.fetch(unauthenticatedRpc())).status).toBe(401);
+		expect(ensureContributionMigrationsStarted).toHaveBeenCalledOnce();
+	});
 	it("runs dedication catch-up once at boot and awaits request-time worker startup before enforcing auth", async () => {
 		let releaseWorker: () => void = () => {};
 		mocks.startWorker.mockImplementationOnce(

@@ -69,6 +69,9 @@ function resolveRequestOrigin(request: Request): {
 
 export default createServerEntry({
 	async fetch(request) {
+		// A transient database failure clears the startup guard. Health checks
+		// and later requests can restart the pass without another deployment.
+		if (productionRuntime()) ensureContributionMigrationsStarted();
 		await ensureEmailWorkerStarted();
 		const url = new URL(request.url);
 		const { origin, isSecure } = resolveRequestOrigin(request);
