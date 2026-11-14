@@ -244,6 +244,15 @@ describe("proxy", () => {
 			).toBeUndefined();
 		});
 
+		it.each(["GET", "HEAD"])(
+			"preserves the catalog handler's canonical Link header on %s",
+			async (method) => {
+				expect(
+					await proxy(makeRequest("/.well-known/api-catalog", { method })),
+				).toBeUndefined();
+			},
+		);
+
 		it("never rewrites or redirects for .md or a markdown Accept", async () => {
 			for (const path of ["/929/1.md", "/929/1", "/פרשה/בראשית.md"]) {
 				for (const accept of [undefined, "text/markdown", "*/*"]) {
@@ -261,9 +270,7 @@ describe("proxy", () => {
 			expect(
 				await proxy(makeRequest("/929/1", { method: "POST" })),
 			).toBeUndefined();
-			expect(
-				await proxy(makeRequest("/api/health")),
-			).toBeUndefined();
+			expect(await proxy(makeRequest("/api/health"))).toBeUndefined();
 		});
 	});
 
@@ -375,7 +382,9 @@ describe("proxy", () => {
 		});
 
 		it("blocks bots by default (env var not set)", async () => {
-			const result = await proxy(makeRequest("/929/1", { ua: "AhrefsBot/7.0" }));
+			const result = await proxy(
+				makeRequest("/929/1", { ua: "AhrefsBot/7.0" }),
+			);
 			expect(result?.status).toBe(403);
 		});
 	});

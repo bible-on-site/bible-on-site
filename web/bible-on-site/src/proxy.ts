@@ -110,8 +110,8 @@ export function canonicalParashaTarget(segments: string[]): string | null {
 /**
  * The `Link` headers public read responses advertise: the agent guide
  * (`rel="help"`), the machine-readable API catalog and the canonical
- * sitemap. Appended (never `set`) so per-route Link headers survive
- * intact.
+ * sitemap. Route Handlers with their own Link header bypass this:
+ * Next.js does not merge that header with proxy response headers.
  */
 const DISCOVERY_LINKS = [
 	'</llms.txt>; rel="help"; type="text/markdown"',
@@ -194,7 +194,8 @@ export async function proxy(
 	// Actions) and API calls never take this branch.
 	if (
 		(request.method === "GET" || request.method === "HEAD") &&
-		!pathname.startsWith("/api/")
+		!pathname.startsWith("/api/") &&
+		pathname !== "/.well-known/api-catalog"
 	) {
 		const response = NextResponse.next();
 		for (const link of DISCOVERY_LINKS) {

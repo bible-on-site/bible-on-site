@@ -114,7 +114,9 @@ describe("/.well-known/api-catalog (RFC 9727)", () => {
 
 	it("HEAD returns the api-catalog Link header and no body", async () => {
 		const response = catalogHEAD();
-		expect(response.headers.get("link")).toContain('rel="api-catalog"');
+		expect(response.headers.get("link")).toBe(
+			'<https://canonical.example/.well-known/api-catalog>; rel="api-catalog"',
+		);
 		expect(response.headers.get("content-type")).toContain(
 			"application/linkset+json",
 		);

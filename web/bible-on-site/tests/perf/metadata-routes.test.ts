@@ -77,6 +77,24 @@ test.describe("Production metadata snapshots", () => {
 		});
 	}
 
+	test("API catalog keeps its canonical Link header through the proxy for GET and HEAD", async ({
+		request,
+	}) => {
+		for (const method of ["GET", "HEAD"]) {
+			const response = await request.fetch("/.well-known/api-catalog", {
+				method,
+			});
+			expect(response.status()).toBe(200);
+			expect(response.headers().link).toBe(
+				`<${SITE_ORIGIN}/.well-known/api-catalog>; rel="api-catalog"`,
+			);
+			expect(response.headers()["content-type"]).toContain(
+				"application/linkset+json",
+			);
+			if (method === "HEAD") expect(await response.body()).toHaveLength(0);
+		}
+	});
+
 	test("sitemap keeps canonical chapters and Parasha readings without Masora or invented dates", () => {
 		const xml = readGeneratedBody("/sitemap.xml").toString("utf8");
 		expect(xml).not.toContain("<lastmod>");

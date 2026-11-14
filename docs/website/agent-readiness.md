@@ -74,8 +74,10 @@ get, discovered through the sitemap and `/api/search`.
 - HTML responses on public GET/HEAD requests advertise `Link:
   </llms.txt>; rel="help"`,
   `</.well-known/api-catalog>; rel="api-catalog"` and
-  `</sitemap.xml>; rel="sitemap"` (appended — per-route Link headers
-  survive intact). Writes/POSTs (incl. Server Actions) never get them.
+  `</sitemap.xml>; rel="sitemap"`. The API catalog supplies its own
+  canonical Link header and bypasses proxy discovery headers, because
+  Next.js does not merge a handler's Link header with the proxy's.
+  Writes/POSTs (incl. Server Actions) never get discovery headers.
 - Alias redirects (`/tanahpedia/*`, `/parasha/*`, Hebrew parasha slug
   variants) stay 308s; Tanahpedia filter params are consumed into the
   canonical slug and dropped, as before.
