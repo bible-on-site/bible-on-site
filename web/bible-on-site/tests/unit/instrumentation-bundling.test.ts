@@ -25,12 +25,12 @@ interface WebpackStatsLike {
 	};
 }
 
-// Each `it` runs one vendored-webpack cold compile of instrumentation.ts
-// (~5-15s typical); 60s bounds a pathological hang while leaving headroom for
-// a loaded CI runner. Jest's 5s default is far too tight for a real webpack run.
-jest.setTimeout(60_000);
-
+// Each `it` runs one vendored-webpack compile of instrumentation.ts. The
+// module graph is three files, so a compile measures ~0.1-0.3s; Jest's 5s
+// default deadline stays in place as the regression check — a slower compile
+// must be made faster, not masked by a bigger timeout.
 const srcDir = path.resolve(__dirname, "../../src");
+const localModules = path.resolve(__dirname, "../../node_modules");
 const tsLoader = path.resolve(__dirname, "../util/webpack-swc-ts-loader.cjs");
 const bundleOutputDirs: string[] = [];
 
@@ -57,7 +57,9 @@ function compileInstrumentation(
 	runtime: "edge" | "nodejs",
 ): Promise<WebpackStatsLike> {
 	const compiler = webpack({
-		mode: "development",
+		// "none" skips the development-mode naming/nodeEnv plugin passes —
+		// the assertions only inspect module names and errors.
+		mode: "none",
 		target: runtime === "nodejs" ? "node" : "webworker",
 		context: srcDir,
 		entry: "./instrumentation.ts",
@@ -69,6 +71,9 @@ function compileInstrumentation(
 		resolve: {
 			extensions: [".ts", ".tsx", ".js", ".json"],
 			alias: { "@": srcDir },
+			// Local node_modules first short-circuits the upward directory
+			// walk; "node_modules" stays as the standard fallback.
+			modules: [localModules, "node_modules"],
 		},
 		module: { rules: [{ test: /\.tsx?$/, use: [tsLoader] }] },
 		plugins: [
