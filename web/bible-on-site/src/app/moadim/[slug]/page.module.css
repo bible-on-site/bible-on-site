@@ -9,26 +9,6 @@
 	margin-bottom: 24px;
 }
 
-.breadcrumb {
-	font-size: 0.85rem;
-	color: var(--muted-text, #666);
-	margin-bottom: 12px;
-}
-
-.breadcrumbLink {
-	color: var(--pasuk-num-color, #1c2c5d);
-	text-decoration: none;
-}
-
-.breadcrumbLink:hover,
-.breadcrumbLink:focus-visible {
-	text-decoration: underline;
-}
-
-.breadcrumbSep {
-	margin: 0 6px;
-}
-
 .heading {
 	font-size: 1.8rem;
 	font-weight: 700;

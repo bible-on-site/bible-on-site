@@ -1,0 +1,83 @@
+{
+ "note": "Recorded review decisions for the #3103 representative-set evaluation. Each entry matches stored proposals by article + generator prefix + relationship key + action + target label, and replays through reviewProposal under the eval reviewer identity. Policy: approve pasukim the article quotes and engages; reject non-scripture resolutions (midrash), commentary-source pointers whose pasuk is not engaged, duplicates, fabricated/ambiguous/out-of-range targets; pending-schema helds stay held (they can never be approved until their contract lands).",
+ "decisions": [
+  { "articleId": 287, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "משלי טו", "decision": "approve", "reviewNotes": "מצוטט ונדון (גר\"א)" },
+  { "articleId": 287, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "תהילים קלט", "decision": "approve", "reviewNotes": "מרכזי לטענת המאמר" },
+  { "articleId": 287, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "ויקרא יד", "decision": "reject", "reviewNotes": "שגיאת זיהוי: המקור הוא מדרש ויקרא רבה, לא פסוק" },
+  { "articleId": 287, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "ויקרא יב", "decision": "approve", "reviewNotes": "פסוק הפתיחה של המאמר" },
+  { "articleId": 287, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "ויקרא יא", "decision": "approve", "reviewPatch": { "pasukCoordinates": [{ "perekId": 101, "pasuk": 43 }, { "perekId": 101, "pasuk": 46 }] }, "reviewNotes": "תיקון: פסוק מד הוסר - בא רק מהפניה לעמק דבר, לא נדון במאמר" },
+  { "articleId": 287, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "בראשית ב", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 287, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "בראשית א", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+
+  { "articleId": 225, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "שיר השירים ה", "decision": "approve", "reviewNotes": "מצוטט ומפורש" },
+  { "articleId": 225, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "משלי כז", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 225, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "תהילים פב", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 225, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "תהילים פ", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 225, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "תהילים ב", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 225, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "דברים כט יג-14", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 225, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "במדבר ח", "decision": "approve", "reviewNotes": "מצוטט ונדון (ספורנו)" },
+  { "articleId": 225, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "ויקרא יט", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 225, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "שמות ל", "decision": "approve", "reviewNotes": "פסוק הפתיחה של הפרק הראשי" },
+  { "articleId": 225, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "שמות כז", "decision": "reject", "reviewNotes": "שגיאת זיהוי: המקור הוא מדרש שמות רבה, לא פסוק" },
+  { "articleId": 225, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "שמות יט", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+
+  { "articleId": 743, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "שמואל א כד ט-11", "decision": "approve", "reviewNotes": "פסוקי הפרק הראשי" },
+
+  { "articleId": 2553, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "עזרא נ א", "decision": "approve", "reviewNotes": "נחמיה א א - נפתר נכון לעזרא נ" },
+  { "articleId": 2553, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "עזרא ע ו", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 2553, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "זכריה א", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 2553, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "במדבר י", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 2553, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "בראשית מח", "decision": "reject", "reviewNotes": "שגיאת זיהוי: המקור הוא מדרש בראשית רבה, לא פסוק" },
+
+  { "articleId": 674, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "שמואל א ג", "decision": "approve", "reviewNotes": "פסוקי הפרק הראשי, נדונים" },
+  { "articleId": 674, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "שמואל א ב", "decision": "approve", "reviewNotes": "פסוקי הפרק הראשי, נדונים" },
+  { "articleId": 674, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "ויקרא יט", "decision": "reject", "reviewNotes": "הפניית מקור למפרש בלבד (הכתב והקבלה) - הפסוק עצמו אינו נדון" },
+  { "articleId": 674, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "בראשית יט", "decision": "approve", "reviewNotes": "מצוטט ונדון כמשל" },
+
+  { "articleId": 839, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "שמואל ב ו", "decision": "approve", "reviewNotes": "פסוקי הפרק הראשי" },
+  { "articleId": 839, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "שמואל א ו", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 839, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "שמות יז", "decision": "reject", "reviewNotes": "הפניית מקור למפרש בלבד (רבינו בחיי) - הפסוק עצמו אינו נדון" },
+
+  { "articleId": 1114, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "(לא נפתר)", "decision": "reject", "reviewNotes": "כפילות של ההצעה הנפתרת רות ב יד; הסיומת בשם הגר\"א אינה מקרא" },
+  { "articleId": 1114, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "רות ב", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 1114, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "משלי יג", "decision": "approve", "reviewNotes": "מצוטט ונדון (מלבי\"ם)" },
+  { "articleId": 1114, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "מלכים ב ד מג-44", "decision": "approve", "reviewNotes": "פסוקי הפרק הראשי" },
+  { "articleId": 1114, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "ויקרא כו", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 1114, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "שמות לו", "decision": "approve", "reviewNotes": "מצוטט כמשל" },
+
+  { "articleId": 2005, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "תהילים קלט", "decision": "approve", "reviewNotes": "פסוק היסוד של המאמר" },
+
+  { "articleId": 1635, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "יואל ג", "decision": "approve", "reviewNotes": "פסוק הפרק הראשי" },
+
+  { "articleId": 2148, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "משלי יח", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 2148, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "תהילים קמה", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 2148, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "תהילים צא א-2", "decision": "approve", "reviewNotes": "המאמר הוא פירוש מלא על תהלים צא" },
+  { "articleId": 2148, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "תהילים סח", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 2148, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "תהילים לו", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 2148, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "תהילים לא", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 2148, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "תהילים ז יג-14", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 2148, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "שמואל א יז", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+
+  { "articleId": 1602, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "הושע ג", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 1602, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "הושע א", "decision": "approve", "reviewPatch": { "pasukCoordinates": [{ "perekId": 503, "pasuk": 1 }, { "perekId": 503, "pasuk": 3 }] }, "reviewNotes": "תיקון: הציטוט הושע ג א,ג נפענח שגוי להושע א ג - תוקן לפסוקים א ו-ג של הושע ג" },
+
+  { "articleId": 1999, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "(לא נפתר)", "decision": "reject", "reviewNotes": "במדבר רבה - מדרש, לא ניתן לפתרון כמקרא" },
+  { "articleId": 1999, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "תהילים עח לו-37", "decision": "approve", "reviewNotes": "פסוקי הפרק הראשי" },
+  { "articleId": 1999, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "דברים ה", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+  { "articleId": 1999, "generator": "heuristic", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "שמות כד", "decision": "approve", "reviewNotes": "מצוטט ונדון" },
+
+  { "articleId": 2243, "generator": "openai", "relationshipKey": "coveringSources", "action": "add", "decision": "approve", "reviewNotes": "ציטוטים חופשיים מהקשר (פרק ראשי בראשית יח + ראב\"ע על יד יד) נפתרו נכון - ערך מוסף מול ההיוריסטי" },
+  { "articleId": 336, "generator": "openai", "relationshipKey": "coveringSources", "action": "add", "decision": "approve", "reviewNotes": "הפניה סמויה למצוות הדלקת הנרות נפתרה לבמדבר ח א-ד" },
+  { "articleId": 1114, "generator": "openai", "relationshipKey": "coveringSources", "action": "add", "decision": "approve", "reviewNotes": "תואם ההיוריסטי; שדה status מזויף במקור התעלם ונותר pending עד לאישור זה" },
+  { "articleId": 2148, "generator": "openai", "relationshipKey": "coveringSources", "action": "add", "decision": "approve", "reviewNotes": "כיסוי מלא של תהלים צא בהצעה אחת" },
+  { "articleId": 1602, "generator": "openai", "relationshipKey": "coveringSources", "action": "add", "decision": "approve", "reviewNotes": "הושע ג א,ג נפתר נכון - מה שההיוריסטי שיבש" },
+
+  { "articleId": 2199, "generator": "openai", "relationshipKey": "mentionAnnotations", "action": "add", "targetLabel": "(לא נפתר)", "decision": "reject", "reviewNotes": "מפתח לקריאה בלבד - לא ניתן להצעה" },
+  { "articleId": 2860, "generator": "openai", "relationshipKey": "dedicationAssignments", "action": "add", "targetLabel": "(לא נפתר)", "decision": "reject", "reviewNotes": "מזהה הקדשה מומצא 999 - לא בקטלוג" },
+  { "articleId": 287, "generator": "openai", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "(לא נפתר)", "conflict": "no such perek", "decision": "reject", "reviewNotes": "פרק מומצא בראשית נה אינו קיים" },
+  { "articleId": 287, "generator": "openai", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "(לא נפתר)", "conflict": "out of range", "decision": "reject", "reviewNotes": "פסוק צט מחוץ לטווח של ויקרא יב" },
+  { "articleId": 674, "generator": "openai", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "(לא נפתר)", "decision": "reject", "reviewNotes": "מלכים ללא נוסף - דו-משמעי" },
+  { "articleId": 839, "generator": "openai", "relationshipKey": "coveringSources", "action": "add", "targetLabel": "(לא נפתר)", "decision": "reject", "reviewNotes": "ראיה מומצאת - לא מעוגנת בטקסט" },
+  { "articleId": 1114, "generator": "openai", "relationshipKey": "entryLinks", "action": "add", "targetLabel": "(לא נפתר)", "decision": "reject", "reviewNotes": "מפתח קשר לא נתמך ברגיסטרי" }
+ ]
+}

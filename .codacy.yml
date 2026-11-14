@@ -32,6 +32,20 @@ engines:
       - "app/devops/verify_android_dex_metadata.py"
       - "app/devops/audit_android_aab_size.py"
       - "app/devops/test_audit_android_aab_size.py"
+  # Opengrep's `Semgrep_javascript.lang.security.html-in-template-string` marks
+  # any interpolated template that resembles markup as XSS. These node:test
+  # files embed real `xcrun simctl`/`CoreSimulatorService` `<Debug>:` log-record
+  # fixtures — the output shape the parsers must accept — where the
+  # interpolation is a simulator UDID into a test string, never rendered HTML.
+  # The tracked Codacy entities freeze the original fixture coordinates, so
+  # restructuring the fixtures cannot clear them; same false-positive class as
+  # release-smoke/merge-runner-shards below. Scoped to the Opengrep engine only
+  # — every other engine keeps scanning, and the repo's own biome/precommit
+  # still lints these files.
+  opengrep:
+    exclude_paths:
+      - "app/mobile-e2e/native-logs.test.mjs"
+      - "app/mobile-e2e/verify-ios-host-log.test.mjs"
 
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
