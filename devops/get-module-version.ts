@@ -38,7 +38,7 @@ export const MODULES: Record<ModulePath, ModuleConfig> = {
 		name: "website",
 		tagPrefix: "website-v",
 		versionFile: "web/bible-on-site/package.json",
-		nativeCommand: "npm run version --silent",
+		nativeCommand: "bun --silent run version",
 		workingDir: "web/bible-on-site",
 		extractFromFile: (content: string) => {
 			const parsed = JSON.parse(content);
@@ -62,7 +62,7 @@ export const MODULES: Record<ModulePath, ModuleConfig> = {
 		name: "admin",
 		tagPrefix: "admin-v",
 		versionFile: "web/admin/package.json",
-		nativeCommand: "npm run version --silent",
+		nativeCommand: "bun --silent run version",
 		workingDir: "web/admin",
 		extractFromFile: (content: string) => {
 			const parsed = JSON.parse(content);
@@ -167,7 +167,7 @@ function tryNativeCommand(module: ModuleConfig): string | null {
 			}
 		}
 
-		// Otherwise return the last non-empty line (typical for npm/cargo)
+		// Otherwise return the last non-empty line (typical for bun/cargo)
 		return lines[lines.length - 1] ?? null;
 	} catch {
 		return null;

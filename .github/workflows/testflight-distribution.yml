@@ -1,0 +1,212 @@
+name: Distribute TestFlight build
+
+on:
+  workflow_call:
+    inputs:
+      ios_artifact_name:
+        required: true
+        type: string
+      ci_run_id:
+        required: true
+        type: string
+      parent_lock_held:
+        description: "The calling app deployment already holds the shared lock"
+        default: false
+        type: boolean
+      release_notes_override:
+        description: "Validated Hebrew store-notes text replacing the generated notes for this exact release"
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      ios_artifact_name:
+        description: "Published iOS artifact name (e.g., app-ios-v5.0.128)"
+        required: true
+        type: string
+      ci_run_id:
+        description: "Master CI run that published this release"
+        required: true
+        type: string
+      release_notes_override:
+        description: "Validated Hebrew store-notes text replacing the generated notes for this exact release"
+        required: false
+        type: string
+
+permissions:
+  # contents:write attaches the notes manifest to the GitHub release.
+  contents: write
+  actions: read
+  deployments: write
+
+# A manual recovery shares the app CD lock. A called job inherits its parent's
+# lock and uses a distinct group to avoid waiting on that same parent forever.
+concurrency:
+  group: ${{ inputs.parent_lock_held && format('{0}-testflight-distribution-{1}', github.repository, github.run_id) || format('{0}-cd-app', github.repository) }}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  distribute:
+    timeout-minutes: 60
+    name: Distribute the verified build to TestFlight testers
+    runs-on: ubuntu-latest
+    env:
+      MODULE_VERSION: "0.0.0"
+      IOS_ARTIFACT_NAME: ${{ inputs.ios_artifact_name }}
+      CI_RUN_ID: ${{ inputs.ci_run_id }}
+    steps:
+      - name: Checkout deployment automation
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: app
+          DEPLOY_TARGET: app-ios-beta
+        run: node devops/github/release/check-deployment.mjs
+
+      - name: Preserve TestFlight verification automation
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        run: |
+          # store-release-notes.mjs arrives via the deployment guard's
+          # RUNNER_TEMP helper copies.
+          cp devops/github/release/testflight-build.mjs "$RUNNER_TEMP/testflight-build.mjs"
+          cp devops/github/release/release-notes.mjs "$RUNNER_TEMP/release-notes.mjs"
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
+          # Store notes diff the curated entry directory between the
+          # delivered baseline tag and this tag — full history is required.
+          fetch-depth: 0
+
+      - name: Restore the published IPA for build identity only
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "app-v$MODULE_VERSION" --pattern '*.ipa' --dir "$RUNNER_TEMP/testflight-distribute"
+          echo "IPA_FILE=$(find "$RUNNER_TEMP/testflight-distribute" -name '*.ipa' -type f | head -1)" >> "$GITHUB_ENV"
+
+      - name: Setup App Store Connect API Key
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          API_KEY_PATH: ${{ runner.temp }}/testflight-api-key.json
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          echo "API_KEY_PATH=$API_KEY_PATH" >> "$GITHUB_ENV"
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync(process.env.API_KEY_PATH, JSON.stringify({
+            key_id: process.env.API_KEY_ID,
+            issuer_id: process.env.API_ISSUER_ID,
+            key: Buffer.from(process.env.API_KEY_BASE64, 'base64').toString('utf8'),
+            in_house: false,
+          }), { mode: 0o600 });
+          NODE
+
+      - name: Verify Apple processed the exact published build
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: build
+        env:
+          UPLOAD_EXIT_CODE: "0"
+        run: node "$RUNNER_TEMP/testflight-build.mjs" postflight
+
+      - name: Build the Hebrew TestFlight notes for this exact build
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STORE_NOTES_OVERRIDE: ${{ inputs.release_notes_override }}
+        run: |
+          node "$RUNNER_TEMP/store-release-notes.mjs" --generate \
+            --target app-ios-beta \
+            --version "$MODULE_VERSION" \
+            --tag "app-v$MODULE_VERSION" \
+            --out-dir "$RUNNER_TEMP/store-notes"
+          # Evidence only — a failed attach must not flip binary delivery.
+          # The per-attempt name keeps earlier manifests immutable.
+          cp "$RUNNER_TEMP/store-notes/release-notes-manifest.json" "$RUNNER_TEMP/store-notes-app-ios-beta-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json" &&
+          gh release upload "app-v$MODULE_VERSION" "$RUNNER_TEMP/store-notes-app-ios-beta-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json" ||
+          echo "::warning::Store-notes manifest attach failed — evidence stays in this job log"
+          # A generation failure must fail the phase: falling back to the
+          # legacy English changelog here would still advance the delivered
+          # baseline, so this audience would never see the announcements and
+          # the technical text would leak into tester-facing notes.
+          if grep -q '"error"' "$RUNNER_TEMP/store-notes/release-notes-manifest.json"; then
+            echo "::error::Hebrew TestFlight notes generation failed — see the manifest error"
+            exit 1
+          fi
+          if [ -s "$RUNNER_TEMP/store-notes/release-notes.txt" ]; then
+            cp "$RUNNER_TEMP/store-notes/release-notes.txt" "$RUNNER_TEMP/testflight-changelog.txt"
+          else
+            # Releases that predate curated entries have no Hebrew manifest —
+            # only those rollbacks keep the legacy English changelog path.
+            node "$RUNNER_TEMP/release-notes.mjs" --testflight "app-v$MODULE_VERSION" > "$RUNNER_TEMP/testflight-changelog.txt"
+          fi
+          {
+            echo "CHANGELOG<<EOF"
+            cat "$RUNNER_TEMP/testflight-changelog.txt"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install Fastlane
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        # Runner images ship fastlane; install only when it is missing.
+        run: command -v fastlane >/dev/null 2>&1 || gem install fastlane -NV
+
+      - name: Distribute the exact iOS build to the beta group
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          TESTFLIGHT_BETA_GROUP: ${{ secrets.TESTFLIGHT_BETA_GROUP_NAME }}
+          APP_IDENTIFIER: ${{ steps.build.outputs.app_identifier }}
+          APP_VERSION: ${{ steps.build.outputs.app_version }}
+          BUILD_NUMBER: ${{ steps.build.outputs.build_number }}
+        run: |
+          # Listing copy is versioned in app/store-listing; refs that predate it
+          # fall back to the embedded text so old-release redistributions work.
+          BETA_DESC_FILE=app/store-listing/he/description.txt
+          if [ -f "$BETA_DESC_FILE" ]; then
+            BETA_DESC="$(cat "$BETA_DESC_FILE")"
+          else
+            BETA_DESC="לימוד תנ\"ך יומי בקצב פרק ליום - מפרשים, מאמרי רבנים, הקראה ותנך-פדיה. ללא פרסומות וללא תשלום. לימוד פורה, תנך.co.il"
+          fi
+          fastlane pilot distribute --app_platform ios \
+            --api_key_path "$API_KEY_PATH" \
+            --app_identifier "$APP_IDENTIFIER" --app_version "$APP_VERSION" --build_number "$BUILD_NUMBER" \
+            --distribute_external true --groups "$TESTFLIGHT_BETA_GROUP" \
+            --beta_app_description "$BETA_DESC" \
+            --beta_app_feedback_email "tanah.site@gmail.com" \
+            --beta_app_review_info '{"contact_email":"tanah.site@gmail.com","contact_first_name":"Dorad","contact_last_name":"Levinshtein","contact_phone":"+372 5707 8640"}' \
+            --changelog "${{ steps.changelog.outputs.CHANGELOG }}"
+
+      - name: Record distribution result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "$RUNNER_TEMP/deployment-state.mjs"
+
+      - name: Cleanup API key
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
+        run: rm -f "$API_KEY_PATH"
+
+      - name: Distribution summary
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
+        run: |
+          echo "## TestFlight Distribution Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Version:** $MODULE_VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Status:** ${{ job.status == 'success' && 'Submitted to the beta group ✅' || 'Failed ❌ — see the failing step log for the actionable cause' }}" >> "$GITHUB_STEP_SUMMARY"

@@ -1,54 +1,267 @@
-ci:
-  # biome-lint runs each web module's own locally-installed Biome; pre-commit.ci
-  # has no module node_modules, and each module's CI lint job is the
-  # authoritative remote gate, so skip it in the cloud and keep it local-only.
-  skip: [biome-lint]
 repos:
   - repo: "https://github.com/mxr/sync-pre-commit-deps"
     rev: v0.0.5
     hooks:
       - id: sync-pre-commit-deps
+        priority: 0
   - repo: "https://github.com/pre-commit/pre-commit-hooks"
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
+        priority: 1
+        # Compressed WASM strings in this generated asset are data, not source whitespace.
+        exclude: ^app/BibleOnSite/Resources/Raw/recitation-mpeg\.min\.js$
+      - id: mixed-line-ending
+        priority: 2
+        exclude: ^app/BibleOnSite/Resources/Raw/recitation-mpeg\.min\.js$
+      # prek runs hooks sharing a `priority` in parallel (lower runs first);
+      # pre-commit validates the field but ignores it, keeping pre-commit.ci
+      # and pre-commit users on sequential order.
       - id: check-yaml
+        priority: 10
         exclude: ^docs/aws/cloudformation/
+      - id: check-toml
+        priority: 10
+      - id: check-json
+        priority: 10
+        # tsconfig and VS Code files are JSONC (comments, trailing commas).
+        exclude: ((^|/)tsconfig[^/]*\.json$|^\.vscode/)
       - id: check-ast
+        priority: 10
       - id: check-added-large-files
+        priority: 10
         exclude: ^(data/mysql/.*_data\.sql|app/BibleOnSite/Resources/Raw/.*\.sqlite|app/BibleOnSite/Resources/Fonts/.*\.ttf|app/BibleOnSite/Platforms/Android/AssetPacks/.*\.sqlite\.gz|web/bulletin/data/.*\.json)$
       - id: check-xml
+        priority: 10
       - id: check-case-conflict
+        priority: 10
       - id: check-symlinks
+        priority: 10
       - id: check-illegal-windows-names
+        priority: 10
       - id: check-merge-conflict
-      - id: trailing-whitespace
-      - id: mixed-line-ending
+        priority: 10
   - repo: "https://github.com/doradsoft/json5-pre-commit-hook"
     rev: v1.0.3
     hooks:
       - id: check-json5
-  - repo: "https://github.com/rhysd/actionlint"
-    rev: v1.7.12
+        priority: 10
+  # Native parallel/background steps are not supported upstream yet:
+  # https://github.com/rhysd/actionlint/issues/693
+  # This Astral revision supports them and retains the existing Pyflakes checks.
+  - repo: "https://github.com/astral-sh/actionlint"
+    rev: b524c8e879bd35356822b4506f62b6feab792eaf
     hooks:
       - id: actionlint
+        priority: 10
+  # hadolint-py ships the hadolint binary as a Python wheel — no docker daemon
+  # or manual binary install needed (works on pre-commit.ci and Windows).
+  - repo: "https://github.com/AleksaC/hadolint-py"
+    rev: v2.15.1
+    hooks:
+      - id: hadolint
+        priority: 10
+  # Codacy parity for its recurring Python findings: F = pyflakes (unused
+  # imports), D2 = docstring structure (D205/D212/D213 layout findings). The
+  # select is explicit so the gate doesn't drift with ruff version defaults;
+  # broader docstring coverage (D1xx undocumented-*) stays out of scope.
+  # #2114 second wave adds the findings github-code-quality accepted on Python
+  # files: BLE001 (blind except — covers "Empty except" and "Except block
+  # handles 'BaseException'"), E722 (bare except:), S110 (try-except-pass with
+  # no explanatory comment), RET502 (implicit-None returns mixed with returns —
+  # the "Explicit returns mixed with implicit returns" finding).
+  - repo: "https://github.com/astral-sh/ruff-pre-commit"
+    rev: v0.17.4
+    hooks:
+      - id: ruff-check
+        args: [--select, "F,D2,BLE001,E722,S110,RET502"]
+        priority: 10
+  # Local gate for the staged-file secret/PII review required by
+  # git-practices — catches keys/tokens before they reach the commit.
+  - repo: "https://github.com/gitleaks/gitleaks"
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+        priority: 10
   - repo: local
     hooks:
       - id: check-app-version
         name: check-app-version
         entry: python devops/check-app-version.py
-        language: system
+        language: python
         files: ^app/BibleOnSite/BibleOnSite\.csproj$
         pass_filenames: false
+        priority: 10
       - id: md-dead-link-check
         name: md-dead-link-check
         entry: python devops/md-dead-link-check-wrapper.py
         language: python
         types: [markdown]
         additional_dependencies: ["md-dead-link-check==1.2.0"]
+        priority: 10
       - id: biome-lint
         name: biome-lint (per-module)
         entry: node devops/precommit-biome.mjs
-        language: system
+        language: node
+        additional_dependencies: ["@biomejs/biome@2.5.15"]
         files: ^web/(bible-on-site|admin)/.*\.(ts|tsx|js|jsx|mjs|cjs)$
         pass_filenames: true
+        priority: 10
+      # Module checks migrated from .husky/pre-commit. precommit-run.mjs
+      # re-derives the changed-file set relative to MERGE_HEAD during merges,
+      # so incoming (already-published) changes do not trigger module checks.
+      # `language: node` provisions a managed Node toolchain per hook — the
+      # stdlib-only scripts keep @types/node pinned to the devops package
+      # version as the bootstrap dep pre-commit >=4.6 requires node hooks to
+      # declare.
+      - id: flip-book-npm-dep
+        name: html-flip-book-react pinned to npm
+        entry: node devops/flip-book-dep.mjs pre
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^web/bible-on-site/
+        pass_filenames: false
+        # Mutates package.json/bun.lock and stages them — runs alone
+        # before the parallel read-only batch so tests see stable files.
+        priority: 5
+      # --related narrows the run to tests covering the staged module files
+      # (argv after `::`, files appended); config-like files or a zero-test
+      # related run fall back to the full suite (argv before `::`). CI still
+      # gates the full suite on every PR.
+      - id: web-unit-tests
+        name: web/bible-on-site unit tests
+        # Quoted — a bare ` :` inside the entry would end the YAML scalar.
+        entry: "node devops/precommit-run.mjs --related web/bible-on-site bun run test:unit :: bun run test:unit --findRelatedTests"
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^web/bible-on-site/
+        pass_filenames: false
+        priority: 10
+      - id: admin-unit-tests
+        name: web/admin unit tests
+        entry: "node devops/precommit-run.mjs --related web/admin bun run test:unit :: bun run test:unit:related"
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^web/admin/
+        pass_filenames: false
+        priority: 10
+      # App unit tests (#1229): same staged-file bucketing as dotnet-analyzers;
+      # --tests runs `dotnet test` on the test projects covering the touched
+      # dirs (BibleOnSite.Tests <- app/BibleOnSite, devops.Tests <- app/devops).
+      - id: app-unit-tests
+        name: app unit tests
+        entry: node devops/precommit-dotnet.mjs --tests
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^app/
+        pass_filenames: false
+        # Reuses the analyzer gate's build outputs; avoid concurrent writers.
+        priority: 20
+      # C# analyzer gate (#2114): builds each touched app/ project so the
+      # SonarAnalyzer.CSharp severities in .editorconfig fail locally instead
+      # of first surfacing as post-push Codacy/Qodana annotations. Skips
+      # projects without a prior restore (fresh clones, pre-commit.ci).
+      - id: dotnet-analyzers
+        name: dotnet analyzers (per-project build)
+        entry: node devops/precommit-dotnet.mjs
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^(app/.*\.(cs|csproj)|\.editorconfig|(app/)?global\.json|app/Directory\.Build\.props)$
+        pass_filenames: false
+        priority: 10
+      # Generic-catch justification gate (#2114 second wave): S2221 does not
+      # fire inside async-void methods, on catch-rethrow sites, or in test
+      # code, so an unannotated generic catch there compiles cleanly and is
+      # only flagged post-push by github-code-quality (#2596, again on
+      # #2644). scan-catch.cjs closes the hole deterministically: every
+      # `catch (Exception)`/bare `catch` without a type-narrowing `when`
+      # filter must carry `//NOSONAR — <reason>` on the catch line or the
+      # contiguous comment/#pragma run above it. The script itself skips
+      # `*.Tests*` assemblies (the audited no-annotation surface); runs even
+      # when the project was never restored.
+      - id: catch-boundary
+        name: generic-catch justification (S2221-exempt sites)
+        entry: node devops/review-audit/scan-catch.cjs
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^app/.*\.cs$
+        pass_filenames: true
+        priority: 10
+      # One hook covers all Rust modules: precommit-rust.mjs buckets staged
+      # changes per module and runs that module's cargo-make lint tasks.
+      - id: rust-checks
+        name: rust lint + fmt (per-module)
+        entry: node devops/precommit-rust.mjs
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^(web/(api|bulletin)|data)/
+        pass_filenames: false
+        priority: 10
+      # Rust unit tests (#1229): `cargo make test-unit` on the modules that
+      # define it — data/ has no test-unit task and stays lint-only.
+      - id: rust-unit-tests
+        name: rust unit tests (per-module)
+        entry: node devops/precommit-rust.mjs --tests
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^(web/api|web/bulletin)/
+        pass_filenames: false
+        priority: 10
+      # Local gate for recurring Codacy findings with no analyzer equivalent
+      # in the repo toolchains: non-unicode SQL string literals, non-literal
+      # RegExp(), String.prototype.replaceAll, and env::args[_os] without a
+      # nosemgrep justification. C# Codacy patterns are covered at build time
+      # by SonarAnalyzer.CSharp (app/Directory.Build.props + .editorconfig).
+      - id: codacy-gate
+        name: codacy-gate (Codacy parity patterns)
+        entry: node devops/codacy-gate.mjs
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: \.(rs|[cm]?[jt]sx?)$
+        pass_filenames: true
+        priority: 10
+      # setup-node rejects cache values outside npm|yarn|pnpm at runtime, and
+      # the affected jobs are master/release-only so CI lint never executes
+      # them — gate the enum at commit time instead (#2643).
+      - id: setup-node-cache
+        name: setup-node cache input enum
+        entry: node devops/github/ci/setup-node-cache.mjs
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^\.github/(workflows|actions)/
+        pass_filenames: true
+        priority: 10
+      # The curated aliyah JSON is generated by the importer from the
+      # vendored hebcal source — --check fails the commit when the JSON,
+      # importer, or vendored source drift apart.
+      - id: parasha-aliyot-drift
+        name: parasha-aliyot.json drift check
+        entry: node devops/import-parasha-aliyot.mjs --check
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: ^(devops/import-parasha-aliyot\.mjs|devops/data-sources/(hebcal-leyning-aliyot|opentorah-tanach-aliyot)|web/bible-on-site/src/data/parasha/parasha-aliyot\.json)$
+        pass_filenames: false
+        priority: 10
+      # cargo-make ZIP ingestion gate (#2826): the installed CLI embeds an
+      # SDK whose nonoptional zip ^2 dependency is affected by
+      # GHSA-m665-v7pm-7grj. A Makefile.toml task that starts ingesting
+      # archives through the duckscript SDK is the live exposure, so this
+      # gate runs whenever task definitions, install pins, Renovate
+      # tracking, or the guard itself change — audit runs repo-wide so a
+      # stale allowlist entry or a split pin version fails here, not later.
+      - id: cargo-make-zip-guard
+        name: cargo-make ZIP ingestion gate
+        entry: node devops/github/ci/cargo-make-zip-guard.mjs
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        files: (^|/)Makefile\.toml$|(^|/)Cargo\.toml$|\.ds$|^\.github/workflows/[^/]+\.ya?ml$|^renovate\.json$|^devops/github/ci/cargo-make-(zip-guard\.test\.mjs|zip-guard\.mjs|archive-allowlist\.json)$
+        pass_filenames: false
+        priority: 10
+      - id: flip-book-local-restore
+        name: restore local html-flip-book-react
+        entry: node devops/flip-book-dep.mjs post
+        language: node
+        additional_dependencies: ["@types/node@26.6.5"]
+        stages: [post-commit]
+        always_run: true
+        pass_filenames: false

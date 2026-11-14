@@ -10,8 +10,11 @@ use bulletin::pdf;
 use bulletin::tanach;
 
 use crate::db::Database;
-use crate::models::GeneratePdfRequest;
 use crate::services;
+
+use base64::{Engine, engine::general_purpose::STANDARD};
+
+use crate::models::{GeneratePdfRequest, ImageExt, PerekContentInput, SegmentKindInput};
 
 // ──────────────────── Shared core logic ────────────────────────
 
@@ -32,23 +35,37 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
         None
     };
 
+    // Fetch all articles for every perek up front in one batch (not one query per perek).
+    let articles_by_perek = services::get_articles_and_authors(
+        db.as_ref(),
+        &req.perakim_ids,
+        &req.article_ids,
+        &req.author_ids,
+    )
+    .await
+    .map_err(|e| format!("Failed to fetch articles: {}", e))?;
+
     // Resolve perek data from embedded Tanach text and attach articles per-perek
     let mut perakim: Vec<pdf::PdfPerekInput> = Vec::with_capacity(req.perakim_ids.len());
     for &id in &req.perakim_ids {
         let data = tanach::get_perek(id).ok_or_else(|| format!("Unknown perekId: {}", id))?;
 
-        let articles = if let Some(ref db) = db {
-            fetch_articles_for_perek(db, id, &req)
-                .await
-                .map_err(|e| format!("Failed to fetch articles: {}", e))?
-        } else {
-            vec![]
+        let articles = articles_by_perek
+            .get(&(id as i16))
+            .cloned()
+            .unwrap_or_default();
+
+        let content = req.perakim_content.iter().find(|c| c.perek_id == id);
+        let (pesukim, images) = match content {
+            Some(c) => (content_pesukim(c), content_images(c)?),
+            None => (pdf::plain_pesukim(&data.pesukim), vec![]),
         };
 
         perakim.push(pdf::PdfPerekInput {
             perek_heb: tanach::perek_to_hebrew(data.perek_in_sefer),
             header: data.header.clone(),
-            pesukim: data.pesukim.clone(),
+            pesukim,
+            images,
             articles,
         });
     }
@@ -75,6 +92,16 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
         include_cover: req.include_cover,
         include_toc: req.include_toc,
         cover_accent_hex: cover_hex,
+        cover_text: req
+            .cover
+            .as_ref()
+            .map(|c| pdf::PdfCoverText {
+                branding: c.branding.clone(),
+                title: c.title.clone(),
+                subtitle: c.subtitle.clone(),
+                edition: c.edition.clone(),
+            })
+            .unwrap_or_default(),
     };
 
     let buf = pdf::build_pdf(&pdf_req, &fonts_dir)
@@ -91,32 +118,46 @@ async fn generate_pdf_core(req: GeneratePdfRequest) -> Result<(Vec<u8>, String),
     Ok((buf, filename))
 }
 
-/// Fetch articles for a single perek, applying optional filters.
-async fn fetch_articles_for_perek(
-    db: &Database,
-    perek_id: i32,
-    req: &GeneratePdfRequest,
-) -> anyhow::Result<Vec<(String, String, String)>> {
-    let mut perek_articles = services::get_articles_by_perek(db, perek_id).await?;
+fn content_pesukim(content: &PerekContentInput) -> Vec<Vec<pdf::PdfSegment>> {
+    content
+        .pesukim
+        .iter()
+        .map(|pasuk| {
+            pasuk
+                .iter()
+                .map(|seg| pdf::PdfSegment {
+                    kind: match seg.kind {
+                        SegmentKindInput::Word => pdf::SegmentKind::Word,
+                        SegmentKindInput::Ktiv => pdf::SegmentKind::Ktiv,
+                        SegmentKindInput::Qri => pdf::SegmentKind::Qri,
+                    },
+                    text: seg.value.clone(),
+                })
+                .collect()
+        })
+        .collect()
+}
 
-    if !req.article_ids.is_empty() {
-        perek_articles.retain(|a| req.article_ids.contains(&a.id));
-    }
-    if !req.author_ids.is_empty() {
-        perek_articles.retain(|a| req.author_ids.contains(&(a.author_id as i32)));
-    }
-
-    let mut articles = Vec::new();
-    for article in perek_articles {
-        let author = services::get_author(db, article.author_id as i32).await?;
-        articles.push((
-            article.name.clone(),
-            author.name.clone(),
-            article.content.clone().unwrap_or_default(),
-        ));
-    }
-
-    Ok(articles)
+fn content_images(content: &PerekContentInput) -> Result<Vec<pdf::PdfImage>, String> {
+    content
+        .images
+        .iter()
+        .map(|img| {
+            let bytes = STANDARD.decode(&img.data_base64).map_err(|e| {
+                format!("Invalid image data for perekId {}: {}", content.perek_id, e)
+            })?;
+            let ext = match img.ext {
+                ImageExt::Jpg => "jpg",
+                ImageExt::Png => "png",
+                ImageExt::Webp => "webp",
+            };
+            Ok(pdf::PdfImage {
+                bytes,
+                ext: ext.to_string(),
+                caption: img.caption.clone(),
+            })
+        })
+        .collect()
 }
 
 fn build_filename(sefer_name: &str, perakim_ids: &[i32]) -> String {
@@ -150,6 +191,18 @@ pub async fn cli_handler() -> anyhow::Result<()> {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input)?;
 
+    // This selects a local output format, makes no security decision, and ignores argv[0].
+    // nosemgrep: rust.lang.security.args-os.args-os, args-os
+    if std::env::args_os()
+        .skip(1)
+        .any(|arg| arg == "--daily-preview")
+    {
+        let req: bulletin::daily::DailyInput = serde_json::from_str(&input)?;
+        let result = bulletin::daily::render(&req, &daily_fonts_dir())?;
+        serde_json::to_writer(io::stdout(), &result)?;
+        return Ok(());
+    }
+
     let req: GeneratePdfRequest =
         serde_json::from_str(&input).map_err(|e| anyhow::anyhow!("Invalid request JSON: {}", e))?;
 
@@ -178,17 +231,43 @@ pub async fn lambda_handler(
 
     match path {
         "/api/generate-pdf" => lambda_generate_pdf(event).await,
+        "/api/preview-daily" => lambda_preview_daily(event).await,
         "/health" => Ok(LambdaResponse::builder()
             .status(200)
             .header("content-type", "application/json")
-            .body(Body::Text(r#"{"status":"ok","service":"bulletin"}"#.into()))
-            .unwrap()),
+            .body(Body::Text(r#"{"status":"ok","service":"bulletin"}"#.into()))?),
         _ => Ok(LambdaResponse::builder()
             .status(404)
             .header("content-type", "application/json")
-            .body(Body::Text(r#"{"error":"not_found"}"#.into()))
-            .unwrap()),
+            .body(Body::Text(r#"{"error":"not_found"}"#.into()))?),
     }
+}
+
+fn daily_fonts_dir() -> PathBuf {
+    env::var("FONTS_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fonts"))
+}
+
+async fn lambda_preview_daily(
+    event: LambdaRequest,
+) -> Result<LambdaResponse<Body>, lambda_http::Error> {
+    let bytes = match event.body() {
+        Body::Text(s) => s.as_bytes(),
+        Body::Binary(b) => b.as_slice(),
+        _ => &[],
+    };
+    let (status, body) = match serde_json::from_slice::<bulletin::daily::DailyInput>(bytes) {
+        Err(e) => (400, serde_json::json!({"error": e.to_string()})),
+        Ok(req) => match bulletin::daily::render(&req, &daily_fonts_dir()) {
+            Ok(artifacts) => (200, serde_json::to_value(artifacts)?),
+            Err(e) => (400, serde_json::json!({"error": e.to_string()})),
+        },
+    };
+    Ok(LambdaResponse::builder()
+        .status(status)
+        .header("content-type", "application/json")
+        .body(Body::Text(body.to_string()))?)
 }
 
 async fn lambda_generate_pdf(
@@ -200,18 +279,16 @@ async fn lambda_generate_pdf(
         Body::Empty | _ => {
             return Ok(LambdaResponse::builder()
                 .status(400)
-                .body(Body::Text(r#"{"error":"Missing request body"}"#.into()))
-                .unwrap());
+                .body(Body::Text(r#"{"error":"Missing request body"}"#.into()))?);
         }
     };
 
     let req: GeneratePdfRequest = match serde_json::from_str(&body_str) {
         Ok(r) => r,
         Err(e) => {
-            return Ok(LambdaResponse::builder()
-                .status(400)
-                .body(Body::Text(format!(r#"{{"error":"{}"}}"#, e)))
-                .unwrap());
+            return Ok(LambdaResponse::builder().status(400).body(Body::Text(
+                serde_json::json!({"error": e.to_string()}).to_string(),
+            ))?);
         }
     };
 
@@ -223,12 +300,10 @@ async fn lambda_generate_pdf(
                 "content-disposition",
                 format!("attachment; filename=\"{}\"", filename),
             )
-            .body(Body::Binary(buf))
-            .unwrap()),
+            .body(Body::Binary(buf))?),
         Err(e) => Ok(LambdaResponse::builder()
             .status(500)
-            .body(Body::Text(format!(r#"{{"error":"{}"}}"#, e)))
-            .unwrap()),
+            .body(Body::Text(serde_json::json!({"error": e}).to_string()))?),
     }
 }
 
@@ -320,6 +395,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn lambda_generate_pdf_uses_website_content_and_reports_bad_images() {
+        let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+        let ok = format!(
+            r#"{{"perakimIds":[8],"includeArticles":false,"perakimContent":[{{"perekId":8,"pesukim":[[{{"kind":"word","value":"וַיְדַבֵּ֥ר"}},{{"kind":"ktiv","value":"הוצא"}},{{"kind":"qri","value":"הַיְצֵ֣א"}}]],"images":[{{"dataBase64":"{png}","ext":"png","caption":"x"}},{{"dataBase64":"{png}","ext":"jpg"}},{{"dataBase64":"{png}","ext":"webp"}}]}}]}}"#
+        );
+        let (content, _) = {
+            let req: GeneratePdfRequest = serde_json::from_str(&ok).unwrap();
+            let c = &req.perakim_content[0];
+            (content_pesukim(c), content_images(c).unwrap())
+        };
+        assert_eq!(content[0][1].kind, pdf::SegmentKind::Ktiv);
+        assert_eq!(content[0][2].kind, pdf::SegmentKind::Qri);
+        assert_eq!(content[0][0].kind, pdf::SegmentKind::Word);
+
+        let bad = r#"{"perakimIds":[8],"includeArticles":false,"perakimContent":[{"perekId":8,"pesukim":[],"images":[{"dataBase64":"%%%","ext":"png"}]}]}"#;
+        let err = generate_pdf_core(serde_json::from_str(bad).unwrap())
+            .await
+            .unwrap_err();
+        assert!(err.starts_with("Invalid image data for perekId 8"), "{err}");
+    }
+
+    #[tokio::test]
     async fn lambda_generate_pdf_returns_validation_errors_from_core() {
         let response = lambda_handler(request(
             "/api/generate-pdf",
@@ -352,11 +449,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn daily_preview_returns_matching_artifacts_and_valid_json_errors() {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        let response = lambda_handler(request(
+            "/api/preview-daily",
+            Body::Binary(br#"{"date":"2026-10-08","hebrewDate":"test date","perekId":1,"article":null,"dedications":[]}"#.to_vec()),
+        )).await.unwrap();
+        assert_eq!(response.status().as_u16(), 200);
+        let artifacts: bulletin::daily::DailyArtifacts =
+            serde_json::from_str(text_body(response.body())).unwrap();
+        assert_eq!(artifacts.source, "בראשית א");
+        assert!(artifacts.subject.contains("test date"));
+        assert!(
+            STANDARD
+                .decode(artifacts.pdf_base64)
+                .unwrap()
+                .starts_with(b"%PDF-")
+        );
+        for body in [
+            Body::Empty,
+            Body::Text(
+                r#"{"date":"invalid","hebrewDate":"date","perekId":1,"article":null}"#.into(),
+            ),
+        ] {
+            let response = lambda_handler(request("/api/preview-daily", body))
+                .await
+                .unwrap();
+            assert_eq!(response.status().as_u16(), 400);
+            let value: serde_json::Value =
+                serde_json::from_str(text_body(response.body())).unwrap();
+            assert!(value["error"].is_string());
+        }
+        let invalid = lambda_handler(request(
+            "/api/generate-pdf",
+            Body::Text(r#"{"perakimIds":"quoted"}"#.into()),
+        ))
+        .await
+        .unwrap();
+        let value: serde_json::Value = serde_json::from_str(text_body(invalid.body())).unwrap();
+        assert!(value["error"].as_str().unwrap().contains("quoted"));
+    }
+
+    #[tokio::test]
     async fn lambda_generate_pdf_returns_pdf_bytes_and_download_headers() {
         let response = lambda_handler(request(
             "/api/generate-pdf",
             Body::Text(
-                r##"{"seferName":"Genesis","perakimIds":[1],"includeArticles":false,"coverAccentHex":"#123abc"}"##
+                r##"{"seferName":"Genesis","perakimIds":[1],"includeArticles":false,"includeCover":true,"coverAccentHex":"#123abc","cover":{"branding":"תנ\"ך על הפרק","title":"ספר בראשית","subtitle":"מקראות גדולות","edition":"עם מאמרים"}}"##
                     .to_string(),
             ),
         ))

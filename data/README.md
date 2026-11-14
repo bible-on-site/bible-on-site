@@ -54,6 +54,7 @@ Outputs will be written to `sefaria/.outputs/`.
 | `sefaria-populate` | Import Sefaria dump into MongoDB |
 | `generate-tanah-view-json` | Generate Tanah view as JSON |
 | `generate-tanah-view-sqlite` | Generate Tanah view as SQLite |
+| `generate-tanah-view-sqlite-from-json` | Regenerate the app-packaged tanah_view SQLite (`app/BibleOnSite/Resources/Raw/`) from the checked-in website JSON corpus — no MongoDB needed |
 | `mysql-populate` | Populate MySQL database with structure and test data |
 | `mysql-populate-data-only` | Populate MySQL database with test data only |
 | `mysql-upgrade-tanahpedia-structure` | Safely create/upgrade Tanahpedia structure without dropping existing content |
@@ -87,7 +88,21 @@ The db-populator runs `tanahpedia_family_shimshon_data.sql` after Tanahpedia see
 
 Before family demo SQL, the populator applies `tanahpedia_incremental_lookups.sql` (`INSERT IGNORE` for new lookup rows such as `FORBIDDEN_WITH_GENTILE`) so older DBs do not fail FK checks when running `cargo make mysql-apply-tanahpedia-families` only.
 
-After the יעקב script, `tanahpedia_place_eretz_yisrael_data.sql` adds the `eretz-yisrael` place entry (coordinates + category homepage `MAP` for `/tanahpedia/place`). Re-run `cargo make mysql-apply-tanahpedia-families` or full populate to apply it on an existing DB.
+The Jerusalem place is delivered as database content by `tanahpedia_place_jerusalem_data.sql` in the data deployment manifest. Local development gets that content through the production database sync, not through the Rust db-populator. The place map is shown whenever mapped places exist. The older `tanahpedia_place_eretz_yisrael_data.sql` remains a demo fixture; re-run `cargo make mysql-apply-tanahpedia-families` or full populate only on a disposable fixture DB to apply that demo.
+
+Jerusalem word links and the reverse occurrences table share the persisted `tanahpedia_entity_tanah_source` records. `tanahpedia_jerusalem_occurrences_data.sql` adds the exact segment references through database deployment. Regenerate it from the canonical corpus with the command below; add `--check` to verify it without writing. The generator is a migration maintenance tool and is not part of local population.
+
+```bash
+node data/mysql/scripts/generate-tanahpedia-occurrences.mjs --entry ירושלים --entity-type PLACE --spellings ירושלם,ירושלים,ירושליים,ירושלמה,ירושלימה --output data/mysql/tanahpedia_jerusalem_occurrences_data.sql
+```
+
+`tanah_perek.pasuk_count` is canonical structural metadata — the number of pesukim the corpus holds per perek — used by the admin article covering-source write path to validate pasuk coordinates (epic #2175 §3; see `docs/data/reading-units.md`). `tanah_perek_pasuk_count_data.sql` fills all 929 rows through database deployment and is regenerated from the checked-in corpus dump, like the occurrences generator above:
+
+```bash
+node data/mysql/scripts/generate-perek-pasuk-counts.mjs --output data/mysql/tanah_perek_pasuk_count_data.sql
+```
+
+The generator reads the checked-in `web/bible-on-site/src/data/db/sefaria-dump-*.tanah_view.json` corpus; add `--check` to verify the file without rewriting. Regenerated `tanah view` MySQL output emits `pasuk_count` too, so future corpus regen keeps the counts in step.
 
 After that, when `tanahpedia_family_jacob_data.sql` is present, full populate applies the **יעקב** demo (Tanahpedia entry `יעקב`, parents, four wives including בלהה וזלפה as full wives per הכתב והקבלה בראשית לב כג, children, and brother עשו) only when the entry is missing. `mysql-apply-tanahpedia-families` forces the family/place demo scripts. The demo scripts use fixed UUIDs (`e200…` / `p200…` / `ea200…` — each script deletes only its own fixed demo rows before re-insert), so do not use the forced demo task as the normal content editing path after production content is edited remotely.
 
@@ -169,25 +184,31 @@ Pull production data (database + optional S3) into your local `tanah-dev` enviro
 AWS_PROFILE=AdministratorAccess-250598594267 aws sso login
 
 # Sync production DB to local tanah-dev
-AWS_PROFILE=AdministratorAccess-250598594267 npx tsx devops/setup-dev-env.mts sync-from-prod
+AWS_PROFILE=AdministratorAccess-250598594267 node devops/setup-dev-env.mts sync-from-prod
 ```
 
 Preview without making changes:
 
 ```bash
-AWS_PROFILE=AdministratorAccess-250598594267 npx tsx devops/setup-dev-env.mts sync-from-prod --dry-run
+AWS_PROFILE=AdministratorAccess-250598594267 node devops/setup-dev-env.mts sync-from-prod --dry-run
 ```
 
 **What it does:**
 
 1. Fetches production DB credentials from AWS SSM (`/bible-on-site-tanah-db-url`)
 2. Fetches RDS security group ID by name (`tanah-rds-sg`)
-3. Temporarily authorizes your public IP on the RDS security group
+3. Temporarily authorizes your public IP on the RDS security group; when an identical rule already exists (added by an operator or another tool), it is borrowed instead of duplicated
 4. Runs `mysqldump` from production and restores into local `tanah-dev`
 5. **Migrates article content**: replaces S3 references from `bible-on-site-assets` → `bible-on-site-assets-dev`
 6. **Applies the Tanahpedia safe structure + baseline seed** (`cargo make mysql-seed-tanahpedia-baseline`) — creates missing tables, idempotent column upgrades, and lookup rows without touching synced content
-7. Optionally syncs S3 assets from prod to dev bucket
-8. Revokes the security group ingress rule
+7. Optionally syncs S3 assets from prod to dev bucket; local RustFS targets use a persistent incremental mirror shared across worktrees at `~/.cache/bible-on-site/s3-mirrors/<region>/<bucket>`, rather than downloading and deleting the entire bucket on every run
+8. Revokes only the ingress rule this run created, identified by its security group rule ID — a borrowed or foreign rule is always left intact
+
+Keep the shared mirror to avoid repeat internet-download charges. Source reads
+use your AWS identity; destination writes use local RustFS credentials and a
+validated local HTTP endpoint. Concurrent mirror use fails with a lock message;
+after a killed process, verify it exited before removing the empty `.lock`
+directory. A failed asset refresh does not mark the complete local sync fresh.
 
 **S3 bucket naming convention:**
 

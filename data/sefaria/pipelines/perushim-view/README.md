@@ -47,9 +47,37 @@ cargo make generate-perushim-compass-stages
 - **`parshan`** — Commentator metadata: id, name (Hebrew)
 - **`perush`** — Commentary work: id, name, parshan reference, dates
 
-### Notes (`perushim_notes_structure.sql`) — large, PAD / on-demand
+### Notes (`perushim_notes_structure.sql`) — compressed, PAD / on-demand
 
-- **`note`** — One row per commentary phrase per pasuk: `(perush_id, perek_id, pasuk, note_idx, note_content)`. Matches the legacy `tanah_note` schema pattern.
+Schema v2 (`_metadata.schema_version = '2'`) stores notes as one zlib-compressed
+blob per perek — roughly a quarter of the v1 row-based size:
+
+- **`note_blob`** — One row per perek: `(perek_id, data)`. The `data` blob is the
+  PNB1 format in `src/commands/note_blob.rs`, decoded by the app in
+  `PerushNoteBlob.cs`. Records inside are ordered by (pasuk, perush_id, note_idx).
+- **`perek_perush`** — One row per (perek, perush) pair, for the picker's
+  "which perushim exist here" lookup.
+
+Re-generating the committed `.sqlite.gz` fallback without a MongoDB dump:
+`--format convert-notes --input <v1.sqlite> --output <v2.sqlite>` reads a v1
+row-based notes DB, emits v2, and verifies every decoded record against the source.
+
+### Search index (`hebrew_search.sqlite`) — prebuilt FTS5, same pack
+
+`--format sqlite` also emits a ready-to-query FTS5 search index next to the
+notes DB (verses + notes documents, `search_metadata` fingerprints binding it
+to the exact generation it was built from). The app adopts it instead of
+re-importing ~363K notes on-device. Its `.gz` is **not** committed — at ~121 MB
+it exceeds GitHub's push limit — so the index travels via CI artifacts into the
+same PAD/ODR pack.
+
+Rebuilding only the index without MongoDB:
+`--format search-index --input <v2 notes.sqlite> --output <index.sqlite>`
+(`--tanah-view` overrides the bundled verses source; `cargo make generate-search-index`).
+
+Text normalization lives in `search_text.rs` — a port of the app's
+`SearchText.PlainText`/`Normalize`. Bump `NORM_VERSION` together with
+`SearchText.NormalizationVersion` so pipeline and app fingerprints stay comparable.
 
 ## On-Demand Delivery for Mobile App
 
@@ -59,12 +87,20 @@ Since note text data is very large, it should **not** be bundled with the mobile
 
 2. **Package notes as Play Asset Delivery (PAD)** — Use on-demand asset pack. Google hosts the notes for free. Pipeline outputs to `app/BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/`.
 
-3. **HTTP fallback** — When PAD is not available (sideloaded APK, emulator, or non-Android), app downloads from S3 when user taps "להוריד פירושים".
+3. **iOS ODR and debug fallback** — iOS uses Apple On-Demand Resources. Android debug APKs can bundle the notes database as an app asset.
 
-4. **Download on-demand** — When notes are not available (PAD not yet fetched or HTTP fallback):
+4. **Download on-demand** — When notes are not available:
    - Show "להוריד פירושים" button in perushim panel and in Settings.
-   - If using S3: download from `bible-on-site-assets.s3.il-central-1.amazonaws.com/perushim/...`
+   - Fetch the matching notes pack through PAD/ODR, or copy a bundled debug asset.
    - Save to `FileSystem.AppDataDirectory` and open as read-only SQLite.
+
+The bundled catalog is refreshed on app startup. Notes include the complete
+`perush_catalog` ID-to-name mapping in `_metadata`; clients verify it before
+resolving IDs against their catalog. Legacy packs require an identical nonzero
+catalog/notes build timestamp. A mismatch offers the download action even when
+an older local file exists. See the [attribution RCA](../../../../docs/app/commentary-attribution.md).
+
+JSON generation also refreshes the client-safe `perush-names.ts` citation projection.
 
 ## Aggregation Pipeline
 

@@ -1,8 +1,7 @@
-"""
-Lambda function for deploying SQL data to RDS MySQL.
+"""Lambda function for deploying SQL data to RDS MySQL.
 
 This Lambda is deployed as: bible-on-site-db-populator
-Runtime: Python 3.11
+Runtime: Python 3.14
 Handler: index.handler
 
 Deployment:
@@ -19,58 +18,114 @@ Deployment:
 import json
 import os
 import re
+from urllib.parse import unquote, urlparse
 import boto3
 import pymysql
 
 
-def handler(event, context):
+def _credentials_from_ssm():
+    """Resolve DB credentials from SSM Parameter Store (legacy contract).
+
+    Replicates the live pre-payload handler exactly: it reads the
+    ``{SSM_PREFIX}-{host,port,name,username,url}`` SecureStrings and takes
+    host/user/database from the discrete parameters (port defaults to
+    3306), extracting only the password from the ``-url`` mysql:// URL —
+    including the legacy quirk of NOT percent-decoding it. Callers that
+    omit ``db_url`` — manual invokes and older deployer checkouts — still
+    rely on that path, so it stays as the last credential source until the
+    approved endpoint migration proves no VPC consumer remains.
     """
-    Lambda handler for database population.
+    ssm = boto3.client("ssm")
+    prefix = os.environ.get("SSM_PREFIX", "bible-on-site-tanah-db")
+    suffixes = ("host", "port", "name", "username", "url")
+    params = ssm.get_parameters(
+        Names=[f"{prefix}-{suffix}" for suffix in suffixes],
+        WithDecryption=True,
+    )
+    param_dict = {
+        p["Name"].rsplit("-", 1)[-1]: p["Value"] for p in params["Parameters"]
+    }
+    # host/name/username are mandatory in the legacy contract (it indexed
+    # them unconditionally); port defaults to 3306 and url only feeds the
+    # password extraction, exactly as the live handler treats them.
+    missing = [s for s in ("host", "name", "username") if not param_dict.get(s)]
+    if missing:
+        raise ValueError(
+            f"SSM parameters {prefix}-{{{', '.join(missing)}}} missing or empty"
+        )
+    # Legacy extraction: password is the substring between the first ':'
+    # after '://' and the next '@', verbatim (no percent-decoding).
+    db_url = param_dict.get("url", "")
+    password = db_url.split(":")[2].split("@")[0] if "://" in db_url else ""
+    return {
+        "host": param_dict["host"],
+        "port": int(param_dict.get("port") or 3306),
+        "user": param_dict["username"],
+        "password": password,
+        "database": param_dict["name"],
+    }
+
+
+def db_credentials(event):
+    """Resolve host/port/user/password/database for the MySQL connection.
+
+    Credential sources, in order:
+
+    1. ``db_url`` in the invoke payload — the CD deployer reads the URL
+       from SSM Parameter Store and delivers it inside the payload, so the
+       function normally never calls SSM from inside the VPC.
+    2. ``DB_URL`` env var — fallback for manual invocations.
+    3. SSM Parameter Store ``{SSM_PREFIX}-*`` parameters — the legacy
+       contract used by callers that predate the payload field.
+       Transitional: it keeps working until the approved endpoint
+       migration removes the need.
+
+    Never log resolved values.
+    """
+    db_url = event.get("db_url") or os.environ.get("DB_URL", "")
+    if not db_url:
+        return _credentials_from_ssm()
+    parts = urlparse(db_url)
+    if parts.scheme != "mysql" or not parts.hostname or not parts.username:
+        raise ValueError(
+            "resolved DB URL (db_url payload or DB_URL env) must be a "
+            "mysql://user:pass@host:port/db URL"
+        )
+    return {
+        "host": parts.hostname,
+        "port": parts.port or 3306,
+        "user": unquote(parts.username),
+        "password": unquote(parts.password or ""),
+        "database": parts.path.lstrip("/"),
+    }
+
+
+def handler(event, context):
+    """Lambda handler for database population.
 
     Expected event format:
     {
         "sql_files": ["file1.sql", "file2.sql"],
-        "s3_prefix": "sql/2024-01-01-120000/"
+        "s3_prefix": "sql/2024-01-01-120000/",
+        "db_url": "mysql://user:pass@host:3306/db"   # optional; see db_credentials
     }
 
     The handler:
-    1. Retrieves DB credentials from SSM Parameter Store
+    1. Resolves DB credentials from db_url, then DB_URL env, then SSM
+       {SSM_PREFIX}-url for callers that omit the payload field
     2. Downloads SQL files from S3
     3. Preprocesses SQL to add DROP TABLE/VIEW IF EXISTS
     4. Filters out MySQL dump artifacts
     5. Executes statements against RDS MySQL
     """
-    ssm = boto3.client("ssm")
     s3 = boto3.client("s3")
 
     bucket = os.environ.get("S3_BUCKET", "bible-on-site-data-deploy")
-    ssm_prefix = os.environ.get("SSM_PREFIX", "bible-on-site-tanah-db")
-
-    # Get database credentials from SSM
-    params = ssm.get_parameters(
-        Names=[
-            f"{ssm_prefix}-host",
-            f"{ssm_prefix}-port",
-            f"{ssm_prefix}-name",
-            f"{ssm_prefix}-username",
-            f"{ssm_prefix}-url",
-        ],
-        WithDecryption=True,
-    )
-
-    param_dict = {p["Name"].split("-")[-1]: p["Value"] for p in params["Parameters"]}
-
-    # Extract password from URL (format: mysql://user:pass@host:port/db)
-    db_url = param_dict.get("url", "")
-    password = db_url.split(":")[2].split("@")[0] if "://" in db_url else ""
+    credentials = db_credentials(event)
 
     # Connect to database
     connection = pymysql.connect(
-        host=param_dict["host"],
-        port=int(param_dict.get("port", 3306)),
-        user=param_dict["username"],
-        password=password,
-        database=param_dict["name"],
+        **credentials,
         connect_timeout=30,
         autocommit=True,
     )
@@ -99,7 +154,7 @@ def handler(event, context):
                     for stmt in stmts:
                         try:
                             cursor.execute(stmt)
-                        except Exception as e:
+                        except Exception:
                             print(f"Error executing: {stmt[:100]}...")
                             raise
                 count = len(stmts)
@@ -118,8 +173,7 @@ def handler(event, context):
 
 
 def find_statement_end(buf):
-    """
-    Find the index of the first ';' that is NOT inside a SQL string literal.
+    """Find the index of the first ';' that is NOT inside a SQL string literal.
 
     Tracks single-quoted strings and skips semicolons that appear within
     them.  Inside a string the following escape sequences are recognised
@@ -159,10 +213,10 @@ def find_statement_end(buf):
 
 
 def execute_sql_streaming(body, connection):
-    """
-    Stream-process a large SQL file from S3 to avoid loading it entirely
-    into memory.  Reads the S3 body in 1 MB chunks, accumulates a buffer,
-    and executes each semicolon-terminated statement as it is found.
+    """Stream-process a large SQL file from S3 to avoid loading it entirely.
+
+    Reads the S3 body in 1 MB chunks, accumulates a buffer, and executes
+    each semicolon-terminated statement as it is found.
 
     Uses quote-aware splitting so that semicolons inside SQL string
     literals (e.g. in perush names or note HTML) are not mistaken for
@@ -197,9 +251,9 @@ def execute_sql_streaming(body, connection):
                 if not _should_execute(stmt):
                     continue
 
-                # Handle CREATE TABLE → add DROP TABLE IF EXISTS
+                # Replace bootstrap tables, preserving explicit additive migrations.
                 table_match = re.match(
-                    r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)[`"]?',
+                    r'CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS\b)[`"]?(\w+)[`"]?',
                     stmt,
                     re.IGNORECASE,
                 )
@@ -226,8 +280,7 @@ def execute_sql_streaming(body, connection):
 
 
 def parse_statements(sql_content):
-    """
-    Parse SQL into executable statements using quote-aware splitting.
+    """Parse SQL into executable statements using quote-aware splitting.
 
     Handles semicolons inside string literals correctly, and filters
     out comments, USE statements, and MySQL dump artifacts.
@@ -275,16 +328,15 @@ def _should_execute(stmt):
 
 
 def preprocess_sql(sql_content):
-    """
-    Add DROP statements before CREATE TABLE/VIEW.
+    """Add DROP statements before replaceable CREATE TABLE/VIEW statements.
 
-    This ensures idempotent deployments - the same SQL can be
-    run multiple times without "already exists" errors.
+    Explicit CREATE TABLE IF NOT EXISTS migrations preserve existing rows.
+    Bootstrap definitions without that clause retain their replacement behavior.
     """
     result = "SET FOREIGN_KEY_CHECKS = 0;\n"
 
-    # Handle CREATE TABLE - add DROP TABLE IF EXISTS before each
-    table_pattern = r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)[`"]?'
+    # Do not turn additive, idempotent migrations into destructive replacements.
+    table_pattern = r'CREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS\b)[`"]?(\w+)[`"]?'
     for match in re.finditer(table_pattern, sql_content, re.IGNORECASE):
         table_name = match.group(1)
         sql_content = sql_content.replace(

@@ -1,0 +1,50 @@
+{
+ "schema": 1,
+ "rows_sha256": "1edeb0454791d6759ead3c63dd702ee9182476ef2ac794f2558c8e8a3e6fc9b2",
+ "candidate": {
+  "name": "dictabert-ner-retype",
+  "hf_repo": "dicta-il/dictabert-ner",
+  "revision": "05ed61bc99437b13bc2bdef8154c52f8b44eaad6",
+  "license": "CC-BY-4.0",
+  "kind": "token-classification",
+  "mode": "retype",
+  "note": "The recommended hybrid: morphhb detection (every tagged proper noun is a candidate — the recall engine) with the encoder re-typing each candidate's entity_type. Keeps the baseline's spans, names and acceptance; abstains to the lexical type when the encoder maps nothing."
+ },
+ "engine": "classifier",
+ "model_revision": "dictabert-ner-retype@05ed61bc+detecte9a06088+contract1",
+ "limits": {
+  "max_articles": 3
+ },
+ "execution": {
+  "device": "cuda:0",
+  "dtype": "float32",
+  "tf32": false
+ },
+ "model_loaded_this_run": false,
+ "inference_runtime": {
+  "torch": "2.14.1+cu126",
+  "transformers": "5.22.2",
+  "tokenizers": "0.23.3",
+  "bitsandbytes": "0.50.2",
+  "cuda_runtime": "12.6",
+  "gpu_name": "NVIDIA GeForce RTX 4070 Laptop GPU",
+  "gpu_compute_capability": [
+   8,
+   9
+  ]
+ },
+ "inference_stats_this_run": null,
+ "request_cache": null,
+ "detection": {
+  "pasuk": "morphhb-lexical-baseline@3d15126f+aligned2+names2+contract1",
+  "article": "morphhb-gazetteer@3d15126f+aligned2+names2+contract1"
+ },
+ "diagnostics": {},
+ "failure_history": {},
+ "complete_valid_responses": true,
+ "checkpoint": {
+  "config": "ce01f2fea1b314b0ee78495223bdf00e8faddb2f80c31da642a79f213a5cbcb4",
+  "hits": 3,
+  "misses": 0
+ }
+}

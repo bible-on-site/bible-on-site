@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { skipAuthEnabled } from "./environment.server";
 
 const COGNITO_REGION = "il-central-1";
 const COGNITO_USER_POOL_ID = requireEnv("COGNITO_USER_POOL_ID");
@@ -17,7 +18,7 @@ const COGNITO_SERVICE_SCOPE =
 
 function requireEnv(name: string): string {
 	const value = process.env[name];
-	if (!value && process.env.SKIP_AUTH !== "true") {
+	if (!value && !skipAuthEnabled()) {
 		throw new Error(`Missing required environment variable: ${name}`);
 	}
 	return value ?? "";
@@ -65,23 +66,32 @@ export async function exchangeCodeForTokens(
 	});
 
 	if (!response.ok) {
-		const text = await response.text();
-		throw new Error(`Token exchange failed: ${response.status} ${text}`);
+		throw new Error(`Token exchange failed: ${response.status}`);
 	}
 
 	return response.json();
 }
 
-export async function verifyIdToken(token: string): Promise<boolean> {
+/**
+ * Verifies the admin session id_token and returns its claims — the `sub`
+ * uniquely scopes each editor's browser-local drafts to their account.
+ */
+export async function verifyIdTokenClaims(
+	token: string,
+): Promise<{ sub?: string; email?: string; name?: string } | null> {
 	try {
-		await jwtVerify(token, jwks, {
+		const { payload } = await jwtVerify(token, jwks, {
 			issuer: ISSUER,
 			audience: COGNITO_CLIENT_ID,
 		});
-		return true;
+		return payload.token_use === "id" ? payload : null;
 	} catch {
-		return false;
+		return null;
 	}
+}
+
+export async function verifyIdToken(token: string): Promise<boolean> {
+	return (await verifyIdTokenClaims(token)) !== null;
 }
 
 /**

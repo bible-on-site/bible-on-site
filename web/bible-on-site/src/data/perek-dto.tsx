@@ -1,24 +1,56 @@
 import { toLetters } from "gematry";
-import moment from "moment-timezone";
-import { getCurrentDate } from "@/util/date";
-import {
-	constructTsetAwareHDate,
-	DateUnits,
-	DayOfWeek,
-	type HebrewDate,
-	hebcalDateToNumber,
-	parseNumericalDateToHebcalDate,
-} from "@/util/hebdates-util";
-import { cycles } from "./db/cycles";
 import { sefarim } from "./db/sefarim";
 import type {
 	Additionals,
 	AdditionalsItem,
 	Pasuk,
+	RecitationRecording,
+	Sefarim,
 	SefarimItemWithPerakim,
 } from "./db/tanah-view-types";
-import { getAllPerakim } from "./sefer-dto";
+
+export { getPerekIdByDate, getTodaysPerekId } from "./perek-calendar";
+
+/** Last canonical perek id — the sequence is a closed 1-929 list. */
+export const LAST_PEREK_ID = 929;
+
+/**
+ * Distinct canonical perakim with a published recording: a perek carries a
+ * `recitation` record only once its audio asset is actually published, so
+ * counting `recitation.audioUrl` counts each recorded perek exactly once.
+ * Alignment approval is unrelated to availability — a playable recording
+ * counts even while its word timings await review (#2397).
+ */
+export function countRecordedPerakim(data: Sefarim = sefarim): number {
+	let count = 0;
+	for (const sefer of data) {
+		const groups: { perakim: { recitation?: RecitationRecording }[] }[] =
+			"additionals" in sefer ? sefer.additionals : [sefer];
+		for (const group of groups) {
+			for (const perek of group.perakim) {
+				if (perek.recitation?.audioUrl) count += 1;
+			}
+		}
+	}
+	return count;
+}
+/**
+ * Previous/next perakim in the canonical 1-929 id sequence, resolved to
+ * full objects with the canonical source formatter (including
+ * additional-book labels like עזרא ע י / עזרא נ א). The corpus edges
+ * return null so callers never fabricate /929/0 or /929/930 (#2518).
+ */
+export function getAdjacentPereks(
+	perekId: number,
+): { prev: PerekObj | null; next: PerekObj | null } {
+	return {
+		prev: perekId > 1 ? getPerekByPerekId(perekId - 1) : null,
+		next: perekId < LAST_PEREK_ID ? getPerekByPerekId(perekId + 1) : null,
+	};
+}
+
 export interface PerekObj {
+	recitation?: RecitationRecording;
 	perekId: number;
 	perekHeb: string;
 	header: string;
@@ -68,6 +100,7 @@ export function getPerekByPerekId(perekId: number): PerekObj {
 		perekId,
 		perekHeb,
 		header: perek.header,
+		recitation: perek.recitation,
 		pesukim: perek.pesukim,
 		helek: seferOrAdditional.helek,
 		sefer: sefer.name,
@@ -76,66 +109,4 @@ export function getPerekByPerekId(perekId: number): PerekObj {
 			additional ? ` ${additional.letter} ` : " "
 		}${perekHeb}`,
 	};
-}
-
-export function getPerekIdByDate(date: Date): number {
-	const floorToThursdayAtWeekend = (hDate: HebrewDate): HebrewDate =>
-		(hDate.getDay() as DayOfWeek) === DayOfWeek.FRIDAY ||
-		(hDate.getDay() as DayOfWeek) === DayOfWeek.SATURDAY
-			? hDate.nearest(DayOfWeek.THURSDAY)
-			: hDate;
-
-	const roundToCycle = (hDate: HebrewDate): HebrewDate => {
-		const cycleHDates = cycles.map(parseNumericalDateToHebcalDate);
-		const CYCLE_LENGTH = 1299;
-		for (const cycleHDate of cycleHDates) {
-			// before a cycle
-			if (hDate.deltaDays(cycleHDate) < 0) {
-				// return next cycle start date
-				return cycleHDate;
-			}
-			// during a cycle
-			if (
-				hDate.deltaDays(cycleHDate.add(CYCLE_LENGTH - 1, DateUnits.DAYS)) < 0
-			) {
-				// no need to round
-				return hDate;
-			}
-		}
-		// after all cycles
-		const lastCycleHDate = cycleHDates.at(-1);
-		/* istanbul ignore next: should never happen */
-		if (!lastCycleHDate) {
-			throw new Error("no cycles data found");
-		}
-		// return last cycle end date
-		return lastCycleHDate.add(CYCLE_LENGTH - 1);
-	};
-
-	const getLearningHDate = (date: Date): HebrewDate => {
-		const tsetAwareHDate = constructTsetAwareHDate(date);
-		const weekendAwareHdate = floorToThursdayAtWeekend(tsetAwareHDate);
-		const cycleAwareHDate = roundToCycle(weekendAwareHdate);
-		return cycleAwareHDate;
-	};
-
-	const hDate: HebrewDate = getLearningHDate(date);
-
-	const hebDateAsNumber = hebcalDateToNumber(hDate);
-
-	const perek = getAllPerakim().find((p) => p.date.includes(hebDateAsNumber));
-	/* istanbul ignore next: should never happen */
-	if (!perek) {
-		throw new Error(`No perek found for date: ${hDate.toString()}`);
-	}
-	return perek.perekId;
-}
-
-/**
- * Get the perek ID for today.
- */
-export function getTodaysPerekId() {
-	return getPerekIdByDate(
-		moment.tz(getCurrentDate(), "Asia/Jerusalem").toDate(),
-	);
 }

@@ -1,9 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../util/playwright/test-fixture";
 
 // These values match the constants in src/app/sitemap.ts
 const SITEMAP_SECTIONS = [
+	"לוח",
 	"dailyBulletin",
 	"whatsappGroup",
+	"dailyBulletin/join/email",
 	"tos",
 	"app",
 	"contact",
@@ -29,6 +31,12 @@ test.describe("sitemap.xml", () => {
 		expect(body).toContain("</loc>");
 		// Root entry should have highest priority
 		expect(body).toContain("<priority>1</priority>");
+	});
+
+	test("omits unsupported modification dates", async ({ request }) => {
+		const response = await request.get("/sitemap.xml");
+		const body = await response.text();
+		expect(body).not.toContain("<lastmod>");
 	});
 
 	test("contains all section URLs", async ({ request }) => {
@@ -61,6 +69,25 @@ test.describe("sitemap.xml", () => {
 		// Check a few perakim in between
 		expect(body).toContain("/929/100</loc>");
 		expect(body).toContain("/929/500</loc>");
+	});
+
+	test("excludes Masora and includes only the 55 canonical Parasha URLs", async ({
+		request,
+	}) => {
+		const response = await request.get("/sitemap.xml");
+		const body = decodeURIComponent(await response.text());
+		expect(body).not.toMatch(/\/(?:מסורה|masora)(?:\/|<)/);
+		// Only canonical Hebrew-name slugs are indexable (issue #2738) —
+		// the hub plus 54 unit URLs; no numeric ids or aliases.
+		const parashaUrls =
+			body.match(/<loc>[^<]*\/פרשה(?:\/[א-ת-]+)?<\/loc>/g) ?? [];
+		expect(parashaUrls).toHaveLength(55);
+		expect(body).not.toMatch(/\/פרשה\/\d+<\/loc>/);
+		for (const slug of ["בראשית", "לך-לך", "אחרי-מות", "וזאת-הברכה"]) {
+			expect(parashaUrls.some((url) => url.includes(`/פרשה/${slug}`))).toBe(
+				true,
+			);
+		}
 	});
 
 	test("contains authors index URL", async ({ request }) => {
@@ -120,11 +147,18 @@ test.describe("sitemap.xml", () => {
 			.length;
 		// Pedia URLs use URL-encoded Hebrew unique names: /pedia/%D7...
 		const pediaEntries = (body.match(/\/pedia\/[^<]+<\/loc>/g) || []).length;
+		// Moed detail URLs under the canonical מועדים root — counted from the
+		// decoded body since Hebrew slugs arrive percent-encoded (#3101).
+		const decoded = decodeURIComponent(body);
+		const moedEntries = (decoded.match(/\/מועדים\/[^<]+<\/loc>/g) || [])
+			.length;
 
-		// Expected: 1 root + sections + 1 929 index + 929 perakim + N articles + N perushim + 1 authors index + N authors + 1 pedia index + N pedias
+		// Root, sections, 929 index, 55 Parasha URLs, chapters, content and
+		// pedia, the מועדים landing + one URL per published moed.
 		const expectedCount =
 			1 +
 			SITEMAP_SECTIONS.length +
+			55 +
 			1 +
 			TOTAL_PERAKIM +
 			articleEntries +
@@ -132,7 +166,9 @@ test.describe("sitemap.xml", () => {
 			1 +
 			authorEntries +
 			1 +
-			pediaEntries;
+			pediaEntries +
+			1 +
+			moedEntries;
 		expect(urlCount).toBe(expectedCount);
 	});
 
@@ -158,5 +194,55 @@ test.describe("sitemap.xml", () => {
 			const url = loc.replace(/<\/?loc>/g, "");
 			expect(url).toMatch(/^https:\/\//);
 		}
+	});
+});
+
+// /sitemap_www.xml is a public sitemap URL external consumers still fetch.
+// It must permanently redirect into the single canonical document —
+// a 200 HTML missing-page is a regression, not a fix (issue #2935).
+test.describe("sitemap_www.xml compatibility", () => {
+	test("answers a permanent redirect to the canonical sitemap", async ({
+		request,
+	}) => {
+		const response = await request.get("/sitemap_www.xml", {
+			maxRedirects: 0,
+		});
+
+		expect(response.status()).toBe(308);
+		expect(response.headers().location).toMatch(/\/sitemap\.xml$/);
+	});
+
+	test("following the chain serves valid sitemap XML, not an HTML error page", async ({
+		request,
+		page,
+	}) => {
+		const response = await request.get("/sitemap_www.xml");
+
+		expect(response.status()).toBe(200);
+		expect(response.headers()["content-type"]).toContain("application/xml");
+		const body = await response.text();
+		expect(body).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+		expect(body).toContain("http://www.sitemaps.org/schemas/sitemap/0.9");
+		expect(body).toContain("<urlset");
+		expect(body).toContain("<loc>");
+		expect(body).not.toMatch(/<!doctype html|<html[\s>]/i);
+		const parsed = await page.evaluate((xml) => {
+			const document = new DOMParser().parseFromString(xml, "application/xml");
+			return {
+				errors: document.getElementsByTagName("parsererror").length,
+				root: document.documentElement.localName,
+				namespace: document.documentElement.namespaceURI,
+				locations: document.getElementsByTagNameNS(
+					"http://www.sitemaps.org/schemas/sitemap/0.9",
+					"loc",
+				).length,
+			};
+		}, body);
+		expect(parsed.errors).toBe(0);
+		expect(parsed.root).toBe("urlset");
+		expect(parsed.namespace).toBe(
+			"http://www.sitemaps.org/schemas/sitemap/0.9",
+		);
+		expect(parsed.locations).toBeGreaterThan(0);
 	});
 });

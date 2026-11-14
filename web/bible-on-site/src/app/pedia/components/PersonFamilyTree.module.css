@@ -12,7 +12,7 @@
   padding: 20px 18px 24px 21px;
   background: linear-gradient(160deg, #f8fafc 0%, #eef2ff 100%);
   border: 1px solid #c7d2fe;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   border-right: 4px solid #6366f1;
   /* אחיד עם גופן הגוף (כולל עברית); ז/נ יורשים ולא נופלים ל־fallback במשקל כבד */
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
@@ -38,7 +38,7 @@
   margin: 0;
   text-align: center;
   background: linear-gradient(160deg, #f8fafc 0%, #eef2ff 100%);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid #c7d2fe;
   box-shadow: 0 1px 4px rgba(99, 102, 241, 0.08);
 }
@@ -85,6 +85,7 @@
 .tierLabelParentsAboveArm {
   margin: 0 auto 10px;
   text-align: center;
+  background: linear-gradient(#a5b4fc, #a5b4fc) center / 2px 100% no-repeat;
   position: relative;
   z-index: 2;
 }
@@ -137,7 +138,7 @@
   max-width: 280px;
   padding: 12px 14px;
   background: #fff;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid #e2e8f0;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
   text-align: center;
@@ -149,7 +150,7 @@
   max-width: 280px;
   padding: 12px 14px;
   background: #fff;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid #818cf8;
   box-shadow: 0 4px 16px rgba(99, 102, 241, 0.2);
   text-align: center;
@@ -165,7 +166,7 @@
 .cardCitationLine {
   font-size: 0.68rem;
   font-weight: 500;
-  color: #64748b;
+  color: var(--muted-text, #64748b);
   line-height: 1.4;
 }
 
@@ -185,7 +186,7 @@
   line-height: 1;
   color: #475569;
   border: 1px solid #cbd5e1;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 2px 6px;
   background: #f8fafc;
 }
@@ -221,8 +222,10 @@
   white-space: nowrap;
 }
 
-.personLink:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .personLink:hover {
+    text-decoration: underline;
+  }
 }
 
 .personUnlinked {
@@ -267,7 +270,7 @@
   text-align: center;
   font-size: 0.72rem;
   line-height: 1.45;
-  color: #64748b;
+  color: var(--muted-text, #64748b);
 }
 
 .relationRibbonMain {
@@ -277,7 +280,7 @@
 
 .relationRibbonSep {
   font-weight: 500;
-  color: #94a3b8;
+  color: var(--muted-text, #94a3b8);
 }
 
 .relationRibbonSubRow {
@@ -316,7 +319,7 @@
 .relationRibbonMeta {
   font-size: 0.68rem;
   font-weight: 500;
-  color: #64748b;
+  color: var(--muted-text, #64748b);
   line-height: 1.4;
 }
 
@@ -327,8 +330,10 @@
   text-underline-offset: 2px;
 }
 
-.citationTanachLink:hover {
-  color: #312e81;
+@media (hover: hover) {
+  .citationTanachLink:hover {
+    color: #312e81;
+  }
 }
 
 /* המשך אנכי מההורים לכיוון מוקד המשפחה */
@@ -336,7 +341,7 @@
   width: 2px;
   height: 32px;
   background: #a5b4fc;
-  margin: 0 auto 6px;
+  margin: 0 auto;
   border-radius: 1px;
   flex-shrink: 0;
 }
@@ -415,7 +420,7 @@
   align-items: start;
   column-gap: 12px;
   row-gap: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 0;
   direction: rtl;
 }
 
@@ -649,6 +654,19 @@
   overflow-y: visible;
 }
 
+.spouseTierFullWidth[data-spouse-layout="cards"] {
+  background: linear-gradient(#a5b4fc, #a5b4fc) center / 2px 100% no-repeat;
+}
+
+.spouseTierFullWidth[data-spouse-layout="cards"] :is(.relationRibbon, .relationRibbonCitation, .spouseUnionTimelineRibbon) {
+  position: relative;
+  z-index: 2;
+  /* transparent: the family-tree surface (and the center connector line)
+     shows through; a solid pill clashes with the section gradient */
+  background: transparent;
+  border-radius: var(--radius-sm);
+}
+
 .spouseTierCards {
   display: flex;
   flex-wrap: wrap;
@@ -877,8 +895,8 @@
 .childTimelineCell .relationRibbon,
 .childTimelineCell .relationRibbonCitation,
 .childTimelineCell .relationRibbonCitationLine {
-  background: #f1f3fb;
-  border-radius: 6px;
+  background: transparent;
+  border-radius: var(--radius-sm);
   padding: 2px 4px;
 }
 
@@ -890,14 +908,14 @@
   align-items: center;
   justify-content: center;
   border: 1px dashed #cbd5e1;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: #f8fafc;
 }
 
 .marriageColumnLooseTitle {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #64748b;
+  color: var(--muted-text, #64748b);
   letter-spacing: 0.04em;
 }
 
@@ -957,15 +975,18 @@
     right: var(--parent-line-inset-right, calc((100% - 12px) / 4));
   }
 
+  /* כרטיסי הורים מקבלים בפריסה האנכית את אותו רוחב תלוי-תוכן של כל כרטיס אדם
+     אחר בעץ (כמו במסך הרחב). רוחב מלא על התא היה מנפח כרטיס של הורה יחיד
+     (למשל תרח) הרבה מעבר לכרטיסים הרגילים. הכרטיס נשאר ממורכז בתא הגריד */
   .parentRow .personCardStack {
-    flex: 1 1 0;
     min-width: 0;
   }
 
   .parentRow .card {
     box-sizing: border-box;
-    width: 100%;
-    min-width: 0;
+    /* רצפת ה־min-width הרגילה של 140px כמו בכל כרטיס אחר, אבל לא יותר מתא
+       הגריד — כך שני הורים עדיין נכנסים בלי גלילה אופקית במסכים <300px */
+    min-width: min(140px, 100%);
     padding-inline: 8px;
   }
 
@@ -1002,8 +1023,8 @@
   .spouseOnlyMatrix .spouseUnionTimelineRibbon {
     position: relative;
     z-index: 2;
-    background: #f1f3fb;
-    border-radius: 6px;
+    background: transparent;
+    border-radius: var(--radius-sm);
   }
 }
 
@@ -1039,8 +1060,8 @@
 .spouseOnlyCollapsed .spouseUnionTimelineRibbon {
   position: relative;
   z-index: 2;
-  background: #f1f3fb;
-  border-radius: 6px;
+  background: transparent;
+  border-radius: var(--radius-sm);
 }
 
 /* פריסה אנכית מוכללת (מסכים צרים): כל הקשרים על ציר אנכי אחד — הורים, מוקד,
@@ -1115,8 +1136,9 @@
 .verticalSpouseStack .spouseUnionTimelineRibbon {
   position: relative;
   z-index: 2;
-  background: #f1f3fb;
-  border-radius: 6px;
+  /* transparent: no connector passes behind in the vertical stack, and a
+     solid pill clashes with the section gradient (issue #2101) */
+  background: transparent;
 }
 
 .verticalChildren {
@@ -1134,7 +1156,7 @@
   /* transparent: no line passes behind in the stacked layout, and a solid pill
      clashes with the section gradient */
   background: transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .matrixMobileStack {
@@ -1227,4 +1249,104 @@
   border-top: 1px solid #e2e8f0;
   width: 100%;
   max-width: 220px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .section {
+    background: linear-gradient(160deg, #161b2a 0%, #1a1f36 100%);
+    border-color: #3b4370;
+  }
+
+  .title {
+    color: #c7d2fe;
+  }
+
+  .familyTreeSectionLabel {
+    color: #a5b4fc;
+    background: linear-gradient(160deg, #1a2030 0%, #232a45 100%);
+    border-color: #3b4370;
+    box-shadow: 0 1px 4px rgba(99, 102, 241, 0.25);
+  }
+
+  .familyTreeSectionLabelAlt {
+    color: #c4b5fd;
+    border-color: #4c3d8f;
+  }
+
+  .card,
+  .cardFocal {
+    background: #1a1f2e;
+    border-color: #2d3548;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+
+  .cardFocal {
+    border-color: #6366f1;
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+  }
+
+  .cardCitation {
+    border-top-color: #2d3548;
+  }
+
+  .cardCitationLine,
+  .relationRibbon,
+  .relationRibbonMeta,
+  .marriageColumnLooseTitle {
+    color: var(--muted-text, #9aa0a6);
+  }
+
+  .sexMark {
+    color: #b8c2d9;
+    border-color: #3b4256;
+    background: #1a1f2e;
+  }
+
+  .sexMarkMale {
+    color: #93c5fd;
+    border-color: #1e40af;
+    background-image: repeating-linear-gradient(45deg, #16213d, #16213d 3px, #1a2748 3px, #1a2748 6px);
+  }
+
+  .sexMarkFemale {
+    color: #f9a8d4;
+    border-color: #9d174d;
+    background-image: repeating-linear-gradient(45deg, #31152b, #31152b 3px, #3a1a33 3px, #3a1a33 6px);
+  }
+
+  .personLink {
+    color: #a5b4fc;
+  }
+
+  .personUnlinked {
+    color: #e8eaed;
+  }
+
+  .relationRibbonMain,
+  .relationRibbonCitationLine {
+    color: #b8c2d9;
+  }
+
+  .relationRibbonSep {
+    color: var(--muted-text, #64748b);
+  }
+
+  .citationTanachLink {
+    color: #a5b4fc;
+  }
+
+  @media (hover: hover) {
+    .citationTanachLink:hover {
+      color: #c7d2fe;
+    }
+  }
+
+  .spouseOpinionTitleInline {
+    color: #a5b4fc;
+  }
+
+  .marriageColumnSpousePlaceholder {
+    border-color: #3b4256;
+    background: #12151c;
+  }
 }

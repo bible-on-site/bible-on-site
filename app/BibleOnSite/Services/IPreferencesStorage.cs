@@ -9,6 +9,13 @@ public interface IPreferencesStorage
     T Get<T>(string key, T defaultValue);
     void Set<T>(string key, T value);
     void Remove(string key);
+
+    /// <summary>
+    /// Whether the key was explicitly written. Cloud-sync migration uses this
+    /// to distinguish a user-customized value (sync-worthy) from a bare
+    /// default read (not sync-worthy).
+    /// </summary>
+    bool ContainsKey(string key);
 }
 
 #if MAUI
@@ -17,19 +24,30 @@ public interface IPreferencesStorage
 /// </summary>
 public class MauiPreferencesStorage : IPreferencesStorage
 {
+    private readonly IPreferences _preferences;
+
+    public MauiPreferencesStorage() : this(Preferences.Default) { }
+
+    public MauiPreferencesStorage(IPreferences preferences) { _preferences = preferences; }
+
     public T Get<T>(string key, T defaultValue)
     {
-        return Preferences.Default.Get(key, defaultValue);
+        return _preferences.Get(key, defaultValue);
     }
 
     public void Set<T>(string key, T value)
     {
-        Preferences.Default.Set(key, value);
+        _preferences.Set(key, value);
     }
 
     public void Remove(string key)
     {
-        Preferences.Default.Remove(key);
+        _preferences.Remove(key);
+    }
+
+    public bool ContainsKey(string key)
+    {
+        return _preferences.ContainsKey(key);
     }
 }
 #endif
@@ -58,6 +76,11 @@ public class InMemoryPreferencesStorage : IPreferencesStorage
     public void Remove(string key)
     {
         _storage.Remove(key);
+    }
+
+    public bool ContainsKey(string key)
+    {
+        return _storage.ContainsKey(key);
     }
 
     public void Clear()

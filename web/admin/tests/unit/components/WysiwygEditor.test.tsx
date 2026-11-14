@@ -134,7 +134,12 @@ const editorState = vi.hoisted(() => {
 vi.mock("@tiptap/extension-bullet-list", () => ({ default: {} }));
 vi.mock("@tiptap/extension-image", () => ({ default: {} }));
 vi.mock("@tiptap/extension-italic", () => ({
-	default: { extend: vi.fn(() => ({})) },
+	default: {
+		extend: vi.fn((extension: { addKeyboardShortcuts?: () => object }) => {
+			extension.addKeyboardShortcuts?.();
+			return {};
+		}),
+	},
 }));
 vi.mock("@tiptap/extension-list-item", () => ({ default: {} }));
 vi.mock("@tiptap/extension-placeholder", () => ({
@@ -216,7 +221,7 @@ describe("WysiwygEditor", () => {
 		fireEvent.click(screen.getByRole("button", { name: "H1" }));
 		fireEvent.click(screen.getByRole("button", { name: "• תבליטים" }));
 		fireEvent.click(screen.getByRole("button", { name: "1. מספרים" }));
-		fireEvent.click(screen.getByRole("button", { name: "א׳ עברית" }));
+		fireEvent.click(screen.getByRole("button", { name: "א' עברית" }));
 
 		expect(editorState.chain.toggleBold).toHaveBeenCalledTimes(1);
 		expect(editorState.chain.toggleItalic).toHaveBeenCalledTimes(1);
@@ -357,6 +362,22 @@ describe("WysiwygEditor", () => {
 		expect(editorState.chain.unsetLink).toHaveBeenCalledTimes(1);
 	});
 
+	it("warns when applying a link while no text is selected", () => {
+		renderEditor();
+
+		editorState.setSelectionEmpty(false);
+		fireEvent.click(screen.getByRole("button", { name: "קישור חדש" }));
+
+		editorState.setSelectionEmpty(true);
+		fireEvent.click(screen.getByRole("button", { name: "עדכן קישור" }));
+
+		expect(alert).toHaveBeenLastCalledWith(
+			"סמן טקסט לפני הוספת קישור, או לחץ על קישור קיים.",
+		);
+		// Only the initial "new link" setLink ran; the apply path refused.
+		expect(editorState.chain.setLink).toHaveBeenCalledTimes(1);
+	});
+
 	it("adds images and delegates footnote insertion to the extension", () => {
 		vi.mocked(prompt).mockReturnValue("https://example.com/image.jpg");
 		renderEditor();
@@ -425,7 +446,9 @@ describe("WysiwygEditor", () => {
 			renderEditorWithEntrySearch();
 			editorState.setSelectionEmpty(false);
 			fireEvent.click(
-				document.querySelectorAll<HTMLInputElement>('input[name="linkType"]')[1],
+				document.querySelectorAll<HTMLInputElement>(
+					'input[name="linkType"]',
+				)[1],
 			);
 
 			fireEvent.click(await screen.findByText("משה רבנו"));
@@ -441,7 +464,9 @@ describe("WysiwygEditor", () => {
 			renderEditorWithEntrySearch();
 			editorState.setSelectionEmpty(false);
 			fireEvent.click(
-				document.querySelectorAll<HTMLInputElement>('input[name="linkType"]')[1],
+				document.querySelectorAll<HTMLInputElement>(
+					'input[name="linkType"]',
+				)[1],
 			);
 
 			fireEvent.click(await screen.findByText("ארץ ישראל"));
@@ -474,7 +499,9 @@ describe("WysiwygEditor", () => {
 			renderEditorWithEntrySearch();
 			editorState.setSelectionEmpty(true);
 			fireEvent.click(
-				document.querySelectorAll<HTMLInputElement>('input[name="linkType"]')[1],
+				document.querySelectorAll<HTMLInputElement>(
+					'input[name="linkType"]',
+				)[1],
 			);
 
 			fireEvent.click(await screen.findByText("משה רבנו"));
@@ -514,7 +541,9 @@ describe("WysiwygEditor", () => {
 
 			expect(screen.getByRole("textbox")).toHaveValue("#note-7");
 			expect(
-				document.querySelectorAll<HTMLInputElement>('input[name="linkType"]')[2],
+				document.querySelectorAll<HTMLInputElement>(
+					'input[name="linkType"]',
+				)[2],
 			).toBeChecked();
 		});
 	});
@@ -614,7 +643,9 @@ describe("WysiwygEditor", () => {
 		fireEvent.change(textarea, {
 			target: { value: "   " },
 		});
-		fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button")[2]);
+		fireEvent.click(
+			within(screen.getByRole("dialog")).getAllByRole("button")[2],
+		);
 
 		expect(localStorage.getItem("admin-editor-shortcut-extras")).toBeNull();
 

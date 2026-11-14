@@ -1,9 +1,9 @@
-import { Extension } from "@tiptap/core";
 import type { Editor } from "@tiptap/core";
+import { Extension } from "@tiptap/core";
 import {
+	type AdminLinkType,
 	buildLinkHref,
 	inferLinkType,
-	type AdminLinkType,
 	type TipTapLinkMarkAttrs,
 } from "./adminLinkExtension";
 
@@ -26,7 +26,7 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
 		rows: [
 			{
 				keys: "Ctrl+1 … Ctrl+6",
-				action: "כותרות H1–H6",
+				action: "כותרות H1-H6",
 				tags: "heading כותרת",
 			},
 		],
@@ -41,8 +41,8 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
 			},
 			{ keys: "Ctrl+B", action: "מודגש", tags: "bold" },
 			{
-				keys: "—",
-				action: "הטייה — מכפתור סרגל בלבד",
+				keys: "-",
+				action: "הטייה - מכפתור סרגל בלבד",
 				tags: "italic",
 			},
 		],
@@ -62,7 +62,7 @@ export const SHORTCUT_SECTIONS: ShortcutSection[] = [
 			},
 			{
 				keys: "סרגל הכלים",
-				action: "רשימה א׳ ב׳ ג׳ (עברית) — כפתור נפרד",
+				action: "רשימה א' ב' ג' (עברית) - כפתור נפרד",
 				tags: "hebrew alpha",
 			},
 		],
@@ -79,7 +79,9 @@ function runHeading(editor: Editor, level: 1 | 2 | 3 | 4 | 5 | 6): boolean {
 
 function promptLink(editor: Editor): boolean {
 	const prevHref = editor.getAttributes("link").href as string | undefined;
-	const prevType = (editor.getAttributes("link").linkType as AdminLinkType | null) ?? inferLinkType(prevHref);
+	const prevType =
+		(editor.getAttributes("link").linkType as AdminLinkType | null) ??
+		inferLinkType(prevHref);
 	const url = window.prompt(
 		prevType === "comment"
 			? "מספר הערה או #note-1"
@@ -133,10 +135,9 @@ function parseExtraCommand(
 	return null;
 }
 
-export function parseStoredShortcutExtras(editor: Editor): Record<
-	string,
-	() => boolean
-> {
+export function parseStoredShortcutExtras(
+	editor: Editor,
+): Record<string, () => boolean> {
 	const out: Record<string, () => boolean> = {};
 	if (typeof localStorage === "undefined") return out;
 	try {

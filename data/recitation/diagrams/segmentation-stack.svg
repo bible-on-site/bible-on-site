@@ -1,0 +1,121 @@
+<?xml version="1.0" ?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+
+
+  <title id="title">Two sources. One canonical timeline.</title>
+  <desc id="desc">The words stay fixed. The recording supplies the boundaries. Full quality at every inference step.</desc>
+
+
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1">
+      <stop stop-color="#081322"/>
+      <stop offset="1" stop-color="#14263b"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop stop-color="#7957db" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#7957db" stop-opacity="0"/>
+    </radialGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10" fill="#7892b5"/>
+    </marker>
+  </defs>
+
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <ellipse cx="920" cy="300" rx="690" ry="480" fill="url(#glow)"/>
+
+
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <text x="48" y="52" fill="#7ad4e8" font-size="15" font-weight="700">TANAH / RECITATION ENGINEERING</text>
+    <text x="48" y="108" fill="#f6f9ff" font-size="42" font-weight="700">Two sources. One canonical timeline.</text>
+    <text x="48" y="148" fill="#b0c2db" font-size="20" font-weight="400">The words stay fixed. The recording supplies the boundaries. Full quality at every inference step.</text>
+    <rect x="48" y="188" width="285" height="605" rx="20" fill="#111f34" stroke="#283d59"/>
+    <g transform="translate(70 210)" fill="none" stroke="#72c8ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M28 3L3 16l25 13 25-13z M3 29l25 13 25-13 M3 42l25 13 25-13"/>
+    </g>
+    <text x="140" y="243" fill="#72c8ff" font-size="18" font-weight="700">SOURCE LAYER</text>
+    <rect x="68" y="291" width="245" height="205" rx="14" fill="#152942" stroke="#38648a"/>
+    <g transform="translate(84 305)" fill="none" stroke="#72c8ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 10L3 28l14 18 M39 10l14 18-14 18 M32 8l-9 40"/>
+    </g>
+    <text x="84" y="386" fill="#f3f8ff" font-size="18" font-weight="600">Canonical perakim JSON</text>
+    <text x="84" y="419" fill="#a9bad2" font-size="16" font-weight="400">Existing spoken qri words</text>
+    <text x="84" y="444" fill="#a9bad2" font-size="16" font-weight="400">perek / pasuk / segment</text>
+    <text x="84" y="469" fill="#a9bad2" font-size="16" font-weight="400">Vocalized text stays intact</text>
+    <rect x="68" y="520" width="245" height="200" rx="14" fill="#152942" stroke="#38648a"/>
+    <g transform="translate(84 534)" fill="none" stroke="#72c8ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 23.0v10"/>
+      <path d="M14 14.5v27"/>
+      <path d="M24 6.0v44"/>
+      <path d="M34 16.5v23"/>
+      <path d="M44 10.5v35"/>
+      <path d="M54 20.5v15"/>
+    </g>
+    <text x="84" y="615" fill="#f3f8ff" font-size="19" font-weight="600">Original chapter MP3</text>
+    <text x="84" y="650" fill="#a9bad2" font-size="16" font-weight="400">Exact audio SHA-256</text>
+    <text x="84" y="675" fill="#a9bad2" font-size="16" font-weight="400">FFmpeg → mono 16 kHz</text>
+    <text x="70" y="764" fill="#72c8ff" font-size="17" font-weight="600">Text truth + acoustic truth</text>
+    <rect x="366" y="188" width="688" height="372" rx="20" fill="#1a203a" stroke="#7356b3"/>
+    <g transform="translate(388 205)" fill="none" stroke="#c4a0ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="8" y="8" width="40" height="40" rx="8"/>
+      <rect x="18" y="18" width="20" height="20" rx="3"/>
+      <path d="M16 0v8 M16 48v8 M0 16h8 M48 16h8"/>
+      <path d="M28 0v8 M28 48v8 M0 28h8 M48 28h8"/>
+      <path d="M40 0v8 M40 48v8 M0 40h8 M48 40h8"/>
+    </g>
+    <text x="460" y="239" fill="#c4a0ff" font-size="19" font-weight="700">GPU INFERENCE LAYER</text>
+    <text x="460" y="265" fill="#bdc6df" font-size="17" font-weight="400">RTX 4070 Laptop · 8 GB VRAM · CUDA</text>
+    <rect x="388" y="293" width="316" height="193" rx="14" fill="#272540" stroke="#69518e"/>
+    <text x="406" y="323" fill="#c4a0ff" font-size="14" font-weight="700">01 / RECOGNIZE</text>
+    <text x="406" y="359" fill="#fff" font-size="22" font-weight="600">ivrit-ai Whisper large-v3</text>
+    <text x="406" y="393" fill="#a9bad2" font-size="17" font-weight="400">FP32 · five beams · Hebrew</text>
+    <text x="406" y="420" fill="#a9bad2" font-size="17" font-weight="400">Full-track ASR + landmarks</text>
+    <rect x="406" y="447" width="213" height="32" rx="16" fill="#101d30" stroke="#c4a0ff"/>
+    <text x="420" y="469" fill="#c4a0ff" font-size="14" font-weight="600">Exact pinned snapshot</text>
+    <rect x="724" y="293" width="308" height="193" rx="14" fill="#272540" stroke="#69518e"/>
+    <text x="742" y="323" fill="#c4a0ff" font-size="14" font-weight="700">03 / FORCE-ALIGN</text>
+    <text x="742" y="359" fill="#fff" font-size="22" font-weight="600">Hebrew wav2vec2 CTC</text>
+    <text x="742" y="393" fill="#a9bad2" font-size="17" font-weight="400">XLS-R 300M Hebrew</text>
+    <text x="742" y="420" fill="#a9bad2" font-size="17" font-weight="400">Known canonical transcript</text>
+    <rect x="742" y="447" width="213" height="32" rx="16" fill="#101d30" stroke="#c4a0ff"/>
+    <text x="756" y="469" fill="#c4a0ff" font-size="14" font-weight="600">Exact pinned snapshot</text>
+    <text x="389" y="533" fill="#c4a0ff" font-size="16" font-weight="400">PyTorch 2.14.1 + Transformers 5.18.0 · models run sequentially</text>
+    <rect x="366" y="589" width="688" height="204" rx="20" fill="#102b32" stroke="#317b83"/>
+    <g transform="translate(388 610)" fill="none" stroke="#77e4d0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="13" width="52" height="30" rx="5"/>
+      <path d="M10 43v8 M20 43v8 M30 43v8 M40 43v8"/>
+      <rect x="10" y="20" width="12" height="15" rx="2"/>
+      <rect x="32" y="20" width="12" height="15" rx="2"/>
+    </g>
+    <text x="460" y="641" fill="#77e4d0" font-size="18" font-weight="700">CPU / HOST RAM / PYTHON HARNESS</text>
+    <text x="390" y="684" fill="#a9bad2" font-size="16" font-weight="400">02 / Global sequence matching → reliable verse windows</text>
+    <text x="390" y="712" fill="#a9bad2" font-size="16" font-weight="400">Python 3.12 orchestrates the resumable worker and checkpoints</text>
+    <text x="390" y="740" fill="#a9bad2" font-size="16" font-weight="400">RAM holds saved attention / KV caches; timestamp DTW runs on CPU</text>
+    <text x="390" y="772" fill="#77e4d0" font-size="16" font-weight="600">No quantization. No fewer beams. No invented word intervals.</text>
+    <path d="M530 486L530 589" stroke="#7892b5" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+    <path d="M890 589L890 486" stroke="#7892b5" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+    <rect x="1086" y="188" width="466" height="605" rx="20" fill="#102b2b" stroke="#348e83"/>
+    <g transform="translate(1110 210)" fill="none" stroke="#7ce7bb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M28 3l22 8v17c0 14-22 26-22 26S6 42 6 28V11z M17 27l8 8 15-17"/>
+    </g>
+    <text x="1182" y="241" fill="#7ce7bb" font-size="18" font-weight="700">PUBLICATION LAYER</text>
+    <text x="1110" y="312" fill="#f5fff9" font-size="26" font-weight="600">04 / A whole-chapter gate</text>
+    <text x="1110" y="351" fill="#a9bad2" font-size="18" font-weight="400">Every canonical word gets exactly one interval</text>
+    <text x="1110" y="381" fill="#a9bad2" font-size="18" font-weight="400">Source hashes + model pins + verse anchors</text>
+    <text x="1110" y="411" fill="#a9bad2" font-size="18" font-weight="400">Complete · ordered · in range · no overlap</text>
+    <rect x="1108" y="453" width="422" height="97" rx="14" fill="#2c2b27" stroke="#b2945b"/>
+    <text x="1128" y="484" fill="#f7cf80" font-size="15" font-weight="700">HOLD WHEN EVIDENCE IS MISSING</text>
+    <text x="1128" y="515" fill="#e0cdac" font-size="16" font-weight="400">Keep diagnostic artifacts; investigate acoustically.</text>
+    <g transform="translate(1114 583)" fill="none" stroke="#7ce7bb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="28" cy="10" rx="23" ry="8"/>
+      <path d="M5 10v32c0 10 46 10 46 0V10 M5 26c0 10 46 10 46 0"/>
+    </g>
+    <text x="1188" y="616" fill="#fff" font-size="24" font-weight="600">Durable recitation.sqlite</text>
+    <text x="1112" y="667" fill="#a9bad2" font-size="17" font-weight="400">Accepted timings retain canonical segment IDs.</text>
+    <text x="1112" y="696" fill="#a9bad2" font-size="17" font-weight="400">Trusted-process provenance is explicit.</text>
+    <text x="1112" y="725" fill="#a9bad2" font-size="17" font-weight="400">No fabricated manual-review flags.</text>
+    <path d="M1054 390L1086 390" stroke="#7892b5" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+    <rect x="48" y="820" width="1504" height="48" rx="12" fill="#091524" stroke="#30435f"/>
+    <text x="72" y="851" fill="#d5e5f9" font-size="17" font-weight="600">ORIGINAL AUDIO  →  ASR LANDMARKS  →  CANONICAL RECONCILIATION  →  CTC BOUNDARIES  →  VALIDATED TIMINGS</text>
+  </g>
+</svg>

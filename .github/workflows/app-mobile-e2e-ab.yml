@@ -1,0 +1,310 @@
+name: App Mobile E2E Runner A/B
+
+# Controlled iOS runner A/B experiment for #2635: alternating shard pairs on
+# `xcode-27` vs `namespace-profile-mac-os` over the SAME built .app artifact,
+# the SAME shard manifest and the SAME toolchain pins. Dispatch-only — master
+# CI (ci.yml -> app-mobile-e2e.yml) never calls this workflow, so the default
+# path is untouched. Runbook: docs/devops/ios-runner-ab-experiment.md
+
+on:
+  workflow_dispatch:
+    inputs:
+      iteration:
+        description: "A/B iteration number (>=1). Odd iterations run xcode-27 first; even iterations run namespace-profile-mac-os first."
+        required: true
+        type: number
+        default: 1
+      force_full_suite:
+        description: "Keep true for the experiment: the full suite yields an identical case manifest on every iteration."
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  # plan_ios and report fetch master baseline artifacts and job metadata via the REST API.
+  actions: read
+
+# One iteration at a time: leg B of an iteration always starts only after leg
+# A fully completes, and iterations queue behind each other so host load and
+# time-of-day effects stay balanced across the pair set. queue: max keeps
+# every dispatch — without it a third submission would silently replace a
+# still-pending iteration and its shard pairs would never run.
+concurrency:
+  group: ios-runner-ab
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  plan_ios:
+    timeout-minutes: 60
+    name: Plan iOS A/B shards
+    runs-on: ubuntu-latest
+    outputs:
+      ios-matrix: ${{ steps.matrix.outputs.matrix }}
+      ios-shards: ${{ steps.matrix.outputs.ios-shards }}
+      runner_a: ${{ steps.legs.outputs.runner_a }}
+      runner_b: ${{ steps.legs.outputs.runner_b }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      # Alternating lead order is the drift control from the #2635 protocol:
+      # the trailing leg always runs ~one shard-window later, so across
+      # iterations neither runner systematically benefits from earlier slots.
+      - name: Resolve leg order
+        id: legs
+        run: |
+          set -euo pipefail
+          test "${{ inputs.iteration }}" -ge 1
+          if [ $(( ${{ inputs.iteration }} % 2 )) -eq 1 ]; then
+            echo "runner_a=xcode-27" >> "$GITHUB_OUTPUT"
+            echo "runner_b=namespace-profile-mac-os" >> "$GITHUB_OUTPUT"
+          else
+            echo "runner_a=namespace-profile-mac-os" >> "$GITHUB_OUTPUT"
+            echo "runner_b=xcode-27" >> "$GITHUB_OUTPUT"
+          fi
+      # Identical to app-mobile-e2e.yml's plan_ios: the published baseline
+      # carries the impact map and rolling per-case timings used for shard
+      # balancing. force_full_suite fixes case SELECTION, but the planner's
+      # timing-based shard count and membership still follow --history — so
+      # the experiment pins ONE baseline: the first iteration on a given
+      # (frozen) ref republishes whatever master had under
+      # ios-ab-baseline.<sha>, and every later iteration reuses that pin
+      # instead of chasing master's rolling coverage tree.
+      - name: Download iOS coverage and timing baseline
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+            --name "ios-ab-baseline.${{ github.sha }}" \
+            --out "$RUNNER_TEMP/ios-baseline"
+          if [ ! -f "$RUNNER_TEMP/ios-baseline/coverage-tree.json" ]; then
+            node devops/github/ci/e2e-impact/e2e-impact.ts baseline-download \
+              --name "app-mobile-e2e-coverage.master.ios" \
+              --out "$RUNNER_TEMP/ios-baseline"
+            # Pin only real evidence: with no master baseline at all there is
+            # nothing to freeze, and later steps already tolerate its absence.
+            if [ -f "$RUNNER_TEMP/ios-baseline/coverage-tree.json" ]; then
+              echo "publish_pin=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+      - name: Publish pinned iOS baseline
+        if: steps.baseline.outputs.publish_pin == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-ab-baseline.${{ github.sha }}
+          path: ${{ runner.temp }}/ios-baseline/coverage-tree.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Select affected iOS tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASELINE_ARGS=()
+          if [ -f "$RUNNER_TEMP/ios-baseline/coverage-tree.json" ]; then
+            BASELINE_ARGS=(--baseline "$RUNNER_TEMP/ios-baseline/coverage-tree.json")
+          fi
+          FORCE_ARGS=()
+          if [ "${{ inputs.force_full_suite }}" == "true" ]; then
+            FORCE_ARGS=(--force-full)
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts select \
+            --suite app/mobile-e2e \
+            --platform ios \
+            --tested-sha "${{ github.sha }}" \
+            --out "$RUNNER_TEMP/ios-plan/selection-manifest.json" \
+            --compare --allow-empty "${BASELINE_ARGS[@]}" "${FORCE_ARGS[@]}"
+      - name: Plan runtime-balanced iOS shards
+        run: |
+          HISTORY_ARGS=()
+          if [ -f "$RUNNER_TEMP/ios-baseline/coverage-tree.json" ]; then
+            HISTORY_ARGS=(--history "$RUNNER_TEMP/ios-baseline/coverage-tree.json")
+          fi
+          node devops/github/ci/e2e-impact/e2e-impact.ts plan \
+            --suite app/mobile-e2e \
+            --platform ios \
+            --manifest "$RUNNER_TEMP/ios-plan/selection-manifest.json" \
+            --tested-sha "${{ github.sha }}" \
+            --mode shadow \
+            --out "$RUNNER_TEMP/ios-plan/ios-shard-plan.json" \
+            --shard-dir "$RUNNER_TEMP/ios-plan/shards" "${HISTORY_ARGS[@]}"
+      - name: Emit iOS matrix
+        id: matrix
+        run: node app/mobile-e2e/appium-matrix.mjs "$RUNNER_TEMP/ios-plan/ios-shard-plan.json"
+      - name: Upload iOS shard plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-mobile-e2e-ab-plan.${{ github.run_id }}
+          path: ${{ runner.temp }}/ios-plan/
+          retention-days: 14
+          if-no-files-found: error
+
+  # The .app artifact is always built on xcode-27 so both legs of every pair
+  # restore byte-identical inputs; only the prebuilt-run legs change runner.
+  build_ios:
+    name: Build shared iOS app (xcode-27)
+    uses: ./.github/workflows/app-mobile-e2e-runner.yml
+    with:
+      platform: iOS
+      platform_id: ios
+      artifact: ios-ab-build
+      runner: xcode-27
+      workload: maui-ios
+      mode: build
+      publish_caches: false
+
+  # Cheap pre-flight on the experimental runner: proves the
+  # namespace-profile-mac-os pool still schedules for this repo and that its
+  # image carries the Xcode_27.app layout every iOS leg hard-selects. A queued
+  # or failed probe stops both legs before any shard minutes are spent.
+  probe_namespace:
+    name: Probe namespace-profile-mac-os runner
+    runs-on: namespace-profile-mac-os
+    timeout-minutes: 10
+    steps:
+      - name: Record runner toolchain
+        run: |
+          set -euo pipefail
+          REPORT="$RUNNER_TEMP/namespace-probe.txt"
+          {
+            echo "== runner =="
+            uname -a
+            sw_vers
+            sysctl -n machdep.cpu.brand_string hw.memsize hw.ncpu
+            df -h /
+            echo "== xcode =="
+            sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+            xcodebuild -version
+            xcode-select -p
+            ls -d /Applications/Xcode*.app
+            echo "== simulators =="
+            xcrun simctl list runtimes
+            xcrun simctl list devices available
+          } 2>&1 | tee "$REPORT"
+      - name: Verify Xcode 27 layout used by iOS legs
+        run: |
+          set -euo pipefail
+          # app-mobile-e2e-runner.yml selects /Applications/Xcode_27.app on
+          # every iOS leg; an image without it fails every shard at setup, so
+          # the probe fails here instead — the iteration aborts cheaply.
+          test -d /Applications/Xcode_27.app/Contents/Developer
+      - name: Upload probe report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-ab-probe.${{ github.run_id }}.${{ github.run_attempt }}
+          path: ${{ runner.temp }}/namespace-probe.txt
+          retention-days: 90
+          if-no-files-found: error
+
+  leg_a:
+    name: iOS A/B iter ${{ inputs.iteration }} leg A shard ${{ matrix.shard }}
+    needs: [build_ios, plan_ios, probe_namespace]
+    # always() is required: a failed leg is a valid experiment outcome and
+    # must not skip its pair partner in leg_b.
+    if: ${{ always() && !cancelled() && needs.build_ios.result == 'success' && needs.plan_ios.result == 'success' && needs.probe_namespace.result == 'success' && needs.plan_ios.outputs.ios-shards != '0' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan_ios.outputs.ios-matrix) }}
+    uses: ./.github/workflows/app-mobile-e2e-runner.yml
+    with:
+      platform: iOS
+      platform_id: ios
+      artifact: ios-shard${{ matrix.shard }}-legA
+      runner: ${{ needs.plan_ios.outputs.runner_a }}
+      workload: maui-ios
+      shard: ${{ matrix.shard }}
+      ios_plan_artifact: app-mobile-e2e-ab-plan.${{ github.run_id }}
+      mode: prebuilt-run
+      e2e_selection_mode: shadow
+      force_full_suite: ${{ inputs.force_full_suite }}
+      publish_caches: false
+
+  leg_b:
+    name: iOS A/B iter ${{ inputs.iteration }} leg B shard ${{ matrix.shard }}
+    needs: [leg_a, build_ios, plan_ios, probe_namespace]
+    # Sequential by design: leg B starts only after every leg-A shard
+    # finishes, which is what makes the per-iteration lead order meaningful.
+    if: ${{ always() && !cancelled() && needs.build_ios.result == 'success' && needs.plan_ios.result == 'success' && needs.probe_namespace.result == 'success' && needs.plan_ios.outputs.ios-shards != '0' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan_ios.outputs.ios-matrix) }}
+    uses: ./.github/workflows/app-mobile-e2e-runner.yml
+    with:
+      platform: iOS
+      platform_id: ios
+      artifact: ios-shard${{ matrix.shard }}-legB
+      runner: ${{ needs.plan_ios.outputs.runner_b }}
+      workload: maui-ios
+      shard: ${{ matrix.shard }}
+      ios_plan_artifact: app-mobile-e2e-ab-plan.${{ github.run_id }}
+      mode: prebuilt-run
+      e2e_selection_mode: shadow
+      force_full_suite: ${{ inputs.force_full_suite }}
+      publish_caches: false
+
+  # Per-iteration evidence table: one CSV row per executed shard leg per
+  # attempt — filter=all keeps first-attempt jobs that a rerun would
+  # otherwise hide — with the runner label, conclusion and wall-clock
+  # bounds. Failure classification stays manual per the #2635 taxonomy —
+  # this job only makes the raw per-leg dataset trivial to collect across
+  # iterations.
+  report:
+    timeout-minutes: 60
+    name: Collect A/B iteration results
+    needs: [leg_a, leg_b]
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect per-leg shard jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ITERATION: ${{ inputs.iteration }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p ab-report
+          RUN_CREATED=$(gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}" --jq .created_at)
+          # filter=all: the jobs endpoint defaults to the latest attempt, so
+          # without it a rerun would erase the first-attempt rows that carry
+          # the experiment's primary failure metric. --paginate covers runs
+          # whose job list spans multiple pages.
+          gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}/jobs?per_page=100&filter=all" --paginate --slurp > ab-report/jobs-pages.json
+          RUN_CREATED_AT="$RUN_CREATED" node --input-type=module -e '
+            import { readFileSync, writeFileSync } from "node:fs";
+            const pages = JSON.parse(readFileSync("ab-report/jobs-pages.json", "utf8"));
+            const header = ["iteration","run_id","run_attempt","leg","shard","job","runner_labels","conclusion","run_created_at","job_started_at","job_completed_at","job_duration_s","queue_s"];
+            const rows = [header];
+            for (const page of pages) {
+              for (const job of page.jobs ?? []) {
+                const m = job.name?.match(/leg ([AB]) shard (\d+)/);
+                if (!m) continue;
+                const started = job.started_at ? Date.parse(job.started_at) : NaN;
+                const completed = job.completed_at ? Date.parse(job.completed_at) : NaN;
+                const runCreated = Date.parse(process.env.RUN_CREATED_AT);
+                rows.push([
+                  process.env.ITERATION, process.env.RUN_ID, job.run_attempt, m[1], m[2],
+                  job.name, (job.labels ?? []).join("+"), job.conclusion ?? "pending",
+                  process.env.RUN_CREATED_AT, job.started_at ?? "", job.completed_at ?? "",
+                  Number.isFinite(started) && Number.isFinite(completed) ? String(Math.round((completed - started) / 1000)) : "",
+                  Number.isFinite(started) && Number.isFinite(runCreated) ? String(Math.round((started - runCreated) / 1000)) : "",
+                ]);
+              }
+            }
+            const esc = (c) => `"${String(c).replaceAll("\"", "\"\"")}"`;
+            writeFileSync("ab-report/shards.csv", rows.map((r) => r.map(esc).join(",")).join("\n") + "\n");
+          '
+          cat ab-report/shards.csv
+      - name: Upload A/B report
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-ab-report.${{ github.run_id }}.${{ github.run_attempt }}
+          path: ab-report/
+          retention-days: 90
+          if-no-files-found: error

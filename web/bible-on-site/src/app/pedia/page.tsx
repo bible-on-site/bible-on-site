@@ -1,45 +1,49 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { JsonLd } from "@/app/components/JsonLd";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { buildLandingGraph } from "@/lib/seo/tanahpedia-jsonld";
 import {
 	CATEGORY_HIERARCHY,
 	labelForCategoryKey,
 } from "@/lib/tanahpedia/category-hierarchy";
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
+import { CATEGORY_LABELS } from "@/lib/tanahpedia/service";
+import type { CategoryKey, EntryStub, EntityWithEntries } from "@/lib/tanahpedia/types";
 import {
-	CATEGORY_LABELS,
-	getCategoryCounts,
-	getRecentEntries,
-	getTodayInTanahEvents,
-} from "@/lib/tanahpedia/service";
-import type { CategoryKey } from "@/lib/tanahpedia/types";
-import { HebrewDate } from "@/util/hebdates-util";
+	getCachedCategoryCounts,
+	getCachedRecentEntrySummaries,
+	getCachedTodayInTanahEntities,
+} from "@/lib/tanahpedia/loaders";
+import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import styles from "./page.module.css";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
 	title: 'תנכפדיה | תנ"ך על הפרק',
 	description: 'אנציקלופדיה לתנ"ך - אישים, מקומות, אירועים ועוד',
-};
+	canonical: "/pedia",
+});
 
-// Dynamic for a production reason: "היום בתנ״ך" is keyed to the current Hebrew date and the list shows recent entries.
+// The page shell renders per request, but its DB reads go through
+// cached loaders (see lib/tanahpedia/loaders.ts) so the landing page no
+// longer runs six uncached queries on every hit.
 export const dynamic = "force-dynamic";
 
 export default async function TanahpediaLandingPage() {
-	const today = HebrewDate.fromGregorian(new Date());
+	const today = constructTsetAwareHDate(new Date());
 	const hebrewMonth = today.getUniformMonth();
 	const hebrewDay = today.day;
 	const hebrewDateStr = today.toTraditionalHebrewString();
 
 	let counts: Record<CategoryKey, number>;
-	let recentEntries: Awaited<ReturnType<typeof getRecentEntries>>;
-	let todayEvents: Awaited<ReturnType<typeof getTodayInTanahEvents>>;
+	let recentEntries: EntryStub[];
+	let todayEntities: EntityWithEntries[];
 	let loadError: string | null = null;
 	try {
-		[counts, recentEntries, todayEvents] = await Promise.all([
-			getCategoryCounts(),
-			getRecentEntries(8),
-			getTodayInTanahEvents(hebrewMonth, hebrewDay),
+		[counts, recentEntries, todayEntities] = await Promise.all([
+			getCachedCategoryCounts(),
+			getCachedRecentEntrySummaries(8),
+			getCachedTodayInTanahEntities(hebrewMonth, hebrewDay),
 		]);
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
@@ -51,8 +55,11 @@ export default async function TanahpediaLandingPage() {
 			Object.keys(CATEGORY_LABELS).map((k) => [k, 0]),
 		) as Record<CategoryKey, number>;
 		recentEntries = [];
-		todayEvents = [];
+		todayEntities = [];
 	}
+
+	// A failed load zeroes every count; only a real zero means "coming soon".
+	const isComingSoon = (key: CategoryKey) => !loadError && counts[key] === 0;
 
 	return (
 		<div className={styles.tanahpediaPage}>
@@ -71,12 +78,12 @@ export default async function TanahpediaLandingPage() {
 						<>
 							<p className={styles.dbLoadWarningText}>
 								ודאו ש-MySQL פעיל, ש-DB_URL ב-.dev.env מצביע על אותה מסד שמולא
-								ב־
+								ב-
 								<code className={styles.dbLoadWarningCode}>
 									cargo make mysql-populate-dev
 								</code>
 								, ואז הריצו שוב{" "}
-								<code className={styles.dbLoadWarningCode}>npm run dev</code>.
+								<code className={styles.dbLoadWarningCode}>bun run dev</code>.
 							</p>
 							<pre className={styles.dbLoadWarningPre}>{loadError}</pre>
 						</>
@@ -88,26 +95,31 @@ export default async function TanahpediaLandingPage() {
 				</div>
 			) : null}
 
-			{todayEvents.length > 0 && (
+			{todayEntities.length > 0 && (
 				<section className={styles.todaySection}>
 					<div className={styles.todayHeader}>
 						<h2 className={styles.todaySectionTitle}>היום בתנ&quot;ך</h2>
 						<span className={styles.todayDate}>{hebrewDateStr}</span>
 					</div>
 					<ul className={styles.todayList}>
-						{todayEvents.map((event) => (
-							<li key={event.entityId} className={styles.todayItem}>
+						{todayEntities.map((entity) => (
+							<li key={entity.entityId} className={styles.todayItem}>
 								<span className={styles.todayBullet}>●</span>
 								<span className={styles.todayText}>
-									{event.entryUniqueName ? (
-										<Link
-											href={`/pedia/${encodeURIComponent(event.entryUniqueName)}`}
-											className={styles.todayLink}
-										>
-											{event.entryTitle ?? event.entityName}
-										</Link>
+									{entity.linkedEntries.length > 0 ? (
+										entity.linkedEntries.map((entry, index) => (
+											<span key={entry.id}>
+												{index > 0 && " / "}
+												<Link
+													href={`/pedia/${encodeURIComponent(entry.uniqueName)}`}
+													className={styles.todayLink}
+												>
+													{entry.title}
+												</Link>
+											</span>
+										))
 									) : (
-										<strong>{event.entityName}</strong>
+										<strong>{entity.entityName}</strong>
 									)}
 								</span>
 							</li>
@@ -123,13 +135,17 @@ export default async function TanahpediaLandingPage() {
 						<div key={cat.type} className={styles.categoryGroup}>
 							<Link
 								href={categoryHref(cat.type)}
-								className={styles.categoryCard}
+								className={`${styles.categoryCard} ${isComingSoon(cat.type) ? styles.categoryCardEmpty : ""}`}
 							>
 								<div className={styles.categoryName}>
 									{CATEGORY_LABELS[cat.type]}
 								</div>
 								<div className={styles.categoryCount}>
-									{counts[cat.type]} ערכים
+									{isComingSoon(cat.type) ? (
+										<span className={styles.comingSoonBadge}>בקרוב</span>
+									) : (
+										`${counts[cat.type]} ערכים`
+									)}
 								</div>
 							</Link>
 							{cat.children && cat.children.length > 0 && (
@@ -138,14 +154,18 @@ export default async function TanahpediaLandingPage() {
 										<Link
 											key={sub}
 											href={categoryHref(sub)}
-											className={styles.subcategoryCard}
+											className={`${styles.subcategoryCard} ${isComingSoon(sub) ? styles.subcategoryCardEmpty : ""}`}
 										>
 											<span className={styles.subcategoryName}>
 												{labelForCategoryKey(sub)}
 											</span>
-											<span className={styles.subcategoryCount}>
-												{counts[sub]}
-											</span>
+											{isComingSoon(sub) ? (
+												<span className={styles.comingSoonBadge}>בקרוב</span>
+											) : (
+												<span className={styles.subcategoryCount}>
+													{counts[sub]}
+												</span>
+											)}
 										</Link>
 									))}
 								</div>

@@ -1,0 +1,31 @@
+/**
+ * Shared dedication presentation (#2731) — a quiet memorial line that
+ * sits under a reading heading or on a sefer cover. Every surface that
+ * shows dedications uses these classes so the look stays uniform.
+ */
+
+.list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.line {
+	color: #5a4a32;
+	font-size: 0.85em;
+	line-height: 1.5;
+	letter-spacing: 0.01em;
+}
+
+/* Flat-page context: a dedication under a reading heading. */
+.block {
+	margin: 0.4em 0 0.9em;
+}
+
+/* Inside the book's perek heading — same line, tighter spacing so the
+   reading space keeps its density. */
+.headerLine {
+	margin-top: 0.15em;
+	font-size: 0.8em;
+	color: #6b5232;
+}

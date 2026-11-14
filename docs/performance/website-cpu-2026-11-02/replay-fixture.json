@@ -1,0 +1,4353 @@
+{
+  "note": "Public paths only; no client addresses, request bodies, search phrases or original random RSC nonces. Use only an isolated server. Peak source 499 requests are replayed to completion, conservatively retaining the offered work. Headers were not present in source logs; native replay sends RSC:1 only for marked URLs, while local mixed-RSC controls send RSC:1 throughout.",
+  "ordinary": {
+    "startsPerSecond": 5,
+    "paths": [
+      "/929/854/2817?_rsc=research",
+      "/?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/78/2370?_rsc=research",
+      "/929/851/2809?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/485?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/56/168?_rsc=research",
+      "/929/316/1146?_rsc=research",
+      "/929/92/258?_rsc=research",
+      "/929/189/504?_rsc=research",
+      "/929/32/2259?_rsc=research",
+      "/929/179/471?_rsc=research",
+      "/929/103/2425?_rsc=research",
+      "/929/161/%D7%A8%D7%9E%D7%91%22%D7%9F",
+      "/",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/71/2359?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/?_rsc=research",
+      "/929/488/1539?_rsc=research",
+      "/929/111/305?_rsc=research",
+      "/929/131/2452?_rsc=research",
+      "/929/104/2426?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%A9%D7%9E%D7%95%D7%AA?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2003?_rsc=research",
+      "/929/488/1543?_rsc=research",
+      "/?_rsc=research",
+      "/?_rsc=research",
+      "/929/105/%D7%99%D7%A8%D7%99%D7%A2%D7%95%D7%AA%20%D7%A9%D7%9C%D7%9E%D7%94?_rsc=research",
+      "/929/244/710?_rsc=research",
+      "/929/565/1789?_rsc=research",
+      "/929/186/493?_rsc=research",
+      "/929/846/2797?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1345?_rsc=research",
+      "/929/49/%D7%AA%D7%95%D7%9C%D7%93%D7%95%D7%AA%20%D7%99%D7%A6%D7%97%D7%A7?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1472?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1789?_rsc=research",
+      "/929/480/1523?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/929/68/198?_rsc=research",
+      "/929/520/1639?_rsc=research",
+      "/929/301/1059?_rsc=research",
+      "/929/111/3077?_rsc=research",
+      "/929/107/2429?_rsc=research",
+      "/?_rsc=research",
+      "/929/804/3085?_rsc=research",
+      "/?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/448?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/424/2559?_rsc=research",
+      "/?_rsc=research",
+      "/929/25/3126?_rsc=research",
+      "/929/164/2513?_rsc=research",
+      "/929/63/178?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%9E%D7%A6%D7%95%D7%A8%D7%A2?perush=%D7%A9%D7%A4%D7%AA%D7%99+%D7%9B%D7%94%D7%9F",
+      "/?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/?_rsc=research",
+      "/929/417/1410?_rsc=research",
+      "/?_rsc=research",
+      "/929/473/2831?_rsc=research",
+      "/929/323/1175?_rsc=research",
+      "/929/103/2425?_rsc=research",
+      "/?_rsc=research",
+      "/929/99/2422?_rsc=research",
+      "/929/18/2868?_rsc=research",
+      "/929/266/778?_rsc=research",
+      "/929/188?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%95%D7%90%D7%A8%D7%90?perush=%D7%A2%D7%9E%D7%A8+%D7%A0%D7%A7%D7%90",
+      "/929/803/2655?_rsc=research",
+      "/929/142/368?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/691?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1472?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/682?_rsc=research",
+      "/929/397/1377?_rsc=research",
+      "/929/167/2518?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%95%D7%99%D7%9C%D7%9A?haftaraPerush=%D7%A8%D7%93%22%D7%A7&perush=%D7%9E%D7%99%D7%A0%D7%99+%D7%AA%D7%A8%D7%92%D7%95%D7%9E%D7%90",
+      "/929/68/188?_rsc=research",
+      "/929/115/313?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/642?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/41/144?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/3075?_rsc=research",
+      "/929/565/1783?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/407?_rsc=research",
+      "/929/80/2373?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%AA%D7%96%D7%A8%D7%99%D7%A2?haftaraPerush=%D7%9E%D7%A6%D7%95%D7%93%D7%AA+%D7%93%D7%95%D7%93&perush=%D7%AA%D7%95%D7%A8%D7%94+%D7%AA%D7%9E%D7%99%D7%9E%D7%94",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%AA%D7%A6%D7%95%D7%94",
+      "/929/113/306?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/211?_rsc=research",
+      "/929/340/1247?_rsc=research",
+      "/929/185/488?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/289?_rsc=research",
+      "/929/186/2334?_rsc=research",
+      "/?_rsc=research",
+      "/929/558/1742?_rsc=research",
+      "/?_rsc=research",
+      "/929/528/1677?_rsc=research",
+      "/?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%99%D7%AA%D7%A8%D7%95?_rsc=research",
+      "/?_rsc=research",
+      "/929/111/%D7%A6%D7%A4%D7%A0%D7%AA%20%D7%A4%D7%A2%D7%A0%D7%97?_rsc=research",
+      "/929/178/462?_rsc=research",
+      "/929/85/2379?_rsc=research",
+      "/929/136/%D7%90%D7%91%D7%9F%20%D7%A2%D7%96%D7%A8%D7%90?_rsc=research",
+      "/929/155/402?_rsc=research",
+      "/929/344/1263?_rsc=research",
+      "/929/68/2349?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2495?perush=%D7%A8%D7%A9%22%D7%99&_rsc=research",
+      "/929/345/1264?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1752?_rsc=research",
+      "/?_rsc=research",
+      "/?_rsc=research",
+      "/?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1743?_rsc=research",
+      "/929/290/974?_rsc=research",
+      "/929/47/152?_rsc=research",
+      "/pedia/%D7%99%D7%94%D7%95%D7%A9%D7%A2-%D7%91%D7%9F-%D7%A0%D7%95%D7%9F?_rsc=research",
+      "/929/428/2561?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/235?_rsc=research",
+      "/929/738/2344?_rsc=research",
+      "/929/514/1621?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/?_rsc=research",
+      "/?_rsc=research",
+      "/929/177/2528?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/245?_rsc=research",
+      "/929/96/269?_rsc=research",
+      "/929/803/2655?_rsc=research",
+      "/929/56/169?_rsc=research",
+      "/929/303/1088?_rsc=research",
+      "/929/63/%D7%90%D7%91%D7%9F%20%D7%A2%D7%96%D7%A8%D7%90",
+      "/929/186/489?_rsc=research",
+      "/929/151?_rsc=research",
+      "/929/142/371?_rsc=research",
+      "/929/139?_rsc=research",
+      "/929/502/1598?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2378?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2412?_rsc=research",
+      "/929/123/327?_rsc=research",
+      "/929/718/2343?_rsc=research",
+      "/929/408/1398?_rsc=research",
+      "/929/28/126?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2319?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/112/2879?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/502/1597?_rsc=research",
+      "/929/180/472?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%A9%D7%9C%D7%97?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2036?_rsc=research",
+      "/929/111/%D7%90%D7%95%D7%A8%20%D7%94%D7%97%D7%99%D7%99%D7%9D?_rsc=research",
+      "/929/202/567?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%9B%D7%99-%D7%AA%D7%A6%D7%90?perush=%D7%9E%D7%96%D7%A8%D7%97%D7%99",
+      "/929/121?_rsc=research",
+      "/929/185/488?_rsc=research",
+      "/?_rsc=research",
+      "/?_rsc=research",
+      "/?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2823?perush=%D7%AA%D7%A8%D7%92%D7%95%D7%9D&_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2289?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/148?_rsc=research",
+      "/?_rsc=research",
+      "/929/413/2550?_rsc=research",
+      "/929/155/402?_rsc=research",
+      "/?_rsc=research",
+      "/?_rsc=research",
+      "/929/185/490?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2883?_rsc=research",
+      "/929/71/2359?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/3025?_rsc=research",
+      "/929/313/1125?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2114?_rsc=research",
+      "/929/165/2516?_rsc=research",
+      "/929/528/1678?_rsc=research",
+      "/929/47/152?_rsc=research",
+      "/929/37/2662?_rsc=research",
+      "/?_rsc=research",
+      "/929/1/594?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/67/3192?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/929/91/1866?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/72/202?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%A9%D7%9E%D7%95%D7%AA?perush=%D7%A0%D7%97%D7%9C%D7%AA+%D7%99%D7%A2%D7%A7%D7%91",
+      "/929/71/190?_rsc=research",
+      "/929/60/3169?_rsc=research",
+      "/929/78/223?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1326?_rsc=research",
+      "/929/73/2362?_rsc=research",
+      "/929/783/2638?_rsc=research",
+      "/929/927/3052?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/49",
+      "/929/294/1007?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/142?_rsc=research",
+      "/929/316/1150?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/215?_rsc=research",
+      "/929/2/3103?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1909?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2194?_rsc=research",
+      "/?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%9E%D7%A6%D7%95%D7%A8%D7%A2?perush=%D7%9C%D7%91%D7%95%D7%A9+%D7%94%D7%90%D7%95%D7%A8%D7%94",
+      "/929/47/2282?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/929/164/418?_rsc=research",
+      "/929/444/1466?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2806?_rsc=research",
+      "/929/481/1525?_rsc=research",
+      "/929/480/1524?_rsc=research",
+      "/929/56/2292?_rsc=research",
+      "/929/32/3137?_rsc=research",
+      "/929/374/1313?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2171?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/454?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%A0%D7%97",
+      "/929/121?_rsc=research",
+      "/929/437/1448?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/622?_rsc=research",
+      "/929/903/2971?_rsc=research",
+      "/929/13?_rsc=research",
+      "/929/186/493?_rsc=research",
+      "/929/246/725?_rsc=research",
+      "/929/41/146?_rsc=research",
+      "/?_rsc=research",
+      "/929/107/2429?_rsc=research",
+      "/929/305/981?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/690?perush=%D7%AA%D7%A8%D7%92%D7%95%D7%9D+%D7%90%D7%95%D7%A0%D7%A7%D7%9C%D7%95%D7%A1&_rsc=research",
+      "/929/148/380?_rsc=research",
+      "/929/191/518?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/236?_rsc=research",
+      "/?_rsc=research",
+      "/929/302/1074?_rsc=research",
+      "/?_rsc=research",
+      "/929/71/3284?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1700?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/929/89/2385?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/?_rsc=research",
+      "/929/401/1384?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/289?perush=%D7%91%D7%A2%D7%9C+%D7%94%D7%98%D7%95%D7%A8%D7%99%D7%9D&_rsc=research",
+      "/929/480/1524?_rsc=research",
+      "/929/56/168?_rsc=research",
+      "/929/548/1735?_rsc=research",
+      "/929/335/1215?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/42/%D7%AA%D7%A8%D7%92%D7%95%D7%9D%20%D7%99%D7%95%D7%A0%D7%AA%D7%9F?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/104/290?_rsc=research",
+      "/929/390/1357?_rsc=research",
+      "/929/118/2440?_rsc=research",
+      "/929/111/305?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/455?_rsc=research",
+      "/929/66/179?_rsc=research",
+      "/929/377/1323?_rsc=research",
+      "/929/473/2831?_rsc=research",
+      "/?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/207?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/23?_rsc=research",
+      "/929/78/223?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2080?_rsc=research",
+      "/929/142/2469?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/363?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/929/105/%D7%A8%D7%9C%D7%91%22%D7%92%20%D7%91%D7%99%D7%90%D7%95%D7%A8%20%D7%94%D7%9E%D7%9C%D7%95%D7%AA?_rsc=research",
+      "/929/723/2315?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/91?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%AA%D7%96%D7%A8%D7%99%D7%A2",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/929/68/%D7%90%D7%91%D7%A8%D7%91%D7%A0%D7%90%D7%9C",
+      "/929/118/321?_rsc=research",
+      "/929/70/2352?_rsc=research",
+      "/?_rsc=research",
+      "/929/12/3111?_rsc=research",
+      "/929/147/2475?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1982?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/929/538/1706?_rsc=research",
+      "/929/41/144?_rsc=research",
+      "/929/120/322?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/127/3185?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1225?_rsc=research",
+      "/929/138/360?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2224?_rsc=research",
+      "/929/47/2847?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/929/329/3062?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/720/2304?_rsc=research",
+      "/929/25/3127?_rsc=research",
+      "/?_rsc=research",
+      "/?_rsc=research",
+      "/?_rsc=research",
+      "/929/537/2586?_rsc=research",
+      "/?_rsc=research",
+      "/929/863/2833?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94?_rsc=research",
+      "/929/23/2621?_rsc=research",
+      "/?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/123?_rsc=research",
+      "/929/56/169?_rsc=research",
+      "/929/549?_rsc=research",
+      "/?_rsc=research",
+      "/?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/471?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%9E%D7%A1%D7%A2%D7%99?perush=%D7%93%D7%91%D7%A8%D7%99+%D7%93%D7%95%D7%93",
+      "/?_rsc=research",
+      "/?_rsc=research",
+      "/929/222/643?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1405?_rsc=research",
+      "/929/77/2369?_rsc=research",
+      "/?_rsc=research",
+      "/929/307/1113?_rsc=research",
+      "/929/47/2282?_rsc=research",
+      "/929/313/989?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/19?_rsc=research",
+      "/?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1782?_rsc=research",
+      "/929/127?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%91%D7%A8%D7%90%D7%A9%D7%99%D7%AA?haftaraPerush=%D7%A8%D7%A9%22%D7%99&perush=%D7%9C%D7%91%D7%95%D7%A9+%D7%94%D7%90%D7%95%D7%A8%D7%94",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94?_rsc=research",
+      "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/135?_rsc=research",
+      "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%A6%D7%95?_rsc=research"
+    ]
+  },
+  "peak": {
+    "sourceUtcMinute": "2026-11-01T21:50Z",
+    "requests": [
+      {
+        "offset": 2,
+        "path": "/929/16?_rsc=peak-research",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%95%D7%99%D7%9C%D7%9A?haftaraPerush=%D7%97%D7%95%D7%9E%D7%AA+%D7%90%D7%A0%D7%9A&perush=%D7%91%D7%A2%D7%9C+%D7%94%D7%98%D7%95%D7%A8%D7%99%D7%9D",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/3",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/2",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/12",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/4",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/5",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/6",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/7",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/10",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/11",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/9",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/20",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/18",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/14",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/13",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/17",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/15",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/16",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/19",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/21",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/24",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/28",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/29",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/31",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/30",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/22",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/23",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/26",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/27",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/25",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/32",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/34",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/35",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/33",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/36",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/37",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/38",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/39",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/42",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/44",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/40",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/41",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/46",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/45",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/43",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/47",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/49",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/48",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/50",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/51",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/55",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/52",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/53",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/54",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/58",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/57",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/61",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/56",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/60",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/65",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/62",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/63",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/59",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/64",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/89",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/91",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/88",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/86",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/87",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/85",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/84",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%94%D7%90%D7%96%D7%99%D7%A0%D7%95?perush=%D7%94%D7%93%D7%A8+%D7%96%D7%A7%D7%A0%D7%99%D7%9D",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/83",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/66",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/77",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/69",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/68",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/70",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/67",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/82",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/76",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/75",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/81",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/80",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/74",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/78",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/73",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/79",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/72",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 2,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/71",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 4,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/589",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%9E%D7%96%D7%A8%D7%97%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/92",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%AA%D7%A8%D7%92%D7%95%D7%9D+%D7%99%D7%95%D7%A0%D7%AA%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%9C%D7%91%22%D7%92",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/93",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%AA%D7%A8%D7%92%D7%95%D7%9D+%D7%90%D7%95%D7%A0%D7%A7%D7%9C%D7%95%D7%A1",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%A9%22%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A7%D7%99%D7%A6%D7%95%D7%A8+%D7%91%D7%A2%D7%9C+%D7%94%D7%98%D7%95%D7%A8%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%9C%D7%91%22%D7%92+%D7%91%D7%99%D7%90%D7%95%D7%A8+%D7%94%D7%9E%D7%9C%D7%95%D7%AA",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%27+%D7%A1%D7%A2%D7%93%D7%99%D7%94+%D7%92%D7%90%D7%95%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%91%D7%A2%D7%9C+%D7%94%D7%98%D7%95%D7%A8%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A4%D7%A8%D7%93%D7%A1+%D7%99%D7%95%D7%A1%D7%A3",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A6%D7%A8%D7%95%D7%A8+%D7%94%D7%9E%D7%95%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A9%D7%A4%D7%AA%D7%99+%D7%9B%D7%94%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A1%D7%A4%D7%95%D7%A8%D7%A0%D7%95",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%99%D7%91%22%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%93%D7%A2%D7%AA+%D7%96%D7%A7%D7%A0%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%A9%D7%91%22%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%AA%D7%95%D7%9C%D7%93%D7%95%D7%AA+%D7%99%D7%A6%D7%97%D7%A7",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%90%D7%91%D7%9F+%D7%A2%D7%96%D7%A8%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%93%22%D7%A7",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%97%D7%96%D7%A7%D7%95%D7%A0%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%90%D7%91%D7%A8%D7%91%D7%A0%D7%90%D7%9C",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%9E%D7%91%22%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%94%D7%93%D7%A8+%D7%96%D7%A7%D7%A0%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%90%22%D7%A9",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%99%D7%A8%D7%99%D7%A2%D7%95%D7%AA+%D7%A9%D7%9C%D7%9E%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%9E%D7%A0%D7%97%D7%AA+%D7%A9%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%AA%D7%95%D7%A8%D7%AA+%D7%9E%D7%A9%D7%94+%28%D7%90%D7%9C%D7%A9%D7%99%D7%9A%29",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%9C%D7%91%D7%95%D7%A9+%D7%94%D7%90%D7%95%D7%A8%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A2%D7%9E%D7%A8+%D7%A0%D7%A7%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%9B%D7%9C%D7%99+%D7%99%D7%A7%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%92%D7%95%D7%A8+%D7%90%D7%A8%D7%99%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%93%D7%91%D7%A8%D7%99+%D7%93%D7%95%D7%93",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A9%D7%A4%D7%AA%D7%99+%D7%97%D7%9B%D7%9E%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%AA%D7%A4%D7%90%D7%A8%D7%AA+%D7%99%D7%94%D7%95%D7%A0%D7%AA%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%90%D7%93%D7%A8%D7%AA+%D7%90%D7%9C%D7%99%D7%94%D7%95",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%97%D7%95%D7%9E%D7%AA+%D7%90%D7%A0%D7%9A",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%9E%D7%A9%D7%9B%D7%99%D7%9C+%D7%9C%D7%93%D7%95%D7%93",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%90%D7%95%D7%A8+%D7%94%D7%97%D7%99%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%9E%D7%99%D7%A0%D7%99+%D7%AA%D7%A8%D7%92%D7%95%D7%9E%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A0%D7%97%D7%9C%D7%AA+%D7%99%D7%A2%D7%A7%D7%91",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A0%D7%97%D7%9C+%D7%A7%D7%93%D7%95%D7%9E%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A0%D7%AA%D7%99%D7%A0%D7%94+%D7%9C%D7%92%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%94%D7%9B%D7%AA%D7%91+%D7%95%D7%94%D7%A7%D7%91%D7%9C%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%94%D7%A2%D7%9E%D7%A7+%D7%93%D7%91%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%9E%D7%9C%D7%91%D7%99%22%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/929/1/3060",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%94%D7%A8%D7%97%D7%91+%D7%93%D7%91%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%AA%D7%95%D7%A8%D7%94+%D7%AA%D7%9E%D7%99%D7%9E%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%91%D7%A8%D7%9B%D7%AA+%D7%90%D7%A9%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/929/1/594",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/929/1/596",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/929/1/2218",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/929/1/3070",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/929/1/3061",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/929/1/3064",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/289",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/260",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/288",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/261",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/282",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/262",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/263",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/929/1/3066",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/929/1/3065",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/287",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/286",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/285",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/280",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/281",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/929/1/3069",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/284",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/279",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/278",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/283",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/276",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/277",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/275",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/274",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/273",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/269",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/272",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/271",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/270",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/268",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/267",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/266",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/265",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 11,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/264",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/93",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/92",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%9E%D7%99%D7%A0%D7%99+%D7%AA%D7%A8%D7%92%D7%95%D7%9E%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%9C%D7%91%22%D7%92+%D7%91%D7%99%D7%90%D7%95%D7%A8+%D7%94%D7%9E%D7%9C%D7%95%D7%AA",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A9%D7%A4%D7%AA%D7%99+%D7%9B%D7%94%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%AA%D7%95%D7%9C%D7%93%D7%95%D7%AA+%D7%99%D7%A6%D7%97%D7%A7",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A4%D7%A8%D7%93%D7%A1+%D7%99%D7%95%D7%A1%D7%A3",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%90%D7%91%D7%A8%D7%91%D7%A0%D7%90%D7%9C",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A6%D7%A8%D7%95%D7%A8+%D7%94%D7%9E%D7%95%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%9E%D7%96%D7%A8%D7%97%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A1%D7%A4%D7%95%D7%A8%D7%A0%D7%95",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%AA%D7%A8%D7%92%D7%95%D7%9D+%D7%99%D7%95%D7%A0%D7%AA%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%AA%D7%A8%D7%92%D7%95%D7%9D+%D7%90%D7%95%D7%A0%D7%A7%D7%9C%D7%95%D7%A1",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%9E%D7%A0%D7%97%D7%AA+%D7%A9%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%A9%22%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%99%D7%A8%D7%99%D7%A2%D7%95%D7%AA+%D7%A9%D7%9C%D7%9E%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%9E%D7%91%22%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%27+%D7%A1%D7%A2%D7%93%D7%99%D7%94+%D7%92%D7%90%D7%95%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%99%D7%91%22%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%94%D7%93%D7%A8+%D7%96%D7%A7%D7%A0%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%90%22%D7%A9",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%91%D7%A2%D7%9C+%D7%94%D7%98%D7%95%D7%A8%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A7%D7%99%D7%A6%D7%95%D7%A8+%D7%91%D7%A2%D7%9C+%D7%94%D7%98%D7%95%D7%A8%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%AA%D7%95%D7%A8%D7%AA+%D7%9E%D7%A9%D7%94+%28%D7%90%D7%9C%D7%A9%D7%99%D7%9A%29",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%9C%D7%91%D7%95%D7%A9+%D7%94%D7%90%D7%95%D7%A8%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%93%D7%A2%D7%AA+%D7%96%D7%A7%D7%A0%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A2%D7%9E%D7%A8+%D7%A0%D7%A7%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%9C%D7%91%22%D7%92",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%A9%D7%91%22%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%90%D7%91%D7%9F+%D7%A2%D7%96%D7%A8%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%92%D7%95%D7%A8+%D7%90%D7%A8%D7%99%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%93%D7%91%D7%A8%D7%99+%D7%93%D7%95%D7%93",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%97%D7%96%D7%A7%D7%95%D7%A0%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A8%D7%93%22%D7%A7",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%9B%D7%9C%D7%99+%D7%99%D7%A7%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A9%D7%A4%D7%AA%D7%99+%D7%97%D7%9B%D7%9E%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%AA%D7%A4%D7%90%D7%A8%D7%AA+%D7%99%D7%94%D7%95%D7%A0%D7%AA%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%9E%D7%A9%D7%9B%D7%99%D7%9C+%D7%9C%D7%93%D7%95%D7%93",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%90%D7%95%D7%A8+%D7%94%D7%97%D7%99%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A0%D7%97%D7%9C%D7%AA+%D7%99%D7%A2%D7%A7%D7%91",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%90%D7%93%D7%A8%D7%AA+%D7%90%D7%9C%D7%99%D7%94%D7%95",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A0%D7%97%D7%9C+%D7%A7%D7%93%D7%95%D7%9E%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%97%D7%95%D7%9E%D7%AA+%D7%90%D7%A0%D7%9A",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%A0%D7%AA%D7%99%D7%A0%D7%94+%D7%9C%D7%92%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/929/1/3061",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%94%D7%9B%D7%AA%D7%91+%D7%95%D7%94%D7%A7%D7%91%D7%9C%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%94%D7%A2%D7%9E%D7%A7+%D7%93%D7%91%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%94%D7%A8%D7%97%D7%91+%D7%93%D7%91%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%91%D7%A8%D7%9B%D7%AA+%D7%90%D7%A9%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/929/1/3060",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/929/1/594",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/929/1/596",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%9E%D7%9C%D7%91%D7%99%22%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1?perush=%D7%AA%D7%95%D7%A8%D7%94+%D7%AA%D7%9E%D7%99%D7%9E%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/929/1/2218",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/264",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/929/1/3065",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/929/1/3066",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/929/1/3069",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/929/1/3070",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/289",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/262",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/261",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/263",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/260",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/288",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/286",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/287",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/285",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/283",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/282",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/284",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/281",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/278",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/271",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/280",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/279",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/277",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/276",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/275",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/270",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/269",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/268",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/265",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/267",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/274",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/272",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/273",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/266",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 14,
+        "path": "/929/1/3064",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 17,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%9E%D7%A1%D7%A2%D7%99?haftaraPerush=%D7%9E%D7%A6%D7%95%D7%93%D7%AA+%D7%A6%D7%99%D7%95%D7%9F&perush=%D7%97%D7%95%D7%9E%D7%AA+%D7%90%D7%A0%D7%9A",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 17,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%99%D7%AA%D7%A8%D7%95?perush=%D7%97%D7%95%D7%9E%D7%AA+%D7%90%D7%A0%D7%9A",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 18,
+        "path": "/929/360/%D7%97%D7%95%D7%9E%D7%AA%20%D7%90%D7%A0%D7%9A",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 19,
+        "path": "/929/82/%D7%AA%D7%A4%D7%90%D7%A8%D7%AA%20%D7%99%D7%94%D7%95%D7%A0%D7%AA%D7%9F",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 22,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%91%D7%A9%D7%9C%D7%97?perush=%D7%90%D7%95%D7%A8+%D7%94%D7%97%D7%99%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 22,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1967",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/291",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/290",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/344",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/293",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/295",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/298",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/296",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/299",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/292",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/303",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/294",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/297",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/306",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/308",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/300",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/301",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/313",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/302",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/304",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/312",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/305",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/315",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/307",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/316",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/310",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/317",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/309",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/311",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/322",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/323",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/314",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/319",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/318",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/320",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/327",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/329",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/321",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/325",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/324",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/332",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/333",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/331",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/326",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/335",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/334",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/328",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/339",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/330",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/343",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/336",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/337",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/338",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/340",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/341",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/342",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/929/928/%D7%97%D7%95%D7%9E%D7%AA%20%D7%90%D7%A0%D7%9A",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/345",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/347",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/349",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/346",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/348",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/350",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/351",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%9C%D7%91%22%D7%92",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/353",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/352",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%90%22%D7%A9",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A7%D7%99%D7%A6%D7%95%D7%A8+%D7%91%D7%A2%D7%9C+%D7%94%D7%98%D7%95%D7%A8%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%91%D7%A2%D7%9C+%D7%94%D7%98%D7%95%D7%A8%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%94%D7%93%D7%A8+%D7%96%D7%A7%D7%A0%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%93%D7%A2%D7%AA+%D7%96%D7%A7%D7%A0%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%97%D7%96%D7%A7%D7%95%D7%A0%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%9E%D7%91%22%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%90%D7%91%D7%9F+%D7%A2%D7%96%D7%A8%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%A9%D7%91%22%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%AA%D7%A8%D7%92%D7%95%D7%9D+%D7%99%D7%95%D7%A0%D7%AA%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/258",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/362",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/358",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%99%D7%91%22%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%91%D7%99%D7%A0%D7%95+%D7%97%D7%A0%D7%A0%D7%90%D7%9C",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%A9%22%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%AA%D7%A8%D7%92%D7%95%D7%9D+%D7%90%D7%95%D7%A0%D7%A7%D7%9C%D7%95%D7%A1",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/363",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/360",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/361",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/359",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/357",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/356",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/355",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 23,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/354",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 25,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/48?perush=%D7%AA%D7%95%D7%A8%D7%AA+%D7%9E%D7%A9%D7%94+%28%D7%90%D7%9C%D7%A9%D7%99%D7%9A%29",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 25,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%A7%D7%A8%D7%97?haftaraPerush=%D7%A8%D7%9C%D7%91%22%D7%92&perush=%D7%A0%D7%AA%D7%99%D7%A0%D7%94+%D7%9C%D7%92%D7%A8",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 25,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%95%D7%99%D7%97%D7%99?haftaraPerush=%D7%9E%D7%A0%D7%97%D7%AA+%D7%A9%D7%99&perush=%D7%97%D7%96%D7%A7%D7%95%D7%A0%D7%99",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 25,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%91%D7%90?haftaraPerush=%D7%9E%D7%9C%D7%91%D7%99%22%D7%9D&perush=%D7%9E%D7%9C%D7%91%D7%99%22%D7%9D",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 25,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/305?perush=%D7%AA%D7%95%D7%A8%D7%AA+%D7%9E%D7%A9%D7%94+%28%D7%90%D7%9C%D7%A9%D7%99%D7%9A%29",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 25,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%95%D7%99%D7%A6%D7%90?haftaraPerush=%D7%9E%D7%A6%D7%95%D7%93%D7%AA+%D7%A6%D7%99%D7%95%D7%9F&perush=%D7%90%D7%91%D7%A8%D7%91%D7%A0%D7%90%D7%9C",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 25,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%95%D7%99%D7%9C%D7%9A?haftaraPerush=%D7%90%D7%91%D7%9F+%D7%A2%D7%96%D7%A8%D7%90&perush=%D7%9C%D7%91%D7%95%D7%A9+%D7%94%D7%90%D7%95%D7%A8%D7%94",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/290",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/12?perush=%D7%A9%D7%A4%D7%AA%D7%99+%D7%9B%D7%94%D7%9F",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/291",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/929/49/%D7%A8%D7%A9%22%D7%99?_rsc=peak-research",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/344",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/292",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/293",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/294",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/295",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/296",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/297",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/299",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/298",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/300",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/325",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/328",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/301",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/302",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/326",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/327",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/329",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/303",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/314",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/330",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/331",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/304",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/317",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/332",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/315",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/316",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/320",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/321",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/305",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/333",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/322",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/306",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/319",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/318",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/307",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/309",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/308",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/335",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/334",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/310",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/336",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/311",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/324",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/323",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/312",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/337",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/338",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/313",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/343",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/339",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/340",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/341",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/342",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/353",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/346",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/345",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/347",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/348",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/350",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/349",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/351",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%9C%D7%91%22%D7%92",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/352",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/43?perush=%D7%90%D7%91%D7%9F+%D7%A2%D7%96%D7%A8%D7%90",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%AA%D7%A8%D7%92%D7%95%D7%9D+%D7%99%D7%95%D7%A0%D7%AA%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%94%D7%93%D7%A8+%D7%96%D7%A7%D7%A0%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%9E%D7%91%22%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%97%D7%96%D7%A7%D7%95%D7%A0%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%90%D7%91%D7%9F+%D7%A2%D7%96%D7%A8%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%A9%D7%91%22%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%93%D7%A2%D7%AA+%D7%96%D7%A7%D7%A0%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%99%D7%91%22%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%A9%22%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%91%D7%99%D7%A0%D7%95+%D7%97%D7%A0%D7%A0%D7%90%D7%9C",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/731?perush=%D7%97%D7%95%D7%9E%D7%AA+%D7%90%D7%A0%D7%9A",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%91%D7%A2%D7%9C+%D7%94%D7%98%D7%95%D7%A8%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%90%22%D7%A9",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A7%D7%99%D7%A6%D7%95%D7%A8+%D7%91%D7%A2%D7%9C+%D7%94%D7%98%D7%95%D7%A8%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/354",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%AA%D7%A8%D7%92%D7%95%D7%9D+%D7%90%D7%95%D7%A0%D7%A7%D7%9C%D7%95%D7%A1",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/362",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/359",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/355",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/363",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/258",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/360",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/361",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/357",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/358",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 26,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/356",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 27,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1307?perush=%D7%A8%D7%9C%D7%91%22%D7%92",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 27,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%9E%D7%98%D7%95%D7%AA?haftaraPerush=%D7%9E%D7%9C%D7%91%D7%99%22%D7%9D&perush=%D7%AA%D7%A4%D7%90%D7%A8%D7%AA+%D7%99%D7%94%D7%95%D7%A0%D7%AA%D7%9F",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 27,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/357?perush=%D7%AA%D7%95%D7%A8%D7%94+%D7%AA%D7%9E%D7%99%D7%9E%D7%94",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 27,
+        "path": "/929/82/%D7%AA%D7%A4%D7%90%D7%A8%D7%AA%20%D7%99%D7%94%D7%95%D7%A0%D7%AA%D7%9F",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 27,
+        "path": "/929/11/%D7%A9%D7%A4%D7%AA%D7%99%20%D7%97%D7%9B%D7%9E%D7%99%D7%9D",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 27,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1125",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 31,
+        "path": "/929/525/1651",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 32,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/468?perush=%D7%A8%D7%A9%22%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 32,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%91%D7%90?perush=%D7%9E%D7%A0%D7%97%D7%AA+%D7%A9%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 32,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1203?perush=%D7%97%D7%95%D7%9E%D7%AA+%D7%90%D7%A0%D7%9A",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 34,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1410",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%9C%D7%91%22%D7%92+%D7%91%D7%99%D7%90%D7%95%D7%A8+%D7%94%D7%9E%D7%9C%D7%95%D7%AA",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A4%D7%A8%D7%93%D7%A1+%D7%99%D7%95%D7%A1%D7%A3",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A9%D7%A4%D7%AA%D7%99+%D7%9B%D7%94%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A6%D7%A8%D7%95%D7%A8+%D7%94%D7%9E%D7%95%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%AA%D7%95%D7%A8%D7%94+%D7%AA%D7%9E%D7%99%D7%9E%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%9E%D7%96%D7%A8%D7%97%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%AA%D7%95%D7%9C%D7%93%D7%95%D7%AA+%D7%99%D7%A6%D7%97%D7%A7",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A6%D7%A4%D7%A0%D7%AA+%D7%A4%D7%A2%D7%A0%D7%97",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%90%D7%91%D7%A8%D7%91%D7%A0%D7%90%D7%9C",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%91%D7%A8%D7%9B%D7%AA+%D7%90%D7%A9%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A1%D7%A4%D7%95%D7%A8%D7%A0%D7%95",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/929/91/255",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%9E%D7%A0%D7%97%D7%AA+%D7%A9%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%9C%D7%91%D7%95%D7%A9+%D7%94%D7%90%D7%95%D7%A8%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/101",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/100",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/104",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/106",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/108",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/107",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/102",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/103",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/105",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/109",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/110",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A2%D7%9E%D7%A8+%D7%A0%D7%A7%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/111",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/929/91/257",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/929/91/1866",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/929/91/2388",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%92%D7%95%D7%A8+%D7%90%D7%A8%D7%99%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%93%D7%91%D7%A8%D7%99+%D7%93%D7%95%D7%93",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/96",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%9B%D7%9C%D7%99+%D7%99%D7%A7%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/929/91/256",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%AA%D7%95%D7%A8%D7%AA+%D7%9E%D7%A9%D7%94+%28%D7%90%D7%9C%D7%A9%D7%99%D7%9A%29",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/929/91/3288",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/95",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/97",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A9%D7%A4%D7%AA%D7%99+%D7%97%D7%9B%D7%9E%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/98",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%90%D7%95%D7%A8+%D7%94%D7%97%D7%99%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%AA%D7%A4%D7%90%D7%A8%D7%AA+%D7%99%D7%94%D7%95%D7%A0%D7%AA%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%9E%D7%A9%D7%9B%D7%99%D7%9C+%D7%9C%D7%93%D7%95%D7%93",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%90%D7%93%D7%A8%D7%AA+%D7%90%D7%9C%D7%99%D7%94%D7%95",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%9E%D7%99%D7%A0%D7%99+%D7%AA%D7%A8%D7%92%D7%95%D7%9E%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A0%D7%97%D7%9C%D7%AA+%D7%99%D7%A2%D7%A7%D7%91",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A0%D7%97%D7%9C+%D7%A7%D7%93%D7%95%D7%9E%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%97%D7%95%D7%9E%D7%AA+%D7%90%D7%A0%D7%9A",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A0%D7%AA%D7%99%D7%A0%D7%94+%D7%9C%D7%92%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%94%D7%A2%D7%9E%D7%A7+%D7%93%D7%91%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%94%D7%A8%D7%97%D7%91+%D7%93%D7%91%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%94%D7%9B%D7%AA%D7%91+%D7%95%D7%94%D7%A7%D7%91%D7%9C%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A4%D7%99%D7%A8%D7%95%D7%A9%D7%99+%D7%A8%D7%93%22%D7%A6+%D7%94%D7%95%D7%A4%D7%9E%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/112",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/114",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/113",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/115",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/116",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/118",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/120",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/121",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/117",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/119",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/123",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/125",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/126",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/127",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/128",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/129",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/122",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/124",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/131",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/130",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/132",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/133",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/134",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/135",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/138",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/136",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/137",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/139",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/140",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/141",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/143",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/142",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/144",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/145",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 35,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/146",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 36,
+        "path": "/929/928/%D7%97%D7%95%D7%9E%D7%AA%20%D7%90%D7%A0%D7%9A",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A8%D7%9C%D7%91%22%D7%92+%D7%91%D7%99%D7%90%D7%95%D7%A8+%D7%94%D7%9E%D7%9C%D7%95%D7%AA",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A4%D7%A8%D7%93%D7%A1+%D7%99%D7%95%D7%A1%D7%A3",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A9%D7%A4%D7%AA%D7%99+%D7%9B%D7%94%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%AA%D7%95%D7%9C%D7%93%D7%95%D7%AA+%D7%99%D7%A6%D7%97%D7%A7",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A6%D7%A8%D7%95%D7%A8+%D7%94%D7%9E%D7%95%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%9E%D7%96%D7%A8%D7%97%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A1%D7%A4%D7%95%D7%A8%D7%A0%D7%95",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%90%D7%91%D7%A8%D7%91%D7%A0%D7%90%D7%9C",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%93%D7%91%D7%A8%D7%99+%D7%93%D7%95%D7%93",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%9C%D7%91%D7%95%D7%A9+%D7%94%D7%90%D7%95%D7%A8%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%9E%D7%A0%D7%97%D7%AA+%D7%A9%D7%99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%AA%D7%A4%D7%90%D7%A8%D7%AA+%D7%99%D7%94%D7%95%D7%A0%D7%AA%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%90%D7%93%D7%A8%D7%AA+%D7%90%D7%9C%D7%99%D7%94%D7%95",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A9%D7%A4%D7%AA%D7%99+%D7%97%D7%9B%D7%9E%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%90%D7%95%D7%A8+%D7%94%D7%97%D7%99%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%9E%D7%A9%D7%9B%D7%99%D7%9C+%D7%9C%D7%93%D7%95%D7%93",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A6%D7%A4%D7%A0%D7%AA+%D7%A4%D7%A2%D7%A0%D7%97",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%91%D7%A8%D7%9B%D7%AA+%D7%90%D7%A9%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%9B%D7%9C%D7%99+%D7%99%D7%A7%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/97",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/929/91/255",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/929/91/256",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/929/91/1866",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/929/91/257",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/929/91/2388",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/96",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/95",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/929/91/3288",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%AA%D7%95%D7%A8%D7%AA+%D7%9E%D7%A9%D7%94+%28%D7%90%D7%9C%D7%A9%D7%99%D7%9A%29",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A2%D7%9E%D7%A8+%D7%A0%D7%A7%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%92%D7%95%D7%A8+%D7%90%D7%A8%D7%99%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/111",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/98",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/99",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/106",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/100",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/101",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/102",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/103",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/105",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/109",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/108",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/104",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/107",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/110",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%9E%D7%99%D7%A0%D7%99+%D7%AA%D7%A8%D7%92%D7%95%D7%9E%D7%90",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A0%D7%97%D7%9C+%D7%A7%D7%93%D7%95%D7%9E%D7%99%D7%9D",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%97%D7%95%D7%9E%D7%AA+%D7%90%D7%A0%D7%9A",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A4%D7%99%D7%A8%D7%95%D7%A9%D7%99+%D7%A8%D7%93%22%D7%A6+%D7%94%D7%95%D7%A4%D7%9E%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A0%D7%97%D7%9C%D7%AA+%D7%99%D7%A2%D7%A7%D7%91",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%A0%D7%AA%D7%99%D7%A0%D7%94+%D7%9C%D7%92%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%94%D7%9B%D7%AA%D7%91+%D7%95%D7%94%D7%A7%D7%91%D7%9C%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%94%D7%A2%D7%9E%D7%A7+%D7%93%D7%91%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%94%D7%A8%D7%97%D7%91+%D7%93%D7%91%D7%A8",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/259?perush=%D7%AA%D7%95%D7%A8%D7%94+%D7%AA%D7%9E%D7%99%D7%9E%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/112",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/121",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/114",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/115",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/113",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/120",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/116",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/118",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/117",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/119",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/730?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/732?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/122",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/124",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/123",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/125",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/126",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/127",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/128",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/134",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/131",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/130",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/129",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/132",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/133",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1306?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1308?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/146",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/135",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/139",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/137",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/136",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/140",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/138",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/141",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/142",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/143",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/144",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 38,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/145",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 39,
+        "path": "/?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 39,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/11?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 39,
+        "path": "/?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 39,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/13?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 39,
+        "path": "/?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 39,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/358?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 39,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/356?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 40,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/305?perush=%D7%AA%D7%95%D7%A8%D7%AA+%D7%9E%D7%A9%D7%94+%28%D7%90%D7%9C%D7%A9%D7%99%D7%9A%29",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 40,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/48?perush=%D7%AA%D7%95%D7%A8%D7%AA+%D7%9E%D7%A9%D7%94+%28%D7%90%D7%9C%D7%A9%D7%99%D7%9A%29",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 40,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%A7%D7%A8%D7%97?haftaraPerush=%D7%A8%D7%9C%D7%91%22%D7%92&perush=%D7%A0%D7%AA%D7%99%D7%A0%D7%94+%D7%9C%D7%92%D7%A8",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 40,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%95%D7%99%D7%97%D7%99?haftaraPerush=%D7%9E%D7%A0%D7%97%D7%AA+%D7%A9%D7%99&perush=%D7%97%D7%96%D7%A7%D7%95%D7%A0%D7%99",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 40,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%95%D7%99%D7%A6%D7%90?haftaraPerush=%D7%9E%D7%A6%D7%95%D7%93%D7%AA+%D7%A6%D7%99%D7%95%D7%9F&perush=%D7%90%D7%91%D7%A8%D7%91%D7%A0%D7%90%D7%9C",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 40,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%91%D7%90?haftaraPerush=%D7%9E%D7%9C%D7%91%D7%99%22%D7%9D&perush=%D7%9E%D7%9C%D7%91%D7%99%22%D7%9D",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 40,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/42?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 40,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/44?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 40,
+        "path": "/?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 40,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%95%D7%99%D7%92%D7%A9?haftaraPerush=%D7%A8%D7%93%22%D7%A7&perush=%D7%AA%D7%95%D7%A8%D7%AA+%D7%9E%D7%A9%D7%94+%28%D7%90%D7%9C%D7%A9%D7%99%D7%9A%29",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 41,
+        "path": "/929/8?_rsc=peak-research",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 41,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/468?perush=%D7%A8%D7%A9%22%D7%99",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 41,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/1203?perush=%D7%97%D7%95%D7%9E%D7%AA+%D7%90%D7%A0%D7%9A",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 42,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%91%D7%90?perush=%D7%9E%D7%A0%D7%97%D7%AA+%D7%A9%D7%99",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 44,
+        "path": "/929/525/1651",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 46,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/147",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 46,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/148",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 46,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/149",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 46,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/152",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/151",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/150",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/154",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/153",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/157",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/155",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/156",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/159",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/160",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/158",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/184",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/180",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/162",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/182",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/183",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/166",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/167",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/181",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/161",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/170",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/163",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/164",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/175",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/165",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/169",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/168",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/171",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/172",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/173",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/174",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/176",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/177",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/179",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 47,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/178",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 48,
+        "path": "/929/199/554?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 48,
+        "path": "/929/199/543?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 48,
+        "path": "/929/199/550?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 48,
+        "path": "/929/199/3216?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 48,
+        "path": "/929/309/1111?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 48,
+        "path": "/929/309/1115?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 48,
+        "path": "/929/309/1075?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 48,
+        "path": "/929/309/1116?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 49,
+        "path": "/929/4/3072?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 49,
+        "path": "/929/4/3073?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 49,
+        "path": "/929/4/3162?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 49,
+        "path": "/929/4/2222?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 49,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/147",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 49,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/148",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 49,
+        "path": "/929/116/315?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 49,
+        "path": "/929/116/2438?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 49,
+        "path": "/929/148/380?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 49,
+        "path": "/929/147/2475?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 49,
+        "path": "/929/147/390?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 49,
+        "path": "/929/147/2524?_rsc=peak-research",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 49,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/149",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/179",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/150",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/151",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/152",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/153",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/171",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/156",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/154",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/172",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/155",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/174",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/173",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/157",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/175",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/158",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/176",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/177",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/178",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/159",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/166",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/160",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/163",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/162",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/161",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/164",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/165",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/167",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/168",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/169",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/170",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/184",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/181",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/180",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/182",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 50,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/183",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 55,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%A7%D7%A8%D7%97?haftaraPerush=%D7%A8%D7%9C%D7%91%22%D7%92&perush=%D7%A0%D7%AA%D7%99%D7%A0%D7%94+%D7%9C%D7%92%D7%A8",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 55,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%95%D7%90%D7%AA%D7%97%D7%A0%D7%9F?haftaraPerush=%D7%90%D7%91%D7%9F+%D7%A2%D7%96%D7%A8%D7%90&perush=%D7%A6%D7%A4%D7%A0%D7%AA+%D7%A4%D7%A2%D7%A0%D7%97",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 55,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/48?perush=%D7%AA%D7%95%D7%A8%D7%AA+%D7%9E%D7%A9%D7%94+%28%D7%90%D7%9C%D7%A9%D7%99%D7%9A%29",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 55,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%95%D7%99%D7%97%D7%99?haftaraPerush=%D7%9E%D7%A0%D7%97%D7%AA+%D7%A9%D7%99&perush=%D7%97%D7%96%D7%A7%D7%95%D7%A0%D7%99",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 55,
+        "path": "/929/50?_rsc=peak-research",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 55,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%95%D7%99%D7%A6%D7%90?haftaraPerush=%D7%9E%D7%A6%D7%95%D7%93%D7%AA+%D7%A6%D7%99%D7%95%D7%9F&perush=%D7%90%D7%91%D7%A8%D7%91%D7%A0%D7%90%D7%9C",
+        "sourceStatus": 200
+      },
+      {
+        "offset": 57,
+        "path": "/929/525/1651",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 59,
+        "path": "/%D7%A4%D7%A8%D7%A9%D7%94/%D7%9E%D7%98%D7%95%D7%AA?haftaraPerush=%D7%9E%D7%9C%D7%91%D7%99%22%D7%9D&perush=%D7%AA%D7%A4%D7%90%D7%A8%D7%AA+%D7%99%D7%94%D7%95%D7%A0%D7%AA%D7%9F",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 59,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/357?perush=%D7%AA%D7%95%D7%A8%D7%94+%D7%AA%D7%9E%D7%99%D7%9E%D7%94",
+        "sourceStatus": 499
+      },
+      {
+        "offset": 59,
+        "path": "/%D7%9E%D7%A1%D7%95%D7%A8%D7%94/305?perush=%D7%AA%D7%95%D7%A8%D7%AA+%D7%9E%D7%A9%D7%94+%28%D7%90%D7%9C%D7%A9%D7%99%D7%9A%29",
+        "sourceStatus": 200
+      }
+    ]
+  }
+}

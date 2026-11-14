@@ -1,11 +1,23 @@
 using BibleOnSite.Config;
 using FluentAssertions;
 using System.Reflection;
+using Microsoft.Maui.Devices;
+using Microsoft.Maui.Storage;
 
 namespace BibleOnSite.Tests.Config;
 
+[Collection("App configuration")]
 public class AppConfigTests
 {
+    private static AppConfig CreateConfig()
+    {
+        var device = new Mock<IDeviceInfo>();
+        device.SetupGet(d => d.DeviceType).Returns(DeviceType.Virtual);
+        var files = new Mock<IFileSystem>();
+        files.Setup(f => f.OpenAppPackageFileAsync(It.IsAny<string>()))
+            .ThrowsAsync(new FileNotFoundException());
+        return new AppConfig(files.Object, device.Object);
+    }
     private static readonly object ApiUrlEnvLock = new();
 
     private static void WithApiUrl(string? value, Action action)
@@ -88,8 +100,28 @@ public class AppConfigTests
 #endif
     }
 
+    public class AccessibilityUrl
+    {
+        [Fact]
+        public void appends_accessibility_path_to_get_website_url()
+        {
+            var config = AppConfig.Instance;
+            config.AccessibilityUrl.Should().Be($"{config.GetWebsiteUrl()}/accessibility");
+        }
+
+#if DEBUG
+        [Fact]
+        public void resolves_to_localhost_accessibility_url()
+        {
+            AppConfig.Instance.AccessibilityUrl.Should().Be("http://localhost:3001/accessibility");
+        }
+#endif
+    }
+
+    [Collection("App configuration")]
     public class GetApiUrl
     {
+        private readonly AppConfig _config = CreateConfig();
         public GetApiUrl()
         {
             ResetCachedApiOverride();
@@ -100,7 +132,7 @@ public class AppConfigTests
         {
             WithApiUrl("http://127.0.0.1:9999", () =>
             {
-                AppConfig.Instance.GetApiUrl().Should().Be("http://127.0.0.1:9999");
+                _config.GetApiUrl().Should().Be("http://127.0.0.1:9999");
             });
         }
 
@@ -110,9 +142,9 @@ public class AppConfigTests
             WithApiUrl(null, () =>
             {
 #if DEBUG
-                AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.DevApiUrl);
+                _config.GetApiUrl().Should().Be(_config.DevApiUrl);
 #else
-                AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.ApiUrl);
+                _config.GetApiUrl().Should().Be(_config.ApiUrl);
 #endif
             });
         }
@@ -123,9 +155,9 @@ public class AppConfigTests
             WithApiUrl("", () =>
             {
 #if DEBUG
-                AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.DevApiUrl);
+                _config.GetApiUrl().Should().Be(_config.DevApiUrl);
 #else
-                AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.ApiUrl);
+                _config.GetApiUrl().Should().Be(_config.ApiUrl);
 #endif
             });
         }
@@ -137,7 +169,7 @@ public class AppConfigTests
             {
                 SetCachedApiOverride("https://override.example.test");
 
-                AppConfig.Instance.GetApiUrl().Should().Be("https://override.example.test");
+                _config.GetApiUrl().Should().Be("https://override.example.test");
             });
         }
 
@@ -147,36 +179,109 @@ public class AppConfigTests
             WithApiUrl(null, () => { });
             ResetCachedApiOverride();
 
-            await AppConfig.Instance.InitializeAsync();
+            await _config.InitializeAsync();
 
             WithApiUrl(null, () =>
             {
 #if DEBUG
-                AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.DevApiUrl);
+                _config.GetApiUrl().Should().Be(_config.DevApiUrl);
 #else
-                AppConfig.Instance.GetApiUrl().Should().Be(AppConfig.Instance.ApiUrl);
+                _config.GetApiUrl().Should().Be(_config.ApiUrl);
 #endif
             });
         }
 
-        private static void SetCachedApiOverride(string? value)
+        private void SetCachedApiOverride(string? value)
         {
             typeof(AppConfig)
                 .GetField("_apiUrlOverride", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .SetValue(AppConfig.Instance, value);
+                .SetValue(_config, value);
             typeof(AppConfig)
                 .GetField("_apiUrlOverrideLoaded", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .SetValue(AppConfig.Instance, true);
+                .SetValue(_config, true);
         }
 
-        private static void ResetCachedApiOverride()
+        private void ResetCachedApiOverride()
         {
             typeof(AppConfig)
                 .GetField("_apiUrlOverride", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .SetValue(AppConfig.Instance, null);
+                .SetValue(_config, null);
             typeof(AppConfig)
                 .GetField("_apiUrlOverrideLoaded", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .SetValue(AppConfig.Instance, false);
+                .SetValue(_config, false);
+        }
+    }
+
+    [Collection("App configuration")]
+    public class GetAssetsBaseUrl
+    {
+        private static readonly object AssetsEnvLock = new();
+
+        private static void WithAssetsEnv(
+            string? baseUrl, string? endpoint, string? bucket, Action action)
+        {
+            lock (AssetsEnvLock)
+            {
+                var prevBase = Environment.GetEnvironmentVariable("ASSETS_BASE_URL");
+                var prevEndpoint = Environment.GetEnvironmentVariable("S3_ENDPOINT");
+                var prevBucket = Environment.GetEnvironmentVariable("S3_BUCKET");
+                try
+                {
+                    Environment.SetEnvironmentVariable("ASSETS_BASE_URL", baseUrl);
+                    Environment.SetEnvironmentVariable("S3_ENDPOINT", endpoint);
+                    Environment.SetEnvironmentVariable("S3_BUCKET", bucket);
+                    action();
+                }
+                finally
+                {
+                    Environment.SetEnvironmentVariable("ASSETS_BASE_URL", prevBase);
+                    Environment.SetEnvironmentVariable("S3_ENDPOINT", prevEndpoint);
+                    Environment.SetEnvironmentVariable("S3_BUCKET", prevBucket);
+                }
+            }
+        }
+
+        [Fact]
+        public void returns_environment_value_when_assets_base_url_is_set()
+        {
+            WithAssetsEnv("https://cdn.example.test/", null, null, () =>
+            {
+                // Trailing slash is trimmed so object keys join cleanly.
+                AppConfig.Instance.GetAssetsBaseUrl().Should().Be("https://cdn.example.test");
+            });
+        }
+
+        [Fact]
+        public void resolves_from_s3_endpoint_and_bucket_when_configured()
+        {
+            WithAssetsEnv(null, "http://192.0.2.9:9000", "bucket-x", () =>
+            {
+#if DEBUG
+                AppConfig.Instance.GetAssetsBaseUrl()
+                    .Should().Be("http://192.0.2.9:9000/bucket-x");
+#else
+                AppConfig.Instance.GetAssetsBaseUrl()
+                    .Should().Be("https://bible-on-site-assets.s3.il-central-1.amazonaws.com");
+#endif
+            });
+        }
+
+        [Fact]
+        public void falls_back_to_the_local_stack_defaults_in_debug()
+        {
+            WithAssetsEnv(null, null, null, () =>
+            {
+#if DEBUG
+                // The dev stack's checked-in .dev.env serves
+                // bucket bible-on-site-assets-dev on :4566; non-Android hosts
+                // reach it over loopback.
+                AppConfig.Instance.GetAssetsBaseUrl()
+                    .Should().Be("http://localhost:4566/bible-on-site-assets-dev");
+#else
+                AppConfig.Instance.GetAssetsBaseUrl()
+                    .Should().Be("https://bible-on-site-assets.s3.il-central-1.amazonaws.com");
+#endif
+            });
         }
     }
 }

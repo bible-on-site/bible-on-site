@@ -2,7 +2,7 @@
   margin: 16px 0;
   padding: 16px;
   background: linear-gradient(to bottom, #faf8f2, #ffffff);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   border: 1px solid #d4c9a8;
 }
@@ -17,7 +17,7 @@
 }
 
 .sectionIcon {
-  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .sectionTitle {
@@ -30,7 +30,7 @@
 .emptyMessage {
   margin: 0;
   padding: 12px 16px;
-  color: #6b5835;
+  color: var(--hc-muted, #6b5835);
   font-size: 0.95rem;
   text-align: center;
 }
@@ -67,7 +67,7 @@
   flex: 0 0 auto;
   width: 180px;
   background: #fffdf5;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 14px 12px;
   border: 1px solid #d4c9a8;
   transition: all 0.2s ease;
@@ -82,15 +82,23 @@
   text-align: center;
 }
 
-.carouselItem:hover {
-  border-color: #8b7355;
-  box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .carouselItem:hover {
+    border-color: var(--hc-muted, #8b7355);
+    box-shadow: 0 2px 8px rgba(90, 74, 46, 0.15);
+    transform: translateY(-1px);
+  }
+}
+
+/* Loading placeholder card: same box as a real card, not interactive. */
+.skeletonItem {
+  cursor: default;
+  pointer-events: none;
 }
 
 .perushIcon {
-  font-size: 28px;
   margin-bottom: 2px;
+  opacity: 0.7;
 }
 
 .perushName {
@@ -107,7 +115,7 @@
 
 .parshanName {
   font-size: 0.8rem;
-  color: #6b5835;
+  color: var(--hc-muted, #6b5835);
   line-height: 1.2;
 }
 
@@ -115,7 +123,7 @@
   font-size: 0.75rem;
   color: #5c4e36;
   background: #f0ead8;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 2px 10px;
   margin-top: 4px;
 }
@@ -136,7 +144,7 @@
   font: inherit;
   background: none;
   border: 1px solid #d4c9a8;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 4px 12px;
   cursor: pointer;
   color: #5a4a2e;
@@ -145,8 +153,10 @@
   transition: background 0.15s;
 }
 
-.backButton:hover {
-  background: #f0ead8;
+@media (hover: hover) {
+  .backButton:hover {
+    background: #f0ead8;
+  }
 }
 
 .fullViewTitle {
@@ -157,7 +167,7 @@
 
 .parshanSubtitle {
   font-size: 0.8rem;
-  color: #6b5835;
+  color: var(--hc-muted, #6b5835);
 }
 
 .notesContainer {
@@ -166,26 +176,85 @@
   gap: 16px;
   max-height: 70vh;
   overflow-y: auto;
+  /* Spine-side scrollbar inside a book leaf (#2994): the flipbook leaf
+     supplies --flipbook-page-scroll-direction; outside a leaf the var
+     is absent and RTL keeps the bar where it was. Note groups restore
+     their own reading direction below. */
+  direction: var(--flipbook-page-scroll-direction, rtl);
   padding: 4px 0;
+}
+
+.notesContainer > * {
+  direction: rtl;
 }
 
 .pasukGroup {
   border-right: 3px solid #d4c9a8;
   padding-right: 12px;
+  scroll-margin-block-start: 8px;
+}
+
+/* Pasuk group highlighted after perek→perush pasuk navigation (mirrors the
+   standalone perush page's .noteHighlight). */
+.pasukGroup[data-pasuk-highlight] {
+  background: rgba(254, 243, 199, 0.95);
+  border-right-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
+  border-radius: var(--radius-sm);
 }
 
 .pasukLabel {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #6b5835;
+  color: var(--hc-muted, #6b5835);
   margin-bottom: 6px;
 }
 
+/* Pasuk label rendered as a perek-navigation button in the book view. */
+.pasukLink {
+  appearance: none;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: inline-block;
+}
+
+@media (hover: hover) {
+  .pasukLink:hover {
+    color: #5a4a2e;
+    text-decoration: underline;
+  }
+}
+
+/* Body text justified like the perek pesukim (.perekText); the last line of
+   each paragraph keeps the natural right edge (RTL). */
 .noteContent {
   font-size: 0.95rem;
   line-height: 1.7;
   color: #333;
   direction: rtl;
+  text-align: justify;
+  text-align-last: right;
+}
+
+/* DB-authored HTML headings are demoted one level (h1→h2…); keep the former UA sizes. */
+.noteContent h2 { font-size: 2em; margin-block: 0.67em; }
+.noteContent h3 { font-size: 1.5em; margin-block: 0.83em; }
+.noteContent h4 { font-size: 1.17em; margin-block: 1em; }
+.noteContent h5 { font-size: 1em; margin-block: 1.33em; }
+.noteContent h6 { font-size: 0.83em; margin-block: 1.67em; }
+
+/* Inline links inside DB-authored commentary need a persistent non-color
+   cue (WCAG 1.4.1) — the global `a { text-decoration: none }` reset would
+   otherwise hide them completely (#2767). */
+.noteContent a {
+  color: var(--link-accent, #1552ac);
+  text-decoration: underline;
+  text-underline-offset: 0.1em;
 }
 
 .noteContent + .noteContent {
@@ -213,7 +282,7 @@
   font: inherit;
   background: #f0ead8;
   border: 1px solid #d4c9a8;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 4px 12px;
   cursor: pointer;
   color: #5a4a2e;
@@ -222,8 +291,103 @@
   transition: background 0.15s;
   text-decoration: none;
   display: inline-block;
+  position: relative;
 }
 
-.shareButton:hover {
-  background: #e8e0cc;
+/* Compact chip, 44px-tall hit area. */
+.shareButton::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: 44px;
+  transform: translateY(-50%);
+}
+
+@media (hover: hover) {
+  .shareButton:hover {
+    background: #e8e0cc;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .perushimSection {
+    background: linear-gradient(to bottom, #1a1611, #12100d);
+    border-color: #4a4030;
+  }
+
+  .sectionTitle,
+  .perushName {
+    color: var(--hc-muted, #cbb98c);
+  }
+
+  .emptyMessage,
+  .parshanName,
+  .pasukLabel,
+  .parshanSubtitle {
+    color: var(--hc-muted, #b8a578);
+  }
+
+  @media (hover: hover) {
+    .pasukLink:hover {
+      color: var(--hc-muted, #cbb98c);
+    }
+  }
+
+  .pasukGroup[data-pasuk-highlight] {
+    background: rgba(58, 47, 16, 0.95);
+    border-right-color: #92600b;
+    box-shadow: 0 0 0 2px rgba(146, 96, 11, 0.45);
+  }
+
+  .carousel {
+    scrollbar-color: #5a4e38 transparent;
+  }
+
+  .carousel::-webkit-scrollbar-thumb {
+    background: #5a4e38;
+  }
+
+  .carouselItem {
+    background: #1f1a12;
+    border-color: #4a4030;
+  }
+
+  @media (hover: hover) {
+    .carouselItem:hover {
+      border-color: var(--hc-muted, #8b7355);
+    }
+  }
+
+  .noteCount {
+    color: var(--hc-muted, #cbb98c);
+    background: #2a241a;
+  }
+
+  .backButton,
+  .shareButton {
+    border-color: #4a4030;
+    color: var(--hc-muted, #cbb98c);
+  }
+
+  @media (hover: hover) {
+    .backButton:hover,
+    .shareButton:hover {
+      background: #2a241a;
+    }
+  }
+
+  .shareButton {
+    background: #2a241a;
+  }
+
+  .noteContent {
+    color: #e8eaed;
+  }
+}
+
+.carouselItem:active,
+.backButton:active,
+.shareButton:active {
+  scale: var(--press-scale);
 }

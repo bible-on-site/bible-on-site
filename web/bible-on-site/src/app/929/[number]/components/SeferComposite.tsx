@@ -8,7 +8,6 @@ import {
 	useRef,
 	useState,
 } from "react";
-
 import type { PerekObj } from "@/data/perek-dto";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import type { ArticleSummary } from "@/lib/articles";
@@ -18,16 +17,26 @@ import {
 	setStoredPerekViewMode,
 } from "@/lib/perek-view-preference";
 import type { PerushSummary } from "@/lib/perushim";
+import type {
+	ReadingMetric,
+	ReadingProgressUnit,
+} from "@/lib/reading-metrics/types";
+import type { PerekIllustration } from "@/lib/seo/perek-illustrations";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import ReadModeToggler from "./ReadModeToggler";
 import styles from "./sefer-composite.module.css";
+import {
+	bookPageFromPath,
+	bookPageFromQuery,
+	seferBookExitPath,
+} from "./sefer-page-utils";
 
 // Lazy-load the heavy Sefer (FlipBook) component so its JS bundle is not
 // included in the initial page load.  When the user toggles book-view the
 // chunk is fetched asynchronously, which keeps the interaction-to-next-paint
 // well below 200 ms because the browser only needs to paint the light
 // overlay — not mount the entire FlipBook tree — in the same frame.
-const Sefer = dynamic(() => import("./Sefer"), {
+const Sefer = dynamic(() => import("./LoadedSefer"), {
 	ssr: false,
 	loading: () => (
 		<output className={styles.loadingContainer} aria-label="טוען תצוגת ספר...">
@@ -50,6 +59,15 @@ const ClientWrapper = (props: {
 	perushim: PerushSummary[];
 	perekIds?: number[];
 	entityRefsByPerek?: Record<number, PerekEntityReference[]>;
+	imagesByPerek?: Record<number, PerekIllustration[]>;
+	/** Stored per-pasuk units for the current perek's progress bar (#2607). */
+	perekPasukUnits?: ReadingProgressUnit[];
+	/** Stored perek metric for the current perek's page badge (#2607). */
+	perekMetric?: ReadingMetric | null;
+	/** Sefer-scoped dedication lines for the book cover (#2731). */
+	seferDedications?: string[];
+	/** Perek-scoped dedication lines by canonical perek id (#2731). */
+	perekDedications?: Record<number, string[]>;
 	/** When set, the book view will auto-expand this article/perush on the current perek page */
 	initialSlug?: string;
 }) => {
@@ -58,6 +76,7 @@ const ClientWrapper = (props: {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const appliedStoredPreference = useRef(false);
+	const handledUserToggle = useRef(false);
 
 	// A better design is to control the toggling state from outside this
 	// component, but in that case the entire page rendering method is changed
@@ -67,9 +86,23 @@ const ClientWrapper = (props: {
 	const [everToggled, setEverToggled] = useState(false);
 	const [currentlyToggled, setCurrentlyToggled] = useState(false);
 	const [display, setDisplay] = useState("none");
+	const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	useEffect(() => {
+		return () => {
+			if (hideTimerRef.current !== null) {
+				clearTimeout(hideTimerRef.current);
+				hideTimerRef.current = null;
+			}
+		};
+	}, []);
 
 	const handleToggle = useCallback(
 		(wantBook: boolean, immediately = false) => {
+			if (hideTimerRef.current !== null) {
+				clearTimeout(hideTimerRef.current);
+				hideTimerRef.current = null;
+			}
 			if (wantBook) {
 				// Show the overlay immediately so the toggle animation is responsive.
 				setDisplay("initial");
@@ -85,10 +118,12 @@ const ClientWrapper = (props: {
 				if (immediately) {
 					setDisplay("none");
 				} else {
-					setTimeout(() => {
+					hideTimerRef.current = setTimeout(() => {
+						hideTimerRef.current = null;
 						setDisplay("none");
 					}, 300);
 				}
+				window.dispatchEvent(new Event("recitation-stop"));
 				setCurrentlyToggled(false);
 			}
 		},
@@ -99,12 +134,18 @@ const ClientWrapper = (props: {
 	useEffect(() => {
 		if (isWideEnough !== true || appliedStoredPreference.current) return;
 		appliedStoredPreference.current = true;
+		// A verse citation takes the reader to its visible anchor in the text view.
+		if (/^#pasuk-[1-9]\d*$/.test(window.location.hash)) return;
 		const stored = getStoredPerekViewMode();
 		if (stored === "book" && searchParams.get("book") == null) {
-			const next = pathnameWithBookQuery(pathname, searchParams.toString(), true);
-			router.replace(next, { scroll: false });
+			const next = pathnameWithBookQuery(
+				pathname,
+				searchParams.toString(),
+				true,
+			);
+			window.history.replaceState(null, "", next);
 		}
-	}, [isWideEnough, pathname, router, searchParams]);
+	}, [isWideEnough, pathname, searchParams]);
 
 	// URL is source of truth: persist when user lands with ?book
 	useEffect(() => {
@@ -115,20 +156,44 @@ const ClientWrapper = (props: {
 
 	const onToggleFromUser = useCallback(
 		(wantBook: boolean) => {
+			handledUserToggle.current = true;
 			setStoredPerekViewMode(wantBook ? "book" : "seo");
-			const next = pathnameWithBookQuery(
-				pathname,
-				searchParams.toString(),
-				wantBook,
-			);
-			router.replace(next, { scroll: false });
+			// While the book is open the flipbook owns the URL — on exit
+			// read the live location so flipping to another perek returns
+			// to that perek's flat page, and an open content selection
+			// keeps its flat-page meaning via the shared params.
+			const togglePath = wantBook
+				? pathname
+				: seferBookExitPath(
+						window.location.pathname,
+						props.perekObj.sefer,
+						props.perekObj.perekId,
+					);
+			const search = wantBook
+				? searchParams.toString()
+				: window.location.search;
+			const next = pathnameWithBookQuery(togglePath, search, wantBook);
+			// Opening changes only reader presentation. A server navigation can
+			// suspend this transition behind unrelated prefetches and prevent the
+			// lazy book from mounting. Closing still loads the facing flat page.
+			if (wantBook) window.history.replaceState(null, "", next);
+			else router.replace(next, { scroll: false });
 			handleToggle(wantBook, wantBook);
 		},
-		[handleToggle, pathname, router, searchParams],
+		[
+			handleToggle,
+			pathname,
+			props.perekObj.perekId,
+			props.perekObj.sefer,
+			router,
+			searchParams,
+		],
 	);
 
 	useEffect(() => {
-		if (everToggled) return;
+		// Hydration can replay a click before this initial URL effect runs.
+		// The stale URL must not close a book the user has already opened.
+		if (everToggled || handledUserToggle.current) return;
 		const IMMEDIATELY = true;
 		handleToggle(toggled, IMMEDIATELY);
 	}, [toggled, handleToggle, everToggled]);
@@ -138,7 +203,7 @@ const ClientWrapper = (props: {
 	// the SEO DOM from the rendering pipeline, eliminating the layout
 	// recalculation cost that was causing flip animation lag.
 	useEffect(() => {
-		if (currentlyToggled) {
+		if (currentlyToggled && isWideEnough === true) {
 			document.documentElement.dataset.bookView = "";
 		} else {
 			delete document.documentElement.dataset.bookView;
@@ -146,7 +211,7 @@ const ClientWrapper = (props: {
 		return () => {
 			delete document.documentElement.dataset.bookView;
 		};
-	}, [currentlyToggled]);
+	}, [currentlyToggled, isWideEnough]);
 
 	// Don't render anything on mobile - sefer view is tablet+ only
 	// Return null during SSR/initial render to avoid hydration mismatch,
@@ -154,6 +219,10 @@ const ClientWrapper = (props: {
 	if (isWideEnough === false) {
 		return null;
 	}
+	const initialBookPage =
+		bookPageFromPath(pathname, props.perekObj.sefer) ??
+		bookPageFromQuery(searchParams.get("bookPage")) ??
+		(searchParams.get("toc") != null ? "toc" : null);
 
 	return (
 		<>
@@ -164,18 +233,26 @@ const ClientWrapper = (props: {
 					currentlyToggled ? styles.visible : styles.hidden
 				}`}
 			>
-			{everToggled ? (
-				<Sefer
-					perekObj={props.perekObj}
-					articles={props.articles}
-					perushim={props.perushim}
-					perekIds={props.perekIds}
-					entityRefsByPerek={props.entityRefsByPerek}
-					initialSlug={props.initialSlug}
-				/>
-			) : currentlyToggled ? (
-				<SeferLoadingIndicator />
-			) : null}
+				{everToggled ? (
+					<Sefer
+						key={props.perekObj.sefer}
+						perekObj={props.perekObj}
+						articles={props.articles}
+						perushim={props.perushim}
+						perekIds={props.perekIds}
+						entityRefsByPerek={props.entityRefsByPerek}
+						imagesByPerek={props.imagesByPerek}
+						seferDedications={props.seferDedications}
+						perekDedications={props.perekDedications}
+						initialSlug={props.initialSlug}
+						initialBookPage={initialBookPage}
+						perekPasukUnits={props.perekPasukUnits}
+						perekMetric={props.perekMetric}
+						isVisible={currentlyToggled}
+					/>
+				) : currentlyToggled ? (
+					<SeferLoadingIndicator />
+				) : null}
 			</div>
 		</>
 	);

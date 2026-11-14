@@ -7,21 +7,15 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:local="clr-namespace:BibleOnSite"
+    xmlns:controls="clr-namespace:BibleOnSite.Controls"
     xmlns:pages="clr-namespace:BibleOnSite.Pages"
+    xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
     xmlns:fonts="clr-namespace:Fonts"
     Shell.FlyoutBehavior="Flyout"
     FlyoutWidth="300"
-    FlyoutBackgroundColor="White"
+    FlyoutBackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}"
     FlowDirection="RightToLeft"
     FlyoutBackdrop="#80000000">
-
-    <!-- Loading Page (shown first on startup) -->
-    <ShellContent
-        ContentTemplate="{DataTemplate pages:LoadingPage}"
-        Route="LoadingPage"
-        FlyoutItemIsVisible="False"
-        Shell.NavBarIsVisible="False"
-        Shell.TabBarIsVisible="False"/>
 
     <!-- Flyout Header with Logo -->
     <Shell.FlyoutHeader>
@@ -40,214 +34,132 @@
     <Shell.FlyoutContentTemplate>
         <DataTemplate>
             <ScrollView>
-                <VerticalStackLayout Spacing="0" BackgroundColor="White">
-                    <!-- על הפרק -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnAlHaperekTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.calendar_today_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{StaticResource Gray600}"
+                <VerticalStackLayout Spacing="0" BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}">
+                    <!-- iOS/MacCatalyst lay the flyout content under FlyoutHeader (the
+                         header height is applied as a scroll inset that races header
+                         measurement and can leave the first rows permanently hidden
+                         under the opaque header) — the logo is rendered in-content
+                         there instead; see AppShell.xaml.cs. -->
+                    <Grid HeightRequest="180"
+                          BackgroundColor="White"
+                          Padding="0">
+                        <Grid.IsVisible>
+                            <OnPlatform x:TypeArguments="x:Boolean" Default="False">
+                                <On Platform="iOS,MacCatalyst" Value="true"/>
+                            </OnPlatform>
+                        </Grid.IsVisible>
+                        <Image Source="logo_header.jpg"
+                               Aspect="AspectFit"
                                VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="על הפרק"
-                                   FontSize="16"
-                                   TextColor="{StaticResource Gray900}"/>
-                            <Label Text="לימוד תנ&quot;ך יומי"
-                                   FontSize="12"
-                                   TextColor="{StaticResource Gray500}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{StaticResource Gray400}"
-                               VerticalOptions="Center"/>
+                               HorizontalOptions="Center"
+                               Margin="20"/>
                     </Grid>
+
+                    <!-- Destination rows share FlyoutMenuRow (#2766): on Windows
+                         its handler wraps the row in a native Button so the menu is
+                         reachable and activatable with keyboard/screen reader, with
+                         hover/pressed/focus visuals; touch platforms keep the
+                         identical tap layout. -->
+                    <!-- על הפרק -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.calendar_today_24_regular}"
+                                            Title="על הפרק"
+                                            Subtitle="לימוד תנ&quot;ך יומי"
+                                            AutomationId="FlyoutAlHaperek"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsAlHaperekCurrent}"
+                                            Activated="OnAlHaperekTapped"/>
+
+                    <!-- תנכפדיה -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.library_24_regular}"
+                                            Title="תנכפדיה"
+                                            Subtitle="אנציקלופדיה לתנ&quot;ך"
+                                            AutomationId="FlyoutTanahpedia"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsTanahpediaCurrent}"
+                                            Activated="OnTanahpediaTapped"/>
+
+                    <!-- לוח לימוד יומי -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.calendar_month_24_regular}"
+                                            Title="לוח לימוד יומי"
+                                            Subtitle="הפרק היומי בלוח השנה"
+                                            AutomationId="FlyoutLearningCalendar"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsLearningCalendarCurrent}"
+                                            Activated="OnLearningCalendarTapped"/>
+
+                    <!-- מסורה על הפרק — opt-in entry gated by the מסורה preference (#2181) -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.split_horizontal_24_regular}"
+                                            Title="מסורה על הפרק"
+                                            Subtitle="חלוקת פרשיות פתוחה וסתומה"
+                                            AutomationId="FlyoutMasora"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsMasoraCurrent}"
+                                            IsVisible="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=ShowMasoraEntry}"
+                                            Activated="OnMasoraTapped"/>
+
+                    <!-- פרשה על הפרק -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.book_open_24_regular}"
+                                            Title="פרשה על הפרק"
+                                            Subtitle="קריאת התורה וההפטרה"
+                                            AutomationId="FlyoutParasha"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsParashaCurrent}"
+                                            Activated="OnParashaTapped"/>
 
                     <!-- רבנים -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnAuthorsTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.edit_person_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{StaticResource Gray600}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="רבנים"
-                                   FontSize="16"
-                                   TextColor="{StaticResource Gray900}"/>
-                            <Label Text="כותבים בתכנית"
-                                   FontSize="12"
-                                   TextColor="{StaticResource Gray500}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{StaticResource Gray400}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.edit_person_24_regular}"
+                                            Title="רבנים"
+                                            Subtitle="כותבים בתכנית"
+                                            AutomationId="FlyoutAuthors"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsAuthorsCurrent}"
+                                            Activated="OnAuthorsTapped"/>
+
+                    <!-- עלון יומי — join cards (#2806) -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.news_24_regular}"
+                                            Title="עלון יומי"
+                                            Subtitle="במייל, בטלגרם ובווטסאפ"
+                                            AutomationId="FlyoutDailyBulletin"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsDailyBulletinCurrent}"
+                                            Activated="OnDailyBulletinTapped"/>
 
                     <!-- תנאי שימוש -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnTermsTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.shield_question_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{StaticResource Gray600}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="תנאי שימוש"
-                                   FontSize="16"
-                                   TextColor="{StaticResource Gray900}"/>
-                            <Label Text="והצהרת פרטיות"
-                                   FontSize="12"
-                                   TextColor="{StaticResource Gray500}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{StaticResource Gray400}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.shield_question_24_regular}"
+                                            Title="תנאי שימוש"
+                                            Subtitle="הצהרות פרטיות ונגישות"
+                                            AutomationId="FlyoutTerms"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsTermsCurrent}"
+                                            Activated="OnTermsTapped"/>
 
                     <!-- העדפות -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnPreferencesTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.settings_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{StaticResource Gray600}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="העדפות"
-                                   FontSize="16"
-                                   TextColor="{StaticResource Gray900}"/>
-                            <Label Text="הגדרות משתמש"
-                                   FontSize="12"
-                                   TextColor="{StaticResource Gray500}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{StaticResource Gray400}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.settings_24_regular}"
+                                            Title="העדפות"
+                                            Subtitle="הגדרות משתמש"
+                                            AutomationId="FlyoutPreferences"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsPreferencesCurrent}"
+                                            Activated="OnPreferencesTapped"/>
 
                     <!-- צור קשר -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnContactTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.contact_card_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{StaticResource Gray600}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="צור קשר"
-                                   FontSize="16"
-                                   TextColor="{StaticResource Gray900}"/>
-                            <Label Text="צוות התכנית"
-                                   FontSize="12"
-                                   TextColor="{StaticResource Gray500}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{StaticResource Gray400}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.contact_card_24_regular}"
+                                            Title="צור קשר"
+                                            Subtitle="צוות התכנית"
+                                            AutomationId="FlyoutContact"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsContactCurrent}"
+                                            Activated="OnContactTapped"/>
 
                     <!-- תרומות -->
-                    <Grid Padding="16,12" ColumnDefinitions="Auto,*,Auto">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Tapped="OnDonationsTapped"/>
-                        </Grid.GestureRecognizers>
-                        <Label Grid.Column="0"
-                               Text="{x:Static fonts:FluentUI.money_hand_24_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="24"
-                               TextColor="{StaticResource Gray600}"
-                               VerticalOptions="Center"
-                               Margin="0,0,12,0"/>
-                        <VerticalStackLayout Grid.Column="1" VerticalOptions="Center">
-                            <Label Text="תרומות"
-                                   FontSize="16"
-                                   TextColor="{StaticResource Gray900}"/>
-                            <Label Text="תמיכה בקיום התכנית"
-                                   FontSize="12"
-                                   TextColor="{StaticResource Gray500}"/>
-                        </VerticalStackLayout>
-                        <Label Grid.Column="2"
-                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
-                               FontFamily="FluentIcons"
-                               FontSize="20"
-                               TextColor="{StaticResource Gray400}"
-                               VerticalOptions="Center"/>
-                    </Grid>
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.money_hand_24_regular}"
+                                            Title="תרומות"
+                                            Subtitle="תמיכה בקיום התכנית"
+                                            AutomationId="FlyoutDonations"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsDonationsCurrent}"
+                                            Activated="OnDonationsTapped"/>
                 </VerticalStackLayout>
             </ScrollView>
         </DataTemplate>
     </Shell.FlyoutContentTemplate>
 
-    <!-- Hidden routes for navigation -->
+    <!-- Startup and reading share one native navigation container. Flyout pages
+         are pushed above it (AppRoutes.FlyoutPage), so back returns to the reader. -->
     <FlyoutItem FlyoutItemIsVisible="False">
         <ShellContent
-            ContentTemplate="{DataTemplate pages:PerekPage}"
+            x:Name="ReaderContent"
+            ContentTemplate="{DataTemplate pages:LoadingPage}"
             Route="PerekPage"/>
-    </FlyoutItem>
-
-    <FlyoutItem FlyoutItemIsVisible="False">
-        <ShellContent
-            ContentTemplate="{DataTemplate pages:AuthorsPage}"
-            Route="AuthorsPage"/>
-    </FlyoutItem>
-
-    <FlyoutItem FlyoutItemIsVisible="False">
-        <ShellContent
-            ContentTemplate="{DataTemplate pages:ContactPage}"
-            Route="ContactPage"/>
-    </FlyoutItem>
-
-    <FlyoutItem FlyoutItemIsVisible="False">
-        <ShellContent
-            ContentTemplate="{DataTemplate pages:DonationsPage}"
-            Route="DonationsPage"/>
-    </FlyoutItem>
-
-    <FlyoutItem FlyoutItemIsVisible="False">
-        <ShellContent
-            ContentTemplate="{DataTemplate pages:TosPage}"
-            Route="TosPage"/>
-    </FlyoutItem>
-
-    <FlyoutItem FlyoutItemIsVisible="False">
-        <ShellContent
-            ContentTemplate="{DataTemplate pages:PreferencesPage}"
-            Route="PreferencesPage"/>
     </FlyoutItem>
 
 </Shell>

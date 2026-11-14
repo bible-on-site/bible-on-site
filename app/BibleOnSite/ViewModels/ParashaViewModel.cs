@@ -1,0 +1,999 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using BibleOnSite.Helpers;
+using BibleOnSite.Models;
+using BibleOnSite.Services;
+
+namespace BibleOnSite.ViewModels;
+
+/// <summary>
+/// ViewModel for the פרשה על הפרק reader — weekly Torah parashot plus
+/// their ordered Haftarah variants. Shares the על הפרק reader's
+/// carousel + perushim + articles + reading-modes pipeline through the
+/// same building blocks <see cref="MasoraViewModel"/> uses, navigating
+/// stable unit ids (1..54) whose rows are canonical pesukim clipped to
+/// the unit's inclusive ranges — scripture is resolved from the existing
+/// corpus, never copied.
+/// </summary>
+// Codacy: S2333 false positive — partial is required by the MVVM source
+// generators ([ObservableProperty]/[RelayCommand]) and the Perushim part.
+#pragma warning disable S2333
+public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewModel //NOSONAR
+#pragma warning restore S2333
+{
+    private readonly ParashaDataService _parashaService;
+    private readonly PerekDataService _perekService;
+    private readonly PerushimCatalogService _catalogService;
+    private readonly PerushimNotesService _notesService;
+    private readonly IAppNavigator _navigator;
+    private readonly IFileSystem _fileSystem;
+    private readonly IShare _share;
+    private readonly PreferencesService _preferencesService;
+    private readonly Func<int, Task<List<Article>>>? _articlesLoader;
+    private readonly Func<int, bool>? _hasPerekAudio;
+    private readonly Func<int> _hebrewDateProvider;
+    private readonly IDedicationService _dedicationService;
+
+    /// <summary>Serializes dedication loads so a fast unit swipe cannot show a
+    /// stale parasha's lines — the latest unit always wins (#2731).</summary>
+    private int _dedicationVersion;
+
+    // Using fields with [ObservableProperty] - the MVVMTK0045 warnings are acceptable
+    // as we're not targeting AOT scenarios for WinRT marshalling.
+#pragma warning disable MVVMTK0045
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UnitId))]
+    [NotifyPropertyChangedFor(nameof(Heading))]
+    [NotifyPropertyChangedFor(nameof(Title))]
+    [NotifyPropertyChangedFor(nameof(Source))]
+    [NotifyPropertyChangedFor(nameof(SeferId))]
+    [NotifyPropertyChangedFor(nameof(UnitOrder))]
+    [NotifyPropertyChangedFor(nameof(UnitPositionText))]
+    [NotifyPropertyChangedFor(nameof(NextUnitId))]
+    [NotifyPropertyChangedFor(nameof(PreviousUnitId))]
+    [NotifyPropertyChangedFor(nameof(CanGoToNextUnit))]
+    [NotifyPropertyChangedFor(nameof(CanGoToPreviousUnit))]
+    [NotifyPropertyChangedFor(nameof(ArticlesCount))]
+    [NotifyPropertyChangedFor(nameof(HasArticles))]
+    [NotifyPropertyChangedFor(nameof(PerushimCount))]
+    [NotifyPropertyChangedFor(nameof(HasPerushim))]
+#if MAUI
+    [NotifyCanExecuteChangedFor(nameof(LoadNextCommand))]
+    [NotifyCanExecuteChangedFor(nameof(LoadPreviousCommand))]
+#endif
+    private ParashaUnit? _unit;
+
+    /// <summary>Carousel collection holding all units for swipe navigation.</summary>
+    [ObservableProperty]
+    private System.Collections.ObjectModel.ObservableCollection<ParashaUnit> _carouselUnits = new();
+
+    /// <summary>Current carousel position (index into <see cref="CarouselUnits"/>).</summary>
+    [ObservableProperty]
+    private int _carouselPosition;
+
+    /// <summary>Currently displayed carousel unit.</summary>
+    [ObservableProperty]
+    private ParashaUnit? _currentCarouselUnit;
+
+    /// <summary>Available perushim for the current unit (union over its readings' perakim).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilteredPerushim))]
+    private List<Perush> _perushim = new();
+
+    /// <summary>Perush IDs that are currently checked (shown inline with text).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PerushimSelectionStatus))]
+    [NotifyPropertyChangedFor(nameof(PerushimLimitReached))]
+    private List<int> _checkedPerushim = new();
+
+    /// <summary>Whether the perushim notes database is available (PAD or HTTP downloaded).</summary>
+    [ObservableProperty]
+    private bool _perushimNotesAvailable;
+
+    /// <summary>Whether the first-launch notes pack is still materializing off the reader path (#2430).</summary>
+    [ObservableProperty]
+    private bool _perushimNotesPending;
+
+    /// <summary>Whether the perushim catalog is available (bundled).</summary>
+    [ObservableProperty]
+    private bool _perushimCatalogAvailable;
+
+    /// <summary>Articles overlapping the current unit's readings (for the articles panel/badge).</summary>
+    [ObservableProperty]
+    private List<Article> _articles = new();
+
+    /// <summary>Used for article list selection highlight (rounded, theme-aware).</summary>
+    [ObservableProperty]
+    private int? _selectedArticleId;
+
+    /// <summary>Font scaling factor from user preferences (0.5-2.0).</summary>
+    [ObservableProperty]
+    private double _fontFactor = 1.0;
+
+    /// <summary>שניים מקרא reading mode — renders every pasuk twice consecutively.</summary>
+    [ObservableProperty]
+    private bool _isShnayimMikraEnabled;
+
+    /// <summary>תיקון קוראים reading mode — continuous flow with a tap-to-toggle marks.</summary>
+    [ObservableProperty]
+    private bool _isTikkunKorimEnabled;
+
+    /// <summary>
+    /// קריינות — mirrors the global preference (העדפות → על הפרק, default on).
+    /// Setting it writes through to <see cref="PreferencesService.QriynotEnabled"/>.
+    /// </summary>
+    public bool IsQriynotEnabled
+    {
+        get => _preferencesService.QriynotEnabled;
+        set
+        {
+            if (_preferencesService.QriynotEnabled == value)
+            {
+                return;
+            }
+
+            _preferencesService.QriynotEnabled = value;
+            // The PreferencesChanged subscriber raises the property-changed
+            // notifications; raise them here too for the unsaved toggle path.
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowHeaderPlayButton));
+        }
+    }
+
+    /// <summary>Whether a recitation is downloaded for at least one perek of the displayed unit.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowHeaderPlayButton))]
+    private bool _hasCurrentUnitRecitation;
+
+    /// <summary>The header play button shows only while קריינות is checked and audio exists.</summary>
+    public bool ShowHeaderPlayButton => IsQriynotEnabled && HasCurrentUnitRecitation;
+
+    /// <summary>Whether niqqud and taamim are currently hidden in תיקון קוראים mode.</summary>
+    [ObservableProperty]
+    private bool _tikkunMarksHidden;
+
+    /// <summary>
+    /// Bumped whenever הסתר שם השם settings change so every realized or
+    /// recycled text row re-renders with the new masking.
+    /// </summary>
+    [ObservableProperty]
+    private int _divineNameMaskingRevision;
+
+    /// <summary>Canonical positions of the selected pesukim — (perekId, pasukNum).</summary>
+    [ObservableProperty]
+    private List<(int PerekId, int PasukNum)> _selectedPasukim = new();
+
+    /// <summary>Formatted dedication lines applying to the displayed parasha (#2731).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDedications))]
+    private List<string> _dedicationLines = [];
+#pragma warning restore MVVMTK0045
+
+    partial void OnIsTikkunKorimEnabledChanged(bool value)
+    {
+        // Leaving the mode restores the original marked display settings.
+        if (!value)
+        {
+            TikkunMarksHidden = false;
+        }
+    }
+
+    partial void OnUnitChanged(ParashaUnit? oldValue, ParashaUnit? newValue)
+    {
+        // Only the displayed carousel page belongs in the accessibility tree.
+        // Unit always tracks the displayed page — unlike the carousel's
+        // CurrentItem, which does not update on programmatic ScrollTo and can
+        // leave the exclusion flag on a page that is actually on screen.
+        if (oldValue is not null) { oldValue.IsOffscreenCarouselPage = true; }
+        if (newValue is not null) { newValue.IsOffscreenCarouselPage = false; }
+        // Selection flags live on the rows' pasuk objects — clear them on
+        // the unit being left, or its cached rows keep showing a phantom
+        // selection after ClearSelected() only reaches the new unit's rows.
+        if (oldValue is not null && !ReferenceEquals(oldValue, newValue))
+        {
+            foreach (var display in oldValue.Rows
+                .Where(row => row.Display is { Pasuk.IsSelected: true })
+                .Select(row => row.Display!))
+            {
+                display.Pasuk.IsSelected = false;
+            }
+        }
+        RefreshRecitationAvailability(newValue);
+        if (newValue is null)
+        {
+            // Invalidate any in-flight dedication load for the previous unit.
+            ++_dedicationVersion;
+            DedicationLines = [];
+        }
+        else if (newValue.UnitId != oldValue?.UnitId)
+        {
+            _ = LoadDedicationsAsync(newValue.UnitId);
+        }
+    }
+
+    /// <summary>
+    /// The weekly parasha's dedication lines (#2731) — whole-parasha scope
+    /// resolved server-side. Best-effort secondary content: a load failure
+    /// shows no lines rather than failing the page.
+    /// </summary>
+    private async Task LoadDedicationsAsync(int unitId)
+    {
+        var version = ++_dedicationVersion;
+        // Clear eagerly — a swiped unit must never inherit its neighbour's lines.
+        DedicationLines = [];
+        try
+        {
+            var dedications = await _dedicationService.GetDedicationsAsync(
+                new DedicationContext { ParashaIds = [unitId] }, CancellationToken.None);
+            if (version != _dedicationVersion || Unit?.UnitId != unitId)
+            {
+                return;
+            }
+            DedicationLines = DedicationFormatter.FormatAll(dedications);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: dedication lines are best-effort
+        catch (Exception ex) //NOSONAR — dedication lines are best-effort.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"Dedication load failed for parasha {unitId}: {ex}");
+            if (version == _dedicationVersion)
+            {
+                DedicationLines = [];
+            }
+        }
+    }
+
+    /// <summary>
+    /// Re-evaluates whether the currently displayed unit has any downloaded
+    /// recitation — controls the קריינות menu item and header play button.
+    /// Called when the unit changes and after the recitation package updates.
+    /// </summary>
+    public void RefreshRecitationAvailability() => RefreshRecitationAvailability(Unit);
+
+    private void RefreshRecitationAvailability(ParashaUnit? unit)
+    {
+        HasCurrentUnitRecitation = _hasPerekAudio != null && unit is { } current &&
+            ParashaUnitText.PerekIdsForUnit(current).Any(_hasPerekAudio);
+    }
+
+    /// <summary>הסתר שם השם toggle — persisted through PreferencesService.</summary>
+    public bool DivineNameMaskingEnabled
+    {
+        get => _preferencesService.DivineNameMaskingEnabled;
+        set => _preferencesService.DivineNameMaskingEnabled = value;
+    }
+
+    /// <summary>Message shown when no perushim (empty list or not available).</summary>
+    public string PerushimEmptyMessage =>
+        Perushim.Count > 0 && !string.IsNullOrWhiteSpace(PerushNameFilter) ? "לא נמצאו פירושים תואמים" :
+        !PerushimCatalogAvailable ? "אין קטלוג פירושים" :
+        PerushimNotesPending ? "טוען פירושים..." :
+        !PerushimNotesAvailable ? "להוריד פירושים" :
+        "אין פרשנות לפרשה זו";
+
+    /// <summary>Whether to show the download perushim button (notes not yet available).</summary>
+    public bool ShowDownloadPerushimButton => PerushimCatalogAvailable && !PerushimNotesAvailable && !PerushimNotesPending;
+
+    /// <summary>
+    /// The production articles loader — reads the StarterService startup
+    /// snapshot (all articles + authors already in memory, ordered by
+    /// Priority), so unit swipes issue no GraphQL round-trips.
+    /// </summary>
+    private static Func<int, Task<List<Article>>>? DefaultArticlesLoader =>
+#if MAUI
+        perekId => Task.FromResult(StarterService.Instance.GetArticlesByPerekId(perekId));
+#else
+        null;
+#endif
+
+    public ParashaViewModel() : this(ParashaDataService.Instance, PerekDataService.Instance,
+        PreferencesService.Instance, null, null, DefaultArticlesLoader)
+    {
+    }
+
+    public ParashaViewModel(ParashaDataService parashaService, PerekDataService perekService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader)
+        : this(parashaService, perekService, preferencesService, catalogService, notesService,
+            articlesLoader, null)
+    {
+    }
+
+    public ParashaViewModel(ParashaDataService parashaService, PerekDataService perekService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
+        Func<int, bool>? hasPerekAudio)
+        : this(parashaService, perekService, preferencesService, catalogService, notesService,
+            articlesLoader, hasPerekAudio, null, null, null, null)
+    {
+    }
+
+    public ParashaViewModel(ParashaDataService parashaService, PerekDataService perekService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
+        Func<int, bool>? hasPerekAudio, Func<int>? hebrewDateProvider)
+        : this(parashaService, perekService, preferencesService, catalogService, notesService,
+            articlesLoader, hasPerekAudio, hebrewDateProvider, null, null, null)
+    {
+    }
+
+    public ParashaViewModel(ParashaDataService parashaService, PerekDataService perekService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
+        Func<int, bool>? hasPerekAudio, Func<int>? hebrewDateProvider,
+        IAppNavigator? navigator, IFileSystem? fileSystem, IShare? share)
+        : this(parashaService, perekService, preferencesService, catalogService, notesService,
+            articlesLoader, hasPerekAudio, hebrewDateProvider, navigator, fileSystem, share, null)
+    {
+    }
+
+    public ParashaViewModel(ParashaDataService parashaService, PerekDataService perekService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
+        Func<int, bool>? hasPerekAudio, Func<int>? hebrewDateProvider,
+        IAppNavigator? navigator, IFileSystem? fileSystem, IShare? share,
+        IDedicationService? dedicationService)
+    {
+        _parashaService = parashaService;
+        _perekService = perekService;
+        _preferencesService = preferencesService;
+        _catalogService = catalogService ?? PerushimCatalogService.Instance;
+        _notesService = notesService ?? PerushimNotesService.Instance;
+        _navigator = navigator ?? ShellAppNavigator.Instance;
+        _fileSystem = fileSystem ?? FileSystem.Current;
+        _share = share ?? Share.Default;
+        _dedicationService = dedicationService ?? DedicationService.Instance;
+        _articlesLoader = articlesLoader;
+        _hebrewDateProvider = hebrewDateProvider ?? HebrewDateHelper.GetTodayDateNumber;
+#if MAUI
+        _hasPerekAudio = hasPerekAudio ?? (perekId => RecitationService.Instance.HasAudio(perekId));
+#else
+        _hasPerekAudio = hasPerekAudio;
+#endif
+
+        // Sync FontFactor from preferences and listen for changes. Rows
+        // resolve pasuk text sizes, so the effective פסוקים factor (master ×
+        // category percent) applies here like on the perek and masora
+        // readers (#2461) — not the bare master.
+        _fontFactor = _preferencesService.PasukFontFactor;
+        _divineNameMaskingRevision = DivineNameMasking.Revision;
+        WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.RefreshPreferences());
+    }
+
+    #region Unit Properties
+
+    public bool HasDedications => DedicationLines.Count > 0;
+
+    public int UnitId => Unit?.UnitId ?? 0;
+
+    /// <summary>The parasha name, e.g. "בראשית".</summary>
+    public string Heading => Unit?.Heading ?? string.Empty;
+
+    /// <summary>"פרשת בראשית" — the reader's identity heading.</summary>
+    public string Title => Unit == null ? string.Empty : $"פרשת {Unit.Heading}";
+
+    /// <summary>The Torah range in original references, e.g. "בראשית א א - ו ח".</summary>
+    public string Source => Unit == null ? string.Empty : RangeLabelOf(Unit.TorahRange);
+
+    public int SeferId => Unit?.SeferId ?? 0;
+
+    public int UnitOrder => Unit?.Order ?? 0;
+
+    /// <summary>"פרשה N מתוך 54" — the unit's place inside the whole division.</summary>
+    public string UnitPositionText =>
+        Unit == null ? string.Empty : $"פרשה {UnitId} מתוך {_parashaService.UnitCount}";
+
+    public int NextUnitId => _parashaService.GetAdjacentUnits(UnitId).Next?.UnitId ?? 0;
+
+    public int PreviousUnitId => _parashaService.GetAdjacentUnits(UnitId).Prev?.UnitId ?? 0;
+
+    /// <summary>True when next-unit navigation should be enabled.</summary>
+    public bool CanGoToNextUnit => NextUnitId > 0;
+
+    /// <summary>True when previous-unit navigation should be enabled.</summary>
+    public bool CanGoToPreviousUnit => PreviousUnitId > 0;
+
+    /// <summary>The count of articles overlapping the current unit.</summary>
+    public int ArticlesCount => Articles.Count;
+
+    /// <summary>Whether the current unit has any overlapping articles.</summary>
+    public bool HasArticles => ArticlesCount > 0;
+
+    /// <summary>Find commentary names in the selection menu — narrows the
+    /// visible picker rows to matching perushim (#3306).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilteredPerushim))]
+    [NotifyPropertyChangedFor(nameof(PerushimEmptyMessage))]
+    private string _perushNameFilter = string.Empty;
+
+    /// <summary>Perushim matching <see cref="PerushNameFilter"/> — the picker
+    /// rows bind this, so typing filters the list in place; an empty filter
+    /// restores all of <see cref="Perushim"/>.</summary>
+    public List<Perush> FilteredPerushim
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(PerushNameFilter))
+            {
+                return Perushim;
+            }
+            var filter = SearchText.Normalize(PerushNameFilter);
+            return Perushim.Where(p => SearchText.Normalize(p.Name)
+                .Contains(filter, StringComparison.Ordinal)).ToList();
+        }
+    }
+
+    public int PerushimCount => Perushim.Count;
+
+    /// <summary>Whether the current unit has any perushim.</summary>
+    public bool HasPerushim => PerushimCount > 0;
+
+    /// <summary>Formats a range in original references through the loaded perek metadata.</summary>
+    public string RangeLabelOf(ScriptureRange range) =>
+        ParashaUnitText.RangeLabel(
+            range,
+            perekId => _perekService.GetPerekSource(perekId),
+            perekId => _perekService.GetPerek(perekId) is { } perek
+                ? (perek.SeferName, perek.PerekNumber, perek.Additional)
+                : null);
+
+    /// <summary>Whether the unit renders the canonical pasuk anywhere in its readings.</summary>
+    public bool UnitContainsPasuk(ParashaUnit unit, int perekId, int pasukNum) =>
+        unit.Rows.Any(row => row.PerekId == perekId && row.PasukNum == pasukNum);
+
+    /// <summary>The unit whose Torah range contains the given canonical pasuk, or null.</summary>
+    public ParashaUnit? GetParashaContainingPasuk(int perekId, int pasukNum) =>
+        _parashaService.GetParashaContainingPasuk(perekId, pasukNum);
+
+    #endregion
+
+    #region Selection
+
+    /// <summary>Selected-pasuk count — drives the reader's selection bar.</summary>
+    public int SelectedPasukCount => SelectedPasukim.Count;
+
+    /// <summary>Toggles selection of a rendered pasuk (keyed canonically so a
+    /// repeated or שניים מקרא pasuk toggles once).</summary>
+    public void ToggleSelectedPasuk(int perekId, int pasukNum)
+    {
+        var list = new List<(int PerekId, int PasukNum)>(SelectedPasukim);
+        var key = (perekId, pasukNum);
+        if (list.Contains(key))
+        {
+            list.Remove(key);
+        }
+        else
+        {
+            list.Add(key);
+        }
+        SelectedPasukim = list;
+
+        if (Unit != null)
+        {
+            foreach (var row in Unit.Rows)
+            {
+                if (row.Display is { } display && row.PerekId == perekId && display.PasukNum == pasukNum)
+                {
+                    display.Pasuk.IsSelected = list.Contains(key);
+                }
+            }
+        }
+        OnPropertyChanged(nameof(SelectedPasukCount));
+    }
+
+    /// <summary>Clears the whole selection.</summary>
+    public void ClearSelected()
+    {
+        if (Unit != null)
+        {
+            foreach (var row in Unit.Rows)
+            {
+                if (row.Display is { Pasuk.IsSelected: true } display)
+                {
+                    display.Pasuk.IsSelected = false;
+                }
+            }
+        }
+        SelectedPasukim = new List<(int PerekId, int PasukNum)>();
+        OnPropertyChanged(nameof(SelectedPasukCount));
+    }
+
+    /// <summary>Whether a canonical pasuk position is selected.</summary>
+    public bool IsPasukSelected(int perekId, int pasukNum) =>
+        SelectedPasukim.Contains((perekId, pasukNum));
+
+    /// <summary>Selected pesukim in reader order (for share/copy).</summary>
+    public List<(int PerekId, Pasuk Pasuk)> GetSelectedPesukim()
+    {
+        if (Unit == null || SelectedPasukim.Count == 0)
+        {
+            return new List<(int, Pasuk)>();
+        }
+        var selected = new HashSet<(int, int)>(SelectedPasukim);
+        var seen = new HashSet<(int, int)>();
+        var result = new List<(int PerekId, Pasuk Pasuk)>();
+        foreach (var row in Unit.Rows)
+        {
+            var key = (row.PerekId, row.PasukNum);
+            if (row.Display is { } display && selected.Contains(key) && seen.Add(key))
+            {
+                result.Add((row.PerekId, display.Pasuk));
+            }
+        }
+        return result;
+    }
+
+    #endregion
+
+#if MAUI
+    #region Load Methods
+
+    /// <summary>
+    /// Asynchronously loads a unit by its stable id: resolves ranges against
+    /// the canonical pesukim corpus, clips boundary pesukim, then loads
+    /// perushim and initializes the carousel.
+    /// </summary>
+    public async Task LoadByUnitIdAsync(int unitId)
+    {
+        if (!_parashaService.IsLoaded)
+        {
+            await _parashaService.LoadAsync();
+        }
+        if (!_perekService.IsLoaded)
+        {
+            await _perekService.LoadAsync();
+        }
+
+        var unit = _parashaService.GetParasha(unitId);
+        if (unit == null)
+        {
+            return;
+        }
+
+        await EnsureRowsLoadedAsync(unit);
+        SetUnit(unit);
+        await LoadPerushimAsync(unit);
+        await InitializeCarouselAsync();
+    }
+
+    /// <summary>
+    /// Raised when the ViewModel needs the CarouselView to jump to a new position.
+    /// The code-behind subscribes and calls <c>ScrollTo(index, animate: false)</c>
+    /// so the CarouselView jumps instantly instead of animating through every
+    /// intermediate item.
+    /// </summary>
+    public event EventHandler<int>? NavigationRequested;
+
+    /// <summary>
+    /// Navigates to a unit by id. Prepares all ViewModel state first, then
+    /// asks the code-behind to scroll the CarouselView without animation.
+    /// </summary>
+    public async Task NavigateToUnitAsync(int unitId)
+    {
+        var index = _parashaService.GetUnitIndex(unitId);
+        if (CarouselUnits.Count > 0 && index >= 0)
+        {
+            var target = _parashaService.GetParasha(unitId);
+            if (target != null)
+            {
+                await EnsureRowsLoadedAsync(target);
+                SetUnit(target);
+                // Load perushim before scrolling so the UI doesn't flash
+                await LoadPerushimAsync(target);
+                // Ask code-behind to scroll without animation
+                NavigationRequested?.Invoke(this, index);
+            }
+        }
+        else
+        {
+            // Carousel not yet initialized — full load
+            await LoadByUnitIdAsync(unitId);
+        }
+    }
+
+    /// <summary>Loads the next unit in canonical order.</summary>
+    [RelayCommand(CanExecute = nameof(CanGoToNextUnit))]
+    public async Task LoadNextAsync()
+    {
+        if (NextUnitId > 0 && NextUnitId != UnitId)
+        {
+            await NavigateToUnitAsync(NextUnitId);
+        }
+    }
+
+    /// <summary>Loads the previous unit in canonical order.</summary>
+    [RelayCommand(CanExecute = nameof(CanGoToPreviousUnit))]
+    public async Task LoadPreviousAsync()
+    {
+        if (PreviousUnitId > 0 && PreviousUnitId != UnitId)
+        {
+            await NavigateToUnitAsync(PreviousUnitId);
+        }
+    }
+
+    /// <summary>
+    /// Optional confirmation hook for the holiday case: the page wires it
+    /// to a dialog so tapping פרשת השבוע on a festival Shabbat explains the
+    /// displaced reading and offers the next regular one. Null (or a true
+    /// result) navigates directly.
+    /// </summary>
+    public Func<WeeklyParashaTarget, Task<bool>>? ConfirmHolidayReading { get; set; }
+
+    /// <summary>
+    /// Resolves the weekly parasha for the current tzeit-aware Hebrew date
+    /// (Israel schedule — the product's Jerusalem policy) into reader
+    /// targets. On a festival Shabbat the target is the next regular
+    /// reading and <see cref="WeeklyParashaTarget.HolidayName"/> names the
+    /// displacing festival.
+    /// </summary>
+    public WeeklyParashaTarget? ResolveWeeklyParasha()
+    {
+        var today = _hebrewDateProvider();
+        var reading = SedraSchedule.GetWeeklyReading(today);
+        var target = reading.HasParasha ? reading : SedraSchedule.GetNextRegularReading(today);
+        var parashiot = _parashaService.Parashiot;
+        if (parashiot is null)
+        {
+            return null;
+        }
+
+        var first = target.ParashaIndexes[0];
+        if (first >= parashiot.Count)
+        {
+            return null;
+        }
+
+        // A joined week keeps both portions: the title names the pair and
+        // the landing unit is its first constituent (the second stays one
+        // swipe away, matching the printed luach convention).
+        var headings = target.ParashaIndexes
+            .Where(index => index < parashiot.Count)
+            .Select(index => parashiot[index].Heading);
+        return new WeeklyParashaTarget(
+            parashiot[first].UnitId,
+            $"פרשת {string.Join("-", headings)}",
+            HebrewDateHelper.FormatHebrewDate(target.ShabbatDate),
+            reading.HolidayName,
+            reading.HasParasha ? null : HebrewDateHelper.FormatHebrewDate(reading.ShabbatDate));
+    }
+
+    /// <summary>Navigates to the current פרשת השבוע on the Israel schedule.</summary>
+    [RelayCommand]
+    public async Task LoadWeeklyParashaAsync()
+    {
+        try
+        {
+            if (!_parashaService.IsLoaded)
+            {
+                await _parashaService.LoadAsync();
+            }
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: see the //NOSONAR note
+        catch (Exception ex) //NOSONAR — an unavailable catalog (missing packaged DB) leaves the reader where it is; the next tap retries because the service never marks itself loaded.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"[Parasha] weekly-reading load failed: {ex.Message}");
+            return;
+        }
+        var target = ResolveWeeklyParasha();
+        if (target is null)
+        {
+            return;
+        }
+        if (target.HolidayName is not null && ConfirmHolidayReading is { } confirm &&
+            !await confirm(target))
+        {
+            return;
+        }
+        if (target.UnitId != UnitId)
+        {
+            await NavigateToUnitAsync(target.UnitId);
+        }
+    }
+
+    /// <summary>
+    /// Half-window size for row pre-loading around the current unit. Units can
+    /// hold a whole sidra of pesukim, so the buffer stays small.
+    /// </summary>
+    private const int RowsBufferHalf = 3;
+
+    /// <summary>
+    /// Initializes the carousel with ALL units (lightweight metadata — rows are
+    /// lazy-loaded per unit on demand). List building runs on a background
+    /// thread so the UI stays responsive.
+    /// </summary>
+    public async Task InitializeCarouselAsync()
+    {
+        if (Unit == null || _parashaService.Parashiot == null)
+        {
+            return;
+        }
+
+        var unit = Unit;
+        var list = await Task.Run(() => _parashaService.Parashiot.ToList());
+
+        // Assign collection on the main thread.
+        // NOTE: CarouselView resets Position to 0 when ItemsSource changes — the
+        // code-behind ScrollTo(targetPos, animate:false) corrects this immediately.
+        CarouselUnits = new System.Collections.ObjectModel.ObservableCollection<ParashaUnit>(list);
+        CurrentCarouselUnit = unit;
+    }
+
+    /// <summary>
+    /// Ensures the unit's clipped display rows are loaded (idempotent —
+    /// cached on the unit object).
+    /// </summary>
+    public async Task EnsureRowsLoadedAsync(ParashaUnit unit)
+    {
+        if (unit.Rows.Count > 0)
+        {
+            return;
+        }
+
+        var (rows, tikkunPasukim) = await ParashaUnitText.BuildRowsAsync(
+            unit,
+            LoadAndCachePasukimAsync,
+            perekId => _perekService.GetPerekSource(perekId),
+            FontFactor,
+            IsShnayimMikraEnabled);
+        unit.TikkunPasukim = tikkunPasukim;
+        unit.Rows = rows;
+        unit.RangeLabel = RangeLabelOf(unit.TorahRange);
+    }
+
+    /// <summary>
+    /// Full canonical pasukim of a perek a loaded unit covers, or null until
+    /// its rows load. Recitation bounds checks (<see cref="RecitationTrack.Matches"/>)
+    /// hash the whole perek — the rows' clipped pesukim can't supply it, and
+    /// <c>Perek.Pasukim</c> only fills when the perek reader visits.
+    /// </summary>
+    public IReadOnlyList<Pasuk>? GetLoadedPasukim(int perekId) =>
+        _loadedPerekPasukim.GetValueOrDefault(perekId);
+
+    private readonly Dictionary<int, List<Pasuk>> _loadedPerekPasukim = new();
+
+    private async Task<List<Pasuk>> LoadAndCachePasukimAsync(int perekId)
+    {
+        var pasukim = await _perekService.LoadPasukimAsync(perekId);
+        _loadedPerekPasukim[perekId] = pasukim;
+        return pasukim;
+    }
+
+    /// <summary>
+    /// Rebuilds rows of every already-loaded unit after a display-mode change
+    /// (שניים מקרא, font factor) — the same contract the perek reader's
+    /// ItemsSource converter applies automatically.
+    /// </summary>
+    public async Task RebuildLoadedRowsAsync()
+    {
+        var loaded = CarouselUnits.Where(u => u.Rows.Count > 0).ToList();
+        foreach (var unit in loaded)
+        {
+            var (rows, tikkunPasukim) = await ParashaUnitText.BuildRowsAsync(
+                unit,
+                LoadAndCachePasukimAsync,
+                perekId => _perekService.GetPerekSource(perekId),
+                FontFactor,
+                IsShnayimMikraEnabled);
+            unit.TikkunPasukim = tikkunPasukim;
+            unit.Rows = rows;
+            unit.RangeLabel = RangeLabelOf(unit.TorahRange);
+        }
+        if (Unit != null)
+        {
+            FillFilteredPerushContents(Unit);
+        }
+    }
+
+    /// <summary>
+    /// Pre-loads rows for units adjacent to the given center so the next swipe
+    /// is instant. Runs on a background thread — never blocks the UI.
+    /// </summary>
+    public async Task PreloadAdjacentRowsAsync(int centerUnitId)
+    {
+        var units = _parashaService.Parashiot;
+        if (units == null)
+        {
+            return;
+        }
+        var index = _parashaService.GetUnitIndex(centerUnitId);
+        if (index < 0)
+        {
+            return;
+        }
+        var start = Math.Max(0, index - RowsBufferHalf);
+        var end = Math.Min(units.Count - 1, index + RowsBufferHalf);
+
+        var toLoad = new List<ParashaUnit>();
+        for (var i = start; i <= end; i++)
+        {
+            var u = units[i];
+            if (u.Rows.Count == 0)
+            {
+                toLoad.Add(u);
+            }
+        }
+        if (toLoad.Count == 0)
+        {
+            return;
+        }
+
+        // Adjacent units share boundary perakim — one task-level cache
+        // serves the whole batch so each perek hits SQLite once. Declared
+        // outside the task so its entries can join _loadedPerekPasukim on
+        // the UI context: the recitation paths query canonical pasukim by
+        // perek for any loaded unit, and a preloaded-only perek must not
+        // come back null.
+        var pasukimCache = new Dictionary<int, Task<List<Pasuk>>>();
+        var loaded = await Task.Run(async () =>
+        {
+            Task<List<Pasuk>> LoadPasukimCached(int perekId) =>
+                pasukimCache.TryGetValue(perekId, out var pending)
+                    ? pending
+                    : pasukimCache[perekId] = _perekService.LoadPasukimAsync(perekId);
+            var result = new List<(ParashaUnit Unit, List<ParashaDisplayItem> Rows, List<Pasuk> Tikkun)>();
+            foreach (var u in toLoad)
+            {
+                var (rows, tikkun) = await ParashaUnitText.BuildRowsAsync(
+                    u, LoadPasukimCached, perekId => _perekService.GetPerekSource(perekId),
+                    FontFactor, IsShnayimMikraEnabled);
+                result.Add((u, rows, tikkun));
+            }
+            return result;
+        });
+
+        foreach (var (u, rows, tikkun) in loaded)
+        {
+            if (u.Rows.Count == 0)
+            {
+                u.TikkunPasukim = tikkun;
+                u.Rows = rows;
+                u.RangeLabel = RangeLabelOf(u.TorahRange);
+            }
+        }
+        foreach (var (perekId, pending) in pasukimCache)
+        {
+            // Every task already completed inside BuildRowsAsync.
+            _loadedPerekPasukim[perekId] = await pending;
+        }
+    }
+
+    /// <summary>
+    /// The parasha containing the last-learnt perek — the reader's resume
+    /// point. Falls back to the first parasha when the stored perek is
+    /// unreadable or outside the Torah corpus.
+    /// </summary>
+    public async Task<int> GetInitialUnitIdAsync()
+    {
+        if (!_parashaService.IsLoaded)
+        {
+            await _parashaService.LoadAsync();
+        }
+        var perekId = _preferencesService.LastLearntPerek ?? 1;
+        var unit = _parashaService.GetParashaContainingPasuk(perekId, 1);
+        return unit?.UnitId ?? 1;
+    }
+
+    /// <summary>The unit whose Torah range contains the given perek's first pasuk.</summary>
+    public int? GetUnitIdForPerek(int perekId) =>
+        _parashaService.GetParashaContainingPasuk(perekId, 1)?.UnitId;
+
+    /// <summary>
+    /// Ensures the service is loaded, then resolves the unit containing the
+    /// given perek's first pasuk (used by <c>?perekId=</c> deep navigation).
+    /// </summary>
+    public async Task<int?> GetUnitIdForPerekAsync(int perekId)
+    {
+        if (!_parashaService.IsLoaded)
+        {
+            await _parashaService.LoadAsync();
+        }
+        return GetUnitIdForPerek(perekId);
+    }
+
+    #endregion
+
+    #region Articles
+
+    /// <summary>
+    /// Loads articles overlapping the current unit — the union of each
+    /// covered perek's articles over the unit's Torah and Haftarah readings,
+    /// deduplicated by id (an article may attach to several perakim).
+    /// </summary>
+    public async Task LoadArticlesAsync(ParashaUnit unit)
+    {
+        if (_articlesLoader == null)
+        {
+            Articles = new List<Article>();
+            unit.ArticlesCount = 0;
+            return;
+        }
+
+        var perekIds = ParashaUnitText.PerekIdsForUnit(unit);
+        // Per-perek fetches run in parallel; WhenAll preserves input order,
+        // so the dedup sees them exactly as the sequential loop did.
+        var perPerek = await Task.WhenAll(perekIds.Select(perekId => _articlesLoader(perekId)));
+        var byId = new Dictionary<int, Article>();
+        foreach (var articles in perPerek)
+        {
+            foreach (var article in articles)
+            {
+                byId[article.Id] = article;
+            }
+        }
+
+        if (Unit?.UnitId != unit.UnitId)
+        {
+            return; // Stale load — a newer unit is already on screen.
+        }
+
+        Articles = byId.Values.ToList();
+        unit.ArticlesCount = Articles.Count;
+    }
+
+    #endregion
+#endif
+
+    /// <summary>Sets the current unit.</summary>
+    private void SetUnit(ParashaUnit unit)
+    {
+        Unit = unit;
+    }
+
+    private void RefreshPreferences()
+    {
+        var rebuild = Math.Abs(_fontFactor - _preferencesService.PasukFontFactor) > 0.001;
+        if (rebuild)
+        {
+            FontFactor = _preferencesService.PasukFontFactor;
+        }
+        if (_divineNameMaskingRevision != DivineNameMasking.Revision)
+        {
+            DivineNameMaskingRevision = DivineNameMasking.Revision;
+            rebuild = true;
+        }
+        OnPropertyChanged(nameof(DivineNameMaskingEnabled));
+        OnPropertyChanged(nameof(IsQriynotEnabled));
+        OnPropertyChanged(nameof(ShowHeaderPlayButton));
+        OnPropertyChanged(nameof(InlineCommentaryLimitMessage));
+        OnPropertyChanged(nameof(InlineCommentaryLimit));
+        OnPropertyChanged(nameof(PerushimSelectionStatus));
+        OnPropertyChanged(nameof(PerushimLimitReached));
+        if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
+        {
+            CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();
+#if MAUI
+            if (Unit != null) { FillFilteredPerushContents(Unit); }
+#endif
+        }
+        if (rebuild)
+        {
+            _ = RebuildLoadedRowsAsync();
+        }
+    }
+}
+
+/// <summary>
+/// פרשת השבוע navigation target resolved by
+/// <see cref="ParashaViewModel.ResolveWeeklyParasha"/>: the first unit of
+/// the week's reading (a joined week keeps both headings in
+/// <see cref="ReadingTitle"/>) plus the strings the page needs to explain a
+/// festival Shabbat and offer the next regular reading.
+/// </summary>
+/// <param name="UnitId">Stable reading-unit id of the first parasha.</param>
+/// <param name="ReadingTitle">Display title, e.g. "פרשת מטות-מסעי".</param>
+/// <param name="ShabbatDateText">The target reading's Shabbat in Hebrew letters.</param>
+/// <param name="HolidayName">
+/// Set when this week's Shabbat is a festival with no ordinary parasha —
+/// the target then points at the next regular reading.
+/// </param>
+/// <param name="HolidayShabbatDateText">
+/// The displaced festival Shabbat's date in Hebrew letters (only when
+/// <paramref name="HolidayName"/> is set).
+/// </param>
+public sealed record WeeklyParashaTarget(
+    int UnitId,
+    string ReadingTitle,
+    string ShabbatDateText,
+    string? HolidayName,
+    string? HolidayShabbatDateText);

@@ -1,0 +1,482 @@
+import { createServerFn, createServerOnlyFn } from "@tanstack/react-start";
+import type mysql from "mysql2/promise";
+import { VALIDATION_PREFIX } from "~/lib/server-fn-errors";
+import {
+	normalizePediaName,
+	reservedCategoryLabelFor,
+} from "~/lib/tanahpedia/pedia-names";
+import {
+	type EntryRevisionRow,
+	normalizeRevisionSource,
+	REVISION_SOURCE_ADMIN,
+	RevisionConflictError,
+} from "~/lib/tanahpedia/revisions-shared";
+import { execute, query, transaction, txExecute, txQueryOne } from "../db";
+import { recomputeEntryMetrics } from "../reading-metrics";
+import { pediaEntryChange, revalidateWebsite } from "../website-revalidate";
+
+const REVISION_COLUMNS =
+	"id, entry_id, proposed_unique_name, proposed_title, proposed_content, source, notes, status, base_revision_id, created_at, updated_at";
+
+interface EntryRow {
+	id: string;
+	unique_name: string;
+	title: string;
+	content: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+/**
+ * The entry's latest APPLIED revision — the row that produced its content.
+ * Resolved topologically, not by timestamp: every APPLIED row records the
+ * head it displaced in base_revision_id, so the head is the one no APPLIED
+ * child points at. `created_at` has second resolution — ordering by it (and
+ * a random UUID) could pick the wrong tip when two commits share a second.
+ */
+async function headRevision(
+	conn: mysql.PoolConnection,
+	entryId: string,
+): Promise<EntryRevisionRow | null> {
+	return txQueryOne<EntryRevisionRow>(
+		conn,
+		`SELECT ${REVISION_COLUMNS}
+		 FROM tanahpedia_entry_revision
+		 WHERE entry_id = ? AND status = 'APPLIED'
+		 AND NOT EXISTS (
+			 SELECT 1 FROM tanahpedia_entry_revision c
+			 WHERE c.entry_id = ? AND c.status = 'APPLIED'
+			   AND c.base_revision_id = tanahpedia_entry_revision.id
+		 )
+		 ORDER BY created_at DESC, id DESC
+		 LIMIT 1`,
+		[entryId, entryId],
+	);
+}
+
+async function lockEntry(
+	conn: mysql.PoolConnection,
+	entryId: string,
+): Promise<EntryRow | null> {
+	return txQueryOne<EntryRow>(
+		conn,
+		"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ? FOR UPDATE",
+		[entryId],
+	);
+}
+
+function assertFreshBase(
+	headId: string | null,
+	baseRevisionId: string | null | undefined,
+): void {
+	if (headId !== (baseRevisionId ?? null)) {
+		throw new RevisionConflictError(
+			"the entry was saved by another session since this edit started - reload and re-apply the changes",
+		);
+	}
+}
+
+/**
+ * Canonical-name checks: the public router only ever looks up the
+ * URL-decoded/NFC form of the final path segment, so names carrying literal
+ * escapes or `/` can never resolve, and a name colliding with a category
+ * route is silently shadowed by the category page — all rejected up front.
+ */
+export function assertEntryNameAllowed(name: string): void {
+	if (!name) {
+		throw new Error(`${VALIDATION_PREFIX}: שם ייחודי חייב להיות מלא`);
+	}
+	if (name.includes("/")) {
+		throw new Error(`${VALIDATION_PREFIX}: השם הייחודי אינו יכול להכיל '/'`);
+	}
+	if (name.length > 255) {
+		throw new Error(
+			`${VALIDATION_PREFIX}: השם הייחודי ארוך מדי (עד 255 תווים)`,
+		);
+	}
+	const reserved = reservedCategoryLabelFor(name);
+	if (reserved) {
+		throw new Error(
+			`${VALIDATION_PREFIX}: השם «${name}» שמור לנתיב הקטגוריה «${reserved}» - בחר שם אחר`,
+		);
+	}
+}
+
+/** Hebrew-facing input checks shared by the create/update save paths. */
+export function assertEntryFieldsValid(input: {
+	unique_name?: string | null;
+	title?: string | null;
+}): void {
+	// Normalize to the stored form first so a pasted encoded name cannot be
+	// stored (and thus double-encoded) — mirroring the public router's decode.
+	if (typeof input.unique_name === "string") {
+		input.unique_name = normalizePediaName(input.unique_name);
+	}
+	assertEntryNameAllowed(input.unique_name ?? "");
+	if (!input.title?.trim()) {
+		throw new Error(`${VALIDATION_PREFIX}: כותרת הערך חייבת להיות מלאה`);
+	}
+}
+
+/**
+ * Maps MySQL write failures the user can fix to VALIDATION errors.
+ * utf8mb4_unicode_ci makes unique_name nikud- and space-insensitive, so a
+ * collision turns every save into the same dup-key error; column limits do
+ * the same for oversized fields. Both deserve a readable failure instead of
+ * a generic 500.
+ */
+export function translateEntryWriteError(err: unknown): unknown {
+	const { code, errno } = err as { code?: unknown; errno?: unknown };
+	if (code === "ER_DUP_ENTRY" || errno === 1062) {
+		return new Error(
+			`${VALIDATION_PREFIX}: השם הייחודי כבר תפוס על ידי ערך אחר`,
+		);
+	}
+	if (code === "ER_DATA_TOO_LONG" || errno === 1406) {
+		return new Error(`${VALIDATION_PREFIX}: אחד השדות ארוך מדי לשמירה`);
+	}
+	return err;
+}
+
+export interface SaveEntryRevisionedInput {
+	id: string;
+	unique_name: string;
+	title: string;
+	content: string;
+	baseRevisionId?: string | null;
+	source?: string;
+	notes?: string | null;
+}
+
+export interface SavedEntryRevisionResult {
+	entry: EntryRow;
+	headRevisionId: string | null;
+	/** True when the save was a no-op, meaning no public content changed. */
+	unchanged?: boolean;
+	/** The unique_name the entry had before this save (undefined if unchanged). */
+	previousUniqueName?: string;
+}
+
+/**
+ * Saves entry fields and records the change as an immutable APPLIED revision
+ * (wiki-style history). Serialized per entry via `FOR UPDATE` on the entry row;
+ * `baseRevisionId` must equal the APPLIED head seen by the editor, otherwise a
+ * `REVISION_CONFLICT` error is thrown instead of silently overwriting.
+ *
+ * Every changed save appends a new APPLIED revision — committed history is
+ * never rewritten, so each explicit commit is a durable, auditable version.
+ */
+export const saveEntryRevisioned = createServerOnlyFn(
+	async function saveEntryRevisioned(
+		conn: mysql.PoolConnection,
+		input: SaveEntryRevisionedInput,
+	): Promise<SavedEntryRevisionResult> {
+		assertEntryFieldsValid(input);
+		const entry = await lockEntry(conn, input.id);
+		if (!entry) throw new Error("Entry not found");
+
+		const head = await headRevision(conn, input.id);
+		assertFreshBase(head?.id ?? null, input.baseRevisionId);
+
+		const nextContent = input.content || null;
+		const unchanged =
+			entry.unique_name === input.unique_name &&
+			entry.title === input.title &&
+			entry.content === nextContent;
+
+		// A no-op save keeps the same head; no history spam for untouched content.
+		if (unchanged) {
+			return { entry, headRevisionId: head?.id ?? null, unchanged: true };
+		}
+
+		const source = normalizeRevisionSource(input.source);
+		const notes = input.notes?.trim() || null;
+		const headId = crypto.randomUUID();
+
+		try {
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_entry_revision
+				 (id, entry_id, proposed_unique_name, proposed_title, proposed_content,
+				  source, notes, status, base_revision_id)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, 'APPLIED', ?)`,
+				[
+					headId,
+					input.id,
+					input.unique_name,
+					input.title,
+					nextContent,
+					source,
+					notes,
+					head?.id ?? null,
+				],
+			);
+
+			await txExecute(
+				conn,
+				"UPDATE tanahpedia_entry SET unique_name = ?, title = ?, content = ? WHERE id = ?",
+				[input.unique_name, input.title, nextContent, input.id],
+			);
+		} catch (err) {
+			throw translateEntryWriteError(err);
+		}
+
+		const saved = await txQueryOne<EntryRow>(
+			conn,
+			"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
+			[input.id],
+		);
+		// Same-transaction reading metrics (#2607): the stored decoration
+		// commits atomically with the entry content it describes.
+		await recomputeEntryMetrics(conn, input.id, nextContent);
+		return {
+			entry: saved as EntryRow,
+			headRevisionId: headId,
+			previousUniqueName: entry.unique_name,
+		};
+	},
+);
+
+export const listEntryRevisions = createServerFn({ method: "GET" })
+	.validator((data: string) => data)
+	.handler(async ({ data: entryId }) => {
+		return await query<EntryRevisionRow>(
+			`SELECT ${REVISION_COLUMNS}
+			 FROM tanahpedia_entry_revision
+			 WHERE entry_id = ?
+			 ORDER BY created_at DESC, id DESC`,
+			[entryId],
+		);
+	});
+
+/**
+ * Applies a PENDING external proposal to the live entry (admin triage). Honors
+ * the proposal's declared `base_revision_id` when set: applying while the head
+ * has moved elsewhere is a conflict. The proposal row is retained as the
+ * change's audit record and stamped with the head it displaced.
+ */
+export const approveEntryRevision = createServerFn({ method: "POST" })
+	.validator((data: { id: string }) => data)
+	.handler(async ({ data }) => {
+		const applied = await transaction(async (conn) => {
+			const revision = await txQueryOne<EntryRevisionRow>(
+				conn,
+				`SELECT ${REVISION_COLUMNS} FROM tanahpedia_entry_revision WHERE id = ? FOR UPDATE`,
+				[data.id],
+			);
+			if (!revision) throw new Error("Revision not found");
+			if (revision.status === "APPLIED") {
+				throw new Error("revision has already been applied");
+			}
+
+			let headId: string | null = null;
+			let targetEntryId: string;
+			let previousUniqueName: string | null = null;
+
+			// Normalize once and persist the stored form: the public router
+			// decodes the URL segment before lookup, so a proposal carrying
+			// escapes would otherwise land as an unresolvable unique_name.
+			const proposedName = revision.proposed_unique_name
+				? normalizePediaName(revision.proposed_unique_name)
+				: null;
+
+			if (revision.entry_id) {
+				targetEntryId = revision.entry_id;
+				const entry = await lockEntry(conn, revision.entry_id);
+				if (!entry) {
+					throw new Error(
+						"the entry targeted by this revision no longer exists",
+					);
+				}
+				previousUniqueName = entry.unique_name;
+				const head = await headRevision(conn, revision.entry_id);
+				headId = head?.id ?? null;
+				if (revision.base_revision_id && revision.base_revision_id !== headId) {
+					throw new RevisionConflictError(
+						"the revision's declared base is stale - the entry head has moved",
+					);
+				}
+				if (proposedName !== null) {
+					assertEntryNameAllowed(proposedName);
+				}
+				await txExecute(
+					conn,
+					`UPDATE tanahpedia_entry
+					 SET unique_name = COALESCE(?, unique_name),
+					     title = COALESCE(?, title),
+					     content = COALESCE(?, content)
+					 WHERE id = ?`,
+					[
+						proposedName,
+						revision.proposed_title,
+						revision.proposed_content,
+						revision.entry_id,
+					],
+				);
+			} else {
+				if (!proposedName || !revision.proposed_title) {
+					throw new Error(
+						"applying a new-entry revision requires proposedUniqueName and proposedTitle",
+					);
+				}
+				assertEntryNameAllowed(proposedName);
+				targetEntryId = crypto.randomUUID();
+				await txExecute(
+					conn,
+					"INSERT INTO tanahpedia_entry (id, unique_name, title, content) VALUES (?, ?, ?, ?)",
+					[
+						targetEntryId,
+						proposedName,
+						revision.proposed_title,
+						revision.proposed_content,
+					],
+				);
+			}
+
+			// The approved content is now live — refresh its reading metric in
+			// the same transaction (#2607).
+			const applied = await txQueryOne<{ content: string | null }>(
+				conn,
+				"SELECT content FROM tanahpedia_entry WHERE id = ?",
+				[targetEntryId],
+			);
+			await recomputeEntryMetrics(
+				conn,
+				targetEntryId,
+				applied?.content ?? null,
+			);
+
+			await txExecute(
+				conn,
+				`UPDATE tanahpedia_entry_revision
+				 SET status = 'APPLIED', entry_id = ?, base_revision_id = ?, updated_at = NOW()
+				 WHERE id = ?`,
+				[targetEntryId, revision.base_revision_id ?? headId, revision.id],
+			);
+			return {
+				revisionId: revision.id,
+				entryId: targetEntryId,
+				headRevisionId: revision.id,
+				uniqueName: proposedName ?? previousUniqueName,
+				previousUniqueName,
+			};
+		});
+		// Post-commit: the proposal is now live content, so pedia caches
+		// expire. A rename's destroyed name rides along as oldUniqueName.
+		if (applied.uniqueName) {
+			await revalidateWebsite([
+				pediaEntryChange({
+					uniqueName: applied.uniqueName,
+					...(applied.previousUniqueName &&
+					applied.previousUniqueName !== applied.uniqueName
+						? { oldUniqueName: applied.previousUniqueName }
+						: {}),
+				}),
+			]);
+		}
+		// uniqueName/previousUniqueName are notification bookkeeping, not part
+		// of the handler's public result.
+		const { uniqueName, previousUniqueName, ...result } = applied;
+		return result;
+	});
+
+/** Marks a PENDING external proposal as rejected. */
+export const rejectEntryRevision = createServerFn({ method: "POST" })
+	.validator((data: { id: string }) => data)
+	.handler(async ({ data }) => {
+		await execute(
+			`UPDATE tanahpedia_entry_revision
+			 SET status = 'REJECTED', updated_at = NOW()
+			 WHERE id = ? AND status = 'PENDING'`,
+			[data.id],
+		);
+		return { revisionId: data.id };
+	});
+
+/**
+ * Restores an entry to the snapshot carried by an earlier revision. History is
+ * never mutated: the restore itself is a new APPLIED revision based on the
+ * current head. Fields the snapshot does not carry keep their current values.
+ */
+export const restoreEntryRevision = createServerFn({ method: "POST" })
+	.validator((data: { id: string; baseRevisionId?: string | null }) => data)
+	.handler(async ({ data }) => {
+		const restored = await transaction(async (conn) => {
+			const revision = await txQueryOne<EntryRevisionRow>(
+				conn,
+				`SELECT ${REVISION_COLUMNS} FROM tanahpedia_entry_revision WHERE id = ?`,
+				[data.id],
+			);
+			if (!revision) throw new Error("Revision not found");
+			if (!revision.entry_id) {
+				throw new Error(
+					"cannot restore a revision that is not linked to an entry",
+				);
+			}
+
+			const entry = await lockEntry(conn, revision.entry_id);
+			if (!entry) throw new Error("Entry not found");
+
+			const head = await headRevision(conn, revision.entry_id);
+			assertFreshBase(head?.id ?? null, data.baseRevisionId);
+
+			// Normalize once so an encoded snapshot name lands in its stored
+			// (URL-decoded) form — same reasoning as in approveEntryRevision.
+			const restoredUniqueName = normalizePediaName(
+				revision.proposed_unique_name ?? entry.unique_name,
+			);
+			assertEntryNameAllowed(restoredUniqueName);
+			const restoredTitle = revision.proposed_title ?? entry.title;
+			const restoredContent = revision.proposed_content ?? entry.content;
+
+			const headId = crypto.randomUUID();
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_entry_revision
+				 (id, entry_id, proposed_unique_name, proposed_title, proposed_content,
+				  source, notes, status, base_revision_id)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, 'APPLIED', ?)`,
+				[
+					headId,
+					revision.entry_id,
+					restoredUniqueName,
+					restoredTitle,
+					restoredContent,
+					REVISION_SOURCE_ADMIN,
+					`שחזור מגרסה ${revision.id}`,
+					head?.id ?? null,
+				],
+			);
+			await txExecute(
+				conn,
+				"UPDATE tanahpedia_entry SET unique_name = ?, title = ?, content = ? WHERE id = ?",
+				[restoredUniqueName, restoredTitle, restoredContent, revision.entry_id],
+			);
+			await recomputeEntryMetrics(conn, revision.entry_id, restoredContent);
+			const saved = await txQueryOne<EntryRow>(
+				conn,
+				"SELECT id, unique_name, title, content, created_at, updated_at FROM tanahpedia_entry WHERE id = ?",
+				[revision.entry_id],
+			);
+			return {
+				entry: saved,
+				headRevisionId: headId,
+				previousUniqueName: entry.unique_name,
+			};
+		});
+		// The restored name and the pre-restore name both revalidate after a
+		// rename restore.
+		if (restored.entry?.unique_name) {
+			await revalidateWebsite([
+				pediaEntryChange({
+					uniqueName: restored.entry.unique_name,
+					...(restored.previousUniqueName &&
+					restored.previousUniqueName !== restored.entry.unique_name
+						? { oldUniqueName: restored.previousUniqueName }
+						: {}),
+				}),
+			]);
+		}
+		const { previousUniqueName, ...result } = restored;
+		return result;
+	});

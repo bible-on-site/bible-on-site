@@ -1,7 +1,7 @@
 import "@tanstack/react-start/server-only";
 import type { EntityType } from "~/lib/tanahpedia/labels";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
-import { query, queryOne } from "../db";
+import { query } from "../db";
 
 export type PersonSex = "MALE" | "FEMALE" | "UNKNOWN";
 
@@ -29,6 +29,10 @@ export interface LinkedEntityStructural {
 		placeId: string;
 		identifications: PlaceIdentificationRow[];
 	};
+	saying?: {
+		sayingId: string;
+		sayingDate: number | null;
+	};
 }
 
 export interface EntryStructuralContext {
@@ -37,6 +41,10 @@ export interface EntryStructuralContext {
 }
 
 const MAIN_NAME_TYPE = "MAIN";
+
+function placeholders(count: number): string {
+	return Array.from({ length: count }, () => "?").join(", ");
+}
 
 function toNum(v: unknown): number | null {
 	if (v === null || v === undefined) return null;
@@ -47,6 +55,32 @@ function toNum(v: unknown): number | null {
 
 function isDbEntityType(t: string): t is EntityType {
 	return (ADMIN_CREATABLE_ENTITY_TYPES as readonly string[]).includes(t);
+}
+
+/** Runs `fn` only when there are ids to look up, so empty IN lists never hit SQL. */
+async function whenAny<T>(ids: string[], fn: () => Promise<T[]>): Promise<T[]> {
+	return ids.length === 0 ? [] : fn();
+}
+
+/** First row per key; callers ORDER BY so the winner matches the old LIMIT 1 queries. */
+function firstPerKey<T>(rows: T[], keyOf: (row: T) => string): Map<string, T> {
+	const map = new Map<string, T>();
+	for (const row of rows) {
+		const key = keyOf(row);
+		if (!map.has(key)) map.set(key, row);
+	}
+	return map;
+}
+
+function groupByKey<T>(rows: T[], keyOf: (row: T) => string): Map<string, T[]> {
+	const map = new Map<string, T[]>();
+	for (const row of rows) {
+		const key = keyOf(row);
+		const bucket = map.get(key);
+		if (bucket) bucket.push(row);
+		else map.set(key, [row]);
+	}
+	return map;
 }
 
 export async function loadEntryStructuralContext(
@@ -65,6 +99,88 @@ export async function loadEntryStructuralContext(
 		[entryId],
 	);
 
+	// Batch per-entity lookups: one IN (...) query per type instead of up to
+	// four sequential queries per linked entity.
+	const personEntityIds = links
+		.filter((r) => r.entityType === "PERSON")
+		.map((r) => r.entityId);
+	const placeEntityIds = links
+		.filter((r) => r.entityType === "PLACE")
+		.map((r) => r.entityId);
+	const sayingEntityIds = links
+		.filter((r) => r.entityType === "SAYING" || r.entityType === "PROPHECY")
+		.map((r) => r.entityId);
+
+	const [persons, places, sayings] = await Promise.all([
+		whenAny(personEntityIds, () =>
+			query<{ entity_id: string; id: string }>(
+				`SELECT entity_id, id FROM tanahpedia_person
+				 WHERE entity_id IN (${placeholders(personEntityIds.length)})`,
+				personEntityIds,
+			),
+		),
+		whenAny(placeEntityIds, () =>
+			query<{ entity_id: string; id: string }>(
+				`SELECT entity_id, id FROM tanahpedia_place
+				 WHERE entity_id IN (${placeholders(placeEntityIds.length)})`,
+				placeEntityIds,
+			),
+		),
+		whenAny(sayingEntityIds, () =>
+			query<{ entity_id: string; id: string; saying_date: number | null }>(
+				`SELECT entity_id, id, saying_date FROM tanahpedia_saying
+				 WHERE entity_id IN (${placeholders(sayingEntityIds.length)})`,
+				sayingEntityIds,
+			),
+		),
+	]);
+
+	const personIds = persons.map((p) => p.id);
+	const placeIds = places.map((p) => p.id);
+
+	const [mainNames, sexRows, identifications] = await Promise.all([
+		whenAny(personIds, () =>
+			query<{ person_id: string; id: string; name: string }>(
+				`SELECT pn.person_id, pn.id, pn.name
+					 FROM tanahpedia_person_name pn
+					 INNER JOIN tanahpedia_lookup_name_type nt ON nt.id = pn.name_type_id
+					 WHERE pn.person_id IN (${placeholders(personIds.length)}) AND nt.name = ? AND pn.alt_group_id IS NULL
+					 ORDER BY pn.person_id, pn.id`,
+				[...personIds, MAIN_NAME_TYPE],
+			),
+		),
+		whenAny(personIds, () =>
+			query<{ person_id: string; id: string; sex: PersonSex }>(
+				`SELECT person_id, id, sex FROM tanahpedia_person_sex
+					 WHERE person_id IN (${placeholders(personIds.length)}) AND alt_group_id IS NULL
+					 ORDER BY person_id, id`,
+				personIds,
+			),
+		),
+		whenAny(placeIds, () =>
+			query<{
+				place_id: string;
+				id: string;
+				modern_name: string | null;
+				latitude: unknown;
+				longitude: unknown;
+			}>(
+				`SELECT place_id, id, modern_name, latitude, longitude
+					 FROM tanahpedia_place_identification
+					 WHERE place_id IN (${placeholders(placeIds.length)})
+					 ORDER BY place_id, id`,
+				placeIds,
+			),
+		),
+	]);
+
+	const personByEntity = firstPerKey(persons, (p) => p.entity_id);
+	const placeByEntity = firstPerKey(places, (p) => p.entity_id);
+	const sayingByEntity = firstPerKey(sayings, (s) => s.entity_id);
+	const mainNameByPerson = firstPerKey(mainNames, (n) => n.person_id);
+	const sexByPerson = firstPerKey(sexRows, (s) => s.person_id);
+	const identsByPlace = groupByKey(identifications, (i) => i.place_id);
+
 	const linkedEntities: LinkedEntityStructural[] = [];
 
 	for (const row of links) {
@@ -78,25 +194,10 @@ export async function loadEntryStructuralContext(
 		};
 
 		if (row.entityType === "PERSON") {
-			const person = await queryOne<{ id: string }>(
-				"SELECT id FROM tanahpedia_person WHERE entity_id = ? LIMIT 1",
-				[row.entityId],
-			);
+			const person = personByEntity.get(row.entityId);
 			if (person) {
-				const mainName = await queryOne<{ id: string; name: string }>(
-					`SELECT pn.id, pn.name
-						 FROM tanahpedia_person_name pn
-						 INNER JOIN tanahpedia_lookup_name_type nt ON nt.id = pn.name_type_id
-						 WHERE pn.person_id = ? AND nt.name = ? AND pn.alt_group_id IS NULL
-						 LIMIT 1`,
-					[person.id, MAIN_NAME_TYPE],
-				);
-				const sexRow = await queryOne<{ id: string; sex: PersonSex }>(
-					`SELECT id, sex FROM tanahpedia_person_sex
-						 WHERE person_id = ? AND alt_group_id IS NULL
-						 ORDER BY id LIMIT 1`,
-					[person.id],
-				);
+				const mainName = mainNameByPerson.get(person.id);
+				const sexRow = sexByPerson.get(person.id);
 				base.person = {
 					personId: person.id,
 					mainName: mainName?.name ?? null,
@@ -108,31 +209,26 @@ export async function loadEntryStructuralContext(
 		}
 
 		if (row.entityType === "PLACE") {
-			const place = await queryOne<{ id: string }>(
-				"SELECT id FROM tanahpedia_place WHERE entity_id = ? LIMIT 1",
-				[row.entityId],
-			);
+			const place = placeByEntity.get(row.entityId);
 			if (place) {
-				const idents = await query<{
-					id: string;
-					modern_name: string | null;
-					latitude: unknown;
-					longitude: unknown;
-				}>(
-					`SELECT id, modern_name, latitude, longitude
-						 FROM tanahpedia_place_identification
-						 WHERE place_id = ?
-						 ORDER BY id`,
-					[place.id],
-				);
 				base.place = {
 					placeId: place.id,
-					identifications: idents.map((i) => ({
+					identifications: (identsByPlace.get(place.id) ?? []).map((i) => ({
 						id: i.id,
 						modern_name: i.modern_name,
 						latitude: toNum(i.latitude),
 						longitude: toNum(i.longitude),
 					})),
+				};
+			}
+		}
+
+		if (row.entityType === "SAYING" || row.entityType === "PROPHECY") {
+			const saying = sayingByEntity.get(row.entityId);
+			if (saying) {
+				base.saying = {
+					sayingId: saying.id,
+					sayingDate: saying.saying_date,
 				};
 			}
 		}

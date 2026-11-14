@@ -98,8 +98,8 @@ describe("person-family-labels", () => {
 
 	describe("spouseOpinionOrdinalTitle", () => {
 		it("returns Hebrew ordinals for the first opinions", () => {
-			expect(spouseOpinionOrdinalTitle(0)).toBe("שיטה א׳");
-			expect(spouseOpinionOrdinalTitle(1)).toBe("שיטה ב׳");
+			expect(spouseOpinionOrdinalTitle(0)).toBe("שיטה א'");
+			expect(spouseOpinionOrdinalTitle(1)).toBe("שיטה ב'");
 		});
 
 		it("falls back to a numeric ordinal beyond the Hebrew list", () => {
@@ -202,11 +202,29 @@ describe("person-family-labels", () => {
 				postLabel: null,
 			});
 		});
+
+		it("retains same-day and non-finite birth dates in the unknown-age cluster", () => {
+			const result = partitionSiblingsForFamilyTree(
+				[
+					sibling("older", "א", 10000101),
+					sibling("same", "ב", 10000102),
+					sibling("younger", "ג", 10000103),
+					sibling("invalid", "ד", Number.NaN),
+				],
+				10000102,
+			);
+			expect(result.preCluster.map((s) => s.entityId)).toEqual(["older"]);
+			expect(result.postCluster.map((s) => s.entityId)).toEqual([
+				"same",
+				"younger",
+				"invalid",
+			]);
+		});
 	});
 
 	describe("childGroupByCoParentLabel", () => {
 		it("labels child groups by co-parent when available", () => {
-			expect(childGroupByCoParentLabel("רחל", true)).toBe("ילדים מ־רחל");
+			expect(childGroupByCoParentLabel("רחל", true)).toBe("ילדים מ-רחל");
 			expect(childGroupByCoParentLabel(null, false)).toBe(
 				"ילדים (בת זוג לא מזוהה בנתונים)",
 			);

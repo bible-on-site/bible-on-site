@@ -53,6 +53,7 @@ function perushDetail(over: Partial<PerushDetail> = {}): PerushDetail {
 	return {
 		id: 3,
 		name: 'רש"י',
+		parshanId: 55,
 		parshanName: "רבי שלמה יצחקי",
 		parshanBirthYear: 1040,
 		notes: [],
@@ -99,10 +100,40 @@ describe("seo/core-jsonld", () => {
 
 	describe("buildPerekGraph", () => {
 		it("emits a Chapter in the Tanah → Sefer hierarchy + breadcrumb", () => {
-			const graph = buildPerekGraph(perekObj());
+			const recording = {
+				perekId: 1,
+				audioUrl: "https://images.example.com/sample.mp3",
+				durationMs: 12000,
+				audioSha256: "b".repeat(64),
+			};
+			const graph = buildPerekGraph(
+				perekObj(),
+				[
+					{
+						id: 17,
+						src: "https://images.example.com/sample.webp",
+						width: 1600,
+						height: 900,
+						avifSrcSet: "",
+						socialSrc: "https://images.example.com/social.jpg",
+						socialWidth: 1600,
+						socialHeight: 900,
+						alt: "איור לדוגמה",
+						caption: "כיתוב לדוגמה",
+						captionMarkdown: null,
+						verseRanges: [{ perekId: 1, pasukFrom: 1, pasukTo: 31 }],
+						description: null,
+						credit: null,
+					},
+				],
+				recording,
+			);
 			const chapter = nodeByType(graph, "Chapter");
 			expect(chapter?.["@id"]).toBe(`${SITE_ORIGIN}/929/1#chapter`);
 			expect(chapter?.isPartOf).toEqual({ "@id": seferId("בראשית") });
+			expect(chapter?.image).toEqual([
+				"https://images.example.com/sample.webp",
+			]);
 			const books = nodesOf(graph).filter((n) => n["@type"] === "Book");
 			const tanah = books.find((b) => b["@id"] === TANAH_ID);
 			const sefer = books.find((b) => b["@id"] === seferId("בראשית"));
@@ -111,6 +142,14 @@ describe("seo/core-jsonld", () => {
 			expect(sefer?.genre).toBe("תורה");
 			const page = nodeByType(graph, "WebPage");
 			expect(page?.about).toEqual({ "@id": chapter?.["@id"] });
+			expect(page?.primaryImageOfPage).toMatchObject({
+				contentUrl: "https://images.example.com/sample.webp",
+				width: 1600,
+				height: 900,
+			});
+			expect(page?.audio).toEqual({
+				"@id": nodeByType(graph, "AudioObject")?.["@id"],
+			});
 			const crumb = nodeByType(graph, "BreadcrumbList");
 			const crumbs = crumb?.itemListElement as Array<{ name: string }>;
 			expect(crumbs.map((c) => c.name)).toEqual(["בית", "בראשית א"]);
@@ -122,6 +161,32 @@ describe("seo/core-jsonld", () => {
 				(n) => n["@type"] === "Book" && n["@id"] === seferId("בראשית"),
 			);
 			expect(sefer?.genre).toBeUndefined();
+		});
+
+		it("does not advertise an illustration for an unillustrated perek", () => {
+			const graph = buildPerekGraph(
+				perekObj({ perekId: 2, perekHeb: "ב", source: "בראשית ב" }),
+			);
+			expect(nodeByType(graph, "Chapter")?.image).toBeUndefined();
+			expect(nodeByType(graph, "WebPage")?.primaryImageOfPage).toBeUndefined();
+		});
+
+		it("emits stored wordCount + ISO timeRequired on the Chapter (#2607)", () => {
+			const graph = buildPerekGraph(perekObj(), [], null, {
+				wordCount: 361,
+				estimatedSeconds: 99,
+			});
+			const chapter = nodeByType(graph, "Chapter");
+			expect(chapter?.wordCount).toBe(361);
+			expect(chapter?.timeRequired).toBe("PT99S");
+			// The real audio duration stays untouched.
+		});
+
+		it("omits reading metrics when the perek metric is unknown", () => {
+			const graph = buildPerekGraph(perekObj());
+			const chapter = nodeByType(graph, "Chapter");
+			expect(chapter?.wordCount).toBeUndefined();
+			expect(chapter?.timeRequired).toBeUndefined();
 		});
 	});
 
@@ -143,6 +208,12 @@ describe("seo/core-jsonld", () => {
 			);
 			expect(person?.image).toBe("https://cdn.example/authors/high-res/7.jpg");
 			expect(node?.author).toEqual({ "@id": person?.["@id"] });
+			expect(node?.publisher).toEqual({
+				"@id": `${SITE_ORIGIN}/#organization`,
+			});
+			expect(nodeByType(graph, "WebPage")?.mainEntity).toEqual({
+				"@id": node?.["@id"],
+			});
 		});
 
 		it("omits description when the abstract and content are empty", () => {
@@ -176,6 +247,43 @@ describe("seo/core-jsonld", () => {
 			});
 			expect(nodeByType(graph, "Article")?.description).toBeUndefined();
 		});
+
+		it("emits the stored full-content metric on the Article (#2607)", () => {
+			const graph = buildArticleGraph({
+				article: article({
+					metric: { wordCount: 1084, estimatedSeconds: 296 },
+				}),
+				perekObj: perekObj(),
+				authorSlug: "harav-ploni",
+			});
+			const node = nodeByType(graph, "Article");
+			expect(node?.wordCount).toBe(1084);
+			expect(node?.timeRequired).toBe("PT296S");
+		});
+
+		it("omits reading metrics when the article metric is unknown", () => {
+			const graph = buildArticleGraph({
+				article: article(),
+				perekObj: perekObj(),
+				authorSlug: "harav-ploni",
+			});
+			const node = nodeByType(graph, "Article");
+			expect(node?.wordCount).toBeUndefined();
+			expect(node?.timeRequired).toBeUndefined();
+		});
+
+		it("omits each metric field that is individually null", () => {
+			const graph = buildArticleGraph({
+				article: article({
+					metric: { wordCount: null, estimatedSeconds: null },
+				}),
+				perekObj: perekObj(),
+				authorSlug: "harav-ploni",
+			});
+			const node = nodeByType(graph, "Article");
+			expect(node?.wordCount).toBeUndefined();
+			expect(node?.timeRequired).toBeUndefined();
+		});
 	});
 
 	describe("buildPerushGraph", () => {
@@ -195,6 +303,54 @@ describe("seo/core-jsonld", () => {
 			expect(person?.sameAs).toBeUndefined();
 		});
 
+		it("marks the WebPage mainEntity as the commentary Article + publisher", () => {
+			const graph = buildPerushGraph({
+				perush: perushDetail(),
+				perekObj: perekObj(),
+			});
+			const node = nodeByType(graph, "Article");
+			expect(node?.publisher).toEqual({
+				"@id": `${SITE_ORIGIN}/#organization`,
+			});
+			expect(nodeByType(graph, "WebPage")?.mainEntity).toEqual({
+				"@id": node?.["@id"],
+			});
+		});
+
+		it("derives a plain-text description from note content", () => {
+			const graph = buildPerushGraph({
+				perush: perushDetail({
+					notes: [
+						{
+							pasuk: 1,
+							noteIdx: 0,
+							noteContent: "<p>בבקשה ורצון.</p>",
+						},
+						{
+							pasuk: 2,
+							noteIdx: 0,
+							noteContent: "<p>שני &quot;מובא&quot;.</p>",
+						},
+					],
+				}),
+				perekObj: perekObj(),
+			});
+			const description = nodeByType(graph, "Article")?.description;
+			expect(description).toContain("בבקשה ורצון.");
+			expect(description).toContain('שני "מובא".');
+			expect(description).not.toContain("<");
+		});
+
+		it("omits description when notes contain only placeholder markup", () => {
+			const graph = buildPerushGraph({
+				perush: perushDetail({
+					notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p></p>" }],
+				}),
+				perekObj: perekObj(),
+			});
+			expect(nodeByType(graph, "Article")?.description).toBeUndefined();
+		});
+
 		it("attaches sameAs when external references are provided", () => {
 			const graph = buildPerushGraph({
 				perush: perushDetail(),
@@ -204,6 +360,20 @@ describe("seo/core-jsonld", () => {
 			expect(nodeByType(graph, "Person")?.sameAs).toEqual([
 				"https://www.wikidata.org/wiki/Q131338",
 			]);
+		});
+
+		it("emits the stored perush×perek metric on the commentary Article (#2607)", () => {
+			const graph = buildPerushGraph({
+				perush: perushDetail({
+					metric: { wordCount: 50, estimatedSeconds: 14 },
+				}),
+				perekObj: perekObj(),
+			});
+			const node = nodeByType(graph, "Article");
+			expect(node?.wordCount).toBe(50);
+			expect(node?.timeRequired).toBe("PT14S");
+			// Personal reading progress never appears in structured data.
+			expect(JSON.stringify(graph)).not.toContain("progress");
 		});
 	});
 
@@ -271,4 +441,43 @@ describe("seo/core-jsonld", () => {
 			});
 		});
 	});
+});
+
+test("recorded chapters link a Hebrew AudioObject to their canonical chapter", () => {
+	const recording = {
+		perekId: 829,
+		audioUrl:
+			"https://bible-on-site-assets.s3.il-central-1.amazonaws.com/recordings/829_record.mp3",
+		durationMs: 36885,
+		audioSha256: "a".repeat(64),
+	};
+	const graph = buildPerekGraph(
+		perekObj({ perekId: 829, source: "אסתר י", sefer: "אסתר" }),
+		[],
+		recording,
+	);
+	const audio = nodeByType(graph, "AudioObject");
+	expect(audio).toMatchObject({
+		contentUrl: recording.audioUrl,
+		duration: "PT36.885S",
+		encodingFormat: "audio/mpeg",
+		inLanguage: "he",
+		isAccessibleForFree: true,
+		sha256: recording.audioSha256,
+	});
+	expect(audio?.encodesCreativeWork).toEqual({
+		"@id": nodeByType(graph, "Chapter")?.["@id"],
+	});
+	expect(nodeByType(graph, "Chapter")?.encoding).toEqual({
+		"@id": audio?.["@id"],
+	});
+	expect(nodeByType(graph, "WebPage")?.audio).toEqual({
+		"@id": audio?.["@id"],
+	});
+	expect(
+		nodeByType(buildPerekGraph(perekObj()), "AudioObject"),
+	).toBeUndefined();
+	expect(
+		nodeByType(buildPerekGraph(perekObj(), [], recording), "AudioObject"),
+	).toBeUndefined();
 });

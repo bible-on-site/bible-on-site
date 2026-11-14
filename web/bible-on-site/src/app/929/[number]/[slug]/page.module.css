@@ -1,11 +1,23 @@
-/* Expanded article section within perek page */
+/* The article route keeps the chapter below the article in normal flow. */
+.articlePerekContainer {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  background-color: var(--surface-elevated, #fff);
+}
+
+/* Expanded article section within perek page. It opens the route in normal
+   flow, so clear the 72px top nav at rest and when ScrollToSlug scrolls to it. */
 .expandedArticle {
-  margin: 24px 16px;
+  margin: calc(72px + 24px) 16px 24px;
+  scroll-margin-top: calc(72px + 24px);
   padding: 24px;
   background: transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 1px solid #e5e7eb;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  /* The article command row sizes against this box, not the viewport (#2786). */
+  container-type: inline-size;
 }
 
 .articleHeader {
@@ -31,7 +43,7 @@
   border-radius: 50%;
   overflow: hidden;
   background: #f3f4f6;
-  border: 2px solid #1c2c5d;
+  border: 2px solid var(--accent-900);
 }
 
 .authorImg {
@@ -43,19 +55,30 @@
 .authorName {
   font-size: 1rem;
   font-weight: 600;
-  color: #1c2c5d;
+  color: var(--accent-900);
   transition: color 0.2s;
 }
 
-.authorLink:hover .authorName {
-  color: #1552ac;
+@media (hover: hover) {
+	.authorLink:hover .authorName {
+	  color: var(--accent-600);
+	}
 }
 
 .articleTitle {
   font-size: 1.4rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0;
+  line-height: 1.4;
+}
+
+/* Shared reading-metrics badge (#2607). */
+.readingTime {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted-text, #666);
+  font-size: 0.85rem;
   line-height: 1.4;
 }
 
@@ -67,22 +90,22 @@
   direction: rtl;
 }
 
-.articleBody h1,
 .articleBody h2,
-.articleBody h3 {
-  color: #1c2c5d;
+.articleBody h3,
+.articleBody h4 {
+  color: var(--accent-900);
   margin: 1.5em 0 0.5em;
 }
 
-.articleBody h1 {
+.articleBody h2 {
   font-size: 1.3rem;
 }
 
-.articleBody h2 {
+.articleBody h3 {
   font-size: 1.2rem;
 }
 
-.articleBody h3 {
+.articleBody h4 {
   font-size: 1.1rem;
 }
 
@@ -100,6 +123,23 @@
 
 .articleBody li {
   margin: 0.35em 0;
+}
+
+/* Tanahpedia mention anchors injected by the annotation pipeline (#2516) —
+   same dashed affordance as the pasuk renderer's .tanahpediaLink. The class
+   is a raw string inside stored HTML, so it must stay unhashed (:global). */
+.articleBody a:global(.tanahpedia-mention) {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dashed var(--link-accent, #1a73e8);
+  transition: border-color 0.2s ease;
+}
+
+@media (hover: hover) {
+	.articleBody a:global(.tanahpedia-mention):hover {
+	  border-bottom-style: solid;
+	  border-bottom-color: var(--link-accent-hover);
+	}
 }
 
 @counter-style article-hebrew-alpha {
@@ -137,8 +177,12 @@
 	padding-right: 2rem;
 }
 
+/* Inline links inside DB-authored article prose keep a persistent non-color
+   cue (WCAG 1.4.1) — color alone is ~1.4:1 off the surrounding text (#2767). */
 .articleBody a {
-  color: #1552ac;
+  color: var(--link-accent, #1552ac);
+  text-decoration: underline;
+  text-underline-offset: 0.1em;
 }
 
 .backToPerek {
@@ -149,22 +193,24 @@
 }
 
 .backLink {
-  color: #1c2c5d;
+  color: var(--accent-900);
   text-decoration: none;
   font-size: 0.95rem;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 10px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: #ffffff;
   border: 1px solid #e5e7eb;
   transition: all 0.2s;
 }
 
-.backLink:hover {
-  background: #f3f4f6;
-  border-color: #1c2c5d;
+@media (hover: hover) {
+	.backLink:hover {
+	  background: #f3f4f6;
+	  border-color: var(--accent-900);
+	}
 }
 
 /* When .backLink is used as a button (e.g. in flipbook article view) */
@@ -176,7 +222,8 @@ button.backLink {
 
 @media (max-width: 640px) {
   .expandedArticle {
-    margin: 16px 8px;
+    margin: calc(72px + 16px) 8px 16px;
+    scroll-margin-top: calc(72px + 16px);
     padding: 16px;
   }
 
@@ -193,30 +240,17 @@ button.backLink {
     height: 64px;
   }
 
-  .expandedPerush {
-    padding: 16px;
-    margin: 16px 8px;
-  }
-
-  .perushTitle {
-    font-size: 1.3rem;
-  }
-
-  .parshanName {
-    font-size: 1.1rem;
-  }
-
-  .noteContent {
-    font-size: 1rem;
-  }
 }
 
-/* Perush styles */
+/* Perush styles — now the first block on the route, so it carries the same
+   top-nav clearance as the expanded article for the at-rest and
+   ScrollToSlug-scrolled positions. */
 .expandedPerush {
-  margin: 24px 16px;
+  margin: calc(72px + 24px) 16px 24px;
+  scroll-margin-top: calc(72px + 24px);
   padding: 24px;
   background: transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 1px solid #e5e7eb;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
@@ -231,7 +265,7 @@ button.backLink {
 .perushTitle {
   font-size: 1.6rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 8px 0;
 }
 
@@ -251,8 +285,8 @@ button.backLink {
 .note {
   padding: 16px;
   background: #f9fafb;
-  border-radius: 8px;
-  border-right: 4px solid #1c2c5d;
+  border-radius: var(--radius-md);
+  border-right: 4px solid var(--accent-900);
 }
 
 .noteHighlight {
@@ -261,10 +295,16 @@ button.backLink {
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
 }
 
+.searchMatch {
+  background: rgba(245, 158, 11, 0.45);
+  border-radius: 2px;
+  color: inherit;
+}
+
 .notePasuk {
   display: inline-block;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin-left: 8px;
   font-size: 1.05rem;
 }
@@ -278,6 +318,114 @@ button.backLink {
   direction: rtl;
 }
 
+/* Same persistent non-color cue (1.4.1) as the article body above. */
+.noteContent a {
+  color: var(--link-accent, #1552ac);
+  text-decoration: underline;
+  text-underline-offset: 0.1em;
+}
+
 .noteContent p {
   margin: 0.5rem 0;
+}
+
+/* DB-authored HTML headings are demoted one level (h1→h2…); keep the former UA sizes. */
+.noteContent h2 { font-size: 2em; margin-block: 0.67em; }
+.noteContent h3 { font-size: 1.5em; margin-block: 0.83em; }
+.noteContent h4 { font-size: 1.17em; margin-block: 1em; }
+.noteContent h5 { font-size: 1em; margin-block: 1.33em; }
+.noteContent h6 { font-size: 0.83em; margin-block: 1.67em; }
+
+/* Must follow the base perush rules above; a media block placed earlier in
+   the file would lose the cascade to the base declarations. */
+@media (max-width: 640px) {
+  .expandedPerush {
+    margin: calc(72px + 16px) 8px 16px;
+    scroll-margin-top: calc(72px + 16px);
+    padding: 16px;
+  }
+
+  .perushTitle {
+    font-size: 1.3rem;
+  }
+
+  .parshanName {
+    font-size: 1.1rem;
+  }
+
+  .noteContent {
+    font-size: 1rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .expandedArticle,
+  .expandedPerush,
+  .backLink {
+    border-color: #2d3548;
+  }
+
+  .authorImage {
+    background: #2d3548;
+    border-color: var(--accent-200);
+  }
+
+  .authorName,
+  .articleTitle,
+  .articleBody h2,
+  .articleBody h3,
+  .articleBody h4,
+  .perushTitle,
+  .notePasuk,
+  .backLink {
+    color: var(--accent-200);
+  }
+
+  .articleBody a {
+    color: var(--link-accent, #7eb0ff);
+  }
+
+  @media (hover: hover) {
+    .authorLink:hover .authorName {
+      color: var(--link-accent, #7eb0ff);
+    }
+  }
+
+  .articleBody a:global(.tanahpedia-mention) {
+    color: inherit;
+    border-bottom-color: var(--link-accent, #7eb0ff);
+  }
+
+  .articleBody,
+  .noteContent {
+    color: #d7dae0;
+  }
+
+  .backLink {
+    background: #1a1f2e;
+  }
+
+  @media (hover: hover) {
+    .backLink:hover {
+      background: #232a45;
+      border-color: var(--accent-200);
+    }
+  }
+
+  .parshanName {
+    color: var(--muted-text, #9aa0a6);
+  }
+
+  .note {
+    background: #12151c;
+  }
+
+  .noteHighlight {
+    background: rgba(58, 47, 16, 0.95);
+    border-right-color: #92600b;
+  }
+
+  .searchMatch {
+    background: rgba(146, 96, 11, 0.6);
+  }
 }

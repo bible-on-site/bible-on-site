@@ -1,12 +1,30 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              x:Class="BibleOnSite.Pages.DonationsPage"
              Title="תרומות"
              FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False"
              BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}">
 
-    <ScrollView Padding="16">
+    <!-- The shared navigation capsule (#2467): hamburger far right, Back
+         beside it (disabled at this root destination), title pill. -->
+    <Grid RowDefinitions="Auto,*">
+        <controls:SharedTopBar Grid.Row="0" NavigationAutomationId="DonationsMenuButton">
+            <controls:SharedTopBar.CenterContent>
+                <controls:ToolbarPill>
+                    <Label Text="תרומות"
+                           FontSize="16"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"
+                           LineBreakMode="TailTruncation"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                </controls:ToolbarPill>
+            </controls:SharedTopBar.CenterContent>
+        </controls:SharedTopBar>
+
+    <ScrollView Grid.Row="1" Padding="16">
         <VerticalStackLayout Spacing="24">
 
             <!-- Introduction Text -->
@@ -26,14 +44,13 @@
 
             <!-- Contact link for donations -->
             <HorizontalStackLayout HorizontalOptions="Center" Spacing="4" Margin="0,20,0,0">
-                <Label Text="צור קשר"
-                       FontSize="16"
-                       TextColor="{StaticResource Primary}"
-                       TextDecorations="Underline">
-                    <Label.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnContactTapped"/>
-                    </Label.GestureRecognizers>
-                </Label>
+                <controls:TappableView Activated="OnContactTapped"
+                                       SemanticProperties.Description="צור קשר למתן תרומה">
+                    <Label Text="צור קשר"
+                           FontSize="16"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                           TextDecorations="Underline"/>
+                </controls:TappableView>
                 <Label Text="למתן תרומה"
                        FontSize="16"
                        TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
@@ -44,9 +61,10 @@
                    FontSize="18"
                    FontAttributes="Bold"
                    HorizontalOptions="Center"
-                   TextColor="{StaticResource Primary}"
+                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                    Margin="0,16,0,0"/>
 
         </VerticalStackLayout>
     </ScrollView>
+    </Grid>
 </ContentPage>

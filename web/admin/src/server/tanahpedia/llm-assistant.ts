@@ -1,9 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getTanahpediaSchemaSummaryForLlm } from "~/lib/tanahpedia/schema-registry";
-import { loadTanahpediaEntryById } from "./entry-loader.server";
-import { loadEntryStructuralContext } from "./structural-loader.server";
+import { callOpenAiJson } from "~/server/llm-json";
 
-/** פלט מוצע בלבד — ללא הרצת SQL או כתיבה ל־DB על ידי המודל */
+/** פלט מוצע בלבד - ללא הרצת SQL או כתיבה ל־DB על ידי המודל */
 export interface TanahpediaLlmProposal {
 	entry?: {
 		title?: string;
@@ -72,7 +71,7 @@ export function buildTanahpediaAssistantSystemPrompt(): string {
 						},
 					},
 				],
-				notesForEditor: "string? — short rationale in Hebrew or English",
+				notesForEditor: "string? - short rationale in Hebrew or English",
 			},
 			null,
 			2,
@@ -87,45 +86,6 @@ export interface SuggestEditsInput {
 	draftContentHtml: string;
 	draftTitle?: string;
 	draftUniqueName?: string;
-}
-
-async function callOpenAiJson(params: {
-	system: string;
-	user: string;
-}): Promise<string> {
-	const apiKey = process.env.OPENAI_API_KEY?.trim();
-	if (!apiKey) {
-		throw new Error(
-			"OPENAI_API_KEY אינו מוגדר — הגדר במשתני סביבה (שרת אדמין בלבד)",
-		);
-	}
-	const model = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
-	const res = await fetch("https://api.openai.com/v1/chat/completions", {
-		method: "POST",
-		headers: {
-			Authorization: `Bearer ${apiKey}`,
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({
-			model,
-			temperature: 0.3,
-			response_format: { type: "json_object" },
-			messages: [
-				{ role: "system", content: params.system },
-				{ role: "user", content: params.user },
-			],
-		}),
-	});
-	if (!res.ok) {
-		const text = await res.text();
-		throw new Error(`OpenAI HTTP ${res.status}: ${text.slice(0, 500)}`);
-	}
-	const body = (await res.json()) as {
-		choices?: Array<{ message?: { content?: string } }>;
-	};
-	const content = body.choices?.[0]?.message?.content;
-	if (!content) throw new Error("OpenAI: empty response");
-	return content;
 }
 
 function safeParseProposal(json: string): TanahpediaLlmProposal {
@@ -146,6 +106,10 @@ export const getLlmAssistantStatus = createServerFn({ method: "GET" }).handler(
 export const suggestTanahpediaEntryEdits = createServerFn({ method: "POST" })
 	.validator((data: SuggestEditsInput) => data)
 	.handler(async ({ data }) => {
+		const { loadTanahpediaEntryById } = await import("./entry-loader.server");
+		const { loadEntryStructuralContext } = await import(
+			"./structural-loader.server"
+		);
 		const [entryRow, structural] = await Promise.all([
 			loadTanahpediaEntryById(data.entryId),
 			loadEntryStructuralContext(data.entryId),
@@ -188,7 +152,7 @@ export const suggestTanahpediaEntryEdits = createServerFn({ method: "POST" })
 			data.userInstruction.trim(),
 		].join("\n");
 
-		const raw = await callOpenAiJson({
+		const { content: raw } = await callOpenAiJson({
 			system: buildTanahpediaAssistantSystemPrompt(),
 			user: userMessage,
 		});

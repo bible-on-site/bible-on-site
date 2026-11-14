@@ -1,19 +1,29 @@
 name: Continuous Deployment - AWS
+run-name: Deploy ${{ github.event.client_payload.module_name }} ${{ github.event.client_payload.module_version }} to AWS
 
 on:
   repository_dispatch:
     types: [deploy-aws]
 
+# Keep every dispatch; never interrupt a production write.
+concurrency:
+  group: ${{ github.repository }}-cd-${{ github.event.client_payload.module_name }}
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   deploy:
+    timeout-minutes: 60
     permissions:
       contents: read
+      actions: read
+      deployments: write
       id-token: write # Required for OIDC authentication with AWS
     runs-on: ubuntu-latest
 
     env:
       DEVOPS_DIRECTORY: devops
-      DEVOPS_NODE_CACHE_PATH: devops/package-lock.json
+      DEVOPS_NODE_CACHE_PATH: devops/bun.lock
       DEVOPS_NODE_VERSION_FILE: devops/package.json
       MODULE_NAME: ${{ github.event.client_payload.module_name }}
       MODULE_DIRECTORY: ${{ github.event.client_payload.module_directory }}
@@ -22,67 +32,241 @@ jobs:
       DOCKER_IMAGE_NAME: ${{ github.event.client_payload.module_directory == 'web/bible-on-site' && 'bible-on-site' || (github.event.client_payload.module_directory == 'web/admin' && 'bible-on-site-admin' || 'bible-on-site-api') }}
       DOCKER_IMAGE_OUTPUT_DIR: ${{ github.event.client_payload.module_directory }}/.release
       CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
+      API_PUBLISH_INDEX: ${{ vars.API_MULTIARCH_RELEASES || 'false' }}
+      WEBSITE_PUBLISH_INDEX: ${{ vars.WEBSITE_MULTIARCH_RELEASES || 'false' }}
+      ADMIN_PUBLISH_INDEX: ${{ vars.ADMIN_MULTIARCH_RELEASES || 'false' }}
       # AWS Configuration
       AWS_REGION: ${{ secrets.AWS_REGION }}
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
     steps:
-      - name: Checkout
+      - name: Checkout deployment automation
         id: checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.client_payload.ref }}
+          ref: ${{ github.sha }}
 
-      - name: Setup Node.js
-        id: setup-node
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: ${{ env.DEVOPS_NODE_VERSION_FILE }}
-          cache-dependency-path: ${{ env.DEVOPS_NODE_CACHE_PATH }}
-          cache: npm
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: ${{ github.event.client_payload.module_name }}
+        run: node devops/github/release/check-deployment.mjs
 
-      - name: Install npm Dependencies
-        id: npm_ci
-        working-directory: ${{ env.DEVOPS_DIRECTORY }}
+      - name: Validate API publication mode
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'api' }}
         run: |
-          npm ci --no-audit
+          case "$API_PUBLISH_INDEX" in true|false) ;; *) echo 'Invalid API_MULTIARCH_RELEASES value'; exit 1 ;; esac
+          if [ "$API_PUBLISH_INDEX" = true ] && [ "${{ steps.guard.outputs.api_arm64 }}" != true ]; then
+            echo 'Index publication requires both archives from published API provenance'
+            exit 1
+          fi
+
+      - name: Validate website publication mode
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'website' }}
+        run: |
+          case "$WEBSITE_PUBLISH_INDEX" in true|false) ;; *) echo 'Invalid WEBSITE_MULTIARCH_RELEASES value'; exit 1 ;; esac
+          if [ "$WEBSITE_PUBLISH_INDEX" = true ] && [ "${{ steps.guard.outputs.website_arm64 }}" != true ]; then
+            echo 'Index publication requires both archives from published website provenance'
+            exit 1
+          fi
+
+      # An unset ADMIN_MULTIARCH_RELEASES keeps the existing single-platform
+      # x86 canonical/latest behavior; index publication needs a fresh release
+      # whose published provenance carried both native archives.
+      - name: Validate admin publication mode
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'admin' }}
+        run: |
+          case "$ADMIN_PUBLISH_INDEX" in true|false) ;; *) echo 'Invalid ADMIN_MULTIARCH_RELEASES value'; exit 1 ;; esac
+          if [ "$ADMIN_PUBLISH_INDEX" = true ] && [ "${{ steps.guard.outputs.admin_arm64 }}" != true ]; then
+            echo 'Index publication requires both archives from published admin provenance'
+            exit 1
+          fi
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
+          path: release-source
+
+      - name: Setup devops bun, Node.js and dependencies
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: devops-bun-cache
+        uses: ./.github/actions/setup-js
+        with:
+          module: devops
+          directory: ${{ env.DEVOPS_DIRECTORY }}
+
+      - name: Save bun store cache
+        if: ${{ steps.guard.outputs.deploy == 'true' && github.ref == 'refs/heads/master' && steps.devops-bun-cache.outputs.cache-hit != 'true' }}
+        uses: ./.github/actions/save-bun-store
+        with:
+          key: ${{ steps.devops-bun-cache.outputs.cache-primary-key }}
+
+      # Preflight the post-rollout verifier's imports through the same
+      # NODE_PATH contract used below, before any deployment side effects
+      # or the long recitation wait (#2372).
+      - name: Verify deployment verifier dependencies resolve
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'website' }}
+        run: |
+          NODE_PATH="$GITHUB_WORKSPACE/devops/node_modules" \
+            node --input-type=module -e \
+            "await import('$GITHUB_WORKSPACE/release-source/web/bible-on-site/scripts/verify-public-content.mjs'); console.log('verifier imports resolve')"
 
       - name: Configure AWS Credentials (OIDC)
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ env.MODULE_NAME == 'api' && format('arn:aws:iam::{0}:role/GitHubActionsAPIDeployRole', env.AWS_ACCOUNT_ID) || secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup crane
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: imjasonh/setup-crane@v0.7
+        with:
+          version: v0.22.1
 
       - name: Login to ECR
+        if: ${{ steps.guard.outputs.deploy == 'true' && !(env.MODULE_NAME == 'api' && steps.guard.outputs.api_arm64 == 'true') && !(env.MODULE_NAME == 'admin' && steps.guard.outputs.admin_arm64 == 'true') }}
         run: |
           aws ecr get-login-password --region ${{ env.AWS_REGION }} | crane auth login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
 
       - name: Prepare Docker Restore
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: prepare_docker_restore
         run: |
           mkdir -p "$DOCKER_IMAGE_OUTPUT_DIR"
           DOCKER_IMAGE_TAR_NAME="${{ env.DOCKER_IMAGE_NAME }}-v${{ env.MODULE_VERSION }}.tar"
           DOCKER_IMAGE_TAR_GZ_PATH="${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${DOCKER_IMAGE_TAR_NAME}.gz"
           echo "DOCKER_IMAGE_TAR_GZ_PATH=${DOCKER_IMAGE_TAR_GZ_PATH}" >> $GITHUB_OUTPUT
+          echo "DOCKER_IMAGE_ARM64_TAR_GZ_PATH=${{ env.DOCKER_IMAGE_OUTPUT_DIR }}/${{ env.DOCKER_IMAGE_NAME }}-v${{ env.MODULE_VERSION }}-arm64.tar.gz" >> $GITHUB_OUTPUT
 
       - name: Restore Docker Image
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.RELEASED_ARTIFACT_NAME }}
-          path: ${{ env.DOCKER_IMAGE_OUTPUT_DIR }}
-          run-id: ${{ env.CI_RUN_ID }}
-          github-token: ${{ secrets.BOT_PAT }}
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECOVERY_FILE_ID: ${{ steps.guard.outputs.recovery_file_id }}
+          RECOVERY_FILE_NAME: ${{ steps.guard.outputs.recovery_file_name }}
+          RECOVERY_FILE_DIGEST: ${{ steps.guard.outputs.recovery_file_digest }}
+          RECOVERY_FILE_SIZE: ${{ steps.guard.outputs.recovery_file_size }}
+        run: |
+          set -euo pipefail
+          if [ -n "$RECOVERY_FILE_ID" ]; then
+            [[ "$RECOVERY_FILE_ID" =~ ^[1-9][0-9]*$ ]]
+            test "$RECOVERY_FILE_NAME" = "${DOCKER_IMAGE_NAME}-v${MODULE_VERSION}.tar.gz"
+            gh api "repos/$GITHUB_REPOSITORY/releases/assets/$RECOVERY_FILE_ID" -H 'Accept: application/octet-stream' > "$DOCKER_IMAGE_OUTPUT_DIR/$RECOVERY_FILE_NAME"
+            node devops/github/release/recovery-request.mjs --verify-file --file "$DOCKER_IMAGE_OUTPUT_DIR/$RECOVERY_FILE_NAME"
+          else
+            gh release download "${MODULE_NAME}-v${MODULE_VERSION}" --pattern "${DOCKER_IMAGE_NAME}-v${MODULE_VERSION}.tar.gz" --dir "$DOCKER_IMAGE_OUTPUT_DIR"
+          fi
+
+      - name: Restore the published API ARM64 archive
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'api' && steps.guard.outputs.api_arm64 == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release download "api-v$MODULE_VERSION"
+          --pattern "bible-on-site-api-v$MODULE_VERSION-arm64.tar.gz"
+          --dir "$DOCKER_IMAGE_OUTPUT_DIR"
+
+      - name: Verify both API release archive digests and source
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'api' && steps.guard.outputs.api_arm64 == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API_RELEASE_SOURCE: ${{ steps.guard.outputs.ref }}
+        run: node devops/github/release/api-image-assets.mjs
+
+      - name: Restore the published website ARM64 archive
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'website' && steps.guard.outputs.website_arm64 == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release download "website-v$MODULE_VERSION"
+          --pattern "bible-on-site-v$MODULE_VERSION-arm64.tar.gz"
+          --dir "$DOCKER_IMAGE_OUTPUT_DIR"
+
+      - name: Verify both website release archive digests and source
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'website' && steps.guard.outputs.website_arm64 == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_RELEASE_SOURCE: ${{ steps.guard.outputs.ref }}
+        run: node devops/github/release/api-image-assets.mjs
+
+      - name: Restore the published admin ARM64 archive
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'admin' && steps.guard.outputs.admin_arm64 == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release download "admin-v$MODULE_VERSION"
+          --pattern "bible-on-site-admin-v$MODULE_VERSION-arm64.tar.gz"
+          --dir "$DOCKER_IMAGE_OUTPUT_DIR"
+
+      - name: Verify both admin release archive digests and source
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'admin' && steps.guard.outputs.admin_arm64 == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_RELEASE_SOURCE: ${{ steps.guard.outputs.ref }}
+        run: node devops/github/release/api-image-assets.mjs
 
       - name: Deploy to ECR
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: deploy
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
+        env:
+          RELEASE_SOURCE: ${{ steps.guard.outputs.ref }}
+          API_HAS_ARM64: ${{ steps.guard.outputs.api_arm64 }}
+          RELEASE_ARM64_ARCHIVE: ${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_ARM64_TAR_GZ_PATH }}
+          WEBSITE_HAS_ARM64: ${{ steps.guard.outputs.website_arm64 }}
+          ADMIN_HAS_ARM64: ${{ steps.guard.outputs.admin_arm64 }}
+          API_ROLLOUT_JOURNAL: ${{ runner.temp }}/api-handover.ndjson
         run: |
-          npm run deploy:ecr -- \
+          PLATFORM_ARGS=()
+          if [ "$MODULE_NAME" = api ] && [ "$API_HAS_ARM64" = true ]; then
+            PLATFORM_ARGS+=(--docker-image-arm64 "$GITHUB_WORKSPACE/$RELEASE_ARM64_ARCHIVE" --source-ref "$RELEASE_SOURCE")
+            if [ "$API_PUBLISH_INDEX" = true ]; then PLATFORM_ARGS+=(--publish-index); fi
+          fi
+          if [ "$MODULE_NAME" = website ] && [ "$WEBSITE_HAS_ARM64" = true ]; then
+            PLATFORM_ARGS+=(--docker-image-arm64 "$GITHUB_WORKSPACE/$RELEASE_ARM64_ARCHIVE" --source-ref "$RELEASE_SOURCE")
+            if [ "$WEBSITE_PUBLISH_INDEX" = true ]; then PLATFORM_ARGS+=(--publish-index); fi
+          fi
+          if [ "$MODULE_NAME" = admin ] && [ "$ADMIN_HAS_ARM64" = true ]; then
+            PLATFORM_ARGS+=(--docker-image-arm64 "$GITHUB_WORKSPACE/$RELEASE_ARM64_ARCHIVE" --source-ref "$RELEASE_SOURCE")
+            if [ "$ADMIN_PUBLISH_INDEX" = true ]; then PLATFORM_ARGS+=(--publish-index); fi
+          fi
+          bun run deploy:ecr -- \
             --module-name ${{ env.MODULE_NAME }} \
             --module-version "${{ env.MODULE_VERSION }}" \
-            --docker-image "${{ github.workspace }}/${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}"
-        # Note: ECS deployment is automatically triggered by EventBridge when
-        # the 'latest' tag is pushed to ECR. See: ecr-ecs-auto-deploy.yaml
+            --docker-image "${{ github.workspace }}/${{ steps.prepare_docker_restore.outputs.DOCKER_IMAGE_TAR_GZ_PATH }}" \
+            "${PLATFORM_ARGS[@]}"
+        # API publication owns its protected ECS handover. Website/admin retain
+        # their existing EventBridge trigger; the API rule is disabled.
+
+      - name: Save API handover evidence
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'api' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: api-handover-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/api-handover.ndjson
+          if-no-files-found: warn
+
+      - name: Verify website recitation after ECS rollout
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'website' }}
+        working-directory: release-source
+        run: |
+          # Recreate the overlay from the exact release SHA. Repeated runs are safe.
+          python data/recitation/publish.py
+          python data/recitation/audit.py
+          python data/recitation/deployment.py --origin https://xn--febl3a.co.il \
+            --version "$MODULE_VERSION" --check-audio --attempts 30 --interval 20
+          NODE_PATH="$GITHUB_WORKSPACE/devops/node_modules" node web/bible-on-site/scripts/verify-public-content.mjs --origin https://xn--febl3a.co.il
+          # www/canonical host normalization and real-404 regression check (#2377).
+          node web/bible-on-site/scripts/verify-canonical-hosts.mjs --domain xn--febl3a.co.il --domain xn--febl3a.com
+
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"

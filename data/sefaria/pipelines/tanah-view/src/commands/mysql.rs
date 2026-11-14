@@ -3,7 +3,8 @@
 //! Generates INSERT statements for tanah_helek, tanah_sefer, tanah_additional,
 //! tanah_perek, and tanah_perek_date tables.
 
-use anyhow::Result;
+use anyhow::{Context, Result, bail, ensure};
+use icu_calendar::{Date, cal::Iso, types::Month};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -62,7 +63,7 @@ fn generate_sql(path: &Path, sefarim: &[Sefer], dump_name: &str) -> Result<()> {
     generate_perek_sql(&mut sql, sefarim);
 
     // Generate perek_date data
-    generate_perek_date_sql(&mut sql, sefarim);
+    generate_perek_date_sql(&mut sql, sefarim)?;
 
     // Re-enable foreign key checks
     sql.push_str("\nSET FOREIGN_KEY_CHECKS = 1;\n");
@@ -78,6 +79,19 @@ fn escape_sql_string(s: &str) -> String {
         .replace('\n', "\\n")
         .replace('\r', "\\r")
         .replace('\t', "\\t")
+}
+
+/// Quote a value as a SQL string literal, emitting `N'...'` when the content is
+/// non-ASCII so MySQL stores it through the national charset (utf8). Keeps the
+/// generated file clean of Codacy's "unicode characters in a non unicode
+/// string" finding.
+fn sql_string_literal(s: &str) -> String {
+    let escaped = escape_sql_string(s);
+    if escaped.is_ascii() {
+        format!("'{escaped}'")
+    } else {
+        format!("N'{escaped}'")
+    }
 }
 
 fn generate_helek_sql(sql: &mut String, sefarim: &[Sefer]) {
@@ -110,8 +124,8 @@ fn generate_helek_sql(sql: &mut String, sefarim: &[Sefer]) {
     for (name, id) in &helek_map {
         if let Some((from, to)) = helek_ranges.get(id) {
             sql.push_str(&format!(
-                "INSERT INTO tanah_helek (id, name, sefer_id_from, sefer_id_to) VALUES ({}, '{}', {}, {});\n",
-                id, escape_sql_string(name), from, to
+                "INSERT INTO tanah_helek (id, name, sefer_id_from, sefer_id_to) VALUES ({}, {}, {}, {});\n",
+                id, sql_string_literal(name), from, to
             ));
         }
     }
@@ -126,13 +140,13 @@ fn generate_sefer_sql(sql: &mut String, sefarim: &[Sefer]) {
         let tanach_us_name = sefer
             .tanach_us_name
             .as_deref()
-            .map(|s| format!("'{}'", escape_sql_string(s)))
+            .map(sql_string_literal)
             .unwrap_or_else(|| "NULL".to_string());
 
         sql.push_str(&format!(
-            "INSERT INTO tanah_sefer (id, name, tanach_us_name, perek_id_from, perek_id_to) VALUES ({}, '{}', {}, {}, {});\n",
+            "INSERT INTO tanah_sefer (id, name, tanach_us_name, perek_id_from, perek_id_to) VALUES ({}, {}, {}, {}, {});\n",
             sefer_id,
-            escape_sql_string(&sefer.name),
+            sql_string_literal(&sefer.name),
             tanach_us_name,
             sefer.perek_from,
             sefer.perek_to
@@ -152,10 +166,10 @@ fn generate_additional_sql(sql: &mut String, sefarim: &[Sefer]) {
                 let tanach_us_name = additional.tanach_us_name.as_deref().unwrap_or("");
 
                 sql.push_str(&format!(
-                    "INSERT INTO tanah_additional (sefer_id, letter, tanach_us_name, perek_from, perek_to) VALUES ({}, '{}', '{}', {}, {});\n",
+                    "INSERT INTO tanah_additional (sefer_id, letter, tanach_us_name, perek_from, perek_to) VALUES ({}, {}, {}, {}, {});\n",
                     sefer_id,
-                    escape_sql_string(&additional.letter),
-                    escape_sql_string(tanach_us_name),
+                    sql_string_literal(&additional.letter),
+                    sql_string_literal(tanach_us_name),
                     additional.perek_from,
                     additional.perek_to
                 ));
@@ -189,41 +203,71 @@ fn generate_perek_sql(sql: &mut String, sefarim: &[Sefer]) {
 
     for perek in &all_perakim {
         sql.push_str(&format!(
-            "INSERT INTO tanah_perek (id, perek, header) VALUES ({}, {}, '{}');\n",
+            "INSERT INTO tanah_perek (id, perek, header, pasuk_count) VALUES ({}, {}, {}, {});\n",
             perek.perek_id,
             perek.perek_id,
-            escape_sql_string(&perek.header)
+            sql_string_literal(&perek.header),
+            perek.pesukim.len()
         ));
     }
     sql.push('\n');
 }
 
-fn hebdate_to_mysql_date(hebdate: i64) -> String {
-    // Convert YYYYMMDD Hebrew date format to a Gregorian-ish date for MySQL
-    // For now, just store as a string date (the actual date conversion would need
-    // Hebrew calendar conversion which is complex)
-    // Format: YYYY-MM-DD where we use the Hebrew year directly
-    let year = hebdate / 10000;
-    let month = (hebdate % 10000) / 100;
-    let day = hebdate % 100;
-
-    // Use a fixed year range for MySQL DATE type (MySQL requires valid dates)
-    // Map Hebrew year 5775-5799 to 2014-2038 (approximately)
-    let greg_year = if (5775..=5799).contains(&year) {
-        year - 3761 // Approximate Hebrew to Gregorian
-    } else {
-        2024 // Default fallback
+fn hebdate_to_mysql_date(hebdate: i64) -> Result<String> {
+    ensure!(hebdate > 0, "Invalid Hebrew date: {hebdate}");
+    let year = i32::try_from(hebdate / 10000).context("Hebrew year out of range")?;
+    let legacy_month = (hebdate % 10000) / 100;
+    let day = (hebdate % 100) as u8;
+    let leap_year = (7 * i64::from(year) + 1) % 19 < 7;
+    let month = match legacy_month {
+        1..=5 | 7..=12 => Month::new(legacy_month as u8),
+        6 if !leap_year => Month::new(6),
+        13 if leap_year => Month::leap(5),
+        14 if leap_year => Month::new(6),
+        _ => bail!("Invalid Hebrew month in {hebdate}"),
     };
-
-    format!(
+    let hebrew = Date::try_new_hebrew_v2(year, month, day)
+        .with_context(|| format!("Invalid Hebrew date: {hebdate}"))?;
+    let iso = hebrew.to_calendar(Iso);
+    let iso_year = iso.year().extended_year();
+    ensure!(
+        (1000..=9999).contains(&iso_year),
+        "Date outside MySQL range: {hebdate}"
+    );
+    Ok(format!(
         "{:04}-{:02}-{:02}",
-        greg_year,
-        month.clamp(1, 12),
-        day.clamp(1, 28)
-    )
+        iso_year,
+        iso.month().ordinal,
+        iso.day_of_month().0
+    ))
 }
 
-fn generate_perek_date_sql(sql: &mut String, sefarim: &[Sefer]) {
+fn validate_star_rise(star_rise: &str) -> Result<String> {
+    let parts: Vec<&str> = star_rise.split(':').collect();
+    ensure!(
+        matches!(parts.len(), 2 | 3),
+        "Invalid star_rise time format: {star_rise}"
+    );
+    let mut values = [0u8; 3];
+    let limits = [24u8, 60, 60];
+    for (i, part) in parts.iter().enumerate() {
+        ensure!(
+            part.len() == 2 && part.bytes().all(|b| b.is_ascii_digit()),
+            "Invalid star_rise time format: {star_rise}"
+        );
+        let v = part
+            .parse::<u8>()
+            .with_context(|| format!("Invalid star_rise time: {star_rise}"))?;
+        ensure!(v < limits[i], "star_rise time out of range: {star_rise}");
+        values[i] = v;
+    }
+    Ok(format!(
+        "{:02}:{:02}:{:02}",
+        values[0], values[1], values[2]
+    ))
+}
+
+fn generate_perek_date_sql(sql: &mut String, sefarim: &[Sefer]) -> Result<()> {
     sql.push_str("-- tanah_perek_date\n");
 
     let all_perakim = collect_all_perakim(sefarim);
@@ -231,30 +275,25 @@ fn generate_perek_date_sql(sql: &mut String, sefarim: &[Sefer]) {
     for perek in &all_perakim {
         for (cycle_idx, date_val) in perek.date.iter().enumerate() {
             let cycle = cycle_idx + 1;
-            let star_rise = perek
-                .star_rise
-                .get(cycle_idx)
-                .map(|s| s.as_str())
-                .unwrap_or("00:00");
-
-            // Format star_rise as TIME (HH:MM:SS)
-            let star_rise_time = if star_rise.len() == 5 {
-                format!("{}:00", star_rise)
-            } else {
-                star_rise.to_string()
-            };
+            let star_rise_time = validate_star_rise(
+                perek
+                    .star_rise
+                    .get(cycle_idx)
+                    .map_or("00:00", |s| s.as_str()),
+            )?;
 
             sql.push_str(&format!(
                 "INSERT INTO tanah_perek_date (perek_id, cycle, date, hebdate, star_rise) VALUES ({}, {}, '{}', '{}', '{}');\n",
                 perek.perek_id,
                 cycle,
-                hebdate_to_mysql_date(*date_val),
+                hebdate_to_mysql_date(*date_val)?,
                 date_val,
                 star_rise_time
             ));
         }
     }
     sql.push('\n');
+    Ok(())
 }
 
 #[cfg(test)]
@@ -274,9 +313,10 @@ mod tests {
 
     fn perek(perek_id: i32, header: &str, star_rise: Vec<&str>) -> Perek {
         Perek {
+            recitation: None,
             perek_id,
             header: header.to_string(),
-            date: vec![57750329, 57000132],
+            date: vec![57750329, 57781103],
             star_rise: star_rise.into_iter().map(str::to_string).collect(),
             pesukim: vec![Pasuk {
                 segments: vec![
@@ -349,10 +389,125 @@ mod tests {
     }
 
     #[test]
-    fn hebdate_to_mysql_date_clamps_invalid_parts_and_falls_back_year() {
-        assert_eq!(hebdate_to_mysql_date(57750329), "2014-03-28");
-        assert_eq!(hebdate_to_mysql_date(57801332), "2019-12-28");
-        assert_eq!(hebdate_to_mysql_date(57000000), "2024-01-01");
+    fn sql_string_literal_marks_non_ascii_with_national_charset_prefix() {
+        assert_eq!(sql_string_literal("plain"), "'plain'");
+        assert_eq!(sql_string_literal("תורה"), "N'תורה'");
+        assert_eq!(sql_string_literal("it's א"), "N'it\\'s א'");
+    }
+
+    #[test]
+    fn hebdate_to_mysql_date_preserves_real_dates_and_leap_months() {
+        for (hebrew, iso) in [
+            (57750329, "2014-12-21"),
+            (57750330, "2014-12-22"),
+            (57781103, "2018-07-15"),
+            (57821305, "2022-02-06"),
+            (57851207, "2025-08-31"),
+            (57890709, "2029-03-25"),
+            (57841301, "2024-02-10"),
+            (57841401, "2024-03-11"),
+            (57860601, "2026-02-18"),
+            (57870101, "2026-09-12"),
+            (57870218, "2026-10-29"),
+        ] {
+            assert_eq!(
+                hebdate_to_mysql_date(hebrew).unwrap(),
+                iso,
+                "Hebrew date {hebrew}"
+            );
+        }
+    }
+
+    #[test]
+    fn hebdate_to_mysql_date_rejects_invalid_dates_instead_of_clamping() {
+        for invalid in [
+            0,
+            -57750329,
+            57000000,
+            57801332,
+            57751301,
+            57751401,
+            57820601,
+            57841430,
+            100000101,
+            200000101,
+            i64::MAX,
+            1000101,
+        ] {
+            assert!(
+                hebdate_to_mysql_date(invalid).is_err(),
+                "Invalid date {invalid}"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_star_rise_normalizes_valid_times() {
+        assert_eq!(validate_star_rise("05:30").unwrap(), "05:30:00");
+        assert_eq!(validate_star_rise("06:07:08").unwrap(), "06:07:08");
+        assert_eq!(validate_star_rise("00:00").unwrap(), "00:00:00");
+        assert_eq!(validate_star_rise("23:59:59").unwrap(), "23:59:59");
+    }
+
+    #[test]
+    fn validate_star_rise_rejects_invalid_times() {
+        for invalid in [
+            "",
+            "5:30",
+            "05:30:08x",
+            "05:30:60",
+            "05:60",
+            "24:00",
+            "05:30:08; DROP TABLE tanah_perek_date; --",
+            "05:30'; DROP TABLE x; --",
+            "05",
+            "05:30:08:01",
+            "05::08",
+            " 05:30",
+            "05:30 ",
+        ] {
+            assert!(
+                validate_star_rise(invalid).is_err(),
+                "star_rise {invalid:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_star_rise_fails_export_and_preserves_existing_file() {
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join(".output");
+        fs::create_dir_all(&parent).unwrap();
+        let dir = parent.join(format!("invalid_star_rise_{}", std::process::id()));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("tanah.sql");
+        fs::write(&path, "previous verified export").unwrap();
+        let mut sefarim = sample_sefarim();
+        sefarim[0].perakim.as_mut().unwrap()[0].star_rise[0] =
+            "05:30'; DROP TABLE tanah_perek_date; --".to_string();
+        assert!(generate_sql(&path, &sefarim, "invalid").is_err());
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "previous verified export"
+        );
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn invalid_hebrew_date_does_not_replace_an_existing_export() {
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join(".output");
+        fs::create_dir_all(&parent).unwrap();
+        let dir = parent.join(format!("invalid_calendar_{}", std::process::id()));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("tanah.sql");
+        fs::write(&path, "previous verified export").unwrap();
+        let mut sefarim = sample_sefarim();
+        sefarim[0].perakim.as_mut().unwrap()[0].date[0] = 57841430;
+        assert!(generate_sql(&path, &sefarim, "invalid").is_err());
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            "previous verified export"
+        );
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
@@ -385,8 +540,11 @@ mod tests {
         assert!(sql.contains("INSERT INTO tanah_additional"));
         assert!(sql.contains("'A', 'BookB I', 2, 3"));
         assert!(sql.contains("Header\\nOne"));
-        assert!(sql.contains("'2014-03-28', '57750329', '05:30:00'"));
-        assert!(sql.contains("'2024-01-28', '57000132', '06:07:08'"));
+        // The perek INSERT carries the corpus pasuk count used by the
+        // covering-source write path to validate pasuk coordinates.
+        assert!(sql.contains("INSERT INTO tanah_perek (id, perek, header, pasuk_count) VALUES (1, 1, 'Header\\nOne', 1)"));
+        assert!(sql.contains("'2014-12-21', '57750329', '05:30:00'"));
+        assert!(sql.contains("'2018-07-15', '57781103', '06:07:08'"));
         assert!(sql.contains("SET FOREIGN_KEY_CHECKS = 1;"));
 
         fs::remove_dir_all(&dir).ok();
