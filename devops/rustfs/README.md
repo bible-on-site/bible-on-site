@@ -1,7 +1,7 @@
 # RustFS for development and CI
 
 Production storage remains AWS S3. Local development and Admin CI use the same
-[Compose configuration](../docker-compose.yml): RustFS 1.0.0 and a Node.js
+[Compose configuration](../docker-compose.yml): RustFS 1.0.5 and a Node.js
 initializer using the locked AWS SDK dependencies. RustFS and Node images are
 pinned by multi-platform image digest. No archived MinIO server or client is
 built or downloaded. RustFS is Apache-2.0 licensed and needs no activation token.
@@ -22,6 +22,11 @@ downloads only. Bucket CORS permits reads and signed uploads from the local Admi
 origins on port 3101. The initialization command must succeed before starting the app.
 `bun run docker:up` runs both commands and stops on failure. Readiness checks wait for
 storage and IAM, not just the process.
+
+RustFS uses `us-east-1` for bucket creation and request signing. Local Admin,
+population tasks, and asset-mirror writes select that region independently of
+the production source bucket. With no `S3_ENDPOINT`, Admin uses `S3_REGION`,
+then `AWS_REGION`, then `il-central-1`; existing AWS asset URLs keep their region.
 
 ## Existing MinIO installations
 

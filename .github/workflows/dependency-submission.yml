@@ -65,7 +65,7 @@ jobs:
           # previous SDK under rollForward: disable — read it so the installed
           # SDK satisfies that tree's resolver instead of failing the first
           # dotnet invocation.
-          dotnet-version: ${{ matrix.source == 'base' && '' || '10.0.403' }}
+          dotnet-version: ${{ matrix.source == 'base' && '' || '10.0.404' }}
           global-json-file: global.json
       - name: 'Setup Java for the Android workload'
         uses: actions/setup-java@v6

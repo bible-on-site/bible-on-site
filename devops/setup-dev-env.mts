@@ -11,7 +11,7 @@ import {
 } from "./dev-db-checkpoint.mts";
 import { configureRecordings, prepareRecitation } from "./local-recitation.mjs";
 import { withDevSyncIngress } from "./rds-sync-access.mts";
-import { assertLocalAssetTarget, localAssetEnvironment, syncLocalAssetMirror } from "./asset-mirror.mjs";
+import { assertLocalAssetTarget, assetBucketCreateArgs, localAssetEnvironment, syncLocalAssetMirror } from "./asset-mirror.mjs";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
 const __dirname = path.dirname(__filename); // get the name of the directory
@@ -635,14 +635,9 @@ async function runSyncFromProd(): Promise<void> {
 			} else {
 				// Ensure dev bucket exists (upsert principle)
 				console.info(`Ensuring S3 bucket '${devS3Bucket}' exists...`);
-				const mbArgs = [
-					"s3",
-					"mb",
-					`s3://${devS3Bucket}`,
-					"--region",
-					awsRegion,
-				];
-				if (s3Endpoint) mbArgs.push("--endpoint-url", s3Endpoint);
+				const mbArgs = assetBucketCreateArgs({
+					bucket: devS3Bucket, region: awsRegion, endpoint: s3Endpoint,
+				});
 				const mbResult = spawnSync("aws", mbArgs, {
 					stdio: ["ignore", "pipe", "pipe"],
 					shell: isWin,

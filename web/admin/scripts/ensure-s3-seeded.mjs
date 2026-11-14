@@ -37,7 +37,7 @@ if (!endpoint) {
 
 const client = new S3Client({
 	endpoint,
-	region: process.env.S3_REGION ?? "us-east-1",
+	region: "us-east-1",
 	forcePathStyle: true,
 	credentials: {
 		accessKeyId: process.env.S3_ACCESS_KEY_ID ?? "test",
@@ -68,5 +68,6 @@ try {
 const result = spawnSync("cargo", ["make", "s3-populate-dev"], {
 	cwd: dataDir,
 	stdio: "inherit",
+	env: { ...process.env, S3_REGION: "us-east-1" },
 });
 process.exit(result.status ?? 1);
