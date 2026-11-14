@@ -1,0 +1,33 @@
+{
+  "enTitle": "Mekhilta DeRabbi Yishmael",
+  "schema": { "nodes": [
+    { "key": "Tractate Pischa", "depth": 2 },
+    { "key": "Tractate Vayehi Beshalach", "depth": 2 }
+  ] },
+  "alt_structs": { "Chapter": { "nodes": [
+    {
+      "depth": 1, "addressTypes": ["Integer"], "sectionNames": ["Verse"],
+      "titles": [{ "lang": "en", "primary": true, "text": "Chapter 12" }],
+      "startingAddress": "6",
+      "refs": ["Mekhilta DeRabbi Yishmael, Tractate Pischa 4:4-5:24"]
+    },
+    {
+      "depth": 1, "addressTypes": ["Integer"], "sectionNames": ["Verse"],
+      "titles": [{ "lang": "en", "primary": true, "text": "Chapter 14" }],
+      "startingAddress": "11", "skipped_addresses": [12],
+      "refs": [
+        "Mekhilta DeRabbi Yishmael, Tractate Vayehi Beshalach 3:17",
+        "Mekhilta DeRabbi Yishmael, Tractate Vayehi Beshalach 3:18-27"
+      ]
+    }
+  ] } },
+  "versions": [{
+    "Tractate Pischa": [[], [], [],
+      ["", "", "", "end of section four"],
+      ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "end of section five"]
+    ],
+    "Tractate Vayehi Beshalach": [[], [],
+      ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "single paragraph", "first included paragraph", "", "", "", "", "", "", "", "", "last included paragraph"]
+    ]
+  }]
+}

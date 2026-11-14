@@ -1,0 +1,1099 @@
+{
+  "versionTitle": "Midrash Tanchuma -- Torat Emet",
+  "sourceRevision": "a155a11352fea18612328587e6897105a7f6b357",
+  "parashot": {
+    "Bereshit": {
+      "hash": "2b63ee7bfe926d44",
+      "paragraphCounts": [
+        20,
+        13,
+        12,
+        7,
+        16,
+        4,
+        14,
+        3,
+        8,
+        2,
+        6,
+        5,
+        5
+      ]
+    },
+    "Noach": {
+      "hash": "a3be689621b8e79a",
+      "paragraphCounts": [
+        5,
+        5,
+        13,
+        9,
+        6,
+        3,
+        5,
+        2,
+        3,
+        8,
+        12,
+        9,
+        7,
+        7,
+        6,
+        1,
+        3,
+        15,
+        3
+      ]
+    },
+    "Lech Lecha": {
+      "hash": "b252a3949e136b44",
+      "paragraphCounts": [
+        2,
+        3,
+        4,
+        4,
+        4,
+        3,
+        2,
+        5,
+        4,
+        2,
+        3,
+        3,
+        6,
+        2,
+        3,
+        3,
+        4,
+        3,
+        2,
+        6
+      ]
+    },
+    "Vayera": {
+      "hash": "8daac1aab0604a10",
+      "paragraphCounts": [
+        7,
+        6,
+        5,
+        8,
+        9,
+        9,
+        2,
+        6,
+        4,
+        1,
+        1,
+        2,
+        6,
+        2,
+        1,
+        2,
+        3,
+        3,
+        1,
+        3,
+        2,
+        14,
+        10
+      ]
+    },
+    "Chayei Sara": {
+      "hash": "727db54a452b5ac1",
+      "paragraphCounts": [
+        2,
+        1,
+        11,
+        5,
+        3,
+        8,
+        2,
+        3
+      ]
+    },
+    "Toldot": {
+      "hash": "bec94fae3f0ee5bb",
+      "paragraphCounts": [
+        4,
+        1,
+        1,
+        2,
+        3,
+        2,
+        2,
+        6,
+        2,
+        2,
+        5,
+        7,
+        1,
+        3
+      ]
+    },
+    "Vayetzei": {
+      "hash": "84750d4fb7108469",
+      "paragraphCounts": [
+        1,
+        3,
+        4,
+        2,
+        3,
+        5,
+        3,
+        4,
+        4,
+        2,
+        6,
+        2,
+        4
+      ]
+    },
+    "Vayishlach": {
+      "hash": "f1583436d7129188",
+      "paragraphCounts": [
+        4,
+        7,
+        7,
+        5,
+        2,
+        3,
+        6,
+        7,
+        4,
+        6
+      ]
+    },
+    "Vayeshev": {
+      "hash": "22cd15619ae8009e",
+      "paragraphCounts": [
+        8,
+        15,
+        5,
+        5,
+        2,
+        4,
+        4,
+        6,
+        7
+      ]
+    },
+    "Miketz": {
+      "hash": "bdd860aee68f3e3f",
+      "paragraphCounts": [
+        2,
+        6,
+        7,
+        3,
+        2,
+        5,
+        2,
+        4,
+        4,
+        13
+      ]
+    },
+    "Vayigash": {
+      "hash": "04f029053c40592e",
+      "paragraphCounts": [
+        4,
+        3,
+        6,
+        9,
+        15,
+        4,
+        2,
+        7,
+        4,
+        2,
+        3
+      ]
+    },
+    "Vayechi": {
+      "hash": "ad363635eb070392",
+      "paragraphCounts": [
+        2,
+        8,
+        9,
+        3,
+        1,
+        8,
+        3,
+        8,
+        8,
+        22,
+        2,
+        3,
+        5,
+        12,
+        4,
+        3,
+        5
+      ]
+    },
+    "Shemot": {
+      "hash": "e33e331d4e3ac0a9",
+      "paragraphCounts": [
+        12,
+        3,
+        3,
+        3,
+        3,
+        1,
+        4,
+        4,
+        4,
+        4,
+        4,
+        3,
+        1,
+        4,
+        2,
+        5,
+        3,
+        6,
+        1,
+        3,
+        1,
+        1,
+        3,
+        2,
+        7,
+        1,
+        3,
+        2,
+        6
+      ]
+    },
+    "Vaera": {
+      "hash": "cca942b839d66eb5",
+      "paragraphCounts": [
+        4,
+        2,
+        2,
+        2,
+        6,
+        7,
+        2,
+        3,
+        9,
+        2,
+        2,
+        2,
+        5,
+        14,
+        2,
+        3,
+        2
+      ]
+    },
+    "Bo": {
+      "hash": "e2aea7e3f7a6de5c",
+      "paragraphCounts": [
+        1,
+        3,
+        3,
+        7,
+        4,
+        1,
+        4,
+        2,
+        3,
+        4,
+        5,
+        5,
+        1,
+        5
+      ]
+    },
+    "Beshalach": {
+      "hash": "2d4195f70e3f0fea",
+      "paragraphCounts": [
+        4,
+        6,
+        1,
+        1,
+        1,
+        2,
+        1,
+        3,
+        2,
+        11,
+        5,
+        14,
+        3,
+        1,
+        4,
+        7,
+        1,
+        3,
+        3,
+        2,
+        3,
+        1,
+        2,
+        3,
+        4,
+        4,
+        2,
+        5
+      ]
+    },
+    "Yitro": {
+      "hash": "62e500269848432a",
+      "paragraphCounts": [
+        3,
+        2,
+        5,
+        3,
+        4,
+        2,
+        5,
+        2,
+        1,
+        3,
+        3,
+        3,
+        3,
+        3,
+        2,
+        8,
+        3
+      ]
+    },
+    "Mishpatim": {
+      "hash": "f77c62f739b18093",
+      "paragraphCounts": [
+        2,
+        2,
+        3,
+        4,
+        12,
+        21,
+        8,
+        6,
+        7,
+        4,
+        4,
+        6,
+        4,
+        1,
+        8,
+        1,
+        7,
+        10,
+        8
+      ]
+    },
+    "Terumah": {
+      "hash": "15821c3ed6b3558b",
+      "paragraphCounts": [
+        2,
+        2,
+        4,
+        3,
+        3,
+        1,
+        5,
+        3,
+        17,
+        4,
+        8
+      ]
+    },
+    "Tetzaveh": {
+      "hash": "9063c79a831ed96e",
+      "paragraphCounts": [
+        4,
+        2,
+        1,
+        4,
+        5,
+        6,
+        1,
+        4,
+        3,
+        8,
+        4,
+        4,
+        8,
+        2,
+        7
+      ]
+    },
+    "Ki Tisa": {
+      "hash": "9c497bd01a5a69a9",
+      "paragraphCounts": [
+        3,
+        8,
+        6,
+        4,
+        9,
+        4,
+        1,
+        4,
+        5,
+        4,
+        3,
+        2,
+        5,
+        8,
+        4,
+        6,
+        3,
+        2,
+        5,
+        2,
+        2,
+        4,
+        2,
+        5,
+        1,
+        5,
+        11,
+        2,
+        3,
+        3,
+        2,
+        1,
+        6,
+        5,
+        4,
+        1,
+        3
+      ]
+    },
+    "Vayakhel": {
+      "hash": "c47dcaa4b37a5ba1",
+      "paragraphCounts": [
+        7,
+        2,
+        3,
+        10,
+        4,
+        5,
+        15,
+        4,
+        2,
+        7
+      ]
+    },
+    "Pekudei": {
+      "hash": "5ea0c8cb38f158e4",
+      "paragraphCounts": [
+        2,
+        8,
+        18,
+        2,
+        5,
+        2,
+        4,
+        3,
+        5,
+        1,
+        14
+      ]
+    },
+    "Vayikra": {
+      "hash": "c1e5f874cd758e9d",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Tzav": {
+      "hash": "e5104bd632c2233f",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Shmini": {
+      "hash": "acc20a3dfe73d076",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        3,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Tazria": {
+      "hash": "f494551ab1124473",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Metzora": {
+      "hash": "ee573eecfc3dce01",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Achrei Mot": {
+      "hash": "5922e0b21074b744",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Kedoshim": {
+      "hash": "99ee340184a00217",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Emor": {
+      "hash": "bb17202b85aa47d7",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Behar": {
+      "hash": "413e54b62b08663f",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Bechukotai": {
+      "hash": "d7e7647ce7d4d81e",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Bamidbar": {
+      "hash": "f08fccdd9778f4bc",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Nasso": {
+      "hash": "38988249bca4cdf6",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Beha'alotcha": {
+      "hash": "ad401677ef0c237c",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Sh'lach": {
+      "hash": "87208cc266ae170b",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Korach": {
+      "hash": "774a540ea2cfa578",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Chukat": {
+      "hash": "9550e6cb2a60f5e7",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Balak": {
+      "hash": "c0cf430a1682198e",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Pinchas": {
+      "hash": "6af536496e21e53a",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Matot": {
+      "hash": "ca7636f6f65fb454",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Masei": {
+      "hash": "24dae8639214de62",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        2
+      ]
+    },
+    "Devarim": {
+      "hash": "cd84860bc87121aa",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Vaetchanan": {
+      "hash": "5bf4d57e3b407e3f",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Eikev": {
+      "hash": "6c7518b63d704ba4",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Re'eh": {
+      "hash": "537e5f576d72f9fb",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Shoftim": {
+      "hash": "307a5ee31c60a3e3",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Ki Teitzei": {
+      "hash": "3a39e4f770f562e2",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Ki Tavo": {
+      "hash": "3e51adc25211afbd",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Nitzavim": {
+      "hash": "73a6bb4304ffe8f7",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "Vayeilech": {
+      "hash": "9de8cbb729329373",
+      "paragraphCounts": [
+        1,
+        1,
+        1
+      ]
+    },
+    "Ha'Azinu": {
+      "hash": "e433245c491dc40f",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "V'Zot HaBerachah": {
+      "hash": "74e466e9351fc15b",
+      "paragraphCounts": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        2
+      ]
+    }
+  },
+  "parashahOrder": [
+    "Bereshit",
+    "Noach",
+    "Lech Lecha",
+    "Vayera",
+    "Chayei Sara",
+    "Toldot",
+    "Vayetzei",
+    "Vayishlach",
+    "Vayeshev",
+    "Miketz",
+    "Vayigash",
+    "Vayechi",
+    "Shemot",
+    "Vaera",
+    "Bo",
+    "Beshalach",
+    "Yitro",
+    "Mishpatim",
+    "Terumah",
+    "Tetzaveh",
+    "Ki Tisa",
+    "Vayakhel",
+    "Pekudei",
+    "Vayikra",
+    "Tzav",
+    "Shmini",
+    "Tazria",
+    "Metzora",
+    "Achrei Mot",
+    "Kedoshim",
+    "Emor",
+    "Behar",
+    "Bechukotai",
+    "Bamidbar",
+    "Nasso",
+    "Beha'alotcha",
+    "Sh'lach",
+    "Korach",
+    "Chukat",
+    "Balak",
+    "Pinchas",
+    "Matot",
+    "Masei",
+    "Devarim",
+    "Vaetchanan",
+    "Eikev",
+    "Re'eh",
+    "Shoftim",
+    "Ki Teitzei",
+    "Ki Tavo",
+    "Nitzavim",
+    "Vayeilech",
+    "Ha'Azinu",
+    "V'Zot HaBerachah"
+  ]
+}

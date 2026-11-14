@@ -1,5 +1,6 @@
 {
 	"enTitle": 1,
+	"versionTitles": 1,
 	"alt_structs": 1,
 	"authors": {
 		"$switch": {

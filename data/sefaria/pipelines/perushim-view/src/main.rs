@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
 
     // Extract entities from pipeline output
     println!("📊 Extracting parshanim, perushim, and notes...");
-    let extracted = data::extract::extract(&results);
+    let extracted = data::extract::extract(&results)?;
     println!(
         "   {} parshanim, {} perushim, {} notes",
         extracted.parshanim.len(),

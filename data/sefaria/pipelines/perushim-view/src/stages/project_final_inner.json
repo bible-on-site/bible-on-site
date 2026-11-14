@@ -1,5 +1,6 @@
 {
 	"enTitle": 1,
+	"versionTitles": 1,
 	"additional": {
 		"$switch": {
 			"branches": [

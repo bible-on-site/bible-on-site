@@ -184,6 +184,14 @@ const UNCLEAR_EXCLUSIONS: &[&str] = &[
 /// - `categories` contains "Tanakh"
 /// - `title` is not in the exclusion list
 pub fn build() -> Document {
+    let mapped_midrashim: Vec<&str> = [
+        "Midrash Tanchuma",
+        "Mekhilta d'Rabbi Yishmael",
+        "Mekhilta DeRabbi Yishmael",
+    ]
+    .into_iter()
+    .chain(crate::data::verse_midrash::titles().iter().copied())
+    .collect();
     let excluded: Vec<&str> = TANAKH_BOOKS
         .iter()
         .chain(HASKALAH_EXCLUDED.iter())
@@ -198,7 +206,12 @@ pub fn build() -> Document {
 
     doc! {
         "$match": {
-            "categories": "Tanakh",
+            "$or": [
+                { "categories": "Tanakh" },
+                // These Midrash-category works have dedicated, reviewed verse
+                // resolvers. Do not include the entire category positionally.
+                { "title": { "$in": mapped_midrashim } }
+            ],
             "title": {
                 "$nin": excluded
             }
@@ -339,7 +352,31 @@ mod tests {
     fn build_produces_valid_match_document() {
         let doc = build();
         let match_doc = doc.get_document("$match").expect("missing $match");
-        assert_eq!(match_doc.get_str("categories").unwrap(), "Tanakh");
+        let alternatives = match_doc.get_array("$or").unwrap();
+        assert_eq!(
+            alternatives[0]
+                .as_document()
+                .unwrap()
+                .get_str("categories")
+                .unwrap(),
+            "Tanakh"
+        );
+        let midrashim = alternatives[1]
+            .as_document()
+            .unwrap()
+            .get_document("title")
+            .unwrap()
+            .get_array("$in")
+            .unwrap();
+        assert_eq!(
+            midrashim.len(),
+            3 + crate::data::verse_midrash::titles().len()
+        );
+        assert!(
+            midrashim
+                .iter()
+                .any(|title| title.as_str() == Some("Midrash Tanchuma"))
+        );
         let nin = match_doc
             .get_document("title")
             .expect("missing title")
