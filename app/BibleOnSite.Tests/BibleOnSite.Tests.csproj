@@ -101,6 +101,8 @@
     <Compile Include="..\BibleOnSite\ViewModels\LearningCalendarViewModel.cs" Link="ViewModels\LearningCalendarViewModel.cs" />
     <!-- Exercise calendar date-refresh lifecycle with the test XAML shell. -->
     <Compile Include="..\BibleOnSite\Pages\LearningCalendarPage.xaml.cs" Link="Pages\LearningCalendarPage.xaml.cs" />
+    <!-- Exercise the real Shell query boundary without constructing XAML controls. -->
+    <Compile Include="..\BibleOnSite\Pages\MoedPage.Query.cs" Link="Pages\MoedPage.Query.cs" />
     <!-- Exercise the section=packs overview/pack-view swap on the real page with the test XAML shells. -->
     <Compile Include="..\BibleOnSite\Pages\PreferencesPage.xaml.cs" Link="Pages\PreferencesPage.xaml.cs" />
     <Compile Include="..\BibleOnSite\Controls\ExtensionPacksView.xaml.cs" Link="Controls\ExtensionPacksView.xaml.cs" />

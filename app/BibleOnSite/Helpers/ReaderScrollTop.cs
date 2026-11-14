@@ -10,6 +10,18 @@ namespace BibleOnSite.Helpers;
 /// </summary>
 public static class ReaderScrollTop
 {
+    /// <summary>Scrolls an explicitly owned top-level list, independent of its binding context.</summary>
+    public static bool ScrollListToStart(CollectionView list)
+    {
+        if (!list.IsVisible || list.Handler is null || list.Height <= 0 ||
+            list.ItemsSource?.Cast<object>().Any() != true)
+        {
+            return false;
+        }
+        list.ScrollTo(0, position: ScrollToPosition.Start, animate: AnimateScroll());
+        return true;
+    }
+
     /// <summary>
     /// Scrolls the vertical reading surface realized for
     /// <paramref name="currentUnit"/> inside <paramref name="root"/> back to its

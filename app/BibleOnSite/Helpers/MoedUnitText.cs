@@ -101,7 +101,7 @@ public static class MoedUnitText
                         var startIndex = pasukNum == slice.StartPasuk ? slice.StartSegmentIndex : null;
                         var endIndex = pasukNum == slice.EndPasuk ? slice.EndSegmentIndex : null;
                         var clipped = startIndex == null && endIndex == null
-                            ? pasuk
+                            ? new Pasuk { PasukNum = pasuk.PasukNum, Text = pasuk.Text, Segments = pasuk.Segments.ToList() }
                             : MasoraUnitText.ClipPasuk(pasuk, startIndex, endIndex);
                         rows.Add(MoedDisplayRow.PasukRow(section.Id, clipped, slice.PerekId,
                             fontSize, markerFontSize, startIndex ?? 0, endIndex ?? int.MaxValue,

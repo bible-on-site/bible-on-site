@@ -9,6 +9,12 @@ catalogue/reader captures also show the pinned pane with the
 
 ## What each file shows
 
+The historical before state is the [Android flyout captured on 2026-10-31](https://github.com/bible-on-site/bible-on-site/blob/480e6ea26537e0b373b017e8e31936093f421552/docs/daily-bulletin/screenshots/app-bulletin-flyout-after.png):
+פרשה על הפרק is followed directly by רבנים, without a מועדים destination.
+The Windows captures below show the added destination, catalogue and reader.
+These captures use different platforms and themes; they document feature
+availability, not a pixel-for-pixel layout comparison.
+
 | File | Content |
 | --- | --- |
 | `after-flyout-entry.png` | The shared flyout open on the catalogue page. The new **מועדים על הפרק / קריאות לימוד למועדים** destination sits between פרשה על הפרק and רכנים and renders highlighted as the current page. |

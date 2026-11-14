@@ -15,6 +15,35 @@ namespace BibleOnSite.Tests.Helpers;
 /// </summary>
 public class ReaderRecitationEngineTests
 {
+    [Theory]
+    [InlineData(7, 12)]
+    [InlineData(8, 11)]
+    public async Task RepeatedMoedPreview_TogglesOnlyItsOwnOccurrence_AndFocusResumesOnlyThatKey(
+        int sectionId, int rangeId)
+    {
+        await using var rig = await StartedRig();
+        var first = MoedDisplayRow.PasukRow(7, Canonical()[0], 1, 18, 10, 0, int.MaxValue, 11);
+        var repeated = MoedDisplayRow.PasukRow(sectionId, Canonical()[0], 1, 18, 10, 0, int.MaxValue, rangeId);
+        var clip = ClipFor() with { SectionId = first.SectionId, RangeId = first.RangeId };
+
+        await rig.Engine.PlayClipAsync(MoedRecitation.PasukKey(first), false, clip);
+        rig.Surface.RaiseOpened();
+        await rig.Engine.PlayClipAsync(MoedRecitation.PasukKey(first), false, clip);
+        rig.Surface.PauseCount.Should().Be(1);
+        rig.Decoder.ClipCalls.Should().Be(1);
+
+        await rig.Engine.PlayClipAsync(MoedRecitation.PasukKey(repeated), false,
+            clip with { SectionId = repeated.SectionId, RangeId = repeated.RangeId });
+        rig.Surface.RaiseOpened();
+
+        rig.Decoder.ClipCalls.Should().Be(2, "another occurrence must prepare instead of toggling the old clip");
+        rig.Surface.PauseCount.Should().Be(1);
+        rig.Engine.CurrentSegment!.SectionId.Should().Be(sectionId);
+        rig.Engine.CurrentSegment.RangeId.Should().Be(rangeId);
+        rig.Engine.Cursor.ResumesOnPasukFocus(MoedRecitation.PasukKey(first), false).Should().BeFalse();
+        rig.Engine.Cursor.ResumesOnPasukFocus(MoedRecitation.PasukKey(repeated), false).Should().BeTrue();
+    }
+
     private static string Hash(byte[] value) => Convert.ToHexStringLower(SHA256.HashData(value));
     private static byte[] Wav(byte[] pcm)
     {

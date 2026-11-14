@@ -345,6 +345,10 @@ public partial class MoedViewModel : ObservableObject, IPerushimSheetViewModel /
         moed.Sections.OrderBy(section => section.Position)
             .SelectMany(PlanSegmentsForSection).ToList();
 
+    /// <summary>Selected occurrences play in display order, including revisited perakim.</summary>
+    public List<RecitationSegment> PlanSegmentsForSelection() =>
+        MoedRecitation.SelectedSegments(Rows, SelectedPasukim, GetLoadedPasukim, _getTrack, _hasPerekAudio);
+
     /// <summary>Mirrors each section's playable verdict onto its header row's play button.</summary>
     private void UpdateSectionPlayButtons()
     {
@@ -562,6 +566,13 @@ public partial class MoedViewModel : ObservableObject, IPerushimSheetViewModel /
     /// </summary>
     public async Task EnsureRowsLoadedAsync(MoedUnit moed)
     {
+        // Display rows belong to the shared catalogue object; alignment data
+        // belongs to this reader instance, including when rows were built by
+        // an earlier page. Never recover canonical text from clipped rows.
+        foreach (var perekId in MoedUnitText.PerekIdsForUnit(moed))
+        {
+            await LoadAndCachePasukimAsync(perekId);
+        }
         if (moed.Rows.Count > 0)
         {
             return;
@@ -593,6 +604,10 @@ public partial class MoedViewModel : ObservableObject, IPerushimSheetViewModel /
 
     private async Task<List<Pasuk>> LoadAndCachePasukimAsync(int perekId)
     {
+        if (_loadedPerekPasukim.TryGetValue(perekId, out var cached))
+        {
+            return cached;
+        }
         var pasukim = await _perekDataService.LoadPasukimAsync(perekId);
         _loadedPerekPasukim[perekId] = pasukim;
         return pasukim;

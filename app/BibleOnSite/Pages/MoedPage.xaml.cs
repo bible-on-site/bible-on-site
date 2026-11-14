@@ -33,13 +33,6 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
     // coordinator (#2573).
     private ReaderDisplaySync _displaySync = null!;
 
-    // Slug requested via query attributes before the initial load finished —
-    // the canonical deep-link key (list taps and /moadim/{slug} links).
-    private string? _pendingSlug;
-
-    // Id requested via query attributes; resolved through the loaded catalogue.
-    private int? _pendingId;
-
     public MoedPage()
     {
         InitializeComponent();
@@ -92,6 +85,7 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
             {
                 ReloadArticlesAsync = ShowUnitArticlesAsync,
                 CurrentUnit = () => _viewModel.Unit,
+                ScrollReadingToStart = () => ReaderScrollTop.ScrollListToStart(MoedRowsCollection),
                 SelectArticle = id => _viewModel.SelectedArticleId = id,
                 CanGoPrevious = () => _viewModel.CanGoToPreviousUnit,
                 CanGoNext = () => _viewModel.CanGoToNextUnit,
@@ -160,29 +154,6 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
                     : Task.CompletedTask,
             });
     }
-
-    /// <summary>
-    /// Query attributes for deep navigation: <c>?slug=תשעה-באב</c> opens a moed
-    /// by its canonical slug; <c>?id=3</c> resolves through the catalogue.
-    /// </summary>
-    public void ApplyQueryAttributes(IDictionary<string, object> query)
-    {
-        if (query.TryGetValue("slug", out var slugValue))
-        {
-            _pendingSlug = slugValue as string;
-        }
-        else if (query.TryGetValue("id", out var idValue))
-        {
-            _pendingId = ParsePositiveInt(idValue);
-        }
-    }
-
-    private static int? ParsePositiveInt(object value) => value switch
-    {
-        int i when i > 0 => i,
-        string s when int.TryParse(s, out var parsed) && parsed > 0 => parsed,
-        _ => null
-    };
 
     /// <summary>
     /// Subscribes to ViewModel.NavigationRequested so programmatic navigation

@@ -13,6 +13,33 @@ namespace BibleOnSite.Tests.Helpers;
 /// </summary>
 public class ReaderScrollTopTests
 {
+    [Fact]
+    public void ExplicitTopLevelList_ScrollsWithoutAUnitBindingContext()
+    {
+        var list = Realize(new CollectionView { BindingContext = new object(), ItemsSource = new[] { "first", "last" } });
+        ScrollToRequestEventArgs? request = null;
+        list.ScrollToRequested += (_, args) => request = args;
+
+        ReaderScrollTop.ScrollListToStart(list).Should().BeTrue();
+
+        request.Should().NotBeNull();
+        request!.Index.Should().Be(0);
+        request.ScrollToPosition.Should().Be(ScrollToPosition.Start);
+    }
+
+    [Fact]
+    public void ExplicitTopLevelList_EmptyOrUnrealizedListDoesNotIssueAScroll()
+    {
+        var list = new CollectionView { ItemsSource = new[] { "first" } };
+        ReaderScrollTop.ScrollListToStart(list).Should().BeFalse();
+        Realize(list);
+        list.IsVisible = false;
+        ReaderScrollTop.ScrollListToStart(list).Should().BeFalse();
+        list.IsVisible = true;
+        list.ItemsSource = Array.Empty<string>();
+        ReaderScrollTop.ScrollListToStart(list).Should().BeFalse();
+    }
+
     private static readonly object CurrentUnit = new();
     private static readonly object NeighborUnit = new();
 

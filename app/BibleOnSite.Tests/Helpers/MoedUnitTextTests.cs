@@ -10,6 +10,30 @@ namespace BibleOnSite.Tests.Helpers;
 /// </summary>
 public class MoedUnitTextTests
 {
+    [Fact]
+    public async Task RepeatedOccurrences_HaveIndependentDisplayState_AndLeaveCanonicalTextUntouched()
+    {
+        var canonical = new List<Pasuk> { PasukOf(1, Word("א")) };
+        var moed = Moed(
+            Section(7, 1, "קריאה", Range(11, 1, 1, 1, 1), Range(12, 1, 1, 1, 1)),
+            Section(8, 2, "מפטיר", Range(13, 1, 1, 1, 1)));
+        var rows = (await MoedUnitText.BuildRowsAsync(moed,
+            _ => Task.FromResult(canonical), PerekSource, PerekInfo, 1))
+            .Where(row => row.Pasuk != null).ToList();
+
+        rows.Select(row => row.Pasuk).Distinct().Should().HaveCount(3);
+        rows[1].Pasuk!.RecitingSegment = 1;
+        rows[1].Pasuk!.IsSelected = true;
+
+        rows[0].Pasuk!.RecitingSegment.Should().BeNull();
+        rows[2].Pasuk!.RecitingSegment.Should().BeNull();
+        rows[0].Pasuk!.IsSelected.Should().BeFalse();
+        rows[2].Pasuk!.IsSelected.Should().BeFalse();
+        canonical[0].RecitingSegment.Should().BeNull();
+        canonical[0].IsSelected.Should().BeFalse();
+        rows.Should().OnlyContain(row => row.Pasuk!.Text == "א");
+    }
+
     private static MoedRange Range(int position, int startPerek, int startPasuk,
         int endPerek, int endPasuk) => new()
         {

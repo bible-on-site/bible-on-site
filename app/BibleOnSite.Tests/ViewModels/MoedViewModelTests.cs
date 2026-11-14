@@ -13,6 +13,31 @@ namespace BibleOnSite.Tests.ViewModels;
 /// </summary>
 public class MoedViewModelTests
 {
+    [Fact]
+    public async Task ReopenedUnit_StillLoadsCanonicalTextAndOffersInstalledRecitation()
+    {
+        RecitationTrack Pending(int id) => new(id, $"u{id}", "h", "t", 5000, "pending", []);
+        await using var fixture = new Fixture(hasPerekAudio: _ => true, getTrack: Pending);
+        await fixture.Initialize();
+        await fixture.Model.LoadBySlugAsync("first");
+        var unit = fixture.Model.Unit!;
+        var rows = unit.Rows;
+        var reopened = new MoedViewModel(fixture.MoedService,
+            new PerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object)),
+            fixture.Preferences, fixture.Catalog, fixture.Notes,
+            () => new List<Article>(), _ => true, Pending);
+
+        await reopened.LoadBySlugAsync("first");
+
+        reopened.Unit.Should().BeSameAs(unit);
+        reopened.Rows.Should().BeSameAs(rows, "the shared display rows can be reused");
+        reopened.GetLoadedPasukim(1).Should().HaveCount(2);
+        reopened.GetLoadedPasukim(2).Should().HaveCount(2);
+        reopened.PlanSegmentsForUnit(unit).Select(segment => segment.PerekId).Should().Equal(1, 2);
+        reopened.HasCurrentUnitRecitation.Should().BeTrue();
+        reopened.Rows[0].ShowPlayButton.Should().BeTrue();
+    }
+
     private const string BibleDb = "sefaria-dump-5784-sivan-4.tanah_view.sqlite";
 
     private const string Catalogue = """
@@ -267,6 +292,9 @@ public class MoedViewModelTests
         // affordance and each section header's play button mirror the plan.
         fixture.Model.HasCurrentUnitRecitation.Should().BeTrue();
         fixture.Model.Rows[0].ShowPlayButton.Should().BeTrue();
+        fixture.Model.ToggleSelectedPasuk(1, 1);
+        fixture.Model.PlanSegmentsForSelection().Should().BeEmpty(
+            "a selected verse needs approved word boundaries even when the whole unaligned perek can play");
     }
 
     [Fact]
