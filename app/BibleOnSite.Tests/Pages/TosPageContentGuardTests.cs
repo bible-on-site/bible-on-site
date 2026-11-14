@@ -66,9 +66,9 @@ public class TosPageContentGuardTests
         var xaml = XDocument.Parse(TosXaml());
         var link = Assert.Single(xaml.Descendants()
             .Where(e => e.Attribute("AutomationId")?.Value == "CopyrightEmailLink"));
+        Assert.Equal("Button", link.Name.LocalName);
         Assert.Equal("tanah.site@gmail.com", link.Attribute("Text")?.Value);
-        Assert.Contains(link.Descendants(),
-            e => e.Attribute("Tapped")?.Value == "OnCopyrightEmailTapped");
+        Assert.Equal("OnCopyrightEmailTapped", link.Attribute("Clicked")?.Value);
         Assert.Contains("OnCopyrightEmailTapped", TosCodeBehind());
         Assert.Contains("CopyrightReport.OpenEmailAsync(Launcher.Default, ShellAppNavigator.Instance)", TosCodeBehind());
     }

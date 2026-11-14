@@ -24,7 +24,7 @@ public partial class TosPage : ContentPage
         await AccessibilityStatement.OpenAsync(Launcher.Default, ShellAppNavigator.Instance);
     }
 
-    private async void OnCopyrightEmailTapped(object? sender, TappedEventArgs e)
+    private async void OnCopyrightEmailTapped(object? sender, EventArgs e)
     {
         await CopyrightReport.OpenEmailAsync(Launcher.Default, ShellAppNavigator.Instance);
     }
