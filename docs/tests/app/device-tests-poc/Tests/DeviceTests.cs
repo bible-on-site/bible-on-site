@@ -37,7 +37,10 @@ public class DeviceOnlyTests
     {
         Assert.Equal(DevicePlatform.Android, DeviceInfo.Platform);
         Assert.True(DeviceInfo.Version.Major >= 1);
-        Assert.Equal("sdk_gphone64_x86_64", DeviceInfo.Model);
+        // Any emulator or physical device is valid — assert a real model string
+        // rather than a specific image name.
+        Assert.False(string.IsNullOrEmpty(DeviceInfo.Model));
+        Assert.False(string.IsNullOrEmpty(DeviceInfo.Manufacturer));
     }
 
     [Fact]

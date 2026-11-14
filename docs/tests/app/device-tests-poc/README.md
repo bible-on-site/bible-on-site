@@ -7,7 +7,8 @@ outside `app/` on purpose (the app NuGet-cache key hashes every `app/*.csproj`).
 The runner (`Platforms/Android/Runner.cs`, `EntryPoints.cs`) is a trimmed,
 hand-written equivalent of the vendored dotnet/maui headless runner used by
 CommunityToolkit/Maui#3344 (~240 lines vs their ~70-file tree + source
-generator, which emits the same manifest entries).
+generator, which emits the same manifest entries). Upstream is MIT licensed —
+see `LICENSE-dotnet-maui.txt`.
 
 `Tests/` holds one parity test (assertions copied from
 `BibleOnSite.Tests/Converters/PasukMarkerTextConverterTests` against the linked
@@ -31,6 +32,7 @@ dotnet build -c Release -p:AndroidPackageFormat=apk -p:RunAOTCompilation=false
 ```
 
 Requires an Android SDK, the `maui-android` workload and a booted emulator or
-`-DeviceId` device. Release is required: Debug APKs ship no embedded assemblies
-and abort on launch ("No assemblies found"). Measured output for the recorded
-run is in `../device-tests-research.md` §4.
+`-DeviceId` device on API 29+ (results export uses `MediaStore.Downloads`, which
+does not exist on API 21–28). Release is required: Debug APKs ship no embedded
+assemblies and abort on launch ("No assemblies found"). Measured output for the
+recorded run is in `../device-tests-research.md` §4.

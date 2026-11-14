@@ -12,7 +12,10 @@
     <ApplicationTitle>DeviceTests PoC</ApplicationTitle>
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
-    <SupportedOSPlatformVersion>21.0</SupportedOSPlatformVersion>
+    <!-- Results export goes through MediaStore.Downloads, which exists only on
+         API 29+ — keep the minimum there so instrumentation can always hand the
+         XML back to XHarness. -->
+    <SupportedOSPlatformVersion>29.0</SupportedOSPlatformVersion>
     <IsTestProject>false</IsTestProject>
   </PropertyGroup>
 

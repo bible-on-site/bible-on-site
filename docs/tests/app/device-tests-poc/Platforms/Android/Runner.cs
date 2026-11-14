@@ -1,5 +1,8 @@
 // Minimal Android headless-runner wiring, trimmed from CommunityToolkit/Maui's
-// vendored dotnet/maui runner (eng/devices PoC for issue #3336). MIT-licensed upstream.
+// vendored dotnet/maui runner (eng/devices PoC for issue #3336).
+// Upstream: https://github.com/dotnet/maui/tree/main/src/TestUtils/src/DeviceTests.Runners
+// MIT licensed — Copyright (c) .NET Foundation and Contributors.
+// License text: ../LICENSE-dotnet-maui.txt
 using System.Globalization;
 using Android.App;
 using Android.Content;
@@ -33,7 +36,8 @@ class HeadlessTestRunner : AndroidApplicationEntryPoint
     {
         _options = options;
         var cache = Android.App.Application.Context.CacheDir!.AbsolutePath;
-        _resultsPath = Path.Combine(cache, runnerOptions.TestResultsFilename);
+        // GetFileName: a rooted or traversing results name must stay inside the cache dir.
+        _resultsPath = $"{cache}/{Path.GetFileName(runnerOptions.TestResultsFilename)}";
     }
 
     protected override bool LogExcludedTests => true;
@@ -47,7 +51,7 @@ class HeadlessTestRunner : AndroidApplicationEntryPoint
             .Distinct()
             .Select(assembly =>
             {
-                var path = Path.Combine(Android.App.Application.Context.CacheDir!.AbsolutePath, assembly.GetName().Name + ".dll");
+                var path = $"{Android.App.Application.Context.CacheDir!.AbsolutePath}/{assembly.GetName().Name}.dll";
                 if (!File.Exists(path))
                 {
                     File.Create(path).Close();
@@ -129,6 +133,8 @@ public abstract class MauiTestActivity : AndroidX.AppCompat.App.AppCompatActivit
         {
             TaskCompletionSource.TrySetResult(await pass);
         }
+        // The catch must stay broad: every fault type has to reach the TCS, or the
+        // instrumentation awaits a completion that never arrives and the run hangs.
         catch (Exception ex)
         {
             TaskCompletionSource.TrySetException(ex);
@@ -202,8 +208,9 @@ public abstract class MauiTestInstrumentation : Instrumentation
         }
         var guid = Guid.NewGuid().ToString("N");
         var name = Path.GetFileName(resultsFile);
+        // MediaStore RelativePath is a virtual path that always uses '/'.
         var downloads = Android.OS.Environment.DirectoryDownloads!;
-        var relative = Path.Combine(downloads, Context!.PackageName!, guid);
+        var relative = $"{downloads}/{Context!.PackageName!}/{guid}";
         var values = new ContentValues();
         values.Put(Android.Provider.MediaStore.IMediaColumns.DisplayName, name);
         values.Put(Android.Provider.MediaStore.IMediaColumns.MimeType, "text/xml");
@@ -215,7 +222,7 @@ public abstract class MauiTestInstrumentation : Instrumentation
 #pragma warning disable CS0618
         var root = Android.OS.Environment.ExternalStorageDirectory!.AbsolutePath;
 #pragma warning restore CS0618
-        var finalPath = Path.Combine(root, relative, name);
+        var finalPath = $"{root}/{relative}/{name}";
         bundle.PutString("test-results-path", finalPath);
     }
 
