@@ -1,4 +1,5 @@
 using BibleOnSite.Services;
+using BibleOnSite.Tests.Support;
 using Microsoft.Maui.Networking;
 
 namespace BibleOnSite.Tests.Services;
@@ -75,5 +76,32 @@ public class NetworkServiceTests
         var act = () => _ = NetworkService.IsOnline;
 
         act.Should().Throw<NotImplementedException>();
+    }
+
+    [Fact]
+    public async Task RefreshAllAsync_RefreshesEveryApiBackedCache()
+    {
+        await using var storage = new TestStorage();
+        using var http = new GraphQLTransport("""
+            {"data":{
+              "starter":{"authors":[],"articles":[],"perekArticlesCounters":[3]},
+              "moadim":[{"id":1,"slug":"refreshed","name":"Refreshed","published":true,
+                "annualOrder":1,"sections":[],"explicitArticleIds":[],"articles":[]}]
+            }}
+            """);
+        var starter = new StarterService(http.Client, storage.FileSystem.Object);
+        var moed = new MoedService(http.Client, storage.FileSystem.Object);
+
+        await NetworkService.RefreshAllAsync(starter, moed);
+
+        // Starter first, then the moadim catalogue — connectivity recovery
+        // refreshes every API-backed cache in one pass (#3261).
+        http.Requests.Should().HaveCount(2);
+        http.Requests[0].Should().Contain("GetStarter");
+        http.Requests[1].Should().Contain("GetMoadim");
+        starter.IsLoaded.Should().BeTrue();
+        starter.GetPerekArticlesCount(1).Should().Be(3);
+        moed.IsLoaded.Should().BeTrue();
+        moed.GetMoedBySlug("refreshed")!.Name.Should().Be("Refreshed");
     }
 }

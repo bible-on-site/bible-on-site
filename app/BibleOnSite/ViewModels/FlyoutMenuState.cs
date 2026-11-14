@@ -58,6 +58,7 @@ public class FlyoutMenuState : ObservableObject
             OnPropertyChanged(nameof(IsLearningCalendarCurrent));
             OnPropertyChanged(nameof(IsMasoraCurrent));
             OnPropertyChanged(nameof(IsParashaCurrent));
+            OnPropertyChanged(nameof(IsMoadimCurrent));
             OnPropertyChanged(nameof(IsAuthorsCurrent));
             OnPropertyChanged(nameof(IsDailyBulletinCurrent));
             OnPropertyChanged(nameof(IsTermsCurrent));
@@ -74,6 +75,7 @@ public class FlyoutMenuState : ObservableObject
     public bool IsLearningCalendarCurrent => CurrentDestination == FlyoutDestination.LearningCalendar;
     public bool IsMasoraCurrent => CurrentDestination == FlyoutDestination.Masora;
     public bool IsParashaCurrent => CurrentDestination == FlyoutDestination.Parasha;
+    public bool IsMoadimCurrent => CurrentDestination == FlyoutDestination.Moadim;
     public bool IsAuthorsCurrent => CurrentDestination == FlyoutDestination.Authors;
     public bool IsDailyBulletinCurrent => CurrentDestination == FlyoutDestination.DailyBulletin;
     public bool IsTermsCurrent => CurrentDestination == FlyoutDestination.Terms;
@@ -106,19 +108,25 @@ public class FlyoutMenuState : ObservableObject
             ? destination
             : FlyoutDestination.None;
 
+    /// <summary>
+    /// Menu/detail destinations plus every reader row derived from the shared
+    /// route-role map (<see cref="AppRoutes.ReaderDivisions"/>, #3263) — a new
+    /// reader family joins the selection model automatically instead of
+    /// needing a second hardcoded reader list here.
+    /// </summary>
     private static readonly IReadOnlyDictionary<string, FlyoutDestination> RouteDestinations =
-        new Dictionary<string, FlyoutDestination>(StringComparer.Ordinal)
+        BuildRouteDestinations();
+
+    private static IReadOnlyDictionary<string, FlyoutDestination> BuildRouteDestinations()
+    {
+        var map = new Dictionary<string, FlyoutDestination>(StringComparer.Ordinal)
         {
-            [AppRoutes.Perek] = FlyoutDestination.AlHaperek,
-            [AppRoutes.SearchReader] = FlyoutDestination.AlHaperek,
-            [AppRoutes.CalendarReader] = FlyoutDestination.AlHaperek,
+            [AppRoutes.ParashaList] = FlyoutDestination.Parasha,
+            [AppRoutes.Moadim] = FlyoutDestination.Moadim,
             [AppRoutes.Tanahpedia] = FlyoutDestination.Tanahpedia,
             [AppRoutes.TanahpediaCategory] = FlyoutDestination.Tanahpedia,
             [AppRoutes.TanahpediaEntryRoute] = FlyoutDestination.Tanahpedia,
             [AppRoutes.LearningCalendar] = FlyoutDestination.LearningCalendar,
-            [AppRoutes.Masora] = FlyoutDestination.Masora,
-            [AppRoutes.ParashaList] = FlyoutDestination.Parasha,
-            [AppRoutes.Parasha] = FlyoutDestination.Parasha,
             [AppRoutes.Authors] = FlyoutDestination.Authors,
             [AppRoutes.DailyBulletin] = FlyoutDestination.DailyBulletin,
             [AppRoutes.Terms] = FlyoutDestination.Terms,
@@ -132,6 +140,23 @@ public class FlyoutMenuState : ObservableObject
             [AppRoutes.Contact] = FlyoutDestination.Contact,
             [AppRoutes.Donations] = FlyoutDestination.Donations,
         };
+        foreach (var (route, division) in AppRoutes.ReaderDivisions)
+        {
+            map[route] = DestinationFor(division);
+        }
+        return map;
+    }
+
+    /// <summary>The flyout destination a reader division's row highlights —
+    /// an unmapped division selects nothing rather than guessing.</summary>
+    internal static FlyoutDestination DestinationFor(ReaderDivision division) => division switch
+    {
+        ReaderDivision.Perek => FlyoutDestination.AlHaperek,
+        ReaderDivision.Parasha => FlyoutDestination.Parasha,
+        ReaderDivision.Masora => FlyoutDestination.Masora,
+        ReaderDivision.Moed => FlyoutDestination.Moadim,
+        _ => FlyoutDestination.None,
+    };
 
     private void OnPreferencesChanged(object? sender, EventArgs e) =>
         OnPropertyChanged(nameof(ShowMasoraEntry));

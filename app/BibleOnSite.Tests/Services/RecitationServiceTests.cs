@@ -1138,4 +1138,28 @@ public class RecitationServiceTests
 
         await act.Should().ThrowAsync<InvalidDataException>().WithMessage("*Truncated*");
     }
+
+    [Theory]
+    [InlineData("io")]
+    [InlineData("unauthorized")]
+    public async Task Update_SweepFailure_IsSwallowedAfterTheCatalogApplies(string kind)
+    {
+        await using var storage = new TestStorage();
+        var extension = new Extension(storage);
+        var source = "alignment MP3"u8.ToArray();
+        extension.Package = new(1, [Track(1, source)]);
+        extension.Bundle();
+        var files = new Mock<IFileSystem>();
+        files.Setup(f => f.OpenAppPackageFileAsync(RecitationExtensionCatalog.FileName))
+            .ReturnsAsync(new MemoryStream(storage.PackageFiles[RecitationExtensionCatalog.FileName]));
+        files.SetupGet(f => f.AppDataDirectory).Throws(kind == "io"
+            ? new IOException("sweep target gone")
+            : new UnauthorizedAccessException("sweep target locked"));
+        var service = new RecitationService(files.Object, extension.Delivery.Object);
+
+        // The catalog applies; the orphan sweep's IO failure is best-effort only.
+        await service.UpdateAsync(TestContext.Current.CancellationToken);
+
+        service.GetTrack(1).Should().NotBeNull();
+    }
 }

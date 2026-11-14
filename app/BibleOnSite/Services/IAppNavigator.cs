@@ -102,6 +102,25 @@ public sealed class ShellAppNavigator : IAppNavigator
         AppDialogs.ConfirmDestructiveAsync(title, message, destructive, cancel);
 }
 
+/// <summary>
+/// The reading division a live reader route belongs to (#3263). A division
+/// groups the interchangeable instances of one reading surface: selecting a
+/// division's explicit destination must land on a reader of that division,
+/// never on whichever foreign reader the location happened to end on.
+/// </summary>
+public enum ReaderDivision
+{
+    /// <summary>The על הפרק chapter reader — the Shell root and its pushed
+    /// search/calendar aliases.</summary>
+    Perek,
+    /// <summary>The פרשה על הפרק reading instance.</summary>
+    Parasha,
+    /// <summary>The מסורה על הפרק reading instance.</summary>
+    Masora,
+    /// <summary>The מועדים על הפרק reading instance (#3261).</summary>
+    Moed,
+}
+
 public static class AppRoutes
 {
     public static string Perek => "PerekPage";
@@ -128,6 +147,12 @@ public static class AppRoutes
     /// <summary>The פרשה listing above the reader — same flyout destination.</summary>
     public static string ParashaList => "ParashaListPage";
 
+    /// <summary>The מועדים catalogue listing above the reader — same flyout destination.</summary>
+    public static string Moadim => "MoadimListPage";
+
+    /// <summary>The מועדים על הפרק reader instance — a reader page like ParashaPage.</summary>
+    public static string Moed => "MoedPage";
+
     public static string Tanahpedia => "TanahpediaPage";
     public static string TanahpediaCategory => "tanahpediaCategory";
     public static string TanahpediaEntryRoute => "tanahpediaEntry";
@@ -151,8 +176,34 @@ public static class AppRoutes
         $"{TanahpediaEntryRoute}?uniqueName={Uri.EscapeDataString(uniqueName)}";
 
     /// <summary>
-    /// Flyout pages replace another menu page above the most recent reader.
-    /// Preserve search-reader history so Back returns to the chapter being read.
+    /// Every live reader route and the <see cref="ReaderDivision"/> it belongs
+    /// to — the single route-role map shared by flyout navigation, the
+    /// selected-destination code and the transition tests (#3263). New reader
+    /// families (e.g. מועדים) register here once instead of per-handler
+    /// hardcoded reader lists.
+    /// </summary>
+    public static IReadOnlyDictionary<string, ReaderDivision> ReaderDivisions { get; } =
+        new Dictionary<string, ReaderDivision>(StringComparer.Ordinal)
+        {
+            [Perek] = ReaderDivision.Perek,
+            [SearchReader] = ReaderDivision.Perek,
+            [CalendarReader] = ReaderDivision.Perek,
+            [Parasha] = ReaderDivision.Parasha,
+            [Masora] = ReaderDivision.Masora,
+            [Moed] = ReaderDivision.Moed,
+        };
+
+    /// <summary>
+    /// Flyout destinations split into two intents (#3263):
+    /// <list type="bullet">
+    /// <item>A reader destination activates its own <see cref="ReaderDivision"/>:
+    /// the deepest already-running reader of that division stays active (pages
+    /// above it pop), regardless of a previous foreign reader, an intermediate
+    /// menu page or a pushed article/preferences/search screen.</item>
+    /// <item>Any other flyout page pushes above the deepest live reader — of
+    /// any division — replacing a sibling menu page there, so Back returns to
+    /// the reading (search/calendar reader history included).</item>
+    /// </list>
     /// </summary>
     public static string FlyoutPage(string route) => FlyoutPage(route, null);
 
@@ -160,8 +211,29 @@ public static class AppRoutes
     {
         var segments = (currentLocation ?? $"//{Perek}").Split('?', 2)[0]
             .Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var reader = Array.FindLastIndex(segments, segment => segment == Perek || segment == SearchReader || segment == Parasha);
-        var readerPath = reader < 0 ? $"//{Perek}" : "//" + string.Join('/', segments.Take(reader + 1));
-        return route == Perek ? readerPath : $"{readerPath}/{route}";
+
+        if (ReaderDivisions.TryGetValue(route, out var division))
+        {
+            var own = Array.FindLastIndex(segments, segment =>
+                ReaderDivisions.TryGetValue(segment, out var other) && other == division);
+            if (own >= 0)
+            {
+                return "//" + string.Join('/', segments.Take(own + 1));
+            }
+            // The perek division is the Shell root itself — its reader always
+            // exists beneath whatever is stacked above. Other divisions are
+            // pushed readers: open one above the current reader so Back works.
+            return route == Perek ? $"//{Perek}" : $"{ReaderAnchorPath(segments)}/{route}";
+        }
+
+        return $"{ReaderAnchorPath(segments)}/{route}";
+    }
+
+    /// <summary>The location prefix ending at the deepest live reader — the
+    /// anchor a non-reader flyout page is pushed above.</summary>
+    private static string ReaderAnchorPath(string[] segments)
+    {
+        var reader = Array.FindLastIndex(segments, segment => ReaderDivisions.ContainsKey(segment));
+        return reader < 0 ? $"//{Perek}" : "//" + string.Join('/', segments.Take(reader + 1));
     }
 }
