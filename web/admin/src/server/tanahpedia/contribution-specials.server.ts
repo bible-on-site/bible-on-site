@@ -133,14 +133,17 @@ export async function readAliasMapping(
 export async function aliasReferenceLabels(
 	conn: PoolConnection,
 	state: ChangeState,
+	validateDestination = true,
 ): Promise<Record<string, string>> {
 	const a = state as unknown as AliasMapping,
 		labels: Record<string, string> = {};
-	const holder = await txQueryOne(
-		conn,
-		"SELECT id FROM tanahpedia_entry WHERE unique_name=? FOR SHARE",
-		[a.name],
-	);
+	const holder =
+		validateDestination &&
+		(await txQueryOne(
+			conn,
+			"SELECT id FROM tanahpedia_entry WHERE unique_name=? FOR SHARE",
+			[a.name],
+		));
 	if (holder)
 		throw new Error("Alias collides with an existing canonical entry address");
 	for (const target of a.targets) {

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
+import { contributionIdentifierKey } from "~/lib/tanahpedia/contribution-identifiers";
 import {
 	CONTRIBUTION_RECORDS,
 	isContributionRecordKind,
@@ -121,6 +122,7 @@ async function lookup(
 async function referenceLabels(
 	conn: PoolConnection,
 	change: ChangeInput,
+	validateDestination = true,
 ): Promise<Record<string, string>> {
 	const labels: Record<string, string> = {};
 	if (!change.after) return labels;
@@ -131,7 +133,11 @@ async function referenceLabels(
 			change.after as unknown as State,
 		);
 	if (change.kind === "alias_mapping")
-		return aliasReferenceLabels(conn, change.after as unknown as State);
+		return aliasReferenceLabels(
+			conn,
+			change.after as unknown as State,
+			validateDestination,
+		);
 	if (change.kind === "source_reference")
 		return sourceReferenceLabels(conn, change.after as unknown as State);
 	const after = change.after as unknown as State;
@@ -153,6 +159,33 @@ async function referenceLabels(
 		labels[String(after[key])] = row.name;
 	}
 	return labels;
+}
+
+async function assertNewEntryAddressFree(
+	conn: PoolConnection,
+	name: unknown,
+	changes: ReviewedChange[] = [],
+): Promise<void> {
+	const aliases = await txQuery<{ id: string }>(
+		conn,
+		"SELECT id FROM tanahpedia_entry_synonym WHERE name=? FOR SHARE",
+		[name],
+	);
+	const removedExplicitly = changes.some(
+		(c) =>
+			c.kind === "alias_mapping" &&
+			c.after === null &&
+			c.before &&
+			aliases.some(
+				(alias) =>
+					contributionIdentifierKey(alias.id) ===
+					contributionIdentifierKey(c.targetId),
+			),
+	);
+	if (aliases.length && !removedExplicitly)
+		throw new Error(
+			"New-entry address belongs to an existing alias; review an explicit alias change first",
+		);
 }
 
 export async function prepareChanges(
@@ -200,7 +233,11 @@ export async function prepareChanges(
 		if (before && input.kind !== "metadata" && input.kind !== "entry") {
 			Object.assign(
 				labels,
-				await referenceLabels(conn, { ...input, after: before } as ChangeInput),
+				await referenceLabels(
+					conn,
+					{ ...input, after: before } as ChangeInput,
+					false,
+				),
 			);
 		}
 		changes.push({
@@ -218,6 +255,9 @@ export async function prepareChanges(
 		});
 	}
 	await assertDistinctContributionAliases(conn, changes);
+	for (const change of changes)
+		if (change.kind === "entry")
+			await assertNewEntryAddressFree(conn, change.after?.uniqueName, changes);
 	return changes;
 }
 
@@ -348,6 +388,7 @@ export async function applyChange(
 		title: input.after.title,
 		unique_name: input.after.uniqueName,
 	});
+	await assertNewEntryAddressFree(conn, input.after.uniqueName);
 	const entityId = randomUUID(),
 		subtypeId = randomUUID();
 	const subtypeTables: Partial<Record<string, string>> = {

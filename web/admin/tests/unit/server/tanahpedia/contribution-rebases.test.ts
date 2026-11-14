@@ -102,6 +102,37 @@ beforeEach(() => {
 	});
 });
 describe("pending proposal base refresh", () => {
+	it("refreshes address proposals when an unrelated record changes the shared public namespace", async () => {
+		pending.changes = [
+			{
+				kind: "alias_mapping",
+				targetId: ID,
+				before: null,
+				after: { name: "shared", targets: [{ entryId: ID, label: "" }] },
+				labels: {},
+			},
+		];
+		mocks.items.set(ID, pending);
+		trigger.changes = [
+			{
+				kind: "entry",
+				targetId: OTHER,
+				before: null,
+				after: {
+					title: "new",
+					uniqueName: "shared",
+					displayName: "new",
+					entityType: "PERSON",
+				},
+				labels: {},
+			},
+		];
+		mocks.prepare.mockRejectedValue(
+			new Error("Alias collides with a canonical entry"),
+		);
+		expect((await refreshPendingContributionBases(trigger)).blocked).toBe(1);
+		expect(item(ID).domainConflict).toContain("canonical entry");
+	});
 	it("refreshes shared targets even when proposals spell their IDs differently", async () => {
 		const id = "Abcdef00-0000-4000-8000-000000000001";
 		pending.changes[0].targetId = id;

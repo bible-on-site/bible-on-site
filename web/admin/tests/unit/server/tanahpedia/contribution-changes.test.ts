@@ -51,6 +51,23 @@ function reviewed(
 }
 
 describe("typed contribution domain API", () => {
+	it("rejects an occupied alias address during preparation and before writing an entry", async () => {
+		mocks.one.mockResolvedValue(null);
+		mocks.query.mockResolvedValue([{ id: OTHER }]);
+		const after = {
+			title: "Title",
+			uniqueName: "occupied",
+			entityType: "PERSON",
+			displayName: "Name",
+		};
+		await expect(
+			prepareChanges(conn, [{ kind: "entry", after } as ChangeInput]),
+		).rejects.toThrow("existing alias");
+		await expect(
+			applyChange(conn, reviewed("entry", after), "source"),
+		).rejects.toThrow("existing alias");
+		expect(mocks.execute).not.toHaveBeenCalled();
+	});
 	it.each([
 		["WAR", "tanahpedia_event", "tanahpedia_war", "event_id"],
 		["TEMPLE_TOOL", "tanahpedia_object", "tanahpedia_temple_tool", "object_id"],

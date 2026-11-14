@@ -1629,6 +1629,187 @@ describe("all category contribution operations against canonical MySQL", () => {
 			),
 		).rejects.toThrow("canonical");
 	});
+	it("rejects new-entry proposals that shadow an existing alias under database collation", async () => {
+		const name = `Alias-${randomUUID()}`;
+		await mergeChanges([
+			{
+				kind: "alias_mapping",
+				after: {
+					name,
+					targets: [{ entryId: String(recordRefs.entry), label: "" }],
+				},
+			},
+		]);
+		await expect(
+			service.createContribution(
+				{
+					kind: "pr",
+					title: "New entry collision",
+					description: "נתוני בדיקה בלבד",
+					evidence,
+					changes: [
+						{
+							kind: "entry",
+							after: {
+								title: "ערך בדיקה",
+								uniqueName: name.toUpperCase(),
+								displayName: "ערך בדיקה",
+								entityType: "PLACE",
+							},
+						},
+					],
+				},
+				owner,
+			),
+		).rejects.toThrow("existing alias");
+	});
+	it("preserves an alias introduced after a new-entry proposal was prepared", async () => {
+		const name = `Late-alias-${randomUUID()}`;
+		const proposal = await service.createContribution(
+			{
+				kind: "pr",
+				title: "Concurrent URL collision",
+				description: "נתוני בדיקה בלבד",
+				evidence,
+				changes: [
+					{
+						kind: "entry",
+						after: {
+							title: "ערך בדיקה",
+							uniqueName: name,
+							displayName: "ערך בדיקה",
+							entityType: "PLACE",
+						},
+					},
+				],
+			},
+			owner,
+		);
+		const alias = await mergeChanges([
+			{
+				kind: "alias_mapping",
+				after: {
+					name,
+					targets: [{ entryId: String(recordRefs.entry), label: "" }],
+				},
+			},
+		]);
+		const pending = await fresh(proposal);
+		await expect(
+			service.mergeContribution(
+				{ id: pending.id, version: pending.version },
+				owner,
+			),
+		).rejects.toThrow("existing alias");
+		expect(
+			(await current("alias_mapping", alias.changes[0].targetId))?.targets,
+		).toEqual([{ entryId: String(recordRefs.entry), label: "" }]);
+		expect(await current("entry", pending.changes[0].targetId)).toBeNull();
+		expect((await fresh(proposal)).state).toBe("open");
+	});
+	it("rolls back a sequence creating an alias and a new entry at the same address", async () => {
+		const name = `Same-PR-address-${randomUUID()}`;
+		const proposal = await service.createContribution(
+			{
+				kind: "pr",
+				title: "Atomic URL collision",
+				description: "נתוני בדיקה בלבד",
+				evidence,
+				changes: [
+					{
+						kind: "entry",
+						after: {
+							title: "ערך בדיקה",
+							uniqueName: name,
+							displayName: "ערך בדיקה",
+							entityType: "PLACE",
+						},
+					},
+					{
+						kind: "alias_mapping",
+						after: {
+							name,
+							targets: [{ entryId: String(recordRefs.entry), label: "" }],
+						},
+					},
+				],
+			},
+			owner,
+		);
+		await expect(
+			service.mergeContribution(
+				{ id: proposal.id, version: proposal.version },
+				owner,
+			),
+		).rejects.toThrow("existing alias");
+		for (const change of proposal.changes)
+			expect(await current(change.kind, change.targetId)).toBeNull();
+	});
+	it("atomically transfers an alias address only with its complete reviewed removal", async () => {
+		const name = `Explicit-transfer-${randomUUID()}`;
+		const alias = await mergeChanges([
+			{
+				kind: "alias_mapping",
+				after: {
+					name,
+					targets: [{ entryId: String(recordRefs.entry), label: "" }],
+				},
+			},
+		]);
+		const transferred = await mergeChanges([
+			{
+				kind: "entry",
+				after: {
+					title: "ערך בדיקה",
+					uniqueName: name,
+					displayName: "ערך בדיקה",
+					entityType: "PLACE",
+				},
+			},
+			{
+				kind: "alias_mapping",
+				targetId: alias.changes[0].targetId,
+				after: null,
+			},
+		]);
+		expect(transferred.changes[1].before?.targets).toEqual([
+			{ entryId: String(recordRefs.entry), label: "" },
+		]);
+		expect(
+			await current("alias_mapping", alias.changes[0].targetId),
+		).toBeNull();
+		expect(
+			(await current("entry", transferred.changes[0].targetId))?.uniqueName,
+		).toBe(name);
+	});
+	it("can remove a legacy shadowed alias without changing its canonical entry", async () => {
+		const name = `Legacy-shadow-${randomUUID()}`;
+		const alias = await mergeChanges([
+			{
+				kind: "alias_mapping",
+				after: {
+					name,
+					targets: [{ entryId: String(recordRefs.entry), label: "" }],
+				},
+			},
+		]);
+		const canonical = randomUUID();
+		await conn.execute(
+			"INSERT INTO tanahpedia_entry (id,unique_name,title,content) VALUES (?,?,'Legacy canonical','<p></p>')",
+			[canonical, name],
+		);
+		await mergeChanges([
+			{
+				kind: "alias_mapping",
+				targetId: alias.changes[0].targetId,
+				after: null,
+			},
+		]);
+		expect(
+			await current("alias_mapping", alias.changes[0].targetId),
+		).toBeNull();
+		expect((await current("entry", canonical))?.uniqueName).toBe(name);
+	});
 	it("moves only the reviewed source and preserves its old shared group's other citation", async () => {
 		const after = {
 			targetKind: "entity",

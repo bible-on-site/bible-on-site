@@ -37,9 +37,19 @@ function identifiers(value: unknown, result = new Set<string>()): Set<string> {
 		for (const child of Object.values(value)) identifiers(child, result);
 	return result;
 }
-function affected(item: Contribution, changed: Set<string>): boolean {
+function changesAddressSpace(item: Contribution): boolean {
+	return item.changes.some(
+		(c) => c.kind === "entry" || c.kind === "alias_mapping",
+	);
+}
+function affected(
+	item: Contribution,
+	changed: Set<string>,
+	addressesChanged: boolean,
+): boolean {
 	return (
 		Boolean(item.domainConflict) ||
+		(addressesChanged && changesAddressSpace(item)) ||
 		[...identifiers(item.changes)].some((id) => changed.has(id))
 	);
 }
@@ -67,6 +77,7 @@ function changedSequence(
 }
 export async function refreshPendingContributionBases(trigger: Contribution) {
 	const changed = identifiers(trigger.changes);
+	const addressesChanged = changesAddressSpace(trigger);
 	const renamed = trigger.changes
 		.filter((c) => c.kind === "metadata")
 		.map((c) => c.targetId);
@@ -118,7 +129,10 @@ export async function refreshPendingContributionBases(trigger: Contribution) {
 				typeof row.data === "string"
 					? (JSON.parse(row.data) as Contribution)
 					: row.data;
-			if (!affected(candidate, changed) || migrationBlocked(candidate))
+			if (
+				!affected(candidate, changed, addressesChanged) ||
+				migrationBlocked(candidate)
+			)
 				continue;
 			const outcome = await withContributions(async (conn) => {
 				const item = await readContribution(conn, row.id, true);
@@ -126,7 +140,7 @@ export async function refreshPendingContributionBases(trigger: Contribution) {
 					item.kind !== "pr" ||
 					item.state !== "open" ||
 					migrationBlocked(item) ||
-					!affected(item, changed)
+					!affected(item, changed, addressesChanged)
 				)
 					return "unchanged";
 				let next: Contribution["changes"];

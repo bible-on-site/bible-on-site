@@ -256,6 +256,13 @@ revisions. The normal post-merge path drains immediately, with a 30-second
 background pass for interrupted work. A refresh failure never reports an already
 committed content merge as rolled back.
 
+Entry and alias operations share the public address space. A new-entry PR cannot
+silently shadow an existing alias. An atomic transfer requires an explicit
+operation removing that alias's complete reviewed destination set in the same
+PR. Both preparation and merge check this; a later collision blocks the pending
+proposal without changing its intent. Any entry/alias merge refreshes pending
+address proposals even when they reference different record IDs.
+
 ## Deployment and rollback
 
 `tanahpedia_contribution_upgrade.sql` adds one InnoDB table and two queue indexes.
