@@ -2,13 +2,14 @@
 <Grid xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
       x:Class="BibleOnSite.Controls.ReaderLoadingOverlay"
-      IsVisible="True"
+      IsVisible="False"
       BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}">
     <!-- Uses a native ActivityIndicator which animates on the GPU even when the
          main thread is blocked by the CarouselView layout pass. -->
     <VerticalStackLayout x:Name="LoadingIndicator"
                          VerticalOptions="Center" HorizontalOptions="Center" Spacing="12">
-        <ActivityIndicator IsRunning="True"
+        <ActivityIndicator x:Name="LoadingSpinner"
+                           IsRunning="True"
                            HeightRequest="48"
                            WidthRequest="48"/>
         <Label x:Name="LoadingLabel"

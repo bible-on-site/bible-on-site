@@ -381,6 +381,16 @@ public partial class PerekViewModel : ObservableObject, IPerushimSheetViewModel
         _fontFactor = _preferencesService.PasukFontFactor;
         _divineNameMaskingRevision = DivineNameMasking.Revision;
         WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.RefreshPreferences());
+
+        // E2E-only mode preset: the Windows suite cannot reliably reach the
+        // real reader menu — CarouselView keeps stale peers with plausible
+        // state that claim the same AutomationIds. Launching with the flag
+        // renders תיקון קוראים (with שניים מקרא) from boot instead.
+        if (Environment.GetEnvironmentVariable("BIBLE_E2E_TIKKUN") == "1")
+        {
+            _isShnayimMikraEnabled = true;
+            _isTikkunKorimEnabled = true;
+        }
     }
 
     /// <summary>Effective pasuk scaling factor: master × pasuk percent (#2461).</summary>
