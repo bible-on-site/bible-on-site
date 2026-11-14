@@ -1,8 +1,8 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { sendNotification, setVapidDetails, WebPushError } from "web-push";
-import { getPerekByPerekId } from "@/data/perek-dto";
 import { query } from "@/lib/api-client";
+import { dailyPerekPayload } from "./payload";
 
 /**
  * Web Push for the daily perek reminder (#1096).
@@ -96,16 +96,6 @@ export async function deleteSubscription(endpoint: string): Promise<void> {
 		"DELETE FROM tanah_web_push_subscription WHERE endpoint_hash = ?",
 		[endpointHash(endpoint)],
 	);
-}
-
-/** Notification payload the service worker (`public/sw.js`) renders. */
-export function dailyPerekPayload(perekId: number) {
-	return {
-		title: 'הפרק היומי - תנ"ך על הפרק',
-		body: `הפרק של היום: ${getPerekByPerekId(perekId).source}`,
-		url: `/929/${perekId}`,
-		tag: "daily-perek",
-	};
 }
 
 /**

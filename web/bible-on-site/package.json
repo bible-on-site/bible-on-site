@@ -1,6 +1,6 @@
 {
 	"name": "bible-on-site",
-	"version": "0.2.659",
+	"version": "0.2.662",
 	"private": true,
 	"license": "MIT",
 	"browserslist": [
@@ -36,7 +36,7 @@
 		"test:e2e:all": "dotenv -e .test.env -- playwright test --config=playwright.e2e.config.ts",
 		"test:perf": "echo 'NOTE: Perf tests require bun run build first (uses production server)' && dotenv -e .test.env -- playwright test --config=playwright.perf.config.ts",
 		"perf:production": "node scripts/collect-production-performance.mjs",
-		"test:perf-reporting": "node --test scripts/performance-report.test.mjs scripts/collect-production-performance.test.mjs scripts/lighthouse-cpu-profile.test.mjs scripts/lighthouse-observed-task.test.mjs",
+		"test:perf-reporting": "node --test scripts/performance-report.test.mjs scripts/collect-production-performance.test.mjs scripts/lighthouse-cpu-profile.test.mjs scripts/lighthouse-observed-task.test.mjs scripts/runtime-bench.test.mjs",
 		"coverage:all": "bun run coverage:unit && bun run coverage:e2e && bun run coverage:merge",
 		"precoverage:unit": "node scripts/generate-client-catalog.mjs",
 		"coverage:unit": "cross-env MEASURE_COV=1 node --no-deprecation ./node_modules/jest/bin/jest.js",
@@ -53,15 +53,15 @@
 		"node": ">=26.10.0 <27"
 	},
 	"dependencies": {
-		"@aws-sdk/client-lambda": "3.1167.0",
+		"@aws-sdk/client-lambda": "3.1168.0",
 		"@pdf-lib/fontkit": "1.1.1",
 		"bidi-js": "1.1.0",
 		"gematry": "1.0.2",
 		"html-flip-book-react": "0.0.0-alpha.117",
 		"isomorphic-dompurify": "4.7.0",
-		"jsdom": "31.0.0",
+		"jsdom": "31.0.1",
 		"leaflet": "1.9.4",
-		"mapbox-gl": "3.34.2",
+		"mapbox-gl": "3.35.0",
 		"moment-timezone": "0.6.6",
 		"monocart-coverage-reports": "3.2.1",
 		"mpg123-decoder": "1.0.3",
@@ -78,7 +78,7 @@
 		"web-push": "4.0.0"
 	},
 	"devDependencies": {
-		"@aws-sdk/client-s3": "3.1167.0",
+		"@aws-sdk/client-s3": "3.1168.0",
 		"@biomejs/biome": "2.6.7",
 		"@playwright/test": "1.65.0",
 		"@swc/core": "1.16.22",

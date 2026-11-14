@@ -207,6 +207,9 @@ test.describe("מועדים על הפרק", () => {
 		const currentButton = breadcrumb.getByRole("button", {
 			name: /המועד הנוכחי: מועד בדיקה/,
 		});
+		// press() does not wait for enabled: the server preview stays disabled
+		// until this dropdown's own hydration has attached its handlers.
+		await expect(currentButton).toBeEnabled();
 		await expect(currentButton).toHaveAttribute("aria-expanded", "false");
 		await currentButton.press("Enter");
 		await expect(currentButton).toHaveAttribute("aria-expanded", "true");
@@ -286,12 +289,8 @@ test.describe("מועדים על הפרק", () => {
 		if (!headingBox || !introBox || !wheelBox)
 			throw new Error("stacked layout boxes missing");
 		// Stacked — the wheel starts below the intro text.
-		expect(wheelBox.y).toBeGreaterThanOrEqual(
-			headingBox.y + headingBox.height,
-		);
-		expect(wheelBox.y).toBeGreaterThanOrEqual(
-			introBox.y + introBox.height - 1,
-		);
+		expect(wheelBox.y).toBeGreaterThanOrEqual(headingBox.y + headingBox.height);
+		expect(wheelBox.y).toBeGreaterThanOrEqual(introBox.y + introBox.height - 1);
 	});
 
 	// #3254 — wheel month labels use the shared UI font: the SVG text
