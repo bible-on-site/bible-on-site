@@ -112,7 +112,9 @@ async fn run(cli: Cli) -> Result<()> {
         .context("--format is required for json/mysql/sqlite output")?;
 
     let results = fetch_from_mongodb(&cli.dump_name).await?;
-    generate_output(format, &data::extract::extract(&results), &cli)
+    let extracted = data::extract::extract(&results)?;
+    let extracted = data::baseline_loader::preserve_bundled(extracted)?;
+    generate_output(format, &extracted, &cli)
 }
 
 /// Writes the MongoDB extraction results in the requested format — kept

@@ -621,7 +621,7 @@
     "priority": 1526
   },
   {
-    "compDate": "[1246, 1286]",
+    "compDate": "[1246, 1270]",
     "id": 83,
     "name": "רמב\"ן",
     "parshanId": 54,
@@ -787,5 +787,51 @@
     "name": "תרגום שני",
     "parshanId": 62,
     "priority": 50
+  },
+  {
+    "compDate": "[1105, 1115]",
+    "id": 105,
+    "name": "מדרש לקח טוב",
+    "parshanId": 65,
+    "priority": 1305,
+    "pubDate": "[1887]"
+  },
+  {
+    "compDate": "[750, 850]",
+    "id": 106,
+    "name": "מדרש משלי",
+    "parshanId": 44,
+    "priority": 950,
+    "pubDate": "[1893]"
+  },
+  {
+    "id": 107,
+    "name": "מדרש תנאים",
+    "parshanId": 44,
+    "priority": 1645
+  },
+  {
+    "compDate": "[500, 800]",
+    "id": 108,
+    "name": "מדרש תנחומא",
+    "parshanId": 62,
+    "priority": 700,
+    "pubDate": "[1522]"
+  },
+  {
+    "compDate": "[200]",
+    "id": 109,
+    "name": "מכילתא דרבי ישמעאל",
+    "parshanId": 62,
+    "priority": 400,
+    "pubDate": "[1515]"
+  },
+  {
+    "compDate": "[200, 500]",
+    "id": 110,
+    "name": "מכילתא דרבי שמעון בן יוחאי",
+    "parshanId": 44,
+    "priority": 400,
+    "pubDate": "[1870]"
   }
 ]

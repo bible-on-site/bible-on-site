@@ -2394,6 +2394,7 @@ dependencies = [
  "mongodb",
  "reading-metrics",
  "rusqlite",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",

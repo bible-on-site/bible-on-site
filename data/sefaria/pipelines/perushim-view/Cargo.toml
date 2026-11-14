@@ -7,6 +7,7 @@ authors.workspace = true
 
 [dependencies]
 tokio.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 mongodb.workspace = true
 anyhow.workspace = true
@@ -19,8 +20,6 @@ unicode-normalization.workspace = true
 unicode_categories.workspace = true
 reading-metrics.workspace = true
 bson.workspace = true
-
-[dev-dependencies]
 tempfile = "3"
 
 [features]
