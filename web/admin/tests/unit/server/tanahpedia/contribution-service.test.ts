@@ -1,7 +1,3 @@
-vi.mock("~/server/tanahpedia/contribution-rebases.server", () => ({
-	resumePendingContributionRebases: vi.fn().mockResolvedValue(undefined),
-}));
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
 import type {
@@ -9,6 +5,10 @@ import type {
 	Contributor,
 	ReviewedChange,
 } from "~/lib/tanahpedia/contributions";
+
+vi.mock("~/server/tanahpedia/contribution-rebases.server", () => ({
+	resumePendingContributionRebases: vi.fn().mockResolvedValue(undefined),
+}));
 
 const mocks = vi.hoisted(() => ({
 	items: new Map<string, Contribution>(),

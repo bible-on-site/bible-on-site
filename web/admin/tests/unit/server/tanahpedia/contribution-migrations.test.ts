@@ -1,7 +1,3 @@
-vi.mock("~/server/tanahpedia/contribution-rebase-runtime.server", () => ({
-	ensureContributionRebasesStarted: vi.fn(),
-}));
-
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	CONTRIBUTION_API_VERSION,
@@ -14,6 +10,10 @@ import {
 	type ReviewedChange,
 	reviewStatus,
 } from "~/lib/tanahpedia/contributions";
+
+vi.mock("~/server/tanahpedia/contribution-rebase-runtime.server", () => ({
+	ensureContributionRebasesStarted: vi.fn(),
+}));
 
 const mocks = vi.hoisted(() => ({
 	query: vi.fn(),
