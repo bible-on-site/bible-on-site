@@ -1150,7 +1150,9 @@ jobs:
           key: ${{ steps.bun-cache.outputs.playwright-cache-primary-key }}
 
       - name: Test performance reporting
-        run: bun run test:perf-reporting
+        run: |
+          bun run test:perf-reporting
+          node --test "$GITHUB_WORKSPACE/devops/github/ci/bencher-report.test.mjs"
 
       - name: Perf Test
         id: bun-perf-test
@@ -1182,6 +1184,7 @@ jobs:
 
       - name: Track Performance with Bencher
         env:
+          GH_TOKEN: ${{ github.token }}
           BENCHER_PROJECT: bible-on-site-website
           BENCHER_BRANCH: ${{ github.head_ref || github.ref_name }} # PR source branch, or branch name on push
         run: |
@@ -1198,7 +1201,7 @@ jobs:
           # --threshold-max-sample-size _ to leave it unset (#2718).
           # Frame blocking can also be zero. Its normalized measure uses
           # the browser test's existing CPU-scaled budget: 1 means the limit.
-          bencher run \
+          node "$GITHUB_WORKSPACE/devops/github/ci/bencher-report.mjs" bencher run \
             --project "$BENCHER_PROJECT" \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
             --branch "$BENCHER_BRANCH" \
