@@ -1,6 +1,7 @@
 "use client";
 
 import { toLetters } from "gematry";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
 	memo,
@@ -40,12 +41,31 @@ import {
 	prevMonth,
 } from "@/data/learning-schedule";
 import { resolveCalendarArtifactRequest } from "@/lib/download/calendar-artifacts";
+import {
+	getStoredCalendarFlipView,
+	setStoredCalendarFlipView,
+} from "@/lib/calendar-flip-view";
 import { parseNumericalDateToHebcalDate } from "@/util/hebdates-util";
 import {
 	CalendarPdfDownload,
 	type CalendarPdfRequest,
 } from "./CalendarPdfDownload";
+import {
+	buildCycleFlipMonths,
+	buildYearFlipMonths,
+	type FlipMonthEntry,
+} from "./flip-month-data";
 import styles from "./learning-calendar.module.css";
+
+/**
+ * The vertical spiral calendar book (#2993) is code-split: the flip engine
+ * and month sheets only load after the flipping presentation is selected,
+ * keeping the default overview path free of that weight.
+ */
+const CalendarFlipBook = dynamic(
+	() => import("./CalendarFlipBook").then((mod) => mod.CalendarFlipBook),
+	{ ssr: false },
+);
 
 const WEEKDAY_NAMES = [
 	{ short: "א", full: "ראשון" },
@@ -60,6 +80,7 @@ const WEEKDAY_NAMES = [
 const MONTH_QUERY_PARAM = "month";
 const VIEW_QUERY_PARAM = "view";
 const CYCLE_QUERY_PARAM = "cycle";
+const FLIP_QUERY_PARAM = "flip";
 
 const VIEW_MODES = [
 	{ key: "month", label: "חודשי" },
@@ -155,6 +176,7 @@ export function LearningCalendar({
 			month: parseMonthParam(params.get(MONTH_QUERY_PARAM)),
 			view: parseViewParam(params.get(VIEW_QUERY_PARAM)),
 			cycle: parseCycleParam(params.get(CYCLE_QUERY_PARAM)),
+			flip: params.get(FLIP_QUERY_PARAM) === "1",
 		};
 	}, [query]);
 	const urlMonth = clampCalendarMonth(
@@ -194,6 +216,16 @@ export function LearningCalendar({
 		urlSelection.cycle,
 	);
 
+	// Flipping presentation (#2993): an explicit ?flip=1 wins (shareable
+	// deep link); otherwise the persisted reader preference applies once
+	// mounted. Only meaningful for the year/cycle scopes.
+	const [prefFlip, setPrefFlip] = useState<boolean | null>(null);
+	useEffect(() => {
+		setPrefFlip(getStoredCalendarFlipView() === "flip");
+	}, []);
+	const flipPresentation =
+		viewMode !== "month" && (urlParams.flip || prefFlip === true);
+
 	// Apply actual URL changes (back/forward, shared links), without replacing
 	// an optimistic selection with the old URL while navigation is pending.
 	useEffect(() => {
@@ -207,7 +239,12 @@ export function LearningCalendar({
 	}, [urlSelection]);
 
 	const pushParams = useCallback(
-		(updates: { month?: MonthRef; view?: ViewMode; cycle?: number }) => {
+		(updates: {
+			month?: MonthRef;
+			view?: ViewMode;
+			cycle?: number;
+			flip?: "on" | "off";
+		}) => {
 			// Compose rapid actions until Next commits a new URL snapshot.
 			const pending = pendingQuery.current;
 			const params = new URLSearchParams(
@@ -221,6 +258,11 @@ export function LearningCalendar({
 			}
 			if (updates.cycle !== undefined) {
 				params.set(CYCLE_QUERY_PARAM, String(updates.cycle));
+			}
+			if (updates.flip === "on") {
+				params.set(FLIP_QUERY_PARAM, "1");
+			} else if (updates.flip === "off") {
+				params.delete(FLIP_QUERY_PARAM);
 			}
 			const value = params.toString();
 			pendingQuery.current = { base: urlSelection, value };
@@ -254,6 +296,35 @@ export function LearningCalendar({
 		},
 		[pushParams, window.next.number],
 	);
+
+	const selectPresentation = useCallback(
+		(flip: boolean) => {
+			setStoredCalendarFlipView(flip ? "flip" : "overview");
+			setPrefFlip(flip);
+			// ?flip=1 stays in shareable URLs; overview drops the param and
+			// relies on the persisted preference instead.
+			pushParams({ flip: flip ? "on" : "off" });
+		},
+		[pushParams],
+	);
+
+	const overviewToggleRef = useRef<HTMLButtonElement>(null);
+	const handleShowOverview = useCallback(() => {
+		selectPresentation(false);
+		// The toolbar button unmounts together with the book; return focus
+		// to the persistent presentation toggle so keyboard users keep place.
+		requestAnimationFrame(() => overviewToggleRef.current?.focus());
+	}, [selectPresentation]);
+
+	const flipJumpNonce = useRef(0);
+	const [flipJump, setFlipJump] = useState<{
+		month: MonthRef;
+		nonce: number;
+	} | null>(null);
+	const requestFlipJump = useCallback((month: MonthRef) => {
+		flipJumpNonce.current += 1;
+		setFlipJump({ month, nonce: flipJumpNonce.current });
+	}, []);
 
 	const cells = useMemo(
 		() => buildVisibleCalendarMonth(viewed.year, viewed.month, window),
@@ -316,7 +387,12 @@ export function LearningCalendar({
 		);
 		setViewed(month);
 		pushParams({ month, cycle });
-	}, [pushParams, today, window]);
+		// The flip book keeps its own position; ask it to jump alongside the
+		// URL/state update (a scope change remounts it on `initialMonth`).
+		if (flipPresentation) {
+			requestFlipJump(month);
+		}
+	}, [pushParams, today, window, flipPresentation, requestFlipJump]);
 
 	const openPerek = useCallback(
 		(perekId: number) => {
@@ -360,6 +436,50 @@ export function LearningCalendar({
 		(day: CalendarDay) => day.cycle !== resolvedCycle,
 		[resolvedCycle],
 	);
+
+	// Ordered month sheets for the flipping book (#2993); empty while the
+	// overview is shown so no schedule work is wasted on it. Window-aware
+	// builders keep the book identical to the overview grids. The memo keys
+	// on scope identity only — flipping pages inside a cycle changes
+	// `viewed.year` and must not rebuild every sheet.
+	const flipYear = viewMode === "year" ? viewed.year : null;
+	const flipMonths = useMemo<FlipMonthEntry[]>(() => {
+		if (!flipPresentation) {
+			return [];
+		}
+		return viewMode === "year" && flipYear !== null
+			? buildYearFlipMonths(flipYear, window)
+			: buildCycleFlipMonths(resolvedCycle, window);
+	}, [flipPresentation, viewMode, flipYear, resolvedCycle, window]);
+
+	// While flipping a full cycle without an explicit ?cycle=, pin the
+	// resolved cycle into the URL and state: each flipped month would
+	// otherwise re-resolve the contextual cycle at boundaries and remount
+	// the book mid-browse.
+	useEffect(() => {
+		if (
+			flipPresentation &&
+			viewMode === "cycle" &&
+			urlSelection.cycle === null
+		) {
+			setViewedCycle(resolvedCycle);
+			pushParams({ cycle: resolvedCycle });
+		}
+	}, [
+		flipPresentation,
+		viewMode,
+		urlSelection.cycle,
+		resolvedCycle,
+		pushParams,
+	]);
+
+	const handleFlipMonthChange = useCallback(
+		(month: MonthRef) => {
+			setViewed(month);
+			pushParams({ month });
+		},
+		[pushParams],
+	);
 	const canExport = canExportCalendarPeriod(
 		viewMode === "cycle"
 			? { view: "cycle", cycle: resolvedCycle }
@@ -396,18 +516,20 @@ export function LearningCalendar({
 		};
 	}, [viewed, viewMode, resolvedCycle, pdfManifestUrl]);
 
+	// The overview grids stay unmounted while the flip book shows — do not
+	// compute their schedules for a hidden presentation (#2993 review).
 	const yearMonths = useMemo(
 		() =>
-			viewMode === "year"
+			viewMode === "year" && !flipPresentation
 				? visibleCalendarMonths(viewed.year, window).map((month) =>
 						buildVisibleCalendarMonth(viewed.year, month, window),
 					)
 				: [],
-		[viewMode, viewed.year, window],
+		[viewMode, viewed.year, window, flipPresentation],
 	);
 
 	const cycleMonths = useMemo(() => {
-		if (viewMode !== "cycle") {
+		if (viewMode !== "cycle" || flipPresentation) {
 			return [] as CalendarMonth[];
 		}
 		const cycle = getCycle(resolvedCycle);
@@ -429,7 +551,7 @@ export function LearningCalendar({
 			ref = nextMonth(ref);
 		}
 		return months;
-	}, [viewMode, resolvedCycle, window]);
+	}, [viewMode, resolvedCycle, window, flipPresentation]);
 
 	/** Saturday dates swallowed by Friday's merged block in `cells`. */
 	const mergedSaturdays = useMemo(() => {
@@ -444,7 +566,9 @@ export function LearningCalendar({
 	}, [cells]);
 
 	return (
-		<main className={styles.page}>
+		<main
+			className={`${styles.page} ${flipPresentation ? styles.pageFlip : ""}`}
+		>
 			<h1 className={styles.title}>לוח לימוד יומי</h1>
 
 			<div className={styles.viewToggle}>
@@ -463,68 +587,98 @@ export function LearningCalendar({
 				))}
 			</div>
 
+			{viewMode !== "month" && (
+				<div className={styles.viewToggle}>
+					<button
+						ref={overviewToggleRef}
+						type="button"
+						className={`${styles.viewButton} ${
+							!flipPresentation ? styles.viewButtonActive : ""
+						}`}
+						aria-pressed={!flipPresentation}
+						onClick={() => selectPresentation(false)}
+					>
+						סקירה
+					</button>
+					<button
+						type="button"
+						className={`${styles.viewButton} ${
+							flipPresentation ? styles.viewButtonActive : ""
+						}`}
+						aria-pressed={flipPresentation}
+						onClick={() => selectPresentation(true)}
+					>
+						דפדוף
+					</button>
+				</div>
+			)}
+
 			<div className={styles.controls}>
-				<button
-					type="button"
-					className={styles.navButton}
-					onClick={() =>
-						viewMode === "cycle"
-							? selectCycle(resolvedCycle - 1)
-							: viewMode === "year"
-								? onYearSelected(viewed.year - 1)
-								: navigateMonth(prevMonth(viewed))
-					}
-					aria-label={
-						viewMode === "cycle"
-							? "מחזור קודם"
-							: viewMode === "year"
-								? "שנה קודמת"
-								: "חודש קודם"
-					}
-					disabled={
-						viewMode === "cycle"
-							? resolvedCycle <= 1
-							: viewMode === "year"
-								? viewed.year <= window.minMonth.year
-								: compareMonths(viewed, window.minMonth) <= 0
-					}
-				>
-					‹
-				</button>
-				<button
-					type="button"
-					className={styles.todayButton}
-					onClick={backToToday}
-				>
-					היום
-				</button>
-				<button
-					type="button"
-					className={styles.navButton}
-					onClick={() =>
-						viewMode === "cycle"
-							? selectCycle(resolvedCycle + 1)
-							: viewMode === "year"
-								? onYearSelected(viewed.year + 1)
-								: navigateMonth(nextMonth(viewed))
-					}
-					aria-label={
-						viewMode === "cycle"
-							? "מחזור הבא"
-							: viewMode === "year"
-								? "שנה הבאה"
-								: "חודש הבא"
-					}
-					disabled={
-						viewMode === "cycle"
-							? resolvedCycle >= window.next.number
-							: viewMode === "year"
-								? viewed.year >= window.maxMonth.year
-								: compareMonths(viewed, window.maxMonth) >= 0
-					}
-				>
-					›
-				</button>
+				{!flipPresentation && (
+					<>
+						<button
+							type="button"
+							className={styles.navButton}
+							onClick={() =>
+								viewMode === "cycle"
+									? selectCycle(resolvedCycle - 1)
+									: viewMode === "year"
+										? onYearSelected(viewed.year - 1)
+										: navigateMonth(prevMonth(viewed))
+							}
+							aria-label={
+								viewMode === "cycle"
+									? "מחזור קודם"
+									: viewMode === "year"
+										? "שנה קודמת"
+										: "חודש קודם"
+							}
+							disabled={
+								viewMode === "cycle"
+									? resolvedCycle <= 1
+									: viewMode === "year"
+										? viewed.year <= window.minMonth.year
+										: compareMonths(viewed, window.minMonth) <= 0
+							}
+						>
+							‹
+						</button>
+						<button
+							type="button"
+							className={styles.todayButton}
+							onClick={backToToday}
+						>
+							היום
+						</button>
+						<button
+							type="button"
+							className={styles.navButton}
+							onClick={() =>
+								viewMode === "cycle"
+									? selectCycle(resolvedCycle + 1)
+									: viewMode === "year"
+										? onYearSelected(viewed.year + 1)
+										: navigateMonth(nextMonth(viewed))
+							}
+							aria-label={
+								viewMode === "cycle"
+									? "מחזור הבא"
+									: viewMode === "year"
+										? "שנה הבאה"
+										: "חודש הבא"
+							}
+							disabled={
+								viewMode === "cycle"
+									? resolvedCycle >= window.next.number
+									: viewMode === "year"
+										? viewed.year >= window.maxMonth.year
+										: compareMonths(viewed, window.maxMonth) >= 0
+							}
+						>
+							›
+						</button>
+					</>
+				)}
 				{viewMode === "month" && (
 					<label className={styles.pickerLabel}>
 						<span className={styles.srOnly}>חודש</span>
@@ -564,11 +718,15 @@ export function LearningCalendar({
 						</select>
 					</label>
 				)}
-				<CalendarPdfDownload
-					request={pdfRequest}
-					scopeLabel={pdfScopeLabel}
-					unavailableReason={canExport ? undefined : CALENDAR_PDF_UNAVAILABLE}
-				/>
+				{!flipPresentation && (
+					<CalendarPdfDownload
+						request={pdfRequest}
+						scopeLabel={pdfScopeLabel}
+						unavailableReason={
+							canExport ? undefined : CALENDAR_PDF_UNAVAILABLE
+						}
+					/>
+				)}
 			</div>
 
 			<h2 className={styles.monthTitle}>
@@ -612,7 +770,41 @@ export function LearningCalendar({
 				)}
 			</div>
 
-			{viewMode === "year" && (
+			{flipPresentation && flipMonths.length > 0 && (
+				<CalendarFlipBook
+					// Remount whenever the displayed scope changes so the book
+					// re-anchors on the requested month instead of an index.
+					key={
+						viewMode === "year"
+							? `year-${viewed.year}`
+							: `cycle-${resolvedCycle}`
+					}
+					months={flipMonths}
+					scopeLabel={pdfScopeLabel}
+					scopeDetail={
+						viewMode === "cycle"
+							? getCycleLabel(getCycle(resolvedCycle))
+							: undefined
+					}
+					initialMonth={viewed}
+					todayDateNumber={todayDateNumber}
+					onMonthChange={handleFlipMonthChange}
+					jumpRequest={flipJump}
+					onOpenPerek={openPerek}
+					dayAriaLabel={dayAriaLabel}
+					mergedDayAriaLabel={mergedAriaLabel}
+					isDimmed={viewMode === "cycle" ? dimOutsideCycle : undefined}
+					onToday={backToToday}
+					onShowOverview={handleShowOverview}
+					pdfRequest={pdfRequest}
+					pdfScopeLabel={pdfScopeLabel}
+					pdfUnavailableReason={
+						canExport ? undefined : CALENDAR_PDF_UNAVAILABLE
+					}
+				/>
+			)}
+
+			{viewMode === "year" && !flipPresentation && (
 				<div className={styles.yearGrid}>
 					{visibleCalendarMonths(viewed.year, window).map((month, index) => (
 						<MiniMonth
@@ -628,7 +820,7 @@ export function LearningCalendar({
 				</div>
 			)}
 
-			{viewMode === "cycle" && (
+			{viewMode === "cycle" && !flipPresentation && (
 				<div className={styles.yearGrid}>
 					{cycleMonths.map(({ ref, cells: cellsForMonth }) => (
 						<MiniMonth
@@ -695,29 +887,33 @@ export function LearningCalendar({
 				</>
 			)}
 
-			<ul className={styles.legend} aria-label="מקרא">
-				<li>
-					<span
-						className={`${styles.legendSwatch} ${styles.studySwatch}`}
-						aria-hidden="true"
-					/>
-					יום לימוד
-				</li>
-				<li>
-					<span
-						className={`${styles.legendSwatch} ${styles.reviewSwatch}`}
-						aria-hidden="true"
-					/>
-					יום חזרה
-				</li>
-				<li>
-					<span
-						className={`${styles.legendSwatch} ${styles.noneSwatch}`}
-						aria-hidden="true"
-					/>
-					לא משובץ
-				</li>
-			</ul>
+			{/* In flip mode the book's title page carries the legend, and the
+			    saved vertical space keeps the bottom turn zone in view. */}
+			{!flipPresentation && (
+				<ul className={styles.legend} aria-label="מקרא">
+					<li>
+						<span
+							className={`${styles.legendSwatch} ${styles.studySwatch}`}
+							aria-hidden="true"
+						/>
+						יום לימוד
+					</li>
+					<li>
+						<span
+							className={`${styles.legendSwatch} ${styles.reviewSwatch}`}
+							aria-hidden="true"
+						/>
+						יום חזרה
+					</li>
+					<li>
+						<span
+							className={`${styles.legendSwatch} ${styles.noneSwatch}`}
+							aria-hidden="true"
+						/>
+						לא משובץ
+					</li>
+				</ul>
+			)}
 		</main>
 	);
 }
