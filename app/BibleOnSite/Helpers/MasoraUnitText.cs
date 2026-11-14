@@ -30,6 +30,13 @@ public static class MasoraUnitText
         public int? StartSegmentIndex { get; init; }
         /// <summary>Last included segment in EndPasuk, when the range ends mid-pasuk.</summary>
         public int? EndSegmentIndex { get; init; }
+        /// <summary>
+        /// The range row this slice decomposed from, when the unit carries
+        /// range identities (מועדים): a section that repeats one reading tags
+        /// its recitation clips with it so the highlight lands on the playing
+        /// occurrence's own rows, not the first canonical match. 0 = untagged.
+        /// </summary>
+        public int RangeId { get; init; }
     }
 
     /// <summary>
@@ -38,7 +45,18 @@ public static class MasoraUnitText
     /// attach only to the range's own start/end coordinates. Shared by every
     /// division whose units carry the contract's inclusive range shape.
     /// </summary>
-    public static List<PerekSlice> PerekSlicesForRange(IScriptureRange range)
+    /// <param name="range">The inclusive canonical range.</param>
+    public static List<PerekSlice> PerekSlicesForRange(IScriptureRange range) =>
+        PerekSlicesForRange(range, 0);
+
+    /// <summary>
+    /// Decomposes a range into ordered per-perek slices in canonical order,
+    /// stamping each with the range's row identity — see
+    /// <see cref="PerekSlice.RangeId"/>.
+    /// </summary>
+    /// <param name="range">The inclusive canonical range.</param>
+    /// <param name="rangeId">Identity stamped on every slice — see <see cref="PerekSlice.RangeId"/>.</param>
+    public static List<PerekSlice> PerekSlicesForRange(IScriptureRange range, int rangeId)
     {
         var slices = new List<PerekSlice>();
         for (var perekId = range.StartPerekId; perekId <= range.EndPerekId; perekId++)
@@ -50,6 +68,7 @@ public static class MasoraUnitText
                 EndPasuk = perekId == range.EndPerekId ? range.EndPasuk : int.MaxValue,
                 StartSegmentIndex = perekId == range.StartPerekId ? range.StartSegmentIndex : null,
                 EndSegmentIndex = perekId == range.EndPerekId ? range.EndSegmentIndex : null,
+                RangeId = rangeId,
             });
         }
         return slices;
@@ -60,7 +79,7 @@ public static class MasoraUnitText
     /// declared range order (mirrors rangesPerekSlices).
     /// </summary>
     public static List<PerekSlice> PerekSlicesForUnit(MasoraUnit unit) =>
-        unit.Ranges.SelectMany(PerekSlicesForRange).ToList();
+        unit.Ranges.SelectMany(range => PerekSlicesForRange(range)).ToList();
 
     /// <summary>Distinct perek ids a unit's ranges overlap, in first-appearance order.</summary>
     public static List<int> PerekIdsForUnit(MasoraUnit unit)
