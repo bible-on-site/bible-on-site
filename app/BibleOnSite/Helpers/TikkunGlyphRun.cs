@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using HarfBuzzSharp;
 using Microsoft.Maui.Graphics;
 using HbBuffer = HarfBuzzSharp.Buffer;
@@ -36,15 +35,29 @@ internal static class TikkunFont
     {
         using var bytes = new MemoryStream();
         font.CopyTo(bytes);
-        var data = JsonSerializer.Deserialize(outlines, TikkunFontJsonContext.Default.TikkunFontData)!;
-        data.FontBytes = bytes.ToArray();
-        if (!string.Equals(Convert.ToHexString(SHA256.HashData(data.FontBytes)),
-            data.FontSha256, StringComparison.OrdinalIgnoreCase))
+        var fontBytes = bytes.ToArray();
+        using var document = JsonDocument.Parse(outlines);
+        var root = document.RootElement;
+        var fontHash = root.GetProperty("FontSha256").GetString()!;
+        if (!string.Equals(Convert.ToHexString(SHA256.HashData(fontBytes)),
+            fontHash, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidDataException("Regenerate TaameyD-outlines.json for the packaged scripture font.");
         }
-        return data;
+        // The asset has a fixed schema. Explicit parsing avoids reflection
+        // in trimmed apps and needs no generated serialization declaration.
+        return new TikkunFontData(fontHash,
+            root.GetProperty("UnitsPerEm").GetInt32(),
+            root.GetProperty("Ascent").GetInt32(),
+            root.GetProperty("Descent").GetInt32(),
+            root.GetProperty("Glyphs").EnumerateArray().Select(glyph =>
+                new TikkunGlyphOutline(glyph.GetProperty("Name").GetString()!,
+                    ReadCommands(glyph, "Base"), ReadCommands(glyph, "Marks"))).ToArray(),
+            fontBytes);
     }
+
+    private static float[] ReadCommands(JsonElement glyph, string layer) =>
+        glyph.GetProperty(layer).EnumerateArray().Select(value => value.GetSingle()).ToArray();
 
     public static TikkunGlyphRun Shape(string markedText, float fontSize)
     {
@@ -115,25 +128,7 @@ internal static class TikkunFont
     }
 }
 
-internal sealed class TikkunFontData
-{
-    public string FontSha256 { get; set; } = "";
-    public int UnitsPerEm { get; set; }
-    public int Ascent { get; set; }
-    public int Descent { get; set; }
-    public TikkunGlyphOutline[] Glyphs { get; set; } = [];
-    [JsonIgnore]
-    public byte[] FontBytes { get; set; } = [];
-}
+internal sealed record TikkunFontData(string FontSha256, int UnitsPerEm, int Ascent,
+    int Descent, TikkunGlyphOutline[] Glyphs, byte[] FontBytes);
 
-internal sealed class TikkunGlyphOutline
-{
-    public string Name { get; set; } = "";
-    public float[] Base { get; set; } = [];
-    public float[] Marks { get; set; } = [];
-}
-
-[JsonSerializable(typeof(TikkunFontData))]
-#pragma warning disable S2333 // System.Text.Json generates the other part of this serialization context.
-internal partial class TikkunFontJsonContext : JsonSerializerContext; //NOSONAR — required by the JSON source generator.
-#pragma warning restore S2333
+internal sealed record TikkunGlyphOutline(string Name, float[] Base, float[] Marks);
