@@ -326,6 +326,52 @@ describe("renderFamilyTreeCitationLine", () => {
 		);
 	});
 
+	it("links a citation after a deeply nested annotation while preserving its text", () => {
+		const line = `רש"י ${"(".repeat(512)}הערה${")".repeat(512)}: בראשית א א`;
+		const { container } = render(
+			<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+		);
+
+		expect(container.textContent).toBe(line);
+		expect(container.querySelectorAll("a")).toHaveLength(1);
+		expect(container.querySelector("a")).toHaveAttribute(
+			"href",
+			build929PerushHref("בראשית", "א", "א", 'רש"י'),
+		);
+	});
+
+	it.each([
+		{
+			line: 'רש"י (הערה (מורחבת): בראשית א א',
+			linkText: "בראשית א א",
+			href: "/929/1#pasuk-1",
+		},
+		{
+			line: 'רש"י ((הערה): בראשית א א',
+			linkText: 'רש"י ((הערה): בראשית א א',
+			href: build929PerushHref("בראשית", "א", "א", 'רש"י'),
+		},
+		{
+			line: 'רש"י ) (הערה): בראשית א א',
+			linkText: 'רש"י ) (הערה): בראשית א א',
+			href: build929PerushHref("בראשית", "א", "א", 'רש"י'),
+		},
+	])(
+		"preserves unmatched parentheses and respects matched annotations in $line",
+		({ line, linkText, href }) => {
+			const { container } = render(
+				<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+			);
+
+			expect(container.textContent).toBe(line);
+			expect(container.querySelectorAll("a")).toHaveLength(1);
+			expect(screen.getByRole("link", { name: linkText })).toHaveAttribute(
+				"href",
+				href,
+			);
+		},
+	);
+
 	it("keeps punctuation in a commentator name while unquoting verse numerals", () => {
 		render(
 			<div>{renderFamilyTreeCitationLine('רש"י בראשית י״א י״ח', "cite")}</div>,
