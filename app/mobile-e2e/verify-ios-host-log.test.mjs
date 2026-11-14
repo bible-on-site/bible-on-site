@@ -1,40 +1,71 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { observeIosHostLog, shutdownEvidence, verifyIosHostLog } from "./verify-ios-host-log.mjs";
+import { clientRecords, observeIosHostLog, shutdownEvidence, udidRecords, verifyIosHostLog } from "./verify-ios-host-log.mjs";
 
 const udid = "24E299B4-C77B-4426-AC2B-71243825F07C";
 const service = "2026-11-11 20:17:06.012 Df com.apple.CoreSimulator.CoreSimulatorService[24253:28cfc]";
-function fixture(t, state = "Booted", classic = false, event = "Shutdown requested for") {
+// eventSource picks which owned stream emits the shutdown record: a stream
+// index (0 unified, 1 debug, 2 device), "classic", or "posthoc".
+function fixture(t, state = "Booted", { classic = false, event = "Shutdown requested for",
+  eventSource = 0, deviceLog = false, posthocLog = "" } = {}) {
   const directory = mkdtempSync(join(tmpdir(), "host-shutdown-contract-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const artifact = join(directory, "host.log");
   const calls = [];
-  let stopped = false;
+  const streams = [];
+  const outputs = [];
   let classicStopped = false;
-  let onOutput;
   let classicOutput, classicArtifact;
-  return { artifact, calls, get stopped() { return stopped && (!classic || classicStopped); }, options: {
+  if (deviceLog) {
+    mkdirSync(join(directory, "Library", "Logs", "CoreSimulator", udid), { recursive: true });
+    writeFileSync(join(directory, "Library", "Logs", "CoreSimulator", udid, "system.log"), "historical\n");
+  }
+  // The record lands in the emitting source's artifact too: stream readers
+  // persist their own file before the observer callback sees the chunk.
+  const eventArtifacts = { 0: artifact, 1: `${artifact}.debug.log`, 2: `${artifact}.device.log` };
+  const emit = log => {
+    if (eventSource === "classic") {
+      writeFileSync(classicArtifact, log);
+      classicOutput(log);
+    } else if (eventSource !== "posthoc") {
+      writeFileSync(eventArtifacts[eventSource], log);
+      outputs[eventSource]?.(log);
+    }
+  };
+  return { artifact, calls, streams,
+    get stopped() {
+      return streams.length > 0 && streams.every(observer => observer.stopped)
+        && (!classic || classicStopped);
+    }, options: {
     udid, artifact, home: directory,
     async execute(command, args) {
       calls.push({ command, args });
+      if (command === "/usr/bin/sw_vers") return { stdout: "ProductName: macOS\nProductVersion: 26.0.1\nBuildVersion: 25A362\n" };
+      if (command === "/usr/bin/xcodebuild") return { stdout: "Xcode 27.0.1\nBuild version 17A400\n" };
+      if (command === "/usr/bin/sudo") return { stdout: "" };
+      if (args[0] === "show") {
+        const log = eventSource === "posthoc" ? `${service} ${event} ${udid}\n` : posthocLog;
+        return { stdout: log };
+      }
+      if (args[1] === "runtime") return { stdout: "com.apple.CoreSimulator.SimRuntime.iOS-27-0\n" };
       if (args[1] === "shutdown") {
         state = "Shutdown";
-        const log = `${service} ${event} ${udid}\n`;
-        writeFileSync(classic ? classicArtifact : artifact, log);
-        (classic ? classicOutput : onOutput)(log);
+        emit(`${service} ${event} ${udid}\n`);
       }
       return { stdout: `${args[1] === "UDID" ? udid : ["Creating", "Shutdown", "Booting", "Booted", "Shutting Down"].indexOf(state)}\n` };
     },
     stream(command, args, path, options) {
       calls.push({ command, args });
-      onOutput = options.onOutput;
       const log = "Filtering the log data using process scope\n";
       writeFileSync(path, log);
-      onOutput(log);
-      return { async stop() { stopped = true; } };
+      outputs.push(options?.onOutput);
+      options?.onOutput?.(log);
+      const observer = { stopped: false, async stop() { observer.stopped = true; } };
+      streams.push(observer);
+      return observer;
     },
     classicStream(path, options) {
       if (!classic) return undefined;
@@ -46,7 +77,7 @@ function fixture(t, state = "Booted", classic = false, event = "Shutdown request
   } };
 }
 
-test("validates the target transition and preserves correlated evidence before stopping the observer", async t => {
+test("validates the target transition and preserves correlated evidence before stopping the observers", async t => {
   const f = fixture(t);
   const result = await verifyIosHostLog(f.options);
   assert.equal(result.udid, udid);
@@ -65,10 +96,20 @@ test("validates the target transition and preserves correlated evidence before s
   assert(Number.isFinite(Date.parse(result.observation.startedAt)));
   assert(Number.isFinite(Date.parse(result.observation.endedAt)));
   assert.equal(result.lifecycleRecordStatus, "observed");
+  assert.equal(result.collectionGap, false);
   assert.equal(result.limitation, null);
   assert.equal(result.correlatedLines, 1);
-  assert.deepEqual(result.sources, { unified: 1 });
-  assert(result.capturedBytes.unified > 0);
+  assert.deepEqual(result.sources, { unified: 1, debug: 0, posthoc: 0 });
+  assert.equal(result.capturedBytes.unified > 0, true);
+  assert.equal(result.capturedBytes.debug > 0, true);
+  assert.equal(result.environment.swVers.status, "captured");
+  assert.match(result.environment.swVers.stdout, /ProductVersion: 26\.0\.1/);
+  assert.match(result.environment.xcode.stdout, /Xcode 27\.0\.1/);
+  assert.match(result.environment.deviceRuntime.stdout, /SimRuntime\.iOS-27-0/);
+  assert.equal(result.debugPersistence.status, "captured");
+  assert.equal(result.debugPersistence.restored, true);
+  assert.equal(result.posthoc.status, "captured");
+  assert.equal(result.posthoc.stdoutBytes, 0);
   assert.deepEqual(JSON.parse(readFileSync(`${f.artifact}.measurement.json`, "utf8")), result);
   assert(f.stopped);
   assert.deepEqual(f.calls.filter(call => call.args[1] === "shutdown"),
@@ -77,27 +118,117 @@ test("validates the target transition and preserves correlated evidence before s
 });
 
 test("retains classic evidence independently when unified logging has no lifecycle event", async t => {
-  const f = fixture(t, "Booted", true);
+  const f = fixture(t, "Booted", { classic: true, eventSource: "classic" });
   const result = await verifyIosHostLog(f.options);
   assert.equal(result.stateTransitionVerified, true);
   assert.equal(result.lifecycleRecordStatus, "observed");
   assert.equal(result.correlatedLines, 1);
-  assert.deepEqual(result.sources, { unified: 0, classic: 1 });
+  assert.deepEqual(result.sources, { unified: 0, debug: 0, classic: 1, posthoc: 0 });
   assert(f.stopped);
   assert.match(readFileSync(`${f.artifact}.classic.log`, "utf8"), /Shutdown requested/);
 });
 
+test("flags a collection gap when only the debug probe retains the record", async t => {
+  const f = fixture(t, "Booted", { eventSource: 1 });
+  const result = await verifyIosHostLog(f.options);
+  assert.equal(result.lifecycleRecordStatus, "observed");
+  assert.deepEqual(result.sources, { unified: 0, debug: 1, posthoc: 0 });
+  assert.equal(result.correlatedLines, 1);
+  assert.equal(result.collectionGap, true);
+  assert.match(result.limitation, /collection correction is required/);
+  assert.equal(result.samples.shutdown.length, 1);
+  assert(f.stopped);
+});
+
+test("flags a collection gap when only the post-hoc sweep retains the record", async t => {
+  const f = fixture(t, "Booted", { eventSource: "posthoc" });
+  f.options.observationWindow = () => AbortSignal.abort(new DOMException("capture window ended", "TimeoutError"));
+  const result = await verifyIosHostLog(f.options);
+  assert.equal(result.lifecycleRecordStatus, "after-window",
+    "a post-hoc record outside the window is still outside the window");
+  assert.deepEqual(result.sources, { unified: 0, debug: 0, posthoc: 1 });
+  assert.equal(result.collectionGap, true);
+  assert.match(result.limitation, /out-of-window bytes retain one/);
+  assert(f.stopped);
+});
+
+test("bounds the persisted-store query to the controlled window", async t => {
+  const f = fixture(t);
+  await verifyIosHostLog(f.options);
+  const show = f.calls.find(call => call.args[0] === "show");
+  assert(show, "the post-hoc sweep runs");
+  const last = Number(show.args[show.args.indexOf("--last") + 1].replace("s", ""));
+  assert(last <= 30,
+    "an earlier shutdown of the same device cannot reach the evidence count");
+});
+
+test("stops the attached reader when a later stream fails to attach", async t => {
+  const f = fixture(t);
+  const stream = f.options.stream;
+  let attachments = 0;
+  f.options.stream = (...args) => {
+    attachments += 1;
+    if (attachments === 2) throw new Error("debug artifact is a directory");
+    return stream(...args);
+  };
+  await assert.rejects(verifyIosHostLog(f.options), /debug artifact is a directory/);
+  assert(f.stopped, "the already-running info reader must not leak");
+});
+
+test("restores debug persistence under cancellation on its own budget", async t => {
+  const f = fixture(t);
+  const controller = new AbortController();
+  f.options.signal = controller.signal;
+  const execute = f.options.execute;
+  f.options.execute = async (command, args, options) => {
+    assert(!options?.signal?.aborted || args.includes("--reset"),
+      "only the independent reset budget may outlive cancellation");
+    return execute(command, args, options);
+  };
+  const stream = f.options.stream;
+  f.options.stream = (...args) => {
+    const observer = stream(...args);
+    return { async stop() {
+      await observer.stop();
+      controller.abort(new DOMException("cancelled during cleanup", "AbortError"));
+    } };
+  };
+  await assert.rejects(verifyIosHostLog(f.options), /cancelled during cleanup/);
+  assert(f.calls.some(call => call.args.includes("--reset")),
+    "the enabled persistence is still reset after cancellation");
+});
+
 test("reports a missing OS record explicitly without claiming lifecycle evidence", async t => {
-  const f = fixture(t, "Booted", true, "Activity for device");
+  const f = fixture(t, "Booted", { classic: true, event: "Activity for device", eventSource: "classic" });
   f.options.observationWindow = () => AbortSignal.abort(new DOMException("capture window ended", "TimeoutError"));
   const result = await verifyIosHostLog(f.options);
   assert.equal(result.stateTransitionVerified, true);
   assert.equal(result.lifecycleRecordStatus, "not-observed");
   assert.match(result.limitation, /reason and requesting client are not established/);
   assert.equal(result.correlatedLines, 0);
-  assert.deepEqual(result.sources, { unified: 0, classic: 0 });
+  assert.deepEqual(result.sources, { unified: 0, debug: 0, classic: 0, posthoc: 0 });
   assert(result.capturedBytes.unified > 0 && result.capturedBytes.classic > 0);
+  assert.equal(result.udidCorrelated.classic, 1,
+    "the device-named context line is retained as context, not claimed as evidence");
   assert(f.stopped);
+});
+
+test("tails the device system log when the image still persists one", async t => {
+  const f = fixture(t, "Booted", { deviceLog: true, eventSource: 2 });
+  const result = await verifyIosHostLog(f.options);
+  assert.equal(result.environment.deviceLog.offset, "historical\n".length);
+  assert.equal(result.lifecycleRecordStatus, "observed");
+  assert.equal(result.sources.device, 1);
+  assert.equal(result.collectionGap, true);
+  assert(f.stopped);
+});
+
+test("records a missing device system log without launching its reader", async t => {
+  const f = fixture(t);
+  const result = await verifyIosHostLog(f.options);
+  assert.equal(result.environment.deviceLog.offset, null);
+  assert.equal("device" in result.sources, false);
+  assert.equal(result.streams, undefined);
 });
 
 test("queries only the owned device within the unchanged command budget", async t => {
@@ -105,7 +236,7 @@ test("queries only the owned device within the unchanged command budget", async 
   const execute = f.options.execute;
   f.options.execute = async (command, args, options) => {
     if (command === "/usr/bin/plutil") {
-      assert(["UDID", "state"].includes(args[1]));
+      assert(["UDID", "state", "runtime"].includes(args[1]));
       assert.deepEqual(args, ["-extract", args[1], "raw", "-o", "-",
         join(f.options.home, "Library", "Developer", "CoreSimulator", "Devices", udid, "device.plist")]);
       assert.equal(options.timeout, 5000);
@@ -113,12 +244,12 @@ test("queries only the owned device within the unchanged command budget", async 
     return execute(command, args, options);
   };
   await verifyIosHostLog(f.options);
-  assert.equal(f.calls.filter(call => call.command === "/usr/bin/plutil").length, 4);
+  assert.equal(f.calls.filter(call => call.command === "/usr/bin/plutil").length, 5);
   assert(!f.calls.some(call => call.args[1] === "list"));
 });
 
 test("rejects a failed final state query and retains its timing without persisting success", async t => {
-  const f = fixture(t, "Booted", true);
+  const f = fixture(t, "Booted", { classic: true });
   const execute = f.options.execute;
   const reports = [];
   let queries = 0;
@@ -135,8 +266,8 @@ test("rejects a failed final state query and retains its timing without persisti
   assert.throws(() => readFileSync(`${f.artifact}.measurement.json`), { code: "ENOENT" });
 });
 
-test("rejects shutdown command failures and joins both readers", async t => {
-  const f = fixture(t, "Booted", true);
+test("rejects shutdown command failures and joins every reader", async t => {
+  const f = fixture(t, "Booted", { classic: true });
   const execute = f.options.execute;
   f.options.execute = async (command, args, options) => {
     if (args[1] === "shutdown") throw new Error("shutdown rejected");
@@ -148,17 +279,20 @@ test("rejects shutdown command failures and joins both readers", async t => {
 });
 
 test("rejects operation expiry during reader cleanup without persisting success", async t => {
-  const f = fixture(t, "Booted", true);
+  const f = fixture(t, "Booted", { classic: true });
   const controller = new AbortController();
   const timeout = AbortSignal.timeout.bind(AbortSignal);
-  t.mock.method(AbortSignal, "timeout", milliseconds => milliseconds === 40000
+  t.mock.method(AbortSignal, "timeout", milliseconds => milliseconds === 60000
     ? controller.signal : timeout(milliseconds));
   const stream = f.options.stream;
+  let wrapped = 0;
   f.options.stream = (...args) => {
     const observer = stream(...args);
     return { async stop() {
       await observer.stop();
-      controller.abort(new DOMException("operation expired during cleanup", "TimeoutError"));
+      if (++wrapped === f.streams.length) {
+        controller.abort(new DOMException("operation expired during cleanup", "TimeoutError"));
+      }
     } };
   };
   await assert.rejects(verifyIosHostLog(f.options), /operation expired during cleanup/);
@@ -167,11 +301,14 @@ test("rejects operation expiry during reader cleanup without persisting success"
 });
 
 test("retains late records without claiming they arrived inside the observation window", async t => {
-  const f = fixture(t, "Booted", true, "Activity for device");
+  const f = fixture(t, "Booted", { classic: true, event: "Activity for device" });
   f.options.observationWindow = () => AbortSignal.abort(new DOMException("capture window ended", "TimeoutError"));
   const stream = f.options.stream;
+  let first = true;
   f.options.stream = (...args) => {
     const observer = stream(...args);
+    if (!first) return observer;
+    first = false;
     return { async stop() {
       const log = `${service} Shutdown requested for ${udid}\n`;
       writeFileSync(f.artifact, log);
@@ -181,13 +318,13 @@ test("retains late records without claiming they arrived inside the observation 
   };
   const result = await verifyIosHostLog(f.options);
   assert.equal(result.correlatedLines, 1, "retain drained bytes as diagnostics");
-  assert.equal(result.lifecycleRecordStatus, "not-observed");
-  assert.match(result.limitation, /No service shutdown record observed in the fixed window/);
+  assert.equal(result.lifecycleRecordStatus, "after-window");
+  assert.match(result.limitation, /out-of-window bytes retain one/);
   assert(f.stopped);
 });
 
 test("rejects the overall deadline instead of reporting an unavailable OS field", async t => {
-  const f = fixture(t, "Booted", true);
+  const f = fixture(t);
   const controller = new AbortController();
   f.options.signal = controller.signal;
   f.options.observe = () => ({ write() {}, async waitFor(stage) {
@@ -204,7 +341,7 @@ test("rejects cancellation before commands or during reader cleanup", async t =>
   before.options.signal = AbortSignal.abort(new DOMException("cancelled", "AbortError"));
   await assert.rejects(verifyIosHostLog(before.options), /cancelled/);
   assert.equal(before.calls.length, 0);
-  const after = fixture(t, "Booted", true);
+  const after = fixture(t, "Booted", { classic: true });
   const controller = new AbortController();
   after.options.signal = controller.signal;
   const stream = after.options.stream;
@@ -258,7 +395,7 @@ test("joins the other bounded plist read before reporting a read failure", async
 
 test("closes the owned host observer when startup or shutdown observation fails", async t => {
   for (const failureAt of [1, 2]) {
-    const f = fixture(t, "Booted", true);
+    const f = fixture(t, "Booted", { classic: true });
     const stages = [];
     f.options.report = event => stages.push(event);
     let observations = 0;
@@ -291,6 +428,33 @@ test("requires the lifecycle emitter, device identity and shutdown event", () =>
     lookalike, valid, legacy, legacyRequester, `${legacyRequester} via ${service}`,
     bareRequester, `${service} booting ${udid}`, `${service} shutdown foreign`,
   ].join("\n"), udid), [valid, legacy]);
+});
+
+test("correlates device-named and client-pid records without claiming them as shutdown evidence", () => {
+  const pid = 37166;
+  const log = [
+    `2026-11-12 21:06:17.076 Df com.apple.CoreSimulator.CoreSimulatorService[6532:1868e] Failed to get a device identity for simulator device ${udid}, error: MobileActivation`,
+    "2026-11-12 21:06:18.370 Df com.apple.CoreSimulator.CoreSimulatorService[6532:18c4e] [com.apple.xpc:connection] activating connection: peer=true name=com.apple.CoreSimulator.CoreSimulatorService.peer[37166].0x783532b340",
+    "Nov 12 21:06:19 runner com.apple.CoreSimulator.simctl[37166] <Notice>: Connecting to com.apple.CoreSimulator.SimLaunchHost-arm64",
+    "Nov 12 21:06:19 runner com.apple.CoreSimulator.simctl[137166] <Notice>: a different client pid must not match",
+    `Nov 12 21:06:20 runner CoreSimulatorService[6532] <Debug>: Shutting down ${udid}`,
+  ].join("\n");
+  assert.equal(shutdownEvidence(log, udid).length, 1);
+  assert.equal(udidRecords(log, udid).length, 2);
+  assert.deepEqual(clientRecords(log, pid).length, 2);
+  assert.deepEqual(clientRecords(log, null), []);
+  assert.deepEqual(clientRecords("nothing", undefined), []);
+});
+
+test("waits for every piped source's startup marker before issuing the shutdown", async () => {
+  const evidence = observeIosHostLog(udid, { startupSources: ["unified", "debug"] });
+  evidence.write("Filtering the log data using process scope\n", "unified");
+  const pending = evidence.waitFor("startup", AbortSignal.timeout(5000));
+  const settled = Promise.race([pending.then(() => "resolved"), new Promise(resolve =>
+    setImmediate(() => resolve("pending")))]);
+  assert.equal(await settled, "pending", "one source's marker must not open the shutdown window");
+  evidence.write("Filtering the log data using debug scope\n", "debug");
+  await pending;
 });
 
 test("retains early and split pipe writes, unrelated events and cancellation without polling", async () => {
