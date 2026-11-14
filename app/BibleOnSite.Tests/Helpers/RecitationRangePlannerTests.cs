@@ -158,33 +158,6 @@ public class RecitationRangePlannerTests
     }
 
     [Fact]
-    public void SegmentsForSlices_WholeVerseSpanWithAPartialWordBoundary_RequiresAlignment()
-    {
-        var segments = RecitationRangePlanner.SegmentsForSlices(
-            [Slice(5, startPasuk: 1, endPasuk: 3, startSegment: 1)],
-            _ => CanonicalPerek(),
-            id => Track(id, "unaligned"),
-            _ => true,
-            versePause: false);
-
-        segments.Should().BeEmpty();
-    }
-
-    [Fact]
-    public void SegmentsForSlices_MissingCanonicalTextOrDownloadedAudio_SkipsThatSlice()
-    {
-        var pasukim = CanonicalPerek();
-        var segments = RecitationRangePlanner.SegmentsForSlices(
-            [Slice(1, 1, 3), Slice(2, 1, 3), Slice(3, 1, 3)],
-            id => id == 1 ? null : pasukim,
-            id => Track(id),
-            id => id == 3,
-            versePause: false);
-
-        segments.Should().ContainSingle().Which.PerekId.Should().Be(3);
-    }
-
-    [Fact]
     public void SegmentsForSlices_VersePause_GroupsRangesPerPasukInsideSlice()
     {
         var tracks = new Dictionary<int, RecitationTrack> { [5] = Track(5) };
@@ -221,4 +194,65 @@ public class RecitationRangePlannerTests
 
         segments.Should().ContainSingle().Which.PerekId.Should().Be(9);
     }
+
+    [Fact]
+    public void SegmentsForSlices_EndClippedSlice_IsNotWholePerek()
+    {
+        var tracks = new Dictionary<int, RecitationTrack> { [5] = Track(5, "pending") };
+        var pasukim = CanonicalPerek();
+        // The slice spans the whole perek's pesukim but clips its last
+        // pasuk's segments — not a whole-perek read for the raw-file fallback.
+        pasukim[^1].Text = "ו ז";
+        pasukim[^1].Segments.Add(new() { Type = SegmentType.Qri, Value = "ז" });
+        var slices = new[] { Slice(5, startPasuk: 1, endPasuk: 3, endSegment: 0) };
+
+        var segments = RecitationRangePlanner.SegmentsForSlices(
+            slices, _ => pasukim, id => tracks.GetValueOrDefault(id),
+            tracks.ContainsKey, versePause: false);
+
+        segments.Should().BeEmpty(
+            "an unaligned track has no approved boundary for a segment-clipped tail");
+    }
+
+    [Fact]
+    public void SegmentsForSlices_StartClippedSlice_IsNotWholePerek()
+    {
+        var tracks = new Dictionary<int, RecitationTrack> { [5] = Track(5, "pending") };
+        var pasukim = CanonicalPerek();
+        // Same shape on the leading edge — the clip starts mid-pasuk.
+        var slices = new[] { Slice(5, startPasuk: 1, endPasuk: 3, startSegment: 2) };
+
+        var segments = RecitationRangePlanner.SegmentsForSlices(
+            slices, _ => pasukim, id => tracks.GetValueOrDefault(id),
+            tracks.ContainsKey, versePause: false);
+
+        segments.Should().BeEmpty();
+    }
+    [Fact]
+    public void SegmentsForSlices_WholeVerseSpanWithAPartialWordBoundary_RequiresAlignment()
+    {
+        var segments = RecitationRangePlanner.SegmentsForSlices(
+            [Slice(5, startPasuk: 1, endPasuk: 3, startSegment: 1)],
+            _ => CanonicalPerek(),
+            id => Track(id, "unaligned"),
+            _ => true,
+            versePause: false);
+
+        segments.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SegmentsForSlices_MissingCanonicalTextOrDownloadedAudio_SkipsThatSlice()
+    {
+        var pasukim = CanonicalPerek();
+        var segments = RecitationRangePlanner.SegmentsForSlices(
+            [Slice(1, 1, 3), Slice(2, 1, 3), Slice(3, 1, 3)],
+            id => id == 1 ? null : pasukim,
+            id => Track(id),
+            id => id == 3,
+            versePause: false);
+
+        segments.Should().ContainSingle().Which.PerekId.Should().Be(3);
+    }
+
 }

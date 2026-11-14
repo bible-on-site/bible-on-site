@@ -101,6 +101,14 @@
                                             IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsParashaCurrent}"
                                             Activated="OnParashaTapped"/>
 
+                    <!-- מועדים על הפרק -->
+                    <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.calendar_star_24_regular}"
+                                            Title="מועדים על הפרק"
+                                            Subtitle="קריאות לימוד למועדים"
+                                            AutomationId="FlyoutMoadim"
+                                            IsSelected="{Binding Source={x:Static viewmodels:FlyoutMenuState.Instance}, Path=IsMoadimCurrent}"
+                                            Activated="OnMoadimTapped"/>
+
                     <!-- רבנים -->
                     <controls:FlyoutMenuRow Icon="{x:Static fonts:FluentUI.edit_person_24_regular}"
                                             Title="רבנים"
