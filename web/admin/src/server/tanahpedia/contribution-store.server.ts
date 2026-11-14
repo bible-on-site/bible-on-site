@@ -132,7 +132,7 @@ export async function listContributions(
 	}
 	if (input.q) {
 		where.push(
-			"LOCATE(LOWER(?), LOWER(CONCAT_WS(' ', title, number, JSON_UNQUOTE(JSON_EXTRACT(data, '$.description')), JSON_UNQUOTE(JSON_EXTRACT(data, '$.author.name')), JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.name')), JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.id')), REPLACE(JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.kind')), '_', ' ')))) > 0",
+			"LOCATE(LOWER(?), LOWER(CONCAT_WS(' ', title, number, JSON_UNQUOTE(JSON_EXTRACT(data, '$.description')), JSON_UNQUOTE(JSON_EXTRACT(data, '$.author.name')), JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.name')), JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.id')), REPLACE(JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.kind')), '_', ' '), CASE JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.kind')) WHEN 'unassigned' THEN 'ללא שיוך' WHEN 'human' THEN 'עורך אנושי' ELSE '' END))) > 0",
 		);
 		values.push(input.q);
 	}

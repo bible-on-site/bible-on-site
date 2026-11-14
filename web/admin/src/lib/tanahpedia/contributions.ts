@@ -1,8 +1,29 @@
 import { canonicalJson } from "~/lib/canonical-json";
 import {
+	FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
+	FAMILY_PARENT_ROLES,
+	FAMILY_UNION_END_REASONS,
+	FAMILY_UNION_TYPES,
+	type FamilyParentChildRelationshipType,
+	type FamilyParentRole,
+	type FamilyUnionEndReason,
+	type FamilyUnionType,
+} from "~/server/tanahpedia/family-api-spec";
+import {
 	type ContributionApiMigration,
 	migrationBlocked,
 } from "./contribution-api";
+import { contributionRecordId } from "./contribution-identifiers";
+import {
+	CONTRIBUTION_RECORDS,
+	type ContributionRecordInput,
+	isContributionRecordKind,
+	validateContributionRecord,
+} from "./contribution-records";
+import {
+	type SpecialChangeInput,
+	validateSpecialChange,
+} from "./contribution-specials";
 import type { EntityType } from "./labels";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "./schema-registry";
 
@@ -46,8 +67,8 @@ export function contributionCitation(value: string): string {
 export interface ParentChildChange {
 	parentId: string;
 	childId: string;
-	relationshipType: "BIOLOGICAL" | "ADOPTIVE" | "STEP" | "FOSTER";
-	parentRole: "FATHER" | "MOTHER";
+	relationshipType: FamilyParentChildRelationshipType;
+	parentRole: FamilyParentRole;
 	sourceCitation: string | null;
 	altGroupId: string | null;
 	birthOrder: number | null;
@@ -56,16 +77,11 @@ export interface ParentChildChange {
 export interface UnionChange {
 	person1Id: string;
 	person2Id: string;
-	unionType:
-		| "MARRIAGE"
-		| "PILEGESH"
-		| "FORBIDDEN_WITH_GENTILE"
-		| "BANNED_INCEST"
-		| "BETROTHAL";
+	unionType: FamilyUnionType;
 	unionOrder: number | null;
 	startDate: number | null;
 	endDate: number | null;
-	endReason: "DEATH" | "DIVORCE" | null;
+	endReason: FamilyUnionEndReason | null;
 	sourceCitation: string | null;
 	personSourceCitation: string | null;
 	altGroupId: string | null;
@@ -87,13 +103,21 @@ export interface EntryShellChange {
 }
 
 export type ChangeInput =
+	| ContributionRecordInput
+	| SpecialChangeInput
 	| { kind: "parent_child"; targetId?: string; after: ParentChildChange | null }
 	| { kind: "union"; targetId?: string; after: UnionChange | null }
 	| { kind: "place"; targetId?: string; after: PlaceChange | null }
 	| { kind: "metadata"; targetId: string; after: { displayName: string } }
 	| { kind: "entry"; targetId?: string; after: EntryShellChange };
 
-export type ChangeState = Record<string, string | number | null>;
+export type ChangeValue =
+	| string
+	| number
+	| boolean
+	| null
+	| { entryId: string; label: string }[];
+export type ChangeState = Record<string, ChangeValue>;
 
 export interface ReviewedChange {
 	kind: ChangeInput["kind"];
@@ -261,6 +285,14 @@ export function validateContributionList(
 }
 
 export const CHANGE_LABELS: Record<ChangeInput["kind"], string> = {
+	...(Object.fromEntries(
+		Object.entries(CONTRIBUTION_RECORDS).map(([kind, spec]) => [
+			kind,
+			spec.label,
+		]),
+	) as Record<ContributionRecordInput["kind"], string>),
+	alias_mapping: "כינוי ופירושונים",
+	source_reference: "מקור לטענה",
 	parent_child: "קשר הורה וילד",
 	union: "זוגיות",
 	place: "זיהוי מקום",
@@ -422,6 +454,10 @@ export function validateEvidence(value: unknown): Evidence[] {
 export function validateChange(value: unknown): ChangeInput {
 	const input = record(value, "change");
 	rejectUnknown(input, ["kind", "targetId", "after"]);
+	if (isContributionRecordKind(input.kind))
+		return validateContributionRecord(input);
+	if (input.kind === "alias_mapping" || input.kind === "source_reference")
+		return validateSpecialChange(input);
 	const kind = oneOf(
 		input.kind,
 		["parent_child", "union", "place", "metadata", "entry"] as const,
@@ -430,7 +466,7 @@ export function validateChange(value: unknown): ChangeInput {
 	const targetId =
 		input.targetId == null || input.targetId === ""
 			? undefined
-			: uuidField(input.targetId, "targetId");
+			: contributionRecordId(input.targetId, "targetId");
 	if (input.after === null) {
 		if (!targetId || kind === "entry" || kind === "metadata")
 			throw new Error("This change cannot delete its target");
@@ -441,7 +477,7 @@ export function validateChange(value: unknown): ChangeInput {
 	const alt = () =>
 		after.altGroupId == null || after.altGroupId === ""
 			? null
-			: uuidField(after.altGroupId, "altGroupId");
+			: contributionRecordId(after.altGroupId, "altGroupId");
 	if (kind === "parent_child") {
 		rejectUnknown(after, [
 			"parentId",
@@ -452,8 +488,8 @@ export function validateChange(value: unknown): ChangeInput {
 			"altGroupId",
 			"birthOrder",
 		]);
-		const parentId = uuidField(after.parentId, "parentId"),
-			childId = uuidField(after.childId, "childId");
+		const parentId = contributionRecordId(after.parentId, "parentId"),
+			childId = contributionRecordId(after.childId, "childId");
 		if (parentId === childId)
 			throw new Error("A person cannot be their own parent");
 		return {
@@ -464,10 +500,10 @@ export function validateChange(value: unknown): ChangeInput {
 				childId,
 				relationshipType: oneOf(
 					after.relationshipType,
-					["BIOLOGICAL", "ADOPTIVE", "STEP", "FOSTER"],
+					FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
 					"relationshipType",
 				),
-				parentRole: oneOf(after.parentRole, ["FATHER", "MOTHER"], "parentRole"),
+				parentRole: oneOf(after.parentRole, FAMILY_PARENT_ROLES, "parentRole"),
 				sourceCitation: citation(),
 				altGroupId: alt(),
 				birthOrder: integer(after.birthOrder, "birthOrder", 1),
@@ -487,8 +523,8 @@ export function validateChange(value: unknown): ChangeInput {
 			"personSourceCitation",
 			"altGroupId",
 		]);
-		const person1Id = uuidField(after.person1Id, "person1Id"),
-			person2Id = uuidField(after.person2Id, "person2Id");
+		const person1Id = contributionRecordId(after.person1Id, "person1Id"),
+			person2Id = contributionRecordId(after.person2Id, "person2Id");
 		if (person1Id === person2Id)
 			throw new Error("A union requires two different people");
 		return {
@@ -497,28 +533,14 @@ export function validateChange(value: unknown): ChangeInput {
 			after: {
 				person1Id,
 				person2Id,
-				unionType: oneOf(
-					after.unionType,
-					[
-						"MARRIAGE",
-						"PILEGESH",
-						"FORBIDDEN_WITH_GENTILE",
-						"BANNED_INCEST",
-						"BETROTHAL",
-					],
-					"unionType",
-				),
+				unionType: oneOf(after.unionType, FAMILY_UNION_TYPES, "unionType"),
 				unionOrder: integer(after.unionOrder, "unionOrder", 1),
 				startDate: integer(after.startDate, "startDate"),
 				endDate: integer(after.endDate, "endDate"),
 				endReason:
 					after.endReason == null || after.endReason === ""
 						? null
-						: oneOf(
-								after.endReason,
-								["DEATH", "DIVORCE"] as const,
-								"endReason",
-							),
+						: oneOf(after.endReason, FAMILY_UNION_END_REASONS, "endReason"),
 				sourceCitation: citation(),
 				personSourceCitation: optionalText(
 					after.personSourceCitation,
@@ -544,7 +566,7 @@ export function validateChange(value: unknown): ChangeInput {
 			kind,
 			targetId,
 			after: {
-				placeId: uuidField(after.placeId, "placeId"),
+				placeId: contributionRecordId(after.placeId, "placeId"),
 				modernName: optionalText(after.modernName, "modernName", 255),
 				latitude,
 				longitude,

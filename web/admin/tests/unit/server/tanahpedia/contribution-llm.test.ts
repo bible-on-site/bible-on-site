@@ -76,6 +76,150 @@ function localOutput(output: unknown) {
 }
 
 describe("issue-to-PR LLM generation", () => {
+	it("grounds every additional operation in the supplied typed candidates", () => {
+		const references = Object.fromEntries(
+			[
+				"person",
+				"place",
+				"person_name",
+				"god",
+				"king_role",
+				"nation",
+				"event",
+				"war",
+				"war_side",
+				"saying",
+				"prophecy",
+				"animal",
+				"plant",
+				"astronomical_object",
+				"sefer",
+				"entry",
+				"entity",
+				"alternative",
+			].map((kind) => [kind, [{ id: ID, name: "מועמד בדיקה" }]]),
+		);
+		Object.assign(references, {
+			perek: [{ id: 1, name: "בראשית א" }],
+			perush: [{ id: 1, name: "פירוש" }],
+			tanah_sefer: [{ id: 1, name: "בראשית" }],
+		});
+		const catalogue = {
+			people: [],
+			places: [],
+			entities: [],
+			references,
+			targets: [
+				{ kind: "saying_date", id: ID },
+				{ kind: "person_sex", id: ID },
+			],
+		};
+		const schema = contributionOutputSchema(catalogue, 1);
+		const serialized = JSON.stringify(schema);
+		for (const kind of [
+			"person_name",
+			"name_giver_god",
+			"person_birth_date",
+			"prophet_role",
+			"king_reign",
+			"event_dates",
+			"war_person",
+			"nation_territory",
+			"saying_date",
+			"prophecy_quality",
+			"animal_purity",
+			"plant_creation",
+			"astronomical_creation",
+			"book_identification",
+			"entry_entity",
+			"entity_source",
+			"model_3d",
+			"alias_mapping",
+			"source_reference",
+		])
+			expect(serialized).toContain(`"const":"${kind}"`);
+		expect(() =>
+			assertGeneratedReferences(
+				[
+					{
+						kind: "person_sex",
+						after: { personId: ID, sex: "MALE", altGroupId: ID },
+					},
+					{
+						kind: "alias_mapping",
+						after: { name: "כינוי", targets: [{ entryId: ID, label: "" }] },
+					},
+					{
+						kind: "source_reference",
+						after: {
+							targetKind: "person_sex",
+							targetId: ID,
+							sourceType: "tanah",
+							perekId: 1,
+							perushId: 1,
+							pasukNumber: 1,
+							sourceText: null,
+						},
+					},
+				],
+				catalogue,
+			),
+		).not.toThrow();
+		for (const changes of [
+			[
+				{
+					kind: "person_sex",
+					after: { personId: "not-supplied", sex: "MALE", altGroupId: null },
+				},
+			],
+			[
+				{
+					kind: "person_sex",
+					after: { personId: ID, sex: "MALE", altGroupId: "not-supplied" },
+				},
+			],
+			[
+				{
+					kind: "alias_mapping",
+					after: {
+						name: "כינוי",
+						targets: [{ entryId: "not-supplied", label: "" }],
+					},
+				},
+			],
+			[
+				{
+					kind: "source_reference",
+					after: {
+						targetKind: "entity",
+						targetId: "not-supplied",
+						sourceType: "tanah",
+						perekId: 1,
+						perushId: null,
+						pasukNumber: 1,
+						sourceText: null,
+					},
+				},
+			],
+			[
+				{
+					kind: "source_reference",
+					after: {
+						targetKind: "entity",
+						targetId: ID,
+						sourceType: "tanah",
+						perekId: 2,
+						perushId: null,
+						pasukNumber: 1,
+						sourceText: null,
+					},
+				},
+			],
+		] as import("~/lib/tanahpedia/contributions").ChangeInput[][])
+			expect(() => assertGeneratedReferences(changes, catalogue)).toThrow(
+				"not supplied",
+			);
+	});
 	it("constrains generated IDs to the supplied catalogue for both providers", () => {
 		const catalogue = {
 			people: [

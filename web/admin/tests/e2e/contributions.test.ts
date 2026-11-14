@@ -1,10 +1,16 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import type { Page, TestInfo } from "@playwright/test";
 import mysql, { type RowDataPacket } from "mysql2/promise";
+import { CONTRIBUTION_RECORDS } from "../../src/lib/tanahpedia/contribution-records";
+import {
+	FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
+	FAMILY_UNION_TYPES,
+} from "../../src/server/tanahpedia/family-api-spec";
 import { expect, test } from "../util/test-fixture";
 
 async function capture(page: Page, info: TestInfo, name: string) {
@@ -14,6 +20,182 @@ async function capture(page: Page, info: TestInfo, name: string) {
 }
 
 test.describe("Issues and typed pull requests", () => {
+	test("reviews a cross-category proposal with dates, names, sources and alias routing", async ({
+		page,
+	}, testInfo) => {
+		const problems: string[] = [];
+		page.on("pageerror", (error) => problems.push(error.message));
+		page.on("requestfailed", (request) =>
+			problems.push(
+				`${request.method()} ${request.url()} ${request.failure()?.errorText}`,
+			),
+		);
+		const title = `קטגוריות מובנות - ${randomUUID().slice(0, 8)}`;
+		await page.goto("/pull-requests?id=new");
+		await page.getByLabel("כותרת", { exact: true }).fill(title);
+		await page
+			.getByLabel("תיאור", { exact: true })
+			.fill("נתוני בדיקה לסקירה בלבד. אין למזג תוכן זה.");
+		await page
+			.getByRole("button", { name: "+ הוספת מקור", exact: true })
+			.click();
+		await page.getByLabel("הפניה למקור", { exact: true }).fill("בראשית יא כו");
+		const kind = () =>
+			page.getByRole("combobox", { name: "סוג שינוי", exact: true });
+		for (const key of Object.keys(CONTRIBUTION_RECORDS))
+			await expect(
+				kind().first().locator(`option[value="${key}"]`),
+			).toHaveCount(1);
+		async function first(label: string, index = 0) {
+			const select = page
+				.getByRole("combobox", { name: label, exact: true })
+				.nth(index);
+			const id = await select
+				.locator('option[value]:not([value=""])')
+				.first()
+				.getAttribute("value");
+			if (!id) throw new Error(`Missing fixture for ${label}`);
+			await select.selectOption(id);
+			return id;
+		}
+		await kind().first().selectOption("person_birth_date");
+		const person = await first("איש");
+		await page.getByLabel("שנה - תאריך לידה", { exact: true }).fill("1948");
+		await page
+			.getByLabel("חודש - תאריך לידה", { exact: true })
+			.selectOption("1");
+		await page.getByLabel("יום - תאריך לידה", { exact: true }).fill("2");
+		const formPath = testInfo.outputPath("category-hebrew-date-form.png");
+		await page
+			.locator(".contribution-change-fields")
+			.first()
+			.screenshot({ path: formPath });
+		await testInfo.attach("category-hebrew-date-form", {
+			path: formPath,
+			contentType: "image/png",
+		});
+		await page
+			.getByRole("button", { name: "+ הוספת שינוי", exact: true })
+			.click();
+		await kind().nth(1).selectOption("person_name");
+		await page
+			.getByRole("combobox", { name: "איש", exact: true })
+			.nth(1)
+			.selectOption(person);
+		await page.getByLabel("שם", { exact: true }).fill("כינוי בדיקה");
+		await page
+			.getByRole("button", { name: "+ הוספת שינוי", exact: true })
+			.click();
+		await kind().nth(2).selectOption("source_reference");
+		await first("הטענה או היישות");
+		await page
+			.getByRole("combobox", { name: "פרק", exact: true })
+			.selectOption("1");
+		await page.getByLabel("פסוק", { exact: true }).fill("1");
+		await page
+			.getByRole("button", { name: "+ הוספת שינוי", exact: true })
+			.click();
+		await kind().nth(3).selectOption("alias_mapping");
+		await page
+			.getByLabel("כינוי", { exact: true })
+			.fill(`כינוי-בדיקה-${randomUUID().slice(0, 8)}`);
+		await page
+			.getByRole("button", { name: "הוספת יעד לכינוי", exact: true })
+			.click();
+		await first("ערך יעד 1");
+		expect(
+			await page.locator("form").evaluate((form) =>
+				Array.from((form as HTMLFormElement).elements)
+					.filter(
+						(e) =>
+							e instanceof HTMLInputElement ||
+							e instanceof HTMLSelectElement ||
+							e instanceof HTMLTextAreaElement,
+					)
+					.filter((e) => !(e as HTMLInputElement).checkValidity())
+					.map((e) => ({
+						label: e.getAttribute("aria-label"),
+						value: (e as HTMLInputElement).value,
+					})),
+			),
+		).toEqual([]);
+		await page.getByRole("button", { name: "פתיחת PR", exact: true }).click();
+		try {
+			await expect(page.getByRole("heading", { level: 1 })).toContainText(
+				title,
+			);
+		} catch (error) {
+			const path = testInfo.outputPath("cross-category-failure.json");
+			await writeFile(
+				path,
+				JSON.stringify({
+					problems,
+					url: page.url(),
+					html: await page.content(),
+				}),
+			);
+			await testInfo.attach("cross-category-failure", {
+				path,
+				contentType: "application/json",
+			});
+			throw error;
+		}
+		await page.getByRole("tab", { name: "שינויים 4", exact: true }).click();
+		await expect(page.locator(".contribution-diff")).toHaveCount(4);
+		await expect(page.locator(".contribution-diffs")).toContainText(
+			"2 תשרי 1948",
+		);
+		await expect(page.locator(".contribution-diffs")).toContainText("בראשית א");
+		await expect(page.locator(".contribution-diffs")).toContainText(
+			"כינוי בדיקה",
+		);
+		await expect(
+			page.getByRole("button", { name: "מיזוג PR", exact: true }),
+		).toBeDisabled();
+		await capture(page, testInfo, "cross-category-domain-diff");
+		await page
+			.getByRole("button", { name: "סגירה ללא מיזוג", exact: true })
+			.click();
+	});
+	test("offers the exact family-tree relationship types under one family category", async ({
+		page,
+	}, testInfo) => {
+		await page.goto("/pull-requests?id=new");
+		await expect(
+			page.getByRole("combobox", { name: "סוג שינוי", exact: true }),
+		).toHaveValue("family");
+		const relation = page.getByRole("combobox", {
+			name: "סוג קשר משפחתי",
+			exact: true,
+		});
+		await expect(relation.locator("option")).toHaveCount(
+			FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES.length + FAMILY_UNION_TYPES.length,
+		);
+		expect(
+			await relation
+				.locator("option")
+				.evaluateAll((options) =>
+					options.map((option) => (option as HTMLOptionElement).value),
+				),
+		).toEqual([
+			...FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES.map(
+				(type) => `parent_child:${type}`,
+			),
+			...FAMILY_UNION_TYPES.map((type) => `union:${type}`),
+		]);
+		await relation.selectOption("union:PILEGESH");
+		await expect(
+			page.getByRole("combobox", { name: "איש ראשון", exact: true }),
+		).toBeVisible();
+		await expect(
+			page.getByRole("combobox", { name: "איש שני", exact: true }),
+		).toBeVisible();
+		await capture(page, testInfo, "defined-family-relationship-types");
+		await relation.selectOption("parent_child:FOSTER");
+		await expect(
+			page.getByRole("combobox", { name: "תפקיד ההורה", exact: true }),
+		).toBeVisible();
+	});
 	test("a workstation worker turns a queued issue into a model-authored PR requiring review", async ({
 		page,
 	}, testInfo) => {

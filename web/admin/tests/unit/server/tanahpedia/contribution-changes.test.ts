@@ -362,6 +362,7 @@ describe("typed contribution domain API", () => {
 			latitude: 31.5,
 			longitude: 35.2,
 		});
-		expect(mocks.query).toHaveBeenCalledTimes(6);
+		expect(result.references).toHaveProperty("person");
+		expect(result.references).toHaveProperty("war_side");
 	});
 });

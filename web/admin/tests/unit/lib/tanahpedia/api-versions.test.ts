@@ -3,6 +3,7 @@ import {
 	type ApiVersionAdapter,
 	ApiVersionError,
 	convertApiVersion,
+	convertApiVersionAsync,
 } from "~/lib/tanahpedia/api-versions";
 
 type Payload = Record<string, string | number>;
@@ -36,6 +37,74 @@ const adapters: ApiVersionAdapter<Payload>[] = [
 	},
 ];
 describe("transitive API contract conversion", () => {
+	it("composes asynchronous context lookups with pure adapters without mutating the source", async () => {
+		const original = { parentId: "person", retired: 4 };
+		const result = await convertApiVersionAsync(original, 1, 4, [
+			...adapters,
+			{
+				from: 3,
+				to: 4,
+				id: "context",
+				convert: async (p) => ({
+					...p,
+					currentName: await Promise.resolve("Authoritative name"),
+				}),
+			},
+		]);
+		expect(result.payload).toEqual({
+			parentPersonId: "person",
+			currentName: "Authoritative name",
+		});
+		expect(original).toEqual({ parentId: "person", retired: 4 });
+		expect(result.steps.map((step) => step.id)).toEqual([
+			"rename-parent",
+			"drop-retired-field",
+			"context",
+		]);
+		await expect(convertApiVersionAsync({}, 0, 1, [])).rejects.toThrow(
+			"positive integers",
+		);
+		await expect(convertApiVersionAsync({}, 1, 2, [])).rejects.toThrow(
+			"No supported conversion",
+		);
+	});
+	it("preserves asynchronous adapter failures as causes and supports detached identity conversion", async () => {
+		const cause = Object.assign(new Error("Storage unavailable"), {
+			code: "ER_SERVER_SHUTDOWN",
+		});
+		try {
+			await convertApiVersionAsync({}, 1, 2, [
+				{
+					from: 1,
+					to: 2,
+					id: "lookup",
+					convert: async () => {
+						throw cause;
+					},
+				},
+			]);
+			throw new Error("Expected conversion failure");
+		} catch (error) {
+			expect(error).toBeInstanceOf(ApiVersionError);
+			expect((error as Error).cause).toBe(cause);
+		}
+		await expect(
+			convertApiVersionAsync({}, 1, 2, [
+				{
+					from: 1,
+					to: 2,
+					id: "invalid",
+					convert: async () => {
+						throw null;
+					},
+				},
+			]),
+		).rejects.toThrow("unsupported payload");
+		const original = { name: "old" },
+			result = await convertApiVersionAsync(original, 2, 2, []);
+		result.payload.name = "new";
+		expect(original.name).toBe("old");
+	});
 	it("composes upgrades and permits removed fields without approval policy", () => {
 		const original = { parentId: "person-1", retired: 7 };
 		const result = convertApiVersion<Payload>(original, 1, 3, adapters);

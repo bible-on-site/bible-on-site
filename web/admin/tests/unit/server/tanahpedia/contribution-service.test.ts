@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
 import type {
 	Contribution,
 	Contributor,
@@ -91,6 +92,7 @@ const change: ReviewedChange = {
 	before: { displayName: "old" },
 	after: { displayName: "new" },
 	labels: {},
+	personNames: [],
 };
 const input = {
 	kind: "pr",
@@ -105,13 +107,18 @@ async function pr(actor = alice) {
 
 it("recovers a gray PR by re-preparing its base and recording an authored revision", async () => {
 	const item = await pr();
-	item.apiVersion = 2;
+	item.apiVersion = CONTRIBUTION_API_VERSION + 1;
 	mocks.items.set(item.id, structuredClone(item));
 	const repaired = await recoverContributionSequence(
-		{ id: item.id, version: item.version, apiVersion: 1, sequence: [change] },
+		{
+			id: item.id,
+			version: item.version,
+			apiVersion: CONTRIBUTION_API_VERSION,
+			sequence: [change],
+		},
 		alice,
 	);
-	expect(repaired.apiVersion).toBe(1);
+	expect(repaired.apiVersion).toBe(CONTRIBUTION_API_VERSION);
 	expect(repaired.apiMigration).toBeUndefined();
 	expect(repaired.revision).toBe(item.revision + 1);
 	expect(repaired.events.at(-1)?.kind).toBe("edited");
@@ -123,13 +130,23 @@ it("rejects recovery targeting an old API or a compatible/finalized PR", async (
 	const item = await pr();
 	await expect(
 		recoverContributionSequence(
-			{ id: item.id, version: item.version, apiVersion: 2, sequence: [change] },
+			{
+				id: item.id,
+				version: item.version,
+				apiVersion: CONTRIBUTION_API_VERSION + 1,
+				sequence: [change],
+			},
 			alice,
 		),
 	).rejects.toThrow("latest API");
 	await expect(
 		recoverContributionSequence(
-			{ id: item.id, version: item.version, apiVersion: 1, sequence: [change] },
+			{
+				id: item.id,
+				version: item.version,
+				apiVersion: CONTRIBUTION_API_VERSION,
+				sequence: [change],
+			},
 			alice,
 		),
 	).rejects.toThrow("incompatible open PR");
@@ -235,7 +252,7 @@ describe("contribution lifecycle", () => {
 			status: "queued",
 			attempts: 0,
 			requestedBy: alice.id,
-			apiVersion: 1,
+			apiVersion: CONTRIBUTION_API_VERSION,
 		});
 		expect(item.events.at(-1)?.kind).toBe("generation_queued");
 		await expect(

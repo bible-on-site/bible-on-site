@@ -5,9 +5,57 @@ import {
 	type ContributionCatalogue,
 	ContributionComposer,
 } from "~/components/tanahpedia/ContributionComposer";
+import {
+	FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
+	FAMILY_UNION_TYPES,
+} from "~/server/tanahpedia/family-api-spec";
 
 const ID = "00000000-0000-4000-8000-000000000001",
 	OTHER = "00000000-0000-4000-8000-000000000002";
+
+it.each([
+	...FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES.map((type) => [
+		"parent_child",
+		type,
+	]),
+	...FAMILY_UNION_TYPES.map((type) => ["union", type]),
+])(
+	"offers and submits the defined family relationship %s:%s",
+	async (kind, type) => {
+		const { submit } = setup("pr");
+		description();
+		expect(screen.getByLabelText("סוג שינוי")).toHaveValue("family");
+		const relation = screen.getByLabelText("סוג קשר משפחתי");
+		expect(relation.querySelectorAll("option")).toHaveLength(
+			FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES.length + FAMILY_UNION_TYPES.length,
+		);
+		fireEvent.change(relation, { target: { value: `${kind}:${type}` } });
+		fireEvent.change(
+			screen.getByLabelText(kind === "parent_child" ? "הורה" : "איש ראשון"),
+			{ target: { value: ID } },
+		);
+		fireEvent.change(
+			screen.getByLabelText(kind === "parent_child" ? "ילד" : "איש שני"),
+			{ target: { value: OTHER } },
+		);
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					changes: [
+						expect.objectContaining({
+							kind,
+							after: expect.objectContaining({
+								[kind === "parent_child" ? "relationshipType" : "unionType"]:
+									type,
+							}),
+						}),
+					],
+				}),
+			),
+		);
+	},
+);
 const catalogue: ContributionCatalogue = {
 	people: [
 		{ id: ID, name: "אברהם" },

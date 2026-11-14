@@ -3,7 +3,6 @@ import type { PoolConnection } from "mysql2/promise";
 import {
 	CONTRIBUTION_API_VERSION,
 	migrationBlocked,
-	validateApiSequence,
 } from "~/lib/tanahpedia/contribution-api";
 import {
 	assertMergeAllowed,
@@ -28,6 +27,7 @@ import {
 	prepareChanges,
 	readChangeState,
 } from "./contribution-changes.server";
+import { contributionApplyRank } from "./contribution-records.server";
 import {
 	insertContribution,
 	readContribution,
@@ -216,7 +216,11 @@ export async function recoverContributionSequence(
 		id = uuidField(input.id, "id");
 	if (input.apiVersion !== CONTRIBUTION_API_VERSION)
 		throw new Error("Recovery must target the latest API version");
-	const sequence = validateApiSequence(input.sequence);
+	if (!Array.isArray(input.sequence) || input.sequence.length > 40)
+		throw new Error("Recovery requires at most 40 operations");
+	// Recovery accepts current operation inputs; stored bases/preconditions are
+	// discarded and recaptured authoritatively after the PR lock is acquired.
+	const sequence = input.sequence.map((raw) => record(raw, "operation"));
 	const changes = validateChanges(
 		sequence.map(({ kind, targetId, after }) => ({ kind, targetId, after })),
 	);
@@ -345,14 +349,22 @@ async function applyReviewedChanges(
 		`${a.kind}:${a.targetId}`.localeCompare(`${b.kind}:${b.targetId}`),
 	);
 	for (const change of changes) {
+		const current = await readChangeState(
+			conn,
+			change.kind,
+			change.targetId,
+			change.after ?? change.before,
+		);
+		// Match preparation's entity -> person -> MAIN-name lock order.
 		await assertMetadataNames(conn, change);
-		const current = await readChangeState(conn, change.kind, change.targetId);
 		if (!sameState(current, change.before))
 			throw new Error(
 				`Conflict: ${change.kind} changed since this PR was prepared. Edit the PR to review a fresh diff.`,
 			);
 	}
-	for (const change of changes)
+	for (const change of [...changes].sort(
+		(a, b) => contributionApplyRank(a) - contributionApplyRank(b),
+	))
 		await applyChange(conn, change, `contribution-pr:${item.number}`);
 }
 
@@ -410,7 +422,16 @@ export async function mergeContribution(
 					.map((change) => change.targetId),
 			),
 		]);
-		await revalidateWebsite(requests.flat());
+		await revalidateWebsite(
+			merged.changes.some(
+				(c) =>
+					!["parent_child", "union", "place", "metadata", "entry"].includes(
+						c.kind,
+					),
+			)
+				? pediaInvalidation()
+				: requests.flat(),
+		);
 	} catch {
 		// Content is already committed. A scoped-resolution failure must not
 		// report a failed merge or leave the affected pages cached indefinitely.

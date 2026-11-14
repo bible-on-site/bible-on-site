@@ -39,11 +39,60 @@ Asia/Jerusalem**. This supersedes the original deadline in the active goal text.
   name edits cannot be silently overwritten.
 - LLM assignment does not itself execute a model or merge changes. Generation
   is explicit, and model output passes the same typed validation as human input.
+- Family relationship choices come from the existing family API contract:
+  biological/adoptive/step/foster parenthood and marriage/pilegesh/
+  forbidden-with-gentile/banned-incest/betrothal unions. They share one Family
+  relationship category in the composer. Additional kinship categories are not
+  inferred from this request.
 
 UX references: [GitHub pull requests](https://docs.github.com/en/pull-requests/get-started/about-pull-requests),
 [GitLab review workflow](https://docs.gitlab.com/user/project/merge_requests/reviews/),
 and [GitLab approval settings](https://docs.gitlab.com/user/project/merge_requests/approvals/settings/).
 Local structured generation follows [Ollama structured outputs](https://docs.ollama.com/capabilities/structured-outputs).
+
+## Supported changes
+
+All additional category types reviewed by the user are included. The current
+contract has 44 operation kinds; family choices use the nine existing API types.
+
+| Category | Structured changes |
+| --- | --- |
+| Family | Biological, adoptive, step and foster parenthood; marriage, pilegesh, forbidden-with-gentile, banned-incest and betrothal unions; their roles, order, dates and source citations |
+| Person | Display/MAIN name, additional names and nicknames, human/divine name giver, sex, birth/death dates, death cause, birthplace |
+| Roles | Prophet and king roles, reign dates and nation |
+| Places | Modern identification, paired coordinates, alternative identifications |
+| Events | Locations and date ranges |
+| Wars | Sides, person participants, nation participants |
+| Nations | Source nations, territories and their date periods |
+| Sayings | Date, location, human/nation/divine speaker, person/nation audience |
+| Prophecies | Prophet, person/nation recipients, good/adverse classification |
+| Animals | Kind and purity using the schema's enums |
+| Plants / astronomy | Creation day |
+| Books | Match to an existing canonical biblical book |
+| Entry identity | Entry/entity links, complete alias target sets and disambiguation labels |
+| Sources | Entity/verse/segment links; scripture/commentary or bibliographic references attached to existing entities, entries or structured facts |
+| Assets | Existing 3D asset key, format and label; no upload or access-policy change |
+| New entries | Empty entry and linked subtype for all 13 creatable entity types |
+
+No operation edits article or saying prose. Hebrew dates use the existing
+uniform month numbering, with zero for unknown components and the death-date
+`-1` sentinel for not yet deceased. Forms expose year/month/day controls.
+Existing prefixed record identifiers are accepted alongside UUIDs; discussion
+and worker-job IDs retain strict UUID validation.
+
+Each record operation whitelists its table, fields, enums and reference types.
+References must exist when preparing and merging a proposal. Unique collisions
+fail the transaction rather than update a different, unreviewed row. Deletions
+refuse implicit cascades: dependent facts and source attachments require explicit
+removal operations, applied before their parent. Roles and war sides retain their
+owner when edited. Competing facts can share an alternative-group identifier and
+carry separate evidence. Moving one source preserves other citations sharing its
+old source group.
+
+Alias changes review the complete destination set, including labels. These
+operations can explicitly change public alias routing after approval and merge;
+they cannot rename an existing alias in place or replace a canonical entry URL.
+The feature deployment itself preserves existing public and crawled URLs.
 
 ## Configuration and operation
 
@@ -92,6 +141,8 @@ claim, complete and fail endpoints; ordinary `admin-api/service` tokens and
 browser cookies cannot authenticate them. Worker tokens cannot review, merge or
 use the general admin API. Logs omit evidence, prompts, tokens and lease secrets.
 Expired SSO requires another AWS sign-in; queued issues remain saved meanwhile.
+The user chose to keep reusing AWS SSO rather than maintain a separate worker
+credential; refreshing that existing session lets the watch worker resume.
 Watch mode resumes after transport outages under the existing abortable poll
 interval; one-shot failures remain observable. The Windows launcher additionally
 restarts an exited process and keeps the model service bound to loopback.
@@ -114,12 +165,21 @@ still requires human review. Unknown IDs and invented source citations are rejec
 
 ## API evolution
 
-The merge operation contract starts at version 1, independently of package or
-release versions. `convertApiVersion` composes explicit directed adapters through
+The merge operation contract is currently version 2, independently of package or
+release versions. Version 1 is retained in migration history. `convertApiVersion`
+and its asynchronous counterpart compose explicit directed adapters through
 intermediate versions. Register reverse adapters when a reverse route is needed;
 no reverse transformation is inferred. Retain historical adapters for PRs that
 skip releases. An adapter may drop obsolete fields or operations. The converter
 does not contain approval logic.
+
+The v1-to-v2 adapter captures MAIN-name preconditions for old person-renaming
+operations under the same entity/person/name lock order as preparation and
+merging. It preserves the original sequence, revision and approval. This is an
+automatic API upgrade under the user's explicit policy, including its broader
+name-write effect. Contextual adapters can perform authoritative lookups inside
+the migration transaction; storage failures abort the CD pass rather than mark
+individual PRs incompatible.
 
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these
@@ -169,7 +229,9 @@ do not drop review history. A content merge is corrected using a new reviewed
 inverse change based on the current state, rather than rewriting its audit record.
 Rolling back across a contract change requires an explicit reverse adapter;
 otherwise the older runtime fails closed and shows the raw sequence until the
-upgrade/recovery path is restored. No public or crawled URLs change.
+upgrade/recovery path is restored. Existing public routes are preserved by the
+deployment; later reviewed alias or new-entry operations have the effects shown
+in their domain diffs.
 
 For configuration rollback, restore the prior writable Cognito client/resource
 settings from the private receipt and redeploy the prior admin task definition.

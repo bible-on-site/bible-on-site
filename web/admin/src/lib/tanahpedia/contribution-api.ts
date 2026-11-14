@@ -1,21 +1,15 @@
-import type { ApiVersionAdapter } from "./api-versions";
+import { contributionRecordId } from "./contribution-identifiers";
 import {
 	type Contribution,
 	type ReviewedChange,
 	record,
 	sameState,
-	uuidField,
 	validateChange,
 } from "./contributions";
 
 // Bump for a change to the typed operation contract, alongside an adapter from
 // the preceding version. Package/release versions do not change this contract.
-export const CONTRIBUTION_API_VERSION = 1;
-
-// Legacy sequences stay opaque until the transitive conversion has completed.
-// Retain adapters permanently so long-lived proposals can skip releases.
-export const CONTRIBUTION_API_ADAPTERS: readonly ApiVersionAdapter<unknown>[] =
-	[];
+export const CONTRIBUTION_API_VERSION = 2;
 
 export interface ContributionApiMigration {
 	id: string;
@@ -49,7 +43,7 @@ export function validateApiSequence(value: unknown): ReviewedChange[] {
 	const targets = new Set<string>();
 	return value.map((raw) => {
 		const change = record(raw, "operation");
-		const targetId = uuidField(change.targetId, "targetId");
+		const targetId = contributionRecordId(change.targetId, "targetId");
 		const input = validateChange({
 			kind: change.kind,
 			targetId,
@@ -70,6 +64,8 @@ export function validateApiSequence(value: unknown): ReviewedChange[] {
 			throw new Error("API operation contains unsupported fields");
 		const labels = record(change.labels, "labels");
 		let personNames: ReviewedChange["personNames"];
+		if (input.kind === "metadata" && change.personNames === undefined)
+			throw new Error("API v2 metadata requires MAIN-name preconditions");
 		if (change.personNames !== undefined) {
 			if (
 				input.kind !== "metadata" ||
@@ -80,7 +76,7 @@ export function validateApiSequence(value: unknown): ReviewedChange[] {
 			const ids = new Set<string>();
 			personNames = change.personNames.map((raw) => {
 				const name = record(raw, "main name"),
-					id = uuidField(name.id, "name id");
+					id = contributionRecordId(name.id, "name id");
 				if (
 					ids.has(id) ||
 					typeof name.name !== "string" ||

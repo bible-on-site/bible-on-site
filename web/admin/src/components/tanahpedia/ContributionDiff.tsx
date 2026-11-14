@@ -1,4 +1,9 @@
 import {
+	CONTRIBUTION_RECORDS,
+	isContributionRecordKind,
+} from "~/lib/tanahpedia/contribution-records";
+import { SOURCE_TARGET_LABELS } from "~/lib/tanahpedia/contribution-specials";
+import {
 	CHANGE_LABELS,
 	type ChangeState,
 	changedFields,
@@ -7,6 +12,11 @@ import {
 	type ReviewedChange,
 } from "~/lib/tanahpedia/contributions";
 import { ENTITY_TYPE_LABELS } from "~/lib/tanahpedia/labels";
+import { toHebrewLetters } from "~/utils/hebrew";
+import {
+	HEBREW_MONTHS,
+	RECORD_OPTION_LABELS,
+} from "./ContributionRecordFields";
 
 const VALUE_LABELS: Record<string, Record<string, string>> = {
 	entityType: ENTITY_TYPE_LABELS,
@@ -33,7 +43,32 @@ function shown(
 	field?: string,
 ): string {
 	if (value == null || value === "") return "-";
-	if (field === "sourceCitation" || field === "personSourceCitation")
+	if (Array.isArray(value))
+		return value
+			.map(
+				(t) =>
+					`${labels[t.entryId] ?? t.entryId}${t.label ? ` (${t.label})` : ""}`,
+			)
+			.join("; ");
+	if (typeof value === "boolean") return value ? "טובה" : "פורענות";
+	if (field?.endsWith("Date") && typeof value === "number") {
+		if (value === -1) return "טרם נפטר";
+		if (value === 0) return "לא ידוע";
+		const year = Math.floor(value / 10000),
+			month = Math.floor(value / 100) % 100,
+			day = value % 100;
+		return `${day || "?"} ${HEBREW_MONTHS[month] ?? "?"} ${year || "?"}`;
+	}
+	if (field === "pasukNumber" && typeof value === "number")
+		return toHebrewLetters(value);
+	if (field === "sourceType") return value === "tanah" ? "מקרא" : "מקור אחר";
+	if (field === "targetKind")
+		return SOURCE_TARGET_LABELS[String(value)] ?? String(value);
+	if (
+		field === "sourceCitation" ||
+		field === "personSourceCitation" ||
+		field === "sourceText"
+	)
 		return contributionCitation(String(value));
 	const key = String(value);
 	const values =
@@ -41,6 +76,12 @@ function shown(
 			? VALUE_LABELS[field]
 			: undefined;
 	return (
+		(field && Object.hasOwn(labels, `${field}:${key}`)
+			? labels[`${field}:${key}`]
+			: undefined) ??
+		(Object.hasOwn(RECORD_OPTION_LABELS, key)
+			? RECORD_OPTION_LABELS[key]
+			: undefined) ??
 		(Object.hasOwn(labels, key) ? labels[key] : undefined) ??
 		(values && Object.hasOwn(values, key) ? values[key] : undefined) ??
 		key
@@ -235,7 +276,26 @@ export function ContributionDiff({ changes }: { changes: ReviewedChange[] }) {
 							<tbody>
 								{changedFields(change).map((field) => (
 									<tr key={field}>
-										<th scope="row">{FIELD_LABELS[field] ?? field}</th>
+										<th scope="row">
+											{(isContributionRecordKind(change.kind)
+												? CONTRIBUTION_RECORDS[change.kind].fields[field]?.label
+												: undefined) ??
+												FIELD_LABELS[field] ??
+												(
+													{
+														targets: "יעדי הכינוי",
+														name: "כינוי",
+														targetKind: "סוג הטענה",
+														targetId: "הטענה או היישות",
+														sourceType: "סוג מקור",
+														sourceText: "הפניה ביבליוגרפית",
+														perekId: "פרק",
+														pasukNumber: "פסוק",
+														perushId: "פירוש",
+													} as Record<string, string>
+												)[field] ??
+												field}
+										</th>
 										<td className="removed">
 											<span aria-hidden="true">− </span>
 											<bdi>

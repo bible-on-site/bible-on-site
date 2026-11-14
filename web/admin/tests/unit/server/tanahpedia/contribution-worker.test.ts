@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
 import type { Contribution } from "~/lib/tanahpedia/contributions";
 
 const mocks = vi.hoisted(() => ({
@@ -66,7 +67,7 @@ beforeEach(() => {
 			requestedAt: "date",
 			requestedBy: "human",
 			attempts: 0,
-			apiVersion: 1,
+			apiVersion: CONTRIBUTION_API_VERSION,
 			worker: null,
 			model: null,
 			leaseHash: null,
@@ -187,7 +188,7 @@ describe("workstation generation leases", () => {
 		if (kind === "token") input.token = "0".repeat(64);
 		if (kind === "state") item.state = "closed";
 		if (kind === "assignee") item.assignee = { kind: "unassigned" };
-		if (kind === "api") input.apiVersion = 2;
+		if (kind === "api") input.apiVersion = CONTRIBUTION_API_VERSION + 1;
 		if (kind === "version") item.version++;
 		if (kind === "expiry") job().leaseExpiresAt = "2000-01-01T00:00:00Z";
 		if (kind === "catalogue")

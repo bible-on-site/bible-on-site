@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
 import {
+	CONTRIBUTION_RECORDS,
+	isContributionRecordKind,
+} from "~/lib/tanahpedia/contribution-records";
+import {
 	type ChangeInput,
 	type ChangeState,
 	type ReviewedChange,
@@ -9,6 +13,21 @@ import {
 } from "~/lib/tanahpedia/contributions";
 import { txExecute, txQuery, txQueryOne } from "../db";
 import { recomputeEntryMetrics } from "../reading-metrics";
+import {
+	applyContributionRecord,
+	readContributionRecord,
+	structuredContributionCatalogue,
+	structuredReferenceLabels,
+} from "./contribution-records.server";
+import {
+	aliasReferenceLabels,
+	applyAliasMapping,
+	applySourceReference,
+	readAliasMapping,
+	readSourceReference,
+	sourceReferenceLabels,
+	specialContributionTargets,
+} from "./contribution-specials.server";
 import { assertEntryFieldsValid } from "./revisions";
 
 type State = ChangeState;
@@ -67,7 +86,13 @@ export async function readChangeState(
 	conn: PoolConnection,
 	kind: ReviewedChange["kind"],
 	targetId: string,
+	context?: State | null,
 ): Promise<State | null> {
+	if (isContributionRecordKind(kind))
+		return readContributionRecord(conn, kind, targetId);
+	if (kind === "alias_mapping")
+		return readAliasMapping(conn, targetId, context);
+	if (kind === "source_reference") return readSourceReference(conn, targetId);
 	const row = await txQueryOne<State>(conn, READS[kind], [targetId]);
 	if (row && kind === "place") {
 		for (const key of ["latitude", "longitude"])
@@ -96,6 +121,16 @@ async function referenceLabels(
 ): Promise<Record<string, string>> {
 	const labels: Record<string, string> = {};
 	if (!change.after) return labels;
+	if (isContributionRecordKind(change.kind))
+		return structuredReferenceLabels(
+			conn,
+			change.kind,
+			change.after as unknown as State,
+		);
+	if (change.kind === "alias_mapping")
+		return aliasReferenceLabels(conn, change.after as unknown as State);
+	if (change.kind === "source_reference")
+		return sourceReferenceLabels(conn, change.after as unknown as State);
 	const after = change.after as unknown as State;
 	for (const key of [
 		"parentId",
@@ -124,7 +159,22 @@ export async function prepareChanges(
 	const changes: ReviewedChange[] = [];
 	for (const input of inputs) {
 		const targetId = input.targetId ?? randomUUID();
-		const before = await readChangeState(conn, input.kind, targetId);
+		const before = await readChangeState(
+			conn,
+			input.kind,
+			targetId,
+			input.after as unknown as State,
+		);
+		if (input.kind === "alias_mapping" && !input.targetId && before)
+			throw new Error(
+				"Choose the existing alias to edit its complete target set",
+			);
+		if (
+			isContributionRecordKind(input.kind) &&
+			CONTRIBUTION_RECORDS[input.kind].updateOnly &&
+			!before
+		)
+			throw new Error("Record not found");
 		if (input.kind === "entry") {
 			if (before) throw new Error("New-entry target already exists");
 			assertEntryFieldsValid({
@@ -143,7 +193,7 @@ export async function prepareChanges(
 			throw new Error("This proposal does not change the target");
 		const labels = await referenceLabels(conn, input);
 		// Preserve the old graph's names when a relationship changes members.
-		if (before && ["parent_child", "union", "place"].includes(input.kind)) {
+		if (before && input.kind !== "metadata" && input.kind !== "entry") {
 			Object.assign(
 				labels,
 				await referenceLabels(conn, { ...input, after: before } as ChangeInput),
@@ -174,6 +224,18 @@ export async function applyChange(
 		targetId: change.targetId,
 		after: change.after,
 	});
+	if (isContributionRecordKind(input.kind)) {
+		await applyContributionRecord(conn, change);
+		return;
+	}
+	if (input.kind === "alias_mapping") {
+		await applyAliasMapping(conn, change);
+		return;
+	}
+	if (input.kind === "source_reference") {
+		await applySourceReference(conn, change);
+		return;
+	}
 	const a = change.after;
 	const id = change.targetId;
 	if (!a) {
@@ -272,6 +334,7 @@ export async function applyChange(
 		);
 		return;
 	}
+	if (input.kind !== "entry") throw new Error("Unsupported operation");
 	assertEntryFieldsValid({
 		title: input.after.title,
 		unique_name: input.after.uniqueName,
@@ -436,5 +499,16 @@ export async function contributionCatalogue(conn: PoolConnection) {
 			} as State,
 		})),
 	];
-	return { people, places, entities, targets };
+	const structured = await structuredContributionCatalogue(conn);
+	const special = await specialContributionTargets(conn);
+	structured.references.place_identification = targets
+		.filter((t) => t.kind === "place")
+		.map((t) => ({ id: t.id, name: t.label }));
+	return {
+		people,
+		places,
+		entities,
+		references: structured.references,
+		targets: [...targets, ...structured.targets, ...special],
+	};
 }

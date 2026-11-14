@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
 import type { Contribution, Contributor } from "~/lib/tanahpedia/contributions";
 
 const mocks = vi.hoisted(() => ({
@@ -94,6 +95,7 @@ function item(overrides: Partial<Contribution> = {}): Contribution {
 		issueId: null,
 		revision: 1,
 		version: 1,
+		apiVersion: CONTRIBUTION_API_VERSION,
 		events: [
 			{
 				id: "event",
@@ -249,7 +251,7 @@ describe("issues and PR administration", () => {
 		).not.toBeInTheDocument();
 	});
 	it("starts raw repair from the version current when editing opens after an assignment", async () => {
-		pr.apiVersion = 2;
+		pr.apiVersion = CONTRIBUTION_API_VERSION + 1;
 		mocks.search = { id: PRID };
 		mocks.detail.mockImplementation(async () => structuredClone(pr));
 		mocks.update.mockImplementation(async () => {
@@ -334,7 +336,7 @@ describe("issues and PR administration", () => {
 	});
 	it("renders failed migrations gray and shows the original sequence instead of a visual diff", async () => {
 		pr.author = owner;
-		pr.apiVersion = 2;
+		pr.apiVersion = CONTRIBUTION_API_VERSION + 1;
 		pr.apiMigration = {
 			status: "failed",
 			id: "failed-migration",
@@ -362,7 +364,7 @@ describe("issues and PR administration", () => {
 		);
 	});
 	it("uses a gray queue row without interpreting an obsolete change kind", async () => {
-		pr.apiVersion = 2;
+		pr.apiVersion = CONTRIBUTION_API_VERSION + 1;
 		show("pr");
 		expect(
 			await screen.findByText("couldn't migrate to latest API"),
@@ -372,7 +374,7 @@ describe("issues and PR administration", () => {
 		);
 	});
 	it("keeps a raw repair draft on errors and submits a validated-current-version recovery", async () => {
-		pr.apiVersion = 2;
+		pr.apiVersion = CONTRIBUTION_API_VERSION + 1;
 		mocks.search = { id: PRID };
 		mocks.recover.mockRejectedValueOnce(new Error("Invalid operation"));
 		show("pr");
@@ -389,7 +391,12 @@ describe("issues and PR administration", () => {
 		);
 		expect(field).toHaveValue(raw);
 		expect(mocks.recover).toHaveBeenCalledWith({
-			data: { id: PRID, version: 1, apiVersion: 1, sequence: pr.changes },
+			data: {
+				id: PRID,
+				version: 1,
+				apiVersion: CONTRIBUTION_API_VERSION,
+				sequence: pr.changes,
+			},
 		});
 	});
 	it("explains migrated PRs whose obsolete operations were all removed", async () => {

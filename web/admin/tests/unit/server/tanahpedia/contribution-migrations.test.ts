@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	CONTRIBUTION_API_VERSION,
 	migrationBlocked,
 	validateApiSequence,
 } from "~/lib/tanahpedia/contribution-api";
@@ -45,6 +46,7 @@ const changes: ReviewedChange[] = [
 		before: { displayName: "old" },
 		after: { displayName: "new" },
 		labels: {},
+		personNames: [],
 	},
 ];
 function pr(): Contribution {
@@ -52,6 +54,7 @@ function pr(): Contribution {
 		id,
 		number: 1,
 		kind: "pr",
+		apiVersion: CONTRIBUTION_API_VERSION,
 		state: "open",
 		title: "Test",
 		description: "Test",
@@ -80,20 +83,48 @@ function pr(): Contribution {
 }
 beforeEach(() => vi.clearAllMocks());
 describe("pending PR API migration", () => {
-	it("composes adapters while preserving approval, revision, base state and raw original", () => {
+	it("propagates a database failure from an asynchronous adapter without marking the PR incompatible", async () => {
 		const item = pr();
-		item.apiVersion = 3;
+		item.apiVersion = 1;
+		await expect(
+			migrateContributionSequence(item, {
+				version: CONTRIBUTION_API_VERSION,
+				adapters: [
+					{
+						from: 1,
+						to: CONTRIBUTION_API_VERSION,
+						id: "lookup",
+						convert: async () => {
+							throw Object.assign(new Error("Storage unavailable"), {
+								code: "ER_SERVER_SHUTDOWN",
+							});
+						},
+					},
+				],
+			}),
+		).rejects.toThrow("Storage unavailable");
+		expect(item.apiMigration).toBeUndefined();
+		expect(item.apiVersion).toBe(1);
+	});
+	it("composes adapters while preserving approval, revision, base state and raw original", async () => {
+		const item = pr();
+		item.apiVersion = 4;
 		const original = structuredClone(item);
 		expect(
-			migrateContributionSequence(item, {
-				version: 1,
+			await migrateContributionSequence(item, {
+				version: CONTRIBUTION_API_VERSION,
 				adapters: [
-					{ from: 3, to: 2, id: "first", convert: (p) => p },
-					{ from: 2, to: 1, id: "second", convert: (p) => p },
+					{ from: 4, to: 3, id: "first", convert: (p) => p },
+					{
+						from: 3,
+						to: CONTRIBUTION_API_VERSION,
+						id: "second",
+						convert: (p) => p,
+					},
 				],
 			}),
 		).toBe("migrated");
-		expect(item.apiVersion).toBe(1);
+		expect(item.apiVersion).toBe(CONTRIBUTION_API_VERSION);
 		expect(item.revision).toBe(4);
 		expect(item.events).toEqual(original.events);
 		expect(reviewStatus(item)).toBe("approved");
@@ -106,14 +137,19 @@ describe("pending PR API migration", () => {
 			original.changes,
 		);
 	});
-	it("permits an adapter to drop retired fields and operations without invalidating approval", () => {
+	it("permits an adapter to drop retired fields and operations without invalidating approval", async () => {
 		const item = pr();
-		item.apiVersion = 2;
+		item.apiVersion = 3;
 		expect(
-			migrateContributionSequence(item, {
-				version: 1,
+			await migrateContributionSequence(item, {
+				version: CONTRIBUTION_API_VERSION,
 				adapters: [
-					{ from: 2, to: 1, id: "remove-operation", convert: () => [] },
+					{
+						from: 3,
+						to: CONTRIBUTION_API_VERSION,
+						id: "remove-operation",
+						convert: () => [],
+					},
 				],
 			}),
 		).toBe("migrated");
@@ -121,50 +157,62 @@ describe("pending PR API migration", () => {
 		expect(() => assertMergeAllowed(item)).not.toThrow();
 		expect(reviewStatus(item)).toBe("approved");
 	});
-	it("keeps the entire plain sequence and approval on conversion failure", () => {
+	it("keeps the entire plain sequence and approval on conversion failure", async () => {
 		const item = pr(),
 			original = structuredClone(item);
-		item.apiVersion = 2;
-		expect(migrateContributionSequence(item)).toBe("failed");
+		item.apiVersion = 3;
+		expect(await migrateContributionSequence(item)).toBe("failed");
 		expect(migrationBlocked(item)).toBe(true);
 		expect(item.changes).toEqual(original.changes);
 		expect(item.events).toEqual(original.events);
 		expect(item.revision).toBe(4);
 		expect(item.apiMigration?.error).toContain("No supported conversion");
 		expect(() => assertMergeAllowed(item)).toThrow("Couldn't migrate");
-		expect(migrateContributionSequence(item)).toBe("unchanged");
+		expect(await migrateContributionSequence(item)).toBe("unchanged");
 		expect(item.apiMigrationHistory).toHaveLength(1);
 	});
-	it("marks invalid adapter output gray and can recover on a later successful deployment", () => {
+	it("marks invalid adapter output gray and can recover on a later successful deployment", async () => {
 		const item = pr();
-		item.apiVersion = 2;
-		migrateContributionSequence(item, {
-			version: 1,
+		item.apiVersion = 3;
+		await migrateContributionSequence(item, {
+			version: CONTRIBUTION_API_VERSION,
 			adapters: [
-				{ from: 2, to: 1, id: "bad", convert: () => [{ kind: "removed" }] },
+				{
+					from: 3,
+					to: CONTRIBUTION_API_VERSION,
+					id: "bad",
+					convert: () => [{ kind: "removed" }],
+				},
 			],
 		});
 		expect(migrationBlocked(item)).toBe(true);
-		expect(item.apiVersion).toBe(2);
+		expect(item.apiVersion).toBe(3);
 		expect(
-			migrateContributionSequence(item, {
-				version: 1,
-				adapters: [{ from: 2, to: 1, id: "fixed", convert: (p) => p }],
+			await migrateContributionSequence(item, {
+				version: CONTRIBUTION_API_VERSION,
+				adapters: [
+					{
+						from: 3,
+						to: CONTRIBUTION_API_VERSION,
+						id: "fixed",
+						convert: (p) => p,
+					},
+				],
 			}),
 		).toBe("migrated");
 		expect(migrationBlocked(item)).toBe(false);
 		expect(item.apiMigrationHistory).toHaveLength(2);
 		expect(reviewStatus(item)).toBe("approved");
 	});
-	it("handles thrown non-Error adapters without discarding original input", () => {
+	it("handles thrown non-Error adapters without discarding original input", async () => {
 		const item = pr();
-		item.apiVersion = 2;
-		migrateContributionSequence(item, {
-			version: 1,
+		item.apiVersion = 3;
+		await migrateContributionSequence(item, {
+			version: CONTRIBUTION_API_VERSION,
 			adapters: [
 				{
-					from: 2,
-					to: 1,
+					from: 3,
+					to: CONTRIBUTION_API_VERSION,
 					id: "broken",
 					convert: () => {
 						throw null;
@@ -175,18 +223,18 @@ describe("pending PR API migration", () => {
 		expect(item.apiMigration?.status).toBe("failed");
 		expect(item.changes).toEqual(changes);
 	});
-	it("skips issues and finalized PRs and leaves valid current PRs untouched", () => {
+	it("skips issues and finalized PRs and leaves valid current PRs untouched", async () => {
 		for (const item of [
 			{ ...pr(), kind: "issue" as const },
 			{ ...pr(), state: "closed" as const },
 			{ ...pr(), state: "merged" as const },
 			pr(),
 		]) {
-			expect(migrateContributionSequence(item)).toBe("unchanged");
+			expect(await migrateContributionSequence(item)).toBe("unchanged");
 			expect(item.apiMigration).toBeUndefined();
 		}
 	});
-	it("validates converted bases, targets, labels and both sides rather than silently dropping fields", () => {
+	it("validates converted bases, targets, labels and both sides rather than silently dropping fields", async () => {
 		expect(validateApiSequence(changes)).toEqual(changes);
 		expect(validateApiSequence([])).toEqual([]);
 		for (const sequence of [
@@ -213,7 +261,7 @@ describe("pending PR API migration", () => {
 		])
 			expect(() => validateApiSequence(sequence)).toThrow();
 	});
-	it("retains validated main-name preconditions across API conversion", () => {
+	it("retains validated main-name preconditions across API conversion", async () => {
 		const names = [
 			{ id: "00000000-0000-4000-8000-000000000003", name: "Main name" },
 		];
@@ -246,11 +294,18 @@ describe("pending PR API migration", () => {
 		mocks.read.mockImplementation(async (_conn: object, rowId: string) => ({
 			...pr(),
 			id: rowId,
-			apiVersion: 2,
+			apiVersion: 3,
 		}));
 		const result = await migrateOpenContributionPrs({
-			version: 1,
-			adapters: [{ from: 2, to: 1, id: "upgrade", convert: (p) => p }],
+			version: CONTRIBUTION_API_VERSION,
+			adapters: [
+				{
+					from: 3,
+					to: CONTRIBUTION_API_VERSION,
+					id: "upgrade",
+					convert: (p) => p,
+				},
+			],
 		});
 		expect(result).toMatchObject({ scanned: 501, migrated: 501, failed: 0 });
 		expect(mocks.save).toHaveBeenCalledTimes(501);
@@ -264,7 +319,7 @@ describe("pending PR API migration", () => {
 				{ id: "2", number: 2 },
 			]);
 		mocks.read
-			.mockResolvedValueOnce({ ...pr(), apiVersion: 2 })
+			.mockResolvedValueOnce({ ...pr(), apiVersion: 3 })
 			.mockResolvedValueOnce(pr());
 		expect(await migrateOpenContributionPrs()).toMatchObject({
 			scanned: 2,

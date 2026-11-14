@@ -1,10 +1,9 @@
 import { randomUUID } from "node:crypto";
 import {
-	type ApiVersionAdapter,
-	convertApiVersion,
+	type AsyncApiVersionAdapter,
+	convertApiVersionAsync,
 } from "~/lib/tanahpedia/api-versions";
 import {
-	CONTRIBUTION_API_ADAPTERS,
 	CONTRIBUTION_API_VERSION,
 	type ContributionApiMigration,
 	contributionApiVersion,
@@ -12,6 +11,7 @@ import {
 } from "~/lib/tanahpedia/contribution-api";
 import type { Contribution } from "~/lib/tanahpedia/contributions";
 import { query } from "../db";
+import { currentContributionApiContract } from "./contribution-api-adapters.server";
 import {
 	ensureContributionSchema,
 	readContribution,
@@ -21,26 +21,26 @@ import {
 
 export interface ContributionApiContract {
 	version: number;
-	adapters: readonly ApiVersionAdapter<unknown>[];
+	adapters: readonly AsyncApiVersionAdapter<unknown>[];
 }
 const CURRENT_CONTRACT: ContributionApiContract = {
 	version: CONTRIBUTION_API_VERSION,
-	adapters: CONTRIBUTION_API_ADAPTERS,
+	adapters: [],
 };
 
 /** Migrations deliberately preserve revision and all approval events, including
  * when an adapter drops fields or removes an operation entirely. */
-export function migrateContributionSequence(
+export async function migrateContributionSequence(
 	item: Contribution,
 	contract = CURRENT_CONTRACT,
-): "migrated" | "failed" | "unchanged" {
+): Promise<"migrated" | "failed" | "unchanged"> {
 	if (item.kind !== "pr" || item.state !== "open") return "unchanged";
 	const from = contributionApiVersion(item),
 		to = contract.version;
 	const original = structuredClone(item.changes);
 	let migration: ContributionApiMigration;
 	try {
-		const converted = convertApiVersion<unknown>(
+		const converted = await convertApiVersionAsync<unknown>(
 			original,
 			from,
 			to,
@@ -62,6 +62,13 @@ export function migrateContributionSequence(
 		item.changes = changes;
 		item.apiVersion = to;
 	} catch (error) {
+		// Adapter lookup failures are infrastructure failures, not incompatible
+		// content. Preserve the row and fail the CD hook for a later retry.
+		let cause: unknown = error;
+		for (let depth = 0; depth < 8 && cause instanceof Error; depth++) {
+			if ("code" in cause) throw cause;
+			cause = cause.cause;
+		}
 		const message =
 			error instanceof Error ? error.message : "Unsupported API sequence";
 		if (
@@ -94,13 +101,15 @@ export function migrateContributionSequence(
 /** Keyset scan covers every open PR, independently of the UI's page size.
  * Each row is locked and committed separately. Conversion failures turn gray;
  * storage or infrastructure failures reject the deployment hook for retry. */
-export async function migrateOpenContributionPrs(contract = CURRENT_CONTRACT) {
+export async function migrateOpenContributionPrs(
+	contract?: ContributionApiContract,
+) {
 	await ensureContributionSchema();
 	const [{ lastNumber }] = await query<{ lastNumber: number }>(
 		"SELECT COALESCE(MAX(number), 0) AS lastNumber FROM tanahpedia_contribution",
 	);
 	const result = {
-		apiVersion: contract.version,
+		apiVersion: contract?.version ?? CONTRIBUTION_API_VERSION,
 		scanned: 0,
 		migrated: 0,
 		failed: 0,
@@ -116,7 +125,10 @@ export async function migrateOpenContributionPrs(contract = CURRENT_CONTRACT) {
 		for (const row of rows) {
 			const outcome = await withContributions(async (conn) => {
 				const item = await readContribution(conn, row.id, true);
-				const outcome = migrateContributionSequence(item, contract);
+				const outcome = await migrateContributionSequence(
+					item,
+					contract ?? currentContributionApiContract(conn),
+				);
 				if (outcome !== "unchanged") await saveContribution(conn, item);
 				return item.apiMigration?.status === "failed" && item.state === "open"
 					? "failed"

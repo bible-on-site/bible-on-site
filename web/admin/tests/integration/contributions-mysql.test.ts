@@ -3,7 +3,23 @@ import { readFileSync } from "node:fs";
 import mysql, { type Connection, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { canonicalJson } from "~/lib/canonical-json";
-import type { Contribution, Contributor } from "~/lib/tanahpedia/contributions";
+import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
+import {
+	CONTRIBUTION_RECORDS,
+	type ContributionRecordKind,
+} from "~/lib/tanahpedia/contribution-records";
+import type {
+	ChangeInput,
+	ChangeState,
+	Contribution,
+	Contributor,
+} from "~/lib/tanahpedia/contributions";
+import {
+	FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
+	FAMILY_PARENT_ROLES,
+	FAMILY_UNION_END_REASONS,
+	FAMILY_UNION_TYPES,
+} from "~/server/tanahpedia/family-api-spec";
 
 vi.mock("@tanstack/react-start/server-only", () => ({}));
 vi.mock("@tanstack/react-start", () => ({
@@ -15,6 +31,7 @@ vi.mock("@tanstack/react-start", () => ({
 }));
 vi.mock("~/server/website-revalidate", () => ({
 	revalidateWebsite: vi.fn().mockResolvedValue(undefined),
+	pediaInvalidation: vi.fn().mockReturnValue([{ type: "pedia" }]),
 }));
 vi.mock("~/server/tanahpedia/paths", () => ({
 	pediaChangesForPersons: vi.fn().mockResolvedValue([]),
@@ -50,6 +67,8 @@ let store: typeof import("~/server/tanahpedia/contribution-store.server");
 let db: typeof import("~/server/db");
 let worker: typeof import("~/server/tanahpedia/contribution-worker.server");
 let created = false;
+const recordRefs: Record<string, string | number> = {};
+let otherEntry: string;
 const ids = {
 	person: randomUUID(),
 	parent: randomUUID(),
@@ -115,12 +134,37 @@ beforeAll(async () => {
 		"tanahpedia_prophecy",
 		"tanahpedia_nation",
 	]);
+	for (const spec of Object.values(CONTRIBUTION_RECORDS))
+		needed.add(spec.table);
+	for (const table of [
+		"tanahpedia_god",
+		"tanahpedia_source_group",
+		"tanahpedia_tanah_source",
+		"tanahpedia_non_tanah_source",
+		"tanahpedia_entry_synonym",
+		"tanahpedia_entry_synonym_disambiguation",
+		"tanah_sefer",
+		"tanah_perek",
+		"tanah_additional",
+		"tanah_perek_date",
+		"parshan",
+		"perush",
+	])
+		needed.add(table);
 	const canonical = readFileSync(
 		new URL("../../../../data/mysql/tanahpedia_structure.sql", import.meta.url),
 		"utf8",
 	);
+	const referenceDDL = ["tanah_static_structure.sql", "perushim_structure.sql"]
+		.map((file) =>
+			readFileSync(
+				new URL(`../../../../data/mysql/${file}`, import.meta.url),
+				"utf8",
+			),
+		)
+		.join("\n");
 	await conn.query("SET FOREIGN_KEY_CHECKS = 0");
-	for (const match of canonical.matchAll(
+	for (const match of (canonical + referenceDDL).matchAll(
 		/CREATE TABLE `([^`]+)` \([\s\S]*?\) ENGINE[^;]*;/g,
 	)) {
 		if (needed.delete(match[1])) await conn.query(match[0]);
@@ -129,16 +173,21 @@ beforeAll(async () => {
 		throw new Error(
 			`Canonical workflow tables missing: ${[...needed].join(", ")}`,
 		);
+	const chapterView = referenceDDL.match(
+		/CREATE VIEW `tanah_perek_view` AS[\s\S]*?;/,
+	)?.[0];
+	if (!chapterView) throw new Error("Missing canonical chapter view");
+	await conn.query(chapterView);
 	await conn.query("SET FOREIGN_KEY_CHECKS = 1");
 	for (const [table, names] of [
 		[
 			"tanahpedia_lookup_parent_child_type",
-			["BIOLOGICAL", "ADOPTIVE", "STEP", "FOSTER"],
+			FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
 		],
-		["tanahpedia_lookup_parent_role", ["FATHER", "MOTHER"]],
-		["tanahpedia_lookup_union_type", ["MARRIAGE", "PILEGESH", "BETROTHAL"]],
-		["tanahpedia_lookup_union_end_reason", ["DEATH", "DIVORCE"]],
-		["tanahpedia_lookup_name_type", ["MAIN"]],
+		["tanahpedia_lookup_parent_role", FAMILY_PARENT_ROLES],
+		["tanahpedia_lookup_union_type", FAMILY_UNION_TYPES],
+		["tanahpedia_lookup_union_end_reason", FAMILY_UNION_END_REASONS],
+		["tanahpedia_lookup_name_type", ["MAIN", "ADDITIONAL", "NICKNAME"]],
 	] as const)
 		for (const name of names)
 			await conn.execute(`INSERT INTO ${table} (id, name) VALUES (?, ?)`, [
@@ -156,6 +205,99 @@ beforeAll(async () => {
 	await conn.execute(
 		"INSERT INTO tanahpedia_place (id, entity_id) VALUES (?, ?)",
 		[ids.place, ids.placeEntity],
+	);
+
+	Object.assign(recordRefs, {
+		person: ids.person,
+		place: ids.place,
+		entity: ids.entity,
+		perek: 1,
+		tanah_sefer: 1,
+		perush: 1,
+	});
+	await conn.query(
+		"INSERT INTO tanah_sefer (id,name,perek_id_from,perek_id_to) VALUES (1,'בראשית',1,1); INSERT INTO tanah_perek (id,perek,pasuk_count) VALUES (1,1,31); INSERT INTO parshan (id,name) VALUES (1,'פרשן בדיקה'); INSERT INTO perush (id,name,parshan_id) VALUES (1,'פירוש בדיקה',1)",
+	);
+	for (const kind of [
+		"nation",
+		"event",
+		"war",
+		"animal",
+		"plant",
+		"astronomical_object",
+		"sefer",
+		"saying",
+		"prophecy",
+	]) {
+		const entity = randomUUID(),
+			id = randomUUID();
+		recordRefs[kind] = id;
+		await conn.execute(
+			"INSERT INTO tanahpedia_entity (id,entity_type,name) VALUES (?,?,?)",
+			[entity, kind.toUpperCase(), `יישות בדיקה ${kind}`],
+		);
+		if (kind === "war" || kind === "prophecy") {
+			const parent = randomUUID(),
+				parentKind = kind === "war" ? "event" : "saying",
+				key = kind === "war" ? "event_id" : "saying_id";
+			await conn.execute(
+				`INSERT INTO tanahpedia_${parentKind} (id,entity_id) VALUES (?,?)`,
+				[parent, entity],
+			);
+			await conn.execute(
+				`INSERT INTO tanahpedia_${kind} (id,entity_id,${key}) VALUES (?,?,?)`,
+				[id, entity, parent],
+			);
+		} else
+			await conn.execute(
+				`INSERT INTO tanahpedia_${kind} (id,entity_id) VALUES (?,?)`,
+				[id, entity],
+			);
+	}
+	recordRefs.source_nation = randomUUID();
+	const sourceNationEntity = randomUUID();
+	await conn.execute(
+		"INSERT INTO tanahpedia_entity (id,entity_type,name) VALUES (?,'NATION','עם מקור בדיקה')",
+		[sourceNationEntity],
+	);
+	await conn.execute(
+		"INSERT INTO tanahpedia_nation (id,entity_id) VALUES (?,?)",
+		[recordRefs.source_nation, sourceNationEntity],
+	);
+	const rolePerson = randomUUID(),
+		roleEntity = randomUUID();
+	await conn.execute(
+		"INSERT INTO tanahpedia_entity (id,entity_type,name) VALUES (?,'PERSON','מלך בדיקה')",
+		[roleEntity],
+	);
+	await conn.execute(
+		"INSERT INTO tanahpedia_person (id,entity_id) VALUES (?,?)",
+		[rolePerson, roleEntity],
+	);
+	recordRefs.king_role = randomUUID();
+	recordRefs.person_name = randomUUID();
+	recordRefs.war_side = randomUUID();
+	recordRefs.god = randomUUID();
+	recordRefs.entry = randomUUID();
+	otherEntry = randomUUID();
+	await conn.execute(
+		"INSERT INTO tanahpedia_person_role_king (id,person_id) VALUES (?,?)",
+		[recordRefs.king_role, rolePerson],
+	);
+	await conn.execute(
+		"INSERT INTO tanahpedia_person_name (id,person_id,name,name_type_id) SELECT ?,?,'מלך בדיקה',id FROM tanahpedia_lookup_name_type WHERE name='MAIN'",
+		[recordRefs.person_name, rolePerson],
+	);
+	await conn.execute(
+		"INSERT INTO tanahpedia_war_side (id,war_id,side_number) VALUES (?,?,99)",
+		[recordRefs.war_side, recordRefs.war],
+	);
+	await conn.execute("INSERT INTO tanahpedia_god (id) VALUES (?)", [
+		recordRefs.god,
+	]);
+	await conn.execute(
+		"INSERT INTO tanahpedia_entry (id,title,unique_name,content) VALUES (?,'ערך בדיקה','ערך-בדיקה','<p>fixture</p>'),(?,'ערך אחר','ערך-אחר','<p>fixture</p>')",
+		[recordRefs.entry, otherEntry],
 	);
 	configured.pathname = `/${schema}`;
 	configured.searchParams.set("ssl-mode", "DISABLED");
@@ -422,6 +564,51 @@ function metadata(name: string) {
 }
 
 describe("durable issue assignment", () => {
+	it.each([
+		...FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES.map((type) => [
+			"parent_child",
+			type,
+		]),
+		...FAMILY_UNION_TYPES.map((type) => ["union", type]),
+	])("applies the defined family relationship %s:%s", async (kind, type) => {
+		const targetId = randomUUID();
+		const after =
+			kind === "parent_child"
+				? {
+						parentId: ids.parent,
+						childId: ids.person,
+						relationshipType: type,
+						parentRole: "FATHER",
+					}
+				: { person1Id: ids.parent, person2Id: ids.person, unionType: type };
+		const pr = await createPr([{ kind, targetId, after }], owner);
+		await service.mergeContribution({ id: pr.id, version: pr.version }, owner);
+		const sql =
+			kind === "parent_child"
+				? "SELECT t.name FROM tanahpedia_person_parent_child r JOIN tanahpedia_lookup_parent_child_type t ON t.id=r.relationship_type_id WHERE r.id=?"
+				: "SELECT t.name FROM tanahpedia_person_union r JOIN tanahpedia_lookup_union_type t ON t.id=r.union_type_id WHERE r.id=?";
+		const [rows] = await conn.execute<RowDataPacket[]>(sql, [targetId]);
+		expect(rows[0].name).toBe(type);
+	});
+	it("searches the displayed Hebrew unassigned label", async () => {
+		const issue = await service.createContribution(
+			{
+				kind: "issue",
+				title: "Hebrew assignment search",
+				description: "Fixture",
+			},
+			alice,
+		);
+		const page = await store.listContributions({
+			kind: "issue",
+			state: "open",
+			q: "ללא שיוך",
+		});
+		expect(page.items.some((item) => item.id === issue.id)).toBe(true);
+		expect(
+			page.items.every((item) => item.assignee.kind === "unassigned"),
+		).toBe(true);
+	});
 	it("pages and searches older open discussions independently of newer closed history", async () => {
 		const old = await service.createContribution(
 			{
@@ -509,6 +696,87 @@ describe("durable issue assignment", () => {
 		expect(
 			(await getPersons()).find((person) => person.id === ids.person)?.name,
 		).toBe("Updated person");
+	});
+	it("automatically upgrades an approved v1 person rename and keeps its approval usable", async () => {
+		let pr = await createPr([metadata("Legacy upgraded person")]);
+		await store.withContributions(async (tx) => {
+			const item = await store.readContribution(tx, pr.id, true);
+			item.apiVersion = 1;
+			delete item.changes[0].personNames;
+			await store.saveContribution(tx, item);
+		});
+		pr = await fresh(pr);
+		pr = await service.updateContribution(
+			{ id: pr.id, version: pr.version, action: "approve" },
+			owner,
+		);
+		const approved = structuredClone(pr.events),
+			revision = pr.revision,
+			original = structuredClone(pr.changes);
+		const { migrateOpenContributionPrs } = await import(
+			"~/server/tanahpedia/contribution-migrations.server"
+		);
+		await migrateOpenContributionPrs();
+		pr = await fresh(pr);
+		expect(pr.apiVersion).toBe(CONTRIBUTION_API_VERSION);
+		expect(pr.apiMigration?.status).toBe("succeeded");
+		expect(pr.events).toEqual(approved);
+		expect(pr.revision).toBe(revision);
+		expect(JSON.parse(pr.apiMigration?.sequence ?? "null")).toEqual(original);
+		expect(pr.changes[0].personNames?.length).toBeGreaterThan(0);
+		expect(
+			(
+				await service.mergeContribution(
+					{ id: pr.id, version: pr.version },
+					owner,
+				)
+			).state,
+		).toBe("merged");
+	});
+	it("prepares and merges person renames concurrently with the same lock order", async () => {
+		const pr = await createPr([metadata("Concurrent merge")], owner);
+		const { prepareChanges, readChangeState } = await import(
+			"~/server/tanahpedia/contribution-changes.server"
+		);
+		let release: () => void = () => {},
+			entered: () => void = () => {};
+		const held = new Promise<void>((resolve) => {
+				release = resolve;
+			}),
+			locked = new Promise<void>((resolve) => {
+				entered = resolve;
+			});
+		const preparing = store.withContributions(async (tx) => {
+			await readChangeState(tx, "metadata", ids.entity);
+			entered();
+			await held;
+			return prepareChanges(tx, [
+				{
+					kind: "metadata",
+					targetId: ids.entity,
+					after: { displayName: "Concurrent draft" },
+				},
+			]);
+		});
+		await locked;
+		const merging = service.mergeContribution(
+			{ id: pr.id, version: pr.version },
+			owner,
+		);
+		try {
+			await vi.waitFor(async () => {
+				const [waits] = await conn.execute<RowDataPacket[]>(
+					"SELECT requesting.OBJECT_NAME FROM performance_schema.data_lock_waits waits JOIN performance_schema.data_locks requesting ON requesting.ENGINE_LOCK_ID=waits.REQUESTING_ENGINE_LOCK_ID WHERE requesting.OBJECT_SCHEMA=? AND requesting.OBJECT_NAME='tanahpedia_entity'",
+					[schema],
+				);
+				expect(waits.length).toBeGreaterThan(0);
+			});
+		} finally {
+			release();
+		}
+		const [prepared, merged] = await Promise.all([preparing, merging]);
+		expect(prepared[0].personNames?.length).toBeGreaterThan(0);
+		expect(merged.state).toBe("merged");
 	});
 	it("persists all four assignee kinds and records a stable discussion number", async () => {
 		let issue = await service.createContribution(
@@ -926,7 +1194,7 @@ describe("reviewed transactional PR merging", () => {
 		);
 		await store.withContributions(async (tx) => {
 			const item = await store.readContribution(tx, pr.id, true);
-			item.apiVersion = 3;
+			item.apiVersion = 4;
 			await store.saveContribution(tx, item);
 		});
 		const original = await store.withContributions((tx) =>
@@ -947,10 +1215,15 @@ describe("reviewed transactional PR merging", () => {
 			),
 		).rejects.toThrow("Couldn't migrate");
 		await migrateOpenContributionPrs({
-			version: 1,
+			version: CONTRIBUTION_API_VERSION,
 			adapters: [
-				{ from: 3, to: 2, id: "bridge", convert: (p) => p },
-				{ from: 2, to: 1, id: "latest", convert: (p) => p },
+				{ from: 4, to: 3, id: "bridge", convert: (p) => p },
+				{
+					from: 3,
+					to: CONTRIBUTION_API_VERSION,
+					id: "latest",
+					convert: (p) => p,
+				},
 			],
 		});
 		const recovered = await store.withContributions((tx) =>
@@ -968,5 +1241,339 @@ describe("reviewed transactional PR merging", () => {
 				)
 			).state,
 		).toBe("merged");
+	});
+});
+
+describe("all category contribution operations against canonical MySQL", () => {
+	async function mergeChanges(changes: unknown[]) {
+		const pr = await service.createContribution(
+			{
+				kind: "pr",
+				description: "נתוני בדיקה בלבד",
+				title: "שינוי מובנה לבדיקה",
+				evidence,
+				changes,
+			},
+			owner,
+		);
+		await service.mergeContribution({ id: pr.id, version: pr.version }, owner);
+		return pr;
+	}
+	async function current(kind: ChangeInput["kind"], id: string) {
+		const { readChangeState } = await import(
+			"~/server/tanahpedia/contribution-changes.server"
+		);
+		return store.withContributions((tx) => readChangeState(tx, kind, id));
+	}
+	function example(kind: ContributionRecordKind): ChangeState {
+		return Object.fromEntries(
+			Object.entries(CONTRIBUTION_RECORDS[kind].fields).map(([key, f]) => [
+				key,
+				f.reference === "alternative"
+					? null
+					: f.type === "reference"
+						? recordRefs[
+								key === "sourceNationId" ? "source_nation" : (f.reference ?? "")
+							]
+						: f.type === "date"
+							? 57840101
+							: f.type === "integer"
+								? 1
+								: f.type === "boolean"
+									? true
+									: f.type === "enum"
+										? (f.options?.[0] ?? "")
+										: f.type === "blob"
+											? "models/test.glb"
+											: f.nullable
+												? null
+												: "תיאור בדיקה",
+			]),
+		);
+	}
+	it.each(Object.keys(CONTRIBUTION_RECORDS) as ContributionRecordKind[])(
+		"merges and reads back %s without modifying unrelated columns",
+		async (kind) => {
+			const spec = CONTRIBUTION_RECORDS[kind],
+				after = example(kind);
+			const pr = await mergeChanges([
+				{
+					kind,
+					...(spec.updateOnly ? { targetId: recordRefs.saying } : {}),
+					after,
+				},
+			]);
+			const id = pr.changes[0].targetId;
+			expect(await current(kind, id)).toEqual(after);
+			let updated: ChangeState | undefined;
+			if (Object.hasOwn(spec.fields, "altGroupId"))
+				updated = { ...after, altGroupId: randomUUID() };
+			else if (kind === "war_side") updated = { ...after, sideNumber: 2 };
+			else if (kind === "saying_date") updated = { sayingDate: 57840202 };
+			else if (kind === "entry_entity")
+				updated = { ...after, entityId: ids.parentEntity };
+			else if (kind === "entity_source") updated = { ...after, pasukNumber: 2 };
+			if (updated) {
+				await mergeChanges([{ kind, targetId: id, after: updated }]);
+				expect(await current(kind, id)).toEqual(updated);
+			}
+			if (!spec.updateOnly) {
+				await mergeChanges([{ kind, targetId: id, after: null }]);
+				expect(await current(kind, id)).toBeNull();
+			} else {
+				const [rows] = await conn.query<RowDataPacket[]>(
+					"SELECT content FROM tanahpedia_saying WHERE id=?",
+					[id],
+				);
+				expect(rows[0].content).toBeNull();
+				await expect(
+					service.createContribution(
+						{
+							kind: "pr",
+							description: "נתוני בדיקה בלבד",
+							title: "Forbidden",
+							evidence,
+							changes: [{ kind, targetId: id, after: null }],
+						},
+						owner,
+					),
+				).rejects.toThrow("deletion");
+			}
+		},
+	);
+	it("rejects unique collisions instead of overwriting another unreviewed role", async () => {
+		const role = await mergeChanges([
+			{ kind: "prophet_role", after: { personId: ids.person } },
+		]);
+		const duplicate = await service.createContribution(
+			{
+				kind: "pr",
+				description: "נתוני בדיקה בלבד",
+				title: "Duplicate role",
+				evidence,
+				changes: [{ kind: "prophet_role", after: { personId: ids.person } }],
+			},
+			owner,
+		);
+		await expect(
+			service.mergeContribution(
+				{ id: duplicate.id, version: duplicate.version },
+				owner,
+			),
+		).rejects.toThrow(/Duplicate/);
+		expect((await fresh(duplicate)).state).toBe("open");
+		expect(await current("prophet_role", role.changes[0].targetId)).toEqual({
+			personId: ids.person,
+		});
+	});
+	it("keeps dependent reigns intact until their removal is explicitly reviewed", async () => {
+		const role = String(recordRefs.king_role),
+			reign = await mergeChanges([
+				{
+					kind: "king_reign",
+					after: {
+						kingRoleId: role,
+						nationId: recordRefs.nation,
+						startDate: 57840101,
+						endDate: null,
+						altGroupId: null,
+					},
+				},
+			]);
+		const deletion = await service.createContribution(
+			{
+				kind: "pr",
+				description: "נתוני בדיקה בלבד",
+				title: "Remove role",
+				evidence,
+				changes: [{ kind: "king_role", targetId: role, after: null }],
+			},
+			owner,
+		);
+		await expect(
+			service.mergeContribution(
+				{ id: deletion.id, version: deletion.version },
+				owner,
+			),
+		).rejects.toThrow("dependent facts");
+		expect(
+			await current("king_reign", reign.changes[0].targetId),
+		).not.toBeNull();
+		await mergeChanges([
+			{ kind: "king_role", targetId: role, after: null },
+			{ kind: "king_reign", targetId: reign.changes[0].targetId, after: null },
+		]);
+		expect(await current("king_role", role)).toBeNull();
+	});
+	it("edits alias routing in the same PR and detects concurrent label changes", async () => {
+		const name = `כינוי-${randomUUID()}`,
+			entryId = String(recordRefs.entry);
+		const pr = await mergeChanges([
+			{
+				kind: "alias_mapping",
+				after: { name, targets: [{ entryId, label: "" }] },
+			},
+		]);
+		const id = pr.changes[0].targetId;
+		const after = {
+			name,
+			targets: [
+				{ entryId, label: "ראשון" },
+				{ entryId: otherEntry, label: "אחר" },
+			].sort((a, b) => a.entryId.localeCompare(b.entryId)),
+		};
+		await mergeChanges([{ kind: "alias_mapping", targetId: id, after }]);
+		expect(await current("alias_mapping", id)).toEqual(after);
+		const proposal = await service.createContribution(
+			{
+				kind: "pr",
+				description: "נתוני בדיקה בלבד",
+				title: "Alias review",
+				evidence,
+				changes: [
+					{
+						kind: "alias_mapping",
+						targetId: id,
+						after: { name, targets: [{ entryId, label: "" }] },
+					},
+				],
+			},
+			owner,
+		);
+		await conn.execute(
+			"UPDATE tanahpedia_entry_synonym_disambiguation d JOIN tanahpedia_entry_synonym s ON s.id=d.synonym_id SET d.disambiguation_label='changed' WHERE s.name=?",
+			[name],
+		);
+		await expect(
+			service.mergeContribution(
+				{ id: proposal.id, version: proposal.version },
+				owner,
+			),
+		).rejects.toThrow("Conflict");
+		await mergeChanges([{ kind: "alias_mapping", targetId: id, after: null }]);
+		expect(await current("alias_mapping", id)).toBeNull();
+		await expect(
+			service.createContribution(
+				{
+					kind: "pr",
+					description: "נתוני בדיקה בלבד",
+					title: "Collision",
+					evidence,
+					changes: [
+						{
+							kind: "alias_mapping",
+							after: { name: "ערך-בדיקה", targets: [{ entryId, label: "" }] },
+						},
+					],
+				},
+				owner,
+			),
+		).rejects.toThrow("canonical");
+	});
+	it("moves only the reviewed source and preserves its old shared group's other citation", async () => {
+		const after = {
+			targetKind: "entity",
+			targetId: ids.entity,
+			sourceType: "other",
+			perekId: null,
+			pasukNumber: null,
+			perushId: null,
+			sourceText: "מקור בדיקה",
+		};
+		const pr = await mergeChanges([{ kind: "source_reference", after }]),
+			id = pr.changes[0].targetId;
+		expect(await current("source_reference", id)).toEqual(after);
+		const [rows] = await conn.query<RowDataPacket[]>(
+			"SELECT source_group_id FROM tanahpedia_non_tanah_source WHERE id=?",
+			[id],
+		);
+		const sibling = randomUUID(),
+			group = rows[0].source_group_id;
+		await conn.execute(
+			"INSERT INTO tanahpedia_non_tanah_source (id,source_group_id,source_text) VALUES (?,?,'מקור נוסף')",
+			[sibling, group],
+		);
+		const moved = {
+			targetKind: "place",
+			targetId: ids.place,
+			sourceType: "tanah",
+			perekId: 1,
+			pasukNumber: 2,
+			perushId: 1,
+			sourceText: null,
+		};
+		await mergeChanges([
+			{ kind: "source_reference", targetId: id, after: moved },
+		]);
+		expect(await current("source_reference", id)).toEqual(moved);
+		expect(await current("source_reference", sibling)).toEqual({
+			...after,
+			sourceText: "מקור נוסף",
+		});
+		await mergeChanges([
+			{ kind: "source_reference", targetId: id, after: null },
+		]);
+		expect(await current("source_reference", id)).toBeNull();
+		expect(await current("source_reference", sibling)).not.toBeNull();
+		await expect(
+			service.createContribution(
+				{
+					kind: "pr",
+					description: "נתוני בדיקה בלבד",
+					title: "Invalid verse",
+					evidence,
+					changes: [
+						{ kind: "source_reference", after: { ...moved, pasukNumber: 32 } },
+					],
+				},
+				owner,
+			),
+		).rejects.toThrow("verse");
+	});
+	it("rolls back every category write when a later operation conflicts with a unique key", async () => {
+		const existing = await mergeChanges([
+			{
+				kind: "animal_kind",
+				after: { animalId: recordRefs.animal, kind: "CHAYA", altGroupId: null },
+			},
+		]);
+		const nameId = randomUUID();
+		const pr = await service.createContribution(
+			{
+				kind: "pr",
+				description: "נתוני בדיקה בלבד",
+				title: "Atomic cross-category merge",
+				evidence,
+				changes: [
+					{
+						kind: "person_name",
+						targetId: nameId,
+						after: {
+							personId: ids.person,
+							name: "Rollback",
+							nameType: "ADDITIONAL",
+							altGroupId: null,
+						},
+					},
+					{
+						kind: "animal_kind",
+						after: {
+							animalId: recordRefs.animal,
+							kind: "OF",
+							altGroupId: null,
+						},
+					},
+				],
+			},
+			owner,
+		);
+		await expect(
+			service.mergeContribution({ id: pr.id, version: pr.version }, owner),
+		).rejects.toThrow(/Duplicate/);
+		expect(await current("person_name", nameId)).toBeNull();
+		expect((await fresh(pr)).state).toBe("open");
+		expect(
+			(await current("animal_kind", existing.changes[0].targetId))?.kind,
+		).toBe("CHAYA");
 	});
 });

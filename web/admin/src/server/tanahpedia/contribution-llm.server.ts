@@ -3,6 +3,13 @@ import {
 	ConverseCommand,
 } from "@aws-sdk/client-bedrock-runtime";
 import type { PoolConnection } from "mysql2/promise";
+import {
+	CONTRIBUTION_RECORDS,
+	type ContributionField,
+	type ContributionRecordInput,
+	isContributionRecordKind,
+} from "~/lib/tanahpedia/contribution-records";
+import { SOURCE_TARGETS } from "~/lib/tanahpedia/contribution-specials";
 import type { ChangeInput, Contribution } from "~/lib/tanahpedia/contributions";
 import {
 	record,
@@ -22,10 +29,20 @@ import {
 	saveContribution,
 	withContributions,
 } from "./contribution-store.server";
+import {
+	FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
+	FAMILY_PARENT_ROLES,
+	FAMILY_UNION_END_REASONS,
+	FAMILY_UNION_TYPES,
+} from "./family-api-spec";
 
-const PROMPT_VERSION = "tanahpedia-issues-v1";
+const PROMPT_VERSION = "tanahpedia-issues-v2";
 
 interface ModelCatalogue {
+	references?: Record<
+		string,
+		{ id: string | number; name: string; ownerId?: string }[]
+	>;
 	people: { id: string; name: string }[];
 	places: { id: string; name: string }[];
 	entities: { id: string; name: string }[];
@@ -53,6 +70,70 @@ export function assertGeneratedReferences(
 				"The model referenced a target not supplied in the issue context",
 			);
 		if (!change.after) continue;
+		const altGroupId = (change.after as unknown as Record<string, unknown>)
+			.altGroupId;
+		if (
+			altGroupId &&
+			!(catalogue.references?.alternative ?? []).some(
+				(r) => r.id === altGroupId,
+			)
+		)
+			throw new Error(
+				"The model referenced an alternative group not supplied in the issue context",
+			);
+		if (isContributionRecordKind(change.kind)) {
+			const after = (change as ContributionRecordInput).after;
+			if (!after) continue;
+			for (const [key, field] of Object.entries(
+				CONTRIBUTION_RECORDS[change.kind].fields,
+			))
+				if (
+					field.type === "reference" &&
+					after[key] != null &&
+					!(catalogue.references?.[field.reference ?? ""] ?? []).some(
+						(r) => r.id === after[key],
+					)
+				)
+					throw new Error(
+						"The model referenced a record not supplied in the issue context",
+					);
+		}
+		if (
+			change.kind === "alias_mapping" &&
+			change.after.targets.some(
+				(t) =>
+					!(catalogue.references?.entry ?? []).some((r) => r.id === t.entryId),
+			)
+		)
+			throw new Error(
+				"The model referenced an alias target not supplied in the issue context",
+			);
+		if (change.kind === "source_reference") {
+			const a = change.after;
+			if (
+				!(catalogue.references?.[a.targetKind] ?? []).some(
+					(r) => r.id === a.targetId,
+				) &&
+				!catalogue.targets.some(
+					(r) => r.kind === a.targetKind && r.id === a.targetId,
+				)
+			)
+				throw new Error(
+					"The model referenced a source target not supplied in the issue context",
+				);
+			for (const [key, ref] of [
+				["perekId", "perek"],
+				["perushId", "perush"],
+			] as const)
+				if (
+					a[key] != null &&
+					!(catalogue.references?.[ref] ?? []).some((r) => r.id === a[key])
+				)
+					throw new Error(
+						"The model referenced a citation not supplied in the issue context",
+					);
+		}
+
 		if (
 			change.kind === "parent_child" &&
 			(!people.has(change.after.parentId) || !people.has(change.after.childId))
@@ -82,6 +163,9 @@ export function contributionOutputSchema(
 ) {
 	const nullableString = { type: ["string", "null"] };
 	const nullableInt = { type: ["integer", "null"] };
+	const nullableAlternative = {
+		enum: [null, ...(catalogue.references?.alternative ?? []).map((r) => r.id)],
+	};
 	const people = {
 		type: "string",
 		enum: catalogue.people.map((person) => person.id),
@@ -136,11 +220,11 @@ export function contributionOutputSchema(
 				parentId: people,
 				childId: people,
 				relationshipType: {
-					enum: ["BIOLOGICAL", "ADOPTIVE", "STEP", "FOSTER"],
+					enum: FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
 				},
-				parentRole: { enum: ["FATHER", "MOTHER"] },
+				parentRole: { enum: FAMILY_PARENT_ROLES },
 				sourceCitation: nullableString,
-				altGroupId: nullableString,
+				altGroupId: nullableAlternative,
 				birthOrder: { type: ["integer", "null"], minimum: 1 },
 			},
 			["parentId", "childId", "relationshipType", "parentRole"],
@@ -151,21 +235,15 @@ export function contributionOutputSchema(
 				person1Id: people,
 				person2Id: people,
 				unionType: {
-					enum: [
-						"MARRIAGE",
-						"PILEGESH",
-						"FORBIDDEN_WITH_GENTILE",
-						"BANNED_INCEST",
-						"BETROTHAL",
-					],
+					enum: FAMILY_UNION_TYPES,
 				},
 				unionOrder: nullableInt,
 				startDate: nullableInt,
 				endDate: nullableInt,
-				endReason: { enum: ["DEATH", "DIVORCE", null] },
+				endReason: { enum: [...FAMILY_UNION_END_REASONS, null] },
 				sourceCitation: nullableString,
 				personSourceCitation: nullableString,
-				altGroupId: nullableString,
+				altGroupId: nullableAlternative,
 			},
 			["person1Id", "person2Id", "unionType"],
 		);
@@ -178,7 +256,7 @@ export function contributionOutputSchema(
 				modernName: nullableString,
 				latitude: { type: ["number", "null"], minimum: -90, maximum: 90 },
 				longitude: { type: ["number", "null"], minimum: -180, maximum: 180 },
-				altGroupId: nullableString,
+				altGroupId: nullableAlternative,
 			},
 			["placeId", "latitude", "longitude"],
 		);
@@ -211,6 +289,138 @@ export function contributionOutputSchema(
 		["title", "uniqueName", "entityType", "displayName"],
 		false,
 	);
+
+	const fieldSchema = (field: ContributionField): Record<string, unknown> => {
+		if (field.reference === "alternative")
+			return {
+				enum: [
+					null,
+					...(catalogue.references?.alternative ?? []).map((r) => r.id),
+				],
+			};
+		if (field.type === "reference")
+			return {
+				enum: [
+					...(catalogue.references?.[field.reference ?? ""] ?? []).map(
+						(r) => r.id,
+					),
+					...(field.nullable ? [null] : []),
+				],
+			};
+		if (field.type === "enum") return { enum: field.options };
+		return {
+			type: [
+				field.type === "integer" || field.type === "date"
+					? "integer"
+					: field.type === "boolean"
+						? "boolean"
+						: "string",
+				...(field.nullable ? ["null"] : []),
+			],
+			...(field.min === undefined ? {} : { minimum: field.min }),
+			...(field.max === undefined ? {} : { maximum: field.max }),
+			...(field.maxLength === undefined ? {} : { maxLength: field.maxLength }),
+		};
+	};
+	for (const [kind, spec] of Object.entries(CONTRIBUTION_RECORDS)) {
+		if (
+			Object.values(spec.fields).some(
+				(f) =>
+					f.type === "reference" &&
+					!f.nullable &&
+					!(catalogue.references?.[f.reference ?? ""] ?? []).length,
+			)
+		)
+			continue;
+		if (spec.updateOnly && !catalogue.targets.some((t) => t.kind === kind))
+			continue;
+		variant(
+			kind,
+			Object.fromEntries(
+				Object.entries(spec.fields).map(([key, f]) => [key, fieldSchema(f)]),
+			),
+			Object.keys(spec.fields),
+			!spec.updateOnly,
+		);
+		if (spec.updateOnly) {
+			const properties = variants[variants.length - 1];
+			(properties.required as string[]).push("targetId");
+		}
+	}
+	const entries = catalogue.references?.entry ?? [];
+	if (entries.length)
+		variant(
+			"alias_mapping",
+			{
+				name: { type: "string", maxLength: 255 },
+				targets: {
+					type: "array",
+					minItems: 1,
+					maxItems: 40,
+					items: {
+						type: "object",
+						additionalProperties: false,
+						required: ["entryId", "label"],
+						properties: {
+							entryId: { enum: entries.map((r) => r.id) },
+							label: { type: "string", maxLength: 255 },
+						},
+					},
+				},
+			},
+			["name", "targets"],
+		);
+	const sourceTargets = SOURCE_TARGETS;
+	for (const kind of Object.keys(sourceTargets)) {
+		const ids = [
+			...(catalogue.references?.[kind] ?? []).map((r) => r.id),
+			...catalogue.targets.filter((t) => t.kind === kind).map((t) => t.id),
+		];
+		if (!ids.length) continue;
+		for (const sourceType of ["tanah", "other"] as const) {
+			if (sourceType === "tanah" && !(catalogue.references?.perek ?? []).length)
+				continue;
+			variant(
+				"source_reference",
+				{
+					targetKind: { const: kind },
+					targetId: { enum: ids },
+					sourceType: { const: sourceType },
+					perekId:
+						sourceType === "tanah"
+							? { enum: (catalogue.references?.perek ?? []).map((r) => r.id) }
+							: { type: "null" },
+					pasukNumber:
+						sourceType === "tanah"
+							? { type: ["integer", "null"], minimum: 1, maximum: 176 }
+							: { type: "null" },
+					perushId:
+						sourceType === "tanah"
+							? {
+									enum: [
+										null,
+										...(catalogue.references?.perush ?? []).map((r) => r.id),
+									],
+								}
+							: { type: "null" },
+					sourceText:
+						sourceType === "other"
+							? { type: "string", maxLength: 500 }
+							: { type: "null" },
+				},
+				[
+					"targetKind",
+					"targetId",
+					"sourceType",
+					"perekId",
+					"pasukNumber",
+					"perushId",
+					"sourceText",
+				],
+				false,
+			);
+		}
+	}
 	return {
 		type: "object",
 		additionalProperties: false,
@@ -273,11 +483,12 @@ export function contributionSystemPrompt(): string {
 		"Group independent change types into separate PRs. If the supplied evidence is insufficient, return an empty pullRequests array.",
 		"For new rows omit targetId. Updating/deleting a relationship requires its exact known targetId. Never invent an existing row ID.",
 		"Supported changes (after fields only; never include before or labels):",
-		"parent_child: {parentId,childId,relationshipType:BIOLOGICAL|ADOPTIVE|STEP|FOSTER,parentRole:FATHER|MOTHER,sourceCitation?,altGroupId?,birthOrder?}",
-		"union: {person1Id,person2Id,unionType:MARRIAGE|PILEGESH|FORBIDDEN_WITH_GENTILE|BANNED_INCEST|BETROTHAL,unionOrder?,startDate?,endDate?,endReason:DEATH|DIVORCE|null,sourceCitation?,personSourceCitation?,altGroupId?}",
+		`parent_child: {parentId,childId,relationshipType:${FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES.join("|")},parentRole:${FAMILY_PARENT_ROLES.join("|")},sourceCitation?,altGroupId?,birthOrder?}`,
+		`union: {person1Id,person2Id,unionType:${FAMILY_UNION_TYPES.join("|")},unionOrder?,startDate?,endDate?,endReason:${FAMILY_UNION_END_REASONS.join("|")}|null,sourceCitation?,personSourceCitation?,altGroupId?}`,
 		"place: {placeId,modernName?,latitude:number|null,longitude:number|null,altGroupId?}",
 		"metadata: targetId is an existing entity ID; after:{displayName}",
 		`entry: after:{title,uniqueName,entityType:${ADMIN_CREATABLE_ENTITY_TYPES.join("|")},displayName}; body is always empty, never propose content.`,
+		"Use the JSON schema for additional category operations. They cover person metadata, roles/reigns, events, wars, nations, sayings, prophecies, animals, plants, astronomy, books, entry links, aliases, evidence attachments and model references. Never emit article or saying content.",
 		"Dates are integers using the repository's YYYYMMDD convention. Use plain Hebrew source references without punctuation.",
 		"Write review descriptions and titles in Hebrew. Explain uncertainty explicitly. Human review is mandatory.",
 		'Return shape: {"pullRequests":[{"title":"...","description":"...","evidenceIndexes":[0],"changes":[{"kind":"...","after":{}}]}]}. The decoder schema defines the permitted fields.',
@@ -426,17 +637,64 @@ export async function prepareContributionGeneration(
 	const people = matching(context.catalogue.people),
 		places = matching(context.catalogue.places),
 		entities = matching(context.catalogue.entities);
-	const referenced = new Set([...people, ...places].map((row) => row.id));
+
+	const references = Object.fromEntries(
+		Object.entries(context.catalogue.references ?? {}).map(([kind, rows]) => {
+			const selected = new Set(
+				matching(rows.map((r) => ({ ...r, id: String(r.id) }))).map(
+					(r) => r.id,
+				),
+			);
+			return [kind, rows.filter((row) => selected.has(String(row.id)))];
+		}),
+	);
+	const referenced = new Set(
+		[
+			...people,
+			...places,
+			...entities,
+			...Object.values(references).flat(),
+		].map((r) => String(r.id)),
+	);
+	for (const [kind, rows] of Object.entries(
+		context.catalogue.references ?? {},
+	)) {
+		references[kind] = rows
+			.filter(
+				(r) =>
+					referenced.has(String(r.id)) ||
+					(r.ownerId && referenced.has(r.ownerId)),
+			)
+			.slice(0, 100);
+	}
+	for (const row of Object.values(references).flat())
+		referenced.add(String(row.id));
 	const targets = context.catalogue.targets
 		.filter(
 			(target) =>
 				searchable.includes(target.id) ||
-				Object.values(target.after).some(
-					(value) => typeof value === "string" && referenced.has(value),
+				Object.values(target.after).some((value) =>
+					typeof value === "string"
+						? referenced.has(value)
+						: Array.isArray(value) &&
+							value.some((t) => referenced.has(t.entryId)),
 				),
 		)
 		.slice(0, 150);
-	const modelCatalogue = { people, places, entities, targets };
+	references.alternative = [
+		{ id: context.issue.id, name: "קבוצת דעות חדשה לפנייה" },
+		...Array.from(
+			new Set(
+				targets.flatMap((t) =>
+					typeof t.after.altGroupId === "string" ? [t.after.altGroupId] : [],
+				),
+			),
+		)
+			.filter((id) => id !== context.issue.id)
+			.map((id) => ({ id, name: "קבוצת דעות חלופיות" })),
+	];
+
+	const modelCatalogue = { people, places, entities, targets, references };
 	const schema = contributionOutputSchema(
 		modelCatalogue,
 		context.issue.evidence.length,
@@ -517,7 +775,11 @@ export async function createGeneratedContributionPrs(
 		);
 		for (const change of changes) {
 			if (!change.after) continue;
-			for (const key of ["sourceCitation", "personSourceCitation"] as const) {
+			for (const key of [
+				"sourceCitation",
+				"personSourceCitation",
+				"sourceText",
+			] as const) {
 				const citation = (change.after as unknown as Record<string, unknown>)[
 					key
 				];

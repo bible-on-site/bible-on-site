@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
 import {
 	assertMergeAllowed,
 	assigneeLabel,
@@ -99,6 +100,7 @@ function pr(): Contribution {
 		issueId: null,
 		revision: 1,
 		version: 1,
+		apiVersion: CONTRIBUTION_API_VERSION,
 		events: [],
 		createdAt: "",
 		updatedAt: "",
