@@ -1,0 +1,102 @@
+name: Production database backup
+
+on:
+  schedule:
+    - cron: "23 2 * * 0"
+    - cron: "43 2 1 * *"
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: Retention tier
+        type: choice
+        options: [weekly, monthly]
+        default: weekly
+
+permissions:
+  contents: read
+
+# Share the existing data-deployment mutex so normal schema migrations do not
+# race the snapshot. Content edits continue under mysqldump's InnoDB snapshot.
+concurrency:
+  group: ${{ github.repository }}-cd-data
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  backup:
+    if: ${{ github.ref == 'refs/heads/master' && vars.PRODUCTION_BACKUPS_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: il-central-1
+      RDS_BUILD_ACCESS_ROLE: arn:aws:iam::250598594267:role/bible-on-site-db-backup
+      RDS_SECURITY_GROUP: sg-09268677e2b65f448
+      BACKUP_SCRATCH_URL: mysql://root:backup-scratch-only@127.0.0.1:3306/tanah
+      BACKUP_TIER: ${{ inputs.tier || (github.event.schedule == '43 2 1 * *' && 'monthly' || 'weekly') }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.15"
+      - name: Install backup SDK
+        run: python -m pip install -r devops/backups/requirements.txt
+      - name: Restrict the disposable MySQL port to loopback before it listens
+        # actions-setup-mysql (13a38f2) launches mysqld with an explicit
+        # --bind-address=*, which overrides the loopback my-cnf setting below.
+        # Enforce the promised loopback-only boundary at this disposable
+        # runner's firewall before mysqld can accept a non-loopback packet.
+        run: |
+          sudo iptables -I INPUT -p tcp --dport 3306 ! -i lo -j REJECT
+          sudo ip6tables -I INPUT -p tcp --dport 3306 ! -i lo -j REJECT
+      - name: Start isolated restore server and matching MySQL tools
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: "8.4"
+          root-password: backup-scratch-only
+          my-cnf: |
+            event_scheduler=OFF
+            local_infile=OFF
+            bind-address=127.0.0.1
+      - name: Verify the scratch listener accepts only loopback connections
+        # The runner's own addresses route over lo, so the probe must arrive
+        # through a real interface: a peer network namespace reaching this
+        # host's end of a veth pair exercises the ! -i lo rule exactly like
+        # traffic from another host on the network.
+        run: |
+          set -euo pipefail
+          sudo ip netns add scratch-probe
+          sudo ip link add veth-host type veth peer name veth-probe
+          sudo ip link set veth-probe netns scratch-probe
+          sudo ip addr add 192.168.253.1/30 dev veth-host
+          sudo ip link set veth-host up
+          sudo ip netns exec scratch-probe ip addr add 192.168.253.2/30 dev veth-probe
+          sudo ip netns exec scratch-probe ip link set veth-probe up
+          sudo ip netns exec scratch-probe ip link set lo up
+          if sudo ip netns exec scratch-probe timeout 5 bash -c 'exec 3<>/dev/tcp/192.168.253.1/3306'; then
+            echo "::error::Scratch MySQL port 3306 is reachable off-loopback"
+            exit 1
+          fi
+          timeout 5 bash -c "exec 3<>/dev/tcp/127.0.0.1/3306"
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.RDS_BUILD_ACCESS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: "250598594267"
+          role-session-name: db-backup-${{ github.run_id }}
+      - name: Verify the database and bucket before opening network access
+        run: python devops/backups/mysql_backup.py check
+      - name: Open this job's owned RDS access lease
+        run: RDS_BUILD_ACCESS_LEASE="$RUNNER_TEMP/backup-rds-lease.json" node devops/github/ci/rds-build-access.mjs grant
+      - name: Export, restore, verify and publish retained backup
+        run: python devops/backups/mysql_backup.py "$BACKUP_TIER"
+      - name: Remove only this job's RDS access lease
+        if: ${{ always() }}
+        run: RDS_BUILD_ACCESS_LEASE="$RUNNER_TEMP/backup-rds-lease.json" node devops/github/ci/rds-build-access.mjs cleanup

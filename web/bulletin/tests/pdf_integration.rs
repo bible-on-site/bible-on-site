@@ -39,12 +39,14 @@ mod pdf_generation {
             perakim: vec![pdf::PdfPerekInput {
                 perek_heb: tanach::perek_to_hebrew(perek_data.perek_in_sefer),
                 header: perek_data.header.clone(),
-                pesukim: perek_data.pesukim.clone(),
+                pesukim: pdf::plain_pesukim(&perek_data.pesukim),
+                images: vec![],
                 articles: vec![],
             }],
             include_cover: false,
             include_toc: false,
             cover_accent_hex: "333333".to_string(),
+            cover_text: pdf::PdfCoverText::default(),
         };
 
         let buf = pdf::build_pdf(&req, &fonts_dir()).unwrap();
@@ -88,7 +90,8 @@ mod pdf_generation {
                 pdf::PdfPerekInput {
                     perek_heb: tanach::perek_to_hebrew(data.perek_in_sefer),
                     header: data.header.clone(),
-                    pesukim: data.pesukim.clone(),
+                    pesukim: pdf::plain_pesukim(&data.pesukim),
+                    images: vec![],
                     articles,
                 }
             })
@@ -103,6 +106,7 @@ mod pdf_generation {
             include_cover: false,
             include_toc: false,
             cover_accent_hex: "333333".to_string(),
+            cover_text: pdf::PdfCoverText::default(),
         };
 
         let buf = pdf::build_pdf(&req, &fonts_dir()).unwrap();

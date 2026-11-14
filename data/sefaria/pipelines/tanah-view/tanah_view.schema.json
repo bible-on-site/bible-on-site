@@ -12,8 +12,12 @@
 			"description": "A sefer (book) in the Tanah. Can have perakim directly or additionals (for split books like שמואל)",
 			"type": "object",
 			"oneOf": [
-				{ "$ref": "#/$defs/SefarimItemWithPerakim" },
-				{ "$ref": "#/$defs/SefarimItemWithAdditionals" }
+				{
+					"$ref": "#/$defs/SefarimItemWithPerakim"
+				},
+				{
+					"$ref": "#/$defs/SefarimItemWithAdditionals"
+				}
 			]
 		},
 		"SefarimItemWithPerakim": {
@@ -56,7 +60,9 @@
 				},
 				"perakim": {
 					"type": "array",
-					"items": { "$ref": "#/$defs/Perek" },
+					"items": {
+						"$ref": "#/$defs/Perek"
+					},
 					"description": "Array of perakim in this sefer"
 				}
 			},
@@ -108,7 +114,9 @@
 				},
 				"additionals": {
 					"type": "array",
-					"items": { "$ref": "#/$defs/AdditionalsItem" },
+					"items": {
+						"$ref": "#/$defs/AdditionalsItem"
+					},
 					"minItems": 2,
 					"maxItems": 2,
 					"description": "Two sub-parts of the sefer (א/ב for שמואל,מלכים,דה\"י or ע/נ for עזרא-נחמיה)"
@@ -171,7 +179,9 @@
 				},
 				"perakim": {
 					"type": "array",
-					"items": { "$ref": "#/$defs/Perek" },
+					"items": {
+						"$ref": "#/$defs/Perek"
+					},
 					"description": "Array of perakim in this additional"
 				}
 			},
@@ -223,9 +233,14 @@
 				},
 				"pesukim": {
 					"type": "array",
-					"items": { "$ref": "#/$defs/Pasuk" },
+					"items": {
+						"$ref": "#/$defs/Pasuk"
+					},
 					"minItems": 1,
 					"description": "Array of pesukim (verses) in this perek"
+				},
+				"recitation": {
+					"$ref": "#/$defs/RecitationRecording"
 				}
 			},
 			"required": ["perekId", "header", "date", "star_rise", "pesukim"],
@@ -237,7 +252,9 @@
 			"properties": {
 				"segments": {
 					"type": "array",
-					"items": { "$ref": "#/$defs/Segment" },
+					"items": {
+						"$ref": "#/$defs/Segment"
+					},
 					"minItems": 1,
 					"description": "Array of text segments that make up this pasuk"
 				}
@@ -248,10 +265,18 @@
 		"Segment": {
 			"description": "A text segment within a pasuk",
 			"oneOf": [
-				{ "$ref": "#/$defs/QriSegment" },
-				{ "$ref": "#/$defs/KtivSegment" },
-				{ "$ref": "#/$defs/StumaSegment" },
-				{ "$ref": "#/$defs/PtuhaSegment" }
+				{
+					"$ref": "#/$defs/QriSegment"
+				},
+				{
+					"$ref": "#/$defs/KtivSegment"
+				},
+				{
+					"$ref": "#/$defs/StumaSegment"
+				},
+				{
+					"$ref": "#/$defs/PtuhaSegment"
+				}
 			]
 		},
 		"QriSegment": {
@@ -326,16 +351,61 @@
 			"properties": {
 				"from": {
 					"type": "string",
-					"pattern": "^\\d{2}:\\d{2}:\\d{2}$",
-					"description": "Start time in HH:MM:SS format"
+					"pattern": "^\\d{2}:[0-5]\\d:[0-5]\\d(?:\\.\\d{3})?$",
+					"description": "Time in HH:MM:SS or HH:MM:SS.mmm format"
 				},
 				"to": {
 					"type": "string",
-					"pattern": "^\\d{2}:\\d{2}:\\d{2}$",
-					"description": "End time in HH:MM:SS format"
+					"pattern": "^\\d{2}:[0-5]\\d:[0-5]\\d(?:\\.\\d{3})?$",
+					"description": "Time in HH:MM:SS or HH:MM:SS.mmm format"
 				}
 			},
 			"required": ["from", "to"],
+			"additionalProperties": false
+		},
+		"RecitationRecording": {
+			"type": "object",
+			"properties": {
+				"version": {
+					"const": 1
+				},
+				"audioUrl": {
+					"type": "string",
+					"format": "uri"
+				},
+				"audioSha256": {
+					"type": "string",
+					"pattern": "^[a-f0-9]{64}$"
+				},
+				"textSha256": {
+					"type": "string",
+					"pattern": "^[a-f0-9]{64}$"
+				},
+				"durationMs": {
+					"type": "integer",
+					"minimum": 1
+				},
+				"alignmentStatus": {
+					"enum": ["pending", "needs_review", "ready"]
+				},
+				"pipeline": {
+					"type": "object"
+				},
+				"reviewMethod": {
+					"type": "string"
+				},
+				"reviewNote": {
+					"type": "string"
+				}
+			},
+			"required": [
+				"version",
+				"audioUrl",
+				"audioSha256",
+				"textSha256",
+				"durationMs",
+				"alignmentStatus"
+			],
 			"additionalProperties": false
 		}
 	}

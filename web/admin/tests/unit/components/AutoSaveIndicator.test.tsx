@@ -3,23 +3,29 @@ import { describe, expect, it } from "vitest";
 import { AutoSaveIndicator } from "~/components/AutoSaveIndicator";
 
 describe("AutoSaveIndicator", () => {
-	it("shows saving state", () => {
+	it("shows the server commit in flight", () => {
 		render(
 			<AutoSaveIndicator isSaving={true} lastSaved={null} hasChanges={false} />,
 		);
 
-		expect(screen.getByText("⏳ שומר...")).toBeInTheDocument();
+		expect(screen.getByText("⏳ שומר בשרת...")).toBeInTheDocument();
 	});
 
-	it("shows unsaved changes state", () => {
+	it("shows uncommitted edits while a local draft protects them", () => {
 		render(
-			<AutoSaveIndicator isSaving={false} lastSaved={null} hasChanges={true} />,
+			<AutoSaveIndicator
+				isSaving={false}
+				lastSaved={null}
+				hasChanges={true}
+				lastDraftAt={new Date("2026-01-25T10:30:00")}
+			/>,
 		);
 
-		expect(screen.getByText("יש שינויים שלא נשמרו")).toBeInTheDocument();
+		expect(screen.getByText("יש שינויים שלא נשמרו בשרת")).toBeInTheDocument();
+		expect(screen.getByText(/טיוטה נשמרה במכשיר זה/)).toBeInTheDocument();
 	});
 
-	it("shows last saved time", () => {
+	it("shows the last server commit time", () => {
 		const lastSaved = new Date("2026-01-25T10:30:00");
 		render(
 			<AutoSaveIndicator
@@ -29,7 +35,35 @@ describe("AutoSaveIndicator", () => {
 			/>,
 		);
 
-		expect(screen.getByText(/✓ נשמר ב-/)).toBeInTheDocument();
+		expect(screen.getByText(/✓ נשמר בשרת ב-/)).toBeInTheDocument();
+	});
+
+	it("shows the persistent save failure", () => {
+		render(
+			<AutoSaveIndicator
+				isSaving={false}
+				lastSaved={null}
+				hasChanges={true}
+				saveFailed={true}
+			/>,
+		);
+
+		expect(screen.getByText("השמירה לשרת נכשלה")).toBeInTheDocument();
+	});
+
+	it("shows the local draft failure instead of the draft timestamp", () => {
+		render(
+			<AutoSaveIndicator
+				isSaving={false}
+				lastSaved={null}
+				hasChanges={true}
+				lastDraftAt={new Date("2026-01-25T10:30:00")}
+				draftFailed={true}
+			/>,
+		);
+
+		expect(screen.getByText("הטיוטה המקומית נכשלה")).toBeInTheDocument();
+		expect(screen.queryByText(/טיוטה נשמרה במכשיר זה/)).not.toBeInTheDocument();
 	});
 
 	it("shows nothing when no state", () => {

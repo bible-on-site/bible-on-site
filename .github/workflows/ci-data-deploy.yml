@@ -1,0 +1,41 @@
+name: Data Deployment Tests
+
+on:
+  pull_request:
+    paths:
+      - devops/deploy/data-deploy/**
+      - devops/package.json
+      - docs/aws/cloudformation/data-deploy/data-deploy-lambda.py
+      - .github/workflows/ci-data-deploy.yml
+  push:
+    branches: [master]
+    paths:
+      - devops/deploy/data-deploy/**
+      - devops/package.json
+      - docs/aws/cloudformation/data-deploy/data-deploy-lambda.py
+      - .github/workflows/ci-data-deploy.yml
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    timeout-minutes: 60
+    name: Lambda restoration recovery
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - name: Test data deployment recovery without AWS or database writes
+        run: bun run --cwd devops test:deploy-data
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.15" # Lambda runtime of bible-on-site-db-populator
+      - name: Test additive migration preservation without AWS
+        run: python -m unittest discover -s devops/deploy/data-deploy -p "test_*.py"

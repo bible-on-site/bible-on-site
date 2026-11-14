@@ -3,7 +3,7 @@ jest.mock("next/navigation", () => ({
 	RedirectType: { replace: "replace" },
 }));
 
-jest.mock("../../../src/data/perek-dto", () => ({
+jest.mock("../../../src/data/perek-calendar", () => ({
 	getTodaysPerekId: jest.fn().mockReturnValue(42),
 }));
 

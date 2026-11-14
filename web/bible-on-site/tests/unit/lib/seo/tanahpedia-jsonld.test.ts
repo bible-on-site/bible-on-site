@@ -98,6 +98,26 @@ describe("seo/tanahpedia-jsonld", () => {
 			expect(plainText("safe<script", 100)).toBe("safe");
 			expect(plainText("a<img src=x b", 100)).toBe("a");
 		});
+
+		it("decodes hex, decimal, and named entities", () => {
+			expect(plainText("a&#x27;b", 100)).toBe("a'b");
+			expect(plainText("a&#39;b", 100)).toBe("a'b");
+			expect(plainText("a&quot;b&nbsp;c", 100)).toBe('a"b c');
+		});
+
+		it("leaves unknown named entities as written", () => {
+			expect(plainText("a&nosuchentity;b", 100)).toBe("a&nosuchentity;b");
+		});
+
+		it("leaves out-of-range numeric entities untouched instead of throwing", () => {
+			expect(plainText("a &#x110000; b", 100)).toBe("a &#x110000; b");
+			expect(plainText("a &#99999999; b", 100)).toBe("a &#99999999; b");
+		});
+
+		it("strips markup revealed by entity decoding", () => {
+			expect(plainText("x &lt;b&gt;bold&lt;/b&gt; y", 100)).toBe("x bold y");
+			expect(plainText("a &lt;i&gt;שלום&lt;/i&gt; b", 100)).toBe("a שלום b");
+		});
 	});
 
 	describe("buildEntryGraph", () => {
@@ -157,6 +177,29 @@ describe("seo/tanahpedia-jsonld", () => {
 				entry: entry({ content: "<p></p>" }),
 			});
 			expect(nodeByType(empty, "DefinedTerm")?.description).toBeUndefined();
+		});
+
+		it("emits the stored entry metric on the DefinedTerm, not the entity (#2607)", () => {
+			const graph = buildEntryGraph({
+				...baseInput(),
+				entry: entry({
+					metric: { wordCount: 181, estimatedSeconds: 50 },
+				}),
+			});
+			const term = nodeByType(graph, "DefinedTerm");
+			expect(term?.wordCount).toBe(181);
+			expect(term?.timeRequired).toBe("PT50S");
+			// The entity node (a Person) stays metric-free — the metric describes
+			// the entry's text, not the person.
+			const entity = nodeByType(graph, "Person");
+			expect(entity?.wordCount).toBeUndefined();
+			expect(entity?.timeRequired).toBeUndefined();
+		});
+
+		it("omits reading metrics when the entry metric is unknown", () => {
+			const term = nodeByType(buildEntryGraph(baseInput()), "DefinedTerm");
+			expect(term?.wordCount).toBeUndefined();
+			expect(term?.timeRequired).toBeUndefined();
 		});
 
 		it("attaches family relations and gender to the focal person", () => {

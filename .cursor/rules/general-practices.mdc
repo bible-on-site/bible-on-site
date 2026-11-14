@@ -15,6 +15,16 @@ alwaysApply: true
 
 - **DevOps**: Node.js/TypeScript (`devops/`)
 - **Data processing**: Rust (`data/`)
+- **Tanahpedia local model inference**: the existing `data/annotations/`
+  pipeline uses Python for PyTorch/Transformers model adapters, GPU execution,
+  evaluation, checkpoints and tests. This is a scoped ML-runtime exception;
+  general data ingestion remains Rust and durable content uses the normal
+  database editing/import path.
+
+The standalone local GPU transcription pipeline in `devops/transcription/` and
+its tests use Python for the native PyAV, faster-whisper and CTranslate2 runtime.
+This exception is scoped to that pipeline. Infrastructure, deployment and other
+DevOps tooling continue to use Node.js/TypeScript.
 
 ## Tool Learning (Agents/Copilot)
 
@@ -36,3 +46,26 @@ gh run view <run-id> --log-failed
 gh run view <run-id> --json workflowName,event,conclusion
 gh api repos/<owner>/<repo>/commits/<sha>
 ```
+
+## Fast Local Tools
+
+| Task | Use | Instead of |
+| ---- | --- | ---------- |
+| Content search | `rg` | `grep -r`, `Select-String`, `find -exec grep` |
+| File enumeration | `fd <pat>` / `rg --files` | `find`, `ls -R`, `Get-ChildItem -Recurse` |
+| Disk usage | `dust` | `du`/explorer walks (minutes → instant) |
+| In-place text replace | `sd 'old' 'new'` | `sed -i` (flag/quoting quirks on Windows) |
+| JSON query/edit | `jq` | `Select-String`, ad-hoc `python -c` |
+| YAML query/edit | `yq` | manual parsing |
+| Workflow lint | `prek run actionlint --files <wf>` (repo-pinned fork; upstream `actionlint` flags `background`/`wait`/`queue` extensions) | push-to-CI trial and error |
+| Benchmarks | `hyperfine` | hand-rolled `time` loops |
+| Structural code search/refactor | `ast-grep` (`sg` name is deprecated) | regex over code structure |
+| SQLite inspect | `sqlite3` | ad-hoc scripts |
+| Archives | `7z` | `Expand-Archive` |
+| Rust rebuild cache | `RUSTC_WRAPPER=sccache cargo …` | uncached builds |
+
+`rg` specifics:
+
+- `.gitignore` + root `.ignore` already exclude build output, nested `artifacts-*/` evidence worktrees, and the generated corpus dumps (42 MB single-line `*.tanah_view.json`, 36 MB bundled `*.tanah_view.sqlite`). Bypass only when needed: `-u`/`--no-ignore`, `--hidden` for dotfiles.
+- Filter: `-t ts -t rust -t py` (`rg --type-list`), `-g '*.csproj'`; `-l` paths only, `-c` counts, `-U` multiline, `-F` literal (Hebrew text, no regex escapes).
+- Windows output uses `\` separators — `tr '\\' '/'` before `cut -d/`-style pipelines.

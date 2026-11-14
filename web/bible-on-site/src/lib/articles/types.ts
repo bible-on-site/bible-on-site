@@ -1,3 +1,5 @@
+import type { ReadingMetric } from "../reading-metrics";
+
 /**
  * Article type with author information for display
  */
@@ -15,6 +17,12 @@ export interface Article {
 	authorName: string;
 	/** Author image URL from S3 */
 	authorImageUrl: string;
+	/**
+	 * Stored reading metric over the FULL article content (#2607) — the same
+	 * number shown before entry and on the article page. `null`/absent means
+	 * the metric is not computed yet; a verified-empty body carries zeros.
+	 */
+	metric?: ReadingMetric | null;
 }
 
 /**
@@ -29,6 +37,8 @@ export interface ArticleSummary {
 	priority: number;
 	authorName: string;
 	authorImageUrl: string;
+	/** Stored full-content reading metric — see {@link Article.metric}. */
+	metric?: ReadingMetric | null;
 }
 
 /**

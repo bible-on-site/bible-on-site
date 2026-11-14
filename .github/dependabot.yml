@@ -1,0 +1,98 @@
+# Dependabot covers security updates only — Renovate (renovate.json) owns
+# version updates. Every entry sets open-pull-requests-limit: 0 so no
+# version-update PRs are opened, while security-update PRs remain enabled.
+# See docs/devops/devops.md for the role split.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directories:
+      - "/"
+      - "/devops"
+      - "/devops/perek-images"
+      - "/web/admin"
+      - "/web/api/tests"
+      - "/web/bible-on-site"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "security"
+
+  - package-ecosystem: "npm"
+    directory: "/app/mobile-e2e"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "security"
+    ignore:
+      # These packages exist in this manifest only as copies bundled inside
+      # the published Appium driver tarballs (inBundle in the lockfile), so no
+      # lockfile edit can patch them — they must be fixed by upstream driver
+      # releases. Tracked by
+      # https://github.com/bible-on-site/bible-on-site/issues/1995 and the hold
+      # in renovate.json. Ignoring them prevents security-update jobs from
+      # repeatedly attempting and failing on advisories no update can satisfy.
+      - dependency-name: "axios"
+      - dependency-name: "brace-expansion"
+      - dependency-name: "morgan"
+      - dependency-name: "proxy-addr"
+      - dependency-name: "sharp"
+      - dependency-name: "shell-quote"
+
+  - package-ecosystem: "cargo"
+    directories:
+      - "/data"
+      - "/web/api"
+      - "/web/bulletin"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "security"
+
+  - package-ecosystem: "nuget"
+    directory: "/app"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "security"
+
+  - package-ecosystem: "docker"
+    directories:
+      - "/data/sefaria/mongodb-docker"
+      - "/devops/coverage/lcov-docker"
+      - "/devops/rustfs"
+      - "/web/admin"
+      - "/web/api"
+      - "/web/bible-on-site"
+      - "/web/bulletin"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "security"
+
+  - package-ecosystem: "pip"
+    directory: "/data/recitation"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "security"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 0
+    labels:
+      - "dependencies"
+      - "security"

@@ -12,6 +12,11 @@ const path = require("node:path");
 const {
 	mergeIstanbulCoverage,
 } = require("./tests/util/coverage/merge-istanbul-coverage");
+const {
+	CoverageAccumulator,
+} = require("./tests/util/coverage/coverage-accumulator");
+
+const accumulator = new CoverageAccumulator();
 
 const COVERAGE_FILE = path.join(
 	process.cwd(),
@@ -26,14 +31,23 @@ if (!fs.existsSync(coverageDir)) {
 	fs.mkdirSync(coverageDir, { recursive: true });
 }
 
-// Write coverage data after all tests complete
-afterAll(() => {
+function collectCoverage() {
 	// Access the global coverage object that SWC's plugin creates
 	// biome-ignore lint/suspicious/noShadowRestrictedNames: we need to use the exact global name to call its constructor
 	const Function = (() => {}).constructor;
 	// biome-ignore lint/suspicious/noShadowRestrictedNames: we need the real globalThis, not the one from the test environment
 	const globalThis = new Function("return this")();
-	const coverage = globalThis.__coverage__;
+	accumulator.collect(globalThis.__coverage__);
+}
+
+// A fresh module instance replaces its coverage object. Capture each test's
+// deltas before the next test reloads modules; do not count cumulative hits twice.
+afterEach(collectCoverage);
+
+// Write the accumulated suite coverage after all tests complete.
+afterAll(() => {
+	collectCoverage();
+	const coverage = accumulator.coverage;
 
 	if (coverage && Object.keys(coverage).length > 0) {
 		// Read existing coverage and merge with new coverage

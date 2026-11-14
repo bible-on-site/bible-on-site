@@ -2,7 +2,7 @@ using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using System.Globalization;
 using System.Text;
-using Newtonsoft.Json;
+using System.Text.Json;
 using SQLite;
 
 namespace BibleOnSite.Services;
@@ -21,9 +21,23 @@ public class PerekDataService
 
     private Dictionary<int, Perek>? _perakim;
     private Dictionary<int, Sefer>? _sefarim;
-    private bool _isLoaded;
+    /// <summary>Volatile for the double-checked lock in <see cref="LoadAsync"/>.</summary>
+    private volatile bool _isLoaded;
+    private readonly SemaphoreSlim _loadLock = new(1, 1);
 
-    private PerekDataService() { }
+    private readonly LocalDatabaseService _databaseService;
+    private readonly PerekScheduleService _scheduleService;
+
+    private PerekDataService() : this(LocalDatabaseService.Instance, PerekScheduleService.Instance) { }
+
+    public PerekDataService(LocalDatabaseService databaseService)
+        : this(databaseService, new PerekScheduleService(databaseService)) { }
+
+    internal PerekDataService(LocalDatabaseService databaseService, PerekScheduleService scheduleService)
+    {
+        _databaseService = databaseService;
+        _scheduleService = scheduleService;
+    }
 
     /// <summary>
     /// Whether perek data has been loaded.
@@ -35,23 +49,36 @@ public class PerekDataService
     /// </summary>
     public IReadOnlyDictionary<int, Perek>? Perakim => _perakim;
 
+    internal Task<SQLiteAsyncConnection> GetSearchConnectionAsync() => _databaseService.GetDatabaseAsync();
+
     /// <summary>
     /// Loads all sefarim and perakim from the database.
     /// </summary>
-    public async Task LoadAsync()
+    public virtual async Task LoadAsync()
     {
         if (_isLoaded)
+        {
             return;
+        }
 
-        var db = await LocalDatabaseService.Instance.GetDatabaseAsync();
+        await _loadLock.WaitAsync();
+        try
+        {
+            if (_isLoaded)
+            {
+                return;
+            }
 
-        // Load sefarim first
-        await LoadSefarimAsync(db);
-
-        // Load perakim
-        await LoadPerakimAsync(db);
-
-        _isLoaded = true;
+            var db = await _databaseService.GetDatabaseAsync();
+            // A replaced query and the background index can arrive together.
+            // Publish one complete catalog instead of replacing its dictionaries
+            // while another caller is already reading chapter search results.
+            await _scheduleService.LoadAsync();
+            await LoadSefarimAsync(db);
+            await LoadPerakimAsync(db);
+            _isLoaded = true;
+        }
+        finally { _loadLock.Release(); }
     }
 
     private async Task LoadSefarimAsync(SQLiteAsyncConnection db)
@@ -67,7 +94,7 @@ public class PerekDataService
             if (row.TanahUsName.Contains('{'))
             {
                 // Handle JSON format for split books
-                var nameDict = JsonConvert.DeserializeObject<Dictionary<string, string>>(row.TanahUsName);
+                var nameDict = JsonSerializer.Deserialize(row.TanahUsName, AppJsonContext.Default.SeferNames);
                 tanahUsName = nameDict?.Values.FirstOrDefault() ?? row.TanahUsName;
             }
             else
@@ -88,6 +115,14 @@ public class PerekDataService
     {
         _perakim = new Dictionary<int, Perek>();
 
+        // Perek dates shown in the reader come from the cycle containing
+        // today (or the next cycle to start when today is unscheduled),
+        // not simply the highest cycle stored in the table. Databases
+        // without usable cycle rows keep the historical latest-cycle join.
+        var displayCycle = _scheduleService.ConfirmedCycleCount > 0
+            ? _scheduleService.GetCycleForDateOrUpcoming(HebrewDateHelper.GetTodayDateNumber()).Number
+            : await GetLatestStoredCycleAsync(db);
+
         var perekRows = await db.QueryAsync<PerekRow>(
             "SELECT p.id AS perek_id, " +
             "p.perek, " +
@@ -107,10 +142,9 @@ public class PerekDataService
             "FROM tanah_perek p " +
             "JOIN tanah_sefer s ON p.id BETWEEN s.perek_id_from AND s.perek_id_to " +
             "LEFT JOIN tanah_additional a ON a.sefer_id = s.id AND p.id BETWEEN a.perek_from AND a.perek_to " +
-            "LEFT JOIN tanah_perek_date pd ON pd.perek_id = p.id AND pd.cycle = (" +
-            "  SELECT MAX(pd2.cycle) FROM tanah_perek_date pd2 WHERE pd2.perek_id = p.id" +
-            ") " +
-            "ORDER BY p.id");
+            "LEFT JOIN tanah_perek_date pd ON pd.perek_id = p.id AND pd.cycle = ? " +
+            "ORDER BY p.id",
+            displayCycle);
 
         foreach (var row in perekRows)
         {
@@ -140,6 +174,17 @@ public class PerekDataService
     }
 
     /// <summary>
+    /// Highest cycle stored in tanah_perek_date; 1 when the table is empty
+    /// (preserves the pre-schedule latest-cycle join). A database without the
+    /// table at all fails the perakim query below just as it always has.
+    /// </summary>
+    private static async Task<int> GetLatestStoredCycleAsync(SQLiteAsyncConnection db)
+    {
+        var latest = await db.ExecuteScalarAsync<int?>("SELECT MAX(cycle) FROM tanah_perek_date");
+        return latest is > 0 ? latest.Value : 1;
+    }
+
+    /// <summary>
     /// Gets a perek by ID.
     /// </summary>
     public Perek? GetPerek(int perekId)
@@ -153,35 +198,92 @@ public class PerekDataService
     public string? GetPerekSource(int perekId)
     {
         var perek = GetPerek(perekId);
-        if (perek == null) return null;
+        if (perek == null)
+        {
+            return null;
+        }
 
         var additionalPart = perek.Additional.HasValue ? $"{perek.Additional.Value.ToHebrewLetters()} " : string.Empty;
         return $"{perek.SeferName} {additionalPart}{perek.PerekNumber.ToHebrewLetters()}";
     }
 
     /// <summary>
+    /// Readable label for a set of reviewed perakim (#2365), e.g. "בראשית א-ה".
+    /// A contiguous run inside one sefer collapses to "ספר א-ה"; a run that
+    /// crosses a sefer boundary spells both ends out; non-contiguous material
+    /// lists each run so the label never implies unstudied perakim.
+    /// </summary>
+    public string GetPerekRangeSource(IReadOnlyList<int> perekIds)
+    {
+        if (perekIds.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var runs = new List<List<int>> { new List<int> { perekIds[0] } };
+        foreach (var id in perekIds.Skip(1))
+        {
+            var run = runs[^1];
+            if (id == run[^1] + 1)
+            {
+                run.Add(id);
+            }
+            else
+            {
+                runs.Add([id]);
+            }
+        }
+
+        var labels = runs.Select(run =>
+        {
+            var first = GetPerek(run[0]);
+            var last = GetPerek(run[^1]);
+            if (first is null || last is null || run.Count == 1)
+            {
+                return first is null ? string.Empty : GetPerekSource(run[0]) ?? string.Empty;
+            }
+            if (first.SeferId == last.SeferId && first.Additional == last.Additional)
+            {
+                var additionalPart = first.Additional.HasValue
+                    ? $"{first.Additional.Value.ToHebrewLetters()} "
+                    : string.Empty;
+                return $"{first.SeferName} {additionalPart}" +
+                    $"{first.PerekNumber.ToHebrewLetters()}-{last.PerekNumber.ToHebrewLetters()}";
+            }
+            return $"{GetPerekSource(run[0])} - {GetPerekSource(run[^1])}";
+        }).Where(label => label.Length > 0).ToList();
+
+        return string.Join(" ", labels.Select((label, index) => index == 0 ? label : "ו" + label));
+    }
+
+    /// <summary>
     /// Gets today's perek ID based on Hebrew date calculation.
-    /// Uses the same logic as the web implementation for consistency.
-    /// Handles tzeit (nightfall), weekend adjustment, and cycle boundaries.
+    /// Delegates to the multi-cycle schedule so "today's perek" agrees with
+    /// the לוח לימוד יומי calendar: scheduled days return their exact perek
+    /// and review days the perek being reviewed, for every stored cycle.
     /// </summary>
     public int GetTodaysPerekId()
     {
         if (_perakim == null || _perakim.Count == 0)
+        {
             return 1;
+        }
 
-        // Use the Hebrew date helper for proper calculation
-        return HebrewDateHelper.GetTodaysPerekIdByHebrew(_perakim);
+        // LoadAsync always runs the schedule load before filling _perakim,
+        // so a populated catalog implies a loaded schedule.
+        return _scheduleService.GetTodaysPerekId();
     }
 
     /// <summary>
     /// Loads the pasukim text for a given perek.
     /// </summary>
-    public async Task<List<Pasuk>> LoadPasukimAsync(int perekId)
+    public virtual async Task<List<Pasuk>> LoadPasukimAsync(int perekId)
     {
-        var db = await LocalDatabaseService.Instance.GetDatabaseAsync();
+        var db = await _databaseService.GetDatabaseAsync();
 
         var segmentRows = await db.QueryAsync<PasukSegmentRow>(
-            "SELECT s.id AS segment_id, s.pasuk_id AS pasuk_id, s.segment_type AS segment_type, " +
+            "SELECT s.id AS segment_id, s.perek_id AS perek_id, s.pasuk_id AS pasuk_id, " +
+            "s.segment_type AS segment_type, " +
             "v.value AS value, o.qri_ktiv_offset AS qri_ktiv_offset " +
             "FROM tanah_pasuk_segment s " +
             "LEFT JOIN tanah_pasuk_segment_value v ON v.id = s.id " +
@@ -190,6 +292,56 @@ public class PerekDataService
             "ORDER BY s.pasuk_id, s.id",
             perekId);
 
+        return BuildPasukim(segmentRows);
+    }
+
+    /// <summary>
+    /// Loads pasukim for several perakim in one round-trip (e.g. the
+    /// Tanahpedia occurrences table, which cites pesukim across many perakim).
+    /// <paramref name="pasukIds"/> optionally narrows the read to the cited
+    /// pasuk numbers; it is a union across all requested perakim, so a perek
+    /// may get back a few uncited pesukim - callers look pesukim up by number.
+    /// </summary>
+    public virtual async Task<Dictionary<int, List<Pasuk>>> LoadPasukimAsync(
+        IReadOnlyCollection<int> perekIds, IReadOnlyCollection<int>? pasukIds)
+    {
+        var pasukimByPerek = new Dictionary<int, List<Pasuk>>();
+        if (perekIds.Count == 0)
+        {
+            return pasukimByPerek;
+        }
+
+        var db = await _databaseService.GetDatabaseAsync();
+
+        var args = perekIds.Cast<object>().ToList();
+        var pasukFilter = string.Empty;
+        if (pasukIds is { Count: > 0 })
+        {
+            pasukFilter = $" AND s.pasuk_id IN ({string.Join(",", pasukIds.Select(_ => "?"))})";
+            args.AddRange(pasukIds.Cast<object>());
+        }
+
+        var segmentRows = await db.QueryAsync<PasukSegmentRow>(
+            "SELECT s.id AS segment_id, s.perek_id AS perek_id, s.pasuk_id AS pasuk_id, " +
+            "s.segment_type AS segment_type, " +
+            "v.value AS value, o.qri_ktiv_offset AS qri_ktiv_offset " +
+            "FROM tanah_pasuk_segment s " +
+            "LEFT JOIN tanah_pasuk_segment_value v ON v.id = s.id " +
+            "LEFT JOIN tanah_pasuk_segment_qri_ktiv_offset o ON o.id = s.id " +
+            $"WHERE s.perek_id IN ({string.Join(",", perekIds.Select(_ => "?"))}){pasukFilter} " +
+            "ORDER BY s.perek_id, s.pasuk_id, s.id",
+            args.ToArray());
+
+        foreach (var perekRows in segmentRows.GroupBy(row => row.PerekId))
+        {
+            pasukimByPerek[perekRows.Key] = BuildPasukim(perekRows);
+        }
+
+        return pasukimByPerek;
+    }
+
+    private static List<Pasuk> BuildPasukim(IEnumerable<PasukSegmentRow> segmentRows)
+    {
         var pasukim = new List<Pasuk>();
         var currentPasukId = -1;
         var currentText = new StringBuilder();
@@ -223,32 +375,7 @@ public class PerekDataService
                 PairedOffset = row.QriKtivOffset
             };
             currentSegments.Add(segment);
-
-            switch (row.SegmentType)
-            {
-                case "ktiv":
-                case "qri":
-                    if (!string.IsNullOrEmpty(value))
-                    {
-                        // Add space before word unless:
-                        // - it's the first word
-                        // - previous char is a newline
-                        // - previous char is a maqaf (Hebrew hyphen)
-                        if (currentText.Length > 0 && currentText[^1] != '\n' && currentText[^1] != '־')
-                        {
-                            currentText.Append(' ');
-                        }
-                        currentText.Append(value);
-                    }
-                    break;
-                case "ptuha":
-                case "stuma":
-                    if (currentText.Length > 0 && currentText[^1] != '\n')
-                    {
-                        currentText.Append('\n');
-                    }
-                    break;
-            }
+            PerekDataServiceText.AppendSegmentText(currentText, segmentType, value);
         }
 
         if (currentPasukId != -1)
@@ -279,7 +406,9 @@ public class PerekDataService
     private static int? ParseAdditionalLetter(string? letter)
     {
         if (string.IsNullOrWhiteSpace(letter))
+        {
             return null;
+        }
 
         return letter switch
         {
@@ -300,7 +429,9 @@ public class PerekDataService
     private static string FormatDate(string? date)
     {
         if (string.IsNullOrWhiteSpace(date))
+        {
             return string.Empty;
+        }
 
         if (date.Length == 8)
         {
@@ -316,10 +447,14 @@ public class PerekDataService
     private static int ParseHebDateNumeric(string? hebDate)
     {
         if (string.IsNullOrWhiteSpace(hebDate) || hebDate.Length != 8)
+        {
             return 0;
+        }
 
         if (int.TryParse(hebDate, out var result))
+        {
             return result;
+        }
 
         return 0;
     }
@@ -327,50 +462,77 @@ public class PerekDataService
     private static string FormatHebrewDate(string? hebDate)
     {
         if (string.IsNullOrWhiteSpace(hebDate))
-            return string.Empty;
-
-        if (hebDate.Length != 8 || !int.TryParse(hebDate, out var _))
-            return hebDate;
-
-        var year = int.Parse(hebDate[..4]);
-        var month = int.Parse(hebDate.Substring(4, 2));
-        var day = int.Parse(hebDate.Substring(6, 2));
-
-        var dayText = day.ToHebrewLetters();
-        var monthText = GetHebrewMonthName(month, IsHebrewLeapYear(year));
-        var yearText = GimatryHelper.ToLetters(year % 1000);
-
-        return string.IsNullOrEmpty(monthText)
-            ? hebDate
-            : $"{dayText} {monthText} {yearText}";
-    }
-
-    private static bool IsHebrewLeapYear(int hebrewYear)
-    {
-        // Leap years in the 19-year cycle: 3, 6, 8, 11, 14, 17, 19
-        var mod = hebrewYear % 19;
-        return mod is 0 or 3 or 6 or 8 or 11 or 14 or 17;
-    }
-
-    private static string GetHebrewMonthName(int month, bool isLeapYear)
-    {
-        return month switch
         {
-            1 => "תשרי",
-            2 => "חשוון",
-            3 => "כסלו",
-            4 => "טבת",
-            5 => "שבט",
-            6 => isLeapYear ? "אדר א" : "אדר",
-            7 => isLeapYear ? "אדר ב" : "ניסן",
-            8 => isLeapYear ? "ניסן" : "אייר",
-            9 => isLeapYear ? "אייר" : "סיון",
-            10 => isLeapYear ? "סיון" : "תמוז",
-            11 => isLeapYear ? "תמוז" : "אב",
-            12 => isLeapYear ? "אב" : "אלול",
-            13 => "אלול",
-            _ => string.Empty
-        };
+            return string.Empty;
+        }
+
+        if (hebDate.Length != 8 || !int.TryParse(hebDate, out var dateNum))
+        {
+            return hebDate;
+        }
+
+        var formatted = HebrewDateHelper.FormatHebrewDate(dateNum);
+        return formatted == dateNum.ToString() ? hebDate : formatted;
+    }
+
+    /// <summary>
+    /// Reading metric for a perek from the packaged tanah_view sqlite
+    /// (issue #2607). Older packs without the table degrade to null.
+    /// </summary>
+    public virtual async Task<ReadingMetric?> GetReadingMetricAsync(int perekId)
+    {
+        var db = await _databaseService.GetDatabaseAsync();
+        try
+        {
+            var rows = await db.QueryAsync<PerekMetricRow>(
+                "SELECT word_count, estimated_seconds, words_per_minute, calc_version, source_hash " +
+                "FROM tanah_perek_metric WHERE perek_id = ?",
+                perekId);
+            var row = rows.FirstOrDefault();
+            return row == null
+                ? null
+                : new ReadingMetric
+                {
+                    WordCount = row.WordCount,
+                    EstimatedSeconds = row.EstimatedSeconds,
+                    WordsPerMinute = row.WordsPerMinute,
+                    CalcVersion = row.CalcVersion,
+                    SourceHash = row.SourceHash ?? string.Empty
+                };
+        }
+        catch (SQLiteException)
+        {
+            // Metric tables absent in packs predating #2607 — degrade like any other optional table.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Ordered pasuk progress units for word-weighted reading position
+    /// (issue #2607). Empty when the metric table is absent or has no rows.
+    /// </summary>
+    public virtual async Task<IReadOnlyList<ReadingProgressUnit>> GetPasukProgressUnitsAsync(int perekId)
+    {
+        var db = await _databaseService.GetDatabaseAsync();
+        try
+        {
+            var rows = await db.QueryAsync<PasukMetricRow>(
+                "SELECT pasuk, word_count, cumulative_words " +
+                "FROM tanah_perek_pasuk_metric WHERE perek_id = ? ORDER BY pasuk",
+                perekId);
+            return rows
+                .Select(r => new ReadingProgressUnit
+                {
+                    Key = r.Pasuk.ToString(CultureInfo.InvariantCulture),
+                    WordCount = r.WordCount,
+                    CumulativeWords = r.CumulativeWords
+                })
+                .ToList();
+        }
+        catch (SQLiteException)
+        {
+            return Array.Empty<ReadingProgressUnit>();
+        }
     }
 
     #region Database Row Classes
@@ -431,6 +593,9 @@ public class PerekDataService
         [Column("segment_id")]
         public int SegmentId { get; set; }
 
+        [Column("perek_id")]
+        public int PerekId { get; set; }
+
         [Column("pasuk_id")]
         public int PasukId { get; set; }
 
@@ -442,6 +607,36 @@ public class PerekDataService
 
         [Column("qri_ktiv_offset")]
         public int? QriKtivOffset { get; set; }
+    }
+
+    private class PerekMetricRow
+    {
+        [Column("word_count")]
+        public int? WordCount { get; set; }
+
+        [Column("estimated_seconds")]
+        public int? EstimatedSeconds { get; set; }
+
+        [Column("words_per_minute")]
+        public int WordsPerMinute { get; set; }
+
+        [Column("calc_version")]
+        public int CalcVersion { get; set; }
+
+        [Column("source_hash")]
+        public string? SourceHash { get; set; }
+    }
+
+    private class PasukMetricRow
+    {
+        [Column("pasuk")]
+        public int Pasuk { get; set; }
+
+        [Column("word_count")]
+        public int WordCount { get; set; }
+
+        [Column("cumulative_words")]
+        public int CumulativeWords { get; set; }
     }
 
     #endregion

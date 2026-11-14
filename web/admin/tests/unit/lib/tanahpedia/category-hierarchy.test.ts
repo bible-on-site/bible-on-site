@@ -23,18 +23,32 @@ describe("tanahpedia category hierarchy", () => {
 			"SEFER",
 			"NATION",
 		]);
-		expect(new Set(ENTITY_TYPES)).toEqual(new Set(Object.keys(ENTITY_TYPE_LABELS)));
+		expect(new Set(ENTITY_TYPES)).toEqual(
+			new Set(Object.keys(ENTITY_TYPE_LABELS)),
+		);
 	});
 
 	it("builds website paths for roles, animal kinds, purities, and base categories", () => {
-		expect(websiteSubcategoryPath("PROPHET")).toBe("/tanahpedia/person?role=prophet");
+		expect(websiteSubcategoryPath("PROPHET")).toBe(
+			"/tanahpedia/person?role=prophet",
+		);
 		expect(websiteSubcategoryPath("KING")).toBe("/tanahpedia/person?role=king");
-		expect(websiteSubcategoryPath("BEHEMA")).toBe("/tanahpedia/animal?kind=behema");
-		expect(websiteSubcategoryPath("CHAYA")).toBe("/tanahpedia/animal?kind=chaya");
+		expect(websiteSubcategoryPath("BEHEMA")).toBe(
+			"/tanahpedia/animal?kind=behema",
+		);
+		expect(websiteSubcategoryPath("CHAYA")).toBe(
+			"/tanahpedia/animal?kind=chaya",
+		);
 		expect(websiteSubcategoryPath("OF")).toBe("/tanahpedia/animal?kind=of");
-		expect(websiteSubcategoryPath("SHERETZ")).toBe("/tanahpedia/animal?kind=sheretz");
-		expect(websiteSubcategoryPath("TAHOR")).toBe("/tanahpedia/animal?purity=tahor");
-		expect(websiteSubcategoryPath("TAMEH")).toBe("/tanahpedia/animal?purity=tameh");
+		expect(websiteSubcategoryPath("SHERETZ")).toBe(
+			"/tanahpedia/animal?kind=sheretz",
+		);
+		expect(websiteSubcategoryPath("TAHOR")).toBe(
+			"/tanahpedia/animal?purity=tahor",
+		);
+		expect(websiteSubcategoryPath("TAMEH")).toBe(
+			"/tanahpedia/animal?purity=tameh",
+		);
 		expect(websiteSubcategoryPath("PLACE")).toBe("/tanahpedia/place");
 	});
 

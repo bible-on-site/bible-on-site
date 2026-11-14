@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
+             x:Class="BibleOnSite.Pages.TanahpediaEntryPage"
+             x:Name="Page"
+             x:DataType="viewmodels:TanahpediaEntryViewModel"
+             Title="{Binding Title}"
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False">
+
+    <Grid RowDefinitions="Auto,*">
+        <!-- The shared navigation capsule (#2467): hamburger at the far-right
+             edge, Back immediately beside it — the press rides the shared
+             pipeline which steps the in-place entry trail first — then the
+             entry title pill. -->
+        <controls:SharedTopBar x:Name="TopBar" Grid.Row="0" NavigationAutomationId="TanahpediaEntryMenuButton">
+            <controls:SharedTopBar.CenterContent>
+                <controls:ToolbarPill>
+                    <Label Text="{Binding Title}"
+                           FontSize="16"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"
+                           LineBreakMode="TailTruncation"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                </controls:ToolbarPill>
+            </controls:SharedTopBar.CenterContent>
+        </controls:SharedTopBar>
+
+        <Grid Grid.Row="1">
+            <!-- Word-weighted reading position over the stored block metrics
+                 (issue #2607): a hairline at the top of the reader viewport. -->
+            <ProgressBar x:Name="ReadingProgressBar"
+                         AutomationId="TanahpediaReadingProgressBar"
+                         ZIndex="50"
+                         HeightRequest="3"
+                         Margin="0"
+                         VerticalOptions="Start"
+                         IsVisible="{Binding HasReadingProgress}"
+                         Progress="{Binding ReadingProgress}"
+                         ProgressColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                         BackgroundColor="Transparent"/>
+
+            <!-- Entry content -->
+            <ScrollView x:Name="EntryScroll"
+                        IsVisible="{Binding ShowEntry}"
+                        Scrolled="OnEntryScrolled"
+                        SizeChanged="OnEntryContentSizeChanged">
+                <VerticalStackLayout Padding="16"
+                                     Spacing="14"
+                                     SizeChanged="OnEntryContentSizeChanged">
+                <VerticalStackLayout.MaximumWidthRequest>
+                    <!-- +∞ = uncapped; an explicit -1 collapses the element on mobile. -->
+                    <OnPlatform x:TypeArguments="x:Double" Default="{x:Static x:Double.PositiveInfinity}">
+                        <On Platform="Windows" Value="{x:Static helpers:DesktopLayout.ContentColumnMaxWidth}"/>
+                    </OnPlatform>
+                </VerticalStackLayout.MaximumWidthRequest>
+                <VerticalStackLayout.HorizontalOptions>
+                    <OnPlatform x:TypeArguments="LayoutOptions" Default="Fill">
+                        <On Platform="Windows" Value="Center"/>
+                    </OnPlatform>
+                </VerticalStackLayout.HorizontalOptions>
+                    <VerticalStackLayout IsVisible="{Binding IsDisambiguation, Converter={StaticResource InvertedBoolConverter}}"
+                                         Spacing="14">
+                        <Label Text="{Binding Title}"
+                               FontSize="24"
+                               FontAttributes="Bold"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+
+                        <!-- Reading-time badge over the entry body (issue #2607);
+                             hidden when the stored metric is unknown or empty. -->
+                        <Label Text="{Binding ReadingTimeBadge}"
+                               IsVisible="{Binding ReadingTimeBadge, Converter={StaticResource StringNotEmptyConverter}}"
+                               FontSize="13"
+                               AutomationId="TanahpediaReadingTimeBadge"
+                               TextColor="{AppThemeBinding Light=#52647C, Dark=#B2C2D8}"/>
+
+                        <!-- Entry-scoped dedications (#2731) -->
+                        <VerticalStackLayout Spacing="2"
+                                             BindableLayout.ItemsSource="{Binding DedicationLines}"
+                                             IsVisible="{Binding HasDedications}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <Label Text="{Binding .}"
+                                           FontSize="13"
+                                           FontAttributes="Italic"
+                                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </VerticalStackLayout>
+
+                        <!-- Entity type badges → category pages -->
+                        <FlexLayout Wrap="Wrap"
+                                    BindableLayout.ItemsSource="{Binding Entities}"
+                                    IsVisible="{Binding HasEntities}">
+                            <BindableLayout.ItemTemplate>
+                                <DataTemplate x:DataType="models:TanahpediaLinkedEntity">
+                                    <controls:TappableView Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntityCategoryCommand}"
+                                                           CommandParameter="{Binding .}"
+                                                           SemanticProperties.Description="{Binding EntityType, Converter={StaticResource TanahpediaCategoryLabelConverter}}">
+                                        <Border Padding="10,4"
+                                                Margin="0,0,8,8"
+                                                StrokeShape="RoundRectangle 14"
+                                                Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                                                StrokeThickness="1">
+                                            <Label Text="{Binding EntityType, Converter={StaticResource TanahpediaCategoryLabelConverter}}"
+                                                   FontSize="13"
+                                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
+                                        </Border>
+                                    </controls:TappableView>
+                                </DataTemplate>
+                            </BindableLayout.ItemTemplate>
+                        </FlexLayout>
+
+                        <!-- Map of the entry's linked PLACE entities -->
+                        <VerticalStackLayout Spacing="6"
+                                             IsVisible="{Binding HasMap}">
+                            <Label Text="מפה"
+                                   FontSize="18"
+                                   FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <controls:TanahpediaPlacesMap Markers="{Binding PlaceMarkers}"
+                                                          EntryTappedCommand="{Binding OpenEntryCommand}"
+                                                          HeightRequest="300"/>
+                        </VerticalStackLayout>
+
+                        <!-- Family tree of the entry's PERSON entity - the
+                             source-backed card tree, same layout as the
+                             website's mobile PersonFamilyTree -->
+                        <controls:TanahpediaFamilyTreeView Tree="{Binding FamilyTree}"
+                                                           EntryTappedCommand="{Binding OpenPersonEntryCommand}"
+                                                           IsVisible="{Binding HasFamily}"/>
+
+                        <!-- Admin-authored HTML body -->
+                        <controls:HtmlView x:Name="EntryHtml"
+                                           HtmlContent="{Binding Content}"
+                                           TextDirection="Rtl"
+                                           TextAlignment="Justify"
+                                           LineHeight="1.6"
+                                           IsVisible="{Binding HasContent}"/>
+
+                        <!-- No-content notice (website parity: only when there is
+                             nothing else to show - no content, map or occurrences) -->
+                        <Label Text="אין תוכן עדיין לערך זה."
+                               FontSize="14"
+                               HorizontalTextAlignment="Center"
+                               IsVisible="{Binding ShowNoContentNotice}"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+
+                        <!-- מופעים בתנ"ך -->
+                        <VerticalStackLayout Spacing="8"
+                                             IsVisible="{Binding HasOccurrences}">
+                            <Label Text="מופעים בתנ&quot;ך"
+                                   FontSize="18"
+                                   FontAttributes="Bold"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <VerticalStackLayout Spacing="6"
+                                                 BindableLayout.ItemsSource="{Binding Occurrences}">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="viewmodels:TanahpediaOccurrenceItem">
+                                        <controls:TappableView Activated="OnOccurrenceTapped"
+                                                               SemanticProperties.Description="{Binding Citation}">
+                                        <Grid ColumnDefinitions="Auto,*"
+                                              ColumnSpacing="12"
+                                              Padding="0,4">
+                                            <Label Text="{Binding Citation}"
+                                                   FontSize="14"
+                                                   FontAttributes="Bold"
+                                                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                                                   TextDecorations="Underline"/>
+                                            <!-- Verse citation — scripture glyphs get the shared
+                                                 Taamey D face via PasukTextLabel (#2623). -->
+                                            <controls:PasukTextLabel Grid.Column="1"
+                                                   FormattedText="{Binding VerseFormatted}"
+                                                   FontSize="13"
+                                                   MaxLines="3"
+                                                   LineBreakMode="TailTruncation"
+                                                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                        </Grid>
+                                        </controls:TappableView>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </ScrollView>
+
+            <!-- Disambiguation - the name leads to several entries -->
+            <ScrollView IsVisible="{Binding IsDisambiguation}">
+                <VerticalStackLayout Padding="16" Spacing="12">
+                    <Label Text="{Binding UniqueName}"
+                           FontSize="24"
+                           FontAttributes="Bold"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                    <Label Text="{Binding UniqueName, StringFormat='השם «{0}» מוביל ליותר מערך אחד. בחר את הערך המבוקש:'}"
+                           FontSize="14"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                    <VerticalStackLayout Spacing="4"
+                                         BindableLayout.ItemsSource="{Binding SynonymTargets}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="models:TanahpediaSynonymTarget">
+                                <HorizontalStackLayout Spacing="4"
+                                                       Margin="0,2">
+                                    <controls:TappableView Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"
+                                                           CommandParameter="{Binding UniqueName}"
+                                                           SemanticProperties.Description="{Binding Title}">
+                                        <Label Text="{Binding Title}"
+                                               FontSize="16"
+                                               TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                                               TextDecorations="Underline"/>
+                                    </controls:TappableView>
+                                    <Label Text="{Binding Label, StringFormat=' - {0}'}"
+                                           FontSize="14"
+                                           IsVisible="{Binding Label, Converter={StaticResource StringNotEmptyConverter}}"
+                                           TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                                </HorizontalStackLayout>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </ScrollView>
+
+            <!-- Not found -->
+            <VerticalStackLayout VerticalOptions="Center"
+                                 HorizontalOptions="Center"
+                                 Padding="24"
+                                 Spacing="10"
+                                 IsVisible="{Binding IsNotFound}">
+                <Label Text="{Binding UniqueName, StringFormat='השם «{0}» לא נמצא בתנכפדיה'}"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       HorizontalTextAlignment="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                <Button Text="חזרה לתנכפדיה"
+                        Clicked="OnBackToPediaClicked"
+                        BackgroundColor="{StaticResource Primary}"
+                        TextColor="White"
+                        HorizontalOptions="Center"/>
+            </VerticalStackLayout>
+
+            <!-- Loading overlay -->
+            <VerticalStackLayout VerticalOptions="Center"
+                                 HorizontalOptions="Center"
+                                 IsVisible="{Binding IsLoading}">
+                <Image Source="loading_book_anim.gif"
+                       IsAnimationPlaying="True"
+                       HeightRequest="60"
+                       WidthRequest="60"
+                       Aspect="AspectFit"/>
+                <Label Text="טוען ערך..."
+                       FontSize="16"
+                       HorizontalTextAlignment="Center"/>
+            </VerticalStackLayout>
+
+            <!-- Error state with retry -->
+            <VerticalStackLayout VerticalOptions="Center"
+                                 HorizontalOptions="Center"
+                                 Padding="24"
+                                 Spacing="12"
+                                 IsVisible="{Binding HasError}">
+                <Label Text="התוכן אינו זמין כרגע"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       HorizontalTextAlignment="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                <Label Text="אירעה שגיאה בטעינת הנתונים"
+                       FontSize="14"
+                       HorizontalTextAlignment="Center"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                <Button Text="נסו שוב"
+                        Command="{Binding LoadCommand}"
+                        BackgroundColor="{StaticResource Primary}"
+                        TextColor="White"
+                        HorizontalOptions="Center"/>
+            </VerticalStackLayout>
+        </Grid>
+    </Grid>
+</ContentPage>

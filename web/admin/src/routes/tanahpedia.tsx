@@ -14,15 +14,11 @@ import {
 	websiteSubcategoryPath,
 } from "~/lib/tanahpedia/category-hierarchy";
 import { CATEGORY_LABELS, type CategoryKey } from "~/lib/tanahpedia/labels";
+import { WEBSITE_BASE } from "~/lib/website-base";
 import {
 	getTanahpediaCategoryCounts,
 	listTanahpediaEntriesForAdmin,
 } from "~/server/tanahpedia/entries";
-
-const WEBSITE_BASE =
-	typeof import.meta.env.VITE_WEBSITE_URL === "string"
-		? import.meta.env.VITE_WEBSITE_URL.replace(/\/$/, "")
-		: "http://localhost:3001";
 
 type TanahpediaSearch = {
 	category?: CategoryKey;
@@ -241,9 +237,7 @@ function TanahpediaIndexPage() {
 								<button
 									type="button"
 									onClick={() =>
-										setCategory(
-											category === cat.type ? undefined : cat.type,
-										)
+										setCategory(category === cat.type ? undefined : cat.type)
 									}
 									className={`text-right flex-1 rounded-lg p-2 -m-2 transition-colors ${
 										category === cat.type
@@ -255,9 +249,7 @@ function TanahpediaIndexPage() {
 										{CATEGORY_LABELS[cat.type]}
 									</div>
 									<div className="text-sm text-gray-500 mt-1">
-										{countsLoading
-											? "…"
-											: `${counts?.[cat.type] ?? 0} ערכים`}
+										{countsLoading ? "…" : `${counts?.[cat.type] ?? 0} ערכים`}
 									</div>
 								</button>
 								<a

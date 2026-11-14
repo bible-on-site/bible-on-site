@@ -11,7 +11,7 @@
 
         <!-- Logo -->
         <Image Grid.Row="0"
-               Source="appicon.png"
+               Source="loading_logo.png"
                HeightRequest="150"
                WidthRequest="150"
                VerticalOptions="End"

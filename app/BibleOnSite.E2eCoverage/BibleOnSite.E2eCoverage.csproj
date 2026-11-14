@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<LangVersion>latest</LangVersion>
+		<Nullable>enable</Nullable>
+		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+		<IsPackable>false</IsPackable>
+		<!--
+			Assembly identity baked into AltCover-instrumented modules:
+			"AltCover.Recorder.g, Version=9.0.0.0". Instrumented sequence and
+			branch points call AltCover.Recorder.Instance.Visit on this
+			assembly; the runtime binds by simple name, so this project provides
+			the substitute recorder that E2E app builds carry instead of
+			AltCover's generated file. It is referenced only when the app is
+			built with -p:E2ECoverage=true and never ships in production builds.
+		-->
+		<AssemblyName>AltCover.Recorder.g</AssemblyName>
+		<AssemblyVersion>9.0.0.0</AssemblyVersion>
+		<!-- Neutral identity: the recorder must load in every app target. -->
+		<RootNamespace>AltCover.Recorder</RootNamespace>
+		<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+		<!--
+			AltCover's generated recorder is strong-named; instrumented modules
+			reference "AltCover.Recorder.g, PublicKeyToken=4ebffcaabf10ce6a".
+			The signing key ships as an embedded resource of the public altcover
+			tool package (AltCover.Recorder.snk) and is kept here so this
+			substitute recorder binds under the same identity.
+		-->
+		<SignAssembly>true</SignAssembly>
+		<AssemblyOriginatorKeyFile>recorder.snk</AssemblyOriginatorKeyFile>
+	</PropertyGroup>
+
+</Project>

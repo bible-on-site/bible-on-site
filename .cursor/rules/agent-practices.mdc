@@ -8,7 +8,7 @@ alwaysApply: true
 **The agent performs tasks. The user does not.**
 
 - Run commands yourself: build, copy scripts, installs, dev server, tests. Do not instruct the user to "run this in your terminal" or "then run the copy script."
-- When working on flip book integration with the local `html-flip-book` repo: build in html-flip-book, then in the website run `USE_LOCAL_FLIP_BOOK=1 npm run postinstall` to copy the local build into node_modules (or add a script that runs that). Do not rely on the file: dependency in CI; the website uses the published npm package.
+- When working on flip book integration with the local `html-flip-book` repo: build in html-flip-book, then in the website run `USE_LOCAL_FLIP_BOOK=1 bun run postinstall` to copy the local build into node_modules (or add a script that runs that). Do not rely on the file: dependency in CI; the website uses the published npm package.
 - Apply fixes, run linters, and verify; do not leave follow-up steps for the user unless they explicitly ask.
 
 # No Suppressing Errors Without Approval
@@ -54,3 +54,7 @@ continue-on-error: true
 - When something is broken, own it: "I introduced this bug when I …" — not "this was a pre-existing issue."
 - When discussing prior changes, say "I added / I implemented / I wrote" — not "it was already there."
 - Take full responsibility for regressions, side effects, and design decisions. Diagnose and fix them without deflecting.
+
+# Performance Failures
+
+Do not increase timeouts, retries, sleeps, polling budgets, or hang-watchdog limits to make a failing or slow operation pass. Treat a timeout as evidence: reproduce it, measure the critical path, and fix the underlying algorithm, blocking work, contention, or delivery defect. Keep the existing interaction deadline as a regression check. A timeout change is permitted only when the user explicitly requests it after seeing the root cause and measured tradeoff.

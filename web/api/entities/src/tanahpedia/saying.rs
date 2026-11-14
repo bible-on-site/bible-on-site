@@ -5,9 +5,10 @@ use sea_orm::entity::prelude::*;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: String,
-    pub name: String,
+    pub entity_id: String,
     #[sea_orm(column_type = "Text", nullable)]
     pub content: Option<String>,
+    pub saying_date: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

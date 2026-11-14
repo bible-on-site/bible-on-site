@@ -13,7 +13,6 @@ const flipBookMountTimeoutMs = isCI || shouldMeasureCov ? 60_000 : 20_000;
  */
 export class SeferPage {
 	private readonly page: Page;
-	private readonly baseUrl = "http://localhost:3001/929";
 
 	constructor(page: Page) {
 		this.page = page;
@@ -23,7 +22,7 @@ export class SeferPage {
 	 * Navigate to a specific perek by its ID
 	 */
 	async navigateToPerek(perekId: number): Promise<void> {
-		await this.page.goto(`${this.baseUrl}/${perekId}`);
+		await this.page.goto(`/929/${perekId}`);
 	}
 
 	/**
@@ -61,7 +60,7 @@ export class SeferPage {
 	/**
 	 * Verify that the sefer overlay is visible and the FlipBook has mounted.
 	 * The overlay displays immediately but the FlipBook is lazy-loaded inside
-	 * a React startTransition, so we must wait for bookWrapper before checking
+	 * a React startTransition, so we must wait for the actual book before checking
 	 * any nested content (articles, qri spans, etc.).
 	 */
 	async verifySeferViewIsOpen(): Promise<void> {
@@ -80,6 +79,10 @@ export class SeferPage {
 		await expect(bookWrapper).toBeVisible({
 			timeout: flipBookMountTimeoutMs,
 		});
+		// The wrapper can precede the dynamically imported FlipBook itself.
+		await expect(seferOverlay.locator(".he-book.flipbook")).toBeVisible({
+			timeout: flipBookMountTimeoutMs,
+		});
 	}
 
 	/**
@@ -87,9 +90,11 @@ export class SeferPage {
 	 * Checks that there are multiple article elements with text content
 	 */
 	async verifyPesukimAreVisible(): Promise<void> {
-		const visibleArticles = this.page.locator("article:visible");
+		const visibleArticles = this.page.locator(
+			".he-book .page.current-page article",
+		);
 
-		// Wait for any article to become visible; flipbook renders hidden pages too
+		// Covered chapters retain layout. Assert the current spread itself.
 		await expect(visibleArticles.first()).toBeVisible({ timeout: 10_000 });
 
 		const count = await visibleArticles.count();
@@ -97,23 +102,28 @@ export class SeferPage {
 
 		// Verify a visible page has meaningful text (avoid hidden cover pages)
 		const firstVisibleArticle = visibleArticles.first();
+		expect(
+			await firstVisibleArticle.evaluate((article) =>
+				article.checkVisibility({
+					checkOpacity: true,
+					checkVisibilityCSS: true,
+				}),
+			),
+		).toBe(true);
 		const textContent = await firstVisibleArticle.textContent();
 		expect(textContent).toBeTruthy();
 		// biome-ignore lint/style/noNonNullAssertion: assured by previous check
 		expect(textContent!.length).toBeGreaterThan(50);
 	}
 
-	/**
-	 * Close the sefer view (if needed for future tests)
-	 */
+	/** Close the active reader through its read-mode control. */
 	async closeSeferView(): Promise<void> {
-		const closeButton = this.page.getByTestId("sefer-overlay-close");
-		if (await closeButton.isVisible()) {
-			await closeButton.click();
-			// Wait for overlay to become hidden instead of fixed timeout
-			const seferOverlay = this.page.locator('[class*="seferOverlay"]');
-			await expect(seferOverlay).toBeHidden({ timeout: 10_000 });
-		}
+		const toggler = this.page.getByTestId("read-mode-toggler");
+		await expect(toggler.locator("input")).toBeChecked();
+		await toggler.click();
+		await expect(this.page.locator('[class*="seferOverlay"]')).toBeHidden({
+			timeout: 10_000,
+		});
 	}
 
 	/**
@@ -129,8 +139,10 @@ export class SeferPage {
 	 * Qri elements are rendered with parentheses when they differ from ktiv
 	 */
 	async verifyQriElementsAreVisible(): Promise<void> {
-		// Qri elements have a specific CSS class
-		const qriElements = this.page.locator('[class*="qri"]');
+		// Retained off-screen chapters are dormant; check the facing chapter.
+		const qriElements = this.page.locator(
+			'.he-book .page.current-page [class*="qri"]',
+		);
 		await expect(qriElements.first()).toBeVisible({ timeout: 10_000 });
 		const count = await qriElements.count();
 		expect(count).toBeGreaterThan(0);

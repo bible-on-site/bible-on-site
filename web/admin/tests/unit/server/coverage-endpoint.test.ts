@@ -1,0 +1,124 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { appFetchMock } = vi.hoisted(() => ({
+	appFetchMock: vi.fn(),
+}));
+
+vi.mock("@tanstack/react-start/server-entry", () => ({
+	default: { fetch: appFetchMock },
+	createServerEntry: (entry: { fetch: (request: Request) => unknown }) => entry,
+}));
+
+// Worker startup and dedication scheduling have their own integration suites.
+// Authentication/coverage assertions must not load their DB/provider graph.
+vi.mock("~/server/email-worker-runtime.server", () => ({
+	ensureEmailWorkerStarted: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("~/server/dedication-expiry", () => ({
+	rescanDedicationExpiries: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("~/server/auth", () => ({
+	buildClearSessionCookie: vi.fn(),
+	buildSessionCookie: vi.fn(),
+	exchangeCodeForTokens: vi.fn(),
+	getLoginUrl: vi.fn(),
+	getLogoutUrl: vi.fn(),
+	parseCookie: vi.fn(),
+	verifyIdToken: vi.fn(),
+	verifyServiceAccessToken: vi.fn(),
+}));
+
+async function loadServer() {
+	vi.resetModules();
+	return import("~/server");
+}
+
+describe("/api/dev/coverage", () => {
+	beforeEach(() => {
+		appFetchMock.mockReset();
+		appFetchMock.mockImplementation(() => new Response("app"));
+		vi.stubEnv("SKIP_AUTH", "true");
+		vi.stubEnv("MEASURE_COV", "0");
+	});
+
+	afterEach(() => {
+		vi.unstubAllEnvs();
+		delete (globalThis as { __coverage__?: unknown }).__coverage__;
+	});
+
+	it("returns the istanbul coverage map and drains it for the next pull", async () => {
+		vi.stubEnv("MEASURE_COV", "1");
+		(globalThis as { __coverage__?: unknown }).__coverage__ = {
+			"src/example.ts": { path: "src/example.ts" },
+		};
+		const { default: entry } = await loadServer();
+
+		const response = await entry.fetch(
+			new Request("http://localhost:3101/api/dev/coverage"),
+		);
+
+		expect(await response.json()).toEqual({
+			"src/example.ts": { path: "src/example.ts" },
+		});
+		expect((globalThis as { __coverage__?: unknown }).__coverage__).toEqual({});
+		expect(appFetchMock).not.toHaveBeenCalled();
+	});
+
+	it("returns an empty object when nothing was instrumented yet", async () => {
+		vi.stubEnv("MEASURE_COV", "1");
+		const { default: entry } = await loadServer();
+
+		const response = await entry.fetch(
+			new Request("http://localhost:3101/api/dev/coverage"),
+		);
+
+		expect(await response.json()).toEqual({});
+	});
+
+	it("passes coverage requests through when not measuring coverage", async () => {
+		const { default: entry } = await loadServer();
+
+		const response = await entry.fetch(
+			new Request("http://localhost:3101/api/dev/coverage"),
+		);
+
+		expect(await response.text()).toBe("app");
+		expect(appFetchMock).toHaveBeenCalledOnce();
+	});
+
+	it("passes other paths through while measuring coverage", async () => {
+		vi.stubEnv("MEASURE_COV", "1");
+		const { default: entry } = await loadServer();
+
+		const response = await entry.fetch(
+			new Request("http://localhost:3101/articles"),
+		);
+
+		expect(await response.text()).toBe("app");
+		expect(appFetchMock).toHaveBeenCalledOnce();
+	});
+
+	// #3069: MEASURE_COV and SKIP_AUTH are local test tools — a stray flag in
+	// a production deployment must not expose the drain or disable auth.
+	it("does not drain coverage in production even when the flags are set", async () => {
+		vi.stubEnv("MEASURE_COV", "1");
+		vi.stubEnv("NODE_ENV", "production");
+		(globalThis as { __coverage__?: unknown }).__coverage__ = {
+			"src/example.ts": { path: "src/example.ts" },
+		};
+		const { default: entry } = await loadServer();
+
+		const response = await entry.fetch(
+			new Request("http://localhost:3101/api/dev/coverage", {
+				headers: { "x-tsr-serverFn": "true" },
+			}),
+		);
+
+		expect(response.status).toBe(401);
+		expect((globalThis as { __coverage__?: unknown }).__coverage__).toEqual({
+			"src/example.ts": { path: "src/example.ts" },
+		});
+		expect(appFetchMock).not.toHaveBeenCalled();
+	});
+});

@@ -7,6 +7,7 @@ import {
 import { categoryHref } from "@/lib/tanahpedia/category-slug";
 import { CATEGORY_LABELS, ENTITY_TYPE_LABELS } from "@/lib/tanahpedia/service";
 import type { CategoryKey, EntityType } from "@/lib/tanahpedia/types";
+import { BreadcrumbDropdown } from "../../929/[number]/components/BreadcrumbDropdown";
 import styles from "../../929/[number]/components/breadcrumb.module.css";
 
 export interface TanahpediaEntryNavItem {
@@ -50,93 +51,65 @@ export function TanahpediaBreadcrumb({
 						<Link href="/pedia">תנכפדיה</Link>
 					</li>
 					{currentCategory && (
-						<li
-							className={`${styles.active} ${styles.relative} ${styles["drop-container"]}`}
+						<BreadcrumbDropdown
+							label={currentLabel}
+							ariaLabel={`קטגוריה נוכחית: ${currentLabel}. לחץ לבחירת קטגוריה אחרת`}
+							dropClassName={styles["tanahpedia-category-drop"]}
 						>
-							<button
-								type="button"
-								aria-haspopup="true"
-								aria-expanded="false"
-								aria-label={`קטגוריה נוכחית: ${currentLabel}. לחץ לבחירת קטגוריה אחרת`}
-							>
-								{currentLabel}
-								<span
-									className={`${styles.glyphicon} ${styles["glyphicon-triangle-bottom"]} ${styles.small}`}
-									aria-hidden="true"
-								/>
-							</button>
-							<div
-								className={`${styles.drop} ${styles["bg-white"]} ${styles["tanahpedia-category-drop"]}`}
-							>
-								<ul className={`${styles.list} ${styles.pl0}`}>
-									{CATEGORY_HIERARCHY.map(({ type, children }) => (
-										<li
-											key={type}
-											className={styles["tanahpedia-category-group"]}
+							<ul className={`${styles.list} ${styles.pl0}`}>
+								{CATEGORY_HIERARCHY.map(({ type, children }) => (
+									<li
+										key={type}
+										className={styles["tanahpedia-category-group"]}
+									>
+										<Link
+											href={categoryHref(type)}
+											className={styles["tanahpedia-category-parent"]}
 										>
-											<Link
-												href={categoryHref(type)}
-												className={styles["tanahpedia-category-parent"]}
-											>
-												{ENTITY_TYPE_LABELS[type]}
-											</Link>
-											{children && children.length > 0 && (
-												<ul className={styles["tanahpedia-nested"]}>
-													{children.map((sub) => (
-														<li key={sub}>
-															<Link href={categoryHref(sub)}>
-																{labelForCategoryKey(sub)}
-															</Link>
-														</li>
-													))}
-												</ul>
-											)}
-										</li>
-									))}
-								</ul>
-							</div>
-						</li>
+											{ENTITY_TYPE_LABELS[type]}
+										</Link>
+										{children && children.length > 0 && (
+											<ul className={styles["tanahpedia-nested"]}>
+												{children.map((sub) => (
+													<li key={sub}>
+														<Link href={categoryHref(sub)}>
+															{labelForCategoryKey(sub)}
+														</Link>
+													</li>
+												))}
+											</ul>
+										)}
+									</li>
+								))}
+							</ul>
+						</BreadcrumbDropdown>
 					)}
 					{currentEntryTitle &&
 						(siblingEntries.length > 0 ? (
-							<li
-								className={`${styles.active} ${styles.relative} ${styles["drop-container"]}`}
-								aria-current="page"
+							<BreadcrumbDropdown
+								label={currentEntryTitle}
+								ariaLabel={`ערך נוכחי: ${currentEntryTitle}. לחץ לבחירת ערך אחר באותה קטגוריה`}
+								isCurrentPage
+								dropClassName={styles["perek-grid"]}
+								dropStyle={{ "--perek-rows": entryRows } as CSSProperties}
 							>
-								<button
-									type="button"
-									aria-haspopup="true"
-									aria-expanded="false"
-									aria-label={`ערך נוכחי: ${currentEntryTitle}. לחץ לבחירת ערך אחר באותה קטגוריה`}
-								>
-									{currentEntryTitle}
-									<span
-										className={`${styles.glyphicon} ${styles["glyphicon-triangle-bottom"]} ${styles.small}`}
-										aria-hidden="true"
-									/>
-								</button>
-								<div
-									className={`${styles.drop} ${styles["bg-white"]} ${styles["perek-grid"]}`}
-									style={{ "--perek-rows": entryRows } as CSSProperties}
-								>
-									<ul className={`${styles.list} ${styles.pl0}`}>
-										{siblingEntries.map((e) => (
-											<li key={e.uniqueName}>
-												<Link
-													href={`/pedia/${encodeURIComponent(e.uniqueName)}`}
-													aria-current={
-														e.uniqueName === currentEntryUniqueName
-															? "page"
-															: undefined
-													}
-												>
-													{e.title}
-												</Link>
-											</li>
-										))}
-									</ul>
-								</div>
-							</li>
+								<ul className={`${styles.list} ${styles.pl0}`}>
+									{siblingEntries.map((e) => (
+										<li key={e.uniqueName}>
+											<Link
+												href={`/pedia/${encodeURIComponent(e.uniqueName)}`}
+												aria-current={
+													e.uniqueName === currentEntryUniqueName
+														? "page"
+														: undefined
+												}
+											>
+												{e.title}
+											</Link>
+										</li>
+									))}
+								</ul>
+							</BreadcrumbDropdown>
 						) : (
 							<li
 								className={`${styles.active} ${styles.relative}`}

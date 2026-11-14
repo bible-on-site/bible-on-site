@@ -3,26 +3,7 @@ use crate::{
     providers::Database,
 };
 use entities::author::{Entity, Model};
-use sea_orm::{DbErr, EntityTrait};
-
-pub async fn find_one_by_id(db: &Database, id: i32) -> Result<Model, ServiceError> {
-    tracing::info_span!("authors_service::find_one_by_id", %id);
-    let user = Entity::find_by_id(id)
-        .one(db.get_connection())
-        .await
-        .map_err(|db_err| {
-            ServiceError::internal_server_error(INTERNAL_SERVER_ERROR, Some(db_err))
-        })?;
-    const AUTHOR_NOT_FOUND: &str = "Author Not Found";
-    match user {
-        Some(value) => {
-            tracing::info!("Author found");
-            Ok(value)
-        }
-        // Not sure about this anyhow::Error, might be of different used module
-        None => Err(ServiceError::not_found(AUTHOR_NOT_FOUND, None::<DbErr>)),
-    }
-}
+use sea_orm::EntityTrait;
 
 pub async fn find_all(db: &Database) -> Result<Vec<Model>, ServiceError> {
     tracing::info_span!("authors_service::find_all");
@@ -49,18 +30,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn find_one_by_id_returns_internal_server_error_on_db_failure() {
-        let db = create_mock_db_with_query_error("Connection lost");
-
-        let result = find_one_by_id(&db, 1).await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, ServiceError::InternalServerError(_)));
-        assert_eq!(err.to_string(), "Internal Server Error");
-    }
-
-    #[tokio::test]
     async fn find_all_returns_internal_server_error_on_db_failure() {
         let db = create_mock_db_with_query_error("Database timeout");
 
@@ -70,22 +39,5 @@ mod tests {
         let err = result.unwrap_err();
         assert!(matches!(err, ServiceError::InternalServerError(_)));
         assert_eq!(err.to_string(), "Internal Server Error");
-    }
-
-    #[tokio::test]
-    async fn find_one_by_id_returns_not_found_when_author_does_not_exist() {
-        let mock_db = MockDatabase::new(DatabaseBackend::MySql)
-            .append_query_results::<entities::author::Model, Vec<entities::author::Model>, _>([
-                vec![],
-            ])
-            .into_connection();
-        let db = Database::from_connection(mock_db);
-
-        let result = find_one_by_id(&db, 999).await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, ServiceError::NotFound(_)));
-        assert_eq!(err.to_string(), "Author Not Found");
     }
 }

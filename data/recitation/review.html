@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recitation timing review</title>
+<style>
+body { font: 16px system-ui; max-width: 1100px; margin: 32px auto; padding: 0 16px; color: #25241f; background: #faf8f2; }
+header { position: sticky; top: 0; background: #faf8f2; padding: 12px 0; border-bottom: 1px solid #ccc; }
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+td, th { padding: 10px; border-bottom: 1px solid #ddd; text-align: start; }
+input[type=number] { width: 100px; padding: 8px; }
+button { padding: 10px 16px; cursor: pointer; }
+.hebrew { font-size: 24px; direction: rtl; }
+.suspect { background: #fff0cb; }
+#status { min-height: 1.5em; }
+</style>
+<header>
+<h1>Recitation timing review</h1>
+<p>Listen to each word, adjust its boundaries in milliseconds, then mark it reviewed.
+The canonical word identity and text cannot be edited here. Yellow rows need particular attention.</p>
+<audio id="audio" controls preload="metadata"></audio>
+<div id="verses"></div>
+<button id="export" disabled>Export reviewed timings</button>
+<p id="status" role="status"></p>
+</header>
+<table><thead><tr><th>Pasuk / segment</th><th>Word</th><th>Start ms</th><th>End ms</th><th>Listen</th><th>Reviewed</th></tr></thead><tbody id="words"></tbody></table>
+<script>
+const manifest = __MANIFEST__;
+const audio = document.querySelector("#audio");
+audio.src = manifest.audioUrl;
+const rows = manifest.words.map(word => ({ ...word, reviewed: false }));
+const status = document.querySelector("#status");
+const exportButton = document.querySelector("#export");
+let audioContext;
+let decoded;
+let source;
+let playback = 0;
+function validate() {
+  let end = 0;
+  let valid = true;
+  for (const row of rows) {
+    if (!Number.isInteger(row.startMs) || !Number.isInteger(row.endMs) ||
+        row.startMs < end || row.endMs <= row.startMs || row.endMs > manifest.durationMs) valid = false;
+    end = row.endMs;
+  }
+  exportButton.disabled = !valid || !rows.every(row => row.reviewed);
+  status.textContent = rows.filter(row => row.reviewed).length + " / " + rows.length +
+    " words reviewed" + (valid ? "" : " — fill all timings and resolve overlaps.");
+}
+function stop() {
+  playback++;
+  audio.pause();
+  if (source) { source.onended = null; source.stop(); source.disconnect(); source = null; }
+}
+audio.addEventListener("play", () => {
+  playback++;
+  if (source) { source.stop(); source.disconnect(); source = null; }
+});
+async function play(row) {
+  stop();
+  const request = playback;
+  if (!Number.isFinite(row.startMs) || !Number.isFinite(row.endMs)) return;
+  try {
+    audioContext ??= new AudioContext();
+    const resumed = audioContext.resume();
+    decoded ??= (async () => {
+      const response = await fetch(manifest.audioUrl);
+      if (!response.ok) throw new Error("Audio download failed");
+      const bytes = await response.arrayBuffer();
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      const hash = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, "0")).join("");
+      if (hash !== manifest.audioSha256) throw new Error("Recording differs from aligned source");
+      return audioContext.decodeAudioData(bytes);
+    })().catch(error => { decoded = null; throw error; });
+    const [buffer] = await Promise.all([decoded, resumed]);
+    if (request !== playback) return;
+    if (row.startMs < 0 || row.endMs <= row.startMs || row.endMs / 1000 > buffer.duration)
+      throw new Error("Clip outside decoded recording");
+    source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContext.destination);
+    source.start(0, row.startMs / 1000, (row.endMs - row.startMs) / 1000);
+  } catch (error) { if (request === playback) status.textContent = "Unable to play audio: " + error.message; }
+}
+for (const pasuk of new Set(rows.map(row => row.pasuk))) {
+  const words = rows.filter(row => row.pasuk === pasuk);
+  const button = document.createElement("button"); button.textContent = "Play pasuk " + pasuk;
+  button.addEventListener("click", () => play({startMs: words[0].startMs, endMs: words.at(-1).endMs}));
+  document.querySelector("#verses").append(button);
+}
+for (const row of rows) {
+  const tr = document.createElement("tr");
+  if (row.startMs === null || row.acousticScore < 0.5) tr.className = "suspect";
+  const reference = tr.insertCell(); reference.textContent = row.pasuk + " / " + row.segment;
+  const text = tr.insertCell(); text.textContent = row.text; text.className = "hebrew";
+  const reviewed = document.createElement("input"); reviewed.type = "checkbox";
+  reviewed.setAttribute("aria-label", "Reviewed " + row.pasuk + "/" + row.segment);
+  for (const field of ["startMs", "endMs"]) {
+    const input = document.createElement("input"); input.type = "number"; input.min = 0; input.step = 1;
+    input.setAttribute("aria-label", field + " " + row.pasuk + "/" + row.segment);
+    input.value = row[field] ?? "";
+    input.addEventListener("input", () => {
+      row[field] = input.value === "" ? null : Number(input.value);
+      row.reviewed = false; reviewed.checked = false; validate();
+    });
+    tr.insertCell().append(input);
+  }
+  const button = document.createElement("button"); button.textContent = "Play word";
+  const context = document.createElement("button"); context.textContent = "With context";
+  context.addEventListener("click", () => play({startMs: Math.max(0, row.startMs - 350), endMs: Math.min(manifest.durationMs, row.endMs + 350)}));
+  button.addEventListener("click", () => play(row));
+  const listen = tr.insertCell(); listen.append(button, context);
+  reviewed.addEventListener("change", () => { row.reviewed = reviewed.checked; validate(); });
+  tr.insertCell().append(reviewed); document.querySelector("#words").append(tr);
+}
+exportButton.addEventListener("click", () => {
+  validate(); if (exportButton.disabled) return;
+  const blob = new Blob([JSON.stringify({
+    perekId: manifest.perekId, audioSha256: manifest.audioSha256, textSha256: manifest.textSha256, words: rows,
+  }, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob); const link = document.createElement("a");
+  link.href = url; link.download = manifest.perekId + ".reviewed.json"; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
+window.addEventListener("pagehide", () => { stop(); decoded = null; void audioContext?.close(); });
+validate();
+</script>
+</html>

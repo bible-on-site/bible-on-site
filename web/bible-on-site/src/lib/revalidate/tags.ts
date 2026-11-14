@@ -1,0 +1,176 @@
+import { unstable_cache } from "next/cache";
+
+/**
+ * The website-owned cache tag vocabulary for entity-dependent content.
+ *
+ * Two tag granularities exist per cached loader:
+ * - the broad COLLECTION tag (`articles`, `perushim`, …) — the operator
+ *   escape hatch; expiring it invalidates every entry of that family.
+ *   Routine admin events never send these; the dependency resolver emits
+ *   them only as a fallback when a change cannot be resolved precisely.
+ * - entity-scoped tags (`article:5`, `perek:12:articles`, …) — emitted by
+ *   `resolveEntityChanges` so a committed change expires only the data
+ *   and routes that actually consume it.
+ *
+ * Tags collected during a route's render propagate to the route's cache
+ * entry, so expiring `article:5` also invalidates the rendered pages that
+ * consumed it — the data cache and the route cache move together.
+ */
+export const COLLECTION_TAGS = {
+	articles: "articles",
+	authors: "authors",
+	perushim: "perushim",
+	pediaEntityRefs: "tanahpedia-entity-refs",
+	pediaMentionRefs: "tanahpedia-mention-refs",
+	pediaLanding: "tanahpedia-landing",
+	pediaEntries: "tanahpedia-entries",
+	perekImages: "perek-images",
+	/**
+	 * Every cached dedication read — the operator escape hatch and the
+	 * dependency resolver's fallback (#2731). The bookshelf loader also
+	 * carries `dedicationsBookshelf` since it aggregates every scope.
+	 */
+	dedications: "dedications",
+	/** Every cached moed read — catalogue and per-slug detail (#3101). */
+	moadim: "moadim",
+} as const;
+
+/** One moed detail read + the `/מועדים/{slug}` page that collected it. */
+export const moedTag = (slug: string) => `moed:${slug}`;
+
+/** The bookshelf's aggregate helek/sefer dedication view (homepage). */
+export const bookshelfDedicationsTag = "dedications:bookshelf";
+
+/** Dedications matching one perek's context (direct + sefer/helek ancestors). */
+export const perekDedicationsTag = (perekId: number) =>
+	`perek:${perekId}:dedications`;
+
+/** Dedications matching one sefer's context (direct + helek ancestor). */
+export const seferDedicationsTag = (seferId: number) =>
+	`sefer:${seferId}:dedications`;
+
+/** Perek-scoped dedication lines aggregated across one sefer's spreads. */
+export const seferPerekDedicationsTag = (seferId: number) =>
+	`sefer:${seferId}:perek-dedications`;
+
+/** Dedications matching one helek's context. */
+export const helekDedicationsTag = (helekId: number) =>
+	`helek:${helekId}:dedications`;
+
+/** Dedications matching one weekly parasha unit. */
+export const parashaDedicationsTag = (unitId: number) =>
+	`parasha:${unitId}:dedications`;
+
+/** Dedications matching one article (legacy article scope). */
+export const articleDedicationsTag = (articleId: number) =>
+	`article:${articleId}:dedications`;
+
+/** Dedications matching one Tanahpedia entry by canonical entry id. */
+export const entryDedicationsTag = (entryId: string) =>
+	`pedia-entry:${entryId}:dedications`;
+
+/** The single feature-level dedication set of מסורה על הפרק (#2731). */
+export const masoraDedicationsTag = "masora:dedications";
+
+/** Article row `id` — `/929/{perek}/{article}` and anywhere it is embedded. */
+export const articleTag = (articleId: number) => `article:${articleId}`;
+
+/**
+ * Every recurring Hebrew-month/day article assignment (#3098) — one small
+ * collection tag covering all cached date-override reads. The admin
+ * assignment editor emits it directly; `resolveArticle` also emits it for
+ * any article change because an edit can alter the assigned article's
+ * rendered summary.
+ */
+export const articleDateOverridesTag = "article-date-overrides";
+
+/** Article summaries listed on `/929/{perek}` and in its sefer view. */
+export const perekArticlesTag = (perekId: number) =>
+	`perek:${perekId}:articles`;
+
+/** Perush summaries listed on `/929/{perek}` and in its sefer view. */
+export const perekPerushimTag = (perekId: number) =>
+	`perek:${perekId}:perushim`;
+
+/** Full perush detail for `/929/{perek}/{perushName}` views. */
+export const perushDetailTag = (perushId: number, perekId: number) =>
+	`perush:${perushId}:${perekId}`;
+
+/**
+ * Author page data for `/929/authors/{authorParam}` — the param is the
+ * normalised-name slug.
+ */
+export const authorTag = (authorParam: string) => `author:${authorParam}`;
+
+/** The article list of one author (`/929/authors/{param}` body). */
+export const authorArticlesTag = (authorId: number) =>
+	`author:${authorId}:articles`;
+
+/** Range article summaries on a parasha unit page (`torah`/`haftara` scope). */
+export const parashaArticlesTag = (unitId: number, scope: string) =>
+	`parasha:${unitId}:${scope}:articles`;
+
+/** Range perush summaries on a parasha unit page (`torah`/`haftara` scope). */
+export const parashaPerushimTag = (unitId: number, scope: string) =>
+	`parasha:${unitId}:${scope}:perushim`;
+
+/** Range article summaries on a masora unit page. */
+export const masoraArticlesTag = (unitId: number) =>
+	`masora:${unitId}:articles`;
+
+/** Range perush summaries on a masora unit page. */
+export const masoraPerushimTag = (unitId: number) =>
+	`masora:${unitId}:perushim`;
+
+/** Curated tanahpedia entity references rendered inside `/929/{perek}` text. */
+export const entityRefsTag = (perekId: number) =>
+	`perek:${perekId}:entity-refs`;
+
+/** Resolved mention decorations rendered inside `/929/{perek}` text. */
+export const mentionRefsTag = (perekId: number) =>
+	`perek:${perekId}:mention-refs`;
+
+/**
+ * Entries listed under one pedia category (entity type) — the entry-page
+ * sibling dropdown and category listings. Emitted per entity type so an
+ * entry change expires only the categories it belongs to.
+ */
+export const pediaCategoryTag = (entityType: string) =>
+	`pedia-category:${entityType}`;
+
+/**
+ * `unstable_cache` tags are fixed per cache definition, so per-entity
+ * invalidation needs one cached function per entity key. This factory
+ * memoizes a `unstable_cache` instance per key: `keyOf` derives the
+ * entity key (also part of the cache key so entries never collide — the
+ * invocation args ride along in the key as well) and `tagsFor` returns
+ * its collection + entity tags. A thrown loader error is never cached —
+ * the next call re-runs the loader. By default entries hold no time
+ * bound: every consumer is a fully static route, so a positive
+ * `revalidate` here would propagate to each route's
+ * `initialRevalidateSeconds` and turn the reading surface into ISR;
+ * expiry is event-driven via `revalidateTag` (see
+ * src/lib/dedications/loaders.ts). Pass `revalidate` only for loaders
+ * consumed exclusively by dynamic routes.
+ */
+export function cachedPerKey<A extends unknown[], R>(
+	baseKey: string,
+	keyOf: (...args: A) => string,
+	tagsFor: (key: string) => string[],
+	loader: (...args: A) => Promise<R>,
+	revalidate?: number | false,
+): (...args: A) => Promise<R> {
+	const instances = new Map<string, (...args: A) => Promise<R>>();
+	return (...args: A) => {
+		const key = keyOf(...args);
+		let fn = instances.get(key);
+		if (!fn) {
+			fn = unstable_cache((...a: A) => loader(...a), [baseKey, key], {
+				tags: tagsFor(key),
+				revalidate: revalidate ?? false,
+			});
+			instances.set(key, fn);
+		}
+		return fn(...args);
+	};
+}

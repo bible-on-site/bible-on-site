@@ -1,0 +1,331 @@
+import type { Pasuk } from "@/data/db/tanah-view-types";
+import type { ScriptureRange } from "./reading/contract";
+import { rangesPerekSlices } from "./reading/ranges";
+
+export interface RecitationWord {
+	pasuk: number;
+	segment: number;
+	text: string;
+	startMs: number;
+	endMs: number;
+}
+
+export interface AlignmentWord
+	extends Omit<RecitationWord, "startMs" | "endMs"> {
+	startMs: number | null;
+	endMs: number | null;
+}
+
+/** Intervals are ordered and nonoverlapping; silence has no active word. */
+export function wordAtPosition(
+	words: RecitationWord[],
+	milliseconds: number | null,
+): RecitationWord | null {
+	if (milliseconds === null || !Number.isFinite(milliseconds)) return null;
+	let low = 0;
+	let high = words.length;
+	while (low < high) {
+		const middle = (low + high) >>> 1;
+		if (words[middle].startMs <= milliseconds) low = middle + 1;
+		else high = middle;
+	}
+	const word = words[low - 1];
+	return word && milliseconds < word.endMs ? word : null;
+}
+
+export interface Recitation {
+	version: 1;
+	perekId: number;
+	audioUrl: string;
+	audioSha256: string;
+	textSha256: string;
+	durationMs: number;
+	alignmentStatus: "pending" | "needs_review" | "ready";
+	words: AlignmentWord[];
+	playback?: {
+		format: "ogg-opus";
+		bitrate: number;
+		audioUrl: string;
+		audioSha256: string;
+	};
+}
+
+function validAudioUrl(value: string, perekId: number) {
+	try {
+		const url = new URL(value);
+		return (
+			(url.protocol === "https:" ||
+				(url.protocol === "http:" &&
+					["localhost", "127.0.0.1"].includes(url.hostname))) &&
+			!url.username &&
+			!url.password &&
+			!url.search &&
+			!url.hash &&
+			url.pathname.endsWith(`/recordings/${perekId}_record.mp3`)
+		);
+	} catch {
+		return false;
+	}
+}
+
+/** Every spoken canonical segment must occur exactly once, even while pending. */
+export function parseRecitation(
+	value: unknown,
+	perekId: number,
+	pesukim: Pasuk[],
+): Recitation {
+	const data = value as Recitation;
+	if (data?.playback) {
+		const playback = data.playback;
+		if (
+			playback.format !== "ogg-opus" ||
+			playback.bitrate !== 24000 ||
+			!/^[a-f0-9]{64}$/.test(playback.audioSha256) ||
+			!validAudioUrl(
+				playback.audioUrl.replace(
+					`/recordings/opus-24k/${playback.audioSha256}.ogg`,
+					`/recordings/${perekId}_record.mp3`,
+				),
+				perekId,
+			) ||
+			!playback.audioUrl.endsWith(
+				`/recordings/opus-24k/${playback.audioSha256}.ogg`,
+			)
+		)
+			throw new Error("Invalid derived playback metadata");
+	}
+	if (
+		data?.version !== 1 ||
+		typeof data.audioSha256 !== "string" ||
+		!/^[a-f0-9]{64}$/.test(data.audioSha256) ||
+		typeof data.textSha256 !== "string" ||
+		!/^[a-f0-9]{64}$/.test(data.textSha256) ||
+		data.perekId !== perekId ||
+		!Number.isSafeInteger(data.durationMs) ||
+		data.durationMs <= 0 ||
+		!Array.isArray(data.words) ||
+		!["pending", "needs_review", "ready"].includes(data.alignmentStatus) ||
+		typeof data.audioUrl !== "string" ||
+		!validAudioUrl(data.audioUrl, perekId)
+	)
+		throw new Error("Invalid recitation manifest");
+	const expected = pesukim.flatMap((verse, p) =>
+		verse.segments.flatMap((segment, s) =>
+			segment.type === "qri" && /[א-ת]/.test(segment.value)
+				? [{ pasuk: p + 1, segment: s + 1, text: segment.value }]
+				: [],
+		),
+	);
+	if (data.words.length !== expected.length)
+		throw new Error("Incomplete recitation chapter");
+	let previousEnd = 0;
+	for (const [index, word] of data.words.entries()) {
+		const source = expected[index];
+		if (
+			!word ||
+			word.pasuk !== source.pasuk ||
+			word.segment !== source.segment ||
+			word.text !== source.text
+		)
+			throw new Error("Recitation must preserve every canonical word in order");
+		if (
+			word.startMs === null &&
+			word.endMs === null &&
+			data.alignmentStatus !== "ready"
+		)
+			continue;
+		if (
+			typeof word.startMs !== "number" ||
+			typeof word.endMs !== "number" ||
+			!Number.isSafeInteger(word.startMs) ||
+			!Number.isSafeInteger(word.endMs) ||
+			word.startMs < 0 ||
+			word.endMs <= word.startMs ||
+			word.endMs > data.durationMs ||
+			(data.alignmentStatus === "ready" && word.startMs < previousEnd)
+		)
+			throw new Error("Invalid recitation word timing");
+		previousEnd = word.endMs;
+	}
+	return data;
+}
+
+/** Candidates may be inspected, but only a fully accepted chapter is playable. */
+export function playableWords(data: Recitation | null): RecitationWord[] {
+	return data?.alignmentStatus === "ready"
+		? (data.words as RecitationWord[])
+		: [];
+}
+
+export function verseRange(words: RecitationWord[], pasuk: number) {
+	const verse = words.filter((word) => word.pasuk === pasuk);
+	return verse.length
+		? { startMs: verse[0].startMs, endMs: verse[verse.length - 1].endMs }
+		: null;
+}
+
+/**
+ * Pasuk ranges covering the whole perek. A tapped-word resume point trims the
+ * containing pasuk's range so continuous playback starts at that word and runs
+ * through the rest of the perek.
+ */
+export function resumeRanges(
+	words: RecitationWord[],
+	fromMs: number | null,
+): { startMs: number; endMs: number }[] {
+	const ranges = [...new Set(words.map((word) => word.pasuk))].map(
+		(pasuk) => verseRange(words, pasuk) as { startMs: number; endMs: number },
+	);
+	if (fromMs === null) return ranges;
+	const index = ranges.findIndex(
+		(range) => fromMs >= range.startMs && fromMs < range.endMs,
+	);
+	return index < 0
+		? ranges
+		: [
+				{ startMs: fromMs, endMs: ranges[index].endMs },
+				...ranges.slice(index + 1),
+			];
+}
+
+/**
+ * One recording's share of an ordered reading plan: the audio intervals
+ * a single perek contributes to a `ScriptureRange[]` reading. Pieces
+ * follow declared range order, so a Haftarah jumping perek A→B→A keeps
+ * two separate A pieces — playback never reorders or fills text.
+ */
+export interface RecitationPlaybackPiece {
+	perekId: number;
+	/** Pasuk-granular recording intervals in declared reading order; the
+	 * pasuk tag distinguishes repeated copies of one verse, which share
+	 * the same recording timestamps. */
+	intervals: { startMs: number; endMs: number; pasuk: number }[];
+}
+
+/**
+ * Maps an ordered range list to per-perek audio intervals over aligned
+ * recitation words. Each included pasuk produces one interval (first
+ * included word's start → last included word's end), so verse-pause
+ * gaps and tapped-word resume keep pasuk granularity; a range bound
+ * cutting mid-pasuk clips to the included segments' words. Perakim
+ * without a manifest are skipped — a partially recorded reading still
+ * plays its recorded pieces in order.
+ */
+export function rangePlaybackPieces(
+	ranges: ScriptureRange[],
+	pasukCount: (perekId: number) => number,
+	wordsByPerek: ReadonlyMap<number, RecitationWord[]>,
+): RecitationPlaybackPiece[] {
+	const pieces: RecitationPlaybackPiece[] = [];
+	for (const slice of rangesPerekSlices(ranges, pasukCount)) {
+		const words = wordsByPerek.get(slice.perekId);
+		if (!words?.length) continue;
+		const intervals: { startMs: number; endMs: number; pasuk: number }[] = [];
+		for (let pasuk = slice.startPasuk; pasuk <= slice.endPasuk; pasuk++) {
+			const segmentStart =
+				pasuk === slice.startPasuk ? (slice.startSegmentIndex ?? 0) : 0;
+			const segmentEnd =
+				pasuk === slice.endPasuk
+					? (slice.endSegmentIndex ?? Number.MAX_SAFE_INTEGER)
+					: Number.MAX_SAFE_INTEGER;
+			// Recitation segments are 1-based into the pasuk's segment list;
+			// range bounds carry the same 0-based indices UnitTextBody clips by.
+			const included = words.filter(
+				(word) =>
+					word.pasuk === pasuk &&
+					word.segment - 1 >= segmentStart &&
+					word.segment - 1 <= segmentEnd,
+			);
+			if (included.length === 0) continue;
+			intervals.push({
+				startMs: included[0].startMs,
+				endMs: included[included.length - 1].endMs,
+				pasuk,
+			});
+		}
+		if (intervals.length === 0) continue;
+		const last = pieces[pieces.length - 1];
+		if (last && last.perekId === slice.perekId) {
+			last.intervals.push(...intervals);
+		} else {
+			pieces.push({ perekId: slice.perekId, intervals });
+		}
+	}
+	return pieces;
+}
+
+/** One interval inside the plan — where a tapped copy lives. */
+export interface RecitationPlaybackSpot {
+	pieceIndex: number;
+	intervalIndex: number;
+}
+
+/**
+ * Locates the interval a tapped word belongs to: the `occurrence`-th
+ * interval carrying its pasuk on `perekId`, in declared plan order. A
+ * reading may legitimately repeat a passage (a concluding verse read
+ * twice), and then several intervals share the same perek and
+ * timestamps — rendered copies count the same ordinals in slice order,
+ * so the tapped copy's ordinal selects its exact interval instead of
+ * always landing on the first identical one. `startMs` identifies the
+ * pasuk (an interval containing it); out-of-range ordinals fall back
+ * to the first containing interval.
+ */
+export function pieceSpotContaining(
+	pieces: RecitationPlaybackPiece[],
+	perekId: number,
+	startMs: number,
+	occurrence = 0,
+): RecitationPlaybackSpot | null {
+	let pasuk: number | null = null;
+	let first: RecitationPlaybackSpot | null = null;
+	for (let i = 0; i < pieces.length; i++) {
+		const piece = pieces[i];
+		if (piece.perekId !== perekId) continue;
+		for (let j = 0; j < piece.intervals.length; j++) {
+			const range = piece.intervals[j];
+			if (startMs < range.startMs || startMs >= range.endMs) continue;
+			pasuk = range.pasuk;
+			first ??= { pieceIndex: i, intervalIndex: j };
+		}
+	}
+	if (pasuk === null) return null;
+	let seen = 0;
+	for (let i = 0; i < pieces.length; i++) {
+		const piece = pieces[i];
+		if (piece.perekId !== perekId) continue;
+		for (let j = 0; j < piece.intervals.length; j++) {
+			if (piece.intervals[j].pasuk !== pasuk) continue;
+			if (seen === occurrence) return { pieceIndex: i, intervalIndex: j };
+			seen++;
+		}
+	}
+	return first;
+}
+
+/**
+ * Trims a piece list so continuous range playback resumes at a tapped
+ * word's recording position: the bookmarked interval is cut at fromMs
+ * (like `resumeRanges` for one perek), earlier intervals in its piece
+ * and every earlier piece drop away, leaving the declared order from
+ * the bookmark forward. The explicit `intervalIndex` matters for
+ * repeated pesukim — identical adjacent intervals make any first-match
+ * lookup land on the wrong copy.
+ */
+export function resumePieces(
+	pieces: RecitationPlaybackPiece[],
+	pieceIndex: number,
+	intervalIndex: number,
+	fromMs: number,
+): RecitationPlaybackPiece[] {
+	const piece = pieces[pieceIndex];
+	/* istanbul ignore next: callers only bookmark indices inside the plan */
+	if (!piece) return pieces;
+	const interval = piece.intervals[intervalIndex];
+	const remaining = piece.intervals.slice(intervalIndex);
+	if (interval && fromMs > interval.startMs && fromMs < interval.endMs)
+		remaining[0] = { ...interval, startMs: fromMs };
+	return remaining.length
+		? [{ ...piece, intervals: remaining }, ...pieces.slice(pieceIndex + 1)]
+		: pieces.slice(pieceIndex + 1);
+}

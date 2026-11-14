@@ -13,10 +13,22 @@ pub struct Model {
     pub priority: i8,
     #[sea_orm(column_type = "Text", nullable)]
     pub content: Option<String>,
+    /// TRUE: covering-source rows are the verified verse-level coverage.
+    /// FALSE: coverage unknown — consumers use the primary perek only.
+    pub coverage_verified: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(has_many = "super::article_covering_source::Entity")]
+    ArticleCoveringSource,
+}
+
+impl Related<super::article_covering_source::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ArticleCoveringSource.def()
+    }
+}
 
 #[async_trait::async_trait]
 impl ActiveModelBehavior for ActiveModel {

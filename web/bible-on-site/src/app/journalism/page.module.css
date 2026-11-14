@@ -8,14 +8,14 @@
 .pageTitle {
   font-size: 1.75rem;
   font-weight: 700;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0 0 8px 0;
   text-align: center;
 }
 
 .pageSubtitle {
   font-size: 1rem;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   margin: 0 0 32px 0;
   text-align: center;
 }
@@ -30,7 +30,7 @@
   display: block;
   break-inside: avoid;
   margin-bottom: 24px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   background: #fff;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -39,9 +39,11 @@
   position: relative;
 }
 
-.masonryItem:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+@media (hover: hover) {
+  .masonryItem:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  }
 }
 
 .itemImage {
@@ -78,17 +80,19 @@
 .backLink {
   display: inline-block;
   padding: 12px 32px;
-  background: #1c2c5d;
+  background: var(--accent-900);
   color: #fff;
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-size: 0.95rem;
   transition: all 0.2s ease;
 }
 
-.backLink:hover {
-  background: #2a3d7a;
-  transform: translateY(-2px);
+@media (hover: hover) {
+  .backLink:hover {
+    background: #2a3d7a;
+    transform: translateY(-2px);
+  }
 }
 
 /* Masonry items as buttons */
@@ -127,7 +131,7 @@
   width: auto;
   height: auto;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
@@ -140,7 +144,7 @@
   border-radius: 50%;
   border: none;
   background: #fff;
-  color: #1c2c5d;
+  color: var(--accent-900);
   font-size: 1.2rem;
   font-weight: 700;
   cursor: pointer;
@@ -152,8 +156,10 @@
   z-index: 1;
 }
 
-.modalClose:hover {
-  transform: scale(1.1);
+@media (hover: hover) {
+  .modalClose:hover {
+    transform: scale(1.1);
+  }
 }
 
 .modalNav {
@@ -176,8 +182,10 @@
   line-height: 1;
 }
 
-.modalNav:hover {
-  background: rgba(255, 255, 255, 0.3);
+@media (hover: hover) {
+  .modalNav:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
 }
 
 .modalNavPrev {
@@ -228,4 +236,35 @@
     height: 36px;
     font-size: 1rem;
   }
+}
+
+@media (prefers-color-scheme: dark) {
+  .pageTitle {
+    color: var(--accent-200);
+  }
+
+  .pageSubtitle {
+    color: var(--muted-text, #9aa0a6);
+  }
+
+  .masonryItem {
+    background: #1a1f2e;
+  }
+
+  .backLink {
+    background: var(--accent-200);
+    color: #16213d;
+  }
+
+  @media (hover: hover) {
+    .backLink:hover {
+      background: #c7d2fe;
+    }
+  }
+}
+
+.masonryItem:active,
+.modalClose:active,
+.modalNav:active {
+  scale: var(--press-scale);
 }

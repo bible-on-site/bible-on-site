@@ -1,0 +1,786 @@
+import type {
+	ScriptureCoordinate,
+	ScriptureRange,
+} from "@/lib/reading/contract";
+import { canonicalPasukCount } from "@/lib/reading/queries";
+import {
+	compareCoordinates,
+	rangeContainsCoordinate,
+} from "@/lib/reading/ranges";
+import aliyotData from "./parasha-aliyot.json";
+import {
+	getAllParashaUnits,
+	getParashaUnitById,
+	rangesRefSpans,
+} from "./parasha-units";
+
+/**
+ * Aliyah boundaries for the פרשה division (issue #2519).
+ *
+ * Aliyot are a *boundary layer* over the parasha division, not a reading
+ * division of their own: a reading context (one standalone parasha, or a
+ * named joined pair read together) selects a boundary set, and a named
+ * scheme (שבת — seven aliyot plus מפטיר, or weekday קריאת הציבור) selects
+ * the split inside it. Joined readings keep their constituent parasha
+ * identities (`unitIds`) — a join never merges units.
+ *
+ * The source table (parasha-aliyot.json) is curated data imported by
+ * `devops/import-parasha-aliyot.mjs` from hebcal-leyning's verified
+ * boundary list (BSD-2-Clause), enriched with documented minhag
+ * alternatives derived from OpenTorah's custom-marked day table
+ * (Apache-2.0; provenance + cross-source audit in
+ * docs/data/aliyah-sources.md). Like the parasha division itself,
+ * references resolve to canonical perekId/pasuk coordinates and are
+ * validated against the corpus at module load — impossible endpoints
+ * fail the build.
+ */
+
+export type AliyahRole = "aliyah" | "maftir";
+
+/**
+ * A documented alternative division of one aliyah — a different
+ * minhag's boundary for the same stretch (e.g. חב"ד's ויגש, עדות
+ * המזרח's מסעי). `custom` names the tradition when the source
+ * attributes one; an absent custom is an unattributed recorded split.
+ */
+export interface AliyahAlternative {
+	range: ScriptureRange;
+	custom?: string;
+	/** Which curated source records this division (hebcal / opentorah) —
+	 * the importer always stamps one (drift-checked in tests). */
+	source: string;
+}
+
+/** A single aliyah boundary resolved to canonical coordinates. */
+export interface AliyahBoundary {
+	/** 1..7 for regular aliyot, 8 for maftir. */
+	ordinal: number;
+	role: AliyahRole;
+	/** Hebrew label — ראשון…שביעי, מפטיר. */
+	label: string;
+	range: ScriptureRange;
+	/** Documented alternative divisions of this aliyah, when any. */
+	alternatives?: AliyahAlternative[];
+}
+
+/** A named boundary scheme/custom (e.g. Shabbat vs weekday splits). */
+export interface AliyahScheme {
+	id: string;
+	label: string;
+	description: string;
+}
+
+/**
+ * A named alternative division inside one scheme — a documented
+ * minhag's re-slicing of a contiguous stretch of aliyot (e.g. חב"ד's
+ * ויגש עליות ג-ה). The variant substitutes its recorded alternative
+ * range for each covered ordinal inside an otherwise-base boundary
+ * list, re-validated for ordered contiguous coverage like the base
+ * scheme itself.
+ */
+export interface AliyahVariant {
+	/** Marker-key/URL id — the attributed custom (חב"ד, עדות המזרח,
+	 * אשכנז), or `alt-{source}` for an unattributed recorded split. */
+	id: string;
+	/** Display label — the custom's name, or "חלוקה אחרת". */
+	label: string;
+	/** Ordinals re-sliced by the variant, in scheme order. */
+	ordinals: number[];
+	/** Full boundary list — base boundaries outside the stretch,
+	 * alternative ranges inside. */
+	boundaries: AliyahBoundary[];
+}
+
+/**
+ * A reading context: the stable identity a boundary set belongs to.
+ * Standalone contexts hold exactly one parasha unit; joined contexts
+ * hold their two constituents in reading order.
+ */
+export interface ParashaAliyahReading {
+	id: string;
+	kind: "standalone" | "joined";
+	/** Constituent parasha unit ids in reading order (1 standalone, 2 joined). */
+	unitIds: number[];
+	/** Constituent parasha names in reading order. */
+	unitNames: string[];
+	seferName: string;
+	/** Where this context applies — e.g. חוקת-בלק joins only in חוץ
+	 * לארץ. Undefined means the context applies everywhere. */
+	applicability?: string;
+	/** scheme id → ordered boundaries (validated at load). */
+	schemes: Record<string, AliyahBoundary[]>;
+	/** scheme id → named alternative divisions of that scheme whose
+	 * substitution actually moves a boundary marker. Variants that only
+	 * shift a trailing edge (e.g. a weekday last-aliyah end) render
+	 * identically to the base and are not listed. */
+	schemeVariants: Record<string, AliyahVariant[]>;
+}
+
+interface SourceVerse {
+	perek: number;
+	pasuk: number;
+}
+
+interface SourceAliyah {
+	ordinal: number;
+	role: AliyahRole;
+	label: string;
+	start: SourceVerse;
+	end: SourceVerse;
+	alternatives?: {
+		start: SourceVerse;
+		end: SourceVerse;
+		custom?: string;
+		source: string;
+	}[];
+}
+
+interface SourceReading {
+	id: string;
+	units: string[];
+	sefer: string;
+	applicability?: string;
+	schemes: Record<string, SourceAliyah[]>;
+}
+
+interface SourceAliyot {
+	version: number;
+	provenance: {
+		name: string;
+		repository: string;
+		license: string;
+		commit: string;
+		retrieved: string;
+		notes: string[];
+	};
+	schemes: AliyahScheme[];
+	readings: SourceReading[];
+}
+
+const source = aliyotData as unknown as SourceAliyot;
+
+export const ALIYAH_SCHEMES: AliyahScheme[] = source.schemes;
+export const ALIYAH_PROVENANCE = source.provenance;
+
+/** Default scheme for the flat parasha page — the Shabbat seven. */
+export const DEFAULT_ALIYAH_SCHEME = "shabbat";
+
+function resolveReadingAliyah(
+	reading: SourceReading,
+	schemeId: string,
+	aliyah: SourceAliyah,
+): AliyahBoundary {
+	// Every aliyah lives inside the reading's own sefer (joined pairs are
+	// always same-sefer); resolve (perek, pasuk) through the shared
+	// perekFrom mapping used by the parasha units themselves.
+	const range = resolveRange(
+		{ start: aliyah.start, end: aliyah.end },
+		reading,
+		schemeId,
+	);
+	return {
+		ordinal: aliyah.ordinal,
+		role: aliyah.role,
+		label: aliyah.label,
+		range,
+		...(aliyah.alternatives
+			? {
+					alternatives: aliyah.alternatives.map((alternative) => ({
+						range: resolveRange(alternative, reading, schemeId),
+						...(alternative.custom ? { custom: alternative.custom } : {}),
+						source: alternative.source,
+					})),
+				}
+			: {}),
+	};
+}
+
+function resolveRange(
+	range: { start: SourceVerse; end: SourceVerse },
+	reading: SourceReading,
+	schemeId: string,
+): ScriptureRange {
+	const start = resolveVerse(reading.sefer, range.start, reading.id, schemeId);
+	const end = resolveVerse(reading.sefer, range.end, reading.id, schemeId);
+	/* istanbul ignore next -- load-time validation: only fires on corrupt vendored data (drift-checked) */
+	if (compareCoordinates(start, end, "end") > 0) {
+		throw new Error(
+			`aliyah data: backwards range in ${reading.id}/${schemeId} ` +
+				`${range.start.perek}:${range.start.pasuk}-${range.end.perek}:${range.end.pasuk}`,
+		);
+	}
+	return { start, end };
+}
+
+/** Canonical coordinate for a (sefer-relative) perek/pasuk reference. */
+function resolveVerse(
+	seferName: string,
+	ref: SourceVerse,
+	readingId: string,
+	schemeId: string,
+): ScriptureCoordinate {
+	const sefer = seferPerekSpan(seferName);
+	const perekId = sefer.perekFrom + ref.perek - 1;
+	const display = `${seferName} ${ref.perek}:${ref.pasuk} (${readingId}/${schemeId})`;
+	/* istanbul ignore next -- load-time validation: only fires on corrupt vendored data (drift-checked) */
+	if (perekId > sefer.perekTo || perekId < sefer.perekFrom) {
+		throw new Error(`aliyah data: ${display} exceeds ${seferName}'s perakim`);
+	}
+	const pasukCount = canonicalPasukCountFor(perekId);
+	/* istanbul ignore next -- load-time validation: only fires on corrupt vendored data (drift-checked) */
+	if (ref.pasuk < 1 || ref.pasuk > pasukCount) {
+		throw new Error(
+			`aliyah data: ${display} is outside the canonical ${pasukCount} pesukim`,
+		);
+	}
+	return { perekId, pasuk: ref.pasuk };
+}
+
+let seferSpanCache: Map<string, { perekFrom: number; perekTo: number }> | null =
+	null;
+
+/**
+ * Sefer → canonical perek span, derived from the resolved parasha units
+ * (the units of a sefer already carry contiguous canonical ranges whose
+ * union is the Torah portion of that sefer). This deliberately reuses
+ * the same resolution the parasha ranges pass through, instead of
+ * duplicating the sefer→perekFrom table.
+ */
+function seferPerekSpan(seferName: string): {
+	perekFrom: number;
+	perekTo: number;
+} {
+	if (!seferSpanCache) {
+		seferSpanCache = new Map();
+		// Units per sefer are ordered and contiguous; first unit's start
+		// and last unit's end bound the sefer's Torah span.
+		for (const unit of getAllParashaUnits()) {
+			const span = seferSpanCache.get(unit.seferName);
+			const start = unit.ranges[0].start.perekId;
+			const end = unit.ranges[0].end.perekId;
+			if (!span) {
+				seferSpanCache.set(unit.seferName, { perekFrom: start, perekTo: end });
+			} else {
+				span.perekFrom = Math.min(span.perekFrom, start);
+				span.perekTo = Math.max(span.perekTo, end);
+			}
+		}
+	}
+	const span = seferSpanCache.get(seferName);
+	/* istanbul ignore next -- defensive: callers pass only sefer names present in the vendored data */
+	if (!span) throw new Error(`aliyah data: unknown sefer "${seferName}"`);
+	return span;
+}
+
+function canonicalPasukCountFor(perekId: number): number {
+	return canonicalPasukCount(perekId);
+}
+
+let unitIdByName: Map<string, number> | null = null;
+
+function unitIdForName(name: string, readingId: string): number {
+	if (!unitIdByName) {
+		unitIdByName = new Map(
+			getAllParashaUnits().map((unit) => [unit.heading, unit.unitId]),
+		);
+	}
+	const unitId = unitIdByName.get(name);
+	/* istanbul ignore next -- load-time validation: only fires on corrupt vendored data (drift-checked) */
+	if (!unitId) {
+		throw new Error(
+			`aliyah data: ${readingId} references unknown parasha "${name}"`,
+		);
+	}
+	return unitId;
+}
+
+function validateScheme(
+	reading: SourceReading,
+	schemeId: string,
+	boundaries: AliyahBoundary[],
+): void {
+	const first = boundaries[0];
+	const last = boundaries[boundaries.length - 1];
+	/* istanbul ignore next -- load-time validation: only fires on corrupt vendored data (drift-checked) */
+	if (!first || !last) {
+		throw new Error(`aliyah data: ${reading.id}/${schemeId} is empty`);
+	}
+	const regular = boundaries.filter((b) => b.role === "aliyah");
+	for (let i = 1; i < regular.length; i++) {
+		const prev = regular[i - 1];
+		const curr = regular[i];
+		/* istanbul ignore next -- load-time validation: only fires on corrupt vendored data (drift-checked) */
+		if (curr.ordinal !== prev.ordinal + 1) {
+			throw new Error(
+				`aliyah data: ${reading.id}/${schemeId} ordinals gap at ${prev.ordinal}→${curr.ordinal}`,
+			);
+		}
+		// Ordered coverage: each regular aliyah starts exactly where the
+		// previous ended — next pasuk, or pasuk 1 of the next perek when
+		// the previous ended on that perek's last pasuk. Anything else is
+		// a hole or an overlap. Maftir intentionally repeats the tail, so
+		// it is excluded here.
+		const prevEnd = prev.range.end;
+		const currStart = curr.range.start;
+		const contiguous =
+			(currStart.perekId === prevEnd.perekId &&
+				currStart.pasuk === prevEnd.pasuk + 1) ||
+			(currStart.perekId === prevEnd.perekId + 1 &&
+				currStart.pasuk === 1 &&
+				prevEnd.pasuk === canonicalPasukCountFor(prevEnd.perekId));
+		/* istanbul ignore next -- load-time validation: only fires on corrupt vendored data (drift-checked) */
+		if (!contiguous) {
+			throw new Error(
+				`aliyah data: ${reading.id}/${schemeId} gap or overlap between aliyot ${prev.ordinal} and ${curr.ordinal}`,
+			);
+		}
+	}
+}
+
+/** Display label for an unattributed recorded split (no named minhag). */
+const UNATTRIBUTED_VARIANT_LABEL = "חלוקה אחרת";
+
+/**
+ * Folds a scheme's documented per-aliyah `alternatives` into named
+ * variant layers. Each distinct (custom | alt-source) group forms one
+ * variant: its recorded ranges replace the covered ordinals' ranges
+ * inside an otherwise-base boundary list, then the substituted layer
+ * is re-validated for ordered contiguous coverage — a variant is a
+ * full legitimate split, never a partial overlay.
+ *
+ * Variants whose substitution moves no boundary *start* are dropped:
+ * the readers display start markers only, so an alternative that
+ * merely shifts a trailing edge (e.g. a weekday last aliyah's end)
+ * would render pixel-identically to the base.
+ */
+function deriveSchemeVariants(
+	reading: SourceReading,
+	schemeId: string,
+	boundaries: AliyahBoundary[],
+): AliyahVariant[] {
+	const groups = new Map<
+		string,
+		{ label: string; byOrdinal: Map<number, ScriptureRange> }
+	>();
+	for (const boundary of boundaries) {
+		for (const alternative of boundary.alternatives ?? []) {
+			const id = alternative.custom ?? `alt-${alternative.source}`;
+			let group = groups.get(id);
+			if (!group) {
+				group = {
+					label: alternative.custom ?? UNATTRIBUTED_VARIANT_LABEL,
+					byOrdinal: new Map(),
+				};
+				groups.set(id, group);
+			}
+			/* istanbul ignore next -- load-time validation: only fires on corrupt vendored data (drift-checked) */
+			if (group.byOrdinal.has(boundary.ordinal)) {
+				throw new Error(
+					`aliyah data: ${reading.id}/${schemeId} has two "${id}" ` +
+						`alternatives on aliyah ${boundary.ordinal}`,
+				);
+			}
+			group.byOrdinal.set(boundary.ordinal, alternative.range);
+		}
+	}
+	const variants: AliyahVariant[] = [];
+	for (const [id, group] of groups) {
+		const substituted = boundaries.map((boundary) => {
+			const range = group.byOrdinal.get(boundary.ordinal);
+			return range
+				? {
+						ordinal: boundary.ordinal,
+						role: boundary.role,
+						label: boundary.label,
+						range,
+					}
+				: boundary;
+		});
+		validateScheme(reading, `${schemeId}/${id}`, substituted);
+		const movesMarker = substituted.some(
+			(boundary, index) =>
+				boundary.range.start.perekId !==
+					boundaries[index].range.start.perekId ||
+				boundary.range.start.pasuk !== boundaries[index].range.start.pasuk,
+		);
+		if (!movesMarker) continue;
+		variants.push({
+			id,
+			label: group.label,
+			ordinals: [...group.byOrdinal.keys()],
+			boundaries: substituted,
+		});
+	}
+	return variants;
+}
+
+interface ResolvedAliyot {
+	readings: ParashaAliyahReading[];
+	byId: Map<string, ParashaAliyahReading>;
+	byUnitId: Map<
+		number,
+		{ standalone?: ParashaAliyahReading; joined: ParashaAliyahReading[] }
+	>;
+}
+
+let resolvedAliyot: ResolvedAliyot | null = null;
+
+function resolved(): ResolvedAliyot {
+	if (resolvedAliyot) return resolvedAliyot;
+	const readings: ParashaAliyahReading[] = [];
+	const byId = new Map<string, ParashaAliyahReading>();
+	const byUnitId = new Map<
+		number,
+		{ standalone?: ParashaAliyahReading; joined: ParashaAliyahReading[] }
+	>();
+
+	for (const reading of source.readings) {
+		const unitIds = reading.units.map((name) =>
+			unitIdForName(name, reading.id),
+		);
+		const schemes: Record<string, AliyahBoundary[]> = {};
+		const schemeVariants: Record<string, AliyahVariant[]> = {};
+		for (const [schemeId, aliyot] of Object.entries(reading.schemes)) {
+			const boundaries = aliyot.map((a) =>
+				resolveReadingAliyah(reading, schemeId, a),
+			);
+			validateScheme(reading, schemeId, boundaries);
+			schemes[schemeId] = boundaries;
+			const variants = deriveSchemeVariants(reading, schemeId, boundaries);
+			if (variants.length > 0) schemeVariants[schemeId] = variants;
+		}
+		const resolvedReading: ParashaAliyahReading = {
+			id: reading.id,
+			kind: unitIds.length > 1 ? "joined" : "standalone",
+			unitIds,
+			unitNames: reading.units,
+			seferName: reading.sefer,
+			...(reading.applicability
+				? { applicability: reading.applicability }
+				: {}),
+			schemes,
+			schemeVariants,
+		};
+		readings.push(resolvedReading);
+		byId.set(resolvedReading.id, resolvedReading);
+		for (const unitId of unitIds) {
+			const bucket: {
+				standalone?: ParashaAliyahReading;
+				joined: ParashaAliyahReading[];
+			} = byUnitId.get(unitId) ?? { joined: [] };
+			if (unitIds.length === 1) bucket.standalone = resolvedReading;
+			else bucket.joined.push(resolvedReading);
+			byUnitId.set(unitId, bucket);
+		}
+	}
+	resolvedAliyot = { readings, byId, byUnitId };
+	return resolvedAliyot;
+}
+
+/** The standalone reading context for a parasha unit. */
+export function getStandaloneReading(unitId: number): ParashaAliyahReading {
+	const found = resolved().byUnitId.get(unitId);
+	if (!found?.standalone) {
+		throw new Error(`aliyah data: no standalone reading for unit ${unitId}`);
+	}
+	return found.standalone;
+}
+
+/**
+ * Joined readings a parasha unit participates in (empty for most). A
+ * unit can only be in one join position, so the list has ≤1 entry today;
+ * the shape stays a list because the contract allows future variants.
+ */
+export function getJoinedReadingsForUnit(
+	unitId: number,
+): ParashaAliyahReading[] {
+	return resolved().byUnitId.get(unitId)?.joined ?? [];
+}
+
+/** A reading context by id (e.g. "Bereshit", "Vayakhel-Pekudei"). */
+export function getParashaReadingById(id: string): ParashaAliyahReading | null {
+	return resolved().byId.get(id) ?? null;
+}
+
+/**
+ * Aliyah boundaries for a reading context + scheme, or null when the
+ * reading does not carry that scheme (joined readings have no weekday
+ * split — weekdays always read the standalone parasha).
+ */
+export function getAliyot(
+	reading: ParashaAliyahReading,
+	schemeId: string = DEFAULT_ALIYAH_SCHEME,
+): AliyahBoundary[] | null {
+	return reading.schemes[schemeId] ?? null;
+}
+
+/**
+ * Start-coordinate → boundary labels lookup for marker rendering. Each
+ * key is `"{perekId}:{pasuk}"`; multiple labels can share a start
+ * (e.g. an aliyah starting where a perek begins is emitted alongside
+ * the perek marker by the caller, not merged).
+ */
+export function aliyahStartMarkers(
+	boundaries: AliyahBoundary[],
+): Map<string, AliyahBoundary> {
+	const map = new Map<string, AliyahBoundary>();
+	for (const boundary of boundaries) {
+		map.set(
+			`${boundary.range.start.perekId}:${boundary.range.start.pasuk}`,
+			boundary,
+		);
+	}
+	return map;
+}
+
+/** Whether a coordinate falls inside any boundary (containment check). */
+export function aliyahContaining(
+	boundaries: AliyahBoundary[],
+	coordinate: ScriptureCoordinate,
+): AliyahBoundary | null {
+	return (
+		boundaries.find((b) => rangeContainsCoordinate(b.range, coordinate)) ?? null
+	);
+}
+
+/* ---- Marker layer for the reading renderer ---- */
+
+/**
+ * Marker category driving its inline styling (issue #3165): the scheme
+ * id for standalone layers (`"shabbat"`/`"weekday"`, open to future
+ * scheme ids), `"joined"` for joined-reading layers, or `"variant"`
+ * for documented custom splits. Categories are distinguished by
+ * typography/border/background — never by color alone.
+ */
+export type AliyahMarkerCategory =
+	| "shabbat"
+	| "weekday"
+	| "joined"
+	| "variant"
+	| (string & {});
+
+/**
+ * A boundary marker rendered inline at a pasuk's start (issue #3165).
+ * `key` identifies the owning `"{readingId}:{schemeId}[:{variantId}]"`
+ * combination — all layers render together at their canonical
+ * positions, and the key doubles as the emphasis hook for the legend's
+ * `?reading=`/`?scheme=`/`?variant=` selection.
+ */
+export interface AliyahMarker {
+	key: string;
+	/** Ordinal label — ראשון…שביעי, מפטיר (joined keeps its numbering). */
+	label: string;
+	role: AliyahRole;
+	/** Short visible tag identifying the layer — the scheme label for
+	 * standalone contexts, the joined reading's names, or the custom's
+	 * label for variants — so coincident markers stay distinguishable. */
+	tag: string;
+	category: AliyahMarkerCategory;
+	/** Richer hover/focus/touch detail and accessible name — context,
+	 * scheme or custom, ordinal, and the aliyah's verse span. */
+	detail: string;
+}
+
+/** One selectable alternative division inside a scheme — a documented
+ * minhag's re-slicing, or an unattributed recorded split. */
+export interface UnitAliyahVariantOption {
+	variantId: string;
+	label: string;
+}
+
+/** One selectable scheme inside a context (שבת / חול). */
+export interface UnitAliyahSchemeOption {
+	schemeId: string;
+	label: string;
+	/** Named alternative divisions of this scheme that move a marker —
+	 * each renders its full substituted layer
+	 * (`{reading}:{scheme}:{variant}`) inline beside the base markers.
+	 * Empty for most schemes. */
+	variants: UnitAliyahVariantOption[];
+}
+
+/** One selectable reading context for a unit page. */
+export interface UnitAliyahContextOption {
+	contextId: string;
+	/** Display label — the standalone "פרשת ויקהל" or joined "ויקהל-פקודי". */
+	label: string;
+	kind: "standalone" | "joined";
+	/** Restricted applicability (e.g. a חוץ לארץ-only join), when any. */
+	applicability?: string;
+	schemes: UnitAliyahSchemeOption[];
+}
+
+/**
+ * Everything a unit page needs to render all boundary markers inline
+ * (issue #3165): the coord-keyed marker map — every applicable layer
+ * merged, all displayed together — the context/scheme options for the
+ * legend, and the default emphasis key.
+ */
+export interface UnitAliyahMarkers {
+	/** `"{perekId}:{pasuk}"` → marker specs at that boundary start, in
+	 * deterministic order (standalone schemes then variants, then
+	 * joined contexts) so coincident boundaries arrange predictably. */
+	markers: Record<string, AliyahMarker[]>;
+	contexts: UnitAliyahContextOption[];
+	/** `"{readingId}:{schemeId}"` emphasized when the URL carries no
+	 * selection — the standalone Shabbat layer. */
+	defaultKey: string;
+}
+
+function contextLabel(reading: ParashaAliyahReading): string {
+	return reading.kind === "standalone"
+		? `פרשת ${reading.unitNames[0]}`
+		: reading.unitNames.join("-");
+}
+
+/** Feminine ordinals for `עלייה N` inside marker detail text. */
+const ALIYAH_ORDINAL_DETAIL = [
+	"ראשונה",
+	"שנייה",
+	"שלישית",
+	"רביעית",
+	"חמישית",
+	"שישית",
+	"שביעית",
+] as const;
+
+/**
+ * Marker detail text (issue #3165): `{context} · קריאת {scheme}
+ * [· מנהג {custom} | · {unattributed}] · {ordinal} ({span})` — e.g.
+ * `פרשת ויגש · קריאת שבת · מנהג חב"ד · עלייה רביעית (בראשית מה כח - מו ז)`.
+ */
+function markerDetail(
+	reading: ParashaAliyahReading,
+	scheme: AliyahScheme,
+	variant: AliyahVariant | null,
+	boundary: AliyahBoundary,
+): string {
+	const context = reading.applicability
+		? `${contextLabel(reading)} (${reading.applicability})`
+		: contextLabel(reading);
+	const custom = variant
+		? variant.id.startsWith("alt-")
+			? ` · ${variant.label}`
+			: ` · מנהג ${variant.label}`
+		: "";
+	const ordinal =
+		boundary.role === "maftir"
+			? "מפטיר"
+			: `עלייה ${ALIYAH_ORDINAL_DETAIL[boundary.ordinal - 1] ?? boundary.label}`;
+	const span = rangesRefSpans([boundary.range]).join(", ");
+	return `${context} · קריאת ${scheme.label}${custom} · ${ordinal} (${span})`;
+}
+
+/**
+ * Marker layer for a parasha unit page: the standalone context always
+ * exists; each joined reading containing the unit adds a joined
+ * context. Joined markers are clipped to boundaries starting inside
+ * the unit's own ranges — a join's later aliyot begin in the second
+ * parasha and can only render on that unit's page. Their labels keep
+ * the joined numbering, so nothing is renumbered or mixed.
+ */
+export function getUnitAliyahMarkers(unitId: number): UnitAliyahMarkers {
+	const unitRanges = getParashaUnitById(unitId).ranges;
+	const markers: Record<string, AliyahMarker[]> = {};
+	const contexts: UnitAliyahContextOption[] = [];
+
+	const addContext = (reading: ParashaAliyahReading, clipToUnit: boolean) => {
+		const schemes: UnitAliyahSchemeOption[] = [];
+		const emitLayer = (
+			layerKey: string,
+			scheme: AliyahScheme,
+			variant: AliyahVariant | null,
+			boundaries: AliyahBoundary[],
+			tag: string,
+			category: AliyahMarkerCategory,
+		): void => {
+			for (const boundary of boundaries) {
+				if (
+					clipToUnit &&
+					!unitRanges.some((range) =>
+						rangeContainsCoordinate(range, boundary.range.start),
+					)
+				) {
+					continue;
+				}
+				const coordKey = `${boundary.range.start.perekId}:${boundary.range.start.pasuk}`;
+				const list = markers[coordKey] ?? [];
+				markers[coordKey] = list;
+				list.push({
+					key: layerKey,
+					label: boundary.label,
+					role: boundary.role,
+					tag,
+					category,
+					detail: markerDetail(reading, scheme, variant, boundary),
+				});
+			}
+		};
+		for (const scheme of ALIYAH_SCHEMES) {
+			const boundaries = reading.schemes[scheme.id];
+			if (!boundaries) continue;
+			const variants = (reading.schemeVariants[scheme.id] ?? []).map(
+				(variant) => ({ variantId: variant.id, label: variant.label }),
+			);
+			schemes.push({ schemeId: scheme.id, label: scheme.label, variants });
+			// Standalone markers tag with the scheme label (שבת/חול);
+			// joined markers tag with the joined reading's names so a
+			// coincident מטות-מסעי marker is distinguishable from מטות's own.
+			const tag =
+				reading.kind === "joined" ? contextLabel(reading) : scheme.label;
+			const category: AliyahMarkerCategory =
+				reading.kind === "joined" ? "joined" : scheme.id;
+			emitLayer(
+				`${reading.id}:${scheme.id}`,
+				scheme,
+				null,
+				boundaries,
+				tag,
+				category,
+			);
+			// Each variant is a complete substituted layer under its own
+			// three-part key — the same clip rules apply (joined contexts
+			// keep only variant boundaries starting inside this unit).
+			for (const variant of reading.schemeVariants[scheme.id] ?? []) {
+				emitLayer(
+					`${reading.id}:${scheme.id}:${variant.id}`,
+					scheme,
+					variant,
+					variant.boundaries,
+					variant.label,
+					"variant",
+				);
+			}
+		}
+		contexts.push({
+			contextId: reading.id,
+			label: reading.applicability
+				? `${contextLabel(reading)} (${reading.applicability})`
+				: contextLabel(reading),
+			kind: reading.kind,
+			...(reading.applicability
+				? { applicability: reading.applicability }
+				: {}),
+			schemes,
+		});
+	};
+
+	const standalone = getStandaloneReading(unitId);
+	addContext(standalone, false);
+	for (const joined of getJoinedReadingsForUnit(unitId)) {
+		addContext(joined, true);
+	}
+	return { markers, contexts, defaultKey: `${standalone.id}:shabbat` };
+}
+
+/**
+ * The book view's marker layers (issue #3165): every applicable
+ * division renders inline — the standalone schemes and customs plus
+ * joined readings clipped to the unit — so the Sefer no longer
+ * silently shows only the standalone Shabbat split.
+ */
+export function getUnitAliyahMarkersForSefer(
+	unitId: number,
+): Record<string, AliyahMarker[]> {
+	return getUnitAliyahMarkers(unitId).markers;
+}

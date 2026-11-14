@@ -1,7 +1,14 @@
 // types.ts
-interface TimeSegment {
-	type: "string";
-	pattern: "^\\d{2}:\\d{2}:\\d{2}$";
+/** HH:MM:SS, with millisecond precision for aligned recitation. */
+type TimeSegment = string;
+
+export interface RecitationRecording {
+	version: 1;
+	audioUrl: string;
+	audioSha256: string;
+	textSha256: string;
+	durationMs: number;
+	alignmentStatus: "pending" | "needs_review" | "ready";
 }
 
 interface Timeframe {
@@ -73,6 +80,7 @@ interface Pasuk {
 }
 
 interface Perek {
+	recitation?: RecitationRecording;
 	header: string;
 	date: number[];
 	star_rise: string[];
@@ -113,17 +121,17 @@ type SefarimItem = SefarimItemWithPerakim | SefarimItemWithAdditionals;
 type Sefarim = SefarimItem[];
 
 export type {
-	TimeSegment,
-	Timeframe,
+	Additionals,
+	AdditionalsItem,
 	KtivSegment,
-	QriSegment,
-	StumaSegment,
-	PtuhaSegment,
-	Segment,
 	Pasuk,
 	Perek,
-	AdditionalsItem,
-	Additionals,
-	SefarimItem,
+	PtuhaSegment,
+	QriSegment,
 	Sefarim,
+	SefarimItem,
+	Segment,
+	StumaSegment,
+	Timeframe,
+	TimeSegment,
 };

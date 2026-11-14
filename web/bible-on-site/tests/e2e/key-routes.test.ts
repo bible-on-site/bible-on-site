@@ -20,6 +20,11 @@ test.describe("Key routes load", () => {
 		await page.goto("/contact");
 		await expect(page.getByRole("heading", { name: "יצירת קשר" })).toBeVisible();
 
+		await page.goto("/לוח");
+		await expect(
+			page.getByRole("heading", { name: "לוח לימוד יומי" }),
+		).toBeVisible();
+
 		await page.goto("/929/1");
 		await expect(page.locator("article").first()).toBeVisible();
 

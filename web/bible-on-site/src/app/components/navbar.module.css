@@ -9,39 +9,32 @@
   transition: all 0.2s;
   cursor: pointer;
   pointer-events: none;
-}
-
-.hamburgerMenu .menuToggle {
-  display: none;
+  z-index: 0;
 }
 
 .menuBtn {
   position: absolute;
-  top: 1.25rem;
-  right: 1.25rem;
-  width: 2rem;
-  height: 2rem;
+  /* 44px hit area; the 2rem bars stay where they were (1.25rem inset). */
+  top: 0.875rem;
+  right: 0.875rem;
+  width: 2.75rem;
+  height: 2.75rem;
   cursor: pointer;
   z-index: 10000;
   background-color: transparent;
   border: 0;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: opacity 0.15s linear;
 }
 
-.hamburgerMenu .menuToggle:checked + .menuBtn {
+.open .menuBtn {
   opacity: 0;
-  transition: opacity 0.15s linear;
 }
 
-.hamburgerMenu .menuToggle:not(:checked) + .menuBtn {
-  opacity: 1;
-  transition: opacity 0.15s linear;
-}
-
-.hamburgerMenu .menuToggle:checked ~ .overlay {
+.open .overlay {
   opacity: 0.3;
   z-index: 10000;
   transition: opacity 0.25s ease-in-out;
@@ -70,28 +63,32 @@
   display: flex;
   flex-direction: column;
   flex: 1;
+  /* The box is fixed to viewport height; items beyond it must scroll. */
+  min-height: 0;
+  overflow-y: auto;
   margin: 0;
-  padding: 0;
+  /* Left room for the ribbon ::after overhang (left: -10px plus its -18deg
+     rotation reach): inside the padding box it creates no horizontal
+     overflow, so no horizontal scrollbar and no clipped sticker. */
+  padding: 0 0 0 16px;
   list-style: none;
 }
 
-.hamburgerMenu .menuToggle:checked ~ .menuBox {
+.open .menuBox {
   right: 0;
   z-index: 10001;
   transition: right 0.25s ease-in-out;
 }
 
-.hamburgerMenu .menuToggle:not(:checked) ~ .overlay {
-  opacity: 0;
-  z-index: 0;
+@media (hover: hover) {
+  .menuBtn:hover {
+    opacity: 0.7;
+  }
 }
 
-.menuBtn:hover {
-  opacity: 0.7;
-}
-
-.menuBtn:focus {
-  outline: none;
+.menuBtn:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 0.375rem;
 }
 
 .menuIcon,
@@ -134,6 +131,10 @@
 .menuItem {
   display: flex;
   flex-wrap: wrap;
+  /* Keep each icon centered on its label's text line: the img has a fixed
+     1em height, so the default stretch can't size it to the taller label
+     line and it would stay pinned to the row's top edge. */
+  align-items: center;
   width: 100%;
 }
 
@@ -142,12 +143,21 @@
   margin: 0.5rem;
 }
 
-/* Ensure menu icons maintain their aspect ratio */
+/* Icons scale with their label's font size and keep their aspect ratio */
 .menuItem img {
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
+  width: 1em;
+  height: 1em;
   object-fit: contain;
+}
+
+/* At least 44px tall to tap. Not flex: 1: a full-row link would reach into
+   Link's 200px prefetch margin while the menu is parked off-screen. */
+.menuItem > a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin-block: 0;
 }
 
 .menuItemLabel {
@@ -173,7 +183,7 @@
   left: -10px;
   top: 50%;
   transform: translateY(-50%) rotate(-18deg);
-  background-color: #1552ac;
+  background-color: var(--accent-600);
   color: white;
   font-size: 0.6rem;
   padding: 2px 6px;
@@ -222,7 +232,7 @@
   border-top: 1px solid rgba(136, 139, 239, 0.29);
   padding: 8px 0 8px 0;
   text-align: center;
-  color: #6b7280;
+  color: var(--muted-text, #6b7280);
   font-size: 0.875rem;
   direction: ltr;
   width: 100%;
@@ -243,4 +253,14 @@
   display: none !important;
   /* biome-ignore lint/complexity/noImportantStyles: TODO: find a way without !important */
   content: none !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .menuBox::before {
+    background: linear-gradient(to right, #000 -100%, #1a1f2e 100%);
+  }
+}
+
+.menuBtn:active {
+  scale: var(--press-scale);
 }

@@ -17,22 +17,40 @@ web/api/docs/migration.md
 actionlint
 test-results/
 
+# Session/PR evidence artifacts — attach to issues and PRs instead of committing
+/evidence/
+/pr-*/
+
 # Rust build artifacts
 **/target/
 
 # Python bytecode cache
 __pycache__/
 
+# Generated eval outputs — the script regenerates them; results live in docs
+web/admin/scripts/link-eval-report.json
+web/admin/scripts/link-eval-runtimes.json
+web/admin/scripts/link-eval-manifest.json
+
 # Raw data files (downloaded/generated locally, except tracked assets)
 app/BibleOnSite/Resources/Raw/*
 !app/BibleOnSite/Resources/Raw/*.sqlite
 !app/BibleOnSite/Resources/Raw/AboutAssets.txt
+!app/BibleOnSite/Resources/Raw/recitation-audio.html
 **/.raw/
 **/.outputs/
+.artifacts/
 app/.artifacts/
+# Nested artifact-storage worktrees (artifacts/* branches holding PR evidence)
+/artifacts-*/
+app/BibleOnSite/Platforms/Android/AssetPacks/recitation_*/
+app/BibleOnSite/Platforms/iOS/AssetPacks/recitation-*/
+app/BibleOnSite/Platforms/Windows/ExtensionPacks/
 data/mysql/tanah_full_dump.sql
 data/mysql/perushim_data.sql
 nul
 
 # QA service (present on qa-bot branch; ignore when untracked on other branches)
 web/qa-service/
+/app/.dev.env.local
+.junit-report/

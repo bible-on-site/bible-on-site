@@ -19,7 +19,7 @@ public class DatabasePopulatorFixture : IAsyncLifetime
     private static string GetDbUrl() =>
         Environment.GetEnvironmentVariable("DB_URL") ?? DefaultTestDbUrl;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         // Populate the test database (idempotent - safe to run multiple times)
         Console.WriteLine("[DatabasePopulatorFixture] Ensuring test database is populated...");
@@ -44,7 +44,7 @@ public class DatabasePopulatorFixture : IAsyncLifetime
         await PopulateDatabase(dataDir);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         // Drop the test database to ensure clean state for next run
         // This helps reproduce CI issues locally
@@ -106,7 +106,8 @@ public class DatabasePopulatorFixture : IAsyncLifetime
 
         if (!completed)
         {
-            try { process.Kill(entireProcessTree: true); } catch { }
+            try { process.Kill(entireProcessTree: true); }
+            catch (Exception ex) { Console.WriteLine($"Warning: Error stopping database drop: {ex.Message}"); }
             Console.WriteLine("[DatabasePopulatorFixture] WARNING: Database drop timed out");
             return;
         }
@@ -135,7 +136,10 @@ public class DatabasePopulatorFixture : IAsyncLifetime
             };
 
             using var process = Process.Start(startInfo);
-            if (process == null) return false;
+            if (process == null)
+            {
+                return false;
+            }
 
             await process.WaitForExitAsync();
             return process.ExitCode == 0;
@@ -193,13 +197,15 @@ public class DatabasePopulatorFixture : IAsyncLifetime
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        // Wait up to 2 minutes for database population
-        var completed = await Task.Run(() => process.WaitForExit(120_000));
+        // An already-populated run still takes ~80s of populator logic, and
+        // cold builds, update checks, or a loaded host stretch it well past 2m.
+        var completed = await Task.Run(() => process.WaitForExit(300_000));
 
         if (!completed)
         {
-            try { process.Kill(entireProcessTree: true); } catch { }
-            throw new TimeoutException("Database population timed out after 2 minutes");
+            try { process.Kill(entireProcessTree: true); }
+            catch (Exception ex) { Console.WriteLine($"Warning: Error stopping database populator: {ex.Message}"); }
+            throw new TimeoutException("Database population timed out after 5 minutes");
         }
 
         if (process.ExitCode != 0)
@@ -221,11 +227,11 @@ public class DatabasePopulatorFixture : IAsyncLifetime
         var dir = new DirectoryInfo(currentDir);
         while (dir != null)
         {
-            var dataPath = Path.Combine(dir.FullName, "data");
+            var dataPath = Path.Join(dir.FullName, "data");
             if (Directory.Exists(dataPath))
             {
                 // Verify it's the right data directory by checking for Makefile.toml
-                var makefileToml = Path.Combine(dataPath, "Makefile.toml");
+                var makefileToml = Path.Join(dataPath, "Makefile.toml");
                 if (File.Exists(makefileToml))
                 {
                     return dataPath;
@@ -233,10 +239,10 @@ public class DatabasePopulatorFixture : IAsyncLifetime
             }
 
             // Also check if we're in the repo root (has bible-on-site.slnx)
-            var slnPath = Path.Combine(dir.FullName, "bible-on-site.slnx");
+            var slnPath = Path.Join(dir.FullName, "bible-on-site.slnx");
             if (File.Exists(slnPath))
             {
-                var dataPath2 = Path.Combine(dir.FullName, "data");
+                var dataPath2 = Path.Join(dir.FullName, "data");
                 if (Directory.Exists(dataPath2))
                 {
                     return dataPath2;

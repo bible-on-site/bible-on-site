@@ -63,6 +63,22 @@ describe("ShareButton", () => {
 		expect(screen.getByText("הועתק!")).toBeTruthy();
 	});
 
+	it("reports a failure when the clipboard write is rejected", async () => {
+		const writeText = jest.fn().mockRejectedValue(new Error("denied"));
+		Object.assign(navigator, {
+			clipboard: { writeText },
+			share: undefined,
+		});
+
+		render(<ShareButton canonicalPath="/929/1/1" />);
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole("link", { name: "שיתוף" }));
+		});
+
+		expect(screen.getByText("השיתוף נכשל")).toBeTruthy();
+	});
+
 	it("uses Web Share API when available", async () => {
 		const shareFn = jest.fn().mockResolvedValue(undefined);
 		Object.assign(navigator, { share: shareFn });
@@ -77,5 +93,46 @@ describe("ShareButton", () => {
 			title: "Test Share Title",
 			url: `${window.location.origin}/929/1/1`,
 		});
+	});
+
+	it("treats a native share dismissal as a cancel, not a failure", async () => {
+		const shareFn = jest
+			.fn()
+			.mockRejectedValue(new DOMException("cancelled", "AbortError"));
+		const writeText = jest.fn().mockResolvedValue(undefined);
+		Object.assign(navigator, {
+			share: shareFn,
+			clipboard: { writeText },
+		});
+
+		render(<ShareButton canonicalPath="/929/1/1" />);
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole("link", { name: "שיתוף" }));
+		});
+
+		// No clipboard fallback and no failure label on a user cancel (#2786).
+		expect(writeText).not.toHaveBeenCalled();
+		expect(screen.getByText("🔗 שתף")).toBeTruthy();
+	});
+
+	it("falls back to the clipboard on a genuine native share failure", async () => {
+		const shareFn = jest
+			.fn()
+			.mockRejectedValue(new DOMException("not allowed", "NotAllowedError"));
+		const writeText = jest.fn().mockResolvedValue(undefined);
+		Object.assign(navigator, {
+			share: shareFn,
+			clipboard: { writeText },
+		});
+
+		render(<ShareButton canonicalPath="/929/1/1" />);
+
+		await act(async () => {
+			fireEvent.click(screen.getByRole("link", { name: "שיתוף" }));
+		});
+
+		expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/929/1/1`);
+		expect(screen.getByText("הועתק!")).toBeTruthy();
 	});
 });

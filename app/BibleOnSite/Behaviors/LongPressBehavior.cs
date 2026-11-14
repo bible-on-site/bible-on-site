@@ -138,22 +138,65 @@ public class LongPressBehavior : Behavior<View>
     /// </summary>
     public static void BeginUnreceivedPress(float rawX, float rawY, Perek? currentPerek)
     {
-        if (currentPerek?.Pasukim is not { Count: > 0 } pasukim)
+        if (currentPerek?.Pasukim is not { Count: > 0 })
+        {
             return;
+        }
 
+        ArmPressUnderPoint(rawX, rawY,
+            bindingContext => PressArming.IsCandidate(bindingContext, currentPerek));
+    }
+
+    /// <summary>Same unreceived-Down arming for the parasha reader's unit-bound views.</summary>
+    public static void BeginUnreceivedPress(float rawX, float rawY, ParashaUnit? currentUnit)
+    {
+        if (currentUnit == null)
+        {
+            return;
+        }
+
+        ArmPressUnderPoint(rawX, rawY,
+            bindingContext => PressArming.IsCandidate(bindingContext, currentUnit));
+    }
+
+    /// <summary>Same unreceived-Down arming for the masora reader's unit-bound views (#3260).</summary>
+    public static void BeginUnreceivedPress(float rawX, float rawY, MasoraUnit? currentUnit)
+    {
+        if (currentUnit == null)
+        {
+            return;
+        }
+
+        ArmPressUnderPoint(rawX, rawY,
+            bindingContext => PressArming.IsCandidate(bindingContext, currentUnit));
+    }
+
+    private static void ArmPressUnderPoint(float rawX, float rawY, Func<object?, bool> isCandidate)
+    {
         lock (_lock)
         {
             foreach (var behavior in _activeBehaviors)
             {
-                if (behavior._androidView is not { IsShown: true } view ||
-                    behavior._associatedView?.BindingContext is not Pasuk pasuk ||
-                    !pasukim.Contains(pasuk))
+                // Managed candidacy check first: pasuk rows bind their own row
+                // type and can never arm here, so every realized row skips the
+                // JNI hit-tests below. Only unit/perek-bound views (header,
+                // tikkun flow) or pasuk-bound views of this unit reach them.
+                if (!isCandidate(behavior._associatedView?.BindingContext))
+                {
                     continue;
+                }
+
+                if (behavior._androidView is not { IsShown: true } view)
+                {
+                    continue;
+                }
 
                 var visibleBounds = new Android.Graphics.Rect();
                 if (!view.GetGlobalVisibleRect(visibleBounds) ||
                     !visibleBounds.Contains((int)rawX, (int)rawY))
+                {
                     continue;
+                }
 
                 if (!behavior._press.IsPressed)
                 {
@@ -189,7 +232,9 @@ public class LongPressBehavior : Behavior<View>
     private void OnAndroidTouch(object? sender, Android.Views.View.TouchEventArgs e)
     {
         if (e.Event is not { } motion)
+        {
             return;
+        }
 
         switch (motion.ActionMasked)
         {
@@ -213,7 +258,10 @@ public class LongPressBehavior : Behavior<View>
                 var tapped = _press.End();
                 CleanupTimer();
                 if (tapped)
+                {
                     NativeTapped?.Invoke(this, EventArgs.Empty);
+                }
+
                 break;
 
             case Android.Views.MotionEventActions.Cancel:
@@ -225,10 +273,44 @@ public class LongPressBehavior : Behavior<View>
             case Android.Views.MotionEventActions.Move:
                 _press.Move(motion.RawX, motion.RawY, isScrolling: false);
                 if (!_press.IsPressed)
+                {
                     CleanupTimer();
+                }
+
+                break;
+
+            default:
+                // Other actions (hover, scroll, etc.) leave press tracking
+                // untouched; the touch stays unhandled.
                 break;
         }
         e.Handled = false;
+    }
+#elif IOS || MACCATALYST
+    private UIKit.UIView? _appleView;
+    private UIKit.UILongPressGestureRecognizer? _applePress;
+    private void AttachNativeEvents()
+    {
+        if (_associatedView?.Handler?.PlatformView is not UIKit.UIView view)
+        {
+            return;
+        }
+
+        _appleView = view;
+        _applePress = new UIKit.UILongPressGestureRecognizer(gesture =>
+        {
+            if (gesture.State == UIKit.UIGestureRecognizerState.Began)
+            {
+                LongPressed?.Invoke(this, EventArgs.Empty);
+            }
+        }) { MinimumPressDuration = LongPressDuration / 1000.0, CancelsTouchesInView = false };
+        view.UserInteractionEnabled = true;
+        view.AddGestureRecognizer(_applePress);
+    }
+    private void DetachNativeEvents()
+    {
+        if (_applePress != null) { _appleView?.RemoveGestureRecognizer(_applePress); _applePress.Dispose(); }
+        _applePress = null; _appleView = null;
     }
 #else
     private void AttachNativeEvents() { }
@@ -249,6 +331,9 @@ public class LongPressBehavior : Behavior<View>
 
     private void CancelLongPressTimer()
     {
+#if IOS || MACCATALYST
+        if (_applePress != null) { _applePress.Enabled = false; _applePress.Enabled = true; }
+#endif
         _press.Cancel();
         CleanupTimer();
     }

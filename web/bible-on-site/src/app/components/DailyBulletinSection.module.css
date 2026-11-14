@@ -1,0 +1,181 @@
+/* Daily bulletin join section (#2941).
+   Sits right after the hero: the hero's bottom divider paints #d8ebff, so this
+   section shares that background and flows seamlessly into the sefarim
+   section below it. White cards carry the visual separation. */
+
+.section {
+	background-color: #d8ebff;
+	box-sizing: border-box;
+	min-width: 0;
+	overflow: hidden;
+	padding: 2.5em 0 4em;
+	position: relative;
+	/* The fixed top nav is 2.75rem; keep section/card targets clear of it. */
+	scroll-margin-top: 4.5rem;
+	text-align: center;
+	width: 100%;
+	z-index: 2;
+}
+
+.header {
+	letter-spacing: 0.3em;
+	padding: 0.5em 1em 1.5em;
+	text-align: center;
+}
+
+.header h2 {
+	font-size: 1.8em;
+	margin: 0.5em 0;
+}
+
+.header h3 {
+	font-size: 1.4em;
+	margin: 0.3em 0;
+}
+
+/* Cards: a single vertical stack on small screens (review on #3083 — no
+   carousel), three columns on wide screens. */
+.cards {
+	display: grid;
+	gap: 1.25rem;
+	grid-template-columns: 1fr;
+	margin: 0 auto;
+	max-width: 72rem;
+	min-width: 0;
+	padding: 0 0.5rem;
+}
+
+/* Cards */
+.card {
+	/* Stacked cards stay readable-width; the three-column grid is narrower
+	   than this cap, so it only applies to the single-column layout. */
+	margin-inline: auto;
+	max-width: 26rem;
+	width: 100%;
+	background-color: var(--surface-elevated, #fff);
+	border-radius: var(--radius-lg, 12px);
+	box-shadow: 0 2px 8px rgba(13, 58, 140, 0.12);
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: 0.6rem;
+	padding: 1.5rem 1.25rem;
+	scroll-margin-top: 4.5rem;
+}
+
+.cardIcon {
+	align-self: center;
+	filter: invert(15%) sepia(60%) saturate(3200%) hue-rotate(215deg)
+		brightness(92%) contrast(100%);
+}
+
+.cardTitle {
+	font-size: 1.25em;
+	letter-spacing: 0.15em;
+	margin: 0;
+}
+
+.cardText {
+	color: var(--muted-text, #666);
+	flex-grow: 1;
+	font-size: 0.9em;
+	line-height: 1.6;
+	margin: 0;
+}
+
+.cardAction {
+	background-color: var(--accent-600, #1552ac);
+	border-radius: var(--radius-sm, 4px);
+	color: #fff;
+	display: inline-block;
+	font-weight: bold;
+	letter-spacing: 0.05em;
+	margin-top: auto;
+	padding: 0.6em 1em;
+	text-decoration: none;
+	transition: background-color 0.2s;
+}
+
+@media (hover: hover) {
+	.cardAction:hover {
+		background-color: var(--accent-700, #11469c);
+	}
+}
+
+.cardAction:focus-visible {
+	outline: 2px solid var(--accent-600, #1552ac);
+	outline-offset: 2px;
+}
+
+/* Brand-evoking card backgrounds (review on #3083): each join card carries a
+   pastel wash of its channel's identity — Telegram sky blue, WhatsApp chat
+   green, and the four Gmail envelope colors — while the markup, text color
+   and navy icons stay on the site palette. */
+.cardTelegram {
+	background-color: #d9ecf9;
+	background-image:
+		radial-gradient(
+			circle at 85% 8%,
+			rgba(255, 255, 255, 0.85) 0,
+			rgba(255, 255, 255, 0) 45%
+		),
+		linear-gradient(155deg, #ecf6fd 0%, #cfe9f8 55%, #e0f1fb 100%);
+}
+
+.cardWhatsapp {
+	background-color: #ddf1cb;
+	background-image:
+		radial-gradient(
+			circle at 85% 8%,
+			rgba(255, 255, 255, 0.8) 0,
+			rgba(255, 255, 255, 0) 45%
+		),
+		linear-gradient(155deg, #f0fbe6 0%, #d7f0c0 55%, #e7f7d4 100%);
+}
+
+.cardEmail {
+	background-color: #fdfdfe;
+	background-image:
+		radial-gradient(
+			circle at 0% 0%,
+			rgba(234, 67, 53, 0.1) 0,
+			rgba(234, 67, 53, 0) 55%
+		),
+		radial-gradient(
+			circle at 100% 0%,
+			rgba(251, 188, 5, 0.12) 0,
+			rgba(251, 188, 5, 0) 55%
+		),
+		radial-gradient(
+			circle at 100% 100%,
+			rgba(66, 133, 244, 0.1) 0,
+			rgba(66, 133, 244, 0) 55%
+		),
+		radial-gradient(
+			circle at 0% 100%,
+			rgba(52, 168, 83, 0.1) 0,
+			rgba(52, 168, 83, 0) 55%
+		);
+}
+
+/* Wide screens: all three cards side by side. */
+@media screen and (min-width: 960px) {
+	.cards {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+
+/* Dark mode: the hero's bottom divider permanently paints this band light
+   blue, so the section stays light in dark mode too — text color and the
+   control tokens are re-pinned to their light-mode values (color is set
+   directly because inherited `color` is already resolved at body), and
+   color-scheme keeps the signup controls light. */
+@media (prefers-color-scheme: dark) {
+	.section {
+		--link-accent: var(--accent-600, #1552ac);
+		--link-accent-hover: var(--accent-700, #11469c);
+		--muted-text: #666;
+		color: #171717;
+		color-scheme: light;
+	}
+}

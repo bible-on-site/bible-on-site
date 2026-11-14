@@ -9,7 +9,15 @@ description = "DevOps utilities for bible-on-site"
 authors = [{ name = "DoradSoft", email = "doradsoft@gmail.com" }]
 requires-python = ">=3.12"
 
-dependencies = ["pre-commit"]
+dependencies = ["prek"]
 
 [tool.md_dead_link_check]
-exclude_links = ["http://localhost:*", "https://localhost:*"]
+# Loopback links can never resolve inside a hook run. GitHub serves 404 to
+# unauthenticated org-project views, so those links only work for humans.
+exclude_links = [
+	"http://localhost:*",
+	"https://localhost:*",
+	"http://127.0.0.1:*",
+	"https://127.0.0.1:*",
+	"https://github.com/orgs/bible-on-site/projects/*",
+]

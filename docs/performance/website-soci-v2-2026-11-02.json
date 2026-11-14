@@ -1,0 +1,46 @@
+{
+  "purpose": "Website image delivery within the existing protected deployment deadline",
+  "status": "Delivery implementation validation; final published-image native workload and production handover are separate gates",
+  "baseline": {
+    "version": "0.2.605",
+    "source": "8a6315c8c6cb8649c3386faa1aa91681501f1c02",
+    "architecture": "amd64",
+    "cpuUnits": 512,
+    "memoryMiB": 2048,
+    "pullSeconds": 126.596,
+    "createdToStartedSeconds": 149.773,
+    "startedToAdmittedUpperSeconds": 65.31928080681246,
+    "admission": "Unmodified full three-route ECS health command and first two-second requests",
+    "minimumAdditionalHandoverSeconds": 130,
+    "additionalStages": ["20 seconds of paired healthy DNS", "At least 110 seconds reserved for source retirement and final routing proof"],
+    "projectionSeconds": 345.0922808068125,
+    "originalPhaseDeadlineSeconds": 300,
+    "productionHandoverAttempted": false,
+    "pageRoutesPassed": 3713,
+    "qualificationPassed": false,
+    "otherFinding": "The first full search exceeded two seconds; it requires separate investigation and final release qualification."
+  },
+  "sociValidation": {
+    "toolVersion": "0.16.1",
+    "linuxAmd64StaticReleaseSHA256": "2ad05a0430042885a7b2ab4a707a85250117dd39f41adc097e83a00a83ae4bc7",
+    "realPinnedLinuxToolExecuted": true,
+    "tamperedReleaseRejectedBeforeExtraction": true,
+    "indexedImageArchitectures": ["amd64", "arm64"],
+    "nativeArmApplicationExecuted": false,
+    "allRawFilesystemAndConfigBytesPreserved": true,
+    "rootNativeDescriptors": 2,
+    "rootBoundSociDescriptors": 2,
+    "metadataPublishedBeforeNativeTags": true,
+    "conversionTestNetwork": "none",
+    "conversionTestRegistry": "SDK mock with complete blob digest and contiguous-part verification",
+    "independentEcrFormatTest": "Actual synthetic OCI native manifest, SOCI v2 artifact and root index accepted; exact immediate reads passed; all temporary images and repository removed",
+    "productionResourcesModified": false,
+    "runtimeLazyLoadingProved": false
+  },
+  "unchangedControls": ["512 CPU units and 2048 MiB per website task", "Desired count one", "Public URLs and application filesystem bytes", "Database content", "IAM and network policy", "Two-second public requests with zero retries", "300-second protected deployment phases", "90-second application drain and 120-second container stop limit"],
+  "references": [
+    "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-tasks-services.html",
+    "https://aws.amazon.com/blogs/containers/improving-amazon-ecs-deployment-consistency-with-soci-index-manifest-v2/",
+    "https://github.com/awslabs/soci-snapshotter/releases/tag/v0.16.1"
+  ]
+}

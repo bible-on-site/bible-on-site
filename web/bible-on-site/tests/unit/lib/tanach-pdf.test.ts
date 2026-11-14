@@ -73,10 +73,10 @@ import {
 import { getPerushimByPerekId } from "../../../src/lib/perushim";
 import { getArticlesByPerekId } from "../../../src/lib/articles/service";
 import type { QriSegment } from "../../../src/data/db/tanah-view-types";
+import { ExportError } from "../../../src/lib/download/export-error";
 import {
 	buildTanachPdfForPerekRange,
 	createTanachPageRangesHandler,
-	reverseGraphemes,
 	segmentsToText,
 	semanticPagesToPerekIds,
 	stripHtml,
@@ -150,7 +150,7 @@ describe("segmentsToText", () => {
 
 	it("removes extra space after maqaf (U+05BE)", () => {
 		const segments = [qri("אֶל־"), qri("מֹשֶׁה")];
-		// maqaf connects words — no space between them
+		// maqaf connects words - no space between them
 		expect(segmentsToText(segments)).toBe("אֶל־מֹשֶׁה");
 	});
 
@@ -197,35 +197,6 @@ describe("stripTaamim", () => {
 	});
 });
 
-describe("reverseGraphemes", () => {
-	it("reverses simple Hebrew text", () => {
-		expect(reverseGraphemes("שלום")).toBe("םולש");
-	});
-
-	it("keeps nikud attached to base characters", () => {
-		// Each grapheme cluster (letter + nikud) stays together
-		const input = "בָּרָא";
-		const reversed = reverseGraphemes(input);
-		// reversed should read א then רָ then בָּ
-		expect(reversed).toBe("ארָבָּ");
-	});
-
-	it("reverses word order for multi-word text", () => {
-		const input = "אבג דהו";
-		expect(reverseGraphemes(input)).toBe("והד גבא");
-	});
-
-	it("handles empty string", () => {
-		expect(reverseGraphemes("")).toBe("");
-	});
-
-	it("preserves maqaf position between reversed words", () => {
-		const input = "אֶל־מֹשֶׁה";
-		const reversed = reverseGraphemes(input);
-		// reversed: ה then שֶׁ then מֹ then ־ then ל then אֶ
-		expect(reversed).toContain("־");
-	});
-});
 
 describe("stripHtml", () => {
 	it("strips HTML tags", () => {
@@ -346,12 +317,64 @@ describe("semanticPagesToPerekIds", () => {
 
 		const semanticPages = [
 			{ pageIndex: 3, semanticName: "א'", title: "" },
-			{ pageIndex: 7, semanticName: "ק'", title: "" }, // 100 — way beyond range
+			{ pageIndex: 7, semanticName: "ק'", title: "" }, // 100 - way beyond range
 		];
 
 		const result = semanticPagesToPerekIds(semanticPages, "בראשית");
 
 		expect(result).toEqual([1]);
+	});
+
+	it("rejects a reversed range with a Hebrew explanation (issue #2407)", () => {
+		const mockSefer = { name: "בראשית" };
+		mockGetSeferByName.mockReturnValue(
+			mockSefer as ReturnType<typeof getSeferByName>,
+		);
+		mockGetPerekIdsForSefer.mockReturnValue(
+			Array.from({ length: 50 }, (_, i) => i + 1),
+		);
+
+		// Start יד (14) after end יב (12): the numeric chapter order is what
+		// matters, not the lexicographic order of the Hebrew labels.
+		const semanticPages = [
+			{ pageIndex: 29, semanticName: "יד", title: "" },
+			{ pageIndex: 31, semanticName: "יג", title: "" },
+			{ pageIndex: 33, semanticName: "יב", title: "" },
+		];
+
+		expect(() => semanticPagesToPerekIds(semanticPages, "בראשית")).toThrow(
+			ExportError,
+		);
+		expect(() => semanticPagesToPerekIds(semanticPages, "בראשית")).toThrow(
+			"טווח לא תקין: פרק ההתחלה מאוחר מפרק הסיום.",
+		);
+	});
+
+	it("accepts an ascending range and a single chapter", () => {
+		const mockSefer = { name: "בראשית" };
+		mockGetSeferByName.mockReturnValue(
+			mockSefer as ReturnType<typeof getSeferByName>,
+		);
+		mockGetPerekIdsForSefer.mockReturnValue(
+			Array.from({ length: 50 }, (_, i) => i + 1),
+		);
+
+		expect(
+			semanticPagesToPerekIds(
+				[
+					{ pageIndex: 25, semanticName: "יב", title: "" },
+					{ pageIndex: 27, semanticName: "יג", title: "" },
+					{ pageIndex: 29, semanticName: "יד", title: "" },
+				],
+				"בראשית",
+			),
+		).toEqual([12, 13, 14]);
+		expect(
+			semanticPagesToPerekIds(
+				[{ pageIndex: 29, semanticName: "יד", title: "" }],
+				"בראשית",
+			),
+		).toEqual([14]);
 	});
 });
 
@@ -432,10 +455,10 @@ describe("buildTanachPdfForPerekRange", () => {
 		const calls = page.drawText.mock.calls;
 		expect(calls.length).toBeGreaterThanOrEqual(1);
 
-		// First call: combined "בראשית א — בריאת העולם" reversed + bold
+		// First call: combined "בראשית א - בריאת העולם" (logical order — fontkit
+		// emits the RTL run visually; see bidi-text.ts) + bold
 		const titleCall = calls[0];
-		const expectedTitle = reverseGraphemes("בראשית א — בריאת העולם");
-		expect(titleCall[0]).toBe(expectedTitle);
+		expect(titleCall[0]).toBe("בראשית א - בריאת העולם");
 		expect(titleCall[1].font).toBe(pdfLib.__mockBoldFont);
 		expect(titleCall[1].size).toBe(18);
 	});
@@ -456,10 +479,9 @@ describe("buildTanachPdfForPerekRange", () => {
 			expect(opts.x).toBeGreaterThanOrEqual(50); // margin
 		}
 
-		// Verify text is grapheme-reversed (visual RTL)
+		// Verify text is drawn in logical order (bidi runs handle RTL visually)
 		const titleCall = calls[0];
-		const expectedTitle = reverseGraphemes("בראשית א — פרק א");
-		expect(titleCall[0]).toBe(expectedTitle);
+		expect(titleCall[0]).toBe("בראשית א - פרק א");
 	});
 
 	it("handles perek with empty header (title only, no dash)", async () => {
@@ -474,9 +496,9 @@ describe("buildTanachPdfForPerekRange", () => {
 
 		const page = pdfLib.__mockPages[0];
 		const calls = page.drawText.mock.calls;
-		// Title should be just "בראשית א" reversed, without " — "
+		// Title should be just "בראשית א" (logical order), without " - "
 		const titleCall = calls[0];
-		expect(titleCall[0]).toBe(reverseGraphemes("בראשית א"));
+		expect(titleCall[0]).toBe("בראשית א");
 		expect(titleCall[0]).not.toContain("—");
 	});
 
@@ -498,13 +520,13 @@ describe("buildTanachPdfForPerekRange", () => {
 			(c: [string]) => c[0],
 		);
 
-		// Text is reversed for visual RTL — check for reversed versions
-		expect(allText).toContain(reverseGraphemes("פירושים זמינים"));
+		// Text is drawn per bidi run in logical order
+		expect(allText).toContain("פירושים זמינים");
 		expect(
-			allText.some((t: string) => t.includes(reverseGraphemes("רש\"י"))),
+			allText.some((t: string) => t.includes('רש"י')),
 		).toBe(true);
 		expect(
-			allText.some((t: string) => t.includes(reverseGraphemes("אבן עזרא"))),
+			allText.some((t: string) => t.includes("אבן עזרא")),
 		).toBe(true);
 	});
 
@@ -535,14 +557,14 @@ describe("buildTanachPdfForPerekRange", () => {
 			(c: [string]) => c[0],
 		);
 
-		// Text is reversed for visual RTL
-		expect(allText).toContain(reverseGraphemes("מאמרים"));
-		expect(allText).toContain(reverseGraphemes("• מאמר על בריאת העולם"));
-		expect(allText).toContain(reverseGraphemes("מאת: הרב כהן"));
-		// HTML should be stripped from abstract, then reversed
+		// Text is drawn per bidi run in logical order
+		expect(allText).toContain("מאמרים");
+		expect(allText).toContain("• מאמר על בריאת העולם");
+		expect(allText).toContain("מאת: הרב כהן");
+		// HTML should be stripped from abstract before drawing
 		expect(
 			allText.some((t: string) =>
-				t.includes(reverseGraphemes("This is an abstract")),
+				t.includes("This is an abstract"),
 			),
 		).toBe(true);
 	});
@@ -570,7 +592,7 @@ describe("buildTanachPdfForPerekRange", () => {
 		const allText = page.drawText.mock.calls.map(
 			(c: [string]) => c[0],
 		);
-		expect(allText).toContain(reverseGraphemes("בראשית"));
+		expect(allText).toContain("בראשית");
 	});
 
 	it("renders articles without abstract", async () => {
@@ -599,8 +621,8 @@ describe("buildTanachPdfForPerekRange", () => {
 		const allText = page.drawText.mock.calls.map(
 			(c: [string]) => c[0],
 		);
-		expect(allText).toContain(reverseGraphemes("• מאמר ללא תקציר"));
-		expect(allText).toContain(reverseGraphemes("מאת: הרב כהן"));
+		expect(allText).toContain("• מאמר ללא תקציר");
+		expect(allText).toContain("מאת: הרב כהן");
 	});
 
 	it("renders articles with HTML-only abstract that strips to empty", async () => {
@@ -629,7 +651,11 @@ describe("buildTanachPdfForPerekRange", () => {
 		const allText = page.drawText.mock.calls.map(
 			(c: [string]) => c[0],
 		);
-		expect(allText).toContain(reverseGraphemes("• מאמר עם HTML ריק"));
+		// The label splits into bidi runs drawn in visual order: the RTL
+		// tail " ריק", the Latin run "HTML", then the RTL lead run.
+		expect(allText).toEqual(
+			expect.arrayContaining(["HTML", "• מאמר עם ", " ריק"]),
+		);
 	});
 
 	it("gracefully handles DB errors for perushim/articles", async () => {

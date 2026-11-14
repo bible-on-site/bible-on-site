@@ -1,10 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
 	xmlns:tools="http://schemas.android.com/tools">
-	<application android:usesCleartextTraffic="true" android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true"></application>
+	<application android:usesCleartextTraffic="true" android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true">
+		<!-- Firebase initializes via FirebaseInitProvider before managed code runs,
+		     so collection starts off and MainActivity enables it only for launches
+		     outside the e2e suite. -->
+		<meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
+		<meta-data android:name="google_analytics_adid_collection_enabled" android:value="false" />
+		<meta-data android:name="google_analytics_default_allow_ad_personalization_signals" android:value="false" />
+		<!-- #2120: test builds (DisableAnalytics — every Debug build, and the
+		     mobile-e2e CompileMobileE2E target passes it explicitly) permanently
+		     deactivate collection for the build's lifetime: runtime opt-in cannot
+		     re-enable it and no event is emitted, queued or flushed. The value is
+		     injected per configuration via AndroidManifestPlaceholders (true for
+		     Debug, false for Release). -->
+		<meta-data android:name="firebase_analytics_collection_deactivated" android:value="${firebaseAnalyticsCollectionDeactivated}" />
+		<!-- #2119: screens are reported manually with logical page names
+		     (AnalyticsScreens/AppShell, PerekPage). Automatic tracking only ever
+		     saw the single host MainActivity, which polluted GA screen reports. -->
+		<meta-data android:name="google_analytics_automatic_screen_reporting_enabled" android:value="false" />
+		<!-- #1097: FCM system-tray notifications (shown while the app is in the
+		     background) render with the app icon on the daily-perek channel that
+		     PushNotificationService creates at startup. Foreground receipts are
+		     posted by Plugin.Firebase.CloudMessaging on the same channel. -->
+		<meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@mipmap/appicon" />
+		<meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="daily_perek" />
+	</application>
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.INTERNET" />
 	<uses-permission android:name="android.permission.VIBRATE" />
+	<!-- Android 13+ runtime notification permission; requested on opt-in (#1097). -->
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 	<!-- Explicitly opt out of advertising ID - this app does not use ads -->
 	<uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
 </manifest>

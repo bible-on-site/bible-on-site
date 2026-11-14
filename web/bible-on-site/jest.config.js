@@ -82,7 +82,7 @@ const config = {
 	testEnvironment: "jsdom",
 	testMatch: ["**/tests/(unit|integration)/**/*.test.ts?(x)"],
 	// Avoid haste collision between root package.json and .next/standalone/package.json
-	modulePathIgnorePatterns: ["<rootDir>/.next/"],
+	modulePathIgnorePatterns: ["[\\\\/]\\.next[\\\\/]"],
 	// Use SWC with coverage plugin when measuring coverage, otherwise use ts-jest
 	transform: shouldMeasureCov
 		? { "^.+\\.(t|j)sx?$": swcCoverageConfig }
@@ -97,19 +97,16 @@ async function nextJestConfigPromise() {
 		dir: "./",
 	});
 	const nextJestConfig = await createNextJestConfig(config)();
-	nextJestConfig.modulePathIgnorePatterns = [
-		...(nextJestConfig.modulePathIgnorePatterns ?? []),
-		"<rootDir>/.next/",
-	];
 	// This cannot be set directly in the jest config because it is overridden by next/jest.
 	nextJestConfig.transformIgnorePatterns = [
-		// ESM modules that need to be transformed for Jest's CommonJS runtime
-		"/node_modules/(?!(gematry|temporal-polyfill|temporal-utils|sunrise-sunset-js)/)",
-	];
-	// Avoid Haste module naming collision: .next/standalone/package.json vs root package.json
-	nextJestConfig.modulePathIgnorePatterns = [
-		...(nextJestConfig.modulePathIgnorePatterns ?? []),
-		"<rootDir>/\\.next/",
+		// ESM modules that need to be transformed for Jest's CommonJS runtime.
+		// bun installs flat via `linker = "hoisted"` (bunfig.toml), so the
+		// node_modules layout matches npm's — no store indirection to unwrap.
+		// The @exodus/@asamuzakjp/@bramus/@csstools scopes and
+		// css-tree/entities/lru-cache/parse5/parse5-parser-stream/tough-cookie
+		// are jsdom's ESM-only dependency subtree; jsdom 31 adds bcp-47 and
+		// bcp-47-match (CSS :lang() support) with their is-* transitive deps.
+		"/node_modules/(?!(?:gematry|temporal-polyfill|temporal-utils|sunrise-sunset-js|@exodus|@asamuzakjp|@bramus|@csstools|bcp-47|bcp-47-match|css-tree|entities|is-alphabetical|is-alphanumerical|is-decimal|lru-cache|parse5|parse5-parser-stream|tough-cookie)/)",
 	];
 
 	return nextJestConfig;

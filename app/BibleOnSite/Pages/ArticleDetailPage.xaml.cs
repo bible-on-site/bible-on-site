@@ -1,8 +1,8 @@
 using BibleOnSite.Controls;
 using BibleOnSite.Helpers;
+using BibleOnSite.Models;
 using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
-using CommunityToolkit.Maui.Views;
 using Microsoft.Maui.Controls.Shapes;
 
 namespace BibleOnSite.Pages;
@@ -10,15 +10,35 @@ namespace BibleOnSite.Pages;
 /// <summary>
 /// Page displaying a single article's content.
 /// </summary>
-[QueryProperty(nameof(ArticleId), "articleId")]
-[QueryProperty(nameof(PerekId), "perekId")]
-public partial class ArticleDetailPage : ContentPage
+[QueryProperty(nameof(ArticleId), "articleId"), QueryProperty(nameof(PerekId), "perekId")]
+[QueryProperty(nameof(SearchExcerpt), "searchExcerpt"), QueryProperty(nameof(SearchPhrase), "searchPhrase")]
+public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
 {
     private readonly ArticleDetailViewModel _viewModel;
-    private readonly List<MediaElement> _mediaElements = [];
+    // Article media stays inert until the user asks for playback: creating a
+    // MediaElement handler activates the device audio session, which would
+    // interrupt external music merely for opening the article (#2642).
+    private readonly List<DeferredMediaElement> _mediaElements = [];
+    /// <summary>Rendered text children that own the article's counted words —
+    /// media elements between them are not counted children (issue #2607).</summary>
+    private readonly List<HtmlView> _countedViews = [];
 
     public int ArticleId { get; set; }
     public int PerekId { get; set; }
+
+    /// <summary>Logical screen identity with article context (#2119).</summary>
+    public string? AnalyticsScreenName =>
+        ArticleId > 0 ? $"Article/{ArticleId}" : nameof(ArticleDetailPage);
+
+    /// <summary>
+    /// Search-result excerpt anchoring the jump target — the query string keeps
+    /// the destination self-contained instead of carrying a navigation object
+    /// (#2078).
+    /// </summary>
+    public string? SearchExcerpt { get; set; }
+
+    /// <summary>Search phrase to locate inside the anchored excerpt window (#2078).</summary>
+    public string? SearchPhrase { get; set; }
 
     public ArticleDetailPage()
     {
@@ -31,10 +51,26 @@ public partial class ArticleDetailPage : ContentPage
     private void SetupFontSizeResources()
     {
         var prefs = PreferencesService.Instance;
-        UpdateFontSizeResources(prefs.FontFactor);
-        prefs.PreferencesChanged += (_, _) =>
+        UpdateFontSizeResources(prefs.ArticleFontFactor);
+        WeakPreferencesSubscription.Subscribe(this, prefs, page =>
             MainThread.BeginInvokeOnMainThread(() =>
-                UpdateFontSizeResources(prefs.FontFactor));
+            {
+                page.UpdateFontSizeResources(prefs.ArticleFontFactor);
+                page.ApplyLessonsVolume();
+            }));
+    }
+
+    /// <summary>
+    /// Recorded-lesson playback (article audio/video) plays on the שיעורים מוקלטים
+    /// channel — every player takes LessonsVolume, applied live to in-flight media.
+    /// </summary>
+    private void ApplyLessonsVolume()
+    {
+        var volume = PreferencesService.Instance.LessonsVolume;
+        foreach (var mediaElement in _mediaElements)
+        {
+            mediaElement.Volume = volume;
+        }
     }
 
     private void UpdateFontSizeResources(double factor)
@@ -67,51 +103,72 @@ public partial class ArticleDetailPage : ContentPage
             if (article != null)
             {
                 _viewModel.SetArticle(article);
-                BuildArticleContent(article.ArticleContent);
+                BuildArticleContent(article);
+                await ApplySearchJumpAsync();
             }
             else
             {
                 _viewModel.ErrorMessage = "לא נמצא מאמר";
             }
         }
-        catch (Exception ex)
+        #pragma warning disable S2221 // Deliberate failure boundary: article load failure surfaces as ErrorMessage
+        catch (Exception ex) //NOSONAR — article load failure surfaces as ErrorMessage.
         {
+            #pragma warning restore S2221
             _viewModel.ErrorMessage = $"שגיאה בטעינת המאמר: {ex.Message}";
         }
     }
 
-    private void BuildArticleContent(string? html)
+    private void BuildArticleContent(Article article)
     {
         ArticleContentContainer.Children.Clear();
         CleanupMediaElements();
+        _countedViews.Clear();
 
-        if (string.IsNullOrEmpty(html))
-            return;
-
-        if (!HtmlMediaExtractor.ContainsMedia(html))
+        var html = article.ArticleContent;
+        if (!string.IsNullOrEmpty(html))
         {
-            ArticleContentContainer.Children.Add(CreateHtmlView(html));
-            return;
-        }
-
-        var segments = HtmlMediaExtractor.ExtractSegments(html);
-        foreach (var segment in segments)
-        {
-            switch (segment.Kind)
+            if (!HtmlMediaExtractor.ContainsMedia(html))
             {
-                case SegmentKind.Html:
-                    ArticleContentContainer.Children.Add(CreateHtmlView(segment.Html!));
-                    break;
+                ArticleContentContainer.Children.Add(CreateHtmlView(html));
+            }
+            else
+            {
+                var segments = HtmlMediaExtractor.ExtractSegments(html);
+                foreach (var segment in segments)
+                {
+                    switch (segment.Kind)
+                    {
+                        case SegmentKind.Html:
+                            ArticleContentContainer.Children.Add(CreateHtmlView(segment.Html!));
+                            break;
 
-                case SegmentKind.Media when segment.Type == MediaType.Video:
-                    ArticleContentContainer.Children.Add(CreateVideoPlayer(segment.MediaUrl!));
-                    break;
+                        case SegmentKind.Media when segment.Type == MediaType.Video:
+                            ArticleContentContainer.Children.Add(CreateVideoPlayer(segment.MediaUrl!));
+                            break;
 
-                case SegmentKind.Media when segment.Type == MediaType.Audio:
-                    ArticleContentContainer.Children.Add(CreateAudioPlayer(segment.MediaUrl!));
-                    break;
+                        case SegmentKind.Media when segment.Type == MediaType.Audio:
+                            ArticleContentContainer.Children.Add(CreateAudioPlayer(segment.MediaUrl!));
+                            break;
+
+                        default:
+                            // Media kinds beyond audio/video have no inline renderer.
+                            break;
+                    }
+                }
             }
         }
+
+        // Attribute the stored block units to the rendered text children —
+        // media elements between them stay outside the counted axis so a
+        // mid-article video never reads as reading progress (issue #2607).
+        _countedViews.AddRange(ArticleContentContainer.Children.OfType<HtmlView>());
+        var blockCounts = _countedViews
+            .Select(view => ReadableBlockCounter.Count(view.HtmlContent))
+            .ToList();
+        _viewModel.SetReadingContent(
+            CountedContentUnits.Attribute(blockCounts, article.ProgressUnits),
+            article.ReadingMetric?.WordCount);
     }
 
     private HtmlView CreateHtmlView(string html)
@@ -125,65 +182,185 @@ public partial class ArticleDetailPage : ContentPage
             HorizontalOptions = LayoutOptions.Fill
         };
         view.SetDynamicResource(HtmlView.FontSizeProperty, "ArticleFontSize");
+        view.LinkTapped += OnArticleLinkTapped;
         return view;
+    }
+
+    /// <summary>
+    /// Article HTML links perakim, pesukim, articles and Tanahpedia entries
+    /// with site-relative hrefs such as <c>/929/125/337</c>; those navigate
+    /// natively (#1227).
+    /// </summary>
+    private async void OnArticleLinkTapped(object? sender, LinkTappedEventArgs e)
+    {
+        e.Handled = true;
+        try
+        {
+            await AppLinkHelper.FollowHtmlLinkAsync(e.Url, Launcher.Default, ShellAppNavigator.Instance);
+        }
+        #pragma warning disable S2221 // Deliberate failure boundary: link navigation/launcher failure must not crash the page
+        catch (Exception ex) //NOSONAR — link navigation/launcher failure must not crash the page.
+        {
+            #pragma warning restore S2221
+            // async void - an unhandled navigation/launcher exception is a crash.
+            Console.Error.WriteLine($"Article link navigation failed for {e.Url}: {ex}");
+        }
     }
 
     private View CreateVideoPlayer(string url)
     {
-        var mediaElement = new MediaElement
+        var host = new DeferredMediaElement(url, isVideo: true,
+            volume: PreferencesService.Instance.LessonsVolume)
         {
-            Source = MediaSource.FromUri(url),
-            ShouldAutoPlay = false,
-            ShouldShowPlaybackControls = true,
-            Aspect = Aspect.AspectFit,
-            HeightRequest = 220,
-            HorizontalOptions = LayoutOptions.Fill,
-            BackgroundColor = Colors.Black
+            HorizontalOptions = LayoutOptions.Fill
         };
-        _mediaElements.Add(mediaElement);
+        _mediaElements.Add(host);
 
         var container = new Border
         {
             StrokeShape = new RoundRectangle { CornerRadius = 8 },
             StrokeThickness = 0,
             Padding = 0,
-            Content = mediaElement
+            Content = host
         };
         return container;
     }
 
     private View CreateAudioPlayer(string url)
     {
-        var mediaElement = new MediaElement
+        var host = new DeferredMediaElement(url, isVideo: false,
+            volume: PreferencesService.Instance.LessonsVolume)
         {
-            Source = MediaSource.FromUri(url),
-            ShouldAutoPlay = false,
-            ShouldShowPlaybackControls = true,
-            HeightRequest = 80,
             HorizontalOptions = LayoutOptions.Fill
         };
-        _mediaElements.Add(mediaElement);
+        _mediaElements.Add(host);
 
         var container = new Border
         {
             StrokeShape = new RoundRectangle { CornerRadius = 8 },
             StrokeThickness = 1,
-            Stroke = Application.Current?.RequestedTheme == AppTheme.Dark
-                ? Color.FromArgb("#444444")
-                : Color.FromArgb("#e0e0e0"),
             Padding = 0,
-            Content = mediaElement
+            Content = host
         };
+        container.SetAppTheme(Border.StrokeProperty,
+            new SolidColorBrush(Color.FromArgb("#e0e0e0")),
+            new SolidColorBrush(Color.FromArgb("#444444")));
         return container;
     }
 
     private void CleanupMediaElements()
     {
-        foreach (var me in _mediaElements)
+        foreach (var host in _mediaElements)
         {
-            me.Stop();
-            me.Handler?.DisconnectHandler();
+            host.Release();
         }
         _mediaElements.Clear();
+    }
+
+    /// <summary>
+    /// Scrolls to the search result's exact occurrence: the excerpt anchors the
+    /// matching window in the joined segment text, the resolved segment's
+    /// HtmlView highlights the match, and the ScrollView lands it below the
+    /// header once the native text layout reports a line position (#2078).
+    /// </summary>
+    private async Task ApplySearchJumpAsync()
+    {
+        if (string.IsNullOrEmpty(SearchExcerpt))
+        {
+            return;
+        }
+        var htmlViews = ArticleContentContainer.Children.OfType<HtmlView>().ToList();
+        if (htmlViews.Count == 0)
+        {
+            return;
+        }
+        var resolved = SearchMatch.ResolveArticleTarget(
+            htmlViews.Select(view => view.HtmlContent ?? string.Empty).ToList(),
+            SearchExcerpt,
+            SearchPhrase ?? string.Empty);
+        if (resolved is not { } hit)
+        {
+            return;
+        }
+        var targetView = htmlViews[hit.Segment];
+        targetView.SearchMatchStart = hit.Span.Start;
+        targetView.SearchMatchLength = hit.Span.Length;
+
+        if (!HtmlView.CanMeasureSearchMatch)
+        {
+            // Platforms without a text-layout hook still land on the segment.
+            await ArticleScroll.ScrollToAsync(targetView, ScrollToPosition.Start, false);
+            return;
+        }
+        // The native text layout arrives after the handler's async render —
+        // poll until a measurable line position exists.
+        for (var attempt = 0; attempt < 60; attempt++)
+        {
+            if (targetView.Handler != null && targetView.Height > 0 &&
+                targetView.GetSearchMatchTop() is { } matchTop)
+            {
+                var y = Math.Max(0, ContentYOffset(targetView) + matchTop - 8);
+                await ArticleScroll.ScrollToAsync(0, y, false);
+                return;
+            }
+            await Task.Delay(50);
+        }
+        Console.Error.WriteLine($"Article search jump could not measure the match in article {ArticleId}.");
+    }
+
+    /// <summary>
+    /// Maps the scroll offset onto the counted text children (issue #2607):
+    /// measured extents move the anchor across the stored words while the
+    /// author header above and any trailing chrome stay off the axis. Fresh
+    /// extents each scroll keep font-size and late-media relayouts honest;
+    /// no re-measurement or text parsing runs per event.
+    /// </summary>
+    private void OnArticleScrolled(object? sender, ScrolledEventArgs e) =>
+        RefreshReadingProgress(e.ScrollY);
+
+    /// <summary>
+    /// Font-size changes, deferred media heights and viewport resizes all
+    /// relayout without scrolling — re-measure the counted extents at the
+    /// current offset so the bar stays honest (issue #2607).
+    /// </summary>
+    private void OnArticleContentSizeChanged(object? sender, EventArgs e) =>
+        RefreshReadingProgress(ArticleScroll.ScrollY);
+
+    private void RefreshReadingProgress(double scrollY)
+    {
+        if (_countedViews.Count == 0)
+        {
+            return;
+        }
+        var extents = new (double Top, double Bottom)[_countedViews.Count];
+        for (var i = 0; i < _countedViews.Count; i++)
+        {
+            if (_countedViews[i].Height < 0)
+            {
+                // A child has not measured yet — leave the bar where it is
+                // rather than report a fabricated extent (issue #2607).
+                return;
+            }
+            var top = ContentYOffset(_countedViews[i]);
+            extents[i] = (top, top + _countedViews[i].Height);
+        }
+        _viewModel.UpdateReadingProgress(
+            scrollY,
+            ArticleScroll.Height,
+            ArticleScroll.ContentSize.Height,
+            extents);
+    }
+
+    /// <summary>Accumulated Y of an element within the ScrollView's content.</summary>
+    private double ContentYOffset(VisualElement element)
+    {
+        double y = 0;
+        VisualElement? current = element;
+        while (current != null && !ReferenceEquals(current, ArticleScroll.Content))
+        {
+            y += current.Y;
+            current = current.Parent as VisualElement;
+        }
+        return y;
     }
 }

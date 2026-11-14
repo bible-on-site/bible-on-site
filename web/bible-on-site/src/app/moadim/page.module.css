@@ -1,0 +1,421 @@
+.container {
+	max-width: 1180px;
+	margin: 0 auto;
+	padding: 88px 16px 48px;
+	font-family: inherit;
+}
+
+/* Hero row: on roomy screens the heading+intro sit beside the wheel in
+   one row (RTL — text column first, wheel second). Narrow or short
+   viewports (also large browser zoom, which shrinks CSS px) fall back to
+   the stacked flow where the index scrolls naturally. */
+.heroRow {
+	display: flex;
+	flex-direction: column;
+}
+
+.heroText {
+	min-width: 0;
+}
+
+.heading {
+	font-size: 1.8rem;
+	font-weight: 700;
+	color: var(--pasuk-num-color, #1c2c5d);
+	margin-bottom: 12px;
+}
+
+.intro {
+	color: var(--muted-text, #555);
+	line-height: 1.7;
+	margin-bottom: 28px;
+	max-width: 60ch;
+}
+
+.empty {
+	color: var(--muted-text, #555);
+	padding: 24px 0;
+}
+
+/* מעגל השנה — the annual chart owns most of the viewport: sized against
+   the shorter viewport axis so the whole circle stays on screen. The
+   wheel is one SVG — month bands on the rim, a clickable sector per
+   moed, names radiating along the spokes. */
+.wheelNav {
+	width: min(96vw - 2rem, 82vh, 1080px);
+	margin: 0 auto 40px;
+}
+
+.wheel {
+	display: block;
+	width: 100%;
+	height: auto;
+	font-family: inherit;
+	filter: drop-shadow(0 18px 42px rgb(21 44 93 / 0.16));
+}
+
+/* ── Chrome: rim, ticks, hub ─────────────────────────────────────── */
+
+.rim {
+	fill: none;
+	stroke: hsl(222 34% 62%);
+	stroke-width: 2.5;
+}
+
+.tick {
+	stroke: hsl(222 30% 70%);
+	stroke-width: 2;
+}
+
+.hub {
+	fill: hsl(44 55% 96%);
+	stroke: hsl(40 45% 80%);
+	stroke-width: 1.5;
+}
+
+.hubStar {
+	fill: none;
+	stroke: hsl(40 60% 55%);
+	stroke-width: 3;
+	stroke-linejoin: round;
+	opacity: 0.85;
+}
+
+.hubTitle {
+	fill: var(--pasuk-num-color, #1c2c5d);
+	font-family: inherit;
+	font-size: 40px;
+	font-weight: 700;
+}
+
+/* ── Month bands (rim) ───────────────────────────────────────────── */
+
+.monthBand,
+.monthBandNeutral {
+	fill: hsl(var(--moed-h, 218) var(--moed-s, 56%) 62%);
+	stroke: var(--background, #fff);
+	stroke-width: 2;
+}
+
+/* Month band labels — shared UI font on the SVG text itself, not a
+   separate decorative face (#3254): `inherit` resolves to the .wheel →
+   body UI stack, so Hebrew glyphs follow the same family as the rest of
+   the interface. */
+.monthLabel {
+	fill: hsl(var(--moed-h, 218) 64% 20%);
+	font-family: inherit;
+	font-size: 34px;
+	font-weight: 800;
+	letter-spacing: 0.5px;
+	pointer-events: none;
+}
+
+/* ── Moed sectors + spoke labels ─────────────────────────────────── */
+
+.moedSlice {
+	outline: none;
+}
+
+.moedCell,
+.moedCellNeutral {
+	fill: hsl(var(--moed-h, 218) var(--moed-s, 62%) 88%);
+	stroke: var(--background, #fff);
+	stroke-width: 3;
+	transition: fill 0.15s ease;
+}
+
+.moedSlice:hover .moedCell,
+.moedSlice:hover .moedCellNeutral {
+	fill: hsl(var(--moed-h, 218) var(--moed-s, 62%) 79%);
+}
+
+.moedSlice:focus-visible .moedCell,
+.moedSlice:focus-visible .moedCellNeutral {
+	fill: hsl(var(--moed-h, 218) var(--moed-s, 66%) 74%);
+	stroke: var(--pasuk-num-color, #1c2c5d);
+	stroke-width: 4;
+}
+
+.moedName {
+	fill: hsl(var(--moed-h, 218) 58% 26%);
+	font-family: inherit;
+	font-size: 21px;
+	font-weight: 600;
+	pointer-events: none;
+}
+
+.moedDate {
+	fill: hsl(var(--moed-h, 218) 44% 38%);
+	font-family: inherit;
+	font-size: 15px;
+	font-weight: 400;
+}
+
+/* The ordered index — same links, guaranteed order and touch targets
+   regardless of how the wheel fits the viewport. Each row carries its
+   month hue as an inline-start accent so the legend lives in the list. */
+.index {
+	margin-top: 8px;
+}
+
+.indexList {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+	gap: 8px;
+	counter-reset: moed;
+}
+
+.indexItem {
+	counter-increment: moed;
+}
+
+.indexLink {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 10px 14px;
+	border: 1px solid hsl(var(--moed-h, 218) var(--moed-s, 40%) 82%);
+	border-inline-start: 6px solid
+		hsl(var(--moed-h, 218) var(--moed-s, 55%) 60%);
+	border-radius: 10px;
+	text-decoration: none;
+	color: var(--pasuk-num-color, #1c2c5d);
+	background: hsl(var(--moed-h, 218) var(--moed-s, 55%) 97%);
+}
+
+.indexLink::before {
+	content: counter(moed);
+	font-size: 0.75rem;
+	font-weight: 700;
+	color: hsl(var(--moed-h, 218) var(--moed-s, 45%) 50%);
+	min-width: 1.2em;
+}
+
+.indexLink:hover,
+.indexLink:focus-visible {
+	border-color: hsl(var(--moed-h, 218) var(--moed-s, 55%) 55%);
+	background: hsl(var(--moed-h, 218) var(--moed-s, 60%) 93%);
+}
+
+.indexLink:focus-visible {
+	outline: 3px solid hsl(var(--moed-h, 218) 60% 45%);
+	outline-offset: 2px;
+}
+
+.indexName {
+	font-weight: 600;
+}
+
+.indexDate,
+.indexMonth {
+	font-size: 0.75rem;
+	color: var(--muted-text, #666);
+	font-weight: 400;
+}
+
+.indexMonth {
+	margin-inline-start: auto;
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: hsl(var(--moed-h, 218) var(--moed-s, 55%) 90%);
+	color: hsl(var(--moed-h, 218) 55% 32%);
+	font-weight: 600;
+}
+
+/* ── Dark scheme — the wheel keeps its palette, retuned for dark ──── */
+
+@media (prefers-color-scheme: dark) {
+	.wheel {
+		filter: drop-shadow(0 18px 42px rgb(0 0 0 / 0.5));
+	}
+
+	.rim {
+		stroke: hsl(222 25% 42%);
+	}
+
+	.tick {
+		stroke: hsl(222 25% 48%);
+	}
+
+	.hub {
+		fill: hsl(228 24% 13%);
+		stroke: hsl(228 20% 32%);
+	}
+
+	.hubStar {
+		stroke: hsl(42 45% 58%);
+	}
+
+	.monthBand,
+	.monthBandNeutral {
+		fill: hsl(var(--moed-h, 218) var(--moed-s, 50%) 46%);
+	}
+
+	.monthLabel {
+		fill: hsl(var(--moed-h, 218) 60% 94%);
+	}
+
+	.moedCell,
+	.moedCellNeutral {
+		fill: hsl(var(--moed-h, 218) var(--moed-s, 44%) 28%);
+	}
+
+	.moedSlice:hover .moedCell,
+	.moedSlice:hover .moedCellNeutral {
+		fill: hsl(var(--moed-h, 218) var(--moed-s, 46%) 37%);
+	}
+
+	.moedSlice:focus-visible .moedCell,
+	.moedSlice:focus-visible .moedCellNeutral {
+		fill: hsl(var(--moed-h, 218) var(--moed-s, 50%) 44%);
+		stroke: var(--pasuk-num-color, #a8b9ff);
+	}
+
+	.moedName {
+		fill: hsl(var(--moed-h, 218) 55% 91%);
+	}
+
+	.moedDate {
+		fill: hsl(var(--moed-h, 218) 38% 74%);
+	}
+
+	.indexLink {
+		border-color: hsl(var(--moed-h, 218) var(--moed-s, 30%) 40%);
+		border-inline-start-color: hsl(
+			var(--moed-h, 218) var(--moed-s, 50%) 55%
+		);
+		background: hsl(var(--moed-h, 218) var(--moed-s, 26%) 15%);
+	}
+
+	.indexLink::before {
+		color: hsl(var(--moed-h, 218) var(--moed-s, 50%) 65%);
+	}
+
+	.indexLink:hover,
+	.indexLink:focus-visible {
+		border-color: hsl(var(--moed-h, 218) var(--moed-s, 50%) 55%);
+		background: hsl(var(--moed-h, 218) var(--moed-s, 30%) 22%);
+	}
+
+	.indexMonth {
+		background: hsl(var(--moed-h, 218) var(--moed-s, 40%) 24%);
+		color: hsl(var(--moed-h, 218) 55% 82%);
+	}
+}
+
+/* ── Accessibility fallbacks ─────────────────────────────────────── */
+
+@media (prefers-contrast: more) {
+	.moedCell,
+	.moedCellNeutral,
+	.monthBand,
+	.monthBandNeutral,
+	.indexLink {
+		stroke: currentColor;
+		border-color: currentColor;
+	}
+
+	.rim,
+	.tick {
+		stroke: currentColor;
+	}
+}
+
+@media (forced-colors: active) {
+	.rim,
+	.tick,
+	.moedCell,
+	.moedCellNeutral,
+	.monthBand,
+	.monthBandNeutral {
+		fill: Canvas;
+		stroke: CanvasText;
+	}
+
+	.hub {
+		fill: Canvas;
+		stroke: CanvasText;
+	}
+
+	.hubStar {
+		stroke: CanvasText;
+	}
+
+	.monthLabel,
+	.moedName,
+	.moedDate,
+	.hubTitle {
+		fill: CanvasText;
+	}
+
+	.moedSlice:focus-visible .moedCell,
+	.moedSlice:focus-visible .moedCellNeutral {
+		fill: Highlight;
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.moedSlice {
+		animation: moed-wedge-in 0.45s ease both;
+		animation-delay: calc(var(--moed-i, 0) * 45ms);
+	}
+
+	/* The sweep-in reveals sectors one by one around the circle — a
+	   subtle nod to the year turning. Opacity only: transform would
+	   fight the spoke rotations. */
+	@keyframes moed-wedge-in {
+		from {
+			opacity: 0;
+		}
+
+		to {
+			opacity: 1;
+		}
+	}
+}
+
+/* Two-column hero on roomy screens (#3254): heading+intro at inline-start
+   (the right, RTL), wheel fills the rest and caps against the viewport
+   height so the whole circle sits under the top bar on entry. The
+   min-height arm keeps very short viewports — and browser zoom that
+   shrinks CSS px — on the stacked layout instead of a cramped row. */
+@media (min-width: 900px) and (min-height: 620px) {
+	.heroRow {
+		flex-direction: row;
+		align-items: center;
+		gap: 40px;
+	}
+
+	.heroText {
+		flex: 0 0 clamp(240px, 26%, 340px);
+	}
+
+	.intro {
+		margin-bottom: 0;
+	}
+
+	.wheelNav {
+		flex: 1 1 0;
+		width: auto;
+		margin: 0;
+	}
+
+	.wheel {
+		width: min(100%, calc(100vh - 160px));
+		margin: 0 auto;
+	}
+}
+
+@media (max-width: 640px) {
+	.container {
+		padding-top: 76px;
+	}
+
+	.wheelNav {
+		width: min(96vw - 1rem, 78vh);
+		margin-bottom: 28px;
+	}
+}

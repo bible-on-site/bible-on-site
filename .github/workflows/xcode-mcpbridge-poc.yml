@@ -1,0 +1,342 @@
+name: Xcode mcpbridge PoC
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [devin/ios-issues-pass, devin/mcpbridge-app-poc]
+    paths: [.github/workflows/xcode-mcpbridge-poc.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  poc:
+    name: Exercise xcrun mcpbridge on iOS simulator
+    runs-on: xcode-27
+    timeout-minutes: 20
+    steps:
+      # XcodeOpenWorkspace needs the repo on disk: the extension's .xcodeproj
+      # is the only Xcode project in the tree.
+      - uses: actions/checkout@v7
+
+      - name: Select compatible Xcode
+        run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+
+      - name: Verify mcpbridge exists
+        run: |
+          xcrun --find mcpbridge
+          # Probe help; a nonzero exit is recorded but must not mask absence.
+          set +e
+          xcrun mcpbridge --help 2>&1 | head -40
+          set -e
+
+      - name: Enable Xcode MCP server
+        # --unsafe-always-allow-all-agents is Apple's documented build-server
+        # bypass: without it the agent gate keys on the signature of the
+        # process that spawned mcpbridge — here python3, unsigned — and every
+        # tool call pends on a GUI/Xcode-menu approval that no one answers.
+        run: sudo xcrun mcp-server enable --unsafe-always-allow-all-agents
+
+      - name: Boot simulator
+        run: |
+          xcrun simctl boot "iPhone 17" 2>/dev/null; true
+          xcrun simctl bootstatus "iPhone 17" -b
+          xcrun simctl list devices booted
+
+      - name: Resolve booted device UDID
+        id: device
+        run: |
+          UDID=$(xcrun simctl list devices booted --json | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(u['udid'] for r in d.values() for u in r if u['state'] == 'Booted'))")
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Probe mcpbridge MCP tools and measure interaction latency
+        env:
+          MOBILE_UDID: ${{ steps.device.outputs.udid }}
+        timeout-minutes: 15
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess, threading, time, uuid
+
+          UDID = os.environ["MOBILE_UDID"]
+          CALL_DEADLINE = 120
+
+          # Xcode grants DeviceInteraction tools only after an mcp-server
+          # approval; pending attempts appear in `status` and are approved with
+          # sudo (mirrors Alumnium's XcodeSession auto-approve loop).
+          stop_approve = threading.Event()
+          approved = set()
+          def approve_pending():
+              while not stop_approve.is_set():
+                  try:
+                      status = subprocess.run(
+                          ["xcrun", "mcp-server", "status", "--format", "json"],
+                          capture_output=True, text=True, timeout=20)
+                      data = json.loads(status.stdout or "{}")
+                      perm = data.get("permission", {})
+                      # Print the permission section once per change — the
+                      # pending-request field names are undocumented, so keep
+                      # the raw shape visible for future drift.
+                      fingerprint = json.dumps(perm, sort_keys=True)
+                      if perm and fingerprint != getattr(
+                              approve_pending, "_last_perm", None):
+                          approve_pending._last_perm = fingerprint
+                          print("mcp-server permission state:",
+                                json.dumps(perm)[:800])
+                      # Pending requests expose grantable ids under `endpoints`
+                      # (observed) or a bare id/identifier — scrape every
+                      # *Attempts list rather than keying on one field name.
+                      ids = set()
+                      for key, val in perm.items():
+                          if not (key.endswith("Attempts")
+                                  and isinstance(val, list)):
+                              continue
+                          for att in val:
+                              if not isinstance(att, dict):
+                                  continue
+                              eps = att.get("endpoints") or []
+                              if isinstance(eps, str):
+                                  eps = [eps]
+                              ids.update(eps)
+                              extra = att.get("id") or att.get("identifier")
+                              if extra:
+                                  ids.add(extra)
+                      ids = sorted(ids - approved)
+                      if ids:
+                          print("approving endpoints:", *ids)
+                          res = subprocess.run(
+                              ["sudo", "xcrun", "mcp-server", "approve", *ids,
+                               "--for-24-hours"],
+                              capture_output=True, text=True, timeout=30)
+                          # Only mark granted when approve actually succeeded —
+                          # a failed approve must not count as progress.
+                          if res.returncode == 0:
+                              approved.update(ids)
+                          else:
+                              print("approve failed rc=%s: %s %s"
+                                    % (res.returncode,
+                                       res.stdout.strip(), res.stderr.strip()))
+                  except Exception as exc:
+                      print("approver warning:", exc)
+                  time.sleep(2)
+
+          # mcpbridge is a persistent stdio MCP server — keep stdin open and
+          # read responses on a deadline instead of closing input.
+          # Xcode's tool service is slow to cold-start; retry the spawn once.
+          proc = None
+          lines = []
+          for attempt in range(2):
+              proc = subprocess.Popen(
+                  ["xcrun", "mcpbridge"], stdin=subprocess.PIPE,
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                  text=True, bufsize=1)
+              lines = []
+              def reader(buf):
+                  for line in proc.stdout:
+                      buf.append(line)
+              threading.Thread(target=reader, args=(lines,), daemon=True).start()
+              def send(msg):
+                  proc.stdin.write(json.dumps(msg) + "\n")
+                  proc.stdin.flush()
+              send({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                    "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                               "clientInfo": {"name": "poc", "version": "0"}}})
+              deadline = time.time() + 90
+              while time.time() < deadline and not any('"id":1' in l or '"id": 1' in l for l in lines):
+                  time.sleep(0.2)
+              if any('"id":1' in l or '"id": 1' in l for l in lines):
+                  break
+              proc.kill()
+              print(f"spawn attempt {attempt + 1}: timed out, retrying")
+          send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+
+          request_id = 10
+          def call(method, params=None):
+              global request_id
+              request_id += 1
+              rid = request_id
+              send({"jsonrpc": "2.0", "id": rid, "method": method,
+                    **({"params": params} if params is not None else {})})
+              started = time.time()
+              deadline = started + CALL_DEADLINE
+              while time.time() < deadline:
+                  for line in list(lines):
+                      try:
+                          msg = json.loads(line)
+                      except json.JSONDecodeError:
+                          continue
+                      if msg.get("id") == rid:
+                          return time.time() - started, msg
+                  time.sleep(0.2)
+              return CALL_DEADLINE, {"timeout": True}
+
+          # MCP exposes tools through tools/call — the tool name rides in
+          # params.name, it is NOT the JSON-RPC method. Sending the bare tool
+          # name as `method` gets -32601 "unknown method" even though
+          # tools/list advertises it.
+          def call_tool(name, arguments=None):
+              return call("tools/call",
+                          {"name": name, "arguments": arguments or {}})
+
+          def result_payload(msg):
+              result = msg.get("result", {})
+              if "structuredContent" in result:
+                  return result["structuredContent"]
+              for part in result.get("content", []):
+                  if part.get("type") == "text":
+                      try:
+                          return json.loads(part["text"])
+                      except json.JSONDecodeError:
+                          return part["text"]
+              return result or msg
+
+          timings = []
+          def timed(label, tool, arguments=None):
+              elapsed, msg = call_tool(tool, arguments)
+              payload = result_payload(msg)
+              summary = payload if isinstance(payload, str) else json.dumps(payload)[:200]
+              if "error" in msg:
+                  summary = f"ERROR {msg['error']}"
+              elif msg.get("timeout"):
+                  summary = f"TIMEOUT ({summary})"
+              # tools/call reports tool failures as result.isError, not as a
+              # JSON-RPC error — surface them instead of logging the payload.
+              elif isinstance(msg.get("result"), dict) and msg["result"].get("isError"):
+                  summary = f"TOOL-ERROR {summary}"
+              print(f"[{elapsed:7.2f}s] {label}: {summary}")
+              timings.append((label, elapsed))
+              return payload, msg
+
+          def failure_kind(msg, payload):
+              """Classify a failed tools/call response for assert messages."""
+              if "error" in msg:
+                  err = msg["error"]
+                  return (f"RPC error: {err.get('message', err)}"
+                          if isinstance(err, dict) else f"RPC error: {err}")
+              if msg.get("timeout"):
+                  return "timed out waiting for a response"
+              if isinstance(msg.get("result"), dict) and msg["result"].get("isError"):
+                  text = payload if isinstance(payload, str) else json.dumps(payload)[:200]
+                  return f"tool error: {text}"
+              return f"response lacks the expected key: {json.dumps(payload)[:200]}"
+
+          # Required measurements: a capture or gesture that returns an RPC
+          # error, a timeout, result.isError, or a payload missing its
+          # expected key is still timed (the table stays useful evidence) but
+          # must fail the workflow — a green check is only meaningful when
+          # every measured interaction actually succeeded.
+          measurement_failures = []
+          def require(label, tool, arguments=None, expect=None):
+              payload, msg = timed(label, tool, arguments)
+              ok = (
+                  "error" not in msg
+                  and not msg.get("timeout")
+                  and not (isinstance(msg.get("result"), dict)
+                           and msg["result"].get("isError"))
+                  and (expect is None
+                       or (isinstance(payload, dict) and expect in payload))
+              )
+              if not ok:
+                  measurement_failures.append(
+                      f"{label}: {failure_kind(msg, payload)}")
+              return payload
+
+          threading.Thread(target=approve_pending, daemon=True).start()
+          try:
+              _, msg = call("tools/list")
+              tools = msg.get("result", {}).get("tools", [])
+              names = [t["name"] for t in tools]
+              print("mcpbridge tools:", *names, sep="\n- ")
+              assert names, "mcpbridge returned no tools"
+              schemas = {t["name"]: t.get("inputSchema", {})
+                         for t in tools if t["name"].startswith("DeviceInteraction")
+                         or t["name"] == "XcodeOpenWorkspace"}
+              print("DeviceInteraction/XcodeOpenWorkspace schemas:",
+                    json.dumps(schemas, indent=2)[:6000])
+
+              # Xcode gates every tool behind agent approval: the first
+              # XcodeOpenWorkspace/XcodeNewProject call registers a
+              # project-access attempt, which the approve_pending loop grants
+              # via `xcrun mcp-server approve`. Retry only when a NEW grant
+              # lands — no grant progress means the failure is real, not
+              # pending authorization.
+              project_path = os.path.join(
+                  os.environ["GITHUB_WORKSPACE"],
+                  "app/extensions/AssetPackDownloader",
+                  "AssetPackDownloader.xcodeproj")
+              workspace_id = None
+              open_diag = "not attempted"
+              grants = len(approved)
+              for _ in range(4):
+                  payload, msg = timed("OpenWorkspace", "XcodeOpenWorkspace",
+                                       {"path": project_path})
+                  if isinstance(payload, dict) and payload.get("workspaceIdentifier"):
+                      workspace_id = payload["workspaceIdentifier"]
+                      break
+                  open_diag = failure_kind(msg, payload)
+                  grant_deadline = time.time() + 60
+                  while len(approved) <= grants and time.time() < grant_deadline:
+                      time.sleep(1)
+                  if len(approved) <= grants:
+                      break
+                  grants = len(approved)
+              assert workspace_id, (
+                  "XcodeOpenWorkspace never returned a workspaceIdentifier — "
+                  f"last result: {open_diag}")
+
+              session_key = None
+              session_diag = "not attempted"
+              for device in (UDID, "iPhone 17"):
+                  # sessionIdentifier: schema asks for a unique Title Case
+                  # human-friendly name used in Xcode's logs/UI.
+                  payload, msg = timed(f"StartSession device={device}",
+                                       "DeviceInteractionStartSession",
+                                       {"sessionIdentifier":
+                                            f"PoC Session {uuid.uuid4().hex[:8]}",
+                                        "deviceIdentifier": device})
+                  if isinstance(payload, dict) and payload.get("interactionSessionKey"):
+                      session_key = payload["interactionSessionKey"]
+                      break
+                  session_diag = failure_kind(msg, payload)
+              assert session_key, (
+                  "DeviceInteractionStartSession produced no key — "
+                  f"last result: {session_diag}")
+
+              # Bare captures measure transport + AX-tree cost with no action —
+              # the per-command latency WDA spends ~1.1s on for findElements.
+              # Every call is a required measurement: a successful Synthesize
+              # answers {"hierarchyPath": ...}, EndSession {"userMessage": ...}.
+              synth = {"interactSessionKey": session_key}
+              require("Synthesize capture #1", "DeviceInteractionSynthesize",
+                      synth, expect="hierarchyPath")
+              require("Synthesize capture #2", "DeviceInteractionSynthesize",
+                      synth, expect="hierarchyPath")
+              require("Synthesize activate Settings", "DeviceInteractionSynthesize",
+                      {**synth, "activationBundleId": "com.apple.Preferences"},
+                      expect="hierarchyPath")
+              require("Synthesize capture #3", "DeviceInteractionSynthesize",
+                      synth, expect="hierarchyPath")
+              require("Synthesize tap t 200 400", "DeviceInteractionSynthesize",
+                      {**synth, "interactionCommand": "t 200 400"},
+                      expect="hierarchyPath")
+              require("Synthesize drag 300 600 300 200", "DeviceInteractionSynthesize",
+                      {**synth, "interactionCommand": "drag 300 600 300 200"},
+                      expect="hierarchyPath")
+              require("Synthesize wait w 1", "DeviceInteractionSynthesize",
+                      {**synth, "interactionCommand": "w 1"},
+                      expect="hierarchyPath")
+              require("EndSession", "DeviceInteractionEndSession",
+                      {"interactionSessionKey": session_key},
+                      expect="userMessage")
+          finally:
+              stop_approve.set()
+              proc.kill()
+
+          print("\n== timing table (ms) ==")
+          for label, elapsed in timings:
+              print(f"{elapsed*1000:8.0f}  {label}")
+          if measurement_failures:
+              print("\n== FAILED measurements ==")
+              for failure in measurement_failures:
+                  print(" -", failure)
+              raise SystemExit(1)
+          PY

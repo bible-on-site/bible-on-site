@@ -19,12 +19,14 @@ export function JournalismGallery({ items }: { items: JournalismItem[] }) {
 
 	const goNext = useCallback(() => {
 		setSelectedIndex((prev) =>
+			/* istanbul ignore next -- defensive: nav buttons only exist while the modal is open */
 			prev !== null ? (prev + 1) % items.length : null,
 		);
 	}, [items.length]);
 
 	const goPrev = useCallback(() => {
 		setSelectedIndex((prev) =>
+			/* istanbul ignore next -- defensive: nav buttons only exist while the modal is open */
 			prev !== null ? (prev - 1 + items.length) % items.length : null,
 		);
 	}, [items.length]);
@@ -34,7 +36,8 @@ export function JournalismGallery({ items }: { items: JournalismItem[] }) {
 
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === "Escape") close();
-			else if (e.key === "ArrowLeft") goNext(); // RTL: left = next
+			else if (e.key === "ArrowLeft")
+				goNext(); // RTL: left = next
 			else if (e.key === "ArrowRight") goPrev(); // RTL: right = prev
 		};
 

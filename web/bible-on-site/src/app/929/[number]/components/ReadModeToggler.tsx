@@ -42,6 +42,7 @@ const ReadModeToggler = forwardRef<
 				className={styles.bookIcon}
 				src="/icons/open-book.svg"
 				alt="תצוגה בסיסית"
+				unoptimized
 				width={16}
 				height={16}
 			/>
@@ -50,6 +51,7 @@ const ReadModeToggler = forwardRef<
 				className={styles.noteIcon}
 				src="/icons/note.svg"
 				alt="תצוגת ספר"
+				unoptimized
 				width={16}
 				height={16}
 			/>

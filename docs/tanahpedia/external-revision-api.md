@@ -38,12 +38,15 @@ mutation Submit($input: SubmitEntryRevisionInput!) {
 | `proposedContent`    | `String` | Proposed entry body (HTML).                                            |
 | `source`             | `String!`| **Required.** External AI client / model id (e.g. `"gpt-4o"`).         |
 | `notes`              | `String` | AI rationale / notes for the human editor.                             |
+| `baseRevisionId`     | `String` | The APPLIED head revision this proposal was authored against.           |
 
 Validation (server-side):
 
 - `source` must be non-blank.
 - At least one of `proposedUniqueName` / `proposedTitle` / `proposedContent` must be present.
 - When `entryId` is supplied it must reference an existing entry, otherwise `NOT_FOUND`.
+- When `baseRevisionId` is supplied it must reference a revision of the same entry,
+  otherwise `BAD_REQUEST`. It may only be set when `entryId` is set.
 
 ## Mutation — apply a revision
 
@@ -68,8 +71,22 @@ mutation Apply($id: String!) {
   is linked back to the new entry.
 - Re-applying an already-`APPLIED` revision is rejected (`BAD_REQUEST`); a missing revision
   or a deleted target entry returns `NOT_FOUND`.
+- When the revision declares `baseRevisionId`, applying while the entry's APPLIED head has
+  moved elsewhere is rejected (`BAD_REQUEST`, stale base) — fetch the current head and
+  re-submit the proposal to retry. On a successful apply the revision's stored
+  `baseRevisionId` is stamped with the head it displaced.
+
+## Wiki-style history
+
+Every applied change — admin save, LLM-assistant apply, or an applied external revision —
+is an immutable `APPLIED` full-snapshot row. The entry's latest `APPLIED` revision is its
+head; the admin editor sends it as the save's base so concurrent editors are rejected
+rather than silently overwriting, and restores are themselves new `APPLIED` revisions.
 
 ## Query — triage queue (Admin / internal)
+
+Requires the same `Authorization: Bearer <TANAHPEDIA_REVISION_API_KEY>` header as the
+mutations.
 
 ```graphql
 query Pending {
@@ -85,7 +102,7 @@ query Pending {
 ```
 
 Both `status` (`PENDING` / `APPLIED` / `APPROVED` / `REJECTED`) and `entryId` are optional filters;
-results are returned newest-first.
+results are returned newest-first, paginated by `limit` (default 50, max 200) and `offset`.
 
 ## Query — family graph lookups (find persons / list unions / list parent-child links / person details)
 
@@ -330,6 +347,84 @@ entity domains (e.g. a place's coordinates, an event's date range, a war's parti
 not yet exposed; only the generic entity + entity-level-citation queries above cover those
 domains today.
 
+## Queries & mutations — entry secondary URLs (aliases)
+
+A secondary URL ("alias") is an extra name that lands on an entry: one alias row redirects
+to a single entry, two or more rows with labels make the name a shared disambiguation page.
+These operations mirror the admin editor's alias save/remove/delete flows, including the
+name lock, the canonical-name and reserved-route collision checks, and the stale-baseline
+conflict guard.
+
+```graphql
+query NameStatus($name: String!, $forEntryId: ID) {
+  tanahpediaNameStatus(name: $name, forEntryId: $forEntryId) {
+    kind        # invalid | reserved | canonical | self_main | alias | free
+    name
+    canonicalEntry { id uniqueName title }
+    reservedCategory
+    aliasTargets { entryId uniqueName title label }
+  }
+}
+
+query EntryAliases($entryId: String!) {
+  tanahpediaEntryAliases(entryId: $entryId) {
+    name
+    kind        # alias | disambiguation
+    targets { entryId uniqueName title label }
+    isSelfMain  # this entry owns the canonical name — editor skips it
+    reservedCategory
+    shadowedByCanonical { id uniqueName title }  # another entry holds this name canonically
+  }
+}
+
+mutation SaveAlias($input: SaveTanahpediaAliasInput!) {
+  saveTanahpediaAlias(input: $input) {
+    name
+    kind        # alias (single target) | disambiguation (labeled multi-target)
+    targetCount
+    revalidation  # APPLIED | FAILED | SKIPPED — see below
+  }
+}
+
+mutation RemoveFromAlias($name: String!, $entryId: String!) {
+  removeTanahpediaEntryFromAlias(name: $name, entryId: $entryId) {
+    name
+    kind
+    targetCount  # targets left on the name; 0 when the name was freed
+    revalidation
+  }
+}
+
+mutation DeleteAlias($name: String!) {
+  deleteTanahpediaAlias(name: $name) {
+    name
+    kind
+    targetCount
+    revalidation
+  }
+}
+```
+
+`SaveTanahpediaAliasInput`: `name` (the secondary URL), `targets` (1+ `{ entryId, label? }`,
+labels required on every target when the name is shared), and `expectedTargets` — the
+target `entryId`s the caller saw when the edit began. If the live set differs the mutation
+fails with a stale-baseline conflict (the same guard the admin editor applies), so a client
+never silently overwrites another admin's change.
+
+Name rules, ported verbatim from the admin validator: non-empty, no `/`, 255 chars max,
+normalized like an entry name (trim → URI-decode → NFC); a shared name requires a
+255-chars-max label on every target. The name must not collide with a category's reserved
+route (Hebrew or English slug) nor with an entry's canonical name — changing a canonical
+name goes through the entry itself, not the alias API.
+
+Every write runs inside a transaction that takes a `FOR UPDATE` lock on the name's
+`synonym` rows, commits, then asks the website to revalidate the alias name and every
+affected entry. `revalidation` reports `APPLIED`, `FAILED` (committed — re-save to retry),
+or `SKIPPED` (the revalidator is not configured); a `FAILED`/`SKIPPED` result never rolls
+back the committed write. `removeTanahpediaEntryFromAlias` is the per-entry rollback path;
+when one target remains it also drops the leftover disambiguation label so the name becomes
+a plain redirect again.
+
 ## Storage
 
 
@@ -337,10 +432,16 @@ Table `tanahpedia_entry_revision` (see [tanachpedia.dbml](./tanachpedia.dbml)) �
 area decoupled from `tanahpedia_entry`. `entry_id` is nullable (new-entry proposals) with
 `ON DELETE CASCADE`, and `status` defaults to `PENDING`.
 
+Alias rows live in `tanahpedia_entry_synonym` (name → entry) and
+`tanahpedia_entry_synonym_disambiguation` (per-target labels on shared names). These tables
+are also written by the admin editor, so the API and the admin stay consistent.
+
 ## Server environment
 
 | Variable                     | Description                                                        |
 | ---------------------------- | ----------------------------------------------------------------- |
 | `TANAHPEDIA_REVISION_API_KEY`| Bearer token external AI clients must present. Endpoint fails closed when unset. |
+| `WEBSITE_URL`                | Website base URL the alias writes POST `/api/revalidate` to after commit. Revalidation reports `SKIPPED` when unset. |
+| `REVALIDATE_SECRET`          | Shared `x-revalidate-secret` header the website expects on revalidation calls. |
 
-Set it in the API environment (`.env` / ECS task definition). Never expose it client-side.
+Set them in the API environment (`.env` / ECS task definition). Never expose them client-side.

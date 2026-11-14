@@ -1,0 +1,65 @@
+name: Web Push Daily Perek
+
+# Triggers the website's daily perek push notification (#1096). The route
+# itself skips Shabbat, review days and days without a scheduled perek, so
+# the schedule only needs to pick the delivery time: 05:00 UTC is 07:00/08:00
+# in Israel. Scheduled runs broadcast to every subscriber and wait for the
+# repository variable WEB_PUSH_ENABLED=`true` plus the PUSH_SEND_SECRET
+# secret matching the website's environment. A manual dispatch is always
+# allowed but must name exactly one subscription endpoint, so the
+# controlled delivery check can run before the schedule is armed and can
+# never broadcast by accident.
+
+on:
+  schedule:
+    - cron: "0 5 * * 0-5"
+  workflow_dispatch:
+    inputs:
+      endpoint:
+        description: >-
+          Push endpoint URL of the single subscription to notify, from the
+          test browser's push subscription. Required: manual dispatch never
+          broadcasts.
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: web-push-daily
+  cancel-in-progress: false
+
+jobs:
+  send:
+    # Scheduled sends fire only after the approved arm switch; a manual
+    # dispatch is ungated so the controlled delivery check can run first.
+    if: github.event_name == 'workflow_dispatch' || vars.WEB_PUSH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Send daily perek notifications
+        env:
+          PUSH_SEND_SECRET: ${{ secrets.PUSH_SEND_SECRET }}
+          SITE_ORIGIN: ${{ vars.WEB_PUSH_SITE_ORIGIN || 'https://xn--febl3a.co.il' }}
+        run: |
+          args=(-X POST -H "Authorization: Bearer ${PUSH_SEND_SECRET}")
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            # Step env values appear in public logs. Read the private URL
+            # from the event file instead, and mask it before sending.
+            endpoint="$(jq --exit-status --raw-output \
+              '.inputs.endpoint | select(type == "string" and length > 0)' \
+              "${GITHUB_EVENT_PATH}")"
+            masked_endpoint="${endpoint//'%'/'%25'}"
+            masked_endpoint="${masked_endpoint//$'\r'/'%0D'}"
+            masked_endpoint="${masked_endpoint//$'\n'/'%0A'}"
+            printf '::add-mask::%s\n' "${masked_endpoint}"
+            # Manual dispatch targets exactly one subscription; only the
+            # armed schedule sends the bodyless broadcast. The route also
+            # validates the endpoint against the push-service allowlist.
+            body="$(jq --compact-output --null-input \
+              --arg endpoint "${endpoint}" '{endpoint: $endpoint}')"
+            args+=(-H "Content-Type: application/json"
+              --data "${body}")
+          fi
+          curl --fail-with-body --silent --show-error --max-time 300 \
+            "${args[@]}" "${SITE_ORIGIN}/api/push/daily"

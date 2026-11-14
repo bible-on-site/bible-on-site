@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:fonts="clr-namespace:Fonts"
+             x:Class="BibleOnSite.Pages.ParashaListPage"
+             x:DataType="viewmodels:ParashaListViewModel"
+             Title="פרשה על הפרק"
+             FlowDirection="RightToLeft"
+             Shell.NavBarIsVisible="False">
+
+    <!-- The shared navigation capsule: hamburger at the far-right edge, Back
+         immediately beside it, then the title pill (#2467). -->
+    <Grid RowDefinitions="Auto,*">
+        <controls:SharedTopBar Grid.Row="0" NavigationAutomationId="ParashaMenuButton">
+            <controls:SharedTopBar.CenterContent>
+                <controls:ToolbarPill>
+                    <Label Text="פרשה על הפרק"
+                           FontSize="16"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center"
+                           LineBreakMode="TailTruncation"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark=#AACBFF}"/>
+                </controls:ToolbarPill>
+            </controls:SharedTopBar.CenterContent>
+        </controls:SharedTopBar>
+
+    <Grid Grid.Row="1" RowDefinitions="*">
+        <!-- The 54 weekly parashiot grouped by their Torah sefer. Each
+             unit keeps its own identity — joined pairs stay separate. -->
+        <CollectionView ItemsSource="{Binding Groups}"
+                        IsGrouped="True"
+                        SelectionMode="None"
+                        Margin="8">
+            <CollectionView.GroupHeaderTemplate>
+                <DataTemplate x:DataType="viewmodels:ParashaSeferGroup">
+                    <Label Text="{Binding SeferName}"
+                           FontSize="17"
+                           FontAttributes="Bold"
+                           Padding="8,12,8,4"
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
+                </DataTemplate>
+            </CollectionView.GroupHeaderTemplate>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:ParashaUnit">
+                    <controls:TappableView Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:ParashaListViewModel}}, Path=OpenParashaCommand}"
+                                           CommandParameter="{Binding .}"
+                                           SemanticProperties.Description="{Binding Heading}">
+                    <Border Padding="12,10"
+                            Margin="0,3"
+                            StrokeShape="RoundRectangle 8"
+                            Stroke="Transparent"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
+                        <Grid ColumnDefinitions="*,Auto" InputTransparent="True">
+                            <Label Grid.Column="0"
+                                   Text="{Binding Heading}"
+                                   AutomationId="ParashaName"
+                                   FontSize="16"
+                                   VerticalOptions="Center"/>
+                            <Label Grid.Column="1"
+                                   Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
+                                   FontFamily="FluentIcons"
+                                   FontSize="18"
+                                   TextColor="{StaticResource Gray400}"
+                                   VerticalOptions="Center"/>
+                        </Grid>
+                    </Border>
+                    </controls:TappableView>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <ActivityIndicator IsVisible="{Binding IsLoading}"
+                           IsRunning="{Binding IsLoading}"
+                           VerticalOptions="Center"
+                           HorizontalOptions="Center"/>
+    </Grid>
+    </Grid>
+</ContentPage>

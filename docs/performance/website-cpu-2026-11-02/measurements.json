@@ -1,0 +1,473 @@
+{
+  "image": "sha256:b889b05fd075499906fc2e3dd96aafa15092dc01b8194875e34aaffad61527f5",
+  "websiteVersion": "0.2.600",
+  "nextVersion": "16.4.3",
+  "date": "2026-11-02",
+  "note": "GC duration is wall time, not an independently additive CPU measure. Docker CFS counters are not Fargate CPU throttling evidence. Failed and timed-out checks remain counted.",
+  "cases": [
+    {
+      "environment": "Docker Linux amd64, CFS quota",
+      "case": "full-mixed-rsc-.25-prod-steady",
+      "vCPU": 0.25,
+      "requests": 360,
+      "pageP95Ms": 1299.4,
+      "healthP95Ms": 186.3,
+      "healthMaxMs": 1011,
+      "cpuSeconds": 11.301281,
+      "elapsedMs": 72245,
+      "statuses": {
+        "200": 360
+      },
+      "healthStatuses": {
+        "200": 160
+      },
+      "cacheStates": {
+        "HIT": 350,
+        "MISS": 10
+      },
+      "gcCount": 110,
+      "gcWallMs": 1439.875,
+      "maxGcWallMs": 110.682,
+      "rssMiB": 616.1,
+      "profileSha256": "a5760e1b794457f0018388632c5be3089c8234bedb1f31da017ea7f774760c36"
+    },
+    {
+      "environment": "Docker Linux amd64, CFS quota",
+      "case": "full-mixed-rsc-.5-prod-steady",
+      "vCPU": 0.5,
+      "requests": 360,
+      "pageP95Ms": 196.6,
+      "healthP95Ms": 17.2,
+      "healthMaxMs": 456,
+      "cpuSeconds": 11.990159,
+      "elapsedMs": 72127,
+      "statuses": {
+        "200": 360
+      },
+      "healthStatuses": {
+        "200": 172
+      },
+      "cacheStates": {
+        "HIT": 350,
+        "MISS": 10
+      },
+      "gcCount": 117,
+      "gcWallMs": 525.559,
+      "maxGcWallMs": 104.757,
+      "rssMiB": 601.77,
+      "profileSha256": "5ad740c7ead48aa55427893c12421f448e41b45d8f90c59bf4b841dc2b9c0983"
+    },
+    {
+      "environment": "Docker Linux amd64, CFS quota",
+      "case": "full-mixed-rsc-.25-no-etag",
+      "vCPU": 0.25,
+      "requests": 360,
+      "pageP95Ms": 1078.9,
+      "healthP95Ms": 101.5,
+      "healthMaxMs": 1041,
+      "cpuSeconds": 10.911308,
+      "elapsedMs": 71942,
+      "statuses": {
+        "200": 360
+      },
+      "healthStatuses": {
+        "200": 163
+      },
+      "cacheStates": {
+        "HIT": 350,
+        "MISS": 10
+      },
+      "gcCount": 110,
+      "gcWallMs": 1429.534,
+      "maxGcWallMs": 199.167,
+      "rssMiB": 614.88,
+      "profileSha256": "790cbb5442d0b4728ade71378a04f4dc26abf9e3e9fed9f0f8077c49ff9ebf62"
+    },
+    {
+      "environment": "Docker Linux amd64, CFS quota",
+      "case": "full-mixed-rsc-.25-no-compress",
+      "vCPU": 0.25,
+      "requests": 360,
+      "pageP95Ms": 690.5,
+      "healthP95Ms": 96.6,
+      "healthMaxMs": 926,
+      "cpuSeconds": 9.874374,
+      "elapsedMs": 71852,
+      "statuses": {
+        "200": 360
+      },
+      "healthStatuses": {
+        "200": 165
+      },
+      "cacheStates": {
+        "HIT": 350,
+        "MISS": 10
+      },
+      "gcCount": 109,
+      "gcWallMs": 1187.424,
+      "maxGcWallMs": 107.873,
+      "rssMiB": 610.94,
+      "profileSha256": "c9ab255faef03a1571d1586e1544c597a65aa3cf18e63230f57e88946f07679b"
+    },
+    {
+      "environment": "Docker Linux amd64, CFS quota",
+      "case": "full-mixed-rsc-.25-cache512",
+      "vCPU": 0.25,
+      "requests": 360,
+      "pageP95Ms": 697.5,
+      "healthP95Ms": 88.1,
+      "healthMaxMs": 830,
+      "cpuSeconds": 10.457716,
+      "elapsedMs": 72054,
+      "statuses": {
+        "200": 360
+      },
+      "healthStatuses": {
+        "200": 166
+      },
+      "cacheStates": {
+        "HIT": 350,
+        "MISS": 10
+      },
+      "gcCount": 111,
+      "gcWallMs": 947.632,
+      "maxGcWallMs": 196.793,
+      "rssMiB": 649.81,
+      "profileSha256": "b25ddb9bf60dbd00fde2a7f860fcfd54df8ccda7a9e8eaff5246f9008c634ff5"
+    },
+    {
+      "environment": "Docker Linux amd64, CFS quota",
+      "case": "full-actions-.25-prod",
+      "vCPU": 0.25,
+      "requests": 140,
+      "pageP95Ms": 580.4,
+      "healthP95Ms": 34.6,
+      "healthMaxMs": 881,
+      "cpuSeconds": 7.145854,
+      "elapsedMs": 69625,
+      "statuses": {
+        "200": 140
+      },
+      "healthStatuses": {
+        "200": 162
+      },
+      "cacheStates": {
+        "HIT": 140
+      },
+      "gcCount": 82,
+      "gcWallMs": 705.007,
+      "maxGcWallMs": 203.83,
+      "rssMiB": 287.32,
+      "profileSha256": "3c59fac51abcb120bc839e4a5b2c7810755448a6d413c6f6fa6768eb5cb67b83"
+    },
+    {
+      "environment": "Docker Linux amd64, CFS quota",
+      "case": "full-book-actions-.25-prod",
+      "vCPU": 0.25,
+      "requests": 4,
+      "pageP95Ms": 1805.2,
+      "healthP95Ms": 18.1,
+      "healthMaxMs": 653,
+      "cpuSeconds": 2.844107,
+      "elapsedMs": 31109,
+      "statuses": {
+        "200": 4
+      },
+      "healthStatuses": {
+        "200": 73
+      },
+      "cacheStates": {
+        "HIT": 4
+      },
+      "gcCount": 19,
+      "gcWallMs": 126.927,
+      "maxGcWallMs": 95.247,
+      "rssMiB": 315.15,
+      "profileSha256": "2887c2446302a0c854972ee2672fc0b82f0d376f999e4a197459a8476ad20474"
+    },
+    {
+      "environment": "Docker Linux amd64, CFS quota",
+      "case": "full-image-.25-prod",
+      "vCPU": 0.25,
+      "requests": 64,
+      "pageP95Ms": 299,
+      "healthP95Ms": 47.5,
+      "healthMaxMs": 202,
+      "cpuSeconds": 1.712451,
+      "elapsedMs": 12673,
+      "statuses": {
+        "200": 64
+      },
+      "healthStatuses": {
+        "200": 30
+      },
+      "cacheStates": {
+        "MISS": 61,
+        "HIT": 3
+      },
+      "gcCount": 6,
+      "gcWallMs": 7.853,
+      "maxGcWallMs": 1.84,
+      "rssMiB": 370.49,
+      "profileSha256": "618c506dbc2d2c86634faca59ed3a83e562ef250f6a3f4bb4adf86cb1571f9ef"
+    },
+    {
+      "environment": "Docker Linux amd64, CFS quota",
+      "case": "full-invalid-.25-prod",
+      "vCPU": 0.25,
+      "requests": 120,
+      "pageP95Ms": 98,
+      "healthP95Ms": 62.9,
+      "healthMaxMs": 182,
+      "cpuSeconds": 3.578402,
+      "elapsedMs": 23902,
+      "statuses": {
+        "400": 60,
+        "404": 60
+      },
+      "healthStatuses": {
+        "200": 57
+      },
+      "cacheStates": {
+        "HIT": 60,
+        "MISS": 60
+      },
+      "gcCount": 40,
+      "gcWallMs": 225.526,
+      "maxGcWallMs": 88.919,
+      "rssMiB": 392.37,
+      "profileSha256": "0e824785b262ee31160896dd662c2be1381f62040fb5676628eeaa1e6ba6efb2"
+    },
+    {
+      "environment": "Docker Linux amd64, CFS quota",
+      "case": "full-search-.25-baseline",
+      "vCPU": 0.25,
+      "requests": 8,
+      "pageP95Ms": 6795.6,
+      "healthP95Ms": 2500.6,
+      "healthMaxMs": 4299,
+      "cpuSeconds": 8.891561,
+      "elapsedMs": 61808,
+      "statuses": {
+        "200": 8
+      },
+      "healthStatuses": {
+        "200": 97
+      },
+      "cacheStates": {
+        "null": 8
+      },
+      "gcCount": 962,
+      "gcWallMs": 7957.303,
+      "maxGcWallMs": 197.411,
+      "rssMiB": 418.83,
+      "profileSha256": "51335e78d67d30ab2fb564cf754d91f7f6178c643568aa2ecfbf84cc67c1984a"
+    },
+    {
+      "environment": "Docker Linux amd64, CFS quota",
+      "case": "full-search-.25-bulk-normalizer",
+      "vCPU": 0.25,
+      "requests": 8,
+      "pageP95Ms": 3391.5,
+      "healthP95Ms": 182.3,
+      "healthMaxMs": 1990,
+      "cpuSeconds": 5.39778,
+      "elapsedMs": 58393,
+      "statuses": {
+        "200": 8
+      },
+      "healthStatuses": {
+        "200": 125
+      },
+      "cacheStates": {
+        "null": 8
+      },
+      "gcCount": 104,
+      "gcWallMs": 1794.558,
+      "maxGcWallMs": 103.259,
+      "rssMiB": 371.22,
+      "profileSha256": "13ee9c57039a99775c66fa67c3ba658cafc98532b7cb29f53c0068742c89d8a0"
+    },
+    {
+      "environment": "Docker Linux amd64, CFS quota",
+      "case": "full-light-api-.25-prod",
+      "vCPU": 0.25,
+      "requests": 120,
+      "pageP95Ms": 4517.7,
+      "healthP95Ms": 2367.6,
+      "healthMaxMs": 3206,
+      "cpuSeconds": 4.088011,
+      "elapsedMs": 24229,
+      "statuses": {
+        "200": 120
+      },
+      "healthStatuses": {
+        "200": 40
+      },
+      "cacheStates": {
+        "null": 90,
+        "HIT": 30
+      },
+      "gcCount": 67,
+      "gcWallMs": 1165.387,
+      "maxGcWallMs": 295.305,
+      "rssMiB": 339.5,
+      "profileSha256": "3657095c978d9937474219955cfc87893697d65688c37d5f3ecd07c856939f5c"
+    },
+    {
+      "environment": "Docker Linux amd64, CFS quota",
+      "case": "full-light-api-.25-warm",
+      "vCPU": 0.25,
+      "requests": 120,
+      "pageP95Ms": 192.8,
+      "healthP95Ms": 20.4,
+      "healthMaxMs": 892,
+      "cpuSeconds": 2.813258,
+      "elapsedMs": 24094,
+      "statuses": {
+        "200": 120
+      },
+      "healthStatuses": {
+        "200": 56
+      },
+      "cacheStates": {
+        "null": 90,
+        "HIT": 30
+      },
+      "gcCount": 28,
+      "gcWallMs": 300.055,
+      "maxGcWallMs": 101.099,
+      "rssMiB": 346.85,
+      "profileSha256": "f5c6b19d74bf7967ac4d955b8099f823e97a5ba5f00f54633760df939a5bc954"
+    },
+    {
+      "environment": "Docker Linux amd64, CFS quota",
+      "case": "full-api-.25-prod",
+      "vCPU": 0.25,
+      "requests": 120,
+      "pageP95Ms": 20029.9,
+      "healthP95Ms": 10020.7,
+      "healthMaxMs": 10021,
+      "cpuSeconds": 11.653635,
+      "elapsedMs": 45582,
+      "statuses": {
+        "200": 13,
+        "error": 107
+      },
+      "healthStatuses": {
+        "200": 3,
+        "error": 4
+      },
+      "cacheStates": {
+        "null": 13,
+        "undefined": 107
+      },
+      "gcCount": 787,
+      "gcWallMs": 7225.556,
+      "maxGcWallMs": 191.626,
+      "rssMiB": 484.95,
+      "profileSha256": "f3996e8c47edc85e6bf8c7c6cf30a82d960221747658477272a228704a601823"
+    },
+    {
+      "environment": "AWS Fargate Linux x86, native CPU shares",
+      "case": "mixed-360-5rps",
+      "vCPU": 0.25,
+      "requests": 360,
+      "pageP95Ms": 4796.2,
+      "healthP95Ms": 1298.0,
+      "healthMaxMs": 2003.3,
+      "cpuSeconds": 14.078659,
+      "elapsedMs": 71999,
+      "statuses": {
+        "200": 360
+      },
+      "healthStatuses": {
+        "200": 113
+      },
+      "cacheStates": {
+        "HIT": 350,
+        "MISS": 10
+      },
+      "gcCount": 80,
+      "gcWallMs": 3327.963,
+      "maxGcWallMs": 300.35,
+      "rssMiB": 645.27
+    },
+    {
+      "environment": "AWS Fargate Linux x86, native CPU shares",
+      "case": "peak-full-minute-796",
+      "vCPU": 0.25,
+      "requests": 796,
+      "pageP95Ms": 14795.8,
+      "healthP95Ms": 10004.9,
+      "healthMaxMs": 10004.9,
+      "cpuSeconds": 15.756816,
+      "elapsedMs": 65914,
+      "statuses": {
+        "200": 796
+      },
+      "healthStatuses": {
+        "200": 15,
+        "error": 1
+      },
+      "cacheStates": {
+        "HIT": 791,
+        "MISS": 5
+      },
+      "gcCount": 73,
+      "gcWallMs": 3992.636,
+      "maxGcWallMs": 206.359,
+      "rssMiB": 803.82
+    },
+    {
+      "environment": "AWS Fargate Linux x86, native CPU shares",
+      "case": "mixed-360-5rps",
+      "vCPU": 0.5,
+      "requests": 360,
+      "pageP95Ms": 685.0,
+      "healthP95Ms": 116.5,
+      "healthMaxMs": 726.4,
+      "cpuSeconds": 13.704308,
+      "elapsedMs": 71926,
+      "statuses": {
+        "200": 360
+      },
+      "healthStatuses": {
+        "200": 166
+      },
+      "cacheStates": {
+        "HIT": 350,
+        "MISS": 10
+      },
+      "gcCount": 62,
+      "gcWallMs": 975.87,
+      "maxGcWallMs": 184.134,
+      "rssMiB": 653.97
+    },
+    {
+      "environment": "AWS Fargate Linux x86, native CPU shares",
+      "case": "peak-full-minute-796",
+      "vCPU": 0.5,
+      "requests": 796,
+      "pageP95Ms": 3825.4,
+      "healthP95Ms": 2413.1,
+      "healthMaxMs": 3924.9,
+      "cpuSeconds": 16.131304,
+      "elapsedMs": 59223,
+      "statuses": {
+        "200": 796
+      },
+      "healthStatuses": {
+        "200": 86
+      },
+      "cacheStates": {
+        "HIT": 791,
+        "MISS": 5
+      },
+      "gcCount": 74,
+      "gcWallMs": 1609.434,
+      "maxGcWallMs": 180.737,
+      "rssMiB": 818.63
+    }
+  ]
+}

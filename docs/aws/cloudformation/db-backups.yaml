@@ -1,0 +1,200 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Private, retained MySQL logical backups and a dedicated GitHub OIDC writer. Deploy only after approval for issue 1828.
+
+Parameters:
+  RdsSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: The verified security group of tanah-mysql; no existing rules are replaced.
+  SsmKeyArn:
+    Type: String
+    AllowedPattern: 'arn:aws:kms:il-central-1:250598594267:key/[a-f0-9-]+'
+    Description: Key ARN resolved from alias/aws/ssm for the dedicated backup credential.
+
+Resources:
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub bible-on-site-db-backups-${AWS::AccountId}-${AWS::Region}
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      ObjectLockEnabled: true
+      ObjectLockConfiguration:
+        ObjectLockEnabled: Enabled
+        Rule:
+          DefaultRetention:
+            Mode: GOVERNANCE
+            Days: 56
+      LifecycleConfiguration:
+        Rules:
+          - Id: WeeklyRetention
+            Status: Enabled
+            Prefix: weekly/
+            ExpirationInDays: 56
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 1
+          - Id: MonthlyRetention
+            Status: Enabled
+            Prefix: monthly/
+            ExpirationInDays: 366
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 1
+          - Id: IncompleteUploadsAndExpiredMarkers
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+            ExpiredObjectDeleteMarker: true
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Purpose
+          Value: independent-db-backups
+
+  BackupBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BackupBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: RequireTls
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !GetAtt BackupBucket.Arn
+              - !Sub ${BackupBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  BackupWriter:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: bible-on-site-db-backup
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: repo:bible-on-site/bible-on-site:ref:refs/heads/master
+      Policies:
+        - PolicyName: DedicatedBackupOnly
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadBackupCredentialOnly
+                Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-backup/db-url
+              - Sid: DecryptBackupCredentialOnly
+                Effect: Allow
+                Action: kms:Decrypt
+                Resource: !Ref SsmKeyArn
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
+                    kms:EncryptionContext:PARAMETER_ARN: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-backup/db-url
+              - Sid: InspectBackupProtection
+                Effect: Allow
+                Action:
+                  - s3:GetBucketVersioning
+                  - s3:GetBucketObjectLockConfiguration
+                  - s3:GetBucketPublicAccessBlock
+                Resource: !GetAtt BackupBucket.Arn
+              - Sid: WriteRetainedBackups
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:AbortMultipartUpload
+                Resource:
+                  - !Sub ${BackupBucket.Arn}/weekly/*
+                  - !Sub ${BackupBucket.Arn}/monthly/*
+              - Sid: BoundWeeklyRetention
+                Effect: Allow
+                Action: s3:PutObjectRetention
+                Resource: !Sub ${BackupBucket.Arn}/weekly/*
+                Condition:
+                  NumericGreaterThanEquals:
+                    s3:object-lock-remaining-retention-days: 55
+                  NumericLessThanEquals:
+                    s3:object-lock-remaining-retention-days: 57
+              - Sid: BoundMonthlyRetention
+                Effect: Allow
+                Action: s3:PutObjectRetention
+                Resource: !Sub ${BackupBucket.Arn}/monthly/*
+                Condition:
+                  NumericGreaterThanEquals:
+                    s3:object-lock-remaining-retention-days: 365
+                  NumericLessThanEquals:
+                    s3:object-lock-remaining-retention-days: 367
+              - Sid: InspectRegionalDatabaseAndLeases
+                Effect: Allow
+                Action:
+                  - rds:DescribeDBInstances
+                  - ec2:DescribeSecurityGroupRules
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:RequestedRegion: !Ref AWS::Region
+              - Sid: LeaseOnlyTheDatabaseGroup
+                # Request tags are absent when authorizing ingress against an
+                # existing group — TagSpecifications describe the new rule, not
+                # the group resource — so the group authorization is scoped by
+                # the deployed stack's region and VPC instead. New-rule tag
+                # restrictions stay on the security-group-rule and CreateTags
+                # authorizations below. Mirrors the approved deployed template.
+                Effect: Allow
+                Action: ec2:AuthorizeSecurityGroupIngress
+                Resource: !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${RdsSecurityGroupId}
+                Condition:
+                  StringEquals:
+                    ec2:Region: il-central-1
+                    ec2:Vpc: arn:aws:ec2:il-central-1:250598594267:vpc/vpc-0d6af72e472db138c
+              - Sid: RevokeFromDatabaseGroupOnly
+                # EC2 authorizes revocation on the group, not tagged rule ARNs.
+                # The existing helper verifies the complete owned lease before revoke.
+                Effect: Allow
+                Action: ec2:RevokeSecurityGroupIngress
+                Resource: !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/${RdsSecurityGroupId}
+              - Sid: CreateOnlyBackupRules
+                Effect: Allow
+                Action: ec2:AuthorizeSecurityGroupIngress
+                Resource: !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group-rule/*
+                Condition:
+                  StringEquals:
+                    aws:RequestTag/Source: github-actions-build
+                    aws:RequestTag/Job: backup
+              - Sid: TagOnlyNewBackupRules
+                Effect: Allow
+                Action: ec2:CreateTags
+                Resource: !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group-rule/*
+                Condition:
+                  StringEquals:
+                    ec2:CreateAction: AuthorizeSecurityGroupIngress
+                    aws:RequestTag/Source: github-actions-build
+                    aws:RequestTag/Job: backup
+Outputs:
+  BucketName:
+    Value: !Ref BackupBucket
+  WriterRoleArn:
+    Value: !GetAtt BackupWriter.Arn

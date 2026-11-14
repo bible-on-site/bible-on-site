@@ -1,25 +1,48 @@
-// import Image from "next/image";
-
-import { toLetters } from "gematry";
+import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 import { Suspense } from "react";
-import { getPerekByPerekId } from "../../../data/perek-dto";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
+import { ReadingTime } from "@/app/components/ReadingTime";
+import { loadRecitation } from "@/lib/recitation-loader";
+import { getAdjacentPereks, getPerekByPerekId } from "../../../data/perek-dto";
 import { getPerekIdsForSefer, getSeferByName } from "../../../data/sefer-dto";
 import { getArticleSummariesByPerekId } from "../../../lib/articles";
+import {
+	getPerekDedications,
+	getSeferDedications,
+	getSeferPerekDedicationLines,
+} from "../../../lib/dedications/loaders";
+import { seferIdByName } from "../../../lib/dedications/service";
 import { getPerushimByPerekId } from "../../../lib/perushim";
+import {
+	getPerekMetric,
+	getPerekProgressUnits,
+	metricOrFallback,
+} from "../../../lib/reading-metrics";
+import {
+	COLLECTION_TAGS,
+	cachedPerKey,
+	perekArticlesTag,
+	perekPerushimTag,
+} from "../../../lib/revalidate/tags";
 import { buildPerekGraph } from "../../../lib/seo/core-jsonld";
-import { buildEntityRefLookup } from "../../../lib/tanahpedia/entity-ref-lookup";
-import type { PerekEntityReference } from "../../../lib/tanahpedia/service";
-import { getEntityReferencesForPerek } from "../../../lib/tanahpedia/service";
+import { pageMetadata } from "../../../lib/seo/opengraph";
+import { selectPerekImages } from "../../../lib/seo/perek-illustrations";
+import { getPerekImagesByChapter } from "../../../lib/seo/perek-images-data";
+import { fetchAllEntityRefs } from "../../../lib/tanahpedia/perek-entity-refs";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "../../components/dedications/DedicationLines";
 import { JsonLd } from "../../components/JsonLd";
-import { ArticlesSection } from "./components/ArticlesSection";
 import Breadcrumb from "./components/Breadcrumb";
+import { DailyArticlesSection } from "./components/DailyArticlesSection";
+import { PerekHeading } from "./components/PerekHeading";
+import { PerekIntro } from "./components/PerekIntro";
+import { PerekNav } from "./components/PerekNav";
+import { PerekText } from "./components/PerekText";
 import { PerushimSection } from "./components/PerushimSection";
-import { Ptuah } from "./components/Ptuha";
-import { renderPasukWithEntityRefs } from "./components/pasuk-renderer";
 import SeferComposite from "./components/SeferComposite";
-import { Stuma } from "./components/Stuma";
-import { TanahpediaLink } from "./components/TanahpediaLink";
 import styles from "./page.module.css";
 // perakim are a closed list — no fallback rendering for unknown IDs.
 export const dynamicParams = false;
@@ -35,57 +58,86 @@ export const dynamicParams = false;
  * - On-demand revalidation provides precise control over when content updates
  *
  * To invalidate:
- * - Single page: revalidatePath('/929/{perekId}')
+ * - One perek's articles: revalidateTag('perek:{perekId}:articles') — the
+ *   entity-scoped tag `/api/revalidate` resolves from an article change.
  * - All articles: revalidateTag('articles')
+ * - Single page: revalidatePath('/929/{perekId}')
  */
-const getCachedArticleSummaries = unstable_cache(
-	async (perekId: number) => getArticleSummariesByPerekId(perekId),
-	["article-summaries"],
-	{
-		tags: ["articles"],
-		revalidate: false,
-	},
+const getCachedArticleSummaries = cachedPerKey(
+	"article-summaries",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
+	(perekId: number) => getArticleSummariesByPerekId(perekId),
 );
 
 /** Cache perushim summaries per perek (same caching strategy as articles). */
-const getCachedPerushim = unstable_cache(
-	async (perekId: number) => getPerushimByPerekId(perekId),
-	["perushim"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
-	},
-);
-/** Cache entity references for tanahpedia links in pasuk text. */
-const getCachedEntityRefs = unstable_cache(
-	async (perekId: number) => getEntityReferencesForPerek(perekId),
-	["tanahpedia-entity-refs"],
-	{
-		tags: ["tanahpedia-entity-refs"],
-		revalidate: false,
-	},
+const getCachedPerushim = cachedPerKey(
+	"perushim",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.perushim, perekPerushimTag(Number(key))],
+	(perekId: number) => getPerushimByPerekId(perekId),
 );
 
 /**
- * Fetch entity references for all perekIds in a sefer.
- * Returns a serializable record (perekId → refs[]) for passing to client components.
+ * Perek word counts decorate fixed canonical content (#2607) — the metric can
+ * only change on a counting-policy redeploy, so the same `perushim`-style
+ * build-time cache is correct: `reading-metrics` tag lets an operator flush it
+ * explicitly without waiting for a deploy.
  */
-async function fetchAllEntityRefs(
-	perekIds: number[],
-): Promise<Record<number, PerekEntityReference[]>> {
-	const allRefs = await Promise.all(
-		perekIds.map((id) => getCachedEntityRefs(id)),
-	);
-	const result: Record<number, PerekEntityReference[]> = {};
-	for (let i = 0; i < perekIds.length; i++) {
-		if (allRefs[i].length > 0) {
-			result[perekIds[i]] = allRefs[i];
-		}
-	}
-	return result;
-}
+const getCachedPerekMetric = unstable_cache(
+	async (perekId: number) => getPerekMetric(perekId),
+	["perek-metric"],
+	{
+		tags: ["reading-metrics"],
+		revalidate: false,
+	},
+);
 
-// TODO: figure out if need to use generateMetadata
+/** Per-pasuk progress units — the same cache contract as the metric row. */
+const getCachedPerekProgressUnits = unstable_cache(
+	async (perekId: number) => getPerekProgressUnits(perekId),
+	["perek-progress-units"],
+	{
+		tags: ["reading-metrics"],
+		revalidate: false,
+	},
+);
+export async function generateMetadata({
+	params,
+}: {
+	params: Promise<{ number: string }>;
+}): Promise<Metadata> {
+	const { number } = await params;
+	const perekId = Number.parseInt(number, 10);
+	const perekObj = getPerekByPerekId(perekId);
+	const illustration = (await getPerekImagesByChapter())[perekId]?.[0];
+	const title = `${perekObj.source} | תנ"ך על הפרק`;
+	const description =
+		illustration?.description ??
+		`קריאת ${perekObj.source} בתנ"ך, עם פירושים ומאמרים על הפרק.`;
+	return {
+		...pageMetadata({
+			title,
+			description,
+			canonical: `/929/${perekId}`,
+			image: illustration
+				? {
+						url: illustration.socialSrc,
+						width: illustration.socialWidth,
+						height: illustration.socialHeight,
+						alt: illustration.alt,
+					}
+				: undefined,
+		}),
+		...(illustration
+			? {
+					robots: {
+						googleBot: { "max-image-preview": "large" as const },
+					},
+				}
+			: {}),
+	};
+}
 export default async function Perek({
 	params,
 }: {
@@ -94,18 +146,52 @@ export default async function Perek({
 	const { number } = await params;
 	const perekId = Number.parseInt(number, 10); // convert string to number
 	const perekObj = getPerekByPerekId(perekId);
+	const recitation = loadRecitation(perekObj);
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
 	const articles = await getCachedArticleSummaries(perekId);
 	const perushim = await getCachedPerushim(perekId);
-	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
-	const entityRefLookup = buildEntityRefLookup(
-		entityRefsByPerek[perekId] ?? [],
+	// The metric is optional decoration — a failed read renders the page
+	// badge-less rather than erroring, and stays uncached so the next render
+	// retries. getCachedPerekMetric itself only caches a successful read.
+	const perekMetric = await metricOrFallback(`perek ${perekId}`, null, () =>
+		getCachedPerekMetric(perekId),
 	);
+	const perekProgressUnits = await metricOrFallback(
+		`perek ${perekId} progress`,
+		[],
+		() => getCachedPerekProgressUnits(perekId),
+	);
+	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
+	const imagesByPerek = await getPerekImagesByChapter();
+	const seferImages = selectPerekImages(imagesByPerek, perekIds);
+	const { prev: prevPerek, next: nextPerek } = getAdjacentPereks(perekId);
+
+	// Dedications (#2731): the flat page renders the perek's whole
+	// applicable set — direct perek scopes plus sefer/helek ancestors —
+	// while the book keeps the sefer+helek set on its cover and only
+	// perek-scoped lines on each spread header. The spread map resolves
+	// the sefer's whole perek range in one cached loader call rather than
+	// a per-perek fan-out; `perek:{id}:dedications`/`sefer:{id}:dedications`
+	// tags still map the page to exactly the scopes it renders.
+	const seferId = seferIdByName(perekObj.sefer);
+	const seferDedicationLines = dedicationLines(
+		seferId === undefined ? [] : await getSeferDedications(seferId),
+	);
+	const flatPageLines = dedicationLines(await getPerekDedications(perekId));
+	const perekDedications =
+		seferId === undefined ? {} : await getSeferPerekDedicationLines(seferId);
 
 	return (
 		<>
-			<JsonLd data={buildPerekGraph(perekObj)} />
+			<JsonLd
+				data={buildPerekGraph(
+					perekObj,
+					imagesByPerek[perekId] ?? [],
+					recitation,
+					perekMetric,
+				)}
+			/>
 			<Suspense>
 				<SeferComposite
 					perekObj={perekObj}
@@ -113,50 +199,49 @@ export default async function Perek({
 					perushim={perushim}
 					perekIds={perekIds}
 					entityRefsByPerek={entityRefsByPerek}
+					imagesByPerek={seferImages}
+					perekPasukUnits={perekProgressUnits}
+					perekMetric={perekMetric}
+					seferDedications={seferDedicationLines}
+					perekDedications={perekDedications}
 				/>
 			</Suspense>
 			<div className={`${styles.perekContainer} seo-content`}>
+				<ReadingProgress
+					units={perekProgressUnits}
+					scroller={`.${styles.perekContainer}`}
+					content={`.${styles.perekText}`}
+					unitSelector="#pasuk-{key}"
+				/>
 				<Breadcrumb perekObj={perekObj} />
-
-				<article className={styles.perekText}>
-					{perekObj.pesukim.map((pasuk, pasukIdx) => {
-						const pasukKey = pasukIdx + 1;
-						const pasukNumElement = (
-							<span className={styles.pasukNum}>{toLetters(pasukIdx + 1)}</span>
-						);
-						const pasukElement = renderPasukWithEntityRefs(
-							pasuk.segments,
-							pasukIdx,
-							entityRefLookup,
-							Ptuah,
-							Stuma,
-							styles.qri,
-							(entryUniqueName, children, key) => (
-								<TanahpediaLink
-									key={key}
-									entryUniqueName={entryUniqueName}
-									className={styles.tanahpediaLink}
-								>
-									{children}
-								</TanahpediaLink>
-							),
-						);
-						return (
-							<span key={pasukKey} id={`pasuk-${pasukKey}`}>
-								{pasukNumElement}
-								<span> </span>
-								{pasukElement}
-								<span> </span>
-							</span>
-						);
-					})}
-				</article>
+				<PerekHeading perekObj={perekObj} />
+				<DedicationLines lines={flatPageLines} />
+				<ReadingTime
+					estimatedSeconds={perekMetric?.estimatedSeconds}
+					className={styles.readingTime}
+				/>
+				<PerekIntro images={imagesByPerek[perekId] ?? []} />
+				<PerekText
+					perekObj={perekObj}
+					entityRefs={entityRefsByPerek[perekId] ?? []}
+				/>
+				<PerekNav prev={prevPerek} next={nextPerek} />
 
 				{/* Perushim section - commentaries carousel */}
-				<PerushimSection perekId={perekId} perushim={perushim} />
+				<PerushimSection
+					perekId={perekId}
+					perushim={perushim}
+					scrollStorageKey={`perushim-perek-${perekId}`}
+				/>
 
-				{/* Articles section - fetched directly from database for lower latency */}
-				<ArticlesSection articles={articles} />
+				{/* Articles section - fetched directly from database for lower
+				    latency; the client swaps in the daily Hebrew-date override
+				    (#3098) only when this perek is today's resolved daily perek. */}
+				<DailyArticlesSection
+					perekId={perekId}
+					articles={articles}
+					scrollStorageKey={`articles-perek-${perekId}`}
+				/>
 			</div>
 		</>
 	);

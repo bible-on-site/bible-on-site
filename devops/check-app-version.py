@@ -24,9 +24,12 @@ def check_version(path: Path) -> list[str]:
     if minor >= 100 or patch >= 100_000:
         return ["Version minor must be below 100 and patch below 100000"]
 
+    # One shared build number for every store that accepts large integers
+    # (Android versionCode, Apple CFBundleVersion). Windows keeps 0: the Store
+    # reserves the MSIX revision and the marketing version leads anyway.
     expected = {
-        "android": major * 10_000_000 + minor * 100_000 + patch,
-        "other platforms": patch,
+        "other platforms": major * 10_000_000 + minor * 100_000 + patch,
+        "windows": 0,
     }
     actual = {}
     versions = re.findall(
@@ -34,9 +37,9 @@ def check_version(path: Path) -> list[str]:
         content,
     )
     for condition, value in versions:
-        if "== 'android'" in condition:
-            platform = "android"
-        elif "!= 'android'" in condition:
+        if "== 'windows'" in condition:
+            platform = "windows"
+        elif "!= 'windows'" in condition:
             platform = "other platforms"
         else:
             return [f"Unrecognized ApplicationVersion condition: {condition}"]

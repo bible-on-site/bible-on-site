@@ -2,8 +2,8 @@ import { execSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ECRClient } from "@aws-sdk/client-ecr";
-import type { ECRConfig } from "./ecr-client.mjs";
-import { ECRDeployerBase } from "./ecr-deployer-base.mjs";
+import type { ECRConfig } from "./ecr-client.mts";
+import { ECRDeployerBase } from "./ecr-deployer-base.mts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

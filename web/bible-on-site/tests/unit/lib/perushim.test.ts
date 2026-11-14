@@ -9,10 +9,16 @@ jest.mock("../../../src/lib/api-client", () => ({
 
 import { query } from "../../../src/lib/api-client";
 import {
-	getPerushDetail,
-	getPerushimByPerekId,
-	getPerushNotes,
 	getAllPerushPerekNamePairs,
+	getPerushDetail,
+	getPerushNotes,
+	getPerushNotesBatch,
+	getPerushNotesForPasuk,
+	getPerushNotesForRanges,
+	getPerushimByPerekId,
+	getPerushimByPerekIds,
+	getPerushimForRangeGroups,
+	getPerushimForRanges,
 } from "../../../src/lib/perushim";
 
 const mockQuery = query as jest.MockedFunction<typeof query>;
@@ -41,13 +47,17 @@ describe("perushim service", () => {
 				{
 					perush_id: 2,
 					perush_name: "Rashi",
-					parshan_name: "רש\"י",
+					parshan_name: 'רש"י',
 					note_count: 5,
 					priority: 100,
 				},
 			];
 
-			mockQuery.mockResolvedValue(mockRows);
+			mockQuery
+				.mockResolvedValueOnce(mockRows)
+				.mockResolvedValueOnce([
+					{ perush_id: 2, word_count: 50, estimated_seconds: 14 },
+				]);
 
 			const result = await getPerushimByPerekId(1);
 
@@ -55,10 +65,48 @@ describe("perushim service", () => {
 				expect.stringContaining("ORDER BY p.priority ASC, note_count DESC"),
 				[1],
 			);
+			// Second query: perush×perek reading metrics (#2607).
+			expect(mockQuery).toHaveBeenCalledWith(
+				expect.stringContaining("tanah_perush_metric"),
+				[1],
+			);
 			expect(result).toEqual([
 				{ id: 1, name: "Ibn Ezra", parshanName: "אבן עזרא", noteCount: 10 },
-				{ id: 2, name: "Rashi", parshanName: "רש\"י", noteCount: 5 },
+				{
+					id: 2,
+					name: "Rashi",
+					parshanName: 'רש"י',
+					noteCount: 5,
+					metric: { wordCount: 50, estimatedSeconds: 14 },
+				},
 			]);
+		});
+
+		it("keeps loaded summaries when the optional metric read fails", async () => {
+			// A non-schema metric failure must degrade to no badge — it must
+			// not hide the commentaries the summary query already loaded.
+			mockQuery
+				.mockResolvedValueOnce([
+					{
+						perush_id: 2,
+						perush_name: "Rashi",
+						parshan_name: 'רש"י',
+						note_count: 5,
+						priority: 100,
+					},
+				])
+				.mockRejectedValueOnce(new Error("metric timeout"));
+
+			const result = await getPerushimByPerekId(1);
+
+			expect(result).toEqual([
+				{ id: 2, name: "Rashi", parshanName: 'רש"י', noteCount: 5 },
+			]);
+			expect(console.warn).toHaveBeenCalledWith(
+				expect.stringContaining("Reading metric read failed"),
+				"perushim perek 1",
+				"metric timeout",
+			);
 		});
 
 		it("queries with priority in SELECT and GROUP BY", async () => {
@@ -71,12 +119,10 @@ describe("perushim service", () => {
 			expect(sql).toContain("GROUP BY p.id, p.name, pa.name, p.priority");
 		});
 
-		it("returns empty array on Error instance", async () => {
+		it("rethrows on Error instance so a false empty is never cached", async () => {
 			mockQuery.mockRejectedValue(new Error("DB error"));
 
-			const result = await getPerushimByPerekId(1);
-
-			expect(result).toEqual([]);
+			await expect(getPerushimByPerekId(1)).rejects.toThrow("DB error");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch perushim for perek %d:",
 				1,
@@ -84,12 +130,12 @@ describe("perushim service", () => {
 			);
 		});
 
-		it("returns empty array on non-Error rejection", async () => {
+		it("rethrows on non-Error rejection", async () => {
 			mockQuery.mockRejectedValue("raw string error");
 
-			const result = await getPerushimByPerekId(1);
-
-			expect(result).toEqual([]);
+			await expect(getPerushimByPerekId(1)).rejects.toBe(
+				"raw string error",
+			);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch perushim for perek %d:",
 				1,
@@ -104,20 +150,25 @@ describe("perushim service", () => {
 				.mockResolvedValueOnce([
 					{
 						perush_name: "Rashi on Torah",
-						parshan_name: "רש\"י",
+						parshan_name: 'רש"י',
 						parshan_birth_year: 1040,
 					},
 				])
 				.mockResolvedValueOnce([
 					{ pasuk: 1, note_idx: 0, note_content: "<p>Comment</p>" },
-				]);
+				])
+				.mockResolvedValueOnce([{ word_count: 50, estimated_seconds: 14 }]);
 
 			const result = await getPerushDetail(38, 1);
 
 			expect(result).not.toBeNull();
-			expect(result?.parshanName).toBe("רש\"י");
+			expect(result?.parshanName).toBe('רש"י');
 			expect(result?.parshanBirthYear).toBe(1040);
 			expect(result?.notes).toHaveLength(1);
+			expect(result?.metric).toEqual({
+				wordCount: 50,
+				estimatedSeconds: 14,
+			});
 		});
 
 		it("omits parshanBirthYear when DB returns null", async () => {
@@ -129,6 +180,7 @@ describe("perushim service", () => {
 						parshan_birth_year: null,
 					},
 				])
+				.mockResolvedValueOnce([])
 				.mockResolvedValueOnce([]);
 
 			const result = await getPerushDetail(2, 1);
@@ -136,6 +188,28 @@ describe("perushim service", () => {
 			expect(result).not.toBeNull();
 			expect(result?.parshanName).toBe("לא ידוע");
 			expect(result).not.toHaveProperty("parshanBirthYear");
+			expect(result).not.toHaveProperty("metric");
+		});
+
+		it("keeps the loaded detail when the optional metric read fails", async () => {
+			mockQuery
+				.mockResolvedValueOnce([
+					{
+						perush_name: "Rashi on Torah",
+						parshan_name: 'רש"י',
+						parshan_birth_year: 1040,
+					},
+				])
+				.mockResolvedValueOnce([
+					{ pasuk: 1, note_idx: 0, note_content: "<p>Comment</p>" },
+				])
+				.mockRejectedValueOnce(new Error("metric timeout"));
+
+			const result = await getPerushDetail(38, 1);
+
+			expect(result).not.toBeNull();
+			expect(result?.notes).toHaveLength(1);
+			expect(result).not.toHaveProperty("metric");
 		});
 
 		it("returns null when perush not found", async () => {
@@ -146,12 +220,10 @@ describe("perushim service", () => {
 			expect(result).toBeNull();
 		});
 
-		it("returns null on Error instance", async () => {
+		it("rethrows on Error instance so a false 404 is never cached", async () => {
 			mockQuery.mockRejectedValue(new Error("timeout"));
 
-			const result = await getPerushDetail(7, 2);
-
-			expect(result).toBeNull();
+			await expect(getPerushDetail(7, 2)).rejects.toThrow("timeout");
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch perush detail %d:",
 				7,
@@ -159,12 +231,12 @@ describe("perushim service", () => {
 			);
 		});
 
-		it("returns null on non-Error rejection", async () => {
+		it("rethrows on non-Error rejection", async () => {
 			mockQuery.mockRejectedValue({ code: "ECONN" });
 
-			const result = await getPerushDetail(7, 2);
-
-			expect(result).toBeNull();
+			await expect(getPerushDetail(7, 2)).rejects.toEqual({
+				code: "ECONN",
+			});
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch perush detail %d:",
 				7,
@@ -192,12 +264,12 @@ describe("perushim service", () => {
 			]);
 		});
 
-		it("returns empty array on Error instance", async () => {
+		it("rethrows on Error instance so a false empty is never cached", async () => {
 			mockQuery.mockRejectedValue(new Error("connection lost"));
 
-			const result = await getPerushNotes(5, 3);
-
-			expect(result).toEqual([]);
+			await expect(getPerushNotes(5, 3)).rejects.toThrow(
+				"connection lost",
+			);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch notes for perush %d perek %d:",
 				5,
@@ -206,12 +278,10 @@ describe("perushim service", () => {
 			);
 		});
 
-		it("returns empty array on non-Error rejection", async () => {
+		it("rethrows on non-Error rejection", async () => {
 			mockQuery.mockRejectedValue(42);
 
-			const result = await getPerushNotes(5, 3);
-
-			expect(result).toEqual([]);
+			await expect(getPerushNotes(5, 3)).rejects.toBe(42);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch notes for perush %d perek %d:",
 				5,
@@ -221,47 +291,722 @@ describe("perushim service", () => {
 		});
 	});
 
+	describe("getPerushNotesForPasuk", () => {
+		it("queries notes for a single pasuk by perush name", async () => {
+			mockQuery.mockResolvedValue([
+				{ pasuk: 23, note_idx: 0, note_content: "<p>A</p>" },
+				{ pasuk: 23, note_idx: 1, note_content: "<p>B</p>" },
+			]);
+
+			const result = await getPerushNotesForPasuk("רש\"י", 32, 23);
+
+			expect(mockQuery).toHaveBeenCalledWith(
+				expect.stringContaining(
+					"WHERE p.name = ? AND n.perek_id = ? AND n.pasuk = ?",
+				),
+				['רש"י', 32, 23],
+			);
+			expect(result).toEqual([
+				{ pasuk: 23, noteIdx: 0, noteContent: "<p>A</p>" },
+				{ pasuk: 23, noteIdx: 1, noteContent: "<p>B</p>" },
+			]);
+		});
+
+		it("rethrows on Error instance so a false empty is never cached", async () => {
+			mockQuery.mockRejectedValue(new Error("connection lost"));
+
+			await expect(
+				getPerushNotesForPasuk("רש\"י", 5, 3),
+			).rejects.toThrow("connection lost");
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch notes for perush %s perek %d pasuk %d:",
+				'רש"י',
+				5,
+				3,
+				"connection lost",
+			);
+		});
+
+		it("rethrows on non-Error rejection", async () => {
+			mockQuery.mockRejectedValue(42);
+
+			await expect(getPerushNotesForPasuk("רש\"י", 5, 3)).rejects.toBe(
+				42,
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch notes for perush %s perek %d pasuk %d:",
+				'רש"י',
+				5,
+				3,
+				42,
+			);
+		});
+	});
+
+	describe("getPerushNotesBatch", () => {
+		it("binds one placeholder per perush id", async () => {
+			mockQuery.mockResolvedValue([
+				{
+					perush_id: 2,
+					pasuk: 1,
+					note_idx: 0,
+					note_content: "<p>B</p>",
+				},
+				{
+					perush_id: 1,
+					pasuk: 1,
+					note_idx: 0,
+					note_content: "<p>A</p>",
+				},
+			]);
+
+			const result = await getPerushNotesBatch(1, [1, 2]);
+
+			expect(mockQuery).toHaveBeenCalledWith(
+				expect.stringContaining("perush_id IN (?,?)"),
+				[1, 1, 2],
+			);
+			expect(result).toEqual({
+				2: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>B</p>" }],
+				1: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>A</p>" }],
+			});
+		});
+
+		it("deduplicates ids and drops non-positive ones", async () => {
+			mockQuery.mockResolvedValue([]);
+
+			await getPerushNotesBatch(1, [3, 3, 0, -1, 5]);
+
+			expect(mockQuery).toHaveBeenCalledWith(expect.any(String), [1, 3, 5]);
+		});
+
+		it("returns empty without querying when no valid ids remain", async () => {
+			const result = await getPerushNotesBatch(1, [0, -2]);
+
+			expect(result).toEqual({});
+			expect(mockQuery).not.toHaveBeenCalled();
+		});
+
+		it("rethrows when the query rejects so a false empty is never cached", async () => {
+			mockQuery.mockRejectedValue(new Error("connection lost"));
+
+			await expect(getPerushNotesBatch(1, [1])).rejects.toThrow(
+				"connection lost",
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch notes batch for perek %d:",
+				1,
+				"connection lost",
+			);
+		});
+
+		it("rethrows on non-Error rejection", async () => {
+			mockQuery.mockRejectedValue("raw failure");
+
+			await expect(getPerushNotesBatch(1, [1])).rejects.toBe(
+				"raw failure",
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch notes batch for perek %d:",
+				1,
+				"raw failure",
+			);
+		});
+	});
+
 	describe("getAllPerushPerekNamePairs", () => {
 		it("returns mapped pairs from query results", async () => {
 			mockQuery.mockResolvedValue([
-				{ perek_id: 1, perush_name: "רש\"י" },
-				{ perek_id: 1, perush_name: "רמב\"ן" },
-				{ perek_id: 2, perush_name: "רש\"י" },
+				{ perek_id: 1, perush_name: 'רש"י' },
+				{ perek_id: 1, perush_name: 'רמב"ן' },
+				{ perek_id: 2, perush_name: 'רש"י' },
 			]);
 
 			const result = await getAllPerushPerekNamePairs();
 
 			expect(result).toEqual([
-				{ perekId: 1, perushName: "רש\"י" },
-				{ perekId: 1, perushName: "רמב\"ן" },
-				{ perekId: 2, perushName: "רש\"י" },
+				{ perekId: 1, perushName: 'רש"י' },
+				{ perekId: 1, perushName: 'רמב"ן' },
+				{ perekId: 2, perushName: 'רש"י' },
 			]);
 			expect(mockQuery).toHaveBeenCalledWith(
 				expect.stringContaining("SELECT DISTINCT n.perek_id"),
 			);
 		});
 
-		it("returns empty array on Error instance", async () => {
-			mockQuery.mockRejectedValue(new Error("DB error"));
+		it("returns an empty array when the successful query has no pairs", async () => {
+			mockQuery.mockResolvedValue([]);
 
-			const result = await getAllPerushPerekNamePairs();
+			await expect(getAllPerushPerekNamePairs()).resolves.toEqual([]);
+			expect(console.warn).not.toHaveBeenCalled();
+		});
 
-			expect(result).toEqual([]);
+		it("propagates the original Error so a build cannot silently omit commentaries", async () => {
+			const failure = new Error("DB error");
+			mockQuery.mockRejectedValue(failure);
+
+			await expect(getAllPerushPerekNamePairs()).rejects.toBe(failure);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch perush-perek name pairs:",
 				"DB error",
 			);
 		});
 
-		it("returns empty array on non-Error rejection", async () => {
-			mockQuery.mockRejectedValue("raw error");
+		it("propagates the original non-Error rejection", async () => {
+			const failure = { code: "ECONN" };
+			mockQuery.mockRejectedValue(failure);
 
-			const result = await getAllPerushPerekNamePairs();
-
-			expect(result).toEqual([]);
+			await expect(getAllPerushPerekNamePairs()).rejects.toBe(failure);
 			expect(console.warn).toHaveBeenCalledWith(
 				"Failed to fetch perush-perek name pairs:",
-				"raw error",
+				failure,
+			);
+		});
+	});
+
+	describe("range-based queries", () => {
+		// בראשית א (31 pesukim) into בראשית ב — a cross-perek unit slice.
+		const crossPerekRanges = [
+			{
+				start: { perekId: 1, pasuk: 30 },
+				end: { perekId: 2, pasuk: 4 },
+			},
+		];
+
+		describe("getPerushimForRanges", () => {
+			it("returns empty without querying for empty ranges", async () => {
+				const result = await getPerushimForRanges([]);
+				expect(result).toEqual([]);
+				expect(mockQuery).not.toHaveBeenCalled();
+			});
+
+			it("aggregates one perush across overlapping perakim", async () => {
+				mockQuery.mockResolvedValue([
+					{
+						perush_id: 1,
+						perush_name: "Rashi",
+						parshan_name: 'רש"י',
+						perek_id: 1,
+						note_count: 3,
+						priority: 100,
+					},
+					{
+						perush_id: 1,
+						perush_name: "Rashi",
+						parshan_name: 'רש"י',
+						perek_id: 2,
+						note_count: 4,
+						priority: 100,
+					},
+					{
+						perush_id: 2,
+						perush_name: "Ibn Ezra",
+						parshan_name: "אבן עזרא",
+						perek_id: 999, // outside the slices -> falls to last order
+						note_count: 1,
+						priority: 50,
+					},
+				]);
+
+				const result = await getPerushimForRanges(crossPerekRanges);
+
+				expect(result).toHaveLength(2);
+				// Ibn Ezra wins on priority (50 < 100).
+				expect(result[0].id).toBe(2);
+				expect(result[0].perekId).toBe(999);
+				// Rashi's counts merge; the canonical link is the first
+				// perek in range order carrying notes (perek 1).
+				expect(result[1]).toEqual(
+					expect.objectContaining({
+						id: 1,
+						perekId: 1,
+						noteCount: 7,
+					}),
+				);
+			});
+
+			// Issue #2190: displayed verse totals must count distinct covered
+			// pesukim — a pasuk with several notes counts once, while the same
+			// pasuk number in another covered perek counts separately
+			// (canonical {perekId, pasuk} identity). The query therefore counts
+			// DISTINCT pasuk per (perush, perek) group before aggregation.
+			it("counts distinct pesukim per covered perek", async () => {
+				mockQuery.mockResolvedValue([]);
+
+				await getPerushimForRanges(crossPerekRanges);
+
+				const sql = mockQuery.mock.calls[0][0];
+				expect(sql).toContain("COUNT(DISTINCT n.pasuk) AS note_count");
+				expect(sql).toContain(
+					"GROUP BY p.id, p.name, pa.name, p.priority, n.perek_id",
+				);
+			});
+
+			it("breaks priority ties by descending note count", async () => {
+				mockQuery.mockResolvedValue([
+					{
+						perush_id: 1,
+						perush_name: "A",
+						parshan_name: "א",
+						perek_id: 1,
+						note_count: 2,
+						priority: 50,
+					},
+					{
+						perush_id: 2,
+						perush_name: "B",
+						parshan_name: "ב",
+						perek_id: 2,
+						note_count: 9,
+						priority: 50,
+					},
+				]);
+
+				const result = await getPerushimForRanges(crossPerekRanges);
+				expect(result.map((r) => r.id)).toEqual([2, 1]);
+			});
+
+			it("keeps the first perek in range order for the canonical link", async () => {
+				// Range jumps from perek 100 to perek 1; a perush appearing
+				// in both keeps perek 100 (first in range order).
+				mockQuery.mockResolvedValue([
+					{
+						perush_id: 1,
+						perush_name: "Rashi",
+						parshan_name: 'רש"י',
+						perek_id: 1,
+						note_count: 1,
+						priority: 100,
+					},
+					{
+						perush_id: 1,
+						perush_name: "Rashi",
+						parshan_name: 'רש"י',
+						perek_id: 100,
+						note_count: 2,
+						priority: 100,
+					},
+				]);
+
+				const result = await getPerushimForRanges([
+					{
+						start: { perekId: 100, pasuk: 5 },
+						end: { perekId: 100, pasuk: 7 },
+					},
+					{
+						start: { perekId: 1, pasuk: 1 },
+						end: { perekId: 1, pasuk: 2 },
+					},
+				]);
+				expect(result[0].perekId).toBe(100);
+				expect(result[0].noteCount).toBe(3);
+			});
+
+			it("rethrows on failure so a false empty is never cached", async () => {
+				mockQuery.mockRejectedValue(new Error("DB error"));
+				await expect(
+					getPerushimForRanges(crossPerekRanges),
+				).rejects.toThrow("DB error");
+				mockQuery.mockRejectedValue("raw error");
+				await expect(
+					getPerushimForRanges(crossPerekRanges),
+				).rejects.toBe("raw error");
+			});
+		});
+
+		describe("getPerushNotesForRanges", () => {
+			it("returns empty without querying for empty ranges", async () => {
+				const result = await getPerushNotesForRanges(1, []);
+				expect(result).toEqual([]);
+				expect(mockQuery).not.toHaveBeenCalled();
+			});
+
+			it("orders notes by range order, then pasuk, then note idx", async () => {
+				mockQuery.mockResolvedValue([
+					// DB orders by perek_id ASC; range order is 100 before 1.
+					{ perek_id: 1, pasuk: 1, note_idx: 0, note_content: "note-a" },
+					{
+						perek_id: 100,
+						pasuk: 7,
+						note_idx: 1,
+						note_content: "note-c",
+					},
+					{
+						perek_id: 100,
+						pasuk: 7,
+						note_idx: 0,
+						note_content: "note-b",
+					},
+					// Rows for perakim outside the slices sort last, stable.
+					{ perek_id: 500, pasuk: 1, note_idx: 0, note_content: "x-1" },
+					{ perek_id: 501, pasuk: 1, note_idx: 0, note_content: "x-2" },
+				]);
+
+				const result = await getPerushNotesForRanges(1, [
+					{
+						start: { perekId: 100, pasuk: 5 },
+						end: { perekId: 100, pasuk: 8 },
+					},
+					{
+						start: { perekId: 1, pasuk: 1 },
+						end: { perekId: 1, pasuk: 2 },
+					},
+				]);
+
+				expect(result.map((n) => n.noteContent)).toEqual([
+					"note-b",
+					"note-c",
+					"note-a",
+					"x-1",
+					"x-2",
+				]);
+				expect(result[0].perekId).toBe(100);
+			});
+
+			it("joins note metrics into each note's word count", async () => {
+				mockQuery.mockResolvedValue([
+					{
+						perek_id: 1,
+						pasuk: 30,
+						note_idx: 0,
+						note_content: "note-a",
+						word_count: 42,
+					},
+					// A note without a metric row keeps wordCount absent.
+					{
+						perek_id: 2,
+						pasuk: 4,
+						note_idx: 1,
+						note_content: "note-b",
+						word_count: null,
+					},
+				]);
+
+				const result = await getPerushNotesForRanges(1, crossPerekRanges);
+				expect(mockQuery).toHaveBeenCalledTimes(1);
+				expect(mockQuery.mock.calls[0][0]).toContain(
+					"LEFT JOIN tanah_note_metric",
+				);
+				expect(result[0].wordCount).toBe(42);
+				expect(result[1].wordCount).toBeUndefined();
+			});
+
+			it("falls back to the plain query when the metrics schema is missing", async () => {
+				for (const schemaError of [
+					Object.assign(new Error("no table"), {
+						code: "ER_NO_SUCH_TABLE",
+					}),
+					Object.assign(new Error("no column"), {
+						code: "ER_BAD_FIELD_ERROR",
+					}),
+					Object.assign(new Error("errno"), { errno: 1146 }),
+					Object.assign(new Error("errno"), { errno: 1054 }),
+				]) {
+					mockQuery.mockReset();
+					mockQuery
+						.mockRejectedValueOnce(schemaError)
+						.mockResolvedValueOnce([
+							{
+								perek_id: 1,
+								pasuk: 30,
+								note_idx: 0,
+								note_content: "note-a",
+							},
+						]);
+
+					const result = await getPerushNotesForRanges(
+						1,
+						crossPerekRanges,
+					);
+					expect(mockQuery).toHaveBeenCalledTimes(2);
+					expect(mockQuery.mock.calls[0][0]).toContain(
+						"tanah_note_metric",
+					);
+					expect(mockQuery.mock.calls[1][0]).not.toContain(
+						"tanah_note_metric",
+					);
+					expect(result).toHaveLength(1);
+					expect(result[0].wordCount).toBeUndefined();
+				}
+			});
+
+			it("rethrows non-schema failures without falling back", async () => {
+				mockQuery.mockRejectedValue(
+					Object.assign(new Error("denied"), {
+						code: "ER_ACCESS_DENIED_ERROR",
+					}),
+				);
+				await expect(
+					getPerushNotesForRanges(1, crossPerekRanges),
+				).rejects.toThrow("denied");
+				expect(mockQuery).toHaveBeenCalledTimes(1);
+			});
+
+			it("rethrows on failure so a false empty is never cached", async () => {
+				mockQuery.mockRejectedValue(new Error("DB error"));
+				await expect(
+					getPerushNotesForRanges(1, crossPerekRanges),
+				).rejects.toThrow("DB error");
+				mockQuery.mockRejectedValue("raw error");
+				await expect(
+					getPerushNotesForRanges(1, crossPerekRanges),
+				).rejects.toBe("raw error");
+			});
+		});
+	});
+});
+
+describe("batched perushim variants", () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+		jest.spyOn(console, "warn").mockImplementation(() => {});
+	});
+
+	afterEach(() => {
+		jest.restoreAllMocks();
+	});
+
+	describe("getPerushimByPerekIds", () => {
+		it("returns an empty map without querying for no perakim", async () => {
+			const result = await getPerushimByPerekIds([]);
+			expect(result.size).toBe(0);
+			expect(mockQuery).not.toHaveBeenCalled();
+		});
+
+		it("runs one grouped query, groups by perek, and attaches metrics", async () => {
+			mockQuery
+				.mockResolvedValueOnce([
+					{
+						perek_id: 5,
+						perush_id: 1,
+						perush_name: "Rashi",
+						parshan_name: 'רש"י',
+						note_count: 3,
+						priority: 100,
+					},
+					{
+						perek_id: 6,
+						perush_id: 2,
+						perush_name: "Ibn Ezra",
+						parshan_name: "אבן עזרא",
+						note_count: 4,
+						priority: 50,
+					},
+				])
+				.mockResolvedValueOnce([
+					{
+						perek_id: 6,
+						perush_id: 2,
+						word_count: 50,
+						estimated_seconds: 14,
+					},
+				]);
+
+			const result = await getPerushimByPerekIds([5, 6]);
+
+			const [sql, params] = mockQuery.mock.calls[0];
+			expect(sql).toContain("n.perek_id IN (?, ?)");
+			expect(sql).toContain("GROUP BY n.perek_id");
+			expect(params).toEqual([5, 6]);
+			expect(result.get(5)).toEqual([
+				{ id: 1, name: "Rashi", parshanName: 'רש"י', noteCount: 3 },
+			]);
+			expect(result.get(6)).toEqual([
+				{
+					id: 2,
+					name: "Ibn Ezra",
+					parshanName: "אבן עזרא",
+					noteCount: 4,
+					metric: { wordCount: 50, estimatedSeconds: 14 },
+				},
+			]);
+			// One notes query + one metrics query — never per perek.
+			expect(mockQuery).toHaveBeenCalledTimes(2);
+		});
+
+		it("rethrows on failure so a false empty is never cached", async () => {
+			mockQuery.mockRejectedValue(new Error("connection lost"));
+			await expect(getPerushimByPerekIds([5])).rejects.toThrow(
+				"connection lost",
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch perushim for %d perakim:",
+				1,
+				"connection lost",
+			);
+
+			mockQuery.mockRejectedValue("string error");
+			await expect(getPerushimByPerekIds([5])).rejects.toBe("string error");
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch perushim for %d perakim:",
+				1,
+				"string error",
+			);
+		});
+	});
+
+	describe("getPerushimForRangeGroups", () => {
+		const groupA = [
+			{
+				start: { perekId: 1, pasuk: 30 },
+				end: { perekId: 2, pasuk: 4 },
+			},
+		];
+		const groupB = [
+			{
+				start: { perekId: 10, pasuk: 1 },
+				end: { perekId: 10, pasuk: 3 },
+			},
+		];
+
+		it("returns empty groups without querying when every group has no slices", async () => {
+			const result = await getPerushimForRangeGroups([[], []]);
+			expect(result).toEqual([[], []]);
+			expect(mockQuery).not.toHaveBeenCalled();
+		});
+
+		it("runs one grouped query and aggregates per (unit, perush)", async () => {
+			mockQuery.mockResolvedValueOnce([
+				{
+					unit_order: 0,
+					first_slice_order: 0,
+					perush_id: 1,
+					perush_name: "Rashi",
+					parshan_name: 'רש"י',
+					perek_id: 1,
+					note_count: 3,
+					priority: 100,
+				},
+				{
+					unit_order: 0,
+					first_slice_order: 1,
+					perush_id: 1,
+					perush_name: "Rashi",
+					parshan_name: 'רש"י',
+					perek_id: 2,
+					note_count: 4,
+					priority: 100,
+				},
+				{
+					unit_order: 1,
+					first_slice_order: 0,
+					perush_id: 2,
+					perush_name: "Ibn Ezra",
+					parshan_name: "אבן עזרא",
+					perek_id: 10,
+					note_count: 2,
+					priority: 50,
+				},
+			]);
+
+			const result = await getPerushimForRangeGroups([groupA, groupB]);
+
+			const [sql, params] = mockQuery.mock.calls[0];
+			expect(sql).toContain("unit_order");
+			expect(sql).toContain("COUNT(DISTINCT n.pasuk) AS note_count");
+			expect(sql).toContain("GROUP BY sm.unit_order");
+			expect(params).toEqual([1, 30, 31, 2, 1, 4, 10, 1, 3]);
+			expect(result).toHaveLength(2);
+			// Rashi's counts merge across perakim; canonical link keeps the
+			// earliest matching slice (perek 1).
+			expect(result[0]).toEqual([
+				expect.objectContaining({ id: 1, perekId: 1, noteCount: 7 }),
+			]);
+			expect(result[1]).toEqual([
+				expect.objectContaining({ id: 2, perekId: 10, noteCount: 2 }),
+			]);
+			expect(mockQuery).toHaveBeenCalledTimes(1);
+		});
+
+		it("moves the canonical perek link when a later row wins an earlier slice", async () => {
+			mockQuery.mockResolvedValueOnce([
+				{
+					unit_order: 0,
+					first_slice_order: 2,
+					perush_id: 1,
+					perush_name: "Rashi",
+					parshan_name: 'רש"י',
+					perek_id: 2,
+					note_count: 3,
+					priority: 100,
+				},
+				{
+					unit_order: 0,
+					first_slice_order: 0,
+					perush_id: 1,
+					perush_name: "Rashi",
+					parshan_name: 'רש"י',
+					perek_id: 1,
+					note_count: 4,
+					priority: 100,
+				},
+				{
+					unit_order: 9,
+					first_slice_order: 0,
+					perush_id: 1,
+					perush_name: "Rashi",
+					parshan_name: 'רש"י',
+					perek_id: 1,
+					note_count: 9,
+					priority: 100,
+				},
+			]);
+
+			const result = await getPerushimForRangeGroups([groupA]);
+
+			// Rows attributed to a unit outside the requested groups are
+			// dropped; the canonical link follows the earliest slice.
+			expect(result).toEqual([
+				[expect.objectContaining({ id: 1, perekId: 1, noteCount: 7 })],
+			]);
+		});
+
+		it("orders perushim by priority then note count", async () => {
+			mockQuery.mockResolvedValueOnce([
+				{
+					unit_order: 0,
+					first_slice_order: 0,
+					perush_id: 1,
+					perush_name: "Low notes",
+					parshan_name: "א",
+					perek_id: 1,
+					note_count: 1,
+					priority: 50,
+				},
+				{
+					unit_order: 0,
+					first_slice_order: 0,
+					perush_id: 2,
+					perush_name: "High notes",
+					parshan_name: "ב",
+					perek_id: 1,
+					note_count: 9,
+					priority: 50,
+				},
+			]);
+
+			const result = await getPerushimForRangeGroups([groupA]);
+
+			expect(result[0].map((perush) => perush.id)).toEqual([2, 1]);
+		});
+
+		it("rethrows on failure so a false empty is never cached", async () => {
+			mockQuery.mockRejectedValue(new Error("DB error"));
+			await expect(getPerushimForRangeGroups([groupA])).rejects.toThrow(
+				"DB error",
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch perushim for range groups:",
+				"DB error",
+			);
+
+			mockQuery.mockRejectedValue("string error");
+			await expect(getPerushimForRangeGroups([groupA])).rejects.toBe(
+				"string error",
+			);
+			expect(console.warn).toHaveBeenCalledWith(
+				"Failed to fetch perushim for range groups:",
+				"string error",
 			);
 		});
 	});

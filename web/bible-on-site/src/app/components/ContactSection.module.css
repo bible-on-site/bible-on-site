@@ -3,7 +3,7 @@
 	text-align: center;
 	width: 100%;
 	z-index: 2;
-	background-color: #1552ac;
+	background-color: var(--accent-600);
 	background-image: url(/root/dots-primary-dark.webp);
 	background-repeat: repeat;
 	background-size: 6px;
@@ -22,12 +22,12 @@
 	text-align: center;
 }
 
-.contactHeader h1 {
+.contactHeader h2 {
 	font-size: 1.8em;
 	margin: 0.5em 0;
 }
 
-.contactHeader h2 {
+.contactHeader h3 {
 	font-size: 1.4em;
 	margin: 0.3em 0;
 }
@@ -64,8 +64,10 @@
 	margin-right: 0.4em;
 }
 
-.contactList li a:hover {
-	text-decoration: underline;
+@media (hover: hover) {
+	.contactList li a:hover {
+		text-decoration: underline;
+	}
 }
 
 .separator {

@@ -58,7 +58,9 @@ public sealed class PressGestureTracker
         // cancellation or a recycled view's new binding is waiting in its queue.
         dispatch(() =>
         {
-            if (pressId != PressId || !IsPressed || !TouchActive || LongPressFired || isScrolling())
+            // IsPressed and TouchActive only ever transition together in
+            // Begin/Cancel — checking one covers both.
+            if (pressId != PressId || !IsPressed || LongPressFired || isScrolling())
             {
                 return;
             }

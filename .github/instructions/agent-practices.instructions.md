@@ -7,7 +7,7 @@ applyTo: "**"
 
 Execution ownership is defined in [user-does-not-execute.instructions.md](user-does-not-execute.instructions.md): you run every command and finish every ask in the same turn. This file adds the repo-specific gates.
 
-- Flip book: build in `html-flip-book`, then run `USE_LOCAL_FLIP_BOOK=1 npm run postinstall` in the website. CI/production use the published npm package, not the `file:` dependency.
+- Flip book: build in `html-flip-book`, then run `USE_LOCAL_FLIP_BOOK=1 bun run postinstall` in the website. After the first copy, website builds refresh that active override from its recorded checkout automatically. CI/production use the published npm package; use `bun run flip-book:npm` to remove the local override before published-package validation.
 
 # Workdir Cleanliness Gate
 
@@ -33,3 +33,7 @@ Reproduce failures locally (tests, builds, linters, Docker builds, coverage merg
 # Own Your Work
 
 Everything in this codebase was written by you; there is no other developer. Never call your own code "pre-existing" or "already there" — say "I added / I introduced this bug" and fix regressions, side effects, and design mistakes without deflecting.
+
+# Performance Failures
+
+Do not increase timeouts, retries, sleeps, polling budgets, or hang-watchdog limits to make a failing or slow operation pass. Treat a timeout as evidence: reproduce it, measure the critical path, and fix the underlying algorithm, blocking work, contention, or delivery defect. Keep the existing interaction deadline as a regression check. A timeout change is permitted only when the user explicitly requests it after seeing the root cause and measured tradeoff.

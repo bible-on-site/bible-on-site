@@ -1,0 +1,79 @@
+{
+  "purpose": "Investigate the website605 first-search failure without changing request deadlines, capacity, candidate limits or production content",
+  "diagnosticOnly": true,
+  "nativeReleaseQualificationPassed": false,
+  "publicRequestDeadlineMs": 2000,
+  "publicRequestRetries": 0,
+  "localDatabase": {
+    "version": "8.4.9",
+    "copiedPublicTables": 92,
+    "rows": 348659,
+    "fingerprintVerifiedBeforeMeasurement": true,
+    "websiteUserSelectOnly": true,
+    "cpu": 1,
+    "memoryMiB": 2048
+  },
+  "localWebsiteSourceRuntime": {
+    "cpu": 0.5,
+    "memoryMiB": 2048,
+    "method": "Bundle the real search providers, full canonical text and MySQL driver; prepare process-shared chapter/verse indexes before measuring the first complete search",
+    "query": "בראשית",
+    "limitPerProvider": 3,
+    "before": {
+      "normalizationAlreadyVectorized": true,
+      "coldMs": 2191.706303,
+      "warmMs": 1915.5814600000003,
+      "availability": [],
+      "providerCompletionChangedResultOrder": true
+    },
+    "after": {
+      "coldMs": 1873.3503360000004,
+      "warmMs": 1617.3968870000008,
+      "availability": [],
+      "counts": {"perek": 3, "pasuk": 3, "perush": 3, "author": 3, "article": 3, "tanahpedia": 1},
+      "identicalColdWarmResultsSHA256": "988756e443f080cf823400030893e94f2e53acacd0cf71d087b01fb38bf0d7a6",
+      "eachProviderMatchesItsPriorResultSHA256": true
+    }
+  },
+  "normalization": {
+    "unicodeScalarEquivalenceCases": 1112064,
+    "preservesPerCodePointCasing": true,
+    "sampleBytes": 1132865,
+    "priorMs": 696.3623,
+    "vectorizedMs": 30.8618,
+    "wholeCorpusOrEndToEndSpeedupClaimed": false
+  },
+  "sqlCandidateEquivalence": {
+    "method": "Run the original weighted rank and the CASE rank against the same copied MySQL database; compare every returned candidate row, independently of tie order",
+    "unchangedFieldsPatternsBoundsAndParameters": true,
+    "nullableFieldOrderingRetained": true,
+    "providers": {"perush": 1000, "author": 3, "article": 666, "tanahpedia": 2},
+    "allCandidateRowsIdentical": true,
+    "mysqlCaseReference": "https://dev.mysql.com/doc/refman/8.4/en/flow-control-functions.html"
+  },
+  "reader": {
+    "regression": "A selected item must survive a later plain-URL commit for the same chapter; paging to another chapter/TOC and newer selections retain ownership",
+    "oldHookRegressionTest": {"failed": 1, "passed": 12},
+    "fixedHookRegressionTestsPassed": 13,
+    "ordinaryRealAppBeforeAfterRunsPassed": true,
+    "timingRaceReproducedByThoseBrowserRuns": false,
+    "pageErrors": 0,
+    "visibleChapterLoading": {
+      "beforeServerActionRequests": 13,
+      "afterServerActionRequests": 3,
+      "unchangedSummaryRequestsPerRun": 2,
+      "method": "Same real app TOC chapter2-to1 and fast commentary selection, original animation and five-second visibility assertion; compare browser network traces before and after limiting new commentary reads to the displayed chapter",
+      "visibleCommentaryPassedBeforeAndAfter": true,
+      "hiddenPagesRetainCompletedNotes": true,
+      "baselineVisibleChapterRegressionTestFailed": true,
+      "fixedSeferAndPanelTestsPassed": 81,
+      "intermittentCIFailureMustStillBeChecked": true
+    },
+    "screenshots": ["website-reader-selection-2026-11-02/before.png", "website-reader-selection-2026-11-02/after.png"],
+    "titleContract": "Closing the book after returning to chapter2 preserves chapter2 URL, heading and title"
+  },
+  "allOwnedDiagnosticContainersVolumesAndNetworksRemoved": true,
+  "productionWrites": false,
+  "awsWrites": false,
+  "remainingValidation": "CI, full coverage and review; actual immutable published image HTTP/native qualification on both architectures before the ARM rollout"
+}

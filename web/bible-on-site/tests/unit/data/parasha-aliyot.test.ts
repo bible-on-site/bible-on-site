@@ -1,0 +1,824 @@
+/**
+ * Unit tests for the aliyah boundary layer over the פרשה division
+ * (issue #2519). The curated source (parasha-aliyot.json, imported
+ * from @hebcal/leyning's BSD-2-Clause aliyot.json and corroborated
+ * against Sefaria's get_aliyot API where it responds) resolves to
+ * canonical coordinates at module load — these assertions pin real
+ * coverage: standalone + joined readings, Shabbat/weekday schemes,
+ * intentional maftir repetition, documented alternative splits, and
+ * the marker layer the readers consume.
+ */
+import { sefarim } from "../../../src/data/db/sefarim";
+import {
+	ALIYAH_PROVENANCE,
+	ALIYAH_SCHEMES,
+	DEFAULT_ALIYAH_SCHEME,
+	aliyahContaining,
+	aliyahStartMarkers,
+	getAliyot,
+	getJoinedReadingsForUnit,
+	getParashaReadingById,
+	getStandaloneReading,
+	getUnitAliyahMarkers,
+	getUnitAliyahMarkersForSefer,
+} from "../../../src/data/parasha/parasha-aliyot";
+import { getAllParashaUnits } from "../../../src/data/parasha/parasha-units";
+import { getPerekByPerekId } from "../../../src/data/perek-dto";
+import type { ScriptureCoordinate } from "../../../src/lib/reading/contract";
+import { rangeContainsCoordinate } from "../../../src/lib/reading/ranges";
+
+function perekIdOf(seferName: string, perek: number): number {
+	const sefer = sefarim.find((s) => s.name === seferName);
+	if (!sefer || !("perekFrom" in sefer)) {
+		throw new Error(`missing sefer ${seferName}`);
+	}
+	return sefer.perekFrom + perek - 1;
+}
+
+function nextPasuk(
+	coordinate: ScriptureCoordinate,
+): ScriptureCoordinate | null {
+	const perek = getPerekByPerekId(coordinate.perekId);
+	if (coordinate.pasuk < perek.pesukim.length) {
+		return { perekId: coordinate.perekId, pasuk: coordinate.pasuk + 1 };
+	}
+	const nextId = coordinate.perekId + 1;
+	return nextId <= 187 ? { perekId: nextId, pasuk: 1 } : null;
+}
+
+function must<T>(value: T | null | undefined): T {
+	if (value == null) throw new Error("expected a value");
+	return value;
+}
+
+const units = getAllParashaUnits();
+const unitByName = (name: string) => {
+	const unit = units.find((u) => u.heading === name);
+	if (!unit) throw new Error(`missing unit ${name}`);
+	return unit;
+};
+
+describe("aliyah source and provenance", () => {
+	it("declares the hebcal source, license and commit", () => {
+		expect(ALIYAH_PROVENANCE.name).toContain("hebcal");
+		expect(ALIYAH_PROVENANCE.license).toContain("BSD");
+		expect(ALIYAH_PROVENANCE.commit).toMatch(/^[0-9a-f]{10,}$/);
+		expect(ALIYAH_PROVENANCE.notes.length).toBeGreaterThan(0);
+	});
+
+	it("exposes the Shabbat and weekday schemes", () => {
+		expect(ALIYAH_SCHEMES.map((s) => s.id)).toEqual(["shabbat", "weekday"]);
+		expect(DEFAULT_ALIYAH_SCHEME).toBe("shabbat");
+	});
+});
+
+describe("standalone readings", () => {
+	it("throws for a unit id that has no reading", () => {
+		expect(() => getStandaloneReading(99999)).toThrow(/aliyah data/);
+	});
+
+	it("resolves one per parasha unit, preserving unit identity", () => {
+		for (const unit of units) {
+			const reading = getStandaloneReading(unit.unitId);
+			expect(reading.kind).toBe("standalone");
+			expect(reading.unitIds).toEqual([unit.unitId]);
+			expect(reading.unitNames).toEqual([unit.heading]);
+			expect(reading.seferName).toBe(unit.seferName);
+		}
+	});
+
+	it("gives every parasha except וזאת הברכה a Shabbat seven plus מפטיר", () => {
+		for (const unit of units) {
+			const boundaries = must(getAliyot(getStandaloneReading(unit.unitId)));
+			const regular = boundaries.filter((b) => b.role === "aliyah");
+			const maftir = boundaries.filter((b) => b.role === "maftir");
+			expect(regular.map((b) => b.ordinal)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+			if (unit.heading === "וזאת הברכה") {
+				expect(maftir).toHaveLength(0);
+				expect(boundaries).toHaveLength(7);
+			} else {
+				expect(maftir).toHaveLength(1);
+				expect(maftir[0].label).toBe("מפטיר");
+				expect(boundaries).toHaveLength(8);
+				// Maftir intentionally repeats the tail of the seventh aliyah.
+				expect(maftir[0].range.end).toEqual(regular[6].range.end);
+			}
+		}
+	});
+
+	it("tiles each reading contiguously — no holes, no overlap", () => {
+		for (const unit of units) {
+			const boundaries = must(getAliyot(getStandaloneReading(unit.unitId)));
+			const regular = boundaries.filter((b) => b.role === "aliyah");
+			expect(regular[0].range.start).toEqual(unit.ranges[0].start);
+			expect(regular[6].range.end).toEqual(unit.ranges[0].end);
+			for (let i = 1; i < regular.length; i++) {
+				expect(regular[i].range.start).toEqual(
+					nextPasuk(regular[i - 1].range.end),
+				);
+			}
+		}
+	});
+
+	it("gives standalone readings a three-aliyah weekday scheme", () => {
+		for (const unit of units) {
+			const weekday = must(
+				getAliyot(getStandaloneReading(unit.unitId), "weekday"),
+			);
+			expect(weekday.map((b) => b.ordinal)).toEqual([1, 2, 3]);
+			expect(weekday.every((b) => b.role === "aliyah")).toBe(true);
+		}
+	});
+});
+
+describe("joined readings", () => {
+	it("covers the standard joins including חוקת-בלק", () => {
+		const joinedIds = [
+			"Vayakhel-Pekudei",
+			"Tazria-Metzora",
+			"Achrei Mot-Kedoshim",
+			"Behar-Bechukotai",
+			"Chukat-Balak",
+			"Matot-Masei",
+			"Nitzavim-Vayeilech",
+		];
+		for (const id of joinedIds) {
+			const reading = getParashaReadingById(id);
+			expect(reading).not.toBeNull();
+			expect(reading?.kind).toBe("joined");
+			expect(reading?.unitIds).toHaveLength(2);
+			// Joined readings are Shabbat-only — no weekday split.
+			expect(getAliyot(must(reading), "weekday")).toBeNull();
+			const shabbat = must(getAliyot(must(reading), "shabbat"));
+			expect(
+				shabbat.filter((b) => b.role === "aliyah").map((b) => b.ordinal),
+			).toEqual([1, 2, 3, 4, 5, 6, 7]);
+		}
+	});
+
+	it("keeps constituent unit identities on both sides of a join", () => {
+		const vayakhel = unitByName("ויקהל");
+		const pekudei = unitByName("פקודי");
+		for (const unit of [vayakhel, pekudei]) {
+			const joined = getJoinedReadingsForUnit(unit.unitId);
+			expect(joined).toHaveLength(1);
+			expect(joined[0].id).toBe("Vayakhel-Pekudei");
+			expect(joined[0].unitIds).toEqual([vayakhel.unitId, pekudei.unitId]);
+		}
+	});
+
+	it("splits joined readings differently than the standalone pair", () => {
+		const vayakhel = getStandaloneReading(unitByName("ויקהל").unitId);
+		const joined = must(getParashaReadingById("Vayakhel-Pekudei"));
+		const standaloneStarts = must(getAliyot(vayakhel)).map(
+			(b) => `${b.range.start.perekId}:${b.range.start.pasuk}`,
+		);
+		const joinedStarts = must(getAliyot(joined))
+			.filter((b) => b.role === "aliyah")
+			.map((b) => `${b.range.start.perekId}:${b.range.start.pasuk}`);
+		// The joined first aliyah is the full combined span's first split —
+		// not Vayakhel's standalone first+continuation.
+		expect(joinedStarts[0]).toBe("85:1"); // שמות לה א
+		expect(joinedStarts).not.toEqual(standaloneStarts);
+		// Joined maftir ends at פקודי's end: שמות מ לח.
+		const maftir = must(
+			must(getAliyot(joined)).find((b) => b.role === "maftir"),
+		);
+		expect(maftir.range.end).toEqual({
+			perekId: perekIdOf("שמות", 40),
+			pasuk: 38,
+		});
+	});
+
+	it("restricts חוקת-בלק to חוץ לארץ and מנהג תימן הבלדי", () => {
+		const chukat = must(getParashaReadingById("Chukat-Balak"));
+		expect(chukat.applicability).toBe("חוץ לארץ ומנהג תימן הבלדי");
+		const balak = unitByName("בלק");
+		const layer = getUnitAliyahMarkers(balak.unitId);
+		const joinedCtx = must(layer.contexts.find((c) => c.kind === "joined"));
+		expect(joinedCtx.contextId).toBe("Chukat-Balak");
+		expect(joinedCtx.applicability).toBe("חוץ לארץ ומנהג תימן הבלדי");
+		expect(joinedCtx.label).toContain("תימן הבלדי");
+	});
+
+	it("excludes מנהג תימן הבלדי from מטות-מסעי — בלדים never join it", () => {
+		const matot = must(getParashaReadingById("Matot-Masei"));
+		expect(matot.applicability).toBe("למעט מנהג תימן הבלדי");
+		// Every other context is unrestricted.
+		for (const unit of units) {
+			for (const ctx of getUnitAliyahMarkers(unit.unitId).contexts) {
+				if (!["Chukat-Balak", "Matot-Masei"].includes(ctx.contextId)) {
+					expect(ctx.applicability).toBeUndefined();
+				}
+			}
+		}
+	});
+
+	it("resolves אחרי מות-קדושים — a Sefaria API hole the source fills", () => {
+		const reading = must(getParashaReadingById("Achrei Mot-Kedoshim"));
+		const shabbat = must(getAliyot(reading, "shabbat"));
+		expect(shabbat[0].range.start).toEqual({
+			perekId: perekIdOf("ויקרא", 16),
+			pasuk: 1,
+		});
+		expect(shabbat[6].range.end).toEqual({
+			perekId: perekIdOf("ויקרא", 20),
+			pasuk: 27,
+		});
+	});
+});
+
+describe("documented alternative splits", () => {
+	// The full curated alternative inventory — every (reading, scheme,
+	// ordinal) that carries a documented variant, its exact range and
+	// its attributed minhag. Coordinates are sefer-relative perek:pasuk
+	// (resolved to perekIds through perekIdOf at assertion time).
+	const EXPECTED: Record<
+		string,
+		Record<
+			string,
+			{
+				sefer: string;
+				ordinal: number;
+				start: [number, number];
+				end: [number, number];
+				custom?: string;
+			}[]
+		>
+	> = {
+		בראשית: {
+			shabbat: [
+				{ sefer: "בראשית", ordinal: 5, start: [4, 19], end: [4, 26] },
+				{ sefer: "בראשית", ordinal: 6, start: [5, 1], end: [5, 24] },
+			],
+		},
+		"לך לך": {
+			weekday: [
+				{ sefer: "בראשית", ordinal: 2, start: [12, 4], end: [12, 6] },
+				{ sefer: "בראשית", ordinal: 3, start: [12, 7], end: [12, 13] },
+			],
+		},
+		ויגש: {
+			shabbat: [
+				{
+					sefer: "בראשית",
+					ordinal: 3,
+					start: [45, 8],
+					end: [45, 27],
+					custom: 'חב"ד',
+				},
+				{
+					sefer: "בראשית",
+					ordinal: 4,
+					start: [45, 28],
+					end: [46, 7],
+					custom: 'חב"ד',
+				},
+				{
+					sefer: "בראשית",
+					ordinal: 5,
+					start: [46, 8],
+					end: [46, 27],
+					custom: 'חב"ד',
+				},
+			],
+		},
+		תרומה: {
+			shabbat: [
+				{
+					sefer: "שמות",
+					ordinal: 2,
+					start: [25, 17],
+					end: [25, 30],
+					custom: "עדות המזרח",
+				},
+				{
+					sefer: "שמות",
+					ordinal: 3,
+					start: [25, 31],
+					end: [26, 14],
+					custom: "עדות המזרח",
+				},
+			],
+		},
+		שמיני: {
+			weekday: [
+				{ sefer: "ויקרא", ordinal: 1, start: [9, 1], end: [9, 5] },
+				{ sefer: "ויקרא", ordinal: 2, start: [9, 6], end: [9, 10] },
+			],
+		},
+		נשא: {
+			shabbat: [
+				{
+					sefer: "במדבר",
+					ordinal: 6,
+					start: [7, 42],
+					end: [7, 83],
+					custom: 'חב"ד',
+				},
+				{
+					sefer: "במדבר",
+					ordinal: 7,
+					start: [7, 84],
+					end: [7, 89],
+					custom: 'חב"ד',
+				},
+			],
+			weekday: [{ sefer: "במדבר", ordinal: 3, start: [4, 29], end: [4, 37] }],
+		},
+		מסעי: {
+			shabbat: [
+				{
+					sefer: "במדבר",
+					ordinal: 1,
+					start: [33, 1],
+					end: [33, 49],
+					custom: "עדות המזרח",
+				},
+				{
+					sefer: "במדבר",
+					ordinal: 2,
+					start: [33, 50],
+					end: [33, 53],
+					custom: "עדות המזרח",
+				},
+				{
+					sefer: "במדבר",
+					ordinal: 3,
+					start: [33, 54],
+					end: [34, 15],
+					custom: "עדות המזרח",
+				},
+			],
+			weekday: [
+				{ sefer: "במדבר", ordinal: 2, start: [33, 4], end: [33, 49] },
+				{ sefer: "במדבר", ordinal: 3, start: [33, 50], end: [33, 53] },
+			],
+		},
+		דברים: {
+			shabbat: [
+				{
+					sefer: "דברים",
+					ordinal: 1,
+					start: [1, 1],
+					end: [1, 11],
+					custom: 'חב"ד',
+				},
+				{
+					sefer: "דברים",
+					ordinal: 2,
+					start: [1, 12],
+					end: [1, 21],
+					custom: 'חב"ד',
+				},
+			],
+			weekday: [{ sefer: "דברים", ordinal: 3, start: [1, 8], end: [1, 10] }],
+		},
+	};
+
+	it("resolves every curated alternative to canonical coordinates", () => {
+		for (const [unitName, schemes] of Object.entries(EXPECTED)) {
+			const reading = getStandaloneReading(unitByName(unitName).unitId);
+			for (const [schemeId, alts] of Object.entries(schemes)) {
+				const boundaries = must(getAliyot(reading, schemeId));
+				for (const expected of alts) {
+					const boundary = must(
+						boundaries.find((b) => b.ordinal === expected.ordinal),
+					);
+					const alternative = must(boundary.alternatives)[0];
+					expect(alternative.range).toEqual({
+						start: {
+							perekId: perekIdOf(expected.sefer, expected.start[0]),
+							pasuk: expected.start[1],
+						},
+						end: {
+							perekId: perekIdOf(expected.sefer, expected.end[0]),
+							pasuk: expected.end[1],
+						},
+					});
+					expect(alternative.custom).toBe(expected.custom);
+					expect(alternative.range).not.toEqual(boundary.range);
+				}
+			}
+		}
+	});
+
+	it("carries no alternatives outside the curated inventory", () => {
+		for (const unit of units) {
+			const reading = getStandaloneReading(unit.unitId);
+			for (const [schemeId, boundaries] of Object.entries(reading.schemes)) {
+				for (const boundary of boundaries) {
+					if (!boundary.alternatives) continue;
+					const expected = EXPECTED[unit.heading]?.[schemeId];
+					expect(expected?.some((e) => e.ordinal === boundary.ordinal)).toBe(
+						true,
+					);
+				}
+			}
+		}
+	});
+
+	it("stamps a curated source on every recorded alternative", () => {
+		// `source` is a required field of the data contract — the
+		// unattributed variant ids (`alt-{source}`) rely on it always
+		// being present.
+		const readings = [
+			...units.map((unit) => getStandaloneReading(unit.unitId)),
+			...units.flatMap((unit) => getJoinedReadingsForUnit(unit.unitId)),
+		];
+		for (const reading of readings) {
+			for (const boundaries of Object.values(reading.schemes)) {
+				for (const boundary of boundaries) {
+					for (const alternative of boundary.alternatives ?? []) {
+						expect(alternative.source).toMatch(/^(hebcal|opentorah)$/);
+					}
+				}
+			}
+		}
+	});
+
+	it("splits the joined מטות-מסעי אשכנז variant at the standalone boundary", () => {
+		const joined = must(getParashaReadingById("Matot-Masei"));
+		const shabbat = must(getAliyot(joined, "shabbat"));
+		const a4 = must(shabbat.find((b) => b.ordinal === 4));
+		const a5 = must(shabbat.find((b) => b.ordinal === 5));
+		expect(a4.alternatives?.[0]).toMatchObject({
+			custom: "אשכנז",
+			range: {
+				start: { perekId: perekIdOf("במדבר", 32), pasuk: 20 },
+				end: { perekId: perekIdOf("במדבר", 33), pasuk: 10 },
+			},
+		});
+		expect(a5.alternatives?.[0]).toMatchObject({
+			custom: "אשכנז",
+			range: {
+				start: { perekId: perekIdOf("במדבר", 33), pasuk: 11 },
+				end: { perekId: perekIdOf("במדבר", 34), pasuk: 15 },
+			},
+		});
+	});
+});
+
+describe("variant layers — selectable alternative divisions", () => {
+	const schemeOption = (unitName: string, schemeId: string) => {
+		const layer = getUnitAliyahMarkers(unitByName(unitName).unitId);
+		const ctx = must(layer.contexts[0]);
+		return {
+			layer,
+			option: must(ctx.schemes.find((s) => s.schemeId === schemeId)),
+		};
+	};
+	const markersForKey = (
+		layer: ReturnType<typeof getUnitAliyahMarkers>,
+		key: string,
+	) =>
+		Object.values(layer.markers)
+			.flat()
+			.filter((m) => m.key === key);
+
+	it("substitutes the חב\"ד stretch inside ויגש's own key", () => {
+		const { layer, option } = schemeOption("ויגש", "shabbat");
+		expect(option.variants).toEqual([{ variantId: 'חב"ד', label: 'חב"ד' }]);
+
+		const key = 'Vayigash:shabbat:חב"ד';
+		const variantMarkers = markersForKey(layer, key);
+		// The variant is a complete layer: all eight boundary starts
+		// carry its key, base boundaries outside the stretch included.
+		expect(variantMarkers).toHaveLength(8);
+		const labelByCoord = Object.fromEntries(
+			Object.entries(layer.markers)
+				.map(([coord, specs]) => [
+					coord,
+					specs.find((m) => m.key === key)?.label,
+				])
+				.filter(([, label]) => label != null),
+		);
+		expect(labelByCoord).toEqual({
+			"44:18": "ראשון",
+			"44:31": "שני",
+			"45:8": "שלישי",
+			"45:28": "רביעי",
+			"46:8": "חמישי",
+			"46:28": "שישי",
+			"47:11": "שביעי",
+			"47:25": "מפטיר",
+		});
+		// The re-sliced stretch: חב"ד's רביעי starts at בראשית מה כח
+		// (the base's חמישי position) and חמישי at וי ח — the base
+		// רביעי at מה יט has no variant marker at all.
+		expect(layer.markers["45:28"]).toContainEqual(
+			expect.objectContaining({ key, label: "רביעי" }),
+		);
+		expect(layer.markers["46:8"]).toContainEqual(
+			expect.objectContaining({ key, label: "חמישי" }),
+		);
+		expect(layer.markers["45:19"].filter((m) => m.key === key)).toHaveLength(0);
+		// The substituted boundaries keep ordered contiguous coverage
+		// — validated at module load like the base scheme.
+		const variant = must(
+			getStandaloneReading(unitByName("ויגש").unitId).schemeVariants
+				.shabbat?.[0],
+		);
+		expect(variant.ordinals).toEqual([3, 4, 5]);
+		expect(variant.boundaries[3].range).toEqual({
+			start: { perekId: 45, pasuk: 28 },
+			end: { perekId: 46, pasuk: 7 },
+		});
+	});
+
+	it("names unattributed splits by source — בראשית's hebcal variant", () => {
+		const { layer, option } = schemeOption("בראשית", "shabbat");
+		expect(option.variants).toEqual([
+			{ variantId: "alt-hebcal", label: "חלוקה אחרת" },
+		]);
+		// The variant's שישי moves to בראשית ה א — coincident with the
+		// perek-5 boundary, which still renders its own modest label.
+		expect(layer.markers["5:1"]).toContainEqual(
+			expect.objectContaining({
+				key: "Bereshit:shabbat:alt-hebcal",
+				label: "שישי",
+			}),
+		);
+	});
+
+	it("offers weekday variants where they move a marker", () => {
+		for (const [unit, readingId] of [
+			["לך לך", "Lech-Lecha"],
+			["שמיני", "Shmini"],
+			["מסעי", "Masei"],
+		] as const) {
+			const { option } = schemeOption(unit, "weekday");
+			expect(option.variants).toEqual([
+				{ variantId: "alt-opentorah", label: "חלוקה אחרת" },
+			]);
+			const layer = getUnitAliyahMarkers(unitByName(unit).unitId);
+			expect(
+				markersForKey(layer, `${readingId}:weekday:alt-opentorah`).length,
+			).toBe(3);
+		}
+	});
+
+	it("drops variants that only shift a trailing edge — nothing renders differently", () => {
+		// נשא and דברים weekday alternatives re-place only the third
+		// aliyah's END; the flat reader shows start markers, so the
+		// substituted layer would be pixel-identical — it is not offered.
+		for (const unit of ["נשא", "דברים"] as const) {
+			const { option } = schemeOption(unit, "weekday");
+			expect(option.variants).toEqual([]);
+			const reading = getStandaloneReading(unitByName(unit).unitId);
+			expect(reading.schemeVariants.weekday).toBeUndefined();
+		}
+	});
+
+	it("carries the אשכנז variant on the joined מטות-מסעי context, clipped per unit", () => {
+		const maseiLayer = getUnitAliyahMarkers(unitByName("מסעי").unitId);
+		const joinedCtx = must(
+			maseiLayer.contexts.find((c) => c.contextId === "Matot-Masei"),
+		);
+		expect(joinedCtx.schemes[0].variants).toEqual([
+			{ variantId: "אשכנז", label: "אשכנז" },
+		]);
+		// The variant's חמישי starts inside מסעי (במדבר לג יא); רביעי
+		// starts inside מטות and is clipped out of this page's layer.
+		const key = "Matot-Masei:shabbat:אשכנז";
+		const maseiVariantMarkers = markersForKey(maseiLayer, key);
+		expect(maseiVariantMarkers.map((m) => m.label)).not.toContain("רביעי");
+		expect(maseiVariantMarkers).toContainEqual(
+			expect.objectContaining({ label: "חמישי" }),
+		);
+		for (const [coord, specs] of Object.entries(maseiLayer.markers)) {
+			if (!specs.some((m) => m.key === key)) continue;
+			const [perekId, pasuk] = coord.split(":").map(Number);
+			expect(
+				unitByName("מסעי").ranges.some((r) =>
+					rangeContainsCoordinate(r, { perekId, pasuk }),
+				),
+			).toBe(true);
+		}
+		// מטות's page conversely holds the variant's רביעי.
+		const matotLayer = getUnitAliyahMarkers(unitByName("מטות").unitId);
+		expect(markersForKey(matotLayer, key).map((m) => m.label)).toContain(
+			"רביעי",
+		);
+	});
+
+	it("carries the full marker contract into the book view — every layer renders", () => {
+		// Issue #3165: the Sefer must not silently keep a Shabbat-only
+		// layer — the book's marker map is the same merged contract the
+		// flat page renders, base, variant, and weekday keys together.
+		const markers = getUnitAliyahMarkersForSefer(unitByName("ויגש").unitId);
+		const keys = new Set(
+			Object.values(markers)
+				.flat()
+				.map((spec) => spec.key),
+		);
+		expect(keys).toEqual(
+			new Set([
+				"Vayigash:shabbat",
+				'Vayigash:shabbat:חב"ד',
+				"Vayigash:weekday",
+			]),
+		);
+		// The substituted variant's moved boundary sits at ITS canonical
+		// coordinate alongside the base marker it differs from.
+		expect(markers["45:28"]?.map((m) => m.key)).toEqual([
+			"Vayigash:shabbat",
+			'Vayigash:shabbat:חב"ד',
+		]);
+	});
+});
+
+describe("marker layer", () => {
+	it("builds coord-keyed markers tagged by reading and scheme", () => {
+		const layer = getUnitAliyahMarkers(unitByName("בראשית").unitId);
+		expect(layer.defaultKey).toBe("Bereshit:shabbat");
+		expect(layer.contexts.map((c) => c.contextId)).toEqual(["Bereshit"]);
+		expect(layer.contexts[0].schemes.map((s) => s.schemeId)).toEqual([
+			"shabbat",
+			"weekday",
+		]);
+		// שני begins בראשית ב ד under shabbat, but the weekday split
+		// starts it elsewhere — both layers coexist at their own coords.
+		// The alt-hebcal variant shares the base start for שני (it only
+		// re-slices the חמישי-שישי stretch), so its full layer carries a
+		// second marker at this coordinate under its own key.
+		const shabbat2 = layer.markers["2:4"];
+		expect(shabbat2).toHaveLength(2);
+		expect(shabbat2[0]).toMatchObject({
+			key: "Bereshit:shabbat",
+			label: "שני",
+			role: "aliyah",
+		});
+		expect(shabbat2[1]).toMatchObject({
+			key: "Bereshit:shabbat:alt-hebcal",
+			label: "שני",
+			role: "aliyah",
+		});
+	});
+
+	it("marks aliyah 1 at the unit's first pasuk", () => {
+		const layer = getUnitAliyahMarkers(unitByName("בראשית").unitId);
+		expect(layer.markers["1:1"]?.[0]).toMatchObject({
+			key: "Bereshit:shabbat",
+			label: "ראשון",
+		});
+	});
+
+	it("clips joined-context markers to the unit's own ranges", () => {
+		const vayakhel = unitByName("ויקהל");
+		const layer = getUnitAliyahMarkers(vayakhel.unitId);
+		const joinedCtx = layer.contexts.find((c) => c.kind === "joined");
+		expect(joinedCtx?.contextId).toBe("Vayakhel-Pekudei");
+		// Joined context offers only the Shabbat scheme.
+		expect(joinedCtx?.schemes.map((s) => s.schemeId)).toEqual(["shabbat"]);
+		const joined = must(getParashaReadingById("Vayakhel-Pekudei"));
+		const joinedBoundariesInUnit = must(getAliyot(joined)).filter((b) =>
+			vayakhel.ranges.some((r) => rangeContainsCoordinate(r, b.range.start)),
+		);
+		const joinedMarkers = Object.values(layer.markers)
+			.flat()
+			.filter((m) => m.key === "Vayakhel-Pekudei:shabbat");
+		expect(joinedMarkers).toHaveLength(joinedBoundariesInUnit.length);
+		// Every clipped marker's coordinate is inside the unit's ranges.
+		for (const [coord, specs] of Object.entries(layer.markers)) {
+			if (!specs.some((m) => m.key === "Vayakhel-Pekudei:shabbat")) continue;
+			const [perekId, pasuk] = coord.split(":").map(Number);
+			expect(
+				vayakhel.ranges.some((r) =>
+					rangeContainsCoordinate(r, { perekId, pasuk }),
+				),
+			).toBe(true);
+		}
+	});
+
+	it("labels joined markers with the joined numbering — never remapped", () => {
+		const pekudei = unitByName("פקודי");
+		const layer = getUnitAliyahMarkers(pekudei.unitId);
+		const joinedMarkers = Object.values(layer.markers)
+			.flat()
+			.filter((m) => m.key === "Vayakhel-Pekudei:shabbat");
+		// The joined reading's later aliyot start inside פקודי; their
+		// labels are the joined ordinals (e.g. החמישי may start פקודי's
+		// text), never renumbered from 1 as if standalone.
+		expect(joinedMarkers.length).toBeGreaterThan(0);
+		expect(joinedMarkers[0].label).not.toBe("ראשון");
+	});
+
+	it("exposes every applicable layer for the book view", () => {
+		// Issue #3165: the Sefer renders all layers inline — the
+		// standalone Shabbat markers plus the weekday split and the
+		// recorded alternative, at their own canonical coordinates.
+		const markers = getUnitAliyahMarkersForSefer(unitByName("בראשית").unitId);
+		expect(Object.keys(markers)).toContain("1:1");
+		expect(markers["2:4"]?.[0]).toMatchObject({
+			key: "Bereshit:shabbat",
+			label: "שני",
+		});
+		const keys = new Set(
+			Object.values(markers)
+				.flat()
+				.map((spec) => spec.key),
+		);
+		expect(keys).toEqual(
+			new Set([
+				"Bereshit:shabbat",
+				"Bereshit:shabbat:alt-hebcal",
+				"Bereshit:weekday",
+			]),
+		);
+	});
+
+	it("emits coincident markers in deterministic layer order", () => {
+		// בראשית א א carries all three layers — base scheme, its
+		// variant, then the next scheme — so coincident boundaries
+		// arrange predictably in the rendered cluster.
+		const layer = getUnitAliyahMarkers(unitByName("בראשית").unitId);
+		expect(layer.markers["1:1"]?.map((m) => m.key)).toEqual([
+			"Bereshit:shabbat",
+			"Bereshit:shabbat:alt-hebcal",
+			"Bereshit:weekday",
+		]);
+	});
+
+	it("tags and details every marker for the inline legend", () => {
+		// Issue #3165: tag distinguishes coincident markers, category
+		// drives non-color styling, detail is the hover/focus/touch text.
+		const layer = getUnitAliyahMarkers(unitByName("בראשית").unitId);
+		expect(layer.markers["2:4"]).toHaveLength(2);
+		expect(layer.markers["2:4"][0]).toMatchObject({
+			key: "Bereshit:shabbat",
+			tag: "שבת",
+			category: "shabbat",
+			detail: "פרשת בראשית · קריאת שבת · עלייה שנייה (בראשית ב ד-יט)",
+		});
+		expect(layer.markers["2:4"][1]).toMatchObject({
+			key: "Bereshit:shabbat:alt-hebcal",
+			tag: "חלוקה אחרת",
+			category: "variant",
+			detail:
+				"פרשת בראשית · קריאת שבת · חלוקה אחרת · עלייה שנייה (בראשית ב ד-יט)",
+		});
+	});
+
+	it("identifies joined markers by the joined reading's names and scope", () => {
+		const layer = getUnitAliyahMarkers(unitByName("מסעי").unitId);
+		const joined = Object.values(layer.markers)
+			.flat()
+			.find((m) => m.key === "Matot-Masei:shabbat");
+		expect(joined).toMatchObject({
+			tag: "מטות-מסעי",
+			category: "joined",
+		});
+		// The detail keeps the join's restricted applicability explicit.
+		expect(joined?.detail).toContain("מטות-מסעי (למעט מנהג תימן הבלדי)");
+		expect(joined?.detail).toContain("קריאת שבת");
+	});
+});
+
+describe("boundary helpers", () => {
+	it("aliyahStartMarkers keys every boundary by start coordinate", () => {
+		const boundaries = must(
+			getAliyot(getStandaloneReading(unitByName("בראשית").unitId)),
+		);
+		const map = aliyahStartMarkers(boundaries);
+		expect(map.size).toBe(boundaries.length);
+		expect(map.get("1:1")?.label).toBe("ראשון");
+		expect(map.get("6:5")?.label).toBe("מפטיר");
+	});
+
+	it("aliyahContaining finds the boundary holding a coordinate", () => {
+		const boundaries = must(
+			getAliyot(getStandaloneReading(unitByName("בראשית").unitId)),
+		);
+		// בראשית ב י sits inside aliyah 2 (ב ד-ב יט) and inside maftir? No —
+		// maftir repeats only ו ה-ח; ב י is solely aliyah 2.
+		const found = aliyahContaining(boundaries, {
+			perekId: perekIdOf("בראשית", 2),
+			pasuk: 10,
+		});
+		expect(found?.ordinal).toBe(2);
+		// A coordinate inside the maftir tail resolves to the *first*
+		// containing boundary — the regular seventh aliyah, not מפטיר.
+		const tail = aliyahContaining(boundaries, {
+			perekId: perekIdOf("בראשית", 6),
+			pasuk: 6,
+		});
+		expect(tail?.ordinal).toBe(7);
+	});
+
+	it("aliyahContaining returns null outside every boundary", () => {
+		const boundaries = must(
+			getAliyot(getStandaloneReading(unitByName("בראשית").unitId)),
+		);
+		const outside = aliyahContaining(boundaries, {
+			perekId: perekIdOf("שמות", 1),
+			pasuk: 1,
+		});
+		expect(outside).toBeNull();
+	});
+
+	it("returns empty/null lookups for unknown ids", () => {
+		expect(getJoinedReadingsForUnit(99999)).toEqual([]);
+		expect(getParashaReadingById("Not-A-Reading")).toBeNull();
+	});
+});

@@ -1,8 +1,23 @@
 import { randomUUID } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
+import type { PoolConnection } from "mysql2/promise";
 import type { EntityType } from "~/lib/tanahpedia/labels";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
-import { execute, query, queryOne } from "../db";
+import {
+	execute,
+	query,
+	queryOne,
+	transaction,
+	txExecute,
+	txQuery,
+	txQueryOne,
+} from "../db";
+import { revalidateWebsite } from "../website-revalidate";
+import {
+	pediaChangesForEntities,
+	pediaChangesForEntryIds,
+	pediaChangesForPersons,
+} from "./paths";
 import {
 	type EntryStructuralContext,
 	type LinkedEntityStructural,
@@ -20,8 +35,9 @@ export type {
 	PlaceIdentificationRow,
 };
 
-async function getMainNameTypeId(): Promise<string> {
-	const row = await queryOne<{ id: string }>(
+async function getMainNameTypeId(conn: PoolConnection): Promise<string> {
+	const row = await txQueryOne<{ id: string }>(
+		conn,
 		"SELECT id FROM tanahpedia_lookup_name_type WHERE name = ? LIMIT 1",
 		[MAIN_NAME_TYPE],
 	);
@@ -48,6 +64,42 @@ export const updateEntityDisplayName = createServerFn({ method: "POST" })
 			name,
 			data.entityId,
 		]);
+		await revalidateWebsite(await pediaChangesForEntities([data.entityId]));
+		return { success: true };
+	});
+
+export const updateSayingDate = createServerFn({ method: "POST" })
+	.validator((data: { sayingId: string; sayingDate: number | null }) => {
+		const date = data.sayingDate;
+		if (
+			date !== null &&
+			(!Number.isInteger(date) ||
+				date < 0 ||
+				date > 99999999 ||
+				Math.floor((date % 10000) / 100) > 14 ||
+				date % 100 > 30 ||
+				(date % 100 > 0 && Math.floor((date % 10000) / 100) === 0))
+		) {
+			throw new Error("תאריך עברי לא תקין");
+		}
+		return data;
+	})
+	.handler(async ({ data }) => {
+		// A saying is an entity subtype — its date renders on the entries
+		// linked to that entity.
+		const saying = await queryOne<{ entity_id: string | null }>(
+			"SELECT entity_id FROM tanahpedia_saying WHERE id = ?",
+			[data.sayingId],
+		);
+		await execute("UPDATE tanahpedia_saying SET saying_date = ? WHERE id = ?", [
+			data.sayingDate,
+			data.sayingId,
+		]);
+		await revalidateWebsite(
+			await pediaChangesForEntities(
+				saying?.entity_id ? [saying.entity_id] : [],
+			),
+		);
 		return { success: true };
 	});
 
@@ -59,33 +111,41 @@ export const updatePersonMainName = createServerFn({ method: "POST" })
 	.handler(async ({ data }) => {
 		const name = data.name.trim();
 		if (!name) throw new Error("שם ריק");
-		const typeId = await getMainNameTypeId();
 
-		if (data.mainNameRowId) {
-			await execute(
-				"UPDATE tanahpedia_person_name SET name = ? WHERE id = ? AND person_id = ?",
-				[name, data.mainNameRowId, data.personId],
+		await transaction(async (conn) => {
+			const typeId = await getMainNameTypeId(conn);
+
+			if (data.mainNameRowId) {
+				await txExecute(
+					conn,
+					"UPDATE tanahpedia_person_name SET name = ? WHERE id = ? AND person_id = ?",
+					[name, data.mainNameRowId, data.personId],
+				);
+			} else {
+				const id = randomUUID();
+				await txExecute(
+					conn,
+					`INSERT INTO tanahpedia_person_name (id, person_id, name, name_type_id, alt_group_id)
+					 VALUES (?, ?, ?, ?, NULL)`,
+					[id, data.personId, name, typeId],
+				);
+			}
+
+			const entity = await txQueryOne<{ entity_id: string }>(
+				conn,
+				"SELECT entity_id FROM tanahpedia_person WHERE id = ?",
+				[data.personId],
 			);
-		} else {
-			const id = randomUUID();
-			await execute(
-				`INSERT INTO tanahpedia_person_name (id, person_id, name, name_type_id, alt_group_id)
-				 VALUES (?, ?, ?, ?, NULL)`,
-				[id, data.personId, name, typeId],
-			);
-		}
+			if (entity) {
+				await txExecute(
+					conn,
+					"UPDATE tanahpedia_entity SET name = ? WHERE id = ?",
+					[name, entity.entity_id],
+				);
+			}
+		});
 
-		const entity = await queryOne<{ entity_id: string }>(
-			"SELECT entity_id FROM tanahpedia_person WHERE id = ?",
-			[data.personId],
-		);
-		if (entity) {
-			await execute("UPDATE tanahpedia_entity SET name = ? WHERE id = ?", [
-				name,
-				entity.entity_id,
-			]);
-		}
-
+		await revalidateWebsite(await pediaChangesForPersons([data.personId]));
 		return { success: true };
 	});
 
@@ -95,22 +155,28 @@ export const updatePersonSex = createServerFn({ method: "POST" })
 			data,
 	)
 	.handler(async ({ data }) => {
-		if (data.sexRowId) {
-			await execute(
-				"UPDATE tanahpedia_person_sex SET sex = ? WHERE id = ? AND person_id = ?",
-				[data.sex, data.sexRowId, data.personId],
-			);
-		} else {
-			await execute(
-				"DELETE FROM tanahpedia_person_sex WHERE person_id = ? AND alt_group_id IS NULL",
-				[data.personId],
-			);
-			await execute(
-				`INSERT INTO tanahpedia_person_sex (id, person_id, sex, alt_group_id)
-				 VALUES (?, ?, ?, NULL)`,
-				[randomUUID(), data.personId, data.sex],
-			);
-		}
+		await transaction(async (conn) => {
+			if (data.sexRowId) {
+				await txExecute(
+					conn,
+					"UPDATE tanahpedia_person_sex SET sex = ? WHERE id = ? AND person_id = ?",
+					[data.sex, data.sexRowId, data.personId],
+				);
+			} else {
+				await txExecute(
+					conn,
+					"DELETE FROM tanahpedia_person_sex WHERE person_id = ? AND alt_group_id IS NULL",
+					[data.personId],
+				);
+				await txExecute(
+					conn,
+					`INSERT INTO tanahpedia_person_sex (id, person_id, sex, alt_group_id)
+					 VALUES (?, ?, ?, NULL)`,
+					[randomUUID(), data.personId, data.sex],
+				);
+			}
+		});
+		await revalidateWebsite(await pediaChangesForPersons([data.personId]));
 		return { success: true };
 	});
 
@@ -126,37 +192,58 @@ export const replacePlaceIdentifications = createServerFn({ method: "POST" })
 		(data: { placeId: string; rows: PlaceIdentificationInput[] }) => data,
 	)
 	.handler(async ({ data }) => {
-		const existing = await query<{ id: string }>(
-			"SELECT id FROM tanahpedia_place_identification WHERE place_id = ?",
-			[data.placeId],
-		);
-		const keepIds = new Set(
-			data.rows.map((r) => r.id).filter((x): x is string => Boolean(x)),
-		);
-		for (const row of existing) {
-			if (!keepIds.has(row.id)) {
-				await execute(
-					"DELETE FROM tanahpedia_place_identification WHERE id = ?",
-					[row.id],
-				);
+		const placeEntityId = await transaction(async (conn) => {
+			const existing = await txQuery<{ id: string }>(
+				conn,
+				"SELECT id FROM tanahpedia_place_identification WHERE place_id = ?",
+				[data.placeId],
+			);
+			const keepIds = new Set(
+				data.rows.map((r) => r.id).filter((x): x is string => Boolean(x)),
+			);
+			for (const row of existing) {
+				if (!keepIds.has(row.id)) {
+					await txExecute(
+						conn,
+						"DELETE FROM tanahpedia_place_identification WHERE id = ?",
+						[row.id],
+					);
+				}
 			}
-		}
-		for (const r of data.rows) {
-			if (r.id) {
-				await execute(
-					`UPDATE tanahpedia_place_identification
-					 SET modern_name = ?, latitude = ?, longitude = ?
-					 WHERE id = ? AND place_id = ?`,
-					[r.modern_name, r.latitude, r.longitude, r.id, data.placeId],
-				);
-			} else {
-				await execute(
-					`INSERT INTO tanahpedia_place_identification (id, place_id, modern_name, latitude, longitude, alt_group_id)
-					 VALUES (?, ?, ?, ?, ?, NULL)`,
-					[randomUUID(), data.placeId, r.modern_name, r.latitude, r.longitude],
-				);
+			for (const r of data.rows) {
+				if (r.id) {
+					await txExecute(
+						conn,
+						`UPDATE tanahpedia_place_identification
+						 SET modern_name = ?, latitude = ?, longitude = ?
+						 WHERE id = ? AND place_id = ?`,
+						[r.modern_name, r.latitude, r.longitude, r.id, data.placeId],
+					);
+				} else {
+					await txExecute(
+						conn,
+						`INSERT INTO tanahpedia_place_identification (id, place_id, modern_name, latitude, longitude, alt_group_id)
+						 VALUES (?, ?, ?, ?, ?, NULL)`,
+						[
+							randomUUID(),
+							data.placeId,
+							r.modern_name,
+							r.latitude,
+							r.longitude,
+						],
+					);
+				}
 			}
-		}
+			const place = await txQueryOne<{ entity_id: string | null }>(
+				conn,
+				"SELECT entity_id FROM tanahpedia_place WHERE id = ?",
+				[data.placeId],
+			);
+			return place?.entity_id ?? null;
+		});
+		await revalidateWebsite(
+			await pediaChangesForEntities(placeEntityId ? [placeEntityId] : []),
+		);
 		return { success: true };
 	});
 
@@ -199,6 +286,7 @@ const DERIVED_SUBTYPES: Partial<
 };
 
 async function insertSubtypeRows(
+	conn: PoolConnection,
 	entityType: EntityType,
 	entityId: string,
 	name: string,
@@ -206,11 +294,13 @@ async function insertSubtypeRows(
 	const derived = DERIVED_SUBTYPES[entityType];
 	if (derived) {
 		const parentId = randomUUID();
-		await execute(
+		await txExecute(
+			conn,
 			`INSERT INTO ${derived.parentTable} (id, entity_id) VALUES (?, ?)`,
 			[parentId, entityId],
 		);
-		await execute(
+		await txExecute(
+			conn,
 			`INSERT INTO ${derived.table} (id, ${derived.parentColumn}, entity_id) VALUES (?, ?, ?)`,
 			[randomUUID(), parentId, entityId],
 		);
@@ -221,14 +311,15 @@ async function insertSubtypeRows(
 	if (!table) throw new Error("סוג יישות לא נתמך ליצירה");
 
 	const subtypeId = randomUUID();
-	await execute(`INSERT INTO ${table} (id, entity_id) VALUES (?, ?)`, [
+	await txExecute(conn, `INSERT INTO ${table} (id, entity_id) VALUES (?, ?)`, [
 		subtypeId,
 		entityId,
 	]);
 
 	if (entityType === "PERSON") {
-		const typeId = await getMainNameTypeId();
-		await execute(
+		const typeId = await getMainNameTypeId(conn);
+		await txExecute(
+			conn,
 			`INSERT INTO tanahpedia_person_name (id, person_id, name, name_type_id, alt_group_id)
 			 VALUES (?, ?, ?, ?, NULL)`,
 			[randomUUID(), subtypeId, name, typeId],
@@ -255,18 +346,23 @@ export const createEntityAndLinkToEntry = createServerFn({ method: "POST" })
 		const entityId = randomUUID();
 		const linkId = randomUUID();
 
-		await execute(
-			`INSERT INTO tanahpedia_entity (id, entity_type, name) VALUES (?, ?, ?)`,
-			[entityId, data.entityType, name],
-		);
+		await transaction(async (conn) => {
+			await txExecute(
+				conn,
+				`INSERT INTO tanahpedia_entity (id, entity_type, name) VALUES (?, ?, ?)`,
+				[entityId, data.entityType, name],
+			);
 
-		await insertSubtypeRows(data.entityType, entityId, name);
+			await insertSubtypeRows(conn, data.entityType, entityId, name);
 
-		await execute(
-			`INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)`,
-			[linkId, data.entryId, entityId],
-		);
+			await txExecute(
+				conn,
+				`INSERT IGNORE INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)`,
+				[linkId, data.entryId, entityId],
+			);
+		});
 
+		await revalidateWebsite(await pediaChangesForEntryIds([data.entryId]));
 		return { entityId, linkId };
 	});
 
@@ -309,12 +405,22 @@ export const linkExistingEntityToEntry = createServerFn({ method: "POST" })
 			`SELECT id FROM tanahpedia_entry_entity WHERE entry_id = ? AND entity_id = ?`,
 			[data.entryId, data.entityId],
 		);
+		// Already linked: no public change, nothing expires.
 		if (existing) return { linkId: existing.id };
 
 		const linkId = randomUUID();
-		await execute(
-			`INSERT INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)`,
+		const insert = await execute(
+			`INSERT IGNORE INTO tanahpedia_entry_entity (id, entry_id, entity_id) VALUES (?, ?, ?)`,
 			[linkId, data.entryId, data.entityId],
 		);
+		if (insert?.affectedRows === 0) {
+			// Lost a concurrent insert race — reuse the row that won; no public change.
+			const winner = await queryOne<{ id: string }>(
+				`SELECT id FROM tanahpedia_entry_entity WHERE entry_id = ? AND entity_id = ?`,
+				[data.entryId, data.entityId],
+			);
+			return { linkId: winner?.id ?? linkId };
+		}
+		await revalidateWebsite(await pediaChangesForEntryIds([data.entryId]));
 		return { linkId };
 	});

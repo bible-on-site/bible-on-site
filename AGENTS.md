@@ -1,12 +1,30 @@
 # Delivery Rule
 
-For repository change, build, or fix tasks, local-only work is not a completed delivery. Commit and push the finished, validated changes at minimum. When authorization and repository policy permit, carry the pull request through CI and merge it. Stop short only when the user explicitly requests review before publication or a hard blocker prevents pushing or merging; report that blocker and the exact remaining action.
+For repository change, build, or fix tasks, local-only work is not a completed delivery. Commit and push the finished, validated changes at minimum. When authorization and repository policy permit, carry the pull request through CI and review feedback, then merge it. Stop short only when the user explicitly requests review before publication or a hard blocker prevents pushing or merging; report that blocker and the exact remaining action.
+
+Following a pull request through CI includes checking its complete review state: workflow results and check annotations, coverage and quality reports, bot and issue comments (including Codacy), submitted reviews, and every review thread. Check feedback against the current head, investigate and fix each actionable finding, record evidence for findings that do not apply, and resolve addressed threads. Recheck these channels after each push, before merging, and when verifying delivery. Do not declare delivery complete while actionable review or quality findings remain unresolved, even when workflow runs are green.
+
+Take responsibility for the overall quality of this project and every flaw encountered while working on it. Investigate and fix flaws whether they are related to the current request, predate the task, appear in another module, or are found by tests, CI, review, or direct inspection. Do not leave a known flaw merely because it does not block the pull request or was caused elsewhere. Validate and deliver each fix through the repository's normal commit, push, CI, and merge process. Stop with a known flaw unresolved only if the user explicitly defers it or a hard blocker prevents a fix; report the evidence and exact remaining action.
 
 For changes limited to README files, local test suites and CI are not required for validation. Commit and push, then request merge without waiting for optional checks. If repository policy requires CI or a merge queue, let those checks run and verify the final merge result.
 
 # Task Permissions
 
 For a task the user assigns, you may grant the local tool, Docker file-sharing, and workspace access permissions needed to complete and validate that task. Keep each grant scoped to the task and follow platform security prompts and repository policy. Do not ask the user to repeat this authorization.
+
+# Worktree Isolation
+
+Use a dedicated Git worktree for every task unless the entire task can be completed using API calls alone. Create or reuse a worktree belonging to the current task before changing repository files or running builds. Do not switch branches or modify files in another task's checkout. After delivery, archive the task's managed worktree or remove its unmanaged worktree.
+
+# Data Ownership
+
+Application content belongs in the database. Treat the Rust db-populator and local population scripts as temporary bootstrap and test tooling, not as a source of production content. Populate the local database from production with `sync-from-prod`; make lasting content changes through the database deployment or admin editing path. Do not add production place or article content to the Rust populator just to make it appear locally.
+
+# Hebrew Text and Source Formatting
+
+Use plain Hebrew letters in source references, separated by spaces, with no commas, geresh, or gershayim: `יהושע י א`, `יהושע כג א`, `שמואל ב ה ו`. Use the regular ASCII hyphen `-` for source ranges, such as `בראשית ל ו-ח`. Apply this consistently across the website, admin, native app, previews, and exports.
+
+Use the regular ASCII double quote `"` in Hebrew UI text and abbreviations, such as `תנ"ך`, rather than typographic quotes or Hebrew gershayim `״`. Use the regular ASCII apostrophe `'` when an apostrophe is needed. Use the regular ASCII hyphen `-` rather than Hebrew maqaf `־` or typographic dashes in authored text. Preserve the biblical maqaf `־` in canonical scripture with taamim, and preserve database content at rest; accept legacy punctuation when parsing existing references and normalize their display.
 
 # Dependency Upgrade Rule
 
@@ -15,3 +33,27 @@ For a dependency upgrade task, refresh every dependency kind within the user's r
 # Pull Request Branch Sync
 
 Sync a pull request branch with its base only when both conditions hold: the current head has no green CI result, and there is an actual merge conflict. A branch being behind its base is not, by itself, a reason to sync.
+
+# Coverage Gates
+
+Codecov enforces per-module project coverage with `threshold: 0%`: a change may not lower any flag below its target. Targets (`codecov.yml`): website 99%, app 98.5%, api 97%, bulletin 90%, admin 86%, data 84%. The unflagged `codecov/project` check is informational only. Codacy additionally gates pull requests on diff coverage (70%).
+
+Keep every touched module at or above its target: add or extend tests before pushing rather than after CI fails. Do not lower targets, raise thresholds, or misuse `istanbul ignore` comments to bypass a gate.
+
+# Performance Failures
+
+Do not increase timeouts, retries, sleeps, polling budgets, or hang-watchdog limits to make a failing or slow operation pass. Treat a timeout as evidence: reproduce it, measure the critical path, and fix the underlying algorithm, blocking work, contention, or delivery defect. Keep the existing interaction deadline as a regression check. A timeout change is permitted only when the user explicitly requests it after seeing the root cause and measured tradeoff.
+
+# Visual Change Evidence
+
+When a change affects user-visible UI, show before/after evidence in the pull request description and when reporting the result to the user: screenshots, screen recordings, or captured device/emulator frames. Prefer real captures from the app's own e2e artifacts over mockups.
+
+Publish validation evidence only through pull-request descriptions/comments, issue attachments, CI artifacts or commit permalinks — never the repository-root `evidence/` directory, which CI rejects (#3319). Module-scoped evidence such as `docs/evidence/` remains allowed.
+
+# Pull Request Merge Authorization
+
+Dorad grants Codex standing authorization to merge pull requests in this repository without requesting separate or per-PR approval. This includes AWS-related pull requests and subsequent revisions of their AWS-impacting changes. This merge authorization supersedes older per-PR AWS merge-approval requirements and auto-merge restrictions in repository documentation. Honor any explicit user request to review a particular task or pull request before merging.
+
+AWS-related pull requests include infrastructure/IaC, IAM and networking, DNS/CDN/cache behavior, S3 access and public asset URLs, deployment workflows, production resource settings, and cost optimizations. Validate and push the changes, address actionable review feedback, and explain their production and backward-compatibility impact with rollback. Codex may merge them directly or use auto-merge under repository policy without additional approval from Dorad.
+
+Production stability and backward compatibility of existing public and crawled URLs take priority over cost savings. Apply live AWS changes only within the user's explicit authorization, after verifying the target account, current state, validation and rollback.

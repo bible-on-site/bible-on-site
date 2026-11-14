@@ -5,7 +5,6 @@ using System.Text;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 using GraphQL.Client.Http;
-using GraphQL.Client.Serializer.Newtonsoft;
 
 namespace BibleOnSite.Tests.Services;
 
@@ -84,6 +83,107 @@ public class ArticleServiceTests
     }
 
     [Fact]
+    public async Task GetArticleByIdAsync_maps_the_stored_reading_metric()
+    {
+        await using var server = new GraphQLStubServer(_ => """
+            {
+              "data": {
+                "articleById": {
+                  "id": 42,
+                  "perekId": 7,
+                  "authorId": 3,
+                  "abstract": "<H1>t</H1>",
+                  "articleContent": "<p>body</p>",
+                  "name": null,
+                  "priority": 4,
+                  "readingMetric": {
+                    "wordCount": 361,
+                    "estimatedSeconds": 99,
+                    "wordsPerMinute": 220,
+                    "calcVersion": 1,
+                    "sourceHash": "abc123"
+                  }
+                }
+              }
+            }
+            """);
+        var service = CreateService(server.Url);
+
+        var article = await service.GetArticleByIdAsync(42);
+
+        article.Should().NotBeNull();
+        article!.ReadingMetric.Should().NotBeNull();
+        article.ReadingMetric!.WordCount.Should().Be(361);
+        article.ReadingMetric.EstimatedSeconds.Should().Be(99);
+        article.ReadingMetric.WordsPerMinute.Should().Be(220);
+        article.ReadingMetric.CalcVersion.Should().Be(1);
+        article.ReadingMetric.SourceHash.Should().Be("abc123");
+        article.ReadingTimeBadge.Should().Be("זמן קריאה משוער: 2 דקות");
+        server.RequestBody.Should().Contain("readingMetric");
+    }
+
+    [Fact]
+    public async Task GetArticleByIdAsync_maps_the_ordered_progress_units()
+    {
+        await using var server = new GraphQLStubServer(_ => """
+            {
+              "data": {
+                "articleById": {
+                  "id": 42,
+                  "perekId": 7,
+                  "authorId": 3,
+                  "abstract": "<H1>t</H1>",
+                  "articleContent": "<p>body</p>",
+                  "name": null,
+                  "priority": 4,
+                  "progressUnits": [
+                    { "key": "0", "wordCount": 30, "cumulativeWords": 30 },
+                    { "key": "1", "wordCount": 70, "cumulativeWords": 100 }
+                  ]
+                }
+              }
+            }
+            """);
+        var service = CreateService(server.Url);
+
+        var article = await service.GetArticleByIdAsync(42);
+
+        article.Should().NotBeNull();
+        article!.ProgressUnits.Should().HaveCount(2);
+        article.ProgressUnits[0].Should().Be(new ReadingProgressUnit
+        {
+            Key = "0", WordCount = 30, CumulativeWords = 30
+        });
+        article.ProgressUnits[1].CumulativeWords.Should().Be(100);
+        server.RequestBody.Should().Contain("progressUnits");
+    }
+
+    [Fact]
+    public async Task GetArticleByIdAsync_defaults_progress_units_when_absent()
+    {
+        await using var server = new GraphQLStubServer(_ => """
+            {
+              "data": {
+                "articleById": {
+                  "id": 42,
+                  "perekId": 7,
+                  "authorId": 3,
+                  "abstract": null,
+                  "articleContent": "<p>body</p>",
+                  "name": null,
+                  "priority": 4
+                }
+              }
+            }
+            """);
+        var service = CreateService(server.Url);
+
+        var article = await service.GetArticleByIdAsync(42);
+
+        article!.ProgressUnits.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task GetArticleByIdAsync_returns_null_when_api_returns_no_article()
     {
         await using var server = new GraphQLStubServer(_ => """
@@ -121,13 +221,52 @@ public class ArticleServiceTests
     }
 
     [Fact]
-    public async Task GetArticlesByPerekIdAsync_returns_empty_when_http_request_fails()
+    public async Task GetArticlesByPerekIdAsync_throws_when_http_request_fails()
     {
         var service = CreateService($"http://127.0.0.1:{GetUnusedPort()}/graphql");
 
-        var articles = await service.GetArticlesByPerekIdAsync(9);
+        var act = () => service.GetArticlesByPerekIdAsync(9);
 
-        articles.Should().BeEmpty();
+        await act.Should().ThrowAsync<HttpRequestException>();
+    }
+
+    [Fact]
+    public async Task SearchArticlesAsync_returns_null_when_search_payload_is_missing()
+    {
+        await using var server = new GraphQLStubServer(_ => """
+            {
+              "data": {
+                "searchArticles": null
+              }
+            }
+            """);
+        var service = CreateService(server.Url);
+
+        var page = await service.SearchArticlesAsync("בראשית", 10, TestContext.Current.CancellationToken);
+
+        page.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SearchArticlesAsync_treats_missing_hits_as_empty_page()
+    {
+        await using var server = new GraphQLStubServer(_ => """
+            {
+              "data": {
+                "searchArticles": {
+                  "total": 0,
+                  "hits": null
+                }
+              }
+            }
+            """);
+        var service = CreateService(server.Url);
+
+        var page = await service.SearchArticlesAsync("בראשית", 10, TestContext.Current.CancellationToken);
+
+        page.Should().NotBeNull();
+        page!.Total.Should().Be(0);
+        page.Hits.Should().BeEmpty();
     }
 
     private static ArticleService CreateService(string url)
@@ -149,7 +288,7 @@ public class ArticleServiceTests
         clientField!.SetValue(
             service,
             new Lazy<GraphQLHttpClient>(() =>
-                new GraphQLHttpClient(url, new NewtonsoftJsonSerializer())));
+                new GraphQLHttpClient(url, BaseGraphQLService.CreateSerializer())));
 
         return service;
     }
@@ -258,5 +397,40 @@ public class ArticleServiceTests
 
             return string.Empty;
         }
+    }
+
+[Fact]
+    public async Task SearchArticlesAsync_returns_null_when_the_data_envelope_is_null()
+    {
+        await using var server = new GraphQLStubServer(_ => """
+            {
+              "data": null
+            }
+            """);
+        var service = CreateService(server.Url);
+
+        var page = await service.SearchArticlesAsync("בראשית", 10, TestContext.Current.CancellationToken);
+
+        page.Should().BeNull();
+    }
+
+    [Fact]
+    public void ReadingMetricDto_ToModel_defaults_a_missing_source_hash()
+    {
+        // The API contract declares sourceHash non-null, but the model guards
+        // a sparse payload — an absent hash must not poison the metric.
+        var dto = new ArticleService.ReadingMetricDto
+        {
+            WordCount = 361,
+            EstimatedSeconds = 99,
+            WordsPerMinute = 220,
+            CalcVersion = 1,
+            SourceHash = null,
+        };
+
+        var metric = dto.ToModel();
+
+        metric.WordCount.Should().Be(361);
+        metric.SourceHash.Should().BeEmpty();
     }
 }

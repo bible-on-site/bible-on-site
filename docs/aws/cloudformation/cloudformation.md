@@ -27,6 +27,28 @@ Sensitive values are masked with placeholders. To retrieve actual values:
 | `<EC2_PUBLIC_IP>` | `aws ec2 describe-instances --instance-ids i-0d811651c11294634 --query "Reservations[0].Instances[0].PublicIpAddress" --output text --region il-central-1` |
 | `<KEY_PAIR_FINGERPRINT>` | `aws ec2 describe-key-pairs --key-names nginx --query "KeyPairs[0].KeyFingerprint" --output text --region il-central-1` |
 
+## Lambda Python Runtimes
+
+The Python Lambdas (`bible-on-site-db-populator`, `ecr-to-ecs-deploy`) target
+`python3.14`, the latest generally available Lambda Python runtime (Amazon Linux
+2023, deprecation scheduled for 2029-06-30). `python3.15` is still in public
+preview and is not covered by the Lambda SLA, so do not use it for production.
+The data-deploy recovery tests in `ci-data-deploy.yml` run on Python 3.14.
+
+The live functions are created outside CloudFormation. After explicit approval
+of the AWS change, upgrade each one in `il-central-1`, recording the previous
+runtime for rollback:
+
+```bash
+aws lambda get-function-configuration --function-name <NAME> --query Runtime --region il-central-1
+aws lambda update-function-configuration --function-name <NAME> --runtime python3.14 --region il-central-1
+aws lambda wait function-updated --function-name <NAME> --region il-central-1
+```
+
+Verify with the next data CD (`bible-on-site-db-populator`) or ECR push
+(`ecr-to-ecs-deploy`) and the function's CloudWatch logs. Roll back by running
+`update-function-configuration` with the recorded runtime.
+
 ## Templates
 
 ### 1. `vpc-networking.yaml`
@@ -58,6 +80,20 @@ ECS cluster, task definitions, services, and Cloud Map service discovery.
 - Task Execution Role: `ecsTaskExecutionRole`
 - Website Task Role: `bible-on-site-website-task-role` (allows `lambda:InvokeFunction` on bulletin Lambda)
 
+**Prerequisites — SecureString SSM parameters:**
+
+ECS injects task `Secrets:` from SSM Parameter Store at container start, so
+every referenced parameter must already exist or the task fails to start.
+CloudFormation cannot create `SecureString` parameters — create them once per
+account/region (the same manual mechanism as `bible-on-site-tanah-db-url`):
+
+```bash
+# Shared admin <-> website revalidation credential (POST /api/revalidate)
+aws ssm put-parameter --name bible-on-site-revalidate-secret \
+  --type SecureString --value "$(openssl rand -hex 32)" \
+  --region il-central-1
+```
+
 **Deploy:**
 ```bash
 aws cloudformation deploy \
@@ -75,6 +111,11 @@ EC2 instance running nginx as reverse proxy.
 - SSL termination (Let's Encrypt)
 - Routes to ECS via Cloud Map DNS (`website.bible-on-site.local`)
 - VPC DNS resolver (`172.31.0.2`) for service discovery
+
+Replacement sizing/architecture (t4g Graviton candidates, validation harness,
+staged DNS canary and EIP cutover) is analyzed in
+[../router-replacement-validation.md](../router-replacement-validation.md) —
+issue #2561.
 
 > **Note**: Key pair and SSL certificates must be set up manually.
 
@@ -103,7 +144,7 @@ Automatic ECS deployment when ECR images are pushed.
 - EventBridge Rules: Listen for ECR push events (tag: `latest`)
   - `ecr-push-bible-on-site-website` → triggers on `bible-on-site` repo
   - `ecr-push-bible-on-site-api` → triggers on `bible-on-site-api` repo
-- Lambda Function: `ecr-to-ecs-deploy` (Python 3.12)
+- Lambda Function: `ecr-to-ecs-deploy` (Python 3.14)
 - IAM Roles: `ECRDeployLambdaRole`, `EventBridgeECSDeployRole`
 
 **Flow:** ECR Push → EventBridge → Lambda → ECS UpdateService (forceNewDeployment)
@@ -194,7 +235,7 @@ Lambda function for deploying SQL data to RDS MySQL.
 
 **Components:**
 - S3 Bucket: `bible-on-site-data-deploy` (SQL file staging)
-- Lambda Function: `bible-on-site-db-populator` (Python 3.11)
+- Lambda Function: `bible-on-site-db-populator` (Python 3.14)
 - Security Group: `data-deploy-lambda-sg` (VPC access)
 - IAM Role: `DataDeployLambdaRole` (SSM read, S3 read)
 
@@ -206,6 +247,49 @@ Lambda function for deploying SQL data to RDS MySQL.
 - Invoked by GitHub Actions CD workflow
 
 **Flow:** GitHub Actions → S3 (upload SQL) → Lambda invoke → RDS MySQL
+
+### 14. `cloudfront-edge-candidate.yaml`
+Isolated CloudFront distribution in front of the nginx router for edge-rollout
+validation (issue [#2508](https://github.com/bible-on-site/bible-on-site/issues/2508)).
+
+**Components:**
+- CloudFront distribution on the default `*.cloudfront.net` certificate — no
+  aliases, so no DNS/ACM change is needed to validate
+- `Managed-CachingDisabled` cache policy + `Managed-AllViewerExceptHostHeader`
+  origin request policy (pass-through to the canonical nginx vhost)
+- No access-log bucket: nginx logs cover forwarded origin requests and
+  CloudWatch standard metrics cover edge request/byte/error totals
+
+> **Note**: Validation-only candidate. See
+> [edge-rollout-validation.md](../edge-rollout-validation.md) for the full
+> plan, staged migration and rollback. No production routing is changed.
+> The candidate hostname is public. The live DNS and cost findings in
+> [edge-research-2026-10-27.md](../edge-research-2026-10-27.md) are preconditions
+> for any later rollout, including explicit API/admin DNS isolation.
+
+### Asset-only candidate: `cloudfront-assets.yaml`
+
+Reference-only proposal for an additive CloudFront pay-as-you-go endpoint in
+front of the existing public assets bucket. It has no aliases, OAC, bucket/IAM
+changes or automatic ECS/URL activation. Success caching is disabled and error
+TTLs are explicitly zero. A custom origin policy forwards CORS inputs and all
+query parameters. This is separate from the full-website edge candidate above.
+See the [S3 bill reassessment and approval-gated runbook](../s3-delivery-cost-2026-11-01.md)
+for costs, compatibility checks, CLI request generation and rollback. Never
+deploy this reference file as a CloudFormation stack.
+
+### Cost-monitoring proposal: `cost-monitoring.yaml`
+
+Reference-only proposal for the cost-alerting gap recorded in
+[s3-delivery-cost-2026-11-01.md](../s3-delivery-cost-2026-11-01.md): a monthly
+AWS Budget (forecast/actual email alerts), a per-service Cost Explorer anomaly
+monitor with a daily subscription, and an `EstimatedCharges` billing alarm on a
+template-local us-east-1 SNS topic. Applying it creates real resources and is a
+gated #2576 change; see [cost-observability.md](../cost-observability.md) and
+the template's own `Metadata.Documentation` for prerequisites, thresholds and
+rollback. The recurring read-only baseline check lives in
+`devops/cost-audit.mjs`. Never deploy this reference file as a CloudFormation
+stack.
 
 ## Data Flow: ECR → ECS → nginx → Internet
 
@@ -261,3 +345,4 @@ aws sso login --profile bible-on-site-deployer
 ## Related Documentation
 
 - [nginx Configuration](./ec2-nginx/router/router.conf)
+- [Edge rollout validation plan](../edge-rollout-validation.md)

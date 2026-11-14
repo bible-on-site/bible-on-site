@@ -72,7 +72,9 @@ The API exposes a `/api/shutdown` endpoint in non-production profiles to enable 
 ### Server-Side Implementation ([app.rs](../../../../web/api/src/startup/app.rs))
 
 ```rust
-if env::var("PROFILE").unwrap_or_default() != "prod" {
+// dev_tools is `profile.dev_tools_enabled()` — true only for an explicit
+// `PROFILE=dev`/`test`; missing, blank or unknown values fail closed.
+if dev_tools {
     cfg.service(web::resource("/api/shutdown").guard(guard::Post()).to({
         let shutdown_signal = shutdown_signal.clone();
         move || {
@@ -90,7 +92,7 @@ if env::var("PROFILE").unwrap_or_default() != "prod" {
 ```
 
 Key points:
-- Only available when `PROFILE != "prod"` (safety guard)
+- Only available for an explicit `PROFILE=dev`/`test` (fail-closed safety guard)
 - Uses `AtomicBool` to signal shutdown across threads
 - 1-second delay allows response to be sent before shutdown
 - The main server loop polls this flag and exits gracefully
@@ -176,12 +178,12 @@ The E2E tests use Playwright but are orchestrated via cargo-make:
 
 ```toml
 [tasks.test-e2e]
-command = "${NPM_BIN}"
-args = ["run", "--prefix", "tests", "test:e2e"]
+command = "bun"
+args = ["run", "--cwd", "tests", "test:e2e"]
 
 [tasks.coverage-e2e]
-command = "${NPM_BIN}"
-args = ["run", "--prefix", "tests", "coverage:e2e"]
+command = "bun"
+args = ["run", "--cwd", "tests", "coverage:e2e"]
 ```
 
 This allows the Rust build system to control when tests run, ensuring the instrumented server is ready.
@@ -192,7 +194,7 @@ API coverage is merged with website coverage at the repository root:
 
 ```bash
 cd devops
-npm run coverage:merge
+bun run coverage:merge
 ```
 
 This produces a combined LCOV file at `.coverage/lcov.info` that includes both Rust and TypeScript coverage, which is then uploaded to Codacy.

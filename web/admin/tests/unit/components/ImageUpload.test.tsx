@@ -25,7 +25,8 @@ function getFileInput(container: HTMLElement) {
 function getDropZone() {
 	const helpText = screen.getByText("או גרור ושחרר קובץ תמונה לכאן");
 	const dropZone = helpText.parentElement;
-	if (dropZone === null) throw new Error("Image upload drop zone was not rendered");
+	if (dropZone === null)
+		throw new Error("Image upload drop zone was not rendered");
 	return dropZone;
 }
 
@@ -65,7 +66,9 @@ describe("ImageUpload", () => {
 		const { container } = render(<ImageUpload onUpload={onUpload} />);
 
 		fireEvent.change(getFileInput(container), {
-			target: { files: [new File(["text"], "notes.txt", { type: "text/plain" })] },
+			target: {
+				files: [new File(["text"], "notes.txt", { type: "text/plain" })],
+			},
 		});
 
 		expect(alert).toHaveBeenCalledWith("יש להעלות קובץ תמונה בלבד");
@@ -119,7 +122,9 @@ describe("ImageUpload", () => {
 	});
 
 	it("clears the preview and reports upload failures", async () => {
-		const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => undefined);
 		const onUpload = vi.fn(() => Promise.reject(new Error("upload failed")));
 		const { container } = render(<ImageUpload onUpload={onUpload} />);
 
@@ -130,7 +135,10 @@ describe("ImageUpload", () => {
 		await waitFor(() =>
 			expect(alert).toHaveBeenCalledWith("העלאת התמונה נכשלה"),
 		);
-		expect(consoleError).toHaveBeenCalledWith("Upload failed:", expect.any(Error));
+		expect(consoleError).toHaveBeenCalledWith(
+			"Upload failed:",
+			expect.any(Error),
+		);
 		expect(screen.queryByAltText("תמונת רב")).not.toBeInTheDocument();
 	});
 });

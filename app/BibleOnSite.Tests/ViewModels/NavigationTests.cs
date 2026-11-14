@@ -44,6 +44,54 @@ public class NavigationTests
         viewModel.PerekId.Should().Be(123);
     }
 
+    [Fact]
+    public void PerekViewModel_Perek_ExposesOnlyTheDisplayedPageToAccessibility()
+    {
+        static Perek Page(int id) => new()
+        {
+            PerekId = id, Date = "2026-01-20", HebDate = "תשרי",
+            SeferName = "בראשית", SeferTanahUsName = "Genesis", Tseit = "18:00"
+        };
+        var first = Page(1);
+        var second = Page(2);
+        var viewModel = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), _ => first);
+        first.IsOffscreenCarouselPage.Should().BeTrue();
+
+        viewModel.Perek = first;
+        first.IsOffscreenCarouselPage.Should().BeFalse();
+
+        viewModel.Perek = second;
+        first.IsOffscreenCarouselPage.Should().BeTrue();
+        second.IsOffscreenCarouselPage.Should().BeFalse();
+
+        viewModel.Perek = null;
+        second.IsOffscreenCarouselPage.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PerekViewModel_StaleCarouselCurrentItemPushback_KeepsDisplayedPageExposed()
+    {
+        static Perek Page(int id) => new()
+        {
+            PerekId = id, Date = "2026-01-20", HebDate = "תשרי",
+            SeferName = "בראשית", SeferTanahUsName = "Genesis", Tseit = "18:00"
+        };
+        var displayed = Page(300);
+        var itemsSourceReset = Page(1);
+        var viewModel = new PerekViewModel(PreferencesService.CreateForTesting(new InMemoryPreferencesStorage()), _ => displayed);
+
+        // The displayed page is set before the carousel's ItemsSource reset
+        // pushes its own CurrentItem through the two-way binding.
+        viewModel.Perek = displayed;
+        displayed.IsOffscreenCarouselPage.Should().BeFalse();
+
+        // A stale CurrentItem pushback must not re-hide the displayed page
+        // (the carousel does not push CurrentItem on programmatic ScrollTo).
+        viewModel.CurrentCarouselPerek = itemsSourceReset;
+        displayed.IsOffscreenCarouselPage.Should().BeFalse();
+        itemsSourceReset.IsOffscreenCarouselPage.Should().BeTrue();
+    }
+
     #endregion
 
     #region ArticlesViewModel Navigation Tests
@@ -51,7 +99,7 @@ public class NavigationTests
     [Fact]
     public void ArticlesViewModel_ByPerek_ShouldHaveCorrectRoute()
     {
-        var viewModel = new ArticlesViewModel(123, "בראשית ה");
+        var viewModel = new ArticlesViewModel { PerekId = 123, PerekTitle = "בראשית ה" };
 
         viewModel.IsFilterByPerek.Should().BeTrue();
         viewModel.PerekId.Should().Be(123);
@@ -63,7 +111,7 @@ public class NavigationTests
     [Fact]
     public void ArticlesViewModel_ByAuthor_ShouldHaveCorrectRoute()
     {
-        var viewModel = ArticlesViewModel.ForAuthor(5, "הרב משה לוי");
+        var viewModel = new ArticlesViewModel { AuthorId = 5, AuthorName = "הרב משה לוי" };
 
         viewModel.IsFilterByAuthor.Should().BeTrue();
         viewModel.AuthorId.Should().Be(5);
@@ -152,7 +200,7 @@ public class NavigationTests
     public void ArticlesViewModel_BackNavigation_ShouldNotLoseState()
     {
         // When navigating back, the filter state should be preserved
-        var viewModel = new ArticlesViewModel(123, "בראשית ה");
+        var viewModel = new ArticlesViewModel { PerekId = 123, PerekTitle = "בראשית ה" };
 
         // Simulate adding articles
         viewModel.SetArticles(new List<Article>
@@ -167,6 +215,31 @@ public class NavigationTests
         viewModel.PerekId.Should().Be(123);
         viewModel.HasArticles.Should().BeTrue();
         viewModel.Articles.Count.Should().Be(1);
+    }
+
+    #endregion
+
+    #region Flyout Routes
+
+    [Fact]
+    public void FlyoutPage_WithoutLocation_StacksAboveDefaultReader()
+    {
+        AppRoutes.FlyoutPage(AppRoutes.SoundPreferences)
+            .Should().Be($"//{AppRoutes.Perek}/{AppRoutes.SoundPreferences}");
+    }
+
+    [Fact]
+    public void FlyoutPage_AboveReader_KeepsTheReaderInTheBackStack()
+    {
+        AppRoutes.FlyoutPage(AppRoutes.SupportPreferences, "//searchReader?perekId=5")
+            .Should().Be("//searchReader/SupportPreferencesPage");
+    }
+
+    [Fact]
+    public void FlyoutPage_ToReader_ReturnsTheReaderPath()
+    {
+        AppRoutes.FlyoutPage(AppRoutes.Perek, "//PerekPage?perekId=5")
+            .Should().Be("//PerekPage");
     }
 
     #endregion

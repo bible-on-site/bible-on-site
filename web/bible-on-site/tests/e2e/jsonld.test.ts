@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../util/playwright/test-fixture";
 
 /**
  * E2E: assert that JSON-LD structured data is server-rendered as valid

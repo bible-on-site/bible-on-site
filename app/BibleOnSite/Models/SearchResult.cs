@@ -7,6 +7,25 @@ public abstract class SearchResult
 {
     public string SearchPhrase { get; set; } = string.Empty;
     public abstract SearchFilter ResultType { get; }
+    public string Title { get; set; } = string.Empty;
+    public string SubtitleHtml { get; set; } = string.Empty;
+    public string Category => ResultType.GetHebrewName();
+    public int Score { get; set; }
+    public int GenerationOrder { get; set; } = int.MaxValue;
+    public int SourceOrder => this switch
+    {
+        PerekSearchResult perek => perek.Perek.PerekId * 1000,
+        PasukSearchResult pasuk => pasuk.PerekId * 1000 + pasuk.Pasuk.PasukNum,
+        PerushSearchResult perush => perush.PerekId * 1000 + perush.PasukNum,
+        _ => int.MaxValue
+    };
+    public virtual string? ThumbnailUrl => null;
+    public bool HasThumbnail => ThumbnailUrl != null;
+
+    protected static string CreateHighlightedResult(string text, string searchPhrase)
+    {
+        return Helpers.SearchText.Snippet(text, searchPhrase ?? string.Empty);
+    }
 }
 
 /// <summary>
@@ -15,6 +34,7 @@ public abstract class SearchResult
 public class AuthorSearchResult : SearchResult
 {
     public Author Author { get; }
+    public override string? ThumbnailUrl => Author.ImageUrl;
 
     public override SearchFilter ResultType => SearchFilter.Author;
 
@@ -59,27 +79,55 @@ public class PasukSearchResult : SearchResult
         SearchPhrase = searchPhrase;
         HighlightedResult = CreateHighlightedResult(pasuk.Text, searchPhrase);
     }
+}
 
-    private static string CreateHighlightedResult(string text, string searchPhrase)
+/// <summary>
+/// Search result for a remote semantic article-content match.
+/// Title carries the article name; SubtitleHtml the API's safe excerpt;
+/// Source the formatted perek label (e.g. "בראשית א").
+/// </summary>
+public class ArticleSearchResult : SearchResult
+{
+    public int ArticleId { get; }
+    public int PerekId { get; }
+    public string AuthorName { get; }
+    public string Source { get; }
+    public string Excerpt { get; }
+
+    public override SearchFilter ResultType => SearchFilter.Articles;
+
+    public ArticleSearchResult(int articleId, int perekId, string authorName, string source, string excerpt, string searchPhrase)
     {
-        if (string.IsNullOrEmpty(searchPhrase) || !text.Contains(searchPhrase))
-            return text.Length > 50 ? text[..50] + "..." : text;
+        ArticleId = articleId;
+        PerekId = perekId;
+        AuthorName = authorName;
+        Source = source;
+        Excerpt = excerpt;
+        SearchPhrase = searchPhrase;
+    }
+}
 
-        var highlighted = text.Replace(searchPhrase, $"<b>{searchPhrase}</b>");
-        var matchIndex = highlighted.IndexOf("<b>", StringComparison.Ordinal);
+/// <summary>
+/// Search result for a remote Tanahpedia encyclopedia entry match.
+/// Title carries the entry title; SubtitleHtml the API excerpt highlighted
+/// for the search phrase; UniqueName is the canonical slug used for
+/// navigation — never the raw alias the reader typed.
+/// </summary>
+public class TanahpediaSearchResult : SearchResult
+{
+    public string EntryId { get; }
+    public string UniqueName { get; }
+    public string Excerpt { get; }
 
-        if (matchIndex < 0)
-            return highlighted.Length > 50 ? highlighted[..50] + "..." : highlighted;
+    public override SearchFilter ResultType => SearchFilter.Tanahpedia;
 
-        // Extract context around the match
-        var start = Math.Max(0, matchIndex - 20);
-        var end = Math.Min(highlighted.Length, matchIndex + searchPhrase.Length + 7 + 20); // +7 for <b></b>
-
-        var result = highlighted[start..end];
-        if (start > 0) result = "..." + result;
-        if (end < highlighted.Length) result += "...";
-
-        return result;
+    public TanahpediaSearchResult(string entryId, string uniqueName, string excerpt, int score, string searchPhrase)
+    {
+        EntryId = entryId;
+        UniqueName = uniqueName;
+        Excerpt = excerpt;
+        SearchPhrase = searchPhrase;
+        Score = score;
     }
 }
 
@@ -104,26 +152,5 @@ public class PerushSearchResult : SearchResult
         PasukNum = pasukNum;
         SearchPhrase = searchPhrase;
         HighlightedResult = CreateHighlightedResult(noteContent, searchPhrase);
-    }
-
-    private static string CreateHighlightedResult(string text, string searchPhrase)
-    {
-        if (string.IsNullOrEmpty(searchPhrase) || !text.Contains(searchPhrase))
-            return text.Length > 50 ? text[..50] + "..." : text;
-
-        var highlighted = text.Replace(searchPhrase, $"<b>{searchPhrase}</b>");
-        var matchIndex = highlighted.IndexOf("<b>", StringComparison.Ordinal);
-
-        if (matchIndex < 0)
-            return highlighted.Length > 50 ? highlighted[..50] + "..." : highlighted;
-
-        var start = Math.Max(0, matchIndex - 20);
-        var end = Math.Min(highlighted.Length, matchIndex + searchPhrase.Length + 7 + 20);
-
-        var result = highlighted[start..end];
-        if (start > 0) result = "..." + result;
-        if (end < highlighted.Length) result += "...";
-
-        return result;
     }
 }

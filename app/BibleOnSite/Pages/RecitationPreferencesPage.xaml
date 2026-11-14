@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<controls:PreferencesPageBase xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
+             xmlns:fonts="clr-namespace:Fonts"
+             x:Class="BibleOnSite.Pages.RecitationPreferencesPage"
+             x:DataType="viewmodels:RecitationPreferencesViewModel"
+             Shell.NavBarIsVisible="False"
+             ControlTemplate="{StaticResource PreferencesPageTemplate}"
+             Title="קריינות"
+             FlowDirection="RightToLeft"
+             BackgroundColor="{AppThemeBinding Light={StaticResource Gray50}, Dark={StaticResource SurfaceDark}}">
+
+    <ScrollView Padding="16,12">
+        <VerticalStackLayout Spacing="24">
+
+            <!-- ═══ השמעה ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="השמעה"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <VerticalStackLayout Spacing="12" AutomationId="RecitationPlaybackSettings">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="מהירות" TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <Label Grid.Column="1" Text="{Binding Speed, StringFormat='{0:0.##}×'}" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"/>
+                        </Grid>
+                        <Slider Minimum="0.5" Maximum="2" Value="{Binding Speed}" AutomationId="RecitationSpeedSlider" SemanticProperties.Description="מהירות"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="אורך הפסקה בין פסוקים" TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <Label Grid.Column="1" Text="{Binding PauseSeconds, StringFormat='{0:0.#} שניות'}" IsVisible="{Binding CustomPauses}" TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"/>
+                        </Grid>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label Text="לפי ההקלטה" VerticalOptions="Center" TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <Switch Grid.Column="1" IsToggled="{Binding OriginalPauses}" AutomationId="RecitationOriginalPausesSwitch"/>
+                        </Grid>
+                        <Slider Minimum="0" Maximum="5" Value="{Binding PauseSeconds}" IsVisible="{Binding CustomPauses}" AutomationId="RecitationPauseSlider" SemanticProperties.Description="אורך הפסקה בין פסוקים"/>
+                        <Label Text="הפסקה מותאמת זמינה בפרקים עם חלוקה לפסוקים" FontSize="12" TextColor="{StaticResource Gray500}" LineBreakMode="WordWrap"/>
+
+                        <!-- עוצמה: navigates to שמע with the קריינות channel in view —
+                             one shared setting, no second slider here. -->
+                        <controls:TappableView AutomationId="RecitationVolumeShortcut"
+                                               SemanticProperties.Description="עוצמה"
+                                               Command="{Binding OpenSoundCommand}">
+                        <Grid ColumnDefinitions="Auto,*,Auto"
+                              Padding="0,6">
+                            <Label Text="{x:Static fonts:FluentUI.speaker_2_24_regular}"
+                                   FontFamily="FluentIcons"
+                                   FontSize="22"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                                   VerticalOptions="Center"
+                                   Margin="0,0,10,0"/>
+                            <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                <Label Text="עוצמה"
+                                       FontSize="15"
+                                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                <Label Text="{Binding Volume, StringFormat='{0:P0}'}"
+                                       FontSize="13"
+                                       TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                            </VerticalStackLayout>
+                            <Label Grid.Column="2"
+                                   Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
+                                   FontFamily="FluentIcons"
+                                   FontSize="20"
+                                   TextColor="{StaticResource Gray400}"
+                                   VerticalOptions="Center"/>
+                        </Grid>
+                        </controls:TappableView>
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+
+            <!-- ═══ התקנת הקלטות — managed under חבילות הרחבה ═══ -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="הקלטות"
+                       FontSize="14"
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                       Padding="4,0,0,0"/>
+
+                <Border Padding="16"
+                        StrokeShape="RoundRectangle 12"
+                        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
+                        StrokeThickness="1"
+                        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
+                    <controls:TappableView AutomationId="RecitationInstallRow"
+                                           SemanticProperties.Description="התקנת הקלטות"
+                                           Command="{Binding OpenExtensionPacksCommand}">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Label Text="{x:Static fonts:FluentUI.arrow_download_24_regular}"
+                               FontFamily="FluentIcons"
+                               FontSize="22"
+                               TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray350}}"
+                               VerticalOptions="Center"
+                               Margin="0,0,10,0"/>
+                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                            <Label Text="התקנת הקלטות"
+                                   FontSize="15"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                            <Label Text="{Binding InstallStateText}"
+                                   AutomationId="RecitationSummaryState"
+                                   FontSize="13"
+                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                        </VerticalStackLayout>
+                        <Label Grid.Column="2"
+                               Text="{x:Static fonts:FluentUI.chevron_circle_left_12_regular}"
+                               FontFamily="FluentIcons"
+                               FontSize="20"
+                               TextColor="{StaticResource Gray400}"
+                               VerticalOptions="Center"/>
+                    </Grid>
+                    </controls:TappableView>
+                </Border>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</controls:PreferencesPageBase>

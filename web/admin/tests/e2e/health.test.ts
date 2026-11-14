@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../util/test-fixture";
 
 test.describe("Admin App Health", () => {
 	test("homepage loads", async ({ page }) => {

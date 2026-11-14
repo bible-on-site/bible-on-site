@@ -1,0 +1,6 @@
+# Extra ignore rules for search tools (ripgrep/fd/agent search) — complements
+# .gitignore with tracked-but-unhelpful search targets. Bypass with rg -u.
+# 42 MB single-line generated scripture corpus; one match floods search output.
+**/*.tanah_view.json
+# Same generated dump bundled for the app (36 MB binary) — rg --files noise.
+**/*.tanah_view.sqlite

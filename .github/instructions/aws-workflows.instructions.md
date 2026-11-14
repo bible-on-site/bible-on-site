@@ -7,8 +7,36 @@ applyTo: ".github/workflows/**, docs/aws/**, devops/deploy/**, web/api/Dockerfil
 
 ## AWS
 
+### Merge Authorization And Live Changes
+
+- Dorad grants Codex standing authorization to merge AWS-related PRs, including
+  later revisions, without separate or per-PR approval. Direct merge and
+  auto-merge remain subject to repository policy, validation and review.
+  Honor explicit requests to review before merging. See root `AGENTS.md`.
+- Live AWS writes still require explicit authorization for their current scope;
+  merging a PR does not itself authorize additional manual production changes.
+- Production uptime and existing public/crawled URLs take priority over savings.
+  Verify account/region, live state, compatibility tests and rollback before any
+  authorized live write. Reference templates are not evidence of live state.
+- Preserve the public assets bucket's legacy S3 URLs. Keep the sole nginx router
+  running and the private-DNS SSM endpoint until its consumers have a verified
+  replacement. The 2026-10-23 audit in `docs/aws/cost-risk-audit-2026-10-23.md`
+  supersedes #2563's unsafe rollout steps.
+- Dorad permits admin-only interruptions for cost savings (one current admin
+  user). Admin runs one Fargate Spot task since 2026-10-24; the rollout and
+  manual on-demand recovery are in `docs/aws/admin-spot-rollout.md`. Keep public
+  website/API capacity and routing unchanged. Spot has no automatic on-demand
+  fallback: preserve a tested recovery path. No shutdown schedule is implied.
+- Live execution of the remaining #2576 migrations requires explicit authorization:
+  db-populator Lambda redeploy and SSM endpoint removal, any CDN/OAC change to
+  the public assets bucket, ARM64 service images (#2562), nginx router
+  replacement or resize (#2561), edge caching in front of the router (#2508),
+  admin scale-to-zero scheduling, and further log-retention reduction. Each
+  item's prerequisites are in `docs/aws/cost-risk-audit-2026-10-23.md`; the
+  withdrawn #2563 recipes must not be rerun.
+
 - Connect: `aws sso login --profile AdministratorAccess-<AccountID>`.
-- Every accepted change must land in IaC under `infrastructure/`, but never run CloudFormation from those templates — they are reference-only. Update `docs/aws/` when the process changes.
+- Every accepted change must be reflected in the existing reference IaC under `docs/aws/cloudformation/`, but never run CloudFormation from those templates — they are reference-only. Update `docs/aws/` when the process changes.
 
 ### Authentication And Secrets
 
@@ -35,3 +63,25 @@ applyTo: ".github/workflows/**, docs/aws/**, devops/deploy/**, web/api/Dockerfil
 ## GitHub Actions
 
 Before editing `.github/workflows/`, re-enable the `github.vscode-github-actions` extension if needed; disable it again afterwards to keep the problems view clean.
+
+### CI Merge Gating (never open holes)
+
+- Every check a change triggers must be able to block the merge. When a job's
+  `if` condition triggers on outputs (e.g. `<module>_ci_changed`), the gate in
+  `cross_module_ci` must evaluate that job's result under the same condition —
+  never reuse another module's flag.
+- Never weaken gating to land a PR: no `continue-on-error` on required paths,
+  no loosening a gate from `!= "success"` to `= "failure"`, no dropping a job
+  from `needs:` because it is flaky or slow. Fix the failure or the job instead.
+- A triggered suite that is skipped or cancelled by an upstream failure must
+  still block; only a suite whose own trigger did not fire may pass untested.
+- When adding or removing CI jobs or changing a job's `if`, update the
+  `cross_module_ci` gate in the same change so triggers and gating stay in sync.
+- Release build paths (Dockerfiles, base images, build contexts) must run
+  before merge: a master-only packaging job needs a non-`push` validation run
+  with publication skipped, gated in `cross_module_ci` (#2292). Only builds
+  that need production data or secrets (the website SSG image) are exempt.
+- Never enable GitHub's managed "Automatic dependency submission" (Settings ->
+  Code security -> Dependency graph). It bare-restores every csproj on Ubuntu,
+  always fails on the MAUI project, and double-reports `submit-nuget`, racing
+  the required check owned by `dependency-submission.yml`.

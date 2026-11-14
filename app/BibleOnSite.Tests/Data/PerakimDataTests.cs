@@ -155,9 +155,15 @@ public class PerakimDataTests
     {
         var perakimData = PerakimData.PerakimOfBooks.GetValueOrDefault(seferId);
         if (perakimData is int count)
+        {
             return count;
+        }
+
         if (perakimData is Dictionary<int, int> additionalCounts)
+        {
             return additionalCounts.Values.Sum();
+        }
+
         return 0;
     }
 }

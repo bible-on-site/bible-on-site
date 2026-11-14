@@ -7,28 +7,46 @@ const BENCHMARK_OUTPUT_DIR = resolve(
 );
 const BENCHMARK_OUTPUT_FILE = resolve(BENCHMARK_OUTPUT_DIR, "benchmark.json");
 
-const WEB_SERVER_URL = "http://127.0.0.1:3001";
-
-// Routes to warm up before running e2e tests with coverage
+// Routes to warm up before running e2e tests with coverage.
+// Every dynamic route pattern gets one sequential hit so its static-paths
+// resolution finishes before parallel workers start — concurrent first-hits
+// race a non-atomic .next/prerender-manifest.json write (vercel/next.js#96259)
+// and surface in the browser as "Unexpected end of JSON input" (#2005).
 const WARMUP_ROUTES = [
 	"",
+	// The home page fetches push capabilities while navigating to the reader.
+	// Finish cold API compilation before it can block that browser navigation.
+	"api/push/subscription",
 	"929",
 	"929/1",
 	"929/188",
 	"929/250",
 	"929/727",
 	"929/764",
+	// 929/[number]/[slug]
+	"929/1/1",
+	// 929/authors/[authorParam]
+	`929/authors/${encodeURIComponent("הרב לדוגמא שליטא")}`,
+	// pedia/[slug]
+	`pedia/${encodeURIComponent("יעקב")}`,
+	// [section]
+	"tos",
 ];
 
 /**
  * Warm up the server by making requests to key routes.
  * This helps stabilize tests when running with coverage instrumentation,
  * which adds overhead that can cause timeouts on cold starts.
+ * @param {string | undefined} baseURL configured server URL (per-worktree port)
  */
-async function warmUpServer() {
+async function warmUpServer(baseURL) {
 	// Playwright loads global setup through a separate transform from its config.
 	// Read the flag here so its ESM transform cannot change the shared module's exports.
 	if (process.env.MEASURE_COV !== "1") {
+		return;
+	}
+	if (!baseURL) {
+		console.warn("[global-setup] No baseURL configured, skipping warmup");
 		return;
 	}
 
@@ -40,7 +58,7 @@ async function warmUpServer() {
 
 	for (let i = 0; i < maxRetries; i++) {
 		try {
-			const response = await fetch(`${WEB_SERVER_URL}/`);
+			const response = await fetch(`${baseURL}/`);
 			if (response.ok) {
 				break;
 			}
@@ -59,7 +77,7 @@ async function warmUpServer() {
 	// Warm up each route sequentially to avoid overwhelming the dev server
 	for (const route of WARMUP_ROUTES) {
 		try {
-			const response = await fetch(`${WEB_SERVER_URL}/${route}`);
+			const response = await fetch(`${baseURL}/${route}`);
 			if (response.ok) {
 				// Consume the response body to ensure full page generation
 				await response.text();
@@ -81,12 +99,11 @@ async function warmUpServer() {
 }
 
 /** @param {import('@playwright/test').FullConfig} config */
-// biome-ignore lint/correctness/noUnusedFunctionParameters: framework required function signature
 module.exports = async function globalSetup(config) {
 	// Clear benchmark file for fresh perf test run (Bencher Metric Format uses object)
 	mkdirSync(BENCHMARK_OUTPUT_DIR, { recursive: true });
 	writeFileSync(BENCHMARK_OUTPUT_FILE, "{}", "utf8");
 
 	// Warm up server when running with coverage
-	await warmUpServer();
+	await warmUpServer(config.projects?.[0]?.use?.baseURL);
 };

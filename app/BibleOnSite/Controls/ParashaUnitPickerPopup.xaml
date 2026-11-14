@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:fonts="clr-namespace:Fonts"
+             x:Class="BibleOnSite.Controls.ParashaUnitPickerPopup"
+             x:Name="PickerPopup"
+             IsVisible="False"
+             AutomationId="ParashaPickerPopup"
+             FlowDirection="RightToLeft">
+
+    <!-- Popup container -->
+    <Grid>
+        <!-- Semi-transparent background for tap to dismiss -->
+        <BoxView BackgroundColor="#80000000"
+                 InputTransparent="False">
+            <BoxView.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnBackgroundTapped"/>
+            </BoxView.GestureRecognizers>
+        </BoxView>
+
+        <!-- Picker container: from below the header to above satellite buttons -->
+        <Border Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                StrokeThickness="1"
+                BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}"
+                Padding="0"
+                Margin="16,55,16,130"
+                AutomationId="ParashaPickerCard"
+                VerticalOptions="Fill"
+                HorizontalOptions="Fill"
+                InputTransparent="False">
+            <Border.StrokeShape>
+                <RoundRectangle CornerRadius="12"/>
+            </Border.StrokeShape>
+
+            <Grid RowDefinitions="Auto,*,Auto">
+                <!-- Header -->
+                <Border Grid.Row="0"
+                        BackgroundColor="{StaticResource Primary}"
+                        Padding="16,12">
+                    <Label Text="בחירת פרשה"
+                           FontSize="18"
+                           FontAttributes="Bold"
+                           TextColor="White"
+                           HorizontalTextAlignment="Center"/>
+                </Border>
+
+                <!-- Two-column picker: ספר -> פרשה -->
+                <Grid Grid.Row="1"
+                      ColumnDefinitions="*,1.6*"
+                      Padding="8"
+                      ColumnSpacing="6"
+                      RowDefinitions="Auto,*"
+                      RowSpacing="4">
+
+                    <!-- Column headers -->
+                    <Label Grid.Row="0" Grid.Column="0"
+                           Text="ספר"
+                           FontSize="12"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                           HorizontalTextAlignment="Center"/>
+                    <Label Grid.Row="0" Grid.Column="1"
+                           Text="פרשה"
+                           FontSize="12"
+                           TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
+                           HorizontalTextAlignment="Center"/>
+
+                    <!-- Column 1: Torah sefarim -->
+                    <Border Grid.Row="1" Grid.Column="0"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource Gray50}, Dark={StaticResource SurfaceDark}}"
+                            Padding="0">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="8"/>
+                        </Border.StrokeShape>
+                        <Grid RowDefinitions="Auto,*,Auto">
+                            <Label x:Name="SeferUpArrow"
+                                   Text="{x:Static fonts:FluentUI.chevron_up_20_regular}"
+                                   FontFamily="FluentIcons" FontSize="14"
+                                   TextColor="{StaticResource Gray400}"
+                                   HeightRequest="22"
+                                   HorizontalTextAlignment="Center"
+                                   VerticalTextAlignment="Center"
+                                   AutomationId="ParashaPickerSeferUp"
+                                   SemanticProperties.Description="תחילת הרשימה"/>
+                            <Grid Grid.Row="1">
+                                <!-- invisible probe with the item template's metrics: its
+                                     arranged height equals one item's height (items are
+                                     uniform via MeasureAllItems) -->
+                                <Label x:Name="SeferItemSizer"
+                                       Text="א" FontSize="15" Padding="8,12"
+                                       Opacity="0"
+                                       InputTransparent="True"
+                                       VerticalOptions="Start"/>
+                                <CollectionView x:Name="SeferList"
+                                        SelectionMode="Single"
+                                        SelectionChanged="OnSeferSelected"
+                                        Scrolled="OnColumnScrolled"
+                                        SizeChanged="OnColumnSizeChanged"
+                                        AutomationId="ParashaPickerSeferList"
+                                        ItemSizingStrategy="MeasureAllItems"
+                                        InputTransparent="False">
+                            <CollectionView.ItemsLayout>
+                                <LinearItemsLayout Orientation="Vertical" ItemSpacing="0"/>
+                            </CollectionView.ItemsLayout>
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="models:ParashaUnit">
+                                    <Grid Padding="8,12">
+                                        <VisualStateManager.VisualStateGroups>
+                                            <VisualStateGroup Name="CommonStates">
+                                                <VisualState Name="Normal"/>
+                                                <VisualState Name="Selected">
+                                                    <VisualState.Setters>
+                                                        <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                                                    </VisualState.Setters>
+                                                </VisualState>
+                                            </VisualStateGroup>
+                                        </VisualStateManager.VisualStateGroups>
+                                        <Label Text="{Binding SeferName}"
+                                               FontSize="15"
+                                               AutomationId="ParashaPickerSeferItem"
+                                               HorizontalTextAlignment="Center"
+                                               VerticalTextAlignment="Center"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                                </CollectionView>
+                            </Grid>
+                            <Label x:Name="SeferDownArrow" Grid.Row="2"
+                                   Text="{x:Static fonts:FluentUI.chevron_down_20_regular}"
+                                   FontFamily="FluentIcons" FontSize="14"
+                                   TextColor="{StaticResource Gray400}"
+                                   HeightRequest="22"
+                                   HorizontalTextAlignment="Center"
+                                   VerticalTextAlignment="Center"
+                                   AutomationId="ParashaPickerSeferDown"
+                                   SemanticProperties.Description="סוף הרשימה"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Column 2: Parashot within sefer -->
+                    <Border Grid.Row="1" Grid.Column="1"
+                            BackgroundColor="{AppThemeBinding Light={StaticResource Gray50}, Dark={StaticResource SurfaceDark}}"
+                            Padding="0">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="8"/>
+                        </Border.StrokeShape>
+                        <Grid RowDefinitions="Auto,*,Auto">
+                            <Label x:Name="UnitUpArrow"
+                                   Text="{x:Static fonts:FluentUI.chevron_up_20_regular}"
+                                   FontFamily="FluentIcons" FontSize="14"
+                                   TextColor="{StaticResource Gray400}"
+                                   HeightRequest="22"
+                                   HorizontalTextAlignment="Center"
+                                   VerticalTextAlignment="Center"
+                                   AutomationId="ParashaPickerUnitUp"
+                                   SemanticProperties.Description="תחילת הרשימה"/>
+                            <Grid Grid.Row="1">
+                                <Label x:Name="UnitItemSizer"
+                                       Text="א" FontSize="14" Padding="8,10"
+                                       Opacity="0"
+                                       InputTransparent="True"
+                                       VerticalOptions="Start"/>
+                                <CollectionView x:Name="UnitList"
+                                        SelectionMode="Single"
+                                        SelectionChanged="OnUnitSelected"
+                                        Scrolled="OnColumnScrolled"
+                                        SizeChanged="OnColumnSizeChanged"
+                                        AutomationId="ParashaPickerUnitList"
+                                        ItemSizingStrategy="MeasureAllItems"
+                                        InputTransparent="False">
+                            <CollectionView.ItemsLayout>
+                                <LinearItemsLayout Orientation="Vertical" ItemSpacing="0"/>
+                            </CollectionView.ItemsLayout>
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="models:ParashaUnit">
+                                    <Grid Padding="8,10">
+                                        <VisualStateManager.VisualStateGroups>
+                                            <VisualStateGroup Name="CommonStates">
+                                                <VisualState Name="Normal"/>
+                                                <VisualState Name="Selected">
+                                                    <VisualState.Setters>
+                                                        <Setter Property="BackgroundColor" Value="{StaticResource Primary}"/>
+                                                    </VisualState.Setters>
+                                                </VisualState>
+                                            </VisualStateGroup>
+                                        </VisualStateManager.VisualStateGroups>
+                                        <Label Text="{Binding Heading}"
+                                               FontSize="14"
+                                               LineBreakMode="TailTruncation"
+                                               AutomationId="ParashaPickerUnitItem"
+                                               HorizontalTextAlignment="Center"
+                                               VerticalTextAlignment="Center"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                                </CollectionView>
+                            </Grid>
+                            <Label x:Name="UnitDownArrow" Grid.Row="2"
+                                   Text="{x:Static fonts:FluentUI.chevron_down_20_regular}"
+                                   FontFamily="FluentIcons" FontSize="14"
+                                   TextColor="{StaticResource Gray400}"
+                                   HeightRequest="22"
+                                   HorizontalTextAlignment="Center"
+                                   VerticalTextAlignment="Center"
+                                   AutomationId="ParashaPickerUnitDown"
+                                   SemanticProperties.Description="סוף הרשימה"/>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- Footer buttons -->
+                <Grid Grid.Row="2"
+                      ColumnDefinitions="*,*"
+                      Padding="12"
+                      ColumnSpacing="12">
+                    <Button Grid.Column="0"
+                            Text="בטל"
+                            AutomationId="ParashaPickerCancel"
+                            BackgroundColor="Transparent"
+                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
+                            BorderColor="{StaticResource Gray400}"
+                            BorderWidth="1"
+                            CornerRadius="8"
+                            Clicked="OnCancelClicked"/>
+                    <Button Grid.Column="1"
+                            x:Name="ConfirmButton"
+                            Text="בחר"
+                            AutomationId="ParashaPickerConfirm"
+                            BackgroundColor="{StaticResource Primary}"
+                            TextColor="White"
+                            CornerRadius="8"
+                            IsEnabled="False"
+                            Clicked="OnConfirmClicked"/>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</ContentView>

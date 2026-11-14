@@ -1,0 +1,70 @@
+# Reference documentation only. Never deploy this file as a stack.
+# Use the reviewed, identity-checked CLI request generator in devops/assets-cdn.mjs.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Additive, read-only CloudFront delivery of existing public S3 assets with edge caching disabled. No DNS, bucket access, IAM or ECS changes."
+
+Resources:
+  AssetsOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Name: bible-on-site-assets-readonly-v1
+        Comment: Forward CORS and all queries without cookies
+        HeadersConfig:
+          HeaderBehavior: whitelist
+          Headers: [Origin, Access-Control-Request-Method, Access-Control-Request-Headers]
+        CookiesConfig:
+          CookieBehavior: none
+        QueryStringsConfig:
+          QueryStringBehavior: all
+
+  AssetsDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      Tags:
+        - Key: Project
+          Value: bible-on-site
+        - Key: Purpose
+          Value: additive-assets-no-cache
+      DistributionConfig:
+        Enabled: true
+        Comment: Additive public asset delivery; caching disabled
+        # No aliases, ACM certificate, nginx route or apex DNS change.
+        PriceClass: PriceClass_All
+        HttpVersion: http2
+        IPV6Enabled: true
+        Origins:
+          - Id: public-assets-s3
+            DomainName: bible-on-site-assets.s3.il-central-1.amazonaws.com
+            # Keep anonymous legacy GET access. No OAC, bucket policy or
+            # ownership/public-access-block change is part of this proposal.
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        DefaultCacheBehavior:
+          TargetOriginId: public-assets-s3
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          Compress: false
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          OriginRequestPolicyId: !Ref AssetsOriginRequestPolicy
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+        # Error TTL is independent of the success-response cache policy.
+        # Repeated negative probes must still pass before any client opts in.
+        CustomErrorResponses:
+          - {ErrorCode: 400, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 403, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 404, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 405, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 414, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 500, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 501, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 502, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 503, ErrorCachingMinTTL: 0}
+          - {ErrorCode: 504, ErrorCachingMinTTL: 0}
+
+Outputs:
+  AssetsBaseUrl:
+    Description: Candidate value only; publish after compatibility checks and specific approval
+    Value: !Sub "https://${AssetsDistribution.DomainName}"

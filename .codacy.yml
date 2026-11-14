@@ -7,17 +7,135 @@
 engines:
   metric:
     enabled: false
+  # Executed on a verifier-owned MySQL 8.4 server. T-SQL SET directives,
+  # schema qualification and SQL Server compression do not apply to this fixture.
+  tsqllint:
+    exclude_paths:
+      - "devops/github/ci/native-api-fixture-rows.sql"
+  # Prospector enforces D213 (summary on line two) while the repo's ruff
+  # config enforces the contradictory D212 (summary on line one). The repo
+  # gate wins; prospector is excluded on these files only — Bandit and the
+  # rest of the Python suite still scan them.
+  prospector:
+    exclude_paths:
+      - "data/annotations/extract_morphhb.py"
+      - "data/annotations/baseline.py"
+      - "data/annotations/baseline_articles.py"
+      - "data/annotations/test_baseline_articles.py"
+      - "data/annotations/golden_eval.py"
+      - "data/annotations/test_golden_eval.py"
+      - "data/annotations/test_golden_set.py"
+      - "data/annotations/encoders.py"
+      - "data/annotations/test_encoders.py"
+      - "data/annotations/publish.py"
+      - "data/annotations/test_publish.py"
+      - "app/devops/verify_android_dex_metadata.py"
+  # Opengrep's `Semgrep_javascript.lang.security.html-in-template-string` marks
+  # any interpolated template that resembles markup as XSS. These node:test
+  # files embed real `xcrun simctl`/`CoreSimulatorService` `<Debug>:` log-record
+  # fixtures — the output shape the parsers must accept — where the
+  # interpolation is a simulator UDID into a test string, never rendered HTML.
+  # The tracked Codacy entities freeze the original fixture coordinates, so
+  # restructuring the fixtures cannot clear them; same false-positive class as
+  # release-smoke/merge-runner-shards below. Scoped to the Opengrep engine only
+  # — every other engine keeps scanning, and the repo's own biome/precommit
+  # still lints these files.
+  opengrep:
+    exclude_paths:
+      - "app/mobile-e2e/native-logs.test.mjs"
+      - "app/mobile-e2e/verify-ios-host-log.test.mjs"
 
 # Exclude MySQL/SQLite schema files: SQL analyzer uses T-SQL dialect and flags
 # valid MySQL backticks and SQLite PRAGMA/AUTOINCREMENT as syntax errors
 exclude_paths:
+  # MySQL-only additive migration, exercised twice by the isolated MySQL integration test.
+  - "data/mysql/private_archive_upgrade.sql"
+  # These are exercised against MySQL by the API and website database tests.
+  - "data/mysql/tanah_dynamic_structure.sql"
+  - "data/mysql/tanah_test_data.sql"
+  - "data/mysql/tanah_daily_bulletin_upgrade.sql"
+  - "data/mysql/tanah_daily_bulletin_telegram_upgrade.sql"
+  - "data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"
+  - "data/mysql/tanah_daily_bulletin_join_upgrade.sql"
+  - "data/mysql/tanah_article_covering_source_upgrade.sql"
+  - "data/mysql/tanah_article_link_proposal_upgrade.sql"
+  - "data/mysql/tanah_article_hebrew_date_upgrade.sql"
+  - "data/mysql/tanah_article_content_hash_upgrade.sql"
+  - "data/mysql/tanah_article_index_upgrade.sql"
+  - "data/mysql/tanah_reading_metrics_upgrade.sql"
+  - "data/mysql/tanah_web_push_upgrade.sql"
+  - "data/mysql/tanah_perek_pasuk_count_upgrade.sql"
+  - "data/mysql/tanah_perek_pasuk_count_data.sql"
+  - "data/mysql/tanah_moed_upgrade.sql"
+  - "data/mysql/tanah_moed_data.sql"
+  - "data/mysql/tanahpedia_alter_entry_revision_history.sql"
+  - "data/mysql/tanahpedia_alter_saying_date.sql"
   - "data/mysql/tanahpedia_alter_person_source_citation.sql"
   - "data/mysql/tanahpedia_alter_source_citation.sql"
   - "data/mysql/tanahpedia_alter_child_birth_order.sql"
+  - "data/mysql/tanahpedia_alter_entry_entity_unique.sql"
+  - "data/mysql/tanahpedia_alter_entry_synonym.sql"
+  - "data/mysql/tanahpedia_alter_today_anniversary_month_day.sql"
+  - "data/mysql/tanahpedia_place_jerusalem_data.sql"
+  - "data/mysql/tanahpedia_jerusalem_occurrences_data.sql"
   - "data/mysql/perushim_structure.sql"
   - "data/mysql/perushim_data.sql"
+  - "data/mysql/tanah_perek_images_structure.sql"
+  - "data/mysql/external_reference_structure.sql"
+  - "data/mysql/tanah_truncate.sql"
+  # Same class of T-SQL-dialect false positive: "Use of unicode characters in
+  # a non unicode string" demands N'...', but MySQL literals already take the
+  # column charset and N'...' is a syntax error (1064) in COMMENT clauses.
+  - "data/mysql/tanah_sefarim_and_perakim_data.sql"
+  - "data/mysql/tanah_test_data.sql"
+  - "data/mysql/tanah_dedication_upgrade.sql"
+  - "data/mysql/tanah_dedication_data.sql"
+  - "data/mysql/external_reference_data.sql"
+  - "data/mysql/tanahpedia_entry_synonym_data.sql"
+  - "data/mysql/tanahpedia_family_edge_lab_data.sql"
+  - "data/mysql/tanahpedia_family_jacob_data.sql"
+  - "data/mysql/tanahpedia_family_shimshon_data.sql"
+  - "data/mysql/tanahpedia_legacy_migration.sql"
+  - "data/mysql/tanahpedia_place_eretz_yisrael_data.sql"
+  - "data/mysql/tanahpedia_structure.sql"
+  - "data/mysql/tanahpedia_alter_mention_decoration.sql"
+  - "data/mysql/tanahpedia_alter_normalized_name.sql"
+  - "data/mysql/tanah_mention_test_data.sql"
   - "data/sqlite/perushim_catalog_structure.sql"
   - "data/sqlite/perushim_notes_structure.sql"
   # CloudFormation Lambda scripts are infra reference code, not application code.
   # Linters flag intentional patterns (e.g. time.sleep polling loops) as issues.
   - "docs/aws/cloudformation/**"
+  # Android SDK manifest parser test fixtures embed Google's repository XML;
+  # markup rules flag the fixture strings as interpolated HTML/XSS.
+  - "devops/github/ci/android-sdk-manifest.test.mjs"
+  # Local-dev/test helpers whose fs paths are legitimately dynamic — a
+  # developer-chosen recordings dir, fixed node_modules/sibling-repo roots,
+  # or fixture-owned temp dirs. non-literal-fs-filename is a systemic false
+  # positive here; these are still linted by the repo's own biome/precommit.
+  - "web/bible-on-site/scripts/copy-local-flip-book.mjs"
+  - "devops/local-recitation.mjs"
+  - "devops/local-recitation.test.mjs"
+  - "app/mobile-e2e/silent-failures.mjs"
+  # Same class as the Android manifest fixtures: e2e test files embedding
+  # JUnit/uiautomator XML stubs that markup rules flag as interpolated HTML.
+  - "app/mobile-e2e/release-smoke.test.mjs"
+  - "app/mobile-e2e/merge-runner-shards.test.mjs"
+  # Differential-check CLI whose entire job is fetching operator-supplied
+  # --base/--candidate origins (scheme/host-validated by parseOrigin, parsed
+  # again via new URL() before fetch). The user-controlled-URL-to-HTTP-client
+  # taint pattern is a systemic false positive for a URL-diffing tool — the
+  # repo's own codacy-gate/precommit still lint this file.
+  - "devops/edge-compat-check.mjs"
+  # Same T-SQL-dialect false positive as the data/mysql files: this MySQL
+  # fixture uses UNSIGNED/MEDIUMBLOB/ENGINE clauses the SQL parser rejects.
+  # It is exercised against a real MySQL 8.4 server by the native verifier.
+  - "devops/github/ci/native-admin-fixture.sql"
+  # Coverage-universe builder: its whole job is walking the website's src/
+  # tree and reading each file to build the canonical instrument map, so
+  # non-literal-fs-filename is the same systemic false positive as the
+  # local-dev helpers above — and PMD's ECMA parser predates the file's
+  # object-spread/??/default-param syntax, so its "Unnecessary block"
+  # findings are parse artifacts, not lone blocks. Still linted by the
+  # repo's own biome/precommit.
+  - "web/bible-on-site/tests/util/coverage/coverage-universe.mjs"

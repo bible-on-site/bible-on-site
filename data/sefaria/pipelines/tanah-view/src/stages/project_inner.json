@@ -171,7 +171,7 @@
 										},
 										"processedPasuk": {
 											"$function": {
-												"body": "function (p) {\n    let qriFlg = false;\n    let res = \"\";\n    for (let i = 0; i < p.length; i++) {\n        let c = p[i];\n        if (c === \"[\") {\n            qriFlg = true;\n            res += c;\n        } else if (c === \"]\") {\n            qriFlg = false;\n            res += c;\n        } else if (qriFlg) {\n            res += c === \" \" ? \"_\" : c;\n        } else {\n            if (c === \"־\") {\n                res += \"־ \";\n            } else {\n                res += c;\n            }\n        }\n    }\n    return res.split(\" ׀\").join(\"׀\");\n}",
+												"body": "function (p) {\n    // Editorial repetition notes are not qri. Remove them before bracket parsing.\n    p = p.replace(/<small\\b[^>]*>[\\s\\S]*?<\\/small\\s*>/gi, \"\").replace(/<[^>]*>/g, \"\");\n    let qriFlg = false;\n    let res = \"\";\n    for (let i = 0; i < p.length; i++) {\n        let c = p[i];\n        if (c === \"[\") {\n            qriFlg = true;\n            res += c;\n        } else if (c === \"]\") {\n            qriFlg = false;\n            res += c;\n        } else if (qriFlg) {\n            res += c === \" \" ? \"_\" : c;\n        } else {\n            if (c === \"־\") {\n                res += \"־ \";\n            } else {\n                res += c;\n            }\n        }\n    }\n    return res.split(\" ׀\").join(\"׀\");\n}",
 												"args": ["$$pasuk"],
 												"lang": "js"
 											}

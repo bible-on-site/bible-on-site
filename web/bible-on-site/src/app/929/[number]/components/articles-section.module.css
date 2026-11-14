@@ -2,7 +2,7 @@
   margin: 16px 0;
   padding: 16px;
   background: linear-gradient(to bottom, #f8f9fc, #ffffff);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   border: 1px solid #e5e7eb;
 }
@@ -13,24 +13,24 @@
   gap: 8px;
   margin-bottom: 20px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #1c2c5d;
+  border-bottom: 1px solid var(--accent-900);
 }
 
 .sectionIcon {
-  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .sectionTitle {
   font-size: 1rem;
   font-weight: 600;
-  color: #1c2c5d;
+  color: var(--accent-900);
   margin: 0;
 }
 
 .emptyMessage {
   margin: 0;
   padding: 12px 16px;
-  color: #637598;
+  color: var(--muted-text, #637598);
   font-size: 0.95rem;
   text-align: center;
 }
@@ -66,7 +66,7 @@
   flex: 0 0 auto;
   width: 240px;
   background: #ffffff;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 12px;
   border: 1px solid #e5e7eb;
   transition: all 0.2s ease;
@@ -80,10 +80,29 @@
   gap: 8px;
 }
 
-.carouselItem:hover {
-  border-color: #1c2c5d;
-  box-shadow: 0 2px 8px rgba(28, 44, 93, 0.12);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  .carouselItem:hover {
+    border-color: var(--accent-900);
+    box-shadow: 0 2px 8px rgba(28, 44, 93, 0.12);
+    transform: translateY(-1px);
+  }
+}
+
+/* Loading placeholder card: same box as a real card, not interactive. */
+.skeletonItem {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Mirrors .articleAbstract's padding and 1.5 line rhythm (0.9rem text). */
+.skeletonAbstract {
+  inline-size: 100%;
+  padding: 18px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9rem;
 }
 
 /* When carousel item is a button (in-place open in flipbook), match link appearance */
@@ -113,7 +132,7 @@ button.carouselItem {
 .authorName {
   font-size: 0.9rem;
   font-weight: 600;
-  color: #1c2c5d;
+  color: var(--accent-900);
   line-height: 1.2;
   text-align: center;
   padding-bottom: 6px;
@@ -126,6 +145,15 @@ button.carouselItem {
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Pre-entry reading estimate (#2607): small centered meta under the author. */
+.readingTime {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted-text, #666);
+  text-align: center;
+  padding: 2px 10px 0;
 }
 
 /* Abstract */
@@ -145,17 +173,16 @@ button.carouselItem {
   vertical-align: middle;
 }
 
-/* Style headings inside abstract */
-.articleAbstract h1,
-.articleAbstract h2,
-.articleAbstract h3,
-.articleAbstract h4,
-.articleAbstract h5,
-.articleAbstract h6 {
+/* Abstract headings arrive as .abstractHeading paragraphs
+   (normalizeAbstractHtml): block-level, so consecutive headings keep their
+   line boundary instead of running together (issue #2290). */
+.articleAbstract p {
+  margin: 0;
+}
+
+.articleAbstract :global(.abstractHeading) {
   font-size: 1.1rem;
   font-weight: 600;
-  margin: 0;
-  display: inline;
 }
 
 /* Responsive: smaller items on mobile */
@@ -173,4 +200,51 @@ button.carouselItem {
   .authorName {
     font-size: 0.85rem;
   }
+}
+
+@media (prefers-color-scheme: dark) {
+  .articlesSection {
+    background: linear-gradient(to bottom, #161b2a, #12151c);
+    border-color: #2d3548;
+  }
+
+  .sectionTitle,
+  .authorName {
+    color: var(--accent-200);
+  }
+
+  .emptyMessage {
+    color: var(--muted-text, #9aa0a6);
+  }
+
+  .carousel {
+    scrollbar-color: #3b4256 transparent;
+  }
+
+  .carousel::-webkit-scrollbar-thumb {
+    background: #3b4256;
+  }
+
+  .carouselItem {
+    background: #1a1f2e;
+    border-color: #2d3548;
+  }
+
+  @media (hover: hover) {
+    .carouselItem:hover {
+      border-color: var(--accent-200);
+    }
+  }
+
+  .authorImage {
+    background: #2d3548;
+  }
+
+  .articleAbstract {
+    color: #d7dae0;
+  }
+}
+
+.carouselItem:active {
+  scale: var(--press-scale);
 }

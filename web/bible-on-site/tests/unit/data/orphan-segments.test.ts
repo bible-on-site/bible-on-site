@@ -66,9 +66,9 @@ describe("Orphan segments in Tanah data", () => {
 		const orphanQriSegments = allQriSegments.filter((s) => s.ktivOffset === 0);
 
 		it("has orphan qri segments in the data", () => {
-			// According to Rust tests: ~11 cases of קרי ולא כתיב
+			// Nine genuine cases; editorial repetition notes are not qri words.
 			expect(orphanQriSegments.length).toBeGreaterThan(0);
-			expect(orphanQriSegments.length).toBe(11);
+			expect(orphanQriSegments.length).toBe(9);
 		});
 
 		it("orphan qri segments have ktivOffset=0", () => {
@@ -148,7 +148,7 @@ describe("Orphan segments in Tanah data", () => {
 			expect(orphanQri.length).toBeGreaterThan(0);
 
 			// Total orphans should match Rust test expectations
-			expect(orphanKtiv.length + orphanQri.length).toBe(41);
+			expect(orphanKtiv.length + orphanQri.length).toBe(39);
 		});
 
 		it("non-zero offset indicates actual pair relationship", () => {

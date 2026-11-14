@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.6.6/schema.json",
 	"vcs": {
 		"enabled": false,
 		"clientKind": "git",
@@ -10,6 +10,7 @@
 		"includes": [
 			"**",
 			"!.next",
+			"!public/generated",
 			"!src/data/db/*.json",
 			"!monocart-report",
 			"!.playwright-report",

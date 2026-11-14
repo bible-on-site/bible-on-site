@@ -1,0 +1,22 @@
+{
+  "test": "tests/e2e/929/sefer-view/sefer-bookmarks.test.ts:keeps book colors on moving bookmark surfaces",
+  "chapter": 300,
+  "attachment": "moving-bookmark-theme-0.3",
+  "environment": "Desktop Chromium; original Playwright test attachments; normal full production builds; registry html-flip-book alpha.104",
+  "before": {
+    "head": "52c5df604ec2387fd7112aee57966e92848ef989",
+    "sourceTree": "51cc3863195e277088d8eada435dc370e520d3ef",
+    "buildId": "o3QRmafNj0gc0TETqVF5U",
+    "file": "moving-bookmark-before.png",
+    "sha256": "7755fbc429658ee29f4450f5f91b7cc0c43f7a8fc9fe39eeda1900c81cc29bd9",
+    "result": "Color regression fails: moving tab rgb(220, 232, 244), resting tab rgb(0, 0, 205)"
+  },
+  "after": {
+    "head": "49b3ba3765faa2a3bbadd7e1e7a6fa0e6b241073",
+    "sourceTree": "a622117bce8cacac79539ca51bd6eda927073d4a",
+    "buildId": "jVcv5suPV7LCiooNYIVe5",
+    "file": "moving-bookmark-after.png",
+    "sha256": "8fb8e41d92ff5eeb96ad9234c9ef158ba5673afff58433ff5fcc2fd4ac6a7885",
+    "result": "Production browser regression passes at both held fold positions; full functional run 57 passed and 1 existing conditional skip"
+  }
+}

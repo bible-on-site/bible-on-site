@@ -20,12 +20,24 @@ export function Footer() {
 	return (
 		<footer className={styles.footer}>
 			<nav className={styles.footerNav}>
+				<Link
+					href="/#privacyPolicy"
+					rel="privacy-policy"
+					className={styles.footerLink}
+				>
+					מדיניות פרטיות
+				</Link>
+				<span className={styles.separator}>|</span>
 				<Link href="/journalism" className={styles.footerLink}>
 					על הפרק בתקשורת
 				</Link>
 				<span className={styles.separator}>|</span>
 				<Link href="/rabbis-blessing" className={styles.footerLink}>
 					רבנים מברכים
+				</Link>
+				<span className={styles.separator}>|</span>
+				<Link href="/accessibility" className={styles.footerLink}>
+					הצהרת נגישות
 				</Link>
 			</nav>
 			<div className={styles.footerBottom}>
@@ -43,6 +55,7 @@ export function Footer() {
 					<Image
 						src="/icons/github.svg"
 						alt="GitHub"
+						unoptimized
 						width={18}
 						height={18}
 						className={styles.githubIcon}

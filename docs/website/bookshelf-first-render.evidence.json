@@ -1,0 +1,116 @@
+{
+  "kind": "Source-equivalent bounded wrapper experiment; not an actual candidate Next build or performance acceptance",
+  "baseline": "Full normal-registry alpha.113 reader build at beb8f4d8716671b538a01b32c56d6f0d1532dce0",
+  "candidate": "SSR-safe useSyncExternalStore width snapshot in Bookshelf.tsx; first render uses actual viewport on client-only mount and deterministic1200 snapshot for server hydration",
+  "actualSourceValidation": "Two first-commit regression cases fail before; all34 focused cases pass after, including resize and hydration root reuse with no recoverable errors. TypeScript and Biome pass. Full273suites/4193tests pass locally. Unit-onlysourcecoverage98.42%, allsixnewwidth-storelinescovered; freshnormalunit+E2EmergedCodecov>=99 remainsmandatory. Actual full source build and current-head hosted/quality validation still required.",
+  "cases": [
+    {
+      "width": 1350,
+      "changedFinalPixels": 0,
+      "original": {
+        "surfacesCreated": 1,
+        "booksCreated": 35,
+        "surfaceWidthCorrections": 1,
+        "bookTransformCorrections": 35,
+        "firstWidths": [
+          "987.826px"
+        ],
+        "widths": [
+          "1118.26px"
+        ]
+      },
+      "candidate": {
+        "surfacesCreated": 1,
+        "booksCreated": 35,
+        "surfaceWidthCorrections": 0,
+        "bookTransformCorrections": 0,
+        "firstWidths": [
+          "1118.26px"
+        ],
+        "widths": [
+          "1118.26px"
+        ]
+      }
+    },
+    {
+      "width": 900,
+      "changedFinalPixels": 0,
+      "original": {
+        "surfacesCreated": 1,
+        "booksCreated": 35,
+        "surfaceWidthCorrections": 1,
+        "bookTransformCorrections": 35,
+        "firstWidths": [
+          "987.826px"
+        ],
+        "widths": [
+          "726.957px"
+        ]
+      },
+      "candidate": {
+        "surfacesCreated": 1,
+        "booksCreated": 35,
+        "surfaceWidthCorrections": 0,
+        "bookTransformCorrections": 0,
+        "firstWidths": [
+          "726.957px"
+        ],
+        "widths": [
+          "726.957px"
+        ]
+      }
+    },
+    {
+      "width": 600,
+      "changedFinalPixels": 0,
+      "original": {
+        "surfacesCreated": 5,
+        "booksCreated": 70,
+        "surfaceWidthCorrections": 0,
+        "bookTransformCorrections": 0,
+        "firstWidths": [
+          "987.826px"
+        ],
+        "widths": [
+          "240px",
+          "304px",
+          "464px",
+          "432px"
+        ]
+      },
+      "candidate": {
+        "surfacesCreated": 4,
+        "booksCreated": 35,
+        "surfaceWidthCorrections": 0,
+        "bookTransformCorrections": 0,
+        "firstWidths": [
+          "240px",
+          "304px",
+          "464px",
+          "432px"
+        ],
+        "widths": [
+          "240px",
+          "304px",
+          "464px",
+          "432px"
+        ]
+      }
+    }
+  ],
+  "originalFailure": "Prior0e hosted Lighthouse homepage desktop TBT12ms produced two Bencher alerts against a6.1875ms relative bound. The original is retained. Diagnostic1500 yielded0TBT and doesnotreproduce or explain it. This candidate removes independently demonstrated redundant DOM work; no claim that every historical stall is solved.",
+  "budgets": "No timeout/retry/sleep/polling/watchdog/CPU-profile/benchmark-bound changes, normalization or failed-sample deletion.",
+  "images": "Both captures show the same final appearance at1350px. Their pixels match exactly; candidate is the source-equivalent browser wrapper, not a fabricated mockup.",
+  "sourceFiles": [
+    {
+      "path": "web/bible-on-site/src/app/components/Bookshelf/Bookshelf.tsx",
+      "sha256": "2acbfdba951fefdae554df215aa19da656e9660be1e6a81b9fc9aebb70da815d",
+      "bytes": 22354
+    },
+    {
+      "path": "web/bible-on-site/tests/unit/components/Bookshelf-first-paint.test.tsx",
+      "sha256": "356aa0980464acf69e60f9838df3536bc2fb8761726e9661ff57bc7989e5b042",
+      "bytes": 2841
+    }
+  ]
+}

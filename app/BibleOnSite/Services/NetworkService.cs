@@ -1,21 +1,29 @@
+using BibleOnSite.Helpers;
+
 namespace BibleOnSite.Services;
 
 /// <summary>
 /// Monitors network connectivity and triggers background refresh of cached data
 /// when the device comes back online.
 /// </summary>
-public class NetworkService : IDisposable
+public class NetworkService
 {
     private static readonly Lazy<NetworkService> _instance = new(() => new NetworkService());
     public static NetworkService Instance => _instance.Value;
 
     private bool _wasOffline;
-    private bool _disposed;
+    private bool _monitoring;
+    private readonly IConnectivity _connectivity;
+    private readonly Func<Task> _refresh;
 
-    private NetworkService()
+    private NetworkService() : this(Connectivity.Current, () => StarterService.Instance.TryRefreshAsync()) { }
+
+    public NetworkService(IConnectivity connectivity, Func<Task> refresh)
     {
+        _connectivity = connectivity;
+        _refresh = refresh;
         // Seed the initial state
-        _wasOffline = Connectivity.Current.NetworkAccess != NetworkAccess.Internet;
+        _wasOffline = _connectivity.NetworkAccess != NetworkAccess.Internet;
     }
 
     /// <summary>
@@ -30,37 +38,38 @@ public class NetworkService : IDisposable
     /// </summary>
     public void StartMonitoring()
     {
-        Connectivity.Current.ConnectivityChanged += OnConnectivityChanged;
-        Console.WriteLine($"[Network] Monitoring started. Online={IsOnline}");
-    }
-
-    /// <summary>
-    /// Stops listening for connectivity changes.
-    /// </summary>
-    public void StopMonitoring()
-    {
-        Connectivity.Current.ConnectivityChanged -= OnConnectivityChanged;
+        if (_monitoring)
+        {
+            return;
+        }
+        _monitoring = true;
+        _connectivity.ConnectivityChanged += OnConnectivityChanged;
+        DebugLog.Write($"[Network] Monitoring started. Online={_connectivity.NetworkAccess == NetworkAccess.Internet}");
     }
 
     private async void OnConnectivityChanged(object? sender, ConnectivityChangedEventArgs e)
     {
         var isNowOnline = e.NetworkAccess == NetworkAccess.Internet;
-        Console.WriteLine($"[Network] Connectivity changed: {e.NetworkAccess} (online={isNowOnline})");
+        DebugLog.Write($"[Network] Connectivity changed: {e.NetworkAccess} (online={isNowOnline})");
 
-        if (isNowOnline && _wasOffline)
-        {
-            Console.WriteLine("[Network] Back online — refreshing starter data");
-            // Refresh starter data in background so article counts etc. become available
-            await StarterService.Instance.TryRefreshAsync();
-        }
-
+        var shouldRefresh = isNowOnline && _wasOffline;
+        // Record the transition before awaiting; duplicate notifications during a
+        // refresh must not start more requests for the same offline period.
         _wasOffline = !isNowOnline;
-    }
-
-    public void Dispose()
-    {
-        if (_disposed) return;
-        _disposed = true;
-        StopMonitoring();
+        if (shouldRefresh)
+        {
+            DebugLog.Write("[Network] Back online — refreshing starter data");
+            // Refresh starter data in background so article counts etc. become available
+            try
+            {
+                await _refresh();
+            }
+            #pragma warning disable S2221 // Deliberate failure boundary: connectivity-refresh failure is log-only
+            catch (Exception ex) //NOSONAR — connectivity-refresh failure is log-only.
+            {
+                #pragma warning restore S2221
+                Console.Error.WriteLine($"[Network] Refresh failed: {ex.Message}");
+            }
+        }
     }
 }

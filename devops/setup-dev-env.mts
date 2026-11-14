@@ -3,12 +3,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import zlib from "node:zlib";
-import {
-	AuthorizeSecurityGroupIngressCommand,
-	EC2Client,
-	RevokeSecurityGroupIngressCommand,
-} from "@aws-sdk/client-ec2";
+import { EC2Client } from "@aws-sdk/client-ec2";
 import * as dotenv from "dotenv";
+import {
+	isCheckpointCurrent,
+	parseTableTimes,
+} from "./dev-db-checkpoint.mts";
+import { configureRecordings, prepareRecitation } from "./local-recitation.mjs";
+import { withDevSyncIngress } from "./rds-sync-access.mts";
+import { assertLocalAssetTarget, localAssetEnvironment, syncLocalAssetMirror } from "./asset-mirror.mjs";
 
 const __filename = fileURLToPath(import.meta.url); // get the resolved path to the file
 const __dirname = path.dirname(__filename); // get the name of the directory
@@ -30,6 +33,10 @@ async function main() {
 		decompressPerushimNotes();
 		return;
 	}
+	if (subcommand === "check-dev-db-freshness") {
+		await runCheckFreshness();
+		return;
+	}
 
 	console.info("Checking cross-module prerequisites...");
 	assertPythonVersion();
@@ -40,6 +47,7 @@ async function main() {
 	console.info("Setting up devops...");
 	if (!setupPythonVenv(devopsDir))
 		throw new Error("Failed to set up Python virtual environment for devops");
+	installGitHooks();
 
 	const modules = [
 		{ name: "website", path: websiteDir },
@@ -65,16 +73,19 @@ async function main() {
 		);
 		switch (moduleName) {
 			case "website":
-				if (!npmInstall(websiteDir))
-					throw new Error("Failed to install npm packages for website module");
+				if (!bunInstall(websiteDir))
+					throw new Error("Failed to install packages for website module");
 				break;
 			case "api":
-				if (!npmInstall(path.resolve(dir, "tests")))
-					throw new Error("Failed to install npm packages for API tests");
+				if (!bunInstall(path.resolve(dir, "tests")))
+					throw new Error("Failed to install packages for API tests");
 				break;
-			case "app":
+			case "app": {
 				decompressPerushimNotes();
+				const recordings = await configureRecordings();
+				prepareRecitation({ platform: "Android", recordings });
 				break;
+			}
 		}
 		console.info(
 			`Development environment for module "${moduleName}" is set up.`,
@@ -92,35 +103,37 @@ function decompressPerushimNotes(): void {
 		"AssetPacks",
 		"perushim_notes",
 	);
-	const gzPath = path.join(
-		assetPackDir,
-		"sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz",
-	);
-	const sqlitePath = gzPath.replace(".gz", "");
+	// Notes pack payloads: the notes DB (its .gz is committed) and the optional
+	// prebuilt search index (its .gz is not committed — CI artifacts only).
+	for (const fileName of [
+		"sefaria-dump-5784-sivan-4.perushim_notes.sqlite",
+		"sefaria-dump-5784-sivan-4.hebrew_search.sqlite",
+	]) {
+		const gzPath = path.join(assetPackDir, `${fileName}.gz`);
+		const sqlitePath = path.join(assetPackDir, fileName);
 
-	if (fs.existsSync(sqlitePath)) {
-		console.info("Perushim notes SQLite already exists — skipping decompress.");
-		return;
-	}
-	if (!fs.existsSync(gzPath)) {
+		if (fs.existsSync(sqlitePath)) {
+			console.info(`${fileName} already exists — skipping decompress.`);
+			continue;
+		}
+		if (!fs.existsSync(gzPath)) {
+			console.info(
+				`${fileName}.gz not found — skipping (run: cd data && cargo make generate-perushim-view-sqlite).`,
+			);
+			continue;
+		}
+
+		console.info(`Decompressing ${fileName}...`);
+		const compressed = fs.readFileSync(gzPath);
+		const decompressed = zlib.gunzipSync(compressed);
+		fs.writeFileSync(sqlitePath, decompressed);
 		console.info(
-			"Perushim notes .gz not found — skipping (run: cd data && cargo make generate-perushim-view-sqlite).",
+			`  ${(compressed.length / 1_048_576).toFixed(1)} MB → ${(decompressed.length / 1_048_576).toFixed(1)} MB`,
 		);
-		return;
 	}
-
-	console.info("Decompressing perushim notes...");
-	const compressed = fs.readFileSync(gzPath);
-	const decompressed = zlib.gunzipSync(compressed);
-	fs.writeFileSync(sqlitePath, decompressed);
-	console.info(
-		`  ${(compressed.length / 1_048_576).toFixed(1)} MB → ${(decompressed.length / 1_048_576).toFixed(1)} MB`,
-	);
 }
 
 // --- sync-from-prod subcommand ---
-
-const DEV_SYNC_TAG = "dev-sync";
 
 interface MysqlUrlParts {
 	host: string;
@@ -215,10 +228,20 @@ function fetchSecurityGroupId(sgName: string, region: string): string {
 	return result.stdout.trim();
 }
 
-async function runSyncFromProd(): Promise<void> {
-	const dryRun = process.argv.includes("--dry-run");
-	if (dryRun) console.info("[dry-run] Would execute the following steps.");
+interface SyncContext {
+	prodDb: MysqlUrlParts;
+	devDb: MysqlUrlParts;
+	devDbUrl: string;
+	sgId: string;
+	awsRegion: string;
+	prodS3Bucket: string;
+	devS3Bucket: string;
+	s3Endpoint?: string;
+	publicIp: string;
+	ec2: EC2Client;
+}
 
+async function resolveSyncContext(): Promise<SyncContext> {
 	dotenv.config({ path: path.resolve(projectDir, "data", ".dev.env") });
 
 	// Use hardcoded region for production
@@ -254,33 +277,47 @@ async function runSyncFromProd(): Promise<void> {
 	const publicIp = await getPublicIp();
 	console.info(`Public IP: ${publicIp}`);
 
-	const ec2 = new EC2Client({ region: awsRegion });
+	return {
+		prodDb,
+		devDb,
+		devDbUrl,
+		sgId,
+		awsRegion,
+		prodS3Bucket,
+		devS3Bucket,
+		s3Endpoint,
+		publicIp,
+		ec2: new EC2Client({ region: awsRegion }),
+	};
+}
 
-	try {
+async function runSyncFromProd(): Promise<void> {
+	const dryRun = process.argv.includes("--dry-run");
+	if (dryRun) console.info("[dry-run] Would execute the following steps.");
+
+	const {
+		prodDb,
+		devDb,
+		devDbUrl,
+		sgId,
+		awsRegion,
+		prodS3Bucket,
+		devS3Bucket,
+		s3Endpoint,
+		publicIp,
+		ec2,
+	} = await resolveSyncContext();
+
+	// Watermark captured before the dump: prod writes racing the restore mark
+	// the checkpoint older-or-equal to the synced content, never newer.
+	let prodWatermark = new Map<string, string | null>();
+
+	// The sync body — runs only while holding owned ingress, so cleanup
+	// revokes exactly the rule this invocation created even when a step fails
+	// (see withDevSyncIngress).
+	const syncBody = async (): Promise<void> => {
 		if (!dryRun) {
-			console.info("Authorizing RDS security group ingress for your IP...");
-			await ec2.send(
-				new AuthorizeSecurityGroupIngressCommand({
-					GroupId: sgId,
-					IpPermissions: [
-						{
-							IpProtocol: "tcp",
-							FromPort: 3306,
-							ToPort: 3306,
-							IpRanges: [
-								{
-									CidrIp: `${publicIp}/32`,
-									Description: DEV_SYNC_TAG,
-								},
-							],
-						},
-					],
-				}),
-			);
-		} else {
-			console.info(
-				`[dry-run] Would authorize ingress on ${sgId} for ${publicIp}/32`,
-			);
+			prodWatermark = queryTableUpdateTimes(prodDb);
 		}
 
 		// Dump from prod and restore to dev
@@ -573,10 +610,12 @@ async function runSyncFromProd(): Promise<void> {
 				);
 			}
 			console.info("  Tanahpedia safe structure + baseline seed complete");
+
 		}
 
 		// S3 sync (optional if buckets are set)
 		if (prodS3Bucket && devS3Bucket) {
+			if (s3Endpoint) assertLocalAssetTarget(s3Endpoint, prodS3Bucket, devS3Bucket);
 			if (!dryRun && s3Endpoint) {
 				ensureRustfsRunning();
 			}
@@ -586,7 +625,7 @@ async function runSyncFromProd(): Promise<void> {
 				);
 				if (s3Endpoint) {
 					console.info(
-						`[dry-run] Would sync: AWS s3://${prodS3Bucket} → local temp → RustFS s3://${devS3Bucket}`,
+						`[dry-run] Would sync: AWS s3://${prodS3Bucket} → shared incremental mirror → RustFS s3://${devS3Bucket}`,
 					);
 				} else {
 					console.info(
@@ -608,6 +647,7 @@ async function runSyncFromProd(): Promise<void> {
 					stdio: ["ignore", "pipe", "pipe"],
 					shell: isWin,
 					encoding: "utf-8",
+					env: s3Endpoint ? localAssetEnvironment() : process.env,
 				});
 				if (mbResult.status === 0) {
 					console.info(`  Created bucket '${devS3Bucket}'`);
@@ -624,72 +664,14 @@ async function runSyncFromProd(): Promise<void> {
 				}
 
 				if (s3Endpoint) {
-					// Two-step sync: AWS prod → local temp dir → RustFS dev
-					// Required because --endpoint-url applies to both source and dest
-					const tempS3Dir = path.join(projectDir, "data", ".s3-sync-temp");
-					fs.mkdirSync(tempS3Dir, { recursive: true });
-
-					console.info(
-						`Downloading S3 from prod (s3://${prodS3Bucket}) to temp dir...`,
-					);
-					const downloadResult = spawnSync(
-						"aws",
-						[
-							"s3",
-							"sync",
-							`s3://${prodS3Bucket}`,
-							tempS3Dir,
-							"--delete",
-							"--region",
-							awsRegion,
-						],
-						{
-							stdio: ["ignore", "pipe", "pipe"],
-							shell: isWin,
-							encoding: "utf-8",
-						},
-					);
-					if (downloadResult.status !== 0) {
-						const stderr = downloadResult.stderr || "";
-						console.warn(`  Warning: S3 download failed: ${stderr}`);
-					} else {
-						console.info("  S3 download complete");
-						console.info(
-							`Uploading to RustFS (s3://${devS3Bucket}) at ${s3Endpoint}...`,
-						);
-						const uploadResult = spawnSync(
-							"aws",
-							[
-								"s3",
-								"sync",
-								tempS3Dir,
-								`s3://${devS3Bucket}`,
-								"--delete",
-								"--endpoint-url",
-								s3Endpoint,
-							],
-							{
-								stdio: ["ignore", "pipe", "pipe"],
-								shell: isWin,
-								encoding: "utf-8",
-								env: {
-									...process.env,
-									AWS_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID || "test",
-									AWS_SECRET_ACCESS_KEY:
-										process.env.S3_SECRET_ACCESS_KEY || "test_1234",
-								},
-							},
-						);
-						if (uploadResult.status !== 0) {
-							const stderr = uploadResult.stderr || "";
-							console.warn(`  Warning: RustFS upload failed: ${stderr}`);
-						} else {
-							console.info("  RustFS upload complete");
-						}
-					}
-
-					// Clean up temp dir
-					fs.rmSync(tempS3Dir, { recursive: true, force: true });
+					console.info("Syncing assets incrementally through the shared local mirror...");
+					const directory = syncLocalAssetMirror({
+						sourceBucket: prodS3Bucket,
+						region: awsRegion,
+						targetBucket: devS3Bucket,
+						endpoint: s3Endpoint,
+					});
+					console.info(`  Asset mirror retained for all worktrees: ${directory}`);
 				} else {
 					// Direct S3-to-S3 sync (both on AWS)
 					console.info("Syncing S3 from prod to dev...");
@@ -721,40 +703,131 @@ async function runSyncFromProd(): Promise<void> {
 				"Skipping S3 sync (set PROD_S3_BUCKET and S3_BUCKET to enable).",
 			);
 		}
-	} finally {
-		if (!dryRun) {
-			console.info("Revoking RDS security group ingress...");
-			try {
-				await ec2.send(
-					new RevokeSecurityGroupIngressCommand({
-						GroupId: sgId,
-						IpPermissions: [
-							{
-								IpProtocol: "tcp",
-								FromPort: 3306,
-								ToPort: 3306,
-								IpRanges: [
-									{
-										CidrIp: `${publicIp}/32`,
-										Description: DEV_SYNC_TAG,
-									},
-								],
-							},
-						],
-					}),
-				);
-			} catch (e) {
-				console.warn(
-					"Revoke ingress failed (you may need to remove the rule manually):",
-					e,
-				);
-			}
-		} else {
-			console.info("[dry-run] Would revoke ingress on", sgId);
-		}
+		// A failed asset refresh must not mark the complete local sync fresh.
+		if (!dryRun) writeDevCheckpoint(devDb, prodWatermark);
+	};
+
+	if (dryRun) {
+		console.info(
+			`[dry-run] Would authorize ingress on ${sgId} for ${publicIp}/32`,
+		);
+		await syncBody();
+		console.info("[dry-run] Would revoke ingress on", sgId);
+	} else {
+		await withDevSyncIngress(ec2, sgId, `${publicIp}/32`, syncBody);
 	}
 
 	console.info("sync-from-prod finished.");
+}
+
+// --- dev/prod freshness checkpoint ---
+
+const CHECKPOINT_TABLE = "dev_sync_checkpoint";
+
+function mysqlQuery(db: MysqlUrlParts, sql: string): string {
+	const res = spawnSync(
+		"mysql",
+		[
+			"-h",
+			db.host,
+			"-P",
+			String(db.port),
+			"-u",
+			db.user,
+			db.database,
+			"-N",
+			"-B",
+			"-e",
+			sql,
+		],
+		{
+			env: { ...process.env, MYSQL_PWD: db.password },
+			encoding: "utf-8",
+		},
+	);
+	if (res.error) throw res.error;
+	if (res.status !== 0)
+		throw new Error(`mysql query failed: ${res.stderr || `exit ${res.status}`}`);
+	return res.stdout ?? "";
+}
+
+/** Per-table UPDATE_TIME on the given DB — cheap freshness watermark. */
+function queryTableUpdateTimes(db: MysqlUrlParts): Map<string, string | null> {
+	// stats_expiry=0 in this session returns live values instead of the
+	// default day-cached information_schema statistics.
+	return parseTableTimes(
+		mysqlQuery(
+			db,
+			`SET SESSION information_schema_stats_expiry=0; SELECT TABLE_NAME, UPDATE_TIME FROM information_schema.TABLES WHERE TABLE_SCHEMA='${db.database.replace(/'/g, "")}' ORDER BY TABLE_NAME`,
+		),
+	);
+}
+
+function queryDevCheckpoint(db: MysqlUrlParts): Map<string, string | null> {
+	try {
+		return parseTableTimes(
+			mysqlQuery(
+				db,
+				`SELECT table_name, update_time FROM ${CHECKPOINT_TABLE}`,
+			),
+		);
+	} catch {
+		// Missing checkpoint table = never synced by this flow → empty → stale.
+		// A real query failure ends up the same: the sync attempt that follows
+		// reports its own error.
+		return new Map();
+	}
+}
+
+function writeDevCheckpoint(
+	db: MysqlUrlParts,
+	times: ReadonlyMap<string, string | null>,
+): void {
+	if (times.size === 0) return;
+	mysqlQuery(
+		db,
+		`CREATE TABLE IF NOT EXISTS ${CHECKPOINT_TABLE} (table_name VARCHAR(128) NOT NULL PRIMARY KEY, update_time DATETIME NULL, recorded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+	);
+	const values = [...times.entries()]
+		.map(
+			([name, t]) =>
+				`('${name.replace(/'/g, "''")}', ${t === null ? "NULL" : `'${t}'`})`,
+		)
+		.join(",");
+	mysqlQuery(
+		db,
+		`REPLACE INTO ${CHECKPOINT_TABLE} (table_name, update_time) VALUES ${values}`,
+	);
+	console.info(
+		`  Recorded prod checkpoint for ${times.size} tables in dev DB`,
+	);
+}
+
+/**
+ * `check-dev-db-freshness` — the cheap probe `ensure-dev-db --sync-from-prod`
+ * runs each predev instead of a blind time throttle. Same SSM/SG plumbing as
+ * the sync, but one information_schema read in place of dump+restore.
+ * Exit 0 = dev DB matches the recorded prod checkpoint; non-zero = sync needed
+ * (or couldn't be disproven — the sync attempt then reports its own error).
+ */
+async function runCheckFreshness(): Promise<void> {
+	const { prodDb, devDb, sgId, publicIp, ec2 } = await resolveSyncContext();
+	const fresh = await withDevSyncIngress(
+		ec2,
+		sgId,
+		`${publicIp}/32`,
+		async () =>
+			isCheckpointCurrent(
+				queryDevCheckpoint(devDb),
+				queryTableUpdateTimes(prodDb),
+			),
+	);
+	console.info(
+		fresh
+			? "dev DB matches the recorded prod checkpoint — sync not needed"
+			: "dev DB is stale vs prod (or checkpoint missing) — sync required",
+	);
+	process.exit(fresh ? 0 : 4);
 }
 
 function ensureRustfsRunning(): void {
@@ -819,21 +892,35 @@ function setupPythonVenv(dir: string, name = ".", fullSetup = true) {
 	}
 	return fullSetup ? pipInstall(dir) : false;
 }
+// Installs the pre-commit framework's git hooks (pre-commit + post-commit
+// stages); the logic lives in install-git-hooks.mjs so the root package.json
+// `prepare` script runs the same code on `bun install`/`bun install --frozen-lockfile`.
+function installGitHooks(): void {
+	const result = spawnSync(
+		"node",
+		[path.join(devopsDir, "install-git-hooks.mjs")],
+		{ cwd: projectDir, stdio: "inherit" },
+	);
+	if (result.status !== 0) {
+		throw new Error("Failed to install pre-commit git hooks");
+	}
+}
+
 function getActivationCommand(dir: string) {
 	return isWin
 		? path.join(dir, ".venv", "Scripts", "activate")
 		: `source ${path.join(dir, ".venv", "bin", "activate")}`;
 }
 
-function npmInstall(dir: string) {
-	const result = spawnSync("npm", ["install"], {
+function bunInstall(dir: string) {
+	const result = spawnSync("bun", ["install"], {
 		cwd: dir,
 		shell: isWin,
 		stdio: "inherit",
 	});
 	if (result.error) {
 		console.error(
-			`Error installing npm packages in ${dir}:`,
+			`Error installing packages in ${dir}:`,
 			result.error.message,
 		);
 		return false;
@@ -913,7 +1000,7 @@ function assertPythonVersion() {
 	})
 		.output.toString()
 		.replace("Python", "")
-		.replaceAll(",", "")
+		.replace(/,/g, "")
 		.trim();
 	if (!supportedPythonVersions.includes(actualPythonVersion)) {
 		throw new Error(
@@ -929,7 +1016,7 @@ function assertNodeJSVersion() {
 	const supportedNodeVersions = ["v26.10.0"];
 	const actualNodeVersion = spawnSync("node", ["--version"], { shell: isWin })
 		.output.toString()
-		.replaceAll(",", "")
+		.replace(/,/g, "")
 		.trim();
 	if (!supportedNodeVersions.includes(actualNodeVersion)) {
 		throw new Error(

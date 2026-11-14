@@ -3,7 +3,11 @@
  * Provides common logging and deployment lifecycle pattern.
  */
 export abstract class DeployerBase {
-	constructor(protected readonly moduleName: string) {}
+	protected readonly moduleName: string;
+
+	constructor(moduleName: string) {
+		this.moduleName = moduleName;
+	}
 
 	/**
 	 * Main deployment entry point. Executes the deployment lifecycle:

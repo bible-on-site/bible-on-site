@@ -1,3 +1,4 @@
+import { SITE_ORIGIN } from "../../src/lib/seo/jsonld";
 import { expect, test } from "../util/playwright/test-fixture";
 
 /**
@@ -7,11 +8,21 @@ import { expect, test } from "../util/playwright/test-fixture";
  */
 
 test.describe("Section pages", () => {
+	test("homepage publishes its canonical root without tracking parameters", async ({
+		page,
+	}) => {
+		await page.goto("/?utm_source=canonical-check");
+		const canonical = page.locator('link[rel="canonical"]');
+		await expect(canonical).toHaveCount(1);
+		const href = await canonical.getAttribute("href");
+		expect(new URL(href ?? "").href).toBe(new URL("/", SITE_ORIGIN).href);
+	});
+
 	test("contact section page loads and shows contact content", async ({
 		page,
 	}) => {
 		await page.goto("/contact");
-		await expect(page).toHaveTitle('תנ"ך על הפרק');
+		await expect(page).toHaveTitle('צור קשר | תנ"ך על הפרק');
 		// Section page includes the main heading and contact/donation/tos sections
 		const heading = page.getByRole("heading", { name: 'תנ"ך על הפרק' }).first();
 		await expect(heading).toBeVisible();
@@ -24,17 +35,44 @@ test.describe("Section pages", () => {
 
 	test("tos section page loads and shows terms content", async ({ page }) => {
 		await page.goto("/tos");
-		await expect(page).toHaveTitle('תנ"ך על הפרק');
+		await expect(page).toHaveTitle('תנאי שימוש | תנ"ך על הפרק');
 		const tosHeading = page.getByRole("heading", { name: "תנאי שימוש" });
 		await expect(tosHeading).toBeVisible();
 	});
 
 	test("app section page loads and shows app section", async ({ page }) => {
 		await page.goto("/app");
-		await expect(page).toHaveTitle('תנ"ך על הפרק');
+		await expect(page).toHaveTitle('יישומון | תנ"ך על הפרק');
 		const appHeading = page.getByRole("heading", {
 			name: 'ישומון תנ"ך על הפרק',
 		});
 		await expect(appHeading).toBeVisible();
+	});
+
+	// The landing pages scroll to the section matching their intent: donation
+	// still lands on contact, while the bulletin pages land on their join card
+	// (#2941 — see SECTIONS.scrollTarget in app/[section]/page.tsx).
+	for (const [section, scrollTarget] of [
+		["donation", "contact"],
+		["dailyBulletin", "bulletin"],
+		["whatsappGroup", "bulletin-whatsapp"],
+	] as const) {
+		test(`${section} has its own title and canonical and scrolls to ${scrollTarget}`, async ({
+			page,
+		}) => {
+			await page.goto(`/${section}`);
+			await expect(page).not.toHaveTitle('תנ"ך על הפרק');
+			await expect(page).toHaveTitle(/ \| תנ"ך על הפרק$/);
+			const canonical = await page
+				.locator('link[rel="canonical"]')
+				.getAttribute("href");
+			expect(new URL(canonical ?? "", page.url()).pathname).toBe(`/${section}`);
+			await expect(page.locator(`#${scrollTarget}`)).toBeInViewport();
+		});
+	}
+
+	test("unknown section returns 404", async ({ page }) => {
+		const response = await page.goto("/no-such-section");
+		expect(response?.status()).toBe(404);
 	});
 });

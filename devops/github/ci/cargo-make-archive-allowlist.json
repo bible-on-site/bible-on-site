@@ -1,0 +1,4 @@
+{
+	"$comment": "https://github.com/bible-on-site/bible-on-site/issues/2826 — every Makefile.toml task whose duckscript invokes an SDK archive command (unzip/zip/*::*zip, aliases included) must be listed here. `reason` is the recorded ingestion-path assessment: which archives are consumed, why they are trusted, and why the GHSA-m665-v7pm-7grj parser differential does not apply. Stale or reason-less entries fail the cargo-make-zip-guard check.",
+	"assessed": []
+}

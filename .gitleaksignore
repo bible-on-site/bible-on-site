@@ -1,0 +1,4 @@
+# Deterministic Android SDK cache-key fixture, not a credential.
+devops/github/ci/android-sdk-manifest.test.mjs:generic-api-key:121
+# Public identifier embedded in the production browser analytics script.
+web/bible-on-site/src/app/components/AhrefsAnalytics.tsx:generic-api-key:4

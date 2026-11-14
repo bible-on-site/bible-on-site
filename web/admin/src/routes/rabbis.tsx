@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, Outlet, useMatch } from "@tanstack/react-router";
+import {
+	createFileRoute,
+	Link,
+	Outlet,
+	useMatch,
+} from "@tanstack/react-router";
 import { type Author, deleteAuthor, getAuthors } from "~/server/authors";
 
 export const Route = createFileRoute("/rabbis")({
@@ -95,17 +100,17 @@ function RabbisListPage() {
 								key={author.id}
 								className="flex items-center gap-5 p-5 hover:bg-gray-50 transition-colors"
 							>
-							{author.imageUrl ? (
-								<img
-									src={author.imageUrl}
-									alt={author.name}
-									className="w-16 h-16 rounded-full object-cover ring-2 ring-gray-100"
-								/>
-							) : (
-								<div className="w-16 h-16 rounded-full bg-linear-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-500 text-2xl ring-2 ring-gray-100">
-									👤
-								</div>
-							)}
+								{author.imageUrl ? (
+									<img
+										src={author.imageUrl}
+										alt={author.name}
+										className="w-16 h-16 rounded-full object-cover ring-2 ring-gray-100"
+									/>
+								) : (
+									<div className="w-16 h-16 rounded-full bg-linear-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-500 text-2xl ring-2 ring-gray-100">
+										👤
+									</div>
+								)}
 								<div className="flex-1 min-w-0">
 									<h3 className="font-semibold text-gray-900 text-lg">
 										{author.name}

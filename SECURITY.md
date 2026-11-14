@@ -7,3 +7,7 @@ Only the latest versions of each module are being supported with security update
 ## Reporting a Vulnerability
 
 Please email `tanah.site@gmail.com`
+
+## Security model
+
+The threat model used to triage security scans is in [SECURITY_MODEL.md](SECURITY_MODEL.md).

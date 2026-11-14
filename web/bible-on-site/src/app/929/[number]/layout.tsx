@@ -1,5 +1,9 @@
 import "@/lib/download/register-tanach";
 import type React from "react";
+import { PageShell } from "@/app/components/PageShell";
+import PerekSwipeNavigation from "./components/PerekSwipeNavigation";
+import ReaderSettings from "./components/ReaderSettings";
+import { hebrewSerif, taameyD } from "./hebrew-font";
 import "./layout.css";
 
 // Must live in layout (not page) so Next.js passes parent params to
@@ -10,9 +14,19 @@ export function generateStaticParams() {
 }
 
 export default function PerekLayout({
-  children,
+	children,
 }: {
-  children: React.ReactNode;
+	children: React.ReactNode;
 }) {
-  return <div className="perek-layout">{children}</div>;
+	return (
+		<PageShell
+			header="solid"
+			className={`perek-layout ${hebrewSerif.variable} ${taameyD.variable}`}
+		>
+			<PerekSwipeNavigation>
+				<ReaderSettings />
+				{children}
+			</PerekSwipeNavigation>
+		</PageShell>
+	);
 }

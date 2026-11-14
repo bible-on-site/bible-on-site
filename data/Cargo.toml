@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "authors",
     "mysql/db-populator",
+    "reading-metrics",
     "s3/s3-populator",
     "sefaria/setup-and-population",
     "sefaria/pipelines/tanah-view",
@@ -27,7 +28,11 @@ chrono = "0.4"
 chrono-tz = "0.10"
 icu_calendar = "2.3"
 dotenvy = "0.15"
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.42", features = ["bundled"] }
 flate2 = "1"
+unicode-normalization = "0.1"
+unicode_categories = "0.1"
+sha2 = "0.11"
+reading-metrics = { path = "reading-metrics" }
 bson = "3"
 sunrise = "3"

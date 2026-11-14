@@ -1,100 +1,111 @@
 # Admin Panel - תנ"ך על הפרק
 
-A React-based admin panel for managing articles and rabbis content.
+The React and TanStack Start application for content editors and archive uploaders.
+It runs separately from the customer website.
 
 ## Features
 
-- 📝 **Article Management**: Create, edit, and delete articles with a WYSIWYG editor
-- 👤 **Rabbi Management**: Manage rabbi profiles with S3 image upload
-- 🔍 **Perek-based Navigation**: Navigate articles by chapter (perek)
-- 💾 **Auto-save**: Changes are automatically saved after 2 seconds of inactivity
-- 🔄 **Cache Invalidation**: Automatic website cache invalidation when content changes
+- Article editing with TipTap, Perek navigation and automatic saving.
+- Rabbi profiles and images, Tanahpedia editing, daily bulletins and other editorial tools.
+- A private archive at `/archive`, with folders, file uploads, downloads and storage quotas.
 
-## Getting Started
+## Archive access
 
-### Prerequisites
+Open `/archive` in the Admin application. Uploaders use the username and password
+provided by the site team through **כניסה לחשבון**. Administrators use
+**כניסת מנהל** with their existing sign-in. Accounts are pre-created; the archive
+does not offer public registration.
 
-- Node.js 26.10.0
-- MySQL database (same as web/bible-on-site)
-- AWS S3 bucket for rabbi images (optional)
+| Role | Application access | Directory access | Allowed actions |
+| --- | --- | --- | --- |
+| `admin` | All Admin sections, including `/archive-settings` | Root `/`, general folders and every author home | Create folders, upload, download and delete completed files |
+| `archiver` | Archive only | Own `/authors/<author name>/` and descendants | Create folders, upload, download and cancel incomplete uploads |
 
-### Installation
+Directory paths describe the archive filesystem. For example, an author's home
+is `/authors/<author name>/`, while its browser URL is
+`/archive/authors/<author name>`. Uploaders cannot browse another author's home
+or use other Admin pages and server functions. Completed files can be deleted
+only by an administrator.
 
-```bash
-cd web/admin
-npm install
-```
+Select files with the upload control; any file type is supported. Each account
+defaults to **1000 decimal GB (1 TB)**. Administrators can change the default and
+individual limits in `/archive-settings`. Incomplete uploads reserve their full
+file size until completed or cancelled.
 
-### Configuration
+The archive serves authenticated downloads through the Admin service and sends
+no-store and noindex headers. See the existing [private archive guide](../../docs/aws/private-archive.md)
+for storage, account provisioning and deployment details.
 
-Copy `.env.example` to `.env` and configure:
+## Local development
 
-```bash
-cp .env.example .env
-```
-
-Environment variables:
-- `VITE_API_URL`: Admin API URL (default: http://localhost:3004)
-- `VITE_WEBSITE_URL`: Main website URL for cache invalidation
-- `VITE_AWS_REGION`: AWS region for S3
-- `VITE_S3_BUCKET`: S3 bucket name for rabbi images
-- `OPENAI_API_KEY` / `OPENAI_MODEL` (optional): Tanahpedia entry LLM assistant — server-side only; see `docs/tanahpedia/admin-llm-assistant.md`
-
-### Development
-
-Start the development server:
+Use the Node.js and Bun versions in [package.json](package.json), Docker, and the
+repository's Rust toolchain with `cargo-make` for database bootstrap tooling.
+From `web/admin`:
 
 ```bash
-npm run dev
+bun install
+bun run dev
 ```
 
-This will start the Vite dev server at http://localhost:3101
+`predev` starts the shared Docker services. With `DB_URL` set and MySQL reachable,
+the default database check runs the bootstrap only when `tanah_sefer` is missing
+or empty. It logs a skipped check when the URL is missing or MySQL is unreachable,
+and checks local image storage when configured. The app runs at
+`http://localhost:3101`.
 
-**מסד נתונים לפיתוח:** `ensure-dev-db.mjs` מריץ `mysql-populate-dev` רק אם אין עדיין `tanah_sefer` (מסד חדש). `mysql-populate-dev` **לא** טוען את `tanah_test_data.sql` (בלי «הרב לדוגמא») — מאמרים אמיתיים מ־`sync-from-prod`. אם כבר היו במסד מאמרי דמו, הם יוסרו בפתיחת dev (אלא אם `KEEP_BUNDLED_TEST_ARTICLES=1`). לדמו מלא כמו ב־CI: `npm run db:populate:dev:test-articles`.
+The development command loads `.dev.env`. Set local overrides in your shell or
+your local `.dev.env`; do not commit credentials. `.env.example` documents the
+optional settings. The server reads `DB_URL` for MySQL and defaults to
+`tanah-dev` outside production when it is unset. Use `sync-from-prod` for real
+local content. Database population scripts are bootstrap and test tools;
+lasting production content changes belong in the database or Admin editing flow.
 
-### Building
+The public image integration uses server-side `S3_*` variables from `.env.example`.
+`VITE_WEBSITE_URL` and the server-only `REVALIDATE_SECRET` configure website
+cache invalidation. Keep credentials and `OPENAI_API_KEY` server-side; `VITE_*`
+values can be included in browser bundles. The optional Tanahpedia assistant is
+documented in [Admin LLM assistant](../../docs/tanahpedia/admin-llm-assistant.md).
+
+`SKIP_AUTH=true` is a local development/test option. It cannot disable
+authentication in a production runtime. The private archive has its own
+`ARCHIVE_*` configuration, documented in the private archive guide above.
+
+## Build and validation
 
 ```bash
-npm run build
+bun run build
+bun run start
 ```
 
-### Tests & coverage
+`build` creates the TanStack Start/Nitro output; `start` runs
+`.output/server/index.mjs` with the supplied runtime environment.
 
-- Unit: `npm run test:unit` / coverage: `npm run coverage:unit` (outputs `web/admin/.coverage/unit/lcov.info`)
-- E2E: `npm run test:e2e`
-- Merge unit (+ E2E lcov when configured): `npm run coverage:merge` → `web/admin/.coverage/merged/lcov.info`
-- CI publishes the merged report to Codecov with flag **`admin`** (see root `README.md`).
+- Unit tests: `bun run test:unit`; coverage: `bun run coverage:unit`.
+- MySQL integration tests: `bun run test:mysql`.
+- Browser tests: `bun run test:e2e`; coverage: `bun run coverage:e2e`.
+- Merge unit and browser coverage: `bun run coverage:merge`.
+- Lint: `bun run lint`.
 
-## Project Structure
+Coverage reports live under `.coverage/unit`, `.coverage/e2e` and
+`.coverage/merged`. CI publishes the merged report with the Codecov `admin` flag.
 
-```
+## Source layout
+
+```text
 src/
-├── api/           # API client functions
-├── components/    # Reusable UI components
-│   ├── Layout.tsx
-│   ├── WysiwygEditor.tsx
-│   ├── ImageUpload.tsx
-│   └── AutoSaveIndicator.tsx
-├── pages/         # Page components
-│   ├── HomePage.tsx
-│   ├── ArticlesPage.tsx
-│   ├── ArticleEditPage.tsx
-│   ├── PerekArticlesPage.tsx
-│   ├── RabbisPage.tsx
-│   └── RabbiEditPage.tsx
-├── types/         # TypeScript type definitions
-└── test/          # Test setup
+├── routes/        # TanStack file routes and server-function entry points
+├── components/    # Editor, layout and archive UI
+├── server/        # Authentication, database access, archive and integrations
+├── lib/           # Shared application types and validation
+├── styles/        # Application styles
+└── utils/         # Display helpers
+tests/
+├── unit/
+├── integration/
+└── e2e/
 ```
-
-## Dependencies
-
-- React 19 with React Router
-- TanStack Query for data fetching
-- TipTap for WYSIWYG editing
-- Tailwind CSS for styling
-- Flowbite React for UI components
 
 ## Related
 
-- [Rust API](../api) - Backend API serving data
-- [Bible on Site](../bible-on-site) - Main website that this admin manages
+- [Rust API](../api) - Shared content API.
+- [Customer website](../bible-on-site) - Public site managed by this application.

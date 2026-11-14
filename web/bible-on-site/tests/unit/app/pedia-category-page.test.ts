@@ -26,22 +26,29 @@ jest.mock("../../../src/lib/tanahpedia/service", () => ({
 	...jest.requireActual("../../../src/lib/tanahpedia/service"),
 	getAllEntryUniqueNames: jest.fn().mockResolvedValue([]),
 	getEntryByUniqueName: jest.fn().mockResolvedValue(null),
+	getEntriesBySynonym: jest.fn().mockResolvedValue([]),
 	getEntitiesWithEntries: jest.fn(),
 	getEntitiesWithEntriesByRole: jest.fn(),
 	getAnimalsByClassification: jest.fn(),
+	getCategoryCounts: jest.fn(),
 	getCategoryHomepage: jest.fn(),
 	getPlaceMapMarkers: jest.fn().mockResolvedValue([]),
 }));
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { CategoryView } from "../../../src/app/pedia/[slug]/category-view";
 import PediaSlugPage, {
 	generateMetadata,
 } from "../../../src/app/pedia/[slug]/page";
-import { resolveCategoryRoute } from "../../../src/lib/tanahpedia/category-slug";
+import { NOT_FOUND_METADATA } from "../../../src/lib/seo/missing-page";
+import {
+	CATEGORY_SLUGS,
+	resolveCategoryRoute,
+} from "../../../src/lib/tanahpedia/category-slug";
 import {
 	getAnimalsByClassification,
+	getCategoryCounts,
 	getCategoryHomepage,
 	getEntitiesWithEntries,
 	getEntitiesWithEntriesByRole,
@@ -123,7 +130,7 @@ describe("pedia/[slug] category route", () => {
 				params: Promise.resolve({ slug: "משה-רבנו" }),
 			});
 
-			expect(result.title).toBe("לא נמצא");
+			expect(result).toEqual(NOT_FOUND_METADATA);
 		});
 	});
 
@@ -190,24 +197,27 @@ describe("pedia/[slug] category route", () => {
 		it.each([
 			["kind", { kind: "חיות" }, "kind", "CHAYA"],
 			["purity", { purity: "טהורים" }, "purity", "TAHOR"],
-		] as const)("uses animal %s classification loading when requested", async (_label, searchParams, classificationType, classificationValue) => {
-			mockGetAnimalsByClassification.mockResolvedValue([
-				{
-					entityType: "ANIMAL",
-					entityId: "animal-1",
-					entityName: "Animal one",
-					linkedEntries: [],
-				},
-			]);
+		] as const)(
+			"uses animal %s classification loading when requested",
+			async (_label, searchParams, classificationType, classificationValue) => {
+				mockGetAnimalsByClassification.mockResolvedValue([
+					{
+						entityType: "ANIMAL",
+						entityId: "animal-1",
+						entityName: "Animal one",
+						linkedEntries: [],
+					},
+				]);
 
-			const result = await renderCategory("בעלי-חיים", searchParams);
+				const result = await renderCategory("בעלי-חיים", searchParams);
 
-			expect(result).toBeDefined();
-			expect(mockGetAnimalsByClassification).toHaveBeenCalledWith(
-				classificationType,
-				classificationValue,
-			);
-		});
+				expect(result).toBeDefined();
+				expect(mockGetAnimalsByClassification).toHaveBeenCalledWith(
+					classificationType,
+					classificationValue,
+				);
+			},
+		);
 
 		it("loads place map markers when the place homepage uses map layout", async () => {
 			mockGetCategoryHomepage.mockResolvedValue({
@@ -235,6 +245,46 @@ describe("pedia/[slug] category route", () => {
 			expect(mockGetPlaceMapMarkers).toHaveBeenCalledTimes(1);
 		});
 
+		function emptyStatePanel(): HTMLElement {
+			const heading = screen.getByRole("heading", {
+				name: "עדיין אין ערכים בקטגוריה זו",
+			});
+			expect(heading).toBeVisible();
+			return heading.closest("section") as HTMLElement;
+		}
+
+		it("renders a Hebrew empty state linking to populated categories", async () => {
+			jest.mocked(getCategoryCounts).mockResolvedValue({
+				...Object.fromEntries(
+					Object.keys(CATEGORY_SLUGS).map((key) => [key, 0]),
+				),
+				PERSON: 5,
+				KING: 2,
+			} as Awaited<ReturnType<typeof getCategoryCounts>>);
+
+			render((await renderCategory("גרמי-שמיים")) as ReactElement);
+
+			const panel = emptyStatePanel();
+			expect(screen.queryByText(/^0 /)).toBeNull();
+			expect(
+				within(panel).getByText(/בינתיים אפשר לעיין בקטגוריות אחרות/),
+			).toBeVisible();
+			const links = within(panel)
+				.getAllByRole("listitem")
+				.map((li) => li.textContent);
+			expect(links).toEqual(["אישים", "מלכים"]);
+		});
+
+		it("omits the suggestion list when no category has entries", async () => {
+			jest.mocked(getCategoryCounts).mockRejectedValue(new Error("down"));
+
+			render((await renderCategory("גרמי-שמיים")) as ReactElement);
+
+			const panel = emptyStatePanel();
+			expect(within(panel).queryByText(/בינתיים/)).toBeNull();
+			expect(within(panel).queryAllByRole("listitem")).toHaveLength(0);
+		});
+
 		it("renders a database warning when category loading fails", async () => {
 			const oldNodeEnv = process.env.NODE_ENV;
 			Object.defineProperty(process.env, "NODE_ENV", {
@@ -253,6 +303,22 @@ describe("pedia/[slug] category route", () => {
 				value: oldNodeEnv,
 				configurable: true,
 			});
+		});
+
+		it("hides details of a non-Error database rejection in production", async () => {
+			jest.replaceProperty(process.env, "NODE_ENV", "production");
+			const log = jest.spyOn(console, "error").mockImplementation(() => {});
+			mockGetEntitiesWithEntries.mockRejectedValueOnce(
+				"private connection details",
+			);
+			try {
+				render((await renderCategory("אישים")) as ReactElement);
+				expect(screen.getByRole("alert")).toBeVisible();
+				expect(screen.queryByText(/private connection details/)).toBeNull();
+				expect(log).not.toHaveBeenCalled();
+			} finally {
+				jest.restoreAllMocks();
+			}
 		});
 	});
 

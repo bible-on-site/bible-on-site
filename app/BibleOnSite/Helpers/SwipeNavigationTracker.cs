@@ -10,11 +10,39 @@ public sealed class SwipeNavigationTracker
 {
     private TouchPosition? _start;
     private int _startPosition;
+    private bool _horizontal;
+    private TouchPosition? _last;
+
+    /// <summary>Last finger position observed while the gesture was active.</summary>
+    public TouchPosition? Last => _last;
 
     public void Begin(TouchPosition start, int position)
     {
         _start = start;
         _startPosition = position;
+        _horizontal = false;
+        _last = start;
+    }
+
+    /// <summary>
+    /// Tracks the drag so a horizontal swipe that later turns vertical is still
+    /// settled horizontally (#2469). Once horizontal displacement dominates the
+    /// gesture beyond touch slop, the swipe is locked to the chapter axis.
+    /// </summary>
+    public void Move(TouchPosition position, double touchSlop)
+    {
+        if (_start == null)
+        {
+            return;
+        }
+
+        _last = position;
+        var dx = Math.Abs(position.X - _start.Value.X);
+        var dy = Math.Abs(position.Y - _start.Value.Y);
+        if (dx > touchSlop && dx > dy)
+        {
+            _horizontal = true;
+        }
     }
 
     public void Cancel() => _start = null;
@@ -23,6 +51,7 @@ public sealed class SwipeNavigationTracker
         double minimumFlingVelocity, bool rightToLeft, int pageCount)
     {
         var start = _start;
+        var horizontal = _horizontal;
         Cancel();
         if (start == null || pageWidth <= 0 || pageCount <= 0)
         {
@@ -32,9 +61,14 @@ public sealed class SwipeNavigationTracker
         var dx = release.X - start.Value.X;
         var dy = release.Y - start.Value.Y;
         var distance = Math.Abs(dx);
-        if (distance <= touchSlop || distance <= Math.Abs(dy) * 1.5)
+        // Without a horizontal lock the release still has to prove horizontal
+        // intent; a primarily-vertical drag stays a content scroll.
+        if (distance <= touchSlop || (!horizontal && distance <= Math.Abs(dy) * 1.5))
         {
-            return null;
+            // A locked horizontal swipe still returns the current page so the
+            // caller snaps a possibly-stranded carousel back instead of
+            // leaving a residual offset (#2469).
+            return horizontal ? _startPosition : null;
         }
 
         // EventTime is the finger's timing, not the time the UI eventually

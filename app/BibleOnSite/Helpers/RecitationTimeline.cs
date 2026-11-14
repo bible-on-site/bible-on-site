@@ -1,0 +1,94 @@
+using BibleOnSite.Models;
+
+namespace BibleOnSite.Helpers;
+
+/// <summary>Maps the player's position to approved canonical words, including joined verse clips.</summary>
+public sealed class RecitationTimeline
+{
+    private readonly List<(RecitationWord Word, double Start, double End)> _words = [];
+
+    public RecitationTimeline(RecitationTrack? track) : this(track, null)
+    {
+    }
+
+    public RecitationTimeline(RecitationTrack? track, IReadOnlyList<(double Start, double End)>? ranges) : this(track, ranges, 0)
+    {
+    }
+
+    public RecitationTimeline(RecitationTrack? track, IReadOnlyList<(double Start, double End)>? ranges, double pauseMs)
+    {
+        if (track?.AlignmentStatus != "ready")
+        {
+            return;
+        }
+
+        if (ranges == null)
+        {
+            _words.AddRange(track.Words.Select(w => (w, w.StartMs!.Value, w.EndMs!.Value)));
+            return;
+        }
+
+        double cursor = 0;
+        foreach (var range in ranges)
+        {
+            foreach (var word in track.Words.Where(w => w.StartMs >= range.Start && w.EndMs <= range.End))
+            {
+                _words.Add((word, cursor + word.StartMs!.Value - range.Start, cursor + word.EndMs!.Value - range.Start));
+            }
+            cursor += range.End - range.Start + pauseMs;
+        }
+    }
+
+    public RecitationWord? WordAt(double milliseconds)
+    {
+        if (!double.IsFinite(milliseconds))
+        {
+            return null;
+        }
+
+        int low = 0, high = _words.Count;
+        while (low < high)
+        {
+            int middle = low + (high - low) / 2;
+            if (_words[middle].Start <= milliseconds)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle;
+            }
+        }
+        return low > 0 && milliseconds < _words[low - 1].End ? _words[low - 1].Word : null;
+    }
+
+    /// <summary>The clip position where a recording timestamp plays, or null when this clip does not contain it.</summary>
+    public double? PositionOf(double sourceMs)
+    {
+        if (!double.IsFinite(sourceMs))
+        {
+            return null;
+        }
+
+        int low = 0, high = _words.Count;
+        while (low < high)
+        {
+            int middle = low + (high - low) / 2;
+            if (_words[middle].Word.StartMs <= sourceMs)
+            {
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle;
+            }
+        }
+        if (low == 0)
+        {
+            return null;
+        }
+
+        var (word, start, _) = _words[low - 1];
+        return sourceMs < word.EndMs ? start + sourceMs - word.StartMs!.Value : null;
+    }
+}

@@ -26,10 +26,7 @@ import {
 	unionEndReasonLabel,
 	unionTypeLabel,
 } from "@/lib/tanahpedia/person-family-labels";
-import {
-	hasTanachRef,
-	renderFamilyTreeCitationLine,
-} from "@/lib/tanahpedia/tanach-citation-links";
+import { renderFamilyTreeCitationLine } from "@/lib/tanahpedia/tanach-citation-links";
 import type {
 	PersonFamilyChildEdge,
 	PersonFamilyParentEdge,
@@ -88,10 +85,16 @@ function partitionChildrenByCoParent(
 	return buckets;
 }
 
-function shouldShowCoParentSubtitles(buckets: CoParentChildBucket[]): boolean {
+function shouldShowCoParentSubtitles(
+	buckets: CoParentChildBucket[],
+	spouseUnits: SpouseUnit[],
+): boolean {
 	if (buckets.length > 1) return true;
-	if (buckets.length === 1 && buckets[0].key !== "__none__") return true;
-	return false;
+	if (buckets.length === 0 || buckets[0].coParentEntityId == null) return false;
+	return (
+		spouseUnits.length !== 1 ||
+		buckets[0].coParentEntityId !== spouseUnits[0].edges[0].related.entityId
+	);
 }
 
 /** מטריצת בן-זוג+ילדים — לא כשחלופי מחייב כמה ישויות שונות באותו בלוק */
@@ -176,15 +179,12 @@ function buildSpouseUnits(spouses: PersonFamilySpouseEdge[]): SpouseUnit[] {
 	}
 
 	const byAlt = groupByAltGroupId(withAlt);
-	const altKeys = [...byAlt.keys()].sort((a, b) => {
-		if (a === b) return 0;
-		if (a === null) return -1;
-		if (b === null) return 1;
-		return String(a).localeCompare(String(b));
-	});
+	// withAlt contains only non-null keys; iterate entries so every group is present.
+	const altGroups = [...byAlt.entries()].sort(([a], [b]) =>
+		String(a).localeCompare(String(b)),
+	);
 
-	for (const key of altKeys) {
-		const group = byAlt.get(key) ?? [];
+	for (const [key, group] of altGroups) {
 		const byEntity = new Map<string, PersonFamilySpouseEdge[]>();
 		for (const edge of group) {
 			const id = edge.related.entityId;
@@ -422,10 +422,32 @@ function ParentCard({ edge }: { edge: PersonFamilyParentEdge }) {
 			>
 				<PersonSexMark sex={edge.related.sex} />
 				<PersonNameLink related={edge.related} />
-				{cardCitationBlock(edge.sourceCitation)}
 			</div>
 		</div>
 	);
+}
+
+/** Show relationship evidence once on the child, preferring a verse shared by both parents. */
+function parentSourceCitation(
+	parents: PersonFamilyParentEdge[],
+): string | null {
+	const sourceRoles = new Map<string, Set<string>>();
+	for (const parent of parents) {
+		for (const { line } of citationLines(parent.sourceCitation)) {
+			const roles = sourceRoles.get(line) ?? new Set<string>();
+			roles.add(parent.parentRole);
+			sourceRoles.set(line, roles);
+		}
+	}
+	const oneParentPerRole =
+		parents.filter((p) => p.parentRole === "FATHER").length === 1 &&
+		parents.filter((p) => p.parentRole === "MOTHER").length === 1;
+	const shared = oneParentPerRole
+		? [...sourceRoles].find(
+				([, roles]) => roles.has("FATHER") && roles.has("MOTHER"),
+			)
+		: undefined;
+	return shared?.[0] ?? ([...sourceRoles.keys()].join("\n") || null);
 }
 
 function ParentRow({ parents }: { parents: PersonFamilyParentEdge[] }) {
@@ -472,12 +494,15 @@ function ChildCard({ edge }: { edge: PersonFamilyChildEdge }) {
 function SpouseCard({
 	edge,
 	matrixSpouseCardMark,
+	showUnionOrder,
 }: {
 	edge: PersonFamilySpouseEdge;
 	matrixSpouseCardMark?: boolean;
+	showUnionOrder: boolean;
 }) {
 	const u = unionTypeLabel(edge.unionType);
-	const orderOnly = edge.unionOrder != null ? `סדר ${edge.unionOrder}` : "";
+	const orderOnly =
+		showUnionOrder && edge.unionOrder != null ? `סדר ${edge.unionOrder}` : "";
 	const timelineBody = spouseTimelinePlain(edge);
 	return (
 		<div className={styles.personCardStack}>
@@ -513,9 +538,11 @@ function SpouseCard({
 function SpouseInterpretationsCard({
 	edges,
 	matrixSpouseCardMark,
+	showUnionOrder,
 }: {
 	edges: PersonFamilySpouseEdge[];
 	matrixSpouseCardMark?: boolean;
+	showUnionOrder: boolean;
 }) {
 	const sorted = sortEdgesForOpinions(edges);
 	const head = sorted[0];
@@ -532,7 +559,9 @@ function SpouseInterpretationsCard({
 		<div className={styles.personCardStack}>
 			{sorted.map((edge, i) => {
 				const orderOnly =
-					edge.unionOrder != null ? `סדר ${edge.unionOrder}` : "";
+					showUnionOrder && edge.unionOrder != null
+						? `סדר ${edge.unionOrder}`
+						: "";
 				const timelineBody = spouseTimelinePlain(edge);
 				return (
 					<div
@@ -611,9 +640,11 @@ function SiblingLabelBridge({ label }: { label: string }) {
 function SpouseUnitCardBlock({
 	unit,
 	matrixSpouseCardMark,
+	showUnionOrder,
 }: {
 	unit: SpouseUnit;
 	matrixSpouseCardMark?: boolean;
+	showUnionOrder: boolean;
 }) {
 	const nEnt = new Set(unit.edges.map((e) => e.related.entityId)).size;
 	const merged = unit.edges.length > 1 && nEnt === 1;
@@ -624,6 +655,7 @@ function SpouseUnitCardBlock({
 		<SpouseInterpretationsCard
 			edges={unit.edges}
 			matrixSpouseCardMark={matrixSpouseCardMark}
+			showUnionOrder={showUnionOrder}
 		/>
 	) : (
 		unit.edges.map((e) => (
@@ -631,6 +663,7 @@ function SpouseUnitCardBlock({
 				key={`${e.related.entityId}-${e.unionType}-${e.unionOrder ?? "x"}`}
 				edge={e}
 				matrixSpouseCardMark={matrixSpouseCardMark}
+				showUnionOrder={showUnionOrder}
 			/>
 		))
 	);
@@ -666,7 +699,7 @@ function SpouseUnitNodes({
 			`${keyPrefix}-solo-${unit.edges[0].related.entityId}-${unit.edges[0].unionType}-${idx}`;
 		return (
 			<Fragment key={key}>
-				<SpouseUnitCardBlock unit={unit} />
+				<SpouseUnitCardBlock unit={unit} showUnionOrder={units.length > 1} />
 			</Fragment>
 		);
 	});
@@ -759,7 +792,10 @@ function MobileMatrixStack({
 					className={styles.matrixMobileColumn}
 				>
 					<div className={styles.matrixMobileSpouse}>
-						<SpouseUnitCardBlock unit={unit} />
+						<SpouseUnitCardBlock
+							unit={unit}
+							showUnionOrder={columns.length > 1}
+						/>
 					</div>
 					{kids.length > 0 ? (
 						<>
@@ -811,8 +847,8 @@ function PersonFamilyTreeContent({
 	} = summary;
 
 	const parentGroups = groupByAltGroupId(parents);
-	const parentKeys = [...parentGroups.keys()].sort((a, b) => {
-		if (a === b) return 0;
+	const orderedParentGroups = [...parentGroups.entries()].sort(([a], [b]) => {
+		// Map entries have distinct keys; null is the default relationship group.
 		if (a === null) return -1;
 		if (b === null) return 1;
 		return a.localeCompare(b);
@@ -841,12 +877,12 @@ function PersonFamilyTreeContent({
 		: undefined;
 
 	const childGroups = groupByAltGroupId(sortedChildren);
-	const childKeys = [...childGroups.keys()].sort((a, b) => {
-		if (a === b) return 0;
+	const orderedChildGroups = [...childGroups.entries()].sort(([a], [b]) => {
 		if (a === null) return -1;
 		if (b === null) return 1;
 		return a.localeCompare(b);
 	});
+	const childKeys = orderedChildGroups.map(([key]) => key);
 
 	const siblingLayout = partitionSiblingsForFamilyTree(
 		siblings,
@@ -1109,11 +1145,10 @@ function PersonFamilyTreeContent({
 		: [];
 
 	const parentsRows =
-		parentKeys.length <= 1 && parentKeys[0] === null ? (
+		orderedParentGroups.length === 1 && orderedParentGroups[0][0] === null ? (
 			<ParentRow parents={sortedParentsGlobal} />
 		) : (
-			parentKeys.map((key) => {
-				const group = parentGroups.get(key) ?? [];
+			orderedParentGroups.map(([key, group]) => {
 				const sorted = [...group].sort((a, b) => {
 					const rk =
 						parentRoleSortKey(a.parentRole) - parentRoleSortKey(b.parentRole);
@@ -1140,18 +1175,7 @@ function PersonFamilyTreeContent({
 			})
 		);
 
-	// The focal person's own source is their Tanah birth record. A non-Tanah source
-	// (e.g. חז"ל identifying a parent) attests that parent claim only, so it stays on
-	// the parent's card instead of being attributed to the focal person.
-	const focalSourceCitation =
-		[
-			...new Set(
-				parents
-					.map((p) => p.sourceCitation?.trim())
-					.filter((c): c is string => Boolean(c))
-					.filter(hasTanachRef),
-			),
-		].join("\n") || null;
+	const focalSourceCitation = parentSourceCitation(parents);
 
 	const focalCardNode = (
 		<div
@@ -1166,8 +1190,7 @@ function PersonFamilyTreeContent({
 
 	const nonMatrixChildrenBlocks =
 		sortedChildren.length > 0 && !matrixEligible
-			? childKeys.map((key) => {
-					const group = childGroups.get(key) ?? [];
+			? orderedChildGroups.map(([key, group]) => {
 					const sortedGroup = [...group].sort((a, b) =>
 						a.related.displayName.localeCompare(b.related.displayName, "he"),
 					);
@@ -1175,7 +1198,7 @@ function PersonFamilyTreeContent({
 						sortedGroup,
 						childEdgeCmp,
 					);
-					const showCoSub = shouldShowCoParentSubtitles(buckets);
+					const showCoSub = shouldShowCoParentSubtitles(buckets, spouseUnits);
 					return (
 						<div key={key ?? "default"} className={styles.altGroupBlock}>
 							{key !== null ? (
@@ -1444,6 +1467,7 @@ function PersonFamilyTreeContent({
 													<SpouseUnitCardBlock
 														unit={unit}
 														matrixSpouseCardMark
+														showUnionOrder={orderedSpouseUnits.length > 1}
 													/>
 												</div>
 											))}
@@ -1587,7 +1611,7 @@ function PersonFamilyTreeContent({
 															className={styles.matrixKidsCell}
 														>
 															<legend className={styles.marriageColumnLegend}>
-																{`ילדים מ־${partnerName}`}
+																{`ילדים מ-${partnerName}`}
 															</legend>
 															<div
 																className={styles.marriageColumnTrunk}
@@ -1670,7 +1694,11 @@ function PersonFamilyTreeContent({
 													.join("_")}`}
 												className={styles.matrixSpouseCell}
 											>
-												<SpouseUnitCardBlock unit={unit} matrixSpouseCardMark />
+												<SpouseUnitCardBlock
+													unit={unit}
+													matrixSpouseCardMark
+													showUnionOrder={orderedSpouseUnits.length > 1}
+												/>
 											</div>
 										))}
 									</div>

@@ -5,7 +5,7 @@
   z-index: 2;
   /* White background creates contrast between al-haperek (blue) divider and TOS (gray).
      When daily bulletin is added back, this section can move after it and use #edf2f7 if needed. */
-  background-color: var(--surface-muted, #fff);
+  background-color: var(--surface-elevated, #fff);
   padding: 2em 1em;
   scroll-margin-top: 1em;
 }
@@ -17,12 +17,12 @@
   color: var(--link-accent, #1552ac);
 }
 
-.appHeader h1 {
+.appHeader h2 {
   font-size: 1.8em;
   margin: 0.5em 0;
 }
 
-.appHeader h2 {
+.appHeader h3 {
   font-size: 1.1em;
   margin: 0.3em 0;
   color: var(--muted-text, #666);
@@ -46,18 +46,22 @@
   padding: 0.75em 1.5em;
   background-color: var(--link-accent, #1552ac);
   color: white;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   text-decoration: none;
   transition: background-color 0.2s, transform 0.2s;
   position: relative;
 }
 
-.appLink:hover {
-  background-color: #0d3d7a;
-  transform: translateY(-2px);
+@media (hover: hover) {
+  .appLink:hover {
+    background-color: #0d3d7a;
+    transform: translateY(-2px);
+  }
 }
 
 .appLink img {
+  width: 24px;
+  height: auto;
   filter: brightness(0) invert(1);
 }
 
@@ -72,7 +76,13 @@
   opacity: 0.7;
 }
 
-.disabled:hover {
-  background-color: var(--link-accent, #1552ac);
-  transform: none;
+@media (hover: hover) {
+  .disabled:hover {
+    background-color: var(--link-accent, #1552ac);
+    transform: none;
+  }
+}
+
+.appLink:not(.disabled):active {
+  scale: var(--press-scale);
 }

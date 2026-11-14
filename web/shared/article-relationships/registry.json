@@ -1,0 +1,142 @@
+{
+	"contractVersion": 1,
+	"articleKey": "articleId",
+	"freshness": {
+		"expectedContentHash": "Lowercase hex of the article's generated tanah_article.content_hash (covers name/abstract/content/perek_id/author_id). Compared under the article row lock; a mismatch rejects the write as stale.",
+		"expectedCoveringSources": "The exact {perekId,pasuk} set the caller read (order-insensitive). Compared under the same lock so a replaced covering set cannot overwrite an unseen edit.",
+		"expectedMoedIds": "The exact moed id set the caller read in articleRelationships.moadim (order-insensitive). The generated contentHash covers the article row alone, so the junction set gets its own snapshot — a mismatch rejects the write the same way."
+	},
+	"relationships": [
+		{
+			"key": "primaryPerek",
+			"label": "פרק ראשי",
+			"meaning": "The article's single required canonical perek — placement, listing and default (unverified) coverage all derive from it.",
+			"targetKind": "perek",
+			"cardinality": "exactly-one",
+			"linkMetadata": [],
+			"ownership": "article",
+			"permission": "ARTICLE_API_KEY",
+			"operations": ["read", "replace"],
+			"writeContract": "updateArticleRelationships.perekId — target must be an existing canonical perek; cannot be cleared (NOT NULL).",
+			"readContract": "Public: Article.perekId, articlesByPerekId. Admin: articleRelationships.perekId.",
+			"invalidates": "article entity change with old ∪ new perekIds",
+			"status": "supported"
+		},
+		{
+			"key": "author",
+			"label": "מחבר",
+			"meaning": "The article's single required author — drives author pages, listings and the byline.",
+			"targetKind": "author",
+			"cardinality": "exactly-one",
+			"linkMetadata": [],
+			"ownership": "article",
+			"permission": "ARTICLE_API_KEY",
+			"operations": ["read", "replace"],
+			"writeContract": "updateArticleRelationships.authorId — target must be an existing tanah_author row; cannot be cleared (NOT NULL).",
+			"readContract": "Public: Article.authorId, articlesByAuthorId. Admin: articleRelationships.authorId.",
+			"invalidates": "article entity change with old ∪ new authorIds",
+			"status": "supported"
+		},
+		{
+			"key": "coveringSources",
+			"label": "כיסוי פסוקים מאומת",
+			"meaning": "Verified pasuk-level coverage: each row links the article to one canonical {perekId,pasuk} it covers. Meaningful only together with the coverageVerified flag — an unverified or absent set means coverage is unknown, never 'covers nothing'.",
+			"targetKind": "pasukCoordinate",
+			"cardinality": "many",
+			"linkMetadata": ["coverageVerified"],
+			"ownership": "article",
+			"permission": "ARTICLE_API_KEY",
+			"operations": ["read", "replace", "clear"],
+			"writeContract": "updateArticleRelationships.coveringSources + .coverageVerified — integer coordinates, pasuk >= 1, within the canonical perek pasuk_count, no duplicates; verified requires at least one row; omitted leaves the set untouched, an explicit empty list clears it and marks coverage unknown.",
+			"readContract": "Public: Article.coveringSources, Article.coverageVerified. Admin: articleRelationships.coveringSources / .coverageVerified.",
+			"invalidates": "article entity change with coveringSpans for the destroyed side (the website unions the live rows)",
+			"status": "supported"
+		},
+		{
+			"key": "dedicationAssignments",
+			"label": "הקדשות",
+			"meaning": "Article-scoped dedication assignments honoring a subject, each carrying an optional assignment-level expiry distinct from the whole-dedication expiry.",
+			"targetKind": "dedication",
+			"cardinality": "many",
+			"linkMetadata": ["expiresAt"],
+			"ownership": "dedication",
+			"permission": "DEDICATION_API_KEY",
+			"operations": ["read", "add", "replace", "remove"],
+			"writeContract": "createDedication / updateDedication / deleteDedication with a DedicationTargetInput{kind: ARTICLE, articleId, expiresAt} target — the dedication aggregate owns its full target set; a replacement omits unlisted links. Article id must exist; expiresAt is UTC ISO-8601.",
+			"readContract": "Public: dedications(context: {articleIds}) — active only. Admin: articleRelationships.dedications, dedicationsAdmin — all including expired.",
+			"invalidates": "dedication entity change with old ∪ new articleIds",
+			"status": "supported"
+		},
+		{
+			"key": "mentionAnnotations",
+			"label": "אנוטציות תנכפדיה",
+			"meaning": "Stored span/intended-name annotations the mention pipeline computed over the article body (keyed by article id + content hash). An editorial annotation record, NOT an explicit FK-based article-to-entry link: resolution to a live entry happens by name at display time.",
+			"targetKind": "tanahpediaEntityName",
+			"cardinality": "many",
+			"linkMetadata": [
+				"spanStart",
+				"spanEnd",
+				"surface",
+				"intendedName",
+				"entityType",
+				"disambiguation",
+				"confidence",
+				"acceptance",
+				"contentHash",
+				"modelRevision"
+			],
+			"ownership": "annotation-pipeline",
+			"permission": null,
+			"operations": ["read"],
+			"writeContract": "Pipeline-owned: rows are produced by the data/annotations pipeline and upserted by devops/import-tanahpedia-mentions.mts. No admin/API write path — a parallel CRUD surface would compete with the pipeline's dedupe/content-hash lifecycle.",
+			"readContract": "Admin: articleRelationships.mentionAnnotations (all acceptance states). Public website: resolved decorations only for auto/manual acceptance and matching content hash.",
+			"invalidates": "pipeline import expires tanahpedia-mention-refs; article content edits invalidate decorations via content-hash mismatch",
+			"status": "supported"
+		},
+		{
+			"key": "recurringHebrewDate",
+			"label": "תאריך עברי חוזר",
+			"meaning": "Assignment of an article to a recurring Hebrew month/day (annual daily-perek override, #3098). Each month/day has at most one chosen article.",
+			"targetKind": "hebrewMonthDay",
+			"cardinality": "many",
+			"linkMetadata": [],
+			"ownership": "article",
+			"permission": "ARTICLE_API_KEY",
+			"operations": [],
+			"writeContract": "Pending — the #3098 schema has not landed on master. Integrate through this contract when the table exists; never fabricate month/day targets.",
+			"readContract": "Pending schema.",
+			"invalidates": "to be defined by #3098",
+			"status": "pending-schema",
+			"pendingIssue": 3098
+		},
+		{
+			"key": "moadim",
+			"label": "מועדים",
+			"meaning": "Optional article-to-moed associations (#3101): a moed may carry zero/one/many articles, and an article may link to several moadim. Explicit links are the editorially approved set — unapproved #3103 proposals never land here.",
+			"targetKind": "moed",
+			"cardinality": "many",
+			"linkMetadata": [],
+			"ownership": "article",
+			"permission": "ARTICLE_API_KEY",
+			"operations": ["read", "replace", "clear"],
+			"writeContract": "updateArticleRelationships.moedIds — every id must reference an existing tanah_moed row and be unique; omitted leaves the set untouched, an explicit empty list clears it. The moed catalogue itself is managed by upsertMoed/deleteMoed under the same key.",
+			"readContract": "Public: Moed.articles (deduplicated union of explicit links and range-overlap matches), moadim/moed(slug). Admin: articleRelationships.moadim.",
+			"invalidates": "article entity change plus one moed entity change per old ∪ new linked moed slug",
+			"status": "supported"
+		}
+	],
+	"internalDerivedTables": [
+		{
+			"name": "tanah_article_metric / tanah_article_metric_block",
+			"reason": "Computed reading metrics derived from article content — regenerated by the metrics pipeline, not user-editable content relationships."
+		},
+		{
+			"name": "article_search_queue / article_search_*",
+			"reason": "Internal derived search-index sync state — the write paths enqueue into it as a side effect, not as a content link."
+		},
+		{
+			"name": "daily bulletin / web-push tables",
+			"reason": "Delivery and scheduling jobs that reference articles — transport, not content relationships."
+		}
+	]
+}

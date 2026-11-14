@@ -2,7 +2,7 @@
  * Integration tests for the bulletin PDF service client.
  *
  * Tests validate:
- * - Request payload construction (just perek IDs — no text data)
+ * - Request payload construction, including website-rendered chapter content
  * - Binary invocation via subprocess (mocked execFileSync) — dev mode
  * - Lambda invocation via AWS SDK (mocked @aws-sdk/client-lambda) — production mode
  * - Error handling (binary not found, crash, empty output, Lambda errors)
@@ -24,19 +24,28 @@ jest.mock("node:fs", () => ({
 	readFileSync: jest.fn().mockReturnValue(new Uint8Array([0, 1, 2, 3])),
 }));
 
-jest.mock("@/lib/download/tanach-pdf", () => ({
+jest.mock("@/lib/download/semantic-pages", () => ({
 	semanticPagesToPerekIds: jest.fn(
 		(semanticPages: Array<{ title: string }>, _seferName: string) =>
 			semanticPages.map((_sp, i) => i + 1),
 	),
 }));
 
-import {
-	generatePdfViaBulletin,
-	createBulletinPageRangesHandler,
-} from "@/lib/download/bulletin-client";
+const mockBuildPerakimContent = jest.fn(async (perekIds: number[]) =>
+	perekIds.map((perekId) => ({ perekId, pesukim: [], images: [] })),
+);
+jest.mock("@/lib/download/perek-export-content", () => ({
+	buildPerakimContent: (...args: [number[]]) =>
+		mockBuildPerakimContent(...args),
+}));
+
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { DEFAULT_DIVINE_NAME_MASKING } from "@/lib/divine-name-masking";
+import {
+	createBulletinPageRangesHandler,
+	generatePdfViaBulletin,
+} from "@/lib/download/bulletin-client";
 
 const mockExecFileSync = execFileSync as jest.Mock;
 const mockExistsSync = existsSync as jest.MockedFunction<typeof existsSync>;
@@ -208,6 +217,12 @@ describe("bulletin-client", () => {
 				includeCover: true,
 				includeToc: true,
 				coverAccentHex: "#8B0000",
+				cover: {
+					branding: 'תנ"ך על הפרק',
+					title: "ספר שמות",
+					subtitle: "מקראות גדולות",
+					edition: "",
+				},
 			});
 
 			const invokeInput = mockSend.mock.calls[0][0];
@@ -222,6 +237,12 @@ describe("bulletin-client", () => {
 					includeCover: true,
 					includeToc: true,
 					coverAccentHex: "8B0000",
+					cover: {
+						branding: 'תנ"ך על הפרק',
+						title: "ספר שמות",
+						subtitle: "מקראות גדולות",
+						edition: "",
+					},
 				}),
 			);
 		});
@@ -275,6 +296,15 @@ describe("bulletin-client", () => {
 
 			await expect(generatePdfViaBulletin([1])).rejects.toThrow(
 				/Bulletin Lambda returned status 500/,
+			);
+		});
+
+		it("reports a Lambda failure even when the response omits its body", async () => {
+			mockSend.mockResolvedValue({
+				Payload: Buffer.from(JSON.stringify({ statusCode: 503 })),
+			});
+			await expect(generatePdfViaBulletin([1])).rejects.toThrow(
+				"Bulletin Lambda returned status 503: ",
 			);
 		});
 
@@ -360,18 +390,16 @@ describe("bulletin-client", () => {
 
 		it("throws when no content pages in range", async () => {
 			const { semanticPagesToPerekIds } = jest.requireMock(
-				"@/lib/download/tanach-pdf",
+				"@/lib/download/semantic-pages",
 			);
 			semanticPagesToPerekIds.mockReturnValueOnce([]);
 
 			const handler = createBulletinPageRangesHandler();
 
 			await expect(
-				handler(
-					[0],
-					[{ pageIndex: 0, semanticName: "א", title: "פרק א'" }],
-					{ seferName: "בראשית" },
-				),
+				handler([0], [{ pageIndex: 0, semanticName: "א", title: "פרק א'" }], {
+					seferName: "בראשית",
+				}),
 			).rejects.toThrow("No content pages in selected range");
 		});
 
@@ -391,6 +419,40 @@ describe("bulletin-client", () => {
 			expect(ext).toBe("pdf");
 			expect(bin).toBeInstanceOf(Uint8Array);
 			expect(bin.length).toBeGreaterThan(0);
+		});
+
+		it("sends website pesukim/images with the reader's masking settings", async () => {
+			mockExecFileSync.mockReturnValue(makeFakePdf());
+			const masking = {
+				...DEFAULT_DIVINE_NAME_MASKING,
+				enabled: true,
+				yhwh: "dalet" as const,
+			};
+
+			const handler = createBulletinPageRangesHandler();
+			await handler(
+				[0],
+				[{ pageIndex: 0, semanticName: "א", title: "פרק א'" }],
+				{
+					seferName: "בראשית",
+					divineNameMasking: { ...masking, junk: 1 } as typeof masking,
+				},
+			);
+
+			expect(mockBuildPerakimContent).toHaveBeenCalledWith([1], masking);
+			const body = JSON.parse(mockExecFileSync.mock.calls[0][2].input);
+			expect(body.perakimContent).toEqual([
+				{ perekId: 1, pesukim: [], images: [] },
+			]);
+		});
+
+		it("falls back to the shared default masking when no settings are sent", async () => {
+			mockExecFileSync.mockReturnValue(makeFakePdf());
+			await generatePdfViaBulletin([2]);
+			expect(mockBuildPerakimContent).toHaveBeenCalledWith(
+				[2],
+				DEFAULT_DIVINE_NAME_MASKING,
+			);
 		});
 	});
 });

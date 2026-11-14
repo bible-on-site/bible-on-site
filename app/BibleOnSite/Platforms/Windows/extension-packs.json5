@@ -1,0 +1,14 @@
+{
+	// Extension pack → Microsoft Store durable add-on binding for the Windows
+	// DLC install leg (PadDeliveryService). Each pack becomes an optional MSIX
+	// package named "<main package name>.<pack name>" unless a packageName
+	// override is recorded here. StoreIds are assigned by Partner Center when
+	// the durable add-ons are created — paste them in keyed by pack name
+	// ("perushim_notes", "recitation_1" … "recitation_39"). While a pack has no
+	// entry, Windows installs it from the app-v* GitHub release payload instead.
+	// See docs/app/extension-packs.md for the Partner Center procedure.
+	"version": 1,
+	"addOns": {
+		// "recitation_1": { "storeId": "9XXXXXXXXXXX" }
+	}
+}

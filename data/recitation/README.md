@@ -1,0 +1,642 @@
+# Recitation alignment
+
+See [the illustrated pipeline guide](PIPELINE.md) for the source-of-truth model,
+segmentation and acceptance gates, durable storage, delivery and live word highlighting.
+
+For isolated speed experiments, the preserved fallback and strict per-boundary
+golden comparisons, see [the lossless performance protocol](PERFORMANCE.md).
+`recite.py` remains the original default. The optional `validated_worker.py`
+enables the measured memory profile only after per-word evidence, fresh controls
+and held-case checks pass. Complete golden coverage remains the default; the
+owner-approved, immutable 17-chapter sample is an explicit option with truthful
+coverage in provenance. GPU capacity failures retry the original full-quality
+inference. See the performance protocol for its commands.
+
+The perakim JSON is the text authority. Whisper supplies acoustic landmarks; it
+never replaces, inserts, deletes, or merges the canonical words in the output.
+The identity of a spoken word is the existing **1-based perek ID, pasuk, segment**.
+Only `qri` segments are spoken. A `ktiv` variant points to its existing qri;
+paragraph markers are not words.
+
+## Models and matching
+
+1. Decode each original MP3 to mono 16 kHz samples for analysis. Playback retains
+   the original MP3, without another lossy encoding.
+2. Transcribe with the full
+   [ivrit-ai/whisper-large-v3](https://huggingface.co/ivrit-ai/whisper-large-v3)
+   in FP32, Hebrew, beam search 5, native long-form decoding and word timestamps.
+   The default does not use a distilled/turbo model, quantization, or skip audio.
+3. Globally reconcile ASR tokens with canonical words using character edit
+   similarity and dynamic programming. Unlike two greedy pointers, this can
+   recover after ASR insertions, omissions, repeated words, and token splits.
+   Internal 1:2/2:1 ASR matches never merge canonical output rows.
+4. Force-align the **known canonical transcript** within each verse window using
+   [imvladikon/wav2vec2-xls-r-300m-hebrew](https://huggingface.co/imvladikon/wav2vec2-xls-r-300m-hebrew).
+   This is also the Hebrew model selected by
+   [WhisperX](https://github.com/m-bain/whisperX/blob/main/whisperx/alignment.py).
+   CTC Viterbi decoding requires every transcript character, including a blank
+   between repeated characters. Niqqud is removed only from the matching view;
+   written display text stays intact. Written divine names get their spoken
+   forms only in that matching view.
+5. Validate completeness, identity, ordering, durations, text/audio hashes, and
+   acoustic evidence. Flag questionable verses and preserve all their candidate
+   rows for review. **A ready chapter must contain exactly one valid interval for
+   every canonical spoken word.** Partial chapters cannot enable verse/word playback.
+
+An embedding/semantic similarity model is inappropriate here: two different
+words can mean similar things. Acoustic forced alignment and character-level
+sequence matching answer the relevant question. The
+[WhisperX paper](https://arxiv.org/abs/2303.00747) describes the ASR/alignment
+separation; newer [FALCON results](https://mlspeech.github.io/FALCON/) also show
+that even dedicated Hebrew aligners do not guarantee perfect boundaries.
+
+Acoustic scores are uncalibrated CTC likelihoods, **not probabilities that a cut
+is correct**. The Esther 10 pilot received chapter-level listening approval after
+correcting browser seeking. The owner subsequently approved the same pinned
+process for incremental publication of the collection. This does not imply that
+each automatically accepted chapter has been listened to.
+
+## Install and run
+
+Python 3.12+, FFmpeg/ffprobe on PATH, and a compatible PyTorch CUDA build are
+required. On the tested RTX 4070 Laptop (8 GB), CUDA 12.6 works with driver 566.07.
+The full FP32 model stays on the GPU. `whisper_memory.py` bounds inference memory
+without quantization, fewer beams, shorter audio, or lower alignment thresholds:
+
+- Word timestamps use decoder cross-attention; retaining the unused encoder
+  attention maps alone costs 5.36 GiB for large-v3. The encoder still runs every
+  layer and attention computation, but those diagnostic maps are not retained.
+- Saved decoder attention and each layer's FP32 key/value cache live in system
+  RAM between uses. Word timestamp extraction uses the unchanged Transformers
+  DTW implementation on CPU and returns its result to the original device.
+- Explicit hooks cover cached cross-attention reads. Transformers 5.18's generic
+  offloaded cache does not prefetch those direct Whisper reads after token one.
+- Hooks and temporary method overrides are removed on success and failure.
+  A memory exhaustion stops the batch and immediately records `failures.json`;
+  it cannot trigger hundreds of subsequent retries in an exhausted CUDA process.
+
+Transfers may take longer; processing time is not an acceptance criterion.
+Native Whisper progress reports show audio already processed. CPU and CUDA
+regression tests compare tokens and word timestamps with ordinary full-precision
+inference, using a small random Whisper without downloading weights. Set
+`RECITATION_TEST_CUDA=1` to include CUDA validation locally. CI uses CPU Torch.
+
+From this directory in PowerShell:
+
+```powershell
+py -3.12 -m venv .venv
+.venv/Scripts/python.exe -m pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cu126
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+$env:HF_HOME = "$PWD/.cache/huggingface"
+$env:PYTHONIOENCODING = "utf-8"
+.venv/Scripts/python.exe -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name())"
+
+# Catalog playback and all word identities, without inventing timings.
+.venv/Scripts/python.exe recite.py --recordings C:/Users/Dorad/git/tanah-s3/recordings --prepare-only
+
+# Small pilot: Esther 10, three pesukim and 46 spoken words.
+.venv/Scripts/python.exe recite.py --recordings C:/Users/Dorad/git/tanah-s3/recordings --perek 829
+
+# Full collection, after validating pilot quality.
+.venv/Scripts/python.exe recite.py --recordings C:/Users/Dorad/git/tanah-s3/recordings
+```
+
+Use `--device cpu` when no compatible GPU is available; there is no silent
+precision/model downgrade. `--force` reruns alignment while retaining an ASR cache
+whose model, exact revision, and audio hash match. Model snapshots are pinned in
+`model_versions.py`; custom models require an explicit `--asr-revision` or
+`--align-revision` commit. A model update preserves human-approved alignments
+unless `--force` is supplied. A changed recording or canonical text
+invalidates the relevant output. A processing exception never overwrites a prior
+artifact. Inspect `.outputs/failures.json` and `*.review.json`. `--shortest-first` prioritizes
+short listening samples while processing every track with identical settings.
+`--database PATH` checkpoints to a separate intermediate DB for a background run;
+`--text PATH` can select a working copy of the canonical JSON.
+
+Overlapping verse windows are re-aligned together as one CTC sequence within
+the existing 45-second acoustic limit. The shared acoustic path determines the
+transition. Unresolved overlaps remain in review and cannot be published.
+
+### Incremental publication after process approval
+
+`trusted.py` is an explicit publication step for the approved version 3 process.
+It verifies the original MP3 hash and duration, current canonical word identities,
+exact model snapshots and thresholds, matching diagnostic and ASR cache artifacts,
+ASR coverage and both boundary anchors in every verse, and complete, ordered,
+nonoverlapping intervals. Durations outside 40-3000 ms, missing scores, unknown
+warnings, or unresolved failures hold the entire chapter. Only low, uncalibrated
+acoustic-score warnings may pass; their scores and diagnostic rows are preserved.
+No timestamp is padded, clamped, inferred, or changed during acceptance.
+
+Accepted chapters have `reviewMethod: "trusted-process"` and versioned acceptance
+diagnostics. They never acquire a false word-level `reviewed` flag. Previously
+published chapters are preserved. Only artifacts validated in the current run
+are overlaid into the durable SQLite DB; leftover staging files cannot publish
+another chapter. Run this while the independent GPU batch continues:
+
+```powershell
+.venv/Scripts/python.exe trusted.py --recordings C:/Users/Dorad/git/tanah-s3/recordings
+.venv/Scripts/python.exe publish.py
+.venv/Scripts/python.exe audit.py
+```
+
+Commit the intermediate DB and canonical JSON together, then deliver through CI/CD,
+which verifies every ready chapter against the running deployment. Website versions
+are bumped by the post-release workflow on master, not in this change. A pending or
+held chapter retains full-chapter playback only.
+
+On Windows, the batch requests system wakefulness for its lifetime and releases
+that request on completion or error. It does not alter global power settings or
+keep the display on. For a worker started before this support was added,
+`awake.py --pid PROCESS_ID` holds the same request until that exact process exits.
+
+## Review
+
+For a minimal verse queue with automatic local saving, see [verse listening](LISTENING.md).
+It collects source-bound feedback without changing the continuous worker or publishing timings.
+
+
+```powershell
+.venv/Scripts/python.exe review.py --perek 829 --output .outputs/review-829.html
+.venv/Scripts/python.exe -m http.server 8765 --bind 127.0.0.1 --directory .outputs
+```
+
+Open `http://127.0.0.1:8765/review-829.html`. Play a verse, individual words, and
+words with surrounding context. Correct millisecond boundaries and mark each
+word reviewed. Export the reviewed JSON, then import it:
+
+```powershell
+.venv/Scripts/python.exe review.py --perek 829 --corrections PATH/829.reviewed.json --recordings C:/Users/Dorad/git/tanah-s3/recordings
+```
+
+Import rechecks the real MP3 hash, canonical text hash, every word identity,
+complete coverage, and nonoverlapping in-range timestamps. It cannot approve a
+partial word list or a review of different audio/text.
+
+### Local preparation and automatic queue refill
+
+`listening_prepare.py` connects a completed diagnostic job to the existing local
+listening application. It reads the selective repair plan, verifies the saved
+full-FP32 CUDA results, original MP3/report/ASR/canonical identities, actual decoded
+PCM context and full-chapter geometry, then creates immutable listening batches.
+It reuses the completed model output: **no new inference, model loading, GPU
+utilization probe, or hosted model call is needed for this node**. Decoding clips,
+checking hashes and managing the queue run locally on the CPU.
+
+A machine proposal is not a manually inspected or corrected cut. Its evidence
+method is `machine-diagnostic-initial-candidate-v1`; original model coordinates and
+scores remain exact, with `sourceInspectionPerformed: false` and
+`automaticApproval: false`. The editor lets the reviewer hear and adjust these
+proposals. Every offered cut requires genuine fresh hearing before a GOOD answer
+can be imported. `listening_accept.py` still checks the original source, exact
+saved answer, complete chapter and unchanged automatic remainder. Preparation
+never writes publication timings or turns diagnostic scores into approval.
+
+Supply a JSON configuration with `version: 1`, the exact immutable `planSha256`,
+and these **absolute** paths:
+
+| Field | Meaning |
+| --- | --- |
+| `planPath` | Selective repair plan containing target verses and raw diagnostic hashes. |
+| `jobRoot` | Completed diagnostic job with `status.json`, `source/` and raw diagnostics. |
+| `canonicalPath` | Canonical chapter JSON used for identities and display labels. |
+| `recordings` | Unchanged original MP3 directory. |
+| `batchRoot` | Permanent task-owned directory for immutable prepared groups and offered batches. |
+| `stateDirectory` | Permanent task-owned directory for `ledger.json`, `status.json` and `worker.lock`. |
+| `publicationDatabase` | Durable publication database, opened briefly read-only to exclude ready chapters. Never a worker checkpoint. |
+| `reviewStore` | Existing accumulated review database, used only by its short transactional append writer. |
+
+Set `reviewUrl` to the existing loopback application, for example
+`http://127.0.0.1:8792/`. Optional positive integer limits are `targetVisible`
+(default 20 verses), `maxVisibleCuts` (default 150 cuts) and `pollSeconds`
+(default 5 seconds). `knownSourceHoldIds` defaults to `[28, 136, 231]`; retain
+explicit source holds when configuring a job. To populate all supported targets
+before review starts, size both limits for the full prepared verse and cut
+inventory, including existing visible cases. These limits govern queue loading,
+not quality checks; unsupported targets remain visible only in the blocked
+inventory until their source and context checks pass.
+
+Run the copied permanent runtime, rather than a disposable checkout:
+
+```powershell
+C:/recitation-preparation/runtime/python.exe -X utf8 C:/recitation-preparation/runtime/listening_prepare.py --config C:/recitation-preparation/config.json
+```
+
+The executable above represents the existing task-authorized Python runtime;
+use its real absolute path, not a new environment or model installation. Copy the
+matching preparation/review modules into the task-owned runtime before launching.
+A limited local Scheduler job can keep that runtime independent of the checkout;
+use a single instance (`IgnoreNew`). The worker also takes an OS-owned lock, which
+is released on exit or crash without deleting another process's lock file.
+Neither output directory may be inside the completed diagnostic job.
+
+The worker prepares complete source groups once, records progress after each
+chapter and fills available review capacity without exceeding either limit.
+`/api/preparation-workload` supplies one atomic inventory of all previously
+offered IDs and currently visible work. The append writer's `--only-unseen`
+transaction refuses to replace an existing candidate, including a typed GOOD or
+an active draft. Previously offered chapters and ready chapters are excluded;
+existing answers, hidden GOOD cuts, candidates and browser drafts are preserved.
+When capacity is full, preparation continues offline and the worker waits before
+refilling. `--once` prepares and refills once, then returns instead of waiting for
+more capacity. A normal run exits when no prepared cases remain to be queued;
+this does not mean the queued cases are approved or published.
+
+The review page also has a collapsible full inventory, separate from playable
+review cases. `GET /api/preparation-inventory` lists every classified target with
+its canonical label, preparation state and safe reason code. The page derives
+prepared, held and previously offered totals from those rows and filters all,
+blocked or prepared targets. Held rows describe work still needed; they do not
+create playable cuts, approvals or repeat review requests. Loading or refreshing
+this inventory preserves active playback, hearing and drafts. The inventory is
+loaded once and on explicit refresh, rather than on every status poll.
+
+The action workspace makes unresolved concerns actionable, including targets
+without valid word candidates. `GET /api/actions` returns immutable task identities
+and their current workflow states. A locate task starts with unset boundaries:
+the user plays the complete original-source audio, chooses the whole verse range,
+listens to that exact range, then requests local cut preparation. Source playback
+uses a verified original-bound 16 kHz mono WAV: its separate playback SHA-256 and
+the exact decoded frame count are checked before playback. Numeric seconds cover
+the original recording; the fine sliders stay within 150 ms of a selected value.
+
+`POST /api/action-responses` saves typed, session-authenticated range or source
+remediation evidence with exact task, original audio and canonical text bindings.
+A completed range playback is separate from word-cut hearing and never saves a
+GOOD verdict. Source problems require a real decision and nonempty note; the
+original recording is preserved and a corrected edition needs separate handling.
+Source remediation is available from every task type, including word review.
+The full original source can also be opened explicitly from a review task
+without changing its candidate or granting word hearing. If its existing context
+is wrong or clipped, the user can select and hear a new whole-verse source range
+and request new local preparation. That request does not approve the old word
+cuts. Ordinary completed GOODs remain protected; a genuine new chapter concern
+is a separate exception. A virtual preparation state with `cutReviewComplete`
+is labeled as waiting for chapter completion, not as active model computation.
+There is no unrestricted mark-resolved action. New locally prepared cuts still
+require genuine fresh word hearing and the unchanged complete-chapter acceptance
+checks. `GET /api/action-case/{taskId}` can explicitly reopen only a current
+unresolved candidate; approved or stale candidates are rejected. Its drafts and
+history remain separate and survive queue polling.
+
+A distinct chapter-concern task may reference a genuine failed full-chapter
+check after a previous GOOD. This exception is bound to the complete saved
+decision digest (including saved timestamp and queue binding, not its inner
+`reviewSha256` content hash), the immutable failed-validation digest and reported segment
+identities; ordinary GOOD protection remains unchanged. The editor restores the
+actual approved coordinates, reuses only recorded direct hearing for those exact
+coordinates, and highlights the newly reported chapter boundary. For a candidate
+without hearing reuse, saved `heardSegments` are direct listening evidence.
+When `listeningReuseSha256` is present, only saved `freshHeardSegments` identify
+direct original-cut listening; inherited hearing is never promoted. A changed reported boundary
+needs fresh playback, and resaving unchanged old coordinates is not presented as
+a correction. A genuinely newer GOOD closes the earlier concern editor.
+
+`GET /api/workflow-status` reports chapter progress separately from individual
+task completion. Saving an action or a word review does not itself mean that a
+chapter is validated, segmented or published.
+
+Inspect progress, counts and reasons through the existing app's `GET /api/preparation-status`, or
+read it without starting a worker:
+
+```powershell
+C:/recitation-preparation/runtime/python.exe -X utf8 C:/recitation-preparation/runtime/listening_prepare.py --config C:/recitation-preparation/config.json --status-only
+```
+
+These readers preserve Windows file-replacement sharing. Do not poll active
+state files with `Get-Content`, `Path.read_text` or an ordinary file handle.
+The task-state writer atomically replaces each flushed JSON generation; an open
+supported reader retains its old generation while subsequent readers see the
+new one. Unchanged ledger content is not rewritten on each status heartbeat.
+This protocol is limited to preparation progress and its resume ledger;
+publication and immutable review-queue writers retain their existing behavior.
+
+The ledger distinguishes `prepared`, `queued`, `excluded` and `held`. Explicit
+holds include `known_original_source_hold`, `chapter_requires_supported_context`,
+`source_or_full_chapter_guard` (with the actual guard detail) and
+`verse_exceeds_configured_review_window`. Score-only diagnostics are not blanket
+listening requests. Unsupported contexts, source defects and failed quality
+checks remain held; the node does not invent anchors or pad, clamp or rewrite
+boundaries to make them pass. Unexpected runtime failures set `state: failed`
+with the error. An unchanged configuration resumes from the ledger; changed plan,
+canonical source or preparation policy requires a distinct state directory.
+
+## Pipeline boundary and storage
+
+`data/recitation/recitation.sqlite` is the versioned intermediate database owned
+by the recitation pipeline. It stores one track record per recording and only
+approved word intervals keyed by `(perek_id, pasuk, segment)`. It does not copy
+Hebrew words. The canonical text SHA-256 includes word identities and vocalized
+text; the audio SHA-256 identifies the exact original MP3. SQLite schema version
+3 separates processing candidates from approved playback data.
+
+The Sefaria CLI automatically reads that database **after aggregation and before
+writing any output**. It adds `recitation` metadata to each recorded perek and
+fills the existing qri `recordingTimeFrame.from/to` fields with
+`HH:MM:SS.mmm` strings. A missing intermediate DB, changed canonical text, missing
+word, overlap, or out-of-range interval aborts the export before overwriting the
+previous output. `--recitation-db PATH` selects another intermediate database.
+Re-running Sefaria therefore cannot silently erase the approved timings.
+
+The recitation pipeline keeps resumable ASR results and candidate alignments in
+ignored `.outputs/` files. It atomically checkpoints the intermediate DB before
+starting inference and after each completed track, preserving tracks outside a partial run and existing approved timings
+when a rerun is unapproved. Review imports update the same intermediate DB.
+Candidates never become published word timings. Fresh checkouts can generate a
+review page directly from the merged perakim DB.
+
+The website reads `recitation` and `recordingTimeFrame` directly from its existing
+perakim JSON. `GET /api/recitation/{perekId}` validates the canonical text hash and
+complete word coverage, then resolves S3/RustFS playback URLs. There are no public
+recitation sidecar files or copied word databases.
+
+To merge the latest intermediate data into an existing perakim JSON without
+rerunning MongoDB aggregation:
+
+```powershell
+.venv/Scripts/python.exe publish.py
+```
+
+Website CI and release packaging automatically merge and audit this database
+before consuming the canonical JSON. Changes to the intermediate SQLite file
+trigger website CI, version validation, packaging, and release. A repeated merge
+preserves the same approved intervals; the GPU/models are never needed in CD.
+Packaging boots the actual Docker image and compares all approved API word rows
+and an unapproved chapter against the database. Recitation mode requests fresh
+metadata when opened, so approved timings do not remain cached as chapter-only.
+CD checks out the immutable
+release commit, waits for its website version, then verifies those rows and each
+approved MP3's public CORS download, MIME type, and SHA-256. Missing/stale timings
+or unavailable/different audio fail deployment verification rather than reporting
+success after only an ECR push.
+
+The Rust Sefaria merge and this Python merge share the same schema and hash
+contract. Regression tests recreate unaligned Sefaria output, restore the
+approved timing data, verify repeatability, and reject changed canonical text.
+
+The sefer reader places a small recitation-mode icon at the left of its second
+header row. Enabling it lazily loads the chapter manifest and downloads, verifies,
+and decodes the original MP3. A circular indicator follows received bytes; the
+mode becomes active automatically after preparation finishes. Clicking an existing
+pasuk letter or spoken qri word plays that interval. Entity links and ordinary
+reading return when the mode is disabled. The adjacent play/pause icon and perek
+heading control playback; pause retains the audio-clock position for resume.
+Basic view has no playback controls. Aligned chapter playback and pasuk/word
+playback reuse the prepared chapter, verified by SHA-256
+against the alignment source, and schedule exact offsets and durations with
+`AudioBufferSourceNode.start`. No timestamp padding or stop timer is used.
+Chapters awaiting segmentation stream the original MP3. On ready chapters, the
+spoken word follows the playback clock with the existing hover colors, without
+changing text layout. Silence clears the highlight; pause preserves it for resume.
+Only the active player's decoded chapter is retained. Disabling recitation mode, changing
+chapter/player, hiding the document, or unmounting cancels playback and releases
+its audio context. Rapid clicks cannot revive an older download/play request.
+
+S3 uses `recordings/{perekId}_record.mp3`, `Content-Type: audio/mpeg`.
+HTTP Range requests support streamed chapter playback. Decoding requires a full
+MP3 download and read-only CORS; `recordings-cors.json` contains the public-read
+configuration used on the existing public assets bucket. Preserve unrelated
+rules if applying it to a bucket with existing CORS. RustFS uses the same public
+GET/HEAD permissions alongside its existing local upload rule.
+No pre-cut audio files are required. Only 496 of the 929 chapters currently have
+source recordings; unavailable chapters show an availability message.
+
+### Timing investigation
+
+On the Esther 10 pilot, six original MP3 seeks delivered audio 67–81 ms later
+than requested. A seek-index remux still started 55–69 ms late. Capturing browser
+output and cross-correlating it with fully decoded audio isolated the player:
+WAV seeks were exact, FLAC was within 0.313 ms, and decoded original MP3 playback
+was exact for all six clips (correlation 1). The timestamps were unchanged.
+The user then reported near-perfect framing in the accurate-seek review.
+FLAC was useful as a control; production uses the verified decoded-MP3 path.
+See [Web Audio scheduling](https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode/start).
+
+### Structured data
+
+Recorded chapter pages include a linked Schema.org `AudioObject` with the original
+public MP3 `contentUrl`, `audio/mpeg`, ISO 8601 duration, Hebrew language, SHA-256,
+and a relation to the existing Chapter node. Its page URL opens sefer view.
+Unavailable recordings are omitted. Playback candidates never become false
+word-level claims in structured data. No narrator or recording date is invented.
+This describes existing content; it does not promise rich results or rankings.
+Google's [AI features guidance](https://developers.google.com/search/docs/appearance/ai-features)
+states that no special AI schema is required.
+
+## Incremental timing delivery
+
+Keep eight-hour accumulation pushes in one rolling draft with automatic merge
+turned off. Validate locally and include `[skip ci]` in the final pushed commit
+message, including any interim merge commit. Do not dispatch or rerun cloud CI
+for these accumulation pushes.
+
+At the two-day delivery opportunity, gather all eligible results and preserve the
+complete task history under a pushed recovery tag. At the already included base,
+use normal hooks to create one clean release commit with the identical validated
+tree and no skip directives anywhere in its message or body. Protect any task
+branch history update with an exact remote lease and preserve human changes.
+An empty final commit does not remove historical skip directives: the merge
+queue can copy earlier commit messages into its generated master commit. Inspect
+that generated message before merge, and require fresh current-head checks,
+reviews, queue CI, release and website/native delivery verification. This history
+cleanup does not authorize a base sync; the repository's branch-sync rule still
+applies. Count the next two-day interval only after full production verification.
+
+## RustFS and checks
+
+Start and initialize the repository's [RustFS mock](../../devops/rustfs/README.md).
+Use `S3_ENDPOINT=http://localhost:4566` and the existing development/test bucket.
+The API selects RustFS automatically from those settings.
+
+From the repository root:
+
+```powershell
+node data/recitation/check_storage.mjs
+node data/recitation/check_storage.mjs C:/Users/Dorad/git/tanah-s3/recordings/1_record.mp3
+node --test data/sefaria/pipelines/tanah-view/tests/preprocessor.test.mjs
+```
+
+The storage test creates a uniquely named temporary bucket **only on loopback
+RustFS**, verifies MP3 headers and exact HTTP 206 bytes at two offsets, then
+removes its own objects and bucket. Its default MP3 fixture is a synthetic
+two-second 440 Hz tone, generated with FFmpeg.
+
+From this directory:
+
+```powershell
+.venv/Scripts/python.exe -m unittest -v
+.venv/Scripts/python.exe audit.py
+```
+
+CI runs those invariants and numerical Whisper memory tests, audits the
+intermediate DB against canonical JSON, and tests byte-range delivery through
+real RustFS without downloading pretrained model weights.
+Website tests cover invalid/stale/partial maps, storage URL selection, exact
+selected intervals, playback cleanup, errors, and unpublished candidates.
+
+Two canonical JSON defects found during the audit were repaired at the same
+segment IDs: the final words of Eikhah 5:22 and Kohelet 12:14 had absorbed editorial
+repetition notes and lost their first letter. The source aggregation now removes
+those notes before qri-bracket parsing; regression tests preserve genuine qri.
+
+## Apply targeted human listening
+
+`listening_review.py` saves actual source-bound verse decisions and their history.
+Use `listening_accept.py` to turn those decisions into complete recovered chapters:
+
+```powershell
+.venv/Scripts/python.exe listening_accept.py --queue /absolute/review/queue/queue.json --reviews /absolute/review/reviews.json --text /absolute/canonical.json --output /absolute/accepted --database /absolute/durable/recitation.sqlite
+.venv/Scripts/python.exe publish.py --input /absolute/durable/recitation.sqlite --database /absolute/canonical.json
+.venv/Scripts/python.exe audit.py --input /absolute/durable/recitation.sqlite --database /absolute/canonical.json
+```
+
+Run this import alongside automatic `trusted.py` staging at each collection follow-up.
+It reads saved snapshots and original MP3s without model inference or changing the
+continuous worker. Start with a copied durable database and verify the recovered
+chapters before overlaying the delivery database. Never point it at the active
+worker checkpoint. Only current GOOD decisions that cover every exact word cut
+can resolve the reviewed verse's ASR failure. A later problem/skip answer, changed
+source/candidate, unreviewed held verse, invalid duration or global overlap keeps
+the chapter held. The other verses retain the original automatic anchor, score,
+diagnostic and timing gates, including the existing low-acoustic-score warning
+policy. Nothing is padded, clamped or fabricated.
+
+Accepted provenance uses `trusted-process-with-human-verse-review` and the
+versioned `targeted-human-listening-v1` policy. It stores the actual reviewed
+pesukim, decisions, listening evidence, diagnostic/source hashes and unchanged
+execution profile. It does not claim whole-chapter human listening or set
+invented word-level `reviewed` flags. Publish and audit the durable overlay, then
+include recovered chapters in the same rolling timing batch. Preserve the review
+queue, answer history and original diagnostic evidence for corrections; do not
+feed verse feedback to the whole-chapter `review.py` importer.
+
+Revisiting an answer is supported: on the next import, a new problem/skip answer
+withdraws only this policy's approval and clears that chapter's published word
+rows atomically. Independent manual and automatic approvals stay intact. A new
+GOOD answer can recover it again after the same complete-chapter checks.
+
+The page outlines every cut that still needs hearing, including unchanged words with no actual prior direct hearing. "חיתוכים שטרם נשמעו" plays only those cuts. GOOD remains disabled until every cut has genuine completed playback; navigation retains unsaved notes and hearing already completed in the open page. Frontend regressions run through the Python suite and require Node.js, as provided by recitation CI.
+
+Completed listening rounds can be copied with `listening_round.archive_round`. Add each returned immutable `path`/`sha256` descriptor to the next queue's `archivedQueues`. The active page shows only the new queue; `/archive` retains prior answers and notes. The importer validates archived sources and uses earlier good answers only for unchanged candidates. Changed cuts require fresh word listening and a new answer.
+
+Serve with `--recovery-database <separate-preview.sqlite> --recovery-output <preview-alignments>` to run the guarded importer after saved answers. Use a copy of the durable database, never the live worker checkpoint. The page reports completed local recoveries; normal canonical, native-package and delivery checks still precede publication.
+
+`listening_tail.py` prepares diagnostic-only trailing-vowel candidates from the pinned CTC character/separator path. It never changes the automatic worker, pads endpoints or approves a candidate. Every corrected boundary requires fresh human listening and the same complete-chapter geometry checks.
+
+The pinned CTC letter endpoints are raw diagnostic evidence, not proof that a
+spoken ending is complete. Before installing a new listening queue, inspect each
+candidate against the original decoded source, including trailing vowels,
+frication and consonant decay. Do not send a known clipped letter endpoint back
+to the listener unchanged. Do not extend every word to `followingWordStartMs` or
+apply one offset: either can include a gap or part of the next word.
+
+For a first candidate, `source-inspected-initial-candidate-v1` supports individually
+inspected boundaries without inventing an earlier problem answer. It binds the
+unchanged pinned CPU/full-FP32/two-thread raw diagnostic, original letter rows and
+scores, source spectrum hash, context and per-word observations. It preserves
+canonical identities and all original timing geometry. The candidate remains
+unapproved: every cut needs genuine fresh hearing and a current source-bound
+GOOD answer; inherited listening and stale answers cannot approve it. Automatic
+worker/model/ASR gates are unchanged. Reported-problem revisions continue using
+`source-inspected-word-boundaries-v1` and their actual saved feedback. Neither
+source inspection nor forced alignment approves or publishes an interval.
+
+Letter endpoints can also stop before a spoken vowel finishes. When a reported
+defect falls between the recorded CTC endpoints, inspect the original decoded
+source waveform and spectrogram for that word. `source-inspected-word-boundaries-v1`
+records a diagnostic proposal separately from the unchanged CTC letter score,
+with immutable inspection and actual problem-answer evidence. This is not an
+automatic alignment policy: it needs a new source-bound GOOD answer covering
+the exact proposed cuts, plus all existing complete-chapter checks. Do not apply
+one offset or endpoint rule to an entire review queue.
+
+Archive the previous queue before installing revised candidates and preserve the
+append-only answer history. Verify the complete archive chain in an isolated
+recovery preview so all earlier chapter approvals remain intact. Changed cuts
+require new candidate hashes and fresh listening; unchanged cases retain their
+actual answers. For a revised verse, `listeningReusePath` and
+`listeningReuseSha256` can reference an immutable prior queue and actual saved
+answer. Only byte-identical word rows from the same original source, canonical
+text and lossless clip retain their actual completed listening evidence. The
+human must freshly hear every changed cut and explicitly give the revised verse
+a new answer. Provenance distinguishes `freshHeardSegments` from
+`reusedHeardSegments`; a prior PROBLEM answer supplies listening evidence only,
+never approval. Verified source-bound CTC and lossless clip evidence may be
+reused, with no claim of fresh inference. The original-MP3 worker and approved
+intervals remain independent of this preparation.
+
+Reported clipped starts, clipped endings and overlong cuts can also be proposed with `propose_path_boundaries`. Each endpoint must be an actual recorded letter/separator boundary from the same pinned CTC path. The verifier rejects unrecorded offsets, changed canonical identities or acoustic scores, missing/duplicate proof, overlaps and invalid durations. These remain diagnostic candidates: every changed verse requires fresh completed word listening before the guarded importer can recover its chapter.
+
+A later review round can reuse a cut directly heard in a round that also reused other cuts. The importer revalidates that round and every original source/history binding, then uses only its saved `freshHeardSegments`. Inherited cuts never become fresh hearing. Changed cuts still require genuine listening and a new answer.
+
+Unchanged cuts directly heard in different completed rounds may share one `listeningReusePath` proof with a `sources` list. Each source retains its immutable queue/history hashes and exact saved answer. The verifier independently revalidates each source and pools only identical cuts listed in that round's actual direct hearing. Inherited hearing never becomes direct hearing, and every changed cut still requires fresh listening and a new answer.
+
+### One accumulated listening application
+
+Use one permanent review server and append prepared batches to its separate
+listening database. Do not start another app/port for each eight-hour batch.
+The browser polls the queue and adds new passages without reloading the document,
+interrupting playback, moving the current passage, or replacing an unsaved note.
+Drafts and completed listening are stored by exact candidate and clip hashes;
+changed cuts never inherit old hearing.
+
+Create the store once from the existing fixed queue/history bindings using
+`ReviewDatabase.seed(sources)`. Keep every older page and its drafts intact.
+The store imports later answers from those still-open pages; it never rewrites
+their queues or histories. Completed answers are not offered again during migration.
+
+```powershell
+python listening_queue.py --store R/review-app/reviews.sqlite serve --port 8792 --session-token-file R/review-app/session.json
+python listening_queue.py --store R/review-app/reviews.sqlite append --queue R/review-app/batches/NEW/queue.json
+python listening_queue.py --store R/review-app/reviews.sqlite snapshot --output E/actual-review-import --database E/current-durable-preview.sqlite
+```
+
+Each appended queue remains immutable source evidence. Use new candidate hashes
+for revised cuts and fresh human hearing as before. Snapshot output preserves
+all actual decision fields, repeated edits and original queue bindings, and feeds
+the existing guarded importer. Always copy CURRENT durable publication data to
+a separate preview first. The listening database is not the alignment worker
+checkpoint or the approved publication database. No append or review save publishes
+timings or changes the original alignment process.
+
+### Complete local concern workflow
+
+Run `python listening_workflow.py --config /absolute/workflow/config.json` for one
+local owner. `--once` performs a guarded pass without leaving a polling process.
+The configuration binds `planPath`/`planSha256`, `canonicalPath`, completed
+`jobRoot`, original `recordings`, `batchRoot`, `stateDirectory`, a separate
+`actionStore`, `reviewStore`, the existing loopback `reviewUrl`, and the CURRENT
+`publicationDatabase`/`publicationSha256`. `queueSnapshot` binds the immutable
+review chain; `preparedLedger` includes any later packets from the local preparer.
+`sourceFallback` contains the four earlier concerns' completed alignment, report
+and ASR artifacts. Every path is absolute; no source checkpoint is read.
+
+The node accounts for every recorded chapter. Ready chapters stay finished;
+pending chapters receive explicit cut-review, source-location or source-remediation
+actions. Individually supported verses can be reviewed before every sibling has
+a supported range, while the whole chapter remains held. A genuine saved range
+can also replace an unusable existing review context. Only that actual human
+response triggers pinned local full-FP32 diagnostics, with exact replay; new cuts
+still require fresh hearing. A newer source selection supersedes an in-flight
+one before append, and a genuinely newer GOOD always remains protected.
+
+Actual review saves feed the unchanged complete-chapter importer through CLOSED
+JSON evidence and a CURRENT private preview. Successful results live under
+`stateDirectory/results/recitation.sqlite`; authoritative publication and source
+files are untouched. A real failed chapter check creates another precise action,
+including a newly bound chapter-boundary concern when necessary. The local ready
+status requires complete canonical geometry, original source evidence and the
+unchanged automatic remainder. Normal publication and release checks remain
+separate. An actual recording defect requires a corrected source edition, not a
+timing approval.
+
+History files are verified before the short SQLite writer transaction. Unchanged
+polls perform no writes, and only genuine new history tails are imported. Source
+actions have a separate append-only response stream; neither source selection nor
+a source-problem report invents word hearing, GOOD, or completion.
+
+Actual app before and after the full inventory was populated:
+
+![Earlier limited listening window](docs/complete-concern-before.png)
+
+![All concern actions and chapter progress](docs/complete-concern-after.png)

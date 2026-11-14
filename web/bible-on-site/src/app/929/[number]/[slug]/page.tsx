@@ -1,10 +1,11 @@
 import { toLetters } from "gematry";
-import { unstable_cache } from "next/cache";
+import DOMPurify from "isomorphic-dompurify";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import React, { Suspense } from "react";
-import { isQriDifferentThanKtiv } from "../../../../data/db/tanah-view-types";
+import { Suspense } from "react";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import { getPerekByPerekId } from "../../../../data/perek-dto";
 import {
 	getPerekIdsForSefer,
@@ -17,24 +18,63 @@ import {
 } from "../../../../lib/articles";
 import { authorNameToSlug } from "../../../../lib/authors";
 import {
+	getArticleDedications,
+	getSeferDedications,
+	getSeferPerekDedicationLines,
+} from "../../../../lib/dedications/loaders";
+import { seferIdByName } from "../../../../lib/dedications/service";
+import { demoteHeadings } from "../../../../lib/html-headings";
+import {
 	getAllPerushPerekNamePairs,
 	getPerushDetail,
 	getPerushimByPerekId,
 } from "../../../../lib/perushim";
 import {
+	getArticleProgressUnits,
+	getPerekMetric,
+	getPerekProgressUnits,
+	getPerushProgressUnits,
+	metricOrFallback,
+} from "../../../../lib/reading-metrics";
+import {
+	articleTag,
+	COLLECTION_TAGS,
+	cachedPerKey,
+	perekArticlesTag,
+	perekPerushimTag,
+	perushDetailTag,
+} from "../../../../lib/revalidate/tags";
+import {
+	articlePath,
+	authorPath,
 	buildArticleGraph,
 	buildPerushGraph,
+	perushPath,
 } from "../../../../lib/seo/core-jsonld";
+import { absUrl, plainText, SITE_NAME } from "../../../../lib/seo/jsonld";
+import { NOT_FOUND_METADATA } from "../../../../lib/seo/missing-page";
+import { pageMetadata } from "../../../../lib/seo/opengraph";
+import { selectPerekImages } from "../../../../lib/seo/perek-illustrations";
+import { getPerekImagesByChapter } from "../../../../lib/seo/perek-images-data";
+import { sameAsFor } from "../../../../lib/seo/same-as";
+import { decorateArticleContent } from "../../../../lib/tanahpedia/article-mention-refs";
+import { fetchAllEntityRefs } from "../../../../lib/tanahpedia/perek-entity-refs";
+import {
+	DedicationLines,
+	dedicationLines,
+} from "../../../components/dedications/DedicationLines";
 import { JsonLd } from "../../../components/JsonLd";
-import { ArticlesSection } from "../components/ArticlesSection";
+import { ArticleActions } from "../components/ArticleActions";
 import Breadcrumb from "../components/Breadcrumb";
+import { DailyArticlesSection } from "../components/DailyArticlesSection";
+import { PerekHeading } from "../components/PerekHeading";
+import { PerekText } from "../components/PerekText";
 import { PerushimSection } from "../components/PerushimSection";
-import { Ptuah } from "../components/Ptuha";
 import SeferComposite from "../components/SeferComposite";
-import { Stuma } from "../components/Stuma";
-import perekStyles from "../page.module.css";
+import { ShareButton } from "../components/ShareButton";
 import styles from "./page.module.css";
 import { ScrollToSlug } from "./ScrollToArticle";
+import { ScrollToArticleMatch } from "./ScrollToArticleMatch";
 import { ScrollToPerushPasukNote } from "./ScrollToPerushPasuk";
 
 /**
@@ -85,43 +125,87 @@ export async function generateStaticParams({
 }
 
 /**
- * Cache article data with on-demand revalidation support.
+ * Entity-scoped caches with on-demand revalidation support: each entry
+ * carries both its collection tag and its entity tag so an admin change
+ * invalidates exactly the data and routes that consume it.
  */
-const getCachedArticle = unstable_cache(
-	async (id: number) => getArticleById(id),
-	["article"],
-	{
-		tags: ["articles"],
-		revalidate: false,
-	},
+const getCachedArticle = cachedPerKey(
+	"article",
+	(id: number) => String(id),
+	(key) => [COLLECTION_TAGS.articles, articleTag(Number(key))],
+	(id: number) => getArticleById(id),
 );
 
-const getCachedArticles = unstable_cache(
-	async (perekId: number) => getArticleSummariesByPerekId(perekId),
-	["article-summaries"],
-	{
-		tags: ["articles"],
-		revalidate: false,
-	},
+const getCachedArticles = cachedPerKey(
+	"article-summaries",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.articles, perekArticlesTag(Number(key))],
+	(perekId: number) => getArticleSummariesByPerekId(perekId),
 );
 
-const getCachedPerushim = unstable_cache(
-	async (perekId: number) => getPerushimByPerekId(perekId),
-	["perushim"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
-	},
+const getCachedPerushim = cachedPerKey(
+	"perushim",
+	(perekId: number) => String(perekId),
+	(key) => [COLLECTION_TAGS.perushim, perekPerushimTag(Number(key))],
+	(perekId: number) => getPerushimByPerekId(perekId),
 );
 
-const getCachedPerushDetail = unstable_cache(
-	async (perushId: number, perekId: number) =>
-		getPerushDetail(perushId, perekId),
-	["perush-detail"],
-	{
-		tags: ["perushim"],
-		revalidate: false,
+const getCachedPerushDetail = cachedPerKey(
+	"perush-detail",
+	(perushId: number, perekId: number) => `${perushId}:${perekId}`,
+	(key) => {
+		const [perushId, perekId] = key.split(":").map(Number);
+		return [COLLECTION_TAGS.perushim, perushDetailTag(perushId, perekId)];
 	},
+	(perushId: number, perekId: number) => getPerushDetail(perushId, perekId),
+);
+
+/**
+ * Progress-unit reads for the two reader bodies on this route (#2607).
+ * Content-keyed rows ride the entity's own cache: the article/perush tag
+ * already expires when the body text (and therefore its metric) changes,
+ * and `reading-metrics` lets an operator flush a counting-policy redeploy.
+ */
+const getCachedArticleProgressUnits = cachedPerKey(
+	"article-progress-units",
+	(id: number) => String(id),
+	(key) => [
+		"reading-metrics",
+		COLLECTION_TAGS.articles,
+		articleTag(Number(key)),
+	],
+	(id: number) => getArticleProgressUnits(id),
+);
+
+const getCachedPerushProgressUnits = cachedPerKey(
+	"perush-progress-units",
+	(perushId: number, perekId: number) => `${perushId}:${perekId}`,
+	(key) => {
+		const [perushId, perekId] = key.split(":").map(Number);
+		return [
+			"reading-metrics",
+			COLLECTION_TAGS.perushim,
+			perushDetailTag(perushId, perekId),
+		];
+	},
+	(perushId: number, perekId: number) =>
+		getPerushProgressUnits(perushId, perekId),
+);
+
+/** Per-pasuk units for the flipbook page of this route's perek (#2607). */
+const getCachedPerekProgressUnits = cachedPerKey(
+	"perek-progress-units",
+	(perekId: number) => String(perekId),
+	() => ["reading-metrics"],
+	(perekId: number) => getPerekProgressUnits(perekId),
+);
+
+/** Perek-level metric for the flipbook page's badge (#2607). */
+const getCachedPerekMetric = cachedPerKey(
+	"perek-metric",
+	(perekId: number) => String(perekId),
+	() => ["reading-metrics"],
+	(perekId: number) => getPerekMetric(perekId),
 );
 
 export async function generateMetadata({
@@ -134,28 +218,56 @@ export async function generateMetadata({
 	const perekId = Number.parseInt(number, 10);
 	const id = Number.parseInt(slug, 10);
 
+	// A malformed or out-of-range perek always renders the shared missing
+	// page — keep metadata on the same contract (issue #2935).
+	if (Number.isNaN(perekId) || perekId < 1 || perekId > 929) {
+		return NOT_FOUND_METADATA;
+	}
+
 	// Check if it's a numeric article ID
 	if (!Number.isNaN(id)) {
 		const article = await getCachedArticle(id);
-		if (!article) {
-			return {
-				title: 'מאמר לא נמצא | תנ"ך באתר',
-			};
+		if (!article || article.perekId !== perekId) {
+			// The render calls notFound() for a missing or perek-mismatched
+			// article; the shared contract keeps the title/OG identical to
+			// app/not-found (issue #2935).
+			return NOT_FOUND_METADATA;
 		}
 
 		const descriptionSource = article.abstract || article.content;
-		let plainText = descriptionSource ?? "";
-		let prev: string;
-		do {
-			prev = plainText;
-			plainText = plainText.replace(/<[^>]*>/g, "");
-		} while (plainText !== prev);
-		return {
-			title: `${article.name} | ${article.authorName} | תנ"ך באתר`,
-			description: plainText
-				? plainText.slice(0, 160)
-				: `מאמר מאת ${article.authorName}`,
-		};
+		const title = `${article.name} | ${article.authorName} | ${SITE_NAME}`;
+		const description =
+			(descriptionSource ? plainText(descriptionSource, 160) : "") ||
+			`מאמר מאת ${article.authorName}`;
+		const url = articlePath(perekId, article.id);
+		// `article:section` enriches previews with the sefer name. The early
+		// range guard above guarantees perekId resolves to a real sefer.
+		const seferName = getPerekByPerekId(perekId)?.sefer;
+		const illustration = (await getPerekImagesByChapter())?.[perekId]?.[0];
+		return pageMetadata({
+			title,
+			description,
+			canonical: url,
+			type: "article",
+			// `article:author` must be a profile URL — the author's public page.
+			authors: [absUrl(authorPath(authorNameToSlug(article.authorName)))],
+			section: seferName,
+			image: illustration
+				? {
+						url: illustration.socialSrc,
+						width: illustration.socialWidth,
+						height: illustration.socialHeight,
+						alt: illustration.alt,
+					}
+				: {
+						// The author's portrait is the page's own content image;
+						// intrinsic dimensions are unknown, so they are omitted
+						// rather than guessed.
+						url: article.authorImageUrl,
+						alt: article.authorName,
+						type: "image/jpeg",
+					},
+		});
 	}
 
 	// Otherwise it's a perush name
@@ -163,18 +275,43 @@ export async function generateMetadata({
 	const perush = perushim.find((p) => p.name === slug);
 
 	if (!perush) {
-		return {
-			title: 'פירוש לא נמצא | תנ"ך באתר',
-		};
+		// The render calls notFound(); the shared contract keeps the
+		// title/OG identical to app/not-found (issue #2935).
+		return NOT_FOUND_METADATA;
 	}
 
 	const perekObj = getPerekByPerekId(perekId);
-	const sefer = getSeferByName(perekObj.sefer);
+	const perushDetail = await getCachedPerushDetail(perush.id, perekId);
+	const notesExcerpt = perushDetail
+		? plainText(
+				perushDetail.notes.map((note) => note.noteContent).join(" "),
+				160,
+			)
+		: "";
 
-	return {
-		title: `${perush.name} על ${sefer.name} ${perekObj.perekHeb} | תנ"ך באתר`,
-		description: `פירוש ${perush.name} מאת ${perush.parshanName} על ${sefer.name} פרק ${perekObj.perekHeb}`,
-	};
+	const title = `${perush.name} על ${perekObj.source} | ${SITE_NAME}`;
+	const description =
+		notesExcerpt ||
+		`פירוש ${perush.name} מאת ${perush.parshanName} על ${perekObj.source}`;
+	const url = perushPath(perekId, perush.name);
+	const illustration = (await getPerekImagesByChapter())?.[perekId]?.[0];
+	return pageMetadata({
+		title,
+		description,
+		canonical: url,
+		type: "article",
+		// Classical commentators have no public profile page, and OGP requires
+		// `article:author` to be a URL — so no `authors` value is emitted here.
+		section: perekObj.sefer,
+		image: illustration
+			? {
+					url: illustration.socialSrc,
+					width: illustration.socialWidth,
+					height: illustration.socialHeight,
+					alt: illustration.alt,
+				}
+			: undefined,
+	});
 }
 
 export default async function ArticlePage({
@@ -187,7 +324,10 @@ export default async function ArticlePage({
 	const perekId = Number.parseInt(number, 10);
 	const id = Number.parseInt(slug, 10);
 
-	if (Number.isNaN(perekId)) {
+	// An out-of-range perek is a missing page, not a server fault — 404
+	// like the parent /929/[number] route does via dynamicParams=false
+	// (issue #2935).
+	if (Number.isNaN(perekId) || perekId < 1 || perekId > 929) {
 		notFound();
 	}
 
@@ -200,14 +340,53 @@ export default async function ArticlePage({
 
 	const sefer = getSeferByName(perekObj.sefer);
 	const perekIds = getPerekIdsForSefer(sefer);
+	const entityRefsByPerek = await fetchAllEntityRefs(perekIds);
+	const imagesByPerek = await getPerekImagesByChapter();
+	const seferImages = selectPerekImages(imagesByPerek, perekIds);
+	const perekPasukUnits = await metricOrFallback(
+		`perek ${perekId} progress`,
+		[],
+		() => getCachedPerekProgressUnits(perekId),
+	);
+	const perekMetric = await metricOrFallback(
+		`perek ${perekId} metric`,
+		null,
+		() => getCachedPerekMetric(perekId),
+	);
+
+	// Dedications (#2731): the book keeps the sefer+helek cover set and the
+	// perek-scoped spread lines regardless of the route it opens from — the
+	// article/perush routes share the same `SeferComposite` mount contract
+	// as the flat perek page.
+	const seferId = seferIdByName(perekObj.sefer);
+	const seferDedicationLines = dedicationLines(
+		seferId === undefined ? [] : await getSeferDedications(seferId),
+	);
+	const perekDedications =
+		seferId === undefined ? {} : await getSeferPerekDedicationLines(seferId);
 
 	if (isArticle) {
-		// Handle article view
-		const article = await getCachedArticle(id);
+		// Handle article view; mention decorations (#2516) resolve against
+		// live entries per render — the returned copy carries them.
+		let article = await getCachedArticle(id);
 
 		if (!article || article.perekId !== perekId) {
 			notFound();
 		}
+
+		// Mention decorations (#2516) resolve against live entries per
+		// render; unresolved targets stay plain text.
+		article = await decorateArticleContent(article);
+		const articleProgressUnits = await metricOrFallback(
+			`article ${article.id} progress`,
+			[],
+			() => getCachedArticleProgressUnits(article.id),
+		);
+
+		// The article's own dedication scope renders under its title (#2731).
+		const articleDedicationLines = dedicationLines(
+			await getArticleDedications(article.id),
+		);
 
 		return (
 			<>
@@ -219,114 +398,98 @@ export default async function ArticlePage({
 					})}
 				/>
 				<ScrollToSlug targetId="article-view" />
+				<Suspense fallback={null}>
+					<ScrollToArticleMatch />
+				</Suspense>
+				<section id="article-view" className={styles.expandedArticle}>
+					<ReadingProgress
+						units={articleProgressUnits}
+						scope={`.${styles.expandedArticle}`}
+						content={`.${styles.articleBody}`}
+						stickyTop="72px"
+					/>
+					<header className={styles.articleHeader}>
+						<Link
+							href={`/929/authors/${authorNameToSlug(article.authorName)}`}
+							className={styles.authorLink}
+						>
+							<div className={styles.authorImage}>
+								<Image
+									src={article.authorImageUrl}
+									alt={article.authorName}
+									width={80}
+									height={80}
+									className={styles.authorImg}
+								/>
+							</div>
+							<span className={styles.authorName}>{article.authorName}</span>
+						</Link>
+						<h1 className={styles.articleTitle}>{article.name}</h1>
+						<DedicationLines lines={articleDedicationLines} />
+						<ReadingTime
+							estimatedSeconds={article.metric?.estimatedSeconds}
+							className={styles.readingTime}
+						/>
+					</header>
+
+					{article.content && (
+						<div
+							className={styles.articleBody}
+							// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+							dangerouslySetInnerHTML={{
+								__html: DOMPurify.sanitize(demoteHeadings(article.content)),
+							}}
+						/>
+					)}
+					{/* The unified article command row (#2786) trails the article
+					 * here — review ask: the standalone route keeps its main
+					 * content on top and its commands at the bottom. */}
+					<div className={styles.backToPerek}>
+						<ArticleActions
+							backLabel="חזרה לפרק"
+							backHref={`/929/${perekId}`}
+							canonicalPath={`/929/${perekId}/${article.id}`}
+							shareTitle={`${article.name} - ${article.authorName}`}
+						/>
+					</div>
+				</section>
 				<Suspense>
 					<SeferComposite
 						perekObj={perekObj}
 						articles={articles}
 						perushim={perushim}
 						perekIds={perekIds}
+						entityRefsByPerek={entityRefsByPerek}
+						imagesByPerek={seferImages}
+						seferDedications={seferDedicationLines}
+						perekDedications={perekDedications}
 						initialSlug={slug}
+						perekPasukUnits={perekPasukUnits}
+						perekMetric={perekMetric}
 					/>
 				</Suspense>
-				<div className={perekStyles.perekContainer}>
+				<div className={styles.articlePerekContainer}>
 					<Breadcrumb perekObj={perekObj} />
+					<PerekHeading perekObj={perekObj} level={2} />
 
-					<article className={perekStyles.perekText}>
-						{perekObj.pesukim.map((pasuk, pasukIdx) => {
-							const pasukKey = pasukIdx + 1;
-							const pasukNumElement = (
-								<span className={perekStyles.pasukNum}>
-									{toLetters(pasukIdx + 1)}
-								</span>
-							);
-							const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
-								const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
-								const isQriWithDifferentKtiv =
-									segment.type === "qri" && isQriDifferentThanKtiv(segment);
-								return (
-									<React.Fragment key={segmentKey}>
-										<span
-											className={isQriWithDifferentKtiv ? perekStyles.qri : ""}
-										>
-											{segment.type === "ktiv" ? (
-												segment.value
-											) : segment.type === "qri" ? (
-												isQriWithDifferentKtiv ? (
-													<>
-														{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
-														(<label />
-														{segment.value})
-													</>
-												) : (
-													segment.value
-												)
-											) : segment.type === "ptuha" ? (
-												Ptuah()
-											) : (
-												Stuma()
-											)}
-										</span>
-										{segmentIdx === pasuk.segments.length - 1 ||
-										((segment.type === "ktiv" || segment.type === "qri") &&
-											segment.value.at(segment.value.length - 1) ===
-												"־") ? null : (
-											<span> </span>
-										)}
-									</React.Fragment>
-								);
-							});
-							return (
-								<React.Fragment key={pasukKey}>
-									{pasukNumElement}
-									<span> </span>
-									{pasukElement}
-									<span> </span>
-								</React.Fragment>
-							);
-						})}
-					</article>
+					<PerekText
+						perekObj={perekObj}
+						entityRefs={entityRefsByPerek[perekId] ?? []}
+					/>
 
 					{/* Perushim section - commentaries carousel */}
-					<PerushimSection perekId={perekId} perushim={perushim} />
+					<PerushimSection
+						perekId={perekId}
+						perushim={perushim}
+						scrollStorageKey={`perushim-perek-${perekId}`}
+					/>
 
 					{/* Articles carousel */}
-					<ArticlesSection articles={articles} />
-
-					{/* Expanded article view */}
-					<section id="article-view" className={styles.expandedArticle}>
-						<header className={styles.articleHeader}>
-							<Link
-								href={`/929/authors/${authorNameToSlug(article.authorName)}`}
-								className={styles.authorLink}
-							>
-								<div className={styles.authorImage}>
-									<Image
-										src={article.authorImageUrl}
-										alt={article.authorName}
-										width={80}
-										height={80}
-										className={styles.authorImg}
-									/>
-								</div>
-								<span className={styles.authorName}>{article.authorName}</span>
-							</Link>
-							<h2 className={styles.articleTitle}>{article.name}</h2>
-						</header>
-
-						{article.content && (
-							<div
-								className={styles.articleBody}
-								// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-								dangerouslySetInnerHTML={{ __html: article.content }}
-							/>
-						)}
-
-						<div className={styles.backToPerek}>
-							<Link href={`/929/${perekId}`} className={styles.backLink}>
-								חזרה לפרק →
-							</Link>
-						</div>
-					</section>
+					<DailyArticlesSection
+						perekId={perekId}
+						articles={articles}
+						scrollStorageKey={`articles-perek-${perekId}`}
+					/>
 				</div>
 			</>
 		);
@@ -344,125 +507,125 @@ export default async function ArticlePage({
 	if (!perushDetail) {
 		notFound();
 	}
+	const parshanSameAs = await sameAsFor("PARSHAN", perushDetail.parshanId);
+
+	const perushProgressUnits = await metricOrFallback(
+		`perush ${perush.id} perek ${perekId} progress`,
+		[],
+		() => getCachedPerushProgressUnits(perush.id, perekId),
+	);
 
 	return (
 		<>
-			<JsonLd data={buildPerushGraph({ perush: perushDetail, perekObj })} />
+			<JsonLd
+				data={buildPerushGraph({
+					perush: perushDetail,
+					perekObj,
+					sameAs: parshanSameAs,
+				})}
+			/>
 			<ScrollToSlug targetId="perush-view" />
-			<ScrollToPerushPasukNote />
+			<Suspense fallback={null}>
+				<ScrollToPerushPasukNote />
+			</Suspense>
+			<section id="perush-view" className={styles.expandedPerush}>
+				<ReadingProgress
+					units={perushProgressUnits}
+					scope={`.${styles.expandedPerush}`}
+					content={`.${styles.perushContent}`}
+					unitSelector='[data-perush-pasuk="{k1}"][data-perush-note="{k2}"]'
+					stickyTop="72px"
+				/>
+				<header className={styles.perushHeader}>
+					<h1 className={styles.perushTitle}>
+						{perushDetail.name} על {perekObj.source}
+					</h1>
+					<h2 className={styles.parshanName}>{perushDetail.parshanName}</h2>
+					<ReadingTime
+						estimatedSeconds={perushDetail.metric?.estimatedSeconds}
+						className={styles.readingTime}
+					/>
+					<ShareButton
+						canonicalPath={perushPath(perekId, perushDetail.name)}
+						title={`${perushDetail.name} - ${perushDetail.parshanName}`}
+					/>
+				</header>
+
+				<div className={styles.perushContent}>
+					{perushDetail.notes.map((note, idx) => {
+						const prevSamePasuk =
+							idx > 0 && perushDetail.notes[idx - 1].pasuk === note.pasuk;
+						const noteAnchorId = !prevSamePasuk
+							? `perush-pasuk-${note.pasuk}`
+							: undefined;
+						return (
+							<div
+								key={`${note.pasuk}-${note.noteIdx}`}
+								id={noteAnchorId}
+								className={styles.note}
+								data-perush-pasuk={note.pasuk}
+								data-perush-note={note.noteIdx}
+							>
+								<span className={styles.notePasuk}>
+									פסוק {toLetters(note.pasuk)}:
+								</span>
+								<div
+									className={styles.noteContent}
+									// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+									dangerouslySetInnerHTML={{
+										__html: DOMPurify.sanitize(
+											demoteHeadings(note.noteContent),
+										),
+									}}
+								/>
+							</div>
+						);
+					})}
+				</div>
+
+				<div className={styles.backToPerek}>
+					<Link href={`/929/${perekId}`} className={styles.backLink}>
+						חזרה לפרק →
+					</Link>
+				</div>
+			</section>
 			<Suspense>
 				<SeferComposite
 					perekObj={perekObj}
 					articles={articles}
 					perushim={perushim}
 					perekIds={perekIds}
+					entityRefsByPerek={entityRefsByPerek}
+					imagesByPerek={seferImages}
+					seferDedications={seferDedicationLines}
+					perekDedications={perekDedications}
 					initialSlug={slug}
+					perekPasukUnits={perekPasukUnits}
+					perekMetric={perekMetric}
 				/>
 			</Suspense>
-			<div className={perekStyles.perekContainer}>
+			<div className={styles.articlePerekContainer}>
 				<Breadcrumb perekObj={perekObj} />
+				<PerekHeading perekObj={perekObj} level={2} />
 
-				<article className={perekStyles.perekText}>
-					{perekObj.pesukim.map((pasuk, pasukIdx) => {
-						const pasukKey = pasukIdx + 1;
-						const pasukNumElement = (
-							<span className={perekStyles.pasukNum}>
-								{toLetters(pasukIdx + 1)}
-							</span>
-						);
-						const pasukElement = pasuk.segments.map((segment, segmentIdx) => {
-							const segmentKey = `${pasukIdx + 1}-${segmentIdx + 1}`;
-							const isQriWithDifferentKtiv =
-								segment.type === "qri" && isQriDifferentThanKtiv(segment);
-							return (
-								<React.Fragment key={segmentKey}>
-									<span
-										className={isQriWithDifferentKtiv ? perekStyles.qri : ""}
-									>
-										{segment.type === "ktiv" ? (
-											segment.value
-										) : segment.type === "qri" ? (
-											isQriWithDifferentKtiv ? (
-												<>
-													{/* biome-ignore lint/a11y/noLabelWithoutControl: It'll take some time to validate this fix altogether with css rules */}
-													(<label />
-													{segment.value})
-												</>
-											) : (
-												segment.value
-											)
-										) : segment.type === "ptuha" ? (
-											Ptuah()
-										) : (
-											Stuma()
-										)}
-									</span>
-									{segmentIdx === pasuk.segments.length - 1 ||
-									((segment.type === "ktiv" || segment.type === "qri") &&
-										segment.value.at(segment.value.length - 1) ===
-											"־") ? null : (
-										<span> </span>
-									)}
-								</React.Fragment>
-							);
-						});
-						return (
-							<React.Fragment key={pasukKey}>
-								{pasukNumElement}
-								<span> </span>
-								{pasukElement}
-								<span> </span>
-							</React.Fragment>
-						);
-					})}
-				</article>
+				<PerekText
+					perekObj={perekObj}
+					entityRefs={entityRefsByPerek[perekId] ?? []}
+				/>
 
 				{/* Perushim section - commentaries carousel */}
-				<PerushimSection perekId={perekId} perushim={perushim} />
+				<PerushimSection
+					perekId={perekId}
+					perushim={perushim}
+					scrollStorageKey={`perushim-perek-${perekId}`}
+				/>
 
 				{/* Articles carousel */}
-				<ArticlesSection articles={articles} />
-
-				{/* Expanded perush view */}
-				<section id="perush-view" className={styles.expandedPerush}>
-					<header className={styles.perushHeader}>
-						<h2 className={styles.perushTitle}>{perushDetail.name}</h2>
-						<h3 className={styles.parshanName}>{perushDetail.parshanName}</h3>
-					</header>
-
-					<div className={styles.perushContent}>
-						{perushDetail.notes.map((note, idx) => {
-							const prevSamePasuk =
-								idx > 0 && perushDetail.notes[idx - 1].pasuk === note.pasuk;
-							const noteAnchorId = !prevSamePasuk
-								? `perush-pasuk-${note.pasuk}`
-								: undefined;
-							return (
-								<div
-									key={`${note.pasuk}-${note.noteIdx}`}
-									id={noteAnchorId}
-									className={styles.note}
-									data-perush-pasuk={note.pasuk}
-								>
-									<span className={styles.notePasuk}>
-										פסוק {toLetters(note.pasuk)}:
-									</span>
-									<div
-										className={styles.noteContent}
-										// biome-ignore lint/security/noDangerouslySetInnerHtml: Content is from trusted database
-										dangerouslySetInnerHTML={{ __html: note.noteContent }}
-									/>
-								</div>
-							);
-						})}
-					</div>
-
-					<div className={styles.backToPerek}>
-						<Link href={`/929/${perekId}`} className={styles.backLink}>
-							חזרה לפרק →
-						</Link>
-					</div>
-				</section>
+				<DailyArticlesSection
+					perekId={perekId}
+					articles={articles}
+					scrollStorageKey={`articles-perek-${perekId}`}
+				/>
 			</div>
 		</>
 	);

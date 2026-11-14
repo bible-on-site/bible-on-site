@@ -247,4 +247,16 @@ public class HtmlMediaExtractorTests
             htmlSegments.Last().Html.Should().Contain("End");
         }
     }
+
+[Fact]
+    public void drops_br_only_fragments_left_between_media_elements()
+    {
+        var segments = HtmlMediaExtractor.ExtractSegments(
+            "א<br><video src=\"v.mp4\"></video><br><audio src=\"a.mp3\"></audio>");
+
+        segments.Select(s => s.Kind).Should().Equal(SegmentKind.Html, SegmentKind.Media, SegmentKind.Media);
+        segments[0].Html.Should().Be("א<br>");
+        segments[1].MediaUrl.Should().Be("v.mp4");
+        segments[2].MediaUrl.Should().Be("a.mp3");
+    }
 }

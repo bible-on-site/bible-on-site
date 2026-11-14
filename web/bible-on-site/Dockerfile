@@ -1,7 +1,15 @@
-# Note: Using classic docker build (DOCKER_BUILDKIT=0) for network:host support
-# Do not add BuildKit-specific syntax directives
+FROM node:26.13.0-alpine AS base
+# Bun ships as a standalone binary — copy the pinned release matching
+# packageManager (bun@1.4.4) rather than installing a package manager.
+COPY --from=oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a /usr/local/bin/bun /usr/local/bin/bun
 
-FROM node:26.10.0-alpine AS base
+# Version-only releases must not invalidate the dependency layer.
+# bun.lock does not embed the manifest version, so only package.json needs
+# the strip.
+FROM base AS manifests
+WORKDIR /app
+COPY bible-on-site/package.json ./
+RUN node -e 'const fs = require("node:fs"); const json = JSON.parse(fs.readFileSync("package.json")); delete json.version; fs.writeFileSync("package.json", JSON.stringify(json));'
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -11,13 +19,13 @@ WORKDIR /app
 
 # Install dependencies based on the preferred package manager
 # Build context is web/, so bible-on-site is a subdirectory
-COPY bible-on-site/package.json bible-on-site/package-lock.json ./
-COPY bible-on-site/.npmrc* ./
+COPY --from=manifests /app/package.json ./
+COPY bible-on-site/bun.lock bible-on-site/bunfig.toml ./
 # Install ALL dependencies (including dev like sass) needed for the build step.
 # The final runner stage uses Next.js standalone output, so dev deps don't end up in production.
-# --ignore-scripts: postinstall (copy-local-flip-book.mjs) is for local dev only
-# and the scripts/ directory isn't available in this deps stage.
-RUN npm ci --prefer-offline --ignore-scripts
+# Source-dependent postinstall helpers run outside this dependency-only stage.
+# prebuild derives the browser catalog after the full source is copied.
+RUN bun install --frozen-lockfile --prefer-offline --ignore-scripts
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -44,17 +52,28 @@ ENV DB_URL=$DB_URL
 ARG NEXT_PUBLIC_ENV=production
 ENV NEXT_PUBLIC_ENV=$NEXT_PUBLIC_ENV
 
-RUN npm run build
+# The public Mapbox token is embedded into client bundles by Next.js at build time.
+# This argument is intentionally public, so the secret build-argument rule does not apply.
+# nosemgrep
+# hadolint ignore=DL3064
+ARG MAPBOX_PUBLIC_KEY
+# hadolint ignore=DL3064
+ENV NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN=$MAPBOX_PUBLIC_KEY
+
+RUN bun run build
 
 # Production image, copy all the files and run next
 FROM base AS runner
 WORKDIR /app
 
+# Bind delivery metadata to the published archive before immutable tags exist.
+LABEL io.bible-on-site.image-delivery="soci-v2"
+
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Install curl for ECS health checks
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl~=8
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
@@ -65,14 +84,42 @@ COPY --from=builder /app/bible-on-site/public ./public
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/bible-on-site/.next/static ./.next/static
+COPY --chown=nextjs:nodejs bible-on-site/scripts/start-server.mjs ./start-server.mjs
 
-USER nextjs
+# Validate the traced runtime, rather than only the build-stage dependencies.
+# A missing or wrong-architecture libvips must fail before an image is published.
+ARG TARGETARCH
+RUN node --input-type=module -e '\
+    import assert from "node:assert/strict"; \
+    import sharp from "sharp"; \
+    assert.ok(["amd64", "arm64"].includes(process.argv[1])); \
+    assert.equal(process.platform, "linux"); \
+    assert.equal(process.arch, process.argv[1] === "amd64" ? "x64" : "arm64"); \
+    const source = await sharp({create:{width:12,height:8,channels:3,background:{r:220,g:30,b:10}}}).jpeg().toBuffer(); \
+    const resized = await sharp(source).resize({width:6}).jpeg().toBuffer(); \
+    const image = await sharp(resized).metadata(); \
+    assert.equal(image.format, "jpeg"); assert.equal(image.width, 6); assert.equal(image.height, 4); \
+    const {data} = await sharp(resized).raw().toBuffer({resolveWithObject:true}); \
+    assert.ok(data[0] > 200 && data[1] < 50 && data[2] < 30);' "$TARGETARCH"
+
+USER 1001
 
 EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+# Warm the actual route bundles before a replacement is eligible for traffic.
+# Keep these settings aligned with the ECS container health check.
+# The first passing probe already marks the task healthy, so a short interval
+# bounds time-to-healthy and lets the route-bundle warm start earlier (#2997).
+# The CMD inside HEALTHCHECK is the probe command, not a container process;
+# USER 1001 above already applies. Codacy's missing-user rule predates the
+# upstream HEALTHCHECK exclusion, so this is a documented false positive.
+# nosemgrep
+HEALTHCHECK --interval=10s --timeout=10s --start-period=120s --start-interval=5s --retries=5 \
+    CMD ["sh", "-c", "for route in api/health/ready api/recitation api/recitation/2; do curl -sf --max-time 3 \"http://localhost:3000/$route\" > /dev/null || exit 1; done"]
+
 # server.js is created by next build from the standalone output
 # https://nextjs.org/docs/pages/api-reference/config/next-config-js/output
-CMD ["node", "server.js"]
+CMD ["node", "start-server.mjs"]

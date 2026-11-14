@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Shared with the AssetPackDownloader extension so Background Assets can
+	     coordinate managed asset-pack downloads between the two processes. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.tanah.daily929.assets</string>
+	</array>
+	<!-- #1097: APNs push entitlement. Distribution provisioning profiles (App
+	     Store / ad hoc) authorize `production` only — requesting `development`
+	     here fails both codesign and ios_signing_requirements validation.
+	     Debug device builds use Entitlements.App.plist instead. -->
+	<key>aps-environment</key>
+	<string>production</string>
+</dict>
+</plist>

@@ -101,7 +101,7 @@ async function main() {
 
 	const out = openSync(path.resolve(logDir, "api.log"), "w");
 
-	// Fork with tsx loader via Node's --import flag
+	// Fork the wrapper; node strips the .mts types natively
 	// TODO: find a way without this ugly wrapper.
 	// The original issue was that when the tests are finished, a signal is sent to this process which then kills the API as well.
 	// The workaround is to have this wrapper process detached from the launcher process.
@@ -111,7 +111,7 @@ async function main() {
 		{
 			cwd: __dirname,
 			detached: true,
-			execArgv: ["--no-deprecation", "--trace-deprecation", "--import", "tsx"],
+			execArgv: ["--no-deprecation", "--trace-deprecation"],
 			silent: true,
 			stdio: ["ignore", out, out, "ipc"],
 		},

@@ -12,6 +12,10 @@
   height: calc(100vh - 72px);
   z-index: 9999;
   background-color: white;
+  /* This opaque, viewport-sized reader owns its painted bounds. Keep fold
+     invalidations inside it instead of propagating through the flat page.
+     Native modal dialogs still render in the document's top layer. */
+  contain: paint;
 }
 
 .visible {
@@ -34,13 +38,34 @@
   width: 48px;
   height: 48px;
   border: 4px solid #e0d5c1;
-  border-top-color: #8b7355;
+  border-top-color: var(--hc-muted, #8b7355);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+}
+
+.loadingError {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.loadingActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem 1.25rem;
 }
 
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .seferOverlay {
+    background-color: #0f1219;
   }
 }

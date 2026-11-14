@@ -5,50 +5,65 @@
 # ============================================================================
 
 AWSTemplateFormatVersion: "2010-09-09"
-Description: |
-  ECS Cluster, Services, Task Definitions, and Cloud Map Service Discovery
-  for Bible On Site project.
+Description: "ECS Cluster, Services, Task Definitions, and Cloud Map Service Discovery Reference documentation only; not a deployed stack."
 
-  ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
+Metadata:
+  Documentation: |
+    ECS Cluster, Services, Task Definitions, and Cloud Map Service Discovery
+    for Bible On Site project.
 
-  This template creates:
-  - ECS Cluster (Fargate)
-  - Cloud Map namespace for service discovery
-  - ECS Task Execution Role with ECR and CloudWatch permissions
-  - Task definitions and services
+    ⚠️ WARNING: This template is DOCUMENTATION ONLY and has never been deployed.
 
-  Sensitive Information Restoration:
-  | Placeholder | Description | Restoration Command |
-  |---|---|---|
-  | `<AWS_ACCOUNT_ID>` | AWS Account ID | `aws sts get-caller-identity --query Account --output text` |
-  | `<NGINX_PUBLIC_IP>` | Nginx Public IP | `aws ec2 describe-instances --filters "Name=tag:Name,Values=nginx-router" --query "Reservations[0].Instances[0].PublicIpAddress" --output text` |
-  | `<VPC_ID>` | VPC ID | `aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text` |
-  | `<SUBNET_IDS>` | Subnet IDs | `aws ec2 describe-subnets --filters "Name=vpc-id,Values=<VPC_ID>" --query "Subnets[*].SubnetId" --output text` |
-  | `<ECS_SECURITY_GROUP_ID>` | ECS Security Group ID | `aws ec2 describe-security-groups --filters "Name=group-name,Values=bible-on-site-ecs-sg" --query "SecurityGroups[0].GroupId" --output text` |
+    This template creates:
+    - ECS Cluster (Fargate)
+    - Cloud Map namespace for service discovery
+    - ECS Task Execution Role with ECR and CloudWatch permissions
+    - Task definitions and services
 
-  Architecture:
-  ┌─────────────────┐      ┌─────────────────────────────────────────────┐
-  │  nginx (EC2)    │      │              ECS Fargate                    │
-  │  <NGINX_PUBLIC_IP>│──────│  ┌─────────────────────────────────────┐    │
-  │                 │      │  │  bible-on-site-website              │    │
-  │  Resolves:      │      │  │  website.bible-on-site.local:3000   │    │
-  │  website.bible- │      │  │  Image: ECR/bible-on-site:latest    │    │
-  │  on-site.local  │      │  └─────────────────────────────────────┘    │
-  │  via Cloud Map  │      │                                             │
-  └─────────────────┘      │  ┌─────────────────────────────────────┐    │
-                          │  │  bible-on-site-api (future)         │    │
-                          │  │  api.bible-on-site.local:3003       │    │
-                          │  │  Image: ECR/bible-on-site-api       │    │
-                          │  └─────────────────────────────────────┘    │
-                          │                                             │
-                          │  ┌─────────────────────────────────────┐    │
-                          │  │  bible-on-site-admin                │    │
-                          │  │  admin.bible-on-site.local:3101     │    │
-                          │  │  Image: ECR/bible-on-site-admin     │    │
-                          │  └─────────────────────────────────────┘    │
-                          └─────────────────────────────────────────────┘
+    Sensitive Information Restoration:
+    | Placeholder | Description | Restoration Command |
+    |---|---|---|
+    | `<AWS_ACCOUNT_ID>` | AWS Account ID | `aws sts get-caller-identity --query Account --output text` |
+    | `<NGINX_PUBLIC_IP>` | Nginx Public IP | `aws ec2 describe-instances --filters "Name=tag:Name,Values=nginx-router" --query "Reservations[0].Instances[0].PublicIpAddress" --output text` |
+    | `<VPC_ID>` | VPC ID | `aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text` |
+    | `<SUBNET_IDS>` | Subnet IDs | `aws ec2 describe-subnets --filters "Name=vpc-id,Values=<VPC_ID>" --query "Subnets[*].SubnetId" --output text` |
+    | `<ECS_SECURITY_GROUP_ID>` | ECS Security Group ID | `aws ec2 describe-security-groups --filters "Name=group-name,Values=bible-on-site-ecs-sg" --query "SecurityGroups[0].GroupId" --output text` |
+
+    Architecture:
+    ┌─────────────────┐      ┌─────────────────────────────────────────────┐
+    │  nginx (EC2)    │      │              ECS Fargate                    │
+    │  <NGINX_PUBLIC_IP>│──────│  ┌─────────────────────────────────────┐    │
+    │                 │      │  │  bible-on-site-website              │    │
+    │  Resolves:      │      │  │  website.bible-on-site.local:3000   │    │
+    │  website.bible- │      │  │  Image: ECR/bible-on-site:latest    │    │
+    │  on-site.local  │      │  └─────────────────────────────────────┘    │
+    │  via Cloud Map  │      │                                             │
+    └─────────────────┘      │  ┌─────────────────────────────────────┐    │
+                            │  │  bible-on-site-api (future)         │    │
+                            │  │  api.bible-on-site.local:3003       │    │
+                            │  │  Image: ECR/bible-on-site-api       │    │
+                            │  └─────────────────────────────────────┘    │
+                            │                                             │
+                            │  ┌─────────────────────────────────────┐    │
+                            │  │  bible-on-site-admin                │    │
+                            │  │  admin.bible-on-site.local:3101     │    │
+                            │  │  Image: ECR/bible-on-site-admin     │    │
+                            │  └─────────────────────────────────────┘    │
+                            └─────────────────────────────────────────────┘
 
 Parameters:
+  ArchiveCognitoUserPoolId:
+    Type: String
+    Default: ""
+  ArchiveCognitoClientId:
+    Type: String
+    Default: ""
+  ArchiveCognitoDomain:
+    Type: String
+    Default: ""
+  ArchiveAdminOrigin:
+    Type: String
+    Default: https://admin.xn--febl3a.co.il
   Environment:
     Type: String
     Default: production
@@ -76,6 +91,14 @@ Parameters:
     Default: bible-on-site-admin
     Description: Name of the admin ECS service
 
+  AdminCapacityProvider:
+    Type: String
+    Default: FARGATE_SPOT
+    AllowedValues:
+      - FARGATE
+      - FARGATE_SPOT
+    Description: Admin-only cost option; use FARGATE for on-demand recovery
+
   WebsiteImageUri:
     Type: String
     Default: <AWS_ACCOUNT_ID>.dkr.ecr.il-central-1.amazonaws.com/bible-on-site:latest
@@ -91,6 +114,12 @@ Resources:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: bible-on-site-cluster
+      # Association only; do not change shared defaults to Spot. Existing
+      # launch-type website/API services remain on-demand.
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy: []
       ClusterSettings:
         - Name: containerInsights
           Value: enabled # Required for deployment/health CloudWatch alarms (see cloudwatch.yaml)
@@ -171,7 +200,8 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: "*"
-        # Permissions to read SSM parameters for database credentials
+        # Permissions to read SSM parameters for database credentials,
+        # the shared website revalidation secret and the web-push secrets.
         - PolicyName: SSMParameterReadAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -180,7 +210,14 @@ Resources:
                 Action:
                   - ssm:GetParameters
                   - ssm:GetParameter
-                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-*"
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-*"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-indexnow-key"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanahpedia-revision-api-key"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-vapid-public-key"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-vapid-private-key"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-push-send-secret"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -221,7 +258,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: bible-on-site-admin-task-role
-      Description: Task role for admin container — allows S3 access for rabbis bucket
+      Description: Task role for admin container — allows S3 access and bulletin previews
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -243,6 +280,13 @@ Resources:
                 Resource:
                   - arn:aws:s3:::bible-on-site-assets
                   - arn:aws:s3:::bible-on-site-assets/*
+        - PolicyName: AdminBulletinPreview
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bible-on-site-bulletin"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -256,10 +300,14 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: bible-on-site-website
+      # Website ARM migration target; apply only after the release and canary gates.
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      Cpu: "256" # 0.25 vCPU
+      Cpu: "512" # 0.5 vCPU; measured CPU decision in docs/performance/website-cpu-2026-11-02
       Memory: "2048" # 2 GB (reduced OOM; was 1024)
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       TaskRoleArn: !GetAtt WebsiteTaskRole.Arn
@@ -267,19 +315,26 @@ Resources:
         - Name: website
           Image: !Ref WebsiteImageUri
           Essential: true
+          # Measured drain keeps serving cached-DNS requests while non-loopback
+          # inbound connections remain, ending early once they stay quiet (30s)
+          # after a measured floor: one router-cache window past the task's last
+          # discovery answer (45s fixed minimum when discovery is unreadable),
+          # or at 90 seconds; 30 more cover shutdown.
+          StopTimeout: 120
           PortMappings:
             - ContainerPort: 3000
               HostPort: 3000
               Protocol: tcp
-          # Container health check - warms the app before marking container as healthy
-          # This ensures the Node.js runtime and data modules are fully loaded
+          # Warm each critical route bundle before ECS replaces the old task.
+          # Keep these settings aligned with the website Dockerfile.
           HealthCheck:
             Command:
               - CMD-SHELL
-              # Use /api/health (lightweight liveness). Never curl the homepage.
-              # Use localhost (not 127.0.0.1) for clarity and consistency.
-              - curl -sf --max-time 5 http://localhost:3000/api/health > /dev/null || exit 1
-            Interval: 30
+              # Three bounded requests fit within the ten-second check timeout.
+              - 'for route in api/health/ready api/recitation api/recitation/2; do curl -sf --max-time 3 "http://localhost:3000/$route" > /dev/null || exit 1; done'
+            # The first passing probe marks the task healthy, so the interval
+            # bounds time-to-healthy and the start of the route-bundle warm.
+            Interval: 10
             Timeout: 10
             Retries: 5
             StartPeriod: 120 # Grace period for container startup before health checks count
@@ -301,11 +356,40 @@ Resources:
             # Bulletin Lambda function name — used by AWS SDK to invoke directly
             - Name: BULLETIN_LAMBDA_NAME
               Value: bible-on-site-bulletin
+            # ASSETS_BASE_URL is intentionally unset in production. Enable
+            # only after an approved additive CDN rollout passes the legacy
+            # S3 URL, CORS, Range and freshness checks in the cost risk audit.
+            # VAPID_SUBJECT is the public contact URI advertised to browser
+            # push services (web-push spec: mailto: or https:). Not a secret.
+            - Name: VAPID_SUBJECT
+              Value: https://xn--febl3a.co.il
           # Database credentials injected from SSM Parameter Store
           # Required for runtime database queries (dynamic pages, ISR, etc.)
+          # Each parameter must exist before the task starts — see the
+          # one-time prerequisites block at the bottom of this file.
           Secrets:
             - Name: DB_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-url"
+            # Guards POST /api/revalidate; must match the admin task's
+            # REVALIDATE_SECRET (same SSM parameter).
+            - Name: REVALIDATE_SECRET
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
+            # IndexNow ownership key: also served at /<key>.txt and used to
+            # sign URL submissions. A value that fails the protocol key
+            # format (8-128 [a-zA-Z0-9-]) disables the feature with a
+            # warning, so a placeholder can stand in until enrollment.
+            - Name: INDEXNOW_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-indexnow-key"
+            # Web push (#1096): VAPID keypair and the bearer secret authorizing
+            # POST /api/push/daily (must equal the PUSH_SEND_SECRET GitHub
+            # secret). All three must exist before this task revision starts,
+            # or ECS fails the task — see docs/aws/web-push-activation.md.
+            - Name: VAPID_PUBLIC_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-vapid-public-key"
+            - Name: VAPID_PRIVATE_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-vapid-private-key"
+            - Name: PUSH_SEND_SECRET
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-push-send-secret"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -323,7 +407,8 @@ Resources:
       ServiceName: bible-on-site-website
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref WebsiteTaskDefinition
-      # DesiredCount: 1 can cause ~1-3 min downtime during rolling deploy. Use 2+ for zero-downtime. See docs/aws/deployment-downtime-2026-02-10.md
+      # Readiness and MinimumHealthyPercent retain the old task during cold loading.
+      # DesiredCount: 1 still has no redundancy outside a rollout.
       DesiredCount: 1
       LaunchType: FARGATE
       PlatformVersion: LATEST
@@ -399,6 +484,11 @@ Resources:
         - FARGATE
       Cpu: "256" # 0.25 vCPU
       Memory: "512" # 512 MB
+      # Apply only after the dual-platform latest index and completed pinned
+      # x86 recovery deployment are verified; see ../api-arm64-cutover.md.
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       ContainerDefinitions:
         - Name: api
@@ -408,15 +498,14 @@ Resources:
             - ContainerPort: 3003
               HostPort: 3003
               Protocol: tcp
-          # TODO: Add container health check once /api/health endpoint is implemented
-          # HealthCheck:
-          #   Command:
-          #     - CMD-SHELL
-          #     - curl -f http://localhost:3003/api/health || exit 1
-          #   Interval: 30
-          #   Timeout: 10
-          #   Retries: 3
-          #   StartPeriod: 60
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - wget -T 2 -qO- http://127.0.0.1:3003/health/ready >/dev/null
+            Interval: 5
+            Timeout: 3
+            Retries: 3
+            StartPeriod: 30
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -429,10 +518,24 @@ Resources:
               Value: prod
             - Name: HOST
               Value: "0.0.0.0" # Required to accept connections from nginx
+            # API reaches the website task over Cloud Map service discovery
+            # to expire pedia caches after committed alias writes.
+            - Name: WEBSITE_URL
+              Value: http://website.bible-on-site.local:3000
           # Database credentials injected from SSM Parameter Store
+          # Each parameter must exist before the task starts — see the
+          # one-time prerequisites block at the bottom of this file.
           Secrets:
             - Name: DB_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-url"
+            # Shared with the website/admin tasks' REVALIDATE_SECRET
+            # (same parameter) — the x-revalidate-secret header.
+            - Name: REVALIDATE_SECRET
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
+            # Bearer token for the authorized Tanahpedia revision API
+            # (revision submissions, family writes, alias management).
+            - Name: TANAHPEDIA_REVISION_API_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanahpedia-revision-api-key"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -469,6 +572,19 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
           Environment:
+            # Populate from the approved private-archive stack outputs.
+            - Name: ARCHIVE_AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: ARCHIVE_S3_BUCKET
+              Value: !Sub "bible-on-site-private-archive-${AWS::AccountId}-${AWS::Region}"
+            - Name: ARCHIVE_COGNITO_POOL_ID
+              Value: !Ref ArchiveCognitoUserPoolId
+            - Name: ARCHIVE_COGNITO_CLIENT_ID
+              Value: !Ref ArchiveCognitoClientId
+            - Name: ARCHIVE_COGNITO_DOMAIN
+              Value: !Ref ArchiveCognitoDomain
+            - Name: ARCHIVE_ORIGIN
+              Value: !Ref ArchiveAdminOrigin
             - Name: HOST
               Value: "0.0.0.0"
             - Name: PORT
@@ -477,9 +593,20 @@ Resources:
               Value: il-central-1
             - Name: S3_BUCKET
               Value: bible-on-site-assets
+            # Keep ASSETS_BASE_URL unset, matching the website. Existing S3
+            # asset URLs must remain public even after a future CDN rollout.
+            # Admin reaches the website task over Cloud Map service discovery
+            # (MULTIVALUE A records) to expire its content caches post-commit.
+            - Name: VITE_WEBSITE_URL
+              Value: http://website.bible-on-site.local:3000
           Secrets:
             - Name: DB_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-tanah-db-url"
+            # Shared with the website task's REVALIDATE_SECRET (same parameter).
+            # Server-side only — never VITE_*, which Vite would inline into
+            # the admin browser bundle and expose the secret.
+            - Name: REVALIDATE_SECRET
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bible-on-site-revalidate-secret"
       Tags:
         - Key: Project
           Value: bible-on-site
@@ -513,8 +640,8 @@ Resources:
         MaximumPercent: 200
         MinimumHealthyPercent: 100
         DeploymentCircuitBreaker:
-          Enable: false
-          Rollback: false
+          Enable: true
+          Rollback: true
       EnableExecuteCommand: false
       Tags:
         - Key: Project
@@ -533,8 +660,13 @@ Resources:
       ServiceName: bible-on-site-admin
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref AdminTaskDefinition
-      DesiredCount: 0 # Initially 0 until first deployment
-      LaunchType: FARGATE
+      DesiredCount: 1
+      # Dorad accepts admin-only outages for savings. Apply only after the
+      # atomic family-save fix is deployed and rollout/recovery checks pass.
+      # Keep the shared cluster default and website/API launch types unchanged.
+      CapacityProviderStrategy:
+        - CapacityProvider: !Ref AdminCapacityProvider
+          Weight: 1
       PlatformVersion: LATEST
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -606,6 +738,65 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-TaskExecutionRoleArn"
 # =============================================================================
+# One-time prerequisites (SecureString SSM parameters)
+# =============================================================================
+#
+# ECS resolves every `Secrets:` ValueFrom at task start, so a missing
+# parameter prevents the task (website AND admin) from starting. Create
+# these parameters before deploying a stack that references them.
+# CloudFormation cannot create SecureString parameters — they are provisioned
+# once per account/region via CLI (same mechanism as the DB_URL parameter,
+# see rds-mysql.yaml):
+#
+#   # Shared admin <-> website revalidation credential
+#   aws ssm put-parameter --name bible-on-site-revalidate-secret \
+#     --type SecureString --value "$(openssl rand -hex 32)" \
+#     --region il-central-1
+#
+#   # IndexNow ownership key for the website's search-engine notifications.
+#   # Generate the value in Bing Webmaster Tools (or any 8-128 char
+#   # [a-zA-Z0-9-] string); a non-matching value disables the feature.
+#   aws ssm put-parameter --name bible-on-site-indexnow-key \
+#     --type SecureString --value "$(openssl rand -hex 16)" \
+#     --region il-central-1
+#
+#   # Bearer token authorizing the Tanahpedia revision API surface on the
+#   # api task (revision submits/applies, family writes, alias writes).
+#   aws ssm put-parameter --name bible-on-site-tanahpedia-revision-api-key \
+#     --type SecureString --value "$(openssl rand -hex 32)" \
+#     --region il-central-1
+#
+#   # Web push (#1096): one VAPID keypair per deployment plus the bearer
+#   # secret authorizing POST /api/push/daily. Generate the pair with
+#   # `VAPID_KEYS="$(bunx web-push generate-vapid-keys --json)"` with tracing
+#   # disabled; capture the private key without printing it as documented in
+#   # docs/aws/web-push-activation.md steps 2-3. The public key is returned by
+#   # GET /api/push/subscription to every browser, so keep it server-side
+#   # consistent — browsers unsubscribe and resubscribe if it rotates.
+#   # The send secret must equal the PUSH_SEND_SECRET GitHub repository
+#   # secret exactly. Generate PUSH_SEND_SECRET once into a shell variable
+#   # without printing it, as in docs/aws/web-push-activation.md step 2.
+#   # Full activation order: docs/aws/web-push-activation.md
+#   aws ssm put-parameter --name bible-on-site-vapid-public-key \
+#     --type SecureString --value "<vapid-public-key>" \
+#     --region il-central-1
+#   aws ssm put-parameter --name bible-on-site-vapid-private-key \
+#     --type SecureString --value "<vapid-private-key>" \
+#     --region il-central-1
+#   aws ssm put-parameter --name bible-on-site-push-send-secret \
+#     --type SecureString --value "$PUSH_SEND_SECRET" \
+#     --region il-central-1
+#
+#   # Database URL (mysql://admin:<password>@<host>:3306/tanah)
+#   aws ssm put-parameter --name bible-on-site-tanah-db-url \
+#     --type SecureString --value "<db-url>" \
+#     --region il-central-1
+#
+# Verify:
+#   aws ssm get-parameter --name bible-on-site-revalidate-secret \
+#     --region il-central-1 --query 'Parameter.Name' --output text
+#
+# =============================================================================
 # CLI Commands to Verify/Update
 # =============================================================================
 #
@@ -623,6 +814,11 @@ Outputs:
 #
 # Update service (force new deployment):
 #   aws ecs update-service --cluster bible-on-site-cluster --service bible-on-site-website --force-new-deployment --region il-central-1
+#
+# Admin-only Spot: see ../admin-spot-rollout.md for prerequisites, exact
+# provider-association semantics, migration, health checks and on-demand
+# recovery. Do not run this reference template as a stack. No scheduled
+# scale-to-zero is authorized; public website/API capacity remains unchanged.
 #
 # List Cloud Map namespaces:
 #   aws servicediscovery list-namespaces --region il-central-1

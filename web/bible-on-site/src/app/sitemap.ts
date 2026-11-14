@@ -1,19 +1,38 @@
 import type { MetadataRoute } from "next";
-import { headers } from "next/headers";
+import {
+	getParashaUnitById,
+	getParashaUnitCount,
+	PARASHA_DIVISION,
+} from "../data/parasha/parasha-units";
 import type { ArticlePerekPair } from "../lib/articles";
 import { getAllArticlePerekIdPairs } from "../lib/articles";
+import {
+	getPublishedMoedSlugs,
+	MOADIM_ROOT,
+	moedHref,
+} from "../lib/moadim";
 import { getAllAuthorSlugs } from "../lib/authors";
-import { getPerushimByPerekId } from "../lib/perushim";
+import { getAllPerushPerekNamePairs } from "../lib/perushim";
+import { SITE_ORIGIN } from "../lib/seo/jsonld";
+import type { PerekIllustration } from "../lib/seo/perek-illustrations";
+import { getPerekImagesByChapter } from "../lib/seo/perek-images-data";
 import { CATEGORY_SLUGS, categoryHref } from "../lib/tanahpedia/category-slug";
 import { getAllEntryUniqueNames } from "../lib/tanahpedia/service";
 import type { CategoryKey } from "../lib/tanahpedia/types";
+
+// Serve the build-time snapshot until the next release. Content-driven refresh
+// is a separate improvement tracked in #2398; request APIs must not disable SSG.
+export const dynamic = "error";
+export const revalidate = false;
 
 /**
  * Static section paths for the sitemap
  */
 export const SITEMAP_SECTIONS = [
+	"לוח",
 	"dailyBulletin",
 	"whatsappGroup",
+	"dailyBulletin/join/email",
 	"tos",
 	"app",
 	"contact",
@@ -35,7 +54,8 @@ export interface PerushPerekPair {
 
 export interface SitemapConfig {
 	baseUrl: string;
-	lastModified: Date;
+	/** Set only when a page's actual last significant update is known. */
+	lastModified?: Date;
 }
 
 /**
@@ -81,17 +101,49 @@ export function generate929IndexEntry(
 }
 
 /**
+ * Generates the פרשה landing entry. Unlike the noindex מסורה section,
+ * the weekly parasha hub and its 54 base readings are indexable.
+ */
+export function generateParashaIndexEntry(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap[0] {
+	return {
+		url: `${config.baseUrl}/פרשה`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly",
+		priority: 0.7,
+	};
+}
+
+/** One canonical base URL per parasha; presentation/content variants stay out. */
+export function generateParashaUnitEntries(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap {
+	return Array.from({ length: getParashaUnitCount() }, (_, index) => ({
+		url: `${config.baseUrl}${PARASHA_DIVISION.rootPath}/${getParashaUnitById(index + 1).slug}`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly" as const,
+		priority: 0.7,
+	}));
+}
+
+/**
  * Generates all 929 perek URL entries
  */
 export function generatePerekEntries(
 	config: SitemapConfig,
+	imagesByPerek: Record<number, PerekIllustration[]> = {},
 ): MetadataRoute.Sitemap {
-	return Array.from({ length: TOTAL_PERAKIM }, (_, i) => ({
-		url: `${config.baseUrl}/929/${i + 1}`,
-		lastModified: config.lastModified,
-		changeFrequency: "monthly" as const,
-		priority: 0.8,
-	}));
+	return Array.from({ length: TOTAL_PERAKIM }, (_, i) => {
+		const images = imagesByPerek[i + 1] ?? [];
+		return {
+			url: `${config.baseUrl}/929/${i + 1}`,
+			lastModified: config.lastModified,
+			changeFrequency: "monthly" as const,
+			priority: 0.8,
+			...(images.length ? { images: images.map((image) => image.src) } : {}),
+		};
+	});
 }
 
 /**
@@ -198,6 +250,34 @@ export function generatePediaCategoryEntries(
 }
 
 /**
+ * Generates the מועדים על הפרק landing entry (#3101). The catalogue is
+ * indexable; unpublished moadim never reach the slug list.
+ */
+export function generateMoadimIndexEntry(
+	config: SitemapConfig,
+): MetadataRoute.Sitemap[0] {
+	return {
+		url: `${config.baseUrl}${MOADIM_ROOT}`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly",
+		priority: 0.7,
+	};
+}
+
+/** One canonical Hebrew-slug URL per published moed. */
+export function generateMoedEntries(
+	config: SitemapConfig,
+	moedSlugs: string[],
+): MetadataRoute.Sitemap {
+	return moedSlugs.map((slug) => ({
+		url: `${config.baseUrl}${moedHref(slug)}`,
+		lastModified: config.lastModified,
+		changeFrequency: "monthly" as const,
+		priority: 0.7,
+	}));
+}
+
+/**
  * Generates the complete sitemap entries (pure function for testing)
  */
 export function generateSitemapEntries(
@@ -206,12 +286,14 @@ export function generateSitemapEntries(
 	articles: ArticlePerekPair[] = [],
 	perushim: PerushPerekPair[] = [],
 	pediaUniqueNames: string[] = [],
+	imagesByPerek: Record<number, PerekIllustration[]> = {},
+	moedSlugs: string[] = [],
 ): MetadataRoute.Sitemap {
 	return [
 		generateRootEntry(config),
 		...generateSectionEntries(config),
 		generate929IndexEntry(config),
-		...generatePerekEntries(config),
+		...generatePerekEntries(config, imagesByPerek),
 		...generateArticleEntries(config, articles),
 		...generatePerushEntries(config, perushim),
 		generateAuthorsIndexEntry(config),
@@ -219,45 +301,41 @@ export function generateSitemapEntries(
 		generatePediaIndexEntry(config),
 		...generatePediaCategoryEntries(config),
 		...generatePediaEntries(config, pediaUniqueNames),
+		generateMoadimIndexEntry(config),
+		...generateMoedEntries(config, moedSlugs),
+		generateParashaIndexEntry(config),
+		...generateParashaUnitEntries(config),
 	];
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-	const headersList = await headers();
-	/* istanbul ignore next: fallback for malformed requests without Host header */
-	const host = headersList.get("host") ?? "xn--febl3a.co.il";
-	const baseUrl = `https://${host}`;
-
-	// Fetch dynamic data for sitemap entries in parallel
-	const [authorSlugs, articles, pediaUniqueNames] = await Promise.all([
+	// Fetch build-time data for sitemap entries in parallel. Perushim load via a
+	// single bulk query rather than one lookup per perek.
+	const [
+		authorSlugs,
+		articles,
+		pediaUniqueNames,
+		imagesByPerek,
+		perushPerekPairs,
+		moedSlugs,
+	] = await Promise.all([
 		getAllAuthorSlugs(),
 		getAllArticlePerekIdPairs(),
 		getAllEntryUniqueNames(),
+		getPerekImagesByChapter(),
+		getAllPerushPerekNamePairs(),
+		getPublishedMoedSlugs(),
 	]);
-
-	// Fetch all perushim for all perakim
-	const perushimPromises = Array.from({ length: TOTAL_PERAKIM }, (_, i) =>
-		getPerushimByPerekId(i + 1),
-	);
-	const allPerushim = await Promise.all(perushimPromises);
-
-	// Flatten to perush-perek pairs
-	const perushPerekPairs: PerushPerekPair[] = allPerushim.flatMap(
-		(perushim, index) =>
-			perushim.map((perush) => ({
-				perekId: index + 1,
-				perushName: perush.name,
-			})),
-	);
 
 	return generateSitemapEntries(
 		{
-			baseUrl,
-			lastModified: new Date(),
+			baseUrl: SITE_ORIGIN,
 		},
 		authorSlugs,
 		articles,
 		perushPerekPairs,
 		pediaUniqueNames,
+		imagesByPerek,
+		moedSlugs,
 	);
 }

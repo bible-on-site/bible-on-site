@@ -54,7 +54,10 @@ export function EntryLinkPicker({
 
 	return (
 		<div className="w-full mt-2 border border-gray-200 rounded-lg bg-white p-2">
-			<label className="block text-xs text-gray-600 mb-1" htmlFor="entry-search">
+			<label
+				className="block text-xs text-gray-600 mb-1"
+				htmlFor="entry-search"
+			>
 				חפש ערך בתנכפדיה
 			</label>
 			<input
@@ -69,9 +72,7 @@ export function EntryLinkPicker({
 			{error && (
 				<p className="text-xs text-red-700 mt-2">טעינת רשימת הערכים נכשלה.</p>
 			)}
-			{!error && loading && (
-				<p className="text-xs text-gray-500 mt-2">טוען…</p>
-			)}
+			{!error && loading && <p className="text-xs text-gray-500 mt-2">טוען…</p>}
 			{!error && !loading && visible.length === 0 && (
 				<p className="text-xs text-gray-500 mt-2">לא נמצאו ערכים.</p>
 			)}
@@ -100,7 +101,7 @@ export function EntryLinkPicker({
 			)}
 			{options.length > MAX_VISIBLE && (
 				<p className="text-xs text-gray-500 mt-1">
-					מוצגים {MAX_VISIBLE} מתוך {options.length} — הוסף תווים לחיפוש.
+					מוצגים {MAX_VISIBLE} מתוך {options.length} - הוסף תווים לחיפוש.
 				</p>
 			)}
 		</div>
