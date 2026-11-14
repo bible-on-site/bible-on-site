@@ -29,6 +29,9 @@ public class AppFixture : IAsyncLifetime
     private Process? _apiProcess;
     private StreamWriter? _appLog;
     private Exception? _drainFailure;
+    private Task[] _drains = [];
+    private readonly CancellationTokenSource _drainStop = new();
+    private int _isDisposing;
     private bool _weStartedApi;
     private DateTime _apiStartedAt;
 
@@ -262,8 +265,8 @@ public class AppFixture : IAsyncLifetime
         Directory.CreateDirectory(Path.GetDirectoryName(appLogPath)!);
         var appLog = new StreamWriter(appLogPath, append: false) { AutoFlush = true };
         _appLog = appLog;
-        DrainPipe(_appProcess.StandardOutput, "[app]", appLog);
-        DrainPipe(_appProcess.StandardError, "[app:err]", appLog);
+        _drains = [DrainPipe(_appProcess.StandardOutput, "[app]", appLog),
+            DrainPipe(_appProcess.StandardError, "[app:err]", appLog)];
 
         // dotnet run evaluates the project even with --no-build, so the app
         // process can spawn seconds after the launcher returns on a loaded
@@ -385,13 +388,12 @@ public class AppFixture : IAsyncLifetime
 
     /// <summary>
     /// Mirrors one redirected pipe into the console and the app log file.
-    /// Closed/disposed pipe reads are expected at teardown, as is a write
-    /// landing on an already-disposed log. Any other failure — including an
-    /// <see cref="IOException"/> from the log write itself — is recorded so a
+    /// Closed/disposed pipe reads are expected during teardown. Other failures,
+    /// including an <see cref="IOException"/> from a log write, are recorded so a
     /// dead drain, which can leave the app blocked on a full pipe, fails the
     /// run instead of vanishing silently.
     /// </summary>
-    private void DrainPipe(StreamReader reader, string prefix, StreamWriter appLog) => _ = Task.Run(async () =>
+    private Task DrainPipe(StreamReader reader, string prefix, StreamWriter appLog) => Task.Run(async () =>
     {
         try
         {
@@ -400,9 +402,10 @@ public class AppFixture : IAsyncLifetime
                 string? line;
                 try
                 {
-                    line = await reader.ReadLineAsync();
+                    line = await reader.ReadLineAsync(_drainStop.Token);
                 }
-                catch (Exception exception) when (exception is IOException or ObjectDisposedException)
+                catch (Exception exception) when (Volatile.Read(ref _isDisposing) != 0 &&
+                    exception is IOException or ObjectDisposedException or OperationCanceledException)
                 {
                     // The pipe closes when the app process exits at teardown.
                     break;
@@ -411,27 +414,19 @@ public class AppFixture : IAsyncLifetime
                 {
                     break;
                 }
-                try
-                {
-                    Console.WriteLine($"{prefix} {line}");
-                    lock (appLog) { appLog.WriteLine($"{prefix} {line}"); }
-                }
-                catch (ObjectDisposedException)
-                {
-                    // Teardown can dispose the log before the last line lands.
-                    break;
-                }
+                Console.WriteLine($"{prefix} {line}");
+                lock (appLog) { appLog.WriteLine($"{prefix} {line}"); }
             }
         }
         catch (Exception exception) //NOSONAR — background drain failures must be retained and fail fixture teardown.
         {
-            _drainFailure = exception;
-            Console.WriteLine($"{prefix} drain failed: {exception}");
+            Interlocked.CompareExchange(ref _drainFailure, exception, null);
         }
     });
 
     public async ValueTask DisposeAsync()
     {
+        Interlocked.Exchange(ref _isDisposing, 1);
         try
         {
             // Pull the app-process coverage snapshot while the instrumented
@@ -486,12 +481,23 @@ public class AppFixture : IAsyncLifetime
             using var automation = _automation;
             try
             {
-                _appLog?.Dispose();
+                await _drainStop.CancelAsync();
+                // Join before checking the retained failure or closing the
+                // shared writer: a late stdout/stderr failure cannot escape
+                // teardown, and no write can race log disposal.
+                await Task.WhenAll(_drains);
             }
-            catch (IOException) when (_drainFailure is not null)
+            finally
             {
-                // Flushing the failed sink must not hide the original drain
-                // failure or prevent the remaining resources from disposing.
+                _drainStop.Dispose();
+                try
+                {
+                    _appLog?.Dispose();
+                }
+                catch (IOException) when (_drainFailure is not null)
+                {
+                    // Preserve the original drain cause if flushing fails too.
+                }
             }
         }
         if (_drainFailure is { } failure)
@@ -562,12 +568,20 @@ public class AppFixture : IAsyncLifetime
     private static extern IntPtr WindowFromPoint(Point point); //NOSONAR — HWND hit-testing is Win32-only; UIA FromPoint can return a child element instead of the covering window.
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId); //NOSONAR — HWND→PID mapping has no managed API.
+    /// <summary>Explicit activation before a native gesture scenario. Every
+    /// gesture still verifies foreground and hit-test ownership, so a user
+    /// switching applications stops input rather than clicking another app.</summary>
+    public void ActivateWindow()
+    {
+        MainWindow.SetForeground();
+        AssertForeground();
+    }
     private void AssertOwnedWindow(IntPtr window)
     {
         GetWindowThreadProcessId(window, out var processId); //NOSONAR — HWND→PID mapping has no managed API.
         if (processId != App.ProcessId)
         {
-            throw new InvalidOperationException("Native gesture tests require an isolated desktop with BibleOnSite in the foreground. No input was sent.");
+            throw new InvalidOperationException($"Native gesture tests require an isolated desktop with BibleOnSite in the foreground (expected process {App.ProcessId}, actual {processId}). No input was sent.");
         }
     }
 

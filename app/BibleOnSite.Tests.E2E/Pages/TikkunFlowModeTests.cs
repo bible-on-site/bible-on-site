@@ -1,6 +1,8 @@
 using BibleOnSite.Tests.E2E.Fixtures;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Capturing;
+using FlaUI.Core.Input;
+using FlaUI.Core.WindowsAPI;
 
 namespace BibleOnSite.Tests.E2E.Pages;
 
@@ -55,6 +57,7 @@ public sealed class TikkunFlowModeTests(TikkunModeFixture fixture)
         // the live scroll view, so one click lands — re-tapping would mask
         // a genuinely dead surface.
         using var shownCapture = Capture.Element(flow!);
+        fixture.ActivateWindow();
         fixture.ClickAt(FlowTapPoint(flow!));
         var repaintedInPlace = await WaitForRepaintAsync(flow!, shownCapture.Bitmap);
         if (!repaintedInPlace)
@@ -71,6 +74,51 @@ public sealed class TikkunFlowModeTests(TikkunModeFixture fixture)
             "the marks toggle repaints in place — the scroll offset must not move");
 
         CaptureScreenshot("tikkun-marks-hidden.png");
+
+        // Search opens a new PerekPage through the real Shell push path.
+        // The recovery must work there too, after navigation and native layout.
+        await OpenPushedReaderAsync();
+        var pushed = await WaitForTikkunFlowAsync(TimeSpan.FromSeconds(30));
+        pushed.Should().NotBeNull("a pushed reader must realize its current carousel item");
+        var pushedOffset = ReadScrollPercent(pushed!);
+        using var pushedShown = Capture.Element(pushed!);
+        CaptureScreenshot("tikkun-pushed-shown.png");
+        fixture.ActivateWindow();
+        fixture.ClickAt(FlowTapPoint(pushed!));
+        (await WaitForRepaintAsync(pushed!, pushedShown.Bitmap)).Should().BeTrue(
+            "the pushed reader must remove marks without adding ink from moving letters");
+        ReadScrollPercent(pushed!).Should().Be(pushedOffset);
+        CaptureScreenshot("tikkun-pushed-hidden.png");
+    }
+
+    private async Task OpenPushedReaderAsync()
+    {
+        var source = await fixture.WaitForElementAsync(window =>
+            window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSource"))
+                .FirstOrDefault(element => !element.IsOffscreen && RenderedAtCenter(element)));
+        source.Should().NotBeNull();
+        fixture.ActivateWindow();
+        fixture.Click(source!);
+        var input = await fixture.WaitForElementAsync(window =>
+            window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSearchInput"))
+                .FirstOrDefault(element => !element.IsOffscreen && element.IsEnabled && RenderedAtCenter(element)));
+        input.Should().NotBeNull();
+        fixture.Click(input!);
+        (await fixture.WaitForElementAsync(window =>
+            window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSearchInput"))
+                .FirstOrDefault(element => element.FrameworkAutomationElement.HasKeyboardFocus)))
+            .Should().NotBeNull("one click must focus the live search field");
+        Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_A);
+        Keyboard.Type("בראשית 11");
+        var result = await fixture.WaitForElementAsync(window =>
+            window.FindAllDescendants(fixture.CF.ByName("בראשית יא"))
+                .FirstOrDefault(element => !element.IsOffscreen && RenderedAtCenter(element)));
+        result.Should().NotBeNull("the packaged chapter index must resolve the new reader target");
+        fixture.Click(result!);
+        (await fixture.WaitForElementAsync(window =>
+            window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSource").And(fixture.CF.ByName("בראשית יא")))
+                .FirstOrDefault(element => !element.IsOffscreen && RenderedAtCenter(element))))
+            .Should().NotBeNull("the pushed reader must honor its explicit target, not the startup preset");
     }
 
     /// <summary>Waits for the realized תיקון scroll view. The "tsy:" semantic
@@ -265,7 +313,8 @@ public sealed class TikkunFlowModeTests(TikkunModeFixture fixture)
         while (DateTime.UtcNow < deadline)
         {
             using var current = Capture.Element(element);
-            if (WordBandRemovedInk(current.Bitmap, before) >= 40)
+            var (removed, added) = WordBandInkDelta(current.Bitmap, before);
+            if (removed >= 40 && added == 0)
             {
                 return true;
             }
@@ -283,11 +332,11 @@ public sealed class TikkunFlowModeTests(TikkunModeFixture fixture)
     /// pixel is compared (no sampling stride), and only a real crossing into
     /// background territory counts as erased so antialiasing shimmer on
     /// surviving glyphs cannot accumulate into a pass.</summary>
-    private static int WordBandRemovedInk(System.Drawing.Bitmap after, System.Drawing.Bitmap before)
+    private static (int Removed, int Added) WordBandInkDelta(System.Drawing.Bitmap after, System.Drawing.Bitmap before)
     {
         if (after.Width != before.Width || after.Height != before.Height)
         {
-            return 0;
+            return (0, 0);
         }
         var rect = new System.Drawing.Rectangle(0, 0, after.Width, after.Height);
         var dataA = after.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadOnly,
@@ -319,6 +368,7 @@ public sealed class TikkunFlowModeTests(TikkunModeFixture fixture)
             }
             var inkIsBright = lumaSum / Math.Max(1, lumaSamples) < 128;
             var removed = 0;
+            var added = 0;
             for (var y = band.Top; y < band.Bottom; y++)
             {
                 var row = y * stride;
@@ -333,9 +383,15 @@ public sealed class TikkunFlowModeTests(TikkunModeFixture fixture)
                     {
                         removed++;
                     }
+                    else if (inkIsBright
+                        ? lumaBefore < 70 && lumaAfter > 110
+                        : lumaBefore > 185 && lumaAfter < 145)
+                    {
+                        added++;
+                    }
                 }
             }
-            return removed;
+            return (removed, added);
         }
         finally
         {

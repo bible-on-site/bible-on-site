@@ -51,10 +51,12 @@ public partial class ReaderLoadingOverlay : Grid
     }
 
     private bool _showRequested;
+    private bool _readerNavigated;
 
     public ReaderLoadingOverlay()
     {
         InitializeComponent();
+        Loaded += (_, _) => ShowIfReady();
     }
 
     /// <summary>Swaps the overlay to its spinner state (initial load and retry).</summary>
@@ -85,40 +87,38 @@ public partial class ReaderLoadingOverlay : Grid
     }
 
     /// <summary>
-    /// Shows the overlay once the platform view is settled: making the overlay
-    /// visible while the page is mid Shell push-navigation creates a stranded
-    /// composition visual that keeps painting even after Visibility collapses,
-    /// so the show is deferred until after attach.
+    /// Windows must attach the overlay and finish the reader's navigation
+    /// before making its composition visual visible. Elapsed time is not a
+    /// readiness signal; both lifecycle events may occur in either order.
     /// </summary>
     private void Show()
     {
         _showRequested = true;
-        if (Handler is null)
-        {
-            Loaded += OnLoadedShow;
-            return;
-        }
-        if (!IsVisible)
-        {
-            Dispatcher.DispatchDelayed(ShowDelay, ShowIfRequested);
-        }
+        ShowIfReady();
     }
 
-    private static readonly TimeSpan ShowDelay = TimeSpan.FromMilliseconds(450);
-
-    private void OnLoadedShow(object? sender, EventArgs e)
+    public void ReaderNavigatedTo()
     {
-        Loaded -= OnLoadedShow;
-        Dispatcher.DispatchDelayed(ShowDelay, ShowIfRequested);
+        _readerNavigated = true;
+        ShowIfReady();
     }
 
-    private void ShowIfRequested()
+    public void ReaderNavigatedFrom()
     {
-        if (_showRequested)
+        _readerNavigated = false;
+        IsVisible = false;
+    }
+
+    private void ShowIfReady()
+    {
+        if (_showRequested && ReadyToShow)
         {
             IsVisible = true;
         }
     }
+
+    // Mobile never needs the Windows composition workaround.
+    private bool ReadyToShow => !OperatingSystem.IsWindows() || (_readerNavigated && IsLoaded);
 
     private void ApplyAutomationIdPrefix(string prefix)
     {

@@ -635,13 +635,6 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         // A perek explicitly requested by navigation (e.g. calendar day tap)
         // wins over search-reader and preference defaults.
-        // E2E-only: pin the first perek so the suite renders a known, richly
-        // marked perek on the first page — no push navigation, whose
-        // re-parented native tree orphans GraphicsView repaint surfaces (#3265).
-        if (int.TryParse(Environment.GetEnvironmentVariable("BIBLE_E2E_PEREK"), out var e2ePerek))
-        {
-            return e2ePerek;
-        }
         if (_pendingPerekId is int pendingPerek)
         {
             _pendingPerekId = null;
@@ -667,6 +660,13 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             return pendingTarget.PerekId;
         }
 
+        // The deterministic E2E start chapter is a preference fallback, not
+        // an override of explicit navigation into another reader instance.
+        if (int.TryParse(Environment.GetEnvironmentVariable("BIBLE_E2E_PEREK"), out var e2ePerek)
+            && e2ePerek is > 0 and <= 929)
+        {
+            return e2ePerek;
+        }
         var prefs = PreferencesService.Instance;
         if (prefs.PerekToLoad == PerekToLoad.Todays)
         {
@@ -684,7 +684,16 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     protected override void OnNavigatedTo(NavigatedToEventArgs args)
     {
         base.OnNavigatedTo(args);
+        CarouselLoadingOverlay.ReaderNavigatedTo();
+        _carousel.ReaderNavigatedTo();
         SetAnalyticsScreenForPerek();
+    }
+
+    protected override void OnNavigatedFrom(NavigatedFromEventArgs args)
+    {
+        CarouselLoadingOverlay.ReaderNavigatedFrom();
+        _carousel.ReaderNavigatedFrom();
+        base.OnNavigatedFrom(args);
     }
 
 

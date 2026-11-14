@@ -111,6 +111,10 @@ public sealed class ReaderCarousel
         _ui = surfaces;
         _actions = actions;
         _ui.Carousel.SizeChanged += OnCarouselSizeChanged;
+#if WINDOWS
+        _ui.Carousel.Loaded += (_, _) => TryResnapAfterLoad();
+        _ui.Carousel.HandlerChanged += (_, _) => TryResnapAfterLoad();
+#endif
     }
 
     /// <summary>
@@ -198,16 +202,76 @@ public sealed class ReaderCarousel
     public void ResnapAfterLoad()
     {
 #if WINDOWS
-        _ui.Carousel.Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(600), () =>
-        {
-            if (_ui.Carousel.Handler?.PlatformView is Microsoft.UI.Xaml.Controls.ListViewBase list
-                && _ui.Carousel.CurrentItem is { } item)
-            {
-                list.ScrollIntoView(item, Microsoft.UI.Xaml.Controls.ScrollIntoViewAlignment.Leading);
-            }
-        });
+        _postLoadResnapPending = true;
+        TryResnapAfterLoad();
 #endif
     }
+
+    public void ReaderNavigatedTo()
+    {
+#if WINDOWS
+        _readerNavigated = true;
+        TryResnapAfterLoad();
+#endif
+    }
+
+    public void ReaderNavigatedFrom()
+    {
+#if WINDOWS
+        _readerNavigated = false;
+        _postLoadResnapPending = false;
+        DetachResnapLayout();
+#endif
+    }
+
+#if WINDOWS
+    private bool _postLoadResnapPending;
+    private bool _readerNavigated;
+    private Microsoft.UI.Xaml.Controls.ListViewBase? _resnapList;
+
+    private void DetachResnapLayout()
+    {
+        if (_resnapList is { } list)
+        {
+            list.LayoutUpdated -= OnResnapLayout;
+            _resnapList = null;
+        }
+    }
+
+    private void OnResnapLayout(object? sender, object e) => TryResnapAfterLoad();
+
+    private void TryResnapAfterLoad()
+    {
+        if (!_postLoadResnapPending || !_readerNavigated ||
+            _ui.Carousel.Handler?.PlatformView is not Microsoft.UI.Xaml.Controls.ListViewBase list)
+        {
+            return;
+        }
+        if (!ReferenceEquals(_resnapList, list))
+        {
+            DetachResnapLayout();
+            _resnapList = list;
+            list.LayoutUpdated += OnResnapLayout;
+        }
+
+        var position = _ui.Carousel.Position;
+        if (!list.IsLoaded || list.ActualWidth <= 0 || list.ActualHeight <= 0 ||
+            list.ItemsPanelRoot is null || position < 0 || position >= list.Items.Count ||
+            _ui.Carousel.CurrentItem is not { } current ||
+            list.Items[position] is not Microsoft.Maui.Controls.Platform.ItemTemplateContext entry ||
+            !Equals(entry.Item, current))
+        {
+            return;
+        }
+
+        _postLoadResnapPending = false;
+        DetachResnapLayout();
+        // The native list contains ItemTemplateContext, not the managed model.
+        // Resolve after navigation, attach and layout, so this is the current
+        // projection even when a newer reader load superseded the first one.
+        list.ScrollIntoView(entry, Microsoft.UI.Xaml.Controls.ScrollIntoViewAlignment.Leading);
+    }
+#endif
 
     /// <summary>
     /// Re-snaps the carousel to the current position after its width changed,
