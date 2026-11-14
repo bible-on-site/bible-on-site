@@ -139,6 +139,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 ExitFullscreenButton = ExitFullScreenButton,
                 ArticlesView = ArticlesCollection,
                 ReaderContent = PerekCarousel,
+                // The perek hairline rides the reading content — the swap
+                // hides it while the articles view is up (#3364).
+                ReadingProgressIndicator = ReadingProgressBar,
                 Toolbar = ReaderToolbar,
                 Host = MainGrid,
                 ContentArea = ContentArea,

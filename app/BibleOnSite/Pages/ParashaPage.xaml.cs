@@ -154,6 +154,8 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 ExitFullscreenButton = ExitFullScreenButton,
                 ArticlesView = ArticlesCollection,
                 ReaderContent = ParashaCarousel,
+                // This reader has no reading-position indicator yet.
+                ReadingProgressIndicator = null,
                 Toolbar = ReaderToolbar,
                 Host = MainGrid,
                 ContentArea = ContentArea,
