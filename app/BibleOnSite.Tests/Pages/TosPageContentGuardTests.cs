@@ -70,7 +70,7 @@ public class TosPageContentGuardTests
         Assert.Contains(link.Descendants(),
             e => e.Attribute("Tapped")?.Value == "OnCopyrightEmailTapped");
         Assert.Contains("OnCopyrightEmailTapped", TosCodeBehind());
-        Assert.Contains("mailto:tanah.site@gmail.com", TosCodeBehind());
+        Assert.Contains("CopyrightReport.OpenEmailAsync(Launcher.Default, ShellAppNavigator.Instance)", TosCodeBehind());
     }
 
     private static string FindAppRoot()

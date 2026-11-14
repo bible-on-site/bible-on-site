@@ -26,16 +26,7 @@ public partial class TosPage : ContentPage
 
     private async void OnCopyrightEmailTapped(object? sender, TappedEventArgs e)
     {
-        try
-        {
-            await Launcher.OpenAsync(new Uri("mailto:tanah.site@gmail.com"));
-        }
-        catch (Exception ex) when (ex is FeatureNotSupportedException
-            or InvalidOperationException or UriFormatException or ArgumentException)
-        {
-            Console.Error.WriteLine($"Error opening email: {ex.Message}");
-            await ShellAppNavigator.Instance.DisplayAlertAsync("שגיאה", "לא ניתן לפתוח את אפליקציית הדואר. נסו שוב", "אישור");
-        }
+        await CopyrightReport.OpenEmailAsync(Launcher.Default, ShellAppNavigator.Instance);
     }
 
     private async void OnPrivacyPolicyTapped(object? sender, TappedEventArgs e)
