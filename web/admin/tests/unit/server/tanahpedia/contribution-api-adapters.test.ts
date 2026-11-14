@@ -35,6 +35,36 @@ beforeEach(() => {
 	mocks.names.mockResolvedValue([{ id: nameId, name: "Main name" }]);
 	mocks.sourceLabels.mockResolvedValue({});
 });
+it("adds v4 edit vocabulary without resolving content or changing the reviewed creation", async () => {
+	const source = [
+		{
+			kind: "entry",
+			targetId: id,
+			before: null,
+			after: {
+				title: "Entry",
+				uniqueName: "entry",
+				displayName: "Name",
+				entityType: "PERSON",
+			},
+			labels: {},
+		},
+	];
+	const contract = currentContributionApiContract({} as never);
+	expect(
+		(
+			await convertApiVersionAsync(
+				source as unknown,
+				3,
+				contract.version,
+				contract.adapters,
+			)
+		).payload,
+	).toEqual(source);
+	expect(mocks.read).not.toHaveBeenCalled();
+	expect(mocks.names).not.toHaveBeenCalled();
+	expect(mocks.source).not.toHaveBeenCalled();
+});
 it("rejects mixed-case duplicate API targets and MAIN-name preconditions", () => {
 	const targetId = "Abcdef00-0000-4000-8000-000000000001";
 	const operation = { ...legacy, targetId, personNames: [] };

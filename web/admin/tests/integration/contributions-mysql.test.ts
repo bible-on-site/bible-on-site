@@ -1310,7 +1310,12 @@ describe("all category contribution operations against canonical MySQL", () => {
 			const pr = await mergeChanges([
 				{
 					kind,
-					...(spec.updateOnly ? { targetId: recordRefs.saying } : {}),
+					...(spec.updateOnly
+						? {
+								targetId:
+									kind === "entry_title" ? recordRefs.entry : recordRefs.saying,
+							}
+						: {}),
 					after,
 				},
 			]);
@@ -1321,6 +1326,7 @@ describe("all category contribution operations against canonical MySQL", () => {
 				updated = { ...after, altGroupId: randomUUID() };
 			else if (kind === "war_side") updated = { ...after, sideNumber: 2 };
 			else if (kind === "saying_date") updated = { sayingDate: 57840202 };
+			else if (kind === "entry_title") updated = { title: "כותרת מתוקנת" };
 			else if (kind === "entry_entity")
 				updated = { ...after, entityId: ids.parentEntity };
 			else if (kind === "entity_source") updated = { ...after, pasukNumber: 2 };
@@ -1333,10 +1339,14 @@ describe("all category contribution operations against canonical MySQL", () => {
 				expect(await current(kind, id)).toBeNull();
 			} else {
 				const [rows] = await conn.query<RowDataPacket[]>(
-					"SELECT content FROM tanahpedia_saying WHERE id=?",
+					kind === "entry_title"
+						? "SELECT content FROM tanahpedia_entry WHERE id=?"
+						: "SELECT content FROM tanahpedia_saying WHERE id=?",
 					[id],
 				);
-				expect(rows[0].content).toBeNull();
+				expect(rows[0].content).toBe(
+					kind === "entry_title" ? "<p>fixture</p>" : null,
+				);
 				await expect(
 					service.createContribution(
 						{
@@ -1663,7 +1673,15 @@ describe("all category contribution operations against canonical MySQL", () => {
 			),
 		).rejects.toThrow("existing alias");
 	});
-	it("preserves an alias introduced after a new-entry proposal was prepared", async () => {
+	it("rebases creation into edits when a later alias resolves its name, requiring fresh owner review", async () => {
+		await conn.execute(
+			"INSERT INTO tanahpedia_entry_entity (id,entry_id,entity_id) VALUES (?,?,?)",
+			[randomUUID(), recordRefs.entry, ids.entity],
+		);
+		const [original] = await conn.execute<RowDataPacket[]>(
+			"SELECT title,unique_name,content FROM tanahpedia_entry WHERE id=?",
+			[recordRefs.entry],
+		);
 		const name = `Late-alias-${randomUUID()}`;
 		const proposal = await service.createContribution(
 			{
@@ -1678,7 +1696,7 @@ describe("all category contribution operations against canonical MySQL", () => {
 							title: "ערך בדיקה",
 							uniqueName: name,
 							displayName: "ערך בדיקה",
-							entityType: "PLACE",
+							entityType: "PERSON",
 						},
 					},
 				],
@@ -1695,17 +1713,49 @@ describe("all category contribution operations against canonical MySQL", () => {
 			},
 		]);
 		const pending = await fresh(proposal);
+		expect(pending.changes.map((c) => c.kind)).toEqual([
+			"entry_title",
+			"metadata",
+		]);
+		expect(pending.changes[0]).toMatchObject({
+			targetId: recordRefs.entry,
+			before: { title: original[0].title },
+			after: { title: "ערך בדיקה" },
+		});
+		expect(pending.changes[1].targetId).toBe(ids.entity);
+		expect(pending.evidence).toEqual(proposal.evidence);
+		expect(
+			pending.events.find((e) => e.kind === "rebased")?.snapshot?.changes,
+		).toEqual(proposal.changes);
+		expect(reviewStatus(pending)).toBe("required");
 		await expect(
 			service.mergeContribution(
 				{ id: pending.id, version: pending.version },
 				owner,
 			),
-		).rejects.toThrow("existing alias");
+		).rejects.toThrow("Approval");
+		const approved = await service.updateContribution(
+			{ id: pending.id, version: pending.version, action: "approve" },
+			owner,
+		);
+		await service.mergeContribution(
+			{ id: approved.id, version: approved.version },
+			owner,
+		);
 		expect(
 			(await current("alias_mapping", alias.changes[0].targetId))?.targets,
 		).toEqual([{ entryId: String(recordRefs.entry), label: "" }]);
-		expect(await current("entry", pending.changes[0].targetId)).toBeNull();
-		expect((await fresh(proposal)).state).toBe("open");
+		expect(await current("entry", proposal.changes[0].targetId)).toBeNull();
+		const [existing] = await conn.execute<RowDataPacket[]>(
+			"SELECT title,unique_name,content FROM tanahpedia_entry WHERE id=?",
+			[recordRefs.entry],
+		);
+		expect(existing[0]).toMatchObject({
+			title: "ערך בדיקה",
+			unique_name: original[0].unique_name,
+			content: original[0].content,
+		});
+		expect((await fresh(proposal)).state).toBe("merged");
 	});
 	it("rolls back a sequence creating an alias and a new entry at the same address", async () => {
 		const name = `Same-PR-address-${randomUUID()}`;
@@ -1744,6 +1794,115 @@ describe("all category contribution operations against canonical MySQL", () => {
 		).rejects.toThrow("existing alias");
 		for (const change of proposal.changes)
 			expect(await current(change.kind, change.targetId)).toBeNull();
+	});
+	async function pendingCreation(
+		name: string,
+		entityType: "PERSON" | "PLACE" = "PERSON",
+	) {
+		return service.createContribution(
+			{
+				kind: "pr",
+				title: "Pending creation resolution",
+				description: "נתוני בדיקה בלבד",
+				evidence,
+				changes: [
+					{
+						kind: "entry",
+						after: {
+							title: "כותרת מבוקשת",
+							uniqueName: name,
+							displayName: "שם מבוקש",
+							entityType,
+						},
+					},
+				],
+			},
+			owner,
+		);
+	}
+	it("rebases creation when another PR creates the same canonical address", async () => {
+		const name = `Created-in-parallel-${randomUUID()}`;
+		const pending = await pendingCreation(name);
+		const actual = await mergeChanges([
+			{
+				kind: "entry",
+				after: {
+					title: "כותרת קיימת",
+					uniqueName: name,
+					displayName: "שם קיים",
+					entityType: "PERSON",
+				},
+			},
+		]);
+		const refreshed = await fresh(pending);
+		expect(refreshed.changes[0]).toMatchObject({
+			kind: "entry_title",
+			targetId: actual.changes[0].targetId,
+			before: { title: "כותרת קיימת" },
+			after: { title: "כותרת מבוקשת" },
+		});
+		expect(refreshed.changes[1]).toMatchObject({
+			kind: "metadata",
+			before: { displayName: "שם קיים" },
+			after: { displayName: "שם מבוקש" },
+		});
+		expect(reviewStatus(refreshed)).toBe("required");
+		expect(refreshed.revisionAuthor?.kind).toBe("system");
+		await service.updateContribution(
+			{ id: refreshed.id, version: refreshed.version, action: "close" },
+			owner,
+		);
+	});
+	it("retains a pending creation for manual recovery when its new alias is ambiguous", async () => {
+		const name = `Ambiguous-creation-${randomUUID()}`;
+		const pending = await pendingCreation(name);
+		await mergeChanges([
+			{
+				kind: "alias_mapping",
+				after: {
+					name,
+					targets: [
+						{ entryId: String(recordRefs.entry), label: "ראשון" },
+						{ entryId: otherEntry, label: "אחר" },
+					],
+				},
+			},
+		]);
+		const refreshed = await fresh(pending);
+		expect(refreshed.domainConflict).toContain("ambiguous alias");
+		expect(refreshed.changes).toEqual(pending.changes);
+		expect(refreshed.evidence).toEqual(pending.evidence);
+		expect(reviewStatus(refreshed)).toBe("required");
+		await service.updateContribution(
+			{ id: refreshed.id, version: refreshed.version, action: "close" },
+			owner,
+		);
+	});
+	it("blocks conversion when the resolved entry has no compatible entity", async () => {
+		const name = `Incompatible-creation-${randomUUID()}`;
+		const pending = await pendingCreation(name, "PLACE");
+		await mergeChanges([
+			{
+				kind: "alias_mapping",
+				after: {
+					name,
+					targets: [{ entryId: String(recordRefs.entry), label: "" }],
+				},
+			},
+		]);
+		const refreshed = await fresh(pending);
+		expect(refreshed.domainConflict).toContain("one PLACE entity");
+		expect(refreshed.changes).toEqual(pending.changes);
+		await expect(
+			service.mergeContribution(
+				{ id: refreshed.id, version: refreshed.version },
+				owner,
+			),
+		).rejects.toThrow("one PLACE entity");
+		await service.updateContribution(
+			{ id: refreshed.id, version: refreshed.version, action: "close" },
+			owner,
+		);
 	});
 	it("atomically transfers an alias address only with its complete reviewed removal", async () => {
 		const name = `Explicit-transfer-${randomUUID()}`;

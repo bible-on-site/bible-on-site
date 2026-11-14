@@ -53,7 +53,7 @@ Local structured generation follows [Ollama structured outputs](https://docs.oll
 ## Supported changes
 
 All additional category types reviewed by the user are included. The current
-contract has 44 operation kinds; family choices use the nine existing API types.
+contract has 45 operation kinds; family choices use the nine existing API types.
 
 | Category | Structured changes |
 | --- | --- |
@@ -69,7 +69,7 @@ contract has 44 operation kinds; family choices use the nine existing API types.
 | Animals | Kind and purity using the schema's enums |
 | Plants / astronomy | Creation day |
 | Books | Match to an existing canonical biblical book |
-| Entry identity | Entry/entity links, complete alias target sets and disambiguation labels |
+| Entry identity | Existing entry title, entry/entity links, complete alias target sets and disambiguation labels |
 | Sources | Entity/verse/segment links; scripture/commentary or bibliographic references attached to existing entities, entries or structured facts |
 | Assets | Existing 3D asset key, format and label; no upload or access-policy change |
 | New entries | Empty entry and linked subtype for all 13 creatable entity types |
@@ -167,8 +167,8 @@ still requires human review. Unknown IDs and invented source citations are rejec
 
 ## API evolution
 
-The merge operation contract is currently version 3, independently of package or
-release versions. Versions 1 and 2 are retained in migration history. `convertApiVersion`
+The merge operation contract is currently version 4, independently of package or
+release versions. Versions 1, 2 and 3 are retained in migration history. `convertApiVersion`
 and its asynchronous counterpart compose explicit directed adapters through
 intermediate versions. Register reverse adapters when a reverse route is needed;
 no reverse transformation is inferred. Retain historical adapters for PRs that
@@ -193,6 +193,10 @@ Its fields and human reference labels appear in the changes view. A merge checks
 that fact again before writing. Free-text evidence in the Description remains
 unchanged. As with every API adapter, this automatic contract upgrade preserves
 approval.
+
+The v3-to-v4 adapter adds existing-entry title operations without changing saved
+sequences or approvals. Resolving a creation to an existing entry belongs to the
+content-rebase path, which creates a new revision and requires renewed review.
 
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these
@@ -234,7 +238,7 @@ and a recoverable raw sequence, as requested.
 Every content merge durably queues a scan of pending PR sequences in the same
 transaction. The scan visits all open PRs, refreshing affected before-states,
 reference labels, MAIN-name preconditions and structured cited facts. Proposed
-after-values and free-text evidence remain unchanged. Equal operations become
+metadata values and free-text evidence remain unchanged. Equal operations become
 explicit no-ops and are not written again. Editing an existing proposal retains
 these satisfied updates and deletions while rechecking current targets and
 references, so evidence or remaining changes can still be edited. New proposals
@@ -256,12 +260,16 @@ revisions. The normal post-merge path drains immediately, with a 30-second
 background pass for interrupted work. A refresh failure never reports an already
 committed content merge as rolled back.
 
-Entry and alias operations share the public address space. A new-entry PR cannot
-silently shadow an existing alias. An atomic transfer requires an explicit
-operation removing that alias's complete reviewed destination set in the same
-PR. Both preparation and merge check this; a later collision blocks the pending
-proposal without changing its intent. Any entry/alias merge refreshes pending
-address proposals even when they reference different record IDs.
+Entry and alias operations share the public address space. When another merge
+makes a pending creation's name resolve to an existing entry, refresh rewrites it
+as edits of that entry's title and compatible entity display name. Its canonical
+address, alias destinations and article prose stay intact. Authoritative before
+values replace the creation base, and the changed sequence requires fresh
+doradsoft review. Ambiguous aliases or multiple/incompatible entity targets
+remain blocked for manual repair. Any entry/alias merge refreshes pending address
+proposals even when they reference different record IDs. Initial creations still
+reject occupied alias addresses; an explicitly reviewed alias removal plus a
+replacement creation can be applied atomically.
 
 ## Deployment and rollback
 

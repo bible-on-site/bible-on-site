@@ -84,6 +84,15 @@ const prophecy = () => ref("prophecy_id", "נבואה", "prophecy");
 const name = () => ref("person_name_id", "שם האיש", "person_name");
 
 export const CONTRIBUTION_RECORDS = {
+	entry_title: spec(
+		"זהות הערך",
+		"כותרת ערך קיים",
+		"tanahpedia_entry",
+		{
+			title: text("title", "כותרת"),
+		},
+		{ updateOnly: true },
+	),
 	person_name: spec(
 		"אישים",
 		"שם נוסף או כינוי",

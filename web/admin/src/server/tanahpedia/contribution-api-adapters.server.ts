@@ -17,6 +17,14 @@ import {
 export function currentContributionApiContract(conn: PoolConnection) {
 	const adapters: AsyncApiVersionAdapter<unknown>[] = [
 		{
+			from: 3,
+			to: 4,
+			id: "existing-entry-title-operations",
+			// New executable vocabulary only. Content resolution belongs to the
+			// separate post-merge rebase and must require renewed review.
+			convert: (payload) => payload,
+		},
+		{
 			from: 1,
 			to: 2,
 			id: "metadata-main-name-preconditions",

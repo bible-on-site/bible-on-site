@@ -14,6 +14,7 @@ import {
 } from "~/lib/tanahpedia/contributions";
 import { txExecute, txQuery, txQueryOne } from "../db";
 import { recomputeEntryMetrics } from "../reading-metrics";
+import { resolveEntryCreations } from "./contribution-entry-resolution.server";
 import {
 	applyContributionRecord,
 	assertNoContributionDependents,
@@ -194,7 +195,10 @@ export async function prepareChanges(
 	options: { refresh?: boolean } = {},
 ): Promise<ReviewedChange[]> {
 	const changes: ReviewedChange[] = [];
-	for (const input of inputs) {
+	const resolved = options.refresh
+		? await resolveEntryCreations(conn, inputs)
+		: inputs;
+	for (const input of resolved) {
 		const targetId = input.targetId ?? randomUUID();
 		const before = await readChangeState(
 			conn,

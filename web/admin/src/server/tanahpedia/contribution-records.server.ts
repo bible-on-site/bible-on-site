@@ -286,7 +286,7 @@ export async function structuredContributionCatalogue(conn: PoolConnection) {
 		for (const { id, ...state } of rows) {
 			const after = normalize(kind as ContributionRecordKind, state);
 			const subject = spec.updateOnly
-				? referenceNames.saying.get(id)
+				? referenceNames[kind === "entry_title" ? "entry" : "saying"].get(id)
 				: Object.entries(spec.fields)
 						.filter(([, f]) => f.reference && f.reference !== "alternative")
 						.map(([key, f]) =>
