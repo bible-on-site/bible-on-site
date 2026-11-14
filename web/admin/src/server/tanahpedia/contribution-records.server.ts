@@ -100,11 +100,12 @@ export async function readContributionRecord(
 	conn: PoolConnection,
 	kind: ContributionRecordKind,
 	id: string,
+	forSource = false,
 ): Promise<ChangeState | null> {
 	const spec = CONTRIBUTION_RECORDS[kind];
 	const row = await txQueryOne<ChangeState>(
 		conn,
-		`SELECT ${columns(spec)} FROM ${spec.table} r WHERE r.id=?${spec.where ? ` AND ${spec.where}` : ""} FOR UPDATE`,
+		`SELECT ${columns(spec)} FROM ${spec.table} r WHERE r.id=?${spec.where && !forSource ? ` AND ${spec.where}` : ""} FOR UPDATE`,
 		[id],
 	);
 	return row ? normalize(kind, row) : null;

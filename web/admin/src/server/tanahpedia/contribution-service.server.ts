@@ -10,6 +10,7 @@ import {
 	type Contribution,
 	type ContributionEvent,
 	type Contributor,
+	contributionHasEffect,
 	contributionSnapshot,
 	record,
 	sameState,
@@ -28,6 +29,7 @@ import {
 	readChangeState,
 } from "./contribution-changes.server";
 import { contributionApplyRank } from "./contribution-records.server";
+import { readContributionSourceFact } from "./contribution-specials.server";
 import {
 	insertContribution,
 	readContribution,
@@ -196,6 +198,7 @@ export async function editContribution(
 		item.description = description;
 		item.evidence = evidence;
 		item.changes = changes;
+		delete item.domainConflict;
 		item.revisionAuthor = actor;
 		item.apiVersion = CONTRIBUTION_API_VERSION;
 		delete item.apiMigration;
@@ -231,6 +234,7 @@ export async function recoverContributionSequence(
 			throw new Error("Only an incompatible open PR can be recovered");
 		rememberRevision(item);
 		item.changes = await prepareChanges(conn, changes);
+		delete item.domainConflict;
 		item.revisionAuthor = actor;
 		item.apiVersion = CONTRIBUTION_API_VERSION;
 		delete item.apiMigration;
@@ -357,6 +361,20 @@ async function applyReviewedChanges(
 		);
 		// Match preparation's entity -> person -> MAIN-name lock order.
 		await assertMetadataNames(conn, change);
+		if (
+			change.sourceTarget &&
+			!sameState(
+				await readContributionSourceFact(
+					conn,
+					change.sourceTarget.kind,
+					change.sourceTarget.id,
+				),
+				change.sourceTarget.state,
+			)
+		)
+			throw new Error(
+				"Conflict: the cited fact changed. Refresh the source proposal before merging.",
+			);
 		if (!sameState(current, change.before))
 			throw new Error(
 				`Conflict: ${change.kind} changed since this PR was prepared. Edit the PR to review a fresh diff.`,
@@ -365,7 +383,8 @@ async function applyReviewedChanges(
 	for (const change of [...changes].sort(
 		(a, b) => contributionApplyRank(a) - contributionApplyRank(b),
 	))
-		await applyChange(conn, change, `contribution-pr:${item.number}`);
+		if (contributionHasEffect(change))
+			await applyChange(conn, change, `contribution-pr:${item.number}`);
 }
 
 export async function mergeContribution(
@@ -374,13 +393,19 @@ export async function mergeContribution(
 ): Promise<Contribution> {
 	const input = record(raw),
 		id = uuidField(input.id, "id");
-	const merged = await withContributions(async (conn) => {
+	let merged = await withContributions(async (conn) => {
 		const item = await readContribution(conn, id, true);
 		assertVersion(item, input.version);
 		assertMergeAllowed(item);
 		await applyReviewedChanges(conn, item);
 		item.state = "merged";
-		addEvent(item, actor, "merged", `${item.changes.length} שינויים הוחלו`);
+		item.rebasePending = true;
+		addEvent(
+			item,
+			actor,
+			"merged",
+			`${item.changes.filter(contributionHasEffect).length} שינויים הוחלו`,
+		);
 		await saveContribution(conn, item);
 		if (item.issueId && item.closeIssue) {
 			const issue = await readContribution(conn, item.issueId, true);
@@ -393,6 +418,20 @@ export async function mergeContribution(
 		}
 		return item;
 	});
+	try {
+		const { resumePendingContributionRebases } = await import(
+			"./contribution-rebases.server"
+		);
+		await resumePendingContributionRebases();
+		merged = await withContributions((conn) =>
+			readContribution(conn, merged.id),
+		);
+	} catch (error) {
+		console.error(
+			"Content merged; pending comparison refresh remains queued",
+			error instanceof Error ? error.message : "unknown error",
+		);
+	}
 	// Invalidate only after committing; a website read must see merged data.
 	try {
 		const people = new Set<string>(),

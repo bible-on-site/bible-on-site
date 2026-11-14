@@ -149,6 +149,7 @@ const EVENT_LABELS: Record<string, string> = {
 	merged: "מיזג את ההצעה",
 	generated: "יצר הצעות שינוי",
 	generation_queued: "שלח לעובד מקומי",
+	rebased: "רענן את בסיס ההשוואה",
 };
 const REVIEW_LABELS = {
 	exempt: "הגרסה נכתבה בידי doradsoft - אין צורך בסקירה נוספת",
@@ -501,6 +502,18 @@ function Detail({
 					)}
 				</section>
 			)}
+			{item.domainConflict && (
+				<section className="contribution-error" role="alert">
+					<strong>נדרשת עריכת השינויים</strong>
+					<p>לא ניתן לרענן את ההשוואה. ההצעה נשמרה וניתן לערוך אותה.</p>
+					<p>{item.domainConflict}</p>
+				</section>
+			)}
+			{item.rebasePending && (
+				<p role="status">
+					ההצעה מוזגה. רענון ההשוואות של ההצעות הממתינות נמצא בתור.
+				</p>
+			)}
 			<div className="contribution-tabs" role="tablist" aria-label="תוכן הדיון">
 				<button
 					role="tab"
@@ -637,7 +650,7 @@ function Detail({
 					)}
 					{item.kind === "pr" && (
 						<section
-							className={`contribution-merge ${!incompatible && ["approved", "exempt"].includes(status) ? "ready" : ""}`}
+							className={`contribution-merge ${!incompatible && !item.domainConflict && ["approved", "exempt"].includes(status) ? "ready" : ""}`}
 						>
 							<h3>
 								{item.state === "merged"
@@ -679,6 +692,7 @@ function Detail({
 										disabled={
 											busy ||
 											incompatible ||
+											Boolean(item.domainConflict) ||
 											!["approved", "exempt"].includes(status)
 										}
 										onClick={() => void act("merge")}
@@ -877,6 +891,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 		enabled: Boolean(search.id && search.id !== "new"),
 		staleTime: 0,
 		refetchInterval: (query) =>
+			query.state.data?.rebasePending ||
 			["queued", "running"].includes(query.state.data?.generation?.status ?? "")
 				? 2000
 				: false,

@@ -23,6 +23,7 @@ import {
 	aliasReferenceLabels,
 	applyAliasMapping,
 	applySourceReference,
+	captureContributionSourceTarget,
 	readAliasMapping,
 	readSourceReference,
 	sourceReferenceLabels,
@@ -155,6 +156,7 @@ async function referenceLabels(
 export async function prepareChanges(
 	conn: PoolConnection,
 	inputs: ChangeInput[],
+	options: { refresh?: boolean } = {},
 ): Promise<ReviewedChange[]> {
 	const changes: ReviewedChange[] = [];
 	for (const input of inputs) {
@@ -184,12 +186,12 @@ export async function prepareChanges(
 		}
 		if (input.kind === "metadata" && !before)
 			throw new Error("Entity not found");
-		if (input.after === null && !before)
+		if (input.after === null && !before && !options.refresh)
 			throw new Error(
 				"The deleted relationship or identification does not exist",
 			);
 		const after = input.after as unknown as State | null;
-		if (sameState(before, after))
+		if (sameState(before, after) && !options.refresh)
 			throw new Error("This proposal does not change the target");
 		const labels = await referenceLabels(conn, input);
 		// Preserve the old graph's names when a relationship changes members.
@@ -207,6 +209,9 @@ export async function prepareChanges(
 			labels,
 			...(input.kind === "metadata"
 				? { personNames: await readMetadataNames(conn, targetId) }
+				: {}),
+			...(input.kind === "source_reference"
+				? { sourceTarget: await captureContributionSourceTarget(conn, after) }
 				: {}),
 		});
 	}

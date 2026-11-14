@@ -11,6 +11,7 @@ import type { ChangeInput } from "~/lib/tanahpedia/contributions";
 import type { ContributionCatalogue } from "./ContributionComposer";
 
 export const RECORD_OPTION_LABELS: Record<string, string> = {
+	MAIN: "שם ראשי",
 	ADDITIONAL: "שם נוסף",
 	NICKNAME: "כינוי",
 	MALE: "זכר",

@@ -7,6 +7,7 @@ import {
 	type Contributor,
 	changedFields,
 	contributionCitation,
+	contributionHasEffect,
 	record,
 	reviewStatus,
 	sameState,
@@ -469,4 +470,22 @@ describe("domain diff", () => {
 		expect(changedFields({ ...change, after: null })).toEqual(["displayName"]);
 		expect(changedFields({ ...change, after: change.before })).toEqual([]);
 	});
+});
+
+it("does not skip MAIN-name synchronization when an entity name is already current", () => {
+	const change = {
+		kind: "metadata" as const,
+		targetId: ID,
+		before: { displayName: "New" },
+		after: { displayName: "New" },
+		labels: {},
+		personNames: [{ id: ID, name: "Old" }],
+	};
+	expect(contributionHasEffect(change)).toBe(true);
+	expect(
+		contributionHasEffect({
+			...change,
+			personNames: [{ id: ID, name: "New" }],
+		}),
+	).toBe(false);
 });

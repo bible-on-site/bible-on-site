@@ -1,11 +1,16 @@
 import type { PoolConnection } from "mysql2/promise";
 import type { AsyncApiVersionAdapter } from "~/lib/tanahpedia/api-versions";
 import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
-import { record, uuidField } from "~/lib/tanahpedia/contributions";
+import { contributionRecordId } from "~/lib/tanahpedia/contribution-identifiers";
+import { type ChangeState, record } from "~/lib/tanahpedia/contributions";
 import {
 	readChangeState,
 	readMetadataNames,
 } from "./contribution-changes.server";
+import {
+	captureContributionSourceTarget,
+	sourceReferenceLabels,
+} from "./contribution-specials.server";
 
 /** Permanent API adapters. Their context is transactional; the generic
  * converter and the PR mechanism do not contain version-specific repair logic. */
@@ -26,11 +31,42 @@ export function currentContributionApiContract(conn: PoolConnection) {
 					)
 					.sort((a, b) => String(a.targetId).localeCompare(String(b.targetId)));
 				for (const change of metadata) {
-					const id = uuidField(change.targetId, "targetId");
+					const id = contributionRecordId(change.targetId, "targetId");
 					if (!(await readChangeState(conn, "metadata", id)))
 						throw new Error("Metadata target no longer exists");
 					change.personNames = await readMetadataNames(conn, id);
 				}
+				return changes;
+			},
+		},
+		{
+			from: 2,
+			to: 3,
+			id: "source-target-freshness",
+			convert: async (payload) => {
+				if (!Array.isArray(payload) || payload.length > 40)
+					throw new Error("Unsupported API v2 sequence");
+				const changes = payload.map((raw) => record(raw, "operation"));
+				for (const change of changes)
+					if (
+						change.kind === "source_reference" &&
+						change.sourceTarget === undefined
+					) {
+						const target = await captureContributionSourceTarget(
+							conn,
+							change.after as ChangeState | null,
+						);
+						if (target) {
+							change.sourceTarget = target;
+							change.labels = {
+								...record(change.labels, "labels"),
+								...(await sourceReferenceLabels(
+									conn,
+									change.after as ChangeState,
+								)),
+							};
+						}
+					}
 				return changes;
 			},
 		},

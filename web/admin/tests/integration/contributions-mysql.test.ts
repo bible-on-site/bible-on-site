@@ -15,6 +15,10 @@ import type {
 	Contributor,
 } from "~/lib/tanahpedia/contributions";
 import {
+	contributionHasEffect,
+	reviewStatus,
+} from "~/lib/tanahpedia/contributions";
+import {
 	FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
 	FAMILY_PARENT_ROLES,
 	FAMILY_UNION_END_REASONS,
@@ -1194,7 +1198,7 @@ describe("reviewed transactional PR merging", () => {
 		);
 		await store.withContributions(async (tx) => {
 			const item = await store.readContribution(tx, pr.id, true);
-			item.apiVersion = 4;
+			item.apiVersion = CONTRIBUTION_API_VERSION + 2;
 			await store.saveContribution(tx, item);
 		});
 		const original = await store.withContributions((tx) =>
@@ -1217,9 +1221,14 @@ describe("reviewed transactional PR merging", () => {
 		await migrateOpenContributionPrs({
 			version: CONTRIBUTION_API_VERSION,
 			adapters: [
-				{ from: 4, to: 3, id: "bridge", convert: (p) => p },
 				{
-					from: 3,
+					from: CONTRIBUTION_API_VERSION + 2,
+					to: CONTRIBUTION_API_VERSION + 1,
+					id: "bridge",
+					convert: (p) => p,
+				},
+				{
+					from: CONTRIBUTION_API_VERSION + 1,
 					to: CONTRIBUTION_API_VERSION,
 					id: "latest",
 					convert: (p) => p,
@@ -1575,5 +1584,330 @@ describe("all category contribution operations against canonical MySQL", () => {
 		expect(
 			(await current("animal_kind", existing.changes[0].targetId))?.kind,
 		).toBe("CHAYA");
+	});
+});
+
+describe("post-merge sequence refresh and renewed owner review", () => {
+	async function proposed(changes: unknown[], actor = alice) {
+		return service.createContribution(
+			{
+				kind: "pr",
+				title: "בדיקת רענון רצף",
+				description: "תוכן בדיקה מקומי",
+				evidence,
+				changes,
+			},
+			actor,
+		);
+	}
+	async function approved(item: Contribution) {
+		return service.updateContribution(
+			{ id: item.id, version: item.version, action: "approve" },
+			owner,
+		);
+	}
+	async function merge(item: Contribution) {
+		return service.mergeContribution(
+			{ id: item.id, version: item.version },
+			owner,
+		);
+	}
+	it("refreshes pending old values, preserves proposed new values and requires owner review again", async () => {
+		const pending = await approved(
+			await proposed([
+				{
+					kind: "metadata",
+					targetId: ids.parentEntity,
+					after: { displayName: "Pending value" },
+				},
+			]),
+		);
+		const original = structuredClone(pending.changes);
+		const trigger = await merge(
+			await proposed(
+				[
+					{
+						kind: "metadata",
+						targetId: ids.parentEntity,
+						after: { displayName: "Merged value" },
+					},
+				],
+				owner,
+			),
+		);
+		const rebased = await fresh(pending);
+		expect(rebased.changes[0].before).toEqual({ displayName: "Merged value" });
+		expect(rebased.changes[0].after).toEqual({ displayName: "Pending value" });
+		expect(rebased.revision).toBe(pending.revision + 1);
+		expect(reviewStatus(rebased)).toBe("required");
+		expect(
+			rebased.events.find((e) => e.kind === "rebased")?.snapshot?.changes,
+		).toEqual(original);
+		expect(rebased.evidence).toEqual(pending.evidence);
+		await expect(merge(rebased)).rejects.toThrow("Approval");
+		const { refreshPendingContributionBases } = await import(
+			"~/server/tanahpedia/contribution-rebases.server"
+		);
+		await refreshPendingContributionBases(trigger);
+		expect((await fresh(rebased)).version).toBe(rebased.version);
+		expect((await merge(await approved(rebased))).state).toBe("merged");
+	});
+	it("makes an already-satisfied sequence an explicit no-op and removes the owner's earlier exemption", async () => {
+		const pending = await proposed(
+			[
+				{
+					kind: "metadata",
+					targetId: ids.parentEntity,
+					after: { displayName: "Already applied" },
+				},
+			],
+			owner,
+		);
+		await merge(
+			await proposed(
+				[
+					{
+						kind: "metadata",
+						targetId: ids.parentEntity,
+						after: { displayName: "Already applied" },
+					},
+				],
+				owner,
+			),
+		);
+		const rebased = await fresh(pending);
+		expect(contributionHasEffect(rebased.changes[0])).toBe(false);
+		expect(reviewStatus(rebased)).toBe("required");
+		await expect(merge(rebased)).rejects.toThrow("Approval");
+		const merged = await merge(await approved(rebased));
+		expect(merged.events.filter((e) => e.kind === "merged").at(-1)?.body).toBe(
+			"0 שינויים הוחלו",
+		);
+	});
+	it("refreshes a structured cited claim while retaining the evidence text, and detects a later direct edit", async () => {
+		const fact = await merge(
+			await proposed(
+				[
+					{
+						kind: "person_birth_date",
+						after: {
+							personId: ids.person,
+							birthDate: 57840101,
+							altGroupId: null,
+						},
+					},
+				],
+				owner,
+			),
+		);
+		const factId = fact.changes[0].targetId;
+		const citation = await approved(
+			await proposed([
+				{
+					kind: "source_reference",
+					after: {
+						targetKind: "person_birth_date",
+						targetId: factId,
+						sourceType: "other",
+						sourceText: "מקור בדיקה",
+						perekId: null,
+						pasukNumber: null,
+						perushId: null,
+					},
+				},
+			]),
+		);
+		expect(citation.changes[0].sourceTarget?.state.birthDate).toBe(57840101);
+		await merge(
+			await proposed(
+				[
+					{
+						kind: "person_birth_date",
+						targetId: factId,
+						after: {
+							personId: ids.person,
+							birthDate: 57840202,
+							altGroupId: null,
+						},
+					},
+				],
+				owner,
+			),
+		);
+		const refreshed = await fresh(citation);
+		expect(refreshed.changes[0].sourceTarget?.state.birthDate).toBe(57840202);
+		expect(refreshed.changes[0].after).toEqual(citation.changes[0].after);
+		expect(refreshed.evidence).toEqual(citation.evidence);
+		expect(reviewStatus(refreshed)).toBe("required");
+		const reviewed = await approved(refreshed);
+		await conn.execute(
+			"UPDATE tanahpedia_person_birth_date SET birth_date=57840303 WHERE id=?",
+			[factId],
+		);
+		await expect(merge(reviewed)).rejects.toThrow("cited fact changed");
+	});
+	it("migrates a v2 structured source through the v3 adapter without discarding its approval", async () => {
+		const fact = await merge(
+			await proposed(
+				[
+					{
+						kind: "person_birth_date",
+						after: {
+							personId: ids.person,
+							birthDate: 57840101,
+							altGroupId: null,
+						},
+					},
+				],
+				owner,
+			),
+		);
+		const pr = await approved(
+			await proposed([
+				{
+					kind: "source_reference",
+					after: {
+						targetKind: "person_birth_date",
+						targetId: fact.changes[0].targetId,
+						sourceType: "other",
+						sourceText: "מקור בדיקה",
+						perekId: null,
+						pasukNumber: null,
+						perushId: null,
+					},
+				},
+			]),
+		);
+		await store.withContributions(async (tx) => {
+			const old = await store.readContribution(tx, pr.id, true);
+			old.apiVersion = 2;
+			delete old.changes[0].sourceTarget;
+			await store.saveContribution(tx, old);
+		});
+		const before = await fresh(pr),
+			{ migrateOpenContributionPrs } = await import(
+				"~/server/tanahpedia/contribution-migrations.server"
+			);
+		await migrateOpenContributionPrs();
+		const migrated = await fresh(pr);
+		expect(migrated.apiVersion).toBe(CONTRIBUTION_API_VERSION);
+		expect(migrated.revision).toBe(before.revision);
+		expect(migrated.events).toEqual(before.events);
+		expect(reviewStatus(migrated)).toBe("approved");
+		expect(migrated.changes[0].sourceTarget?.state.birthDate).toBe(57840101);
+		expect((await merge(migrated)).state).toBe("merged");
+	});
+	it("preserves a source proposal when its cited fact disappears, and clears the conflict on an authored repair", async () => {
+		const fact = await merge(
+			await proposed(
+				[
+					{
+						kind: "person_death_cause",
+						after: {
+							personId: ids.person,
+							deathCause: "בדיקה",
+							altGroupId: null,
+						},
+					},
+				],
+				owner,
+			),
+		);
+		const citation = await proposed([
+			{
+				kind: "source_reference",
+				after: {
+					targetKind: "person_death_cause",
+					targetId: fact.changes[0].targetId,
+					sourceType: "other",
+					sourceText: "מקור בדיקה",
+					perekId: null,
+					pasukNumber: null,
+					perushId: null,
+				},
+			},
+		]);
+		await merge(
+			await proposed(
+				[
+					{
+						kind: "person_death_cause",
+						targetId: fact.changes[0].targetId,
+						after: null,
+					},
+				],
+				owner,
+			),
+		);
+		const blocked = await fresh(citation);
+		expect(blocked.domainConflict).toContain("target does not exist");
+		expect(blocked.changes).toEqual(citation.changes);
+		await expect(merge(blocked)).rejects.toThrow("Refresh");
+		const repaired = await service.editContribution(
+			{
+				id: blocked.id,
+				version: blocked.version,
+				title: blocked.title,
+				description: blocked.description,
+				evidence: blocked.evidence,
+				changes: [
+					{
+						kind: "source_reference",
+						targetId: blocked.changes[0].targetId,
+						after: {
+							...blocked.changes[0].after,
+							targetKind: "entity",
+							targetId: ids.entity,
+						},
+					},
+				],
+			},
+			owner,
+		);
+		expect(repaired.domainConflict).toBeUndefined();
+		expect((await merge(repaired)).state).toBe("merged");
+	});
+	it("durably resumes a post-commit refresh failure without applying the content merge twice", async () => {
+		const pending = await proposed([
+			{
+				kind: "metadata",
+				targetId: ids.parentEntity,
+				after: { displayName: "After retry" },
+			},
+		]);
+		const queued = await proposed(
+			[
+				{
+					kind: "metadata",
+					targetId: ids.parentEntity,
+					after: { displayName: "Trigger retry" },
+				},
+			],
+			owner,
+		);
+		const jobs = await import(
+				"~/server/tanahpedia/contribution-rebases.server"
+			),
+			spy = vi
+				.spyOn(jobs, "resumePendingContributionRebases")
+				.mockRejectedValueOnce(new Error("Injected storage interruption")),
+			logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		const merged = await (async () => {
+			try {
+				return await merge(queued);
+			} finally {
+				spy.mockRestore();
+				logged.mockRestore();
+			}
+		})();
+		expect((await fresh(merged)).rebasePending).toBe(true);
+		expect((await fresh(pending)).changes).toEqual(pending.changes);
+		await jobs.resumePendingContributionRebases();
+		const completed = await fresh(merged);
+		expect(completed.rebasePending).toBeUndefined();
+		expect(completed.events.filter((e) => e.kind === "merged")).toHaveLength(1);
+		expect((await fresh(pending)).changes[0].before).toEqual({
+			displayName: "Trigger retry",
+		});
 	});
 });

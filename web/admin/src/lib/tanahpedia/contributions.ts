@@ -36,7 +36,7 @@ export type Assignee =
 export interface Contributor {
 	id: string;
 	name: string;
-	kind: "human" | "aws_llm" | "local_llm";
+	kind: "human" | "aws_llm" | "local_llm" | "system";
 	isDoradsoft: boolean;
 }
 
@@ -126,6 +126,11 @@ export interface ReviewedChange {
 	after: ChangeState | null;
 	labels: Record<string, string>;
 	personNames?: { id: string; name: string }[];
+	sourceTarget?: {
+		kind: string;
+		id: string;
+		state: Record<string, string | number | boolean | null>;
+	};
 }
 
 export interface ContributionEvent {
@@ -141,7 +146,8 @@ export interface ContributionEvent {
 		| "reopened"
 		| "merged"
 		| "generated"
-		| "generation_queued";
+		| "generation_queued"
+		| "rebased";
 	actor: Contributor;
 	body: string;
 	at: string;
@@ -224,6 +230,8 @@ export interface Contribution {
 	apiMigrationHistory?: ContributionApiMigration[];
 	generation?: ContributionGeneration;
 	revisionHistory?: ContributionRevisionSnapshot[];
+	domainConflict?: string;
+	rebasePending?: boolean;
 }
 
 export interface ContributionListRequest {
@@ -640,6 +648,10 @@ export function reviewStatus(
 export function assertMergeAllowed(pr: Contribution): void {
 	if (pr.kind !== "pr" || pr.state !== "open")
 		throw new Error("Only an open PR can be merged");
+	if (pr.domainConflict)
+		throw new Error(
+			`Refresh the proposal's changes before merging: ${pr.domainConflict}`,
+		);
 	if (migrationBlocked(pr))
 		throw new Error(
 			"Couldn't migrate to latest API. Recover the plain sequence before merging.",
@@ -655,6 +667,15 @@ export function assertMergeAllowed(pr: Contribution): void {
 
 export function sameState(a: unknown, b: unknown): boolean {
 	return canonicalJson(a) === canonicalJson(b);
+}
+export function contributionHasEffect(change: ReviewedChange): boolean {
+	return (
+		!sameState(change.before, change.after) ||
+		(change.kind === "metadata" &&
+			Boolean(
+				change.personNames?.some((n) => n.name !== change.after?.displayName),
+			))
+	);
 }
 
 export function changedFields(change: ReviewedChange): string[] {

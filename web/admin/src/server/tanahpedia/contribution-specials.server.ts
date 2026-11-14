@@ -1,8 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
-import { CONTRIBUTION_RECORDS } from "~/lib/tanahpedia/contribution-records";
+import {
+	CONTRIBUTION_RECORDS,
+	isContributionRecordKind,
+} from "~/lib/tanahpedia/contribution-records";
 import {
 	type AliasMapping,
+	isContributionSourceFact,
 	SOURCE_TARGETS,
 	type SourceReference,
 } from "~/lib/tanahpedia/contribution-specials";
@@ -14,8 +18,52 @@ import { txExecute, txQuery, txQueryOne } from "../db";
 import {
 	loadContributionReference,
 	REFERENCE_SELECTS,
+	readContributionRecord,
+	structuredReferenceLabels,
 	validateScriptureVerse,
 } from "./contribution-records.server";
+
+export async function readContributionSourceFact(
+	conn: PoolConnection,
+	kind: string,
+	id: string,
+): Promise<ChangeState | null> {
+	if (isContributionRecordKind(kind))
+		return readContributionRecord(conn, kind, id, true);
+	const fields: Record<string, string> = {
+		parent_child:
+			"parent_id AS parentId,child_id AS childId,(SELECT name FROM tanahpedia_lookup_parent_child_type WHERE id=relationship_type_id) AS relationshipType,(SELECT name FROM tanahpedia_lookup_parent_role WHERE id=parent_role_id) AS parentRole,source_citation AS sourceCitation,alt_group_id AS altGroupId,birth_order AS birthOrder",
+		union:
+			"person1_id AS person1Id,person2_id AS person2Id,(SELECT name FROM tanahpedia_lookup_union_type WHERE id=union_type_id) AS unionType,union_order AS unionOrder,start_date AS startDate,end_date AS endDate,(SELECT name FROM tanahpedia_lookup_union_end_reason WHERE id=end_reason_id) AS endReason,source_citation AS sourceCitation,person_source_citation AS personSourceCitation,alt_group_id AS altGroupId",
+		place_identification:
+			"place_id AS placeId,modern_name AS modernName,latitude,longitude,alt_group_id AS altGroupId",
+	};
+	if (!Object.hasOwn(fields, kind)) throw new Error("Unsupported source fact");
+	return txQueryOne<ChangeState>(
+		conn,
+		`SELECT ${fields[kind]} FROM ${SOURCE_TARGETS[kind]} WHERE id=? FOR UPDATE`,
+		[id],
+	);
+}
+export async function captureContributionSourceTarget(
+	conn: PoolConnection,
+	after: ChangeState | null,
+): Promise<ReviewedChange["sourceTarget"]> {
+	if (
+		!after ||
+		typeof after.targetKind !== "string" ||
+		!isContributionSourceFact(after.targetKind)
+	)
+		return undefined;
+	const id = String(after.targetId),
+		state = await readContributionSourceFact(conn, after.targetKind, id);
+	if (!state) throw new Error("Source target fact no longer exists");
+	return {
+		kind: after.targetKind,
+		id,
+		state: state as NonNullable<ReviewedChange["sourceTarget"]>["state"],
+	};
+}
 
 function sourceTable(kind: string): string {
 	const table = Object.hasOwn(SOURCE_TARGETS, kind)
@@ -154,6 +202,36 @@ export async function sourceReferenceLabels(
 	const a = state as unknown as SourceReference,
 		table = sourceTable(a.targetKind),
 		labels: Record<string, string> = {};
+	if (isContributionRecordKind(a.targetKind)) {
+		const fact = await readContributionRecord(
+			conn,
+			a.targetKind,
+			a.targetId,
+			true,
+		);
+		if (!fact) throw new Error("Source attachment target does not exist");
+		Object.assign(
+			labels,
+			await structuredReferenceLabels(conn, a.targetKind, fact),
+		);
+	} else if (isContributionSourceFact(a.targetKind)) {
+		const fact = await readContributionSourceFact(
+			conn,
+			a.targetKind,
+			a.targetId,
+		);
+		for (const [key, ref] of [
+			["parentId", "person"],
+			["childId", "person"],
+			["person1Id", "person"],
+			["person2Id", "person"],
+			["placeId", "place"],
+		])
+			if (fact?.[key]) {
+				const row = await loadContributionReference(conn, ref, fact[key]);
+				if (row) labels[`${key}:${fact[key]}`] = row.name;
+			}
+	}
 	const target = await txQueryOne(
 		conn,
 		`SELECT id FROM ${table} WHERE id=? FOR SHARE`,

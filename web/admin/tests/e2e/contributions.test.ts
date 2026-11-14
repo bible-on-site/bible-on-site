@@ -518,11 +518,16 @@ test.describe("Issues and typed pull requests", () => {
 		await expect(
 			page.getByRole("link", { name: "+ פנייה חדשה", exact: true }),
 		).toBeVisible();
-		const width = await page.evaluate(() => ({
-			document: document.documentElement.scrollWidth,
-			viewport: innerWidth,
-		}));
-		expect(width.document).toBeLessThanOrEqual(width.viewport);
 		await capture(page, testInfo, "mobile-issues-queue");
+		for (const viewport of [390, 812, 1024, 1280]) {
+			await page.setViewportSize({ width: viewport, height: 844 });
+			const width = await page.evaluate(() => ({
+				document: document.documentElement.scrollWidth,
+				viewport: innerWidth,
+			}));
+			expect(width.document).toBeLessThanOrEqual(width.viewport);
+			if (viewport === 812)
+				await capture(page, testInfo, "medium-width-admin-navigation");
+		}
 	});
 });

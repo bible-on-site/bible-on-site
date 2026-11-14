@@ -8,6 +8,7 @@ import {
 	type ChangeState,
 	changedFields,
 	contributionCitation,
+	contributionHasEffect,
 	FIELD_LABELS,
 	type ReviewedChange,
 } from "~/lib/tanahpedia/contributions";
@@ -222,6 +223,37 @@ function Coordinates({ change }: { change: ReviewedChange }) {
 	);
 }
 
+function SourceFact({
+	target,
+	labels,
+}: {
+	target: NonNullable<ReviewedChange["sourceTarget"]>;
+	labels: Record<string, string>;
+}) {
+	return (
+		<section
+			className="contribution-diff-note contribution-source-fact"
+			aria-label="הטענה המצוטטת"
+		>
+			<h4>הטענה שאליה מצורף המקור</h4>
+			<dl>
+				{Object.entries(target.state).map(([field, value]) => (
+					<div key={field}>
+						<dt>
+							{(isContributionRecordKind(target.kind)
+								? CONTRIBUTION_RECORDS[target.kind].fields[field]?.label
+								: undefined) ??
+								FIELD_LABELS[field] ??
+								field}
+						</dt>
+						<dd>{shown(value, labels, field)}</dd>
+					</div>
+				))}
+			</dl>
+		</section>
+	);
+}
+
 export function ContributionDiff({ changes }: { changes: ReviewedChange[] }) {
 	return (
 		<div className="contribution-diffs">
@@ -262,6 +294,15 @@ export function ContributionDiff({ changes }: { changes: ReviewedChange[] }) {
 							שם האיש הראשי יעודכן גם ברשימת האישים:{" "}
 							{change.personNames?.map((name) => name.name).join(", ")} ←{" "}
 							{String(change.after?.displayName ?? "")}
+						</p>
+					)}
+					{change.sourceTarget && (
+						<SourceFact target={change.sourceTarget} labels={change.labels} />
+					)}
+					{!contributionHasEffect(change) && (
+						<p className="contribution-diff-note">
+							מצב היעד כבר תואם להצעה. המיזוג ישמור את ההיסטוריה ללא כתיבה חוזרת
+							של הנתון.
 						</p>
 					)}
 					<div className="contribution-diff-table-wrap">

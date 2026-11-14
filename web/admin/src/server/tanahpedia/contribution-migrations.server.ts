@@ -145,11 +145,18 @@ export async function migrateOpenContributionPrs(
 let startup: Promise<unknown> | undefined;
 export function ensureContributionMigrationsStarted(): void {
 	if (startup) return;
-	startup = migrateOpenContributionPrs().catch((error: unknown) => {
-		startup = undefined;
-		console.error(
-			"Contribution API startup migration failed",
-			error instanceof Error ? error.message : "unknown error",
-		);
-	});
+	startup = migrateOpenContributionPrs()
+		.then(async () => {
+			const { ensureContributionRebasesStarted } = await import(
+				"./contribution-rebase-runtime.server"
+			);
+			ensureContributionRebasesStarted();
+		})
+		.catch((error: unknown) => {
+			startup = undefined;
+			console.error(
+				"Contribution API startup migration failed",
+				error instanceof Error ? error.message : "unknown error",
+			);
+		});
 }

@@ -540,3 +540,16 @@
 	font-size: 12px;
 	text-align: left;
 }
+.contribution-source-fact dl > div {
+	display: grid;
+	grid-template-columns: minmax(7rem, 1fr) minmax(0, 2fr);
+	gap: 1rem;
+	padding-block: 0.25rem;
+}
+.contribution-source-fact dt {
+	font-weight: 600;
+}
+.contribution-source-fact dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}

@@ -1,4 +1,5 @@
 import { contributionRecordId } from "./contribution-identifiers";
+import { isContributionSourceFact } from "./contribution-specials";
 import {
 	type Contribution,
 	type ReviewedChange,
@@ -9,7 +10,7 @@ import {
 
 // Bump for a change to the typed operation contract, alongside an adapter from
 // the preceding version. Package/release versions do not change this contract.
-export const CONTRIBUTION_API_VERSION = 2;
+export const CONTRIBUTION_API_VERSION = 3;
 
 export interface ContributionApiMigration {
 	id: string;
@@ -63,6 +64,39 @@ export function validateApiSequence(value: unknown): ReviewedChange[] {
 		if (!sameState(input.after, change.after))
 			throw new Error("API operation contains unsupported fields");
 		const labels = record(change.labels, "labels");
+		const attachment = input.kind === "source_reference" ? input.after : null;
+		const needsSourceTarget =
+			attachment && isContributionSourceFact(attachment.targetKind);
+		let sourceTarget: ReviewedChange["sourceTarget"];
+		if (needsSourceTarget && !change.sourceTarget)
+			throw new Error(
+				"API v3 source attachment requires target-fact preconditions",
+			);
+		if (change.sourceTarget !== undefined) {
+			const target = record(change.sourceTarget, "source target"),
+				state = record(target.state, "source fact");
+			if (
+				!needsSourceTarget ||
+				target.kind !== attachment.targetKind ||
+				target.id !== attachment.targetId ||
+				Object.keys(target).some((k) => !["kind", "id", "state"].includes(k)) ||
+				Object.keys(state).length === 0 ||
+				Object.keys(state).length > 40 ||
+				Object.values(state).some(
+					(v) =>
+						v !== null &&
+						typeof v !== "boolean" &&
+						typeof v !== "string" &&
+						!(typeof v === "number" && Number.isFinite(v)),
+				)
+			)
+				throw new Error("Invalid source-target preconditions");
+			sourceTarget = {
+				kind: attachment.targetKind,
+				id: attachment.targetId,
+				state: state as NonNullable<ReviewedChange["sourceTarget"]>["state"],
+			};
+		}
 		let personNames: ReviewedChange["personNames"];
 		if (input.kind === "metadata" && change.personNames === undefined)
 			throw new Error("API v2 metadata requires MAIN-name preconditions");
@@ -99,6 +133,7 @@ export function validateApiSequence(value: unknown): ReviewedChange[] {
 			after: input.after as unknown as ReviewedChange["after"],
 			labels: labels as Record<string, string>,
 			...(personNames ? { personNames } : {}),
+			...(sourceTarget ? { sourceTarget } : {}),
 		};
 	});
 }

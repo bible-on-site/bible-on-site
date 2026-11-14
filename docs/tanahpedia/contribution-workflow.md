@@ -18,7 +18,7 @@ Asia/Jerusalem**. This supersedes the original deadline in the active goal text.
   starts generation. A verified account identity determines review authority.
   Exemption follows the current revision's author: another editor changing an
   owner-authored PR cannot inherit that exemption.
-- Human edits invalidate old approvals. Automatic API migrations never do,
+- Human edits and automatic content rebases require a fresh owner review. Automatic API migrations never invalidate approvals,
   including conversions that remove fields or operations. Merge checks the
   current API contract, reviewed revision and target state. An issue is closed
   only after a successful merge when the PR requests it.
@@ -158,15 +158,17 @@ settings and are not applied as a replacement stack.
 
 The local smoke used Ollama 0.40.16 with `qwen3:4b` on CPU: an issue produced a
 metadata-only PERSON entry proposal with its supplied evidence, a visual diff,
-and a disabled merge button pending owner review. The entry was not applied.
+and a disabled merge button pending owner review. The entry was not applied. A second real workstation smoke produced the new
+PERSON birth-date operation under API v2; it retained model authorship, the supplied
+synthetic evidence and the owner review gate, and was closed without applying it.
 Smaller models can choose an incorrect relationship even with valid JSON;
 structured output constrains the operation protocol, while source correctness
 still requires human review. Unknown IDs and invented source citations are rejected.
 
 ## API evolution
 
-The merge operation contract is currently version 2, independently of package or
-release versions. Version 1 is retained in migration history. `convertApiVersion`
+The merge operation contract is currently version 3, independently of package or
+release versions. Versions 1 and 2 are retained in migration history. `convertApiVersion`
 and its asynchronous counterpart compose explicit directed adapters through
 intermediate versions. Register reverse adapters when a reverse route is needed;
 no reverse transformation is inferred. Retain historical adapters for PRs that
@@ -180,6 +182,12 @@ automatic API upgrade under the user's explicit policy, including its broader
 name-write effect. Contextual adapters can perform authoritative lookups inside
 the migration transaction; storage failures abort the CD pass rather than mark
 individual PRs incompatible.
+
+The v2-to-v3 adapter captures the structured target fact for source attachments.
+Its fields and human reference labels appear in the changes view. A merge checks
+that fact again before writing. Free-text evidence in the Description remains
+unchanged. As with every API adapter, this automatic contract upgrade preserves
+approval.
 
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these
@@ -215,6 +223,30 @@ compile an operation sequence at merge time (less exact review predictability);
 or convert lazily on read/merge (leaves dormant PR failures undiscovered until
 used). Deployment-time upgrades with explicit adapters provide an early audit
 and a recoverable raw sequence, as requested.
+
+## Refresh after content merges
+
+Every content merge durably queues a scan of pending PR sequences in the same
+transaction. The scan visits all open PRs, refreshing affected before-states,
+reference labels, MAIN-name preconditions and structured cited facts. Proposed
+after-values and free-text evidence remain unchanged. Equal operations become
+explicit no-ops and are not written again. Incompatible API sequences retain
+their untouched raw sequence for the API migration path.
+
+A changed comparison creates a new revision authored by the system and requires
+fresh doradsoft review, including an originally owner-authored proposal. Its
+previous exact proposal remains on the refresh event. An owner-authored edit can
+then use the normal author exemption; an owner approval applies to the refreshed
+revision. An unchanged comparison creates no extra revision. API migrations
+remain distinct and preserve approval, as explicitly requested by the user.
+
+If a target can no longer be refreshed, the proposal and prior sequence remain
+available with an explanation and merging is blocked until an authored repair.
+A storage interruption retains the committed merge's pending marker. Startup
+and a server worker replay pending refreshes; equal comparisons prevent duplicate
+revisions. The normal post-merge path drains immediately, with a 30-second
+background pass for interrupted work. A refresh failure never reports an already
+committed content merge as rolled back.
 
 ## Deployment and rollback
 

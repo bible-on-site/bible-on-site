@@ -76,6 +76,13 @@ export const SOURCE_TARGET_LABELS: Record<string, string> = {
 			.map(([kind, spec]) => [kind, spec.label]),
 	),
 };
+export function isContributionSourceFact(kind: string): boolean {
+	return (
+		Object.hasOwn(SOURCE_TARGETS, kind) &&
+		(Object.hasOwn(CONTRIBUTION_RECORDS, kind) ||
+			["parent_child", "union", "place_identification"].includes(kind))
+	);
+}
 function exact(value: Record<string, unknown>, keys: string[]) {
 	for (const key of Object.keys(value))
 		if (!keys.includes(key)) throw new Error(`Unsupported field: ${key}`);

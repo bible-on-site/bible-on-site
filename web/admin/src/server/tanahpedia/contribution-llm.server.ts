@@ -623,11 +623,18 @@ export async function prepareContributionGeneration(
 	// Pass every matching candidate (including duplicate names), bounded to avoid
 	// flooding a local model with unrelated corpus records. Never pick one of
 	// several same-name people on the model's behalf.
-	const matching = <T extends { id: string; name: string }>(rows: T[]) =>
+	const matching = <T extends { id: string | number; name: string }>(
+		rows: T[],
+		idNames: string[] = [],
+	) =>
 		rows
 			.filter(
 				(row) =>
-					searchable.includes(row.id) ||
+					(typeof row.id === "string"
+						? searchable.includes(row.id)
+						: idNames.some((name) =>
+								searchableNames.includes(` ${namePhrase(name)} ${row.id} `),
+							)) ||
 					Boolean(
 						namePhrase(row.name) &&
 							searchableNames.includes(` ${namePhrase(row.name)} `),
@@ -640,12 +647,12 @@ export async function prepareContributionGeneration(
 
 	const references = Object.fromEntries(
 		Object.entries(context.catalogue.references ?? {}).map(([kind, rows]) => {
-			const selected = new Set(
-				matching(rows.map((r) => ({ ...r, id: String(r.id) }))).map(
-					(r) => r.id,
-				),
-			);
-			return [kind, rows.filter((row) => selected.has(String(row.id)))];
+			const idNames: Record<string, string[]> = {
+				perek: ["perekId", "perek_id"],
+				perush: ["perushId", "perush_id"],
+				tanah_sefer: ["tanahSeferId", "tanah_sefer_id"],
+			};
+			return [kind, matching(rows, idNames[kind] ?? [])];
 		}),
 	);
 	const referenced = new Set(
@@ -654,21 +661,23 @@ export async function prepareContributionGeneration(
 			...places,
 			...entities,
 			...Object.values(references).flat(),
-		].map((r) => String(r.id)),
+		].flatMap((r) => (typeof r.id === "string" ? [r.id] : [])),
 	);
 	for (const [kind, rows] of Object.entries(
 		context.catalogue.references ?? {},
 	)) {
+		const selected = new Set(references[kind].map((r) => r.id));
 		references[kind] = rows
 			.filter(
 				(r) =>
-					referenced.has(String(r.id)) ||
+					selected.has(r.id) ||
+					(typeof r.id === "string" && referenced.has(r.id)) ||
 					(r.ownerId && referenced.has(r.ownerId)),
 			)
 			.slice(0, 100);
 	}
 	for (const row of Object.values(references).flat())
-		referenced.add(String(row.id));
+		if (typeof row.id === "string") referenced.add(row.id);
 	const targets = context.catalogue.targets
 		.filter(
 			(target) =>

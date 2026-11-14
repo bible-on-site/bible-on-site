@@ -654,4 +654,41 @@ describe("issue-to-PR LLM generation", () => {
 		expect(user.catalogue.targets[0].id).toBe("edge");
 		expect(contributionSystemPrompt()).toContain("untrusted data");
 	});
+	it("matches numeric references by named fields or chapter labels, never by unrelated digits", async () => {
+		issue.description = `Person ${ID}, birthDate 19480000. Cite בראשית א. Explicit perush_id=2 and tanahSeferId 3.`;
+		mocks.catalogue.mockResolvedValue({
+			people: [],
+			places: [],
+			entities: [],
+			targets: [],
+			references: {
+				perek: [
+					{ id: 1, name: "בראשית א" },
+					{ id: 2, name: "בראשית ב" },
+					{ id: 194, name: "פרק אחר" },
+				],
+				perush: [
+					{ id: 1, name: "פירוש אחר" },
+					{ id: 2, name: "פירוש נבחר" },
+				],
+				tanah_sefer: [
+					{ id: 1, name: "ספר אחר" },
+					{ id: 3, name: "ספר נבחר" },
+				],
+			},
+		});
+		await generateContributionPrs(input);
+		const user = JSON.parse(
+			JSON.parse(mocks.fetch.mock.calls[0][1].body).messages[1].content,
+		);
+		expect(user.catalogue.references.perek).toEqual([
+			{ id: 1, name: "בראשית א" },
+		]);
+		expect(user.catalogue.references.perush).toEqual([
+			{ id: 2, name: "פירוש נבחר" },
+		]);
+		expect(user.catalogue.references.tanah_sefer).toEqual([
+			{ id: 3, name: "ספר נבחר" },
+		]);
+	});
 });
