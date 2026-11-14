@@ -12,7 +12,12 @@ use bson::{Document, doc};
 pub fn build() -> Document {
     doc! {
         "$match": {
-            "versions_count": { "$gt": 0 }
+            "$or": [
+                { "versions_count": { "$gt": 0 } },
+                // A missing mapped edition must fail extraction, not silently
+                // remove Tanchuma from the generated catalog again.
+                { "enTitle": "Midrash Tanchuma" }
+            ]
         }
     }
 }

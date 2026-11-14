@@ -6,6 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use anyhow::Result;
 use bson::Document;
 
 use super::perek_mapping;
@@ -51,14 +52,20 @@ pub struct Extracted {
 }
 
 /// Extract all three entities from the pipeline output documents.
-pub fn extract(docs: &[Document]) -> Extracted {
+pub fn extract(docs: &[Document]) -> Result<Extracted> {
     let mut parshan_map: HashMap<String, i64> = HashMap::new(); // name → id
     let mut parshanim: Vec<Parshan> = Vec::new();
     let mut perush_map: HashMap<String, i64> = HashMap::new(); // name → id
     let mut perushim: Vec<Perush> = Vec::new();
     let mut notes: Vec<Note> = Vec::new();
 
-    for doc in docs {
+    // Append newly supported midrashim after the existing catalog, so adding
+    // them does not renumber existing perush/parshan IDs in web/app assets.
+    for doc in docs
+        .iter()
+        .filter(|doc| !is_mapped_midrash(doc))
+        .chain(docs.iter().filter(|doc| is_mapped_midrash(doc)))
+    {
         let perush_name = doc.get_str("name").unwrap_or("").to_string();
         if perush_name.is_empty() {
             continue;
@@ -118,6 +125,24 @@ pub fn extract(docs: &[Document]) -> Extracted {
             id
         };
 
+        // Midrash divisions are not biblical chapters/verses. Never send them
+        // through the positional commentary flattener.
+        match doc.get_str("enTitle").unwrap_or("") {
+            "Midrash Tanchuma" => {
+                notes.extend(super::tanchuma::flatten(doc, perush_id)?);
+                continue;
+            }
+            "Mekhilta d'Rabbi Yishmael" | "Mekhilta DeRabbi Yishmael" => {
+                notes.extend(super::mekhilta::flatten(doc, perush_id)?);
+                continue;
+            }
+            title if super::verse_midrash::supports(title) => {
+                notes.extend(super::verse_midrash::flatten(doc, perush_id)?);
+                continue;
+            }
+            _ => {}
+        }
+
         // Flatten versions into notes
         let sefer = bson_to_i64(doc.get("sefer"));
         let additional = doc.get("additional").and_then(bson_to_optional_i64);
@@ -162,11 +187,18 @@ pub fn extract(docs: &[Document]) -> Extracted {
     // the SQLite INSERT OR IGNORE behaviour.
     dedup_notes_by_pk(&mut notes);
 
-    Extracted {
+    Ok(Extracted {
         parshanim,
         perushim,
         notes,
-    }
+    })
+}
+
+fn is_mapped_midrash(doc: &Document) -> bool {
+    matches!(
+        doc.get_str("enTitle").unwrap_or(""),
+        "Midrash Tanchuma" | "Mekhilta d'Rabbi Yishmael" | "Mekhilta DeRabbi Yishmael"
+    ) || super::verse_midrash::supports(doc.get_str("enTitle").unwrap_or(""))
 }
 
 /// Remove notes that share a primary key `(perush_id, perek_id, pasuk, note_idx)`,
@@ -606,7 +638,7 @@ mod tests {
         // Two chapters: ch1 has 2 verses (strings), ch2 has 1 verse
         let chapters = bson!([["note ch1 v1", "note ch1 v2"], ["note ch2 v1"]]);
         let doc = simple_schema_doc("רש\"י", 1, chapters);
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
 
         assert_eq!(result.parshanim.len(), 1);
         assert_eq!(result.perushim.len(), 1);
@@ -627,11 +659,42 @@ mod tests {
     }
 
     #[test]
+    fn new_midrashim_append_without_renumbering_the_existing_catalog() {
+        let regular = simple_schema_doc("existing", 1, bson!([["old note"]]));
+        let mut midrash = doc! {
+            "name": "מכילתא", "enTitle": "Mekhilta d'Rabbi Yishmael",
+            "authors": ["רבותינו זכרונם לברכה"],
+            "schema": {"depth": 3, "addressTypes": ["Perek", "Pasuk", "Integer"],
+                "sectionNames": ["Chapter", "Verse", "Paragraph"]},
+            "versions": [[[ ["new note"] ]]]
+        };
+        // A misleading sefer must not override the explicit Exodus resolver.
+        midrash.insert("sefer", 1);
+        let before = extract(std::slice::from_ref(&regular)).unwrap();
+        let after = extract(&[midrash, regular]).unwrap();
+        assert_eq!(after.perushim[0].name, before.perushim[0].name);
+        assert_eq!(after.perushim[0].id, before.perushim[0].id);
+        assert_eq!(after.parshanim[0].name, before.parshanim[0].name);
+        assert_eq!(after.parshanim[0].id, before.parshanim[0].id);
+        assert_eq!(after.notes[1].perek_id, 51);
+        assert_eq!(after.notes[1].perush_id, 2);
+    }
+
+    #[test]
+    fn unresolved_midrash_mapping_aborts_generation_instead_of_using_parashah_positions() {
+        let doc = doc! {
+            "name": "מדרש תנחומא", "enTitle": "Midrash Tanchuma", "sefer": 1,
+            "versionTitles": ["unreviewed edition"], "versions": [[["would be misplaced"]]]
+        };
+        assert!(extract(&[doc]).is_err());
+    }
+
+    #[test]
     fn complex_schema_default_key() {
         // Ramban-like: versions[0] is a Document with "default" holding chapters
         let chapters = bson!([["ramban ch1 v1", "ramban ch1 v2"], ["ramban ch2 v1"]]);
         let doc = complex_schema_doc("רמב\"ן", 1, "default", chapters);
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
 
         assert_eq!(result.parshanim.len(), 1);
         assert_eq!(result.perushim.len(), 1);
@@ -659,7 +722,7 @@ mod tests {
         // Non-"default" key but depth >= 3 → should still find it
         let chapters = bson!([["custom ch1 v1"]]);
         let doc = complex_schema_doc("test perush", 1, "commentary", chapters);
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
 
         assert_eq!(
             result.notes.len(),
@@ -678,7 +741,7 @@ mod tests {
             "versions": [],
             "schema": { "depth": 3 }
         };
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
 
         assert_eq!(result.parshanim.len(), 1);
         assert_eq!(result.perushim.len(), 1);
@@ -692,7 +755,7 @@ mod tests {
         let ch2 = bson!([["note sefer2"]]);
         let doc1 = simple_schema_doc("רש\"י", 1, ch1);
         let doc2 = simple_schema_doc("רש\"י", 2, ch2);
-        let result = extract(&[doc1, doc2]);
+        let result = extract(&[doc1, doc2]).unwrap();
 
         assert_eq!(result.parshanim.len(), 1);
         assert_eq!(result.perushim.len(), 1);
@@ -708,7 +771,7 @@ mod tests {
         // Verse with multiple notes (array of strings)
         let chapters = bson!([[["note1", "note2", "note3"]]]);
         let doc = simple_schema_doc("test", 1, chapters);
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
 
         assert_eq!(result.notes.len(), 3);
         assert_eq!(result.notes[0].note_idx, 0);
@@ -726,7 +789,7 @@ mod tests {
         let doc1 = simple_schema_doc("רש\"י", 1, simple_chapters);
         let doc2 = complex_schema_doc("רמב\"ן", 1, "default", complex_chapters);
 
-        let result = extract(&[doc1, doc2]);
+        let result = extract(&[doc1, doc2]).unwrap();
 
         assert_eq!(result.parshanim.len(), 2);
         assert_eq!(result.perushim.len(), 2);
@@ -740,7 +803,7 @@ mod tests {
     fn unknown_sefer_skipped() {
         let chapters = bson!([["note"]]);
         let doc = simple_schema_doc("test", 99, chapters); // sefer 99 doesn't exist
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
 
         assert_eq!(result.parshanim.len(), 1);
         assert_eq!(result.perushim.len(), 1);
@@ -755,7 +818,7 @@ mod tests {
     fn empty_and_whitespace_notes_skipped() {
         let chapters = bson!([["", "  ", "real note", "  "]]);
         let doc = simple_schema_doc("test", 1, chapters);
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
 
         assert_eq!(result.notes.len(), 1);
         assert_eq!(result.notes[0].note_content, "real note");
@@ -840,7 +903,7 @@ mod tests {
             "versions": [],
             "schema": { "depth": 3 }
         };
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
         assert_eq!(result.parshanim[0].name, "אברהם סבע");
     }
 
@@ -884,7 +947,7 @@ mod tests {
                 ("Exodus", bson!([["exo ch1 v1"]])),
             ],
         );
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
 
         assert_eq!(result.parshanim.len(), 1);
         assert_eq!(result.perushim.len(), 1);
@@ -921,7 +984,7 @@ mod tests {
                 ("Deuteronomy", bson!([["d"]])),
             ],
         );
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
 
         assert_eq!(result.notes.len(), 5);
         assert_eq!(result.notes[0].perek_id, 1); // Genesis
@@ -941,7 +1004,7 @@ mod tests {
                 ("Shemot", bson!([["note2"]])),
             ],
         );
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
 
         assert_eq!(result.notes.len(), 2);
         assert_eq!(result.notes[0].perek_id, 1); // Bereshit → Genesis
@@ -958,7 +1021,7 @@ mod tests {
                 ("Book of Ruth", bson!([["ruth note"]])),
             ],
         );
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
 
         assert_eq!(result.notes.len(), 2);
         assert_eq!(result.notes[0].perek_id, 1); // Genesis
@@ -988,7 +1051,7 @@ mod tests {
             }
         };
 
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
         assert_eq!(result.notes.len(), 1, "should only extract from book nodes");
         assert_eq!(result.notes[0].note_content, "real note");
     }
@@ -1000,7 +1063,7 @@ mod tests {
             "test",
             &[("Genesis", bson!([["ch1 note"], ["ch2 note"], ["ch3 note"]]))],
         );
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
 
         assert_eq!(result.notes.len(), 3);
         assert_eq!(result.notes[0].perek_id, 1);
@@ -1075,7 +1138,7 @@ mod tests {
                 ("Exodus", bson!([["exo ch1 v1"]])),
             ],
         );
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
 
         assert_eq!(result.notes.len(), 3);
         assert_eq!(result.notes[0].perek_id, 1);
@@ -1088,7 +1151,7 @@ mod tests {
     #[test]
     fn nested_multi_book_schema_skips_introduction_content() {
         let doc = nested_multi_book_schema_doc("אברבנאל", &[("Genesis", bson!([["real"]]))]);
-        let result = extract(&[doc]);
+        let result = extract(&[doc]).unwrap();
 
         assert_eq!(result.notes.len(), 1);
         assert_eq!(result.notes[0].note_content, "real");
