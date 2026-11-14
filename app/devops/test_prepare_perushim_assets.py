@@ -99,12 +99,33 @@ class PreparePerushimAssetsTests(unittest.TestCase):
                                  (self.source / CATALOG).read_bytes())
                 self.assertEqual((self.app / directory / NOTES).read_bytes(), (self.source / NOTES).read_bytes())
 
-    def test_removes_the_legacy_underscore_pack_dir(self):
-        stale = self.app / "Platforms/iOS/AssetPacks/perushim_notes"
+    def test_removes_legacy_pack_manifests_before_archiving_slim_payloads(self):
+        for name in ("perushim_notes", "perushim-notes"):
+            with self.subTest(name=name):
+                stale = self.app / "Platforms/iOS/AssetPacks" / name
+                stale.mkdir(parents=True)
+                (stale / NOTES).write_bytes(b"stale")
+                (stale / "Manifest.json").write_text(json.dumps({"assetPackID": name}))
+                archive = self.app.parent / ".artifacts/assetpacks" / f"{name}.aar"
+                archive.parent.mkdir(parents=True, exist_ok=True)
+                archive.write_bytes(b"legacy archive")
+                self.assertEqual(prepare_assets(self.source, self.app, "iOS"), 2)
+                self.assertFalse(stale.exists())
+                self.assertFalse(archive.exists())
+                self.assertTrue((self.app / NOTES_DIRECTORIES["iOS"] / SEARCH_INDEX).is_file())
+
+    def test_invalid_source_keeps_the_existing_legacy_pack_and_archive(self):
+        stale = self.app / "Platforms/iOS/AssetPacks/perushim-notes"
         stale.mkdir(parents=True)
-        (stale / NOTES).write_bytes(b"stale")
-        self.assertEqual(prepare_assets(self.source, self.app, "iOS"), 2)
-        self.assertFalse(stale.exists())
+        (stale / NOTES).write_bytes(b"legacy notes")
+        archive = self.app.parent / ".artifacts/assetpacks/perushim-notes.aar"
+        archive.parent.mkdir(parents=True)
+        archive.write_bytes(b"legacy archive")
+        self.metadata("schema_version", "1")
+        with self.assertRaisesRegex(ValueError, "schema v2"):
+            prepare_assets(self.source, self.app, "iOS")
+        self.assertEqual((stale / NOTES).read_bytes(), b"legacy notes")
+        self.assertEqual(archive.read_bytes(), b"legacy archive")
 
     def test_legacy_artifact_is_rejected_without_changing_existing_assets(self):
         self.metadata("perush_catalog", None)

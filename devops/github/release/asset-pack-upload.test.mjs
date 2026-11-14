@@ -537,6 +537,46 @@ test("an app-only release reuses every pack without a single upload", async () =
 	}
 });
 
+test("publishing the slim notes identifier preserves the legacy pack for older clients", async () => {
+	const entry = plannedPack("perushim-notes-slim", "slim-archive");
+	const dir = packDir([entry]);
+	const legacy = {
+		pack: { type: "backgroundAssets", id: "apple-pack-legacy", attributes: { assetPackIdentifier: "perushim-notes" } },
+		versions: [{ id: "legacy-version", number: 7, state: "COMPLETE", beta: "READY_FOR_TESTING", files: [assetFile(sha256("legacy-archive"))] }],
+	};
+	const remote = { "perushim-notes": structuredClone(legacy) };
+	const reads = [];
+	const reader = remoteReader(remote);
+	try {
+		const result = await uploadAssetPacks({
+			directory: dir,
+			bundle: "com.tanah.daily929",
+			credentials,
+			github: noGithub,
+			exec: (command, args) => {
+				assert.equal(command, "xcrun");
+				assert.equal(args[2], path.join(dir, "perushim-notes-slim.aar"));
+				remote[entry.id] = {
+					pack: { type: "backgroundAssets", id: "apple-pack-slim", attributes: { assetPackIdentifier: entry.id } },
+					versions: [{ id: "slim-version", number: 1, state: "COMPLETE", beta: "READY_FOR_TESTING", files: [assetFile(entry.archiveSha256)] }],
+				};
+				return { status: 0, stdout: "Asset pack uploaded" };
+			},
+			sleep: () => Promise.resolve(),
+		}, (requestPath, parameters) => {
+			reads.push([requestPath, parameters]);
+			return reader(requestPath, parameters);
+		});
+		assert.equal(result.uploaded, 1);
+		assert.equal(result.verified, 1);
+		assert.deepEqual(remote["perushim-notes"], legacy);
+		assert.ok(reads.every(([requestPath, parameters]) => !requestPath.includes("apple-pack-legacy")
+			&& parameters?.["filter[assetPackIdentifier]"] !== "perushim-notes"));
+	} finally {
+		cleanup(dir);
+	}
+});
+
 test("only the changed pack uploads; identical packs are reused", async () => {
 	const entries = [plannedPack("recitation-1", "same-archive"), plannedPack("recitation-2", "changed-archive")];
 	const dir = packDir(entries);

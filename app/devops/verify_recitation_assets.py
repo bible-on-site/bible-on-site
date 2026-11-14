@@ -127,7 +127,9 @@ def verify_apple(archive, catalog, names, asset_pack_dir, archive_dir, payload_d
 
 def verify_perushim_pack(asset_pack_dir, archive_dir, payload_dir, extract):
     """The notes pack carries both payloads the managed-delivery contract requires."""
-    pack = "perushim-notes"
+    pack = "perushim-notes-slim"
+    if (asset_pack_dir / "perushim-notes" / "Manifest.json").exists():
+        raise ValueError("Legacy iOS perushim-notes must not be republished with the slim index")
     manifest_path = asset_pack_dir / pack / "Manifest.json"
     if not manifest_path.is_file():
         raise ValueError(f"Missing asset-pack manifest: {manifest_path}")

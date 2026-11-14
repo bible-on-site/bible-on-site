@@ -9,7 +9,8 @@ namespace BibleOnSite.Services;
 /// Service for loading perushim notes (commentary text per pasuk).
 /// Android: delivered via Play Asset Delivery (PAD) as an on-demand asset pack in the AAB.
 /// iOS: delivered via Apple Background Assets as a managed on-demand asset pack.
-/// Data updates are coupled to app releases — updating perushim data requires a new app version.
+/// Notes must match the bundled catalog. Apple can update packs for older app builds too,
+/// so incompatible payload layouts use separate managed-pack identifiers.
 /// On app update the client compares build_timestamp in the local DB vs the store-delivered
 /// version and auto-upgrades if the store copy is newer.
 /// If the notes DB is not yet available, returns empty; download can be triggered separately.
@@ -18,8 +19,7 @@ public class PerushimNotesService : IReaderNotesAvailability
 {
     private const string NotesDbName = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite";
 #if IOS || MACCATALYST
-    // App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
-    private const string PerushimNotesPackName = "perushim-notes";
+    private const string PerushimNotesPackName = PadDeliveryService.IosPerushimNotesPackName;
 #else
     private const string PerushimNotesPackName = "perushim_notes";
 #endif
