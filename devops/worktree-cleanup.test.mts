@@ -11,8 +11,8 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
 	classify,
-	containsTrackedContent,
 	isBenignDirty,
+	isCheckoutRemnant,
 	isRegenerableIgnored,
 	parseWorktrees,
 	splitStatus,
@@ -50,7 +50,7 @@ const benignRe = /^ M app[/\\]\.nuke[/\\]build\.schema\.json$/;
 const base = {
 	isMain: false,
 	isProtected: false,
-	openPrBranches: new Set<string>(),
+	openPr: false,
 	remoteDone: true,
 	mergedIntoDefault: false,
 	idleBeyondThreshold: false,
@@ -65,10 +65,7 @@ describe("classify", () => {
 		assert.equal(classify({ ...base, wt: wt("b"), isProtected: true }), "protected");
 	});
 	it("keeps branches with open PRs", () => {
-		assert.equal(
-			classify({ ...base, wt: wt("feat/x"), openPrBranches: new Set(["feat/x"]) }),
-			"open-pr",
-		);
+		assert.equal(classify({ ...base, wt: wt("feat/x"), openPr: true }), "open-pr");
 	});
 	it("removes clean worktrees whose remote work is done", () => {
 		assert.equal(classify({ ...base, wt: wt("gone") }), "remove");
@@ -168,8 +165,8 @@ describe("isRegenerableIgnored", () => {
 	});
 });
 
-describe("containsTrackedContent", () => {
-	it("requires matching blob hashes, not just matching paths", () => {
+describe("isCheckoutRemnant", () => {
+	it("requires a hash-verified tracked file and zero foreign files", () => {
 		const repo = mkdtempSync(join(tmpdir(), "wt-repo-"));
 		const root = mkdtempSync(join(tmpdir(), "wt-debris-"));
 		const git = (args: string[]) =>
@@ -187,20 +184,22 @@ describe("containsTrackedContent", () => {
 			// A remnant holding an identical tracked file is debris.
 			mkdirSync(join(root, "data"), { recursive: true });
 			writeFileSync(join(root, "data", "a.sql"), "tracked-content");
-			assert.equal(containsTrackedContent(repo, root, tracked), true);
+			assert.equal(isCheckoutRemnant(repo, root, tracked), true);
+
+			// Verified content plus an unrelated file is not debris — the
+			// unexplained file would be lost.
+			mkdirSync(join(root, "notes"), { recursive: true });
+			writeFileSync(join(root, "notes", "mine.md"), "x");
+			assert.equal(isCheckoutRemnant(repo, root, tracked), false);
+			rmSync(join(root, "notes"), { recursive: true });
 
 			// Same path, different content (a name collision) is not evidence.
 			writeFileSync(join(root, "data", "a.sql"), "user-edited");
-			assert.equal(containsTrackedContent(repo, root, tracked), false);
-
-			// An unrelated folder with only untracked names is not evidence.
-			mkdirSync(join(root, "notes"), { recursive: true });
-			writeFileSync(join(root, "notes", "mine.md"), "x");
-			assert.equal(containsTrackedContent(repo, root, tracked), false);
+			assert.equal(isCheckoutRemnant(repo, root, tracked), false);
 
 			// A .git anywhere inside means foreign repo / live worktree.
 			mkdirSync(join(root, "sub", ".git"), { recursive: true });
-			assert.equal(containsTrackedContent(repo, root, tracked), false);
+			assert.equal(isCheckoutRemnant(repo, root, tracked), false);
 		} finally {
 			rmSync(repo, { recursive: true, force: true });
 			rmSync(root, { recursive: true, force: true });

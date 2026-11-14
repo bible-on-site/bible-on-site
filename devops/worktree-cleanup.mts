@@ -61,9 +61,10 @@ interface ClassifyInput {
 	wt: WorktreeInfo;
 	isMain: boolean;
 	isProtected: boolean;
-	openPrBranches: Set<string>;
-	/** Closed/merged PR exists, or the branch had a remote upstream that is
-	 *  now deleted. Never-pushed local branches are NOT remote-done. */
+	openPr: boolean;
+	/** The remote branch is gone AND (a closed/merged PR's head commit equals
+	 *  the current tip, or the branch had a configured upstream). Never-pushed
+	 *  local branches and re-pushed branch names are NOT remote-done. */
 	remoteDone: boolean;
 	mergedIntoDefault: boolean;
 	idleBeyondThreshold: boolean;
@@ -103,7 +104,7 @@ export function isBenignDirty(statusLines: string[], benignRe: RegExp): boolean 
 export function classify(input: ClassifyInput): Disposition {
 	const { wt } = input;
 	if (input.isMain || input.isProtected) return "protected";
-	if (wt.branch && input.openPrBranches.has(wt.branch)) return "open-pr";
+	if (input.openPr) return "open-pr";
 	const clean = input.statusLines.length === 0;
 	const benign = !clean && isBenignDirty(input.statusLines, input.benignDirtyRe);
 	if (wt.branch === null) {
@@ -143,13 +144,17 @@ function tryGit(repo: string, args: string[], input?: string): string | null {
 	}
 }
 
-interface PrStates {
-	open: Set<string>;
-	closed: Set<string>;
+interface BranchPr {
+	open: boolean;
+	/** headRefOid of each closed/merged PR for this exact branch name. */
+	closedOids: Set<string>;
 }
 
-/** Branches with open vs. closed/merged PRs; null when gh is unavailable. */
-function prStates(repo: string): PrStates | null {
+/**
+ * PR state for one branch, queried by name so unrelated PR history can never
+ * crowd it out. null when gh is unavailable.
+ */
+function branchPr(repo: string, branch: string): BranchPr | null {
 	try {
 		const out = execFileSync(
 			"gh",
@@ -160,20 +165,22 @@ function prStates(repo: string): PrStates | null {
 				repoSlug(repo),
 				"--state",
 				"all",
+				"--head",
+				branch,
 				"--limit",
-				"1000",
+				"20",
 				"--json",
-				"headRefName,state",
+				"headRefOid,state",
 			],
 			{ encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
 		);
-		const open = new Set<string>();
-		const closed = new Set<string>();
-		for (const pr of JSON.parse(out) as { headRefName: string; state: string }[]) {
-			(pr.state === "OPEN" ? open : closed).add(pr.headRefName);
-		}
-		for (const b of open) closed.delete(b); // an open PR always wins
-		return { open, closed };
+		const prs = JSON.parse(out) as { headRefOid: string; state: string }[];
+		return {
+			open: prs.some((p) => p.state === "OPEN"),
+			closedOids: new Set(
+				prs.filter((p) => p.state !== "OPEN").map((p) => p.headRefOid),
+			),
+		};
 	} catch {
 		return null;
 	}
@@ -339,13 +346,13 @@ export function trackedFiles(
 }
 
 /**
- * True when `root` holds at least one file whose path AND content hash match
- * a blob in `tracked` — positive evidence the dir is a checkout remnant. A
- * path alone is not enough: caches like `.ruff_cache` contain their own
- * `.gitignore`, which collides with tracked names. Returns false on a `.git`
- * anywhere inside (foreign repo or live worktree) and on budget exhaustion.
+ * True when `root` is provably a checkout remnant: at least one file matches
+ * a tracked path AND its blob hash, and every other file is either a tracked
+ * name or recognizably regenerable. One matching `.gitignore` surrounded by
+ * unrelated files is not evidence. Returns false on a `.git` anywhere inside
+ * (foreign repo or live worktree) and on budget exhaustion.
  */
-export function containsTrackedContent(
+export function isCheckoutRemnant(
 	repo: string,
 	root: string,
 	tracked: ReadonlyMap<string, string>,
@@ -368,6 +375,7 @@ export function containsTrackedContent(
 			const rp = rel ? `${rel}/${e.name}` : e.name;
 			if (e.isDirectory()) stack.push(rp);
 			else if (tracked.has(rp)) candidates.push([rp, join(root, rp)]);
+			else if (!isRegenerableIgnored(rp)) return false; // unexplained file
 		}
 	}
 	if (candidates.length === 0) return false;
@@ -479,10 +487,6 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 	const registered = new Set(worktrees.map((w) => resolve(w.path)));
 	const mainPath = registered.size ? worktrees[0].path : repo;
 
-	const prs = prStates(repo);
-	if (prs === null) log(`[${repo}] gh unavailable — keeping all worktrees`);
-	const prsSafe = prs ?? { open: new Set<string>(), closed: new Set<string>() };
-
 	const remoteOut = tryGit(repo, ["branch", "-r", "--format=%(refname:strip=3)"]);
 	if (remoteOut === null)
 		log(`[${repo}] remote ref listing failed — keeping all worktrees`);
@@ -493,9 +497,9 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 			.filter((b) => b && b !== "HEAD"),
 	);
 
-	// Worktree removal is only enabled when every remote signal succeeded —
-	// stale or missing remote state must never look like "the work is done".
-	const remoteOk = fetched && prs !== null && remoteOut !== null;
+	// Worktree removal requires successful fetch and remote-ref state; the PR
+	// check is per-branch below (a failed gh call keeps that worktree too).
+	const remoteOk = fetched && remoteOut !== null;
 
 	const defaultRef = (
 		tryGit(repo, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]) ??
@@ -531,7 +535,10 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 			tryGit(wpath, ["status", "--porcelain", "--ignored"]) ?? "ERROR",
 		);
 		let disp: Disposition;
-		if (!remoteOk) {
+		const bp = remoteOk && wt.branch !== null ? branchPr(repo, wt.branch) : null;
+		if (!remoteOk || (wt.branch !== null && bp === null)) {
+			if (wt.branch !== null && remoteOk && bp === null)
+				log(`[${repo}] gh lookup failed for ${wt.branch} — keeping`);
 			disp =
 				wpath === resolve(mainPath) || isProtectedPath(wpath)
 					? "protected"
@@ -544,11 +551,11 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 				wt,
 				isMain: wpath === resolve(mainPath),
 				isProtected: isProtectedPath(wpath),
-				openPrBranches: prsSafe.open,
+				openPr: bp?.open ?? false,
 				remoteDone:
 					wt.branch !== null &&
-					(prsSafe.closed.has(wt.branch) ||
-						(hasUpstream(wt.branch) && !remoteBranches.has(wt.branch))),
+					!remoteBranches.has(wt.branch) &&
+					((bp?.closedOids.has(wt.head) ?? false) || hasUpstream(wt.branch)),
 				mergedIntoDefault: merged,
 				idleBeyondThreshold:
 					now - lastActivityMs(wpath) >= cli.idleDays * 86400_000,
@@ -594,8 +601,7 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 			if (!empty) {
 				const idleMs = now - newestTopLevelMtime(child);
 				const proven =
-					trackedSet !== null &&
-					containsTrackedContent(repo, child, trackedSet);
+					trackedSet !== null && isCheckoutRemnant(repo, child, trackedSet);
 				if (idleMs < cli.debrisDays * 86400_000 || !proven) continue;
 			}
 			if (cli.yes) rmrf(child);
