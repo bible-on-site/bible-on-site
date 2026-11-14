@@ -1,6 +1,7 @@
 """Exercise the real Lambda SQL helpers without AWS or third-party imports."""
 
 import importlib.util
+import io
 import json
 import re
 import sqlite3
@@ -8,8 +9,9 @@ import sys
 import tempfile
 import types
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 HERE = Path(__file__).resolve().parent
@@ -317,6 +319,53 @@ class CommentScannerTests(unittest.TestCase):
 
     def test_double_dash_without_whitespace_is_not_a_comment(self):
         self._scan("SET x = 5--2;")
+
+
+class ValidatorTargetTests(unittest.TestCase):
+    """Parsing must never implicitly execute migrations on a shared database."""
+
+    def test_no_arguments_do_not_connect_even_with_db_url_in_environment(self):
+        database = MagicMock()
+        with patch.object(sys, "argv", ["validate_lambda_parser.py"]), \
+                patch.dict("os.environ", {"DB_URL": "mysql://localhost/tanah-dev"}), \
+                patch.dict(sys.modules, {"pymysql": database}), \
+                redirect_stdout(io.StringIO()):
+            VALIDATOR.main()
+        database.connect.assert_not_called()
+
+    def test_parse_only_does_not_connect_even_with_an_explicit_target(self):
+        database = MagicMock()
+        with patch.object(sys, "argv", [
+            "validate_lambda_parser.py", "--parse-only", "--db",
+            "mysql://localhost/disposable_validation",
+        ]), patch.dict(sys.modules, {"pymysql": database}), \
+                redirect_stdout(io.StringIO()):
+            VALIDATOR.main()
+        database.connect.assert_not_called()
+
+    def test_execution_uses_only_the_explicit_database(self):
+        database = MagicMock()
+        with patch.object(sys, "argv", [
+            "validate_lambda_parser.py", "--db",
+            "mysql://fixture@127.0.0.1:3306/disposable_validation",
+        ]), patch.dict("os.environ", {"DB_URL": "mysql://localhost/tanah-dev"}), \
+                patch.dict(sys.modules, {"pymysql": database}), \
+                redirect_stdout(io.StringIO()):
+            VALIDATOR.main()
+        self.assertEqual(database.connect.call_count, 2)
+        for call in database.connect.call_args_list:
+            self.assertEqual(call.kwargs["database"], "disposable_validation")
+            self.assertEqual(call.kwargs["host"], "127.0.0.1")
+        self.assertGreater(database.connect.return_value.cursor.return_value.__enter__.return_value.execute.call_count, 6000)
+
+    def test_explicit_execution_fails_when_the_database_driver_is_missing(self):
+        with patch.object(sys, "argv", [
+            "validate_lambda_parser.py", "--db",
+            "mysql://localhost/disposable_validation",
+        ]), patch.dict(sys.modules, {"pymysql": None}), \
+                redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(SystemExit, "pymysql is required"):
+                VALIDATOR.main()
 
 
 class ParsedStatementGuardTests(unittest.TestCase):

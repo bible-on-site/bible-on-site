@@ -39,8 +39,9 @@ bun run deploy:data
 
 The validator and deployer share `data-deploy/sql-files.json`. The validator resolves
 SQL paths from its own location, so it also works from other working directories.
-Without `--parse-only`, it executes SQL (including injected table/view drops): use
-that mode only with a disposable local database.
+Parsing is the default and never selects a database from `DB_URL`. Execution
+requires an explicit `--db` URL and the `pymysql` driver; use that mode only with
+a disposable local database because the SQL includes injected table/view drops.
 
 An idle VPC Lambda can reject its first invocation with `ResourceNotReadyException`
 while AWS restores its resources. The deployer retries only that pre-execution

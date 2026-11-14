@@ -1,8 +1,8 @@
 """Validate deployed SQL files with the production Lambda's parser, in manifest order.
 
-Use --parse-only for the database-free compatibility check used in Data CI.
-Without --parse-only, execute the statements against a disposable local MySQL
-database (the parser injects DROP TABLE/VIEW statements).
+By default, only parse the SQL, as in Data CI. Pass --db explicitly to execute
+the statements against a disposable local MySQL database (the parser injects
+DROP TABLE/VIEW statements). DB_URL never selects an execution target implicitly.
 
 Usage:
     python devops/deploy/data-deploy/validate_lambda_parser.py [--db DB_URL] [--parse-only]
@@ -310,7 +310,7 @@ def main():
 
     print(f"\nTotal: {len(all_stmts)} executable statements across {len(sql_files)} files")
 
-    if args.parse_only:
+    if args.parse_only or not args.db_url:
         print("LAMBDA PARSER VALIDATION PASSED.")
         return
 
@@ -318,13 +318,9 @@ def main():
     try:
         import pymysql
     except ImportError:
-        print("\npymysql not installed — skipping live DB validation.")
-        sys.exit(0)
+        sys.exit("pymysql is required for explicit --db execution")
 
-    db_url = args.db_url or os.environ.get(
-        "DB_URL",
-        "mysql://root:test_123@localhost:3306/tanah-dev?ssl-mode=DISABLED",
-    )
+    db_url = args.db_url
     from urllib.parse import urlparse
     parsed = urlparse(db_url)
     db_name = parsed.path.lstrip("/").split("?")[0]
