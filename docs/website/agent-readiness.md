@@ -52,9 +52,15 @@ view-param `noindex` handling are unchanged.
 Every public learning page is served as fully rendered HTML
 (SSG — no client rendering required); scripture qri/ktiv,
 stuma/ptuha markers, footnotes, verse references and source licences
-are present in the served markup. The sitemap is the complete
-canonical URL index; `/api/search` provides anonymous JSON query
-access.
+are present in the served markup. The sitemap lists indexable
+canonical URLs; Masora (`/מסורה`) pages are intentionally
+`noindex, follow` and excluded. Follow the sefer/unit links from
+`/מסורה` to discover those readings. `/api/search` provides anonymous
+JSON query access. Its HTTP 200 responses include an `availability`
+array: nonempty notices mean results are incomplete and may be
+retried later. Uncaught search failures return HTTP 500 with
+`error=search_failed`; invalid parameters return 400, or 414 for an
+overlong query. The OpenAPI document describes this existing contract.
 
 **No alternate whole-corpus representation.** A Markdown mirror of
 every corpus page (the earlier `/md/*` route + `Accept: text/markdown`

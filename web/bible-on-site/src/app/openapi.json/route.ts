@@ -4,6 +4,7 @@
  * this document grants or implies access to management/write APIs.
  */
 import { NextResponse } from "next/server";
+import { SEARCH_RESULT_TYPES } from "@/lib/search/types";
 import { SITE_ORIGIN } from "@/lib/seo/jsonld";
 
 export const dynamic = "force-static";
@@ -43,8 +44,7 @@ const DOCUMENT = {
 							description:
 								"Comma-separated result types: perek,pasuk,perush,author,article,tanahpedia",
 						},
-						description:
-							"Optional filter (CSV); absent = all types.",
+						description: "Optional filter (CSV); absent = all types.",
 					},
 					{
 						name: "limit",
@@ -55,9 +55,87 @@ const DOCUMENT = {
 					},
 				],
 				responses: {
-					"200": { description: "Search results (JSON)." },
-					"400": { description: "Invalid parameters." },
-					"503": { description: "Transient backend failure; retry." },
+					"200": {
+						description:
+							"Search results. Inspect availability even on HTTP 200: nonempty notices mean incomplete results; retry later.",
+						content: {
+							"application/json": {
+								schema: {
+									type: "object",
+									required: [
+										"query",
+										"types",
+										"results",
+										"counts",
+										"availability",
+									],
+									properties: {
+										query: {
+											type: "string",
+											description: "Normalized search query.",
+										},
+										types: {
+											type: "array",
+											items: { type: "string", enum: SEARCH_RESULT_TYPES },
+										},
+										results: {
+											type: "array",
+											description:
+												"Grouped by type, ordered by relevance within each type.",
+											items: {
+												type: "object",
+												required: [
+													"type",
+													"title",
+													"snippetHtml",
+													"href",
+													"score",
+												],
+												properties: {
+													type: { type: "string", enum: SEARCH_RESULT_TYPES },
+													title: { type: "string" },
+													snippetHtml: {
+														type: ["string", "null"],
+														description:
+															"HTML-escaped excerpt with optional <mark> highlights.",
+													},
+													href: {
+														type: "string",
+														description: "Site-relative result URL.",
+													},
+													score: { type: "number" },
+												},
+											},
+										},
+										counts: {
+											type: "object",
+											description:
+												"Returned result counts keyed by successful result type.",
+											additionalProperties: { type: "integer", minimum: 0 },
+										},
+										availability: {
+											type: "array",
+											items: { type: "string" },
+											description:
+												"Non-fatal provider availability notices. Nonempty means incomplete results; retry later. Empty means no provider failure was reported.",
+										},
+									},
+								},
+							},
+						},
+					},
+					"400": {
+						description:
+							"Invalid parameters: JSON error is invalid_query (missing or blank q), invalid_limit, or invalid_type (no recognized type).",
+					},
+					"414": {
+						description:
+							"Query exceeds 256 characters after trimming; JSON error is invalid_query.",
+					},
+					"500": {
+						description:
+							"Uncaught search failure; JSON error is search_failed. Retry later.",
+					},
 				},
 			},
 		},

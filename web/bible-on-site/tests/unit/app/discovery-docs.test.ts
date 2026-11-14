@@ -10,8 +10,11 @@ jest.mock("@/lib/seo/jsonld", () => ({
 			: `https://canonical.example${path.startsWith("/") ? path : `/${path}`}`,
 }));
 
+import {
+	GET as catalogGET,
+	HEAD as catalogHEAD,
+} from "@/app/.well-known/api-catalog/route";
 import { GET as llmsGET } from "@/app/llms.txt/route";
-import { GET as catalogGET, HEAD as catalogHEAD } from "@/app/.well-known/api-catalog/route";
 import { GET as openapiGET } from "@/app/openapi.json/route";
 
 describe("/llms.txt (issue #3257)", () => {
@@ -70,6 +73,14 @@ describe("/llms.txt (issue #3257)", () => {
 		const body = await llmsGET().text();
 		expect(body).toMatch(/\/dev|\/api\/dev|\/api\/revalidate/);
 	});
+
+	it("explains how to discover Masora readings outside the indexing sitemap", async () => {
+		const body = await llmsGET().text();
+		expect(body).toContain("Masora (/מסורה) pages are intentionally noindex");
+		expect(body).toContain("excluded from the sitemap");
+		expect(body).toContain("follow the sefer/unit links from /מסורה");
+		expect(body).not.toMatch(/complete\s+coverage|every canonical URL/);
+	});
 });
 
 describe("/.well-known/api-catalog (RFC 9727)", () => {
@@ -91,7 +102,12 @@ describe("/.well-known/api-catalog (RFC 9727)", () => {
 			linkset: Record<string, { href: string }[] | undefined>[];
 		};
 		const json = JSON.stringify(body);
-		for (const forbidden of ["/api/dev", "/api/revalidate", "/api/push", "/dev"]) {
+		for (const forbidden of [
+			"/api/dev",
+			"/api/revalidate",
+			"/api/push",
+			"/dev",
+		]) {
 			expect(json).not.toContain(forbidden);
 		}
 	});
@@ -107,6 +123,27 @@ describe("/.well-known/api-catalog (RFC 9727)", () => {
 });
 
 describe("/openapi.json", () => {
+	it("documents partial search results and their availability notices", async () => {
+		const doc = await openapiGET().json();
+		const response = doc.paths["/api/search"].get.responses["200"];
+		expect(response.description).toContain("availability");
+		const schema = response.content["application/json"].schema;
+		expect(schema.required).toEqual(
+			expect.arrayContaining([
+				"query",
+				"types",
+				"results",
+				"counts",
+				"availability",
+			]),
+		);
+		expect(schema.properties.availability).toMatchObject({
+			type: "array",
+			items: { type: "string" },
+		});
+		expect(schema.properties.availability.description).toContain("incomplete");
+	});
+
 	it("describes only the public read endpoints", async () => {
 		const response = openapiGET();
 		expect(response.headers.get("content-type")).toContain(
@@ -129,7 +166,9 @@ describe("/openapi.json", () => {
 		);
 		expect(Object.keys(doc.paths)).not.toContain("/md/{path}");
 		const json = JSON.stringify(doc);
-		expect(json).toContain("model training, including learning in model weights");
+		expect(json).toContain(
+			"model training, including learning in model weights",
+		);
 		expect(json).not.toMatch(/withheld|ai-train=no/);
 		for (const forbidden of ["/api/dev", "/api/revalidate", "/api/push"]) {
 			expect(json).not.toContain(forbidden);

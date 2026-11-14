@@ -79,14 +79,17 @@ Every public learning page is served as fully rendered HTML (SSG — no
 client-side rendering required): vocalized scripture with qri/ktiv
 semantics, stuma (ס)/ptuha (פ) markers in position, full article and
 commentary bodies, author names, verse references and source licences
-are all present in the served markup. Crawl the sitemap for complete
-coverage; use /api/search for query-style discovery. There is no bulk
+are all present in the served markup. Crawl the sitemap for indexable
+canonical pages; use /api/search for query-style discovery.
+Masora (/מסורה) pages are intentionally noindex, follow and are
+excluded from the sitemap; follow the sefer/unit links from /מסורה
+to discover those readings. There is no bulk
 export endpoint and no alternate full-corpus representation — fetch
 bounded canonical pages at a reasonable pace.
 
 ## Machine-readable discovery
 
-- [/sitemap.xml](/sitemap.xml) — every canonical URL (also
+- [/sitemap.xml](/sitemap.xml) — indexable canonical URLs (also
   /sitemap_www.xml for the www host).
 - [/.well-known/api-catalog](/.well-known/api-catalog) — RFC 9727
   linkset of the public API endpoints.
@@ -109,8 +112,11 @@ bounded canonical pages at a reasonable pace.
 
 Public GET/HEAD only. There are no public write APIs, no private data
 exports and no authentication for reading. Distinguish a real 404
-(content does not exist / unpublished) from a retryable 503
-(backend temporarily unavailable — never cache it as missing).
+(content does not exist / unpublished) from a transient backend
+failure (never cache it as missing). /api/search returns HTTP 200
+with an availability array: nonempty notices mean results are
+incomplete and can be retried later. An uncaught search failure
+returns HTTP 500 with error=search_failed; see /openapi.json.
 `;
 
 export function GET(): NextResponse {
