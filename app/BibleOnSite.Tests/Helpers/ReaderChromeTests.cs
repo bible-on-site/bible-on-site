@@ -25,6 +25,20 @@ namespace BibleOnSite.Tests.Helpers;
 [Collection("Application state")]
 public class ReaderChromeTests
 {
+    [Fact]
+    public void TextReselect_UsesTheExplicitNonCarouselScrollAction()
+    {
+        using var seams = new Seams();
+        var rig = new Rig();
+        var calls = 0;
+        _ = rig.CreateChrome(scrollReadingToStart: () => { calls++; return true; });
+        ReaderChrome.ScrollToStart = (_, _) => throw new InvalidOperationException("must not search carousel descendants");
+
+        rig.BottomBar.RaiseTextMode();
+
+        calls.Should().Be(1);
+    }
+
     /// <summary>
     /// Attaches a mocked MAUI context to a view tree so <c>FadeToAsync</c>
     /// resolves an animation manager; <see cref="TickAll"/> lands every queued
@@ -240,7 +254,7 @@ public class ReaderChromeTests
             Toolbar.Arrange(new Rect(0, 0, 400, 56));
         }
 
-        public ReaderChrome CreateChrome(bool withFullscreenHandler = true)
+        public ReaderChrome CreateChrome(bool withFullscreenHandler = true, Func<bool>? scrollReadingToStart = null)
         {
             return new ReaderChrome(
                 new ReaderChromeSurfaces
@@ -261,6 +275,7 @@ public class ReaderChromeTests
                 {
                     ReloadArticlesAsync = () => { ReloadCount++; return Task.CompletedTask; },
                     CurrentUnit = () => Unit,
+                    ScrollReadingToStart = scrollReadingToStart,
                     SelectArticle = id => Selections.Add(id),
                     CanGoPrevious = () => CanPrev,
                     CanGoNext = () => CanNext,

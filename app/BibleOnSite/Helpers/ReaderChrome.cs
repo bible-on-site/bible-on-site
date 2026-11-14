@@ -94,6 +94,9 @@ public sealed class ReaderChromeActions
     /// <summary>The currently displayed reading unit (scroll-to-start target).</summary>
     public required Func<object?> CurrentUnit { get; init; }
 
+    /// <summary>Explicit scroll target for a reader without a unit carousel.</summary>
+    public Func<bool>? ScrollReadingToStart { get; init; }
+
     /// <summary>Marks (or clears, on null) the selected article id on the view model.</summary>
     public required Action<int?> SelectArticle { get; init; }
 
@@ -259,7 +262,14 @@ public sealed class ReaderChrome
         }
         else
         {
-            ScrollToStart(_ui.ReaderContent, _actions.CurrentUnit());
+            if (_actions.ScrollReadingToStart is { } scroll)
+            {
+                scroll();
+            }
+            else
+            {
+                ScrollToStart(_ui.ReaderContent, _actions.CurrentUnit());
+            }
         }
     }
 
