@@ -71,6 +71,14 @@ public sealed class ReaderChromeSurfaces
     /// <summary>The reading content hidden while articles show (the carousel).</summary>
     public required VisualElement ReaderContent { get; init; }
 
+    /// <summary>
+    /// The reading-position indicator owned by the reading content — the
+    /// articles/text swap hides and restores it with <see cref="ReaderContent"/>
+    /// so it never paints over the article cards (#3364). Required but null on
+    /// readers with no indicator, so each page declares its surface explicitly.
+    /// </summary>
+    public required VisualElement? ReadingProgressIndicator { get; init; }
+
     /// <summary>The reader toolbar row hidden in fullscreen.</summary>
     public required VisualElement Toolbar { get; init; }
 
@@ -231,6 +239,7 @@ public sealed class ReaderChrome
 
         _ui.ArticlesView.IsVisible = false;
         _ui.ReaderContent.IsVisible = true;
+        _ui.ReadingProgressIndicator?.IsVisible = true;
 
         _ui.BottomBar.IsArticlesActive = false;
     }
@@ -279,6 +288,9 @@ public sealed class ReaderChrome
 
             _ui.ReaderContent.IsVisible = false;
             _ui.ArticlesView.IsVisible = true;
+            // The reading-position hairline belongs to the hidden content —
+            // leaving it drawn painted it over the article cards (#3364).
+            _ui.ReadingProgressIndicator?.IsVisible = false;
 
             _ui.BottomBar.IsArticlesActive = true;
         }
