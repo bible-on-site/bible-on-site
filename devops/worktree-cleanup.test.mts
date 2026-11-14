@@ -4,6 +4,7 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	rmSync,
+	utimesSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,9 +12,12 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
 	classify,
+	deepestMtime,
 	isBenignDirty,
 	isCheckoutRemnant,
+	isIgnoredDir,
 	isRegenerableIgnored,
+	parseDays,
 	parseWorktrees,
 	splitStatus,
 	sweepableContainer,
@@ -123,6 +127,62 @@ describe("isBenignDirty", () => {
 	});
 });
 
+describe("deepestMtime", () => {
+	it("sees nested edits, skips regenerable dirs, and fails safe on budget", () => {
+		const root = mkdtempSync(join(tmpdir(), "wt-mtime-"));
+		try {
+			const old = new Date("2020-01-01");
+			const fresh = new Date("2025-06-01");
+			const newest = new Date("2026-01-01");
+			mkdirSync(join(root, "src", "deep"), { recursive: true });
+			mkdirSync(join(root, ".venv", "lib"), { recursive: true });
+			writeFileSync(join(root, "src", "deep", "edit.ts"), "x");
+			writeFileSync(join(root, ".venv", "lib", "new.py"), "x");
+			writeFileSync(join(root, "top.ts"), "x");
+			// Age every directory so only file mtimes carry the signal —
+			// otherwise fresh dir timestamps mask a broken deep walk.
+			for (const d of ["src", join("src", "deep"), ".venv", join(".venv", "lib")])
+				utimesSync(join(root, d), old, old);
+			utimesSync(join(root, "top.ts"), old, old);
+			utimesSync(join(root, "src", "deep", "edit.ts"), fresh, fresh);
+			// The .venv file is the newest of all — if the walk descended
+			// into it, the result would be `newest`, not `fresh`.
+			utimesSync(join(root, ".venv", "lib", "new.py"), newest, newest);
+
+			const m = deepestMtime(root);
+			assert.ok(
+				Math.abs(m - fresh.getTime()) < 10_000 && m < newest.getTime(),
+				`expected ~${fresh.toISOString()}, got ${new Date(m).toISOString()}`,
+			);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+	it("returns ~now on budget exhaustion — unknown is not idle", () => {
+		const root = mkdtempSync(join(tmpdir(), "wt-mtime-"));
+		try {
+			for (let i = 0; i < 5; i++)
+				writeFileSync(join(root, `f${i}.ts`), "x");
+			const before = Date.now();
+			assert.ok(deepestMtime(root, 2) >= before);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("parseDays", () => {
+	it("accepts valid non-negative numbers", () => {
+		assert.equal(parseDays("0", "--idle-days"), 0);
+		assert.equal(parseDays("14", "--idle-days"), 14);
+		assert.equal(parseDays("2.5", "--idle-days"), 2.5);
+	});
+	it("rejects NaN, non-numeric and negative values", () => {
+		for (const bad of ["14d", "", "abc", "NaN", "-1"])
+			assert.throws(() => parseDays(bad, "--idle-days"), /expects a number/);
+	});
+});
+
 describe("sweepableContainer", () => {
 	it("rejects containers that are worktrees themselves", () => {
 		assert.equal(sweepableContainer("/repo", new Set(["/repo"]), true), false);
@@ -166,7 +226,7 @@ describe("isRegenerableIgnored", () => {
 });
 
 describe("isCheckoutRemnant", () => {
-	it("requires a hash-verified tracked file and zero foreign files", () => {
+	it("requires every tracked-name file to hash-match and zero foreign files", () => {
 		const repo = mkdtempSync(join(tmpdir(), "wt-repo-"));
 		const root = mkdtempSync(join(tmpdir(), "wt-debris-"));
 		const git = (args: string[]) =>
@@ -181,10 +241,17 @@ describe("isCheckoutRemnant", () => {
 			const tracked = trackedFiles(repo, "HEAD");
 			assert.ok(tracked !== null && tracked.size === 2);
 
-			// A remnant holding an identical tracked file is debris.
+			// A remnant holding identical tracked files is debris.
 			mkdirSync(join(root, "data"), { recursive: true });
 			writeFileSync(join(root, "data", "a.sql"), "tracked-content");
+			writeFileSync(join(root, ".gitignore"), "*.log\n");
 			assert.equal(isCheckoutRemnant(repo, root, tracked), true);
+
+			// One verified file + one locally edited tracked file is not
+			// debris — the edit would be lost.
+			writeFileSync(join(root, ".gitignore"), "local-edit\n");
+			assert.equal(isCheckoutRemnant(repo, root, tracked), false);
+			writeFileSync(join(root, ".gitignore"), "*.log\n");
 
 			// Verified content plus an unrelated file is not debris — the
 			// unexplained file would be lost.
@@ -193,16 +260,30 @@ describe("isCheckoutRemnant", () => {
 			assert.equal(isCheckoutRemnant(repo, root, tracked), false);
 			rmSync(join(root, "notes"), { recursive: true });
 
-			// Same path, different content (a name collision) is not evidence.
-			writeFileSync(join(root, "data", "a.sql"), "user-edited");
-			assert.equal(isCheckoutRemnant(repo, root, tracked), false);
-
 			// A .git anywhere inside means foreign repo / live worktree.
 			mkdirSync(join(root, "sub", ".git"), { recursive: true });
 			assert.equal(isCheckoutRemnant(repo, root, tracked), false);
 		} finally {
 			rmSync(repo, { recursive: true, force: true });
 			rmSync(root, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("isIgnoredDir", () => {
+	it("distinguishes git-ignored output dirs from plain source dirs", () => {
+		const repo = mkdtempSync(join(tmpdir(), "wt-ignore-"));
+		const git = (args: string[]) =>
+			execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
+		try {
+			git(["init", "-q"]);
+			writeFileSync(join(repo, ".gitignore"), "dist/\n.next/\n");
+			mkdirSync(join(repo, "dist"), { recursive: true });
+			mkdirSync(join(repo, "src"), { recursive: true });
+			assert.equal(isIgnoredDir(repo, join(repo, "dist"), repo), true);
+			assert.equal(isIgnoredDir(repo, join(repo, "src"), repo), false);
+		} finally {
+			rmSync(repo, { recursive: true, force: true });
 		}
 	});
 });
