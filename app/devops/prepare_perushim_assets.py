@@ -92,10 +92,23 @@ def validate_search_index(index_path: Path, notes_timestamp: int, tanah_view: Pa
         if index.execute("SELECT COUNT(*) FROM verses_documents").fetchone()[0] == 0:
             raise ValueError("Search index has no verses documents")
         index.execute("SELECT term FROM notes_vocab LIMIT 1").fetchall()
-        index.execute(
-            "SELECT PerekId, PasukNum, PerushId, SeferId, c.Text FROM notes JOIN notes_documents c ON c.rowid=notes.rowid WHERE notes MATCH ? LIMIT 1",
-            ("בראשית",),
-        ).fetchall()
+        # Two documents layouts exist: the slim one stores the note's identity
+        # (NoteIdx) so hit bodies resolve from the notes blob, and the legacy
+        # one stored a copy of the text. Baseline artifacts can still carry the
+        # fat layout, so validate whichever is present coherently.
+        notes_columns = {row[1] for row in index.execute("PRAGMA table_info(notes_documents)")}
+        if "NoteIdx" in notes_columns and "Text" not in notes_columns:
+            index.execute(
+                "SELECT PerekId, PasukNum, PerushId, SeferId, c.NoteIdx FROM notes JOIN notes_documents c ON c.rowid=notes.rowid WHERE notes MATCH ? LIMIT 1",
+                ("בראשית",),
+            ).fetchall()
+        elif "Text" in notes_columns:
+            index.execute(
+                "SELECT PerekId, PasukNum, PerushId, SeferId, c.Text FROM notes JOIN notes_documents c ON c.rowid=notes.rowid WHERE notes MATCH ? LIMIT 1",
+                ("בראשית",),
+            ).fetchall()
+        else:
+            raise ValueError("notes_documents matches neither the slim nor the legacy layout")
         if index.execute("SELECT COUNT(*) FROM notes_documents").fetchone()[0] == 0:
             raise ValueError("Search index has no notes documents")
 

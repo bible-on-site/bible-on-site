@@ -10,7 +10,7 @@ from unittest.mock import patch
 from prepare_perushim_assets import CATALOG, NOTES, NOTES_DIRECTORIES, SEARCH_INDEX, SEARCH_INDEX_DIRECTORIES, TANAH, main, prepare_assets, validate_pair
 
 
-def write_search_index(path: Path, notes_timestamp: int = 200) -> None:
+def write_search_index(path: Path, notes_timestamp: int = 200, slim: bool = True) -> None:
     """A minimal delivered-index fixture carrying the generation fingerprints."""
     with closing(sqlite3.connect(path)) as db:
         with db:
@@ -25,8 +25,25 @@ def write_search_index(path: Path, notes_timestamp: int = 200) -> None:
                 CREATE VIRTUAL TABLE verses USING fts5(Text, content='verses_documents', content_rowid='rowid');
                 INSERT INTO verses(rowid,Text) VALUES (1,'בראשית');
                 CREATE VIRTUAL TABLE verses_vocab USING fts5vocab(verses, 'row');
-                CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY, Text TEXT, PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER, SeferId INTEGER);
-                INSERT INTO notes_documents VALUES (1,'בראשית',1,1,0,1);
+            """)
+            # The slim layout keeps only the note's identity; the text resolves
+            # from the notes blob. Baseline artifacts can still carry the
+            # legacy fat layout.
+            if slim:
+                db.executescript("""
+                    CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY,
+                        PerekId INTEGER, PasukNum INTEGER, PerushId INTEGER,
+                        SeferId INTEGER, NoteIdx INTEGER);
+                    INSERT INTO notes_documents VALUES (1,1,1,0,1,0);
+                """)
+            else:
+                db.executescript("""
+                    CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY,
+                        Text TEXT, PerekId INTEGER, PasukNum INTEGER,
+                        PerushId INTEGER, SeferId INTEGER);
+                    INSERT INTO notes_documents VALUES (1,'בראשית',1,1,0,1);
+                """)
+            db.executescript("""
                 CREATE VIRTUAL TABLE notes USING fts5(Text, content='notes_documents', content_rowid='rowid');
                 INSERT INTO notes(rowid,Text) VALUES (1,'בראשית');
                 CREATE VIRTUAL TABLE notes_vocab USING fts5vocab(notes, 'row');
@@ -195,6 +212,24 @@ class PreparePerushimAssetsTests(unittest.TestCase):
                         db.execute(defect)
                 with self.assertRaisesRegex(ValueError, "missing|no notes documents"):
                     validate_pair(self.source)
+
+    def test_legacy_fat_index_layout_is_still_accepted(self):
+        # Baseline artifacts built before #3309 keep the duplicated text in
+        # notes_documents; they remain coherent, queryable indexes.
+        (self.source / SEARCH_INDEX).unlink()
+        write_search_index(self.source / SEARCH_INDEX, slim=False)
+        self.assertEqual(validate_pair(self.source), 2)
+
+    def test_documents_matching_neither_layout_are_rejected(self):
+        (self.source / SEARCH_INDEX).unlink()
+        write_search_index(self.source / SEARCH_INDEX)
+        with closing(sqlite3.connect(self.source / SEARCH_INDEX)) as db:
+            with db:
+                db.execute("CREATE TABLE notes_documents2 AS SELECT rowid, PerekId, PasukNum, PerushId, SeferId FROM notes_documents")
+                db.execute("DROP TABLE notes_documents")
+                db.execute("ALTER TABLE notes_documents2 RENAME TO notes_documents")
+        with self.assertRaisesRegex(ValueError, "neither the slim nor the legacy layout"):
+            validate_pair(self.source)
 
     def test_missing_pair_is_rejected(self):
         for name in [CATALOG, NOTES]:

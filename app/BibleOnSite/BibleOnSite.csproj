@@ -195,7 +195,6 @@
 		<MauiImage Include="Resources\Images\*" />
 		<!-- Launcher icons are not runtime images on iOS; bundle the same artwork for the loading page. -->
 		<MauiImage Include="Resources\AppIcon\appicon.svg" Link="loading_logo.svg" BaseSize="150,150" />
-		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
 
 		<!-- Custom Fonts -->
 		<MauiFont Include="Resources\Fonts\*.ttf;Resources\Fonts\*.otf" />
