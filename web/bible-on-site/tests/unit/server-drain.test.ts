@@ -8,6 +8,7 @@ import path from "node:path";
 // even though each file finishes in a fraction of it.
 const suites = [
 	"start-server-drain.test.mjs",
+	"start-server-dns.test.mjs",
 	"start-server-remote.test.mjs",
 	"start-server-signals.test.mjs",
 	"start-server-lifecycle.test.mjs",

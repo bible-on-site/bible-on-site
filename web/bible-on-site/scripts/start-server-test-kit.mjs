@@ -24,6 +24,13 @@ export async function fixture(t, source, options = {}) {
 	const measureFile = path.join(directory, "inbound-count.txt");
 	if (options.measure !== false)
 		await writeFile(measureFile, options.measure ?? "0");
+	// A file-backed answer list steers the discovery read the same way: rewrite
+	// it mid-test to move the task's address in or out of the resolver's
+	// answers. `false` selects the real VPC resolver; omitted means an
+	// unreadable answers file — the fixed-minimum fallback.
+	const dnsFile = path.join(directory, "discovery-answers.txt");
+	if (options.dns !== false && options.dns !== undefined)
+		await writeFile(dnsFile, JSON.stringify(options.dns));
 	const launcher = path.join(directory, "launcher.mjs");
 	await writeFile(
 		launcher,
@@ -37,10 +44,16 @@ const options = {
 	pollMs: Number(process.argv[6]),
 	minDrainMs: Number(process.argv[7]),
 	port: Number(process.argv[8]),
+	routerCacheMs: Number(process.argv[9]),
+	dnsTimeoutMs: Number(process.argv[10]),
 };
 if (process.env.MEASURE_FILE) {
 	const metric = process.env.MEASURE_FILE;
 	options.measure = async () => Number(await readFile(metric, "utf8"));
+}
+if (process.env.DNS_FILE) {
+	const answers = process.env.DNS_FILE;
+	options.resolve = async () => JSON.parse(await readFile(answers, "utf8"));
 }
 if (process.env.START_SERVER_TEST_PROBE_SIGNAL) {
 	const request = globalThis.fetch;
@@ -67,6 +80,8 @@ startServer(options);
 			// Port 0 keeps the readiness probe off: drain and signal fixtures
 			// must not fire real HTTP at whatever happens to hold :3000.
 			String(options.port ?? 0),
+			String(options.routerCacheMs ?? 10_000),
+			String(options.dnsTimeoutMs ?? 1_000),
 		],
 		{
 			stdio: ["ignore", "pipe", "pipe"],
@@ -77,6 +92,7 @@ startServer(options);
 			env: {
 				...process.env,
 				MEASURE_FILE: options.measure === false ? "" : measureFile,
+				DNS_FILE: options.dns === false ? "" : dnsFile,
 				START_SERVER_TEST_PROBE_SIGNAL: options.signalDuringProbe ?? "",
 				...options.env,
 			},
@@ -144,7 +160,14 @@ startServer(options);
 			await new Promise((resolve) => setTimeout(resolve, 10));
 		}
 	};
-	return { wrapper, exited, waitFor, measureFile, output: () => output };
+	return {
+		wrapper,
+		exited,
+		waitFor,
+		measureFile,
+		dnsFile,
+		output: () => output,
+	};
 }
 
 // Bound for markers the wrapper prints from its own event loop (drain
