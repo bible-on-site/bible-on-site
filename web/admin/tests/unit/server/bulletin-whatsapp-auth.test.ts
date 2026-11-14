@@ -94,3 +94,6 @@ describe("WhatsApp actions share the production authentication boundary", () => 
 		expect(mocks.fetch).toHaveBeenCalledOnce();
 	});
 });
+vi.mock("~/server/tanahpedia/contribution-migrations.server", () => ({
+	ensureContributionMigrationsStarted: vi.fn(),
+}));

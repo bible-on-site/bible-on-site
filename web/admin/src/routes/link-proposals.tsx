@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import {
 	LinkProposalCard,
 	type ReviewInput,
@@ -13,6 +13,10 @@ import {
 	listLinkProposals,
 	reviewLinkProposal,
 } from "~/server/article-link-proposals";
+
+const subscribeHydration = () => () => {};
+const clientHydrated = () => true;
+const serverHydrated = () => false;
 
 export const Route = createFileRoute("/link-proposals")({
 	validateSearch: (search: Record<string, unknown>) => ({
@@ -39,6 +43,12 @@ const STATUS_FILTER_OPTIONS: {
 
 /** The human review queue for the article-linking pipeline (#3103). */
 function LinkProposalsPage() {
+	// Server-rendered controls cannot accept edits before React owns them.
+	const hydrated = useSyncExternalStore(
+		subscribeHydration,
+		clientHydrated,
+		serverHydrated,
+	);
 	const { articleId } = Route.useSearch();
 	const queryClient = useQueryClient();
 	const [statusFilter, setStatusFilter] = useState<"" | LinkProposalStatus>("");
@@ -181,7 +191,10 @@ function LinkProposalsPage() {
 				<div className="px-6 py-4 border-b border-gray-100">
 					<h2 className="font-semibold text-gray-900">הפקת הצעות חדשות</h2>
 				</div>
-				<div className="p-6 flex flex-wrap items-end gap-4">
+				<fieldset
+					disabled={!hydrated || !pipeline?.schemaReady || busy}
+					className="p-6 flex flex-wrap items-end gap-4"
+				>
 					<label className="flex flex-col gap-1">
 						<span className="text-xs font-medium text-gray-500">
 							מזהי מאמרים (מופרדים בפסיק)
@@ -237,7 +250,7 @@ function LinkProposalsPage() {
 					>
 						{generateMutation.isPending ? "מפיק…" : "הפק הצעות"}
 					</button>
-				</div>
+				</fieldset>
 			</section>
 
 			{notice && (

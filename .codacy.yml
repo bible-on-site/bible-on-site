@@ -50,6 +50,8 @@ engines:
 exclude_paths:
   # MySQL-only additive migration, exercised twice by the isolated MySQL integration test.
   - "data/mysql/private_archive_upgrade.sql"
+  # MySQL prepared DDL, exercised repeatedly by contributions-mysql.test.ts.
+  - "data/mysql/tanahpedia_contribution_upgrade.sql"
   # These are exercised against MySQL by the API and website database tests.
   - "data/mysql/tanah_dynamic_structure.sql"
   - "data/mysql/tanah_test_data.sql"

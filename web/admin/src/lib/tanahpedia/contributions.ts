@@ -1,0 +1,670 @@
+import { canonicalJson } from "~/lib/canonical-json";
+import {
+	FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
+	FAMILY_PARENT_ROLES,
+	FAMILY_UNION_END_REASONS,
+	FAMILY_UNION_TYPES,
+	type FamilyParentChildRelationshipType,
+	type FamilyParentRole,
+	type FamilyUnionEndReason,
+	type FamilyUnionType,
+} from "~/server/tanahpedia/family-api-spec";
+import {
+	type ContributionApiMigration,
+	migrationBlocked,
+} from "./contribution-api";
+import { contributionRecordId } from "./contribution-identifiers";
+import {
+	CONTRIBUTION_RECORDS,
+	type ContributionRecordInput,
+	isContributionRecordKind,
+	validateContributionRecord,
+} from "./contribution-records";
+import {
+	type SpecialChangeInput,
+	validateSpecialChange,
+} from "./contribution-specials";
+import type { EntityType } from "./labels";
+import { ADMIN_CREATABLE_ENTITY_TYPES } from "./schema-registry";
+
+export type Assignee =
+	| { kind: "unassigned" }
+	| { kind: "human"; id: string; name: string }
+	| { kind: "aws_llm" }
+	| { kind: "local_llm" };
+
+export interface Contributor {
+	id: string;
+	name: string;
+	kind: "human" | "aws_llm" | "local_llm";
+	isDoradsoft: boolean;
+}
+
+export interface Evidence {
+	citation: string;
+	quote: string;
+	url: string | null;
+	note: string;
+}
+
+/** Normalize recognizable scripture references for display, retaining stored
+ * evidence and arbitrary bibliographic citations exactly as supplied. */
+export function contributionCitation(value: string): string {
+	const candidate = value
+		.replace(/["'׳״“”‘’]/g, "")
+		.replace(/[,、:]/g, " ")
+		.replace(/[־–—]/g, "-")
+		.replace(/\s*-\s*/g, "-")
+		.replace(/\s+/g, " ")
+		.trim();
+	return /^(?:בראשית|שמות|ויקרא|במדבר|דברים|יהושע|שופטים|שמואל [אב]|מלכים [אב]|ישעיהו|ירמיהו|יחזקאל|הושע|יואל|עמוס|עובדיה|יונה|מיכה|נחום|חבקוק|צפניה|חגי|זכריה|מלאכי|תהלים|משלי|איוב|שיר השירים|רות|איכה|קהלת|אסתר|דניאל|עזרא|נחמיה|דברי הימים [אב]) [א-ת]{1,3}(?: [א-ת]{1,3}(?:-[א-ת]{1,3})?)?$/.test(
+		candidate,
+	)
+		? candidate
+		: value;
+}
+
+export interface ParentChildChange {
+	parentId: string;
+	childId: string;
+	relationshipType: FamilyParentChildRelationshipType;
+	parentRole: FamilyParentRole;
+	sourceCitation: string | null;
+	altGroupId: string | null;
+	birthOrder: number | null;
+}
+
+export interface UnionChange {
+	person1Id: string;
+	person2Id: string;
+	unionType: FamilyUnionType;
+	unionOrder: number | null;
+	startDate: number | null;
+	endDate: number | null;
+	endReason: FamilyUnionEndReason | null;
+	sourceCitation: string | null;
+	personSourceCitation: string | null;
+	altGroupId: string | null;
+}
+
+export interface PlaceChange {
+	placeId: string;
+	modernName: string | null;
+	latitude: number | null;
+	longitude: number | null;
+	altGroupId: string | null;
+}
+
+export interface EntryShellChange {
+	title: string;
+	uniqueName: string;
+	entityType: Exclude<EntityType, "TANAH_SEFER">;
+	displayName: string;
+}
+
+export type ChangeInput =
+	| ContributionRecordInput
+	| SpecialChangeInput
+	| { kind: "parent_child"; targetId?: string; after: ParentChildChange | null }
+	| { kind: "union"; targetId?: string; after: UnionChange | null }
+	| { kind: "place"; targetId?: string; after: PlaceChange | null }
+	| { kind: "metadata"; targetId: string; after: { displayName: string } }
+	| { kind: "entry"; targetId?: string; after: EntryShellChange };
+
+export type ChangeValue =
+	| string
+	| number
+	| boolean
+	| null
+	| { entryId: string; label: string }[];
+export type ChangeState = Record<string, ChangeValue>;
+
+export interface ReviewedChange {
+	kind: ChangeInput["kind"];
+	targetId: string;
+	before: ChangeState | null;
+	after: ChangeState | null;
+	labels: Record<string, string>;
+	personNames?: { id: string; name: string }[];
+}
+
+export interface ContributionEvent {
+	id: string;
+	kind:
+		| "created"
+		| "edited"
+		| "comment"
+		| "assigned"
+		| "approved"
+		| "changes_requested"
+		| "closed"
+		| "reopened"
+		| "merged"
+		| "generated"
+		| "generation_queued";
+	actor: Contributor;
+	body: string;
+	at: string;
+	revision: number;
+	snapshot?: ContributionRevisionSnapshot;
+}
+
+export interface ContributionRevisionSnapshot {
+	revision: number;
+	version: number;
+	apiVersion: number;
+	author: Contributor;
+	title: string;
+	description: string;
+	evidence: Evidence[];
+	changes: ReviewedChange[];
+	issueId: string | null;
+	closeIssue: boolean;
+	at: string;
+}
+
+export function contributionSnapshot(
+	item: Contribution,
+): ContributionRevisionSnapshot {
+	return structuredClone({
+		revision: item.revision,
+		version: item.version,
+		apiVersion: item.apiVersion ?? 1,
+		author: item.revisionAuthor ?? item.author,
+		title: item.title,
+		description: item.description,
+		evidence: item.evidence,
+		changes: item.changes,
+		issueId: item.issueId,
+		closeIssue: item.closeIssue,
+		at: new Date().toISOString(),
+	});
+}
+
+export interface ContributionGeneration {
+	id: string;
+	status: "queued" | "running" | "completed" | "failed" | "cancelled";
+	requestedAt: string;
+	requestedBy: string;
+	attempts: number;
+	apiVersion: number;
+	worker: string | null;
+	model: string | null;
+	leaseHash: string | null;
+	leaseExpiresAt: string | null;
+	claimedVersion: number | null;
+	contextHash: string | null;
+	outputHash: string | null;
+	prIds: string[];
+	error: string | null;
+}
+
+export interface Contribution {
+	id: string;
+	number: number;
+	kind: "issue" | "pr";
+	state: "open" | "closed" | "merged";
+	title: string;
+	description: string;
+	author: Contributor;
+	revisionAuthor?: Contributor;
+	assignee: Assignee;
+	evidence: Evidence[];
+	changes: ReviewedChange[];
+	issueId: string | null;
+	revision: number;
+	version: number;
+	events: ContributionEvent[];
+	createdAt: string;
+	updatedAt: string;
+	closeIssue: boolean;
+	provenance: { model: string; provider: string; promptVersion: string } | null;
+	apiVersion?: number;
+	apiMigration?: ContributionApiMigration;
+	apiMigrationHistory?: ContributionApiMigration[];
+	generation?: ContributionGeneration;
+	revisionHistory?: ContributionRevisionSnapshot[];
+}
+
+export interface ContributionListRequest {
+	kind?: Contribution["kind"];
+	state?: "open" | "closed" | "all";
+	q?: string;
+	assignee?: Assignee["kind"];
+	before?: number;
+	relatedTo?: string;
+}
+export interface ContributionPage {
+	items: Contribution[];
+	nextCursor: number | null;
+	counts: {
+		issues: number;
+		prs: number;
+		open: number;
+		closed: number;
+		all: number;
+	};
+}
+export function validateContributionList(
+	raw: unknown,
+): ContributionListRequest {
+	const input = record(raw ?? {});
+	if (input.kind !== undefined && !["issue", "pr"].includes(String(input.kind)))
+		throw new Error("Invalid discussion kind");
+	if (
+		input.state !== undefined &&
+		!["open", "closed", "all"].includes(String(input.state))
+	)
+		throw new Error("Invalid discussion state");
+	if (
+		input.assignee !== undefined &&
+		!["unassigned", "human", "aws_llm", "local_llm"].includes(
+			String(input.assignee),
+		)
+	)
+		throw new Error("Invalid assignee filter");
+	if (
+		input.before !== undefined &&
+		(!Number.isSafeInteger(input.before) || Number(input.before) < 1)
+	)
+		throw new Error("Invalid discussion cursor");
+	return {
+		kind: input.kind as ContributionListRequest["kind"],
+		state: input.state as ContributionListRequest["state"],
+		assignee: input.assignee as ContributionListRequest["assignee"],
+		q:
+			input.q === undefined
+				? undefined
+				: (optionalText(input.q, "search", 500) ?? undefined),
+		before: input.before as number | undefined,
+		relatedTo:
+			input.relatedTo === undefined
+				? undefined
+				: uuidField(input.relatedTo, "relatedTo"),
+	};
+}
+
+export const CHANGE_LABELS: Record<ChangeInput["kind"], string> = {
+	...(Object.fromEntries(
+		Object.entries(CONTRIBUTION_RECORDS).map(([kind, spec]) => [
+			kind,
+			spec.label,
+		]),
+	) as Record<ContributionRecordInput["kind"], string>),
+	alias_mapping: "כינוי ופירושונים",
+	source_reference: "מקור לטענה",
+	parent_child: "קשר הורה וילד",
+	union: "זוגיות",
+	place: "זיהוי מקום",
+	metadata: "מטא-נתונים",
+	entry: "ערך חדש",
+};
+
+/** Proper names and the canonical migration status requested for both queues. */
+export const CONTRIBUTION_UI = {
+	reviewer: "doradsoft",
+	awsLlm: "AWS LLM",
+	localLlm: "Local LLM",
+	migrationFailed: "couldn't migrate to latest API",
+} as const;
+
+export const FIELD_LABELS: Record<string, string> = {
+	parentId: "הורה",
+	childId: "ילד",
+	relationshipType: "סוג קשר",
+	parentRole: "תפקיד ההורה",
+	person1Id: "איש ראשון",
+	person2Id: "איש שני",
+	unionType: "סוג זוגיות",
+	unionOrder: "סדר זוגיות",
+	startDate: "תאריך התחלה",
+	endDate: "תאריך סיום",
+	endReason: "סיבת סיום",
+	sourceCitation: "מקור",
+	personSourceCitation: "מקור לאיש",
+	altGroupId: "דעה חלופית",
+	birthOrder: "סדר לידה",
+	placeId: "מקום",
+	modernName: "שם מודרני",
+	latitude: "קו רוחב",
+	longitude: "קו אורך",
+	displayName: "שם תצוגה",
+	title: "כותרת",
+	uniqueName: "שם ייחודי",
+	entityType: "סוג יישות",
+};
+
+export function assigneeLabel(assignee: Assignee): string {
+	if (assignee.kind === "human") return assignee.name;
+	return {
+		unassigned: "ללא שיוך",
+		aws_llm: CONTRIBUTION_UI.awsLlm,
+		local_llm: CONTRIBUTION_UI.localLlm,
+	}[assignee.kind];
+}
+
+export function record(
+	value: unknown,
+	field = "input",
+): Record<string, unknown> {
+	if (!value || typeof value !== "object" || Array.isArray(value))
+		throw new Error(`${field}: object required`);
+	return value as Record<string, unknown>;
+}
+
+export function textField(value: unknown, field: string, max = 255): string {
+	if (typeof value !== "string" || !value.trim() || value.trim().length > max)
+		throw new Error(`${field}: required, maximum ${max} characters`);
+	return value.trim();
+}
+
+function optionalText(value: unknown, field: string, max = 400): string | null {
+	return value == null || value === "" ? null : textField(value, field, max);
+}
+
+export function uuidField(value: unknown, field: string): string {
+	const id = textField(value, field, 36);
+	if (
+		!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+	)
+		throw new Error(`${field}: UUID required`);
+	return id.toLowerCase();
+}
+
+function oneOf<T extends string>(
+	value: unknown,
+	allowed: readonly T[],
+	field: string,
+): T {
+	if (typeof value !== "string" || !allowed.includes(value as T))
+		throw new Error(`${field}: invalid value`);
+	return value as T;
+}
+
+function integer(
+	value: unknown,
+	field: string,
+	min = -2147483648,
+): number | null {
+	if (value == null || value === "") return null;
+	if (
+		typeof value !== "number" ||
+		!Number.isSafeInteger(value) ||
+		value < min ||
+		value > 2147483647
+	)
+		throw new Error(`${field}: invalid integer`);
+	return value;
+}
+
+function coordinate(
+	value: unknown,
+	field: string,
+	limit: number,
+): number | null {
+	if (value == null || value === "") return null;
+	if (
+		typeof value !== "number" ||
+		!Number.isFinite(value) ||
+		Math.abs(value) > limit
+	)
+		throw new Error(`${field}: invalid coordinate`);
+	return Math.round(value * 1e8) / 1e8;
+}
+
+function rejectUnknown(input: Record<string, unknown>, fields: string[]): void {
+	for (const key of Object.keys(input))
+		if (!fields.includes(key)) throw new Error(`Unsupported field: ${key}`);
+}
+
+export function validateAssignee(value: unknown): Assignee {
+	const input = record(value, "assignee");
+	const kind = oneOf(
+		input.kind,
+		["unassigned", "human", "aws_llm", "local_llm"] as const,
+		"assignee.kind",
+	);
+	if (kind === "human")
+		return {
+			kind,
+			id: textField(input.id, "assignee.id", 200),
+			name: textField(input.name, "assignee.name", 120),
+		};
+	return { kind };
+}
+
+export function validateEvidence(value: unknown): Evidence[] {
+	if (!Array.isArray(value) || value.length > 30)
+		throw new Error("evidence: maximum 30 sources");
+	return value.map((raw) => {
+		const input = record(raw, "evidence");
+		const citation = textField(input.citation, "citation", 500);
+		const url = optionalText(input.url, "url", 2000);
+		if (url && !["http:", "https:"].includes(new URL(url).protocol))
+			throw new Error("Evidence URLs must use http or https");
+		return {
+			citation,
+			quote: optionalText(input.quote, "quote", 8000) ?? "",
+			url,
+			note: optionalText(input.note, "note", 4000) ?? "",
+		};
+	});
+}
+
+export function validateChange(value: unknown): ChangeInput {
+	const input = record(value, "change");
+	rejectUnknown(input, ["kind", "targetId", "after"]);
+	if (isContributionRecordKind(input.kind))
+		return validateContributionRecord(input);
+	if (input.kind === "alias_mapping" || input.kind === "source_reference")
+		return validateSpecialChange(input);
+	const kind = oneOf(
+		input.kind,
+		["parent_child", "union", "place", "metadata", "entry"] as const,
+		"change.kind",
+	);
+	const targetId =
+		input.targetId == null || input.targetId === ""
+			? undefined
+			: contributionRecordId(input.targetId, "targetId");
+	if (input.after === null) {
+		if (!targetId || kind === "entry" || kind === "metadata")
+			throw new Error("This change cannot delete its target");
+		return { kind, targetId, after: null };
+	}
+	const after = record(input.after, "after");
+	const citation = () => optionalText(after.sourceCitation, "sourceCitation");
+	const alt = () =>
+		after.altGroupId == null || after.altGroupId === ""
+			? null
+			: contributionRecordId(after.altGroupId, "altGroupId");
+	if (kind === "parent_child") {
+		rejectUnknown(after, [
+			"parentId",
+			"childId",
+			"relationshipType",
+			"parentRole",
+			"sourceCitation",
+			"altGroupId",
+			"birthOrder",
+		]);
+		const parentId = contributionRecordId(after.parentId, "parentId"),
+			childId = contributionRecordId(after.childId, "childId");
+		if (parentId === childId)
+			throw new Error("A person cannot be their own parent");
+		return {
+			kind,
+			targetId,
+			after: {
+				parentId,
+				childId,
+				relationshipType: oneOf(
+					after.relationshipType,
+					FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
+					"relationshipType",
+				),
+				parentRole: oneOf(after.parentRole, FAMILY_PARENT_ROLES, "parentRole"),
+				sourceCitation: citation(),
+				altGroupId: alt(),
+				birthOrder: integer(after.birthOrder, "birthOrder", 1),
+			},
+		};
+	}
+	if (kind === "union") {
+		rejectUnknown(after, [
+			"person1Id",
+			"person2Id",
+			"unionType",
+			"unionOrder",
+			"startDate",
+			"endDate",
+			"endReason",
+			"sourceCitation",
+			"personSourceCitation",
+			"altGroupId",
+		]);
+		const person1Id = contributionRecordId(after.person1Id, "person1Id"),
+			person2Id = contributionRecordId(after.person2Id, "person2Id");
+		if (person1Id === person2Id)
+			throw new Error("A union requires two different people");
+		return {
+			kind,
+			targetId,
+			after: {
+				person1Id,
+				person2Id,
+				unionType: oneOf(after.unionType, FAMILY_UNION_TYPES, "unionType"),
+				unionOrder: integer(after.unionOrder, "unionOrder", 1),
+				startDate: integer(after.startDate, "startDate"),
+				endDate: integer(after.endDate, "endDate"),
+				endReason:
+					after.endReason == null || after.endReason === ""
+						? null
+						: oneOf(after.endReason, FAMILY_UNION_END_REASONS, "endReason"),
+				sourceCitation: citation(),
+				personSourceCitation: optionalText(
+					after.personSourceCitation,
+					"personSourceCitation",
+				),
+				altGroupId: alt(),
+			},
+		};
+	}
+	if (kind === "place") {
+		rejectUnknown(after, [
+			"placeId",
+			"modernName",
+			"latitude",
+			"longitude",
+			"altGroupId",
+		]);
+		const latitude = coordinate(after.latitude, "latitude", 90),
+			longitude = coordinate(after.longitude, "longitude", 180);
+		if ((latitude === null) !== (longitude === null))
+			throw new Error("Latitude and longitude must be supplied together");
+		return {
+			kind,
+			targetId,
+			after: {
+				placeId: contributionRecordId(after.placeId, "placeId"),
+				modernName: optionalText(after.modernName, "modernName", 255),
+				latitude,
+				longitude,
+				altGroupId: alt(),
+			},
+		};
+	}
+	if (kind === "metadata") {
+		rejectUnknown(after, ["displayName"]);
+		if (!targetId) throw new Error("metadata requires an existing entity");
+		return {
+			kind,
+			targetId,
+			after: { displayName: textField(after.displayName, "displayName") },
+		};
+	}
+	rejectUnknown(after, ["title", "uniqueName", "entityType", "displayName"]);
+	const uniqueName = textField(after.uniqueName, "uniqueName").normalize("NFC");
+	if (/[/%?#\\]/.test(uniqueName))
+		throw new Error("uniqueName must be a plain path segment");
+	return {
+		kind,
+		targetId,
+		after: {
+			title: textField(after.title, "title"),
+			uniqueName,
+			entityType: oneOf(
+				after.entityType,
+				ADMIN_CREATABLE_ENTITY_TYPES,
+				"entityType",
+			),
+			displayName: textField(after.displayName, "displayName"),
+		},
+	};
+}
+
+export function validateChanges(value: unknown): ChangeInput[] {
+	if (!Array.isArray(value) || value.length === 0 || value.length > 40)
+		throw new Error("A PR requires 1-40 typed changes");
+	const changes = value.map(validateChange);
+	const targets = changes
+		.filter((c) => c.targetId)
+		.map((c) => `${c.kind}:${c.targetId}`);
+	if (new Set(targets).size !== targets.length)
+		throw new Error("A target can only appear once per PR");
+	return changes;
+}
+
+export function reviewStatus(
+	pr: Contribution,
+): "exempt" | "approved" | "changes_requested" | "required" {
+	const revisionAuthor = pr.revisionAuthor ?? pr.author;
+	if (revisionAuthor.kind === "human" && revisionAuthor.isDoradsoft)
+		return "exempt";
+	const review = [...pr.events]
+		.reverse()
+		.find(
+			(event) =>
+				event.revision === pr.revision &&
+				event.actor.kind === "human" &&
+				event.actor.isDoradsoft &&
+				["approved", "changes_requested"].includes(event.kind),
+		);
+	return review?.kind === "approved"
+		? "approved"
+		: review?.kind === "changes_requested"
+			? "changes_requested"
+			: "required";
+}
+
+export function assertMergeAllowed(pr: Contribution): void {
+	if (pr.kind !== "pr" || pr.state !== "open")
+		throw new Error("Only an open PR can be merged");
+	if (migrationBlocked(pr))
+		throw new Error(
+			"Couldn't migrate to latest API. Recover the plain sequence before merging.",
+		);
+	if (
+		(pr.changes.length === 0 && pr.apiMigration?.status !== "succeeded") ||
+		pr.evidence.length === 0
+	)
+		throw new Error("A PR requires changes and evidence");
+	if (!["exempt", "approved"].includes(reviewStatus(pr)))
+		throw new Error("Approval from doradsoft is required for this revision");
+}
+
+export function sameState(a: unknown, b: unknown): boolean {
+	return canonicalJson(a) === canonicalJson(b);
+}
+
+export function changedFields(change: ReviewedChange): string[] {
+	return [
+		...new Set([
+			...Object.keys(change.before ?? {}),
+			...Object.keys(change.after ?? {}),
+		]),
+	].filter(
+		(key) =>
+			!sameState(change.before?.[key] ?? null, change.after?.[key] ?? null),
+	);
+}

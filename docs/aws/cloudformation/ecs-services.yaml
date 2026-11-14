@@ -52,6 +52,10 @@ Metadata:
                             └─────────────────────────────────────────────┘
 
 Parameters:
+  TanahpediaReviewerSubject:
+    Type: String
+    Default: ""
+    Description: Immutable Cognito subject for doradsoft; configure privately in the existing admin pool
   ArchiveCognitoUserPoolId:
     Type: String
     Default: ""
@@ -579,6 +583,8 @@ Resources:
               Value: !Sub "bible-on-site-private-archive-${AWS::AccountId}-${AWS::Region}"
             - Name: ARCHIVE_COGNITO_POOL_ID
               Value: !Ref ArchiveCognitoUserPoolId
+            - Name: TANAHPEDIA_DORADSOFT_SUB
+              Value: !Ref TanahpediaReviewerSubject
             - Name: ARCHIVE_COGNITO_CLIENT_ID
               Value: !Ref ArchiveCognitoClientId
             - Name: ARCHIVE_COGNITO_DOMAIN

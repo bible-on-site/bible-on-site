@@ -14,11 +14,14 @@ import { rescanDedicationExpiries } from "./server/dedication-expiry";
 import { ensureEmailWorkerStarted } from "./server/email-worker-runtime.server";
 import {
 	measureCovEnabled,
+	productionRuntime,
 	skipAuthEnabled,
 } from "./server/environment.server";
+import { ensureContributionMigrationsStarted } from "./server/tanahpedia/contribution-migrations.server";
 
 // Local dev/test escape hatch only — fails closed in production (#3069).
 const SKIP_AUTH = skipAuthEnabled();
+if (productionRuntime()) ensureContributionMigrationsStarted();
 
 // Boot catch-up for expiry-instant invalidations (#2731): arms timers for
 // future dedication expiries and flushes ones that elapsed while the admin
@@ -69,6 +72,18 @@ export default createServerEntry({
 		await ensureEmailWorkerStarted();
 		const url = new URL(request.url);
 		const { origin, isSecure } = resolveRequestOrigin(request);
+		if (url.pathname === "/api/contributions/migrate") {
+			const { handleContributionMigrationRequest } = await import(
+				"./server/tanahpedia/contribution-deployment.server"
+			);
+			return handleContributionMigrationRequest(request);
+		}
+		if (url.pathname.startsWith("/api/contributions/worker/")) {
+			const { handleContributionWorkerRequest } = await import(
+				"./server/tanahpedia/contribution-worker-http.server"
+			);
+			return handleContributionWorkerRequest(request);
+		}
 
 		// Native archivers enter only this explicit HTTP surface. They never reach
 		// TanStack server functions, which continue to require the admin SSO client.
