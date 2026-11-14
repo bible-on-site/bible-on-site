@@ -95,6 +95,17 @@ public abstract class MobilePlatformAdapter
     /// </summary>
     public abstract void ScrollPageDown(AppiumDriver driver);
 
+    /// <summary>
+    /// The vertical band where an injected gesture may begin without tripping
+    /// system navigation: below the status-bar shade strip and above the
+    /// gesture-pill strip. A touch starting outside it is claimed as
+    /// Home/Overview or edge-back before the page sees it — the full-window
+    /// scrollGesture probe swiped up from ~95% height and the launcher
+    /// swallowed the app (LAUNCHER_TASK_DISMISS_SWIPE_UP).
+    /// </summary>
+    internal static System.Drawing.Rectangle PageGestureBand(System.Drawing.Size window) =>
+        new(0, window.Height / 5, window.Width, window.Height * 3 / 5);
+
     public void RevealTrailingSearchChips(AppiumDriver driver)
     {
         var chips = driver.FindElement(AutomationId("SearchFilterChips"));
@@ -370,15 +381,18 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     {
         var window = DriverTelemetry.WindowSize(driver);
         // The driver-level scroll gesture drives the scrollable surface itself.
-        // It returns false when the accessibility scroll action cannot move
-        // this surface — MauiScrollView does not answer it — in which case the
-        // injected drag takes over immediately (see ScrollTikkunDown).
+        // Constrain its swipe to the page band: the full-window probe started
+        // inside the system gesture strip and gesture navigation claimed it
+        // as Home/Overview. It returns false when the surface ignores the
+        // accessibility scroll action — MauiScrollView does not answer it —
+        // in which case the injected drag takes over (see ScrollTikkunDown).
+        var band = PageGestureBand(window);
         var scrolled = driver.ExecuteScript("mobile: scrollGesture", new Dictionary<string, object>
         {
             ["left"] = 0,
-            ["top"] = 0,
+            ["top"] = band.Top,
             ["width"] = window.Width,
-            ["height"] = window.Height,
+            ["height"] = band.Height,
             ["direction"] = "down",
             ["percent"] = 0.9,
         });
@@ -413,12 +427,12 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
     /// <summary>
     /// Picks the drag start y nearest the window's lower fifth whose (x, y)
     /// point does not land inside a gesture-claiming control (SeekBar, Switch,
-    /// EditText) in the current page source. Scans downward first, then
-    /// upward, and falls back to the lower fifth when no clear point exists.
+    /// EditText) in the current page source. Scans downward first — never past
+    /// the gesture-navigation strip the page band marks — then upward, and
+    /// falls back to the lower fifth when no clear point exists.
     /// </summary>
     private static int DragStartClearOfControls(AppiumDriver driver, int x, int windowHeight)
     {
-        var preferred = windowHeight * 4 / 5;
         var claimed = new List<System.Drawing.Rectangle>();
         try
         {
@@ -445,15 +459,29 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
         catch (Exception exception) when (exception is WebDriverException or System.Xml.XmlException)
         {
             // Without a source snapshot the drag keeps its historical start.
-            return preferred;
+            return windowHeight * 4 / 5;
         }
+        return ChooseDragStartClearOfControls(x, windowHeight, claimed);
+    }
+
+    /// <summary>
+    /// The (x, y)-scan behind <see cref="DragStartClearOfControls"/>: prefers
+    /// the window's lower fifth, steps below claiming controls while a start
+    /// remains above the gesture strip (bottom ~15%), then scans upward above
+    /// the status-bar strip (top fifth).
+    /// </summary>
+    internal static int ChooseDragStartClearOfControls(
+        int x, int windowHeight, IReadOnlyList<System.Drawing.Rectangle> claimed)
+    {
+        var preferred = windowHeight * 4 / 5;
+        var maxStart = windowHeight * 17 / 20;
         bool Clear(int y) => claimed.All(r => !r.Contains(x, y));
         var y = preferred;
-        while (y < windowHeight && !Clear(y))
+        while (y < maxStart && !Clear(y))
         {
             y = claimed.Where(r => r.Contains(x, y)).Max(r => r.Bottom) + 1;
         }
-        if (y < windowHeight)
+        if (y < maxStart)
         {
             return y;
         }
