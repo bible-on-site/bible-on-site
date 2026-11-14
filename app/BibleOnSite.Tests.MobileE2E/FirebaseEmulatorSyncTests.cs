@@ -139,13 +139,18 @@ public sealed class FirebaseEmulatorSyncTests(ITestOutputHelper output, MobileDe
         Assert.Equal(HttpStatusCode.Forbidden, await _backend.ReadStatusAsync(uid, strangerToken));
 
         // Relaunch with the same installation identity: the restart resolves
-        // the endpoint through the persisted channel, the restored anonymous
-        // session keeps the same uid, and the document stays whole.
+        // the endpoint through the persisted channel and the restored
+        // anonymous session keeps the same uid.
         RelaunchKeepingChannel();
         AssertNoBlockingDialog();
+        // An unchanged document proves nothing — it is the pre-relaunch
+        // commit and sits there even if the restarted process never
+        // reconnected. Only a preference flipped now, after the restart,
+        // reaching the backend distinguishes a resumed sync channel.
+        toggled = ToggleDivineNameMasking();
+        document = await _backend.WaitForUserDocumentAsync(uid, doc =>
+            EntryBool(doc, SyncedToggleKey) == toggled);
         Assert.Equal(new[] { uid }, await _backend.UserDocumentIdsAsync());
-        document = await _backend.UserDocumentAsync(uid);
-        Assert.NotNull(document);
         Assert.True(FirebaseEmulatorBackend.TryGetEntry(document, unknownKey, out _),
             "the relaunched merge rewrote users/{uid} without the carried-through entry");
     }

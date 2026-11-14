@@ -72,13 +72,35 @@ internal static class AndroidDeviceBridge
     /// targets the exported intent extra must not carry.</summary>
     private static void WriteEmulatorMarker(string deviceEndpoint)
     {
-        if (deviceEndpoint.Contains('\''))
+        // adb re-joins "shell" argv into a single command line for the
+        // device's shell, so the sh -c script must arrive as one quoted
+        // word — sent bare, the outer shell consumes the redirect before
+        // run-as and the marker is never written. The endpoint is
+        // whitelisted to the host/port alphabet first, so nothing inside
+        // the quotes can still break out or expand.
+        if (deviceEndpoint.Any(c =>
+            !(char.IsLetterOrDigit(c) || c is '.' or '-' or ':' or '[' or ']' or '_')))
         {
             throw new InvalidOperationException(
                 $"Emulator endpoint cannot be shell-quoted into the marker write: {deviceEndpoint}");
         }
-        Run("shell", "run-as", PackageId, "sh", "-c",
-            $"printf '%s' '{deviceEndpoint}' > files/firebase-emulator");
+        var write = Run("shell", "run-as", PackageId, "sh", "-c",
+            $"\"printf '%s' '{deviceEndpoint}' > files/firebase-emulator\"");
+        if (write is null)
+        {
+            throw new InvalidOperationException(
+                $"Writing the emulator marker for {deviceEndpoint} timed out — the LAN channel is unbound.");
+        }
+        // A discarded result cannot prove the write landed: read the marker
+        // back — the only check that also catches a redirect the outer
+        // shell swallowed while run-as still exited cleanly.
+        var persisted = Run("shell", "run-as", PackageId, "cat", "files/firebase-emulator");
+        if (persisted != deviceEndpoint)
+        {
+            throw new InvalidOperationException(
+                $"Emulator marker did not persist '{deviceEndpoint}' through run-as " +
+                $"(read back: {persisted?.Trim() ?? "<no output>"}).");
+        }
     }
 
     /// <summary>Removes the persisted endpoint marker so the next cold start
