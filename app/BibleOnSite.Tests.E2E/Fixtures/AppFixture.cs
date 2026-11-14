@@ -18,10 +18,20 @@ namespace BibleOnSite.Tests.E2E.Fixtures;
 public class AppFixture : IAsyncLifetime
 {
     protected virtual bool RequiresApi => true;
+
+    /// <summary>Extra environment variables passed to the launched app —
+    /// e2e mode presets the app reads at boot (e.g. BIBLE_E2E_TIKKUN).</summary>
+    protected virtual IEnumerable<KeyValuePair<string, string>> LaunchEnvironment =>
+        [];
     private Application? _app;
     private UIA3Automation? _automation;
     private Process? _appProcess;
     private Process? _apiProcess;
+    private StreamWriter? _appLog;
+    private Exception? _drainFailure;
+    private Task[] _drains = [];
+    private readonly CancellationTokenSource _drainStop = new();
+    private int _isDisposing;
     private bool _weStartedApi;
     private DateTime _apiStartedAt;
 
@@ -38,9 +48,12 @@ public class AppFixture : IAsyncLifetime
     public UIA3Automation Automation => _automation ?? throw new InvalidOperationException("Automation not initialized.");
 
     /// <summary>
-    /// Gets the main window of the application.
+    /// Gets the main window of the application. The inner wait stays short so a
+    /// transient UIA attach stall is retried by the caller's own budget
+    /// (WaitForElementAsync catches the timeout FlaUI wraps it in) instead of
+    /// one ElementFromHandle call spending the whole deadline at once.
     /// </summary>
-    public Window MainWindow => App.GetMainWindow(Automation, TimeSpan.FromSeconds(10))
+    public Window MainWindow => App.GetMainWindow(Automation, TimeSpan.FromSeconds(2))
         ?? throw new InvalidOperationException("Main window not found within timeout.");
 
     /// <summary>
@@ -186,6 +199,10 @@ public class AppFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         SetProcessDPIAware(); //NOSONAR — process DPI awareness has no managed API; synthetic-input coordinates must map to physical pixels.
+        // Keep the default 2s connection timeout: a slow provider attach is
+        // retried by the caller's own budget — WaitForElementAsync already
+        // catches the UIA_TIMEOUT COMException FlaUI wraps — rather than
+        // letting one query block for fifteen seconds and mask a real stall.
         _automation = new UIA3Automation();
 
         // Ensure API is running first (reuse if already running)
@@ -216,13 +233,17 @@ public class AppFixture : IAsyncLifetime
             UseShellExecute = false,
             CreateNoWindow = true,
             WindowStyle = ProcessWindowStyle.Hidden,
-            RedirectStandardOutput = false,
-            RedirectStandardError = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
         };
 
         // Offline fixtures use a closed endpoint even when a development API is running.
         var launchApiUrl = RequiresApi ? ApiUrl : "http://127.0.0.1:1";
         startInfo.EnvironmentVariables["API_URL"] = launchApiUrl;
+        foreach (var pair in LaunchEnvironment)
+        {
+            startInfo.EnvironmentVariables[pair.Key] = pair.Value;
+        }
 
         Console.WriteLine($"Starting app from {projectDir} with API_URL={launchApiUrl}");
 
@@ -232,6 +253,20 @@ public class AppFixture : IAsyncLifetime
         {
             throw new InvalidOperationException("Failed to start dotnet run process");
         }
+
+        // Drain the app's stdout/stderr so its startup stages show up in test
+        // output instead of deadlocking the app on a full pipe buffer. A copy
+        // also goes to .artifacts/app-log-<fixture>.txt — the test host swallows
+        // console output on a passing run, so the file is the durable diagnostic
+        // sink. Collection fixtures initialize in parallel, so each fixture
+        // type gets its own file instead of racing one shared path.
+        var appLogName = $"app-log-{GetType().Name}.txt";
+        var appLogPath = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".artifacts", appLogName));
+        Directory.CreateDirectory(Path.GetDirectoryName(appLogPath)!);
+        var appLog = new StreamWriter(appLogPath, append: false) { AutoFlush = true };
+        _appLog = appLog;
+        _drains = [DrainPipe(_appProcess.StandardOutput, "[app]", appLog),
+            DrainPipe(_appProcess.StandardError, "[app:err]", appLog)];
 
         // dotnet run evaluates the project even with --no-build, so the app
         // process can spawn seconds after the launcher returns on a loaded
@@ -351,8 +386,47 @@ public class AppFixture : IAsyncLifetime
             lastException);
     }
 
+    /// <summary>
+    /// Mirrors one redirected pipe into the console and the app log file.
+    /// Closed/disposed pipe reads are expected during teardown. Other failures,
+    /// including an <see cref="IOException"/> from a log write, are recorded so a
+    /// dead drain, which can leave the app blocked on a full pipe, fails the
+    /// run instead of vanishing silently.
+    /// </summary>
+    private Task DrainPipe(StreamReader reader, string prefix, StreamWriter appLog) => Task.Run(async () =>
+    {
+        try
+        {
+            while (true)
+            {
+                string? line;
+                try
+                {
+                    line = await reader.ReadLineAsync(_drainStop.Token);
+                }
+                catch (Exception exception) when (Volatile.Read(ref _isDisposing) != 0 &&
+                    exception is IOException or ObjectDisposedException or OperationCanceledException)
+                {
+                    // The pipe closes when the app process exits at teardown.
+                    break;
+                }
+                if (line is null)
+                {
+                    break;
+                }
+                Console.WriteLine($"{prefix} {line}");
+                lock (appLog) { appLog.WriteLine($"{prefix} {line}"); }
+            }
+        }
+        catch (Exception exception) //NOSONAR — background drain failures must be retained and fail fixture teardown.
+        {
+            Interlocked.CompareExchange(ref _drainFailure, exception, null);
+        }
+    });
+
     public async ValueTask DisposeAsync()
     {
+        Interlocked.Exchange(ref _isDisposing, 1);
         try
         {
             // Pull the app-process coverage snapshot while the instrumented
@@ -405,6 +479,26 @@ public class AppFixture : IAsyncLifetime
             using var apiProcess = _apiProcess;
             using var appProcess = _appProcess;
             using var automation = _automation;
+            using var drainStop = _drainStop;
+            try
+            {
+                using var appLog = _appLog;
+                await drainStop.CancelAsync();
+                // Join before checking the retained failure or closing the
+                // shared writer: a late stdout/stderr failure cannot escape
+                // teardown, and no write can race log disposal.
+                await Task.WhenAll(_drains);
+            }
+            catch (IOException) when (_drainFailure is not null)
+            {
+                // Preserve the original drain cause if flushing fails too.
+            }
+        }
+        if (_drainFailure is { } failure)
+        {
+            // Surface the retained cause after cleanup has completed.
+            throw new InvalidOperationException(
+                "App output drain failed during the run.", failure);
         }
     }
 
@@ -468,13 +562,20 @@ public class AppFixture : IAsyncLifetime
     private static extern IntPtr WindowFromPoint(Point point); //NOSONAR — HWND hit-testing is Win32-only; UIA FromPoint can return a child element instead of the covering window.
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId); //NOSONAR — HWND→PID mapping has no managed API.
-
+    /// <summary>Explicit activation before a native gesture scenario. Every
+    /// gesture still verifies foreground and hit-test ownership, so a user
+    /// switching applications stops input rather than clicking another app.</summary>
+    public void ActivateWindow()
+    {
+        MainWindow.SetForeground();
+        AssertForeground();
+    }
     private void AssertOwnedWindow(IntPtr window)
     {
         GetWindowThreadProcessId(window, out var processId); //NOSONAR — HWND→PID mapping has no managed API.
         if (processId != App.ProcessId)
         {
-            throw new InvalidOperationException("Native gesture tests require an isolated desktop with BibleOnSite in the foreground. No input was sent.");
+            throw new InvalidOperationException($"Native gesture tests require an isolated desktop with BibleOnSite in the foreground (expected process {App.ProcessId}, actual {processId}). No input was sent.");
         }
     }
 
@@ -507,6 +608,16 @@ public class AppFixture : IAsyncLifetime
         }
     }
 
+    /// <summary>Clicks a physical point inside an element's bounds — for
+    /// targets whose meaningful region is offset from the element's own
+    /// clickable point (e.g. dead space under a short canvas).</summary>
+    public void ClickAt(Point point)
+    {
+        AssertForeground();
+        AssertOwnedWindow(WindowFromPoint(point)); //NOSONAR — HWND hit-testing has no managed equivalent; the ownership guard must see the covering window, not a UIA child.
+        Mouse.Click(point);
+    }
+
     /// <summary>
     /// Waits for an element to appear in the UI.
     /// </summary>
@@ -536,6 +647,12 @@ public class AppFixture : IAsyncLifetime
             catch (COMException ex) when (ex.HResult == unchecked((int)0x80131505))
             {
                 // WinUI can briefly time out while its first visual tree is being built.
+            }
+            catch (TimeoutException ex) when (ex.InnerException is COMException { HResult: unchecked((int)0x80131505) })
+            {
+                // FlaUI wraps the same UIA_TIMEOUT COMException in
+                // System.TimeoutException ("UIA Timeout") — retry it too or a
+                // single transient attach race fails the whole wait.
             }
             await Task.Delay(100);
         }

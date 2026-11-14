@@ -50,30 +50,75 @@ public partial class ReaderLoadingOverlay : Grid
         set => SetValue(AutomationIdPrefixProperty, value);
     }
 
+    private bool _showRequested;
+    private bool _readerNavigated;
+
     public ReaderLoadingOverlay()
     {
         InitializeComponent();
+        Loaded += (_, _) => ShowIfReady();
     }
 
     /// <summary>Swaps the overlay to its spinner state (initial load and retry).</summary>
     public void ShowLoading()
     {
         ErrorPanel.IsVisible = false;
+        LoadingSpinner.IsRunning = true;
         LoadingIndicator.IsVisible = true;
-        IsVisible = true;
+        Show();
     }
 
     /// <summary>Swaps the overlay to its retryable error state.</summary>
     public void ShowError(Exception ex)
     {
+        LoadingSpinner.IsRunning = false;
         LoadingIndicator.IsVisible = false;
         ErrorDetailLabel.Text = ex.Message;
         ErrorPanel.IsVisible = true;
-        IsVisible = true;
+        Show();
     }
 
     /// <summary>Hides the overlay once the carousel is ready.</summary>
-    public void Hide() => IsVisible = false;
+    public void Hide()
+    {
+        _showRequested = false;
+        LoadingSpinner.IsRunning = false;
+        IsVisible = false;
+    }
+
+    /// <summary>
+    /// Windows must attach the overlay and finish the reader's navigation
+    /// before making its composition visual visible. Elapsed time is not a
+    /// readiness signal; both lifecycle events may occur in either order.
+    /// </summary>
+    private void Show()
+    {
+        _showRequested = true;
+        ShowIfReady();
+    }
+
+    public void ReaderNavigatedTo()
+    {
+        _readerNavigated = true;
+        ShowIfReady();
+    }
+
+    public void ReaderNavigatedFrom()
+    {
+        _readerNavigated = false;
+        IsVisible = false;
+    }
+
+    private void ShowIfReady()
+    {
+        if (_showRequested && ReadyToShow)
+        {
+            IsVisible = true;
+        }
+    }
+
+    // Mobile never needs the Windows composition workaround.
+    private bool ReadyToShow => !OperatingSystem.IsWindows() || (_readerNavigated && IsLoaded);
 
     private void ApplyAutomationIdPrefix(string prefix)
     {

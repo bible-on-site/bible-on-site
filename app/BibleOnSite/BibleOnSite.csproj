@@ -198,6 +198,8 @@
 		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
 
 		<!-- Custom Fonts -->
+		<EmbeddedResource Include="Resources/Fonts/TaameyD-Regular.ttf" LogicalName="TikkunFont.ttf" />
+		<EmbeddedResource Include="Resources/Fonts/TaameyD-outlines.json" LogicalName="TikkunFont.outlines.json" />
 		<MauiFont Include="Resources\Fonts\*.ttf;Resources\Fonts\*.otf" />
 		<!-- The MauiFont glob covers the TTF only — ship the font's GPL
 		     attribution inside the package too (#2623). -->
@@ -419,6 +421,7 @@
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
 		<PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />
 		<PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
+		<PackageReference Include="HarfBuzzSharp" Version="14.4.0.100" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.120" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.14" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.11.285" />

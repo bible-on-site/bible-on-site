@@ -665,7 +665,7 @@ public class TikkunFlowLayoutTests
             var pesukim = ToPesukim(rows.Where(r => r.PerekId == 10));
             pesukim.Should().NotBeEmpty();
 
-            var words = TikkunKorimTextBuilder.BuildWords(pesukim, repeatEachPasuk: true, hideMarks: false);
+            var words = TikkunKorimTextBuilder.BuildWords(pesukim, repeatEachPasuk: true);
             var result = TikkunFlowLayout.Layout(words, Measure, BaseFontSize,
                 maxWidth: 1_000_000, LineHeightFactor);
 
@@ -685,47 +685,43 @@ public class TikkunFlowLayoutTests
         {
             // The >34-letter unbreakable-word exception is documented defensive
             // behavior; shipped scripture (incl. maqaf-joined layout units)
-            // must never produce one. Guards both marked and unmarked builds.
+            // must never produce one. The word list is always the marked
+            // geometry text — mark visibility is paint-only (#3265).
             var rows = await LoadAllSegmentsAsync();
             var pesukim = ToPesukim(rows);
             pesukim.Should().NotBeEmpty();
 
-            foreach (var hideMarks in new[] { false, true })
-            {
-                var words = TikkunKorimTextBuilder.BuildWords(pesukim, repeatEachPasuk: true, hideMarks);
-                var longest = words.Where(w => w.Kind == TikkunWordKind.Text)
-                    .Select(w => TikkunFlowLayout.HebrewLetters(w.Text))
-                    .Max();
-                longest.Should().BeLessThanOrEqualTo(TikkunFlowLayout.MaxLineLetters,
-                    $"hideMarks={hideMarks}: no real word may force the unbreakable exception");
-            }
+            var words = TikkunKorimTextBuilder.BuildWords(pesukim, repeatEachPasuk: true);
+            var longest = words.Where(w => w.Kind == TikkunWordKind.Text)
+                .Select(w => TikkunFlowLayout.HebrewLetters(w.Text))
+                .Max();
+            longest.Should().BeLessThanOrEqualTo(TikkunFlowLayout.MaxLineLetters,
+                "no real word may force the unbreakable exception");
         }
 
         [Fact]
         public async Task every_line_of_every_perek_stays_within_the_cap()
         {
-            // Whole-canon sweep: every emitted line of every perek, marked and
-            // unmarked, honors the budget — the flow's only input is this data.
+            // Whole-canon sweep: every emitted line of every perek honors the
+            // budget — the flow's only input is this data. The word list is
+            // always the marked geometry text (marks hide at paint, #3265).
             var rows = await LoadAllSegmentsAsync();
             var byPerek = rows.GroupBy(r => r.PerekId);
 
             foreach (var perek in byPerek)
             {
                 var pesukim = ToPesukim(perek);
-                foreach (var hideMarks in new[] { false, true })
-                {
-                    var words = TikkunKorimTextBuilder.BuildWords(pesukim, repeatEachPasuk: true, hideMarks);
-                    var result = TikkunFlowLayout.Layout(words, Measure, BaseFontSize,
-                        maxWidth: 1_000_000, LineHeightFactor);
+                var words = TikkunKorimTextBuilder.BuildWords(pesukim, repeatEachPasuk: true);
+                var result = TikkunFlowLayout.Layout(words, Measure, BaseFontSize,
+                    maxWidth: 1_000_000, LineHeightFactor);
 
-                    Lines(result, LineHeight)
-                        .Select(l => l.Sum(w => TikkunFlowLayout.HebrewLetters(w.Text)))
-                        .Should().OnlyContain(count => count <= TikkunFlowLayout.MaxLineLetters,
-                            $"perek {perek.Key} hideMarks={hideMarks} emitted an over-cap line");
-                    result.Words.Select(w => w.Text)
-                        .Should().Equal(words.Where(w => w.Kind == TikkunWordKind.Text).Select(w => w.Text),
-                            $"perek {perek.Key} hideMarks={hideMarks} lost or duplicated words");
-                }
+                Lines(result, LineHeight)
+                    .Select(l => l.Sum(w => TikkunFlowLayout.HebrewLetters(w.Text)))
+                    .Should().OnlyContain(count => count <= TikkunFlowLayout.MaxLineLetters,
+                        $"perek {perek.Key} emitted an over-cap line");
+                result.Words.Select(w => w.Text)
+                    .Should().Equal(words.Where(w => w.Kind == TikkunWordKind.Text).Select(w => w.Text),
+                        $"perek {perek.Key} lost or duplicated words");
             }
         }
     }

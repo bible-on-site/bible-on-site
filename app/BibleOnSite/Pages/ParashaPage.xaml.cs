@@ -484,6 +484,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
 
         // Hide loading overlay — carousel is ready
         CarouselLoadingOverlay.Hide();
+        _carousel.ResnapAfterLoad();
 
         // A search-result link lands inside the selected reading instance.
         await ApplySearchReaderLocationAsync();
@@ -707,7 +708,16 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     protected override void OnNavigatedTo(NavigatedToEventArgs args)
     {
         base.OnNavigatedTo(args);
+        CarouselLoadingOverlay.ReaderNavigatedTo();
+        _carousel.ReaderNavigatedTo();
         SetAnalyticsScreenForUnit();
+    }
+
+    protected override void OnNavigatedFrom(NavigatedFromEventArgs args)
+    {
+        CarouselLoadingOverlay.ReaderNavigatedFrom();
+        _carousel.ReaderNavigatedFrom();
+        base.OnNavigatedFrom(args);
     }
 
     /// <summary>Logs current parasha screen to analytics (legacy-style: ParashaAlHaperek/{unitId}).</summary>

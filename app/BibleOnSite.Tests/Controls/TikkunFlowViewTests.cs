@@ -11,356 +11,232 @@ namespace BibleOnSite.Tests.Controls;
 [Collection("Application state")]
 public class TikkunFlowViewTests
 {
-    private static Pasuk PasukOf(int num, string text) => new()
+    private static Pasuk PasukOf(string text) => new()
     {
-        PasukNum = num,
+        PasukNum = 1,
         Text = text,
         Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = text }]
     };
 
-    private static Mock<ICanvas> MeasuringCanvas(double widthFactor = 0.5)
-    {
-        var canvas = new Mock<ICanvas>();
-        canvas.Setup(c => c.GetStringSize(It.IsAny<string>(), It.IsAny<IFont>(), It.IsAny<float>()))
-            .Returns((string text, IFont _, float size) => new SizeF((float)(text.Length * size * widthFactor), size));
-        return canvas;
-    }
+    private sealed record Paint(string Text, PathF Path, bool IsMark, float X, float Y, Color Color);
 
-    private static void WithInlineDispatcher(Action body)
+    /// <summary>Captures actual shaped contours and the canvas transform that
+    /// paints them, rather than substituting fake string widths/origins.</summary>
+    private sealed class Rig : IDisposable
     {
-        var dispatcher = new Mock<IDispatcher>();
-        dispatcher.Setup(d => d.Dispatch(It.IsAny<Action>()))
-            .Returns((Action action) => { action(); return true; });
-        var provider = new Mock<IDispatcherProvider>();
-        provider.Setup(p => p.GetForCurrentThread()).Returns(dispatcher.Object);
-        DispatcherProvider.SetCurrent(provider.Object);
-        try
+        public TikkunFlowView View { get; }
+        public Mock<ICanvas> Canvas { get; } = new();
+        public List<(string Text, float Size)> Shapes { get; } = [];
+        public Dictionary<(string, float), TikkunGlyphRun> Runs { get; } = [];
+        private readonly List<Paint> _paint = [];
+
+        public Rig(string? text)
         {
-            body();
+            var dispatcher = new Mock<IDispatcher>();
+            dispatcher.Setup(d => d.Dispatch(It.IsAny<Action>()))
+                .Returns((Action action) => { action(); return true; });
+            var provider = new Mock<IDispatcherProvider>();
+            provider.Setup(p => p.GetForCurrentThread()).Returns(dispatcher.Object);
+            DispatcherProvider.SetCurrent(provider.Object);
+            View = new TikkunFlowView((word, size) =>
+            {
+                Shapes.Add((word, size));
+                var run = TikkunFont.Shape(word, size);
+                Runs[(word, size)] = run;
+                return run;
+            });
+            if (text is not null)
+            {
+                View.Pasukim = [PasukOf(text)];
+            }
+            var x = 0f;
+            var y = 0f;
+            var color = Colors.Black;
+            var saved = new Stack<(float X, float Y)>();
+            Canvas.Setup(c => c.SaveState()).Callback(() => saved.Push((x, y)));
+            Canvas.Setup(c => c.RestoreState()).Callback(() => (x, y) = saved.Pop()).Returns(true);
+            Canvas.Setup(c => c.Translate(It.IsAny<float>(), It.IsAny<float>()))
+                .Callback((float dx, float dy) => { x += dx; y += dy; });
+            Canvas.SetupSet(c => c.FillColor = It.IsAny<Color>()).Callback((Color value) => color = value);
+            Canvas.Setup(c => c.FillPath(It.IsAny<PathF>(), It.IsAny<WindingMode>()))
+                .Callback((PathF path, WindingMode _) =>
+                {
+                    var source = Runs.First(p => ReferenceEquals(p.Value.Bases, path) || ReferenceEquals(p.Value.Marks, path));
+                    _paint.Add(new Paint(source.Key.Item1, path, ReferenceEquals(path, source.Value.Marks), x, y, color));
+                });
         }
-        finally
+
+        public Paint[] Draw(float width = 360)
         {
-            DispatcherProvider.SetCurrent(null);
+            _paint.Clear();
+            View.Drawable!.Draw(Canvas.Object, new RectF(0, 0, width, 600));
+            return _paint.ToArray();
         }
-    }
 
-    private static System.Linq.Expressions.Expression<Action<ICanvas>> DrawStringCall() =>
-        c => c.DrawString(It.IsAny<string>(), It.IsAny<float>(), It.IsAny<float>(),
-            It.IsAny<float>(), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
-            It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>());
-
-    [Fact]
-    public void constructor_forces_ltr_canvas_and_a_positive_height_estimate()
-    {
-        var view = new TikkunFlowView();
-
-        view.FlowDirection.Should().Be(FlowDirection.LeftToRight);
-        view.Drawable.Should().NotBeNull();
-        view.HeightRequest.Should().BeGreaterThan(0);
+        public void Dispose() => DispatcherProvider.SetCurrent(null);
     }
 
     [Fact]
-    public void bindable_properties_round_trip()
+    public void constructor_and_bindable_properties_preserve_the_reader_contract()
     {
-        var view = new TikkunFlowView();
-        var pesukim = new List<Pasuk> { PasukOf(1, "א") };
-
-        view.Pasukim = pesukim;
-        view.RepeatEachPasuk = true;
-        view.HideMarks = true;
-        view.MaskingRevision = 7;
-        view.TextFontSize = 24;
-
-        view.Pasukim.Should().BeSameAs(pesukim);
-        view.RepeatEachPasuk.Should().BeTrue();
-        view.HideMarks.Should().BeTrue();
-        view.MaskingRevision.Should().Be(7);
-        view.TextFontSize.Should().Be(24);
+        using var rig = new Rig("א");
+        rig.View.FlowDirection.Should().Be(FlowDirection.LeftToRight);
+        rig.View.HeightRequest.Should().BeGreaterThan(0);
+        rig.View.RepeatEachPasuk = true;
+        rig.View.HideMarks = true;
+        rig.View.MaskingRevision = 7;
+        rig.View.TextFontSize = 24;
+        rig.View.RepeatEachPasuk.Should().BeTrue();
+        rig.View.HideMarks.Should().BeTrue();
+        rig.View.MaskingRevision.Should().Be(7);
+        rig.View.TextFontSize.Should().Be(24);
+        var same = rig.View.Pasukim;
+        rig.View.Pasukim = same;
+        rig.View.Pasukim.Should().BeSameAs(same);
+        rig.View.Pasukim = null;
+        rig.View.Pasukim.Should().BeNull();
     }
 
-    [Fact]
-    public void setting_the_same_pasukim_twice_does_not_throw()
+    [Theory]
+    [InlineData(null, 360)]
+    [InlineData("אברהם", 10)]
+    public void empty_or_too_narrow_flow_paints_nothing(string? text, float width)
     {
-        var view = new TikkunFlowView();
-        var pesukim = new List<Pasuk> { PasukOf(1, "א") };
-
-        view.Pasukim = pesukim;
-        var act = () => view.Pasukim = pesukim;
-
-        act.Should().NotThrow();
+        using var rig = new Rig(text);
+        rig.Draw(width).Should().BeEmpty();
+        rig.Draw(width).Should().BeEmpty();
+        rig.View.HeightRequest.Should().BeLessThan(9);
     }
 
-    [Fact]
-    public void clearing_pasukim_back_to_null_is_safe()
+    [Theory]
+    [InlineData("וַיַּ֧רְא")]
+    [InlineData("בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים")]
+    [InlineData("שָׁ֣ם שָׂ֔ם מֶ֖לֶךְ אֶת־הָאָ֑רֶץ")]
+    [InlineData("יְרוּשָׁלַ֗͏ִם׃")]
+    [InlineData("(קְרִי: וַיַּ֧רְא)")]
+    public void toggling_marks_preserves_every_painted_base_contour_and_origin(string text)
     {
-        var view = new TikkunFlowView { Pasukim = [PasukOf(1, "א")] };
+        using var rig = new Rig(text);
+        var shown = rig.Draw();
+        var bases = shown.Where(p => !p.IsMark).ToArray();
+        shown.Should().Contain(p => p.IsMark);
+        var shapes = rig.Shapes.Count;
+        var height = rig.View.HeightRequest;
 
-        var act = () => view.Pasukim = null;
-
-        act.Should().NotThrow();
-        view.Pasukim.Should().BeNull();
-    }
-
-    [Fact]
-    public void draw_lays_out_and_paints_each_word()
-    {
-        WithInlineDispatcher(() =>
+        for (var i = 0; i < 3; i++)
         {
-            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אברהם יצחק")] };
-            var canvas = MeasuringCanvas();
-
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-
-            canvas.Verify(DrawStringCall(), Times.AtLeastOnce);
-            view.HeightRequest.Should().BeGreaterThan(0);
-        });
+            rig.View.HideMarks = true;
+            rig.Draw().Should().Equal(bases, "the same glyph contours paint at the same baselines and origins");
+            rig.View.HideMarks = false;
+            rig.Draw().Should().Equal(shown);
+        }
+        rig.Shapes.Should().HaveCount(shapes, "visibility never reshapes a stripped word");
+        rig.View.HeightRequest.Should().Be(height);
     }
 
-    [Fact]
-    public void draw_without_pesukim_collapses_height_and_paints_nothing()
+    [Theory]
+    [InlineData("֖")]
+    [InlineData("׀")]
+    public void a_marks_only_segment_keeps_geometry_without_painting_an_empty_base_path(string text)
     {
-        WithInlineDispatcher(() =>
-        {
-            var view = new TikkunFlowView();
-            var canvas = MeasuringCanvas();
-
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-
-            canvas.Verify(DrawStringCall(), Times.Never);
-            view.HeightRequest.Should().BeLessThan(9);
-        });
+        using var rig = new Rig(text);
+        var shown = rig.Draw();
+        var height = rig.View.HeightRequest;
+        shown.Should().Contain(p => p.Text == text && p.IsMark);
+        rig.View.HideMarks = true;
+        rig.Draw().Should().NotContain(p => p.Text == text);
+        rig.View.HeightRequest.Should().Be(height);
     }
 
     [Fact]
-    public void draw_gives_each_word_a_box_it_cannot_wrap_inside()
+    public void repeated_words_and_repaints_reuse_shaped_runs()
     {
-        WithInlineDispatcher(() =>
-        {
-            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אאאא בב")] };
-            var canvas = MeasuringCanvas();
-
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-
-            // Android turns the DrawString width into an int and hands it to a
-            // StaticLayout as the wrap constraint: a box snugger than the word's
-            // drawn width fragments it into narrow vertical pieces (#2069).
-            // Every word must therefore get at least the whole text column as
-            // its box — text direction is forced LTR inside DrawString, so a
-            // wide box stays left-anchored at the computed x and cannot
-            // re-align. Text column here is 360 − 12 − 12 = 336.
-            canvas.Verify(c => c.DrawString("אאאא", It.IsAny<float>(), It.IsAny<float>(),
-                It.Is<float>(w => w >= 336), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
-                It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>()));
-            canvas.Verify(c => c.DrawString("בב", It.IsAny<float>(), It.IsAny<float>(),
-                It.Is<float>(w => w >= 336), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
-                It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>()));
-        });
+        using var rig = new Rig("וַיַּ֧רְא וַיַּ֧רְא");
+        var first = rig.Draw();
+        rig.Draw().Should().Equal(first);
+        rig.View.MaskingRevision++;
+        rig.Draw().Should().Equal(first);
+        rig.Shapes.Count(s => s.Text == "וַיַּ֧רְא").Should().Be(1);
+        rig.Canvas.Verify(c => c.GetStringSize(It.IsAny<string>(), It.IsAny<IFont>(), It.IsAny<float>()), Times.Never);
     }
 
     [Fact]
-    public void draw_box_covers_an_overlong_word_that_exceeds_the_column()
+    public void font_resize_and_content_changes_establish_new_marked_geometry()
     {
-        WithInlineDispatcher(() =>
-        {
-            // A word wider than the whole column must still not wrap: its box is
-            // its own measured width plus slack. 30 letters × 18 × 1.5 = 810
-            // measured, wider than the 336-wide column.
-            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אאאאאאאאאאאאאאאאאאאאאאאאאאאאאא")] };
-            var canvas = MeasuringCanvas(widthFactor: 1.5);
-
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-
-            canvas.Verify(c => c.DrawString(It.IsAny<string>(), It.IsAny<float>(), It.IsAny<float>(),
-                It.Is<float>(w => w > 810), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
-                It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>()));
-        });
+        using var rig = new Rig("וַיַּ֧רְא");
+        rig.Draw();
+        var originalWidth = rig.Runs[("וַיַּ֧רְא", 18)].Width;
+        rig.View.TextFontSize = 36;
+        var enlarged = rig.Draw();
+        rig.Runs[("וַיַּ֧רְא", 36)].Width.Should().BeApproximately(originalWidth * 2, 0.001f);
+        rig.View.HideMarks = true;
+        rig.Draw().Should().Equal(enlarged.Where(p => !p.IsMark));
+        rig.View.Pasukim = [PasukOf("מֶלֶךְ")];
+        rig.Draw().Should().Contain(p => p.Text == "מֶלֶךְ");
+        rig.View.Pasukim = [PasukOf("וַיַּ֧רְא")];
+        rig.Draw();
+        rig.Shapes.Count(s => s.Text == "וַיַּ֧רְא" && Math.Abs(s.Size - 36) < 0.01f)
+            .Should().Be(2, "old chapters' cached glyphs are released");
     }
 
     [Fact]
-    public void draw_narrower_than_the_padding_collapses_height()
+    public void narrow_and_wide_layouts_each_preserve_base_geometry_across_the_toggle()
     {
-        WithInlineDispatcher(() =>
-        {
-            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אברהם")] };
-            var canvas = MeasuringCanvas();
-
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 10, 600));
-
-            canvas.Verify(DrawStringCall(), Times.Never);
-            view.HeightRequest.Should().BeLessThan(9);
-        });
+        using var rig = new Rig("וַיַּ֧רְא בְּרֵאשִׁ֖ית בָּרָ֣א אֱלֹהִ֑ים");
+        var wide = rig.Draw();
+        var narrow = rig.Draw(110);
+        rig.View.HideMarks = true;
+        rig.Draw(110).Should().Equal(narrow.Where(p => !p.IsMark));
+        rig.Draw().Should().Equal(wide.Where(p => !p.IsMark));
     }
 
     [Fact]
-    public void relayout_after_invalidation_measures_each_unique_word_once()
+    public void overlong_words_are_painted_as_complete_paths_without_a_native_text_wrap_box()
     {
-        WithInlineDispatcher(() =>
-        {
-            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אא בב אא")] };
-            var canvas = MeasuringCanvas();
-
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-            view.MaskingRevision = 1;
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-
-            canvas.Verify(c => c.GetStringSize("אא", It.IsAny<IFont>(), It.IsAny<float>()), Times.Once);
-            canvas.Verify(c => c.GetStringSize("בב", It.IsAny<IFont>(), It.IsAny<float>()), Times.Once);
-        });
+        var word = new string('א', 80);
+        using var rig = new Rig(word);
+        rig.Draw().Count(p => p.Text == word).Should().Be(1);
+        rig.Runs[(word, 18)].Glyphs.Should().HaveCount(80);
+        rig.Runs[(word, 18)].Width.Should().BeGreaterThan(336);
     }
 
     [Fact]
-    public void relayout_on_a_canvas_with_different_metrics_remeasures()
+    public void repeating_a_pasuk_keeps_one_emphasized_marker_and_duplicates_the_verse()
     {
-        WithInlineDispatcher(() =>
-        {
-            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אא")] };
-            var narrow = MeasuringCanvas();
-            var wide = MeasuringCanvas(widthFactor: 0.9);
-
-            view.Drawable!.Draw(narrow.Object, new RectF(0, 0, 360, 600));
-            view.MaskingRevision = 1;
-            view.Drawable!.Draw(wide.Object, new RectF(0, 0, 360, 600));
-
-            wide.Verify(c => c.GetStringSize("אא", It.IsAny<IFont>(), It.IsAny<float>()), Times.Once);
-        });
+        using var rig = new Rig("בְּרֵאשִׁ֖ית");
+        rig.View.RepeatEachPasuk = true;
+        var paints = rig.Draw();
+        paints.Count(p => p.Text == "א").Should().Be(2, "the one marker is painted twice for emphasis");
+        paints.Count(p => p.Text == "בְּרֵאשִׁ֖ית" && !p.IsMark).Should().Be(2);
     }
 
     [Fact]
-    public void font_size_change_remeasures_instead_of_reusing_stale_widths()
+    public void draw_caps_lines_at_the_hebrew_letter_budget()
     {
-        WithInlineDispatcher(() =>
-        {
-            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אא")] };
-            var canvas = MeasuringCanvas();
-
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-            view.TextFontSize = 30;
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-
-            canvas.Verify(c => c.GetStringSize("אא", It.IsAny<IFont>(), 30f), Times.Once);
-            canvas.Verify(c => c.GetStringSize("אא", It.IsAny<IFont>(), 18f), Times.Once);
-        });
+        var text = string.Join(' ', Enumerable.Range(0, 40)
+            .Select(i => new string([(char)('א' + i % 22), (char)('א' + i / 22)])));
+        using var rig = new Rig(text);
+        var lines = rig.Draw(10000).Where(p => !p.IsMark)
+            .GroupBy(p => (int)((p.Y - 8) / (18 * 1.4f))).OrderBy(g => g.Key);
+        lines.Select(line => line.Select(p => p.Text).Distinct().Sum(TikkunFlowLayout.HebrewLetters))
+            .Should().Equal(33, 34, 14);
     }
 
     [Fact]
-    public void repeated_draws_at_the_same_width_keep_painting()
-    {
-        WithInlineDispatcher(() =>
-        {
-            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "א")] };
-            var canvas = MeasuringCanvas();
-
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-
-            canvas.Verify(DrawStringCall(), Times.AtLeast(2));
-        });
-    }
-
-    // #2623: תיקון קוראים is a scripture presentation — its canvas draws and
-    // measures in the same Taamey D face as the pasuk labels (a different
-    // measure face would also corrupt the justification math). The canvas
-    // resolves IFont.Name itself, so the contract fields are the oracle —
-    // the platform spell differs per OS (asset name / PostScript / URI).
-    [Fact]
-    public void draw_paints_and_measures_words_in_the_scripture_font()
-    {
-        WithInlineDispatcher(() =>
-        {
-            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אברהם יצחק")] };
-            var canvas = MeasuringCanvas();
-
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-
-            canvas.VerifySet(c => c.Font =
-                It.Is<IFont>(f => f.Name == ScriptureFonts.Regular.Name), Times.AtLeastOnce);
-            // The pasuk-number word is bold — its face is the bold scripture variant.
-            canvas.VerifySet(c => c.Font =
-                It.Is<IFont>(f => f.Name == ScriptureFonts.Bold.Name &&
-                                  f.Weight == FontWeights.Bold), Times.AtLeastOnce);
-            canvas.Verify(c => c.GetStringSize(It.IsAny<string>(),
-                It.Is<IFont>(f => f.Name == ScriptureFonts.Regular.Name),
-                It.IsAny<float>()), Times.AtLeastOnce);
-        });
-    }
-
-    // #2623: bundled fonts resolve to a real typeface on Android/iOS, so the
-    // canvas there drops IFont.Weight — marker words are double-struck to keep
-    // the emphasis the system font used to give (#if !WINDOWS keeps this
-    // branch active in the net10.0 test target).
-    [Fact]
-    public void draw_double_strikes_bold_marker_words_for_faux_bold()
-    {
-        WithInlineDispatcher(() =>
-        {
-            var view = new TikkunFlowView { Pasukim = [PasukOf(1, "אברהם")] };
-            var canvas = MeasuringCanvas();
-
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-
-            // The "א" pasuk-number marker is bold → struck twice; the verse
-            // word itself is regular → struck once.
-            canvas.Verify(c => c.DrawString("א", It.IsAny<float>(), It.IsAny<float>(),
-                It.IsAny<float>(), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
-                It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>()), Times.Exactly(2));
-            canvas.Verify(c => c.DrawString("אברהם", It.IsAny<float>(), It.IsAny<float>(),
-                It.IsAny<float>(), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
-                It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>()), Times.Once);
-        });
-    }
-
-    // #2839: the letter budget lives in the shared layout, so the canvas draw
-    // honors it too — here width would fit ~93 words, so only the 34-letter
-    // budget can end the first rendered line.
-    [Fact]
-    public void draw_caps_each_rendered_line_at_the_hebrew_letter_budget()
-    {
-        WithInlineDispatcher(() =>
-        {
-            // Distinct two-letter words so per-line text dedup only removes
-            // the bold marker's faux-bold strike, never a real word.
-            var text = string.Join(' ', Enumerable.Range(0, 40)
-                .Select(i => new string([(char)('א' + i % 22), (char)('א' + i / 22)])));
-            var view = new TikkunFlowView { Pasukim = [PasukOf(1, text)] };
-            var canvas = MeasuringCanvas(widthFactor: 0.1);
-            var draws = new List<(string Text, float Y)>();
-            canvas.Setup(c => c.DrawString(It.IsAny<string>(), It.IsAny<float>(), It.IsAny<float>(),
-                    It.IsAny<float>(), It.IsAny<float>(), It.IsAny<HorizontalAlignment>(),
-                    It.IsAny<VerticalAlignment>(), It.IsAny<TextFlow>(), It.IsAny<float>()))
-                .Callback((string t, float _, float y, float _, float _,
-                           HorizontalAlignment _, VerticalAlignment _, TextFlow _, float _) =>
-                    draws.Add((t, y)));
-
-            view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-
-            // Marker "א" + 16 words = 33 letters, then 17 (34), then the last 7
-            // copies (14). Bold marker words strike twice — count distinct text.
-            var lines = draws.GroupBy(d => d.Y).OrderBy(g => g.Key).ToList();
-            lines.Should().HaveCount(3);
-            lines.Select(line => line.Select(d => d.Text).Distinct()
-                    .Sum(TikkunFlowLayout.HebrewLetters))
-                .Should().Equal(33, 34, 14);
-        });
-    }
-
-    [Fact]
-    public void draw_in_dark_theme_paints_with_the_dark_default_color()
+    public void theme_changes_recolor_the_same_glyph_geometry()
     {
         var previous = Application.Current;
         try
         {
-            Application.Current = new Application { UserAppTheme = AppTheme.Dark };
-            WithInlineDispatcher(() =>
-            {
-                var view = new TikkunFlowView { Pasukim = [PasukOf(1, "א")] };
-                var canvas = MeasuringCanvas();
-
-                view.Drawable!.Draw(canvas.Object, new RectF(0, 0, 360, 600));
-
-                canvas.VerifySet(c => c.FontColor =
-                    It.Is<Color>(color => color.Equals(Color.FromArgb("#e0e0e0"))));
-            });
+            Application.Current = new Application { UserAppTheme = AppTheme.Light };
+            using var rig = new Rig("וַיַּ֧רְא");
+            var light = rig.Draw().First(p => p.Text == "וַיַּ֧רְא" && !p.IsMark);
+            Application.Current.UserAppTheme = AppTheme.Dark;
+            rig.View.OnAppRequestedThemeChanged(null, new AppThemeChangedEventArgs(AppTheme.Dark));
+            var dark = rig.Draw().First(p => p.Text == light.Text && !p.IsMark);
+            dark.Path.Should().BeSameAs(light.Path);
+            dark.Color.Should().Be(Color.FromArgb("#e0e0e0"));
+            light.Color.Should().Be(Color.FromArgb("#1a1a1a"));
         }
         finally
         {
