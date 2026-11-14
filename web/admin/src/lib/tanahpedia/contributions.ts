@@ -13,7 +13,10 @@ import {
 	type ContributionApiMigration,
 	migrationBlocked,
 } from "./contribution-api";
-import { contributionRecordId } from "./contribution-identifiers";
+import {
+	contributionIdentifierKey,
+	contributionRecordId,
+} from "./contribution-identifiers";
 import {
 	CONTRIBUTION_RECORDS,
 	type ContributionRecordInput,
@@ -498,7 +501,9 @@ export function validateChange(value: unknown): ChangeInput {
 		]);
 		const parentId = contributionRecordId(after.parentId, "parentId"),
 			childId = contributionRecordId(after.childId, "childId");
-		if (parentId === childId)
+		if (
+			contributionIdentifierKey(parentId) === contributionIdentifierKey(childId)
+		)
 			throw new Error("A person cannot be their own parent");
 		return {
 			kind,
@@ -533,7 +538,10 @@ export function validateChange(value: unknown): ChangeInput {
 		]);
 		const person1Id = contributionRecordId(after.person1Id, "person1Id"),
 			person2Id = contributionRecordId(after.person2Id, "person2Id");
-		if (person1Id === person2Id)
+		if (
+			contributionIdentifierKey(person1Id) ===
+			contributionIdentifierKey(person2Id)
+		)
 			throw new Error("A union requires two different people");
 		return {
 			kind,
@@ -617,7 +625,7 @@ export function validateChanges(value: unknown): ChangeInput[] {
 	const changes = value.map(validateChange);
 	const targets = changes
 		.filter((c) => c.targetId)
-		.map((c) => `${c.kind}:${c.targetId}`);
+		.map((c) => `${c.kind}:${contributionIdentifierKey(c.targetId as string)}`);
 	if (new Set(targets).size !== targets.length)
 		throw new Error("A target can only appear once per PR");
 	return changes;

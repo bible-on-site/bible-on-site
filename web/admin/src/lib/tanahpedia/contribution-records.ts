@@ -1,4 +1,8 @@
-import { contributionRecordId } from "./contribution-identifiers";
+import { MAX_DAY_FOR_HEBREW_MONTH } from "~/lib/hebrew-calendar";
+import {
+	contributionIdentifierKey,
+	contributionRecordId,
+} from "./contribution-identifiers";
 /** Explicit structured operations for the existing Tanahpedia schema. Table
  * and column names are server-owned constants; submitted data supplies values. */
 export type RecordValue = string | number | boolean | null;
@@ -504,7 +508,7 @@ export function validateContributionField(
 				month < 0 ||
 				month > 14 ||
 				day < 0 ||
-				day > 30 ||
+				day > (MAX_DAY_FOR_HEBREW_MONTH[month] ?? 30) ||
 				(month === 0 && day !== 0)
 			)
 				throw new Error(`${field.label}: invalid Hebrew date`);
@@ -569,7 +573,11 @@ export function validateContributionRecord(
 			validateContributionField(input[key], field),
 		]),
 	);
-	if (raw.kind === "nation_origin" && after.nationId === after.sourceNationId)
+	if (
+		raw.kind === "nation_origin" &&
+		contributionIdentifierKey(String(after.nationId)) ===
+			contributionIdentifierKey(String(after.sourceNationId))
+	)
 		throw new Error("A nation cannot originate from itself");
 	if (
 		raw.kind === "entity_source" &&

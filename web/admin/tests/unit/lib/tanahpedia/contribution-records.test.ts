@@ -6,14 +6,75 @@ import {
 	validateContributionField,
 	validateContributionRecord,
 } from "~/lib/tanahpedia/contribution-records";
-import { validateChange } from "~/lib/tanahpedia/contributions";
+import {
+	validateChange,
+	validateChanges,
+} from "~/lib/tanahpedia/contributions";
 
 const ID = "00000000-0000-4000-8000-000000000001",
 	OTHER = "00000000-0000-4000-8000-000000000002";
 describe("category contribution contract", () => {
+	it("treats mixed-case stored IDs as one identity without changing their spelling", () => {
+		const id = "Abcdef00-0000-4000-8000-000000000001";
+		expect(contributionRecordId(id, "record")).toBe(id);
+		for (const change of [
+			{
+				kind: "parent_child",
+				after: {
+					parentId: id,
+					childId: id.toLowerCase(),
+					relationshipType: "BIOLOGICAL",
+					parentRole: "FATHER",
+				},
+			},
+			{
+				kind: "union",
+				after: {
+					person1Id: id,
+					person2Id: id.toLowerCase(),
+					unionType: "MARRIAGE",
+				},
+			},
+			{
+				kind: "nation_origin",
+				after: { nationId: id, sourceNationId: id.toLowerCase() },
+			},
+			{
+				kind: "alias_mapping",
+				after: {
+					name: "שם בדיקה",
+					targets: [
+						{ entryId: id, label: "א" },
+						{ entryId: id.toLowerCase(), label: "ב" },
+					],
+				},
+			},
+		])
+			expect(() => validateChange(change)).toThrow();
+		expect(() =>
+			validateChanges([
+				{ kind: "metadata", targetId: id, after: { displayName: "א" } },
+				{
+					kind: "metadata",
+					targetId: id.toLowerCase(),
+					after: { displayName: "ב" },
+				},
+			]),
+		).toThrow("once");
+	});
 	it("accepts stored prefixed identifiers without weakening discussion UUIDs", () => {
 		const id = "p1000000-0000-4000-8000-000000000001";
 		expect(contributionRecordId(id, "person")).toBe(id);
+		for (const invalid of [
+			null,
+			1,
+			"a".repeat(100000),
+			"a-b-c-d-e",
+			"!1000000-0000-4000-8000-000000000001",
+		])
+			expect(() => contributionRecordId(invalid, "person")).toThrow(
+				"identifier",
+			);
 		expect(() => contributionRecordId("bad", "person")).toThrow("identifier");
 		expect(
 			validateChange({
@@ -110,6 +171,12 @@ describe("category contribution contract", () => {
 		57841501,
 		57840131,
 		57840001,
+		57840430,
+		57840630,
+		57840830,
+		57841030,
+		57841230,
+		57841430,
 		100000000,
 		1.2,
 		Infinity,

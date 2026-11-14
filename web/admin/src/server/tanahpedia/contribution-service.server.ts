@@ -29,7 +29,10 @@ import {
 	readChangeState,
 } from "./contribution-changes.server";
 import { contributionApplyRank } from "./contribution-records.server";
-import { readContributionSourceFact } from "./contribution-specials.server";
+import {
+	assertDistinctContributionAliases,
+	readContributionSourceFact,
+} from "./contribution-specials.server";
 import {
 	insertContribution,
 	readContribution,
@@ -157,7 +160,11 @@ export async function editContribution(
 		if (item.state !== "open") throw new Error("Reopen before editing");
 		const changes =
 			item.kind === "pr"
-				? await prepareChanges(conn, validateChanges(input.changes))
+				? await prepareChanges(conn, validateChanges(input.changes), {
+						// Existing proposals may retain operations satisfied by another
+						// merge. Re-read all bases and references while allowing no-ops.
+						refresh: true,
+					})
 				: [];
 		if (item.kind === "pr" && evidence.length === 0)
 			throw new Error("PRs require evidence");
@@ -347,6 +354,7 @@ async function applyReviewedChanges(
 	conn: PoolConnection,
 	item: Contribution,
 ): Promise<void> {
+	await assertDistinctContributionAliases(conn, item.changes);
 	// Stable ordering prevents two PRs touching overlapping rows from locking
 	// their target sets in opposite orders. All freshness checks precede writes.
 	const changes = [...item.changes].sort((a, b) =>

@@ -1,4 +1,7 @@
-import { contributionRecordId } from "./contribution-identifiers";
+import {
+	contributionIdentifierKey,
+	contributionRecordId,
+} from "./contribution-identifiers";
 import { isContributionSourceFact } from "./contribution-specials";
 import {
 	type Contribution,
@@ -78,7 +81,9 @@ export function validateApiSequence(value: unknown): ReviewedChange[] {
 			if (
 				!needsSourceTarget ||
 				target.kind !== attachment.targetKind ||
-				target.id !== attachment.targetId ||
+				typeof target.id !== "string" ||
+				contributionIdentifierKey(target.id) !==
+					contributionIdentifierKey(attachment.targetId) ||
 				Object.keys(target).some((k) => !["kind", "id", "state"].includes(k)) ||
 				Object.keys(state).length === 0 ||
 				Object.keys(state).length > 40 ||
@@ -112,18 +117,18 @@ export function validateApiSequence(value: unknown): ReviewedChange[] {
 				const name = record(raw, "main name"),
 					id = contributionRecordId(name.id, "name id");
 				if (
-					ids.has(id) ||
+					ids.has(contributionIdentifierKey(id)) ||
 					typeof name.name !== "string" ||
 					name.name.length > 255
 				)
 					throw new Error("Invalid main-name preconditions");
-				ids.add(id);
+				ids.add(contributionIdentifierKey(id));
 				return { id, name: name.name };
 			});
 		}
 		if (Object.values(labels).some((label) => typeof label !== "string"))
 			throw new Error("API labels must be text");
-		const key = `${input.kind}:${targetId}`;
+		const key = `${input.kind}:${contributionIdentifierKey(targetId)}`;
 		if (targets.has(key)) throw new Error("API target appears more than once");
 		targets.add(key);
 		return {

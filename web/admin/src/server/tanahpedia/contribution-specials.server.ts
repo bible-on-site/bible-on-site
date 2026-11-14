@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
+import { canonicalJson } from "~/lib/canonical-json";
 import {
 	CONTRIBUTION_RECORDS,
 	isContributionRecordKind,
@@ -71,6 +72,27 @@ function sourceTable(kind: string): string {
 		: undefined;
 	if (!table) throw new Error("Unsupported source target");
 	return table;
+}
+/** Alias operations replace a complete destination set. Use the database's
+ * actual collation so case, accents and trailing spaces cannot disguise repeats. */
+export async function assertDistinctContributionAliases(
+	conn: PoolConnection,
+	changes: ReviewedChange[],
+): Promise<void> {
+	const names = changes
+		.filter((c) => c.kind === "alias_mapping")
+		.map((c) => (c.after ?? c.before)?.name)
+		.filter((name) => typeof name === "string");
+	if (names.length < 2) return;
+	const row = await txQueryOne<{ count: number }>(
+		conn,
+		"SELECT COUNT(DISTINCT CAST(name AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_ci) AS count FROM JSON_TABLE(?, '$[*]' COLUMNS(name VARCHAR(255) PATH '$')) AS alias_names",
+		[canonicalJson(names)],
+	);
+	if (Number(row?.count) !== names.length)
+		throw new Error(
+			"An alias name can only appear once per PR; include its complete target set in one operation",
+		);
 }
 export async function readAliasMapping(
 	conn: PoolConnection,

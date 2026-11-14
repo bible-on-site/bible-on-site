@@ -15,6 +15,7 @@ import { txExecute, txQuery, txQueryOne } from "../db";
 import { recomputeEntryMetrics } from "../reading-metrics";
 import {
 	applyContributionRecord,
+	assertNoContributionDependents,
 	readContributionRecord,
 	structuredContributionCatalogue,
 	structuredReferenceLabels,
@@ -23,6 +24,7 @@ import {
 	aliasReferenceLabels,
 	applyAliasMapping,
 	applySourceReference,
+	assertDistinctContributionAliases,
 	captureContributionSourceTarget,
 	readAliasMapping,
 	readSourceReference,
@@ -215,6 +217,7 @@ export async function prepareChanges(
 				: {}),
 		});
 	}
+	await assertDistinctContributionAliases(conn, changes);
 	return changes;
 }
 
@@ -250,6 +253,7 @@ export async function applyChange(
 			place: "tanahpedia_place_identification",
 		}[input.kind as "parent_child" | "union" | "place"];
 		if (!table) throw new Error("Unsupported deletion");
+		await assertNoContributionDependents(conn, table, id);
 		await txExecute(conn, `DELETE FROM ${table} WHERE id = ?`, [id]);
 		return;
 	}

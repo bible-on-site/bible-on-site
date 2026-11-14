@@ -171,6 +171,7 @@ beforeAll(async () => {
 	for (const match of (canonical + referenceDDL).matchAll(
 		/CREATE TABLE `([^`]+)` \([\s\S]*?\) ENGINE[^;]*;/g,
 	)) {
+		// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- DDL comes only from fixed repository schema files in a disposable loopback database.
 		if (needed.delete(match[1])) await conn.query(match[0]);
 	}
 	if (needed.size)
@@ -181,6 +182,7 @@ beforeAll(async () => {
 		/CREATE VIEW `tanah_perek_view` AS[\s\S]*?;/,
 	)?.[0];
 	if (!chapterView) throw new Error("Missing canonical chapter view");
+	// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- fixed canonical view parsed from the repository schema, never request data.
 	await conn.query(chapterView);
 	await conn.query("SET FOREIGN_KEY_CHECKS = 1");
 	for (const [table, names] of [
@@ -1414,6 +1416,154 @@ describe("all category contribution operations against canonical MySQL", () => {
 		]);
 		expect(await current("king_role", role)).toBeNull();
 	});
+	it.each(["parent_child", "union", "place"] as const)(
+		"requires explicit source removal before deleting a cited %s",
+		async (kind) => {
+			const after =
+				kind === "parent_child"
+					? {
+							parentId: ids.parent,
+							childId: ids.person,
+							relationshipType: "FOSTER",
+							parentRole: "FATHER",
+							altGroupId: randomUUID(),
+						}
+					: kind === "union"
+						? {
+								person1Id: ids.parent,
+								person2Id: ids.person,
+								unionType: "BETROTHAL",
+								altGroupId: randomUUID(),
+							}
+						: {
+								placeId: ids.place,
+								modernName: "זיהוי עם מקור",
+								latitude: 31,
+								longitude: 35,
+								altGroupId: randomUUID(),
+							};
+			const target = await mergeChanges([{ kind, after }]);
+			const targetId = target.changes[0].targetId;
+			const source = await mergeChanges([
+				{
+					kind: "source_reference",
+					after: {
+						targetKind: kind === "place" ? "place_identification" : kind,
+						targetId,
+						sourceType: "other",
+						sourceText: "מקור מפורש למחיקה",
+					},
+				},
+			]);
+			const deletion = await service.createContribution(
+				{
+					kind: "pr",
+					title: "Remove cited fact",
+					description: "נתוני בדיקה בלבד",
+					evidence,
+					changes: [{ kind, targetId, after: null }],
+				},
+				owner,
+			);
+			await expect(
+				service.mergeContribution(
+					{ id: deletion.id, version: deletion.version },
+					owner,
+				),
+			).rejects.toThrow("source references");
+			expect(await current(kind, targetId)).not.toBeNull();
+			expect(
+				await current("source_reference", source.changes[0].targetId),
+			).not.toBeNull();
+			await mergeChanges([
+				{ kind, targetId, after: null },
+				{
+					kind: "source_reference",
+					targetId: source.changes[0].targetId,
+					after: null,
+				},
+			]);
+			expect(await current(kind, targetId)).toBeNull();
+			expect(
+				await current("source_reference", source.changes[0].targetId),
+			).toBeNull();
+		},
+	);
+	it.each(["same", "case", "accent"])(
+		"rejects repeated alias names under MySQL collation (%s)",
+		async (variation) => {
+			const name = `Café-${randomUUID()}`;
+			const second =
+				variation === "case"
+					? name.toUpperCase()
+					: variation === "accent"
+						? name.replace("é", "e")
+						: name;
+			await expect(
+				service.createContribution(
+					{
+						kind: "pr",
+						title: "Duplicate aliases",
+						description: "נתוני בדיקה בלבד",
+						evidence,
+						changes: [name, second].map((name, index) => ({
+							kind: "alias_mapping",
+							after: {
+								name,
+								targets: [
+									{
+										entryId: index ? otherEntry : String(recordRefs.entry),
+										label: "",
+									},
+								],
+							},
+						})),
+					},
+					owner,
+				),
+			).rejects.toThrow("alias name can only appear once");
+		},
+	);
+	it("rejects repeated aliases saved before validation was introduced without writing destinations", async () => {
+		const name = `Legacy-${randomUUID()}`;
+		const proposal = await service.createContribution(
+			{
+				kind: "pr",
+				title: "Legacy alias sequence",
+				description: "נתוני בדיקה בלבד",
+				evidence,
+				changes: [name, `${name}-other`].map((name, index) => ({
+					kind: "alias_mapping",
+					after: {
+						name,
+						targets: [
+							{
+								entryId: index ? otherEntry : String(recordRefs.entry),
+								label: "",
+							},
+						],
+					},
+				})),
+			},
+			owner,
+		);
+		await store.withContributions(async (tx) => {
+			const stored = await store.readContribution(tx, proposal.id, true);
+			if (!stored.changes[1].after) throw new Error("Missing alias fixture");
+			stored.changes[1].after.name = name.toUpperCase();
+			await store.saveContribution(tx, stored);
+		});
+		const saved = await fresh(proposal);
+		await expect(
+			service.mergeContribution(
+				{ id: saved.id, version: saved.version },
+				owner,
+			),
+		).rejects.toThrow("alias name can only appear once");
+		for (const change of saved.changes)
+			expect(await current("alias_mapping", change.targetId)).toBeNull();
+		expect((await fresh(proposal)).state).toBe("open");
+	});
 	it("edits alias routing in the same PR and detects concurrent label changes", async () => {
 		const name = `כינוי-${randomUUID()}`,
 			entryId = String(recordRefs.entry);
@@ -1588,6 +1738,78 @@ describe("all category contribution operations against canonical MySQL", () => {
 });
 
 describe("post-merge sequence refresh and renewed owner review", () => {
+	it("edits evidence and a remaining change while retaining satisfied updates and deletions", async () => {
+		const identification = await proposed(
+			[
+				{
+					kind: "place",
+					after: {
+						placeId: ids.place,
+						modernName: "זיהוי למחיקה",
+						latitude: 30,
+						longitude: 34,
+					},
+				},
+			],
+			owner,
+		);
+		await merge(identification);
+		const displayName = `כינוי חדש-${randomUUID()}`;
+		const shared = [
+			{ kind: "metadata", targetId: ids.entity, after: { displayName } },
+			{
+				kind: "place",
+				targetId: identification.changes[0].targetId,
+				after: null,
+			},
+		];
+		const pending = await proposed([
+			...shared,
+			{
+				kind: "person_name",
+				after: {
+					personId: ids.person,
+					nameType: "ADDITIONAL",
+					name: "כינוי לפני עריכה",
+				},
+			},
+		]);
+		await merge(await proposed(shared, owner));
+		const refreshed = await fresh(pending);
+		expect(refreshed.changes.filter(contributionHasEffect)).toHaveLength(1);
+		const edited = await service.editContribution(
+			{
+				id: refreshed.id,
+				version: refreshed.version,
+				title: refreshed.title,
+				description: "תיאור מתוקן",
+				evidence: [{ ...evidence[0], note: "ראיה חדשה" }],
+				changes: refreshed.changes.map((c) => ({
+					kind: c.kind,
+					targetId: c.targetId,
+					after:
+						c.kind === "person_name"
+							? { ...c.after, name: "כינוי אחרי עריכה" }
+							: c.after,
+				})),
+			},
+			alice,
+		);
+		expect(edited.evidence[0].note).toBe("ראיה חדשה");
+		expect(edited.changes.filter(contributionHasEffect)).toHaveLength(1);
+		expect(reviewStatus(edited)).toBe("required");
+		const merged = await merge(await approved(edited));
+		expect(
+			[...merged.events].reverse().find((e) => e.kind === "merged")?.body,
+		).toContain("1");
+		const name = merged.changes.find((c) => c.kind === "person_name");
+		if (!name) throw new Error("Missing remaining name change");
+		const [names] = await conn.execute<RowDataPacket[]>(
+			"SELECT name FROM tanahpedia_person_name WHERE id=?",
+			[name.targetId],
+		);
+		expect(names[0].name).toBe("כינוי אחרי עריכה");
+	});
 	async function proposed(changes: unknown[], actor = alice) {
 		return service.createContribution(
 			{

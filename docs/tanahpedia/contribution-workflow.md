@@ -230,7 +230,10 @@ Every content merge durably queues a scan of pending PR sequences in the same
 transaction. The scan visits all open PRs, refreshing affected before-states,
 reference labels, MAIN-name preconditions and structured cited facts. Proposed
 after-values and free-text evidence remain unchanged. Equal operations become
-explicit no-ops and are not written again. Incompatible API sequences retain
+explicit no-ops and are not written again. Editing an existing proposal retains
+these satisfied updates and deletions while rechecking current targets and
+references, so evidence or remaining changes can still be edited. New proposals
+continue to reject unchanged operations. Incompatible API sequences retain
 their untouched raw sequence for the API migration path.
 
 A changed comparison creates a new revision authored by the system and requires

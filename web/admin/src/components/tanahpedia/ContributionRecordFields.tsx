@@ -1,3 +1,4 @@
+import { MAX_DAY_FOR_HEBREW_MONTH } from "~/lib/hebrew-calendar";
 import {
 	CONTRIBUTION_RECORDS,
 	type ContributionField,
@@ -131,7 +132,7 @@ export function HebrewDateField({
 						aria-label={`יום - ${label}`}
 						type="number"
 						min="0"
-						max="30"
+						max={month === 0 ? 0 : MAX_DAY_FOR_HEBREW_MONTH[month]}
 						value={day}
 						onChange={(e) => change(year, month, Number(e.target.value))}
 					/>

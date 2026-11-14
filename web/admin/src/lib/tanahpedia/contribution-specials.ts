@@ -1,4 +1,7 @@
-import { contributionRecordId } from "./contribution-identifiers";
+import {
+	contributionIdentifierKey,
+	contributionRecordId,
+} from "./contribution-identifiers";
 import { CONTRIBUTION_RECORDS } from "./contribution-records";
 import { record, textField } from "./contributions";
 import { ENTITY_TYPE_LABELS, type EntityType } from "./labels";
@@ -133,7 +136,10 @@ export function validateSpecialChange(
 				};
 			})
 			.sort((a, b) => a.entryId.localeCompare(b.entryId));
-		if (new Set(targets.map((t) => t.entryId)).size !== targets.length)
+		if (
+			new Set(targets.map((t) => contributionIdentifierKey(t.entryId))).size !==
+			targets.length
+		)
 			throw new Error("Duplicate alias target");
 		const result = validateAliasSpec(name, targets);
 		if (!result.ok) throw new Error(result.error);

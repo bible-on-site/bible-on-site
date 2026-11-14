@@ -4,6 +4,10 @@ import {
 	migrationBlocked,
 } from "~/lib/tanahpedia/contribution-api";
 import {
+	contributionIdentifierKey,
+	isContributionRecordId,
+} from "~/lib/tanahpedia/contribution-identifiers";
+import {
 	type Contribution,
 	type Contributor,
 	contributionSnapshot,
@@ -25,13 +29,8 @@ const system: Contributor = {
 	isDoradsoft: false,
 };
 function identifiers(value: unknown, result = new Set<string>()): Set<string> {
-	if (
-		typeof value === "string" &&
-		/^[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}$/i.test(
-			value,
-		)
-	)
-		result.add(value);
+	if (isContributionRecordId(value))
+		result.add(contributionIdentifierKey(value));
 	else if (Array.isArray(value))
 		for (const child of value) identifiers(child, result);
 	else if (value && typeof value === "object")
@@ -96,7 +95,7 @@ export async function refreshPendingContributionBases(trigger: Contribution) {
 				.join(" UNION ALL "),
 			roots.flatMap(() => renamed),
 		);
-		for (const row of rows) changed.add(row.id);
+		for (const row of rows) changed.add(contributionIdentifierKey(row.id));
 	}
 	const [{ lastNumber }] = await query<{ lastNumber: number }>(
 		"SELECT COALESCE(MAX(number),0) AS lastNumber FROM tanahpedia_contribution",

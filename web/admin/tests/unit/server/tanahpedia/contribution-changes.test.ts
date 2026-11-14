@@ -179,6 +179,7 @@ describe("typed contribution domain API", () => {
 	it.each(["parent_child", "union", "place"] as const)(
 		"deletes exactly one %s target",
 		async (kind) => {
+			mocks.one.mockResolvedValueOnce(null);
 			await applyChange(
 				conn,
 				reviewed(kind, null, { field: "before" }),

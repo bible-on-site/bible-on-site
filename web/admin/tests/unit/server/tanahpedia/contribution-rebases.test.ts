@@ -102,6 +102,13 @@ beforeEach(() => {
 	});
 });
 describe("pending proposal base refresh", () => {
+	it("refreshes shared targets even when proposals spell their IDs differently", async () => {
+		const id = "Abcdef00-0000-4000-8000-000000000001";
+		pending.changes[0].targetId = id;
+		trigger.changes[0].targetId = id.toLowerCase();
+		mocks.items.set(ID, pending);
+		expect((await refreshPendingContributionBases(trigger)).refreshed).toBe(1);
+	});
 	it("revises the diff and owner-review requirement without changing its intent or evidence", async () => {
 		expect(await refreshPendingContributionBases(trigger)).toEqual({
 			scanned: 1,

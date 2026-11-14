@@ -3,6 +3,7 @@ import {
 	ConverseCommand,
 } from "@aws-sdk/client-bedrock-runtime";
 import type { PoolConnection } from "mysql2/promise";
+import { canonicalJson } from "~/lib/canonical-json";
 import {
 	CONTRIBUTION_RECORDS,
 	type ContributionField,
@@ -513,7 +514,7 @@ async function localGenerate(
 		redirect: "error",
 		signal: AbortSignal.timeout(120000),
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
+		body: canonicalJson({
 			model,
 			stream: false,
 			think: false,
@@ -562,7 +563,7 @@ async function awsGenerate(
 						structure: {
 							jsonSchema: {
 								name: "tanahpedia_prs",
-								schema: JSON.stringify(schema),
+								schema: canonicalJson(schema),
 							},
 						},
 					},
@@ -611,7 +612,7 @@ export async function prepareContributionGeneration(
 		evidence: context.issue.evidence,
 		comments,
 	};
-	const searchable = JSON.stringify(issueContext).normalize("NFC");
+	const searchable = canonicalJson(issueContext).normalize("NFC");
 	const namePhrase = (value: string) =>
 		value
 			.normalize("NFC")
@@ -708,7 +709,7 @@ export async function prepareContributionGeneration(
 		modelCatalogue,
 		context.issue.evidence.length,
 	);
-	const user = JSON.stringify({
+	const user = canonicalJson({
 		issue: issueContext,
 		catalogue: modelCatalogue,
 	});

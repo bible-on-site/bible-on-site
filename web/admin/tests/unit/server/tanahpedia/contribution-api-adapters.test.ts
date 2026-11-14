@@ -35,6 +35,27 @@ beforeEach(() => {
 	mocks.names.mockResolvedValue([{ id: nameId, name: "Main name" }]);
 	mocks.sourceLabels.mockResolvedValue({});
 });
+it("rejects mixed-case duplicate API targets and MAIN-name preconditions", () => {
+	const targetId = "Abcdef00-0000-4000-8000-000000000001";
+	const operation = { ...legacy, targetId, personNames: [] };
+	expect(() =>
+		validateApiSequence([
+			operation,
+			{ ...operation, targetId: targetId.toLowerCase() },
+		]),
+	).toThrow("more than once");
+	expect(() =>
+		validateApiSequence([
+			{
+				...operation,
+				personNames: [
+					{ id: targetId, name: "Name" },
+					{ id: targetId.toLowerCase(), name: "Name" },
+				],
+			},
+		]),
+	).toThrow("main-name");
+});
 it("adds source-fact preconditions in the explicit v2-to-v3 step", async () => {
 	const target = {
 		kind: "person_birth_date",
