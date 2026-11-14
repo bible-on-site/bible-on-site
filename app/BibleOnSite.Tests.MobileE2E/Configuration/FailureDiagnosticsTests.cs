@@ -49,10 +49,11 @@ public sealed class FailureDiagnosticsTests : IDisposable
     [Fact]
     public async Task ListeningSupervisorAcknowledgesAtomicPublicationWithoutFilesystemEvents()
     {
-        using var supervisor = new Supervisor(_directory, async (id, stream, cancellation) =>
+        using var supervisor = new Supervisor(_directory, (id, stream, cancellation) =>
         {
             Acknowledge(Path.Join(_directory, $"{id}.request.json"));
-            await ReplyAsync(id, stream, cancellation);
+            Reply(id, stream, cancellation);
+            return Task.CompletedTask;
         });
         await StartClient(() => FailureDiagnostics.WaitForCapture(_directory, "test identity", "session identity", _log.Add,
             TimeSpan.FromSeconds(1), request =>
@@ -111,21 +112,21 @@ public sealed class FailureDiagnosticsTests : IDisposable
     [InlineData("extra")]
     public async Task InvalidAcknowledgementCannotCompleteTheHandshake(string failure)
     {
-        using var supervisor = new Supervisor(_directory, async (id, stream, cancellation) =>
+        using var supervisor = new Supervisor(_directory, (id, stream, cancellation) =>
         {
             if (failure == "closed")
             {
-                return;
+                return Task.CompletedTask;
             }
             if (failure != "not-retained")
             {
                 Acknowledge(Path.Join(_directory, $"{id}.request.json"));
             }
-            await ReplyAsync(failure == "different" ? new string('0', 32) : id, stream, cancellation);
-            if (failure == "extra")
-            {
-                await stream.WriteAsync(new byte[] { 1 }, cancellation);
-            }
+            // Publish the entire invalid frame before the client can reject
+            // and close it; a second write races the client's disconnect.
+            Reply(failure == "different" ? new string('0', 32) : id, stream, cancellation,
+                extra: failure == "extra" ? "\u0001" : "");
+            return Task.CompletedTask;
         });
         await StartClient(() => FailureDiagnostics.WaitForCapture(_directory, "test", null, _log.Add,
             TimeSpan.FromSeconds(1), notificationPort: supervisor.Port));
@@ -146,7 +147,7 @@ public sealed class FailureDiagnosticsTests : IDisposable
             observed.TrySetResult(request);
             await release.Task.WaitAsync(cancellation);
             Acknowledge(request);
-            await ReplyAsync(id, stream, cancellation);
+            Reply(id, stream, cancellation);
         });
         Environment.SetEnvironmentVariable(FailureDiagnostics.DirectoryVariable, _directory);
         Environment.SetEnvironmentVariable(FailureDiagnostics.PortVariable, supervisor.Port);
@@ -256,13 +257,18 @@ public sealed class FailureDiagnosticsTests : IDisposable
         Directory.Delete(_directory, true);
     }
 
-    private static ValueTask ReplyAsync(string id, NetworkStream stream, CancellationToken cancellation) =>
-        stream.WriteAsync(Encoding.ASCII.GetBytes(id + "\n"), cancellation);
+    private static void Reply(string id, NetworkStream stream, CancellationToken cancellation, string extra = "")
+    {
+        cancellation.ThrowIfCancellationRequested();
+        stream.Write(Encoding.ASCII.GetBytes(id + "\n" + extra));
+    }
 
     private sealed class Supervisor : IDisposable
     {
         private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
-        private readonly CancellationTokenSource _deadline = new(TimeSpan.FromSeconds(5));
+        private static readonly TimeSpan Budget = TimeSpan.FromSeconds(5);
+        private readonly CancellationTokenSource _deadline = new(Budget);
+        private readonly ManualResetEventSlim _listening = new();
         public string Port { get; }
         public Task Completion { get; }
 
@@ -271,18 +277,27 @@ public sealed class FailureDiagnosticsTests : IDisposable
             _listener.Start();
             Port = ((IPEndPoint)_listener.LocalEndpoint).Port.ToString(CultureInfo.InvariantCulture);
             var cancellation = _deadline.Token;
-            Completion = ReceiveAsync();
-            async Task ReceiveAsync()
+            // Production runs the supervisor in a separate process. Give this
+            // in-process stand-in its own thread too: async socket continuations
+            // on a loaded simulator host must not consume the client's one-second
+            // protocol budget merely waiting for the test pool to schedule them.
+            Completion = Task.Factory.StartNew(Receive, CancellationToken.None,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            _listening.Wait(cancellation);
+            void Receive()
             {
-                using var client = await _listener.AcceptTcpClientAsync(cancellation).ConfigureAwait(false);
+                using var stop = cancellation.Register(_listener.Stop);
+                _listening.Set();
+                using var client = _listener.AcceptTcpClient();
+                using var close = cancellation.Register(client.Dispose);
                 using var stream = client.GetStream();
                 var notification = new byte[33];
-                await stream.ReadExactlyAsync(notification, cancellation).ConfigureAwait(false);
+                stream.ReadExactly(notification);
                 Assert.Equal((byte)'\n', notification[32]);
                 var id = Encoding.ASCII.GetString(notification, 0, 32);
                 Assert.Matches("^[a-f0-9]{32}$", id);
                 Assert.True(File.Exists(Path.Join(directory, $"{id}.request.json")));
-                await receive(id, stream, cancellation).ConfigureAwait(false);
+                receive(id, stream, cancellation).GetAwaiter().GetResult();
             }
         }
 
@@ -291,6 +306,7 @@ public sealed class FailureDiagnosticsTests : IDisposable
             _deadline.Cancel();
             _listener.Stop();
             _deadline.Dispose();
+            _listening.Dispose();
         }
     }
 
