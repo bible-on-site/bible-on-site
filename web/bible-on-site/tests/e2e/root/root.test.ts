@@ -1,5 +1,6 @@
 // import { test, expect } from "@playwright/test";
 
+import sharp from "sharp";
 import { expect, test } from "../../util/playwright/test-fixture";
 
 const ROOT_URL = "/";
@@ -167,6 +168,19 @@ test.describe("Root page", () => {
 				document.documentElement.clientWidth,
 		);
 		expect(overflow).toBeLessThanOrEqual(1);
+
+		// SVG viewBox letterboxing can leave an unpainted strip even when
+		// the mask loads and its element meets the shelf. Check real pixels
+		// along the rendered edge, not only the element's geometry.
+		const { data, info } = await sharp(await divider.screenshot())
+			.raw()
+			.toBuffer({ resolveWithObject: true });
+		const shelfRgb = (shelfBg.match(/\d+/g) ?? []).map(Number);
+		for (const fraction of [0.25, 0.5, 0.75]) {
+			const x = Math.floor(info.width * fraction);
+			const offset = ((info.height - 2) * info.width + x) * info.channels;
+			expect([...data.subarray(offset, offset + 3)]).toEqual(shelfRgb);
+		}
 	});
 
 	test("Bulletin→shelf edge tracks the shelf surface in dark mode", async ({
