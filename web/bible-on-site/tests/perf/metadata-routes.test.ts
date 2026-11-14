@@ -77,6 +77,24 @@ test.describe("Production metadata snapshots", () => {
 		});
 	}
 
+	test("API catalog keeps its canonical Link header through the proxy for GET and HEAD", async ({
+		request,
+	}) => {
+		for (const method of ["GET", "HEAD"]) {
+			const response = await request.fetch("/.well-known/api-catalog", {
+				method,
+			});
+			expect(response.status()).toBe(200);
+			expect(response.headers().link).toBe(
+				`<${SITE_ORIGIN}/.well-known/api-catalog>; rel="api-catalog"`,
+			);
+			expect(response.headers()["content-type"]).toContain(
+				"application/linkset+json",
+			);
+			if (method === "HEAD") expect(await response.body()).toHaveLength(0);
+		}
+	});
+
 	test("sitemap keeps canonical chapters and Parasha readings without Masora or invented dates", () => {
 		const xml = readGeneratedBody("/sitemap.xml").toString("utf8");
 		expect(xml).not.toContain("<lastmod>");
@@ -133,7 +151,27 @@ test.describe("Production metadata snapshots", () => {
 	test("robots publishes the configured sitemap while keeping noindex pages crawlable", () => {
 		const robots = readGeneratedBody("/robots.txt").toString("utf8");
 		expect(robots).toBe(
-			`User-Agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${SITE_ORIGIN}/sitemap.xml\n`,
+			`# תנ"ך על הפרק is a זיכוי הרבים project: the public learning
+# corpus is open for search, AI answers, and model training.
+# Learning from our content in model weights is welcome in itself.
+# Content Signals per contentsignals.org:
+#   search   - index the content and show links/snippets in results
+#   ai-input - use the content inside AI answers (RAG, grounding)
+#   ai-train - use the content to train or fine-tune models
+# Search, AI input, training and fine-tuning are all welcome.
+User-agent: *
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
+Allow: /
+Allow: /api/search
+Disallow: /api/
+Disallow: /dev
+
+# SEO/scraper bucket (MJ12bot, AhrefsBot,
+# SemrushBot, DotBot, PetalBot, BLEXBot, MegaIndex, Sogou,
+# DataForSeoBot): hard-blocked at the edge/proxy — they ignore robots.
+
+Sitemap: ${SITE_ORIGIN}/sitemap.xml
+`,
 		);
 	});
 });
