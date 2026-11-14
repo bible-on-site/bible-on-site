@@ -789,30 +789,22 @@
     "priority": 50
   },
   {
-    "compDate": "[1105, 1115]",
-    "id": 105,
-    "name": "מדרש לקח טוב",
-    "parshanId": 65,
-    "priority": 1305,
-    "pubDate": "[1887]"
-  },
-  {
     "compDate": "[750, 850]",
-    "id": 106,
+    "id": 105,
     "name": "מדרש משלי",
     "parshanId": 44,
     "priority": 950,
     "pubDate": "[1893]"
   },
   {
-    "id": 107,
+    "id": 106,
     "name": "מדרש תנאים",
     "parshanId": 44,
     "priority": 1645
   },
   {
     "compDate": "[500, 800]",
-    "id": 108,
+    "id": 107,
     "name": "מדרש תנחומא",
     "parshanId": 62,
     "priority": 700,
@@ -820,7 +812,7 @@
   },
   {
     "compDate": "[200]",
-    "id": 109,
+    "id": 108,
     "name": "מכילתא דרבי ישמעאל",
     "parshanId": 62,
     "priority": 400,
@@ -828,7 +820,7 @@
   },
   {
     "compDate": "[200, 500]",
-    "id": 110,
+    "id": 109,
     "name": "מכילתא דרבי שמעון בן יוחאי",
     "parshanId": 44,
     "priority": 400,

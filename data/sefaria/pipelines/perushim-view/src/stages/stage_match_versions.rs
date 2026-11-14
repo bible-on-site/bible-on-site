@@ -8,7 +8,8 @@ use bson::{Document, doc};
 
 /// Returns the `$match` stage document.
 ///
-/// Filters for documents where `versions_count > 0`.
+/// Drops ordinary works without versions. Reviewed manual maps pass through so
+/// extraction reports a missing required edition instead of silently omitting it.
 pub fn build() -> Document {
     doc! {
         "$match": {
@@ -16,7 +17,7 @@ pub fn build() -> Document {
                 { "versions_count": { "$gt": 0 } },
                 // A missing mapped edition must fail extraction, not silently
                 // remove Tanchuma from the generated catalog again.
-                { "enTitle": "Midrash Tanchuma" }
+                { "enTitle": { "$in": ["Midrash Tanchuma", "Midrash Mishlei"] } }
             ]
         }
     }

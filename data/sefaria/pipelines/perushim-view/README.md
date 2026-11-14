@@ -129,8 +129,7 @@ interpret a parashah, siman, or midrash chapter number as a biblical chapter.
 |------|---------|
 | מדרש תנחומא | Manually reviewed dictionary for each source paragraph |
 | מכילתא דרבי ישמעאל | Biblical coordinates in the 5784 dump; explicit verse-indexed `Chapter` alternative structure in the newer tractate layout |
-| מדרש לקח טוב | Verified book/chapter/verse/midrash arrays |
-| מדרש משלי | Verified chapter/verse text |
+| מדרש משלי | Manually reviewed homily-to-verse dictionary for the Buber edition |
 | מדרש תנאים על דברים | Verified default node with chapter/verse/paragraph arrays |
 | מכילתא דרבי שמעון בן יוחאי | Verified chapter/verse arrays in both default and Additions nodes |
 
@@ -191,7 +190,20 @@ the manifest, then run the full pipeline integration test. Never refresh a
 fingerprint merely to suppress a source-change error. Tsel and Buber editions
 must receive their own reviewed mappings before inclusion.
 
-#### Mekhilta and remaining gaps
+#### Mishlei, Mekhilta and remaining gaps
+
+Midrash Mishlei's schema labels its second address `Verse`, but the Buber text
+uses packed homily numbers: source 11:2 explains Proverbs 11:21, and source 31:2
+explains Proverbs 31:10-11. Its
+[`mishlei_mapping.json`](src/data/mishlei_mapping.json) maps all 140 source slots
+at their deepest text granularity, producing 397 verse assignments. The two
+literal missing-chapter placeholders at source 3:1 and 18:1 are explicitly null.
+Original homily text is preserved, including when several subjects share it.
+[`mishlei_manifest.json`](src/data/mishlei_manifest.json) pins the Buber edition
+and exact reviewed source texts; ten citation/text corrections between the
+2024 export and current dump have been manually checked. Unknown changes fail
+generation. Ordinary source links and packed homily positions are not used as
+automatic verse assignments.
 
 The newer Mekhilta layout requires both `startingAddress` and
 `skipped_addresses` when reading verse-indexed references. Inclusive paragraph
@@ -207,6 +219,9 @@ mixed numbering and erroneous coordinates. See
 מדרש שכל טוב also needs a manual audit: supplementary paragraphs stored under
 Genesis 15:21 and 19:35 explain other verses, including other chapters, despite
 having valid coordinates. See [the supplementary-paragraph mapping follow-up](https://github.com/bible-on-site/bible-on-site/issues/3371).
+לקח טוב also contains misplaced paragraphs and appended collections, including
+material for Exodus 27:21 under 27:20 and the next parashah's proem under
+Leviticus 5:26. See [the complete paragraph-audit follow-up](https://github.com/bible-on-site/bible-on-site/issues/3374).
 Other literary midrashim such as רבה and פרקי דרבי אליעזר are not automatically
 included. Their chapter numbers need separate, reviewed verse maps.
 

@@ -7,6 +7,10 @@
 					{ "$or": [
 						{ "$ne": ["$$idx_title", "Midrash Tanchuma"] },
 						{ "$eq": ["$versionTitle", "Midrash Tanchuma -- Torat Emet"] }
+					] },
+					{ "$or": [
+						{ "$ne": ["$$idx_title", "Midrash Mishlei"] },
+						{ "$eq": ["$versionTitle", "מדרש משלי - שלמה באבער"] }
 					] }
 				]
 			},
