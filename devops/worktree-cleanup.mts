@@ -226,12 +226,29 @@ function newestTopLevelMtime(dir: string): number {
 
 /**
  * Newest mtime across the source tree — nested edits count too, so a
- * worktree someone is actively editing is never considered idle. Heavy
- * output dirs and .git are skipped: their churn is the pruning target, not
- * activity. Bounded by maxEntries; returns the newest seen so far.
+ * worktree someone is actively editing is never considered idle.
+ * Regenerable output dirs (.venv, node_modules, build output) and .git are
+ * skipped: their churn is the pruning target, not activity, and a huge one
+ * must not consume the scan budget before real source is seen. The
+ * top-level pass always completes first, so the basic signal survives any
+ * budget cap. Budget exhaustion or an unreadable subtree returns "now" —
+ * unknown activity must look recent, never old.
  */
-function deepestMtime(root: string, maxEntries = 5000): number {
+export function deepestMtime(root: string, maxEntries = 5000): number {
 	let newest = 0;
+	try {
+		for (const e of readdirSync(root, { withFileTypes: true })) {
+			if (e.name === ".git") continue;
+			try {
+				const m = statSync(join(root, e.name)).mtimeMs;
+				if (m > newest) newest = m;
+			} catch {
+				/* entry vanished */
+			}
+		}
+	} catch {
+		return Date.now(); // root unreadable — unknown, not idle
+	}
 	let seen = 0;
 	const stack = [""];
 	while (stack.length) {
@@ -240,19 +257,18 @@ function deepestMtime(root: string, maxEntries = 5000): number {
 		try {
 			entries = readdirSync(join(root, rel), { withFileTypes: true });
 		} catch {
-			continue;
+			return Date.now(); // unreadable subtree — unknown, not idle
 		}
 		for (const e of entries) {
-			if (++seen > maxEntries) return newest;
+			if (++seen > maxEntries) return Date.now(); // budget — unknown, not idle
 			if (e.name === ".git") continue;
-			const p = join(root, rel, e.name);
 			if (e.isDirectory()) {
-				if (!HEAVY_DIRS.has(e.name))
+				if (!REGENERABLE_NAMES.has(e.name))
 					stack.push(rel ? `${rel}/${e.name}` : e.name);
 				continue;
 			}
 			try {
-				const m = statSync(p).mtimeMs;
+				const m = statSync(join(root, rel, e.name)).mtimeMs;
 				if (m > newest) newest = m;
 			} catch {
 				/* entry vanished */
@@ -585,6 +601,12 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 	const containers = new Set<string>();
 	for (const wt of worktrees) containers.add(dirname(resolve(wt.path)));
 
+	// Worktrees holding uncommitted or unverifiable content are never
+	// heavy-pruned — name-matched dirs there can hold source. An open-PR or
+	// detached worktree can be dirty too, so this is tracked separately from
+	// the disposition.
+	const unprunable = new Set<string>();
+
 	const hasUpstream = (b: string) =>
 		(tryGit(repo, ["config", "--get", `branch.${b}.remote`]) ?? "").trim() !== "";
 
@@ -599,6 +621,10 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 				"--untracked-files=normal",
 			]) ?? "ERROR",
 		);
+		const cleanEnough =
+			changes.length === 0 || isBenignDirty(changes, benignRe);
+		if (!cleanEnough || ignored.some((p) => !isRegenerableIgnored(p)))
+			unprunable.add(wpath);
 		let disp: Disposition;
 		const bp = remoteOk && wt.branch !== null ? branchPr(repo, wt.branch) : null;
 		if (!remoteOk || (wt.branch !== null && bp === null)) {
@@ -706,8 +732,8 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 	}
 
 	// Prune regenerable heavy dirs inside kept, idle worktrees. Worktrees
-	// holding uncommitted or unverifiable content (real-dirty, ignored-local)
-	// are left completely alone — name-matched dirs there can hold source.
+	// holding uncommitted or unverifiable content are left completely alone —
+	// name-matched dirs there can hold source.
 	const prunable = new Set<Disposition>([
 		"open-pr",
 		"stale-fresh",
@@ -716,7 +742,7 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 	]);
 	if (cli.heavy) {
 		for (const [wpath, disp] of report.kept) {
-			if (!prunable.has(disp)) continue;
+			if (!prunable.has(disp) || unprunable.has(wpath)) continue;
 			const idleMs = now - lastActivityMs(wpath);
 			if (idleMs < cli.idleDays * 86400_000) continue;
 			for (const d of heavyDirs(wpath, 3)) {

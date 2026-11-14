@@ -4,6 +4,7 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	rmSync,
+	utimesSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,6 +12,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
 	classify,
+	deepestMtime,
 	isBenignDirty,
 	isCheckoutRemnant,
 	isIgnoredDir,
@@ -122,6 +124,43 @@ describe("isBenignDirty", () => {
 		assert.ok(!isBenignDirty(["?? new-file"], benignRe));
 		assert.ok(!isBenignDirty([" M src/x.ts"], benignRe));
 		assert.ok(!isBenignDirty([], benignRe));
+	});
+});
+
+describe("deepestMtime", () => {
+	it("sees nested edits, skips regenerable dirs, and fails safe on budget", () => {
+		const root = mkdtempSync(join(tmpdir(), "wt-mtime-"));
+		try {
+			const old = new Date("2020-01-01");
+			const fresh = new Date();
+			mkdirSync(join(root, "src", "deep"), { recursive: true });
+			mkdirSync(join(root, ".venv", "lib"), { recursive: true });
+			writeFileSync(join(root, "src", "deep", "edit.ts"), "x");
+			writeFileSync(join(root, ".venv", "lib", "new.py"), "x");
+			writeFileSync(join(root, "top.ts"), "x");
+			utimesSync(join(root, "top.ts"), old, old);
+			utimesSync(join(root, "src", "deep", "edit.ts"), fresh, fresh);
+			utimesSync(join(root, ".venv", "lib", "new.py"), fresh, fresh);
+
+			// A nested edit counts even though the top level looks old.
+			assert.ok(
+				Math.abs(deepestMtime(root) - fresh.getTime()) < 60_000,
+				"nested fresh mtime should win over old top-level",
+			);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+	it("returns ~now on budget exhaustion — unknown is not idle", () => {
+		const root = mkdtempSync(join(tmpdir(), "wt-mtime-"));
+		try {
+			for (let i = 0; i < 5; i++)
+				writeFileSync(join(root, `f${i}.ts`), "x");
+			const before = Date.now();
+			assert.ok(deepestMtime(root, 2) >= before);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });
 
