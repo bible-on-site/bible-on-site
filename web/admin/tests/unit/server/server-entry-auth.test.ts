@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("~/server/tanahpedia/contribution-migrations.server", () => ({
+	ensureContributionMigrationsStarted: vi.fn(),
+}));
+
 // Issue #2611 regression: an expired Cognito session used to return the
 // login 302 for server-function calls too, which a cross-origin fetch cannot
 // follow — the client saw an opaque network error and autosave retried

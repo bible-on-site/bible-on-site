@@ -1,0 +1,134 @@
+import { describe, expect, it } from "vitest";
+import {
+	type ApiVersionAdapter,
+	ApiVersionError,
+	convertApiVersion,
+} from "~/lib/tanahpedia/api-versions";
+
+type Payload = Record<string, string | number>;
+const adapters: ApiVersionAdapter<Payload>[] = [
+	{
+		from: 1,
+		to: 2,
+		id: "rename-parent",
+		convert: ({ parentId, ...rest }) => ({ ...rest, parentPersonId: parentId }),
+	},
+	{
+		from: 2,
+		to: 1,
+		id: "restore-parent",
+		convert: ({ parentPersonId, ...rest }) => ({
+			...rest,
+			parentId: parentPersonId,
+		}),
+	},
+	{
+		from: 2,
+		to: 3,
+		id: "drop-retired-field",
+		convert: ({ retired, ...rest }) => rest,
+	},
+	{
+		from: 3,
+		to: 2,
+		id: "restore-default",
+		convert: (payload) => ({ ...payload, retired: 0 }),
+	},
+];
+describe("transitive API contract conversion", () => {
+	it("composes upgrades and permits removed fields without approval policy", () => {
+		const original = { parentId: "person-1", retired: 7 };
+		const result = convertApiVersion<Payload>(original, 1, 3, adapters);
+		expect(result.payload).toEqual({ parentPersonId: "person-1" });
+		expect(result.steps.map((step) => step.id)).toEqual([
+			"rename-parent",
+			"drop-retired-field",
+		]);
+		expect(original).toEqual({ parentId: "person-1", retired: 7 });
+		expect(result).not.toHaveProperty("requiresReview");
+	});
+	it("composes explicitly registered reverse conversions", () =>
+		expect(
+			convertApiVersion({ parentPersonId: "person-1" }, 3, 1, adapters).payload,
+		).toEqual({ parentId: "person-1", retired: 0 }));
+	it("does not invent missing paths or implicitly reverse adapters", () => {
+		expect(() => convertApiVersion({}, 1, 4, adapters)).toThrow(
+			"No supported conversion",
+		);
+		expect(() => convertApiVersion({}, 2, 1, [adapters[0]])).toThrow(
+			ApiVersionError,
+		);
+	});
+	it("returns a detached current-version payload", () => {
+		const original = { parentId: "person" };
+		const result = convertApiVersion(original, 1, 1, adapters);
+		result.payload.parentId = "changed";
+		expect(original.parentId).toBe("person");
+		expect(result.steps).toEqual([]);
+	});
+	it("chooses the shortest explicit route deterministically and terminates cycles", () => {
+		const result = convertApiVersion<Payload>({ parentId: "p" }, 1, 3, [
+			...adapters,
+			{ from: 1, to: 3, id: "direct", convert: () => ({ converted: 1 }) },
+		]);
+		expect(result.steps.map((step) => step.id)).toEqual(["direct"]);
+		expect(result.payload).toEqual({ converted: 1 });
+	});
+	it("protects input even against mutating legacy adapters", () => {
+		const input = { parentId: "original" };
+		convertApiVersion(input, 1, 2, [
+			{
+				from: 1,
+				to: 2,
+				id: "legacy",
+				convert: (payload) => {
+					payload.parentId = "converted";
+					return payload;
+				},
+			},
+		]);
+		expect(input.parentId).toBe("original");
+	});
+	it.each([0, -1, 1.5, NaN, Infinity])(
+		"rejects invalid version %s",
+		(version) =>
+			expect(() => convertApiVersion({}, version, 1, adapters)).toThrow(
+				"positive integers",
+			),
+	);
+	it("rejects ambiguous adapter registries", () => {
+		for (const edges of [
+			[adapters[0], adapters[0]],
+			[{ ...adapters[0], to: 1 }],
+			[{ ...adapters[0], id: "" }],
+			[adapters[0], { ...adapters[0], id: "duplicate-pair" }],
+		])
+			expect(() => convertApiVersion({}, 1, 2, edges)).toThrow("unique");
+	});
+	it("reports the failing step and leaves the original payload recoverable", () => {
+		expect(() =>
+			convertApiVersion({}, 1, 2, [
+				{
+					from: 1,
+					to: 2,
+					id: "missing-equivalent",
+					convert: () => {
+						throw new Error("cannot convert operation");
+					},
+				},
+			]),
+		).toThrow("missing-equivalent failed: cannot convert operation");
+		expect(() =>
+			convertApiVersion({}, 1, 2, [
+				{
+					from: 1,
+					to: 2,
+					id: "bad",
+					convert: () => {
+						throw "bad";
+					},
+				},
+			]),
+		).toThrow("unsupported payload");
+	});
+});

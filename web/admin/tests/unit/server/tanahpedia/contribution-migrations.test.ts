@@ -1,0 +1,275 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	migrationBlocked,
+	validateApiSequence,
+} from "~/lib/tanahpedia/contribution-api";
+import {
+	assertMergeAllowed,
+	type Contribution,
+	type ReviewedChange,
+	reviewStatus,
+} from "~/lib/tanahpedia/contributions";
+
+const mocks = vi.hoisted(() => ({
+	query: vi.fn(),
+	ensure: vi.fn(),
+	read: vi.fn(),
+	save: vi.fn(),
+}));
+vi.mock("~/server/db", () => ({ query: mocks.query }));
+vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
+	ensureContributionSchema: mocks.ensure,
+	readContribution: mocks.read,
+	saveContribution: mocks.save,
+	withContributions: async (fn: (conn: object) => Promise<unknown>) => fn({}),
+}));
+
+import {
+	ensureContributionMigrationsStarted,
+	migrateContributionSequence,
+	migrateOpenContributionPrs,
+} from "~/server/tanahpedia/contribution-migrations.server";
+
+const id = "00000000-0000-4000-8000-000000000001";
+const author = {
+	id: "alice",
+	name: "Alice",
+	kind: "human" as const,
+	isDoradsoft: false,
+};
+const owner = { ...author, id: "owner", name: "doradsoft", isDoradsoft: true };
+const changes: ReviewedChange[] = [
+	{
+		kind: "metadata",
+		targetId: id,
+		before: { displayName: "old" },
+		after: { displayName: "new" },
+		labels: {},
+	},
+];
+function pr(): Contribution {
+	return {
+		id,
+		number: 1,
+		kind: "pr",
+		state: "open",
+		title: "Test",
+		description: "Test",
+		author,
+		assignee: { kind: "unassigned" },
+		evidence: [{ citation: "בראשית א א", quote: "", url: null, note: "" }],
+		changes: structuredClone(changes),
+		issueId: null,
+		revision: 4,
+		version: 7,
+		events: [
+			{
+				id: "review",
+				kind: "approved",
+				actor: owner,
+				body: "approved",
+				at: "2026-11-14T00:00:00.000Z",
+				revision: 4,
+			},
+		],
+		createdAt: "2026-11-14T00:00:00.000Z",
+		updatedAt: "2026-11-14T00:00:00.000Z",
+		closeIssue: false,
+		provenance: null,
+	};
+}
+beforeEach(() => vi.clearAllMocks());
+describe("pending PR API migration", () => {
+	it("composes adapters while preserving approval, revision, base state and raw original", () => {
+		const item = pr();
+		item.apiVersion = 3;
+		const original = structuredClone(item);
+		expect(
+			migrateContributionSequence(item, {
+				version: 1,
+				adapters: [
+					{ from: 3, to: 2, id: "first", convert: (p) => p },
+					{ from: 2, to: 1, id: "second", convert: (p) => p },
+				],
+			}),
+		).toBe("migrated");
+		expect(item.apiVersion).toBe(1);
+		expect(item.revision).toBe(4);
+		expect(item.events).toEqual(original.events);
+		expect(reviewStatus(item)).toBe("approved");
+		expect(() => assertMergeAllowed(item)).not.toThrow();
+		expect(item.apiMigration?.steps.map((s) => s.id)).toEqual([
+			"first",
+			"second",
+		]);
+		expect(JSON.parse(item.apiMigration?.sequence ?? "null")).toEqual(
+			original.changes,
+		);
+	});
+	it("permits an adapter to drop retired fields and operations without invalidating approval", () => {
+		const item = pr();
+		item.apiVersion = 2;
+		expect(
+			migrateContributionSequence(item, {
+				version: 1,
+				adapters: [
+					{ from: 2, to: 1, id: "remove-operation", convert: () => [] },
+				],
+			}),
+		).toBe("migrated");
+		expect(item.changes).toEqual([]);
+		expect(() => assertMergeAllowed(item)).not.toThrow();
+		expect(reviewStatus(item)).toBe("approved");
+	});
+	it("keeps the entire plain sequence and approval on conversion failure", () => {
+		const item = pr(),
+			original = structuredClone(item);
+		item.apiVersion = 2;
+		expect(migrateContributionSequence(item)).toBe("failed");
+		expect(migrationBlocked(item)).toBe(true);
+		expect(item.changes).toEqual(original.changes);
+		expect(item.events).toEqual(original.events);
+		expect(item.revision).toBe(4);
+		expect(item.apiMigration?.error).toContain("No supported conversion");
+		expect(() => assertMergeAllowed(item)).toThrow("Couldn't migrate");
+		expect(migrateContributionSequence(item)).toBe("unchanged");
+		expect(item.apiMigrationHistory).toHaveLength(1);
+	});
+	it("marks invalid adapter output gray and can recover on a later successful deployment", () => {
+		const item = pr();
+		item.apiVersion = 2;
+		migrateContributionSequence(item, {
+			version: 1,
+			adapters: [
+				{ from: 2, to: 1, id: "bad", convert: () => [{ kind: "removed" }] },
+			],
+		});
+		expect(migrationBlocked(item)).toBe(true);
+		expect(item.apiVersion).toBe(2);
+		expect(
+			migrateContributionSequence(item, {
+				version: 1,
+				adapters: [{ from: 2, to: 1, id: "fixed", convert: (p) => p }],
+			}),
+		).toBe("migrated");
+		expect(migrationBlocked(item)).toBe(false);
+		expect(item.apiMigrationHistory).toHaveLength(2);
+		expect(reviewStatus(item)).toBe("approved");
+	});
+	it("handles thrown non-Error adapters without discarding original input", () => {
+		const item = pr();
+		item.apiVersion = 2;
+		migrateContributionSequence(item, {
+			version: 1,
+			adapters: [
+				{
+					from: 2,
+					to: 1,
+					id: "broken",
+					convert: () => {
+						throw null;
+					},
+				},
+			],
+		});
+		expect(item.apiMigration?.status).toBe("failed");
+		expect(item.changes).toEqual(changes);
+	});
+	it("skips issues and finalized PRs and leaves valid current PRs untouched", () => {
+		for (const item of [
+			{ ...pr(), kind: "issue" as const },
+			{ ...pr(), state: "closed" as const },
+			{ ...pr(), state: "merged" as const },
+			pr(),
+		]) {
+			expect(migrateContributionSequence(item)).toBe("unchanged");
+			expect(item.apiMigration).toBeUndefined();
+		}
+	});
+	it("validates converted bases, targets, labels and both sides rather than silently dropping fields", () => {
+		expect(validateApiSequence(changes)).toEqual(changes);
+		expect(validateApiSequence([])).toEqual([]);
+		for (const sequence of [
+			null,
+			Array(41).fill(changes[0]),
+			[...changes, ...changes],
+			[{ ...changes[0], before: undefined }],
+			[{ ...changes[0], after: { displayName: "new", retired: 1 } }],
+			[{ ...changes[0], before: { displayName: "old", retired: 1 } }],
+			[{ ...changes[0], labels: { bad: 7 } }],
+			[
+				{
+					...changes[0],
+					kind: "entry",
+					before: { title: "old" },
+					after: {
+						title: "T",
+						uniqueName: "T",
+						entityType: "PERSON",
+						displayName: "T",
+					},
+				},
+			],
+		])
+			expect(() => validateApiSequence(sequence)).toThrow();
+	});
+	it("scans beyond 500 UI rows, locks each open PR and persists only changes", async () => {
+		const rows = Array.from({ length: 501 }, (_, i) => ({
+			id: String(i + 1),
+			number: i + 1,
+		}));
+		mocks.query.mockImplementation(async (sql: string, params?: number[]) =>
+			sql.includes("MAX(number)")
+				? [{ lastNumber: 501 }]
+				: rows.filter((r) => r.number > (params?.[0] ?? 0)).slice(0, 100),
+		);
+		mocks.read.mockImplementation(async (_conn: object, rowId: string) => ({
+			...pr(),
+			id: rowId,
+			apiVersion: 2,
+		}));
+		const result = await migrateOpenContributionPrs({
+			version: 1,
+			adapters: [{ from: 2, to: 1, id: "upgrade", convert: (p) => p }],
+		});
+		expect(result).toMatchObject({ scanned: 501, migrated: 501, failed: 0 });
+		expect(mocks.save).toHaveBeenCalledTimes(501);
+		expect(mocks.read).toHaveBeenCalledWith({}, "501", true);
+	});
+	it("continues conversion failures but propagates storage errors for CD retry", async () => {
+		mocks.query
+			.mockResolvedValueOnce([{ lastNumber: 2 }])
+			.mockResolvedValueOnce([
+				{ id: "1", number: 1 },
+				{ id: "2", number: 2 },
+			]);
+		mocks.read
+			.mockResolvedValueOnce({ ...pr(), apiVersion: 2 })
+			.mockResolvedValueOnce(pr());
+		expect(await migrateOpenContributionPrs()).toMatchObject({
+			scanned: 2,
+			failed: 1,
+			unchanged: 1,
+		});
+		mocks.query
+			.mockResolvedValueOnce([{ lastNumber: 1 }])
+			.mockRejectedValueOnce(new Error("database unavailable"));
+		await expect(migrateOpenContributionPrs()).rejects.toThrow(
+			"database unavailable",
+		);
+	});
+	it("startup runs once and reports infrastructure failure without an unhandled rejection", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		mocks.ensure.mockRejectedValueOnce(new Error("unavailable"));
+		ensureContributionMigrationsStarted();
+		await vi.waitFor(() => expect(log).toHaveBeenCalled());
+		mocks.ensure.mockResolvedValue(undefined);
+		mocks.query.mockResolvedValue([{ lastNumber: 0 }]);
+		ensureContributionMigrationsStarted();
+		await vi.waitFor(() => expect(mocks.query).toHaveBeenCalled());
+		const calls = mocks.ensure.mock.calls.length;
+		ensureContributionMigrationsStarted();
+		expect(mocks.ensure).toHaveBeenCalledTimes(calls);
+		log.mockRestore();
+	});
+});

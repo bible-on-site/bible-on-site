@@ -242,6 +242,10 @@ jobs:
         # API publication owns its protected ECS handover. Website/admin retain
         # their existing EventBridge trigger; the API rule is disabled.
 
+      - name: Upgrade every open PR to the deployed API contract
+        if: ${{ steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'api' }}
+        run: node devops/github/release/migrate-contribution-prs.mjs
+
       - name: Save API handover evidence
         if: ${{ always() && steps.guard.outputs.deploy == 'true' && env.MODULE_NAME == 'api' }}
         uses: actions/upload-artifact@v7

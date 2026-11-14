@@ -143,8 +143,8 @@ export function TopBar({ archive = false }: { archive?: boolean }) {
 							to={admin ? "/" : "/archive"}
 							className="flex items-center gap-2"
 						>
-							<span className="text-2xl">📖</span>
-							<span className="text-xl font-bold bg-linear-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
+							<span className="text-xl sm:text-2xl">📖</span>
+							<span className="text-base sm:text-xl font-bold bg-linear-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
 								ניהול תנ"ך על הפרק
 							</span>
 						</Link>
@@ -162,7 +162,18 @@ export function TopBar({ archive = false }: { archive?: boolean }) {
 							)}
 						</div>
 					</div>
-					<div className="flex items-center gap-4">
+					<div className="flex items-center gap-1 sm:gap-4">
+						{admin && (
+							<Link
+								to="/issues"
+								search={{}}
+								className={linkClass}
+								activeProps={activeLink}
+							>
+								<span className="hidden lg:inline">פניות ושינויים</span>
+								<span className="lg:hidden">פניות</span>
+							</Link>
+						)}
 						{archive ? (
 							session.data ? (
 								<>

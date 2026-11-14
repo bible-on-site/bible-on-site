@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("~/server/tanahpedia/contribution-migrations.server", () => ({
+	ensureContributionMigrationsStarted: vi.fn(),
+}));
+
+import { ensureContributionMigrationsStarted } from "~/server/tanahpedia/contribution-migrations.server";
+
 const mocks = vi.hoisted(() => ({
 	appFetch: vi.fn(),
 	rescan: vi.fn(),
@@ -67,6 +73,11 @@ afterEach(() => {
 });
 
 describe("admin startup integration", () => {
+	it("starts the API migration pass on production boot", async () => {
+		vi.stubEnv("NODE_ENV", "production");
+		await loadEntry();
+		expect(ensureContributionMigrationsStarted).toHaveBeenCalledOnce();
+	});
 	it("runs dedication catch-up once at boot and awaits request-time worker startup before enforcing auth", async () => {
 		let releaseWorker: () => void = () => {};
 		mocks.startWorker.mockImplementationOnce(
