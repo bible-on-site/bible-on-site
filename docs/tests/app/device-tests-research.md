@@ -29,9 +29,9 @@ job (install/startup/packaged-Release coverage included).
 |---|---|---|---|
 | Pure logic, VM commands, converters, services | ✅ ~2 200 tests, ~19 tests/s with coverage | overkill | ✅ runs too, no added value |
 | Real MAUI handlers / platform views | ❌ (no MAUI platform assemblies) | indirect, black-box only | ✅ `IView.ToHandler(mauiContext)` (PoC-verified) |
-| XAML inflation & code-behind | ❌ every `*.xaml.cs` excluded | indirect | ✅ `LoadFromXaml` / compiled pages (PoC-verified) |
-| Layout, measure/arrange, RTL rendering | ❌ | screenshots/element rects via remote calls | ✅ platform `Measure`, real text shaping (PoC-verified) |
-| UI-thread affinity / lifecycle / activity recreation | ❌ (stubs) | indirectly observed | ✅ `MainThread.InvokeOnMainThreadAsync`, recreation is first-class in their runner (PoC-verified) |
+| XAML inflation & code-behind | ❌ every `*.xaml.cs` excluded | indirect | ✅ `LoadFromXaml` on inline markup (PoC-verified); compiled-page inflation not yet exercised |
+| Layout, measure/arrange, RTL rendering | ❌ | screenshots/element rects via remote calls | ✅ platform `Measure`/`Layout` on a Hebrew label (PoC-verified); RTL output assertions not yet exercised |
+| UI-thread affinity / lifecycle / activity recreation | ❌ (stubs) | indirectly observed | ✅ `MainThread.InvokeOnMainThreadAsync` (PoC-verified); activity recreation is first-class in upstream's runner — the guard is vendored into the PoC but not exercised |
 | Platform services (Preferences, SecureStorage, FileSystem, media, permissions) | ❌ (interfaces stubbed) | exercised only through UI | ✅ real implementations (PoC: DeviceInfo/AppInfo) |
 | WebView rendering | ❌ | element-level | ✅ real WebView inside test app |
 | Gestures, permissions prompts, multi-window, system integration | ❌ | ✅ only option (real user input path) | partial — in-app gestures possible, OS-level permission prompts not |

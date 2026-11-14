@@ -18,7 +18,10 @@ public class ParityTests
         text.Spans.Add(new Span { Text = "פסוק" });
         text.Spans.Add(qriSpan);
 
-        var merged = (FormattedString)new PasukMarkerTextConverter { MarkerColor = Colors.Red }
+        // ResolvedMarkerColor follows the running app's RequestedTheme: on a
+        // dark-mode device it selects MarkerColorDark, so both theme colors are
+        // pinned to keep this assertion theme-independent.
+        var merged = (FormattedString)new PasukMarkerTextConverter { MarkerColor = Colors.Red, MarkerColorDark = Colors.Red }
             .Convert(new object[] { text, "א", 16.0 }, typeof(object), null, CultureInfo.InvariantCulture);
 
         Assert.Equal(3, merged.Spans.Count);
@@ -89,6 +92,10 @@ public class DeviceOnlyTests
                 Android.Views.View.MeasureSpec.MakeMeasureSpec(0, Android.Views.MeasureSpecMode.Unspecified),
                 Android.Views.View.MeasureSpec.MakeMeasureSpec(0, Android.Views.MeasureSpecMode.Unspecified));
             Assert.True(platformView.MeasuredWidth > 0 && platformView.MeasuredHeight > 0);
+            // Arrange: the name claims it, so assign real bounds and check the
+            // platform view accepted them.
+            platformView.Layout(0, 0, platformView.MeasuredWidth, platformView.MeasuredHeight);
+            Assert.True(platformView.Width > 0 && platformView.Height > 0);
         });
     }
 
