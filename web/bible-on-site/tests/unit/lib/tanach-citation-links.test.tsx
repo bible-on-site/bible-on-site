@@ -273,6 +273,42 @@ describe("renderFamilyTreeCitationLine", () => {
 	);
 
 	it.each([
+		{
+			line: 'רש"י בראשית א א; מדרש תנחומא בראשית ט ב; שמות א ב',
+			links: [
+				{
+					label: 'רש"י בראשית א א',
+					href: build929PerushHref("בראשית", "א", "א", 'רש"י'),
+				},
+				{ label: "שמות א ב", href: "/929/51#pasuk-2" },
+			],
+		},
+		{
+			line: 'בראשית א א; מדרש תנחומא בראשית ט ב; רש"י שמות א ב',
+			links: [
+				{ label: "בראשית א א", href: "/929/1#pasuk-1" },
+				{
+					label: 'רש"י שמות א ב',
+					href: build929PerushHref("שמות", "א", "ב", 'רש"י'),
+				},
+			],
+		},
+	])("renders each commentary clause safely in $line", ({ line, links }) => {
+		const { container } = render(
+			<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+		);
+
+		expect(container.textContent).toBe(line);
+		expect(container.querySelectorAll("a")).toHaveLength(links.length);
+		for (const { label, href } of links) {
+			expect(screen.getByRole("link", { name: label })).toHaveAttribute(
+				"href",
+				href,
+			);
+		}
+	});
+
+	it.each([
 		'רש"י על בראשית א א',
 		'רש"י: (בראשית א א)',
 		'רש"י — על (בראשית א א)',
