@@ -20,13 +20,24 @@ const HEBREW_PASUK_TOKEN =
 const PERUSH_REF_SEPARATOR = /^[\s\p{P}]*(?:על[\s\p{P}]*)?$/u;
 
 function stripParentheticalAnnotations(text: string): string {
-	let separator = text;
-	let previous = "";
-	while (separator !== previous) {
-		previous = separator;
-		separator = separator.replace(/\([^()]*\)/gu, "");
+	const characters: string[] = [];
+	const openings: number[] = [];
+	for (const character of text) {
+		if (character === "(") {
+			openings.push(characters.length);
+			characters.push(character);
+		} else if (character === ")") {
+			const opening = openings.pop();
+			if (opening === undefined) {
+				characters.push(character);
+			} else {
+				characters.length = opening;
+			}
+		} else {
+			characters.push(character);
+		}
 	}
-	return separator;
+	return characters.join("");
 }
 
 function plainNumeral(raw: string): string {
