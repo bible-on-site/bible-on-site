@@ -69,9 +69,11 @@ sefer, `note_idx`); hit bodies resolve from the compressed `note_blob` rows in
 the notes DB instead of duplicating ~250 MB of commentary text inside the
 index. `SearchIndexService` still reads the older fat layout when a legacy pack
 or cached index supplies it, and swaps a fat working index for the slim file
-once the pack redelivers. `audit_android_aab_size.py` gates the packaged AAB on
-this layout plus on-demand delivery for every asset pack, an optional-payload
-allowlist inside `base/`, and a compressed-size budget per module.
+once the pack redelivers. `devops/github/ci/audit-android-aab-size.mjs` gates the
+packaged AAB on this layout plus on-demand delivery for every asset pack, an
+optional-payload allowlist inside `base/`, and base-module and index size budgets.
+App CI and store packaging both audit their real bundles and upload the JSON
+module-size report.
 
 ## Install paths
 

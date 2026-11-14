@@ -483,8 +483,13 @@ jobs:
       # their on-demand packs, the search index must keep the slim layout, and
       # the base module must not cross its compressed budget. The JSON report
       # keeps a machine-readable breakdown for the next size complaint.
+      - name: Setup Node.js for AAB audit
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
       - name: Audit AAB module sizes and asset-pack layout
-        run: python app/devops/audit_android_aab_size.py --package "$(find app/.artifacts -name '*.aab' -print -quit)" --json-out app/.artifacts/aab-size-report.json
+        run: node devops/github/ci/audit-android-aab-size.mjs --package "$(find app/.artifacts -name '*.aab' -print -quit)" --json-out app/.artifacts/aab-size-report.json
 
       # #2970: the archive Play receives is this zip — its entries must be
       # symbol-bearing arm64 ELFs named after, and build-ID-matched to, the

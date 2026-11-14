@@ -30,8 +30,6 @@ engines:
       - "data/annotations/publish.py"
       - "data/annotations/test_publish.py"
       - "app/devops/verify_android_dex_metadata.py"
-      - "app/devops/audit_android_aab_size.py"
-      - "app/devops/test_audit_android_aab_size.py"
   # Opengrep's `Semgrep_javascript.lang.security.html-in-template-string` marks
   # any interpolated template that resembles markup as XSS. These node:test
   # files embed real `xcrun simctl`/`CoreSimulatorService` `<Debug>:` log-record
