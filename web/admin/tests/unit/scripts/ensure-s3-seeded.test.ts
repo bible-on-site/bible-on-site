@@ -1,5 +1,11 @@
 import { execFile, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
@@ -57,7 +63,7 @@ describe("ensure-s3-seeded", () => {
 			join(stubDir, "cargo_stub.rs"),
 			`fn main() {
 	let m = std::env::var("POPULATE_MARKER").expect("POPULATE_MARKER");
-	std::fs::write(m, "ok").expect("marker");
+	std::fs::write(m, std::env::var("S3_REGION").unwrap_or_default()).expect("marker");
 }
 `,
 		);
@@ -143,6 +149,14 @@ describe("ensure-s3-seeded", () => {
 		mode = "empty";
 		await run();
 		expect(populated()).toBe(true);
+	}, 30_000);
+
+	it("seeds an empty local bucket with the RustFS region when AWS uses the production region", async () => {
+		mode = "empty";
+		await run({ S3_REGION: "il-central-1" });
+		expect(readFileSync(join(dir, "populated.marker"), "utf8")).toBe(
+			"us-east-1",
+		);
 	}, 30_000);
 
 	it("runs the populator when the dev bucket is missing", async () => {

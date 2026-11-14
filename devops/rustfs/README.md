@@ -23,6 +23,11 @@ origins on port 3101. The initialization command must succeed before starting th
 `bun run docker:up` runs both commands and stops on failure. Readiness checks wait for
 storage and IAM, not just the process.
 
+RustFS uses `us-east-1` for bucket creation and request signing. Local Admin,
+population tasks, and asset-mirror writes select that region independently of
+the production source bucket. With no `S3_ENDPOINT`, Admin uses `S3_REGION`,
+then `AWS_REGION`, then `il-central-1`; existing AWS asset URLs keep their region.
+
 ## Existing MinIO installations
 
 RustFS uses a new `rustfs_data` named volume. The old `minio_data` volume is left
