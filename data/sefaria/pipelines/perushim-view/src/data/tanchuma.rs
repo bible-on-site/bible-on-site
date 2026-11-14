@@ -41,7 +41,10 @@ struct Manifest {
 #[serde(rename_all = "camelCase")]
 struct SourceSection {
     hash: String,
+    #[serde(default)]
+    reviewed_hashes: Vec<String>,
     paragraph_counts: Vec<usize>,
+    paragraph_hashes: Vec<Vec<Vec<String>>>,
 }
 
 fn mapping() -> Result<Mapping> {
@@ -138,28 +141,45 @@ fn is_empty(value: &Bson) -> bool {
 fn validate_source(key: &str, source: &Bson, expected: &SourceSection) -> Result<()> {
     let mut hash = 0xcbf29ce484222325;
     fingerprint(source, &mut hash)?;
-    ensure!(
-        format!("{hash:016x}") == expected.hash,
-        "Tanchuma {key}: source text/segmentation changed; manually review the dictionary before regenerating"
-    );
+    let actual_hash = format!("{hash:016x}");
+    let known_snapshot =
+        actual_hash == expected.hash || expected.reviewed_hashes.contains(&actual_hash);
     let simanim = source
         .as_array()
         .context("Tanchuma parashah must contain simanim")?;
     ensure!(
-        simanim.len() == expected.paragraph_counts.len(),
+        simanim.len() == expected.paragraph_counts.len()
+            && simanim.len() == expected.paragraph_hashes.len(),
         "Tanchuma {key}: siman count changed"
     );
     for (index, siman) in simanim.iter().enumerate() {
-        let count = match siman {
-            Bson::String(_) => 1,
-            Bson::Array(paragraphs) => paragraphs.len(),
+        let paragraphs = match siman {
+            Bson::String(_) => std::slice::from_ref(siman),
+            Bson::Array(paragraphs) => paragraphs.as_slice(),
             _ => bail!("Tanchuma {key} {}: unsupported siman shape", index + 1),
         };
         ensure!(
-            count == expected.paragraph_counts[index],
+            paragraphs.len() == expected.paragraph_counts[index]
+                && paragraphs.len() == expected.paragraph_hashes[index].len(),
             "Tanchuma {key} {}: paragraph count changed",
             index + 1
         );
+        if !known_snapshot {
+            // A cached dump can contain an intermediate combination of the
+            // independently reviewed transcription corrections. Accept only
+            // exact reviewed paragraph texts, keeping the same segmentation.
+            for (paragraph_idx, paragraph) in paragraphs.iter().enumerate() {
+                let mut hash = 0xcbf29ce484222325;
+                fingerprint(paragraph, &mut hash)?;
+                ensure!(
+                    expected.paragraph_hashes[index][paragraph_idx]
+                        .contains(&format!("{hash:016x}")),
+                    "Tanchuma {key} {}:{}: source text changed; manually review the dictionary before regenerating",
+                    index + 1,
+                    paragraph_idx + 1
+                );
+            }
+        }
     }
     Ok(())
 }
@@ -366,9 +386,40 @@ mod tests {
         let source = bson!([["changed"]]);
         let expected = SourceSection {
             hash: "wrong".into(),
+            reviewed_hashes: Vec::new(),
             paragraph_counts: vec![1],
+            paragraph_hashes: vec![vec![vec!["unreviewed".into()]]],
         };
         assert!(validate_source("Bereshit", &source, &expected).is_err());
+    }
+
+    #[test]
+    fn accepts_only_individually_reviewed_transcription_variants_in_cached_snapshots() {
+        fn hash(value: &Bson) -> String {
+            let mut hash = 0xcbf29ce484222325;
+            fingerprint(value, &mut hash).unwrap();
+            format!("{hash:016x}")
+        }
+        let historical = bson!([["old first", "old second"]]);
+        let current = bson!([["new first", "new second"]]);
+        let expected = SourceSection {
+            hash: hash(&historical),
+            reviewed_hashes: vec![hash(&current)],
+            paragraph_counts: vec![2],
+            paragraph_hashes: vec![vec![
+                vec![hash(&bson!("old first")), hash(&bson!("new first"))],
+                vec![hash(&bson!("old second")), hash(&bson!("new second"))],
+            ]],
+        };
+        // Each paragraph is known, although this combination is neither of
+        // the two complete snapshots used during the manual source review.
+        assert!(
+            validate_source("sample", &bson!([["old first", "new second"]]), &expected).is_ok()
+        );
+        assert!(validate_source("sample", &bson!([["old first", "unknown"]]), &expected).is_err());
+        assert!(
+            validate_source("sample", &bson!([["old first"], ["new second"]]), &expected).is_err()
+        );
     }
 
     #[test]

@@ -11,7 +11,6 @@ use super::{extract::Note, perek_mapping};
 
 const TITLES: &[&str] = &[
     "Midrash Lekach Tov",
-    "Midrash Sekhel Tov",
     "Midrash Mishlei",
     "Midrash Tannaim on Deuteronomy",
     "Mekhilta DeRabbi Shimon Ben Yochai",
@@ -52,17 +51,25 @@ pub fn flatten(doc: &Document, perush_id: i64) -> Result<Vec<Note>> {
         return Ok(output.notes);
     }
 
+    // Sefaria removed Tannaim's default-node wrapper after the 2024 dump.
+    // Both known layouts retain the same biblical chapter/verse coordinates;
+    // verify the complete simple schema before accepting its chapter array.
+    if title == "Midrash Tannaim on Deuteronomy" && !schema.contains_key("nodes") {
+        validate_schema(
+            schema,
+            &["Integer", "Integer", "Integer"],
+            Some("Paragraph"),
+        )?;
+        output.chapters("Deuteronomy", version, 3)?;
+        return Ok(output.notes);
+    }
+
     // These names/order come from the pinned June 2024 Sefaria index schemas.
     let (keys, addresses, paragraph): (&[&str], &[&str], Option<&str>) = match title {
         "Midrash Lekach Tov" => (
             &["Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy"],
             &["Integer", "Integer", "Integer"],
             Some("Midrash"),
-        ),
-        "Midrash Sekhel Tov" => (
-            &["Bereshit", "Shemot", "Vayikra"],
-            &["Perek", "Pasuk", "Integer"],
-            Some("Paragraph"),
         ),
         "Midrash Tannaim on Deuteronomy" => (
             &["default"],
@@ -173,15 +180,9 @@ impl Output {
         }
         let (sefer, additional) = perek_mapping::english_node_key_to_sefer(book)
             .context("Unrecognized midrash biblical book")?;
-        let canonical = match sefer {
-            1 => "Genesis",
-            2 => "Exodus",
-            3 => "Leviticus",
-            _ => book,
-        };
         let counts = self
             .counts
-            .get(canonical)
+            .get(book)
             .context("Missing biblical verse counts")?;
         let chapters = text.as_array().context("Expected midrash chapters array")?;
         for (chapter_idx, chapter) in chapters.iter().enumerate() {
@@ -322,6 +323,53 @@ mod tests {
     }
 
     #[test]
+    fn tannaim_simple_and_default_schemas_preserve_identical_biblical_coordinates() {
+        let title = "Midrash Tannaim on Deuteronomy";
+        let chapters = bson!([[["first", "second"], ["third"]], [["next chapter"]]]);
+        let mut simple = doc! {
+            "enTitle": title,
+            "schema": node(title, &["Integer", "Integer", "Integer"], Some("Paragraph")),
+            "versions": [chapters.clone()]
+        };
+        let complex = doc! {
+            "enTitle": title,
+            "schema": {"nodes": [node("default", &["Integer", "Integer", "Integer"], Some("Paragraph"))]},
+            "versions": [{"default": chapters.clone()}]
+        };
+        let coordinates = |notes: Vec<Note>| {
+            notes
+                .into_iter()
+                .map(|note| (note.perek_id, note.pasuk, note.note_idx, note.note_content))
+                .collect::<Vec<_>>()
+        };
+        let actual = coordinates(flatten(&simple, 9).unwrap());
+        assert_eq!(actual, coordinates(flatten(&complex, 9).unwrap()));
+        assert_eq!(
+            actual,
+            vec![
+                (154, 1, 0, "first".into()),
+                (154, 1, 1, "second".into()),
+                (154, 2, 0, "third".into()),
+                (155, 1, 0, "next chapter".into()),
+            ]
+        );
+        simple
+            .get_document_mut("schema")
+            .unwrap()
+            .insert("sectionNames", bson!(["Chapter", "Siman", "Paragraph"]));
+        assert!(flatten(&simple, 9).is_err());
+        simple.insert(
+            "schema",
+            node(title, &["Integer", "Integer", "Integer"], Some("Paragraph")),
+        );
+        simple.insert("versions", bson!([{"default": chapters}]));
+        assert!(
+            flatten(&simple, 9).is_err(),
+            "simple schemas require a chapter array"
+        );
+    }
+
+    #[test]
     fn mishlei_uses_proverbs_coordinates_and_never_infers_simanim() {
         let source = doc! {
             "enTitle": "Midrash Mishlei", "schema": node("Midrash Mishlei", &["Perek", "Integer"], None),
@@ -332,6 +380,7 @@ mod tests {
         assert!(!supports("Sifra"));
         assert!(!supports("Midrash Tanchuma"));
         assert!(!supports("Midrash Aggadah"));
+        assert!(!supports("Midrash Sekhel Tov"));
     }
 
     #[test]
@@ -355,10 +404,12 @@ mod tests {
     }
 
     /// Uses the dump's index/text collections, including the competing one-note
-    /// Mishlei edition. The test never retrieves source texts over the network.
+    /// Mishlei edition. Checks both reviewed Tannaim generations: the 2024
+    /// default-node edition and the current simple schema. The test never
+    /// retrieves source texts over the network.
     #[cfg(feature = "integration")]
     #[tokio::test]
-    async fn pinned_mongo_pipeline_preserves_all_five_verse_aligned_midrashim() {
+    async fn mongo_pipeline_preserves_supported_verse_aligned_midrashim() {
         let host = std::env::var("MONGO_HOST").unwrap_or_else(|_| "localhost".into());
         let port = std::env::var("MONGO_PORT").unwrap_or_else(|_| "27017".into());
         let database =
@@ -384,14 +435,12 @@ mod tests {
                         (1, 1),
                         1..=187,
                     ),
-                    "Midrash Sekhel Tov" => (
-                        6890,
-                        1572,
-                        "Sechel Tob, Berlin 1900-1901",
-                        (15, 12),
-                        1..=117,
-                    ),
                     "Midrash Mishlei" => (140, 140, "מדרש משלי - שלמה באבער", (718, 1), 718..=748),
+                    "Midrash Tannaim on Deuteronomy"
+                        if !doc.get_document("schema").unwrap().contains_key("nodes") =>
+                    {
+                        (3978, 498, "Berlin, 1908", (154, 1), 154..=187)
+                    }
                     "Midrash Tannaim on Deuteronomy" => {
                         (3979, 497, "Berlin, 1908", (154, 1), 154..=187)
                     }

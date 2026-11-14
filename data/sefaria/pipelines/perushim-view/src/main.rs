@@ -113,6 +113,7 @@ async fn run(cli: Cli) -> Result<()> {
 
     let results = fetch_from_mongodb(&cli.dump_name).await?;
     let extracted = data::extract::extract(&results)?;
+    let extracted = data::baseline_loader::preserve_bundled(extracted)?;
     generate_output(format, &extracted, &cli)
 }
 
