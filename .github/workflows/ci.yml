@@ -2500,6 +2500,9 @@ jobs:
       - name: Test Android DEX metadata verification
         run: python3 -m unittest discover -s devops -p test_verify_android_dex_metadata.py
 
+      - name: Test Android AAB size and layout audit
+        run: python3 -m unittest discover -s devops -p test_audit_android_aab_size.py
+
       - name: Setup Python for signing validation tests
         uses: actions/setup-python@v7
         with:

@@ -4,6 +4,7 @@ A synthetic bundle mirroring the real layout, plus negative fixtures
 proving bloat and mispackaging are rejected (#3309).
 """
 
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
@@ -20,7 +21,7 @@ from audit_android_aab_size import (
 
 
 def write_search_index(path: Path, slim: bool = True) -> None:
-    with sqlite3.connect(path) as db:
+    with closing(sqlite3.connect(path)) as db, db:
         db.execute("CREATE TABLE search_metadata (name TEXT PRIMARY KEY, fingerprint TEXT)")
         if slim:
             db.execute("CREATE TABLE notes_documents (rowid INTEGER PRIMARY KEY,"
@@ -35,8 +36,8 @@ def write_search_index(path: Path, slim: bool = True) -> None:
 def write_aab(path: Path, *, slim_index: bool = True, perushim: bool = True,
               on_demand: bool = True, base_payloads: dict | None = None,
               recitations: int = 2, search_index: bool = True) -> None:
-    workdir = Path(tempfile.mkdtemp())
-    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as bundle:
+    with tempfile.TemporaryDirectory() as temporary, zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as bundle:
+        workdir = Path(temporary)
         bundle.writestr("base/manifest/AndroidManifest.xml", b"manifest")
         bundle.writestr("base/assets/sefaria-dump-5784-sivan-4.tanah_view.sqlite", b"tanah")
         bundle.writestr("base/assets/sefaria-dump-5784-sivan-4.perushim_catalog.sqlite", b"catalog")

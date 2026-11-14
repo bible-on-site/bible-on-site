@@ -455,6 +455,50 @@ public class SearchIndexServiceTests
     }
 
     [Fact]
+    public async Task SlimDeliveredIndex_ResolvesDistinctNotesForTheSameVerseAndAuthor()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "סימן ראשון"), (7, 1, 1, 1, "סימן שני")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן ראשון"),
+            "INSERT INTO notes_documents VALUES (2,1,1,7,1,1)",
+            "INSERT INTO notes(rowid,Text) VALUES (2,'סימן שני')"]);
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Select(hit => hit.Text).Should().BeEquivalentTo("סימן ראשון", "סימן שני");
+    }
+
+    [Fact]
+    public async Task SlimDeliveredIndex_DropsHitsWhoseIdentityIsMissingFromTheBlob()
+    {
+        await using var storage = new TestStorage();
+        var perakim = await SeedAsync(storage);
+        await storage.CreateDatabaseAsync(NotesDb,
+            [.. NotesDbV2.Statements((7, 1, 1, 0, "סימן מובהק")),
+            "INSERT INTO _metadata VALUES ('build_timestamp','42')"]);
+        var delivered = await storage.CreateDatabaseAsync(PerushimNotesService.SearchIndexDbName,
+            [.. DeliveredIndexStatements($"v4:42:n{SearchText.NormalizationVersion}", "סימן מובהק"),
+            "INSERT INTO notes_documents VALUES (2,1,1,7,1,99)",
+            "INSERT INTO notes(rowid,Text) VALUES (2,'סימן חסר')"]);
+        await delivered.CloseAsync();
+        var notes = PerushimNotesService.CreateForTesting(NullPad().Object, storage.Root);
+        await using var index = new SearchIndexService(perakim, notes, Path.Join(storage.Root, "search.sqlite"));
+
+        var hits = await index.SearchAsync("סימן", new HashSet<SearchFilter> { SearchFilter.Perush },
+            new HashSet<int> { 1 }, 10, TestContext.Current.CancellationToken);
+
+        hits.Should().ContainSingle().Which.Text.Should().Be("סימן מובהק");
+    }
+
+    [Fact]
     public async Task FatWorkingIndex_KeepsServingStoredTextUntilTheSlimIndexArrives()
     {
         await using var storage = new TestStorage();
