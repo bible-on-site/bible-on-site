@@ -113,10 +113,58 @@ describe("TosSection", () => {
 	it("provides an actual contact and qualified access, correction and deletion request rights", () => {
 		render(<TosSection />);
 		expect(
-			screen.getByRole("link", { name: "tanah.site@gmail.com" }),
+			screen.getAllByRole("link", { name: "tanah.site@gmail.com" })[0],
 		).toHaveAttribute("href", "mailto:tanah.site@gmail.com");
 		expect(policyText()).toContain("זכויות עיון ותיקון לפי הדין");
 		expect(policyText()).toContain("לבקשות מחיקת מידע");
 		expect(policyText()).toContain("נבחן כל בקשה בהתאם לדין");
+	});
+
+	it("states the qualified content provenance and copyright best-efforts", () => {
+		render(<TosSection />);
+		expect(
+			screen.getByRole("heading", {
+				level: 3,
+				name: "זכויות יוצרים ופניות בנושא תוכן",
+			}),
+		).toBeInTheDocument();
+		const notice = document.getElementById("tos")?.textContent ?? "";
+		// Qualified provenance wording, not absolute claims.
+		for (const detail of [
+			"למיטב ידיעתנו",
+			"אישורים שקיבלנו מהרבנים המחברים",
+			"בכפוף להיקף ההרשאה",
+			"שימוש הוגן",
+			"בהתאם לנסיבות העניין",
+			"נכתבו במלואם על ידינו באופן מקורי",
+			"אינו התחייבות",
+			"אין בפרסום תוכן כדי להקנות זכויות",
+		]) {
+			expect(notice).toContain(detail);
+		}
+	});
+
+	it("promises the reporter transparent updates at every handling stage", () => {
+		render(<TosSection />);
+		const notice = document.getElementById("tos")?.textContent ?? "";
+		expect(notice).toContain("אישור על קבלת הפנייה");
+		expect(notice).toContain("עדכונים על הטיפול ועל כל שינוי בסטטוס");
+		expect(notice).toContain("עדכון עם סיום הטיפול");
+		expect(notice).toContain("השארת הפריט, הסרתו או כל סיום אחר");
+		// No-admission / reservation clause — without blanket immunity.
+		expect(notice).toContain("אינם מהווים, כשלעצמם, הודאה");
+		expect(notice).toContain("ויתור על טענה, זכות או הגנה");
+		expect(notice).not.toContain("אין עלינו כל אחריות");
+	});
+
+	it("exposes a working reporting email for copyright concerns", () => {
+		render(<TosSection />);
+		const links = screen.getAllByRole("link", {
+			name: "tanah.site@gmail.com",
+		});
+		expect(links.length).toBeGreaterThanOrEqual(2);
+		for (const link of links) {
+			expect(link).toHaveAttribute("href", "mailto:tanah.site@gmail.com");
+		}
 	});
 });

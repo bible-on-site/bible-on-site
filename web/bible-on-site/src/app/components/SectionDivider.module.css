@@ -1,0 +1,58 @@
+/* Shared landing-section edge (#3267): the NON-SYMMETRIC artistic
+   transition between two feature bands — an asymmetric multi-lobe wave in
+   the same design language as the sefarim/numbers/contact waves, never a
+   mirror-symmetric dome (PR #3293 review). `--divider-paint` carries the
+   NEXT section's surface color, so the neighbor's color visibly invades
+   the owning band in uneven lobes — the two surfaces literally play
+   across the seam in light, dark and high-contrast themes. The paint
+   lives in CSS, not in tinted SVG assets. */
+.divider {
+	background-color: var(--divider-paint, #fff);
+	bottom: 0;
+	height: 3em;
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-size: 100% 100%;
+	mask-size: 100% 100%;
+	pointer-events: none;
+	position: absolute;
+	right: 0;
+	width: 100%;
+	z-index: 3;
+}
+
+/* The wave asset ships per-width curves like the other root dividers. */
+@media screen and (max-width: 960px) {
+	.divider {
+		-webkit-mask-image: url(/root/daily-bulletin-devider-xs.svg);
+		mask-image: url(/root/daily-bulletin-devider-xs.svg);
+	}
+}
+
+@media screen and (min-width: 960px) and (max-width: 1280px) {
+	.divider {
+		-webkit-mask-image: url(/root/daily-bulletin-devider-s.svg);
+		mask-image: url(/root/daily-bulletin-devider-s.svg);
+	}
+}
+
+@media screen and (min-width: 1280px) and (max-width: 1920px) {
+	.divider {
+		-webkit-mask-image: url(/root/daily-bulletin-devider-m.svg);
+		mask-image: url(/root/daily-bulletin-devider-m.svg);
+	}
+}
+
+@media screen and (min-width: 1920px) and (max-width: 2560px) {
+	.divider {
+		-webkit-mask-image: url(/root/daily-bulletin-devider-l.svg);
+		mask-image: url(/root/daily-bulletin-devider-l.svg);
+	}
+}
+
+@media screen and (min-width: 2560px) {
+	.divider {
+		-webkit-mask-image: url(/root/daily-bulletin-devider-xl.svg);
+		mask-image: url(/root/daily-bulletin-devider-xl.svg);
+	}
+}

@@ -37,6 +37,16 @@ describe("DailyBulletinSection", () => {
 		expect(container.querySelector("#bulletin-email")).not.toBeNull();
 	});
 
+	it("renders the shared shaped edge separating it from the sefarim shelf", () => {
+		const { container } = render(<DailyBulletinSection />);
+		// #3267: the bulletin owns its boundary with the shelf via the shared
+		// SectionDivider contract — a decorative, assistive-tech-hidden edge.
+		const divider = container.querySelector(
+			'#bulletin > div[aria-hidden="true"]:last-child',
+		);
+		expect(divider).not.toBeNull();
+	});
+
 	it("embeds the reusable signup form in the email card", () => {
 		render(<DailyBulletinSection />);
 		expect(screen.getByRole("checkbox")).toBeInTheDocument();
