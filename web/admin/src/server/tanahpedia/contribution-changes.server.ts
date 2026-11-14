@@ -277,7 +277,7 @@ export async function applyChange(
 		after: change.after,
 	});
 	if (isContributionRecordKind(input.kind)) {
-		await applyContributionRecord(conn, change);
+		await applyContributionRecord(conn, change, source);
 		return;
 	}
 	if (input.kind === "alias_mapping") {

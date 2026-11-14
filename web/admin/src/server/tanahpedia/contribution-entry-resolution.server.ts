@@ -28,7 +28,7 @@ export async function resolveEntryCreations(
 		}
 		const canonical = await txQuery<{ id: string }>(
 			conn,
-			"SELECT id FROM tanahpedia_entry WHERE unique_name=? FOR SHARE",
+			"SELECT id FROM tanahpedia_entry WHERE unique_name=? FOR UPDATE",
 			[input.after.uniqueName],
 		);
 		let candidates = canonical;
@@ -64,7 +64,7 @@ export async function resolveEntryCreations(
 		if (!candidates.length && input.targetId)
 			candidates = await txQuery<{ id: string }>(
 				conn,
-				"SELECT id FROM tanahpedia_entry WHERE id=? FOR SHARE",
+				"SELECT id FROM tanahpedia_entry WHERE id=? FOR UPDATE",
 				[input.targetId],
 			);
 		if (!candidates.length) {
@@ -76,6 +76,13 @@ export async function resolveEntryCreations(
 				"The proposed creation now resolves to an ambiguous alias. Choose its existing destination manually.",
 			);
 		const entryId = candidates[0].id;
+		// Match merge's entry -> entity order, before the metadata read takes
+		// entity locks. Concurrent resolutions serialize on the entry as well.
+		await txQuery(
+			conn,
+			"SELECT id FROM tanahpedia_entry WHERE id=? FOR UPDATE",
+			[entryId],
+		);
 		const entities = await txQuery<{ id: string }>(
 			conn,
 			"SELECT e.id FROM tanahpedia_entry_entity ee JOIN tanahpedia_entity e ON e.id=ee.entity_id WHERE ee.entry_id=? AND e.entity_type=? ORDER BY e.id FOR SHARE",

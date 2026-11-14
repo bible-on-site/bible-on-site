@@ -11,6 +11,7 @@ import type {
 	ReviewedChange,
 } from "~/lib/tanahpedia/contributions";
 import { txExecute, txQuery, txQueryOne } from "../db";
+import { saveEntryTitleRevisioned } from "./revisions";
 
 export interface ContributionReference {
 	id: string | number;
@@ -198,11 +199,22 @@ export async function assertNoContributionDependents(
 export async function applyContributionRecord(
 	conn: PoolConnection,
 	change: ReviewedChange,
+	source = "contribution-pr",
 ): Promise<void> {
 	if (!isContributionRecordKind(change.kind))
 		throw new Error("Unsupported structured operation");
 	const spec = CONTRIBUTION_RECORDS[change.kind],
 		a = change.after;
+	if (change.kind === "entry_title") {
+		if (!a || typeof a.title !== "string")
+			throw new Error("An entry title is required");
+		await saveEntryTitleRevisioned(conn, {
+			id: change.targetId,
+			title: a.title,
+			source,
+		});
+		return;
+	}
 	if (!a) {
 		await assertNoContributionDependents(conn, spec.table, change.targetId);
 		await txExecute(conn, `DELETE FROM ${spec.table} WHERE id=?`, [

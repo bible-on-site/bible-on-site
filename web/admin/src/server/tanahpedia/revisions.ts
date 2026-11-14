@@ -170,17 +170,26 @@ export const saveEntryRevisioned = createServerOnlyFn(
 	async function saveEntryRevisioned(
 		conn: mysql.PoolConnection,
 		input: SaveEntryRevisionedInput,
+		options: { metadataOnly?: boolean } = {},
 	): Promise<SavedEntryRevisionResult> {
-		assertEntryFieldsValid(input);
+		if (options.metadataOnly) {
+			if (!input.title?.trim())
+				throw new Error(`${VALIDATION_PREFIX}: כותרת הערך חייבת להיות מלאה`);
+		} else assertEntryFieldsValid(input);
 		const entry = await lockEntry(conn, input.id);
 		if (!entry) throw new Error("Entry not found");
 
 		const head = await headRevision(conn, input.id);
 		assertFreshBase(head?.id ?? null, input.baseRevisionId);
 
-		const nextContent = input.content || null;
+		const nextContent = options.metadataOnly
+			? entry.content
+			: input.content || null;
+		const nextUniqueName = options.metadataOnly
+			? entry.unique_name
+			: input.unique_name;
 		const unchanged =
-			entry.unique_name === input.unique_name &&
+			entry.unique_name === nextUniqueName &&
 			entry.title === input.title &&
 			entry.content === nextContent;
 
@@ -203,7 +212,7 @@ export const saveEntryRevisioned = createServerOnlyFn(
 				[
 					headId,
 					input.id,
-					input.unique_name,
+					nextUniqueName,
 					input.title,
 					nextContent,
 					source,
@@ -215,7 +224,7 @@ export const saveEntryRevisioned = createServerOnlyFn(
 			await txExecute(
 				conn,
 				"UPDATE tanahpedia_entry SET unique_name = ?, title = ?, content = ? WHERE id = ?",
-				[input.unique_name, input.title, nextContent, input.id],
+				[nextUniqueName, input.title, nextContent, input.id],
 			);
 		} catch (err) {
 			throw translateEntryWriteError(err);
@@ -234,6 +243,31 @@ export const saveEntryRevisioned = createServerOnlyFn(
 			headRevisionId: headId,
 			previousUniqueName: entry.unique_name,
 		};
+	},
+);
+
+/** Metadata PRs advance the same immutable revision chain as the prose editor.
+ * The server reads the current body/address under its row lock; neither field
+ * is accepted from the metadata proposal, including empty and legacy values. */
+export const saveEntryTitleRevisioned = createServerOnlyFn(
+	async (
+		conn: mysql.PoolConnection,
+		input: { id: string; title: string; source: string },
+	) => {
+		const entry = await lockEntry(conn, input.id);
+		if (!entry) throw new Error("Entry not found");
+		const head = await headRevision(conn, input.id);
+		return saveEntryRevisioned(
+			conn,
+			{
+				...input,
+				unique_name: entry.unique_name,
+				content: entry.content ?? "",
+				baseRevisionId: head?.id ?? null,
+				notes: "Metadata-only contribution merge",
+			},
+			{ metadataOnly: true },
+		);
 	},
 );
 

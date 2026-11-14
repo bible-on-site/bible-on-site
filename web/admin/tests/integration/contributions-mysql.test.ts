@@ -1362,6 +1362,145 @@ describe("all category contribution operations against canonical MySQL", () => {
 			}
 		},
 	);
+	async function titleFixture(content: string | null) {
+		const id = randomUUID(),
+			uniqueName = `Cafe\u0301-${randomUUID()}`;
+		await conn.execute(
+			"INSERT INTO tanahpedia_entry (id,title,unique_name,content) VALUES (?,'Before',?,?)",
+			[id, uniqueName, content],
+		);
+		return { id, uniqueName, content };
+	}
+	it.each([null, "", "<p>Current body</p>"])(
+		"records title history and preserves the exact body/address (%s)",
+		async (content) => {
+			const entry = await titleFixture(content);
+			const pr = await mergeChanges([
+				{ kind: "entry_title", targetId: entry.id, after: { title: "After" } },
+			]);
+			const [rows] = await conn.execute<RowDataPacket[]>(
+				"SELECT title,unique_name,content FROM tanahpedia_entry WHERE id=?",
+				[entry.id],
+			);
+			expect(rows[0]).toEqual({
+				title: "After",
+				unique_name: entry.uniqueName,
+				content,
+			});
+			const [history] = await conn.execute<RowDataPacket[]>(
+				"SELECT proposed_title,proposed_unique_name,proposed_content,status,source FROM tanahpedia_entry_revision WHERE entry_id=?",
+				[entry.id],
+			);
+			expect(history).toHaveLength(1);
+			expect(history[0]).toMatchObject({
+				proposed_title: "After",
+				proposed_unique_name: entry.uniqueName,
+				proposed_content: content,
+				status: "APPLIED",
+				source: `contribution-pr:${pr.number}`,
+			});
+			const revisions = await import("~/server/tanahpedia/revisions");
+			await expect(
+				store.withContributions((tx) =>
+					revisions.saveEntryRevisioned(tx, {
+						id: entry.id,
+						title: "Before",
+						unique_name: entry.uniqueName,
+						content: "<p>Stale editor</p>",
+						baseRevisionId: null,
+					}),
+				),
+			).rejects.toThrow("REVISION_CONFLICT");
+		},
+	);
+	it("preserves prose edited while a title-only PR waits and advances its current revision head", async () => {
+		const entry = await titleFixture("<p>Original</p>");
+		const pending = await service.createContribution(
+			{
+				kind: "pr",
+				title: "Pending title",
+				description: "נתוני בדיקה בלבד",
+				evidence,
+				changes: [
+					{
+						kind: "entry_title",
+						targetId: entry.id,
+						after: { title: "After" },
+					},
+				],
+			},
+			owner,
+		);
+		const revisions = await import("~/server/tanahpedia/revisions");
+		const prose = await store.withContributions((tx) =>
+			revisions.saveEntryRevisioned(tx, {
+				id: entry.id,
+				title: "Before",
+				unique_name: `current-body-${entry.id}`,
+				content: "<p>New current prose</p>",
+				baseRevisionId: null,
+			}),
+		);
+		await service.mergeContribution(
+			{ id: pending.id, version: pending.version },
+			owner,
+		);
+		const [rows] = await conn.execute<RowDataPacket[]>(
+			"SELECT title,unique_name,content FROM tanahpedia_entry WHERE id=?",
+			[entry.id],
+		);
+		expect(rows[0]).toEqual({
+			title: "After",
+			unique_name: `current-body-${entry.id}`,
+			content: "<p>New current prose</p>",
+		});
+		const [head] = await conn.execute<RowDataPacket[]>(
+			"SELECT proposed_content,base_revision_id FROM tanahpedia_entry_revision WHERE entry_id=? AND base_revision_id=?",
+			[entry.id, prose.headRevisionId],
+		);
+		expect(head).toHaveLength(1);
+		expect(head[0].proposed_content).toBe("<p>New current prose</p>");
+	});
+	it("rolls back title revisions along with the PR when a later role operation fails", async () => {
+		const entry = await titleFixture("<p>Unchanged</p>");
+		await mergeChanges([
+			{ kind: "prophet_role", after: { personId: ids.parent } },
+		]);
+		const pending = await service.createContribution(
+			{
+				kind: "pr",
+				title: "Atomic title revision",
+				description: "נתוני בדיקה בלבד",
+				evidence,
+				changes: [
+					{
+						kind: "entry_title",
+						targetId: entry.id,
+						after: { title: "After" },
+					},
+					{ kind: "prophet_role", after: { personId: ids.parent } },
+				],
+			},
+			owner,
+		);
+		await expect(
+			service.mergeContribution(
+				{ id: pending.id, version: pending.version },
+				owner,
+			),
+		).rejects.toThrow("Duplicate");
+		const [rows] = await conn.execute<RowDataPacket[]>(
+			"SELECT title,content FROM tanahpedia_entry WHERE id=?",
+			[entry.id],
+		);
+		expect(rows[0]).toEqual({ title: "Before", content: "<p>Unchanged</p>" });
+		const [history] = await conn.execute<RowDataPacket[]>(
+			"SELECT id FROM tanahpedia_entry_revision WHERE entry_id=?",
+			[entry.id],
+		);
+		expect(history).toHaveLength(0);
+		expect((await fresh(pending)).state).toBe("open");
+	});
 	it("rejects unique collisions instead of overwriting another unreviewed role", async () => {
 		const role = await mergeChanges([
 			{ kind: "prophet_role", after: { personId: ids.person } },
@@ -1852,6 +1991,77 @@ describe("all category contribution operations against canonical MySQL", () => {
 			{ id: refreshed.id, version: refreshed.version, action: "close" },
 			owner,
 		);
+	});
+	it("locks a resolved entry before its entity when a concurrent title merge holds that entry", async () => {
+		const name = `Resolution-lock-${randomUUID()}`;
+		const actual = await mergeChanges([
+			{
+				kind: "entry",
+				after: {
+					title: "Lock target",
+					uniqueName: `${name}-canonical`,
+					displayName: "Lock entity",
+					entityType: "PLACE",
+				},
+			},
+		]);
+		const entryId = actual.changes[0].targetId;
+		const [links] = await conn.execute<RowDataPacket[]>(
+			"SELECT entity_id FROM tanahpedia_entry_entity WHERE entry_id=?",
+			[entryId],
+		);
+		await mergeChanges([
+			{
+				kind: "alias_mapping",
+				after: { name, targets: [{ entryId, label: "" }] },
+			},
+		]);
+		const { prepareChanges } = await import(
+			"~/server/tanahpedia/contribution-changes.server"
+		);
+		await conn.beginTransaction();
+		await conn.execute(
+			"SELECT id FROM tanahpedia_entry WHERE id=? FOR UPDATE",
+			[entryId],
+		);
+		const preparing = store.withContributions((tx) =>
+			prepareChanges(
+				tx,
+				[
+					{
+						kind: "entry",
+						targetId: randomUUID(),
+						after: {
+							title: "Proposed",
+							uniqueName: name,
+							displayName: "Proposed entity",
+							entityType: "PLACE",
+						},
+					},
+				],
+				{ refresh: true },
+			),
+		);
+		let prepared: Awaited<ReturnType<typeof prepareChanges>> | undefined;
+		try {
+			await vi.waitFor(async () => {
+				const [waits] = await conn.execute<RowDataPacket[]>(
+					"SELECT requesting.OBJECT_NAME FROM performance_schema.data_lock_waits waits JOIN performance_schema.data_locks requesting ON requesting.ENGINE_LOCK_ID=waits.REQUESTING_ENGINE_LOCK_ID WHERE requesting.OBJECT_SCHEMA=? AND requesting.OBJECT_NAME='tanahpedia_entry'",
+					[schema],
+				);
+				expect(waits.length).toBeGreaterThan(0);
+			});
+			await expect(
+				conn.execute(
+					"SELECT id FROM tanahpedia_entity WHERE id=? FOR UPDATE NOWAIT",
+					[links[0].entity_id],
+				),
+			).resolves.toBeDefined();
+		} finally {
+			await conn.rollback();
+			prepared = await preparing;
+		}
+		expect(prepared.map((c) => c.kind)).toEqual(["entry_title", "metadata"]);
 	});
 	it("retains a pending creation for manual recovery when its new alias is ambiguous", async () => {
 		const name = `Ambiguous-creation-${randomUUID()}`;

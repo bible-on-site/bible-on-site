@@ -271,6 +271,12 @@ proposals even when they reference different record IDs. Initial creations still
 reject occupied alias addresses; an explicitly reviewed alias removal plus a
 replacement creation can be applied atomically.
 
+Existing-entry title edits append the normal immutable APPLIED revision, so an
+older prose-editor save conflicts instead of reverting the reviewed title. The
+server preserves the current body and canonical address exactly, including null,
+empty and legacy values. Resolution locks the entry before its entity, matching
+the merge path; a native concurrent-write regression checks that order.
+
 ## Deployment and rollback
 
 `tanahpedia_contribution_upgrade.sql` adds one InnoDB table and two queue indexes.

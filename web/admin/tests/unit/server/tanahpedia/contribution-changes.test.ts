@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 	execute: vi.fn(),
 	valid: vi.fn(),
 	metrics: vi.fn(),
+	saveTitle: vi.fn(),
 }));
 vi.mock("~/server/db", () => ({
 	txQueryOne: mocks.one,
@@ -18,6 +19,7 @@ vi.mock("~/server/db", () => ({
 }));
 vi.mock("~/server/tanahpedia/revisions", () => ({
 	assertEntryFieldsValid: mocks.valid,
+	saveEntryTitleRevisioned: mocks.saveTitle,
 }));
 vi.mock("~/server/reading-metrics", () => ({
 	recomputeEntryMetrics: mocks.metrics,
@@ -51,6 +53,19 @@ function reviewed(
 }
 
 describe("typed contribution domain API", () => {
+	it("sends title-only changes through entry revision history without a proposed body or address", async () => {
+		await applyChange(
+			conn,
+			reviewed("entry_title", { title: "New title" }, { title: "Old title" }),
+			"contribution-pr:4",
+		);
+		expect(mocks.saveTitle).toHaveBeenCalledWith(conn, {
+			id: ID,
+			title: "New title",
+			source: "contribution-pr:4",
+		});
+		expect(mocks.execute).not.toHaveBeenCalled();
+	});
 	it("rejects an occupied alias address during preparation and before writing an entry", async () => {
 		mocks.one.mockResolvedValue(null);
 		mocks.query.mockResolvedValue([{ id: OTHER }]);
