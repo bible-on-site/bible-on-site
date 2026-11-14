@@ -9,6 +9,30 @@ namespace BibleOnSite.Tests.ViewModels;
 
 public class MasoraViewModelTests
 {
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    public async Task HeaderPlayButton_RequiresBothEnabledRecitationAndPlayableAudio(bool enabled, bool audio, bool visible)
+    {
+        await using var fixture = new Fixture();
+        fixture.Model.IsQriynotEnabled = enabled;
+        fixture.Model.HasCurrentUnitRecitation = audio;
+        fixture.Model.ShowHeaderPlayButton.Should().Be(visible);
+    }
+
+    [Fact]
+    public async Task SelectionBeforeAUnitLoads_CanBeToggledAndCleared()
+    {
+        await using var fixture = new Fixture();
+        fixture.Model.Unit.Should().BeNull();
+        fixture.Model.ToggleSelectedPasuk(1, 1);
+        fixture.Model.SelectedPasukCount.Should().Be(1);
+        fixture.Model.ClearSelected();
+        fixture.Model.SelectedPasukCount.Should().Be(0);
+    }
+
     private const string BibleDb = "sefaria-dump-5784-sivan-4.tanah_view.sqlite";
 
     private sealed class Fixture : IAsyncDisposable
@@ -414,6 +438,11 @@ public class MasoraViewModelTests
         await fixture.Model.PreloadAdjacentRowsAsync(1);
         unit2.Rows.Should().NotBeEmpty();
         unit3.Rows.Should().NotBeEmpty();
+
+        // Recitation queries canonical pasukim for every perek a loaded
+        // unit covers — a preloaded-only perek must not come back null.
+        fixture.Model.GetLoadedPasukim(51).Should().NotBeNullOrEmpty();
+        fixture.Model.GetLoadedPasukim(999).Should().BeNull();
 
         // Everything already loaded → nothing left to do.
         await fixture.Model.PreloadAdjacentRowsAsync(1);

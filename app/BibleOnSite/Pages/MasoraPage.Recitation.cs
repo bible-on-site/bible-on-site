@@ -134,18 +134,15 @@ public partial class MasoraPage
 
         _recitingWord = word;
         _recitingPasuk = nextPasuk;
-        if (word != null)
+        if (word != null && nextRow != null)
         {
-            if (nextRow != null)
-            {
-                nextRow.Pasuk.RecitingSegment = word.Segment - nextRow.ClipStartIndex;
-            }
-            if (_focusedPasuk?.PasukNum == word.Pasuk && _focusedPerekId == timelinePerekId &&
-                _focusedWordSpans.TryGetValue(word.Segment, out var current))
-            {
-                current.BackgroundColor = Pasuk.RecitingBackgroundDefault;
-                current.TextColor = Pasuk.RecitingText;
-            }
+            nextRow.Pasuk.RecitingSegment = word.Segment - nextRow.ClipStartIndex;
+        }
+        if (word != null && _focusedPasuk?.PasukNum == word.Pasuk && _focusedPerekId == timelinePerekId &&
+            _focusedWordSpans.TryGetValue(word.Segment, out var current))
+        {
+            current.BackgroundColor = Pasuk.RecitingBackgroundDefault;
+            current.TextColor = Pasuk.RecitingText;
         }
     }
 

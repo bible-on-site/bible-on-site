@@ -416,21 +416,36 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
 
     private bool TryHandleReaderBack()
     {
-        // Topmost transient surfaces own Back first (#2766): fullscreen,
-        // then the open fan menu previously fell through to page navigation
-        // while still visible.
-        if (ExitFullScreenButton.IsVisible)
-        { _chrome.ExitFullScreen(); return true; }
-        if (FanMenu.IsOpen)
-        { _ = FanMenu.CloseAsync(); return true; }
-        if (PerushimPanel.IsOpen)
-        { PerushimPanel.CloseImmediate(); return true; }
-        // Whatever keeps the selection bar up also owns Back — including a clip
-        // playing with nothing selected, which stops instead of navigating.
-        if (ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount, _unitRecitationSelection,
-                _focusedPasuk != null, Recitation.Cursor.PlayingKey != null))
-        { ClearAllSelections(); return true; }
-        return false;
+        // Match the other readers' foreground-first policy: a focused pasuk
+        // owns Back before the commentary sheet covered by its overlay (#3307).
+        var owner = ReaderBackPolicy.Resolve(
+            exitFullScreenVisible: ExitFullScreenButton.IsVisible,
+            unitPickerOpen: false,
+            fanMenuOpen: FanMenu.IsOpen,
+            menuOverlayOpen: false,
+            chapterSearchOpen: false,
+            focusedPasuk: _focusedPasuk != null,
+            perushimSheetOpen: PerushimPanel.IsOpen,
+            selectionSurfacesActive: ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
+                _unitRecitationSelection, focusedPasuk: false, Recitation.Cursor.PlayingKey != null));
+        switch (owner)
+        {
+            case ReaderBackSurface.ExitFullScreen:
+                _chrome.ExitFullScreen();
+                return true;
+            case ReaderBackSurface.FanMenu:
+                _ = FanMenu.CloseAsync();
+                return true;
+            case ReaderBackSurface.PerushimSheet:
+                PerushimPanel.CloseImmediate();
+                return true;
+            case ReaderBackSurface.FocusedPasuk:
+            case ReaderBackSurface.SelectionSurfaces:
+                ClearAllSelections();
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>

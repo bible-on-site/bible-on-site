@@ -486,7 +486,7 @@ public class ParashaViewModelTests
         fixture.Model.HasPerushim.Should().BeTrue();
         fixture.Model.FilteredPerushim.Should().NotBeEmpty();
 
-        // The selection-menu search narrows the list without hiding entries.
+        // The selection-menu search narrows the bound rows to the match (#3306).
         fixture.Model.PerushNameFilter = "Ramb";
         fixture.Model.FilteredPerushim.Select(p => p.Name).Should().Equal("Ramban");
         fixture.Model.PerushimEmptyMessage.Should().Be("לא נמצאו פירושים תואמים");
@@ -830,6 +830,12 @@ public class ParashaViewModelTests
 
         await fixture.Model.PreloadAdjacentRowsAsync(1);
         other.Rows.Should().NotBeEmpty();
+
+        // Recitation queries canonical pasukim for every perek a loaded
+        // unit covers — a preloaded-only perek must not come back null.
+        fixture.Model.GetLoadedPasukim(other.TorahRange.EndPerekId)
+            .Should().NotBeNullOrEmpty();
+        fixture.Model.GetLoadedPasukim(999).Should().BeNull();
 
         // A second pass finds everything already loaded — nothing to do.
         await fixture.Model.PreloadAdjacentRowsAsync(1);

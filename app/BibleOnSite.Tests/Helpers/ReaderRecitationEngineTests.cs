@@ -1047,4 +1047,107 @@ public class ReaderRecitationEngineTests
         act.Should().NotThrow();
         rig.Engine.HighlightedWord.Should().BeNull();
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SameKey_AfterPlayerDisappearsOrStops_PreparesANewSource(bool exists)
+    {
+        await using var rig = await StartedRig();
+        await rig.Engine.PlayClipAsync("chapter:1", true, SegmentFor());
+        rig.Surface.RaiseOpened();
+        rig.Surface.Exists = exists;
+        rig.Surface.CurrentState = RecitationPlaybackState.Stopped;
+
+        await rig.Engine.PlayClipAsync("chapter:1", true, SegmentFor());
+
+        rig.Surface.SourcePathValue.Should().NotBeNull();
+        rig.Surface.PauseCount.Should().Be(0);
+        rig.Surface.RaiseOpened();
+        rig.Surface.PlayCount.Should().Be(2);
+    }
+
+    [Theory]
+    [InlineData(RecitationPlaybackState.None)]
+    [InlineData(RecitationPlaybackState.Opening)]
+    [InlineData(RecitationPlaybackState.Buffering)]
+    [InlineData(RecitationPlaybackState.Failed)]
+    public async Task StateTransitions_StopHighlightTickerUntilPlaybackResumes(RecitationPlaybackState state)
+    {
+        await using var rig = await StartedRig();
+        await rig.Engine.PlayClipAsync("chapter:1", true, SegmentFor());
+        rig.Surface.RaiseOpened();
+        rig.Surface.RaiseState(RecitationPlaybackState.Playing);
+        rig.Surface.Position = TimeSpan.FromMilliseconds(500);
+        rig.Ticker.Tick();
+        rig.Engine.HighlightedWord.Should().NotBeNull();
+        var stops = rig.Ticker.Stops;
+
+        rig.Surface.RaiseState(state);
+
+        rig.Ticker.Stops.Should().BeGreaterThan(stops);
+        if (state is RecitationPlaybackState.None or RecitationPlaybackState.Failed)
+        {
+            rig.Engine.HighlightedWord.Should().BeNull();
+        }
+        rig.Surface.RaiseState(RecitationPlaybackState.Playing);
+        rig.Engine.HighlightedWord.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task StaleHighlightTick_WithoutAPlayerOrActiveCursor_IsHarmless()
+    {
+        await using var rig = await StartedRig();
+        await rig.Engine.PlayClipAsync("chapter:1", true, SegmentFor());
+        rig.Surface.RaiseOpened();
+        rig.Surface.RaiseState(RecitationPlaybackState.Playing);
+        var refreshes = rig.Surface.Refreshes;
+        rig.Surface.Exists = false;
+
+        rig.Ticker.Tick();
+        rig.Surface.RaiseState(RecitationPlaybackState.Playing);
+        rig.Surface.Refreshes.Should().Be(refreshes);
+        rig.Engine.ResetSession();
+        rig.Ticker.Tick();
+        rig.Engine.HighlightedWord.Should().BeNull();
+        rig.Surface.Refreshes.Should().Be(refreshes);
+    }
+
+    [Fact]
+    public async Task MediaEnded_BeforeAnyPlayback_DoesNotAcquireAudio()
+    {
+        await using var rig = await StartedRig();
+        rig.Surface.RaiseEnded();
+        rig.Engine.Cursor.PlayingKey.Should().BeNull();
+        rig.Platform.Activations.Should().Be(0);
+        rig.Alerts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DisabledDuringDecode_DropsPreparedAudioWithoutAlert()
+    {
+        await using var rig = await StartedRig();
+        rig.Decoder.ClipGate = new TaskCompletionSource();
+        var play = rig.Engine.PlayClipAsync("preview", false, ClipFor());
+        await WaitForAsync(() => rig.Decoder.ClipCalls == 1);
+        rig.Preferences.QriynotEnabled = false;
+        rig.Decoder.ClipGate.SetResult();
+        await play;
+        rig.Surface.SourcePathValue.Should().BeNull();
+        rig.Alerts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CancelledDecodeThatFailsLater_DoesNotShowAnObsoleteAlert()
+    {
+        await using var rig = await StartedRig();
+        rig.Decoder.ClipGate = new TaskCompletionSource();
+        rig.Decoder.ClipException = new InvalidOperationException("late decode failure");
+        var play = rig.Engine.PlayClipAsync("preview", false, ClipFor());
+        await WaitForAsync(() => rig.Decoder.ClipCalls == 1);
+        rig.Engine.ResetSession();
+        rig.Decoder.ClipGate.SetResult();
+        await play;
+        rig.Surface.SourcePathValue.Should().BeNull();
+        rig.Alerts.Should().BeEmpty();
+    }
 }

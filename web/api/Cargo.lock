@@ -685,7 +685,7 @@ checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
 name = "bible-on-site-api"
-version = "0.1.129"
+version = "0.1.132"
 dependencies = [
  "actix-web",
  "anyhow",
@@ -3412,7 +3412,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys",
@@ -3690,9 +3690,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-bunyan-formatter"
-version = "0.3.11"
+version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07148ec9e1201c0d3156f7d581e02a09d2982fd56ce589fee1f8464270c0e78e"
+checksum = "c5f5406d3494d9ed06e4016d667eedbe299c5a2006331a2ef41655a461ddd1ea"
 dependencies = [
  "ahash",
  "log",

@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { defineConfig, type ReporterDescription } from "@playwright/test";
+import { generateVAPIDKeys } from "web-push";
 import { isCI, shouldMeasureCov } from "../shared/tests-util/environment.mjs";
 import { getBaseConfig } from "./playwright.base.config";
 import {
@@ -21,6 +22,19 @@ if (shouldMeasureCov) {
 // Uses next dev in both modes; production behavior is checked by the performance suite.
 const webServerCommand = `node ./launch-e2e-server.mts ${shouldMeasureCov ? "--coverage" : ""}`;
 
+// Web push is exercised end-to-end (#1096): the e2e deployment enables the
+// feature with throwaway per-run keys so the real opt-in toggle and
+// subscription routes run against the test database. Browser tests stub only
+// the platform transport (PushManager/OS notifications) that headless test
+// browsers lack; nothing here reaches a real push service.
+const vapidKeys = generateVAPIDKeys();
+const webPushEnv: Record<string, string> = {
+	VAPID_PUBLIC_KEY: vapidKeys.publicKey,
+	VAPID_PRIVATE_KEY: vapidKeys.privateKey,
+	VAPID_SUBJECT: "mailto:web-push-e2e@localhost.invalid",
+	PUSH_SEND_SECRET: `e2e-${vapidKeys.privateKey.slice(0, 16)}`,
+};
+
 export default defineConfig({
 	...baseConfig,
 	reporter: [
@@ -32,6 +46,7 @@ export default defineConfig({
 	webServer: {
 		...(baseConfig.webServer as TestConfigWebServer),
 		command: webServerCommand,
+		env: webPushEnv,
 	},
 	fullyParallel: true,
 	// Browser-timing nondeterminism under parallel CI load (e.g. the lazy

@@ -86,16 +86,15 @@
                                                            VerticalTextAlignment="Center"
                                                            IsVisible="{Binding Prefix, Converter={StaticResource StringNotEmptyConverter}}"
                                                            TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
-                                                    <Label Text="{Binding Title}"
-                                                           FontSize="15"
-                                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
-                                                           TextDecorations="Underline"
-                                                           VerticalTextAlignment="Center">
-                                                        <Label.GestureRecognizers>
-                                                            <TapGestureRecognizer Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"
-                                                                                  CommandParameter="{Binding UniqueName}"/>
-                                                        </Label.GestureRecognizers>
-                                                    </Label>
+                                                    <controls:TappableView Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"
+                                                                           CommandParameter="{Binding UniqueName}"
+                                                                           SemanticProperties.Description="{Binding Title}">
+                                                        <Label Text="{Binding Title}"
+                                                               FontSize="15"
+                                                               TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                                                               TextDecorations="Underline"
+                                                               VerticalTextAlignment="Center"/>
+                                                    </controls:TappableView>
                                                     <Label Text="{Binding Suffix}"
                                                            FontSize="15"
                                                            VerticalTextAlignment="Center"
@@ -123,6 +122,9 @@
                             <DataTemplate x:DataType="viewmodels:TanahpediaCategoryGroup">
                                 <VerticalStackLayout Spacing="6">
                                     <!-- Parent category card -->
+                                    <controls:TappableView Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenCategoryCommand}"
+                                                           CommandParameter="{Binding Parent}"
+                                                           SemanticProperties.Description="{Binding Parent.Label}">
                                     <Border Padding="14,10"
                                             StrokeShape="RoundRectangle 12"
                                             Stroke="Transparent"
@@ -130,10 +132,6 @@
                                         <Border.Shadow>
                                             <Shadow Brush="Black" Offset="0,2" Radius="4" Opacity="0.15"/>
                                         </Border.Shadow>
-                                        <Border.GestureRecognizers>
-                                            <TapGestureRecognizer Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenCategoryCommand}"
-                                                                  CommandParameter="{Binding Parent}"/>
-                                        </Border.GestureRecognizers>
                                         <Grid ColumnDefinitions="*,Auto">
                                             <Label Text="{Binding Parent.Label}"
                                                    FontSize="16"
@@ -159,6 +157,7 @@
                                             </Label>
                                         </Grid>
                                     </Border>
+                                    </controls:TappableView>
 
                                     <!-- Subcategory chips -->
                                     <FlexLayout Wrap="Wrap"
@@ -166,16 +165,15 @@
                                                 IsVisible="{Binding HasChildren}">
                                         <BindableLayout.ItemTemplate>
                                             <DataTemplate x:DataType="viewmodels:TanahpediaCategoryItem">
+                                                <controls:TappableView Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenCategoryCommand}"
+                                                                       CommandParameter="{Binding .}"
+                                                                       SemanticProperties.Description="{Binding Label}">
                                                 <Border Padding="10,5"
                                                         Margin="0,0,8,8"
                                                         StrokeShape="RoundRectangle 16"
                                                         Stroke="{StaticResource Gray200}"
                                                         StrokeThickness="1"
                                                         BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
-                                                    <Border.GestureRecognizers>
-                                                        <TapGestureRecognizer Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenCategoryCommand}"
-                                                                              CommandParameter="{Binding .}"/>
-                                                    </Border.GestureRecognizers>
                                                     <HorizontalStackLayout Spacing="6">
                                                         <Label Text="{Binding Label}"
                                                                FontSize="13"
@@ -190,6 +188,7 @@
                                                                IsVisible="{Binding IsComingSoon}"/>
                                                     </HorizontalStackLayout>
                                                 </Border>
+                                                </controls:TappableView>
                                             </DataTemplate>
                                         </BindableLayout.ItemTemplate>
                                     </FlexLayout>
@@ -210,16 +209,15 @@
                                          BindableLayout.ItemsSource="{Binding RecentEntries}">
                         <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="models:TanahpediaEntry">
-                                <Label Text="{Binding Title}"
-                                       FontSize="15"
-                                       TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
-                                       TextDecorations="Underline"
-                                       Margin="0,2">
-                                    <Label.GestureRecognizers>
-                                        <TapGestureRecognizer Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"
-                                                              CommandParameter="{Binding UniqueName}"/>
-                                    </Label.GestureRecognizers>
-                                </Label>
+                                <controls:TappableView Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"
+                                                       CommandParameter="{Binding UniqueName}"
+                                                       SemanticProperties.Description="{Binding Title}"
+                                                       Margin="0,2">
+                                    <Label Text="{Binding Title}"
+                                           FontSize="15"
+                                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                                           TextDecorations="Underline"/>
+                                </controls:TappableView>
                             </DataTemplate>
                         </BindableLayout.ItemTemplate>
                     </VerticalStackLayout>

@@ -25,6 +25,7 @@ import {
 	buildArticleLinkSystemPrompt,
 	buildArticleLinkUserMessage,
 	HEURISTIC_GENERATOR_ID,
+	HEURISTIC_PROMPT_VERSION,
 	LINK_PROMPT_VERSION,
 } from "~/lib/article-linking/prompt";
 import type {
@@ -37,6 +38,7 @@ import type {
 	ProposalTarget,
 } from "~/lib/article-linking/types";
 import {
+	AUTHOR_ATTRIBUTION_POLICY_REASON,
 	normalizeTarget,
 	type RawModelOutput,
 	validateModelOutput,
@@ -373,6 +375,27 @@ const PROPOSAL_SELECT = `SELECT p.*, LOWER(HEX(a.content_hash)) AS live_hash
 	 FROM tanah_article_link_proposal p
 	 JOIN tanah_article a ON a.id = p.article_id`;
 
+/** Same rows when the article content-hash upgrade is not deployed yet. */
+const PROPOSAL_SELECT_NO_HASH = `SELECT p.*, NULL AS live_hash
+	 FROM tanah_article_link_proposal p`;
+
+/** Query proposals with the freshness join, degrading to no-hash rows when
+ *  tanah_article.content_hash is undeployed (ER_BAD_FIELD_ERROR). */
+async function queryProposals(
+	suffix: string,
+	params: unknown[],
+): Promise<ProposalRow[]> {
+	try {
+		return await query<ProposalRow>(`${PROPOSAL_SELECT} ${suffix}`, params);
+	} catch (error) {
+		if (!isCoveringSourceSchemaMissing(error)) throw error;
+		return await query<ProposalRow>(
+			`${PROPOSAL_SELECT_NO_HASH} ${suffix}`,
+			params,
+		);
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Generation
 // ---------------------------------------------------------------------------
@@ -452,12 +475,19 @@ interface InsertableProposal {
 	snapshot: ArticleLinkSnapshot;
 }
 
+function promptVersionFor(generator: string): string {
+	return generator === HEURISTIC_GENERATOR_ID
+		? HEURISTIC_PROMPT_VERSION
+		: LINK_PROMPT_VERSION;
+}
+
 async function insertProposals(
 	conn: mysql.PoolConnection,
 	items: InsertableProposal[],
 ): Promise<number> {
 	let inserted = 0;
 	for (const item of items) {
+		const promptVersion = promptVersionFor(item.generator);
 		const result = await txExecute(
 			conn,
 			`INSERT IGNORE INTO tanah_article_link_proposal
@@ -482,7 +512,7 @@ async function insertProposals(
 				item.draft.status,
 				dedupeKey(
 					item.generator,
-					LINK_PROMPT_VERSION,
+					promptVersion,
 					item.articleId,
 					item.baseContentHash,
 					item.draft,
@@ -490,7 +520,7 @@ async function insertProposals(
 				decisionKey(item.articleId, item.draft),
 				item.generator.slice(0, 120),
 				item.model?.slice(0, 120) ?? null,
-				LINK_PROMPT_VERSION,
+				promptVersion,
 				item.baseContentHash,
 				JSON.stringify(item.snapshot),
 				item.promptTokens,
@@ -520,7 +550,7 @@ async function upsertCheckpoint(
 		[
 			articleId,
 			generator.slice(0, 120),
-			LINK_PROMPT_VERSION,
+			promptVersionFor(generator),
 			contentHash,
 			runId,
 			proposalCount,
@@ -536,7 +566,12 @@ async function checkpointExists(
 	const row = await queryOne<{ article_id: number }>(
 		`SELECT article_id FROM tanah_article_link_checkpoint
 		 WHERE article_id = ? AND generator = ? AND prompt_version = ? AND content_hash = ?`,
-		[articleId, generator.slice(0, 120), LINK_PROMPT_VERSION, contentHash],
+		[
+			articleId,
+			generator.slice(0, 120),
+			promptVersionFor(generator),
+			contentHash,
+		],
 	);
 	return row !== null;
 }
@@ -585,6 +620,7 @@ export async function runLinkGeneration(
 			const plainText = articlePlainText(row);
 			const snapshot = await loadSnapshot(articleId);
 			const drafts: InsertableProposal[] = [];
+			const successfulGenerators = new Set<string>();
 
 			const wantHeuristic = engine === "heuristic" || engine === "both";
 			const llmGenerator = `openai:${process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini"}`;
@@ -637,6 +673,7 @@ export async function runLinkGeneration(
 						snapshot,
 					});
 				}
+				successfulGenerators.add(HEURISTIC_GENERATOR_ID);
 			}
 
 			if (runLlm) {
@@ -686,11 +723,37 @@ export async function runLinkGeneration(
 				} catch {
 					throw new Error("המודל החזיר JSON לא תקין");
 				}
+				if (
+					!parsed ||
+					typeof parsed !== "object" ||
+					Array.isArray(parsed) ||
+					(!Object.hasOwn(parsed, "proposals") &&
+						!Object.hasOwn(parsed, "abstentions")) ||
+					(Object.hasOwn(parsed, "proposals") &&
+						!Array.isArray(parsed.proposals)) ||
+					(Object.hasOwn(parsed, "abstentions") &&
+						!Array.isArray(parsed.abstentions))
+				) {
+					throw new Error(
+						"LLM response must be an object containing proposals and/or abstentions arrays; correct the response and retry generation",
+					);
+				}
 				const validated = validateModelOutput(parsed, {
 					catalogue,
 					plainText,
 					snapshot,
 				});
+				const submittedItems =
+					(parsed.proposals?.length ?? 0) + (parsed.abstentions?.length ?? 0);
+				if (
+					submittedItems > 0 &&
+					validated.drafts.length === 0 &&
+					validated.abstentions.length === 0
+				) {
+					throw new Error(
+						"LLM returned only malformed proposals or abstentions; correct the response and retry generation",
+					);
+				}
 				for (const draft of validated.drafts) {
 					drafts.push({
 						id: randomUUID(),
@@ -705,6 +768,7 @@ export async function runLinkGeneration(
 						snapshot,
 					});
 				}
+				successfulGenerators.add(generator);
 			}
 
 			if (data.dryRun) {
@@ -718,30 +782,14 @@ export async function runLinkGeneration(
 
 			const inserted = await transaction(async (conn) => {
 				const count = await insertProposals(conn, drafts);
-				const heuristicCount = drafts.filter(
-					(d) => d.generator === HEURISTIC_GENERATOR_ID,
-				).length;
-				const llmDrafts = drafts.filter(
-					(d) => d.generator !== HEURISTIC_GENERATOR_ID,
-				);
-				if (wantHeuristic) {
+				for (const generator of successfulGenerators) {
 					await upsertCheckpoint(
 						conn,
 						articleId,
-						HEURISTIC_GENERATOR_ID,
+						generator,
 						contentHash,
 						runId,
-						heuristicCount,
-					);
-				}
-				if (llmDrafts.length > 0) {
-					await upsertCheckpoint(
-						conn,
-						articleId,
-						llmDrafts[0].generator,
-						contentHash,
-						runId,
-						llmDrafts.length,
+						drafts.filter((draft) => draft.generator === generator).length,
 					);
 				}
 				return count;
@@ -798,8 +846,8 @@ export async function listProposals(
 	}
 	const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
 	const limit = Math.min(Math.max(data.limit ?? 200, 1), 500);
-	const rows = await query<ProposalRow>(
-		`${PROPOSAL_SELECT} ${where}
+	const rows = await queryProposals(
+		`${where}
 			 ORDER BY p.created_at DESC, p.id LIMIT ?`,
 		[...params, limit],
 	);
@@ -817,9 +865,8 @@ export async function getProposalDetail(
 	id: string,
 ): Promise<LinkProposalDetail | null> {
 	await ensureLinkSchema();
-	const row = await queryOne<ProposalRow>(`${PROPOSAL_SELECT} WHERE p.id = ?`, [
-		id,
-	]);
+	const rows = await queryProposals("WHERE p.id = ?", [id]);
+	const row = rows[0];
 	if (!row) return null;
 	const article = await queryOne<{ name: string }>(
 		"SELECT name FROM tanah_article WHERE id = ?",
@@ -930,6 +977,10 @@ export async function reviewProposal(
 			return { id: data.id, status: "rejected" as const };
 		}
 
+		// Uploaded attribution is authoritative, including for legacy drafts.
+		if (row.relationship_key === "author") {
+			throw new Error(AUTHOR_ATTRIBUTION_POLICY_REASON);
+		}
 		// approve — a stale article must be regenerated, not approved blind.
 		if (stale) {
 			throw new Error("תוכן המאמר השתנה מאז ההפקה — יש להפיק מחדש לפני אישור");
@@ -1007,11 +1058,6 @@ function alreadySatisfied(
 			return (
 				action === "replace" &&
 				snapshot.perekId === (target as { perekId?: number }).perekId
-			);
-		case "author":
-			return (
-				action === "replace" &&
-				snapshot.authorId === (target as { authorId?: number }).authorId
 			);
 		case "coveringSources": {
 			const live = new Set(
@@ -1245,7 +1291,12 @@ export async function pipelineStatus(): Promise<LinkPipelineStatus> {
 		articleApiConfigured: articleApiConfigured(),
 		contractVersion: ARTICLE_RELATIONSHIP_REGISTRY.contractVersion,
 		supportedKeys: ARTICLE_RELATIONSHIP_REGISTRY.relationships
-			.filter((r) => r.status === "supported" && r.operations.length > 1)
+			.filter(
+				(r) =>
+					r.key !== "author" &&
+					r.status === "supported" &&
+					r.operations.length > 1,
+			)
 			.map((r) => r.key),
 		pendingKeys: ARTICLE_RELATIONSHIP_REGISTRY.relationships
 			.filter((r) => r.status === "pending-schema")
