@@ -10,4 +10,16 @@ export async function register(): Promise<void> {
 		"@/lib/diagnostics/event-loop-diagnostics"
 	);
 	startEventLoopDiagnostics();
+	// Load the canonical sefarim corpus during startup rather than inside the
+	// first sefer request: the ~4 MB Brotli decode + ~40 MB JSON.parse is
+	// synchronous event-loop work that otherwise lands on the cold-start
+	// critical path of whichever request hits it first (issue #2881). The
+	// module's globalThis cache means route bundles reuse this one parse.
+	// Production only — dev/test keep the lazy path and the dev fixture module.
+	if (process.env.NODE_ENV !== "production") return;
+	const { sefarim } = await import("@/data/db/sefarim");
+	if (sefarim.length === 0) {
+		// Fail fast at boot rather than serving requests with a missing corpus.
+		throw new Error("canonical sefarim corpus is empty after boot load");
+	}
 }
