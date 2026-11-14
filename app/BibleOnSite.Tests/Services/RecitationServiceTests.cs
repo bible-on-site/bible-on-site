@@ -651,6 +651,53 @@ public class RecitationServiceTests
         File.Exists(verse).Should().BeTrue();
     }
 
+    /// <summary>
+    /// #3260: a clip interval is approved when it spans a consecutive run of
+    /// the track's canonical words — start on one word's boundary, end on a
+    /// later word's end. That publishes mid-verse Masoretic clips and
+    /// multi-pasuk slices alike, while a cut inside a word or inside the gap
+    /// between words is still rejected.
+    /// </summary>
+    [Theory]
+    [InlineData(100, 800, true)]   // one word
+    [InlineData(100, 1800, true)]  // the whole pasuk (two words)
+    [InlineData(900, 2600, true)]  // mid-pasuk start through the next pasuk
+    [InlineData(100, 2600, true)]  // both pesukim end to end
+    [InlineData(150, 800, false)]  // starts inside a word
+    [InlineData(100, 1750, false)] // ends inside a word
+    [InlineData(1850, 2600, false)]// starts inside the inter-word gap
+    [InlineData(100, 1900, false)] // ends inside the inter-word gap
+    [InlineData(0, 800, false)]    // outside the track's timings
+    public async Task ContiguousWordBoundarySpans_AreApproved_AndCutsAreRejected(
+        double start, double end, bool approved)
+    {
+        await using var storage = new TestStorage();
+        var server = new Extension(storage);
+        var audio = "approved audio"u8.ToArray();
+        var track = new RecitationTrack(1, "https://example.com/recordings/1_record.mp3", Hash(audio),
+            Hash(Encoding.UTF8.GetBytes("1:1:א\n1:2:ב\n2:1:ג")), 3000, "ready",
+            [new(1, 1, "א", 100, 800), new(1, 2, "ב", 900, 1800), new(2, 1, "ג", 2000, 2600)]);
+        server.Package = new(1, [track]); server.Audio["/recordings/1_record.mp3"] = audio;
+        var service = server.Service;
+        server.Bundle(); await service.UpdateAsync(TestContext.Current.CancellationToken); await service.DownloadAsync([1]);
+        List<Pasuk> pasukim = [
+            new() { PasukNum = 1, Text = "א ב", Segments = [new() { Type = SegmentType.Qri, Value = "א" }, new() { Type = SegmentType.Qri, Value = "ב" }] },
+            new() { PasukNum = 2, Text = "ג", Segments = [new() { Type = SegmentType.Qri, Value = "ג" }] }];
+        var decoder = new Mock<IRecitationAudioDecoder>();
+        decoder.Setup(d => d.CreateClipAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<(double Start, double End)>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("PCM WAV"u8.ToArray());
+
+        var act = () => service.PrepareAudioAsync(1, pasukim, start, end, decoder: decoder.Object);
+        if (approved)
+        {
+            File.Exists(await act()).Should().BeTrue();
+        }
+        else
+        {
+            await act.Should().ThrowAsync<InvalidDataException>();
+        }
+    }
+
     [Theory]
     [InlineData("pending")] [InlineData("needs_review")]
     public async Task PendingChapterAllowsFullPlayback_ButCannotPlayWords(string status)

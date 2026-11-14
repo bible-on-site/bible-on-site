@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getPerakimText } from "@/app/components/reading/unit-book-actions";
 import catalog from "@/data/db/client-catalog.generated.json";
-import type { Pasuk, Perek } from "@/data/db/tanah-view-types";
+import type { Perek } from "@/data/db/tanah-view-types";
 import { BookRequestError, loadSefer, seferPerekMap } from "@/data/load-sefer";
 import type { ArticleSummary } from "@/lib/articles";
 import type { RangePerushSummary } from "@/lib/perushim";
@@ -45,8 +45,7 @@ export default function ParashaLoadedSefer(props: {
 	isVisible?: boolean;
 }) {
 	const mainFile = useMemo(
-		() =>
-			catalog.books.find((book) => book.name === props.seferName)?.file,
+		() => catalog.books.find((book) => book.name === props.seferName)?.file,
 		[props.seferName],
 	);
 	/** Canonical perek ids the parashot's Haftarot render — fetched
@@ -71,7 +70,7 @@ export default function ParashaLoadedSefer(props: {
 
 	const [loaded, setLoaded] = useState<Map<
 		number,
-		Pick<Perek, "pesukim">
+		Pick<Perek, "pesukim" | "recitation">
 	> | null>(null);
 	const [loadedKey, setLoadedKey] = useState("");
 	const [failure, setFailure] = useState<{ refreshPage: boolean } | null>(null);
@@ -92,7 +91,7 @@ export default function ParashaLoadedSefer(props: {
 		])
 			.then(([sefer, auxPerakim]) => {
 				if (!current) return;
-				const map = new Map<number, { pesukim: Pasuk[] }>();
+				const map = new Map<number, Pick<Perek, "pesukim" | "recitation">>();
 				for (const [perekId, perek] of Object.entries(auxPerakim)) {
 					map.set(Number(perekId), perek);
 				}

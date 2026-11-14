@@ -77,13 +77,18 @@ function fullQueue(response) {
     prs.add(node.pullRequest.number);
     const head = node.headCommit?.oid ?? null;
     const base = node.baseCommit?.oid ?? null;
-    // Entries not yet folded into a merge group carry no commits at all;
-    // grouped entries always carry both. A lone null is unknown topology.
-    requireValue((head === null) === (base === null), "QUEUE_TOPOLOGY");
+    // An unmergeable entry may retain its place in the chain through its
+    // base while GitHub cannot produce a head. That base still protects CI.
     if (head === null) {
       requireValue(node.state === "QUEUED" || node.state === "UNMERGEABLE", "UNKNOWN_QUEUE_HEAD");
+      if (base !== null) {
+        requireValue(node.state === "UNMERGEABLE", "QUEUE_TOPOLOGY");
+        requireValue(hex(base), "UNKNOWN_QUEUE_HEAD");
+        bases.push(base);
+      }
       continue;
     }
+    requireValue(base !== null, "QUEUE_TOPOLOGY");
     requireValue(hex(head) && hex(base), "UNKNOWN_QUEUE_HEAD");
     heads.push(head);
     bases.push(base);

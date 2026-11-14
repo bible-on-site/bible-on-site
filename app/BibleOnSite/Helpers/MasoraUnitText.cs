@@ -145,7 +145,10 @@ public static class MasoraUnitText
                 var clipped = startIndex == null && endIndex == null
                     ? pasuk
                     : ClipPasuk(pasuk, startIndex, endIndex);
-                rows.Add(new MasoraPasukRow(clipped, slice.PerekId, fontSize));
+                // The row remembers its canonical segment window so recitation
+                // word timings map onto the clipped display segments.
+                rows.Add(new MasoraPasukRow(clipped, slice.PerekId, fontSize,
+                    startIndex ?? 0, endIndex ?? int.MaxValue));
             }
         }
         return rows;

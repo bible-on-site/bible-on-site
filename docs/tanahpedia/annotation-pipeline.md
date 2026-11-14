@@ -4,8 +4,12 @@ Local NLP decoration of perakim/pesukim and articles with **intended**
 Tanahpedia entry references — independent of whether the target entry
 exists today. This document is the issue's research deliverable: source
 and model evaluation, the selected architecture, and the data contract.
-The pipeline itself lives under `data/annotations/` (to be populated by
-this implementation).
+The pipeline itself lives under `data/annotations/`. The current
+[local GPU runbook](../../data/annotations/README.md) covers explicit device
+selection, classifier and generative-model comparisons, independent LLM
+detection, bounded/resumable generation and provenance. Research CPU numbers
+below describe the original increments; use qualified comparison artifacts
+for the current model/runtime decision.
 
 ## The three responsibilities (per the user's clarification)
 
@@ -29,7 +33,7 @@ model re-invocation; deleting/unpublishing must revoke them the same way.
 | **DictaBERT** family (`dicta-il`) | **CC BY 4.0** | Modern Hebrew; `dictabert-morph` is a dedicated morphological analyzer; **BEREL** targets Rabbinic Hebrew specifically | **Measured winner for the typing tier.** `dictabert-ner` (base) lifts `type_accuracy` 0.55→0.65 (pasuk) / 0.67→0.89 (article) when re-typing morphhb candidates; base ties large everywhere and beats it on pasuk. Attribution required — acceptable, same class as our other sourced data. **BEREL's model card is Apache-2.0** (verified — cleaner than expected) but it is fill-mask only: no published classification head, so it stayed unmeasured this increment. |
 | **HeBERT** | Apache-2.0 (check per-variant) | Modern Hebrew, older | Superseded by DictaBERT/AlephBERT on the same benchmarks — no reason to pick it. |
 | **Multilingual mBERT** | Apache-2.0 | Weak on Hebrew morphology | Baseline floor only; AlephBERT paper documents it underperforms dedicated Hebrew models. |
-| **Local LLM (instruct) hybrid** | model-dependent (e.g. Gemma/Llama licenses) | Can classify ambiguous mentions with context | Reserved for the ambiguity tier **if and only if** the deterministic+encoder path misses the quality bar — per issue, evaluate dedicated classifiers first. No API calls; everything pinned and local. |
+| **Local LLM (instruct) hybrid** | Apache-2.0 for the pinned DictaLM 3.0 1.7B and Qwen3-8B candidates | Can classify ambiguous mentions and detect beyond the lexical vocabulary | `local_llm.py` compares retyping and `llm_detect.py` compares independent detection using joint span/type/name scoring. Optional publish engines reuse these adapters. No API calls; model revisions, prompts and runtime settings are pinned and recorded. |
 | **Deterministic lexical baseline** (our lexicon + morphology stripping) | n/a | Both domains | **Required first stage regardless** — it is the quality floor the neural approaches must beat, and it is nearly free: segment → strip prefixes → lemma candidates → type classify. |
 
 ### Domain split (per issue)

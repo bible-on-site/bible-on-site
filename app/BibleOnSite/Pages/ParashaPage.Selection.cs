@@ -237,26 +237,26 @@ public partial class ParashaPage
         // still owns the Android Back press (TryHandleReaderBack) — both read
         // their answer from ReaderSurfaceState.
         var isSelectionMode = ReaderSurfaceState.ShowsSelectionBar(count, _unitRecitationSelection,
-            focused, _recitationCursor.PlayingKey != null);
+            focused, Recitation.Cursor.PlayingKey != null);
         ChapterSearch.SetFocusedPasukScope(focused);
         var ordinarySelection = count > 0 && !_unitRecitationSelection && _focusedPasuk == null;
         SelectionBar.SetSelectionActionsVisible(ordinarySelection);
         SelectionBar.SetRecitationVisible(RecitationAvailable);
         // An active playback can always be paused — even while more of the
         // unit's tracks are still pending alignment.
-        var recitationEnabled = !_recitationBusy && _viewModel.Unit != null &&
-            (_recitationCursor.PlayingKey != null || _unitRecitationSelection || CanPlayFocusedPasuk ||
+        var recitationEnabled = !Recitation.Busy && _viewModel.Unit != null &&
+            (Recitation.Cursor.PlayingKey != null || _unitRecitationSelection || CanPlayFocusedPasuk ||
                 CanPlaySelectedPasukim());
         // The glyph must match what the button does: only bar-issued playback
         // pauses, so a word preview still playing shows Play (it starts the
         // unit at the bookmark), like the website's preview state.
         var recitationVisual =
-            RecitationPlayer?.CurrentState == CommunityToolkit.Maui.Core.MediaElementState.Playing && _recitationCursor.BarIssued
+            RecitationPlayerState == RecitationPlaybackState.Playing && Recitation.Cursor.BarIssued
                 ? ReaderSelectionBar.RecitationVisual.Pause
-                : RecitationPlayer?.CurrentState is CommunityToolkit.Maui.Core.MediaElementState.Playing or CommunityToolkit.Maui.Core.MediaElementState.Paused
+                : RecitationPlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused
                     ? ReaderSelectionBar.RecitationVisual.Resume : ReaderSelectionBar.RecitationVisual.Play;
-        var hint = _recitationBusy ? "טוען את הקלטת הפרשה..." :
-            !_viewModel.HasCurrentUnitRecitation ? "אין הקלטה לפרשה זו — הורידו את הקלטות הספר בהעדפות" :
+        var hint = Recitation.Busy ? "טוען את הקלטת הפרשה..." :
+            !_viewModel.HasCurrentUnitRecitation ? "אין הקלטה לפרשה זו - הורידו את הקלטות הספר בהעדפות" :
             recitationEnabled ? "הקראה" : "הקראת מילים ופסוקים אינה זמינה";
         SelectionBar.SetRecitationState(recitationEnabled, recitationVisual, hint);
 

@@ -10,6 +10,12 @@
 
 - **DevOps tooling**: Use Node.js/TypeScript (see `devops/` directory)
 - **Data processing**: Use Rust (see `data/` directory)
+- **Tanahpedia local model inference**: the existing `data/annotations/`
+  pipeline uses Python for PyTorch/Transformers model adapters, GPU execution,
+  evaluation, checkpoints and tests. This scoped ML-runtime exception keeps
+  the established inference stack together. General data ingestion remains
+  Rust; durable application content uses the normal database editing/import
+  path.
 
 This ensures consistency, type safety, and maintainability across the codebase.
 

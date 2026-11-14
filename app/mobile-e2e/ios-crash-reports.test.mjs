@@ -11,11 +11,13 @@ test("retains app, automation and simulator failures for this run without copyin
   for (const directory of [host, device, artifacts]) mkdirSync(directory);
   const started = Date.now() - 10000;
   const hostReports = ["BibleOnSite-2026.ips", "WebDriverAgentRunner-2026.ips",
-    "CoreSimulatorService_2026.ips", "Simulator-2026.ips", "simulatord-2026.ips",
+    "CoreSimulatorService_2026.ips", "com.apple.CoreSimulator.CoreSimulatorService-2026.ips",
+    "DeviceHub-2026.ips", "Simulator-2026.ips", "simulatord-2026.ips",
     "SpringBoard-2026.ips", "backboardd-2026.ips", "testmanagerd-2026.ips",
     "runningboardd-2026.ips", "launchd_sim-2026.ips", "JetsamEvent-2026.ips"];
   try {
-    for (const report of [...hostReports, "OtherApp-2026.ips", "BibleOnSiteOther-2026.ips", "BibleOnSite-old.ips"]) {
+    for (const report of [...hostReports, "OtherApp-2026.ips", "BibleOnSiteOther-2026.ips",
+      "com.apple.CoreSimulator.CoreSimulatorServiceOther-2026.ips", "DeviceHubOther-2026.ips", "BibleOnSite-old.ips"]) {
       writeFileSync(join(host, report), report);
     }
     utimesSync(join(host, "BibleOnSite-old.ips"), new Date(0), new Date(0));

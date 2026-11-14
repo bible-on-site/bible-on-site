@@ -187,6 +187,26 @@ jobs:
           bun run test:workflow-timeouts
           bun run verify:workflow-timeouts
 
+  root_evidence_guard:
+    timeout-minutes: 5
+    name: Root evidence guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-js
+        with:
+          module: devops
+          directory: devops
+      # Unconditional index scan, independent of determine_changes (#3319):
+      # a PR that only adds root evidence must fail here.
+      - name: Reject tracked repository-root evidence
+        working-directory: devops
+        run: |
+          bun run test:root-evidence-guard
+          bun run verify:root-evidence-guard
+
   setup_env:
     timeout-minutes: 60
     name: Setup Environment Variables
@@ -3320,6 +3340,10 @@ jobs:
     name: Database backup recovery
     uses: ./.github/workflows/ci-db-backup.yml
 
+  transcription_ci:
+    name: Local transcription
+    uses: ./.github/workflows/ci-transcription.yml
+
   cross_module_ci:
     timeout-minutes: 10
     name: Cross Module CI
@@ -3327,6 +3351,7 @@ jobs:
     needs:
       [
         workflow_timeouts,
+        root_evidence_guard,
         setup_env,
         determine_changes,
         website_performance,
@@ -3350,6 +3375,7 @@ jobs:
         recitation_ci,
         deploy_verifier,
         database_backups,
+        transcription_ci,
         perushim_data,
         determine_baseline_availability,
         determine_docker_image_availability,
@@ -3373,8 +3399,18 @@ jobs:
             exit 1
           fi
 
+          if [ "${{ needs.root_evidence_guard.result }}" != "success" ]; then
+            echo "Root evidence guard did not pass."
+            exit 1
+          fi
+
           if [ "${{ needs.database_backups.result }}" != "success" ]; then
             echo "Database backup and restore validation did not pass."
+            exit 1
+          fi
+
+          if [ "${{ needs.transcription_ci.result }}" != "success" ]; then
+            echo "Local transcription validation did not pass."
             exit 1
           fi
 
@@ -3797,6 +3833,12 @@ jobs:
         with:
           name: database-backup-coverage-${{ github.run_id }}
           path: .coverage/db-backup
+
+      - name: Restore transcription coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: transcription-coverage-${{ github.run_id }}
+          path: .coverage/transcription
 
       - name: Measure release and image-publisher regression coverage
         working-directory: ${{ env.DEVOPS_DIRECTORY }}

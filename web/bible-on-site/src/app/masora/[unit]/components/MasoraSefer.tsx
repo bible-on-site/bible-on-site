@@ -8,6 +8,10 @@ import {
 	releaseSeferDocumentTitle,
 	setSeferDocumentTitle,
 } from "@/app/929/[number]/components/sefer-document-title";
+import {
+	RangeRecitationControls,
+	RangeRecitationPlayer,
+} from "@/app/components/reading/RangeRecitationPlayer";
 import { UnitBlankPageContent } from "@/app/components/reading/UnitBlankPageContent";
 import { UnitSeferBook } from "@/app/components/reading/UnitSeferBook";
 import { UnitTextBody } from "@/app/components/reading/UnitTextBody";
@@ -27,6 +31,7 @@ import { useUnitBookContentNavigation } from "@/app/components/reading/useUnitBo
 import type { Perek } from "@/data/db/tanah-view-types";
 import type { ArticleSummary } from "@/lib/articles";
 import type { RangePerushSummary } from "@/lib/perushim";
+import { rangesPerekIds } from "@/lib/reading/ranges";
 import type { PerekEntityReference } from "@/lib/tanahpedia/service";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 import unitPageStyles from "../page.module.css";
@@ -197,57 +202,82 @@ const MasoraSefer = (props: {
 					};
 				};
 				const bookKey = unitBookKey(unit.unitId, "torah");
+				// Every perek the unit's ranges touch, for range playback
+				// manifest loading and validation (issue #3259).
+				const recitationPerakim = rangesPerekIds(unit.ranges).flatMap(
+					(perekId) => {
+						const perek = perekById.get(perekId);
+						return perek
+							? [
+									{
+										perekId,
+										pesukim: perek.pesukim,
+										hasRecording: Boolean(perek.recitation),
+									},
+								]
+							: [];
+					},
+				);
 				return (
 					<React.Fragment key={`masora-${unit.unitId}`}>
 						<section
 							className={`${seferStyles.pageContentPage} flipbook-page-bounded`}
 							data-sefer-unit-text={bookKey}
 						>
-							<div className={seferStyles.pageHeaderRight}>
-								<div className={seferStyles.pageHeaderRow}>
-									<span className={seferStyles.pageHeaderSefer}>
-										{seferName}
-									</span>
-									<span className={seferStyles.pageHeaderPerek}>
-										{toLetters(unit.order)}
-									</span>
-								</div>
-							</div>
-							<div className={seferStyles.pageHeaderLeft}>
-								<span>{unit.heading}</span>
-								{unit.closingBreak && (
-									<span className={unitPageStyles.closingBreak}>
-										{unit.closingBreak === "ptuha"
-											? "פרשה פתוחה"
-											: "פרשה סתומה"}
-									</span>
-								)}
-							</div>
-							{/* Pasuk-numeral clicks navigate the facing open perush;
-						the delegated handler no-ops everywhere else. */}
-							{/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: delegated pasuk-number navigation — the real targets carry data-pasuk-num and are pointer-only text numerals */}
-							<div
-								className={seferStyles.perekTextScrollWrapper}
-								onClick={(event) =>
-									handleUnitTextPasukClick(bookKey, event.target)
-								}
+							<RangeRecitationPlayer
+								ranges={unit.ranges}
+								perakim={recitationPerakim}
 							>
-								<article className={seferStyles.perekText}>
-									<UnitTextBody
-										ranges={unit.ranges}
-										entityRefsByPerek={entityRefsByPerek}
-										pasukCount={pasukCount}
-										resolvePerek={resolvePerek}
-										/* Book-side anchors carry a unit-unique scope so they
-										 * never duplicate the flat page's canonical
-										 * pasuk-{perek}-{pasuk} ids — a mounted book
-										 * must not shadow the flat anchors' getElementById
-										 * resolution (boundary pesukim appear in two
-										 * adjacent units, so the unit id scopes them). */
-										anchorScope={`book-${unit.unitId}`}
+								<div className={seferStyles.pageHeaderRight}>
+									<div className={seferStyles.pageHeaderRow}>
+										<span className={seferStyles.pageHeaderSefer}>
+											{seferName}
+										</span>
+										<span className={seferStyles.pageHeaderPerek}>
+											{toLetters(unit.order)}
+										</span>
+									</div>
+								</div>
+								<div className={seferStyles.pageHeaderLeft}>
+									<span>{unit.heading}</span>
+									<RangeRecitationControls
+										playLabel={`השמעת ${unit.heading}`}
 									/>
-								</article>
-							</div>
+									{unit.closingBreak && (
+										<span className={unitPageStyles.closingBreak}>
+											{unit.closingBreak === "ptuha"
+												? "פרשה פתוחה"
+												: "פרשה סתומה"}
+										</span>
+									)}
+								</div>
+								{/* Pasuk-numeral clicks navigate the facing open perush;
+						the delegated handler no-ops everywhere else. */}
+								{/* biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: delegated pasuk-number navigation — the real targets carry data-pasuk-num and are pointer-only text numerals */}
+								<div
+									className={seferStyles.perekTextScrollWrapper}
+									onClick={(event) =>
+										handleUnitTextPasukClick(bookKey, event.target)
+									}
+								>
+									<article className={seferStyles.perekText}>
+										<UnitTextBody
+											ranges={unit.ranges}
+											entityRefsByPerek={entityRefsByPerek}
+											pasukCount={pasukCount}
+											resolvePerek={resolvePerek}
+											/* Book-side anchors carry a unit-unique scope so they
+											 * never duplicate the flat page's canonical
+											 * pasuk-{perek}-{pasuk} ids — a mounted book
+											 * must not shadow the flat anchors' getElementById
+											 * resolution (boundary pesukim appear in two
+											 * adjacent units, so the unit id scopes them). */
+											anchorScope={`book-${unit.unitId}`}
+											recitationWords
+										/>
+									</article>
+								</div>
+							</RangeRecitationPlayer>
 						</section>
 					</React.Fragment>
 				);

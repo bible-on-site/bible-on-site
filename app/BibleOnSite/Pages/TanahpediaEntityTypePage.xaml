@@ -82,63 +82,71 @@
                                         Stroke="{StaticResource Gray200}"
                                         StrokeThickness="1"
                                         BackgroundColor="{AppThemeBinding Light={StaticResource Surface}, Dark={StaticResource SurfaceDark}}">
-                                    <Border.GestureRecognizers>
-                                        <TapGestureRecognizer Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"
-                                                              CommandParameter="{Binding SingleUniqueName}"/>
-                                    </Border.GestureRecognizers>
-                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                        <VerticalStackLayout Grid.Column="0" Spacing="6">
-                                            <Label Text="{Binding EntityName}"
-                                                   FontSize="16"
-                                                   FontAttributes="Bold"
-                                                   TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                                            <!-- Multi-entry entities pick a
-                                                 specific entry via chips. -->
-                                            <FlexLayout Wrap="Wrap"
-                                                        BindableLayout.ItemsSource="{Binding Links}"
-                                                        IsVisible="{Binding ShowLinks}">
-                                                <BindableLayout.ItemTemplate>
-                                                    <DataTemplate x:DataType="models:TanahpediaEntryLink">
+                                    <VerticalStackLayout Spacing="6">
+                                        <!-- Only a single-entry entity opens directly;
+                                             multi-entry entities navigate through the
+                                             chips and unlinked ones have no target —
+                                             those cards must not become dead focus
+                                             stops (#3252). -->
+                                        <controls:TappableView IsEnabled="{Binding IsSingleLink}"
+                                                               Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"
+                                                               CommandParameter="{Binding SingleUniqueName}"
+                                                               SemanticProperties.Description="{Binding EntityName}">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <Label Grid.Column="0"
+                                                       Text="{Binding EntityName}"
+                                                       FontSize="16"
+                                                       FontAttributes="Bold"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                                                <!-- Affordance: chevron for an
+                                                     openable entity, muted badge for
+                                                     an unavailable one. -->
+                                                <Label Grid.Column="1"
+                                                       Text="{x:Static fonts:FluentUI.chevron_left_24_regular}"
+                                                       FontFamily="FluentIcons"
+                                                       FontSize="20"
+                                                       VerticalOptions="Center"
+                                                       IsVisible="{Binding IsSingleLink}"
+                                                       TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"/>
+                                                <Border Grid.Column="1"
+                                                        Padding="8,2"
+                                                        StrokeShape="RoundRectangle 8"
+                                                        StrokeThickness="0"
+                                                        VerticalOptions="Start"
+                                                        IsVisible="{Binding ShowNoEntryBadge}"
+                                                        BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray800}}">
+                                                    <Label Text="אין ערך"
+                                                           FontSize="11"
+                                                           TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
+                                                </Border>
+                                            </Grid>
+                                        </controls:TappableView>
+                                        <!-- Multi-entry entities pick a specific entry
+                                             via chips — siblings of the card's tappable
+                                             region, so disabling it never disables them. -->
+                                        <FlexLayout Wrap="Wrap"
+                                                    BindableLayout.ItemsSource="{Binding Links}"
+                                                    IsVisible="{Binding ShowLinks}">
+                                            <BindableLayout.ItemTemplate>
+                                                <DataTemplate x:DataType="models:TanahpediaEntryLink">
+                                                    <controls:TappableView Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"
+                                                                           CommandParameter="{Binding UniqueName}"
+                                                                           SemanticProperties.Description="{Binding Title}">
                                                         <Border Padding="8,3"
                                                                 Margin="0,0,6,6"
                                                                 StrokeShape="RoundRectangle 8"
                                                                 Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                                                 StrokeThickness="1"
                                                                 BackgroundColor="Transparent">
-                                                            <Border.GestureRecognizers>
-                                                                <TapGestureRecognizer Command="{Binding Source={x:Reference Page}, Path=BindingContext.OpenEntryCommand}"
-                                                                                      CommandParameter="{Binding UniqueName}"/>
-                                                            </Border.GestureRecognizers>
                                                             <Label Text="{Binding Title}"
                                                                    FontSize="13"
                                                                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                                                         </Border>
-                                                    </DataTemplate>
-                                                </BindableLayout.ItemTemplate>
-                                            </FlexLayout>
-                                        </VerticalStackLayout>
-                                        <!-- Affordance: chevron for an
-                                             openable entity, muted badge for
-                                             an unavailable one. -->
-                                        <Label Grid.Column="1"
-                                               Text="{x:Static fonts:FluentUI.chevron_left_24_regular}"
-                                               FontFamily="FluentIcons"
-                                               FontSize="20"
-                                               VerticalOptions="Center"
-                                               IsVisible="{Binding IsSingleLink}"
-                                               TextColor="{AppThemeBinding Light={StaticResource Gray400}, Dark={StaticResource Gray500}}"/>
-                                        <Border Grid.Column="1"
-                                                Padding="8,2"
-                                                StrokeShape="RoundRectangle 8"
-                                                StrokeThickness="0"
-                                                VerticalOptions="Start"
-                                                IsVisible="{Binding ShowNoEntryBadge}"
-                                                BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray800}}">
-                                            <Label Text="אין ערך"
-                                                   FontSize="11"
-                                                   TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                                        </Border>
-                                    </Grid>
+                                                    </controls:TappableView>
+                                                </DataTemplate>
+                                            </BindableLayout.ItemTemplate>
+                                        </FlexLayout>
+                                    </VerticalStackLayout>
                                 </Border>
                             </DataTemplate>
                         </CollectionView.ItemTemplate>

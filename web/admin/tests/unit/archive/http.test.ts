@@ -97,6 +97,30 @@ it("requires verified sessions and returns private noindex responses", async () 
 	expect(r.headers.get("cache-control")).toContain("no-store");
 	expect(mocks.directory).not.toHaveBeenCalled();
 });
+it("reports the verified role for the shared top bar without touching the store", async () => {
+	mocks.archiver.mockResolvedValueOnce(null);
+	expect((await handle(request("/archive/api?session"))).status).toBe(401);
+
+	mocks.admin.mockResolvedValue({
+		...author,
+		role: "admin",
+		name: "המנהל הראשי",
+	});
+	const adminSession = await handle(request("/archive/api?session"));
+	expect(await adminSession.json()).toEqual({
+		isAdmin: true,
+		username: "המנהל הראשי",
+	});
+
+	mocks.admin.mockResolvedValue(null);
+	const archiverSession = await handle(request("/archive/api?session"));
+	expect(await archiverSession.json()).toEqual({
+		isAdmin: false,
+		username: "alice",
+	});
+	expect(mocks.directory).not.toHaveBeenCalled();
+	expect(mocks.resolvePath).not.toHaveBeenCalled();
+});
 it("passes only the verified actor and bounded folder/cursor headers to the store", async () => {
 	await handle(
 		request("/archive/api", "GET", undefined, {

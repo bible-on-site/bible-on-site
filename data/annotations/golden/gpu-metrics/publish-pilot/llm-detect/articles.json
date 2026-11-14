@@ -1,0 +1,47 @@
+[
+ {
+  "source_kind": "article",
+  "article_id": 9501,
+  "content_hash": "b8570a1ed0328778edca9af8a8a9b191eb07624c7c5ab5838ad16cafc6b4e728",
+  "span_start": 3,
+  "span_end": 8,
+  "surface": "דבורה",
+  "intended_name": "דבורה",
+  "entity_type": "PERSON",
+  "disambiguation": null,
+  "confidence": null,
+  "acceptance": "auto",
+  "model_revision": "qwen3-8b-detect@b968826d+local-detect-v2+target-key-v1+18907f373d24",
+  "source_hash": "b8570a1ed0328778edca9af8a8a9b191eb07624c7c5ab5838ad16cafc6b4e728"
+ },
+ {
+  "source_kind": "article",
+  "article_id": 9501,
+  "content_hash": "b8570a1ed0328778edca9af8a8a9b191eb07624c7c5ab5838ad16cafc6b4e728",
+  "span_start": 9,
+  "span_end": 13,
+  "surface": "וברק",
+  "intended_name": "ברק",
+  "entity_type": "PERSON",
+  "disambiguation": null,
+  "confidence": null,
+  "acceptance": "auto",
+  "model_revision": "qwen3-8b-detect@b968826d+local-detect-v2+target-key-v1+18907f373d24",
+  "source_hash": "b8570a1ed0328778edca9af8a8a9b191eb07624c7c5ab5838ad16cafc6b4e728"
+ },
+ {
+  "source_kind": "article",
+  "article_id": 9501,
+  "content_hash": "b8570a1ed0328778edca9af8a8a9b191eb07624c7c5ab5838ad16cafc6b4e728",
+  "span_start": 18,
+  "span_end": 23,
+  "surface": "לתבור",
+  "intended_name": "תבור",
+  "entity_type": "PLACE",
+  "disambiguation": null,
+  "confidence": null,
+  "acceptance": "auto",
+  "model_revision": "qwen3-8b-detect@b968826d+local-detect-v2+target-key-v1+18907f373d24",
+  "source_hash": "b8570a1ed0328778edca9af8a8a9b191eb07624c7c5ab5838ad16cafc6b4e728"
+ }
+]
