@@ -213,6 +213,26 @@ describe("pending PR API migration", () => {
 		])
 			expect(() => validateApiSequence(sequence)).toThrow();
 	});
+	it("retains validated main-name preconditions across API conversion", () => {
+		const names = [
+			{ id: "00000000-0000-4000-8000-000000000003", name: "Main name" },
+		];
+		expect(
+			validateApiSequence([{ ...changes[0], personNames: names }])[0]
+				.personNames,
+		).toEqual(names);
+		for (const personNames of [
+			null,
+			{},
+			[...names, ...names],
+			[{ ...names[0], id: "bad" }],
+			[{ ...names[0], name: 4 }],
+			Array(101).fill(names[0]),
+		])
+			expect(() =>
+				validateApiSequence([{ ...changes[0], personNames }]),
+			).toThrow();
+	});
 	it("scans beyond 500 UI rows, locks each open PR and persists only changes", async () => {
 		const rows = Array.from({ length: 501 }, (_, i) => ({
 			id: String(i + 1),

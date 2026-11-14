@@ -1,6 +1,9 @@
 /** Client imports receive RPC stubs; persistence and providers stay server-only. */
 import { createServerFn } from "@tanstack/react-start";
-import { uuidField } from "~/lib/tanahpedia/contributions";
+import {
+	uuidField,
+	validateContributionList,
+} from "~/lib/tanahpedia/contributions";
 import { contributionCatalogue } from "./contribution-changes.server";
 import { contributionIdentity } from "./contribution-identity.server";
 import {
@@ -23,12 +26,12 @@ import {
 export const getContributionSession = createServerFn({ method: "GET" }).handler(
 	contributionIdentity,
 );
-export const getContributions = createServerFn({ method: "GET" }).handler(
-	async () => {
+export const getContributions = createServerFn({ method: "GET" })
+	.validator(validateContributionList)
+	.handler(async ({ data }) => {
 		await contributionIdentity();
-		return listContributions();
-	},
-);
+		return listContributions(data);
+	});
 export const getContribution = createServerFn({ method: "GET" })
 	.validator((id: unknown) => uuidField(id, "id"))
 	.handler(async ({ data }) => {

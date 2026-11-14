@@ -70,7 +70,7 @@ describe("contribution RPC boundary", () => {
 		expect(await getContributionSession()).toEqual({ id: "verified" });
 	});
 	it("authenticates list, detail, catalogue and provider status reads", async () => {
-		await getContributions();
+		await getContributions({ data: {} });
 		await getContribution({ data: "00000000-0000-4000-8000-000000000001" });
 		await getContributionCatalogue();
 		await getContributionLlmStatus();
@@ -107,7 +107,7 @@ describe("contribution RPC boundary", () => {
 	});
 	it("fails closed on account resolution failures", async () => {
 		mocks.identity.mockRejectedValue(new Error("unauthenticated"));
-		await expect(getContributions()).rejects.toThrow();
+		await expect(getContributions({ data: {} })).rejects.toThrow();
 		expect(mocks.list).not.toHaveBeenCalled();
 	});
 });

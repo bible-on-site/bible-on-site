@@ -216,6 +216,13 @@ export function ContributionDiff({ changes }: { changes: ReviewedChange[] }) {
 						</div>
 					)}
 					{change.kind === "place" && <Coordinates change={change} />}
+					{Boolean(change.personNames?.length) && (
+						<p className="contribution-diff-note">
+							שם האיש הראשי יעודכן גם ברשימת האישים:{" "}
+							{change.personNames?.map((name) => name.name).join(", ")} ←{" "}
+							{String(change.after?.displayName ?? "")}
+						</p>
+					)}
 					<div className="contribution-diff-table-wrap">
 						<table>
 							<thead>

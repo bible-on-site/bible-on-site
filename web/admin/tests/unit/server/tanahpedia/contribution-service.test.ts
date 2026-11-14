@@ -47,6 +47,7 @@ vi.mock("~/server/tanahpedia/contribution-changes.server", () => ({
 	prepareChanges: mocks.prepare,
 	readChangeState: mocks.read,
 	applyChange: mocks.apply,
+	assertMetadataNames: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("~/server/db", () => ({ query: mocks.query }));
 vi.mock("~/server/website-revalidate", () => ({
@@ -170,6 +171,54 @@ describe("contribution lifecycle", () => {
 		mocks.query.mockResolvedValue([]);
 	});
 	afterEach(() => vi.restoreAllMocks());
+	it("retains immutable authored snapshots and the exact proposal attached to an approval", async () => {
+		let item = await pr();
+		item = await updateContribution(action(item, "approve"), owner);
+		const approval = structuredClone(item.events.at(-1)?.snapshot);
+		const edited = await editContribution(
+			{
+				...input,
+				id: item.id,
+				version: item.version,
+				description: "Changed description",
+				evidence: [{ citation: "Other source", quote: "Other quote" }],
+			},
+			alice,
+		);
+		expect(edited.revisionHistory?.[0]).toMatchObject({
+			revision: 1,
+			description: input.description,
+			evidence,
+			changes: [change],
+		});
+		expect(
+			edited.events.find((event) => event.kind === "approved")?.snapshot,
+		).toEqual(approval);
+		expect(
+			edited.events.find((event) => event.kind === "approved")?.snapshot
+				?.evidence,
+		).toEqual(evidence);
+		expect(edited.description).toBe("Changed description");
+	});
+	it("saves assignee-only edits without invalidating a reviewed revision", async () => {
+		let item = await pr();
+		item = await updateContribution(action(item, "approve"), owner);
+		const assigned = await editContribution(
+			{
+				...input,
+				id: item.id,
+				version: item.version,
+				assignee: { kind: "local_llm" },
+			},
+			alice,
+		);
+		expect(assigned.assignee.kind).toBe("local_llm");
+		expect(assigned.revision).toBe(item.revision);
+		expect(assigned.events.at(-1)?.kind).toBe("assigned");
+		await expect(
+			mergeContribution({ id: assigned.id, version: assigned.version }, alice),
+		).resolves.toMatchObject({ state: "merged" });
+	});
 	it("queues workstation work explicitly, prevents duplicates and allows recovery after a lost lease", async () => {
 		let item = await createContribution(
 			{

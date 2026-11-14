@@ -101,6 +101,7 @@ export interface ReviewedChange {
 	before: ChangeState | null;
 	after: ChangeState | null;
 	labels: Record<string, string>;
+	personNames?: { id: string; name: string }[];
 }
 
 export interface ContributionEvent {
@@ -121,6 +122,39 @@ export interface ContributionEvent {
 	body: string;
 	at: string;
 	revision: number;
+	snapshot?: ContributionRevisionSnapshot;
+}
+
+export interface ContributionRevisionSnapshot {
+	revision: number;
+	version: number;
+	apiVersion: number;
+	author: Contributor;
+	title: string;
+	description: string;
+	evidence: Evidence[];
+	changes: ReviewedChange[];
+	issueId: string | null;
+	closeIssue: boolean;
+	at: string;
+}
+
+export function contributionSnapshot(
+	item: Contribution,
+): ContributionRevisionSnapshot {
+	return structuredClone({
+		revision: item.revision,
+		version: item.version,
+		apiVersion: item.apiVersion ?? 1,
+		author: item.revisionAuthor ?? item.author,
+		title: item.title,
+		description: item.description,
+		evidence: item.evidence,
+		changes: item.changes,
+		issueId: item.issueId,
+		closeIssue: item.closeIssue,
+		at: new Date().toISOString(),
+	});
 }
 
 export interface ContributionGeneration {
@@ -165,6 +199,65 @@ export interface Contribution {
 	apiMigration?: ContributionApiMigration;
 	apiMigrationHistory?: ContributionApiMigration[];
 	generation?: ContributionGeneration;
+	revisionHistory?: ContributionRevisionSnapshot[];
+}
+
+export interface ContributionListRequest {
+	kind?: Contribution["kind"];
+	state?: "open" | "closed" | "all";
+	q?: string;
+	assignee?: Assignee["kind"];
+	before?: number;
+	relatedTo?: string;
+}
+export interface ContributionPage {
+	items: Contribution[];
+	nextCursor: number | null;
+	counts: {
+		issues: number;
+		prs: number;
+		open: number;
+		closed: number;
+		all: number;
+	};
+}
+export function validateContributionList(
+	raw: unknown,
+): ContributionListRequest {
+	const input = record(raw ?? {});
+	if (input.kind !== undefined && !["issue", "pr"].includes(String(input.kind)))
+		throw new Error("Invalid discussion kind");
+	if (
+		input.state !== undefined &&
+		!["open", "closed", "all"].includes(String(input.state))
+	)
+		throw new Error("Invalid discussion state");
+	if (
+		input.assignee !== undefined &&
+		!["unassigned", "human", "aws_llm", "local_llm"].includes(
+			String(input.assignee),
+		)
+	)
+		throw new Error("Invalid assignee filter");
+	if (
+		input.before !== undefined &&
+		(!Number.isSafeInteger(input.before) || Number(input.before) < 1)
+	)
+		throw new Error("Invalid discussion cursor");
+	return {
+		kind: input.kind as ContributionListRequest["kind"],
+		state: input.state as ContributionListRequest["state"],
+		assignee: input.assignee as ContributionListRequest["assignee"],
+		q:
+			input.q === undefined
+				? undefined
+				: (optionalText(input.q, "search", 500) ?? undefined),
+		before: input.before as number | undefined,
+		relatedTo:
+			input.relatedTo === undefined
+				? undefined
+				: uuidField(input.relatedTo, "relatedTo"),
+	};
 }
 
 export const CHANGE_LABELS: Record<ChangeInput["kind"], string> = {

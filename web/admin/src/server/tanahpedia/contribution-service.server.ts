@@ -11,6 +11,7 @@ import {
 	type Contribution,
 	type ContributionEvent,
 	type Contributor,
+	contributionSnapshot,
 	record,
 	sameState,
 	textField,
@@ -23,6 +24,7 @@ import { query } from "../db";
 import { pediaInvalidation, revalidateWebsite } from "../website-revalidate";
 import {
 	applyChange,
+	assertMetadataNames,
 	prepareChanges,
 	readChangeState,
 } from "./contribution-changes.server";
@@ -53,7 +55,17 @@ export function addEvent(
 		body,
 		at: new Date().toISOString(),
 		revision: item.revision,
+		...(["approved", "changes_requested", "merged"].includes(kind)
+			? { snapshot: contributionSnapshot(item) }
+			: {}),
 	});
+}
+
+function rememberRevision(item: Contribution): void {
+	item.revisionHistory = [
+		...(item.revisionHistory ?? []),
+		contributionSnapshot(item),
+	];
 }
 
 export function assertVersion(item: Contribution, version: unknown): void {
@@ -147,25 +159,35 @@ export async function editContribution(
 				: [];
 		if (item.kind === "pr" && evidence.length === 0)
 			throw new Error("PRs require evidence");
-		if (
-			sameState(
-				{
-					title: item.title,
-					description: item.description,
-					evidence: item.evidence,
-					changes: item.changes,
-					closeIssue: item.closeIssue,
-				},
-				{
-					title,
-					description,
-					evidence,
-					changes,
-					closeIssue: input.closeIssue !== false,
-				},
-			)
-		)
-			return item;
+		const assignee =
+			input.assignee === undefined
+				? item.assignee
+				: validateAssignee(input.assignee);
+		const assignmentChanged = !sameState(item.assignee, assignee);
+		const contentChanged = !sameState(
+			{
+				title: item.title,
+				description: item.description,
+				evidence: item.evidence,
+				changes: item.changes,
+				closeIssue: item.closeIssue,
+			},
+			{
+				title,
+				description,
+				evidence,
+				changes,
+				closeIssue: input.closeIssue !== false,
+			},
+		);
+		if (!contentChanged && !assignmentChanged) return item;
+		if (assignmentChanged) {
+			cancelGeneration(item, "The issue assignee changed");
+			item.assignee = assignee;
+			addEvent(item, actor, "assigned", assigneeLabel(assignee));
+		}
+		if (!contentChanged) return saveContribution(conn, item);
+		rememberRevision(item);
 		item.title = title;
 		cancelGeneration(
 			item,
@@ -203,6 +225,7 @@ export async function recoverContributionSequence(
 		assertVersion(item, input.version);
 		if (item.state !== "open" || !migrationBlocked(item))
 			throw new Error("Only an incompatible open PR can be recovered");
+		rememberRevision(item);
 		item.changes = await prepareChanges(conn, changes);
 		item.revisionAuthor = actor;
 		item.apiVersion = CONTRIBUTION_API_VERSION;
@@ -301,6 +324,7 @@ export async function updateContribution(
 		} else if (input.action === "reopen") {
 			if (item.state !== "closed")
 				throw new Error("Only closed items can reopen");
+			rememberRevision(item);
 			item.state = "open";
 			item.revision += 1;
 			addEvent(item, actor, "reopened", "");
@@ -321,6 +345,7 @@ async function applyReviewedChanges(
 		`${a.kind}:${a.targetId}`.localeCompare(`${b.kind}:${b.targetId}`),
 	);
 	for (const change of changes) {
+		await assertMetadataNames(conn, change);
 		const current = await readChangeState(conn, change.kind, change.targetId);
 		if (!sameState(current, change.before))
 			throw new Error(

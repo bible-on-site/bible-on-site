@@ -14,11 +14,36 @@ import {
 	validateAssignee,
 	validateChange,
 	validateChanges,
+	validateContributionList,
 	validateEvidence,
 } from "~/lib/tanahpedia/contributions";
 
 const ID = "00000000-0000-4000-8000-000000000001";
 const OTHER = "00000000-0000-4000-8000-000000000002";
+it.each([
+	{ kind: "other" },
+	{ state: "merged" },
+	{ assignee: "other" },
+	{ before: 0 },
+	{ before: 1.5 },
+	{ before: "3" },
+	{ relatedTo: "invalid" },
+	{ q: "a".repeat(501) },
+])("rejects invalid queue filters %j", (raw) =>
+	expect(() => validateContributionList(raw)).toThrow(),
+);
+it("normalizes optional queue filters", () => {
+	expect(validateContributionList(undefined).q).toBeUndefined();
+	expect(
+		validateContributionList({
+			q: "  source  ",
+			kind: "pr",
+			state: "all",
+			before: 10,
+			relatedTo: ID,
+		}),
+	).toMatchObject({ q: "source", kind: "pr", before: 10, relatedTo: ID });
+});
 it.each([
 	["יהושע י׳, א׳", "יהושע י א"],
 	["יהושע כ״ג, א׳", "יהושע כג א"],

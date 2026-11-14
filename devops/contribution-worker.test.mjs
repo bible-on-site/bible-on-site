@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { inspect } from "node:util";
 import {
 	createContributionWorker,
 	workerAwsCredentials,
 	workerOptions,
 	workerTokenProvider,
+	runContributionWorker,
 } from "./contribution-worker.mjs";
 
 const id = "00000000-0000-4000-8000-000000000001";
@@ -28,6 +30,52 @@ const options = workerOptions(
 	["--origin", "http://127.0.0.1:3101", "--dev", "--model", "local-test"],
 	{},
 );
+
+test("watch resumes after a temporary claim outage and cancels its original polling delay", async () => {
+	const stop = new AbortController(),
+		logs = [],
+		pauses = [];
+	let claims = 0;
+	await runContributionWorker(
+		["--watch", "--dev", "--origin", "http://localhost:3101"],
+		{},
+		{
+			signal: stop.signal,
+			log: (...args) => logs.push(args),
+			request: async () =>
+				new Response(null, { status: ++claims === 1 ? 503 : 204 }),
+			pause: async (ms, _value, { signal }) => {
+				pauses.push(ms);
+				if (pauses.length === 2) {
+					stop.abort();
+					assert.equal(signal.aborted, true);
+					throw new DOMException("Stopped", "AbortError");
+				}
+			},
+		},
+	);
+	assert.equal(claims, 2);
+	assert.deepEqual(pauses, [5000, 5000]);
+	assert.match(JSON.stringify(logs), /503/);
+	assert.ok(!JSON.stringify(logs).includes("idle"));
+});
+test("once reports a failed claim without silently retrying", async () => {
+	let claims = 0;
+	await assert.rejects(
+		runContributionWorker(
+			["--once", "--dev", "--origin", "http://localhost:3101"],
+			{},
+			{
+				request: async () => {
+					claims++;
+					return new Response(null, { status: 503 });
+				},
+			},
+		),
+		/503/,
+	);
+	assert.equal(claims, 1);
+});
 
 test("restricts worker origins, protocols, identifiers and development auth", () => {
 	assert.equal(workerOptions([], {}).origin, "https://admin.xn--febl3a.co.il");
@@ -129,7 +177,7 @@ test("reads Cognito bootstrap settings through the expected AWS account and runn
 	const result = await workerAwsCredentials("profile", {
 		call: async (args) => {
 			calls.push(args);
-			if (args[0] === "sts") return { Account: "250598594267" };
+			if (args[0] === "sts") return { Account: "250598594267" }; // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 			if (args[1] === "describe-services")
 				return {
 					services: [
@@ -178,7 +226,7 @@ test("reads Cognito bootstrap settings through the expected AWS account and runn
 	await assert.rejects(
 		workerAwsCredentials("wrong", {
 			call: async (args) =>
-				args[0] === "sts" ? { Account: "250598594267" } : { services: [] },
+				args[0] === "sts" ? { Account: "250598594267" } : { services: [] }, // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 		}),
 		/Unexpected admin task/,
 	);
@@ -216,9 +264,9 @@ test("claims work, uses only local inference and submits an authority-free resul
 	assert.equal(calls[2].body.model, "doradsoft");
 	assert.equal(calls[2].body.token, claim.token);
 	assert.equal(calls[2].body.author, undefined);
-	assert.ok(!JSON.stringify(logs).includes("Private supplied evidence"));
-	assert.ok(!JSON.stringify(logs).includes(claim.token));
-	assert.ok(!JSON.stringify(calls[1].body).includes("short-worker-token"));
+	assert.ok(!inspect(logs).includes("Private supplied evidence"));
+	assert.ok(!inspect(logs).includes(claim.token));
+	assert.ok(!inspect(calls[1].body).includes("short-worker-token"));
 });
 
 test("idle and malformed claims never invoke a model", async () => {

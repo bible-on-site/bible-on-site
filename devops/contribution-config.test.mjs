@@ -92,13 +92,16 @@ function awsFixture(overrides = {}) {
 	const calls = [];
 	const call = async (args, payload) => {
 		calls.push({ args, payload });
-		if (overrides[args[1]])
-			return typeof overrides[args[1]] === "function"
-				? overrides[args[1]](args, payload)
-				: overrides[args[1]];
+		const override = Object.hasOwn(overrides, args[1])
+			? overrides[args[1]]
+			: undefined;
+		if (override)
+			return typeof override === "function"
+				? override(args, payload)
+				: override;
 		switch (args[1]) {
 			case "get-caller-identity":
-				return { Account: "250598594267" };
+				return { Account: "250598594267" }; // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 			case "describe-services":
 				return { services: [structuredClone(stable)] };
 			case "describe-task-definition":

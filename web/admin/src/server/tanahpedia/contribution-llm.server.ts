@@ -527,14 +527,16 @@ export async function createGeneratedContributionPrs(
 					);
 			}
 		}
+		const evidenceIndexes = draft.evidenceIndexes as number[];
 		return {
 			kind: "pr",
 			issueId: id,
 			title: textField(draft.title, "title"),
 			description: textField(draft.description, "description", 20000),
 			changes,
-			evidence: [...new Set(draft.evidenceIndexes as number[])].map(
-				(index) => context.issue.evidence[index],
+			// Keep selected sources in the issue's order and include each once.
+			evidence: context.issue.evidence.filter((_source, index) =>
+				evidenceIndexes.includes(index),
 			),
 			assignee: { kind: "human", id: "doradsoft", name: "doradsoft" },
 			closeIssue:

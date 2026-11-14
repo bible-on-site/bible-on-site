@@ -26,6 +26,17 @@ Asia/Jerusalem**. This supersedes the original deadline in the active goal text.
   cannot propose encyclopedia prose, SQL, arbitrary API methods, or credentials.
 - Durable records, comments, reviews, and applied-operation history live in
   MySQL. Local browser storage is not the issue/PR source of truth.
+- Authored edits retain immutable previous proposal snapshots, including their
+  evidence and operation sequence. Review and merge events also retain the
+  exact proposal they approved or applied. Historical versions are available
+  in the discussion as raw sequences with their original API versions.
+- Queue filtering and counts run on the server before pagination. Keyset pages
+  contain 100 discussions, with an explicit load-more action; newer closed
+  history cannot hide older open issues or linked discussions. Assignment-only
+  edits preserve approval, while changing proposal content creates a revision.
+- PERSON display-name changes also update MAIN person names. Their reviewed
+  values participate in conflict checks and appear in the diff, so independent
+  name edits cannot be silently overwritten.
 - LLM assignment does not itself execute a model or merge changes. Generation
   is explicit, and model output passes the same typed validation as human input.
 
@@ -81,6 +92,9 @@ claim, complete and fail endpoints; ordinary `admin-api/service` tokens and
 browser cookies cannot authenticate them. Worker tokens cannot review, merge or
 use the general admin API. Logs omit evidence, prompts, tokens and lease secrets.
 Expired SSO requires another AWS sign-in; queued issues remain saved meanwhile.
+Watch mode resumes after transport outages under the existing abortable poll
+interval; one-shot failures remain observable. The Windows launcher additionally
+restarts an exited process and keeps the model service bound to loopback.
 
 `devops/contribution-config.mjs --reviewer-sub <verified-sub> --receipt <private-file>`
 plans the configuration. Add `--apply` to append the scope to the existing
@@ -168,3 +182,12 @@ Validation tasks: `bun run test:unit`, `bun run coverage:unit`,
 `bun run test:contributions:mysql`, `bun run lint`, and `bun run build` in
 `web/admin`. The MySQL suite creates and removes its own random loopback-only
 database from the canonical repository schema; it never edits the local corpus.
+
+Local browser validation uses the task-specific `tanah_e2e_4243` fixture database.
+The shared `tanah_test` corpus no longer contained its required article/author
+fixtures despite a previously successful population. Keeping this task's fixture
+separate removes shared-database interference. Coverage and browser report
+directories are excluded from Vite's watch
+set: writing generated HTML must not reload an editor. The deployment-tool suite
+uses four test processes to avoid Windows child-process contention; its original
+process deadlines remain unchanged.

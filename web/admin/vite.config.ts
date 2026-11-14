@@ -131,6 +131,16 @@ export default defineConfig({
 	},
 	server: {
 		port: 3101,
+		// Generated HTML reports must not reload an open editor or trigger
+		// hundreds of redundant refreshes while a local coverage run finishes.
+		watch: {
+			ignored: [
+				"**/.coverage/**",
+				"**/.playwright-results/**",
+				"**/.playwright-report/**",
+				"**/.output/**",
+			],
+		},
 		...(measureCoverage ? { hmr: false } : {}),
 	},
 	plugins: [

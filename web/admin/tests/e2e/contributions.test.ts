@@ -254,11 +254,13 @@ test.describe("Issues and typed pull requests", () => {
 		const configured = new URL(process.env.DB_URL ?? "");
 		if (
 			!["localhost", "127.0.0.1", "[::1]"].includes(configured.hostname) ||
-			configured.pathname !== "/tanah_test"
+			!/^\/tanah_(?:test|e2e_[a-f0-9]{4,16})$/.test(configured.pathname)
 		)
-			throw new Error("Migration E2E requires loopback tanah_test");
+			throw new Error("Migration E2E requires a loopback Tanah test fixture");
 		const id = new URL(page.url()).searchParams.get("id");
 		if (!id) throw new Error("Created PR ID missing");
+		// mysql2 does not accept the Rust populator's URL-only ssl-mode option.
+		configured.searchParams.delete("ssl-mode");
 		const connection = await mysql.createConnection(configured.toString());
 		try {
 			const [rows] = await connection.execute<RowDataPacket[]>(
@@ -312,6 +314,12 @@ test.describe("Issues and typed pull requests", () => {
 		).toHaveCount(0);
 		await page.getByRole("tab", { name: "שינויים 1", exact: true }).click();
 		await expect(page.getByRole("table")).toBeVisible();
+		await page.getByRole("tab", { name: "תיאור ודיון 0", exact: true }).click();
+		await page.getByText(/^הצגת גרסה 1 -/).click();
+		await expect(
+			page.locator(".contribution-raw-sequence").first(),
+		).toContainText('"kind": "entry"');
+		await capture(page, testInfo, "recovered-pr-retained-history");
 		await page
 			.getByRole("button", { name: "סגירה ללא מיזוג", exact: true })
 			.click();

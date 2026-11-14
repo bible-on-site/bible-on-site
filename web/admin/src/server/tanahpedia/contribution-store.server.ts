@@ -1,5 +1,10 @@
 import type { PoolConnection } from "mysql2/promise";
-import type { Contribution } from "~/lib/tanahpedia/contributions";
+import {
+	type Contribution,
+	type ContributionListRequest,
+	type ContributionPage,
+	validateContributionList,
+} from "~/lib/tanahpedia/contributions";
 import { execute, query, transaction, txExecute, txQueryOne } from "../db";
 
 // DDL is outside transactions: MySQL implicitly commits schema statements.
@@ -110,12 +115,63 @@ export async function saveContribution(
 	return item;
 }
 
-export async function listContributions(): Promise<Contribution[]> {
+export async function listContributions(
+	raw: ContributionListRequest = {},
+): Promise<ContributionPage> {
 	await ensureContributionSchema();
-	const rows = await query<ContributionRow>(
-		"SELECT id, number, kind, state, title, version, data FROM tanahpedia_contribution ORDER BY number DESC LIMIT 500",
+	const input = validateContributionList(raw),
+		where: string[] = [],
+		values: (string | number)[] = [];
+	if (input.kind) {
+		where.push("kind = ?");
+		values.push(input.kind);
+	}
+	if (input.assignee) {
+		where.push("JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.kind')) = ?");
+		values.push(input.assignee);
+	}
+	if (input.q) {
+		where.push(
+			"LOCATE(LOWER(?), LOWER(CONCAT_WS(' ', title, number, JSON_UNQUOTE(JSON_EXTRACT(data, '$.description')), JSON_UNQUOTE(JSON_EXTRACT(data, '$.author.name')), JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.name')), JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.id')), REPLACE(JSON_UNQUOTE(JSON_EXTRACT(data, '$.assignee.kind')), '_', ' ')))) > 0",
+		);
+		values.push(input.q);
+	}
+	if (input.relatedTo) {
+		where.push(
+			"(id = ? OR issue_id = ? OR id = (SELECT issue_id FROM tanahpedia_contribution related WHERE related.id = ?))",
+		);
+		values.push(input.relatedTo, input.relatedTo, input.relatedTo);
+	}
+	const base = where.length ? where.join(" AND ") : "1 = 1";
+	const [totals] = await query<{ open: number; closed: number; all: number }>(
+		`SELECT COALESCE(SUM(state = 'open'),0) AS open, COALESCE(SUM(state <> 'open'),0) AS closed, COUNT(*) AS \`all\` FROM tanahpedia_contribution WHERE ${base}`,
+		[...values],
 	);
-	return rows.map(decode);
+	const [global] = await query<{ issues: number; prs: number }>(
+		"SELECT COALESCE(SUM(kind = 'issue' AND state = 'open'),0) AS issues, COALESCE(SUM(kind = 'pr' AND state = 'open'),0) AS prs FROM tanahpedia_contribution",
+	);
+	if (input.state && input.state !== "all")
+		where.push(input.state === "open" ? "state = 'open'" : "state <> 'open'");
+	if (input.before) {
+		where.push("number < ?");
+		values.push(input.before);
+	}
+	const rows = await query<ContributionRow>(
+		`SELECT id, number, kind, state, title, version, data FROM tanahpedia_contribution WHERE ${where.length ? where.join(" AND ") : "1 = 1"} ORDER BY number DESC LIMIT 101`,
+		values,
+	);
+	const items = rows.slice(0, 100).map(decode);
+	return {
+		items,
+		nextCursor: rows.length > 100 ? items[items.length - 1].number : null,
+		counts: {
+			issues: Number(global.issues),
+			prs: Number(global.prs),
+			open: Number(totals.open),
+			closed: Number(totals.closed),
+			all: Number(totals.all),
+		},
+	};
 }
 
 export async function withContributions<T>(

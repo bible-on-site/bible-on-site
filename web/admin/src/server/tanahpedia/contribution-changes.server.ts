@@ -13,6 +13,35 @@ import { assertEntryFieldsValid } from "./revisions";
 
 type State = ChangeState;
 
+export async function readMetadataNames(
+	conn: PoolConnection,
+	entityId: string,
+): Promise<{ id: string; name: string }[]> {
+	const people = await txQuery<{ id: string }>(
+		conn,
+		"SELECT id FROM tanahpedia_person WHERE entity_id = ? ORDER BY id FOR UPDATE",
+		[entityId],
+	);
+	if (!people.length) return [];
+	return txQuery<{ id: string; name: string }>(
+		conn,
+		"SELECT n.id, n.name FROM tanahpedia_person_name n JOIN tanahpedia_person p ON p.id = n.person_id JOIN tanahpedia_lookup_name_type t ON t.id = n.name_type_id WHERE p.entity_id = ? AND t.name = 'MAIN' ORDER BY n.id FOR UPDATE",
+		[entityId],
+	);
+}
+
+export async function assertMetadataNames(
+	conn: PoolConnection,
+	change: ReviewedChange,
+): Promise<void> {
+	if (change.kind !== "metadata") return;
+	const current = await readMetadataNames(conn, change.targetId);
+	if (!sameState(current, change.personNames ?? []))
+		throw new Error(
+			"Conflict: the person's main names changed. Edit the PR to review a fresh diff.",
+		);
+}
+
 const READS = {
 	parent_child: `SELECT pc.parent_id AS parentId, pc.child_id AS childId,
 	 t.name AS relationshipType, r.name AS parentRole, pc.source_citation AS sourceCitation,
@@ -120,7 +149,16 @@ export async function prepareChanges(
 				await referenceLabels(conn, { ...input, after: before } as ChangeInput),
 			);
 		}
-		changes.push({ kind: input.kind, targetId, before, after, labels });
+		changes.push({
+			kind: input.kind,
+			targetId,
+			before,
+			after,
+			labels,
+			...(input.kind === "metadata"
+				? { personNames: await readMetadataNames(conn, targetId) }
+				: {}),
+		});
 	}
 	return changes;
 }
@@ -150,9 +188,15 @@ export async function applyChange(
 	}
 	await referenceLabels(conn, input);
 	if (input.kind === "metadata") {
+		await assertMetadataNames(conn, change);
 		await txExecute(
 			conn,
 			"UPDATE tanahpedia_entity SET name = ? WHERE id = ?",
+			[a.displayName, id],
+		);
+		await txExecute(
+			conn,
+			"UPDATE tanahpedia_person_name n JOIN tanahpedia_person p ON p.id = n.person_id JOIN tanahpedia_lookup_name_type t ON t.id = n.name_type_id SET n.name = ? WHERE p.entity_id = ? AND t.name = 'MAIN'",
 			[a.displayName, id],
 		);
 		return;

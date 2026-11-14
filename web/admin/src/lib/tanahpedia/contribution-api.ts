@@ -69,6 +69,28 @@ export function validateApiSequence(value: unknown): ReviewedChange[] {
 		if (!sameState(input.after, change.after))
 			throw new Error("API operation contains unsupported fields");
 		const labels = record(change.labels, "labels");
+		let personNames: ReviewedChange["personNames"];
+		if (change.personNames !== undefined) {
+			if (
+				input.kind !== "metadata" ||
+				!Array.isArray(change.personNames) ||
+				change.personNames.length > 100
+			)
+				throw new Error("Invalid main-name preconditions");
+			const ids = new Set<string>();
+			personNames = change.personNames.map((raw) => {
+				const name = record(raw, "main name"),
+					id = uuidField(name.id, "name id");
+				if (
+					ids.has(id) ||
+					typeof name.name !== "string" ||
+					name.name.length > 255
+				)
+					throw new Error("Invalid main-name preconditions");
+				ids.add(id);
+				return { id, name: name.name };
+			});
+		}
 		if (Object.values(labels).some((label) => typeof label !== "string"))
 			throw new Error("API labels must be text");
 		const key = `${input.kind}:${targetId}`;
@@ -80,6 +102,7 @@ export function validateApiSequence(value: unknown): ReviewedChange[] {
 			before: change.before as ReviewedChange["before"],
 			after: input.after as unknown as ReviewedChange["after"],
 			labels: labels as Record<string, string>,
+			...(personNames ? { personNames } : {}),
 		};
 	});
 }

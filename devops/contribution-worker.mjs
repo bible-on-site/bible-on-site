@@ -9,7 +9,8 @@ const MODEL_TIMEOUT = 120000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const loopback = (host) => ["localhost", "127.0.0.1", "[::1]"].includes(host);
 const adminHosts = new Set(["admin.xn--febl3a.co.il", "admin.xn--febl3a.com"]);
-const AWS_ACCOUNT = "250598594267",
+// Public account identifier used to reject worker authentication in the wrong account.
+const AWS_ACCOUNT = "250598594267", // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 	AWS_REGION = "il-central-1";
 const executeFile = promisify(execFile);
 
@@ -208,7 +209,7 @@ export function workerTokenProvider(
 						env.CONTRIBUTION_AWS_PROFILE || "AdministratorAccess-250598594267",
 					);
 		const domain = new URL(
-			/^[a-z][a-z0-9+.-]*:\/\//i.test(settings.COGNITO_DOMAIN)
+			settings.COGNITO_DOMAIN.includes("://")
 				? settings.COGNITO_DOMAIN
 				: `https://${settings.COGNITO_DOMAIN}`,
 		);
@@ -348,33 +349,52 @@ export function createContributionWorker(
 export async function runContributionWorker(
 	args = process.argv.slice(2),
 	env = process.env,
+	runtime = {},
 ) {
 	const options = workerOptions(args, env);
 	const controller = new AbortController();
+	const signal = runtime.signal
+		? AbortSignal.any([controller.signal, runtime.signal])
+		: controller.signal;
+	const pause = runtime.pause ?? delay,
+		log = runtime.log ?? console.info;
 	const run = createContributionWorker(options, {
 		getToken: workerTokenProvider({
 			...env,
 			CONTRIBUTION_AWS_PROFILE: options.profile,
 		}),
-		log: (message) => console.info(message),
-		signal: controller.signal,
+		log,
+		signal,
+		...(runtime.request ? { request: runtime.request } : {}),
 	});
 	const stop = () => controller.abort();
 	process.once("SIGINT", stop);
 	process.once("SIGTERM", stop);
 	try {
 		do {
-			const result = await run();
-			console.info("Local contribution worker:", result);
+			let result;
+			try {
+				result = await run();
+			} catch (error) {
+				if (signal.aborted) break;
+				if (!options.watch) throw error;
+				log(
+					"Local worker unavailable:",
+					error instanceof Error ? error.message : "Request failed",
+				);
+				await pause(5000, undefined, { signal });
+				continue;
+			}
+			if (result.status !== "idle" || !options.watch)
+				log("Local contribution worker:", result);
 			if (!options.watch) {
 				if (result.status === "failed") process.exitCode = 1;
 				break;
 			}
-			if (result.status === "idle")
-				await delay(5000, undefined, { signal: controller.signal });
-		} while (!controller.signal.aborted);
+			if (result.status === "idle") await pause(5000, undefined, { signal });
+		} while (!signal.aborted);
 	} catch (error) {
-		if (!controller.signal.aborted) throw error;
+		if (!signal.aborted) throw error;
 	} finally {
 		process.removeListener("SIGINT", stop);
 		process.removeListener("SIGTERM", stop);

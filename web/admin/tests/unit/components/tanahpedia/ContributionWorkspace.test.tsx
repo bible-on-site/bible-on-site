@@ -158,7 +158,39 @@ describe("issues and PR administration", () => {
 				},
 			],
 		});
-		mocks.list.mockImplementation(async () => [issue, pr]);
+		mocks.list.mockImplementation(async ({ data }) => {
+			const all = [issue, pr];
+			const base = all.filter(
+				(row) =>
+					(!data.kind || row.kind === data.kind) &&
+					(!data.assignee || row.assignee.kind === data.assignee) &&
+					(!data.q ||
+						`${row.title} ${row.description} ${row.number} ${row.author.name}`
+							.toLowerCase()
+							.includes(data.q.toLowerCase())),
+			);
+			return {
+				items: base.filter(
+					(row) =>
+						!data.state ||
+						data.state === "all" ||
+						(data.state === "open"
+							? row.state === "open"
+							: row.state !== "open"),
+				),
+				nextCursor: null,
+				counts: {
+					issues: all.filter(
+						(row) => row.kind === "issue" && row.state === "open",
+					).length,
+					prs: all.filter((row) => row.kind === "pr" && row.state === "open")
+						.length,
+					open: base.filter((row) => row.state === "open").length,
+					closed: base.filter((row) => row.state !== "open").length,
+					all: base.length,
+				},
+			};
+		});
 		mocks.session.mockResolvedValue(owner);
 		mocks.detail.mockImplementation(async ({ data }) =>
 			data === PRID ? pr : issue,
@@ -182,6 +214,91 @@ describe("issues and PR administration", () => {
 	});
 	afterEach(() => {
 		client?.clear();
+	});
+	it("loads another keyset page and retains independently computed queue counts", async () => {
+		mocks.list.mockImplementation(async ({ data }) => ({
+			items: data.before
+				? [{ ...issue, id: PRID, number: 1, title: "Older open issue" }]
+				: [{ ...issue, number: 600 }],
+			nextCursor: data.before ? null : 600,
+			counts: { issues: 601, prs: 4, open: 601, closed: 2, all: 603 },
+		}));
+		show();
+		fireEvent.click(
+			await screen.findByRole("button", {
+				name: "טעינת דיונים נוספים",
+			}),
+		);
+		expect(await screen.findByText("Older open issue")).toBeInTheDocument();
+		expect(mocks.list).toHaveBeenLastCalledWith({
+			data: {
+				kind: "issue",
+				state: "open",
+				q: undefined,
+				assignee: undefined,
+				before: 600,
+			},
+		});
+		expect(
+			screen.getByRole("link", { name: /Issues 601/ }),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", {
+				name: "טעינת דיונים נוספים",
+			}),
+		).not.toBeInTheDocument();
+	});
+	it("starts raw repair from the version current when editing opens after an assignment", async () => {
+		pr.apiVersion = 2;
+		mocks.search = { id: PRID };
+		mocks.detail.mockImplementation(async () => structuredClone(pr));
+		mocks.update.mockImplementation(async () => {
+			pr = { ...pr, version: 2 };
+			return structuredClone(pr);
+		});
+		mocks.recover.mockResolvedValue(pr);
+		show("pr");
+		fireEvent.click(await screen.findByRole("tab", { name: "שינויים 1" }));
+		fireEvent.click(screen.getByRole("button", { name: "שמירת שיוך" }));
+		await waitFor(() => expect(mocks.detail).toHaveBeenCalledTimes(2));
+		fireEvent.click(screen.getByRole("button", { name: "תיקון הרצף" }));
+		fireEvent.click(screen.getByRole("button", { name: "שמירת רצף מתוקן" }));
+		await waitFor(() =>
+			expect(mocks.recover).toHaveBeenCalledWith({
+				data: expect.objectContaining({ version: 2 }),
+			}),
+		);
+	});
+	it("exposes the description, evidence and raw operations of prior reviewed revisions", async () => {
+		mocks.search = { id: PRID };
+		pr.revisionHistory = [
+			{
+				revision: 1,
+				version: 1,
+				apiVersion: 1,
+				author: alice,
+				title: "Original proposal",
+				description: "Original rationale",
+				evidence: [
+					{
+						citation: "Original evidence",
+						quote: "Original quote",
+						url: null,
+						note: "",
+					},
+				],
+				changes: pr.changes,
+				issueId: ID,
+				closeIssue: true,
+				at: pr.createdAt,
+			},
+		];
+		show("pr");
+		fireEvent.click(await screen.findByText("הצגת גרסה 1 - Alice"));
+		expect(screen.getByText("Original rationale")).toBeInTheDocument();
+		expect(screen.getByText("Original evidence")).toBeInTheDocument();
+		expect(screen.getByText("Original quote")).toBeInTheDocument();
+		expect(screen.getByText(/"displayName": "חדש"/)).toBeInTheDocument();
 	});
 	it("renders separate queues with creation and filtering controls", async () => {
 		show();
@@ -308,7 +425,11 @@ describe("issues and PR administration", () => {
 		expect(await screen.findByText("שינוי שם")).toBeInTheDocument();
 	});
 	it("has informative empty states for both queues", async () => {
-		mocks.list.mockResolvedValue([]);
+		mocks.list.mockResolvedValue({
+			items: [],
+			nextCursor: null,
+			counts: { issues: 0, prs: 0, open: 0, closed: 0, all: 0 },
+		});
 		show("pr");
 		expect(await screen.findByText("השינוי הבא מתחיל כאן")).toBeInTheDocument();
 	});

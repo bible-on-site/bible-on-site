@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	useInfiniteQuery,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import {
@@ -12,6 +17,8 @@ import {
 	CHANGE_LABELS,
 	CONTRIBUTION_UI,
 	type Contribution,
+	type ContributionListRequest,
+	type ContributionRevisionSnapshot,
 	type Contributor,
 	contributionCitation,
 	reviewStatus,
@@ -59,7 +66,11 @@ export function validateContributionSearch(
 			search.state === "closed" || search.state === "all"
 				? search.state
 				: "open",
-		assignee: typeof search.assignee === "string" ? search.assignee : undefined,
+		assignee:
+			typeof search.assignee === "string" &&
+			["unassigned", "human", "aws_llm", "local_llm"].includes(search.assignee)
+				? search.assignee
+				: undefined,
 	};
 }
 
@@ -156,7 +167,7 @@ function date(value: string): string {
 	});
 }
 
-function EvidenceList({ item }: { item: Contribution }) {
+function EvidenceList({ item }: { item: Pick<Contribution, "evidence"> }) {
 	return (
 		<section className="contribution-evidence" aria-label="ראיות ומקורות">
 			<h3>
@@ -185,6 +196,27 @@ function EvidenceList({ item }: { item: Contribution }) {
 	);
 }
 
+function RevisionSnapshot({
+	snapshot,
+}: {
+	snapshot: ContributionRevisionSnapshot;
+}) {
+	return (
+		<details className="contribution-card contribution-card-body">
+			<summary>
+				הצגת גרסה {snapshot.revision} - {snapshot.author.name}
+			</summary>
+			<h3>{snapshot.title}</h3>
+			<p className="contribution-description">{snapshot.description}</p>
+			<EvidenceList item={snapshot} />
+			<p>רצף הפעולות שנשמר בגרסה זו (API v{snapshot.apiVersion})</p>
+			<pre className="contribution-raw-sequence" dir="ltr">
+				{JSON.stringify(snapshot.changes, null, 2)}
+			</pre>
+		</details>
+	);
+}
+
 function SequenceRecovery({
 	item,
 	refresh,
@@ -193,7 +225,7 @@ function SequenceRecovery({
 	refresh: () => void;
 }) {
 	const [editing, setEditing] = useState(false);
-	const [baseVersion] = useState(item.version);
+	const [baseVersion, setBaseVersion] = useState(item.version);
 	const [sequence, setSequence] = useState(() =>
 		JSON.stringify(item.changes, null, 2),
 	);
@@ -221,7 +253,11 @@ function SequenceRecovery({
 						<button
 							type="button"
 							className="contribution-button"
-							onClick={() => setEditing(true)}
+							onClick={() => {
+								setBaseVersion(item.version);
+								setSequence(JSON.stringify(item.changes, null, 2));
+								setEditing(true);
+							}}
 						>
 							תיקון הרצף
 						</button>
@@ -530,6 +566,12 @@ function Detail({
 									<EvidenceList item={item} />
 								</div>
 							</article>
+							{item.revisionHistory?.map((snapshot) => (
+								<RevisionSnapshot
+									key={`${snapshot.revision}:${snapshot.version}`}
+									snapshot={snapshot}
+								/>
+							))}
 							<section
 								className="contribution-timeline"
 								aria-label="היסטוריית הדיון"
@@ -551,6 +593,9 @@ function Detail({
 												)}
 										</div>
 										{event.body && <p>{event.body}</p>}
+										{event.snapshot && (
+											<RevisionSnapshot snapshot={event.snapshot} />
+										)}
 									</article>
 								))}
 							</section>
@@ -802,9 +847,23 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 	const editing = editingItem?.id === search.id ? editingItem : null;
 	const [actionError, setActionError] = useState("");
 	const path = kind === "issue" ? "/issues" : "/pull-requests";
-	const list = useQuery({
-		queryKey: ["contributions", "list"],
-		queryFn: () => getContributions(),
+	const filters: ContributionListRequest =
+		search.id && search.id !== "new"
+			? { relatedTo: search.id }
+			: {
+					kind,
+					state: search.state ?? "open",
+					q: search.q,
+					assignee: search.assignee as ContributionListRequest["assignee"],
+				};
+	const list = useInfiniteQuery({
+		queryKey: ["contributions", "list", filters],
+		queryFn: ({ pageParam }) =>
+			getContributions({
+				data: { ...filters, ...(pageParam ? { before: pageParam } : {}) },
+			}),
+		initialPageParam: null as number | null,
+		getNextPageParam: (page) => page.nextCursor ?? undefined,
 		staleTime: 0,
 	});
 	const session = useQuery({
@@ -879,20 +938,15 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 			});
 		},
 	});
-	const all = list.data ?? [];
-	const items = all.filter((item) => item.kind === kind);
-	const filtered = items.filter(
-		(item) =>
-			(search.state === "all" ||
-				(search.state === "closed"
-					? item.state !== "open"
-					: item.state === "open")) &&
-			(!search.assignee || item.assignee.kind === search.assignee) &&
-			(!search.q ||
-				`${item.title} ${item.description} ${item.number} ${item.author.name} ${assigneeLabel(item.assignee)}`
-					.toLocaleLowerCase()
-					.includes(search.q.toLocaleLowerCase())),
-	);
+	const all = list.data?.pages.flatMap((page) => page.items) ?? [];
+	const filtered = all;
+	const counts = list.data?.pages[0]?.counts ?? {
+		issues: 0,
+		prs: 0,
+		open: 0,
+		closed: 0,
+		all: 0,
+	};
 	const item = detail.data;
 	return (
 		<div className="contributions">
@@ -903,12 +957,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 					aria-current={kind === "issue" ? "page" : undefined}
 				>
 					<WorkflowIcon /> Issues{" "}
-					<span className="contribution-count">
-						{
-							all.filter((row) => row.kind === "issue" && row.state === "open")
-								.length
-						}
-					</span>
+					<span className="contribution-count">{counts.issues}</span>
 				</Link>
 				<Link
 					to="/pull-requests"
@@ -916,12 +965,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 					aria-current={kind === "pr" ? "page" : undefined}
 				>
 					<WorkflowIcon kind="pr" /> Pull requests{" "}
-					<span className="contribution-count">
-						{
-							all.filter((row) => row.kind === "pr" && row.state === "open")
-								.length
-						}
-					</span>
+					<span className="contribution-count">{counts.prs}</span>
 				</Link>
 			</div>
 			{(list.error ||
@@ -1081,17 +1125,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 									}
 								>
 									{label}{" "}
-									<span className="contribution-count">
-										{
-											items.filter(
-												(row) =>
-													state === "all" ||
-													(state === "closed"
-														? row.state !== "open"
-														: row.state === "open"),
-											).length
-										}
-									</span>
+									<span className="contribution-count">{counts[state]}</span>
 								</button>
 							))}
 						</div>
@@ -1165,6 +1199,18 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 						)}
 					</div>
 				</>
+			)}
+			{list.hasNextPage && search.id !== "new" && !editing && (
+				<button
+					type="button"
+					className="contribution-button"
+					disabled={list.isFetchingNextPage}
+					onClick={() => void list.fetchNextPage()}
+				>
+					{list.isFetchingNextPage
+						? "טוען דיונים נוספים..."
+						: "טעינת דיונים נוספים"}
+				</button>
 			)}
 		</div>
 	);

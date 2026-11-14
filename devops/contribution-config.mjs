@@ -3,7 +3,8 @@ import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
 import { writeFile } from "node:fs/promises";
 const execute = promisify(execFile);
-const ACCOUNT = "250598594267",
+// Public account identifier used to reject configuration in the wrong account.
+const ACCOUNT = "250598594267", // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 	REGION = "il-central-1",
 	SCOPE = "admin-api/contributions";
 const serviceName = "bible-on-site-admin",
@@ -71,11 +72,17 @@ export function contributionReviewerPlan(
 	subject,
 	tags = [],
 ) {
+	const prefix = `arn:aws:ecs:${REGION}:${ACCOUNT}:task-definition/${serviceName}:`;
+	const revision =
+		typeof definition.taskDefinitionArn === "string" &&
+		definition.taskDefinitionArn.startsWith(prefix)
+			? definition.taskDefinitionArn.slice(prefix.length)
+			: "";
 	if (
 		definition.family !== serviceName ||
-		!/^arn:aws:ecs:il-central-1:250598594267:task-definition\/bible-on-site-admin:\d+$/.test(
-			definition.taskDefinitionArn,
-		) ||
+		!Number.isSafeInteger(Number(revision)) ||
+		Number(revision) < 1 ||
+		String(Number(revision)) !== revision ||
 		!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(
 			subject,
 		)

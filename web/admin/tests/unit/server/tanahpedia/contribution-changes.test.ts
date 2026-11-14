@@ -196,11 +196,39 @@ describe("typed contribution domain API", () => {
 			reviewed("metadata", { displayName: "New" }, { displayName: "Old" }),
 			"source",
 		);
-		expect(mocks.execute).toHaveBeenCalledExactlyOnceWith(
+		expect(mocks.execute).toHaveBeenCalledWith(
 			conn,
 			"UPDATE tanahpedia_entity SET name = ? WHERE id = ?",
 			["New", ID],
 		);
+	});
+	it("captures and checks all MAIN names before synchronizing a person rename", async () => {
+		mocks.one.mockResolvedValue({ displayName: "Old" });
+		mocks.query.mockImplementation(async (_conn, sql) =>
+			sql.includes("SELECT n.id")
+				? [{ id: OTHER, name: "Main old" }]
+				: [{ id: ID }],
+		);
+		const [change] = await prepareChanges(conn, [
+			{ kind: "metadata", targetId: ID, after: { displayName: "New" } },
+		]);
+		expect(change.personNames).toEqual([{ id: OTHER, name: "Main old" }]);
+		await applyChange(conn, change, "PR");
+		expect(mocks.execute).toHaveBeenCalledWith(
+			conn,
+			expect.stringContaining("UPDATE tanahpedia_person_name"),
+			["New", ID],
+		);
+		mocks.query.mockImplementation(async (_conn, sql) =>
+			sql.includes("SELECT n.id")
+				? [{ id: OTHER, name: "Concurrent name" }]
+				: [{ id: ID }],
+		);
+		mocks.execute.mockClear();
+		await expect(applyChange(conn, change, "PR")).rejects.toThrow(
+			"main names changed",
+		);
+		expect(mocks.execute).not.toHaveBeenCalled();
 	});
 	it("upserts a place identification including nullable alternate metadata", async () => {
 		await applyChange(

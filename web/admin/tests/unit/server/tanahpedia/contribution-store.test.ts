@@ -113,16 +113,49 @@ describe("durable contribution storage", () => {
 		).rejects.toThrow("Reload");
 	});
 	it("lists newest discussions after schema initialization", async () => {
-		mocks.query.mockResolvedValue([
-			row,
-			{ ...row, id: "other", data: { ...item } },
-		]);
-		expect(await store.listContributions()).toHaveLength(2);
-		expect(mocks.query.mock.calls[0][0]).toContain("ORDER BY number DESC");
+		mocks.query
+			.mockResolvedValueOnce([{ open: 2, closed: 0, all: 2 }])
+			.mockResolvedValueOnce([{ issues: 2, prs: 0 }])
+			.mockResolvedValueOnce([row, { ...row, id: "other", data: { ...item } }]);
+		expect((await store.listContributions()).items).toHaveLength(2);
+		expect(mocks.query.mock.calls[2][0]).toContain("ORDER BY number DESC");
 	});
 	it("runs a contribution operation inside a dedicated transaction", async () => {
 		const work = vi.fn().mockResolvedValue("result");
 		expect(await store.withContributions(work)).toBe("result");
 		expect(work).toHaveBeenCalledWith(mocks.conn);
+	});
+	it("applies bound filters before the page limit and keeps counts independent of the cursor", async () => {
+		mocks.query
+			.mockResolvedValueOnce([{ open: "501", closed: "3", all: "504" }])
+			.mockResolvedValueOnce([{ issues: "600", prs: "20" }])
+			.mockResolvedValueOnce(
+				Array.from({ length: 101 }, (_, index) => ({
+					...row,
+					number: 600 - index,
+				})),
+			);
+		const page = await store.listContributions({
+			kind: "issue",
+			state: "closed",
+			assignee: "local_llm",
+			q: "literal_%'",
+			before: 700,
+			relatedTo: "00000000-0000-4000-8000-000000000001",
+		});
+		expect(page.items).toHaveLength(100);
+		expect(page.nextCursor).toBe(501);
+		expect(page.counts).toEqual({
+			issues: 600,
+			prs: 20,
+			open: 501,
+			closed: 3,
+			all: 504,
+		});
+		expect(mocks.query.mock.calls[2][0]).toContain("state <> 'open'");
+		expect(mocks.query.mock.calls[2][0]).toContain("number < ?");
+		expect(mocks.query.mock.calls[2][0]).not.toContain("literal_%'");
+		expect(mocks.query.mock.calls[2][1]).toContain("literal_%'");
+		expect(mocks.query.mock.calls[0][0]).not.toContain("number < ?");
 	});
 });

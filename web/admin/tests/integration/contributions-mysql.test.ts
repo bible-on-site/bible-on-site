@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import mysql, { type Connection, type RowDataPacket } from "mysql2/promise";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { canonicalJson } from "~/lib/canonical-json";
 import type { Contribution, Contributor } from "~/lib/tanahpedia/contributions";
 
 vi.mock("@tanstack/react-start/server-only", () => ({}));
@@ -90,6 +91,9 @@ beforeAll(async () => {
 		"tanahpedia_entry_entity",
 		"tanahpedia_person",
 		"tanahpedia_person_name",
+		"tanahpedia_person_sex",
+		"tanahpedia_person_birth_date",
+		"tanahpedia_person_death_date",
 		"tanahpedia_lookup_name_type",
 		"tanahpedia_person_parent_child",
 		"tanahpedia_lookup_parent_child_type",
@@ -200,7 +204,7 @@ describe("workstation generation with actual MySQL transactions", () => {
 			version: job.version,
 			apiVersion: job.apiVersion,
 			model: "doradsoft",
-			content: JSON.stringify(
+			content: canonicalJson(
 				output ?? {
 					pullRequests: [
 						{
@@ -418,6 +422,94 @@ function metadata(name: string) {
 }
 
 describe("durable issue assignment", () => {
+	it("pages and searches older open discussions independently of newer closed history", async () => {
+		const old = await service.createContribution(
+			{
+				kind: "issue",
+				title: `old-${randomUUID()}`,
+				description: "unique earlier discussion",
+				assignee: { kind: "local_llm" },
+			},
+			alice,
+		);
+		const rows = Array.from({ length: 501 }, (_, index) => {
+			const item = {
+				...old,
+				id: randomUUID(),
+				number: 0,
+				state: "closed",
+				title: `newer closed ${index}`,
+			};
+			return [item.id, "issue", "closed", item.title, 1, JSON.stringify(item)];
+		});
+		await conn.query(
+			"INSERT INTO tanahpedia_contribution (id,kind,state,title,version,data) VALUES ?",
+			[rows],
+		);
+		const found = await store.listContributions({
+			kind: "issue",
+			state: "open",
+			q: old.title,
+			assignee: "local_llm",
+		});
+		expect(found.items.map((item) => item.id)).toEqual([old.id]);
+		expect(found.counts).toMatchObject({ open: 1, closed: 0, all: 1 });
+		const seen = new Set<string>();
+		let before: number | undefined;
+		do {
+			const page = await store.listContributions({
+				kind: "issue",
+				state: "closed",
+				q: "newer closed",
+				before,
+			});
+			for (const item of page.items) {
+				expect(seen.has(item.id)).toBe(false);
+				seen.add(item.id);
+			}
+			before = page.nextCursor ?? undefined;
+		} while (before);
+		expect(seen.size).toBe(501);
+	});
+	it("synchronizes person readers on rename and rejects independently changed MAIN names", async () => {
+		const nameId = randomUUID();
+		await conn.execute(
+			"INSERT INTO tanahpedia_person_name (id,person_id,name,name_type_id) SELECT ?,?,'Previous main name',id FROM tanahpedia_lookup_name_type WHERE name='MAIN'",
+			[nameId, ids.person],
+		);
+		let pr = await createPr([metadata("Updated person")], owner);
+		expect(pr.changes[0].personNames).toEqual([
+			{ id: nameId, name: "Previous main name" },
+		]);
+		await conn.execute(
+			"UPDATE tanahpedia_person_name SET name='Concurrent name' WHERE id=?",
+			[nameId],
+		);
+		await expect(
+			service.mergeContribution({ id: pr.id, version: pr.version }, owner),
+		).rejects.toThrow("main names changed");
+		pr = await service.editContribution(
+			{
+				id: pr.id,
+				version: pr.version,
+				title: pr.title,
+				description: pr.description,
+				evidence: pr.evidence,
+				changes: [metadata("Updated person")],
+			},
+			owner,
+		);
+		await service.mergeContribution({ id: pr.id, version: pr.version }, owner);
+		const { getPerson, getPersons } = await import(
+			"~/server/tanahpedia/persons"
+		);
+		expect(await getPerson({ data: ids.person })).toMatchObject({
+			name: "Updated person",
+		});
+		expect(
+			(await getPersons()).find((person) => person.id === ids.person)?.name,
+		).toBe("Updated person");
+	});
 	it("persists all four assignee kinds and records a stable discussion number", async () => {
 		let issue = await service.createContribution(
 			{ kind: "issue", title: "פנייה", description: "תיאור" },
@@ -438,8 +530,9 @@ describe("durable issue assignment", () => {
 			expect((await fresh(issue)).assignee).toEqual(assignee);
 		}
 		expect(
-			(await store.listContributions()).find((item) => item.id === issue.id)
-				?.events,
+			(await store.listContributions({ relatedTo: issue.id })).items.find(
+				(item) => item.id === issue.id,
+			)?.events,
 		).toHaveLength(5);
 	});
 	it("rejects stale actions and preserves discussion history", async () => {
