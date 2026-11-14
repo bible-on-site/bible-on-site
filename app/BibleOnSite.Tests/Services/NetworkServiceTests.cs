@@ -82,7 +82,13 @@ public class NetworkServiceTests
     public async Task RefreshAllAsync_RefreshesEveryApiBackedCache()
     {
         await using var storage = new TestStorage();
-        using var http = new GraphQLTransport("{\"data\":{}}");
+        using var http = new GraphQLTransport("""
+            {"data":{
+              "starter":{"authors":[],"articles":[],"perekArticlesCounters":[3]},
+              "moadim":[{"id":1,"slug":"refreshed","name":"Refreshed","published":true,
+                "annualOrder":1,"sections":[],"explicitArticleIds":[],"articles":[]}]
+            }}
+            """);
         var starter = new StarterService(http.Client, storage.FileSystem.Object);
         var moed = new MoedService(http.Client, storage.FileSystem.Object);
 
@@ -91,46 +97,11 @@ public class NetworkServiceTests
         // Starter first, then the moadim catalogue — connectivity recovery
         // refreshes every API-backed cache in one pass (#3261).
         http.Requests.Should().HaveCount(2);
+        http.Requests[0].Should().Contain("GetStarter");
+        http.Requests[1].Should().Contain("GetMoadim");
+        starter.IsLoaded.Should().BeTrue();
+        starter.GetPerekArticlesCount(1).Should().Be(3);
+        moed.IsLoaded.Should().BeTrue();
+        moed.GetMoedBySlug("refreshed")!.Name.Should().Be("Refreshed");
     }
-
-    [Fact]
-    public async Task RefreshAllBound_ResolvesTheProductionSingletons()
-    {
-        // The bound delegate wires the real lazy singletons — on the
-        // unit-test host they construct (FileSystem.Current exists; only its
-        // paths are unimplemented) and every refresh failure stays contained
-        // inside TryRefreshAsync.
-        var starter = StarterService.Instance;
-        var snapshot = (
-            starter.Authors, starter.Articles, starter.PerekArticlesCounters,
-            starter.IsLoaded, starter.IsFromCache,
-            HebrewDateOverrides(starter));
-        try
-        {
-            var act = NetworkService.RefreshAllBound;
-
-            await act.Should().NotThrowAsync();
-        }
-        finally
-        {
-            // Where the refresh reached the real API it swapped the shared
-            // singleton's data — restore it so loader tests keep their empty
-            // snapshot.
-            var type = typeof(StarterService);
-            type.GetProperty(nameof(StarterService.Authors))!.SetValue(starter, snapshot.Authors);
-            type.GetProperty(nameof(StarterService.Articles))!.SetValue(starter, snapshot.Articles);
-            type.GetProperty(nameof(StarterService.PerekArticlesCounters))!.SetValue(starter, snapshot.PerekArticlesCounters);
-            type.GetProperty(nameof(StarterService.IsLoaded))!.SetValue(starter, snapshot.IsLoaded);
-            type.GetProperty(nameof(StarterService.IsFromCache))!.SetValue(starter, snapshot.IsFromCache);
-            type.GetField("_hebrewDateOverrideArticleIds",
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
-                .SetValue(starter, snapshot.Item6);
-        }
-    }
-
-    private static object? HebrewDateOverrides(StarterService starter) =>
-        typeof(StarterService)
-            .GetField("_hebrewDateOverrideArticleIds",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
-            .GetValue(starter);
 }

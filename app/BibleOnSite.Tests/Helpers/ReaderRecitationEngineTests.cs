@@ -930,29 +930,38 @@ public class ReaderRecitationEngineTests
         rig.Surface.Refreshes.Should().BeGreaterThan(0);
     }
 
-    [Fact]
-    public async Task StateChanged_QuietVariants_ClearHighlightAndIdleLease()
+    [Theory]
+    [InlineData(RecitationPlaybackState.None, false)]
+    [InlineData(RecitationPlaybackState.Stopped, false)]
+    [InlineData(RecitationPlaybackState.Failed, false)]
+    [InlineData(RecitationPlaybackState.Paused, true)]
+    public async Task StateChanged_QuietVariants_UpdateHighlightAndIdleLease(
+        RecitationPlaybackState state, bool retainsHighlight)
     {
         await using var rig = await StartedRig();
         await rig.Engine.PlayClipAsync("chapter:1", continuous: true, SegmentFor());
         rig.Surface.RaiseOpened();
         rig.Surface.RaiseState(RecitationPlaybackState.Playing);
-        rig.Ticker.TickAction.Should().NotBeNull();
+        rig.Surface.Position = TimeSpan.FromMilliseconds(500);
+        rig.Ticker.Tick();
+        var word = rig.Engine.HighlightedWord;
+        word.Should().NotBeNull("each transition must start with a visible playing word");
+        var stops = rig.Ticker.Stops;
         var idles = rig.Platform.Deactivations;
 
-        // Every non-audible quiet state drops the highlight and releases the
-        // lease; the transient load states keep the claim instead.
-        foreach (var state in Enum.GetValues<RecitationPlaybackState>())
+        rig.Surface.RaiseState(state);
+
+        if (retainsHighlight)
         {
-            rig.Surface.RaiseState(state);
-            if (state is not (RecitationPlaybackState.Playing or RecitationPlaybackState.Opening
-                or RecitationPlaybackState.Buffering))
-            {
-                rig.Engine.HighlightedWord.Should().BeNull();
-            }
+            rig.Engine.HighlightedWord.Should().BeSameAs(word, "pause preserves the resume position");
+        }
+        else
+        {
+            rig.Engine.HighlightedWord.Should().BeNull();
         }
 
-        await Task.Delay(50, TestContext.Current.CancellationToken);
+        rig.Ticker.Stops.Should().BeGreaterThan(stops);
+        await WaitForAsync(() => rig.Platform.Deactivations > idles);
         rig.Platform.Deactivations.Should().BeGreaterThan(idles);
     }
 

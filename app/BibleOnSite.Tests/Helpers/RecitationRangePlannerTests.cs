@@ -202,7 +202,9 @@ public class RecitationRangePlannerTests
         var pasukim = CanonicalPerek();
         // The slice spans the whole perek's pesukim but clips its last
         // pasuk's segments — not a whole-perek read for the raw-file fallback.
-        var slices = new[] { Slice(5, startPasuk: 1, endPasuk: 3, endSegment: 1) };
+        pasukim[^1].Text = "ו ז";
+        pasukim[^1].Segments.Add(new() { Type = SegmentType.Qri, Value = "ז" });
+        var slices = new[] { Slice(5, startPasuk: 1, endPasuk: 3, endSegment: 0) };
 
         var segments = RecitationRangePlanner.SegmentsForSlices(
             slices, _ => pasukim, id => tracks.GetValueOrDefault(id),
