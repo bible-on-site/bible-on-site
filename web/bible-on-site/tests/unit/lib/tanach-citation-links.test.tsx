@@ -326,6 +326,41 @@ describe("renderFamilyTreeCitationLine", () => {
 		);
 	});
 
+	it("accepts Unicode punctuation outside the BMP as a citation separator", () => {
+		const line = 'רש"י \u{10100} על בראשית א א';
+		const { container } = render(
+			<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+		);
+
+		expect(container.textContent).toBe(line);
+		expect(container.querySelectorAll("a")).toHaveLength(1);
+		expect(screen.getByRole("link", { name: line })).toHaveAttribute(
+			"href",
+			build929PerushHref("בראשית", "א", "א", 'רש"י'),
+		);
+	});
+
+	it.each([
+		'רש"י על על בראשית א א',
+		'רש"י ע ל בראשית א א',
+		'רש"י בפירושו על בראשית א א',
+		'רש"י ע בראשית א א',
+	])(
+		"does not bind a commentary across extra or incomplete words in %s",
+		(line) => {
+			const { container } = render(
+				<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+			);
+
+			expect(container.textContent).toBe(line);
+			expect(container.querySelectorAll("a")).toHaveLength(1);
+			expect(screen.getByRole("link", { name: "בראשית א א" })).toHaveAttribute(
+				"href",
+				"/929/1#pasuk-1",
+			);
+		},
+	);
+
 	it("links a citation after a deeply nested annotation while preserving its text", () => {
 		const line = `רש"י ${"(".repeat(512)}הערה${")".repeat(512)}: בראשית א א`;
 		const { container } = render(

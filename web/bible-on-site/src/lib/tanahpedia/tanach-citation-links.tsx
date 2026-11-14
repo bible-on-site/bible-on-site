@@ -17,7 +17,27 @@ interface TanachRefMatch {
 const HEBREW_REF_TOKEN = /^[א-ת][א-ת"״׳']{0,4}$/u;
 const HEBREW_PASUK_TOKEN =
 	/^[א-ת][א-ת"״׳']{0,4}(?:[-־–—][א-ת][א-ת"״׳']{0,4})?$/u;
-const PERUSH_REF_SEPARATOR = /^[\s\p{P}]*(?:על[\s\p{P}]*)?$/u;
+const PERUSH_REF_SEPARATOR_CHARACTER = /^[\s\p{P}]$/u;
+
+function isMidrashName(name: string): boolean {
+	return /^(?:מדרש|מכילתא)(?:\s|$)/u.test(name);
+}
+
+function isPerushRefSeparator(text: string): boolean {
+	let markerSeen = false;
+	let awaitingLamed = false;
+	for (const character of text) {
+		if (awaitingLamed) {
+			if (character !== "ל") return false;
+			awaitingLamed = false;
+		} else if (!PERUSH_REF_SEPARATOR_CHARACTER.test(character)) {
+			if (markerSeen || character !== "ע") return false;
+			markerSeen = true;
+			awaitingLamed = true;
+		}
+	}
+	return !awaitingLamed;
+}
 
 function stripParentheticalAnnotations(text: string): string {
 	const characters: string[] = [];
@@ -260,8 +280,8 @@ export function renderFamilyTreeCitationLine(
 	const separator = refMatch
 		? stripParentheticalAnnotations(line.slice(perushEnd, refMatch.index))
 		: "";
-	const followsSeparator = PERUSH_REF_SEPARATOR.test(separator);
-	const isMidrash = /^(?:מדרש|מכילתא)(?:\s|$)/u.test(perushMatch.name);
+	const followsSeparator = isPerushRefSeparator(separator);
+	const isMidrash = isMidrashName(perushMatch.name);
 	const nextSemicolon = line.indexOf(";", perushEnd);
 	const clauseEnd = nextSemicolon === -1 ? line.length : nextSemicolon;
 	const hasExplicitBibleReference =
