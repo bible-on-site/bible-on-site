@@ -264,6 +264,19 @@ push/`workflow_dispatch` publishing rule as the Android caches; pull requests
 only restore. Bump `IOS_SIM_STATE_RECIPE` when the capture or restore semantics
 change.
 
+## iOS host lifecycle evidence
+
+iOS legs stream the host's CoreSimulator-side records the whole run
+(`simulator-host-live.log`, `simulator-host-classic-live.log`) so a device
+that disappears mid-suite still leaves its host-side context. After tests and
+coverage finish, `verify-ios-host-log.mjs` shuts down this job's own device
+through a recorded `xcrun simctl shutdown` and measures what the host
+observers actually retain — per source, at info and debug level, including a
+post-hoc `log show` sweep. See
+[`docs/devops/ios-host-lifecycle-evidence.md`](../../docs/devops/ios-host-lifecycle-evidence.md)
+for the capture inventory, measurement fields, reproduction command and the
+measured macOS/Xcode findings.
+
 ## Running locally
 
 Install the platform's .NET MAUI workload, Android SDK/JDK or compatible Xcode,

@@ -173,17 +173,39 @@ test("keeps automation logging on the explicit simulator without replacing the a
   }
 });
 
-test("keeps host lifecycle logging independent of device RPCs and limits its process scope", () => {
+test("keeps host lifecycle logging independent of device RPCs and scopes its emitters", () => {
   const args = nativeLogs.iosHostLogArguments();
   assert.deepEqual(args.slice(0, 6), ["stream", "--style", "compact", "--level", "info", "--predicate"]);
-  const names = args[6].split(" OR ").map(term => {
+  const terms = args[6].split(" OR ");
+  const names = terms.filter(term => term.startsWith("process")).map(term => {
     const match = /^process == "([A-Za-z_.]+)"$/.exec(term);
     assert.ok(match, "only exact process filters may broaden this host observer");
     return match[1];
   });
   assert.deepEqual(names.sort(), ["CoreSimulatorService", "com.apple.CoreSimulator.CoreSimulatorService",
-    "DeviceHub", "Simulator", "launchd_sim", "simulatord"].sort());
+    "DeviceHub", "Simulator", "launchd_sim", "simctl", "simulatord"].sort());
+  // The subsystem term retains requester-side records from any
+  // CoreSimulatorKit client; the explicit processes cover service records
+  // emitted under other subsystems.
+  assert.deepEqual(terms.filter(term => !term.startsWith("process")),
+    ['subsystem BEGINSWITH "com.apple.CoreSimulator"']);
   assert.equal(args.length, 7);
+  assert.ok(!args.includes("simctl"), "simctl stays a predicate name, never a spawned command");
+});
+
+test("keeps the debug probe on the same emitters and widens only the level", () => {
+  const info = nativeLogs.iosHostLogArguments();
+  const debug = nativeLogs.iosHostDebugProbeArguments();
+  assert.equal(debug.at(-1), info.at(-1), "the probe must not drift from the contract predicate");
+  assert.deepEqual(debug.slice(0, 6), ["stream", "--style", "compact", "--level", "debug", "--predicate"]);
+});
+
+test("queries the persisted store for the same emitters over a bounded window", () => {
+  const args = nativeLogs.iosHostPosthocArguments(90);
+  assert.equal(args[0], "show");
+  assert.deepEqual(args.slice(1, 4), ["--last", "90s", "--style"]);
+  assert.ok(args.includes("--info") && args.includes("--debug"));
+  assert.equal(args.at(-1), nativeLogs.iosHostLogArguments().at(-1));
   assert.ok(!args.includes("simctl"));
 });
 

@@ -95,10 +95,33 @@ export function iosAutomationLogArguments(udid) {
 // Device-scoped streams disappear with the simulator. Observe its host-side
 // lifecycle independently to retain the service's events when a device
 // disappears during an otherwise valid XCTest query. Do not launch,
-// inspect, or signal the simulator while collecting this evidence.
+// inspect, or signal the simulator while collecting this evidence. The
+// CoreSimulator subsystem term keeps client-side records — every simctl or
+// CoreSimulatorKit caller is a potential requester — while the explicit
+// process terms retain service records emitted under other subsystems.
 export function iosHostLogArguments() {
   return ["stream", "--style", "compact", "--level", "info", "--predicate",
-    'process == "CoreSimulatorService" OR process == "com.apple.CoreSimulator.CoreSimulatorService" OR process == "DeviceHub" OR process == "Simulator" OR process == "simulatord" OR process == "launchd_sim"'];
+    'process == "CoreSimulatorService" OR process == "com.apple.CoreSimulator.CoreSimulatorService" OR process == "DeviceHub" OR process == "Simulator" OR process == "simulatord" OR process == "launchd_sim" OR process == "simctl" OR subsystem BEGINSWITH "com.apple.CoreSimulator"'];
+}
+
+// The bounded shutdown check also watches a debug-level probe built on the
+// same predicate. If this captures a lifecycle record the info-level
+// contract misses, collection — not the OS — is what loses the evidence.
+export function iosHostDebugProbeArguments() {
+  const args = iosHostLogArguments();
+  args[args.indexOf("--level") + 1] = "debug";
+  return args;
+}
+
+// A post-hoc `log show` reads the persisted store after the observation
+// window, recovering records a live stream can drop and exposing what the
+// current persistence configuration retains. --info/--debug ask the query
+// for the levels the stream's --level flag covers. Callers bound `--last`
+// to the measurement window so an earlier shutdown of the same device
+// cannot count as evidence for the controlled one.
+export function iosHostPosthocArguments(seconds = 120) {
+  return ["show", "--last", `${seconds}s`, "--style", "compact", "--info", "--debug",
+    "--predicate", iosHostLogArguments().at(-1)];
 }
 
 // CoreSimulator also keeps a host file log. On the measured macOS image its
