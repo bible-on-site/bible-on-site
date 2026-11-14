@@ -1,13 +1,10 @@
 import type { Metadata } from "next";
-import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import {
 	bandRotation,
 	buildMoedWheel,
-	getPublishedMoadim,
 	MOADIM_ROOT,
-	MOED_STALE_BOUND_SECONDS,
 	moedHref,
 	polar,
 	sectorPath,
@@ -15,18 +12,10 @@ import {
 	starOfDavidPath,
 	wrapMoedName,
 } from "@/lib/moadim";
-import { COLLECTION_TAGS } from "@/lib/revalidate/tags";
+import { getCachedMoadim } from "@/lib/moadim/catalogue-cache";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import styles from "./page.module.css";
-
-// Hourly bound keeps a pre-migration empty catalogue from pinning — the
-// data-deploy seed lands without a website invalidation, so the catalogue
-// self-heals on the next ISR window (editorial writes still expire via tag).
-const getCachedMoadim = unstable_cache(getPublishedMoadim, ["moadim-catalogue"], {
-	tags: [COLLECTION_TAGS.moadim],
-	revalidate: MOED_STALE_BOUND_SECONDS,
-});
 
 export async function generateMetadata(): Promise<Metadata> {
 	return pageMetadata({
@@ -79,15 +68,18 @@ export default async function MoadimLanding() {
 
 	return (
 		<div className={styles.container}>
-			<h1 className={styles.heading}>מועדים על הפרק</h1>
-			<p className={styles.intro}>
-				מעגל השנה של קריאות התנ&quot;ך למועדי ישראל ולימים המיוחדים — כל מועד
-				עם הפסוקים, הפירושים והמאמרים שלו.
-			</p>
-			{moadim.length === 0 ? (
-				<p className={styles.empty}>אין מועדים מפורסמים עדיין.</p>
-			) : (
-				<>
+			<div className={styles.heroRow}>
+				<div className={styles.heroText}>
+					<h1 className={styles.heading}>מועדים על הפרק</h1>
+					<p className={styles.intro}>
+						מעגל השנה של קריאות התנ&quot;ך למועדי ישראל ולימים המיוחדים — כל
+						מועד עם הפסוקים, הפירושים והמאמרים שלו.
+					</p>
+					{moadim.length === 0 && (
+						<p className={styles.empty}>אין מועדים מפורסמים עדיין.</p>
+					)}
+				</div>
+				{moadim.length > 0 && (
 					<nav aria-label="גלגל המועדים" className={styles.wheelNav}>
 						<svg className={styles.wheel} viewBox="0 0 1000 1000">
 							<title>גלגל המועדים</title>
@@ -97,12 +89,7 @@ export default async function MoadimLanding() {
 							<g>
 								{wheel.slices.map((slice) => {
 									const [x1, y1] = polar(CX, CY, RIM_OUT, slice.startDeg);
-									const [x2, y2] = polar(
-										CX,
-										CY,
-										RIM_OUT + 9,
-										slice.startDeg,
-									);
+									const [x2, y2] = polar(CX, CY, RIM_OUT + 9, slice.startDeg);
 									return (
 										<line
 											key={`tick-${slice.moed.id}`}
@@ -162,7 +149,10 @@ export default async function MoadimLanding() {
 									nameLines.length * NAME_LINE_HEIGHT +
 									(hasDate ? DATE_LINE_HEIGHT : 0);
 								const lineY = (index: number) =>
-									ty - blockH / 2 + index * NAME_LINE_HEIGHT + NAME_LINE_HEIGHT / 2;
+									ty -
+									blockH / 2 +
+									index * NAME_LINE_HEIGHT +
+									NAME_LINE_HEIGHT / 2;
 								const sliceStyle: WheelVars = {
 									...hueStyle(slice.hue),
 									"--moed-i": index,
@@ -240,32 +230,34 @@ export default async function MoadimLanding() {
 							</g>
 						</svg>
 					</nav>
-					<nav aria-label="רשימת המועדים" className={styles.index}>
-						<ol className={styles.indexList}>
-							{wheel.slices.map((slice) => (
-								<li key={slice.moed.id} className={styles.indexItem}>
-									<Link
-										href={moedHref(slice.moed.slug)}
-										className={styles.indexLink}
-										style={hueStyle(slice.hue)}
-									>
-										<span className={styles.indexName}>{slice.moed.name}</span>
-										{slice.moed.dateLabel && (
-											<span className={styles.indexDate}>
-												{slice.moed.dateLabel}
-											</span>
-										)}
-										{slice.moed.hebrewMonth && (
-											<span className={styles.indexMonth}>
-												{slice.moed.hebrewMonth}
-											</span>
-										)}
-									</Link>
-								</li>
-							))}
-						</ol>
-					</nav>
-				</>
+				)}
+			</div>
+			{moadim.length > 0 && (
+				<nav aria-label="רשימת המועדים" className={styles.index}>
+					<ol className={styles.indexList}>
+						{wheel.slices.map((slice) => (
+							<li key={slice.moed.id} className={styles.indexItem}>
+								<Link
+									href={moedHref(slice.moed.slug)}
+									className={styles.indexLink}
+									style={hueStyle(slice.hue)}
+								>
+									<span className={styles.indexName}>{slice.moed.name}</span>
+									{slice.moed.dateLabel && (
+										<span className={styles.indexDate}>
+											{slice.moed.dateLabel}
+										</span>
+									)}
+									{slice.moed.hebrewMonth && (
+										<span className={styles.indexMonth}>
+											{slice.moed.hebrewMonth}
+										</span>
+									)}
+								</Link>
+							</li>
+						))}
+					</ol>
+				</nav>
 			)}
 		</div>
 	);

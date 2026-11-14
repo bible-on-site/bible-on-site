@@ -37,7 +37,6 @@ public class ExternalAudioGuardTests
 
     [Theory]
     [InlineData("PerekPage.Recitation.cs")]
-    [InlineData("ParashaPage.Recitation.cs")]
     public void RecitationPages_KeepPlayerConstructionLazy(string fileName)
     {
         var source = ReadPage(fileName);
@@ -50,6 +49,34 @@ public class ExternalAudioGuardTests
         // released once playback pauses, stops, ends or is left behind.
         Assert.Contains("PlaybackAudioOwnership", source);
         Assert.Contains("ResumeRecitationPlayback", source);
+    }
+
+    [Fact]
+    public void SharedRecitationSurface_KeepsPlayerConstructionLazy()
+    {
+        // The engine-backed pages (Parasha, Masora, future מועדים) share this
+        // adapter — the only place a recitation MediaElement may be built for
+        // them, still inside the lazy host factory (#3260).
+        var source = ReadControl("MediaElementRecitationSurface.cs");
+        Assert.Equal(1, Occurrences(source, "new MediaElement"));
+        Assert.Contains("GetOrCreatePlayer", source);
+        Assert.Contains("ShouldAutoPlay = false", source);
+    }
+
+    [Theory]
+    [InlineData("ParashaPage.Recitation.cs")]
+    [InlineData("MasoraPage.Recitation.cs")]
+    public void EngineBackedRecitationPages_DelegateToTheSharedSurface(string fileName)
+    {
+        var source = ReadPage(fileName);
+        // A page constructing its own MediaElement would bypass the adapter's
+        // lazy Exists gate and activate the audio session while browsing —
+        // every "new MediaElement…" construction must be the adapter itself.
+        Assert.Equal(Occurrences(source, "new MediaElementRecitationSurface"),
+            Occurrences(source, "new MediaElement"));
+        Assert.Contains("MediaElementRecitationSurface", source);
+        Assert.Contains("PlaybackAudioOwnership", source);
+        Assert.Contains("ResumePlayback", source);
     }
 
     [Fact]

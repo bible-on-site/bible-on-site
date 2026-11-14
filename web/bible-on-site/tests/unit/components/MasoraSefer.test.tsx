@@ -435,6 +435,33 @@ describe("MasoraSefer", () => {
 		expect(resolvePerek(999)).toBeUndefined();
 	});
 
+	it("flags only recorded perakim playable and skips ones missing from the corpus", () => {
+		const props = baseProps();
+		const recorded: Perek = {
+			...perek(3),
+			recitation: {
+				version: 1,
+				audioUrl: "https://example.com/1.mp3",
+				audioSha256: "a".repeat(64),
+				textSha256: "b".repeat(64),
+				durationMs: 1000,
+				alignmentStatus: "ready",
+			},
+		};
+		props.perekById = new Map<number, Perek>([[1, recorded]]);
+		// Unit 2's only ranged perek is absent from the corpus map — its
+		// reading resolves to no playable perakim at all.
+		const missing: MasoraBookUnit = {
+			...units[1],
+			ranges: [range(99, 1, 99, 1)],
+		};
+		render(<MasoraSefer {...props} units={[units[0], missing]} />);
+		const toggles = screen.getAllByRole("button", { name: "מצב הקראה" });
+		expect(toggles[0]).toBeEnabled();
+		expect(toggles[1]).toBeDisabled();
+		expect(toggles[1]).toHaveAttribute("title", "אין הקלטה לקריאה זו");
+	});
+
 	it("wires TOC navigation, entry hrefs, and the contents filter", () => {
 		render(<MasoraSefer {...baseProps()} />);
 		const onNavigate = capturedTocProps.onNavigate as (idx: number) => void;

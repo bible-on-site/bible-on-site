@@ -176,6 +176,22 @@ Selection **enforcement is opt-in**: only the mobile workflow exposes
 - `website_publish_test_results_to_codecov` uploads the website's JUnit
   results as a Codecov `test_results` report.
 
+All Codecov coverage and test-results uploads use `CODECOV_BRANCH_OVERRIDE`.
+For `merge_group`, this is the complete `github.ref_name`, preserving the
+`gh-readonly-queue/master/...` branch. The CLI otherwise
+[reduces that name to `master`](https://github.com/codecov/codecov-cli/blob/main/codecov_cli/helpers/ci_adapters/github_actions.py),
+so even an early JUnit upload can move the README badges to a synthetic commit
+with no coverage report. Queue reports now remain on their queue branch.
+
+For every other event the override is empty, preserving the action's native
+PR head SHA, fork/tokenless handling, and push/dispatch identity. A normal or
+admin merge gets a new `master` report from the **actual merged SHA** in its
+`push` run; it does not reuse or wait for a queue report. This also prevents a
+late queue upload from replacing that report. If master CI is still pending
+or fails before coverage publication, that commit still has no valid baseline;
+merging early does not create coverage evidence. Existing coverage thresholds
+and failure gates continue to apply. The README badge URLs stay branch-based.
+
 ### 4. Packaging (Master `push`; API, Bulletin, Admin also pre-merge)
 
 `package_api`, `package_bulletin` and `package_admin` also run on PR, merge-queue and dispatch

@@ -270,8 +270,9 @@
 
 /* The decorative face beneath each month grid: the printed card back of a
    spiral calendar's month divider — visible under the sheet and while it
-   lifts over the binding. Tonal, not interactive. */
-.cal-sheet-back {
+   lifts over the binding. Tonal, not interactive. Scoped under .cal-book so
+   it ties the page-content default's specificity and wins by order. */
+.cal-book .cal-sheet-back {
 	display: flex;
 	flex-direction: column;
 	align-items: center;

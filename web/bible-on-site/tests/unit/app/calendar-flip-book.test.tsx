@@ -12,7 +12,11 @@ const engineStub: {
 	jumpToPage: jest.Mock;
 	attachHandle: boolean;
 	lastHandlers: { onPageFlipped?: () => void } | null;
-	lastProps: { pages?: unknown[]; of?: number } | null;
+	lastProps: {
+		pages?: unknown[];
+		of?: number;
+		initialTurnedLeaves?: number[];
+	} | null;
 } = {
 	currentPageIndex: 0,
 	jumpToPage: jest.fn(),
@@ -153,7 +157,10 @@ describe("CalendarFlipBook", () => {
 		render(<CalendarFlipBook {...baseProps} />);
 		// Month 2 is the second pair: readable face at page index 5 →
 		// leaves 0..2 turned so the spread shows pages 5-6.
-		expect(engineStub.lastProps).toMatchObject({ of: months.length });
+		expect(engineStub.lastProps).toMatchObject({
+			of: months.length,
+			initialTurnedLeaves: [0, 1, 2],
+		});
 	});
 
 	it("reports the top readable month after each committed turn", () => {

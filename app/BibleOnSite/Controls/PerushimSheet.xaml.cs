@@ -8,10 +8,11 @@ namespace BibleOnSite.Controls;
 /// <summary>
 /// The reader's perushim bottom sheet shared by the perek, parasha and masora
 /// readers: the slide-up commentary panel, its pan-to-dismiss/expand gesture,
-/// the RTL search that scrolls to the first match, and the checkbox toggle
-/// pipeline. The host view model implements <see cref="IPerushimSheetViewModel"/>
-/// for checked-state and the filtered list; everything else binds through the
-/// ambient BindingContext (Perushim, CheckedPerushim, PerushimSelectionStatus…).
+/// the RTL search that narrows the visible rows to matching names, and the
+/// checkbox toggle pipeline. The host view model implements
+/// <see cref="IPerushimSheetViewModel"/> for checked-state; everything else
+/// binds through the ambient BindingContext (FilteredPerushim,
+/// CheckedPerushim, PerushimSelectionStatus…).
 /// </summary>
 #pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
 public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
@@ -100,6 +101,9 @@ public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
     {
         if (sender is BindableObject { BindingContext: Perush perush })
         {
+            // The display-only CheckBox is input-transparent, so the keyboard
+            // dismissal its handler performed moves to the row tap.
+            _ = HideKeyboardAsync();
             ViewModel?.ToggleCheckedPerush(perush.Id);
         }
     }
@@ -138,41 +142,6 @@ public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
         finally
         {
             _isTogglingPerush = false;
-        }
-    }
-
-    /// <summary>
-    /// Perushim search navigates instead of filtering — the full list stays
-    /// visible and each keystroke scrolls the first matching perush into view.
-    /// Subscribed to the view model's property change (which fires after
-    /// PerushNameFilter is assigned), not the entry's TextChanged.
-    /// </summary>
-    protected override void OnBindingContextChanged()
-    {
-        base.OnBindingContextChanged();
-        if (_subscribedVm is System.ComponentModel.INotifyPropertyChanged old)
-        {
-            old.PropertyChanged -= OnViewModelPropertyChanged;
-        }
-        _subscribedVm = BindingContext;
-        if (_subscribedVm is System.ComponentModel.INotifyPropertyChanged inpc)
-        {
-            inpc.PropertyChanged += OnViewModelPropertyChanged;
-        }
-    }
-
-    private object? _subscribedVm;
-
-    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName != "PerushNameFilter" || !IsOpen)
-        {
-            return;
-        }
-        var match = ViewModel?.FilteredPerushim.FirstOrDefault();
-        if (match != null)
-        {
-            PerushimCollection.ScrollTo(match, position: ScrollToPosition.Start, animate: false);
         }
     }
 

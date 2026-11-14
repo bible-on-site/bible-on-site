@@ -7,9 +7,9 @@
 #
 # Install into a local venv:
 #   python -m venv .venv
-#   .venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch==2.14.1
-#   .venv/bin/pip install transformers==5.19.0
-# (PyPI's default torch wheel also works; the pytorch.org CPU index keeps
-# the install CUDA-free, same as the recitation CI step.)
+#   .venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0+cpu
+#   .venv/bin/pip install -r data/annotations/requirements-encoders.txt
+# The explicit CPU wheel keeps this environment CUDA-free. GPU inference
+# uses the separate requirements-cuda-cu126.txt profile.
 torch==2.15.0
 transformers==5.22.2
