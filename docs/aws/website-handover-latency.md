@@ -23,22 +23,27 @@ still carry request or response bytes (`ESTABLISHED`, `SYN_RECV`,
 same-host clients — the container's own health-check curls and exec sessions —
 which need no DNS protection and cannot outlive the task.
 
-SIGTERM now ends the drain once inbound connections have been quiet for 30
-seconds — but no earlier than a 45-second floor and no later than the same
-90-second deadline as before:
+SIGTERM still ends the drain once inbound connections have been quiet for 30
+seconds and never past the same 90-second deadline as before. The floor under
+that is now measured instead of guessed: the task resolves its own discovery
+name (`website.bible-on-site.local`, overridable via `WEBSITE_DISCOVERY_NAME`)
+through the same VPC resolver the router uses, every drain poll:
 
-- The 45-second floor covers DNS removal: registration-side propagation was
-  observed at ~35 seconds and the router caches answers for 10, so a socket
-  count of zero cannot prove the old address is out of answers until then.
-  Quiet termination before the floor could drop requests still routed to the
-  removed address.
+- While a readable answer still lists this task's address the floor stays
+  open — quiet clients can still be routed to an advertised address.
+- Once answers provably stop naming the task, the floor clears one full
+  router-cache window (`valid=10s`) after the last moment the address could
+  still have been listed — the last "listed" read, or the first "absent" read
+  when removal already propagated before SIGTERM. A cached answer naming the
+  removed address can be at most that old, so quiet termination after the
+  window cannot drop cache-held traffic.
+- If no discovery read ever succeeds, the previous 45-second fixed minimum
+  still applies — a zero socket count cannot prove removal, and a missing
+  answer cannot either. Removal propagation that outlasts the old estimate
+  now extends the drain toward the 90-second cap instead of exposing the
+  still-advertised address early.
 - A client still arriving at the removed address refreshes the activity
-  timestamp, so slow Cloud Map removal propagation stretches the drain toward
-  the cap exactly like the old fixed wait — up to and including pathological
-  cases. Nothing that was served before is refused earlier.
-- Past the floor, refusing the removed address requires answers to violate
-  the 10-second TTL while no connection arrived for a full quiet window — the
-  same exposure class the fixed deadline had at its own edge.
+  timestamp, stretching the drain toward the cap exactly as before.
 - An unreadable socket table (non-Linux, restricted procfs) is treated as
   busy, so the drain falls back to the original 90-second deadline instead of
   exiting early or hanging. The 90-second bound still holds in every case.
@@ -46,9 +51,16 @@ seconds — but no earlier than a 45-second floor and no later than the same
   are preserved, and the 120-second `StopTimeout` still leaves ~30 seconds
   for the Next graceful shutdown after the forward.
 
-`drainMs`, `minDrainMs`, `quietMs`, `pollMs`, the port, the metric reader and
-the logger are injectable for tests; production uses `PORT` (default 3000) and
-procfs.
+The first read that finds the address gone logs
+`Website task left discovery answers after <elapsed>ms`, recording the
+actual Cloud Map removal propagation for the deployment instead of assuming
+the ~35-second estimate.
+
+`drainMs`, `minDrainMs`, `quietMs`, `pollMs`, `routerCacheMs`,
+`dnsTimeoutMs`, the port, the metric reader, the resolver, the discovery
+name, the own-address provider and the loggers are injectable for tests;
+production uses `PORT` (default 3000), procfs and the VPC resolver with a
+one-second query timeout (cancelled with the child).
 
 ## Early readiness probe
 
@@ -77,12 +89,20 @@ timers are unref'd for the same reason). The probe is best-effort: each
 distinct transport failure warns once as
 `Website readiness probe attempt failed: …`, probe defects never change
 the launcher exit status, and the container `HEALTHCHECK` stays
-authoritative. The first response logs
+authoritative. The probe logs two boundaries:
 
-- `Website readiness probe: HTTP <status> after <elapsed>ms`
+- `Website listener accepting connections after <elapsed>ms` — one bare TCP
+  handshake marks the first listening socket, separating process start from
+  the initialization work before accept.
+- `Website readiness probe: HTTP <status> after <elapsed>ms` — the first
+  queued readiness response; the gap between the two lines is the
+  initialization and warm-up work itself.
 
-which separates launcher start, listener readiness and warm completion in
-CloudWatch — the startup-side counterpart of the drain lines above.
+Inside `/api/health/ready` the public-content query now fires before the
+synchronous warm-up runs, so its pool setup and round trip overlap the data
+load, and the page-render warm is awaited together with the query instead of
+behind it — all gates are unchanged, the same check still runs once per
+admission and the database is still re-verified on every sequential probe.
 
 The launcher registers SIGTERM and SIGINT handlers before spawning the server
 and starting the readiness probe. Initializing the first HTTP client can block
@@ -95,14 +115,20 @@ quiet window, deadline and readiness schedule described above.
 
 The launcher logs the boundaries that were previously invisible:
 
-- `Website draining cached DNS requests: forwarding SIGTERM after <quiet>ms
-  without inbound connections, no earlier than <min>ms, or <drain>ms at most`
-  — drain began.
-- `Website drain <reason> after <elapsed>ms; forwarding SIGTERM to server.js` —
-  drain ended (`saw no inbound connections` or `reached the deadline`).
+- `Website listener accepting connections after <elapsed>ms` — first
+  listening socket.
 - `Website readiness probe: HTTP <status> after <elapsed>ms` — the early
   warm-up probe's first response; with container start and ECS health events
   it separates launcher start, listener readiness and warm completion.
+- `Website draining cached DNS requests: forwarding SIGTERM after <quiet>ms
+  without inbound connections, once this task has been out of discovery
+  answers for <router cache>ms (<min>ms when discovery is unreadable), or
+  <drain>ms at most` — drain began.
+- `Website task left discovery answers after <elapsed>ms` — the first read
+  that found this task's address gone: the actual Cloud Map removal
+  propagation for that deployment.
+- `Website drain <reason> after <elapsed>ms; forwarding SIGTERM to server.js` —
+  drain ended (`saw no inbound connections` or `reached the deadline`).
 
 Together with container start, ECS health and Cloud Map events these lines
 separate SIGTERM receipt, measured drain, forwarded shutdown and exit in
@@ -143,4 +169,7 @@ specific PR under the root `AGENTS.md` AWS rule.
   capacity, `StopTimeout: 120`, the deployment circuit breaker setting and all
   routing/protection behavior are unchanged.
 - No timeouts, retries or polling budgets were increased; the drain cap is
-  identical and the health-check budget is unchanged.
+  identical, the health-check budget is unchanged, and the 45-second minimum
+  still applies whenever discovery cannot be read. Every readiness gate —
+  canonical data, search indexes, recitation package, sanitizer, public
+  content query and page renders — is still checked before admission.
