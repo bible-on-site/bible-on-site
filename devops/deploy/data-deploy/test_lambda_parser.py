@@ -1,6 +1,7 @@
 """Exercise the real Lambda SQL helpers without AWS or third-party imports."""
 
 import importlib.util
+import io
 import json
 import re
 import sqlite3
@@ -8,8 +9,9 @@ import sys
 import tempfile
 import types
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 HERE = Path(__file__).resolve().parent
@@ -188,16 +190,29 @@ class LambdaParserSafetyTests(unittest.TestCase):
             self.assertLess(manifest.index(name), manifest.index("external_reference_data.sql"))
         structure = LAMBDA.preprocess_sql((ROOT / "data/mysql/external_reference_structure.sql").read_text(encoding="utf-8"))
         self.assertRegex(structure, r"CREATE TABLE IF NOT EXISTS `external_reference`")
+        self.assertRegex(structure, r"CREATE TABLE IF NOT EXISTS `external_reference_seed`")
         self.assertNotRegex(structure, r"(?im)^\s*(?:DROP|TRUNCATE|DELETE)\b")
         path = ROOT / "data/mysql/external_reference_data.sql"
         VALIDATOR.validate_lambda_safe_comments(path)
         seed = LAMBDA.preprocess_sql(path.read_text(encoding="utf-8"))
-        # 2 session settings + PARSHAN rebuild (DELETE + INSERT) + entity upsert.
-        self.assertEqual(len(LAMBDA.parse_statements(seed)), 5)
+        # 2 session settings + PARSHAN rebuild (DELETE + INSERT) + guarded
+        # entity insert + entity-claim insert (#3330 admin-owned mappings).
+        self.assertEqual(len(LAMBDA.parse_statements(seed)), 6)
         # Only the regenerated PARSHAN rows are ever wiped.
         self.assertEqual([m.strip() for m in re.findall(r"(?im)^\s*DELETE\b.*$", seed)], ["DELETE FROM external_reference WHERE subject_kind = 'PARSHAN';"])
         self.assertNotRegex(seed, r"(?im)^\s*(?:DROP|TRUNCATE|CREATE)\b")
         self.assertNotIn("'TANAH_AUTHOR'", seed)
+        # Entity mappings are admin-owned: never upserted over an editor row,
+        # and skipped once claimed, so reruns cannot resurrect deletes.
+        self.assertNotIn("ON DUPLICATE KEY UPDATE", seed)
+        self.assertIn("external_reference_seed", seed)
+        entity_insert = next(
+            s for s in LAMBDA.parse_statements(seed)
+            if s.startswith("INSERT INTO external_reference")
+            and "TANAHPEDIA_ENTITY" in s
+        )
+        self.assertIn("NOT EXISTS", entity_insert)
+        self.assertIn("external_reference_seed", entity_insert)
 
     def test_mention_schema_is_in_manifest_and_remains_one_additive_statement(self):
         manifest = json.loads((HERE / "sql-files.json").read_text(encoding="utf-8"))
@@ -304,6 +319,53 @@ class CommentScannerTests(unittest.TestCase):
 
     def test_double_dash_without_whitespace_is_not_a_comment(self):
         self._scan("SET x = 5--2;")
+
+
+class ValidatorTargetTests(unittest.TestCase):
+    """Parsing must never implicitly execute migrations on a shared database."""
+
+    def test_no_arguments_do_not_connect_even_with_db_url_in_environment(self):
+        database = MagicMock()
+        with patch.object(sys, "argv", ["validate_lambda_parser.py"]), \
+                patch.dict("os.environ", {"DB_URL": "mysql://localhost/tanah-dev"}), \
+                patch.dict(sys.modules, {"pymysql": database}), \
+                redirect_stdout(io.StringIO()):
+            VALIDATOR.main()
+        database.connect.assert_not_called()
+
+    def test_parse_only_does_not_connect_even_with_an_explicit_target(self):
+        database = MagicMock()
+        with patch.object(sys, "argv", [
+            "validate_lambda_parser.py", "--parse-only", "--db",
+            "mysql://localhost/disposable_validation",
+        ]), patch.dict(sys.modules, {"pymysql": database}), \
+                redirect_stdout(io.StringIO()):
+            VALIDATOR.main()
+        database.connect.assert_not_called()
+
+    def test_execution_uses_only_the_explicit_database(self):
+        database = MagicMock()
+        with patch.object(sys, "argv", [
+            "validate_lambda_parser.py", "--db",
+            "mysql://fixture@127.0.0.1:3306/disposable_validation",
+        ]), patch.dict("os.environ", {"DB_URL": "mysql://localhost/tanah-dev"}), \
+                patch.dict(sys.modules, {"pymysql": database}), \
+                redirect_stdout(io.StringIO()):
+            VALIDATOR.main()
+        self.assertEqual(database.connect.call_count, 2)
+        for call in database.connect.call_args_list:
+            self.assertEqual(call.kwargs["database"], "disposable_validation")
+            self.assertEqual(call.kwargs["host"], "127.0.0.1")
+        self.assertGreater(database.connect.return_value.cursor.return_value.__enter__.return_value.execute.call_count, 6000)
+
+    def test_explicit_execution_fails_when_the_database_driver_is_missing(self):
+        with patch.object(sys, "argv", [
+            "validate_lambda_parser.py", "--db",
+            "mysql://localhost/disposable_validation",
+        ]), patch.dict(sys.modules, {"pymysql": None}), \
+                redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(SystemExit, "pymysql is required"):
+                VALIDATOR.main()
 
 
 class ParsedStatementGuardTests(unittest.TestCase):
