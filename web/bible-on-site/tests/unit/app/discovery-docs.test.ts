@@ -25,7 +25,7 @@ describe("/llms.txt (issue #3257)", () => {
 	it("documents the open-corpus policy and every content family", async () => {
 		const body = await llmsGET().text();
 		for (const fragment of [
-			"search=yes, ai-input=yes, ai-train=no",
+			"search=yes, ai-input=yes, ai-train=yes",
 			"/929/{perekId",
 			"/פרשה/",
 			"/מסורה/",
@@ -41,8 +41,12 @@ describe("/llms.txt (issue #3257)", () => {
 		}
 	});
 
-	it("publishes the crawler buckets — surfacing welcome, training withheld", async () => {
+	it("welcomes training without requiring referrals and keeps the crawler buckets", async () => {
 		const body = await llmsGET().text();
+		expect(body).toContain("AI-training crawlers — welcome");
+		expect(body).toContain("Training is welcome even without a link or");
+		expect(body).toContain("model weights is welcome in itself");
+		expect(body).not.toMatch(/ai-train=no|withheld|pending.*decision/);
 		for (const fragment of [
 			"GPTBot",
 			"ClaudeBot",
@@ -125,6 +129,8 @@ describe("/openapi.json", () => {
 		);
 		expect(Object.keys(doc.paths)).not.toContain("/md/{path}");
 		const json = JSON.stringify(doc);
+		expect(json).toContain("model training, including learning in model weights");
+		expect(json).not.toMatch(/withheld|ai-train=no/);
 		for (const forbidden of ["/api/dev", "/api/revalidate", "/api/push"]) {
 			expect(json).not.toContain(forbidden);
 		}

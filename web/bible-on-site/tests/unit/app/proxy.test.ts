@@ -169,10 +169,7 @@ describe("proxy", () => {
 
 	describe("crawler buckets (issue #3257)", () => {
 		it.each([
-			// The pre-existing pure-harvest SEO/scraper bucket stays blocked —
-			// it never surfaced the content and is excluded pending a
-			// per-bucket decision (PR #3299 review).
-			"Bytespider",
+			// The unrelated SEO/scraper bucket stays blocked.
 			"MJ12bot/v1.4.8",
 			"AhrefsBot/7.0",
 			"SemrushBot/7~bl",
@@ -193,6 +190,12 @@ describe("proxy", () => {
 			"GPTBot/1.2",
 			"ClaudeBot/1.0",
 			"meta-externalagent/1.1",
+			"CCBot/2.0",
+			"Google-Extended",
+			"Applebot-Extended",
+			"Diffbot/0.1",
+			"TikTokSpider/1.0",
+			"Bytespider",
 			"OAI-SearchBot/1.0",
 			// Browsers and unknown agents.
 			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -361,10 +364,9 @@ describe("proxy", () => {
 				configuredProxy = require("@/proxy").proxy;
 			});
 			try {
-				// /929/1 is Markdown-eligible, so an allowed bot now reaches the
-				// discovery-header branch instead of returning undefined.
+				// An allowed bot reaches the public discovery-header branch.
 				const result = await configuredProxy(
-					makeRequest("/929/1", { ua: "Bytespider" }),
+					makeRequest("/929/1", { ua: "AhrefsBot/7.0" }),
 				);
 				expect(result?.status).not.toBe(403);
 			} finally {
@@ -373,7 +375,7 @@ describe("proxy", () => {
 		});
 
 		it("blocks bots by default (env var not set)", async () => {
-			const result = await proxy(makeRequest("/929/1", { ua: "Bytespider" }));
+			const result = await proxy(makeRequest("/929/1", { ua: "AhrefsBot/7.0" }));
 			expect(result?.status).toBe(403);
 		});
 	});

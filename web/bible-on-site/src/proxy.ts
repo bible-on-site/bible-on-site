@@ -8,22 +8,17 @@ import {
 } from "@/lib/tanahpedia/category-slug";
 
 /**
- * Agent-readiness policy (#3257, PR #3299 review): the public corpus
- * is open to crawlers that SURFACE it — search engines and AI agents
- * that index the content or answer user questions with it
- * (זיכוי הרבים, not an ad business). The affirmative policy is
+ * Agent-readiness policy (#3257): the public corpus is open for
+ * search, AI answers, and model training (זיכוי הרבים). Learning
+ * from the content in model weights is welcome in itself. The policy is
  * published through /robots.txt Content-Signal, /llms.txt and the
  * discovery Link headers below.
  *
- * Non-surfacing bots are bucketized pending the owner's per-bucket
- * decision:
- * - AI-training-only crawlers (GPTBot, ClaudeBot, CCBot, ...) are not
- *   graced: /robots.txt disallows them and declares ai-train=no.
- * - The pre-existing pure-harvest SEO/scraper bucket below stays
- *   blocked — it never surfaced the content.
+ * Training crawlers, including Bytespider, share browser access to
+ * public content. The unrelated SEO/scraper bucket below stays blocked.
  */
 const BLOCKED_BOTS =
-	/Bytespider|MJ12bot|AhrefsBot|SemrushBot|DotBot|PetalBot|BLEXBot|MegaIndex|Sogou|DataForSeoBot/i;
+	/MJ12bot|AhrefsBot|SemrushBot|DotBot|PetalBot|BLEXBot|MegaIndex|Sogou|DataForSeoBot/i;
 
 const BOT_BLOCKING_ENABLED = process.env.BOT_BLOCKING_ENABLED !== "false";
 

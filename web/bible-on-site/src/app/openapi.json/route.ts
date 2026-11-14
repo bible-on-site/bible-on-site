@@ -16,8 +16,8 @@ const DOCUMENT = {
 		description:
 			"Anonymous read-only endpoints over the public learning corpus. " +
 			"זיכוי הרבים project — content may be indexed and used in AI " +
-			"answers; model training is withheld pending a per-bucket " +
-			"decision (see /llms.txt and /robots.txt).",
+			"answers and model training, including learning in model weights " +
+			"without referrals (see /llms.txt and /robots.txt).",
 	},
 	servers: [{ url: SITE_ORIGIN }],
 	paths: {

@@ -16,11 +16,11 @@ describe("/robots.txt (issue #3257)", () => {
 		expect(body).toContain("Allow: /");
 	});
 
-	it("publishes AI Content Signals: surfacing uses granted, training withheld", async () => {
+	it("welcomes search, AI answers, and model training", async () => {
 		const body = await GET().text();
 		const group = body.slice(body.indexOf("User-agent: *"));
 		expect(group).toContain(
-			"Content-Signal: search=yes, ai-input=yes, ai-train=no",
+			"Content-Signal: search=yes, ai-input=yes, ai-train=yes",
 		);
 	});
 
@@ -29,13 +29,14 @@ describe("/robots.txt (issue #3257)", () => {
 		expect(body).toContain("Disallow: /api/");
 		// The narrow exception must come before/around the blanket api rule.
 		expect(body).toContain("Allow: /api/search");
+		expect(body).toContain("Disallow: /dev");
 	});
 
-	it("withholds the AI-training-only bucket pending the owner's decision", async () => {
+	it("lets training crawlers inherit the wildcard public/private boundaries", async () => {
 		const body = await GET().text();
-		const withheld = body.slice(body.indexOf("User-agent: GPTBot"));
-		// The withheld group runs to the harvest comment / sitemap tail.
-		const group = withheld.slice(0, withheld.indexOf("Sitemap:"));
+		expect(body.match(/^User-agent: .+$/gm)).toEqual(["User-agent: *"]);
+		expect(body).not.toMatch(/^Disallow: \/$/m);
+		expect(body).not.toContain("ai-train=no");
 		for (const ua of [
 			"GPTBot",
 			"ClaudeBot",
@@ -45,10 +46,10 @@ describe("/robots.txt (issue #3257)", () => {
 			"Applebot-Extended",
 			"Diffbot",
 			"TikTokSpider",
+			"Bytespider",
 		]) {
-			expect(group).toContain(`User-agent: ${ua}`);
+			expect(body).not.toContain(`User-agent: ${ua}`);
 		}
-		expect(group).toContain("Disallow: /");
 	});
 
 	it("graces the surfacing siblings — they are not in a disallow group", async () => {
@@ -66,11 +67,7 @@ describe("/robots.txt (issue #3257)", () => {
 		]) {
 			expect(body).not.toContain(`User-agent: ${ua}`);
 		}
-		// Applebot itself is graced (Siri/Spotlight answers) — only its
-		// training opt-out token is withheld. Match full lines so the
-		// Applebot-Extended entry does not count against it.
 		expect(body).not.toMatch(/^User-agent: Applebot$/m);
-		expect(body).toMatch(/^User-agent: Applebot-Extended$/m);
 	});
 
 	it("points crawlers at the canonical sitemap", async () => {

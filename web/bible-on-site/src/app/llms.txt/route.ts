@@ -13,36 +13,38 @@ const BODY = `# תנ"ך על הפרק (Bible on Site)
 > תנ"ך על הפרק is a זיכוי הרבים (community merit) Torah-study project —
 > a daily-chapter companion for the 929 cycle. It is not an ad-driven
 > business: the whole public learning corpus is deliberately open to
-> crawlers and agents that surface it back to readers.
+> search, AI answers, and model training. Learning from our content in
+> model weights is welcome in itself as part of לזכות הרבים.
 
 ## Open corpus policy
 
 You are welcome to crawl, index, quote and embed ALL public content
-of this site in search results and AI answers (RAG/grounding) — no
-account, no API key, no bot-identity requirement. The site declares
+of this site in search results and AI answers (RAG/grounding), and
+to train or fine-tune models on it — no account, no API key, no
+bot-identity requirement. Training is welcome even without a link or
+referral back to the site. The site declares
 the same policy in /robots.txt:
-\`Content-Signal: search=yes, ai-input=yes, ai-train=no\` —
-surfacing uses are granted; use for model training is withheld
-pending the project's per-bucket policy decision. Administrative,
+\`Content-Signal: search=yes, ai-input=yes, ai-train=yes\`.
+Administrative,
 development and write surfaces (/dev, /api/dev, /api/revalidate,
 /api/push, subscription endpoints) are private and excluded from
 crawling.
 
-## Crawler buckets (PR #3299 review)
+## Crawler buckets
 
 - Surfacing bots — welcome: search engines (Googlebot, bingbot,
   Applebot, Baiduspider, YandexBot) and AI answer/retrieval agents
   (ChatGPT-User, OAI-SearchBot, PerplexityBot/Perplexity-User,
   Claude-User, Claude-SearchBot, Amazonbot/Alexa, FacebookBot link
   previews) receive identical content to browsers.
-- AI-training-only crawlers — withheld pending the owner's decision:
+- AI-training crawlers — welcome:
   GPTBot, ClaudeBot, CCBot, meta-externalagent, Google-Extended,
-  Applebot-Extended, Diffbot and TikTokSpider are disallowed in
-  /robots.txt, and \`ai-train=no\` is declared for all.
-- Pure-harvest SEO/scrapers — blocked outright at the edge
-  (Bytespider, MJ12bot, AhrefsBot, SemrushBot, DotBot, PetalBot,
-  BLEXBot, MegaIndex, Sogou, DataForSeoBot): they never surfaced the
-  content.
+  Applebot-Extended, Diffbot, TikTokSpider and Bytespider share the
+  wildcard /robots.txt rules, including \`ai-train=yes\`. Crawl at a
+  reasonable pace; crawler rate limits still protect site availability.
+- SEO/scrapers — blocked at the edge
+  (MJ12bot, AhrefsBot, SemrushBot, DotBot, PetalBot,
+  BLEXBot, MegaIndex, Sogou, DataForSeoBot).
 
 ## Canonical site
 
