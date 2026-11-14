@@ -8,7 +8,7 @@ public class FixtureCleanupCollection;
 [Collection("Fixture cleanup")]
 public class AppFixtureDisposalTests
 {
-    private sealed class FailedLogWriter(bool failOnDispose) : StreamWriter(new MemoryStream())
+    private sealed class FailedLogWriter(Stream stream, bool failOnDispose) : StreamWriter(stream)
     {
         public bool WasDisposed { get; private set; }
         public override void WriteLine(string? value) => throw new IOException($"log disk unavailable: {value}");
@@ -34,7 +34,8 @@ public class AppFixtureDisposalTests
         {
             var fixture = new AppFixture();
             var original = new IOException("original drain failure");
-            var log = new FailedLogWriter(failOnDispose);
+            using var stream = new MemoryStream();
+            var log = new FailedLogWriter(stream, failOnDispose);
             const BindingFlags fields = BindingFlags.Instance | BindingFlags.NonPublic;
             typeof(AppFixture).GetField("_drainFailure", fields)!.SetValue(fixture, original);
             typeof(AppFixture).GetField("_appLog", fields)!.SetValue(fixture, log);
@@ -43,6 +44,7 @@ public class AppFixtureDisposalTests
 
             Assert.Same(original, failure.InnerException);
             Assert.True(log.WasDisposed);
+            Assert.False(stream.CanWrite);
         }
         finally
         {
