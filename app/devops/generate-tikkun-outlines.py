@@ -1,10 +1,9 @@
-"""Export the bundled font's base and mark contours without changing glyph geometry.
+"""Export base and mark contours without changing the bundled font's glyph geometry."""
 
-Run with Python and fonttools installed after changing TaameyD-Regular.ttf.
-HarfBuzz still shapes complete marked words at runtime. These contours only let
-the canvas paint their base and annotation layers separately, including marks
-inside composite glyphs such as yoddagesh and trueshin.
-"""
+# Run with Python and fonttools installed after changing TaameyD-Regular.ttf.
+# HarfBuzz shapes complete marked words at runtime; these contours let the
+# canvas paint base and annotation layers separately, including marks inside
+# composite glyphs such as yoddagesh and trueshin.
 
 import hashlib
 import json
@@ -18,6 +17,7 @@ class LayerPen(BasePen):
     """Decompose components while retaining either base or mark outlines."""
 
     def __init__(self, glyph_set, classes, composites, marks):
+        """Select the annotation or base layer for component decomposition."""
         super().__init__(glyph_set)
         self.classes = classes
         self.composites = composites
@@ -71,7 +71,8 @@ def main():
             glyph_set[name].draw(pen)
             cut = pen.contour_ends[-2]
             base, marks = pen.commands[:cut], pen.commands[cut:]
-            assert marks == [0, 852, 287, 1, 76, 287, 1, 76, 381, 1, 852, 381, 4]
+            if marks != [0, 852, 287, 1, 76, 287, 1, 76, 381, 1, 852, 381, 4]:
+                raise ValueError("Review the pointed yod ligature's contours after changing Taamey D")
             glyphs.append({"Name": name, "Base": base, "Marks": marks})
             continue
         layers = []

@@ -134,4 +134,6 @@ internal sealed class TikkunGlyphOutline
 }
 
 [JsonSerializable(typeof(TikkunFontData))]
-internal partial class TikkunFontJsonContext : JsonSerializerContext;
+#pragma warning disable S2333 // System.Text.Json generates the other part of this serialization context.
+internal partial class TikkunFontJsonContext : JsonSerializerContext; //NOSONAR — required by the JSON source generator.
+#pragma warning restore S2333

@@ -177,7 +177,7 @@ public class TikkunFlowView : GraphicsView
             if (_layout == null || Math.Abs(_laidWidth - textWidth) > 0.5f)
             {
                 var baseSize = (float)_view.TextFontSize;
-                _layout = TikkunFlowLayout.Layout(_words, MeasureWord, baseSize,
+                _layout = TikkunFlowLayout.Layout(_words, (text, size, _) => GetRun(text, size).Width, baseSize,
                     textWidth, (float)LineHeightFactor);
                 _laidWidth = textWidth;
             }
@@ -258,6 +258,5 @@ public class TikkunFlowView : GraphicsView
             return run;
         }
 
-        private float MeasureWord(string text, float fontSize, bool _) => GetRun(text, fontSize).Width;
     }
 }
