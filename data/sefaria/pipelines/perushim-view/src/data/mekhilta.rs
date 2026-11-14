@@ -592,12 +592,20 @@ mod tests {
         );
     }
 
-    /// Run against the pinned 5784 Sivan dump (or the same three source
-    /// versions imported into an isolated fixture database). No network fetch
-    /// of Sefaria content takes place during the test.
+    /// Accept both the pinned biblical schema and the renamed tractate schema
+    /// in refreshed dumps. No Sefaria content is fetched during the test.
     #[cfg(feature = "integration")]
     #[tokio::test]
-    async fn pinned_mongo_pipeline_selects_and_maps_complete_wikisource_version() {
+    async fn mongo_pipeline_maps_both_known_mekhilta_schemas_without_dropping_paragraphs() {
+        fn nonempty_paragraphs(value: &Bson) -> usize {
+            match value {
+                Bson::String(text) => usize::from(!text.trim().is_empty()),
+                Bson::Array(items) => items.iter().map(nonempty_paragraphs).sum(),
+                Bson::Document(nodes) => nodes.values().map(nonempty_paragraphs).sum(),
+                _ => 0,
+            }
+        }
+
         let host = std::env::var("MONGO_HOST").unwrap_or_else(|_| "localhost".into());
         let port = std::env::var("MONGO_PORT").unwrap_or_else(|_| "27017".into());
         let database =
@@ -607,24 +615,56 @@ mod tests {
             .unwrap();
         let collection = client.database(&database).collection::<Document>("index");
         let mut pipeline = crate::aggregation::build_pipeline();
-        pipeline.push(doc! { "$match": { "enTitle": OLD_TITLE } });
+        pipeline.push(doc! { "$match": { "enTitle": { "$in": [OLD_TITLE, TITLE] } } });
         let mut cursor = collection.aggregate(pipeline).await.unwrap();
+        let mut works = 0;
+        while cursor.advance().await.unwrap() {
+            let doc = cursor.deserialize_current().unwrap();
+            let notes = flatten(&doc, 1).unwrap();
+            let source = &doc.get_array("versions").unwrap()[0];
+            let source_count = nonempty_paragraphs(source);
+            assert!(source_count > 0, "selected Mekhilta version is empty");
+            assert!(
+                notes.len() >= source_count,
+                "source paragraphs were dropped"
+            );
+            let verses: HashSet<_> = notes.iter().map(|n| (n.perek_id, n.pasuk)).collect();
+            let keys: HashSet<_> = notes
+                .iter()
+                .map(|n| (n.perek_id, n.pasuk, n.note_idx))
+                .collect();
+            assert_eq!(keys.len(), notes.len(), "duplicate note indices at a verse");
+            assert!(notes.iter().all(|n| {
+                (51..=90).contains(&n.perek_id)
+                    && n.pasuk > 0
+                    && n.pasuk as usize <= VERSE_COUNTS[(n.perek_id - 51) as usize]
+            }));
+            assert!(verses.contains(&(62, 1)));
+
+            if source.as_array().is_some() {
+                assert_eq!(notes.len(), source_count);
+                if doc.get_array("versionTitles").unwrap()[0].as_str()
+                    == Some("Mekhilta -- Wikisource")
+                {
+                    assert_eq!(notes.len(), 805);
+                    assert_eq!(verses.len(), 309);
+                    assert!(verses.contains(&(81, 17)));
+                }
+            } else {
+                // `flatten` verifies every nonempty source coordinate, even
+                // where several source paragraphs share one biblical verse.
+                assert!(notes.len() > verses.len());
+                if source_count == 2043 {
+                    // Full current source audited with its Chapter refs and
+                    // the two reviewed gap assignments: 41 repeated targets.
+                    assert_eq!(notes.len(), 2084);
+                }
+            }
+            works += 1;
+        }
         assert!(
-            cursor.advance().await.unwrap(),
-            "pinned Mekhilta index is missing"
+            works > 0,
+            "neither known Mekhilta title survived the pipeline"
         );
-        let doc = cursor.deserialize_current().unwrap();
-        assert_eq!(
-            doc.get_array("versionTitles").unwrap()[0].as_str(),
-            Some("Mekhilta -- Wikisource")
-        );
-        let notes = flatten(&doc, 1).unwrap();
-        assert_eq!(notes.len(), 805);
-        let verses: HashSet<_> = notes.iter().map(|n| (n.perek_id, n.pasuk)).collect();
-        assert_eq!(verses.len(), 309);
-        assert!(notes.iter().all(|n| (51..=90).contains(&n.perek_id)));
-        assert!(verses.contains(&(62, 1)));
-        assert!(verses.contains(&(81, 17)));
-        assert!(!cursor.advance().await.unwrap());
     }
 }
