@@ -24,8 +24,12 @@ public sealed class FlyoutReaderDestinationTests(ITestOutputHelper output, Mobil
         // פרשה על הפרק → בראשית — a foreign-division reader is now active.
         Page.Tap(Platform.FlyoutButton);
         Page.Tap("FlyoutParasha");
-        var bereshit = Page.RenderedElements("ParashaName")
-            .First(element => element.Text == "בראשית");
+        // iOS exposes the row as one accessible element and folds its child
+        // labels into the announced heading. Target that actual tap surface,
+        // retaining a single snapshot lookup and the existing tap deadline.
+        var bereshit = Page.RenderedElements("ParashaUnit1",
+            element => Platform.SemanticDescription(element) ?? element.Text).Single();
+        Assert.Equal("בראשית", bereshit.Text);
         Platform.Tap(Driver!, bereshit.Element);
         Page.WaitFor("ParashaSource", element => !string.IsNullOrEmpty(element.Text));
         SaveDiagnostics("ParashaReaderOpen", "passed");
