@@ -1,4 +1,8 @@
+import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { createServer } from "node:http";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import type { Page, TestInfo } from "@playwright/test";
 import mysql, { type RowDataPacket } from "mysql2/promise";
 import { expect, test } from "../util/test-fixture";
@@ -10,6 +14,136 @@ async function capture(page: Page, info: TestInfo, name: string) {
 }
 
 test.describe("Issues and typed pull requests", () => {
+	test("a workstation worker turns a queued issue into a model-authored PR requiring review", async ({
+		page,
+	}, testInfo) => {
+		const title = `הפקה מקומית ${randomUUID()}`;
+		await page.goto("/issues?id=new");
+		await page.getByLabel("כותרת", { exact: true }).fill(title);
+		await page
+			.getByLabel("תיאור", { exact: true })
+			.fill("נדרש ערך חדש לאברם עם מטא-נתונים בלבד, בהתבסס על המקור המצורף.");
+		await page
+			.getByRole("combobox", { name: "אחראי", exact: true })
+			.selectOption("local_llm");
+		await page
+			.getByRole("button", { name: "+ הוספת מקור", exact: true })
+			.click();
+		await page.getByLabel("הפניה למקור", { exact: true }).fill("בראשית יא כו");
+		await page
+			.getByLabel("ציטוט רלוונטי", { exact: true })
+			.fill("ויולד את אברם");
+		await page
+			.getByRole("button", { name: "פתיחת פנייה", exact: true })
+			.click();
+		await expect(page.getByRole("heading", { level: 1 })).toContainText(title);
+		const issueId = new URL(page.url()).searchParams.get("id");
+		if (!issueId) throw new Error("Created issue ID missing");
+		await page
+			.getByRole("button", { name: "שליחה לעובד מקומי", exact: true })
+			.click();
+		await expect(
+			page.getByText("ממתין לעובד בתחנת העבודה", { exact: true }),
+		).toBeVisible();
+		let inferenceCalls = 0;
+		const ollama = createServer(async (request, response) => {
+			const parts: Buffer[] = [];
+			for await (const chunk of request) parts.push(Buffer.from(chunk));
+			const input = JSON.parse(Buffer.concat(parts).toString("utf8"));
+			if (
+				request.url !== "/api/chat" ||
+				request.headers.authorization ||
+				!input.format
+			) {
+				response.writeHead(400);
+				response.end();
+				return;
+			}
+			inferenceCalls++;
+			response.setHeader("Content-Type", "application/json");
+			response.end(
+				JSON.stringify({
+					model: "doradsoft",
+					message: {
+						content: JSON.stringify({
+							pullRequests: [
+								{
+									title: "ערך לאברם לפי המקור",
+									description: "מטא-נתונים עם מקור; ללא טקסט לערך.",
+									evidenceIndexes: [0],
+									changes: [
+										{
+											kind: "entry",
+											after: {
+												title: "אברם",
+												uniqueName: `worker-${randomUUID()}`,
+												entityType: "PERSON",
+												displayName: "אברם",
+											},
+										},
+									],
+								},
+							],
+						}),
+					},
+				}),
+			);
+		});
+		await new Promise<void>((resolve) =>
+			ollama.listen(0, "127.0.0.1", resolve),
+		);
+		try {
+			const address = ollama.address();
+			if (!address || typeof address === "string")
+				throw new Error("Local inference endpoint missing");
+			const script = fileURLToPath(
+				new URL("../../../../devops/contribution-worker.mjs", import.meta.url),
+			);
+			const { stdout } = await promisify(execFile)(
+				process.execPath,
+				[
+					script,
+					"--once",
+					"--dev",
+					"--origin",
+					"http://localhost:3101",
+					"--ollama",
+					`http://127.0.0.1:${address.port}`,
+					"--model",
+					"test-local",
+					"--issue",
+					issueId,
+				],
+				{ timeout: 15000, windowsHide: true },
+			);
+			expect(stdout).toContain("completed");
+			expect(stdout).not.toContain("ויולד את אברם");
+			expect(inferenceCalls).toBe(1);
+			await expect(
+				page.getByText("העובד המקומי יצר הצעות לסקירה", { exact: true }),
+			).toBeVisible();
+			await capture(page, testInfo, "workstation-generation-completed");
+			await page
+				.getByRole("link", { name: "פתיחת הצעה 1 לסקירה", exact: true })
+				.click();
+			await expect(
+				page.getByText("Local LLM", { exact: true }).first(),
+			).toBeVisible();
+			await expect(
+				page.getByRole("button", { name: "מיזוג PR", exact: true }),
+			).toBeDisabled();
+			await page.getByRole("tab", { name: "שינויים 1", exact: true }).click();
+			await expect(page.getByRole("table")).toContainText("אברם");
+			await capture(page, testInfo, "workstation-model-pr-review-gate");
+			await page
+				.getByRole("button", { name: "סגירה ללא מיזוג", exact: true })
+				.click();
+		} finally {
+			await new Promise<void>((resolve, reject) =>
+				ollama.close((error) => (error ? reject(error) : resolve())),
+			);
+		}
+	});
 	test("supports all four issue assignee kinds and durable discussion", async ({
 		page,
 	}, testInfo) => {

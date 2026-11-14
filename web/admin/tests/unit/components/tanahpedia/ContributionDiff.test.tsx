@@ -4,6 +4,23 @@ import { ContributionDiff } from "~/components/tanahpedia/ContributionDiff";
 import type { ReviewedChange } from "~/lib/tanahpedia/contributions";
 
 describe("typed contribution diff", () => {
+	it("displays free metadata that matches an object prototype property", () => {
+		render(
+			<ContributionDiff
+				changes={[
+					{
+						kind: "metadata",
+						targetId: "one",
+						before: { displayName: "constructor" },
+						after: { displayName: "toString" },
+						labels: {},
+					},
+				]}
+			/>,
+		);
+		expect(screen.getByText("constructor")).toBeInTheDocument();
+		expect(screen.getByText("toString")).toBeInTheDocument();
+	});
 	it("shows added, changed and removed fields without requiring a file diff", () => {
 		render(
 			<ContributionDiff

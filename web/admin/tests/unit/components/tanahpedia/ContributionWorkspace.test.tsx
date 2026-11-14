@@ -432,10 +432,10 @@ describe("issues and PR administration", () => {
 	});
 	it("generates PRs only through the persisted LLM assignee", async () => {
 		mocks.search = { id: ID };
-		issue.assignee = { kind: "local_llm" };
+		issue.assignee = { kind: "aws_llm" };
 		show();
 		const button = await screen.findByRole("button", {
-			name: "יצירת PRs עם Local LLM",
+			name: "יצירת PRs עם AWS LLM",
 		});
 		await waitFor(() => expect(button).toBeEnabled());
 		fireEvent.click(button);
@@ -445,6 +445,24 @@ describe("issues and PR administration", () => {
 			}),
 		);
 		expect(await screen.findByRole("status")).toHaveTextContent("נוצרו 1");
+	});
+	it("queues workstation generation without invoking a server-side model", async () => {
+		mocks.search = { id: ID };
+		issue.assignee = { kind: "local_llm" };
+		show();
+		fireEvent.click(
+			await screen.findByRole("button", { name: "שליחה לעובד מקומי" }),
+		);
+		await waitFor(() =>
+			expect(mocks.update).toHaveBeenCalledWith({
+				data: expect.objectContaining({
+					id: ID,
+					version: 1,
+					action: "queue_generation",
+				}),
+			}),
+		);
+		expect(mocks.generate).not.toHaveBeenCalled();
 	});
 	it("reports provider failures and unconfigured providers", async () => {
 		mocks.search = { id: ID };
@@ -463,11 +481,11 @@ describe("issues and PR administration", () => {
 	});
 	it("shows model errors without pretending PRs were generated", async () => {
 		mocks.search = { id: ID };
-		issue.assignee = { kind: "local_llm" };
+		issue.assignee = { kind: "aws_llm" };
 		mocks.generate.mockRejectedValue(new Error("Invalid model output"));
 		show();
 		const button = await screen.findByRole("button", {
-			name: "יצירת PRs עם Local LLM",
+			name: "יצירת PRs עם AWS LLM",
 		});
 		await waitFor(() => expect(button).toBeEnabled());
 		fireEvent.click(button);
@@ -545,6 +563,61 @@ describe("issues and PR administration", () => {
 		await waitFor(() =>
 			expect(mocks.edit).toHaveBeenCalledWith({
 				data: expect.objectContaining({ id: ID, version: 1, title: "מעודכן" }),
+			}),
+		);
+	});
+	it("preserves an unsent comment across a background issue refresh", async () => {
+		mocks.search = { id: ID };
+		show();
+		const field = await screen.findByLabelText("הוספת תגובה");
+		fireEvent.change(field, { target: { value: "טיוטה שלא נשלחה" } });
+		issue = { ...issue, version: 2 };
+		await client.invalidateQueries({ queryKey: ["contribution", ID] });
+		await waitFor(() =>
+			expect(mocks.detail.mock.calls.length).toBeGreaterThan(1),
+		);
+		expect(screen.getByLabelText("הוספת תגובה")).toHaveValue("טיוטה שלא נשלחה");
+	});
+	it("retains a comment typed while an earlier comment is being submitted", async () => {
+		let complete: (value: Contribution) => void = () => {};
+		mocks.update.mockImplementation(
+			() =>
+				new Promise<Contribution>((resolve) => {
+					complete = resolve;
+				}),
+		);
+		mocks.search = { id: ID };
+		show();
+		const field = await screen.findByLabelText("הוספת תגובה");
+		fireEvent.change(field, { target: { value: "תגובה ראשונה" } });
+		fireEvent.click(screen.getByRole("button", { name: "שליחת תגובה" }));
+		await waitFor(() => expect(mocks.update).toHaveBeenCalled());
+		fireEvent.change(field, { target: { value: "תגובה חדשה" } });
+		complete(issue);
+		await waitFor(() =>
+			expect(screen.getByRole("button", { name: "שליחת תגובה" })).toBeEnabled(),
+		);
+		expect(screen.getByLabelText("הוספת תגובה")).toHaveValue("תגובה חדשה");
+	});
+	it("submits edits against the snapshot opened by the editor despite a background update", async () => {
+		mocks.search = { id: ID };
+		show();
+		fireEvent.click(await screen.findByRole("button", { name: "עריכה" }));
+		await screen.findByRole("form");
+		fireEvent.change(screen.getByLabelText("כותרת"), {
+			target: { value: "טיוטה שלי" },
+		});
+		issue = { ...issue, version: 2, title: "שינוי של עורך אחר" };
+		await client.invalidateQueries({ queryKey: ["contribution", ID] });
+		expect(screen.getByLabelText("כותרת")).toHaveValue("טיוטה שלי");
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(mocks.edit).toHaveBeenCalledWith({
+				data: expect.objectContaining({
+					id: ID,
+					version: 1,
+					title: "טיוטה שלי",
+				}),
 			}),
 		);
 	});

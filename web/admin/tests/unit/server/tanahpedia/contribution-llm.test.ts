@@ -298,13 +298,17 @@ describe("issue-to-PR LLM generation", () => {
 	});
 	it("reports explicit provider configuration without exposing credentials", () => {
 		expect(contributionLlmStatus()).toEqual({
-			local: { enabled: true, model: "local-test" },
+			local: {
+				enabled: true,
+				model: "local-test",
+				execution: "workstation_worker",
+			},
 			aws: { enabled: true, model: "aws-test" },
 		});
 		vi.stubEnv("LOCAL_LLM_MODEL", "");
 		vi.stubEnv("BEDROCK_MODEL_ID", "");
 		expect(contributionLlmStatus()).toMatchObject({
-			local: { enabled: false },
+			local: { enabled: true, execution: "workstation_worker" },
 			aws: { enabled: false },
 		});
 	});

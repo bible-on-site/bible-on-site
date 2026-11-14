@@ -47,6 +47,7 @@ let conn: Connection;
 let service: typeof import("~/server/tanahpedia/contribution-service.server");
 let store: typeof import("~/server/tanahpedia/contribution-store.server");
 let db: typeof import("~/server/db");
+let worker: typeof import("~/server/tanahpedia/contribution-worker.server");
 let created = false;
 const ids = {
 	person: randomUUID(),
@@ -159,6 +160,228 @@ beforeAll(async () => {
 	service = await import("~/server/tanahpedia/contribution-service.server");
 	store = await import("~/server/tanahpedia/contribution-store.server");
 	await store.ensureContributionSchema();
+});
+
+describe("workstation generation with actual MySQL transactions", () => {
+	async function queued() {
+		worker ??= await import("~/server/tanahpedia/contribution-worker.server");
+		const item = await service.createContribution(
+			{
+				kind: "issue",
+				title: "בקשה להפקת מטא-נתונים",
+				description: "נדרש ערך חדש עם מטא-נתונים בלבד, ללא גוף טקסט.",
+				assignee: { kind: "local_llm" },
+				evidence,
+			},
+			alice,
+		);
+		return service.updateContribution(
+			{ id: item.id, version: item.version, action: "queue_generation" },
+			alice,
+		);
+	}
+	async function claim(id: string) {
+		const job = await worker.claimContributionGeneration({
+			workerId: "local-test-workstation",
+			issueId: id,
+		});
+		if (!job) throw new Error("Expected queued generation job");
+		return job;
+	}
+	function completion(
+		job: Awaited<ReturnType<typeof claim>>,
+		output?: unknown,
+	) {
+		const uniqueName = `worker-${randomUUID()}`;
+		return {
+			issueId: job.issueId,
+			jobId: job.id,
+			token: job.token,
+			version: job.version,
+			apiVersion: job.apiVersion,
+			model: "doradsoft",
+			content: JSON.stringify(
+				output ?? {
+					pullRequests: [
+						{
+							title: "ערך ממקור",
+							description: "הצעה לסקירה בלבד",
+							evidenceIndexes: [0],
+							changes: [
+								{
+									kind: "entry",
+									after: {
+										title: "שם בדיקה",
+										uniqueName,
+										entityType: "PERSON",
+										displayName: "שם בדיקה",
+									},
+								},
+							],
+						},
+					],
+				},
+			),
+		};
+	}
+	it("leases a queued issue once, creates only reviewable PRs and makes completion replay-safe", async () => {
+		const item = await queued();
+		const claims = await Promise.all([
+			worker.claimContributionGeneration({ workerId: "one", issueId: item.id }),
+			worker.claimContributionGeneration({ workerId: "two", issueId: item.id }),
+		]);
+		const job = claims.find(Boolean);
+		if (!job) throw new Error("No worker won the claim");
+		expect(claims.filter(Boolean)).toHaveLength(1);
+		const input = completion(job);
+		const result = await worker.completeContributionGeneration(input);
+		expect(result.prIds).toHaveLength(1);
+		expect(await worker.completeContributionGeneration(input)).toEqual(result);
+		const pr = await store.withContributions((tx) =>
+			store.readContribution(tx, result.prIds[0]),
+		);
+		expect(pr.author).toMatchObject({
+			kind: "local_llm",
+			name: "doradsoft",
+			isDoradsoft: false,
+		});
+		expect(pr.provenance?.provider).toBe("local_llm_worker");
+		await expect(
+			service.mergeContribution({ id: pr.id, version: pr.version }, alice),
+		).rejects.toThrow("Approval");
+		const uniqueName = pr.changes[0].after?.uniqueName;
+		if (typeof uniqueName !== "string")
+			throw new Error("Generated entry unique name missing");
+		const [entries] = await conn.execute<RowDataPacket[]>(
+			"SELECT id FROM tanahpedia_entry WHERE unique_name=?",
+			[uniqueName],
+		);
+		expect(entries).toHaveLength(0);
+		const source = await store.withContributions((tx) =>
+			store.readContribution(tx, item.id),
+		);
+		expect(source.generation).toMatchObject({
+			status: "completed",
+			prIds: result.prIds,
+			attempts: 1,
+		});
+		expect(source.generation?.leaseHash).not.toBe(job.token);
+		const [prs] = await conn.execute<RowDataPacket[]>(
+			"SELECT id FROM tanahpedia_contribution WHERE issue_id=?",
+			[item.id],
+		);
+		expect(prs).toHaveLength(1);
+	});
+	it("rejects an invalid batch atomically and records a recoverable failure", async () => {
+		const item = await queued(),
+			job = await claim(item.id);
+		await expect(
+			worker.completeContributionGeneration(
+				completion(job, {
+					pullRequests: [
+						{
+							title: "הצעה",
+							description: "בדיקה",
+							evidenceIndexes: [7],
+							changes: [],
+						},
+					],
+				}),
+			),
+		).rejects.toThrow("evidence");
+		const saved = await store.withContributions((tx) =>
+			store.readContribution(tx, item.id),
+		);
+		expect(saved.generation?.status).toBe("failed");
+		const [prs] = await conn.execute<RowDataPacket[]>(
+			"SELECT id FROM tanahpedia_contribution WHERE issue_id=?",
+			[item.id],
+		);
+		expect(prs).toHaveLength(0);
+	});
+	it("cancels stale work when a human edits or reassigns its source", async () => {
+		for (const action of ["edit", "assign"]) {
+			const item = await queued(),
+				job = await claim(item.id);
+			if (action === "edit")
+				await service.editContribution(
+					{
+						id: item.id,
+						version: job.version,
+						title: "נוסח מתוקן",
+						description: item.description,
+						evidence: item.evidence,
+					},
+					alice,
+				);
+			else
+				await service.updateContribution(
+					{
+						id: item.id,
+						version: job.version,
+						action: "assign",
+						assignee: { kind: "human", id: "alice", name: "Alice" },
+					},
+					alice,
+				);
+			await expect(
+				worker.completeContributionGeneration(completion(job)),
+			).rejects.toThrow("no longer owns");
+			expect(
+				(
+					await store.withContributions((tx) =>
+						store.readContribution(tx, item.id),
+					)
+				).generation?.status,
+			).toBe("cancelled");
+		}
+	});
+	it("reclaims an expired lease and refuses a late result from its former owner", async () => {
+		const item = await queued(),
+			old = await claim(item.id);
+		await store.withContributions(async (tx) => {
+			const source = await store.readContribution(tx, item.id, true);
+			if (!source.generation) throw new Error("Job missing");
+			source.generation.leaseExpiresAt = "2000-01-01T00:00:00.000Z";
+			await store.saveContribution(tx, source);
+		});
+		const replacement = await claim(item.id);
+		expect(replacement.token).not.toBe(old.token);
+		await expect(
+			worker.completeContributionGeneration(completion(old)),
+		).rejects.toThrow("no longer owns");
+		const result = await worker.completeContributionGeneration(
+			completion(replacement),
+		);
+		expect(result.prIds).toHaveLength(1);
+	});
+	it("bounds disconnected-worker attempts and allows a new explicit request", async () => {
+		const item = await queued();
+		await claim(item.id);
+		await store.withContributions(async (tx) => {
+			const source = await store.readContribution(tx, item.id, true);
+			if (!source.generation) throw new Error("Job missing");
+			source.generation.attempts = 3;
+			source.generation.leaseExpiresAt = "2000-01-01T00:00:00.000Z";
+			await store.saveContribution(tx, source);
+		});
+		expect(
+			await worker.claimContributionGeneration({
+				workerId: "replacement",
+				issueId: item.id,
+			}),
+		).toBeNull();
+		const failed = await store.withContributions((tx) =>
+			store.readContribution(tx, item.id),
+		);
+		expect(failed.generation?.status).toBe("failed");
+		const retry = await service.updateContribution(
+			{ id: item.id, version: failed.version, action: "queue_generation" },
+			alice,
+		);
+		expect(retry.generation?.id).not.toBe(failed.generation?.id);
+		expect(await claim(item.id)).toBeTruthy();
+	});
 });
 
 afterAll(async () => {
@@ -537,8 +760,8 @@ describe("reviewed transactional PR merging", () => {
 					after: {
 						placeId: ids.place,
 						modernName: "מקום",
-						latitude: 31.77812,
-						longitude: 35.23543,
+						latitude: 31.77812345678,
+						longitude: -35.23543987654,
 					},
 				},
 			],
@@ -550,6 +773,14 @@ describe("reviewed transactional PR merging", () => {
 			[unionId],
 		);
 		expect(rows[0].person_source_citation).toBe("מקור לאיש");
+		const [coordinates] = await conn.execute<RowDataPacket[]>(
+			"SELECT latitude, longitude FROM tanahpedia_place_identification WHERE id=?",
+			[placeId],
+		);
+		expect(Number(coordinates[0].latitude)).toBe(pr.changes[1].after?.latitude);
+		expect(Number(coordinates[0].longitude)).toBe(
+			pr.changes[1].after?.longitude,
+		);
 		pr = await createPr(
 			[
 				{
@@ -565,7 +796,7 @@ describe("reviewed transactional PR merging", () => {
 			],
 			owner,
 		);
-		expect(pr.changes[0].before?.latitude).toBe(31.77812);
+		expect(pr.changes[0].before?.latitude).toBe(31.77812346);
 		await service.mergeContribution({ id: pr.id, version: pr.version }, owner);
 		pr = await createPr(
 			[

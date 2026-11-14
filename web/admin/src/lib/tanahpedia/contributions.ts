@@ -26,6 +26,23 @@ export interface Evidence {
 	note: string;
 }
 
+/** Normalize recognizable scripture references for display, retaining stored
+ * evidence and arbitrary bibliographic citations exactly as supplied. */
+export function contributionCitation(value: string): string {
+	const candidate = value
+		.replace(/["'׳״“”‘’]/g, "")
+		.replace(/[,、:]/g, " ")
+		.replace(/[־–—]/g, "-")
+		.replace(/\s*-\s*/g, "-")
+		.replace(/\s+/g, " ")
+		.trim();
+	return /^(?:בראשית|שמות|ויקרא|במדבר|דברים|יהושע|שופטים|שמואל [אב]|מלכים [אב]|ישעיהו|ירמיהו|יחזקאל|הושע|יואל|עמוס|עובדיה|יונה|מיכה|נחום|חבקוק|צפניה|חגי|זכריה|מלאכי|תהלים|משלי|איוב|שיר השירים|רות|איכה|קהלת|אסתר|דניאל|עזרא|נחמיה|דברי הימים [אב]) [א-ת]{1,3}(?: [א-ת]{1,3}(?:-[א-ת]{1,3})?)?$/.test(
+		candidate,
+	)
+		? candidate
+		: value;
+}
+
 export interface ParentChildChange {
 	parentId: string;
 	childId: string;
@@ -98,11 +115,30 @@ export interface ContributionEvent {
 		| "closed"
 		| "reopened"
 		| "merged"
-		| "generated";
+		| "generated"
+		| "generation_queued";
 	actor: Contributor;
 	body: string;
 	at: string;
 	revision: number;
+}
+
+export interface ContributionGeneration {
+	id: string;
+	status: "queued" | "running" | "completed" | "failed" | "cancelled";
+	requestedAt: string;
+	requestedBy: string;
+	attempts: number;
+	apiVersion: number;
+	worker: string | null;
+	model: string | null;
+	leaseHash: string | null;
+	leaseExpiresAt: string | null;
+	claimedVersion: number | null;
+	contextHash: string | null;
+	outputHash: string | null;
+	prIds: string[];
+	error: string | null;
 }
 
 export interface Contribution {
@@ -128,6 +164,7 @@ export interface Contribution {
 	apiVersion?: number;
 	apiMigration?: ContributionApiMigration;
 	apiMigrationHistory?: ContributionApiMigration[];
+	generation?: ContributionGeneration;
 }
 
 export const CHANGE_LABELS: Record<ChangeInput["kind"], string> = {
@@ -137,6 +174,14 @@ export const CHANGE_LABELS: Record<ChangeInput["kind"], string> = {
 	metadata: "מטא-נתונים",
 	entry: "ערך חדש",
 };
+
+/** Proper names and the canonical migration status requested for both queues. */
+export const CONTRIBUTION_UI = {
+	reviewer: "doradsoft",
+	awsLlm: "AWS LLM",
+	localLlm: "Local LLM",
+	migrationFailed: "couldn't migrate to latest API",
+} as const;
 
 export const FIELD_LABELS: Record<string, string> = {
 	parentId: "הורה",
@@ -166,9 +211,11 @@ export const FIELD_LABELS: Record<string, string> = {
 
 export function assigneeLabel(assignee: Assignee): string {
 	if (assignee.kind === "human") return assignee.name;
-	return { unassigned: "ללא שיוך", aws_llm: "AWS LLM", local_llm: "Local LLM" }[
-		assignee.kind
-	];
+	return {
+		unassigned: "ללא שיוך",
+		aws_llm: CONTRIBUTION_UI.awsLlm,
+		local_llm: CONTRIBUTION_UI.localLlm,
+	}[assignee.kind];
 }
 
 export function record(

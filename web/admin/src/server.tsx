@@ -78,6 +78,12 @@ export default createServerEntry({
 			);
 			return handleContributionMigrationRequest(request);
 		}
+		if (url.pathname.startsWith("/api/contributions/worker/")) {
+			const { handleContributionWorkerRequest } = await import(
+				"./server/tanahpedia/contribution-worker-http.server"
+			);
+			return handleContributionWorkerRequest(request);
+		}
 
 		// Native archivers enter only this explicit HTTP surface. They never reach
 		// TanStack server functions, which continue to require the admin SSO client.

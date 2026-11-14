@@ -2,6 +2,7 @@ import {
 	CHANGE_LABELS,
 	type ChangeState,
 	changedFields,
+	contributionCitation,
 	FIELD_LABELS,
 	type ReviewedChange,
 } from "~/lib/tanahpedia/contributions";
@@ -32,10 +33,17 @@ function shown(
 	field?: string,
 ): string {
 	if (value == null || value === "") return "-";
+	if (field === "sourceCitation" || field === "personSourceCitation")
+		return contributionCitation(String(value));
+	const key = String(value);
+	const values =
+		field && Object.hasOwn(VALUE_LABELS, field)
+			? VALUE_LABELS[field]
+			: undefined;
 	return (
-		labels[String(value)] ??
-		(field ? VALUE_LABELS[field]?.[String(value)] : undefined) ??
-		String(value)
+		(Object.hasOwn(labels, key) ? labels[key] : undefined) ??
+		(values && Object.hasOwn(values, key) ? values[key] : undefined) ??
+		key
 	);
 }
 

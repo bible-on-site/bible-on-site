@@ -170,6 +170,71 @@ describe("contribution lifecycle", () => {
 		mocks.query.mockResolvedValue([]);
 	});
 	afterEach(() => vi.restoreAllMocks());
+	it("queues workstation work explicitly, prevents duplicates and allows recovery after a lost lease", async () => {
+		let item = await createContribution(
+			{
+				kind: "issue",
+				title: "Issue",
+				description: "Saved source",
+				evidence,
+				assignee: { kind: "local_llm" },
+			},
+			alice,
+		);
+		item = await updateContribution(action(item, "queue_generation"), alice);
+		expect(item.generation).toMatchObject({
+			status: "queued",
+			attempts: 0,
+			requestedBy: alice.id,
+			apiVersion: 1,
+		});
+		expect(item.events.at(-1)?.kind).toBe("generation_queued");
+		await expect(
+			updateContribution(action(item, "queue_generation"), alice),
+		).rejects.toThrow("already queued");
+		if (!item.generation) throw new Error("Missing fixture generation");
+		item.generation.status = "running";
+		item.generation.leaseExpiresAt = new Date(Date.now() + 60000).toISOString();
+		mocks.items.set(item.id, structuredClone(item));
+		await expect(
+			updateContribution(action(item, "queue_generation"), alice),
+		).rejects.toThrow("already queued");
+		item.generation.leaseExpiresAt = "2000-01-01T00:00:00Z";
+		mocks.items.set(item.id, structuredClone(item));
+		const retry = await updateContribution(
+			action(item, "queue_generation"),
+			alice,
+		);
+		expect(retry.generation?.id).not.toBe(item.generation.id);
+		expect(retry.generation?.attempts).toBe(0);
+		expect(mocks.apply).not.toHaveBeenCalled();
+	});
+	it.each(["no evidence", "human assignee", "model actor", "closed", "pr"])(
+		"rejects unsuitable worker requests: %s",
+		async (reason) => {
+			const item = await createContribution(
+				{
+					kind: "issue",
+					title: "Issue",
+					description: "Description",
+					evidence: reason === "no evidence" ? [] : evidence,
+					assignee: { kind: "local_llm" },
+				},
+				alice,
+			);
+			if (reason === "human assignee") item.assignee = { kind: "unassigned" };
+			if (reason === "closed") item.state = "closed";
+			if (reason === "pr") item.kind = "pr";
+			mocks.items.set(item.id, structuredClone(item));
+			await expect(
+				updateContribution(
+					action(item, "queue_generation"),
+					reason === "model actor" ? { ...alice, kind: "local_llm" } : alice,
+				),
+			).rejects.toThrow();
+			expect(mocks.items.get(item.id)?.generation).toBeUndefined();
+		},
+	);
 	it("creates an issue without touching content and records assignment", async () => {
 		const value = await createContribution(
 			{

@@ -45,8 +45,6 @@ Server-only environment variables:
 
 | Variable | Purpose |
 | --- | --- |
-| `LOCAL_LLM_MODEL` | Enables local generation with the named Ollama model |
-| `LOCAL_LLM_URL` | Ollama base URL, default `http://127.0.0.1:11434`; reachable from the admin server |
 | `BEDROCK_MODEL_ID` | Enables AWS generation using Bedrock Converse |
 | `BEDROCK_REGION` | Bedrock region, falling back to `AWS_REGION` and then `us-east-1` |
 | `TANAHPEDIA_DORADSOFT_SUB` | Binds the reviewer to an immutable verified Cognito subject when the Cognito username differs from `doradsoft` |
@@ -54,9 +52,44 @@ Server-only environment variables:
 
 Bedrock uses the AWS SDK's normal server credential chain and requires
 `bedrock:InvokeModel` for the configured model. No IAM grants are created by the
-feature. A deployed admin must reach its local inference service over its own
-private network; a visitor's browser localhost is not the server's localhost.
-No hosted OpenAI fallback is used for issue generation.
+feature. Local inference runs on the workstation, through an outbound worker;
+the deployed admin does not connect to workstation localhost. No hosted OpenAI
+fallback is used for issue generation.
+
+Run Ollama with `qwen3:4b`, sign into the existing AWS SSO profile, then run
+`node devops/contribution-worker.mjs --watch`. The worker defaults to the
+production admin and `AdministratorAccess-250598594267`. Use `--once` for one
+job, `--issue <UUID>` to select an issue, or `--origin http://localhost:3102 --dev`
+for an explicitly local preview. `--model` and `--ollama` select another local
+model or inference endpoint. The user requested automatic startup at Windows
+sign-in; its launcher lives outside the repository so archiving this worktree
+does not remove it.
+
+The explicit local generation button saves a durable queue request. Workers
+claim one issue using a three-minute hashed lease, run inference under the
+existing two-minute deadline, and submit output for server validation. A changed
+issue, assignment, API contract or catalogue rejects the result. PR creation and
+completion receipt commit together; an identical replay returns that receipt.
+A disconnected worker can be replaced after lease expiry, with three automatic
+claim attempts per request. An editor can explicitly retry or cancel by closing,
+editing or reassigning the issue. Background job refreshes preserve unsaved drafts.
+
+The worker reads the existing service client's credentials in memory through
+AWS SSO and requests only `admin-api/contributions`. It retains a short-lived
+access token and never copies the service secret to disk. This scope only grants
+claim, complete and fail endpoints; ordinary `admin-api/service` tokens and
+browser cookies cannot authenticate them. Worker tokens cannot review, merge or
+use the general admin API. Logs omit evidence, prompts, tokens and lease secrets.
+Expired SSO requires another AWS sign-in; queued issues remain saved meanwhile.
+
+`devops/contribution-config.mjs --reviewer-sub <verified-sub> --receipt <private-file>`
+plans the configuration. Add `--apply` to append the scope to the existing
+Cognito resource/client and bind the reviewer in a cloned admin task definition.
+It verifies account, pool, enabled subject and stable service, preserves all
+current writable settings, refuses unknown AWS fields and saves a private
+rollback receipt, including the running image digest, before writes. No additional
+Cognito client or IAM grant is created. The CloudFormation files document the
+settings and are not applied as a replacement stack.
 
 The local smoke used Ollama 0.40.16 with `qwen3:4b` on CPU: an issue produced a
 metadata-only PERSON entry proposal with its supplied evidence, a visual diff,
@@ -123,6 +156,13 @@ inverse change based on the current state, rather than rewriting its audit recor
 Rolling back across a contract change requires an explicit reverse adapter;
 otherwise the older runtime fails closed and shows the raw sequence until the
 upgrade/recovery path is restored. No public or crawled URLs change.
+
+For configuration rollback, restore the prior writable Cognito client/resource
+settings from the private receipt and redeploy the prior admin task definition.
+After a later `latest` image publication, register its saved definition with the
+saved running image digest instead of relying on the mutable tag. Stop the local
+worker before removing its scope. Existing general admin service access remains
+unchanged because its original scope and client settings are preserved.
 
 Validation tasks: `bun run test:unit`, `bun run coverage:unit`,
 `bun run test:contributions:mysql`, `bun run lint`, and `bun run build` in

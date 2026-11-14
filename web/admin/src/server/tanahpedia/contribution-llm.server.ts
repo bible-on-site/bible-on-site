@@ -2,6 +2,7 @@ import {
 	BedrockRuntimeClient,
 	ConverseCommand,
 } from "@aws-sdk/client-bedrock-runtime";
+import type { PoolConnection } from "mysql2/promise";
 import type { ChangeInput, Contribution } from "~/lib/tanahpedia/contributions";
 import {
 	record,
@@ -251,7 +252,8 @@ export function contributionOutputSchema(
 export function contributionLlmStatus() {
 	return {
 		local: {
-			enabled: Boolean(process.env.LOCAL_LLM_MODEL?.trim()),
+			enabled: true,
+			execution: "workstation_worker" as const,
 			model: process.env.LOCAL_LLM_MODEL?.trim() ?? "",
 		},
 		aws: {
@@ -367,12 +369,13 @@ async function awsGenerate(
 	}
 }
 
-export async function generateContributionPrs(
+export async function prepareContributionGeneration(
 	raw: unknown,
-): Promise<Contribution[]> {
+	existingConn?: PoolConnection,
+) {
 	const input = record(raw),
 		id = uuidField(input.id, "id");
-	const context = await withContributions(async (conn) => {
+	const load = async (conn: PoolConnection) => {
 		const issue = await readContribution(conn, id);
 		assertVersion(issue, input.version);
 		if (issue.kind !== "issue" || issue.state !== "open")
@@ -382,7 +385,10 @@ export async function generateContributionPrs(
 		if (issue.evidence.length === 0)
 			throw new Error("Add evidence to the issue before generating PRs");
 		return { issue, catalogue: await contributionCatalogue(conn) };
-	});
+	};
+	const context = existingConn
+		? await load(existingConn)
+		: await withContributions(load);
 	const provider = context.issue.assignee.kind;
 	const comments = context.issue.events
 		.filter((event) => event.kind === "comment")
@@ -439,11 +445,44 @@ export async function generateContributionPrs(
 		issue: issueContext,
 		catalogue: modelCatalogue,
 	});
-	const result = await (provider === "local_llm" ? localGenerate : awsGenerate)(
-		contributionSystemPrompt(),
-		user,
+	return {
+		issue: context.issue,
+		provider,
+		modelCatalogue,
 		schema,
-	);
+		system: contributionSystemPrompt(),
+		user,
+	};
+}
+
+export async function generateContributionPrs(
+	raw: unknown,
+): Promise<Contribution[]> {
+	const context = await prepareContributionGeneration(raw);
+	const result = await (context.provider === "local_llm"
+		? localGenerate
+		: awsGenerate)(context.system, context.user, context.schema);
+	return createGeneratedContributionPrs(context, result);
+}
+
+export async function createGeneratedContributionPrs(
+	context: Awaited<ReturnType<typeof prepareContributionGeneration>>,
+	result: { content: string; model: string },
+	hooks: {
+		beforeCreate?: (
+			conn: PoolConnection,
+			issue: Contribution,
+		) => Promise<void> | void;
+		afterCreate?: (
+			conn: PoolConnection,
+			issue: Contribution,
+			prs: Contribution[],
+		) => Promise<void> | void;
+		provenanceProvider?: string;
+	} = {},
+): Promise<Contribution[]> {
+	const { provider, modelCatalogue } = context;
+	const id = context.issue.id;
 	let output: Record<string, unknown>;
 	try {
 		output = record(JSON.parse(result.content));
@@ -505,6 +544,7 @@ export async function generateContributionPrs(
 	return withContributions(async (conn) => {
 		const issue = await readContribution(conn, id, true);
 		assertVersion(issue, context.issue.version);
+		await hooks.beforeCreate?.(conn, issue);
 		const prs: Contribution[] = [];
 		for (const draft of drafts)
 			prs.push(
@@ -516,7 +556,11 @@ export async function generateContributionPrs(
 						kind: provider === "local_llm" ? "local_llm" : "aws_llm",
 						isDoradsoft: false,
 					},
-					{ model: result.model, provider, promptVersion: PROMPT_VERSION },
+					{
+						model: result.model,
+						provider: hooks.provenanceProvider ?? provider,
+						promptVersion: PROMPT_VERSION,
+					},
 					conn,
 				),
 			);
@@ -531,6 +575,7 @@ export async function generateContributionPrs(
 			"generated",
 			prs.map((pr) => `PR #${pr.number}`).join(", "),
 		);
+		await hooks.afterCreate?.(conn, issue, prs);
 		await saveContribution(conn, issue);
 		return prs;
 	});

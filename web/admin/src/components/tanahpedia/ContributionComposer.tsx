@@ -3,6 +3,7 @@ import {
 	type Assignee,
 	CHANGE_LABELS,
 	type ChangeInput,
+	CONTRIBUTION_UI,
 	type Contribution,
 	type Evidence,
 	FIELD_LABELS,
@@ -48,8 +49,8 @@ export function AssigneePicker({
 				>
 					<option value="unassigned">ללא שיוך</option>
 					<option value="human">עורך אנושי</option>
-					<option value="aws_llm">AWS LLM</option>
-					<option value="local_llm">Local LLM</option>
+					<option value="aws_llm">{CONTRIBUTION_UI.awsLlm}</option>
+					<option value="local_llm">{CONTRIBUTION_UI.localLlm}</option>
 				</select>
 			</label>
 			{value.kind === "human" && (

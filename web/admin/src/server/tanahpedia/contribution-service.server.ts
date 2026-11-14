@@ -61,6 +61,16 @@ export function assertVersion(item: Contribution, version: unknown): void {
 		throw new Error("This issue or PR changed. Reload before retrying.");
 }
 
+function cancelGeneration(item: Contribution, reason: string): void {
+	if (
+		item.generation &&
+		["queued", "running"].includes(item.generation.status)
+	) {
+		item.generation.status = "cancelled";
+		item.generation.error = reason;
+	}
+}
+
 export async function createContribution(
 	raw: unknown,
 	actor: Contributor,
@@ -157,6 +167,10 @@ export async function editContribution(
 		)
 			return item;
 		item.title = title;
+		cancelGeneration(
+			item,
+			"The issue was edited after generation was requested",
+		);
 		item.description = description;
 		item.evidence = evidence;
 		item.changes = changes;
@@ -218,7 +232,10 @@ export async function updateContribution(
 		} else if (input.action === "assign") {
 			if (item.state !== "open")
 				throw new Error("Only open items can be assigned");
-			item.assignee = validateAssignee(input.assignee);
+			const assignee = validateAssignee(input.assignee);
+			if (!sameState(item.assignee, assignee))
+				cancelGeneration(item, "The issue assignee changed");
+			item.assignee = assignee;
 			addEvent(item, actor, "assigned", assigneeLabel(item.assignee));
 		} else if (
 			input.action === "approve" ||
@@ -234,9 +251,52 @@ export async function updateContribution(
 				input.action === "approve" ? "approved" : "changes_requested",
 				typeof input.body === "string" ? input.body.trim().slice(0, 10000) : "",
 			);
+		} else if (input.action === "queue_generation") {
+			if (
+				item.kind !== "issue" ||
+				item.state !== "open" ||
+				item.assignee.kind !== "local_llm" ||
+				actor.kind !== "human"
+			)
+				throw new Error(
+					"Queue generation for an open issue assigned to Local LLM",
+				);
+			if (!item.evidence.length)
+				throw new Error("Add evidence before requesting generation");
+			if (
+				item.generation &&
+				(item.generation.status === "queued" ||
+					(item.generation.status === "running" &&
+						Date.parse(item.generation.leaseExpiresAt ?? "") > Date.now()))
+			)
+				throw new Error("Local generation is already queued or running");
+			item.generation = {
+				id: randomUUID(),
+				status: "queued",
+				requestedAt: new Date().toISOString(),
+				requestedBy: actor.id,
+				attempts: 0,
+				apiVersion: CONTRIBUTION_API_VERSION,
+				worker: null,
+				model: null,
+				leaseHash: null,
+				leaseExpiresAt: null,
+				claimedVersion: null,
+				contextHash: null,
+				outputHash: null,
+				prIds: [],
+				error: null,
+			};
+			addEvent(
+				item,
+				actor,
+				"generation_queued",
+				"נשלח לעובד Local LLM בתחנת העבודה",
+			);
 		} else if (input.action === "close") {
 			if (item.state !== "open") throw new Error("Item is already closed");
 			item.state = "closed";
+			cancelGeneration(item, "The issue was closed");
 			addEvent(item, actor, "closed", "");
 		} else if (input.action === "reopen") {
 			if (item.state !== "closed")
@@ -289,6 +349,7 @@ export async function mergeContribution(
 			const issue = await readContribution(conn, item.issueId, true);
 			if (issue.state === "open") {
 				issue.state = "closed";
+				cancelGeneration(issue, "The linked PR was merged");
 				addEvent(issue, actor, "closed", `מוזג ב-PR #${item.number}`);
 				await saveContribution(conn, issue);
 			}

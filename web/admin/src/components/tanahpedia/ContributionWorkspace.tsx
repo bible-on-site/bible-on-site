@@ -10,8 +10,10 @@ import {
 	type Assignee,
 	assigneeLabel,
 	CHANGE_LABELS,
+	CONTRIBUTION_UI,
 	type Contribution,
 	type Contributor,
+	contributionCitation,
 	reviewStatus,
 } from "~/lib/tanahpedia/contributions";
 import {
@@ -135,6 +137,7 @@ const EVENT_LABELS: Record<string, string> = {
 	reopened: "פתח מחדש",
 	merged: "מיזג את ההצעה",
 	generated: "יצר הצעות שינוי",
+	generation_queued: "שלח לעובד מקומי",
 };
 const REVIEW_LABELS = {
 	exempt: "הגרסה נכתבה בידי doradsoft - אין צורך בסקירה נוספת",
@@ -147,7 +150,7 @@ function date(value: string): string {
 	return new Date(value).toLocaleString("he-IL", {
 		timeZone: "Asia/Jerusalem",
 		day: "numeric",
-		month: "short",
+		month: "long",
 		hour: "2-digit",
 		minute: "2-digit",
 	});
@@ -167,7 +170,7 @@ function EvidenceList({ item }: { item: Contribution }) {
 			) : (
 				item.evidence.map((source) => (
 					<article key={`${source.citation}:${source.quote}:${source.url}`}>
-						<strong>{source.citation}</strong>
+						<strong>{contributionCitation(source.citation)}</strong>
 						{source.quote && <blockquote>{source.quote}</blockquote>}
 						{source.note && <p>{source.note}</p>}
 						{source.url && (
@@ -190,6 +193,7 @@ function SequenceRecovery({
 	refresh: () => void;
 }) {
 	const [editing, setEditing] = useState(false);
+	const [baseVersion] = useState(item.version);
 	const [sequence, setSequence] = useState(() =>
 		JSON.stringify(item.changes, null, 2),
 	);
@@ -198,7 +202,7 @@ function SequenceRecovery({
 			recoverContributionItem({
 				data: {
 					id: item.id,
-					version: item.version,
+					version: baseVersion,
 					apiVersion: CONTRIBUTION_API_VERSION,
 					sequence: JSON.parse(sequence),
 				},
@@ -265,6 +269,96 @@ function SequenceRecovery({
 	);
 }
 
+function AssignmentForm({
+	item,
+	busy,
+	act,
+}: {
+	item: Contribution;
+	busy: boolean;
+	act: (action: string, extra?: Record<string, unknown>) => Promise<boolean>;
+}) {
+	const [assignee, setAssignee] = useState<Assignee>(item.assignee);
+	return (
+		<form
+			onSubmit={async (event) => {
+				event.preventDefault();
+				await act("assign", { assignee });
+			}}
+		>
+			<AssigneePicker
+				value={assignee}
+				onChange={setAssignee}
+				disabled={busy || item.state !== "open"}
+			/>
+			{item.state === "open" && (
+				<button className="contribution-button" disabled={busy} type="submit">
+					שמירת שיוך
+				</button>
+			)}
+		</form>
+	);
+}
+
+function LocalGenerationStatus({ item }: { item: Contribution }) {
+	const job = item.generation;
+	if (!job) return null;
+	const disconnected =
+		job.status === "running" &&
+		!(Date.parse(job.leaseExpiresAt ?? "") > Date.now());
+	const labels = {
+		queued: "ממתין לעובד בתחנת העבודה",
+		running: "המודל המקומי מכין הצעות",
+		completed: "העובד המקומי יצר הצעות לסקירה",
+		failed: "ההפקה המקומית נכשלה",
+		cancelled: "בקשת ההפקה בוטלה",
+	};
+	return (
+		<section
+			className="contribution-card contribution-card-body"
+			aria-label="התקדמות העובד המקומי"
+		>
+			<strong role="status">
+				{disconnected
+					? "העובד המקומי התנתק - ניתן לשלוח שוב"
+					: labels[job.status]}
+			</strong>
+			{job.status === "queued" && (
+				<p className="contribution-muted">
+					הבקשה תישאר בתור עד שעובד מקומי יתחבר. לא מתבצעת הפקה בענן.
+				</p>
+			)}
+			{job.worker && (
+				<p>
+					<bdi>{job.worker}</bdi>
+					{job.model && (
+						<>
+							{" "}
+							· <bdi>{job.model}</bdi>
+						</>
+					)}
+				</p>
+			)}
+			{job.error && (
+				<p className="contribution-error" role="alert">
+					{job.error}
+				</p>
+			)}
+			{job.prIds.map((id, index) => (
+				<p key={id}>
+					<Link
+						className="contribution-link"
+						to="/pull-requests"
+						search={{ id }}
+					>
+						פתיחת הצעה {index + 1} לסקירה
+					</Link>
+				</p>
+			))}
+		</section>
+	);
+}
+
 function Detail({
 	item,
 	all,
@@ -284,9 +378,14 @@ function Detail({
 }) {
 	const [tab, setTab] = useState("description"),
 		[comment, setComment] = useState("");
-	const [assignee, setAssignee] = useState<Assignee>(item.assignee);
 	const status = reviewStatus(item);
 	const incompatible = migrationBlocked(item);
+	const localPending = Boolean(
+		item.generation &&
+			(item.generation.status === "queued" ||
+				(item.generation.status === "running" &&
+					Date.parse(item.generation.leaseExpiresAt ?? "") > Date.now())),
+	);
 	const llm = useQuery({
 		queryKey: ["contributions", "llm-status"],
 		queryFn: () => getContributionLlmStatus(),
@@ -301,7 +400,7 @@ function Detail({
 	const linkedIssue = all.find((other) => other.id === item.issueId);
 	const providerReady =
 		item.assignee.kind === "local_llm"
-			? llm.data?.local.enabled
+			? true
 			: item.assignee.kind === "aws_llm"
 				? llm.data?.aws.enabled
 				: false;
@@ -334,7 +433,7 @@ function Detail({
 						<span>גרסה {item.revision}</span>
 						{incompatible && (
 							<span className="contribution-muted" lang="en">
-								couldn't migrate to latest API
+								{CONTRIBUTION_UI.migrationFailed}
 							</span>
 						)}
 					</div>
@@ -352,7 +451,7 @@ function Detail({
 			</div>
 			{incompatible && (
 				<section className="contribution-migration-notice" role="status">
-					<strong lang="en">couldn't migrate to latest API</strong>
+					<strong lang="en">{CONTRIBUTION_UI.migrationFailed}</strong>
 					<p>
 						ההצעה נשארת פתוחה. התצוגה החזותית והמיזוג אינם זמינים עד לשחזור
 						הרצף. האישורים נשמרו.
@@ -459,7 +558,11 @@ function Detail({
 								className="contribution-card"
 								onSubmit={async (event) => {
 									event.preventDefault();
-									if (await act("comment", { body: comment })) setComment("");
+									const submitted = comment;
+									if (await act("comment", { body: submitted }))
+										setComment((current) =>
+											current === submitted ? "" : current,
+										);
 								}}
 							>
 								<div className="contribution-card-body contribution-form">
@@ -563,6 +666,7 @@ function Detail({
 							{generate.error.message}
 						</div>
 					)}
+					{item.kind === "issue" && <LocalGenerationStatus item={item} />}
 					{generate.data && (
 						<div role="status" className="contribution-card-body">
 							נוצרו {generate.data.length} הצעות שינוי. כל אחת ממתינה לאישור
@@ -573,33 +677,18 @@ function Detail({
 				<aside className="contribution-sidebar">
 					<section>
 						<h3>אחראי</h3>
-						<form
-							onSubmit={async (event) => {
-								event.preventDefault();
-								await act("assign", { assignee });
-							}}
-						>
-							<AssigneePicker
-								value={assignee}
-								onChange={setAssignee}
-								disabled={busy || item.state !== "open"}
-							/>
-							{item.state === "open" && (
-								<button
-									className="contribution-button"
-									disabled={busy}
-									type="submit"
-								>
-									שמירת שיוך
-								</button>
-							)}
-						</form>
+						<AssignmentForm
+							key={JSON.stringify(item.assignee)}
+							item={item}
+							busy={busy}
+							act={act}
+						/>
 					</section>
 					{item.kind === "pr" && (
 						<section>
 							<h3>סקירה נדרשת</h3>
 							<p>
-								<bdi>doradsoft</bdi>
+								<bdi>{CONTRIBUTION_UI.reviewer}</bdi>
 							</p>
 							<p className="contribution-muted">{REVIEW_LABELS[status]}</p>
 							{item.provenance && (
@@ -628,14 +717,23 @@ function Detail({
 										disabled={
 											busy ||
 											generate.isPending ||
+											localPending ||
 											!providerReady ||
 											item.evidence.length === 0
 										}
-										onClick={() => generate.mutate()}
+										onClick={() =>
+											item.assignee.kind === "local_llm"
+												? void act("queue_generation")
+												: generate.mutate()
+										}
 									>
-										{generate.isPending
-											? "מכין הצעות..."
-											: `יצירת PRs עם ${assigneeLabel(item.assignee)}`}
+										{item.assignee.kind === "local_llm"
+											? localPending
+												? "העובד המקומי מטפל בפנייה"
+												: "שליחה לעובד מקומי"
+											: generate.isPending
+												? "מכין הצעות..."
+												: `יצירת PRs עם ${assigneeLabel(item.assignee)}`}
 									</button>
 									{!providerReady && (
 										<p className="contribution-muted">
@@ -700,7 +798,8 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 	const search = useSearch({ strict: false }) as ContributionSearch;
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const [editing, setEditing] = useState(false);
+	const [editingItem, setEditingItem] = useState<Contribution | null>(null);
+	const editing = editingItem?.id === search.id ? editingItem : null;
 	const [actionError, setActionError] = useState("");
 	const path = kind === "issue" ? "/issues" : "/pull-requests";
 	const list = useQuery({
@@ -718,11 +817,15 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 		queryFn: () => getContribution({ data: search.id as string }),
 		enabled: Boolean(search.id && search.id !== "new"),
 		staleTime: 0,
+		refetchInterval: (query) =>
+			["queued", "running"].includes(query.state.data?.generation?.status ?? "")
+				? 2000
+				: false,
 	});
 	const catalogue = useQuery({
 		queryKey: ["contributions", "catalogue"],
 		queryFn: () => getContributionCatalogue(),
-		enabled: search.id === "new" || editing,
+		enabled: search.id === "new" || Boolean(editing),
 	});
 	const issue = useQuery({
 		queryKey: ["contribution", search.issueId],
@@ -762,13 +865,13 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 	};
 	const save = useMutation({
 		mutationFn: async (data: ComposeContribution) =>
-			editing && detail.data
+			editing
 				? editContributionItem({
-						data: { ...data, id: detail.data.id, version: detail.data.version },
+						data: { ...data, id: editing.id, version: editing.version },
 					})
 				: createContributionItem({ data }),
 		onSuccess: async (item) => {
-			setEditing(false);
+			setEditingItem(null);
 			refresh();
 			await navigate({
 				to: item.kind === "issue" ? "/issues" : "/pull-requests",
@@ -844,7 +947,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 					className="contribution-link"
 					to={path}
 					search={{}}
-					onClick={() => setEditing(false)}
+					onClick={() => setEditingItem(null)}
 				>
 					→ חזרה לרשימה
 				</Link>
@@ -871,9 +974,9 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 						<div className="contribution-card">
 							<div className="contribution-card-body">
 								<ContributionComposer
-									key={editing ? item?.id : `new:${kind}`}
+									key={editing ? editing.id : `new:${kind}`}
 									kind={kind}
-									initial={editing ? item : undefined}
+									initial={editing ?? undefined}
 									linkedIssue={issue.data}
 									catalogue={catalogue.data}
 									busy={save.isPending}
@@ -881,7 +984,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 										await save.mutateAsync(value);
 									}}
 									onCancel={() => {
-										setEditing(false);
+										setEditingItem(null);
 										if (!editing) void navigate({ to: path, search: {} });
 									}}
 								/>
@@ -894,13 +997,13 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 			) : search.id ? (
 				item ? (
 					<Detail
-						key={`${item.id}:${item.version}`}
+						key={item.id}
 						item={item}
 						all={all}
 						actor={session.data}
 						busy={mutation.isPending}
 						act={act}
-						edit={() => setEditing(true)}
+						edit={() => setEditingItem(item)}
 						refresh={refresh}
 					/>
 				) : (
@@ -956,8 +1059,8 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 							<option value="">כל האחראים</option>
 							<option value="unassigned">ללא שיוך</option>
 							<option value="human">עורך אנושי</option>
-							<option value="aws_llm">AWS LLM</option>
-							<option value="local_llm">Local LLM</option>
+							<option value="aws_llm">{CONTRIBUTION_UI.awsLlm}</option>
+							<option value="local_llm">{CONTRIBUTION_UI.localLlm}</option>
 						</select>
 					</div>
 					<div className="contribution-list">
@@ -1039,7 +1142,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 												{date(row.createdAt)}
 											</time>
 											{migrationBlocked(row) ? (
-												<span lang="en">couldn't migrate to latest API</span>
+												<span lang="en">{CONTRIBUTION_UI.migrationFailed}</span>
 											) : (
 												[
 													...new Set(row.changes.map((change) => change.kind)),

@@ -5,6 +5,7 @@ import {
 	type Contribution,
 	type Contributor,
 	changedFields,
+	contributionCitation,
 	record,
 	reviewStatus,
 	sameState,
@@ -18,6 +19,17 @@ import {
 
 const ID = "00000000-0000-4000-8000-000000000001";
 const OTHER = "00000000-0000-4000-8000-000000000002";
+it.each([
+	["יהושע י׳, א׳", "יהושע י א"],
+	["יהושע כ״ג, א׳", "יהושע כג א"],
+	["שמואל ב׳ ה׳:ו׳", "שמואל ב ה ו"],
+	["בראשית ל׳, ו׳–ח׳", "בראשית ל ו-ח"],
+	['רש"י, פירוש על התורה', 'רש"י, פירוש על התורה'],
+	["וַיְהִי־כֵן", "וַיְהִי־כֵן"],
+])(
+	"formats a displayed citation without changing arbitrary sources: %s",
+	(raw, expected) => expect(contributionCitation(raw)).toBe(expected),
+);
 const human: Contributor = {
 	id: "alice",
 	name: "Alice",
