@@ -1,7 +1,7 @@
 # RustFS for development and CI
 
 Production storage remains AWS S3. Local development and Admin CI use the same
-[Compose configuration](../docker-compose.yml): RustFS 1.0.0 and a Node.js
+[Compose configuration](../docker-compose.yml): RustFS 1.0.5 and a Node.js
 initializer using the locked AWS SDK dependencies. RustFS and Node images are
 pinned by multi-platform image digest. No archived MinIO server or client is
 built or downloaded. RustFS is Apache-2.0 licensed and needs no activation token.

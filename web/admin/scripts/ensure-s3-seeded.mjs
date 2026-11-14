@@ -37,7 +37,7 @@ if (!endpoint) {
 
 const client = new S3Client({
 	endpoint,
-	region: process.env.S3_REGION ?? "us-east-1",
+	region: "us-east-1",
 	forcePathStyle: true,
 	credentials: {
 		accessKeyId: process.env.S3_ACCESS_KEY_ID ?? "test",

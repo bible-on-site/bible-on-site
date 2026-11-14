@@ -49,6 +49,7 @@ describe("ensure-s3-seeded", () => {
 	let populated: () => boolean;
 	let mode: "objects" | "empty" | "missing";
 	let stubDir: string;
+	let authorization: string | undefined;
 
 	beforeAll(() => {
 		stubDir = mkdtempSync(join(tmpdir(), "s3-seeded-cargo-"));
@@ -76,11 +77,13 @@ describe("ensure-s3-seeded", () => {
 	beforeEach(async () => {
 		dir = mkdtempSync(join(tmpdir(), "s3-seeded-"));
 		mode = "objects";
+		authorization = undefined;
 		const marker = join(dir, "populated.marker");
 		process.env.POPULATE_MARKER = marker;
 		populated = () => existsSync(marker);
 
-		server = createServer((_req, res) => {
+		server = createServer((req, res) => {
+			authorization = req.headers.authorization;
 			if (mode === "missing") {
 				res.writeHead(404, { "content-type": "application/xml" });
 				res.end(
@@ -127,6 +130,12 @@ describe("ensure-s3-seeded", () => {
 	it("skips the populator when the dev bucket already holds objects", async () => {
 		const { stdout } = await run();
 		expect(stdout).toContain("already holds objects");
+		expect(populated()).toBe(false);
+	}, 30_000);
+
+	it("signs local seed checks for RustFS even when AWS uses the production region", async () => {
+		await run({ S3_REGION: "il-central-1" });
+		expect(authorization).toContain("/us-east-1/s3/aws4_request");
 		expect(populated()).toBe(false);
 	}, 30_000);
 
