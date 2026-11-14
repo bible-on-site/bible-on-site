@@ -1,5 +1,5 @@
 import { toNumber } from "gematry";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { PasukPreviewLink } from "@/app/pedia/components/PasukPreviewLink";
 import catalog from "@/data/db/client-catalog.generated.json";
 import { perushNames } from "@/data/db/perush-names";
@@ -262,13 +262,21 @@ export function renderFamilyTreeCitationLine(
 	// before treating them as Bible coordinates; otherwise protect the clause.
 	const literalEnd =
 		isMidrash && !hasExplicitBibleReference ? clauseEnd : perushEnd;
+	const renderRemainingCitations = (start: number): ReactNode[] =>
+		start < line.length
+			? [
+					<Fragment key={`citation-tail-${start}`}>
+						{renderFamilyTreeCitationLine(line.slice(start), linkClassName)}
+					</Fragment>,
+				]
+			: [];
 	const renderWithLiteralPerushCitation = (): ReactNode[] => [
 		...renderCitationWithTanachLinks(
 			line.slice(0, perushMatch.index),
 			linkClassName,
 		),
 		line.slice(perushMatch.index, literalEnd),
-		...renderCitationWithTanachLinks(line.slice(literalEnd), linkClassName),
+		...renderRemainingCitations(literalEnd),
 	];
 	if (
 		!refMatch?.pasukRaw?.trim() ||
@@ -301,11 +309,7 @@ export function renderFamilyTreeCitationLine(
 			{line.slice(perushIdx, refMatch.index) + displayTanachRef(refMatch)}
 		</PasukPreviewLink>,
 	);
-	if (linkEnd < line.length) {
-		nodes.push(
-			...renderCitationWithTanachLinks(line.slice(linkEnd), linkClassName),
-		);
-	}
+	nodes.push(...renderRemainingCitations(linkEnd));
 	return nodes.length > 0 ? nodes : [line];
 }
 
