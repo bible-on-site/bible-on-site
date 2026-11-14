@@ -7,8 +7,18 @@ import {
 	resolveCategoryRoute,
 } from "@/lib/tanahpedia/category-slug";
 
+/**
+ * Agent-readiness policy (#3257): the public corpus is open for
+ * search, AI answers, and model training (זיכוי הרבים). Learning
+ * from the content in model weights is welcome in itself. The policy is
+ * published through /robots.txt Content-Signal, /llms.txt and the
+ * discovery Link headers below.
+ *
+ * Training crawlers, including Bytespider, share browser access to
+ * public content. The unrelated SEO/scraper bucket below stays blocked.
+ */
 const BLOCKED_BOTS =
-	/Bytespider|MJ12bot|AhrefsBot|SemrushBot|DotBot|PetalBot|BLEXBot|MegaIndex|Sogou|DataForSeoBot/i;
+	/MJ12bot|AhrefsBot|SemrushBot|DotBot|PetalBot|BLEXBot|MegaIndex|Sogou|DataForSeoBot/i;
 
 const BOT_BLOCKING_ENABLED = process.env.BOT_BLOCKING_ENABLED !== "false";
 
@@ -97,6 +107,18 @@ export function canonicalParashaTarget(segments: string[]): string | null {
 	return `/פרשה/${resolved.slug}`;
 }
 
+/**
+ * The `Link` headers public read responses advertise: the agent guide
+ * (`rel="help"`), the machine-readable API catalog and the canonical
+ * sitemap. Route Handlers with their own Link header bypass this:
+ * Next.js does not merge that header with proxy response headers.
+ */
+const DISCOVERY_LINKS = [
+	'</llms.txt>; rel="help"; type="text/markdown"',
+	'</.well-known/api-catalog>; rel="api-catalog"',
+	'</sitemap.xml>; rel="sitemap"; type="application/xml"',
+] as const;
+
 export async function proxy(
 	request: NextRequest,
 ): Promise<NextResponse | undefined> {
@@ -163,6 +185,22 @@ export async function proxy(
 	) {
 		const response = NextResponse.next();
 		response.headers.set("X-Robots-Tag", "noindex, follow");
+		return response;
+	}
+
+	// Agent discovery headers on public read responses: HTML-bound
+	// pages (everything outside /api/) advertise the agent guide and
+	// machine catalogs. GET/HEAD only — writes/POSTs (incl. Server
+	// Actions) and API calls never take this branch.
+	if (
+		(request.method === "GET" || request.method === "HEAD") &&
+		!pathname.startsWith("/api/") &&
+		pathname !== "/.well-known/api-catalog"
+	) {
+		const response = NextResponse.next();
+		for (const link of DISCOVERY_LINKS) {
+			response.headers.append("Link", link);
+		}
 		return response;
 	}
 
