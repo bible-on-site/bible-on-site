@@ -317,7 +317,9 @@ Resources:
           Essential: true
           # Measured drain keeps serving cached-DNS requests while non-loopback
           # inbound connections remain, ending early once they stay quiet (30s)
-          # past a 45-second minimum, or at 90 seconds; 30 more cover shutdown.
+          # after a measured floor: one router-cache window past the task's last
+          # discovery answer (45s fixed minimum when discovery is unreadable),
+          # or at 90 seconds; 30 more cover shutdown.
           StopTimeout: 120
           PortMappings:
             - ContainerPort: 3000
