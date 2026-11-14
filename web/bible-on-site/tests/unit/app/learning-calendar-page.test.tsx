@@ -17,14 +17,10 @@ const mockFlipBookProps: {
 			ref: { year: number; month: number };
 			cells: unknown[];
 		}[];
-		initialMonth: { year: number; month: number };
+		requestedMonth: { year: number; month: number };
 		onMonthChange: (month: { year: number; month: number }) => void;
 		onToday: () => void;
 		onShowOverview: () => void;
-		jumpRequest: {
-			month: { year: number; month: number };
-			nonce: number;
-		} | null;
 		isDimmed?: (day: unknown) => boolean;
 	} | null;
 } = { current: null };
@@ -1019,7 +1015,7 @@ describe("LearningCalendar", () => {
 			const book = await screen.findByTestId("calendar-flip-book");
 			// 5786 is a regular (non-leap) year: 12 month sheets.
 			expect(book).toHaveAttribute("data-month-count", "12");
-			expect(mockFlipBookProps.current?.initialMonth).toEqual({
+			expect(mockFlipBookProps.current?.requestedMonth).toEqual({
 				year: 5786,
 				month: 9,
 			});
@@ -1127,6 +1123,78 @@ describe("LearningCalendar", () => {
 			expect(props?.months.length).toBeGreaterThan(12);
 			expect(props?.months[0].cells.length).toBeGreaterThan(0);
 			expect(props?.isDimmed).toBeDefined();
+		});
+
+		it("requests the cycle's start month when picking a cycle whose start lies in the displayed year", async () => {
+			// Regression: cycle 4 starts Elul 5785 — inside the displayed year —
+			// so the scope key does not remount and the mounted book must follow
+			// the committed month, not stay on Tishrei.
+			setSearchParam("578501", { view: "year", flip: "1" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			await screen.findByTestId("calendar-flip-book");
+			expect(mockFlipBookProps.current?.requestedMonth).toEqual({
+				year: 5785,
+				month: 1,
+			});
+
+			fireEvent.change(
+				screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+				{ target: { value: "4" } },
+			);
+
+			expect(mockFlipBookProps.current?.requestedMonth).toEqual({
+				year: 5785,
+				month: 12,
+			});
+			expect(mockReplace).toHaveBeenCalledWith(
+				expect.stringContaining("month=578512"),
+				{ scroll: false },
+			);
+		});
+
+		it("does not replay a Today target after picking another year", async () => {
+			// Regression: Today records Elul 5785; the year change then remounts
+			// the book — the new instance must open on the year-selected Elul
+			// 5786, never on the retained Today month clamped into the new scope.
+			setSearchParam("578601", { view: "year", flip: "1" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			await screen.findByTestId("calendar-flip-book");
+
+			act(() => mockFlipBookProps.current?.onToday());
+			expect(mockFlipBookProps.current?.requestedMonth).toEqual({
+				year: 5785,
+				month: 12,
+			});
+
+			fireEvent.change(screen.getByRole("combobox", { name: "שנה" }), {
+				target: { value: "5786" },
+			});
+
+			expect(mockFlipBookProps.current?.requestedMonth).toEqual({
+				year: 5786,
+				month: 12,
+			});
+			expect(mockFlipBookProps.current).not.toHaveProperty("jumpRequest");
+			expect(mockReplace).toHaveBeenCalledWith(
+				expect.stringContaining("month=578612"),
+				{ scroll: false },
+			);
+		});
+
+		it("follows committed ?month= changes inside the book's scope", async () => {
+			setSearchParam("578601", { view: "year", flip: "1" });
+			const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+			await screen.findByTestId("calendar-flip-book");
+
+			// Another month of the same displayed year: the scope key does not
+			// remount, so the mounted book must follow the committed URL month.
+			setSearchParam("578603", { view: "year", flip: "1" });
+			rerender(<LearningCalendar {...cycleStartProps} />);
+
+			expect(mockFlipBookProps.current?.requestedMonth).toEqual({
+				year: 5786,
+				month: 3,
+			});
 		});
 	});
 

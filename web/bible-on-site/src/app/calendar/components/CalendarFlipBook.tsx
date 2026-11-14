@@ -10,7 +10,11 @@ import {
 	Toolbar,
 } from "html-flip-book-react/toolbar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CalendarDay, MonthRef } from "@/data/learning-schedule";
+import {
+	compareMonths,
+	type CalendarDay,
+	type MonthRef,
+} from "@/data/learning-schedule";
 import {
 	CalendarPdfDownload,
 	type CalendarPdfRequest,
@@ -43,17 +47,16 @@ import "./calendar-flip-book.css";
  * a leaf turn advances two page indices, so a single face per month would
  * strand every second month under the turned stack (#2993 review).
  * History is disabled (`enableHistory={false}`): the host owns the `?month=`
- * query contract through `onMonthChange`/`jumpRequest`, so no stale `#page`
- * hashes or duplicate history entries appear.
+ * query contract through `onMonthChange`/`requestedMonth`, so no stale
+ * `#page` hashes or duplicate history entries appear.
  */
 export function CalendarFlipBook({
 	months,
 	scopeLabel,
 	scopeDetail,
-	initialMonth,
+	requestedMonth,
 	todayDateNumber,
 	onMonthChange,
-	jumpRequest,
 	onOpenPerek,
 	dayAriaLabel,
 	mergedDayAriaLabel,
@@ -70,13 +73,13 @@ export function CalendarFlipBook({
 	scopeLabel: string;
 	/** Optional longer scope caption (cycle date range) for the title page. */
 	scopeDetail?: string;
-	/** Month the book should open on; clamped into `months` when outside. */
-	initialMonth: MonthRef;
+	/** Month the book should show: anchors the mount, then external changes
+	 * (pickers, Today, URL navigation) are synced into the mounted engine.
+	 * Clamped into `months` when outside. */
+	requestedMonth: MonthRef;
 	todayDateNumber: number;
 	/** Reports the top visible month face after each committed turn. */
 	onMonthChange: (month: MonthRef) => void;
-	/** Imperative jump to a month (Today / scope navigation), nonce-keyed. */
-	jumpRequest: { month: MonthRef; nonce: number } | null;
 	onOpenPerek: (perekId: number) => void;
 	dayAriaLabel: (day: CalendarDay) => string;
 	/** Both dates in one name for a merged review block (#2365). */
@@ -96,7 +99,7 @@ export function CalendarFlipBook({
 	// construction, and the parent remounts this component (React key) whenever
 	// the displayed scope changes, so a stable lazy value is correct here.
 	const [initialTurnedLeaves] = useState(() => {
-		const clamped = clampMonthToFlipScope(months, initialMonth);
+		const clamped = clampMonthToFlipScope(months, requestedMonth);
 		const pageIndex = flipPageIndexForMonth(months, clamped);
 		// clampMonthToFlipScope always returns a month inside `months`, so
 		// pageIndex is never -1 here; Math.max only satisfies the type.
@@ -230,23 +233,28 @@ export function CalendarFlipBook({
 		syncPageExposure();
 	});
 
-	const lastJumpNonce = useRef(0);
+	// `requestedMonth` anchors the book at mount through initialTurnedLeaves;
+	// afterwards the engine owns its position. A changed request is always an
+	// external selection — pickers, Today or committed URL navigation — so
+	// the mounted engine follows. The engine's own month is compared first:
+	// positions it reported through onMonthChange must not feed back into a
+	// redundant jump, and a scope remount already opens on the request.
 	useEffect(() => {
-		if (!jumpRequest || jumpRequest.nonce === lastJumpNonce.current) {
-			return;
-		}
-		lastJumpNonce.current = jumpRequest.nonce;
 		const book = flipBookRef.current;
 		if (!book) {
 			return;
 		}
-		const clamped = clampMonthToFlipScope(months, jumpRequest.month);
+		const clamped = clampMonthToFlipScope(months, requestedMonth);
 		const pageIndex = flipPageIndexForMonth(months, clamped);
-		if (pageIndex >= 0) {
+		if (pageIndex < 0) {
+			return;
+		}
+		const current = flipMonthAtPageIndex(months, book.getCurrentPageIndex());
+		if (current === null || compareMonths(current, clamped) !== 0) {
 			book.jumpToPage(pageIndex);
 			syncPageExposure();
 		}
-	}, [jumpRequest, months, syncPageExposure]);
+	}, [requestedMonth, months, syncPageExposure]);
 
 	return (
 		<div className="cal-book-wrap" ref={containerRef} dir="rtl">
@@ -300,7 +308,10 @@ export function CalendarFlipBook({
 				<div className="flipbook-toolbar-nav-cluster">
 					<FirstPageButton />
 					<PrevButton />
-					<PageIndicator ariaLabel="עבור לחודש" />
+					{/* Cycle books use full month-year labels (e.g.
+						תשרי ה'תשפ"ו) as semantic names — the input's
+						default maxLength of 10 would cut them off. */}
+					<PageIndicator ariaLabel="עבור לחודש" maxLength={64} />
 					<NextButton />
 					<LastPageButton />
 				</div>

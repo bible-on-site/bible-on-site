@@ -114,10 +114,9 @@ const months = [makeMonth(5785, 1), makeMonth(5785, 2), makeMonth(5785, 3)];
 const baseProps = {
 	months,
 	scopeLabel: "שנת ה'תשפ\"ה",
-	initialMonth: { year: 5785, month: 2 },
+	requestedMonth: { year: 5785, month: 2 },
 	todayDateNumber: -1,
 	onMonthChange: jest.fn(),
-	jumpRequest: null as { month: { year: number; month: number }; nonce: number } | null,
 	onOpenPerek: jest.fn(),
 	dayAriaLabel: (day: CalendarDay) => `day ${day.dateNumber}`,
 	mergedDayAriaLabel: (a: CalendarDay, b: CalendarDay) =>
@@ -137,7 +136,9 @@ const baseProps = {
 
 describe("CalendarFlipBook", () => {
 	beforeEach(() => {
-		engineStub.currentPageIndex = 0;
+		// The engine settles on the requested month's sheet face after
+		// initialTurnedLeaves — page 5 is month {5785,2}'s readable face.
+		engineStub.currentPageIndex = 5;
 		engineStub.jumpToPage.mockClear();
 		baseProps.onMonthChange.mockClear();
 	});
@@ -192,28 +193,55 @@ describe("CalendarFlipBook", () => {
 		expect(pages[2]).toHaveAttribute("aria-hidden", "true");
 	});
 
-	it("jumps imperatively to a requested month", () => {
+	it("moves to a same-scope externally selected month (e.g. the cycle picker staying in the displayed year)", () => {
 		const { rerender } = render(<CalendarFlipBook {...baseProps} />);
 		rerender(
 			<CalendarFlipBook
 				{...baseProps}
-				jumpRequest={{ month: { year: 5785, month: 3 }, nonce: 1 }}
+				requestedMonth={{ year: 5785, month: 3 }}
 			/>,
 		);
 		// Third month pair → readable face at index 7.
 		expect(engineStub.jumpToPage).toHaveBeenCalledWith(7);
 	});
 
-	it("clamps a jump request outside the book to the nearest month", () => {
+	it("does not jump when the requested month already matches the engine", () => {
+		const { rerender } = render(<CalendarFlipBook {...baseProps} />);
+		// The engine sits on {5785,2}; re-requesting it must not bounce a
+		// reported position back into a redundant jump.
+		rerender(<CalendarFlipBook {...baseProps} />);
+		expect(engineStub.jumpToPage).not.toHaveBeenCalled();
+	});
+
+	it("clamps a request outside the book to the nearest month", () => {
 		const { rerender } = render(<CalendarFlipBook {...baseProps} />);
 		rerender(
 			<CalendarFlipBook
 				{...baseProps}
-				jumpRequest={{ month: { year: 5790, month: 5 }, nonce: 2 }}
+				requestedMonth={{ year: 5790, month: 5 }}
 			/>,
 		);
 		// Far-future month clamps to the last month (position 2 → index 7).
 		expect(engineStub.jumpToPage).toHaveBeenCalledWith(7);
+	});
+
+	it("a remounted book opens on its own request without repeating the previous instance's", () => {
+		// Today then a year change remounts the book through the scope key:
+		// the new instance must open on the year-selected month, not replay
+		// an earlier request the previous book already consumed.
+		const { unmount } = render(<CalendarFlipBook {...baseProps} />);
+		unmount();
+		engineStub.jumpToPage.mockClear();
+		// The remounted engine opens on {5785,3}'s spread (page index 7).
+		engineStub.currentPageIndex = 7;
+		render(
+			<CalendarFlipBook
+				{...baseProps}
+				requestedMonth={{ year: 5785, month: 3 }}
+			/>,
+		);
+		expect(engineStub.lastProps?.initialTurnedLeaves).toEqual([0, 1, 2, 3]);
+		expect(engineStub.jumpToPage).not.toHaveBeenCalled();
 	});
 
 	it("prints the cycle detail line on the title page when provided", () => {
@@ -234,7 +262,7 @@ describe("CalendarFlipBook", () => {
 			rerender(
 				<CalendarFlipBook
 					{...baseProps}
-					jumpRequest={{ month: { year: 5785, month: 2 }, nonce: 3 }}
+					requestedMonth={{ year: 5785, month: 3 }}
 				/>,
 			);
 			expect(engineStub.jumpToPage).not.toHaveBeenCalled();

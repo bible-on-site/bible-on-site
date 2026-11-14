@@ -316,16 +316,6 @@ export function LearningCalendar({
 		requestAnimationFrame(() => overviewToggleRef.current?.focus());
 	}, [selectPresentation]);
 
-	const flipJumpNonce = useRef(0);
-	const [flipJump, setFlipJump] = useState<{
-		month: MonthRef;
-		nonce: number;
-	} | null>(null);
-	const requestFlipJump = useCallback((month: MonthRef) => {
-		flipJumpNonce.current += 1;
-		setFlipJump({ month, nonce: flipJumpNonce.current });
-	}, []);
-
 	const cells = useMemo(
 		() => buildVisibleCalendarMonth(viewed.year, viewed.month, window),
 		[viewed, window],
@@ -387,12 +377,9 @@ export function LearningCalendar({
 		);
 		setViewed(month);
 		pushParams({ month, cycle });
-		// The flip book keeps its own position; ask it to jump alongside the
-		// URL/state update (a scope change remounts it on `initialMonth`).
-		if (flipPresentation) {
-			requestFlipJump(month);
-		}
-	}, [pushParams, today, window, flipPresentation, requestFlipJump]);
+		// The mounted flip book follows `viewed` through its requestedMonth
+		// sync; a scope change remounts it onto the same value.
+	}, [pushParams, today, window]);
 
 	const openPerek = useCallback(
 		(perekId: number) => {
@@ -786,10 +773,9 @@ export function LearningCalendar({
 							? getCycleLabel(getCycle(resolvedCycle))
 							: undefined
 					}
-					initialMonth={viewed}
+					requestedMonth={viewed}
 					todayDateNumber={todayDateNumber}
 					onMonthChange={handleFlipMonthChange}
-					jumpRequest={flipJump}
 					onOpenPerek={openPerek}
 					dayAriaLabel={dayAriaLabel}
 					mergedDayAriaLabel={mergedAriaLabel}
