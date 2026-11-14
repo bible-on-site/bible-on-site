@@ -79,6 +79,9 @@
     <Compile Include="..\BibleOnSite\Services\IPreferencesStorage.cs" Link="Services\IPreferencesStorage.cs" />
     <Compile Include="..\BibleOnSite\Services\IPreferencesCloudStore.cs" Link="Services\IPreferencesCloudStore.cs" />
     <Compile Include="..\BibleOnSite\Services\IUserIdentity.cs" Link="Services\IUserIdentity.cs" />
+    <!-- #3185: the emulator endpoint parser is platform-agnostic; the device
+         channel stays behind ANDROID||IOS so the net10.0 unit run compiles it. -->
+    <Compile Include="..\BibleOnSite\Services\FirebaseEmulatorEndpoint.cs" Link="Services\FirebaseEmulatorEndpoint.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesCloudDocument.cs" Link="Services\PreferencesCloudDocument.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesService.cs" Link="Services\PreferencesService.cs" />
     <Compile Include="..\BibleOnSite\Services\PreferencesSyncService.cs" Link="Services\PreferencesSyncService.cs" />

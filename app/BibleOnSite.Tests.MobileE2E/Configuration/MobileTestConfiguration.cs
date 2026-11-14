@@ -21,6 +21,14 @@ public sealed record MobileTestConfiguration(
     /// </summary>
     public bool AppPreinstalled { get; init; }
 
+    /// <summary>
+    /// Host-side Firebase Emulator Suite endpoint (#3185), raw
+    /// <c>MOBILE_FIREBASE_EMULATOR</c> value. Null keeps the suite on the
+    /// app's local-only posture; a set value opts the FirebaseEmulatorSyncTests
+    /// scenarios in and is asserted reachable before they use it.
+    /// </summary>
+    public string? FirebaseEmulator { get; init; }
+
     public static MobilePlatform ParsePlatform(string? value) => value?.ToLowerInvariant() switch
     {
         "android" => MobilePlatform.Android,
@@ -47,6 +55,7 @@ public sealed record MobileTestConfiguration(
                 : null,
             KeepAppForReview = Environment.GetEnvironmentVariable("MOBILE_KEEP_APP") == "1",
             AppPreinstalled = Environment.GetEnvironmentVariable("MOBILE_APP_PREINSTALLED") == "1",
+            FirebaseEmulator = Environment.GetEnvironmentVariable("MOBILE_FIREBASE_EMULATOR"),
             PrebuiltWdaPath = platform == MobilePlatform.IOS ? Required("MOBILE_WDA_PATH") : null
         };
     }

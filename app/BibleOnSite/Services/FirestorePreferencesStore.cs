@@ -18,8 +18,37 @@ public sealed class FirestorePreferencesStore : IPreferencesCloudStore
 {
     private const string UsersCollection = "users";
 
+#if FIREBASE_EMULATOR
+    private static int _emulatorConfigured;
+
+    // #3185: UseEmulator must run before any Firestore operation, so the first
+    // document access performs it exactly once. The launch channel must have
+    // resolved an endpoint already (the identity gate guarantees it); a null
+    // endpoint here is a wiring bug — throwing keeps an emulator build from
+    // ever reaching the production backend by accident.
+    private static IFirebaseFirestore Store
+    {
+        [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(
+            Justification = "Emulator-gated device path; covered by the Firebase emulator device scenario, not unit tests.")]
+        get
+        {
+            var store = CrossFirebaseFirestore.Current;
+            if (Interlocked.Exchange(ref _emulatorConfigured, 1) == 0)
+            {
+                var endpoint = FirebaseEmulatorEndpoint.Current
+                    ?? throw new InvalidOperationException(
+                        "FIREBASE_EMULATOR build reached Firestore without a resolved emulator endpoint.");
+                FirebaseEmulatorRedirect.UseFirestoreEmulator(endpoint);
+            }
+            return store;
+        }
+    }
+#else
+    private static IFirebaseFirestore Store => CrossFirebaseFirestore.Current;
+#endif
+
     private static IDocumentReference DocumentFor(string userId) =>
-        CrossFirebaseFirestore.Current.GetDocument($"{UsersCollection}/{userId}");
+        Store.GetDocument($"{UsersCollection}/{userId}");
 
     public async Task<PreferencesCloudDocument?> FetchAsync(string userId, CancellationToken cancellationToken)
     {

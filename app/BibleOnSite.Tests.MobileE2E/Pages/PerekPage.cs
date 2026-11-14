@@ -142,6 +142,44 @@ public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platfor
     public void Tap(By locator) => platform.Tap(driver, WaitFor(locator, platform.CanTap));
 
     /// <summary>
+    /// Scrolls the page's own scroll surface down until the element's center is
+    /// inside the viewport. Deep settings sections (e.g. הסתר שם השם under
+    /// תצוגה preferences) never render on a short viewport, so a plain WaitFor
+    /// cannot reach them.
+    /// </summary>
+    public AppiumElement ScrollToVisible(string automationId)
+    {
+        var locator = platform.AutomationId(automationId);
+        var deadline = DateTime.UtcNow.AddSeconds(45);
+        for (var attempt = 0; attempt < 12 && DateTime.UtcNow < deadline; attempt++)
+        {
+            try
+            {
+                var visible = FindVisible(locator).FirstOrDefault();
+                if (visible != null)
+                {
+                    return visible.Element;
+                }
+                platform.ScrollPageDown(driver);
+            }
+            catch (StaleElementReferenceException)
+            {
+                // A snapshot can reference a node the page just recycled.
+            }
+            catch (WebDriverTimeoutException exception) when (!DeviceSessionDeath.Matches(exception))
+            {
+                // An observation timeout can retry within this deadline.
+            }
+        }
+        var found = FindVisible(locator).FirstOrDefault();
+        if (found != null)
+        {
+            return found.Element;
+        }
+        throw new WebDriverTimeoutException($"Scrolling the page down never revealed a visible element matching {locator} within 45 seconds.");
+    }
+
+    /// <summary>
     /// A long commentary hit can land several screens below its heading. Scroll
     /// back to verify the selected commentary before testing reader history.
     /// </summary>

@@ -165,7 +165,12 @@ partial class Build
                     // keeps the protection build-flag driven rather than
                     // configuration-derived, so a future non-Debug e2e build
                     // stays dark too.
-                    ["DisableAnalytics"] = "true"
+                    ["DisableAnalytics"] = "true",
+                    // #3185: e2e builds also compile the Auth/Firestore redirect
+                    // to the local Emulator Suite. The channel stays inert
+                    // unless the suite launch supplies an endpoint — every
+                    // other scenario keeps the same local-only posture.
+                    ["FirebaseEmulator"] = "true"
                 };
                 if (MobileIsAndroid)
                 {
