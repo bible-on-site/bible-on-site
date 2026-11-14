@@ -60,6 +60,10 @@ def main():
     font = TTFont(font_path)
     glyph_set = font.getGlyphSet()
     classes = font["GDEF"].table.GlyphClassDef.classDefs
+    # Paseq has an advance and GDEF calls it a base glyph, but HideMarks has
+    # always hidden U+05C0 with cantillation. Keep its marked advance while
+    # painting its contour in the annotation layer.
+    classes[font.getBestCmap()[0x05C0]] = 3
     composites = {name for name in font.getGlyphOrder() if font["glyf"][name].isComposite()}
     glyphs = []
     for name in font.getGlyphOrder():

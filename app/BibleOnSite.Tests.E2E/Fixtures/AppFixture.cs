@@ -479,25 +479,19 @@ public class AppFixture : IAsyncLifetime
             using var apiProcess = _apiProcess;
             using var appProcess = _appProcess;
             using var automation = _automation;
+            using var drainStop = _drainStop;
             try
             {
-                await _drainStop.CancelAsync();
+                using var appLog = _appLog;
+                await drainStop.CancelAsync();
                 // Join before checking the retained failure or closing the
                 // shared writer: a late stdout/stderr failure cannot escape
                 // teardown, and no write can race log disposal.
                 await Task.WhenAll(_drains);
             }
-            finally
+            catch (IOException) when (_drainFailure is not null)
             {
-                _drainStop.Dispose();
-                try
-                {
-                    _appLog?.Dispose();
-                }
-                catch (IOException) when (_drainFailure is not null)
-                {
-                    // Preserve the original drain cause if flushing fails too.
-                }
+                // Preserve the original drain cause if flushing fails too.
             }
         }
         if (_drainFailure is { } failure)

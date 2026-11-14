@@ -134,15 +134,17 @@ public class TikkunFlowViewTests
         rig.View.HeightRequest.Should().Be(height);
     }
 
-    [Fact]
-    public void a_marks_only_segment_keeps_geometry_without_painting_an_empty_base_path()
+    [Theory]
+    [InlineData("֖")]
+    [InlineData("׀")]
+    public void a_marks_only_segment_keeps_geometry_without_painting_an_empty_base_path(string text)
     {
-        using var rig = new Rig("֖");
+        using var rig = new Rig(text);
         var shown = rig.Draw();
         var height = rig.View.HeightRequest;
-        shown.Should().Contain(p => p.Text == "֖" && p.IsMark);
+        shown.Should().Contain(p => p.Text == text && p.IsMark);
         rig.View.HideMarks = true;
-        rig.Draw().Should().NotContain(p => p.Text == "֖");
+        rig.Draw().Should().NotContain(p => p.Text == text);
         rig.View.HeightRequest.Should().Be(height);
     }
 

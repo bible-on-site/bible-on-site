@@ -111,14 +111,34 @@ public sealed class TikkunFlowModeTests(TikkunModeFixture fixture)
         Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_A);
         Keyboard.Type("בראשית 11");
         var result = await fixture.WaitForElementAsync(window =>
-            window.FindAllDescendants(fixture.CF.ByName("בראשית יא"))
-                .FirstOrDefault(element => !element.IsOffscreen && RenderedAtCenter(element)));
+        {
+            // Local chapter hits appear before the other search kinds finish
+            // sorting the list. Select a settled row within the same deadline.
+            var status = window.FindAllDescendants(fixture.CF.ByAutomationId("SearchStatus"))
+                .FirstOrDefault(element => !element.IsOffscreen);
+            if (status is null || !System.Text.RegularExpressions.Regex.IsMatch(status.Name, @"^\d+ תוצאות$"))
+            {
+                return null;
+            }
+            return window.FindAllDescendants(fixture.CF.ByAutomationId("SearchResultTitle").And(fixture.CF.ByName("בראשית יא")))
+                .FirstOrDefault(element => !element.IsOffscreen && RenderedAtCenter(element));
+        });
         result.Should().NotBeNull("the packaged chapter index must resolve the new reader target");
-        fixture.Click(result!);
-        (await fixture.WaitForElementAsync(window =>
+        var bounds = result!.BoundingRectangle;
+        var target = new System.Drawing.Point((int)(bounds.Left + bounds.Width / 2),
+            (int)(bounds.Top + bounds.Height / 2));
+        // Use the point whose hit-test was verified, rather than the UIA
+        // provider's independent clickable point on a templated result row.
+        CaptureScreenshot("tikkun-search-before-push.png");
+        fixture.ClickAt(target);
+        var landed = await fixture.WaitForElementAsync(window =>
             window.FindAllDescendants(fixture.CF.ByAutomationId("PerekSource").And(fixture.CF.ByName("בראשית יא")))
-                .FirstOrDefault(element => !element.IsOffscreen && RenderedAtCenter(element))))
-            .Should().NotBeNull("the pushed reader must honor its explicit target, not the startup preset");
+                .FirstOrDefault(element => !element.IsOffscreen && RenderedAtCenter(element)));
+        if (landed is null)
+        {
+            DumpTikkunDiagnostics("tikkun-push-failed.png");
+        }
+        landed.Should().NotBeNull("the pushed reader must honor its explicit target, not the startup preset");
     }
 
     /// <summary>Waits for the realized תיקון scroll view. The "tsy:" semantic
@@ -406,7 +426,8 @@ public sealed class TikkunFlowModeTests(TikkunModeFixture fixture)
     private void DumpTikkunDiagnostics(string capture)
     {
         CaptureScreenshot(capture);
-        foreach (var id in new[] { "TikkunScrollView", "PasukimCollection", "ReaderMenuOverlay", "ReaderMenuButton" })
+        foreach (var id in new[] { "TikkunScrollView", "PasukimCollection", "ReaderMenuOverlay", "ReaderMenuButton",
+            "PerekSource", "SearchResults", "SearchStatus" })
         {
             var elements = fixture.MainWindow.FindAllDescendants(fixture.CF.ByAutomationId(id));
             foreach (var element in elements)

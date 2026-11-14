@@ -83,7 +83,7 @@ public class AppFixtureDisposalTests
             using var input = new MemoryStream();
             using var reader = new PendingReader(input);
             using var output = new MemoryStream();
-            var log = new StreamWriter(output);
+            using var log = new StreamWriter(output);
             SetField(fixture, "_appLog", log);
             var drain = Drain(fixture, reader, log);
             SetField(fixture, "_drains", new[] { drain });

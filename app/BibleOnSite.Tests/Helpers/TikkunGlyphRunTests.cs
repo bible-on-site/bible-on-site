@@ -43,6 +43,16 @@ public class TikkunGlyphRunTests
     }
 
     [Fact]
+    public void paseq_keeps_its_marked_advance_but_hides_with_cantillation()
+    {
+        TikkunKorimTextBuilder.StripMarks("׀").Should().BeEmpty();
+        var run = TikkunFont.Shape("׀", 18);
+        run.Width.Should().BeGreaterThan(0);
+        run.Bases.Count.Should().Be(0);
+        run.Marks.Count.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void the_font_and_derived_contours_cannot_drift_silently()
     {
         using var wrongFont = new MemoryStream([1, 2, 3]);
