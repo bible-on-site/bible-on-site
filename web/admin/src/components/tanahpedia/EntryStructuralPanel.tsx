@@ -16,6 +16,7 @@ import {
 	updatePersonSex,
 	updateSayingDate,
 } from "~/server/tanahpedia/structural";
+import { EntityExternalReferences } from "./EntityExternalReferences";
 import { ExistingEntityPicker } from "./ExistingEntityPicker";
 
 const structuralQueryKey = (entryId: string) =>
@@ -186,6 +187,11 @@ function PersonCard({
 					שמור מין
 				</button>
 			</div>
+			<EntityExternalReferences
+				entityId={row.entityId}
+				references={row.externalReferences}
+				onSaved={onSaved}
+			/>
 		</div>
 	);
 }
@@ -380,6 +386,11 @@ function PlaceCard({
 					שמור זיהויים
 				</button>
 			</div>
+			<EntityExternalReferences
+				entityId={row.entityId}
+				references={row.externalReferences}
+				onSaved={onSaved}
+			/>
 		</div>
 	);
 }
@@ -495,6 +506,11 @@ function GenericEntityCard({
 					עריכת שדות מורחבת לסוג זה תתווסף בהמשך - כרגע רק שם בישות הבסיס.
 				</p>
 			)}
+			<EntityExternalReferences
+				entityId={row.entityId}
+				references={row.externalReferences}
+				onSaved={onSaved}
+			/>
 		</div>
 	);
 }

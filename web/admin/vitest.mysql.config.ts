@@ -11,6 +11,7 @@ export default defineConfig({
 			"tests/integration/whatsapp-mysql.test.ts",
 			"tests/integration/bulletin-approval-mysql.test.ts",
 			"tests/integration/join-links-mysql.test.ts",
+			"tests/integration/external-references-mysql.test.ts",
 		],
 		fileParallelism: false,
 	},
