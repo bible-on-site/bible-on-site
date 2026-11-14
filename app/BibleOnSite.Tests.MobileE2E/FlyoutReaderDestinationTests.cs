@@ -27,9 +27,9 @@ public sealed class FlyoutReaderDestinationTests(ITestOutputHelper output, Mobil
         // iOS exposes the row as one accessible element and folds its child
         // labels into the announced heading. Target that actual tap surface,
         // retaining a single snapshot lookup and the existing tap deadline.
-        var bereshit = Page.RenderedElements("ParashaUnit1",
-            element => Platform.SemanticDescription(element) ?? element.Text).Single();
-        Assert.Equal("בראשית", bereshit.Text);
+        var bereshit = Page.RenderedElements("ParashaRow",
+            element => Platform.SemanticDescription(element) ?? element.Text)
+            .First(element => element.Text == "בראשית");
         Platform.Tap(Driver!, bereshit.Element);
         Page.WaitFor("ParashaSource", element => !string.IsNullOrEmpty(element.Text));
         SaveDiagnostics("ParashaReaderOpen", "passed");
