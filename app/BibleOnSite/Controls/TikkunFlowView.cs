@@ -28,10 +28,35 @@ public class TikkunFlowView : GraphicsView
         nameof(RepeatEachPasuk), typeof(bool), typeof(TikkunFlowView), false,
         propertyChanged: OnContentChanged);
 
-    /// <summary>Hide niqqud and taamim for the whole perek.</summary>
+    /// <summary>
+    /// Hide niqqud and taamim for the whole perek. Visibility is a paint-time
+    /// concern only: the fully marked text stays the measurement/layout
+    /// reference, so a toggle repaints without moving a single base letter
+    /// (#3265) — hence a bare <see cref="GraphicsView.Invalidate"/> rather than
+    /// <see cref="InvalidateContent"/>.
+    /// </summary>
     public static readonly BindableProperty HideMarksProperty = BindableProperty.Create(
         nameof(HideMarks), typeof(bool), typeof(TikkunFlowView), false,
-        propertyChanged: OnContentChanged);
+        propertyChanged: (bindable, _, _) =>
+        {
+            var view = (TikkunFlowView)bindable;
+            view.Invalidate();
+            // Windows: once the carousel's host item stops re-arranging, the
+            // CanvasControl's visual stays attached to the compositor but its
+            // swapchain stops presenting — Draw() runs, the frame never
+            // reaches the screen (dotnet/maui#7639 family). Detaching and
+            // re-attaching the CanvasControl gives it a fresh composition
+            // visual, so the next Invalidate() actually presents (#3265).
+#if WINDOWS
+            if (view.Handler?.PlatformView is Microsoft.UI.Xaml.Controls.UserControl platform
+                && platform.Content is Microsoft.UI.Xaml.UIElement canvas)
+            {
+                platform.Content = null;
+                platform.Content = canvas;
+                view.Invalidate();
+            }
+#endif
+        });
 
     /// <summary>
     /// הסתר שם השם revision — a change-only input bound to
@@ -51,9 +76,11 @@ public class TikkunFlowView : GraphicsView
     private readonly TikkunFlowDrawable _drawable;
     private int _contentVersion;
 
-    public TikkunFlowView()
+    public TikkunFlowView() : this(TikkunFont.Shape) { }
+
+    internal TikkunFlowView(Func<string, float, TikkunGlyphRun> shapeWord)
     {
-        Drawable = _drawable = new TikkunFlowDrawable(this);
+        Drawable = _drawable = new TikkunFlowDrawable(this, shapeWord);
         // The layout engine positions words for RTL itself; GraphicsView
         // auto-mirrors its canvas when the page is RTL, which would flip the
         // manual positions back — force an LTR canvas instead.
@@ -123,15 +150,15 @@ public class TikkunFlowView : GraphicsView
         private int _wordsVersion = -1;
         private TikkunFlowLayout.Result? _layout;
         private float _laidWidth = -1;
-        // Word widths repeat massively across a perek (את, ה׳…) — a layout
-        // re-run (marks/masking toggles, resize) otherwise re-measures every
-        // word through the native text stack. Keyed by the exact inputs.
-        private readonly Dictionary<(string Text, float FontSize, bool Bold), float> _widthCache = new();
-        private const string WidthProbeText = "אאא";
+        private readonly Func<string, float, TikkunGlyphRun> _shapeWord;
+        private readonly Dictionary<(string Text, float FontSize), TikkunGlyphRun> _runs = new();
         private const float FauxBoldOffset = 0.5f;
-        private float _widthProbe = -1;
 
-        public TikkunFlowDrawable(TikkunFlowView view) => _view = view;
+        public TikkunFlowDrawable(TikkunFlowView view, Func<string, float, TikkunGlyphRun> shapeWord)
+        {
+            _view = view;
+            _shapeWord = shapeWord;
+        }
 
         public void Draw(ICanvas canvas, RectF dirtyRect)
         {
@@ -150,7 +177,7 @@ public class TikkunFlowView : GraphicsView
             if (_layout == null || Math.Abs(_laidWidth - textWidth) > 0.5f)
             {
                 var baseSize = (float)_view.TextFontSize;
-                _layout = TikkunFlowLayout.Layout(_words, MeasureWord(canvas), baseSize,
+                _layout = TikkunFlowLayout.Layout(_words, (text, size, _) => GetRun(text, size).Width, baseSize,
                     textWidth, (float)LineHeightFactor);
                 _laidWidth = textWidth;
             }
@@ -162,38 +189,22 @@ public class TikkunFlowView : GraphicsView
             var lineHeight = (float)_view.TextFontSize * (float)LineHeightFactor;
             foreach (var word in _layout.Words)
             {
-                // Taamey D (#2623) — the same scripture face as the pasuk
-                // labels. The canvas resolves IFont.Name through the platform
-                // text stack, not the font registrar.
-                canvas.Font = word.IsBold ? ScriptureFonts.Bold : ScriptureFonts.Regular;
-                canvas.FontSize = word.FontSize;
-                canvas.FontColor = word.TextColor ?? defaultColor;
-                // The draw box must never be tighter than the word's drawn
-                // width: Android truncates it to int and hands it to a
-                // StaticLayout as the wrap constraint, so a snug box fragments
-                // the word into narrow vertical pieces that pile over the
-                // surrounding lines (#2069). Current MAUI forces an LTR text
-                // direction inside DrawString, so HorizontalAlignment.Left
-                // anchors the text at word.X no matter how wide the box is —
-                // give every word the whole column, and an overlong word its
-                // measured width plus slack.
-                var drawWidth = MathF.Max(word.Width + 1f, textWidth);
-                canvas.DrawString(word.Text, padLeft + word.X, padTop + word.Y,
-                    drawWidth, lineHeight,
-                    HorizontalAlignment.Left, VerticalAlignment.Center, TextFlow.OverflowBounds);
-#if !WINDOWS
+                var run = GetRun(word.Text, word.FontSize);
+                // Reserve the marked font's full ascent/descent in both states.
+                // Native paths have no text box that Android can re-wrap (#2069).
+                var baseline = (lineHeight - (run.Ascent - run.Descent)) / 2 + run.Ascent;
+                canvas.SaveState();
+                canvas.Translate(padLeft + word.X, padTop + word.Y + baseline);
+                canvas.FillColor = word.TextColor ?? defaultColor;
+                PaintRun(canvas, run);
                 if (word.IsBold)
                 {
-                    // MAUI's canvas drops IFont.Weight once a bundled font
-                    // resolves to a real typeface (Android asset, iOS CTFont) —
-                    // only Windows honors it via CanvasTextFormat.FontWeight.
-                    // A sub-pixel double-strike keeps the pasuk-marker emphasis
-                    // the system font used to provide (#2623).
-                    canvas.DrawString(word.Text, padLeft + word.X + FauxBoldOffset, padTop + word.Y,
-                        drawWidth, lineHeight,
-                        HorizontalAlignment.Left, VerticalAlignment.Center, TextFlow.OverflowBounds);
+                    // Preserve the marker emphasis used by the bundled regular
+                    // scripture face on mobile (#2623), identically on Windows.
+                    canvas.Translate(FauxBoldOffset, 0);
+                    PaintRun(canvas, run);
                 }
-#endif
+                canvas.RestoreState();
             }
 
             var needed = _layout.Height + padTop + (float)ContentPadding.Bottom;
@@ -210,35 +221,42 @@ public class TikkunFlowView : GraphicsView
                 return;
             }
 
-            _words = TikkunKorimTextBuilder.BuildWords(_view.Pasukim, _view.RepeatEachPasuk, _view.HideMarks);
+            // Geometry words always carry the marked text — HideMarks never
+            // reaches this method (it repaints instead of invalidating content).
+            _words = TikkunKorimTextBuilder.BuildWords(_view.Pasukim, _view.RepeatEachPasuk);
+            var fontSize = (float)_view.TextFontSize;
+            var active = _words.Select(w => (w.Text, w.FontSizeScale * fontSize)).ToHashSet();
+            active.Add((" ", fontSize));
+            active.Add((TikkunFlowLayout.StumaProbe, fontSize));
+            foreach (var key in _runs.Keys.Where(k => !active.Contains(k)).ToArray())
+            {
+                _runs.Remove(key);
+            }
             _wordsVersion = _view._contentVersion;
             _layout = null;
         }
 
-        private Func<string, float, bool, float> MeasureWord(ICanvas canvas)
+        private void PaintRun(ICanvas canvas, TikkunGlyphRun run)
         {
-            // One probe per layout validates the cache context: a canvas with
-            // different font metrics or a font-size change (slider drags)
-            // shifts the probe width, so entries measured under another
-            // context are flushed instead of reused or accumulated.
-            var probe = canvas.GetStringSize(
-                WidthProbeText, ScriptureFonts.Regular, (float)_view.TextFontSize).Width;
-            if (Math.Abs(probe - _widthProbe) > 0.01f)
+            if (run.Bases.Count > 0)
             {
-                _widthCache.Clear();
-                _widthProbe = probe;
+                canvas.FillPath(run.Bases, WindingMode.NonZero);
             }
-            return (text, fontSize, bold) =>
+            if (!_view.HideMarks && run.Marks.Count > 0)
             {
-                if (_widthCache.TryGetValue((text, fontSize, bold), out var width))
-                {
-                    return width;
-                }
-                width = canvas.GetStringSize(text,
-                    bold ? ScriptureFonts.Bold : ScriptureFonts.Regular, fontSize).Width;
-                _widthCache[(text, fontSize, bold)] = width;
-                return width;
-            };
+                canvas.FillPath(run.Marks, WindingMode.NonZero);
+            }
         }
+
+        private TikkunGlyphRun GetRun(string text, float fontSize)
+        {
+            if (!_runs.TryGetValue((text, fontSize), out var run))
+            {
+                run = _shapeWord(text, fontSize);
+                _runs[(text, fontSize)] = run;
+            }
+            return run;
+        }
+
     }
 }

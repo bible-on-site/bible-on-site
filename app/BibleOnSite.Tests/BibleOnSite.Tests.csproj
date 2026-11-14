@@ -21,6 +21,8 @@
     <PackageReference Include="xunit.v3" Version="4.0.3" />
     <PackageReference Include="FluentAssertions" Version="8.11.0" />
     <PackageReference Include="Moq" Version="4.21.0" />
+    <PackageReference Include="HarfBuzzSharp" Version="14.4.0.100" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="14.4.0.100" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Maui.Controls" Version="10.0.120" />
     <PackageReference Include="GraphQL.Client" Version="6.1.0" />
@@ -123,6 +125,8 @@
 
   <ItemGroup>
     <None Include="Fixtures\sedra-schedule.json" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="../BibleOnSite/Resources/Fonts/TaameyD-Regular.ttf" LogicalName="TikkunFont.ttf" />
+    <EmbeddedResource Include="../BibleOnSite/Resources/Fonts/TaameyD-outlines.json" LogicalName="TikkunFont.outlines.json" />
   </ItemGroup>
 
 </Project>
