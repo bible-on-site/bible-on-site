@@ -10,3 +10,17 @@ CREATE TABLE IF NOT EXISTS `external_reference` (
     `url` varchar(1024) NOT NULL,
     PRIMARY KEY (`subject_kind`, `subject_id`, `source`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- Deploy-acknowledgment ledger for issue 3330. Each row marks an
+-- external_reference mapping the data deploy has already seen on a
+-- Tanahpedia entity. The seed inserts a mapping only while it is unclaimed,
+-- so a later deploy rerun can neither overwrite an administrator edit nor
+-- resurrect a deleted mapping. Same additive and repeat-safe guarantees as
+-- external_reference.
+
+CREATE TABLE IF NOT EXISTS `external_reference_seed` (
+    `subject_kind` enum('TANAHPEDIA_ENTITY', 'PARSHAN', 'TANAH_AUTHOR') NOT NULL,
+    `subject_id` varchar(36) NOT NULL,
+    `source` enum('WIKIDATA', 'WIKIPEDIA_HE', 'WIKIPEDIA_EN', 'SEFARIA', 'OFFICIAL') NOT NULL,
+    PRIMARY KEY (`subject_kind`, `subject_id`, `source`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;

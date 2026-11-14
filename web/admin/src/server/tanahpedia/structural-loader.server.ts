@@ -1,4 +1,9 @@
 import "@tanstack/react-start/server-only";
+import {
+	type EntityExternalReference,
+	EXTERNAL_REFERENCE_SUBJECT_KIND,
+	isExternalReferenceSource,
+} from "~/lib/tanahpedia/external-references";
 import type { EntityType } from "~/lib/tanahpedia/labels";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
 import { query } from "../db";
@@ -33,6 +38,8 @@ export interface LinkedEntityStructural {
 		sayingId: string;
 		sayingDate: number | null;
 	};
+	/** Verified external identifiers (JSON-LD sameAs) bound to the entity UUID. */
+	externalReferences: EntityExternalReference[];
 }
 
 export interface EntryStructuralContext {
@@ -83,6 +90,45 @@ function groupByKey<T>(rows: T[], keyOf: (row: T) => string): Map<string, T[]> {
 	return map;
 }
 
+/** ER_NO_SUCH_TABLE — the external_reference deploy has not run here yet. */
+function isMissingMysqlSchema(error: unknown): boolean {
+	return (error as { code?: string })?.code === "ER_NO_SUCH_TABLE";
+}
+
+/**
+ * Existing sameAs mappings for the linked entity ids, grouped by entity —
+ * one batched lookup. A not-yet-deployed table reads as "no mappings",
+ * matching the public website reader's tolerance.
+ */
+async function externalReferencesByEntity(
+	entityIds: string[],
+): Promise<Map<string, EntityExternalReference[]>> {
+	const map = new Map<string, EntityExternalReference[]>();
+	if (entityIds.length === 0) return map;
+	try {
+		const rows = await query<{
+			subject_id: string;
+			source: string;
+			url: string;
+		}>(
+			`SELECT subject_id, source, url FROM external_reference
+			 WHERE subject_kind = ? AND subject_id IN (${placeholders(entityIds.length)})
+			 ORDER BY subject_id, source`,
+			[EXTERNAL_REFERENCE_SUBJECT_KIND, ...entityIds],
+		);
+		for (const row of rows) {
+			if (!isExternalReferenceSource(row.source)) continue;
+			const bucket = map.get(row.subject_id) ?? [];
+			bucket.push({ source: row.source, url: row.url });
+			map.set(row.subject_id, bucket);
+		}
+	} catch (error) {
+		if (isMissingMysqlSchema(error)) return map;
+		throw error;
+	}
+	return map;
+}
+
 export async function loadEntryStructuralContext(
 	entryId: string,
 ): Promise<EntryStructuralContext> {
@@ -111,7 +157,15 @@ export async function loadEntryStructuralContext(
 		.filter((r) => r.entityType === "SAYING" || r.entityType === "PROPHECY")
 		.map((r) => r.entityId);
 
-	const [persons, places, sayings] = await Promise.all([
+	// External identifiers bind to the entity UUID — never the entry, subtype
+	// row or name — so they load for every creatable linked entity in one
+	// batch alongside the subtype lookups.
+	const creatableEntityIds = links
+		.filter((r) => isDbEntityType(r.entityType))
+		.map((r) => r.entityId);
+
+	const [externalRefs, persons, places, sayings] = await Promise.all([
+		externalReferencesByEntity(creatableEntityIds),
 		whenAny(personEntityIds, () =>
 			query<{ entity_id: string; id: string }>(
 				`SELECT entity_id, id FROM tanahpedia_person
@@ -191,6 +245,7 @@ export async function loadEntryStructuralContext(
 			entityId: row.entityId,
 			entityType: row.entityType,
 			displayName: row.displayName,
+			externalReferences: externalRefs.get(row.entityId) ?? [],
 		};
 
 		if (row.entityType === "PERSON") {
