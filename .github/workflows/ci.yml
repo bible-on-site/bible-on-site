@@ -66,6 +66,12 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
+  # Codecov's CLI collapses gh-readonly-queue/<base>/... to the base branch.
+  # Isolate every queue upload, including early test_results without coverage,
+  # so it cannot replace master's badge/baseline with a synthetic commit.
+  # Other events keep the action's native PR/fork/push SHA and branch handling;
+  # an admin merge is covered by its own master push, independently of the queue.
+  CODECOV_BRANCH_OVERRIDE: ${{ github.event_name == 'merge_group' && github.ref_name || '' }}
   API_CARGO_FILE: web/api/Cargo.toml
   API_COVERAGE_ARTIFACT_NAME_MASTER: api-coverage.master
   API_COVERAGE_ARTIFACT_NAME_WF: api-coverage.${{ github.run_id }}
@@ -2326,6 +2332,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ steps.list_api_junit_files.outputs.junit_files }}
           flags: api
@@ -2597,6 +2604,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
           flags: app
@@ -2629,6 +2637,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
           flags: app
@@ -2801,6 +2810,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.BULLETIN_DIRECTORY }}/.junit-report/unit/results.xml
           flags: bulletin
@@ -3037,6 +3047,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.DATA_DIRECTORY }}/.junit-report/unit/results.xml
           flags: data
@@ -3105,6 +3116,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.DATA_DIRECTORY }}/.junit-report/integration/results.xml
           flags: data-integration
@@ -3366,6 +3378,7 @@ jobs:
         if: ${{ needs.website_e2e.result != 'skipped' }}
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           working-directory: ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ steps.list_files.outputs.junit_files }}
@@ -3702,6 +3715,7 @@ jobs:
       - name: Publish Website Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
           disable_search: true
@@ -3731,6 +3745,7 @@ jobs:
       - name: Publish API Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.API_COVERAGE_REPORT }}
           disable_search: true
@@ -3780,6 +3795,7 @@ jobs:
       - name: Publish Bulletin Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.BULLETIN_COVERAGE_REPORT }}
           disable_search: true
@@ -3813,6 +3829,7 @@ jobs:
       - name: Publish Admin Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
           disable_search: true
@@ -3842,6 +3859,7 @@ jobs:
       - name: Publish Data Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.DATA_COVERAGE_REPORT }}
           disable_search: true
@@ -4001,6 +4019,7 @@ jobs:
       - name: Publish App Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.APP_COVERAGE_REPORT }}
           disable_search: true
