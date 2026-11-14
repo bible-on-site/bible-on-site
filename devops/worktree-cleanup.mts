@@ -225,13 +225,67 @@ function newestTopLevelMtime(dir: string): number {
 }
 
 /**
- * Last-activity timestamp for a worktree: newest top-level entry mtime plus
- * the gitdir's HEAD and reflog (updated by checkouts/commits). The index is
+ * Newest mtime across the source tree — nested edits count too, so a
+ * worktree someone is actively editing is never considered idle.
+ * Regenerable output dirs (.venv, node_modules, build output) and .git are
+ * skipped: their churn is the pruning target, not activity, and a huge one
+ * must not consume the scan budget before real source is seen. The
+ * top-level pass always completes first, so the basic signal survives any
+ * budget cap. Budget exhaustion or an unreadable subtree returns "now" —
+ * unknown activity must look recent, never old.
+ */
+export function deepestMtime(root: string, maxEntries = 5000): number {
+	let newest = 0;
+	try {
+		for (const e of readdirSync(root, { withFileTypes: true })) {
+			if (e.name === ".git") continue;
+			try {
+				const m = statSync(join(root, e.name)).mtimeMs;
+				if (m > newest) newest = m;
+			} catch {
+				/* entry vanished */
+			}
+		}
+	} catch {
+		return Date.now(); // root unreadable — unknown, not idle
+	}
+	let seen = 0;
+	const stack = [""];
+	while (stack.length) {
+		const rel = stack.pop() as string;
+		let entries;
+		try {
+			entries = readdirSync(join(root, rel), { withFileTypes: true });
+		} catch {
+			return Date.now(); // unreadable subtree — unknown, not idle
+		}
+		for (const e of entries) {
+			if (++seen > maxEntries) return Date.now(); // budget — unknown, not idle
+			if (e.name === ".git") continue;
+			if (e.isDirectory()) {
+				if (!REGENERABLE_NAMES.has(e.name))
+					stack.push(rel ? `${rel}/${e.name}` : e.name);
+				continue;
+			}
+			try {
+				const m = statSync(join(root, rel, e.name)).mtimeMs;
+				if (m > newest) newest = m;
+			} catch {
+				/* entry vanished */
+			}
+		}
+	}
+	return newest;
+}
+
+/**
+ * Last-activity timestamp for a worktree: newest source-file mtime plus the
+ * gitdir's HEAD and reflog (updated by checkouts/commits). The index is
  * deliberately excluded — `git status` refreshes it, so our own scan would
  * mark every worktree as active.
  */
 function lastActivityMs(wtPath: string): number {
-	let newest = newestTopLevelMtime(wtPath);
+	let newest = deepestMtime(wtPath);
 	const gitDir = tryGit(wtPath, ["rev-parse", "--git-dir"])?.trim();
 	if (gitDir) {
 		const gd = resolve(wtPath, gitDir);
@@ -274,11 +328,24 @@ function rmrf(p: string): boolean {
 }
 
 /** True if `rel` (or anything under it) is tracked in the worktree — those
- *  dirs (e.g. devops/coverage) are content, not regenerable build output. */
+ *  dirs (e.g. devops/coverage) are content, not regenerable build output.
+ *  Fails closed: an unreadable index counts as tracked. */
 function isTracked(wtPath: string, absDir: string, relTo: string): boolean {
 	const rel = absDir.slice(relTo.length + 1).split(sep).join("/");
 	const out = tryGit(wtPath, ["ls-files", "--", rel]);
-	return out !== null && out.trim().length > 0;
+	return out === null || out.trim().length > 0;
+}
+
+/** True only when git itself ignores the directory — positive evidence it
+ *  is regenerable output, not an untracked source dir that happens to be
+ *  named `bin`/`dist`. Fails closed: an error counts as not ignored. */
+export function isIgnoredDir(
+	wtPath: string,
+	absDir: string,
+	relTo: string,
+): boolean {
+	const rel = absDir.slice(relTo.length + 1).split(sep).join("/");
+	return tryGit(wtPath, ["check-ignore", "-q", "--", rel]) !== null;
 }
 
 /** Ignored names that are reproducible build/tool output, so deleting the
@@ -346,11 +413,13 @@ export function trackedFiles(
 }
 
 /**
- * True when `root` is provably a checkout remnant: at least one file matches
- * a tracked path AND its blob hash, and every other file is either a tracked
- * name or recognizably regenerable. One matching `.gitignore` surrounded by
- * unrelated files is not evidence. Returns false on a `.git` anywhere inside
- * (foreign repo or live worktree) and on budget exhaustion.
+ * True when `root` is provably a checkout remnant: every file inside is
+ * either recognizably regenerable output or a tracked path whose content
+ * hash is verified identical to the committed blob — plus at least one such
+ * verified file exists (positive evidence). A name match alone is never
+ * enough: a locally edited tracked file or an unrelated file both keep the
+ * directory. Returns false on a `.git` anywhere inside (foreign repo or
+ * live worktree) and on budget/verification failure.
  */
 export function isCheckoutRemnant(
 	repo: string,
@@ -379,19 +448,18 @@ export function isCheckoutRemnant(
 		}
 	}
 	if (candidates.length === 0) return false;
-	const slice = candidates.slice(0, 200);
 	const out = tryGit(
 		repo,
 		["hash-object", "--stdin-paths"],
-		slice.map(([, abs]) => abs).join("\n"),
+		candidates.map(([, abs]) => abs).join("\n"),
 	);
 	if (out === null) return false;
 	const hashes = out
 		.split("\n")
 		.map((s) => s.trim())
 		.filter(Boolean);
-	if (hashes.length !== slice.length) return false; // cannot align safely
-	return slice.some(([rel], i) => tracked.get(rel) === hashes[i]);
+	if (hashes.length !== candidates.length) return false; // cannot align safely
+	return candidates.every(([rel], i) => tracked.get(rel) === hashes[i]);
 }
 
 // ---------- CLI ----------
@@ -404,6 +472,15 @@ interface Cli {
 	heavy: boolean;
 	keepNames: Set<string>;
 	log?: string;
+}
+
+/** Days argument must be a finite non-negative number — NaN would silently
+ *  turn every age check into "threshold passed". */
+export function parseDays(raw: string, flag: string): number {
+	const n = Number(raw);
+	if (raw.trim() === "" || !Number.isFinite(n) || n < 0)
+		throw new Error(`${flag} expects a number, got "${raw}"`);
+	return n;
 }
 
 function parseCli(args: string[]): Cli {
@@ -421,12 +498,11 @@ function parseCli(args: string[]): Cli {
 		else if (a === "--no-heavy") cli.heavy = false;
 		else if (a === "--repo") cli.repos.push(resolve(args[++i]));
 		else if (a === "--keep") cli.keepNames.add(args[++i]);
-		else if (a === "--debris-days") cli.debrisDays = Number(args[++i]);
-		else if (a === "--idle-days") cli.idleDays = Number(args[++i]);
+		else if (a === "--debris-days") cli.debrisDays = parseDays(args[++i], a);
+		else if (a === "--idle-days") cli.idleDays = parseDays(args[++i], a);
 		else if (a === "--log") cli.log = args[++i];
 		else {
-			console.error(`worktree-cleanup: unexpected argument "${a}"`);
-			process.exit(1);
+			throw new Error(`unexpected argument "${a}"`);
 		}
 	}
 	if (cli.repos.length === 0) {
@@ -525,6 +601,12 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 	const containers = new Set<string>();
 	for (const wt of worktrees) containers.add(dirname(resolve(wt.path)));
 
+	// Worktrees holding uncommitted or unverifiable content are never
+	// heavy-pruned — name-matched dirs there can hold source. An open-PR or
+	// detached worktree can be dirty too, so this is tracked separately from
+	// the disposition.
+	const unprunable = new Set<string>();
+
 	const hasUpstream = (b: string) =>
 		(tryGit(repo, ["config", "--get", `branch.${b}.remote`]) ?? "").trim() !== "";
 
@@ -532,8 +614,17 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 		const wpath = resolve(wt.path);
 		if (!existsSync(wpath)) continue; // pruned below
 		const { changes, ignored } = splitStatus(
-			tryGit(wpath, ["status", "--porcelain", "--ignored"]) ?? "ERROR",
+			tryGit(wpath, [
+				"status",
+				"--porcelain",
+				"--ignored",
+				"--untracked-files=normal",
+			]) ?? "ERROR",
 		);
+		const cleanEnough =
+			changes.length === 0 || isBenignDirty(changes, benignRe);
+		if (!cleanEnough || ignored.some((p) => !isRegenerableIgnored(p)))
+			unprunable.add(wpath);
 		let disp: Disposition;
 		const bp = remoteOk && wt.branch !== null ? branchPr(repo, wt.branch) : null;
 		if (!remoteOk || (wt.branch !== null && bp === null)) {
@@ -567,11 +658,38 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 		}
 		if (disp === "remove") {
 			if (cli.yes) {
-				if (tryGit(repo, ["worktree", "remove", wpath]) === null)
-					tryGit(repo, ["worktree", "remove", "--force", wpath]);
-				if (existsSync(wpath)) rmrf(wpath);
+				let gone = tryGit(repo, ["worktree", "remove", wpath]) !== null;
+				if (!gone) {
+					// Clean remove refused — re-verify the checkout is still
+					// clean/benign before forcing: edits could have landed
+					// between the scan above and this removal.
+					const recheck = splitStatus(
+						tryGit(wpath, [
+							"status",
+							"--porcelain",
+							"--ignored",
+							"--untracked-files=normal",
+						]) ?? "ERROR",
+					);
+					const safeToForce =
+						(recheck.changes.length === 0 ||
+							isBenignDirty(recheck.changes, benignRe)) &&
+						recheck.ignored.every(isRegenerableIgnored);
+					if (safeToForce)
+						gone =
+							tryGit(repo, ["worktree", "remove", "--force", wpath]) !==
+							null;
+				}
+				// rmrf only handles husks git left behind — never run it when
+				// the git-level removal itself failed (locked or changed
+				// worktree): the checkout is not ours to delete then.
+				if (gone && existsSync(wpath) && !rmrf(wpath))
+					report.errors.push(`leftover files remain in ${wpath}`);
+				if (gone) report.removed.push(`${wpath} [${wt.branch ?? "detached"}]`);
+				else report.errors.push(`could not remove ${wpath} — kept`);
+			} else {
+				report.removed.push(`${wpath} [${wt.branch ?? "detached"}]`);
 			}
-			report.removed.push(`${wpath} [${wt.branch ?? "detached"}]`);
 		} else {
 			report.kept.push([wpath, disp]);
 		}
@@ -604,21 +722,38 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 					trackedSet !== null && isCheckoutRemnant(repo, child, trackedSet);
 				if (idleMs < cli.debrisDays * 86400_000 || !proven) continue;
 			}
-			if (cli.yes) rmrf(child);
-			report.debris.push(child);
+			if (cli.yes) {
+				if (rmrf(child)) report.debris.push(child);
+				else report.errors.push(`debris ${child}`);
+			} else {
+				report.debris.push(child);
+			}
 		}
 	}
 
-	// Prune regenerable heavy dirs inside kept, idle worktrees.
+	// Prune regenerable heavy dirs inside kept, idle worktrees. Worktrees
+	// holding uncommitted or unverifiable content are left completely alone —
+	// name-matched dirs there can hold source.
+	const prunable = new Set<Disposition>([
+		"open-pr",
+		"stale-fresh",
+		"detached-unmerged",
+		"remote-unknown",
+	]);
 	if (cli.heavy) {
 		for (const [wpath, disp] of report.kept) {
-			if (disp === "protected") continue;
+			if (!prunable.has(disp) || unprunable.has(wpath)) continue;
 			const idleMs = now - lastActivityMs(wpath);
 			if (idleMs < cli.idleDays * 86400_000) continue;
 			for (const d of heavyDirs(wpath, 3)) {
 				if (isTracked(wpath, d, wpath)) continue;
-				if (cli.yes) rmrf(d);
-				report.pruned.push(d);
+				if (!isIgnoredDir(wpath, d, wpath)) continue;
+				if (cli.yes) {
+					if (rmrf(d)) report.pruned.push(d);
+					else report.errors.push(`pruned ${d}`);
+				} else {
+					report.pruned.push(d);
+				}
 			}
 		}
 	}
@@ -627,18 +762,25 @@ function processRepo(repo: string, cli: Cli, log: (s: string) => void): RepoRepo
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);
 if (isMain) {
-	const cli = parseCli(process.argv.slice(2));
+	let cli: Cli;
+	try {
+		cli = parseCli(process.argv.slice(2));
+	} catch (e) {
+		console.error(`worktree-cleanup: ${(e as Error).message}`);
+		process.exit(1);
+	}
 	const log = makeLogger(cli.log);
 	log(`worktree-cleanup ${cli.yes ? "APPLY" : "DRY-RUN"} — ${new Date().toISOString()}`);
 	for (const repo of cli.repos) {
 		try {
 			const r = processRepo(repo, cli, log);
 			log(
-				`[${r.repo}] remove=${r.removed.length} keep=${r.kept.length} debris=${r.debris.length} pruned=${r.pruned.length}`,
+				`[${r.repo}] remove=${r.removed.length} keep=${r.kept.length} debris=${r.debris.length} pruned=${r.pruned.length} errors=${r.errors.length}`,
 			);
 			for (const s of r.removed) log(`  - worktree ${s}`);
 			for (const s of r.debris) log(`  - debris ${s}`);
 			for (const s of r.pruned) log(`  - pruned ${s}`);
+			for (const s of r.errors) log(`  ! ${s}`);
 			for (const [p, d] of r.kept) log(`  = keep(${d}) ${p}`);
 		} catch (e) {
 			log(`[${repo}] ERROR: ${(e as Error).message}`);
