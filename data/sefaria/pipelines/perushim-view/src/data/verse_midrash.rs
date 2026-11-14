@@ -1,6 +1,6 @@
-//! Midrashim whose verified Sefaria schemas already address biblical chapters/verses.
-//! Literary simanim are deliberately unsupported. Both schema metadata and each
-//! nonempty coordinate are checked before notes can reach an output writer.
+//! Selected midrashim with verified biblical coordinates or reviewed mappings.
+//! Packed literary homilies use a manual mapping. Positional extraction checks
+//! schema metadata and each nonempty coordinate before output.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -10,7 +10,6 @@ use bson::{Bson, Document};
 use super::{extract::Note, perek_mapping};
 
 const TITLES: &[&str] = &[
-    "Midrash Lekach Tov",
     "Midrash Mishlei",
     "Midrash Tannaim on Deuteronomy",
     "Mekhilta DeRabbi Shimon Ben Yochai",
@@ -27,10 +26,10 @@ pub fn supports(title: &str) -> bool {
 /// Use only the explicitly verified schemas, retaining all paragraphs at a verse.
 pub fn flatten(doc: &Document, perush_id: i64) -> Result<Vec<Note>> {
     let title = doc.get_str("enTitle")?;
-    ensure!(
-        supports(title),
-        "Unsupported verse-aligned midrash: {title}"
-    );
+    ensure!(supports(title), "Unsupported midrash: {title}");
+    if title == "Midrash Mishlei" {
+        return super::mishlei::flatten(doc, perush_id);
+    }
     let schema = doc.get_document("schema")?;
     let version = doc
         .get_array("versions")?
@@ -44,12 +43,6 @@ pub fn flatten(doc: &Document, perush_id: i64) -> Result<Vec<Note>> {
         notes: Vec::new(),
         indices: HashMap::new(),
     };
-
-    if title == "Midrash Mishlei" {
-        validate_schema(schema, &["Perek", "Integer"], None)?;
-        output.chapters("Proverbs", version, 2)?;
-        return Ok(output.notes);
-    }
 
     // Sefaria removed Tannaim's default-node wrapper after the 2024 dump.
     // Both known layouts retain the same biblical chapter/verse coordinates;
@@ -66,11 +59,6 @@ pub fn flatten(doc: &Document, perush_id: i64) -> Result<Vec<Note>> {
 
     // These names/order come from the pinned June 2024 Sefaria index schemas.
     let (keys, addresses, paragraph): (&[&str], &[&str], Option<&str>) = match title {
-        "Midrash Lekach Tov" => (
-            &["Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy"],
-            &["Integer", "Integer", "Integer"],
-            Some("Midrash"),
-        ),
         "Midrash Tannaim on Deuteronomy" => (
             &["default"],
             &["Integer", "Integer", "Integer"],
@@ -112,7 +100,7 @@ pub fn flatten(doc: &Document, perush_id: i64) -> Result<Vec<Note>> {
         let book = match title {
             "Midrash Tannaim on Deuteronomy" => "Deuteronomy",
             "Mekhilta DeRabbi Shimon Ben Yochai" => "Exodus",
-            _ => key,
+            _ => unreachable!("manual mappings handled above"),
         };
         if let Some(text) = text {
             output.chapters(book, text, addresses.len())?;
@@ -370,37 +358,12 @@ mod tests {
     }
 
     #[test]
-    fn mishlei_uses_proverbs_coordinates_and_never_infers_simanim() {
-        let source = doc! {
-            "enTitle": "Midrash Mishlei", "schema": node("Midrash Mishlei", &["Perek", "Integer"], None),
-            "versions": [[["a", "b"]]]
-        };
-        let notes = flatten(&source, 5).unwrap();
-        assert_eq!((notes[1].perek_id, notes[1].pasuk), (718, 2));
+    fn unsupported_midrashim_require_reviewed_mapping() {
         assert!(!supports("Sifra"));
         assert!(!supports("Midrash Tanchuma"));
         assert!(!supports("Midrash Aggadah"));
         assert!(!supports("Midrash Sekhel Tov"));
-    }
-
-    #[test]
-    fn multi_book_verse_schema_uses_each_biblical_book_and_keeps_paragraphs() {
-        let nodes: Vec<_> = ["Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy"]
-            .iter()
-            .map(|key| node(key, &["Integer", "Integer", "Integer"], Some("Midrash")))
-            .collect();
-        let source = doc! {
-            "enTitle": "Midrash Lekach Tov", "schema": {"nodes": nodes},
-            "versions": [{"Genesis": [[["first", false, "second"]]], "Exodus": [[["third"]]]}]
-        };
-        let notes = flatten(&source, 23).unwrap();
-        assert_eq!(notes.len(), 3);
-        assert_eq!((notes[0].perek_id, notes[0].note_idx), (1, 0));
-        assert_eq!((notes[1].perek_id, notes[1].note_idx), (1, 1));
-        assert_eq!(
-            (notes[2].perek_id, notes[2].pasuk, notes[2].note_idx),
-            (51, 1, 0)
-        );
+        assert!(!supports("Midrash Lekach Tov"));
     }
 
     /// Uses the dump's index/text collections, including the competing one-note
@@ -426,16 +389,66 @@ mod tests {
             let doc = cursor.deserialize_current().unwrap();
             let title = doc.get_str("enTitle").unwrap();
             assert!(found.insert(title.to_string()), "duplicate source title");
+            if title == "Midrash Mishlei" {
+                assert_eq!(
+                    doc.get_array("versionTitles").unwrap()[0].as_str(),
+                    Some("מדרש משלי - שלמה באבער")
+                );
+                let notes = flatten(&doc, 7).unwrap();
+                let mut source_counts: HashMap<&str, usize> = HashMap::new();
+                let mut source_slots = 0;
+                for (chapter_idx, chapter) in doc.get_array("versions").unwrap()[0]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .enumerate()
+                {
+                    for (homily_idx, homily) in chapter.as_array().unwrap().iter().enumerate() {
+                        if is_empty(homily) {
+                            continue;
+                        }
+                        source_slots += 1;
+                        let text = homily.as_str().unwrap().trim();
+                        let placeholder = match (chapter_idx + 1, homily_idx + 1) {
+                            (3, 1) => Some("אין פרק ג"),
+                            (18, 1) => Some("אין פרק יח"),
+                            _ => None,
+                        };
+                        if let Some(expected) = placeholder {
+                            assert_eq!(
+                                text, expected,
+                                "Mishlei missing-chapter placeholder changed"
+                            );
+                            continue;
+                        }
+                        *source_counts.entry(text).or_default() += 1;
+                    }
+                }
+                assert_eq!(source_slots, 140);
+                assert_eq!(source_counts.values().sum::<usize>(), 138);
+                let mut output_counts: HashMap<&str, usize> = HashMap::new();
+                for note in &notes {
+                    *output_counts.entry(note.note_content.trim()).or_default() += 1;
+                }
+                for (text, count) in source_counts {
+                    assert!(
+                        output_counts.get(text).copied().unwrap_or(0) >= count,
+                        "Mishlei dropped a source homily"
+                    );
+                }
+                let keys: HashSet<_> = notes
+                    .iter()
+                    .map(|n| (n.perek_id, n.pasuk, n.note_idx))
+                    .collect();
+                assert_eq!(
+                    keys.len(),
+                    notes.len(),
+                    "Mishlei note primary-key collision"
+                );
+                continue;
+            }
             let (expected_notes, expected_verses, version, first_coordinate, chapter_range) =
                 match title {
-                    "Midrash Lekach Tov" => (
-                        7822,
-                        4231,
-                        "Midrash Lekach Tov on Torah, Vilna 1884",
-                        (1, 1),
-                        1..=187,
-                    ),
-                    "Midrash Mishlei" => (140, 140, "מדרש משלי - שלמה באבער", (718, 1), 718..=748),
                     "Midrash Tannaim on Deuteronomy"
                         if !doc.get_document("schema").unwrap().contains_key("nodes") =>
                     {
