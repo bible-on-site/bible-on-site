@@ -132,20 +132,27 @@ describe("deepestMtime", () => {
 		const root = mkdtempSync(join(tmpdir(), "wt-mtime-"));
 		try {
 			const old = new Date("2020-01-01");
-			const fresh = new Date();
+			const fresh = new Date("2025-06-01");
+			const newest = new Date("2026-01-01");
 			mkdirSync(join(root, "src", "deep"), { recursive: true });
 			mkdirSync(join(root, ".venv", "lib"), { recursive: true });
 			writeFileSync(join(root, "src", "deep", "edit.ts"), "x");
 			writeFileSync(join(root, ".venv", "lib", "new.py"), "x");
 			writeFileSync(join(root, "top.ts"), "x");
+			// Age every directory so only file mtimes carry the signal —
+			// otherwise fresh dir timestamps mask a broken deep walk.
+			for (const d of ["src", join("src", "deep"), ".venv", join(".venv", "lib")])
+				utimesSync(join(root, d), old, old);
 			utimesSync(join(root, "top.ts"), old, old);
 			utimesSync(join(root, "src", "deep", "edit.ts"), fresh, fresh);
-			utimesSync(join(root, ".venv", "lib", "new.py"), fresh, fresh);
+			// The .venv file is the newest of all — if the walk descended
+			// into it, the result would be `newest`, not `fresh`.
+			utimesSync(join(root, ".venv", "lib", "new.py"), newest, newest);
 
-			// A nested edit counts even though the top level looks old.
+			const m = deepestMtime(root);
 			assert.ok(
-				Math.abs(deepestMtime(root) - fresh.getTime()) < 60_000,
-				"nested fresh mtime should win over old top-level",
+				Math.abs(m - fresh.getTime()) < 10_000 && m < newest.getTime(),
+				`expected ~${fresh.toISOString()}, got ${new Date(m).toISOString()}`,
 			);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
