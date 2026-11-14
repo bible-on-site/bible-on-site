@@ -7,6 +7,7 @@ jest.mock("@/lib/search/service", () => ({
 }));
 
 import { GET } from "@/app/api/search/route";
+import { GET as openapiGET } from "@/app/openapi.json/route";
 import { searchSite } from "@/lib/search/service";
 import type { SearchResponse } from "@/lib/search/types";
 
@@ -36,11 +37,9 @@ describe("GET /api/search", () => {
 		);
 		expect(res.status).toBe(200);
 		expect(res.headers.get("Cache-Control")).toBe("no-store");
-		expect(mockSearch).toHaveBeenCalledWith(
-			"בראשית",
-			["perek", "pasuk"],
-			{ limit: 5 },
-		);
+		expect(mockSearch).toHaveBeenCalledWith("בראשית", ["perek", "pasuk"], {
+			limit: 5,
+		});
 		const body = await res.json();
 		expect(body.query).toBe("בראשית");
 	});
@@ -96,5 +95,38 @@ describe("GET /api/search", () => {
 		jest.spyOn(console, "error").mockImplementation(() => {});
 		const res = await requestFor(`?q=${encodeURIComponent("את")}`);
 		expect(res.status).toBe(500);
+	});
+
+	it.each([
+		["", 400],
+		[`?q=${"א".repeat(257)}`, 414],
+		["?q=test&limit=0", 400],
+		["?q=test&type=bogus", 400],
+		["?q=test", 500],
+	])("documents the actual error response for %s", async (path, status) => {
+		mockSearch.mockRejectedValue(new Error("unavailable"));
+		jest.spyOn(console, "error").mockImplementation(() => {});
+		const response = await requestFor(path);
+		expect(response.status).toBe(status);
+		const doc = await openapiGET().json();
+		const responses = doc.paths["/api/search"].get.responses;
+		expect(responses[String(response.status)]).toBeDefined();
+		expect(responses).not.toHaveProperty("503");
+	});
+
+	it("keeps partial results at 200 with the documented availability field", async () => {
+		const partial = {
+			...EMPTY,
+			availability: ["חיפוש המאמרים אינו זמין כרגע"],
+		};
+		mockSearch.mockResolvedValue(partial);
+		const response = await requestFor("?q=test");
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual(partial);
+		const doc = await openapiGET().json();
+		const schema =
+			doc.paths["/api/search"].get.responses["200"].content["application/json"]
+				.schema;
+		expect([...schema.required].sort()).toEqual(Object.keys(partial).sort());
 	});
 });
