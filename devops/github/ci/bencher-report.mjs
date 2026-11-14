@@ -9,19 +9,19 @@ const pending = (check) => check.status !== "completed" && check.conclusion == n
 export async function runBencherReport(context, io) {
 	const before = new Set((await io.listChecks()).map((check) => check.id));
 	const result = io.run();
+	const runError = result.error || result.status !== 0
+		? new Error(`Bencher command failed (${result.error?.message ?? result.status})`) : null;
 	const created = (await io.listChecks()).filter((check) =>
 		!before.has(check.id) && check.head_sha === context.checkSha
 		&& check.app?.slug === "github-actions"
 		&& check.name === `Bencher Report (${context.project})`);
 	if (created.length !== 1) {
-		throw new Error(`Expected one new Bencher check for this invocation; found ${created.length}`);
+		throw runError ?? new Error(`Expected one new Bencher check for this invocation; found ${created.length}`);
 	}
 	const check = created[0];
 	let mutationAttempted = false;
 	try {
-		if (result.error || result.status !== 0) {
-			throw new Error(`Bencher command failed (${result.error?.message ?? result.status})`);
-		}
+		if (runError) throw runError;
 		const urls = [...result.stdout.matchAll(/View report:\s+(https:\/\/[^\s]+)/gu)];
 		if (urls.length !== 1) throw new Error("Bencher did not print exactly one report URL");
 		const url = new URL(urls[0][1]);

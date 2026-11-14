@@ -108,6 +108,12 @@ test("surfaces a failed GitHub completion without retrying or reporting success"
 	assert.equal(updates.length, 1);
 });
 
+test("preserves a CLI launch failure when no GitHub check was created", async () => {
+	const { io, updates } = setup({ after: [], result: { status: null, error: new Error("ENOENT") } });
+	await assert.rejects(runBencherReport(context, io), /Bencher command failed \(ENOENT\)/);
+	assert.deepEqual(updates, []);
+});
+
 test("refuses to overwrite a completed check that disagrees with the report", async () => {
 	const check = { ...checkFixture(), status: "completed", conclusion: "failure" };
 	const { io, updates } = setup({ after: [check] });
