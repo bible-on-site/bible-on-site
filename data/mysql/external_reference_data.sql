@@ -35,8 +35,14 @@
 -- Parshan ids are regenerated in first-seen order by every perushim data
 -- deploy, so this file owns the PARSHAN rows and rebuilds them by parshan
 -- name each run (gershayim normalized to an ASCII double quote).
--- Tanahpedia entity ids are stable, so entity rows are upserted by a unique
--- PERSON name and never deleted. A missing or ambiguous name is skipped.
+--
+-- Tanahpedia entity mappings moved to admin ownership in issue 3330: each
+-- declared mapping is inserted only while it is neither present nor already
+-- claimed in external_reference_seed, and every entity mapping present at
+-- deploy time is claimed afterwards. A later deploy rerun therefore cannot
+-- overwrite an administrator edit or resurrect a deleted mapping, while a
+-- fresh database still receives the curated set once. A missing or
+-- ambiguous PERSON name is skipped.
 --
 -- Comment lines stay free of semicolons and apostrophes for the deploy
 -- Lambda statement splitter.
@@ -226,4 +232,25 @@ WHERE (
     SELECT COUNT(*) FROM tanahpedia_entity d
     WHERE d.entity_type = 'PERSON' AND d.name = r.name
 ) = 1
-ON DUPLICATE KEY UPDATE url = r.url;
+AND NOT EXISTS (
+    SELECT 1 FROM external_reference x
+    WHERE x.subject_kind = 'TANAHPEDIA_ENTITY'
+      AND x.subject_id = e.id
+      AND x.source = r.source
+)
+AND NOT EXISTS (
+    SELECT 1 FROM external_reference_seed s
+    WHERE s.subject_kind = 'TANAHPEDIA_ENTITY'
+      AND s.subject_id = e.id
+      AND s.source = r.source
+);
+
+-- Claim every entity mapping present after the guarded insert as
+-- seed-acknowledged so no rerun ever installs it again. The claim insert
+-- follows the mapping insert on purpose: claiming first would suppress the
+-- initial seed. Rows the admin created are claimed the same way, so a
+-- deleted mapping stays deleted even if the pair is declared here later.
+INSERT IGNORE INTO external_reference_seed (subject_kind, subject_id, source)
+SELECT subject_kind, subject_id, source
+FROM external_reference
+WHERE subject_kind = 'TANAHPEDIA_ENTITY';

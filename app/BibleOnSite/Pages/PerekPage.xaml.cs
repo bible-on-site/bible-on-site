@@ -139,6 +139,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 ExitFullscreenButton = ExitFullScreenButton,
                 ArticlesView = ArticlesCollection,
                 ReaderContent = PerekCarousel,
+                // The perek hairline rides the reading content — the swap
+                // hides it while the articles view is up (#3364).
+                ReadingProgressIndicator = ReadingProgressBar,
                 Toolbar = ReaderToolbar,
                 Host = MainGrid,
                 ContentArea = ContentArea,
@@ -464,6 +467,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
         // Hide loading overlay — carousel is ready
         CarouselLoadingOverlay.Hide();
+        // Windows: a carousel realized mid Shell push can keep its items panel
+        // anchored at a stale offset — re-anchor natively once settled.
+        _carousel.ResnapAfterLoad();
 
         await ApplySearchReaderLocationAsync();
         _ = _viewModel.PreloadAdjacentPasukimAsync(_viewModel.PerekId);
@@ -657,6 +663,13 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             return pendingTarget.PerekId;
         }
 
+        // The deterministic E2E start chapter is a preference fallback, not
+        // an override of explicit navigation into another reader instance.
+        if (int.TryParse(Environment.GetEnvironmentVariable("BIBLE_E2E_PEREK"), out var e2ePerek)
+            && e2ePerek is > 0 and <= 929)
+        {
+            return e2ePerek;
+        }
         var prefs = PreferencesService.Instance;
         if (prefs.PerekToLoad == PerekToLoad.Todays)
         {
@@ -674,7 +687,16 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     protected override void OnNavigatedTo(NavigatedToEventArgs args)
     {
         base.OnNavigatedTo(args);
+        CarouselLoadingOverlay.ReaderNavigatedTo();
+        _carousel.ReaderNavigatedTo();
         SetAnalyticsScreenForPerek();
+    }
+
+    protected override void OnNavigatedFrom(NavigatedFromEventArgs args)
+    {
+        CarouselLoadingOverlay.ReaderNavigatedFrom();
+        _carousel.ReaderNavigatedFrom();
+        base.OnNavigatedFrom(args);
     }
 
 

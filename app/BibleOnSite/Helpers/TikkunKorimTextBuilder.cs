@@ -5,11 +5,12 @@ using Microsoft.Maui.Graphics;
 namespace BibleOnSite.Helpers;
 
 /// <summary>
-/// Builds the drawable word list for the continuous-flow "תיקון קוראים" view and
-/// provides reversible display-only stripping of niqqud and taamim.
-/// Canonical <see cref="Pasuk.Text"/> and <see cref="Pasuk.Segments"/> are never touched —
-/// each build re-derives its output from the original data, so toggling marks back on
-/// restores the marked text exactly.
+/// Builds the drawable word list for the continuous-flow "תיקון קוראים" view.
+/// The word list always carries the fully marked/cantillated text: it is the
+/// geometry input for measurement and layout, so it must not vary with mark
+/// visibility — hiding marks is a paint-time concern handled by
+/// <see cref="StripMarks"/> at the drawable (#3265). Canonical
+/// <see cref="Pasuk.Text"/> and <see cref="Pasuk.Segments"/> are never touched.
 /// </summary>
 public static class TikkunKorimTextBuilder
 {
@@ -59,8 +60,7 @@ public static class TikkunKorimTextBuilder
     /// </summary>
     public static IReadOnlyList<TikkunWord> BuildWords(
         IReadOnlyList<Pasuk>? pesukim,
-        bool repeatEachPasuk,
-        bool hideMarks)
+        bool repeatEachPasuk)
     {
         var words = new List<TikkunWord>();
         if (pesukim is null)
@@ -76,7 +76,7 @@ public static class TikkunKorimTextBuilder
 
             for (var copy = 0; copy < copies; copy++)
             {
-                AppendPasukWords(words, pasuk, hideMarks);
+                AppendPasukWords(words, pasuk);
             }
         }
         return words;
@@ -89,7 +89,7 @@ public static class TikkunKorimTextBuilder
     /// recognizers are irrelevant at word level — in תיקון קוראים a tap anywhere
     /// toggles marks and must never trigger selection or playback.
     /// </summary>
-    private static void AppendPasukWords(List<TikkunWord> words, Pasuk pasuk, bool hideMarks)
+    private static void AppendPasukWords(List<TikkunWord> words, Pasuk pasuk)
     {
         // Mirrors Pasuk.BuildFormattedText's spacing: a text segment joins the
         // previous word with no space only when the previous segment ended in a
@@ -113,18 +113,18 @@ public static class TikkunKorimTextBuilder
                     // Qri differs from ktiv: "(קְרִי: value)" with note styling —
                     // the note label pieces glue to the value (no space before ")").
                     AppendText(words, "(קְרִי: ", QriNoteColor, NoteFontScale, bold: false,
-                        hideMarks, joinPrevious);
+                        joinPrevious);
                     AppendText(words, DivineNameMasking.MaskText(segment.Value), reciting ? RecitingColor : QriNoteColor,
-                        1f, bold: false, hideMarks, glueToPrevious: false);
+                        1f, bold: false, glueToPrevious: false);
                     AppendText(words, ")", QriNoteColor, NoteFontScale, bold: false,
-                        hideMarks, glueToPrevious: true);
+                        glueToPrevious: true);
                     break;
 
                 case SegmentType.Ktiv:
                 case SegmentType.Qri: // same-as-ktiv qri — plain text
                     // הסתר שם השם applies at display time only — segments stay canonical.
                     AppendText(words, DivineNameMasking.MaskText(segment.Value), reciting ? RecitingColor : null,
-                        1f, bold: false, hideMarks, joinPrevious);
+                        1f, bold: false, joinPrevious);
                     break;
 
                 default:
@@ -142,16 +142,15 @@ public static class TikkunKorimTextBuilder
     /// the closing ")" of a qri note); empty pieces emit nothing.
     /// </summary>
     private static void AppendText(List<TikkunWord> words, string? text, Color? color,
-        float scale, bool bold, bool hideMarks, bool glueToPrevious)
+        float scale, bool bold, bool glueToPrevious)
     {
-        var value = hideMarks ? StripMarks(text) : text;
-        if (string.IsNullOrEmpty(value))
+        if (string.IsNullOrEmpty(text))
         {
             return;
         }
 
         var glue = glueToPrevious;
-        foreach (var piece in value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var piece in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
             if (glue && words.Count > 0 && words[^1].Kind == TikkunWordKind.Text)
             {

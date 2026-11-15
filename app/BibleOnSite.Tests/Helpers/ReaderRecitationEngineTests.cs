@@ -15,6 +15,35 @@ namespace BibleOnSite.Tests.Helpers;
 /// </summary>
 public class ReaderRecitationEngineTests
 {
+    [Theory]
+    [InlineData(7, 12)]
+    [InlineData(8, 11)]
+    public async Task RepeatedMoedPreview_TogglesOnlyItsOwnOccurrence_AndFocusResumesOnlyThatKey(
+        int sectionId, int rangeId)
+    {
+        await using var rig = await StartedRig();
+        var first = MoedDisplayRow.PasukRow(7, Canonical()[0], 1, 18, 10, 0, int.MaxValue, 11);
+        var repeated = MoedDisplayRow.PasukRow(sectionId, Canonical()[0], 1, 18, 10, 0, int.MaxValue, rangeId);
+        var clip = ClipFor() with { SectionId = first.SectionId, RangeId = first.RangeId };
+
+        await rig.Engine.PlayClipAsync(MoedRecitation.PasukKey(first), false, clip);
+        rig.Surface.RaiseOpened();
+        await rig.Engine.PlayClipAsync(MoedRecitation.PasukKey(first), false, clip);
+        rig.Surface.PauseCount.Should().Be(1);
+        rig.Decoder.ClipCalls.Should().Be(1);
+
+        await rig.Engine.PlayClipAsync(MoedRecitation.PasukKey(repeated), false,
+            clip with { SectionId = repeated.SectionId, RangeId = repeated.RangeId });
+        rig.Surface.RaiseOpened();
+
+        rig.Decoder.ClipCalls.Should().Be(2, "another occurrence must prepare instead of toggling the old clip");
+        rig.Surface.PauseCount.Should().Be(1);
+        rig.Engine.CurrentSegment!.SectionId.Should().Be(sectionId);
+        rig.Engine.CurrentSegment.RangeId.Should().Be(rangeId);
+        rig.Engine.Cursor.ResumesOnPasukFocus(MoedRecitation.PasukKey(first), false).Should().BeFalse();
+        rig.Engine.Cursor.ResumesOnPasukFocus(MoedRecitation.PasukKey(repeated), false).Should().BeTrue();
+    }
+
     private static string Hash(byte[] value) => Convert.ToHexStringLower(SHA256.HashData(value));
     private static byte[] Wav(byte[] pcm)
     {
@@ -182,29 +211,38 @@ public class ReaderRecitationEngineTests
         public List<(string Title, string Message)> Alerts { get; } = [];
         public ReaderRecitationEngine Engine { get; }
         public int DecoderFactoryCalls { get; private set; }
+        public int TickerFactoryCalls { get; private set; }
 
-        public Rig(InMemoryPreferencesStorage prefs)
+        /// <param name="pendingTrack">Also install a perek-2 track whose
+        /// alignment was never approved — playback falls back to the raw file
+        /// with no word timeline.</param>
+        public Rig(InMemoryPreferencesStorage prefs, string status = "ready", bool pendingTrack = false)
         {
             Preferences = PreferencesService.CreateForTesting(prefs);
             Preferences.Load();
             // Install one ready perek track: catalog drives IsInstalled/GetTrack,
             // the audio file at AudioPath drives HasAudio and the hash check.
             var audio = "approved audio"u8.ToArray();
-            var track = Track(1, audio);
-            var book = new RecitationBookPack(1, Hash("pack"u8.ToArray()), 4, [1]);
-            var catalog = new RecitationExtensionCatalog(1, new RecitationPackage(1, [track]), [book]);
+            var track = Track(1, audio, status);
+            List<RecitationTrack> tracks = pendingTrack ? [track, Track(2, audio, "pending")] : [track];
+            var book = new RecitationBookPack(1, Hash("pack"u8.ToArray()), 4,
+                pendingTrack ? [1, 2] : [1]);
+            var catalog = new RecitationExtensionCatalog(1, new RecitationPackage(1, tracks), [book]);
             Storage.PackageFiles[RecitationExtensionCatalog.FileName] =
                 System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(catalog,
                     RecitationJsonContext.Default.RecitationExtensionCatalog);
             Service = new RecitationService(Storage.FileSystem.Object, new Mock<IPadDeliveryService>().Object);
             var recordingsDir = Path.Join(Storage.Root, "extensions", "recitation");
             Directory.CreateDirectory(recordingsDir);
-            File.WriteAllBytes(Path.Join(recordingsDir, track.PlaybackFileName), audio);
+            foreach (var installed in tracks)
+            {
+                File.WriteAllBytes(Path.Join(recordingsDir, installed.PlaybackFileName), audio);
+            }
             var ownership = new PlaybackAudioOwnership(Platform, TimeSpan.Zero);
             Engine = new ReaderRecitationEngine(
                 Service, Preferences, ownership, new object(), Surface,
                 () => { DecoderFactoryCalls++; return Decoder; },
-                (_, tick) => { Ticker.TickAction = tick; return Ticker; },
+                (_, tick) => { TickerFactoryCalls++; Ticker.TickAction = tick; return Ticker; },
                 (title, message, _) => { Alerts.Add((title, message)); return Task.CompletedTask; });
         }
 
@@ -748,6 +786,296 @@ public class ReaderRecitationEngineTests
         rig.Surface.Volume.Should().Be(0.7, "no live player means nothing to push the preference onto");
     }
 
+    [Fact]
+    public async Task CurrentSegment_TracksTheLoadedClip_AndClearsOnStop()
+    {
+        await using var rig = await StartedRig();
+        var segment = SegmentFor();
+
+        rig.Engine.CurrentSegment.Should().BeNull("nothing is loaded before playback");
+
+        await rig.Engine.PlayClipAsync("chapter:1", continuous: true, segment);
+        rig.Surface.RaiseOpened();
+
+        // The page reads the loaded clip's section/range identity to map the
+        // highlight onto the playing occurrence.
+        rig.Engine.CurrentSegment.Should().BeSameAs(segment);
+
+        rig.Engine.StopPlayback();
+
+        rig.Engine.CurrentSegment.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task PlayClipAsync_SameKey_WhenPlayerGone_RepreparesInsteadOfToggling()
+    {
+        await using var rig = await StartedRig();
+        await rig.Engine.PlayClipAsync("chapter:1", continuous: true, SegmentFor());
+        rig.Surface.RaiseOpened();
+        rig.Surface.SetSourcePath(null);
+        rig.Surface.Exists = false;
+
+        // The player vanished but the key is still the same — the engine must
+        // re-prepare rather than toggle a dead pause state.
+        await rig.Engine.PlayClipAsync("chapter:1", continuous: true, SegmentFor());
+
+        rig.Surface.PauseCount.Should().Be(0);
+        rig.Surface.SourcePathValue.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task PlayClipAsync_SameKey_WhenPlayerStopped_RepreparesInsteadOfToggling()
+    {
+        await using var rig = await StartedRig();
+        await rig.Engine.PlayClipAsync("chapter:1", continuous: true, SegmentFor());
+        rig.Surface.RaiseOpened();
+        rig.Surface.CurrentState = RecitationPlaybackState.Stopped;
+
+        // The player exists but sits in a quiet state — the same key must
+        // re-prepare, not toggle a dead pause.
+        await rig.Engine.PlayClipAsync("chapter:1", continuous: true, SegmentFor());
+
+        rig.Surface.PauseCount.Should().Be(0);
+        rig.Surface.SourcePathValue.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task ResetSession_WithoutPlayback_CompletesQuietly()
+    {
+        await using var rig = await StartedRig();
+
+        // No clip ever ran, so no audio lease was ever materialized.
+        var act = () => rig.Engine.ResetSession();
+
+        act.Should().NotThrow();
+        rig.Platform.Activations.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ChapterPlay_WithoutTrack_AlertsWithoutSource()
+    {
+        await using var rig = await StartedRig();
+
+        await rig.Engine.PlayClipAsync("chapter:2", continuous: true, SegmentFor(perekId: 2));
+
+        rig.Alerts.Should().ContainSingle("a missing recording must surface the playback-failure alert");
+        rig.Surface.SourcePathValue.Should().BeNull();
+        rig.Engine.Cursor.PlayingKey.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ChapterPlay_WithVersePause_WithoutTrack_AlertsWithoutSource()
+    {
+        var prefs = new InMemoryPreferencesStorage();
+        prefs.Set("recitationVersePauseMs", 500.0);
+        await using var rig = new Rig(prefs);
+        await rig.Service.UpdateAsync(TestContext.Current.CancellationToken);
+
+        // With the verse-pause preference on, the range lookup reaches the
+        // track check even for a perek with no recording at all.
+        await rig.Engine.PlayClipAsync("chapter:2", continuous: true, SegmentFor(perekId: 2));
+
+        rig.Alerts.Should().ContainSingle();
+        rig.Surface.SourcePathValue.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task PasukPlay_MultiRange_WithVersePause_ScalesPauseIntoClip()
+    {
+        var prefs = new InMemoryPreferencesStorage();
+        prefs.Set("recitationVersePauseMs", 500.0);
+        await using var rig = new Rig(prefs);
+        await rig.Service.UpdateAsync(TestContext.Current.CancellationToken);
+
+        await rig.Engine.PlayClipAsync("pasuk:1:1-2", continuous: true,
+            SegmentFor(ranges: [(100, 800), (900, 1800)]));
+        rig.Surface.RaiseOpened();
+
+        // Multiple approved intervals plus a verse pause decode a composite
+        // clip whose timeline carries the pause-scaled layout.
+        rig.Decoder.ClipCalls.Should().Be(1);
+        rig.Surface.PlayCount.Should().Be(1);
+        rig.Engine.TimelinePerekId.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task PrepareFinishes_WhenAvailabilityLost_LoadsNothing()
+    {
+        await using var rig = await StartedRig();
+        rig.Decoder.ClipGate = new TaskCompletionSource();
+        rig.Decoder.HonorCancellation = false;
+
+        var play = rig.Engine.PlayClipAsync("pasuk:1:1", continuous: true, ClipFor());
+        // The recitation flag drops while the decode is parked — the finished
+        // clip must not load a source.
+        rig.Preferences.QriynotEnabled = false;
+        rig.Decoder.ClipGate.SetResult();
+        await play;
+
+        rig.Surface.SourcePathValue.Should().BeNull();
+        rig.Surface.PlayCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ChapterPlay_UnreadyTrack_PlaysRawFileWithoutTimeline()
+    {
+        await using var rig = new Rig(new InMemoryPreferencesStorage(), status: "pending");
+        await rig.Service.UpdateAsync(TestContext.Current.CancellationToken);
+
+        await rig.Engine.PlayClipAsync("chapter:1", continuous: true, SegmentFor());
+        rig.Surface.RaiseOpened();
+
+        // An unapproved alignment still plays the chapter file — just with no
+        // word timeline, so the playing state never arms the highlight ticker.
+        rig.Decoder.ClipCalls.Should().Be(0);
+        rig.Surface.PlayCount.Should().Be(1);
+        rig.Surface.RaiseState(RecitationPlaybackState.Playing);
+        rig.TickerFactoryCalls.Should().Be(0, "no timeline means no highlight ticker");
+    }
+
+    [Fact]
+    public async Task Tick_WithUnreadyTrackTimeline_KeepsHighlightEmpty()
+    {
+        await using var rig = new Rig(new InMemoryPreferencesStorage(), pendingTrack: true);
+        await rig.Service.UpdateAsync(TestContext.Current.CancellationToken);
+
+        // Arm the ticker callback through a ready clip, then load the pending
+        // perek whose timeline is null.
+        await rig.Engine.PlayClipAsync("chapter:1", continuous: true, SegmentFor());
+        rig.Surface.RaiseOpened();
+        rig.Surface.RaiseState(RecitationPlaybackState.Playing);
+        rig.TickerFactoryCalls.Should().Be(1);
+
+        await rig.Engine.PlayClipAsync("chapter:2", continuous: true, SegmentFor(perekId: 2));
+        rig.Surface.RaiseOpened();
+        rig.Engine.TimelinePerekId.Should().Be(2);
+        rig.Surface.RaiseState(RecitationPlaybackState.Playing);
+
+        // A stale tick while a timeline-less clip plays must not throw or
+        // resurrect a word.
+        rig.Ticker.Tick();
+
+        rig.Engine.HighlightedWord.Should().BeNull();
+        rig.Surface.Refreshes.Should().BeGreaterThan(0);
+    }
+
+    [Theory]
+    [InlineData(RecitationPlaybackState.None, false)]
+    [InlineData(RecitationPlaybackState.Stopped, false)]
+    [InlineData(RecitationPlaybackState.Failed, false)]
+    [InlineData(RecitationPlaybackState.Paused, true)]
+    public async Task StateChanged_QuietVariants_UpdateHighlightAndIdleLease(
+        RecitationPlaybackState state, bool retainsHighlight)
+    {
+        await using var rig = await StartedRig();
+        await rig.Engine.PlayClipAsync("chapter:1", continuous: true, SegmentFor());
+        rig.Surface.RaiseOpened();
+        rig.Surface.RaiseState(RecitationPlaybackState.Playing);
+        rig.Surface.Position = TimeSpan.FromMilliseconds(500);
+        rig.Ticker.Tick();
+        var word = rig.Engine.HighlightedWord;
+        word.Should().NotBeNull("each transition must start with a visible playing word");
+        var stops = rig.Ticker.Stops;
+        var idles = rig.Platform.Deactivations;
+
+        rig.Surface.RaiseState(state);
+
+        if (retainsHighlight)
+        {
+            rig.Engine.HighlightedWord.Should().BeSameAs(word, "pause preserves the resume position");
+        }
+        else
+        {
+            rig.Engine.HighlightedWord.Should().BeNull();
+        }
+
+        rig.Ticker.Stops.Should().BeGreaterThan(stops);
+        await WaitForAsync(() => rig.Platform.Deactivations > idles);
+        rig.Platform.Deactivations.Should().BeGreaterThan(idles);
+    }
+
+    [Fact]
+    public async Task StateChanged_PlayingAgain_ReusesTheSameTicker()
+    {
+        await using var rig = await StartedRig();
+        await rig.Engine.PlayClipAsync("chapter:1", continuous: true, SegmentFor());
+        rig.Surface.RaiseOpened();
+
+        rig.Surface.RaiseState(RecitationPlaybackState.Playing);
+        rig.Surface.RaiseState(RecitationPlaybackState.Paused);
+        rig.Surface.RaiseState(RecitationPlaybackState.Playing);
+
+        rig.TickerFactoryCalls.Should().Be(1, "the ticker instance is created once and reused");
+        rig.Ticker.Starts.Should().Be(2);
+        rig.Ticker.Stops.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task MediaEnded_WhileTickerRuns_StopsIt()
+    {
+        await using var rig = await StartedRig();
+        await rig.Engine.PlayClipAsync("chapter:1", continuous: true, SegmentFor());
+        rig.Surface.RaiseOpened();
+        rig.Surface.RaiseState(RecitationPlaybackState.Playing);
+
+        rig.Surface.RaiseEnded();
+
+        rig.Ticker.Stops.Should().BeGreaterThan(0, "clearing the highlight stops the ticker");
+    }
+
+    [Fact]
+    public async Task UpdateHighlight_WithoutSubscriber_StillTracksWord()
+    {
+        var prefs = new InMemoryPreferencesStorage();
+        prefs.Set("recitationVersePauseMs", 500.0);
+        await using var rig = new Rig(prefs);
+        await rig.Service.UpdateAsync(TestContext.Current.CancellationToken);
+
+        await rig.Engine.PlayClipAsync("chapter:1", continuous: true, SegmentFor());
+        rig.Surface.RaiseOpened();
+        rig.Surface.RaiseState(RecitationPlaybackState.Playing);
+        rig.Surface.Position = TimeSpan.FromMilliseconds(500);
+        rig.Ticker.Tick();
+
+        // No WordChanged subscriber — the property still tracks the word.
+        rig.Engine.HighlightedWord.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task UpdateHighlight_WithoutPlayingKeyOrPlayer_ReturnsEarly()
+    {
+        await using var rig = await StartedRig();
+        await rig.Engine.PlayClipAsync("chapter:1", continuous: true, SegmentFor());
+        rig.Surface.RaiseOpened();
+        rig.Surface.RaiseState(RecitationPlaybackState.Playing);
+        var refreshes = rig.Surface.Refreshes;
+
+        // The platform player vanished mid-play.
+        rig.Surface.Exists = false;
+        rig.Ticker.Tick();
+        rig.Surface.Refreshes.Should().Be(refreshes, "no player means nothing to refresh");
+
+        // The clip ended — a stale tick must not reach the player either.
+        rig.Surface.Exists = true;
+        rig.Engine.StopPlayback();
+        rig.Ticker.Tick();
+        rig.Surface.Refreshes.Should().Be(refreshes, "no playing key means nothing to refresh");
+        rig.Engine.HighlightedWord.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task StateChanged_QuietState_WithoutPlayer_SkipsHighlightClear()
+    {
+        await using var rig = await StartedRig();
+        rig.Surface.Exists = false;
+
+        // A quiet state arriving before the platform player exists still has
+        // nothing to clear — the highlight check is player-gated.
+        var act = () => rig.Surface.RaiseState(RecitationPlaybackState.Stopped);
+
+        act.Should().NotThrow();
+        rig.Engine.HighlightedWord.Should().BeNull();
+    }
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
