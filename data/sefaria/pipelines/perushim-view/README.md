@@ -284,6 +284,21 @@ the matching catalog/notes/search SQLite triple with
 artifact and is not committed. Updating only one catalog before generating the
 remaining outputs intentionally fails the baseline identity check.
 
+### Verify a published update
+
+Generation and publication are separate checks. Successful producer jobs and
+uploaded baseline artifacts do not mean that a production update was deployed.
+
+- Follow the normal master push CI through Cross Module CI and Release Data.
+  A skipped release job does not import its generated pack.
+- Match the data deployment to its source commit, CI run and attempt, and the
+  immutable SQL artifact ID and digest. Confirm the production deployment result.
+- Follow the matching website release through deployment, then check the serving
+  version, published work IDs, canonical commentary pages and live sitemap.
+- Follow native release and distribution status separately. Keep catalog, notes
+  and search fingerprints aligned; web numeric work IDs belong to another
+  namespace and must not be used to identify native notes.
+
 ### Excluded Titles
 
 The match stage excludes titles for several reasons (see `stage_match_index.rs` for details):

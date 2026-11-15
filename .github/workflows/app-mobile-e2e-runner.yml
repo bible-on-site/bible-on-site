@@ -186,7 +186,10 @@ jobs:
         if: inputs.platform == 'iOS'
         # The .NET 11 iOS workload (27.2.x) requires the newest Xcode 27.x the
         # image carries; sort -V picks 27.2 over 27.0 when both are present.
-        run: sudo xcode-select --switch "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)/Contents/Developer"
+        run: |
+          XCODE_DIR="$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)/Contents/Developer"
+          sudo xcode-select --switch "$XCODE_DIR"
+          echo "DEVELOPER_DIR=$XCODE_DIR" >> "$GITHUB_ENV"
 
       # Xcode or the workload invalidates compiled intermediates — stamp every
       # iOS cache key with the toolchain so a mismatched restore can't happen.

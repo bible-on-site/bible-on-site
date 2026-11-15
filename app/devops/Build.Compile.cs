@@ -217,6 +217,7 @@ partial class Build
                 {
                     BuildE2ECoverageRecorder("Debug");
                     properties["E2ECoverage"] = "true";
+                    E2eXamlCompilation.Configure(properties);
                 }
                 DotNetBuild(s => s
                     .SetProjectFile(MainProject)
@@ -225,7 +226,13 @@ partial class Build
 
                 if (MobileE2ECoverage)
                 {
-                    PublishE2ECoverageBuildArtifacts();
+                    // Inspect the delivered IL, after XamlC and coverage weaving:
+                    // Debug's validation-only task otherwise leaves runtime inflation.
+                    var assemblyPath = SourceDirectory / "bin" / "Debug"
+                        / (string)properties["TargetFrameworks"]
+                        / (string)properties["RuntimeIdentifier"] / "BibleOnSite.dll";
+                    E2eXamlCompilation.VerifyPerekPage(assemblyPath);
+                    PublishE2ECoverageBuildArtifacts(assemblyPath);
                 }
             }
             finally
@@ -345,7 +352,7 @@ partial class Build
     /// source lines; its module hash only matches the assembly built in this
     /// exact pass, so it always travels with the build.
     /// </summary>
-    void PublishE2ECoverageBuildArtifacts()
+    void PublishE2ECoverageBuildArtifacts(string assemblyPath)
     {
         // The intermediate output path is empty in single-TFM global-property builds, so glob the project directory for either layout.
         var templates = SourceDirectory.GlobFiles("**/e2e-coverage/template.opencover.xml");
@@ -355,10 +362,11 @@ partial class Build
                 "E2E coverage instrumentation did not produce a template; " +
                 "the app was not built with -p:E2ECoverage=true.");
         }
+        var template = templates.OrderByDescending(t => File.GetLastWriteTimeUtc(t)).First();
+        E2eCoverageBuildValidation.Verify(assemblyPath, template);
         var coverageApp = MobileE2EArtifactsDirectory / "coverage-app";
         coverageApp.CreateOrCleanDirectory();
-        templates.OrderByDescending(t => File.GetLastWriteTimeUtc(t)).First()
-            .Copy(coverageApp / "template.opencover.xml", ExistsPolicy.FileOverwrite);
+        template.Copy(coverageApp / "template.opencover.xml", ExistsPolicy.FileOverwrite);
 
         var manifest = new Dictionary<string, object?>
         {

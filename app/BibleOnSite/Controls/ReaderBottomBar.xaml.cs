@@ -63,7 +63,9 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
 
     public ReaderBottomBar()
     {
+        DebugLog.Write("[Startup] ReaderBottomBar InitializeComponent");
         InitializeComponent();
+        DebugLog.Write("[Startup] ReaderBottomBar XAML initialized");
         // The bar fill is resolved from the requested theme inside
         // BottomBarDrawable.Draw — repaint it when the theme flips (#2601).
         if (Microsoft.Maui.Controls.Application.Current is { } app)
@@ -77,6 +79,7 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
             };
             Unloaded += (_, _) => app.RequestedThemeChanged -= OnAppRequestedThemeChanged;
         }
+        DebugLog.Write("[Startup] ReaderBottomBar constructed");
     }
 
     private void OnAppRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e) =>

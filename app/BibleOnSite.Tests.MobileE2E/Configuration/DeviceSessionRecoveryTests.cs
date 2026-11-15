@@ -128,6 +128,68 @@ public sealed class DeviceSessionRecoveryTests
     }
 
     [Fact]
+    public async Task RefusedReadinessEndpointDoesNotReacquireOrInvokeTransportRecovery()
+    {
+        var session = new FakeSession(_artifacts);
+        var test = new ReadinessDeviceTest(new ListOutput(_log), session);
+        var previous = MobileDeviceTest.TransportRecovery;
+        var recoveries = 0;
+        MobileDeviceTest.TransportRecovery = _ =>
+        {
+            recoveries++;
+            return true;
+        };
+        try
+        {
+            var failure = await Assert.ThrowsAsync<ReaderStartupTimeoutException>(() => test.InitializeAsync().AsTask());
+            Assert.Contains("did not settle within 45 seconds", failure.Message);
+            Assert.Contains("Connection refused (127.0.0.1:4787)", failure.Message);
+            Assert.False(DeviceSessionDeath.Matches(failure));
+            Assert.False(DeviceTransportLoss.Matches(failure));
+            Assert.Equal(1, test.Connects);
+            Assert.Equal(1, session.Acquisitions);
+            Assert.Equal(0, recoveries);
+            Assert.DoesNotContain(_log, line => line.Contains("acquiring it once more"));
+        }
+        finally
+        {
+            MobileDeviceTest.TransportRecovery = previous;
+        }
+    }
+
+    [Fact]
+    public async Task OccupiedStartupArtifactPathCannotReplaceTheReadinessTimeout()
+    {
+        File.WriteAllText(_artifacts, "existing file must survive");
+        var session = new FakeSession(_artifacts);
+        var failure = new ReaderStartupTimeoutException("7cc4c496-4e24-478c-93eb-d62e9ec0077c",
+            DateTimeOffset.UtcNow, "Reader startup timed out: Connection refused (127.0.0.1:4787)");
+        var test = new StartupFaultDeviceTest(new ListOutput(_log), session, failure);
+        var previous = MobileDeviceTest.TransportRecovery;
+        var recoveries = 0;
+        MobileDeviceTest.TransportRecovery = _ =>
+        {
+            recoveries++;
+            return true;
+        };
+        try
+        {
+            var thrown = await Assert.ThrowsAsync<ReaderStartupTimeoutException>(() => test.InitializeAsync().AsTask());
+            Assert.Same(failure, thrown);
+            Assert.Equal(1, test.Connects);
+            Assert.Equal(1, session.Acquisitions);
+            Assert.Equal(0, recoveries);
+            Assert.Equal("existing file must survive", File.ReadAllText(_artifacts));
+            Assert.Contains(_log, line => line.Contains("Failure diagnostics failed"));
+        }
+        finally
+        {
+            MobileDeviceTest.TransportRecovery = previous;
+            File.Delete(_artifacts);
+        }
+    }
+
+    [Fact]
     public async Task ASecondStartupDeathStillFails()
     {
         _test.ConnectFailures.Enqueue(new UnknownErrorException("invalid session id"));
@@ -240,6 +302,19 @@ public sealed class DeviceSessionRecoveryTests
         Assert.Equal("1", session.LastEnvironment?["BIBLE_E2E_PERUSHIM"]);
     }
 
+    [Fact]
+    public void StartupIdentityReachesTheRestartAlongsideScenarioEnvironment()
+    {
+        var session = new FakeSession(_artifacts);
+        var test = new EnvironmentDeviceTest(new ListOutput(_log), session);
+        var launchId = Guid.NewGuid().ToString("D");
+
+        test.Reacquire(launchId);
+
+        Assert.Equal("1", session.LastEnvironment?["BIBLE_E2E_PERUSHIM"]);
+        Assert.Equal(launchId, session.LastEnvironment?[ReaderStartupReadiness.LaunchIdEnvironmentVariable]);
+    }
+
     private sealed class ListOutput(List<string> lines) : ITestOutputHelper
     {
         public string Output => string.Join("\n", lines);
@@ -257,9 +332,13 @@ public sealed class DeviceSessionRecoveryTests
             MobilePlatform.Android, "/test/app", "test-device", artifacts,
             new Uri("http://127.0.0.1:4723"));
         public AppiumDriver? Driver => null;
+        public int Acquisitions { get; private set; }
         public IReadOnlyDictionary<string, string>? LastEnvironment { get; private set; }
-        public void Acquire(IReadOnlyDictionary<string, string>? environment) =>
+        public void Acquire(IReadOnlyDictionary<string, string>? environment)
+        {
+            Acquisitions++;
             LastEnvironment = environment;
+        }
     }
 
     private sealed class FakeDeviceTest(ITestOutputHelper output, IMobileDeviceSession session)
@@ -285,5 +364,36 @@ public sealed class DeviceSessionRecoveryTests
         protected override IReadOnlyDictionary<string, string> LaunchEnvironment =>
             new Dictionary<string, string> { ["BIBLE_E2E_PERUSHIM"] = "1" };
         public void Reacquire() => AcquireSession();
+        public void Reacquire(string launchId) => AcquireSession(launchId);
+    }
+
+    private sealed class ReadinessDeviceTest(ITestOutputHelper output, IMobileDeviceSession session)
+        : MobileDeviceTest(output, session)
+    {
+        public int Connects { get; private set; }
+        protected override void Connect()
+        {
+            Connects++;
+            AcquireSession();
+            var elapsed = TimeSpan.Zero;
+            ReaderStartupReadiness.WaitForReady("7cc4c496-4e24-478c-93eb-d62e9ec0077c", TimeSpan.FromSeconds(45),
+                _ =>
+                {
+                    elapsed = TimeSpan.FromSeconds(45);
+                    throw new HttpRequestException("Connection refused (127.0.0.1:4787)");
+                }, () => elapsed, _ => throw new InvalidOperationException("The readiness budget is already exhausted."));
+        }
+    }
+
+    private sealed class StartupFaultDeviceTest(ITestOutputHelper output, IMobileDeviceSession session,
+        ReaderStartupTimeoutException failure) : MobileDeviceTest(output, session)
+    {
+        public int Connects { get; private set; }
+        protected override void Connect()
+        {
+            Connects++;
+            AcquireSession();
+            throw failure;
+        }
     }
 }
