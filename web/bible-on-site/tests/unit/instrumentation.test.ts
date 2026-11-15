@@ -84,6 +84,15 @@ describe("instrumentation register", () => {
 });
 
 describe("sefarim corpus boot load", () => {
+	it("does not load the corpus on the production edge runtime", async () => {
+		process.env.NEXT_RUNTIME = "edge";
+		setNodeEnv("production");
+		const before = importCount();
+		const register = await freshRegister();
+		await register();
+		expect(importCount()).toBe(before);
+	});
+
 	it("loads the corpus during register on production nodejs", async () => {
 		process.env.NEXT_RUNTIME = "nodejs";
 		setNodeEnv("production");
