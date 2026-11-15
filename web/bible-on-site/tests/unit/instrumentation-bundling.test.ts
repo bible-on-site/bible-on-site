@@ -11,6 +11,10 @@ const require = createRequire(__filename);
 const { webpack } = require("next/dist/compiled/webpack/webpack") as {
 	webpack: ((config: Record<string, unknown>) => {
 		run: (cb: (err: Error | null, stats: WebpackStatsLike) => void) => void;
+		close: (cb: (err: Error | null) => void) => void;
+		hooks: {
+			shouldEmit: { tap: (name: string, callback: () => boolean) => void };
+		};
 	}) & {
 		DefinePlugin: new (defs: Record<string, string>) => unknown;
 	};
@@ -92,16 +96,21 @@ function compileInstrumentation(
 			}),
 		],
 	});
+	// The sealed graph is the assertion target, so do not write its unused chunks.
+	// This still resolves, builds and generates code for every real module.
+	compiler.hooks.shouldEmit.tap("InstrumentationGraphOnly", () => false);
 	return new Promise((resolve, reject) => {
 		compiler.run((err, stats) => {
-			if (err) reject(err);
-			else resolve(stats);
+			compiler.close((closeError) => {
+				if (err || closeError) reject(err || closeError);
+				else resolve(stats);
+			});
 		});
 	});
 }
 
 function moduleNames(stats: WebpackStatsLike): string[] {
-	return (stats.toJson({ modules: true }).modules ?? [])
+	return (stats.toJson({ all: false, modules: true }).modules ?? [])
 		.map((m) => m.name ?? "")
 		.filter(Boolean);
 }
@@ -110,7 +119,7 @@ describe("instrumentation bundling", () => {
 	it("excludes the Node-only diagnostics module from the edge bundle", async () => {
 		const stats = await compileInstrumentation("edge");
 		const errors = stats
-			.toJson({ errors: true })
+			.toJson({ all: false, errors: true })
 			.errors?.map((e) => e.message ?? "");
 		expect({ errors, hasErrors: stats.hasErrors() }).toEqual({
 			errors: [],
@@ -134,7 +143,7 @@ describe("instrumentation bundling", () => {
 		expect(
 			moduleNames(stats).some((n) => n.includes("event-loop-diagnostics")),
 		).toBe(true);
-		const modules = stats.toJson({ modules: true }).modules ?? [];
+		const modules = stats.toJson({ all: false, modules: true }).modules ?? [];
 		expect(modules.some((m) => m.name?.includes("data/db/sefarim.ts"))).toBe(
 			true,
 		);
