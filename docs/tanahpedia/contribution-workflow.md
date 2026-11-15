@@ -238,8 +238,10 @@ changing the proposal's review revision. During a rolling deployment, a server
 only claims and executes bundles/API versions it implements exactly; older
 servers leave newer work intact. Protocol-1 issue generation remains available
 only for legacy task records. It cannot claim assignment-driven protocol-2 jobs.
-Deploy the admin before upgrading the workstation worker, then verify a fresh
-assignment and comment pass. Retain the previous worker file for rollback.
+For the initial protocol-2 rollout, pause existing workstation workers before
+deploying admin: pre-feature servers do not recognize the new job envelope.
+Wait until the old admin tasks have drained, then upgrade and resume the worker
+and verify a fresh assignment and comment pass. Retain the previous worker file.
 
 ## API evolution
 
@@ -382,10 +384,15 @@ upgrade/recovery path is restored. Existing public routes are preserved by the
 deployment; later reviewed alias or new-entry operations have the effects shown
 in their domain diffs.
 
-For an agent-runtime rollback, stop the newer workstation worker and restore its
-previous executable before starting it again. Retain registry, bundles and queued
-jobs. Older servers skip unsupported bundles instead of downgrading registrations
-or executing newer work; restore the matching admin/worker release to resume it.
+For a rollback between version-aware agent releases, stop the newer workstation
+worker and restore its previous executable before starting it again. Retain
+registry, bundles and queued jobs. Version-aware servers skip unsupported bundles
+instead of downgrading registrations or executing newer work; restore the matching
+admin/worker release to resume it. Rolling back to the pre-feature admin
+`0.1.195` requires keeping contribution automation and workstation workers paused
+until protocol 2 is restored: that older image lacks these task gates. Do not
+resume old generation or merge agent-assigned proposals on that image while new
+jobs remain pending. Existing public content remains available during this pause.
 This release creates no new IAM grants, Cognito clients or public content routes.
 
 For configuration rollback, restore the prior writable Cognito client/resource
