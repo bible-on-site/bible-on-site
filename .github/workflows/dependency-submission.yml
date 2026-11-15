@@ -60,12 +60,9 @@ jobs:
       - name: 'Setup .NET'
         uses: actions/setup-dotnet@v6
         with:
-          # The head leg pins the PR's bumped SDK literally. The base leg's
-          # merge-base checkout has its own global.json still pinning the
-          # previous SDK under rollForward: disable — read it so the installed
-          # SDK satisfies that tree's resolver instead of failing the first
-          # dotnet invocation.
-          dotnet-version: ${{ matrix.source == 'base' && '' || '10.0.404' }}
+          # Each leg reads the SDK pin from whichever tree is checked out —
+          # head's global.json bumps the SDK while the merge-base checkout
+          # still pins the previous one under rollForward: disable.
           global-json-file: global.json
       - name: 'Setup Java for the Android workload'
         uses: actions/setup-java@v6
@@ -75,10 +72,26 @@ jobs:
           java-version: "17"
           verify-signature: true
       - name: 'Install MAUI Android workload'
-        run: dotnet workload install maui-android
+        # The head leg pins the workload set matching its SDK band; the base
+        # leg resolves whatever set its merge-base SDK band serves. Foreign-band
+        # sdk-manifests claiming the same packs abort the install — drop them.
+        run: |
+          band=$(dotnet --version)
+          if [ "${{ matrix.source }}" = 'head' ]; then
+            for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "$band" ] || sudo rm -rf "$d"; done
+            dotnet workload update
+            dotnet workload install maui-android --version "$band.1"
+          else
+            dotnet workload install maui-android
+          fi
       - name: 'Restore NuGet projects'
         run: |
-          dotnet restore app/BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
+          # Read the Android TFM from whichever tree is checked out — the
+          # merge-base targets an older .NET, head the current one — so the
+          # restore always matches the snapshot instead of pinning a version.
+          TFM=$(grep -o 'net[0-9.]*-android' app/BibleOnSite/BibleOnSite.csproj | head -1)
+          echo "Restoring $TFM for ${{ matrix.source }}"
+          dotnet restore app/BibleOnSite/BibleOnSite.csproj -p:TargetFramework=$TFM -p:RuntimeIdentifiers=android-arm64 -r android-arm64 -p:PublishReadyToRun=true
           dotnet restore app/BibleOnSite.Tests/BibleOnSite.Tests.csproj
           dotnet restore app/BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj -p:EnableWindowsTargeting=true
           dotnet restore app/BibleOnSite.Tests.MobileE2E/BibleOnSite.Tests.MobileE2E.csproj

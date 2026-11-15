@@ -103,11 +103,64 @@ test("quiesce refuses to save when a test app survives the uninstall pass", asyn
   assert.ok(!ran.includes("simctl shutdown AAA"));
 });
 
-test("quiesce does not capture a device that never reached Booted", async () => {
+test("quiesce boots a device the lifecycle measurement powered off, then captures it", async () => {
+  const apps = JSON.stringify({
+    "com.tanah.daily929": {},
+    "com.apple.mobilesafari": {},
+  });
+  const clean = JSON.stringify({ "com.apple.mobilesafari": {} });
+  // The first read sees the measurement's shutdown; the boot wait then
+  // observes the transition to Booted and the final wait sees Shutdown.
+  const states = ["Shutdown", "Booting", "Booted", "Shutdown"];
+  const ran = [];
+  let listings = 0;
   const saved = await quiesce({
     udid: "AAA",
     expectedUdid: "AAA",
-    run: () => Buffer.from(JSON.stringify({ devices: { [runtime]: [{ udid: "AAA", state: "Shutdown" }] } })),
+    sleep: () => Promise.resolve(),
+    dirExists: () => true,
+    run: (command, args) => {
+      ran.push(args.join(" "));
+      if (args[0] === "simctl" && args[1] === "listapps") return Buffer.from("<plist/>");
+      if (command === "plutil") return Buffer.from(++listings === 1 ? apps : clean);
+      if (args[1] === "list") {
+        const state = states.length > 1 ? states.shift() : states[0];
+        return Buffer.from(JSON.stringify({ devices: { [runtime]: [{ udid: "AAA", state }] } }));
+      }
+      return Buffer.from("");
+    },
+  });
+  assert.equal(saved, true);
+  const boot = ran.indexOf("simctl boot AAA");
+  const uninstall = ran.indexOf("simctl uninstall AAA com.tanah.daily929");
+  assert.ok(boot !== -1 && uninstall !== -1 && boot < uninstall);
+  assert.ok(ran.includes("simctl shutdown AAA"));
+});
+
+test("quiesce does not capture when the measured shutdown device cannot boot", async () => {
+  const saved = await quiesce({
+    udid: "AAA",
+    expectedUdid: "AAA",
+    run: (command, args) => {
+      if (args[1] === "boot") throw new Error("boot failed");
+      return Buffer.from(JSON.stringify({ devices: { [runtime]: [{ udid: "AAA", state: "Shutdown" }] } }));
+    },
   });
   assert.equal(saved, false);
+});
+
+test("quiesce does not capture a device that never reached Booted", async () => {
+  const ran = [];
+  const saved = await quiesce({
+    udid: "AAA",
+    expectedUdid: "AAA",
+    timeout: 0,
+    run: (command, args) => {
+      ran.push(args.join(" "));
+      return Buffer.from(JSON.stringify({ devices: { [runtime]: [{ udid: "AAA", state: "Shutdown" }] } }));
+    },
+  });
+  assert.equal(saved, false);
+  // A powered-off device is offered the boot path before the refusal.
+  assert.ok(ran.includes("simctl boot AAA"));
 });

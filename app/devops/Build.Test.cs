@@ -78,7 +78,7 @@ partial class Build
         // Prebuilt consumers have complete runnable assembly output, but
         // no NuGet imports. Project evaluation would change NUKE's output
         // directory and require test-platform package targets unnecessarily.
-        var harnessDirectory = RootDirectory / "BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0";
+        var harnessDirectory = RootDirectory / "BibleOnSite.Tests.MobileE2E/bin/Debug/net11.0";
         // No --stop-on-fail: MTP reports never-run tests as skipped rather than
         // failed, so aborting on the first failure would hide the rest of the
         // shard's results. Every selected test runs once.

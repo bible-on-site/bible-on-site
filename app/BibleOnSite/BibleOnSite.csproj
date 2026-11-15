@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net10.0-android;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
+		<TargetFrameworks>net11.0-android;net11.0-ios;net11.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net11.0-windows10.0.19041.0</TargetFrameworks>
 		<!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
-		<!-- <TargetFrameworks>$(TargetFrameworks);net10.0-tizen</TargetFrameworks> -->
+		<!-- <TargetFrameworks>$(TargetFrameworks);net11.0-tizen</TargetFrameworks> -->
 
 		<!-- Note for MacCatalyst:
 		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
@@ -114,27 +114,16 @@
 		<WindowsPackageType Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">None</WindowsPackageType>
 
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">23.0</SupportedOSPlatformVersion>
+		<!-- .NET 11 / MAUI 11 raised the platform minimums: Android 24, Mac Catalyst 17, iOS 15. -->
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">17.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
 		<!-- For Release: embed assemblies in APK. For Debug: use Fast Deployment (much faster iteration) -->
 		<EmbedAssembliesIntoApk Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">true</EmbedAssembliesIntoApk>
-		<!-- Android Release: profiled AOT. The .NET 10 SDK (Microsoft.Android.Sdk 36.x)
-		     already defaults RunAOTCompilation + AndroidEnableProfiledAot to true for
-		     Release on the MonoVM runtime and feeds the bundled dotnet.aotprofile into
-		     the compiler — the pins below keep that behavior explicit and durable:
-		     the SDK default only applies while '$(_AndroidRuntime)' == 'MonoVM', so a
-		     future CoreCLR/PublishAot experiment or SDK default change would otherwise
-		     silently drop AOT back to JIT. The UseMonoRuntime guard keeps the pin
-		     inert if someone explicitly opts out of MonoVM on the command line.
-		     Full AOT (AndroidEnableProfiledAot=false) is not an option: the linker
-		     emits zero-RVA method stubs (e.g. System.Net.Requests.HttpWebRequest
-		     local functions) that abort mono-aot-cross with exit 1.
-		     AndroidStripILAfterAOT is deliberately NOT set: profiled AOT only
-		     precompiles profiled methods, so JIT fallback for everything else
-		     (including non-profiled generic instantiations) needs the IL kept
-		     in the embedded assemblies. -->
-		<RunAOTCompilation Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release' AND '$(UseMonoRuntime)' != 'false'">true</RunAOTCompilation>
-		<AndroidEnableProfiledAot Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release' AND '$(UseMonoRuntime)' != 'false'">true</AndroidEnableProfiledAot>
+		<!-- Android runtime: .NET 11 removes MonoVM — net11.0-android always runs
+		     CoreCLR (NETSDK1242). The Mono profiled-AOT pins (RunAOTCompilation,
+		     AndroidEnableProfiledAot, AndroidStripILAfterAOT) no longer exist for
+		     this target and would fail with XA1044; CoreCLR relies on its own
+		     R2R/tiered compilation instead. -->
 		<!-- Android Release: R8 shrinks the Java/Kotlin DEX (AndroidX, Firebase, Media3,
 		     Glide, Play Asset Delivery bindings) instead of plain D8 dexing (#2355):
 		     uncompressed DEX 25.4 -> 14.0 MB, arm64 install download -3.8 MB, installed
@@ -152,7 +141,7 @@
 		     members while preserving every class/interface name and all
 		     public/protected members — the exact surface JNI/ACW callbacks and the
 		     SDK's generated keep rules cover. Requires Microsoft.Android.Sdk
-		     36.1.118+ (workload set 10.0.402.1); older SDKs silently ignore the
+		     36.1.118+ (the .NET 11 set 11.0.100.1 ships 37.2.x); older SDKs silently ignore the
 		     property, so the _RequireR8ObfuscationSdkSupport target below fails
 		     Release builds on stale workloads. The SDK embeds mapping.txt as
 		     BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map and
@@ -186,7 +175,7 @@
 	</PropertyGroup>
 
 	<!-- #2708: AndroidR8ObfuscationMode only exists in Microsoft.Android.Sdk
-	     36.1.118+ (workload set 10.0.402.1); on older packs the property is a
+	     36.1.118+ (the .NET 11 set 11.0.100.1 ships 37.2.x); on older packs the property is a
 	     silent no-op and the build would ship a non-obfuscated bundle that looks
 	     compliant on paper. Fail instead of silently shipping -dontobfuscate.
 	     The version suffix is stripped so preview SDKs (e.g. 37.0.0-rc.1) compare
@@ -196,7 +185,7 @@
 		<Error Condition="'$(AndroidNETSdkVersion)' == ''"
 				Text="AndroidR8ObfuscationMode='$(AndroidR8ObfuscationMode)' requires the Android workload to report its SDK version; none was found." />
 		<Error Condition="'$(AndroidNETSdkVersion)' != '' AND $([MSBuild]::VersionLessThan($(AndroidNETSdkVersion.Split('-')[0]), '36.1.118'))"
-				Text="AndroidR8ObfuscationMode='$(AndroidR8ObfuscationMode)' requires Microsoft.Android.Sdk 36.1.118+ (workload set 10.0.402.1+); found $(AndroidNETSdkVersion). Run 'dotnet workload update' or install maui-android with --version 10.0.402.1." />
+				Text="AndroidR8ObfuscationMode='$(AndroidR8ObfuscationMode)' requires Microsoft.Android.Sdk 36.1.118+ (workload set 11.0.100.1+); found $(AndroidNETSdkVersion). Run 'dotnet workload update' or install maui-android with --version 11.0.100.1." />
 	</Target>
 
 	<ItemGroup>
@@ -433,15 +422,15 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.1" />
-		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="10.0.0" />
+		<PackageReference Include="CommunityToolkit.Maui" Version="17.0.0" />
+		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="12.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
 		<PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />
 		<PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
 		<PackageReference Include="HarfBuzzSharp" Version="14.4.0.100" />
-		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.130" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.15" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="11.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="11.0.0" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.11.285" />
 	</ItemGroup>
 
@@ -472,6 +461,7 @@
 	     ============================================================ -->
 	<PropertyGroup>
 		<AltCoverVersion>9.0.145</AltCoverVersion>
+		<DefineConstants Condition="'$(E2ECoverage)' == 'true'">$(DefineConstants);E2E_COVERAGE</DefineConstants>
 		<_E2EAltCoverTool Condition="'$(NuGetPackageRoot)' != ''">$(NuGetPackageRoot)altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>
 		<_E2EAltCoverTool Condition="'$(_E2EAltCoverTool)' == '' AND '$(NUGET_PACKAGES)' != ''">$(NUGET_PACKAGES)\altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>
 		<_E2EAltCoverTool Condition="'$(_E2EAltCoverTool)' == '' AND '$(USERPROFILE)' != ''">$(USERPROFILE)\.nuget\packages\altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>
@@ -490,8 +480,8 @@
 
 	<!-- Weave coverage calls into the compiled assembly. Runs after XamlC so
 	     Debug (Runtime inflator / validate-only) and Release (IL rewrite)
-	     both instrument the final IL. The pristine assembly is preserved for
-	     restore on plain builds. -->
+	     both instrument the final IL. The pre-weave checkpoint still contains
+	     E2E-only compiled code and cannot replace a plain compiler output. -->
 	<Target Name="_E2ECoverageInstrument" AfterTargets="XamlC" Condition="'$(E2ECoverage)' == 'true'"
 			Inputs="$(IntermediateOutputPath)$(TargetFileName);$(IntermediateOutputPath)$(TargetName).pdb"
 			Outputs="$(IntermediateOutputPath)e2e-coverage.stamp">
@@ -513,19 +503,16 @@
 		<Message Importance="high" Text="E2E coverage: instrumented $(TargetFileName); OpenCover template at $(_E2EAltDir)template.opencover.xml" />
 	</Target>
 
-	<!-- Plain builds after an instrumented one restore the untouched assembly
-	     so coverage instrumentation never leaks into non-test builds. -->
-	<Target Name="_E2ECoverageRestore" AfterTargets="XamlC" Condition="'$(E2ECoverage)' != 'true'">
-		<PropertyGroup>
-			<_E2EWasInstrumented Condition="Exists('$(IntermediateOutputPath)e2e-coverage.stamp')">true</_E2EWasInstrumented>
-		</PropertyGroup>
-		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetName).uninstrumented.dll" DestinationFiles="$(IntermediateOutputPath)$(TargetFileName)"
-				Condition="'$(_E2EWasInstrumented)' == 'true' AND Exists('$(IntermediateOutputPath)$(TargetName).uninstrumented.dll')" />
-		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetName).uninstrumented.pdb" DestinationFiles="$(IntermediateOutputPath)$(TargetName).pdb"
-				Condition="'$(_E2EWasInstrumented)' == 'true' AND Exists('$(IntermediateOutputPath)$(TargetName).uninstrumented.pdb')" />
-		<Delete Files="$(TargetDir)$(TargetFileName);$(TargetDir)$(TargetName).pdb;$(TargetDir)AltCover.Recorder.g.dll" Condition="'$(_E2EWasInstrumented)' == 'true'" />
-		<Delete Files="$(IntermediateOutputPath)e2e-coverage.stamp" Condition="'$(_E2EWasInstrumented)' == 'true'" />
-		<Message Importance="high" Text="E2E coverage: restored uninstrumented $(TargetFileName)" Condition="'$(_E2EWasInstrumented)' == 'true'" />
+	<!-- Invalidate coverage outputs before the ordinary compiler checks its
+	     incremental inputs. A pre-weave backup was compiled with E2E_COVERAGE;
+	     copying it after XamlC would overwrite fresh plain code and retain its
+	     recorder reference after the recorder DLL was removed. -->
+	<Target Name="_E2ECoverageRestore" BeforeTargets="CoreCompile"
+			Condition="'$(E2ECoverage)' != 'true' AND '$(DesignTimeBuild)' != 'true' AND '$(SkipCompilerExecution)' != 'true' AND Exists('$(IntermediateOutputPath)e2e-coverage.stamp')">
+		<Delete Files="$(IntermediateOutputPath)$(TargetFileName);$(IntermediateOutputPath)$(TargetName).pdb;$(IntermediateOutputPath)$(TargetName).uninstrumented.dll;$(IntermediateOutputPath)$(TargetName).uninstrumented.pdb" />
+		<Delete Files="$(TargetDir)$(TargetFileName);$(TargetDir)$(TargetName).pdb;$(TargetDir)AltCover.Recorder.g.dll;$(TargetDir)AltCover.Recorder.g.pdb" />
+		<Delete Files="$(IntermediateOutputPath)e2e-coverage.stamp" />
+		<Message Importance="high" Text="E2E coverage: invalidated test outputs before compiling plain $(TargetFileName)" />
 	</Target>
 
 </Project>
