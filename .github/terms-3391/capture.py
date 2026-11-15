@@ -68,7 +68,10 @@ for side, expected_sha, target in (
 ):
     apk, = (ROOT / (side + "-apk")).rglob("app-release-smoke.apk")
     assert hashlib.file_digest(apk.open("rb"), "sha256").hexdigest() == expected_sha
-    adb("install", "-r", "-g", apk, timeout=60)
+    if side == "after":
+        # Independent smoke builds use run-specific Android signing keys.
+        adb("uninstall", APP)
+    adb("install", "-g", apk, timeout=60)
     adb("shell", "pm", "clear", APP)
     resolved = adb("shell", "cmd", "package", "resolve-activity", "--brief", "-a",
                    "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", APP)
