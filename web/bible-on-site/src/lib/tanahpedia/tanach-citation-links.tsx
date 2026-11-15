@@ -1,5 +1,5 @@
 import { toNumber } from "gematry";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { PasukPreviewLink } from "@/app/pedia/components/PasukPreviewLink";
 import catalog from "@/data/db/client-catalog.generated.json";
 import { perushNames } from "@/data/db/perush-names";
@@ -17,6 +17,48 @@ interface TanachRefMatch {
 const HEBREW_REF_TOKEN = /^[א-ת][א-ת"״׳']{0,4}$/u;
 const HEBREW_PASUK_TOKEN =
 	/^[א-ת][א-ת"״׳']{0,4}(?:[-־–—][א-ת][א-ת"״׳']{0,4})?$/u;
+const PERUSH_REF_SEPARATOR_CHARACTER = /^[\s\p{P}]$/u;
+
+function isMidrashName(name: string): boolean {
+	return /^(?:מדרש|מכילתא)(?:\s|$)/u.test(name);
+}
+
+function isPerushRefSeparator(text: string): boolean {
+	let markerSeen = false;
+	let awaitingLamed = false;
+	for (const character of text) {
+		if (awaitingLamed) {
+			if (character !== "ל") return false;
+			awaitingLamed = false;
+		} else if (!PERUSH_REF_SEPARATOR_CHARACTER.test(character)) {
+			if (markerSeen || character !== "ע") return false;
+			markerSeen = true;
+			awaitingLamed = true;
+		}
+	}
+	return !awaitingLamed;
+}
+
+function stripParentheticalAnnotations(text: string): string {
+	const characters: string[] = [];
+	const openings: number[] = [];
+	for (const character of text) {
+		if (character === "(") {
+			openings.push(characters.length);
+			characters.push(character);
+		} else if (character === ")") {
+			const opening = openings.pop();
+			if (opening === undefined) {
+				characters.push(character);
+			} else {
+				characters.length = opening;
+			}
+		} else {
+			characters.push(character);
+		}
+	}
+	return characters.join("");
+}
 
 function plainNumeral(raw: string): string {
 	return raw.replace(/["״׳']/gu, "").replace(/[־–—]/gu, "-");
@@ -79,7 +121,7 @@ function findTanachRefAt(text: string, start: number): TanachRefMatch | null {
 		let cursor = start + seferName.length;
 		// Older citations may quote the book's volume letter, e.g. שמואל א'.
 		const volumeQuote = text[cursor];
-		if (volumeQuote && '"״׳\''.includes(volumeQuote)) cursor++;
+		if (volumeQuote && "\"״׳'".includes(volumeQuote)) cursor++;
 		if (!isWhitespace(text[cursor])) continue;
 		while (isWhitespace(text[cursor])) cursor++;
 
@@ -111,9 +153,9 @@ function findTanachRefAt(text: string, start: number): TanachRefMatch | null {
 	return null;
 }
 
-function findTanachRefMatches(text: string): TanachRefMatch[] {
+function findTanachRefMatches(text: string, startIndex = 0): TanachRefMatch[] {
 	const matches: TanachRefMatch[] = [];
-	let cursor = 0;
+	let cursor = startIndex;
 	while (cursor < text.length) {
 		const match = findTanachRefAt(text, cursor);
 		if (!match) {
@@ -216,7 +258,7 @@ function firstTanachRefMatchFromIndex(
 	line: string,
 	minIndex: number,
 ): TanachRefMatch | null {
-	return findTanachRefMatches(line).find((m) => m.index >= minIndex) ?? null;
+	return findTanachRefMatches(line, minIndex)[0] ?? null;
 }
 
 /**
@@ -232,16 +274,54 @@ export function renderFamilyTreeCitationLine(
 	if (!perushMatch) {
 		return renderCitationWithTanachLinks(line, linkClassName);
 	}
-	const refMatch = firstTanachRefMatchFromIndex(line, perushMatch.index);
-	if (!refMatch?.pasukRaw?.trim()) {
-		return renderCitationWithTanachLinks(line, linkClassName);
+	// A work title may contain a Bible book name without using its coordinates.
+	const perushEnd = perushMatch.index + perushMatch.name.length;
+	const refMatch = firstTanachRefMatchFromIndex(line, perushEnd);
+	const separator = refMatch
+		? stripParentheticalAnnotations(line.slice(perushEnd, refMatch.index))
+		: "";
+	const followsSeparator = isPerushRefSeparator(separator);
+	const isMidrash = isMidrashName(perushMatch.name);
+	const nextSemicolon = line.indexOf(";", perushEnd);
+	const clauseEnd = nextSemicolon === -1 ? line.length : nextSemicolon;
+	const hasExplicitBibleReference =
+		refMatch != null &&
+		refMatch.index < clauseEnd &&
+		followsSeparator &&
+		separator.includes("על");
+	// Midrash source coordinates can resemble a Bible reference. Require על
+	// before treating them as Bible coordinates; otherwise protect the clause.
+	const literalEnd =
+		isMidrash && !hasExplicitBibleReference ? clauseEnd : perushEnd;
+	const renderRemainingCitations = (start: number): ReactNode[] =>
+		start < line.length
+			? [
+					<Fragment key={`citation-tail-${start}`}>
+						{renderFamilyTreeCitationLine(line.slice(start), linkClassName)}
+					</Fragment>,
+				]
+			: [];
+	const renderWithLiteralPerushCitation = (): ReactNode[] => [
+		...renderCitationWithTanachLinks(
+			line.slice(0, perushMatch.index),
+			linkClassName,
+		),
+		line.slice(perushMatch.index, literalEnd),
+		...renderRemainingCitations(literalEnd),
+	];
+	if (
+		!refMatch?.pasukRaw?.trim() ||
+		!followsSeparator ||
+		(isMidrash && !hasExplicitBibleReference)
+	) {
+		return renderWithLiteralPerushCitation();
 	}
 	const seferC = refMatch.seferCitation;
 	const perekRaw = refMatch.perekRaw;
 	const pasukRaw = refMatch.pasukRaw;
 	const href = build929PerushHref(seferC, perekRaw, pasukRaw, perushMatch.name);
 	if (!href) {
-		return renderCitationWithTanachLinks(line, linkClassName);
+		return renderWithLiteralPerushCitation();
 	}
 	const perushIdx = perushMatch.index;
 	const linkEnd = refMatch.index + refMatch.full.length;
@@ -260,11 +340,7 @@ export function renderFamilyTreeCitationLine(
 			{line.slice(perushIdx, refMatch.index) + displayTanachRef(refMatch)}
 		</PasukPreviewLink>,
 	);
-	if (linkEnd < line.length) {
-		nodes.push(
-			...renderCitationWithTanachLinks(line.slice(linkEnd), linkClassName),
-		);
-	}
+	nodes.push(...renderRemainingCitations(linkEnd));
 	return nodes.length > 0 ? nodes : [line];
 }
 
