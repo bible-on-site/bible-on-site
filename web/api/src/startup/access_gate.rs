@@ -396,6 +396,22 @@ impl NonceCache {
             }
             self.entries.remove(&key);
         }
+        // Drop dead front records — re-record leftovers and expired entries —
+        // on every insert. Without this, cycling fewer than `capacity` nonces
+        // leaves their stale queue entries untouched by the eviction loop and
+        // `order` grows without bound. An expired front still live in
+        // `entries` loses its map record too, keeping every queued record
+        // paired with an unexpired map entry.
+        while let Some((front_key, front_expiry)) = self.order.front() {
+            let live = self.entries.get(front_key) == Some(front_expiry);
+            if live && *front_expiry > now {
+                break;
+            }
+            if live {
+                self.entries.remove(front_key);
+            }
+            self.order.pop_front();
+        }
         while self.entries.len() >= self.capacity {
             let Some((stale, recorded_expiry)) = self.order.pop_front() else {
                 break;
@@ -651,6 +667,16 @@ mod tests {
     }
 
     #[test]
+    fn parse_keys_trims_each_side_like_the_app_client() {
+        // `k3 : padded` must verify the same bytes `ApiSigningCredential.Parse`
+        // signs with — a per-side trim on both ends of the colon.
+        let keys = parse_signing_keys(" k1 : s1 , k2:s2 , : id-only , secret-only:  ");
+        assert_eq!(keys.len(), 2);
+        assert_eq!(keys["k1"], b"s1");
+        assert_eq!(keys["k2"], b"s2");
+    }
+
+    #[test]
     fn resolve_parses_tolerance_and_falls_back_on_garbage() {
         let gate = AccessGate::resolve_with(resolver(&[(TOLERANCE_ENV, "120")])).unwrap();
         assert_eq!(gate.tolerance_secs, 120);
@@ -873,5 +899,27 @@ mod tests {
         assert_eq!(cache.record("k", "c", ttl, later), NonceOutcome::Fresh);
         assert_eq!(cache.record("k", "a", ttl, later), NonceOutcome::Fresh);
         assert_eq!(cache.record("k", "c", ttl, later), NonceOutcome::Replayed);
+    }
+
+    #[test]
+    fn nonce_cache_rerecording_expired_nonces_keeps_the_queue_bounded() {
+        let ttl = Duration::from_secs(60);
+        let mut cache = NonceCache::new(8);
+        let t0 = Instant::now();
+        // Cycle two nonces far below capacity; each pass expires and
+        // re-records them. `order` must prune the dead leftovers instead of
+        // accumulating one stale entry per reuse.
+        for cycle in 0..16u32 {
+            let now = t0 + (ttl + Duration::from_secs(1)) * cycle;
+            assert_eq!(cache.record("k", "a", ttl, now), NonceOutcome::Fresh);
+            assert_eq!(cache.record("k", "b", ttl, now), NonceOutcome::Fresh);
+        }
+        assert!(cache.entries.len() <= cache.capacity);
+        assert!(
+            cache.order.len() <= cache.capacity,
+            "queue {} outgrew capacity {}",
+            cache.order.len(),
+            cache.capacity
+        );
     }
 }

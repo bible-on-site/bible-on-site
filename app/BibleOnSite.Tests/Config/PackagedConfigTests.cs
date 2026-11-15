@@ -99,12 +99,19 @@ public class PackagedConfigTests
 
     // --- API signing credential (#3066) ---
 
+    // Whitespace handling mirrors the API's parse_signing_keys: each side of
+    // the colon is trimmed, so "k1: secret" on the wire must sign the same
+    // bytes the server verifies.
     [Theory]
     [InlineData("k1:secret", "k1", "secret")]
     [InlineData("  k2:sec:with:colons  ", "k2", "sec:with:colons")]
+    [InlineData("k3 : secret", "k3", "secret")]
+    [InlineData("k4:  padded  ", "k4", "padded")]
     [InlineData("no-colon", null, null)]
     [InlineData(":empty-id", null, null)]
     [InlineData("empty-secret:", null, null)]
+    [InlineData(" : id-whitespace-only", null, null)]
+    [InlineData("secret-whitespace-only:  ", null, null)]
     [InlineData("   ", null, null)]
     [InlineData(null, null, null)]
     public void SigningCredential_Parse_RequiresIdAndSecret(string? raw, string? id, string? secret)

@@ -35,7 +35,7 @@ public class ApiSigningHandlerTests
 
     private static ApiSigningCredential Credential => new(GoldenKeyId, Encoding.UTF8.GetBytes(GoldenSecret));
 
-    private static (ApiSigningHandler Signing, CaptureHandler Capture, HttpClient Client) ClientFor(
+    private static (ApiSigningHandler Signing, CaptureHandler Capture) HandlersFor(
         Func<CancellationToken, Task<ApiSigningCredential?>> resolver,
         Func<long>? clock = null,
         Func<string>? nonce = null)
@@ -46,16 +46,18 @@ public class ApiSigningHandlerTests
             clock ?? (() => GoldenTimestamp),
             nonce ?? (() => GoldenNonce),
             capture);
-        return (signing, capture, new HttpClient(signing));
+        return (signing, capture);
     }
 
     [Fact]
     public async Task Send_ProducesTheSharedCanonicalSignature()
     {
-        var (_, capture, client) = ClientFor(_ => Task.FromResult<ApiSigningCredential?>(Credential));
-        var request = new HttpRequestMessage(HttpMethod.Post, "https://api.example.test/")
+        var (signing, capture) = HandlersFor(_ => Task.FromResult<ApiSigningCredential?>(Credential));
+        using var client = new HttpClient(signing);
+        using var content = new StringContent(GoldenBody, Encoding.UTF8, "application/json");
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.example.test/")
         {
-            Content = new StringContent(GoldenBody, Encoding.UTF8, "application/json")
+            Content = content
         };
 
         await client.SendAsync(request, TestContext.Current.CancellationToken);
@@ -71,10 +73,12 @@ public class ApiSigningHandlerTests
     [Fact]
     public async Task Send_WithoutCredential_IsAnUnsignedPassThrough()
     {
-        var (_, capture, client) = ClientFor(_ => Task.FromResult<ApiSigningCredential?>(null));
-        var request = new HttpRequestMessage(HttpMethod.Post, "https://api.example.test/")
+        var (signing, capture) = HandlersFor(_ => Task.FromResult<ApiSigningCredential?>(null));
+        using var client = new HttpClient(signing);
+        using var content = new StringContent("{}", Encoding.UTF8, "application/json");
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.example.test/")
         {
-            Content = new StringContent("{}", Encoding.UTF8, "application/json")
+            Content = content
         };
 
         await client.SendAsync(request, TestContext.Current.CancellationToken);
@@ -89,14 +93,17 @@ public class ApiSigningHandlerTests
     public async Task Send_ResolvesTheCredentialOnce()
     {
         var probes = 0;
-        var (_, _, client) = ClientFor(_ =>
+        var (signing, _) = HandlersFor(_ =>
         {
             probes++;
             return Task.FromResult<ApiSigningCredential?>(Credential);
         });
+        using var client = new HttpClient(signing);
+        using var first = new StringContent("{}");
+        using var second = new StringContent("{}");
 
-        await client.PostAsync("https://api.example.test/", new StringContent("{}"), TestContext.Current.CancellationToken);
-        await client.PostAsync("https://api.example.test/", new StringContent("{}"), TestContext.Current.CancellationToken);
+        await client.PostAsync("https://api.example.test/", first, TestContext.Current.CancellationToken);
+        await client.PostAsync("https://api.example.test/", second, TestContext.Current.CancellationToken);
 
         probes.Should().Be(1);
     }

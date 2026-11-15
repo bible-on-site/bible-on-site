@@ -12,7 +12,11 @@ namespace BibleOnSite.Config;
 /// </summary>
 public sealed record ApiSigningCredential(string KeyId, byte[] Secret)
 {
-    /// <summary>Parses a <c>key-id:secret</c> value; null when malformed.</summary>
+    /// <summary>
+    /// Parses a <c>key-id:secret</c> value; null when malformed. Each side is
+    /// trimmed exactly like the API's <c>parse_signing_keys</c>, so
+    /// <c>k1: secret</c> signs with the same bytes the server verifies.
+    /// </summary>
     public static ApiSigningCredential? Parse(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
@@ -21,10 +25,16 @@ public sealed record ApiSigningCredential(string KeyId, byte[] Secret)
         }
         raw = raw.Trim();
         var separator = raw.IndexOf(':');
-        if (separator <= 0 || separator == raw.Length - 1)
+        if (separator < 0)
         {
             return null;
         }
-        return new ApiSigningCredential(raw[..separator], Encoding.UTF8.GetBytes(raw[(separator + 1)..]));
+        var keyId = raw[..separator].Trim();
+        var secret = raw[(separator + 1)..].Trim();
+        if (keyId.Length == 0 || secret.Length == 0)
+        {
+            return null;
+        }
+        return new ApiSigningCredential(keyId, Encoding.UTF8.GetBytes(secret));
     }
 }
