@@ -31,6 +31,7 @@ def source(items):
 
 class NativeDevice:
     def __init__(self, args):
+        """Validate the target emulator and prepare its evidence directory."""
         executable = Path(args.adb).resolve(strict=True)
         if executable.name.lower() not in ("adb", "adb.exe"):
             raise ValueError("Expected an Android SDK adb executable")
@@ -58,6 +59,9 @@ class NativeDevice:
         deadline = time.monotonic() + 90
         while time.monotonic() < deadline:
             items = self.nodes()
+            if find(items, "aerr_close") is not None:
+                self.capture("application-not-responding")
+                raise AssertionError(f"Android ANR while waiting for {description}")
             if predicate(items):
                 return items
             self.poll_interval.wait(0.3)
@@ -156,7 +160,7 @@ def check_scroll_and_swipe(device, check):
 
 def check_destinations(device):
     device.tap("HomeCalendar")
-    device.wait(lambda ns: find(ns, "CalendarViewMonth") is not None, "Calendar")
+    device.wait(lambda ns: find(ns, "MonthWeek") is not None, "Populated calendar")
     device.capture("calendar")
     device.back()
     device.home()
@@ -179,7 +183,7 @@ def check_global_search(device, check):
     check.assertIsNotNone(find(items, "HomeNavigationResult"))
     device.capture("navigation-search")
     device.tap("לוח שנה")
-    device.wait(lambda ns: find(ns, "CalendarViewMonth") is not None,
+    device.wait(lambda ns: find(ns, "MonthWeek") is not None,
                 "Navigation search opens calendar")
     device.back()
     device.wait(lambda ns: find(ns, "HomeSearchInput") is not None, "Search history")
