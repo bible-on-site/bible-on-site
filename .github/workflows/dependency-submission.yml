@@ -91,7 +91,7 @@ jobs:
           # restore always matches the snapshot instead of pinning a version.
           TFM=$(grep -o 'net[0-9.]*-android' app/BibleOnSite/BibleOnSite.csproj | head -1)
           echo "Restoring $TFM for ${{ matrix.source }}"
-          dotnet restore app/BibleOnSite/BibleOnSite.csproj -p:TargetFramework=$TFM -p:RuntimeIdentifiers=android-arm64 -r android-arm64
+          dotnet restore app/BibleOnSite/BibleOnSite.csproj -p:TargetFramework=$TFM -p:RuntimeIdentifiers=android-arm64 -r android-arm64 -p:PublishReadyToRun=true
           dotnet restore app/BibleOnSite.Tests/BibleOnSite.Tests.csproj
           dotnet restore app/BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj -p:EnableWindowsTargeting=true
           dotnet restore app/BibleOnSite.Tests.MobileE2E/BibleOnSite.Tests.MobileE2E.csproj
