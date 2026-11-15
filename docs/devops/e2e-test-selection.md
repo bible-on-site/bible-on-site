@@ -346,7 +346,14 @@ suite's Playwright config sets it to `<package>/.coverage/e2e-impact/` under
 | --- | --- | --- |
 | `discovered.json` | `E2eImpactReporter.onBegin` | The runtime test list (`e2e-impact-discovery/1`) reconciled against static discovery as diagnostics |
 | `test-results.json` | `E2eImpactReporter.onTestEnd/onEnd` | Per-test `{id, project, retry, status, outcome}` across projects and retries |
-| `coverage/<hash>-<project>-<seq>.json` | `dumpImpactCoverage` (browser fixtures) | One istanbul map per drain, tagged `realm` |
+| `coverage/<hash>-<project>-w<worker>-r<retry>-<seq>.json` | `dumpImpactCoverage` (browser fixtures) | One istanbul map per drain, tagged `realm` |
+
+Playwright's reporter supplies `titlePath()` as root, project, file, then
+describe/test titles. The fixture's `TestInfo.titlePath` starts at the file;
+`dumpImpactCoverage` prefixes the root and `TestInfo.project.name` before
+using the shared identity formatter. Both paths therefore produce the same
+`<file> :: <describe/test titles>` id. Projects, workers and retries keep
+their own dump files while coverage joins under that common id.
 
 The **realm** tag carries the conservative split:
 
