@@ -4,6 +4,7 @@ jest.mock("isomorphic-dompurify", () => ({
 }));
 
 import {
+	toPlainTextPreview,
 	toPreviewHtml,
 	truncatePreviewSnippet,
 } from "../../../src/lib/tanahpedia/preview-format";
@@ -63,6 +64,59 @@ describe("tanahpedia/preview-format", () => {
 
 		it("returns original when cutIdx stays zero for empty string", () => {
 			expect(truncatePreviewSnippet("", 10)).toBe("");
+		});
+	});
+
+	describe("toPlainTextPreview", () => {
+		const words = (count: number) =>
+			Array.from({ length: count }, (_, i) => `מילה${i + 1}`).join(" ");
+
+		it("keeps at most the requested whole words and marks truncation", () => {
+			const all = words(25);
+			const out = toPlainTextPreview(`<p>${all}</p>`, 20);
+			expect(out).toBe(`${words(20)}…`);
+			// The cut lands on a word boundary — no partial word, no space
+			// before the ellipsis.
+			expect(out.split("…")[0].endsWith(" ")).toBe(false);
+		});
+
+		it("returns the body intact when it fits the word cap", () => {
+			expect(toPlainTextPreview(`<p>${words(20)}</p>`, 20)).toBe(words(20));
+			expect(toPlainTextPreview("<p>אחת שתיים</p>", 20)).toBe("אחת שתיים");
+		});
+
+		it("honours block boundaries so adjacent words never merge", () => {
+			expect(toPlainTextPreview("<p>אחת</p><p>שתיים</p>", 20)).toBe(
+				"אחת שתיים",
+			);
+		});
+
+		it("drops script/style contents and sup markers entirely", () => {
+			// DOMPurify is a passthrough mock here; the executable-content
+			// strip runs in the formatter itself so neither pass can leak it.
+			const html =
+				"<script>var secret = 1;</script><p>אחת</p>" +
+				"<style>.x{}</style><sup><a>12</a></sup><p>שתיים</p>";
+			expect(toPlainTextPreview(html, 20)).toBe("אחת שתיים");
+		});
+
+		it("decodes entities and collapses nbsp to spaces", () => {
+			expect(toPlainTextPreview("<p>אחת&nbsp;שתיים &amp; שלוש</p>", 20)).toBe(
+				"אחת שתיים & שלוש",
+			);
+		});
+
+		it("preserves Hebrew combining marks and attached punctuation", () => {
+			expect(
+				toPlainTextPreview("<p>פֶּסַח, חַג הַמַּצּוֹת.</p>", 20),
+			).toBe("פֶּסַח, חַג הַמַּצּוֹת.");
+		});
+
+		it("returns empty for empty or marker-only bodies", () => {
+			expect(toPlainTextPreview("", 20)).toBe("");
+			expect(toPlainTextPreview("<p></p>", 20)).toBe("");
+			expect(toPlainTextPreview("<p>&nbsp;</p>", 20)).toBe("");
+			expect(toPlainTextPreview("<sup>1</sup>", 20)).toBe("");
 		});
 	});
 });

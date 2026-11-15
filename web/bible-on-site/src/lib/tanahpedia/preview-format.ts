@@ -1,4 +1,5 @@
 import DOMPurify from "isomorphic-dompurify";
+import { plainText } from "../seo/jsonld";
 
 /**
  * HTML → safe snippet for Tanahpedia hover preview API.
@@ -8,6 +9,8 @@ import DOMPurify from "isomorphic-dompurify";
 const PREVIEW_OUTPUT_TAGS = ["h2", "h3", "h4", "br"];
 /** Structural tags we still need to transform below before the final allowlist. */
 const PREVIEW_INPUT_TAGS = ["p", "sup", "hr", ...PREVIEW_OUTPUT_TAGS];
+
+const ELLIPSIS = "…";
 
 export function toPreviewHtml(html: string): string {
 	// Sanitize up-front with a vetted sanitizer so the cosmetic transforms below
@@ -44,7 +47,35 @@ export function toPreviewHtml(html: string): string {
 	});
 }
 
-const ELLIPSIS = "…";
+/**
+ * The first `maxWords` whole words of an entry body's readable plain
+ * text — the moed-introduction preview (#3381). Script/style blocks
+ * carry no readable words and are dropped up-front (belt to the
+ * sanitizer's suspenders); the same vetted sanitize as `toPreviewHtml`
+ * then removes every unsafe construct, `<sup>` footnote/UI markers are
+ * removed rather than flattening their digits into words, entities are
+ * decoded and block tags become word boundaries — `</p><p>` can never
+ * merge two words. Whole words only: a truncated excerpt ends exactly
+ * at a word boundary with `…`, while a body at or under the limit
+ * returns intact with no marker.
+ */
+export function toPlainTextPreview(html: string, maxWords: number): string {
+	const withoutExecutable = html
+		.replace(/<script[\s\S]*?(?:<\/script\s*>|$)/gi, " ")
+		.replace(/<style[\s\S]*?(?:<\/style\s*>|$)/gi, " ");
+	const safe = DOMPurify.sanitize(withoutExecutable, {
+		ALLOWED_TAGS: PREVIEW_INPUT_TAGS,
+		ALLOWED_ATTR: [],
+	});
+	const text = plainText(
+		safe.replace(/\\n/g, "").replace(/<sup[\s\S]*?(?:<\/sup\s*>|$)/gi, " "),
+		Number.MAX_SAFE_INTEGER,
+	);
+	if (!text) return "";
+	const words = text.split(" ");
+	const head = words.slice(0, maxWords).join(" ");
+	return words.length > maxWords ? `${head}${ELLIPSIS}` : head;
+}
 
 /**
  * Truncate `snippet` so visible text (ignoring HTML tags) is at most `maxLen` chars.

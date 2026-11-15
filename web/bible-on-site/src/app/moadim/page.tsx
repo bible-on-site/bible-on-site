@@ -5,6 +5,7 @@ import {
 	bandRotation,
 	buildMoedWheel,
 	MOADIM_ROOT,
+	moedDateCarriesMonth,
 	moedHref,
 	polar,
 	sectorPath,
@@ -248,11 +249,15 @@ export default async function MoadimLanding() {
 											{slice.moed.dateLabel}
 										</span>
 									)}
-									{slice.moed.hebrewMonth && (
-										<span className={styles.indexMonth}>
-											{slice.moed.hebrewMonth}
-										</span>
-									)}
+									{/* The month chip is information, not decoration:
+									    it shows only when the date does not already
+									    name the month (#3381). */}
+									{slice.moed.hebrewMonth &&
+										!moedDateCarriesMonth(slice.moed) && (
+											<span className={styles.indexMonth}>
+												{slice.moed.hebrewMonth}
+											</span>
+										)}
 								</Link>
 							</li>
 						))}

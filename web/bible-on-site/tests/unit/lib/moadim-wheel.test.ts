@@ -26,7 +26,6 @@ const moed = (id: number, extra: Partial<MoedSummary> = {}): MoedSummary => ({
 	id,
 	slug: `moed-${id}`,
 	name: `מועד ${id}`,
-	summary: null,
 	hebrewMonth: null,
 	dateLabel: null,
 	annualOrder: id,
