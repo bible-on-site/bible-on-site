@@ -60,12 +60,9 @@ jobs:
       - name: 'Setup .NET'
         uses: actions/setup-dotnet@v6
         with:
-          # The head leg pins the PR's bumped SDK literally. The base leg's
-          # merge-base checkout has its own global.json still pinning the
-          # previous SDK under rollForward: disable — read it so the installed
-          # SDK satisfies that tree's resolver instead of failing the first
-          # dotnet invocation.
-          dotnet-version: ${{ matrix.source == 'base' && '' || '11.0.100' }}
+          # Each leg reads the SDK pin from whichever tree is checked out —
+          # head's global.json bumps the SDK while the merge-base checkout
+          # still pins the previous one under rollForward: disable.
           global-json-file: global.json
       - name: 'Setup Java for the Android workload'
         uses: actions/setup-java@v6
