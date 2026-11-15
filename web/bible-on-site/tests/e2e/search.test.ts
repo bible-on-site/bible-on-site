@@ -123,6 +123,9 @@ test.describe("Site search", () => {
 		await expect(link).toBeVisible();
 		await link.click();
 		await page.waitForURL("**/929/159**");
+		// The URL can commit before the destination renders. Verify that the
+		// canonical verse was reached before testing navigation back from it.
+		await expect(page.locator("#pasuk-4")).toBeVisible();
 
 		// Returning restores query, results and list position.
 		await page.goBack();
