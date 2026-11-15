@@ -2862,6 +2862,47 @@ describe("post-merge sequence refresh and renewed owner review", () => {
 			);
 		},
 	);
+	it("merges an approved deferred PR as a no-op when its API adapter removes all operations", async () => {
+		const pending = await approved(
+			await proposed([metadata(`Removed proposed ${randomUUID()}`)]),
+		);
+		await store.withContributions(async (tx) => {
+			const old = await store.readContribution(tx, pending.id, true);
+			old.apiVersion = 999;
+			old.domainConflict = "Obsolete operation target";
+			await store.saveContribution(tx, old);
+		});
+		const currentName = `Current after removal ${randomUUID()}`;
+		await merge(await proposed([metadata(currentName)], owner));
+		const waiting = await fresh(pending);
+		expect(waiting.deferredContentMerge).toBeDefined();
+		const { migrateOpenContributionPrs } = await import(
+			"~/server/tanahpedia/contribution-migrations.server"
+		);
+		await migrateOpenContributionPrs({
+			version: CONTRIBUTION_API_VERSION,
+			adapters: [
+				{
+					from: 999,
+					to: CONTRIBUTION_API_VERSION,
+					id: "remove-obsolete-operations",
+					convert: () => [],
+				},
+			],
+		});
+		const recovered = await fresh(pending);
+		expect(recovered.changes).toEqual([]);
+		expect(recovered.domainConflict).toBeUndefined();
+		expect(recovered.deferredContentMerge).toBeUndefined();
+		expect(recovered.revision).toBe(waiting.revision);
+		expect(reviewStatus(recovered)).toBe("approved");
+		expect((await merge(recovered)).state).toBe("merged");
+		const [rows] = await conn.execute<RowDataPacket[]>(
+			"SELECT name FROM tanahpedia_entity WHERE id=?",
+			[ids.entity],
+		);
+		expect(rows[0].name).toBe(currentName);
+	});
 	it("durably resumes a post-commit refresh failure without applying the content merge twice", async () => {
 		const pending = await proposed([
 			{

@@ -85,13 +85,15 @@ async function refreshContributionBase(
 	delete item.deferredContentMerge;
 	let next: Contribution["changes"];
 	try {
-		const inputs = validateChanges(
-			item.changes.map((c) => ({
-				kind: c.kind,
-				targetId: c.targetId,
-				after: c.after,
-			})),
-		);
+		const inputs = item.changes.length
+			? validateChanges(
+					item.changes.map((c) => ({
+						kind: c.kind,
+						targetId: c.targetId,
+						after: c.after,
+					})),
+				)
+			: [];
 		next = await prepareChanges(conn, inputs, { refresh: true });
 	} catch (error) {
 		// A storage failure rolls back this transaction and retains its marker.

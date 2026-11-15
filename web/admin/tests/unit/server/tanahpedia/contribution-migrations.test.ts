@@ -231,6 +231,7 @@ describe("pending PR API migration", () => {
 	it("permits an adapter to drop retired fields and operations without invalidating approval", async () => {
 		const item = pr();
 		item.apiVersion = CONTRIBUTION_API_VERSION + 1;
+		item.domainConflict = "The removed operation had a missing target";
 		expect(
 			await migrateContributionSequence(item, {
 				version: CONTRIBUTION_API_VERSION,

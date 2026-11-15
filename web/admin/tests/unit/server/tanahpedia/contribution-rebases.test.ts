@@ -241,6 +241,19 @@ describe("pending proposal base refresh", () => {
 		expect(recovered.revision).toBe(pending.revision);
 		expect(recovered.events).toEqual(pending.events);
 	});
+	it("retains approval when API recovery removed every operation from a deferred proposal", async () => {
+		const recovered = {
+			...structuredClone(pending),
+			changes: [],
+			deferredContentMerge: { id: trigger.id, number: trigger.number },
+		};
+		mocks.prepare.mockResolvedValue([]);
+		await refreshDeferredContributionBase({} as never, recovered);
+		expect(recovered.deferredContentMerge).toBeUndefined();
+		expect(recovered.changes).toEqual([]);
+		expect(recovered.revision).toBe(pending.revision);
+		expect(reviewStatus(recovered)).toBe(reviewStatus(pending));
+	});
 	it("waits for an open, compatible proposal with deferred content", async () => {
 		const marker = { id: trigger.id, number: trigger.number };
 		for (const fields of [

@@ -63,6 +63,7 @@ export async function migrateContributionSequence(
 		};
 		item.changes = changes;
 		item.apiVersion = to;
+		if (changes.length === 0) delete item.domainConflict;
 	} catch (error) {
 		// Adapter lookup failures are infrastructure failures, not incompatible
 		// content. Preserve the row and fail the CD hook for a later retry.
