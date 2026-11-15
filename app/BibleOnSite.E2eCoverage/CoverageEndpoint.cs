@@ -40,8 +40,6 @@ namespace AltCover.Recorder
 		private static readonly StartupState Startup = new();
 		private static int _started;
 
-		internal static void MarkStartupReady() => Startup.MarkReady();
-
 		internal static int Port
 		{
 			get
@@ -350,8 +348,8 @@ namespace AltCover.Recorder
 	/// <summary>A process-local signal, independent of coverage resets and UI queries.</summary>
 	internal sealed class StartupState
 	{
+		internal const string ReadySwitch = "BibleOnSite.E2eCoverage.StartupReady";
 		private readonly string? _launchId;
-		private int _ready;
 
 		internal StartupState() : this(Environment.GetEnvironmentVariable("BIBLE_E2E_LAUNCH_ID")) { }
 
@@ -363,10 +361,10 @@ namespace AltCover.Recorder
 				? parsed.ToString("D") : null;
 		}
 
-		internal void MarkReady() => Volatile.Write(ref _ready, 1);
-
 		internal string SnapshotJson() => "{\"ok\":true,\"ready\":"
-			+ (Volatile.Read(ref _ready) == 1 ? "true" : "false")
+			// The app signals through the BCL, so its pre-weave assembly does
+			// not reference the recorder and trip AltCover's instrumentation guard.
+			+ (AppContext.TryGetSwitch(ReadySwitch, out var ready) && ready ? "true" : "false")
 			+ ",\"launchId\":" + (_launchId == null ? "null" : "\"" + _launchId + "\"") + "}";
 	}
 }

@@ -128,6 +128,36 @@ public sealed class DeviceSessionRecoveryTests
     }
 
     [Fact]
+    public async Task RefusedReadinessEndpointDoesNotReacquireOrInvokeTransportRecovery()
+    {
+        var session = new FakeSession(_artifacts);
+        var test = new ReadinessDeviceTest(new ListOutput(_log), session);
+        var previous = MobileDeviceTest.TransportRecovery;
+        var recoveries = 0;
+        MobileDeviceTest.TransportRecovery = _ =>
+        {
+            recoveries++;
+            return true;
+        };
+        try
+        {
+            var failure = await Assert.ThrowsAsync<TimeoutException>(() => test.InitializeAsync().AsTask());
+            Assert.Contains("did not settle within 45 seconds", failure.Message);
+            Assert.Contains("Connection refused (127.0.0.1:4787)", failure.Message);
+            Assert.False(DeviceSessionDeath.Matches(failure));
+            Assert.False(DeviceTransportLoss.Matches(failure));
+            Assert.Equal(1, test.Connects);
+            Assert.Equal(1, session.Acquisitions);
+            Assert.Equal(0, recoveries);
+            Assert.DoesNotContain(_log, line => line.Contains("acquiring it once more"));
+        }
+        finally
+        {
+            MobileDeviceTest.TransportRecovery = previous;
+        }
+    }
+
+    [Fact]
     public async Task ASecondStartupDeathStillFails()
     {
         _test.ConnectFailures.Enqueue(new UnknownErrorException("invalid session id"));
@@ -270,9 +300,13 @@ public sealed class DeviceSessionRecoveryTests
             MobilePlatform.Android, "/test/app", "test-device", artifacts,
             new Uri("http://127.0.0.1:4723"));
         public AppiumDriver? Driver => null;
+        public int Acquisitions { get; private set; }
         public IReadOnlyDictionary<string, string>? LastEnvironment { get; private set; }
-        public void Acquire(IReadOnlyDictionary<string, string>? environment) =>
+        public void Acquire(IReadOnlyDictionary<string, string>? environment)
+        {
+            Acquisitions++;
             LastEnvironment = environment;
+        }
     }
 
     private sealed class FakeDeviceTest(ITestOutputHelper output, IMobileDeviceSession session)
@@ -299,5 +333,23 @@ public sealed class DeviceSessionRecoveryTests
             new Dictionary<string, string> { ["BIBLE_E2E_PERUSHIM"] = "1" };
         public void Reacquire() => AcquireSession();
         public void Reacquire(string launchId) => AcquireSession(launchId);
+    }
+
+    private sealed class ReadinessDeviceTest(ITestOutputHelper output, IMobileDeviceSession session)
+        : MobileDeviceTest(output, session)
+    {
+        public int Connects { get; private set; }
+        protected override void Connect()
+        {
+            Connects++;
+            AcquireSession();
+            var elapsed = TimeSpan.Zero;
+            ReaderStartupReadiness.WaitForReady("7cc4c496-4e24-478c-93eb-d62e9ec0077c", TimeSpan.FromSeconds(45),
+                _ =>
+                {
+                    elapsed = TimeSpan.FromSeconds(45);
+                    throw new HttpRequestException("Connection refused (127.0.0.1:4787)");
+                }, () => elapsed, _ => throw new InvalidOperationException("The readiness budget is already exhausted."));
+        }
     }
 }

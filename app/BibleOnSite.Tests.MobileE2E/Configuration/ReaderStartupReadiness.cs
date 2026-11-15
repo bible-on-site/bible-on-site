@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Text.Json;
-using OpenQA.Selenium;
 
 namespace BibleOnSite.Tests.MobileE2E.Configuration;
 
@@ -62,7 +61,9 @@ internal static class ReaderStartupReadiness
                 pause(remaining < PollInterval ? remaining : PollInterval);
             }
         }
-        throw new WebDriverTimeoutException(
+        // Endpoint availability does not establish Appium session health. Its
+        // error text must never enter the driver's death/transport classifiers.
+        throw new TimeoutException(
             $"Reader startup did not settle within {budget.TotalSeconds} seconds. {lastObservation}");
     }
 

@@ -409,7 +409,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         // search-index warmup so it cannot starve the accessibility snapshot.
         Services.SearchIndexService.NotifyStartupSettled();
 #if E2E_COVERAGE
-        AltCover.Recorder.Instance.MarkStartupReady();
+        // Keep the pre-weave assembly free of recorder references: AltCover
+        // treats their strong-name token as an already-instrumented marker.
+        AppContext.SetSwitch("BibleOnSite.E2eCoverage.StartupReady", true);
 #endif
         _platformChrome.ScheduleHistoryRefresh();
     }

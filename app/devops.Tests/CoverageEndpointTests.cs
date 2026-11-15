@@ -19,6 +19,7 @@ public sealed class CoverageEndpointTests
     [Fact]
     public void StartupHttpReportsItsCapturedLaunchIdentityAndReaderTransition()
     {
+        using var signal = new StartupSignal();
         const string launchId = "736d03cf-bfe6-44cb-a9db-9907194ae2ce";
         var previous = Environment.GetEnvironmentVariable("BIBLE_E2E_LAUNCH_ID");
         try
@@ -37,8 +38,8 @@ public sealed class CoverageEndpointTests
                 Assert.Equal(launchId, body.RootElement.GetProperty("launchId").GetString());
                 Assert.Equal(3, body.RootElement.EnumerateObject().Count());
             }
-            startup.MarkReady();
-            startup.MarkReady();
+            signal.MarkReady();
+            signal.MarkReady();
             var after = server.Request("GET", "/coverage/startup");
             Assert.Equal(200, after.Status);
             using var ready = JsonDocument.Parse(after.Body);
@@ -63,6 +64,7 @@ public sealed class CoverageEndpointTests
     [InlineData("736d03cf-bfe6-44cb-a9db-9907194ae2ce\r\n\"ready\":true")]
     public void StartupHttpDoesNotEchoMissingOrMalformedLaunchIdentities(string? launchId)
     {
+        using var signal = new StartupSignal();
         var startup = new StartupState(launchId);
         using var server = new EndpointServer(startup);
         var response = server.Request("GET", "/coverage/startup");
@@ -70,7 +72,7 @@ public sealed class CoverageEndpointTests
         using var body = JsonDocument.Parse(response.Body);
         Assert.Equal(JsonValueKind.Null, body.RootElement.GetProperty("launchId").ValueKind);
         Assert.False(body.RootElement.GetProperty("ready").GetBoolean());
-        startup.MarkReady();
+        signal.MarkReady();
         using var ready = JsonDocument.Parse(server.Request("GET", "/coverage/startup").Body);
         Assert.True(ready.RootElement.GetProperty("ready").GetBoolean());
         Assert.Equal(JsonValueKind.Null, ready.RootElement.GetProperty("launchId").ValueKind);
@@ -79,12 +81,13 @@ public sealed class CoverageEndpointTests
     [Fact]
     public void StartupHttpKeepsLegacyHealthCoverageAndAuthenticatedResetContracts()
     {
+        using var signal = new StartupSignal();
         var previous = Environment.GetEnvironmentVariable(TokenVariable);
         try
         {
             Environment.SetEnvironmentVariable(TokenVariable, "http-reset-token");
             var startup = new StartupState(Guid.NewGuid().ToString("D"));
-            startup.MarkReady();
+            signal.MarkReady();
             using var server = new EndpointServer(startup);
             Assert.Equal((200, "{\"ok\":true}"), server.Request("GET", "/coverage/health"));
             Instance.Visit("startup-http-contract", 97);
@@ -112,14 +115,30 @@ public sealed class CoverageEndpointTests
     }
 
     [Fact]
-    public void PublicRecorderSignalReachesTheDefaultStartupHttpState()
+    public void BclSignalReachesTheDefaultStartupHttpStateWithoutARecorderCall()
     {
-        Instance.MarkStartupReady();
+        using var signal = new StartupSignal();
         using var server = new EndpointServer();
+        using (var initial = JsonDocument.Parse(server.Request("GET", "/coverage/startup").Body))
+        {
+            Assert.False(initial.RootElement.GetProperty("ready").GetBoolean());
+        }
+        signal.MarkReady();
         var response = server.Request("GET", "/coverage/startup");
         Assert.Equal(200, response.Status);
         using var body = JsonDocument.Parse(response.Body);
         Assert.True(body.RootElement.GetProperty("ready").GetBoolean());
+    }
+
+    private sealed class StartupSignal : IDisposable
+    {
+        private readonly bool _previous = AppContext.TryGetSwitch(StartupState.ReadySwitch, out var ready) && ready;
+
+        internal StartupSignal() => AppContext.SetSwitch(StartupState.ReadySwitch, false);
+
+        internal void MarkReady() => AppContext.SetSwitch(StartupState.ReadySwitch, true);
+
+        public void Dispose() => AppContext.SetSwitch(StartupState.ReadySwitch, _previous);
     }
 
     private sealed class EndpointServer : IDisposable

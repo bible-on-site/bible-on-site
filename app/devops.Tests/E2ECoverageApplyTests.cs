@@ -145,6 +145,96 @@ public class E2ECoverageApplyTests
         Assert.Equal("0", Point(modules[0], "SequencePoint", "10").Attribute("vc")?.Value);
     }
 
+    [Fact]
+    public void CollectedRunWithOnlyEmptyModulesCannotPublishAZeroCoverageLayer()
+    {
+        var dumps = Enumerable.Range(0, 21)
+            .Select(index => ($"scenario-{index}.json", """{"snapshot":{"modules":{}}}""")).ToList();
+        var applied = E2ECoverageApply.ApplyDumps(Modules(), dumps, out var stats);
+
+        var failure = Assert.Throws<InvalidOperationException>(() =>
+            E2ECoverageApply.RequireRecordedVisits(dumps.Count, applied, stats));
+
+        Assert.Contains("collected 21 dump(s)", failure.Message);
+        Assert.Contains("no recognized positive visits", failure.Message);
+        Assert.Contains("incompatible=21, unknownPoints=0", failure.Message);
+    }
+
+    [Theory]
+    [InlineData("stale")]
+    [InlineData("unknown-point")]
+    [InlineData("zero-hit")]
+    [InlineData("zero-count")]
+    public void CollectedRunRequiresRecognizedPositiveVisits(string kind)
+    {
+        var points = kind switch
+        {
+            "unknown-point" => new Dictionary<string, long> { ["99999"] = 4 },
+            "zero-hit" => new Dictionary<string, long>(),
+            _ => new Dictionary<string, long> { ["10"] = kind == "zero-count" ? 0 : 1 }
+        };
+        var dump = Dump(kind == "stale" ? "other-build" : Hash, points);
+        var applied = E2ECoverageApply.ApplyDumps(Modules(), [("scenario.json", dump)], out var stats);
+
+        var failure = Assert.Throws<InvalidOperationException>(() =>
+            E2ECoverageApply.RequireRecordedVisits(1, applied, stats));
+
+        Assert.Contains("collected 1 dump(s)", failure.Message);
+        var incompatible = kind == "stale" ? 1 : 0;
+        var unknown = kind == "unknown-point" ? 1 : 0;
+        Assert.Equal(incompatible, stats.IncompatibleDumps);
+        Assert.Equal(unknown, stats.UnknownPointIds);
+        Assert.Contains($"incompatible={incompatible}, unknownPoints={unknown}", failure.Message);
+    }
+
+    [Fact]
+    public void IndividualEmptyAndZeroHitDumpsDoNotRejectARecordedRun()
+    {
+        var dumps = new List<(string Name, string Json)>
+        {
+            ("empty.json", """{"snapshot":{"modules":{}}}"""),
+            ("zero-hit.json", Dump(Hash, new Dictionary<string, long>())),
+            ("recorded.json", Dump(Hash, new Dictionary<string, long> { ["10"] = 2 }))
+        };
+        var modules = Modules();
+        var applied = E2ECoverageApply.ApplyDumps(modules, dumps, out var stats);
+
+        E2ECoverageApply.RequireRecordedVisits(dumps.Count, applied, stats);
+
+        Assert.Equal(2, applied);
+        Assert.Equal(1, stats.IncompatibleDumps);
+        Assert.Equal(1, stats.SequencePointsVisited);
+        Assert.Equal("2", Point(modules[0], "SequencePoint", "10").Attribute("vc")?.Value);
+    }
+
+    [Theory]
+    [InlineData(10)]
+    [InlineData(int.MinValue | 20)]
+    [InlineData(100663581)]
+    public void RecognizedSequenceBranchOrMethodVisitsProveTheRecorderWorked(int point)
+    {
+        var applied = E2ECoverageApply.ApplyDumps(Modules(),
+            [("recorded.json", Dump(Hash, new Dictionary<string, long> { [point.ToString()] = 1 }))], out var stats);
+
+        E2ECoverageApply.RequireRecordedVisits(1, applied, stats);
+
+        Assert.Equal(1, applied);
+        Assert.Equal(0, stats.IncompatibleDumps);
+        Assert.Equal(0, stats.UnknownPointIds);
+    }
+
+    [Fact]
+    public void NoDumpsRemainAllowedForAFullySkippedRun()
+    {
+        var applied = E2ECoverageApply.ApplyDumps(Modules(), [], out var stats);
+
+        E2ECoverageApply.RequireRecordedVisits(0, applied, stats);
+
+        Assert.Equal(0, applied);
+        Assert.Equal(0, stats.IncompatibleDumps);
+        Assert.Equal(0, stats.SequencePointsVisited);
+    }
+
     [Fact]    public void Counts_dumps_without_a_snapshot_as_incompatible()
     {
         var modules = Modules();

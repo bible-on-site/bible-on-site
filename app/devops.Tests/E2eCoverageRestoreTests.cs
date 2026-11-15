@@ -77,8 +77,8 @@ public sealed class E2eCoverageRestoreTests
     }
 
     // Real SDK compilation exercises the actual cleanup target from the app
-    // project without importing MAUI workloads. A tiny recorder reference
-    // reproduces the E2E_COVERAGE call already present before IL weaving.
+    // project without importing MAUI workloads. A tiny recorder call models
+    // the dependency injected by IL weaving, which a plain rebuild must remove.
     private sealed class BuildFixture : IDisposable
     {
         private readonly DirectoryInfo _root = Directory.CreateDirectory(
@@ -117,7 +117,7 @@ public sealed class E2eCoverageRestoreTests
                 """);
             File.WriteAllText(Path.Join(recorder.FullName, "Recorder.cs"), """
                 namespace AltCover.Recorder;
-                public static class Instance { public static void MarkStartupReady() { } }
+                public static class Instance { public static void Visit(string module, int point) { } }
                 """);
             var app = Directory.CreateDirectory(Path.Join(_root.FullName, "App"));
             _project = Path.Join(app.FullName, "App.csproj");
@@ -152,7 +152,8 @@ public sealed class E2eCoverageRestoreTests
 
         internal void WriteProgram(string plainText) => File.WriteAllText(_program, $$"""
             #if E2E_COVERAGE
-            AltCover.Recorder.Instance.MarkStartupReady();
+            System.AppContext.SetSwitch("BibleOnSite.E2eCoverage.StartupReady", true);
+            AltCover.Recorder.Instance.Visit("fixture", 1);
             System.Console.WriteLine("coverage");
             #else
             System.Console.WriteLine("{{plainText}}");
