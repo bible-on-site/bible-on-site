@@ -1,0 +1,48 @@
+name: Native terms frames for PR 3391
+on:
+  push:
+    branches: [codex/evidence-font-terms-3391]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github/terms-3391
+      - uses: actions/download-artifact@v8
+        with:
+          name: appium-android-release-smoke-43716471438-1
+          path: before-apk
+          run-id: 43716471438
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: appium-android-release-smoke-43722779725-1
+          path: after-apk
+          run-id: 43722779725
+          github-token: ${{ github.token }}
+      - name: Allow this runner to use its own KVM device
+        run: sudo chmod 666 /dev/kvm
+      - uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 36
+          arch: x86_64
+          target: google_apis
+          profile: pixel_7
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader -noaudio -no-boot-anim -no-metrics -no-snapshot -memory 4096
+          script: python3 .github/terms-3391/capture.py
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: terms-3391-device-frames
+          path: terms-frames/
+          if-no-files-found: warn
+          retention-days: 30
+
