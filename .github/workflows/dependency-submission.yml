@@ -82,6 +82,7 @@ jobs:
           band=$(dotnet --version)
           if [ "${{ matrix.source }}" = 'head' ]; then
             for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "$band" ] || sudo rm -rf "$d"; done
+            dotnet workload update
             dotnet workload install maui-android --version "$band.1"
           else
             dotnet workload install maui-android

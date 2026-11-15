@@ -143,6 +143,9 @@ jobs:
         # install — drop every band except the SDK's own 11.0.100.
         run: |
           Get-ChildItem "$env:DOTNET_ROOT\sdk-manifests" -Directory | Where-Object Name -ne '11.0.100' | Remove-Item -Recurse -Force
+          # Populate the 11-band advertising manifests — without them the SDK
+          # cannot map workload IDs (maui-windows not recognized).
+          dotnet workload update
           dotnet workload install maui-windows --version 11.0.100.1
 
       - name: Decode signing certificate
@@ -357,6 +360,7 @@ jobs:
         # Foreign-band sdk-manifests claiming the same packs abort the install.
         run: |
           for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
+          dotnet workload update
           dotnet workload install maui-android --version 11.0.100.1
 
       - name: Restore perushim notes SQLite for AAB asset pack
@@ -617,6 +621,7 @@ jobs:
           # deferral while the image lagged. Foreign-band sdk-manifests
           # claiming the same packs abort the install — drop them first.
           for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
+          dotnet workload update
           dotnet workload install maui-ios --version 11.0.100.1
           # Show installed workloads
           dotnet workload list

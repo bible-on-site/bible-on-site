@@ -504,6 +504,7 @@ jobs:
         # Foreign-band sdk-manifests claiming the same packs abort the install.
         run: |
           for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
+          dotnet workload update
           dotnet workload install ${{ inputs.workload }} --version ${{ steps.workload-set.outputs.version }}
 
       # Background like the other cache saves: compression and upload stay off
