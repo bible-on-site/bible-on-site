@@ -39,6 +39,7 @@ import path from "node:path";
 // real TestInfo/TestCase/TestResult/Reporter satisfies these structurally.
 interface TestInfoLike {
 	titlePath: string[];
+	project: { name: string };
 	workerIndex: number;
 	retry: number;
 }
@@ -126,8 +127,10 @@ export function dumpImpactCoverage(
 ): void {
 	const dir = impactEvidenceDir();
 	if (dir === null || !coverage || Object.keys(coverage).length === 0) return;
-	const { file, titlePath, project } = impactIdParts(testInfo.titlePath);
-	const id = impactTestId(testInfo.titlePath);
+	// TestInfo starts at the file; the reporter also includes root and project.
+	const reporterPath = ["", testInfo.project.name, ...testInfo.titlePath];
+	const { file, titlePath, project } = impactIdParts(reporterPath);
+	const id = impactTestId(reporterPath);
 	const seq = coverageSeq.get(id) ?? 0;
 	coverageSeq.set(id, seq + 1);
 	// The filename stays unique across every writer that can produce a dump
@@ -179,8 +182,7 @@ export default class E2eImpactReporter implements ReporterLike {
 			.allTests()
 			.map((test) => {
 				const titlePath = test.titlePath();
-				const { file, titlePath: titles, project } =
-					impactIdParts(titlePath);
+				const { file, titlePath: titles, project } = impactIdParts(titlePath);
 				return {
 					id: impactTestId(titlePath),
 					project,
