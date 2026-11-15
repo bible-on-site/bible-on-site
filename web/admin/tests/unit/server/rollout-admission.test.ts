@@ -40,6 +40,7 @@ interface Subscriber {
 	id: number;
 	email: string;
 	consent_status: string;
+	consent_source: string | null;
 }
 interface CohortRow {
 	subscriber_id: number;
@@ -68,7 +69,11 @@ const runtime = {
 
 /** In-memory implementation of the exact SQL contract the sweep issues. */
 const state = {
-	rollout: { state: "disabled", cohort: "original" },
+	rollout: {
+		state: "disabled",
+		cohort: "original",
+		last_error: null as string | null,
+	},
 	subscribers: new Map<number, Subscriber>(),
 	cohort: new Map<number, CohortRow>(),
 	admissions: new Map<string, Admission>(),
@@ -79,6 +84,27 @@ const state = {
 	query(sql: string, params: unknown[] = []) {
 		if (sql.includes("tanah_daily_bulletin_email_rollout"))
 			return [{ ...this.rollout }];
+		// The next-member select embeds a NOT EXISTS subselect over the
+		// admission table, so it must dispatch before the admission patterns.
+		if (sql.includes("FROM tanah_daily_bulletin_email_cohort c")) {
+			const cohort = String(params[0]);
+			const next = [...this.cohort.values()]
+				.filter(
+					(row) =>
+						this.rollout.cohort === cohort &&
+						row.status === "pending" &&
+						this.subscribers.get(row.subscriber_id)?.consent_status ===
+							"pending" &&
+						// NOT EXISTS an outstanding reservation for this member.
+						![...this.admissions.values()].some(
+							(entry) =>
+								entry.status === "reserved" &&
+								entry.subscriber_id === row.subscriber_id,
+						),
+				)
+				.sort((a, b) => a.position - b.position)[0];
+			return next ? [{ subscriber_id: next.subscriber_id }] : [];
+		}
 		if (sql.includes("tanah_daily_bulletin_email_admission")) {
 			if (sql.includes("WHERE status = 'reserved' AND local_date < ?")) {
 				const limit = Number(params[1]);
@@ -96,19 +122,6 @@ const state = {
 					this.admissionKey(String(params[0]), String(params[1])),
 				) ?? null;
 			return row ? [{ ...row }] : [];
-		}
-		if (sql.includes("tanah_daily_bulletin_email_cohort")) {
-			const cohort = String(params[0]);
-			const next = [...this.cohort.values()]
-				.filter(
-					(row) =>
-						this.rollout.cohort === cohort &&
-						row.status === "pending" &&
-						this.subscribers.get(row.subscriber_id)?.consent_status ===
-							"pending",
-				)
-				.sort((a, b) => a.position - b.position)[0];
-			return next ? [{ subscriber_id: next.subscriber_id }] : [];
 		}
 		if (sql.includes("tanah_daily_bulletin_subscriber")) {
 			const row = this.subscribers.get(Number(params[0])) ?? null;
@@ -177,6 +190,10 @@ const state = {
 			this.rollout.state = "completed";
 			return { affectedRows: 1 };
 		}
+		if (sql.includes("tanah_daily_bulletin_email_rollout SET last_error")) {
+			this.rollout.last_error = String(params[0]);
+			return { affectedRows: 1 };
+		}
 		if (sql.includes("SET subscriber_id = ?, last_error = NULL")) {
 			const row = this.admissions.get(
 				this.admissionKey(String(params[1]), String(params[2])),
@@ -199,7 +216,9 @@ const state = {
 			const row = this.admissions.get(
 				this.admissionKey(String(params[1]), String(params[2])),
 			);
-			if (row?.status !== "reserved") return { affectedRows: 0 };
+			const member = params[3] === null ? null : Number(params[3]);
+			if (row?.status !== "reserved" || row.subscriber_id !== member)
+				return { affectedRows: 0 };
 			row.subscriber_id = null;
 			row.last_error = String(params[0]);
 			return { affectedRows: 1 };
@@ -208,7 +227,9 @@ const state = {
 			const row = this.admissions.get(
 				this.admissionKey(String(params[1]), String(params[2])),
 			);
-			if (row?.status !== "reserved") return { affectedRows: 0 };
+			const member = params[3] === null ? null : Number(params[3]);
+			if (row?.status !== "reserved" || row.subscriber_id !== member)
+				return { affectedRows: 0 };
 			row.status = "lapsed";
 			row.last_error = String(params[0]);
 			return { affectedRows: 1 };
@@ -225,6 +246,7 @@ const state = {
 			const row = this.subscribers.get(Number(params[0]));
 			if (row?.consent_status !== "pending") return { affectedRows: 0 };
 			row.consent_status = "confirmed";
+			row.consent_source ??= "Original subscriber list rollout";
 			return { affectedRows: 1 };
 		}
 		if (sql.includes("SET status = 'admitted', admission_date")) {
@@ -238,7 +260,9 @@ const state = {
 			const row = this.admissions.get(
 				this.admissionKey(String(params[0]), String(params[1])),
 			);
-			if (row?.status !== "reserved") return { affectedRows: 0 };
+			const member = params[2] === null ? null : Number(params[2]);
+			if (row?.status !== "reserved" || row.subscriber_id !== member)
+				return { affectedRows: 0 };
 			row.status = "admitted";
 			row.last_error = null;
 			return { affectedRows: 1 };
@@ -268,6 +292,7 @@ function seed(
 			id: entry.id,
 			email: entry.email,
 			consent_status: entry.consent,
+			consent_source: null,
 		});
 		state.cohort.set(entry.id, {
 			subscriber_id: entry.id,
@@ -285,7 +310,7 @@ const at = (utc: string) => new Date(`${utc}Z`);
 
 beforeEach(() => {
 	vi.resetAllMocks();
-	state.rollout = { state: "disabled", cohort: "original" };
+	state.rollout = { state: "disabled", cohort: "original", last_error: null };
 	state.subscribers.clear();
 	state.cohort.clear();
 	state.admissions.clear();
@@ -312,6 +337,11 @@ describe("original-cohort admission sweep", () => {
 		]);
 		await reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00"));
 		expect(state.subscribers.get(1)?.consent_status).toBe("confirmed");
+		// The original list — not the provisioned SES contact — is recorded as
+		// the durable consent basis.
+		expect(state.subscribers.get(1)?.consent_source).toBe(
+			"Original subscriber list rollout",
+		);
 		expect(state.subscribers.get(2)?.consent_status).toBe("pending");
 		expect(state.cohort.get(1)).toMatchObject({
 			status: "admitted",
@@ -500,6 +530,83 @@ describe("original-cohort admission sweep", () => {
 			"exhausted",
 		);
 		expect(m.ensureSubscribed).toHaveBeenCalledTimes(1);
+	});
+	it("freezes stale reservations without provider calls while paused or disabled", async () => {
+		seed([
+			{ id: 1, email: "held@x.invalid", consent: "pending" },
+			{ id: 2, email: "next@x.invalid", consent: "pending" },
+		]);
+		state.admissions.set("original|2026-11-01", {
+			cohort: "original",
+			local_date: "2026-11-01",
+			subscriber_id: 1,
+			status: "reserved",
+			last_error: null,
+		});
+		for (const stopped of ["paused", "disabled"]) {
+			state.rollout.state = stopped;
+			await reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00"));
+			expect(state.subscribers.get(1)?.consent_status).toBe("pending");
+			expect(state.admissions.get("original|2026-11-01")).toMatchObject({
+				status: "reserved",
+				subscriber_id: 1,
+			});
+		}
+		expect(m.ensureSubscribed).not.toHaveBeenCalled();
+		// Re-enabling resumes the same recorded member under its own date.
+		state.rollout.state = "running";
+		await reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00"));
+		expect(state.admissions.get("original|2026-11-01")?.status).toBe(
+			"admitted",
+		);
+		expect(state.cohort.get(1)?.admission_date).toBe("2026-11-01");
+	});
+	it("blocks the activation commit when the rollout is disabled mid-check", async () => {
+		seed([
+			{ id: 1, email: "held@x.invalid", consent: "pending" },
+			{ id: 2, email: "next@x.invalid", consent: "pending" },
+		]);
+		m.ensureSubscribed.mockImplementation(async (email: string) => {
+			if (email === "held@x.invalid") state.rollout.state = "disabled";
+			return "subscribed";
+		});
+		await reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00"));
+		expect(state.subscribers.get(1)?.consent_status).toBe("pending");
+		expect(state.cohort.get(1)?.status).toBe("pending");
+		expect(state.admissions.get("original|2026-11-02")).toMatchObject({
+			status: "reserved",
+			subscriber_id: 1,
+		});
+		expect(state.subscribers.get(2)?.consent_status).toBe("pending");
+	});
+	it("selects the next member today while an older reservation still holds the first", async () => {
+		seed([
+			{ id: 1, email: "retry@x.invalid", consent: "pending" },
+			{ id: 2, email: "next@x.invalid", consent: "pending" },
+		]);
+		state.admissions.set("original|2026-11-01", {
+			cohort: "original",
+			local_date: "2026-11-01",
+			subscriber_id: 1,
+			status: "reserved",
+			last_error: null,
+		});
+		m.ensureSubscribed.mockImplementation(async (email: string) => {
+			if (email === "retry@x.invalid") throw new Error("timeout");
+			return "subscribed";
+		});
+		await reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00"));
+		// The older reservation keeps its member; today's slot went to member 2.
+		expect(state.admissions.get("original|2026-11-01")).toMatchObject({
+			status: "reserved",
+			subscriber_id: 1,
+			last_error: "timeout",
+		});
+		expect(state.admissions.get("original|2026-11-02")).toMatchObject({
+			status: "admitted",
+			subscriber_id: 2,
+		});
+		expect(state.cohort.get(1)?.status).toBe("pending");
 	});
 	it("bounds same-day re-selection so an all-ineligible day still converges", async () => {
 		seed(

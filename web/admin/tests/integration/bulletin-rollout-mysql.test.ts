@@ -19,6 +19,8 @@ const contacts = new Map<string, Set<string>>();
 const optedOut = new Set<string>();
 const sesFailures = new Set<string>();
 const unsubscribedInSes = new Set<string>();
+/** Runs inside the provider call, simulating a concurrent worker or operator. */
+const midCallActions = new Map<string, () => Promise<void>>();
 vi.mock("~/server/ses-client.server", () => {
 	class SesError extends Error {
 		constructor(
@@ -41,6 +43,7 @@ vi.mock("~/server/ses-client.server", () => {
 		SesClient: class {
 			async ensureSubscribedContact(email: string, topic: string) {
 				if (sesFailures.has(email)) throw new SesError("timeout", "uncertain");
+				await midCallActions.get(email)?.();
 				const topics = contacts.get(email);
 				if (topics)
 					return optedOut.has(email) || !topics.has(topic)
@@ -285,6 +288,13 @@ async function consentOf(id: number): Promise<string> {
 	);
 	return String(row?.consent_status);
 }
+async function consentSourceOf(id: number): Promise<string | null> {
+	const row = await db.queryOne<{ consent_source: string | null }>(
+		"SELECT consent_source FROM tanah_daily_bulletin_subscriber WHERE id = ?",
+		[id],
+	);
+	return row?.consent_source ?? null;
+}
 
 const at = (utc: string) => new Date(`${utc}Z`);
 
@@ -381,6 +391,7 @@ beforeEach(async () => {
 	optedOut.clear();
 	sesFailures.clear();
 	unsubscribedInSes.clear();
+	midCallActions.clear();
 });
 
 afterAll(async () => {
@@ -445,6 +456,9 @@ describe("admission sweep on the real schema", () => {
 			at(`${localDate}T06:00:00`),
 		);
 		expect(await consentOf(10)).toBe("confirmed");
+		// Activation stamps the authoritative original list — not the SES
+		// contact provisioning — as the durable consent basis.
+		expect(await consentSourceOf(10)).toBe("Original subscriber list rollout");
 		expect(await consentOf(11)).toBe("pending");
 		const rows = await admissionRows();
 		expect(rows).toHaveLength(1);
@@ -539,6 +553,122 @@ describe("admission sweep on the real schema", () => {
 		expect(rows).toHaveLength(2);
 		expect(rows[0]).toMatchObject({ status: "admitted", subscriber_id: 10 });
 		expect(rows[1]).toMatchObject({ status: "admitted", subscriber_id: 11 });
+	});
+	it("never lets a superseded worker clear a newer member's reservation", async () => {
+		await seedSubscribers();
+		optedOut.add("first@example.invalid");
+		contacts.set("first@example.invalid", new Set());
+		// While the first member's SES check runs, another worker releases it
+		// and claims member 11 for the same day.
+		midCallActions.set("first@example.invalid", async () => {
+			await db.execute(
+				"UPDATE tanah_daily_bulletin_email_admission SET subscriber_id = 11 WHERE cohort = 'original' AND local_date = ? AND status = 'reserved'",
+				[localDate],
+			);
+		});
+		await enrollCohort();
+		await rolloutState.setRolloutState({ action: "enable", revision: 0 });
+		await admission.reconcileRolloutAdmission(
+			undefined,
+			at(`${localDate}T06:00:00`),
+		);
+		// The opted-out member is excluded; member 11's reservation survived and
+		// completed under the same day — still one committed activation.
+		expect(await consentOf(10)).toBe("unsubscribed");
+		expect(await consentOf(11)).toBe("confirmed");
+		expect(await consentOf(13)).toBe("confirmed");
+		expect(await admissionRows()).toHaveLength(1);
+		expect((await admissionRows())[0]).toMatchObject({
+			status: "admitted",
+			subscriber_id: 11,
+		});
+	});
+	it("freezes the activation when the rollout is disabled mid-check", async () => {
+		await seedSubscribers();
+		midCallActions.set("first@example.invalid", async () => {
+			await db.execute(
+				"UPDATE tanah_daily_bulletin_email_rollout SET state = 'disabled' WHERE id = 1",
+			);
+		});
+		await enrollCohort();
+		await rolloutState.setRolloutState({ action: "enable", revision: 0 });
+		await admission.reconcileRolloutAdmission(
+			undefined,
+			at(`${localDate}T06:00:00`),
+		);
+		// The operator's disable won the serialization: nothing was activated.
+		expect(await consentOf(10)).toBe("pending");
+		expect((await admissionRows())[0]).toMatchObject({
+			status: "reserved",
+			subscriber_id: 10,
+		});
+		// While disabled the sweep performs no provider calls at all; any
+		// attempted check would have failed and stamped last_error.
+		midCallActions.clear();
+		sesFailures.add("first@example.invalid");
+		sesFailures.add("second@example.invalid");
+		await admission.reconcileRolloutAdmission(
+			undefined,
+			at(`${localDate}T08:00:00`),
+		);
+		expect((await admissionRows())[0]).toMatchObject({
+			status: "reserved",
+			subscriber_id: 10,
+			last_error: null,
+		});
+		sesFailures.clear();
+		// Re-enabling resumes the frozen reservation under its own date.
+		const enabled = await rolloutState.setRolloutState({
+			action: "enable",
+			revision: 1,
+		});
+		expect(enabled.state).toBe("running");
+		await admission.reconcileRolloutAdmission(
+			undefined,
+			at(`${localDate}T10:00:00`),
+		);
+		expect(await consentOf(10)).toBe("confirmed");
+		expect((await admissionRows())[0]).toMatchObject({
+			status: "admitted",
+			subscriber_id: 10,
+		});
+	});
+	it("keeps today's slot for the next member while an older reservation holds the first", async () => {
+		await seedSubscribers();
+		await enrollCohort();
+		await admin.query(
+			"INSERT INTO tanah_daily_bulletin_email_admission (cohort, local_date, subscriber_id, status) VALUES ('original', '2026-10-30', 10, 'reserved')",
+		);
+		sesFailures.add("first@example.invalid");
+		await rolloutState.setRolloutState({ action: "enable", revision: 0 });
+		await admission.reconcileRolloutAdmission(
+			undefined,
+			at(`${localDate}T06:00:00`),
+		);
+		const rows = await admissionRows();
+		expect(rows).toHaveLength(2);
+		expect(rows[0]).toMatchObject({
+			status: "reserved",
+			subscriber_id: 10,
+			last_error: "timeout",
+		});
+		expect(rows[1]).toMatchObject({
+			status: "admitted",
+			subscriber_id: 11,
+		});
+		expect(await consentOf(10)).toBe("pending");
+		// Once the provider recovers the older reservation still completes its
+		// own member under its own date.
+		sesFailures.clear();
+		await admission.reconcileRolloutAdmission(
+			undefined,
+			at(`${localDate}T09:00:00`),
+		);
+		expect(await consentOf(10)).toBe("confirmed");
+		expect((await admissionRows())[0]).toMatchObject({
+			status: "admitted",
+			subscriber_id: 10,
+		});
 	});
 	it("stops new admissions while paused but keeps deliveries licensed", async () => {
 		await seedSubscribers();
