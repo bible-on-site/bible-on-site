@@ -25,10 +25,9 @@ interface WebpackStatsLike {
 	};
 }
 
-// Each `it` runs one vendored-webpack compile of instrumentation.ts. The
-// module graph is three files, so a compile measures ~0.1-0.3s; Jest's 5s
-// default deadline stays in place as the regression check — a slower compile
-// must be made faster, not masked by a bigger timeout.
+// Each `it` compiles instrumentation.ts with the production runtime constants.
+// Keep Jest's 5s default deadline as a regression check for accidental data
+// bundling; the development corpus must stay outside the production graph.
 const srcDir = path.resolve(__dirname, "../../src");
 const localModules = path.resolve(__dirname, "../../node_modules");
 const tsLoader = path.resolve(__dirname, "../util/webpack-swc-ts-loader.cjs");
@@ -79,6 +78,7 @@ function compileInstrumentation(
 		plugins: [
 			new DefinePlugin({
 				"process.env.NEXT_RUNTIME": JSON.stringify(runtime),
+				"process.env.NODE_ENV": JSON.stringify("production"),
 			}),
 		],
 	});
@@ -109,7 +109,10 @@ describe("instrumentation bundling", () => {
 		const names = moduleNames(stats);
 		expect(
 			names.filter(
-				(n) => n.includes("event-loop-diagnostics") || n.includes("perf_hooks"),
+				(n) =>
+					n.includes("event-loop-diagnostics") ||
+					n.includes("perf_hooks") ||
+					n.includes("/data/db/"),
 			),
 		).toEqual([]);
 	});
@@ -117,8 +120,13 @@ describe("instrumentation bundling", () => {
 	it("keeps the diagnostics module reachable in the nodejs bundle", async () => {
 		const stats = await compileInstrumentation("nodejs");
 		expect(stats.hasErrors()).toBe(false);
+		const names = moduleNames(stats);
+		expect(names.some((n) => n.includes("event-loop-diagnostics"))).toBe(true);
+		expect(names.some((n) => n.includes("/data/db/sefarim.ts"))).toBe(true);
 		expect(
-			moduleNames(stats).some((n) => n.includes("event-loop-diagnostics")),
-		).toBe(true);
+			names.filter((n) =>
+				n.includes("sefaria-dump-5784-sivan-4.tanah_view.json"),
+			),
+		).toEqual([]);
 	});
 });
