@@ -69,6 +69,9 @@ public sealed class ReaderCarouselActions
     /// the dispatched event then stays unsubscribed entirely.
     /// </summary>
     public Action<float, float>? ArmUnreceivedPress { get; init; }
+
+    /// <summary>Reveals navigation on upward content intent even while a native list is settling.</summary>
+    public Action? UpwardContentDrag { get; init; }
 }
 
 /// <summary>
@@ -434,6 +437,10 @@ public sealed class ReaderCarousel
             ? Android.Views.ViewConfiguration.Get(view.Context!)?.ScaledTouchSlop ?? 12
             : 12;
         _swipe.Move(position, slop);
+        if (_swipe.IsUpwardContentDrag(slop))
+        {
+            _actions.UpwardContentDrag?.Invoke();
+        }
     }
 
     // Releases and native cancels/interruptions both arrive here: a cancel

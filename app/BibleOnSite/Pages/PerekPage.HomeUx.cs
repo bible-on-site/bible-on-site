@@ -53,6 +53,13 @@ public partial class PerekPage
         ReaderToolbar.IsVisible = _homeUxHeader.Update(delta, keepVisible);
     }
 
+    private void RevealHomeUxHeader()
+    {
+        if (!HomeUxPreview.Enabled || ExitFullScreenButton.IsVisible) { return; }
+        _homeUxHeader.Reset();
+        ReaderToolbar.IsVisible = true;
+    }
+
     private async void OnHomePreviewClicked(object? sender, EventArgs e) =>
         await ShellAppNavigator.Instance.GoToAsync($"//{AppRoutes.Perek}");
 }
