@@ -52,11 +52,29 @@ async fn tanchuma_survives_the_complete_mongo_pipeline_and_keeps_paragraphs() {
             .iter()
             .any(|n| n.perek_id == 5 && n.pasuk == 29)
     );
-    // An explicit subject outside the Torah, not the first incidental quote.
+    // Supporting quotations must not move Tanchuma away from its Torah context.
     assert!(
         extracted
             .notes
             .iter()
-            .any(|n| n.perek_id == 600 && n.pasuk == 7)
+            .all(|note| (1..=187).contains(&note.perek_id))
     );
+
+    // Vayikra 8 keeps the opening 1:1-2 passage at its first verse and the
+    // separate bird-offering passage at 1:14. Jonah remains supporting material.
+    let vayikra = docs[0].get_array("versions").unwrap()[0]
+        .as_document()
+        .unwrap()
+        .get_array("Vayikra")
+        .unwrap();
+    let source = vayikra[7]
+        .as_str()
+        .unwrap_or_else(|| vayikra[7].as_array().unwrap()[0].as_str().unwrap());
+    let subjects: HashSet<_> = extracted
+        .notes
+        .iter()
+        .filter(|note| note.note_content == source.trim())
+        .map(|note| (note.perek_id, note.pasuk))
+        .collect();
+    assert_eq!(subjects, HashSet::from([(91, 1), (91, 14)]));
 }

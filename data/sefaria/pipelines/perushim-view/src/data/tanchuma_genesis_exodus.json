@@ -1,70 +1,35 @@
 {
   "Bereshit": [
     [
-      [
-        "Genesis 1:1",
-        "Song of Songs 5:11",
-        "Leviticus 22:32",
-        "Psalms 150:6"
-      ],
-      [
-        "Deuteronomy 6:4",
-        "Exodus 34:14",
-        "Jeremiah 5:12"
-      ],
-      "I Samuel 2:2",
-      "Song of Songs 5:11",
-      [
-        "Genesis 1:1",
-        "Proverbs 8:30"
-      ],
-      "Joshua 1:8",
-      "I Samuel 2:8",
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1",
       "Genesis 1:31",
-      [
-        "Proverbs 22:4",
-        "Psalms 111:10"
-      ],
-      [
-        "Numbers 12:3",
-        "Exodus 3:6"
-      ],
-      [
-        "Exodus 3:6",
-        "Exodus 34:30",
-        "Numbers 12:8"
-      ],
-      "Deuteronomy 7:11",
-      [
-        "Genesis 41:42",
-        "Psalms 31:20"
-      ],
-      "Psalms 31:20",
-      "Isaiah 49:4",
-      "Isaiah 32:20",
-      [
-        "Isaiah 64:3",
-        "Psalms 119:1",
-        "Proverbs 3:18"
-      ],
-      [
-        "Deuteronomy 11:22",
-        "I Samuel 2:30"
-      ],
-      [
-        "Deuteronomy 10:20",
-        "Proverbs 3:15"
-      ],
-      "Proverbs 8:34"
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1",
+      "Genesis 1:1"
     ],
     [
       "Genesis 2:2",
-      "Isaiah 58:13",
-      "Isaiah 58:13",
-      "Isaiah 58:13",
-      "Isaiah 58:13",
-      "Isaiah 58:13",
-      "Isaiah 58:13",
+      "Genesis 2:2",
+      "Genesis 2:2",
+      "Genesis 2:2",
+      "Genesis 2:2",
+      "Genesis 2:2",
+      "Genesis 2:2",
       "Genesis 2:2",
       "Genesis 2:2",
       "Genesis 2:2",
@@ -79,7 +44,7 @@
       "Genesis 2:2",
       "Genesis 2:2",
       "Genesis 2:2",
-      "Esther 9:18",
+      "Genesis 2:2",
       "Genesis 2:2",
       "Genesis 2:2",
       "Genesis 2:2",
@@ -141,32 +106,17 @@
       "Genesis 3:22"
     ],
     [
-      [
-        "Genesis 4:3",
-        "Genesis 4:4"
-      ],
+      "Genesis 4:3",
       "Genesis 4:8",
       "Genesis 4:8",
       "Genesis 4:9",
-      [
-        "Genesis 4:9",
-        "Genesis 4:10"
-      ],
+      "Genesis 4:9",
       "Genesis 4:10",
-      [
-        "Genesis 4:11",
-        "Genesis 4:12"
-      ],
-      [
-        "Genesis 4:13",
-        "Genesis 4:16"
-      ]
+      "Genesis 4:11",
+      "Genesis 4:13"
     ],
     [
-      [
-        "Genesis 4:14",
-        "Genesis 4:15"
-      ],
+      "Genesis 4:14",
       "Genesis 4:8"
     ],
     [
@@ -178,10 +128,7 @@
       "Genesis 5:29"
     ],
     [
-      [
-        "Genesis 6:2",
-        "Genesis 6:5"
-      ],
+      "Genesis 6:5",
       "Genesis 6:5",
       "Genesis 6:4",
       "Genesis 6:5",
@@ -189,43 +136,25 @@
     ],
     [
       null,
-      "I Kings 8:66",
-      [
-        "Proverbs 4:26",
-        "Proverbs 5:6"
-      ],
-      [
-        "Proverbs 3:15",
-        "Proverbs 8:11",
-        "Psalms 49:12"
-      ],
-      [
-        "Joel 2:26",
-        "Joel 2:27"
-      ]
+      null,
+      null,
+      null,
+      null
     ]
   ],
   "Noach": [
     [
       [
         "Leviticus 15:25",
-        "Numbers 15:20",
-        "Isaiah 58:13"
+        "Numbers 15:20"
       ],
       [
         "Leviticus 15:25",
-        "Numbers 15:20",
-        "Isaiah 58:13"
+        "Numbers 15:20"
       ],
-      [
-        "Genesis 3:6",
-        "Genesis 9:6"
-      ],
-      [
-        "Genesis 2:6",
-        "Genesis 2:7"
-      ],
-      "Proverbs 20:27"
+      "Genesis 3:6",
+      "Genesis 2:6",
+      "Genesis 3:6"
     ],
     [
       "Genesis 6:9",
@@ -235,41 +164,19 @@
       "Genesis 6:9"
     ],
     [
-      [
-        "Genesis 6:9",
-        "Job 11:9"
-      ],
-      [
-        "Job 28:13",
-        "Numbers 19:14",
-        "Exodus 34:27"
-      ],
+      "Genesis 6:9",
       "Exodus 34:27",
-      [
-        "Exodus 19:17",
-        "Deuteronomy 6:5"
-      ],
-      [
-        "Deuteronomy 6:6",
-        "Deuteronomy 6:7"
-      ],
-      [
-        "Deuteronomy 11:13",
-        "Deuteronomy 11:14"
-      ],
+      "Exodus 34:27",
+      "Exodus 19:17",
+      "Deuteronomy 6:6",
       "Deuteronomy 11:13",
-      [
-        "Isaiah 9:1",
-        "Jeremiah 33:25"
-      ],
-      "Isaiah 59:21",
-      "II Kings 24:14",
-      "II Kings 24:14",
-      [
-        "Ezekiel 17:13",
-        "Daniel 9:14"
-      ],
-      "Micah 4:10"
+      "Deuteronomy 11:13",
+      "Genesis 6:9",
+      "Genesis 6:9",
+      "Genesis 6:9",
+      "Genesis 6:9",
+      "Genesis 6:9",
+      "Genesis 6:9"
     ],
     [
       "Genesis 6:13",
@@ -284,10 +191,7 @@
     ],
     [
       "Genesis 6:9",
-      [
-        "Genesis 6:12",
-        "Genesis 1:25"
-      ],
+      "Genesis 6:12",
       "Genesis 6:9",
       "Genesis 6:9",
       "Genesis 6:9",
@@ -330,41 +234,22 @@
       "Genesis 8:16",
       "Genesis 8:16",
       "Genesis 8:16",
-      [
-        "Genesis 8:21",
-        "Isaiah 54:9"
-      ],
-      "I Kings 6:38",
-      "I Kings 6:38",
-      [
-        "Genesis 9:11",
-        "Isaiah 54:9"
-      ],
-      [
-        "Isaiah 62:8",
-        "Isaiah 62:9"
-      ],
-      "Psalms 147:2",
-      "Psalms 102:17"
+      "Genesis 8:21",
+      "Genesis 8:21",
+      "Genesis 8:21",
+      "Genesis 9:11",
+      "Genesis 9:11",
+      "Genesis 9:11",
+      "Genesis 9:11"
     ],
     [
-      [
-        "Genesis 9:18",
-        "Genesis 1:28"
-      ],
+      "Genesis 9:18",
       "Genesis 1:28",
-      [
-        "Genesis 24:3",
-        "Genesis 28:2",
-        "Genesis 6:2"
-      ],
-      [
-        "Genesis 6:12",
-        "Genesis 7:8"
-      ],
+      "Genesis 6:2",
+      "Genesis 6:12",
       "Genesis 8:19",
       "Genesis 9:18",
-      "Ezekiel 26:21",
+      "Genesis 9:18",
       "Genesis 9:18",
       "Genesis 9:18"
     ],
@@ -387,10 +272,7 @@
       "Genesis 9:20"
     ],
     [
-      [
-        "Genesis 9:20",
-        "Genesis 9:23"
-      ],
+      "Genesis 9:20",
       "Genesis 9:25",
       "Genesis 9:25",
       "Genesis 9:25",
@@ -435,14 +317,8 @@
     ],
     [
       "Genesis 12:1",
-      [
-        "Genesis 12:1",
-        "Song of Songs 8:9"
-      ],
-      [
-        "Genesis 12:1",
-        "Song of Songs 8:10"
-      ]
+      "Genesis 12:1",
+      "Genesis 12:1"
     ],
     [
       "Genesis 12:1",
@@ -460,7 +336,7 @@
       "Genesis 12:10",
       "Genesis 12:14",
       "Genesis 12:17",
-      "Psalms 92:13"
+      "Genesis 12:10"
     ],
     [
       "Genesis 14:1",
@@ -481,12 +357,7 @@
     [
       "Genesis 14:1",
       "Genesis 14:1",
-      [
-        "Genesis 12:1",
-        "Genesis 12:2",
-        "Genesis 12:10",
-        "Genesis 12:14"
-      ],
+      "Genesis 12:1",
       "Genesis 14:1"
     ],
     [
@@ -533,10 +404,7 @@
     ],
     [
       "Genesis 17:1",
-      [
-        "Genesis 14:23",
-        "Genesis 17:1"
-      ],
+      "Genesis 17:1",
       "Genesis 17:2"
     ],
     [
@@ -580,28 +448,12 @@
     [
       "Genesis 18:2",
       "Genesis 18:2",
-      [
-        "Genesis 18:4",
-        "Genesis 18:5",
-        "Genesis 18:8"
-      ],
-      [
-        "Genesis 18:5",
-        "Genesis 18:6"
-      ],
+      "Genesis 18:4",
+      "Genesis 18:5",
       "Genesis 18:7",
-      [
-        "Genesis 15:13",
-        "Genesis 15:14"
-      ],
-      [
-        "Genesis 23:11",
-        "Genesis 23:15"
-      ],
-      [
-        "Genesis 23:9",
-        "Genesis 23:16"
-      ]
+      "Genesis 15:13",
+      "Genesis 23:11",
+      "Genesis 23:9"
     ],
     [
       "Genesis 18:17",
@@ -651,11 +503,7 @@
     ],
     [
       "Genesis 19:4",
-      [
-        "Genesis 19:9",
-        "Genesis 19:10",
-        "Genesis 19:11"
-      ]
+      "Genesis 19:9"
     ],
     [
       "Genesis 21:1",
@@ -674,10 +522,7 @@
     ],
     [
       "Genesis 21:1",
-      [
-        "Genesis 21:1",
-        "Isaiah 44:26"
-      ]
+      "Genesis 21:1"
     ],
     [
       "Genesis 21:1",
@@ -739,37 +584,17 @@
       "Genesis 24:1"
     ],
     [
-      [
-        "Genesis 24:1",
-        "Psalms 104:1"
-      ],
-      "Isaiah 40:12",
-      [
-        "Isaiah 26:4",
-        "Genesis 17:1"
-      ],
-      "Psalms 104:3",
-      [
-        "Psalms 104:3",
-        "Psalms 104:4"
-      ],
-      "Isaiah 30:33",
-      [
-        "Isaiah 30:33",
-        "Psalms 104:5",
-        "Psalms 104:6"
-      ],
-      "Psalms 104:7",
-      "Psalms 104:8",
-      [
-        "Psalms 104:9",
-        "Psalms 104:10"
-      ],
-      [
-        "Psalms 104:14",
-        "Psalms 104:1",
-        "Genesis 24:1"
-      ]
+      "Genesis 24:1",
+      "Genesis 24:1",
+      "Genesis 24:1",
+      "Genesis 24:1",
+      "Genesis 24:1",
+      "Genesis 24:1",
+      "Genesis 1:9",
+      "Genesis 1:9",
+      "Genesis 1:9",
+      "Genesis 1:9",
+      "Genesis 24:1"
     ],
     [
       "Genesis 23:2",
@@ -872,30 +697,14 @@
       "Genesis 27:33"
     ],
     [
-      [
-        "Psalms 121:1",
-        "Zechariah 4:7",
-        "Isaiah 52:13"
-      ],
-      [
-        "I Chronicles 3:24",
-        "Daniel 7:13"
-      ],
-      [
-        "I Chronicles 3:24",
-        "Zechariah 4:7",
-        "Zechariah 4:10",
-        "Psalms 121:1"
-      ]
+      null,
+      null,
+      null
     ]
   ],
   "Vayetzei": [
     [
-      [
-        "Genesis 28:10",
-        "Genesis 28:11",
-        "Genesis 28:18"
-      ]
+      "Genesis 28:10"
     ],
     [
       "Genesis 28:12",
@@ -949,11 +758,7 @@
       "Genesis 31:3"
     ],
     [
-      [
-        "Genesis 31:3",
-        "Genesis 31:4",
-        "Genesis 31:6"
-      ],
+      "Genesis 31:3",
       "Genesis 31:7",
       "Genesis 31:8",
       "Genesis 31:8",
@@ -961,17 +766,11 @@
       "Genesis 31:20"
     ],
     [
-      [
-        "Genesis 31:24",
-        "Genesis 31:32"
-      ],
+      "Genesis 31:24",
       "Genesis 31:19"
     ],
     [
-      [
-        "Genesis 31:24",
-        "Genesis 31:42"
-      ],
+      "Genesis 31:24",
       "Genesis 31:42",
       "Genesis 31:36",
       "Genesis 31:52"
@@ -1064,10 +863,7 @@
     [
       "Genesis 37:3",
       "Genesis 37:2",
-      [
-        "Genesis 37:14",
-        "Genesis 37:18"
-      ],
+      "Genesis 37:14",
       "Genesis 37:28",
       "Genesis 37:28",
       "Genesis 37:29",
@@ -1115,10 +911,7 @@
       ]
     ],
     [
-      [
-        "Genesis 39:2",
-        "Genesis 39:3"
-      ],
+      "Genesis 39:2",
       "Genesis 39:3",
       "Genesis 39:6",
       "Genesis 39:8",
@@ -1131,14 +924,8 @@
       "Genesis 39:12",
       "Genesis 39:17",
       "Genesis 39:19",
-      [
-        "Genesis 39:20",
-        "Genesis 40:23"
-      ],
-      [
-        "Genesis 37:19",
-        "Genesis 41:1"
-      ]
+      "Genesis 41:1",
+      "Genesis 41:1"
     ]
   ],
   "Miketz": [
@@ -1155,25 +942,12 @@
       "Genesis 41:8"
     ],
     [
-      [
-        "Genesis 41:2",
-        "Genesis 41:8",
-        "Genesis 41:12"
-      ],
+      "Genesis 41:2",
       "Genesis 41:14",
       "Genesis 41:14",
       "Genesis 41:16",
-      [
-        "Genesis 41:18",
-        "Genesis 41:19",
-        "Genesis 41:22",
-        "Genesis 41:23",
-        "Genesis 41:39"
-      ],
-      [
-        "Genesis 49:22",
-        "Genesis 41:40"
-      ],
+      "Genesis 41:18",
+      "Genesis 49:22",
       "Genesis 41:40"
     ],
     [
@@ -1197,10 +971,7 @@
       "Genesis 41:55"
     ],
     [
-      [
-        "Genesis 42:1",
-        "Genesis 42:2"
-      ],
+      "Genesis 42:1",
       "Genesis 42:5",
       "Genesis 42:7",
       "Genesis 42:25"
@@ -1220,10 +991,7 @@
       "Genesis 43:14",
       "Genesis 43:14",
       "Genesis 43:14",
-      [
-        "Genesis 43:29",
-        "Genesis 44:2"
-      ],
+      "Genesis 43:29",
       "Genesis 44:13",
       "Genesis 44:14",
       "Genesis 44:14",
@@ -1272,10 +1040,7 @@
       "Genesis 45:1",
       "Genesis 44:19",
       "Genesis 44:18",
-      [
-        "Genesis 45:1",
-        "Genesis 45:3"
-      ],
+      "Genesis 45:1",
       "Genesis 45:3",
       "Genesis 45:12",
       "Genesis 45:3",
@@ -1351,33 +1116,17 @@
       "Genesis 48:1"
     ],
     [
-      [
-        "Genesis 48:1",
-        "Genesis 47:29"
-      ],
-      "Isaiah 26:20",
+      "Genesis 47:29",
+      "Genesis 47:29",
       "Genesis 47:29",
       [
         "Genesis 47:30",
         "Genesis 50:5"
       ],
-      [
-        "Genesis 48:1",
-        "Genesis 48:2"
-      ],
-      [
-        "Genesis 48:3",
-        "Genesis 48:4",
-        "Genesis 48:5"
-      ],
+      "Genesis 48:1",
+      "Genesis 48:3",
       "Genesis 48:8",
-      [
-        "Genesis 48:14",
-        "Genesis 48:16",
-        "Genesis 48:17",
-        "Genesis 48:19",
-        "Genesis 48:20"
-      ]
+      "Genesis 48:14"
     ],
     [
       "Genesis 49:1",
@@ -1430,10 +1179,7 @@
     ],
     [
       "Genesis 49:13",
-      [
-        "Genesis 49:14",
-        "Genesis 49:15"
-      ]
+      "Genesis 49:14"
     ],
     [
       "Genesis 49:16",
@@ -1505,16 +1251,8 @@
     ],
     [
       "Exodus 1:1",
-      [
-        "Exodus 1:2",
-        "Exodus 1:3",
-        "Exodus 1:4"
-      ],
-      [
-        "Exodus 1:2",
-        "Exodus 1:3",
-        "Exodus 1:4"
-      ]
+      "Exodus 1:2",
+      "Exodus 1:2"
     ],
     [
       "Exodus 1:1",
@@ -1522,18 +1260,12 @@
       "Exodus 1:1"
     ],
     [
-      [
-        "Exodus 1:6",
-        "Exodus 1:7"
-      ],
+      "Exodus 1:6",
       "Exodus 1:7",
       "Exodus 1:8"
     ],
     [
-      [
-        "Exodus 1:10",
-        "Exodus 1:12"
-      ]
+      "Exodus 1:10"
     ],
     [
       "Exodus 3:1",
@@ -1545,10 +1277,7 @@
       "Exodus 2:6",
       "Exodus 2:10",
       "Exodus 2:10",
-      [
-        "Exodus 2:11",
-        "Exodus 2:15"
-      ]
+      "Exodus 2:11"
     ],
     [
       "Exodus 2:11",
@@ -1571,11 +1300,7 @@
     [
       "Exodus 2:21",
       "Exodus 2:21",
-      [
-        "Exodus 3:1",
-        "Exodus 2:24",
-        "Exodus 2:25"
-      ]
+      "Exodus 2:24"
     ],
     [
       "Exodus 3:1"
@@ -1583,10 +1308,7 @@
     [
       "Exodus 3:1",
       "Exodus 3:1",
-      [
-        "Exodus 3:1",
-        "Exodus 3:2"
-      ],
+      "Exodus 3:1",
       "Exodus 3:2"
     ],
     [
@@ -1614,10 +1336,7 @@
       "Exodus 3:4"
     ],
     [
-      [
-        "Exodus 3:4",
-        "Exodus 3:5"
-      ]
+      "Exodus 3:4"
     ],
     [
       "Exodus 3:7",
@@ -1636,10 +1355,7 @@
       "Exodus 4:1"
     ],
     [
-      [
-        "Exodus 4:29",
-        "Exodus 4:31"
-      ],
+      "Exodus 4:29",
       "Exodus 5:1"
     ],
     [
@@ -1664,10 +1380,7 @@
       "Exodus 4:27"
     ],
     [
-      [
-        "Exodus 4:28",
-        "Exodus 4:29"
-      ],
+      "Exodus 4:28",
       "Exodus 4:29",
       "Exodus 4:29",
       "Exodus 4:29",
@@ -1683,19 +1396,12 @@
       "Exodus 6:2"
     ],
     [
-      [
-        "Exodus 6:6",
-        "Exodus 6:9",
-        "Exodus 6:12"
-      ],
+      "Exodus 6:6",
       "Exodus 6:13"
     ],
     [
       "Exodus 7:9",
-      [
-        "Exodus 7:10",
-        "Exodus 7:12"
-      ]
+      "Exodus 7:10"
     ],
     [
       "Exodus 7:9",
@@ -1751,30 +1457,17 @@
       "Exodus 7:10"
     ],
     [
-      [
-        "Exodus 7:15",
-        "Exodus 7:17"
-      ],
+      "Exodus 7:15",
       "Exodus 7:20",
       "Exodus 7:25",
-      [
-        "Exodus 7:20",
-        "Isaiah 23:5",
-        "Isaiah 34:9"
-      ],
-      [
-        "Isaiah 34:10",
-        "Isaiah 66:6"
-      ]
+      "Exodus 7:15",
+      "Exodus 7:15"
     ],
     [
       "Exodus 8:16",
       "Exodus 8:16",
       "Exodus 7:20",
-      [
-        "Exodus 7:19",
-        "Exodus 8:12"
-      ],
+      "Exodus 7:19",
       "Exodus 8:2",
       "Exodus 8:13",
       "Exodus 8:20",
@@ -1784,10 +1477,7 @@
       "Exodus 9:23",
       "Exodus 10:14",
       "Exodus 10:22",
-      [
-        "Exodus 10:22",
-        "Exodus 11:2"
-      ]
+      "Exodus 10:22"
     ],
     [
       "Exodus 9:22",
@@ -1796,10 +1486,7 @@
     [
       "Exodus 9:18",
       "Exodus 9:23",
-      [
-        "Exodus 9:27",
-        "Exodus 9:28"
-      ]
+      "Exodus 9:27"
     ],
     [
       "Exodus 9:34",
@@ -1821,42 +1508,13 @@
       "Exodus 10:23"
     ],
     [
-      [
-        "Exodus 7:20",
-        "Exodus 8:2",
-        "Exodus 8:13",
-        "Exodus 8:20",
-        "Exodus 9:6",
-        "Exodus 9:10",
-        "Exodus 9:23",
-        "Exodus 10:14",
-        "Exodus 10:22",
-        "Exodus 12:29"
-      ],
-      [
-        "Exodus 7:20",
-        "Exodus 8:2",
-        "Exodus 8:13",
-        "Exodus 8:20"
-      ],
+      "Exodus 7:20",
+      "Exodus 7:20",
       "Exodus 9:3",
-      [
-        "Isaiah 23:5",
-        "Joel 3:3",
-        "Isaiah 66:6",
-        "Isaiah 34:9",
-        "Isaiah 34:11"
-      ],
-      "Exodus 10:22",
-      [
-        "Exodus 9:3",
-        "Exodus 9:23",
-        "Exodus 12:29"
-      ],
-      [
-        "Isaiah 34:7",
-        "Isaiah 24:21"
-      ]
+      "Exodus 7:20",
+      "Exodus 7:20",
+      "Exodus 9:3",
+      "Exodus 7:20"
     ],
     [
       "Exodus 12:1",
@@ -1892,10 +1550,7 @@
       "Exodus 13:2",
       "Exodus 13:2",
       "Exodus 13:3",
-      [
-        "Exodus 13:3",
-        "Exodus 13:4"
-      ],
+      "Exodus 13:3",
       "Exodus 13:4"
     ],
     [
@@ -1950,10 +1605,7 @@
     [
       "Exodus 14:7",
       "Exodus 14:10",
-      [
-        "Exodus 14:2",
-        "Exodus 14:3"
-      ]
+      "Exodus 14:2"
     ],
     [
       "Exodus 14:10",
@@ -2041,10 +1693,7 @@
       "Exodus 16:33"
     ],
     [
-      [
-        "Exodus 17:6",
-        "Exodus 17:7"
-      ]
+      "Exodus 17:4"
     ],
     [
       "Exodus 14:24",
@@ -2072,10 +1721,7 @@
       "Exodus 17:11"
     ],
     [
-      [
-        "Exodus 17:12",
-        "Exodus 17:13"
-      ],
+      "Exodus 17:12",
       "Exodus 17:14",
       "Exodus 17:14",
       "Exodus 17:14",
@@ -2093,31 +1739,16 @@
       "Exodus 18:21"
     ],
     [
-      "Song of Songs 1:3",
-      [
-        "Song of Songs 1:3",
-        "Exodus 18:1"
-      ],
-      [
-        "Exodus 17:7",
-        "Exodus 17:8"
-      ],
-      [
-        "Exodus 17:7",
-        "Exodus 17:8"
-      ],
-      [
-        "Exodus 17:7",
-        "Exodus 17:8"
-      ]
+      "Exodus 18:1",
+      "Exodus 18:1",
+      "Exodus 17:7",
+      "Exodus 17:7",
+      "Exodus 17:7"
     ],
     [
       "Exodus 18:1",
       "Exodus 18:1",
-      [
-        "Ecclesiastes 4:2",
-        "Ecclesiastes 9:4"
-      ]
+      "Exodus 18:1"
     ],
     [
       "Exodus 18:1",
@@ -2126,19 +1757,11 @@
       "Exodus 18:1"
     ],
     [
-      [
-        "Exodus 18:1",
-        "Exodus 18:6",
-        "Exodus 18:7"
-      ],
+      "Exodus 18:1",
       "Exodus 18:6"
     ],
     [
-      [
-        "Exodus 18:9",
-        "Exodus 18:10",
-        "Exodus 18:11"
-      ],
+      "Exodus 18:9",
       "Exodus 18:11",
       "Exodus 18:11",
       "Exodus 18:11",
@@ -2184,23 +1807,14 @@
       "Exodus 20:2",
       "Exodus 20:2",
       "Exodus 20:3",
-      "Exodus 20:5",
+      "Deuteronomy 4:24",
       "Exodus 20:20",
-      [
-        "Proverbs 3:11",
-        "Proverbs 3:12"
-      ],
+      "Exodus 20:2",
       "Deuteronomy 8:5",
-      [
-        "Leviticus 1:4",
-        "Leviticus 26:43"
-      ]
+      "Exodus 20:2"
     ],
     [
-      [
-        "Exodus 20:23",
-        "Exodus 20:22"
-      ],
+      "Exodus 20:22",
       "Exodus 20:22",
       "Exodus 20:23"
     ]
@@ -2208,10 +1822,7 @@
   "Mishpatim": [
     [
       "Exodus 21:1",
-      [
-        "Exodus 21:1",
-        "Exodus 23:5"
-      ]
+      "Exodus 23:5"
     ],
     [
       "Exodus 21:1",
@@ -2253,36 +1864,33 @@
       "Deuteronomy 19:17",
       "Deuteronomy 19:17",
       "Deuteronomy 19:17",
-      "Exodus 18:13",
-      [
-        "Song of Songs 3:7",
-        "Song of Songs 3:8",
-        "Jeremiah 21:12"
-      ],
-      "Proverbs 7:4",
-      "Deuteronomy 1:17",
+      "Exodus 21:1",
+      "Exodus 21:1",
+      "Deuteronomy 1:16",
+      "Deuteronomy 1:16",
       "Exodus 18:21",
       "Exodus 21:1",
-      "Proverbs 17:14",
+      "Exodus 21:1",
       "Deuteronomy 1:17",
       [
         "Deuteronomy 1:17",
-        "Deuteronomy 19:17",
-        "Psalms 82:1",
-        "II Chronicles 19:6"
+        "Deuteronomy 19:17"
       ],
-      "II Chronicles 19:6",
-      "Zechariah 8:16"
+      "Exodus 21:1",
+      "Exodus 21:1"
     ],
     [
       "Leviticus 19:17",
       "Leviticus 19:17",
       "Leviticus 19:17",
-      "Ezekiel 9:4",
-      "Ezekiel 9:6",
-      "Ezekiel 21:8",
-      "Psalms 94:12",
-      "Proverbs 24:25"
+      "Leviticus 19:17",
+      "Leviticus 19:17",
+      "Leviticus 19:17",
+      "Leviticus 19:17",
+      [
+        "Leviticus 19:17",
+        "Leviticus 18:4"
+      ]
     ],
     [
       "Exodus 22:24",
@@ -2304,10 +1912,7 @@
     [
       "Exodus 22:25",
       "Deuteronomy 24:15",
-      [
-        "Exodus 22:26",
-        "Exodus 22:27"
-      ],
+      "Exodus 22:26",
       "Exodus 22:28"
     ],
     [
@@ -2344,10 +1949,7 @@
       "Deuteronomy 15:7"
     ],
     [
-      [
-        "Exodus 22:25",
-        "Exodus 22:26"
-      ]
+      "Exodus 22:25"
     ],
     [
       "Exodus 23:20",
@@ -2367,37 +1969,18 @@
       "Exodus 23:21",
       "Exodus 23:20",
       "Exodus 23:28",
-      [
-        "Deuteronomy 3:3",
-        "Amos 2:9"
-      ],
-      [
-        "Isaiah 24:21",
-        "Malachi 3:23"
-      ]
+      "Deuteronomy 3:3",
+      "Exodus 23:20"
     ],
     [
-      [
-        "Exodus 23:20",
-        "Psalms 91:11",
-        "Psalms 91:7"
-      ],
-      "Psalms 91:7",
-      "Psalms 91:7",
-      "Psalms 91:7",
-      "Job 33:22",
-      [
-        "Job 33:23",
-        "Job 33:24"
-      ],
-      [
-        "Genesis 32:2",
-        "Genesis 28:15"
-      ],
-      [
-        "Genesis 32:4",
-        "Genesis 48:16"
-      ]
+      "Exodus 23:20",
+      "Exodus 23:20",
+      "Exodus 23:20",
+      "Exodus 23:20",
+      "Exodus 23:20",
+      "Exodus 23:20",
+      "Exodus 23:20",
+      "Exodus 23:20"
     ]
   ],
   "Terumah": [
@@ -2421,20 +2004,8 @@
       "Exodus 25:2"
     ],
     [
-      [
-        "Exodus 25:3",
-        "Exodus 25:4",
-        "Exodus 25:5",
-        "Exodus 25:6",
-        "Exodus 25:7"
-      ],
-      [
-        "Exodus 25:3",
-        "Exodus 25:4",
-        "Exodus 25:5",
-        "Exodus 25:6",
-        "Exodus 25:7"
-      ],
+      "Exodus 25:3",
+      "Exodus 25:3",
       "Exodus 25:3"
     ],
     [
@@ -2459,10 +2030,7 @@
       "Exodus 26:7",
       "Exodus 26:7",
       "Exodus 26:7",
-      [
-        "Exodus 26:7",
-        "Exodus 26:36"
-      ],
+      "Exodus 26:7",
       "Exodus 26:7",
       "Exodus 26:7",
       "Exodus 26:7",
@@ -2533,11 +2101,7 @@
       "Exodus 27:20",
       "Exodus 27:20",
       "Exodus 27:20",
-      [
-        "Psalms 50:23",
-        "I Chronicles 8:33",
-        "I Samuel 14:51"
-      ]
+      "Exodus 27:20"
     ],
     [
       "Exodus 29:1",
@@ -2597,20 +2161,13 @@
       "Exodus 30:13"
     ],
     [
-      [
-        "Exodus 30:12",
-        "Song of Songs 7:3"
-      ],
-      "Song of Songs 7:3",
-      "Song of Songs 7:3",
-      "Song of Songs 7:3",
-      "Song of Songs 7:3",
-      "Song of Songs 7:3",
-      [
-        "Exodus 30:13",
-        "Genesis 37:27",
-        "Psalms 10:3"
-      ],
+      "Exodus 30:12",
+      "Exodus 30:12",
+      "Exodus 30:12",
+      "Exodus 30:12",
+      "Exodus 30:12",
+      "Exodus 30:12",
+      "Exodus 30:13",
       "Exodus 30:13"
     ],
     [
@@ -2676,22 +2233,11 @@
       "Exodus 31:2"
     ],
     [
-      [
-        "Exodus 31:2",
-        "Joshua 18:28",
-        "Joshua 15:37"
-      ],
-      "I Chronicles 8:27",
-      [
-        "I Chronicles 4:1",
-        "I Chronicles 2:24",
-        "I Chronicles 4:2"
-      ],
-      "I Chronicles 4:2",
-      [
-        "I Chronicles 4:2",
-        "Exodus 38:23"
-      ]
+      "Exodus 31:2",
+      "Exodus 31:2",
+      "Exodus 31:2",
+      "Exodus 31:2",
+      "Exodus 38:23"
     ],
     [
       "Exodus 31:18",
@@ -2759,21 +2305,14 @@
       "Exodus 32:13"
     ],
     [
-      [
-        "Exodus 33:1",
-        "Proverbs 26:6"
-      ]
+      "Exodus 33:1"
     ],
     [
       "Exodus 33:1",
       "Exodus 33:1",
       "Exodus 32:19",
       "Exodus 32:32",
-      [
-        "Exodus 33:2",
-        "Exodus 33:3",
-        "Exodus 33:4"
-      ]
+      "Exodus 33:2"
     ],
     [
       "Exodus 33:7",
@@ -2784,10 +2323,7 @@
       "Exodus 33:12",
       "Exodus 33:16",
       "Exodus 33:16",
-      [
-        "Exodus 33:13",
-        "Exodus 33:21"
-      ],
+      "Exodus 33:13",
       "Exodus 33:19",
       "Exodus 33:19"
     ],
@@ -2810,10 +2346,7 @@
       "Exodus 34:2"
     ],
     [
-      [
-        "Exodus 34:5",
-        "Exodus 34:6"
-      ]
+      "Exodus 34:5"
     ],
     [
       "Exodus 34:27",
@@ -2897,22 +2430,19 @@
       "Exodus 37:1",
       "Exodus 37:1",
       "Exodus 37:1",
-      [
-        "Exodus 37:6",
-        "Exodus 37:7"
-      ],
+      "Exodus 37:6",
       "Exodus 37:8",
       "Exodus 37:9",
-      "Exodus 37:1",
-      "Exodus 37:1",
-      "Exodus 37:1",
-      "Exodus 37:1",
-      "I Samuel 6:12"
+      "Numbers 10:33",
+      "Numbers 10:33",
+      "Numbers 4:20",
+      "Numbers 4:20",
+      "Numbers 4:20"
     ],
     [
       [
         "Exodus 37:1",
-        "Exodus 37:2"
+        "Exodus 25:10"
       ],
       "Exodus 37:1",
       "Exodus 25:10",
@@ -2925,10 +2455,7 @@
     [
       "Exodus 37:1",
       "Exodus 37:6",
-      [
-        "Exodus 37:6",
-        "Exodus 37:10"
-      ],
+      "Exodus 37:1",
       "Exodus 37:10",
       "Exodus 37:17",
       "Exodus 36:14",
@@ -2952,36 +2479,24 @@
     ],
     [
       [
-        "Exodus 38:22",
+        "Exodus 31:2",
         "Exodus 35:30"
       ],
       "Exodus 38:21",
-      [
-        "Exodus 31:3",
-        "Proverbs 3:19"
-      ],
-      "Job 9:10",
-      "Job 9:10",
-      "Job 9:10",
-      "Job 9:10",
-      "Job 9:10",
-      [
-        "Proverbs 4:3",
-        "Proverbs 4:4"
-      ],
-      "Job 9:10",
-      "Job 9:10",
-      "Job 9:10",
-      "Job 9:10",
-      [
-        "I Kings 19:11",
-        "I Kings 19:12"
-      ],
-      "Psalms 139:15",
-      [
-        "Psalms 139:15",
-        "Exodus 31:3"
-      ],
+      "Exodus 31:3",
+      "Exodus 31:3",
+      "Exodus 31:3",
+      "Exodus 31:3",
+      "Exodus 31:3",
+      "Exodus 31:3",
+      "Exodus 31:3",
+      "Exodus 31:3",
+      "Exodus 31:3",
+      "Exodus 31:3",
+      "Exodus 31:3",
+      "Exodus 31:3",
+      "Exodus 31:3",
+      "Exodus 31:3",
       "Genesis 1:26",
       "Genesis 1:26"
     ],
@@ -3014,10 +2529,7 @@
     [
       "Exodus 38:29",
       "Exodus 1:7",
-      [
-        "Exodus 1:7",
-        "Exodus 1:12"
-      ],
+      "Exodus 1:7",
       "Exodus 38:8",
       "Exodus 38:8"
     ],

@@ -264,10 +264,9 @@ mod tests {
                     assert!(!anchor.refs().is_empty());
                     let mut seen = HashSet::new();
                     for reference in anchor.refs() {
-                        assert!(
-                            seen.insert(resolve_ref(reference, &counts).unwrap()),
-                            "{key}: {reference}"
-                        );
+                        let resolved = resolve_ref(reference, &counts).unwrap();
+                        assert!(seen.insert(resolved), "{key}: {reference}");
+                        assert!((1..=187).contains(&resolved.0), "Use the Torah context");
                     }
                 }
             }
@@ -275,7 +274,19 @@ mod tests {
         assert_eq!(slots, 2121);
         assert_eq!(
             unmapped,
-            ["Bereshit 13:1", "Masei 13:2", "V'Zot HaBerachah 7:2"]
+            [
+                "Bereshit 13:1",
+                "Bereshit 13:2",
+                "Bereshit 13:3",
+                "Bereshit 13:4",
+                "Bereshit 13:5",
+                "Masei 5:1",
+                "Masei 13:2",
+                "Toldot 14:1",
+                "Toldot 14:2",
+                "Toldot 14:3",
+                "V'Zot HaBerachah 7:2",
+            ]
         );
     }
 
