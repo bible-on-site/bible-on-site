@@ -57,9 +57,9 @@ public sealed class MobileDeviceSessionTests
         await using var session = CreateSession(factory);
         session.Acquire(ScenarioEnvironment(FirstLaunchId, synthetic: true));
         var original = Assert.Single(factory.Executors);
-        original.TerminationFailure = sessionDeath
+        original.FailTermination(sessionDeath
             ? new UnknownErrorException("invalid session id")
-            : new WebDriverTimeoutException("The restart did not answer.");
+            : new WebDriverTimeoutException("The restart did not answer."));
 
         session.Acquire(ScenarioEnvironment(NextLaunchId, synthetic: false));
 
@@ -102,7 +102,7 @@ public sealed class MobileDeviceSessionTests
         var factory = new DriverFactory(MobilePlatform.Android);
         await using var session = CreateSession(factory);
         session.Acquire(null);
-        Assert.Single(factory.Executors).TerminationFailure = new UnknownErrorException("invalid session id");
+        Assert.Single(factory.Executors).FailTermination(new UnknownErrorException("invalid session id"));
         session.Acquire(ScenarioEnvironment(NextLaunchId, synthetic: true));
 
         Assert.Equal(2, factory.Executors.Count);
@@ -165,11 +165,12 @@ public sealed class MobileDeviceSessionTests
     private sealed class SessionExecutor(MobilePlatform platform) : ICommandExecutor
     {
         private readonly Dictionary<string, CommandInfo> _commands = [];
+        private WebDriverException? _terminationFailure;
         public int SessionCreations { get; private set; }
         public int Terminations { get; private set; }
         public int Activations { get; private set; }
         public int Quits { get; private set; }
-        public WebDriverException? TerminationFailure { get; set; }
+        public void FailTermination(WebDriverException exception) => _terminationFailure = exception;
         public List<Dictionary<string, object>> Launches { get; } = [];
         public bool TryAddCommand(string name, CommandInfo? info) =>
             info != null && _commands.TryAdd(name, info);
@@ -189,9 +190,9 @@ public sealed class MobileDeviceSessionTests
             else if (command.Name == "terminateApp")
             {
                 Terminations++;
-                if (TerminationFailure != null)
+                if (_terminationFailure != null)
                 {
-                    throw TerminationFailure;
+                    throw _terminationFailure;
                 }
                 value = true;
             }
