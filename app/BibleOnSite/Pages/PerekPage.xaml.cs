@@ -565,9 +565,12 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
     private void OnAppLinkRequested(object? sender, AppLinkHelper.AppLinkTarget target)
     {
-        // Only the original reader handles app links; search readers are pushed
-        // above it and must not compete to navigate a page that has been popped.
-        if (Shell.Current?.Navigation.NavigationStack.OfType<PerekPage>().FirstOrDefault() is { } rootReader && rootReader != this)
+        // Preview navigation returns to the deepest reader route; ordinary
+        // navigation returns to the original root reader. The target must be
+        // applied by the same reader that navigation leaves visible.
+        var readers = Shell.Current?.Navigation.NavigationStack.OfType<PerekPage>();
+        var linkReader = Config.HomeUxPreview.Enabled ? readers?.LastOrDefault() : readers?.FirstOrDefault();
+        if (linkReader is not null && linkReader != this)
         {
             return;
         }

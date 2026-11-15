@@ -154,6 +154,41 @@ def check_scroll_and_swipe(device, check):
         device.swipe(0.2, 0.55, 0.8, 0.55)
     device.wait(lambda ns: source(ns) == "בראשית ב" and device.verses(ns),
                 "Chapter swipe")
+    device.swipe(0.5, 0.76, 0.5, 0.34)
+    device.wait(lambda ns: find(ns, "ReaderHomeButton") is None, "Hidden text toolbar")
+    device.tap("ArticlesButton")
+    device.wait(lambda ns: find(ns, "ReaderHomeButton") is not None and not device.verses(ns),
+                "Articles restore reader navigation")
+    device.capture("articles-with-navigation")
+    device.tap("TextButton")
+    device.wait(lambda ns: find(ns, "ReaderHomeButton") is not None and device.verses(ns),
+                "Return from articles to text")
+    device.tap("ReaderHomeButton")
+    device.home()
+
+
+def check_stacked_reader_links(device, check):
+    daily_source = find(device.home(), "HomeDailySource").get("text")
+    device.tap("HomeDailyPerek")
+    device.wait(lambda ns: source(ns) == daily_source and device.verses(ns), "Daily reader")
+    device.tap("PerekSource")
+    device.tap("PerekSearchInput")
+    device.adb("shell", "input", "text", "1")
+    device.wait(lambda ns: find(ns, "SearchResultTitle") is not None, "Reader search results")
+    device.tap("SearchResultTitle")
+    device.wait(lambda ns: source(ns) == "בראשית א" and device.verses(ns), "Nested search reader")
+    device.adb("shell", "am", "start", "-W", "-a", "android.intent.action.VIEW", "-d",
+               "https://xn--febl3a.co.il/929/2", "-p", "com.tanah.daily929")
+    items = device.wait(lambda ns: source(ns) == "בראשית ב" and device.verses(ns),
+                        "App link targets the visible nested reader")
+    check.assertEqual(source(items), "בראשית ב")
+    device.capture("nested-reader-app-link")
+    device.back()
+    device.wait(lambda ns: find(ns, "SearchNavigationButton") is not None,
+                "Underlying reader retains search history")
+    device.tap("SearchNavigationButton")
+    device.wait(lambda ns: source(ns) == daily_source and device.verses(ns),
+                "App link did not change the hidden daily reader")
     device.tap("ReaderHomeButton")
     device.home()
 
@@ -175,8 +210,8 @@ def check_destinations(device):
 
 def check_global_search(device, check):
     device.tap("HomeGlobalSearch")
-    device.wait(lambda ns: find(ns, "HomeSearchInput") is not None, "Global search")
-    device.tap("HomeSearchInput")
+    device.wait(lambda ns: find(ns, "HomeSearchInput") is not None
+                and find(ns, "HomeSearchInput").get("focused") == "true", "Focused global search")
     device.adb("shell", "input", "text", "calendar")
     items = device.wait(lambda ns: find(ns, "לוח שנה") is not None,
                         "Navigation result for calendar")
@@ -211,7 +246,7 @@ def main():
     device = NativeDevice(args)
     check = unittest.TestCase()
     checks = []
-    for scenario in (check_home_and_daily, check_index, check_scroll_and_swipe):
+    for scenario in (check_home_and_daily, check_index, check_scroll_and_swipe, check_stacked_reader_links):
         scenario(device, check)
         checks.append(scenario.__name__)
         print(f"PASS {scenario.__name__}", flush=True)
