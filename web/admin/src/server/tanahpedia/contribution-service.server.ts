@@ -610,6 +610,11 @@ export async function mergeContribution(
 		),
 	);
 	let merged = await withContributions(async (conn) => {
+		// Agent completions lock the issue before its related PRs. Keep that
+		// order when merging may close the issue, including leave-open merges.
+		const issue = prepared.issueId
+			? await readContribution(conn, prepared.issueId, true)
+			: null;
 		const item = await readContribution(conn, id, true);
 		// Preparation may migrate the API or reconcile deferred comparisons.
 		// Any later authored edit/review still requires the caller to reload.
@@ -625,8 +630,7 @@ export async function mergeContribution(
 			`${item.changes.filter(contributionHasEffect).length} שינויים הוחלו`,
 		);
 		await saveContribution(conn, item);
-		if (item.issueId && item.closeIssue) {
-			const issue = await readContribution(conn, item.issueId, true);
+		if (issue && item.closeIssue) {
 			if (issue.state === "open") {
 				issue.state = "closed";
 				cancelGeneration(issue, "The linked PR was merged");

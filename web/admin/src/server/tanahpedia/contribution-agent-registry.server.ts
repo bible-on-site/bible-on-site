@@ -379,6 +379,8 @@ export async function refreshRegisteredContributionAgents(): Promise<{
 			conn,
 			"SELECT id, version, data FROM tanahpedia_contribution_agent ORDER BY id FOR UPDATE",
 		);
+		const upgrades: { agent: RegisteredContributionAgent; previous: number }[] =
+			[];
 		for (const row of rows) {
 			const agent = decode(row);
 			if (
@@ -395,16 +397,29 @@ export async function refreshRegisteredContributionAgents(): Promise<{
 			agent.installedVersion = latest.version;
 			agent.version++;
 			agent.updatedAt = new Date().toISOString();
+			upgrades.push({ agent, previous: row.version });
+			updated++;
+		}
+		if (upgrades.length) {
+			// All registrations are locked above. Apply one parameterized batch,
+			// keeping the per-row expected version predicate and atomic rollback.
+			const cases = upgrades.map(() => "WHEN ? THEN ?").join(" ");
+			const predicates = upgrades
+				.map(() => "(id = ? AND version = ?)")
+				.join(" OR ");
 			const changed = await txExecute(
 				conn,
-				"UPDATE tanahpedia_contribution_agent SET version = ?, data = ? WHERE id = ? AND version = ?",
-				[agent.version, JSON.stringify(agent), agent.id, row.version],
+				`UPDATE tanahpedia_contribution_agent SET version = CASE id ${cases} ELSE version END, data = CASE id ${cases} ELSE data END WHERE ${predicates}`,
+				[
+					...upgrades.flatMap(({ agent }) => [agent.id, agent.version]),
+					...upgrades.flatMap(({ agent }) => [agent.id, JSON.stringify(agent)]),
+					...upgrades.flatMap(({ agent, previous }) => [agent.id, previous]),
+				],
 			);
-			if (changed.affectedRows !== 1)
+			if (changed.affectedRows !== upgrades.length)
 				throw new Error(
 					"Agent release update conflicted; retry the deployment",
 				);
-			updated++;
 		}
 		return { updated, unchanged };
 	});

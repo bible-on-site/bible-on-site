@@ -66,6 +66,35 @@ const REFERENCES: Record<string, string> = {
 			`SELECT alt_group_id AS id,'קבוצת דעות חלופיות' AS name FROM ${table} WHERE alt_group_id IS NOT NULL`,
 	).join(" UNION "),
 };
+const REFERENCE_ID_COLUMNS: Record<string, string> = {
+	person: "r.id",
+	place: "r.id",
+	nation: "r.id",
+	event: "r.id",
+	war: "r.id",
+	animal: "r.id",
+	object: "r.id",
+	temple_tool: "r.id",
+	plant: "r.id",
+	astronomical_object: "r.id",
+	sefer: "r.id",
+	saying: "r.id",
+	prophecy: "r.id",
+	entity: "id",
+	entry: "id",
+	person_name: "n.id",
+	king_role: "r.id",
+	war_side: "r.id",
+	god: "id",
+	tanah_sefer: "id",
+	perek: "p.id",
+	perush: "id",
+	place_identification: "i.id",
+};
+// Only these fields contribute to REFERENCE_SELECTS.perek's projected label.
+// Excluding the view's date joins avoids locking unrelated scheduling rows.
+const PEREK_LOCK_SELECT =
+	"SELECT p.id,CONCAT(s.name,' ',CASE WHEN a.id IS NOT NULL THEN p.id-a.perek_from+1 ELSE p.id-s.perek_id_from+1 END) AS name FROM tanah_perek p JOIN tanah_sefer s ON p.id BETWEEN s.perek_id_from AND s.perek_id_to LEFT JOIN tanah_additional a ON a.sefer_id=s.id AND p.id BETWEEN a.perek_from AND a.perek_to";
 const SPECIAL_SEARCHES: Record<string, string> = {
 	metadata: REFERENCE_SELECTS.entity,
 	entry: REFERENCE_SELECTS.entry,
@@ -215,7 +244,53 @@ class ContextReader {
 	constructor(
 		private readonly conn: PoolConnection,
 		private readonly alternativeId: string,
+		private readonly lockReferences: boolean,
 	) {}
+
+	private async lockedAlternative(
+		id: string | number,
+	): Promise<ContributionReference | null> {
+		for (const table of ALT_TABLES) {
+			const candidate = await txQueryOne<{ id: string }>(
+				this.conn,
+				`SELECT id FROM ${table} WHERE alt_group_id=? ORDER BY id LIMIT 1`,
+				[id],
+			);
+			if (!candidate) continue;
+			// Lock one existing witness by its primary key, never the nonunique
+			// group range. Its membership pins the existence-only projection.
+			const witness = await txQueryOne<{ id: string }>(
+				this.conn,
+				`SELECT alt_group_id AS id FROM ${table} WHERE id=? AND alt_group_id=? FOR UPDATE NOWAIT`,
+				[candidate.id, id],
+			);
+			return witness ? { id: witness.id, name: "קבוצת דעות חלופיות" } : null;
+		}
+		return null;
+	}
+
+	private async readReference(
+		kind: string,
+		id: string | number,
+		sql: string,
+	): Promise<ContributionReference | null> {
+		if (!this.lockReferences)
+			return txQueryOne<ContributionReference>(
+				this.conn,
+				`SELECT candidate.* FROM (${sql}) candidate WHERE candidate.id=?`,
+				[id],
+			);
+		if (kind === "alternative") return this.lockedAlternative(id);
+		const column = REFERENCE_ID_COLUMNS[kind];
+		if (!column)
+			throw new Error("Missing contribution reference lock contract");
+		const projection = kind === "perek" ? PEREK_LOCK_SELECT : sql;
+		return txQueryOne<ContributionReference>(
+			this.conn,
+			`${projection} WHERE ${column}=? FOR UPDATE NOWAIT`,
+			[id],
+		);
+	}
 
 	async reference(
 		kind: string,
@@ -234,11 +309,7 @@ class ContextReader {
 			kind === "alternative" &&
 			String(id).toLowerCase() === this.alternativeId.toLowerCase()
 				? { id, name: "קבוצת דעות חדשה לפנייה" }
-				: await txQueryOne<ContributionReference>(
-						this.conn,
-						`SELECT candidate.* FROM (${sql}) candidate WHERE candidate.id=?`,
-						[id],
-					);
+				: await this.readReference(kind, id, sql);
 		this.records.push({ kind, id, current: row });
 		if (!row) return null;
 		this.catalogue.references[kind] ??= [];
@@ -360,6 +431,41 @@ class ContextReader {
 	}
 }
 
+/** Call before any consistent read in the final transaction. The identity hint
+ * comes from preparation outside it; reading it here first could create an old
+ * REPEATABLE READ snapshot before a dependency lock becomes available. After
+ * these locks, the caller must reread the fingerprint to reject new members
+ * committed between preparation and acquiring the parent lock. */
+export async function lockContributionAgentContext(
+	conn: PoolConnection,
+	item: Pick<Contribution, "id" | "kind" | "issueId">,
+	relatedIds: readonly string[],
+): Promise<void> {
+	const owner = item.kind === "issue" ? item.id : item.issueId;
+	if (!owner) {
+		const locked = await readContribution(conn, item.id, true);
+		if (locked.kind !== "pr" || locked.issueId)
+			throw new Error("Contribution context changed before completion");
+		return;
+	}
+	const issue = await readContribution(conn, owner, true);
+	if (issue.kind !== "issue")
+		throw new Error("Contribution context changed before completion");
+	const ids = [...new Set(relatedIds.map((id) => id.toLowerCase()))].sort();
+	if (item.kind === "pr" && !ids.includes(item.id.toLowerCase()))
+		throw new Error("Contribution context changed before completion");
+	// Parent ownership prevents new canonical members. Exact primary-key locks
+	// avoid range gap locks that can deadlock independent issue implementations.
+	for (const id of ids) {
+		const proposal = await readContribution(conn, id, true);
+		if (
+			proposal.kind !== "pr" ||
+			proposal.issueId?.toLowerCase() !== owner.toLowerCase()
+		)
+			throw new Error("Contribution context changed before completion");
+	}
+}
+
 async function linkedIssue(
 	conn: PoolConnection,
 	item: Contribution,
@@ -444,10 +550,15 @@ export async function readContributionAgentTool(
 	item: Contribution,
 	name: string,
 	raw: unknown,
+	lockReferences = false,
 ): Promise<{ data: unknown; catalogue: AgentCatalogue }> {
 	const args = argumentsFor(name, raw);
 	const current = await readContribution(conn, item.id);
-	const reader = new ContextReader(conn, current.issueId ?? current.id);
+	const reader = new ContextReader(
+		conn,
+		current.issueId ?? current.id,
+		lockReferences,
+	);
 	if (name === "related") {
 		const { cursor, limit } = pageArguments(args);
 		const section = args.section ?? "items";
@@ -559,8 +670,8 @@ export async function readContributionAgentTool(
 			);
 			items.push({ kind, id: row.id, label: row.name, current });
 		} else {
-			await reader.reference(kind, row.id);
-			items.push(row);
+			const current = await reader.reference(kind, row.id);
+			if (current) items.push(current);
 		}
 	}
 	return {
@@ -632,11 +743,21 @@ function summary(item: Contribution) {
 export async function readContributionAgentInitialContext(
 	conn: PoolConnection,
 	item: Contribution,
-): Promise<{ data: unknown; catalogue: AgentCatalogue; hash: string }> {
+	lockReferences = false,
+): Promise<{
+	data: unknown;
+	catalogue: AgentCatalogue;
+	hash: string;
+	relatedIds: string[];
+}> {
 	const current = await readContribution(conn, item.id);
 	const issue = await linkedIssue(conn, current);
 	const related = (await relatedContributions(conn, current)).items;
-	const reader = new ContextReader(conn, issue?.id ?? current.id);
+	const reader = new ContextReader(
+		conn,
+		issue?.id ?? current.id,
+		lockReferences,
+	);
 	await reader.reference("alternative", issue?.id ?? current.id);
 	for (const change of current.changes) {
 		// Failed migrations retain their untouched operations for recovery. They
@@ -697,6 +818,7 @@ export async function readContributionAgentInitialContext(
 	return {
 		data,
 		catalogue: reader.catalogue,
+		relatedIds: related.map((proposal) => proposal.id),
 		hash: hash({
 			item: semanticItem(current),
 			issue: issue ? semanticItem(issue) : null,

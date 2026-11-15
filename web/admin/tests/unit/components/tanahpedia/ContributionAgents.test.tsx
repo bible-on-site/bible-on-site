@@ -104,6 +104,12 @@ describe("versioned agent configuration", () => {
 		);
 		show();
 		await card();
+		expect(
+			screen.getByRole("option", { name: "Local LLM - עובד בתחנת העבודה" }),
+		).toHaveValue("local_llm");
+		expect(screen.getByRole("option", { name: "AWS LLM" })).toHaveValue(
+			"aws_llm",
+		);
 		expect(screen.getByText("טרם התחבר")).toBeInTheDocument();
 		expect(screen.getByText(/בסביבות הרצה קיימות/)).toBeInTheDocument();
 		expect(mocks.install).not.toHaveBeenCalled();
