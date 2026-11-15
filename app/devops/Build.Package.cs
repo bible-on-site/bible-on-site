@@ -505,7 +505,7 @@ partial class Build
     }
 
     /// <summary>
-    /// Archives every iOS asset pack (perushim-notes + recitation-*) into an Apple
+    /// Archives every iOS asset pack (perushim-notes-slim + recitation-*) into an Apple
     /// Archive (.aar) via `xcrun ba-package`. The archives upload to App Store
     /// Connect separately from the IPA (Transporter); on device they resolve
     /// through BAAssetPackManager managed asset packs.
