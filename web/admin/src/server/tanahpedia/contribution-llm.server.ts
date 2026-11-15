@@ -11,7 +11,11 @@ import {
 	isContributionRecordKind,
 } from "~/lib/tanahpedia/contribution-records";
 import { SOURCE_TARGETS } from "~/lib/tanahpedia/contribution-specials";
-import type { ChangeInput, Contribution } from "~/lib/tanahpedia/contributions";
+import type {
+	ChangeInput,
+	Contribution,
+	Contributor,
+} from "~/lib/tanahpedia/contributions";
 import {
 	record,
 	textField,
@@ -39,7 +43,7 @@ import {
 
 const PROMPT_VERSION = "tanahpedia-issues-v3";
 
-interface ModelCatalogue {
+export interface ModelCatalogue {
 	references?: Record<
 		string,
 		{ id: string | number; name: string; ownerId?: string }[]
@@ -539,12 +543,13 @@ async function localGenerate(
 	};
 }
 
-async function awsGenerate(
+export async function awsGenerate(
 	system: string,
 	user: string,
-	schema: ReturnType<typeof contributionOutputSchema>,
+	schema: Record<string, unknown>,
+	options: { model?: string; signal?: AbortSignal } = {},
 ): Promise<{ content: string; model: string }> {
-	const model = process.env.BEDROCK_MODEL_ID?.trim();
+	const model = options.model ?? process.env.BEDROCK_MODEL_ID?.trim();
 	if (!model)
 		throw new Error("BEDROCK_MODEL_ID is not configured on the admin server");
 	const client = new BedrockRuntimeClient({
@@ -572,7 +577,7 @@ async function awsGenerate(
 					},
 				},
 			}),
-			{ abortSignal: AbortSignal.timeout(120000) },
+			{ abortSignal: options.signal ?? AbortSignal.timeout(120000) },
 		);
 		const content =
 			response.output?.message?.content
@@ -607,7 +612,6 @@ export async function prepareContributionGeneration(
 	const provider = context.issue.assignee.kind;
 	const comments = context.issue.events
 		.filter((event) => event.kind === "comment")
-		.slice(-20)
 		.map((event) => event.body);
 	const issueContext = {
 		title: context.issue.title,
@@ -756,6 +760,15 @@ export async function generateContributionPrs(
 	raw: unknown,
 ): Promise<Contribution[]> {
 	const context = await prepareContributionGeneration(raw);
+	if (
+		context.issue.generation?.task ||
+		(context.issue.generation &&
+			["queued", "running"].includes(context.issue.generation.status))
+	) {
+		throw new Error(
+			"This issue uses assigned-agent work. Follow or rerun its saved agent task instead of generating another proposal.",
+		);
+	}
 	const result = await (context.provider === "local_llm"
 		? localGenerate
 		: awsGenerate)(context.system, context.user, context.schema);
@@ -763,7 +776,11 @@ export async function generateContributionPrs(
 }
 
 export async function createGeneratedContributionPrs(
-	context: Awaited<ReturnType<typeof prepareContributionGeneration>>,
+	context: {
+		issue: Contribution;
+		provider: Contribution["assignee"]["kind"];
+		modelCatalogue: ModelCatalogue;
+	},
 	result: { content: string; model: string },
 	hooks: {
 		beforeCreate?: (
@@ -776,6 +793,8 @@ export async function createGeneratedContributionPrs(
 			prs: Contribution[],
 		) => Promise<void> | void;
 		provenanceProvider?: string;
+		actor?: Contributor;
+		promptVersion?: string;
 	} = {},
 ): Promise<Contribution[]> {
 	const { provider, modelCatalogue } = context;
@@ -853,7 +872,7 @@ export async function createGeneratedContributionPrs(
 			prs.push(
 				await createContribution(
 					draft,
-					{
+					hooks.actor ?? {
 						id: `${provider}:${result.model}`,
 						name: result.model,
 						kind: provider === "local_llm" ? "local_llm" : "aws_llm",
@@ -862,14 +881,14 @@ export async function createGeneratedContributionPrs(
 					{
 						model: result.model,
 						provider: hooks.provenanceProvider ?? provider,
-						promptVersion: PROMPT_VERSION,
+						promptVersion: hooks.promptVersion ?? PROMPT_VERSION,
 					},
 					conn,
 				),
 			);
 		addEvent(
 			issue,
-			{
+			hooks.actor ?? {
 				id: `${provider}:${result.model}`,
 				name: result.model,
 				kind: provider === "local_llm" ? "local_llm" : "aws_llm",

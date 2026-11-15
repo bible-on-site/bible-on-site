@@ -21,6 +21,14 @@ const mocks = vi.hoisted(() => ({
 	entries: vi.fn(),
 	query: vi.fn(),
 	afterTransaction: vi.fn(),
+	agent: vi.fn(),
+	notify: vi.fn(),
+}));
+vi.mock("~/server/tanahpedia/contribution-agent-registry.server", () => ({
+	getAssignedContributionAgent: mocks.agent,
+}));
+vi.mock("~/server/tanahpedia/contribution-agent-runtime.server", () => ({
+	notifyContributionAgentWork: mocks.notify,
 }));
 vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
 	withContributions: async (fn: (conn: object) => Promise<unknown>) => {
@@ -70,6 +78,7 @@ vi.mock("~/server/tanahpedia/paths", () => ({
 
 import {
 	addEvent,
+	applyContributionAgentRevision,
 	assertVersion,
 	createContribution,
 	editContribution,
@@ -195,6 +204,8 @@ describe("contribution lifecycle", () => {
 			mocks.entries,
 			mocks.query,
 			mocks.afterTransaction,
+			mocks.agent,
+			mocks.notify,
 		])
 			mock.mockReset();
 		mocks.prepare.mockImplementation(async (_conn, inputs) =>
@@ -205,8 +216,276 @@ describe("contribution lifecycle", () => {
 		mocks.entities.mockResolvedValue([]);
 		mocks.entries.mockResolvedValue([]);
 		mocks.query.mockResolvedValue([]);
+		mocks.agent.mockImplementation(async (_conn, assignee) => ({
+			id: ID,
+			version: 1,
+			provider: assignee.kind,
+			model: "configured:model",
+			enabled: true,
+			installedVersion: "agents-v1",
+			bundleHash: "a".repeat(64),
+		}));
 	});
 	afterEach(() => vi.restoreAllMocks());
+	it.each(["issue", "pr"])(
+		"creating an assigned %s queues its implementation task atomically",
+		async (kind) => {
+			let committed = false;
+			mocks.afterTransaction.mockImplementation(async () => {
+				committed = true;
+			});
+			mocks.notify.mockImplementation(() => expect(committed).toBe(true));
+			const item = await createContribution(
+				{ ...input, kind, assignee: { kind: "local_llm" } },
+				alice,
+			);
+			expect(item.generation).toMatchObject({
+				status: "queued",
+				task: kind === "issue" ? "issue_implementation" : "pr_resolution",
+				agentId: ID,
+				agentVersion: 1,
+				bundleVersion: "agents-v1",
+				trigger: "assignment",
+				attempts: 0,
+			});
+			expect(item.events.at(-1)?.run?.jobId).toBe(item.generation?.id);
+			expect(mocks.notify).toHaveBeenCalledOnce();
+			expect(mocks.apply).not.toHaveBeenCalled();
+		},
+	);
+	it("human feedback replaces the old lease and retains pending trigger IDs without loops from model replies", async () => {
+		let item = await createContribution(
+			{ ...input, assignee: { kind: "local_llm" } },
+			alice,
+		);
+		const previousId = item.generation?.id;
+		item = await updateContribution(
+			action(item, "comment", { body: "Fix this fact" }),
+			alice,
+		);
+		expect(item.generation?.id).not.toBe(previousId);
+		const feedback = item.events
+			.filter((event) => event.kind === "comment")
+			.at(-1);
+		expect(item.generation?.triggerEventIds).toContain(feedback?.id);
+		expect(item.revision).toBe(1);
+		const request = structuredClone(item.generation);
+		item = await updateContribution(
+			action(item, "comment", { body: "Working on it" }),
+			{ ...alice, kind: "local_llm" },
+		);
+		expect(item.generation).toEqual(request);
+	});
+	it("owner change requests enqueue feedback while approval alone does not launch another pass", async () => {
+		let item = await createContribution(
+			{ ...input, assignee: { kind: "aws_llm" } },
+			alice,
+		);
+		item = await updateContribution(
+			action(item, "request_changes", { body: "Please correct the date" }),
+			owner,
+		);
+		expect(item.generation?.triggerEventIds).toContain(
+			item.events.filter((event) => event.kind === "changes_requested").at(-1)
+				?.id,
+		);
+		const jobId = item.generation?.id;
+		item = await updateContribution(action(item, "approve"), owner);
+		expect(item.generation?.id).toBe(jobId);
+	});
+	it("explicit reassignment/rerun refreshes work, and closing/unassigning revokes it", async () => {
+		let item = await createContribution(
+			{ ...input, assignee: { kind: "local_llm" } },
+			alice,
+		);
+		const first = item.generation?.id;
+		item = await updateContribution(
+			action(item, "assign", { assignee: item.assignee }),
+			alice,
+		);
+		expect(item.generation?.id).not.toBe(first);
+		item = await updateContribution(action(item, "run_agent"), alice);
+		expect(item.generation?.trigger).toBe("manual");
+		item = await updateContribution(action(item, "close"), alice);
+		expect(item.generation?.status).toBe("cancelled");
+		item = await updateContribution(action(item, "reopen"), alice);
+		expect(item.generation).toMatchObject({
+			status: "queued",
+			trigger: "reopen",
+		});
+		item = await updateContribution(
+			action(item, "assign", { assignee: { kind: "unassigned" } }),
+			alice,
+		);
+		expect(item.generation?.status).toBe("cancelled");
+		await expect(
+			updateContribution(action(item, "run_agent"), alice),
+		).rejects.toThrow("assigned");
+	});
+	it.each(["disabled", "missing model"])(
+		"saves assignments needing %s configuration without pretending to execute",
+		async (reason) => {
+			mocks.agent.mockResolvedValue({
+				id: ID,
+				version: 1,
+				provider: "aws_llm",
+				model: reason === "missing model" ? null : "model",
+				enabled: reason !== "disabled",
+				installedVersion: "v1",
+				bundleHash: "a".repeat(64),
+			});
+			const item = await createContribution(
+				{
+					kind: "issue",
+					title: "Issue",
+					description: "Implement",
+					assignee: { kind: "aws_llm" },
+				},
+				alice,
+			);
+			expect(item.generation?.status).toBe("needs_input");
+			expect(item.generation?.error).toBeTruthy();
+			expect(mocks.notify).not.toHaveBeenCalled();
+		},
+	);
+	it("a model-authored no-op response retains approval, while an actual revision records fresh model authorship", async () => {
+		let item = await pr();
+		item = await updateContribution(action(item, "approve"), owner);
+		const modelActor: Contributor = {
+			id: "agent:model",
+			name: "Local reviewer",
+			kind: "local_llm",
+			isDoradsoft: false,
+		};
+		const prior = structuredClone(item);
+		expect(
+			await applyContributionAgentRevision({} as never, item, {}, modelActor),
+		).toBe(false);
+		expect(item).toEqual(prior);
+		expect(
+			await applyContributionAgentRevision(
+				{} as never,
+				item,
+				{ description: "Corrected explanation" },
+				modelActor,
+			),
+		).toBe(true);
+		expect(item.revision).toBe(2);
+		expect(item.revisionAuthor).toEqual(modelActor);
+		expect(item.revisionHistory?.at(-1)?.description).toBe(prior.description);
+		expect(
+			item.events.find((event) => event.kind === "approved")?.snapshot
+				?.revision,
+		).toBe(1);
+		await expect(
+			applyContributionAgentRevision({} as never, item, {}, owner),
+		).rejects.toThrow("model authorship");
+		item.state = "closed";
+		await expect(
+			applyContributionAgentRevision({} as never, item, {}, modelActor),
+		).rejects.toThrow("open PR");
+	});
+	it("description-only edits preserve a successful API migration that retired all operations", async () => {
+		let item = await pr();
+		item.changes = [];
+		item.apiMigration = {
+			id: ID,
+			status: "succeeded",
+			from: 3,
+			to: CONTRIBUTION_API_VERSION,
+			at: new Date().toISOString(),
+			steps: [],
+			error: null,
+			sequence: JSON.stringify([change]),
+		};
+		mocks.items.set(item.id, structuredClone(item));
+		item = await editContribution(
+			{
+				...input,
+				id: item.id,
+				version: item.version,
+				changes: [],
+				description: "Obsolete request explained",
+			},
+			alice,
+		);
+		expect(item.changes).toEqual([]);
+		expect(item.apiMigration?.status).toBe("succeeded");
+		const modelActor: Contributor = {
+			id: "agent",
+			name: "Agent",
+			kind: "local_llm",
+			isDoradsoft: false,
+		};
+		expect(
+			await applyContributionAgentRevision(
+				{} as never,
+				item,
+				{ description: "Further explanation" },
+				modelActor,
+			),
+		).toBe(true);
+		expect(item.changes).toEqual([]);
+		expect(item.apiMigration?.status).toBe("succeeded");
+		await expect(
+			applyContributionAgentRevision(
+				{} as never,
+				item,
+				{ evidence: [] },
+				modelActor,
+			),
+		).rejects.toThrow("evidence");
+	});
+	it("manual raw recovery atomically replaces failed assigned work and wakes it after commit", async () => {
+		let item = await createContribution(
+			{ ...input, assignee: { kind: "local_llm" } },
+			alice,
+		);
+		item.apiVersion = CONTRIBUTION_API_VERSION + 1;
+		if (!item.generation) throw new Error("Missing assigned task");
+		item.generation.status = "failed";
+		const previousJob = item.generation.id;
+		mocks.items.set(item.id, structuredClone(item));
+		mocks.notify.mockClear();
+		item = await recoverContributionSequence(
+			{
+				id: item.id,
+				version: item.version,
+				apiVersion: CONTRIBUTION_API_VERSION,
+				sequence: [change],
+			},
+			alice,
+		);
+		expect(item.generation).toMatchObject({
+			status: "queued",
+			trigger: "edit",
+			task: "pr_resolution",
+		});
+		expect(item.generation?.id).not.toBe(previousJob);
+		expect(item.generation?.triggerEventIds).toContain(
+			item.events.filter((event) => event.kind === "edited").at(-1)?.id,
+		);
+		expect(mocks.notify).toHaveBeenCalledOnce();
+	});
+	it("legacy generation cannot strip versioned agent metadata from an already modern task", async () => {
+		const item = await createContribution(
+			{
+				kind: "issue",
+				title: "Issue",
+				description: "Implement",
+				evidence,
+				assignee: { kind: "local_llm" },
+			},
+			alice,
+		);
+		if (!item.generation) throw new Error("Missing assigned task");
+		item.generation.status = "completed";
+		mocks.items.set(item.id, structuredClone(item));
+		await expect(
+			updateContribution(action(item, "queue_generation"), alice),
+		).rejects.toThrow("run_agent");
+		expect(mocks.items.get(item.id)?.generation).toEqual(item.generation);
+	});
 	it("retains immutable authored snapshots and the exact proposal attached to an approval", async () => {
 		let item = await pr();
 		item = await updateContribution(action(item, "approve"), owner);
@@ -250,22 +529,33 @@ describe("contribution lifecycle", () => {
 		);
 		expect(assigned.assignee.kind).toBe("local_llm");
 		expect(assigned.revision).toBe(item.revision);
-		expect(assigned.events.at(-1)?.kind).toBe("assigned");
+		expect(assigned.events.at(-2)?.kind).toBe("assigned");
+		expect(assigned.events.at(-1)?.kind).toBe("generation_queued");
 		await expect(
 			mergeContribution({ id: assigned.id, version: assigned.version }, alice),
+		).rejects.toThrow(/agent|סוכן/i);
+		const released = await updateContribution(
+			action(assigned, "assign", { assignee: { kind: "unassigned" } }),
+			alice,
+		);
+		await expect(
+			mergeContribution({ id: released.id, version: released.version }, alice),
 		).resolves.toMatchObject({ state: "merged" });
 	});
-	it("queues workstation work explicitly, prevents duplicates and allows recovery after a lost lease", async () => {
+	it("preserves pre-upgrade explicit worker requests, duplicate protection and lost-lease recovery", async () => {
 		let item = await createContribution(
 			{
 				kind: "issue",
 				title: "Issue",
 				description: "Saved source",
 				evidence,
-				assignee: { kind: "local_llm" },
+				assignee: { kind: "unassigned" },
 			},
 			alice,
 		);
+		// This fixture represents a persisted assignment from before automatic work.
+		item.assignee = { kind: "local_llm" };
+		mocks.items.set(item.id, structuredClone(item));
 		item = await updateContribution(action(item, "queue_generation"), alice);
 		expect(item.generation).toMatchObject({
 			status: "queued",
@@ -311,13 +601,14 @@ describe("contribution lifecycle", () => {
 			if (reason === "closed") item.state = "closed";
 			if (reason === "pr") item.kind = "pr";
 			mocks.items.set(item.id, structuredClone(item));
+			const generation = structuredClone(item.generation);
 			await expect(
 				updateContribution(
 					action(item, "queue_generation"),
 					reason === "model actor" ? { ...alice, kind: "local_llm" } : alice,
 				),
 			).rejects.toThrow();
-			expect(mocks.items.get(item.id)?.generation).toBeUndefined();
+			expect(mocks.items.get(item.id)?.generation).toEqual(generation);
 		},
 	);
 	it("creates an issue without touching content and records assignment", async () => {
@@ -398,7 +689,9 @@ describe("contribution lifecycle", () => {
 				alice,
 			);
 			expect(item.assignee).toEqual(assignee);
-			expect(item.events.at(-1)?.kind).toBe("assigned");
+			expect(item.events.some((event) => event.kind === "assigned")).toBe(true);
+			if (assignee.kind.endsWith("llm"))
+				expect(item.generation?.status).toBe("queued");
 		}
 	});
 	it("rejects stale updates", async () => {

@@ -5,6 +5,7 @@ import {
 	type ContributionCatalogue,
 	ContributionComposer,
 } from "~/components/tanahpedia/ContributionComposer";
+import type { ContributionAgentSummary } from "~/lib/tanahpedia/contribution-agents";
 import type { Contribution } from "~/lib/tanahpedia/contributions";
 import {
 	FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
@@ -106,6 +107,102 @@ function description() {
 }
 
 describe("contribution composer", () => {
+	it.each([undefined, "failed", "succeeded"] as const)(
+		"preserves an existing empty sequence only after a successful migration (%s)",
+		async (status) => {
+			const initial = {
+				id: ID,
+				kind: "pr",
+				title: "Migrated proposal",
+				description: "Keep the context",
+				assignee: { kind: "unassigned" },
+				evidence: [
+					{
+						citation: "בראשית א א",
+						quote: "Existing source",
+						url: null,
+						note: "",
+					},
+				],
+				issueId: OTHER,
+				closeIssue: true,
+				changes: [],
+				...(status
+					? {
+							apiMigration: {
+								status,
+								from: 1,
+								to: 4,
+								at: "now",
+								steps: [],
+								error: status === "failed" ? "Cannot migrate" : null,
+							},
+						}
+					: {}),
+			} as unknown as Contribution;
+			const { submit } = setup("pr", { initial });
+			expect(screen.queryByLabelText("סוג שינוי")).not.toBeInTheDocument();
+			fireEvent.change(screen.getByLabelText("תיאור"), {
+				target: { value: "Revised explanation" },
+			});
+			fireEvent.change(screen.getByLabelText("מה המקור מוכיח?"), {
+				target: { value: "Clarified evidence" },
+			});
+			fireEvent.submit(screen.getByRole("form"));
+			if (status === "succeeded") {
+				await waitFor(() =>
+					expect(submit).toHaveBeenCalledWith(
+						expect.objectContaining({
+							description: "Revised explanation",
+							evidence: [
+								expect.objectContaining({ note: "Clarified evidence" }),
+							],
+							changes: [],
+						}),
+					),
+				);
+			} else {
+				expect(await screen.findByRole("alert")).toHaveTextContent(
+					"A PR requires 1-40 typed changes",
+				);
+				expect(submit).not.toHaveBeenCalled();
+			}
+		},
+	);
+	it("preserves all four assignee kinds and submits the selected registered agent as the initial work trigger", async () => {
+		const agent = {
+			id: OTHER,
+			name: "My workstation",
+			provider: "local_llm",
+			enabled: true,
+		} as ContributionAgentSummary;
+		const { submit } = setup("issue", {
+			agents: [
+				agent,
+				{ ...agent, id: "disabled", name: "Disabled", enabled: false },
+				{ ...agent, id: "aws", name: "Cloud", provider: "aws_llm" },
+			],
+		});
+		description();
+		const assignee = screen.getByLabelText("אחראי", { exact: true });
+		expect(assignee.querySelectorAll("option")).toHaveLength(4);
+		fireEvent.change(assignee, { target: { value: "local_llm" } });
+		const picker = screen.getByLabelText("סוכן מטפל");
+		expect(picker.querySelectorAll("option")).toHaveLength(3);
+		expect(
+			screen.getByRole("option", { name: "Disabled (מושבת)" }),
+		).toBeDisabled();
+		fireEvent.change(picker, { target: { value: OTHER } });
+		expect(screen.getByRole("note")).toHaveTextContent(/שמירת/);
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					assignee: { kind: "local_llm", agentId: OTHER },
+				}),
+			),
+		);
+	});
 	it("edits an existing metadata proposal and independently controls linked-issue closure", async () => {
 		const initial = {
 			kind: "pr",

@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
 	claim: vi.fn(),
 	complete: vi.fn(),
 	fail: vi.fn(),
+	bundle: vi.fn(),
+	context: vi.fn(),
 }));
 vi.mock("~/server/auth", () => ({
 	verifyContributionWorkerAccessToken: mocks.verify,
@@ -15,6 +17,8 @@ vi.mock("~/server/tanahpedia/contribution-worker.server", () => ({
 	claimContributionGeneration: mocks.claim,
 	completeContributionGeneration: mocks.complete,
 	failContributionGeneration: mocks.fail,
+	getContributionWorkerBundle: mocks.bundle,
+	readContributionWorkerContext: mocks.context,
 	ContributionWorkerConflict: class extends Error {},
 }));
 
@@ -44,6 +48,11 @@ beforeEach(() => {
 	mocks.claim.mockResolvedValue({ id: "job" });
 	mocks.complete.mockResolvedValue({ prIds: ["pr"] });
 	mocks.fail.mockResolvedValue(true);
+	mocks.bundle.mockResolvedValue({ hash: "bundle-hash" });
+	mocks.context.mockResolvedValue({
+		data: { total: 21 },
+		receipt: { hash: "read-hash" },
+	});
 });
 afterEach(() => vi.restoreAllMocks());
 describe("local worker HTTP trust boundary", () => {
@@ -52,6 +61,8 @@ describe("local worker HTTP trust boundary", () => {
 			["claim", { id: "job" }],
 			["complete", { prIds: ["pr"] }],
 			["fail", { updated: true }],
+			["bundle", { hash: "bundle-hash" }],
+			["context", { data: { total: 21 }, receipt: { hash: "read-hash" } }],
 		] as const) {
 			const response = await handleContributionWorkerRequest(request(action));
 			expect(response.status).toBe(200);

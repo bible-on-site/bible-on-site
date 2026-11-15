@@ -24,9 +24,28 @@ export const CONTRIBUTION_SCHEMA = `CREATE TABLE IF NOT EXISTS tanahpedia_contri
 	KEY idx_contribution_issue (issue_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
 
+export const CONTRIBUTION_AGENT_SCHEMA = `CREATE TABLE IF NOT EXISTS tanahpedia_contribution_agent (
+	id CHAR(36) NOT NULL PRIMARY KEY,
+	version INT UNSIGNED NOT NULL DEFAULT 1,
+	data JSON NOT NULL,
+	created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+	updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
+
+export const CONTRIBUTION_AGENT_BUNDLE_SCHEMA = `CREATE TABLE IF NOT EXISTS tanahpedia_contribution_agent_bundle (
+	hash CHAR(64) NOT NULL PRIMARY KEY,
+	version VARCHAR(100) NOT NULL,
+	data JSON NOT NULL,
+	created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
+
 let schemaPromise: Promise<unknown> | undefined;
 export async function ensureContributionSchema(): Promise<void> {
-	schemaPromise ??= execute(CONTRIBUTION_SCHEMA).catch((error: unknown) => {
+	schemaPromise ??= (async () => {
+		await execute(CONTRIBUTION_SCHEMA);
+		await execute(CONTRIBUTION_AGENT_SCHEMA);
+		await execute(CONTRIBUTION_AGENT_BUNDLE_SCHEMA);
+	})().catch((error: unknown) => {
 		schemaPromise = undefined;
 		throw error;
 	});

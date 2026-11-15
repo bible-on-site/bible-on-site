@@ -9,6 +9,7 @@ import {
 	assigneeLabel,
 	type Contribution,
 	type ContributionEvent,
+	type ContributionGeneration,
 	type Contributor,
 	contributionHasEffect,
 	contributionSnapshot,
@@ -22,6 +23,8 @@ import {
 } from "~/lib/tanahpedia/contributions";
 import { query } from "../db";
 import { pediaInvalidation, revalidateWebsite } from "../website-revalidate";
+import { getAssignedContributionAgent } from "./contribution-agent-registry.server";
+import { notifyContributionAgentWork } from "./contribution-agent-runtime.server";
 import {
 	applyChange,
 	assertMetadataNames,
@@ -74,6 +77,92 @@ function rememberRevision(item: Contribution): void {
 	];
 }
 
+function editedChanges(item: Contribution, value: unknown) {
+	// A successful API conversion may explicitly retire every operation. Editing
+	// its description/evidence must not invent an operation to retain that PR.
+	if (
+		Array.isArray(value) &&
+		value.length === 0 &&
+		item.changes.length === 0 &&
+		item.apiMigration?.status === "succeeded"
+	)
+		return [];
+	return validateChanges(value);
+}
+
+/** Apply a validated model-authored revision inside the worker's lease/result
+ * transaction. The caller saves its response and completion receipt atomically. */
+export async function applyContributionAgentRevision(
+	conn: PoolConnection,
+	item: Contribution,
+	draft: {
+		title?: unknown;
+		description?: unknown;
+		evidence?: unknown;
+		changes?: unknown;
+	},
+	actor: Contributor,
+): Promise<boolean> {
+	if (item.kind !== "pr" || item.state !== "open")
+		throw new Error("Agent revisions require an open PR");
+	if (!["local_llm", "aws_llm"].includes(actor.kind) || actor.isDoradsoft)
+		throw new Error("Agent revisions require model authorship");
+	const title =
+		draft.title === undefined ? item.title : textField(draft.title, "title");
+	const description =
+		draft.description === undefined
+			? item.description
+			: textField(draft.description, "description", 20000);
+	const evidence =
+		draft.evidence === undefined
+			? item.evidence
+			: validateEvidence(draft.evidence);
+	if (!evidence.length) throw new Error("PRs require evidence");
+	const changes = await prepareChanges(
+		conn,
+		editedChanges(
+			item,
+			draft.changes === undefined
+				? item.changes.map(({ kind, targetId, after }) => ({
+						kind,
+						targetId,
+						after,
+					}))
+				: draft.changes,
+		),
+		{ refresh: true },
+	);
+	if (
+		sameState(
+			{ title, description, evidence, changes },
+			{
+				title: item.title,
+				description: item.description,
+				evidence: item.evidence,
+				changes: item.changes,
+			},
+		)
+	)
+		return false;
+	rememberRevision(item);
+	item.title = title;
+	item.description = description;
+	item.evidence = evidence;
+	item.changes = changes;
+	item.revisionAuthor = actor;
+	item.apiVersion = CONTRIBUTION_API_VERSION;
+	if (changes.length !== 0) delete item.apiMigration;
+	delete item.domainConflict;
+	item.revision++;
+	addEvent(
+		item,
+		actor,
+		"edited",
+		"הסוכן עדכן את ההצעה. נדרש אישור לגרסה המעודכנת.",
+	);
+	return true;
+}
+
 export function assertVersion(item: Contribution, version: unknown): void {
 	if (!Number.isSafeInteger(version) || item.version !== version)
 		throw new Error("This issue or PR changed. Reload before retrying.");
@@ -87,6 +176,78 @@ function cancelGeneration(item: Contribution, reason: string): void {
 		item.generation.status = "cancelled";
 		item.generation.error = reason;
 	}
+}
+
+/** Assignment and human feedback commit their durable work request together.
+ * Replacing an active job revokes its lease; a stale model cannot overwrite it. */
+export async function queueAssignedContributionAgent(
+	conn: PoolConnection,
+	item: Contribution,
+	actor: Contributor,
+	trigger: NonNullable<ContributionGeneration["trigger"]>,
+	triggerEventIds: string[] = [],
+): Promise<boolean> {
+	if (
+		item.state !== "open" ||
+		!["human", "system"].includes(actor.kind) ||
+		(item.assignee.kind !== "local_llm" && item.assignee.kind !== "aws_llm")
+	)
+		return false;
+	const agent = await getAssignedContributionAgent(conn, item.assignee);
+	const canRun = agent.enabled && Boolean(agent.model);
+	const previousTriggers =
+		item.generation &&
+		["queued", "running", "needs_input"].includes(item.generation.status)
+			? (item.generation.triggerEventIds ?? [])
+			: [];
+	item.generation = {
+		id: randomUUID(),
+		status: canRun ? "queued" : "needs_input",
+		requestedAt: new Date().toISOString(),
+		requestedBy: actor.id,
+		attempts: 0,
+		apiVersion: CONTRIBUTION_API_VERSION,
+		worker: null,
+		model: null,
+		leaseHash: null,
+		leaseExpiresAt: null,
+		claimedVersion: null,
+		contextHash: null,
+		outputHash: null,
+		prIds: [],
+		error: !agent.enabled
+			? "הסוכן מושבת. ניתן להפעיל אותו בעמוד הסוכנים."
+			: !agent.model
+				? "יש להגדיר מודל לסוכן בעמוד הסוכנים."
+				: null,
+		task: item.kind === "issue" ? "issue_implementation" : "pr_resolution",
+		provider: agent.provider,
+		agentId: agent.id,
+		bundleVersion: agent.installedVersion,
+		bundleHash: agent.bundleHash,
+		agentVersion: agent.version,
+		trigger,
+		triggerEventIds: [...new Set([...previousTriggers, ...triggerEventIds])],
+	};
+	addEvent(
+		item,
+		actor,
+		"generation_queued",
+		canRun ? "המשימה נשלחה לסוכן המשויך" : (item.generation.error ?? ""),
+	);
+	const event = item.events[item.events.length - 1];
+	event.run = {
+		jobId: item.generation.id,
+		agentId: agent.id,
+		bundleVersion: agent.installedVersion,
+		model: agent.model ?? "",
+	};
+	return true;
+}
+
+function wakeAgent(item: Contribution): Contribution {
+	if (item.generation?.status === "queued") notifyContributionAgentWork();
+	return item;
 }
 
 export async function createContribution(
@@ -141,9 +302,14 @@ export async function createContribution(
 			apiVersion: CONTRIBUTION_API_VERSION,
 		};
 		addEvent(item, actor, "created", "");
+		await queueAssignedContributionAgent(conn, item, actor, "assignment", [
+			item.events[0].id,
+		]);
 		return insertContribution(conn, item);
 	};
-	return existingConn ? create(existingConn) : withContributions(create);
+	return existingConn
+		? create(existingConn)
+		: withContributions(create).then(wakeAgent);
 }
 
 export async function editContribution(
@@ -161,7 +327,7 @@ export async function editContribution(
 		if (item.state !== "open") throw new Error("Reopen before editing");
 		const changes =
 			item.kind === "pr"
-				? await prepareChanges(conn, validateChanges(input.changes), {
+				? await prepareChanges(conn, editedChanges(item, input.changes), {
 						// Existing proposals may retain operations satisfied by another
 						// merge. Re-read all bases and references while allowing no-ops.
 						refresh: true,
@@ -196,7 +362,12 @@ export async function editContribution(
 			item.assignee = assignee;
 			addEvent(item, actor, "assigned", assigneeLabel(assignee));
 		}
-		if (!contentChanged) return saveContribution(conn, item);
+		if (!contentChanged) {
+			await queueAssignedContributionAgent(conn, item, actor, "assignment", [
+				item.events[item.events.length - 1].id,
+			]);
+			return saveContribution(conn, item);
+		}
 		rememberRevision(item);
 		item.title = title;
 		cancelGeneration(
@@ -209,12 +380,15 @@ export async function editContribution(
 		delete item.domainConflict;
 		item.revisionAuthor = actor;
 		item.apiVersion = CONTRIBUTION_API_VERSION;
-		delete item.apiMigration;
+		if (changes.length !== 0) delete item.apiMigration;
 		item.closeIssue = input.closeIssue !== false;
 		item.revision += 1;
 		addEvent(item, actor, "edited", "העדכון מבטל אישורים של גרסאות קודמות");
+		await queueAssignedContributionAgent(conn, item, actor, "edit", [
+			item.events[item.events.length - 1].id,
+		]);
 		return saveContribution(conn, item);
-	});
+	}).then(wakeAgent);
 }
 
 /** Human recovery is an authored edit. Recapture authoritative base states and
@@ -253,8 +427,11 @@ export async function recoverContributionSequence(
 			"edited",
 			"רצף הפעולות שוחזר ידנית. הרצף הקודם נשמר בהיסטוריה; נדרש אישור לגרסה הערוכה.",
 		);
+		await queueAssignedContributionAgent(conn, item, actor, "edit", [
+			item.events[item.events.length - 1].id,
+		]);
 		return saveContribution(conn, item);
-	});
+	}).then(wakeAgent);
 }
 
 export async function updateContribution(
@@ -268,6 +445,10 @@ export async function updateContribution(
 		assertVersion(item, input.version);
 		if (input.action === "comment") {
 			addEvent(item, actor, "comment", textField(input.body, "comment", 10000));
+			if (actor.kind === "human")
+				await queueAssignedContributionAgent(conn, item, actor, "comment", [
+					item.events[item.events.length - 1].id,
+				]);
 		} else if (input.action === "assign") {
 			if (item.state !== "open")
 				throw new Error("Only open items can be assigned");
@@ -276,6 +457,9 @@ export async function updateContribution(
 				cancelGeneration(item, "The issue assignee changed");
 			item.assignee = assignee;
 			addEvent(item, actor, "assigned", assigneeLabel(item.assignee));
+			await queueAssignedContributionAgent(conn, item, actor, "assignment", [
+				item.events[item.events.length - 1].id,
+			]);
 		} else if (
 			input.action === "approve" ||
 			input.action === "request_changes"
@@ -290,7 +474,22 @@ export async function updateContribution(
 				input.action === "approve" ? "approved" : "changes_requested",
 				typeof input.body === "string" ? input.body.trim().slice(0, 10000) : "",
 			);
+			if (input.action === "request_changes")
+				await queueAssignedContributionAgent(conn, item, actor, "comment", [
+					item.events[item.events.length - 1].id,
+				]);
+		} else if (input.action === "run_agent") {
+			if (
+				actor.kind !== "human" ||
+				!(await queueAssignedContributionAgent(conn, item, actor, "manual"))
+			) {
+				throw new Error(
+					"Run an agent on an open issue or PR assigned to an LLM",
+				);
+			}
 		} else if (input.action === "queue_generation") {
+			if (item.generation?.task)
+				throw new Error("Use run_agent for registered agent work");
 			if (
 				item.kind !== "issue" ||
 				item.state !== "open" ||
@@ -344,11 +543,14 @@ export async function updateContribution(
 			item.state = "open";
 			item.revision += 1;
 			addEvent(item, actor, "reopened", "");
+			await queueAssignedContributionAgent(conn, item, actor, "reopen", [
+				item.events[item.events.length - 1].id,
+			]);
 		} else {
 			throw new Error("Unsupported issue/PR action");
 		}
 		return saveContribution(conn, item);
-	});
+	}).then(wakeAgent);
 }
 
 async function applyReviewedChanges(

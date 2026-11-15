@@ -1,8 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import mysql, { type Connection, type RowDataPacket } from "mysql2/promise";
+import mysql, {
+	type Connection,
+	type PoolConnection,
+	type RowDataPacket,
+} from "mysql2/promise";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { canonicalJson } from "~/lib/canonical-json";
+import { DEFAULT_LOCAL_AGENT_ID } from "~/lib/tanahpedia/contribution-agents";
 import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
 import {
 	CONTRIBUTION_RECORDS,
@@ -70,6 +75,7 @@ let service: typeof import("~/server/tanahpedia/contribution-service.server");
 let store: typeof import("~/server/tanahpedia/contribution-store.server");
 let db: typeof import("~/server/db");
 let worker: typeof import("~/server/tanahpedia/contribution-worker.server");
+let registry: typeof import("~/server/tanahpedia/contribution-agent-registry.server");
 let created = false;
 const recordRefs: Record<string, string | number> = {};
 let otherEntry: string;
@@ -312,9 +318,12 @@ beforeAll(async () => {
 	service = await import("~/server/tanahpedia/contribution-service.server");
 	store = await import("~/server/tanahpedia/contribution-store.server");
 	await store.ensureContributionSchema();
+	registry = await import(
+		"~/server/tanahpedia/contribution-agent-registry.server"
+	);
 });
 
-describe("workstation generation with actual MySQL transactions", () => {
+describe("pre-upgrade workstation generation with actual MySQL transactions", () => {
 	async function queued() {
 		worker ??= await import("~/server/tanahpedia/contribution-worker.server");
 		const item = await service.createContribution(
@@ -322,13 +331,21 @@ describe("workstation generation with actual MySQL transactions", () => {
 				kind: "issue",
 				title: "בקשה להפקת מטא-נתונים",
 				description: "נדרש ערך חדש עם מטא-נתונים בלבד, ללא גוף טקסט.",
-				assignee: { kind: "local_llm" },
+				assignee: { kind: "unassigned" },
 				evidence,
 			},
 			alice,
 		);
+		// Reproduce an assignment persisted by the old release, which had no
+		// automatic task/bundle metadata. Modern assignments use the v2 cases.
+		const legacy = await store.withContributions(async (tx) => {
+			const saved = await store.readContribution(tx, item.id, true);
+			saved.assignee = { kind: "local_llm" };
+			service.addEvent(saved, alice, "assigned", "Local LLM");
+			return store.saveContribution(tx, saved);
+		});
 		return service.updateContribution(
-			{ id: item.id, version: item.version, action: "queue_generation" },
+			{ id: item.id, version: legacy.version, action: "queue_generation" },
 			alice,
 		);
 	}
@@ -479,13 +496,16 @@ describe("workstation generation with actual MySQL transactions", () => {
 			await expect(
 				worker.completeContributionGeneration(completion(job)),
 			).rejects.toThrow("no longer owns");
-			expect(
-				(
-					await store.withContributions((tx) =>
-						store.readContribution(tx, item.id),
-					)
-				).generation?.status,
-			).toBe("cancelled");
+			const saved = await store.withContributions((tx) =>
+				store.readContribution(tx, item.id),
+			);
+			expect(saved.generation?.status).toBe(
+				action === "edit" ? "queued" : "cancelled",
+			);
+			if (action === "edit") {
+				expect(saved.generation?.task).toBe("issue_implementation");
+				expect(saved.generation?.id).not.toBe(job.id);
+			}
 		}
 	});
 	it("reclaims an expired lease and refuses a late result from its former owner", async () => {
@@ -533,6 +553,703 @@ describe("workstation generation with actual MySQL transactions", () => {
 		);
 		expect(retry.generation?.id).not.toBe(failed.generation?.id);
 		expect(await claim(item.id)).toBeTruthy();
+	});
+});
+
+describe("assignment-driven agents with actual MySQL transactions", () => {
+	async function installedAgent() {
+		return registry.installRegisteredContributionAgent({
+			name: `Fixture agent ${randomUUID()}`,
+			provider: "local_llm",
+			model: "fixture-model",
+			enabled: true,
+		});
+	}
+	async function assignedIssue() {
+		worker ??= await import("~/server/tanahpedia/contribution-worker.server");
+		const agent = await installedAgent();
+		const item = await service.createContribution(
+			{
+				kind: "issue",
+				title: `Agent issue ${randomUUID()}`,
+				description: "Implement typed metadata only",
+				evidence,
+				assignee: { kind: "local_llm", agentId: agent.id },
+			},
+			alice,
+		);
+		return { item, agent };
+	}
+	async function claim(item: Contribution) {
+		worker ??= await import("~/server/tanahpedia/contribution-worker.server");
+		const value = await worker.claimContributionGeneration({
+			workerId: "v2-mysql-fixture",
+			protocolVersion: 2,
+			supportedTasks: ["issue_implementation", "pr_resolution"],
+			issueId: item.id,
+			runtimeVersion: "fixture-v2",
+		});
+		if (!value || !("protocolVersion" in value) || value.protocolVersion !== 2)
+			throw new Error("Expected a v2 assigned-agent claim");
+		return value;
+	}
+	function identity(job: Awaited<ReturnType<typeof claim>>) {
+		return {
+			issueId: job.issueId,
+			jobId: job.id,
+			version: job.version,
+			token: job.token,
+			apiVersion: job.apiVersion,
+			protocolVersion: 2,
+			model: "forged-owner-name",
+		};
+	}
+	const result = (
+		summary: string,
+		commentId?: string,
+		draft?: Record<string, unknown>,
+	) =>
+		canonicalJson({
+			outcome: draft ? "revised" : "unchanged",
+			summary,
+			responses: commentId
+				? [{ commentId, status: "addressed", body: summary }]
+				: [],
+			...(draft ? { draft } : {}),
+		});
+	async function isolatedEntity() {
+		const id = randomUUID();
+		await conn.execute(
+			"INSERT INTO tanahpedia_entity (id,entity_type,name) VALUES (?,'PERSON',?)",
+			[id, `Current ${id}`],
+		);
+		return id;
+	}
+	it("persists registry declarations once per hash and rejects concurrent configuration updates", async () => {
+		const installed = await installedAgent();
+		const persisted = await store.withContributions((tx) =>
+			registry.getRegisteredContributionAgent(tx, installed.id),
+		);
+		const bundle = await store.withContributions((tx) =>
+			registry.readContributionAgentBundle(tx, installed.bundleHash),
+		);
+		expect(persisted.bundle).toEqual(bundle);
+		expect(bundle.tools.some((tool) => tool.name === "related")).toBe(true);
+		const updated = await registry.updateRegisteredContributionAgent({
+			id: installed.id,
+			version: installed.version,
+			action: "configure",
+			name: "Updated fixture agent",
+			model: "other-fixture-model",
+		});
+		expect(updated.version).toBe(installed.version + 1);
+		expect(
+			await store.withContributions((tx) =>
+				registry.readContributionAgentBundle(tx, installed.bundleHash),
+			),
+		).toEqual(bundle);
+		await expect(
+			registry.updateRegisteredContributionAgent({
+				id: installed.id,
+				version: installed.version,
+				action: "configure",
+				name: "Stale name",
+			}),
+		).rejects.toThrow("configuration changed");
+		const [bundles] = await conn.execute<RowDataPacket[]>(
+			"SELECT hash FROM tanahpedia_contribution_agent_bundle WHERE hash=?",
+			[installed.bundleHash],
+		);
+		expect(bundles).toHaveLength(1);
+	});
+	it("serializes concurrent startup default seeding and refresh without lock-upgrade deadlock or config changes", async () => {
+		await registry.listContributionAgents();
+		const [before] = await conn.execute<RowDataPacket[]>(
+			"SELECT id,version,data FROM tanahpedia_contribution_agent ORDER BY id",
+		);
+		let firstConnection: PoolConnection | undefined;
+		let entered = () => {},
+			release = () => {},
+			secondEntered = () => {};
+		const reached = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const secondSeeding = new Promise<void>((resolve) => {
+			secondEntered = resolve;
+		});
+		const query = db.txQuery,
+			execute = db.txExecute;
+		const pause = vi
+			.spyOn(db, "txQuery")
+			.mockImplementation(
+				async <T>(
+					tx: PoolConnection,
+					sql: string,
+					params?: unknown[],
+				): Promise<T[]> => {
+					if (
+						!firstConnection &&
+						sql.includes(
+							"FROM tanahpedia_contribution_agent ORDER BY id FOR UPDATE",
+						)
+					) {
+						firstConnection = tx;
+						entered();
+						await gate;
+					}
+					return query<T>(tx, sql, params);
+				},
+			);
+		const observe = vi.spyOn(db, "txExecute").mockImplementation((...args) => {
+			const executing = execute(...args);
+			if (
+				firstConnection &&
+				args[0] !== firstConnection &&
+				args[1].includes("INTO tanahpedia_contribution_agent (")
+			)
+				secondEntered();
+			return executing;
+		});
+		const first = registry.refreshRegisteredContributionAgents();
+		let second:
+			| ReturnType<typeof registry.refreshRegisteredContributionAgents>
+			| undefined;
+		let completed:
+			| Promise<PromiseSettledResult<Awaited<typeof first>>[]>
+			| undefined;
+		try {
+			await Promise.race([
+				reached,
+				first.then(() => {
+					throw new Error("First refresh skipped its row-lock barrier");
+				}),
+			]);
+			second = registry.refreshRegisteredContributionAgents();
+			completed = Promise.allSettled([first, second]);
+			await Promise.race([
+				secondSeeding,
+				second.then(() => {
+					throw new Error("Second refresh skipped default seeding");
+				}),
+			]);
+			const probe = await db.pool.getConnection();
+			try {
+				await probe.beginTransaction();
+				// Seeding must already own an exclusive lock. INSERT IGNORE instead
+				// retained compatible shared locks, then deadlocked at the two upgrades.
+				await expect(
+					probe.execute(
+						"SELECT id FROM tanahpedia_contribution_agent WHERE id=? FOR SHARE NOWAIT",
+						[DEFAULT_LOCAL_AGENT_ID],
+					),
+				).rejects.toMatchObject({ code: "ER_LOCK_NOWAIT" });
+			} finally {
+				await probe.rollback();
+				probe.release();
+			}
+			release();
+			const results = await completed;
+			for (const result of results) {
+				expect(result.status).toBe("fulfilled");
+				if (result.status === "fulfilled")
+					expect(result.value).toMatchObject({ updated: 0 });
+			}
+			const [after] = await conn.execute<RowDataPacket[]>(
+				"SELECT id,version,data FROM tanahpedia_contribution_agent ORDER BY id",
+			);
+			expect(after).toEqual(before);
+		} finally {
+			release();
+			await (completed ??
+				Promise.allSettled([first, ...(second ? [second] : [])]));
+			pause.mockRestore();
+			observe.mockRestore();
+		}
+	});
+	it("creates a source-backed issue proposal under the registered identity through v2 reads and completion", async () => {
+		const { item, agent } = await assignedIssue(),
+			entityId = await isolatedEntity(),
+			job = await claim(item);
+		const read = await worker.readContributionWorkerContext({
+			...identity(job),
+			name: "record",
+			arguments: { kind: "entity", id: entityId },
+		});
+		const input = {
+			...identity(job),
+			receipts: [read.receipt],
+			content: canonicalJson({
+				outcome: "implemented",
+				summary: "Prepared for human review",
+				responses: [],
+				pullRequests: [
+					{
+						title: "Proposed metadata",
+						description: "Source-backed fixture",
+						evidenceIndexes: [0],
+						changes: [
+							{
+								kind: "metadata",
+								targetId: entityId,
+								after: { displayName: "Reviewed proposal value" },
+							},
+						],
+					},
+				],
+			}),
+		};
+		const receipt = await worker.completeContributionGeneration(input);
+		expect(receipt.prIds).toHaveLength(1);
+		expect(await worker.completeContributionGeneration(input)).toEqual(receipt);
+		const proposal = await store.withContributions((tx) =>
+			store.readContribution(tx, receipt.prIds[0]),
+		);
+		expect(proposal.author).toMatchObject({
+			id: `agent:${agent.id}`,
+			name: agent.name,
+			kind: "local_llm",
+			isDoradsoft: false,
+		});
+		expect(proposal.provenance).toMatchObject({
+			provider: "contribution_agent",
+			model: "fixture-model",
+			promptVersion: agent.installedVersion,
+		});
+		expect(reviewStatus(proposal)).toBe("required");
+		const [rows] = await conn.execute<RowDataPacket[]>(
+			"SELECT name FROM tanahpedia_entity WHERE id=?",
+			[entityId],
+		);
+		expect(rows[0].name).toBe(`Current ${entityId}`);
+	});
+	it("refreshes a raced queued configuration atomically before spending one lease attempt", async () => {
+		const { item, agent } = await assignedIssue(),
+			originalJob = item.generation?.id;
+		const configured = await registry.updateRegisteredContributionAgent({
+			id: agent.id,
+			version: agent.version,
+			action: "configure",
+			model: "new-fixture-model",
+		});
+		const job = await claim(item),
+			saved = await fresh(item);
+		expect(job.id).not.toBe(originalJob);
+		expect(job.model).toBe("new-fixture-model");
+		expect(saved.generation).toMatchObject({
+			agentVersion: configured.version,
+			attempts: 1,
+			status: "running",
+			triggerEventIds: [item.events[0].id],
+		});
+	});
+	it("keeps missing-evidence clarification as a completed observation instead of creating empty proposals", async () => {
+		const { item } = await assignedIssue();
+		const edited = await service.editContribution(
+			{
+				id: item.id,
+				version: item.version,
+				title: item.title,
+				description: item.description,
+				evidence: [],
+			},
+			alice,
+		);
+		const job = await claim(edited);
+		await worker.completeContributionGeneration({
+			...identity(job),
+			content: canonicalJson({
+				outcome: "clarification",
+				summary: "Please supply a source",
+				responses: [],
+			}),
+		});
+		expect((await fresh(item)).generation).toMatchObject({
+			status: "needs_input",
+			result: { outcome: "clarification", changed: false },
+		});
+		const [rows] = await conn.execute<RowDataPacket[]>(
+			"SELECT id FROM tanahpedia_contribution WHERE issue_id=?",
+			[item.id],
+		);
+		expect(rows).toHaveLength(0);
+	});
+	it("holds the configured agent row from final validation until the same-PR revision commits", async () => {
+		const agent = await installedAgent(),
+			entityId = await isolatedEntity();
+		const pr = await service.createContribution(
+			{
+				kind: "pr",
+				title: "Config-lock fixture",
+				description: "Before",
+				evidence,
+				changes: [
+					{
+						kind: "metadata",
+						targetId: entityId,
+						after: { displayName: "Proposed" },
+					},
+				],
+				assignee: { kind: "local_llm", agentId: agent.id },
+			},
+			owner,
+		);
+		const job = await claim(pr);
+		let entered = () => {},
+			release = () => {};
+		const reached = new Promise<void>((resolve) => {
+				entered = resolve;
+			}),
+			gate = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+		const apply = service.applyContributionAgentRevision;
+		const paused = vi
+			.spyOn(service, "applyContributionAgentRevision")
+			.mockImplementationOnce(async (...args) => {
+				entered();
+				await gate;
+				return apply(...args);
+			});
+		const completing = worker.completeContributionGeneration({
+			...identity(job),
+			content: result("Validated old configuration", undefined, {
+				description: "After",
+			}),
+		});
+		try {
+			await Promise.race([
+				reached,
+				completing.then(() => {
+					throw new Error("Completion skipped the revision barrier");
+				}),
+			]);
+			const probe = await db.pool.getConnection();
+			try {
+				await probe.beginTransaction();
+				await expect(
+					probe.execute(
+						"SELECT id FROM tanahpedia_contribution_agent WHERE id=? FOR UPDATE NOWAIT",
+						[agent.id],
+					),
+				).rejects.toMatchObject({ code: "ER_LOCK_NOWAIT" });
+			} finally {
+				await probe.rollback();
+				probe.release();
+			}
+			const configuring = registry.updateRegisteredContributionAgent({
+				id: agent.id,
+				version: agent.version,
+				action: "configure",
+				model: "configuration-after-commit",
+			});
+			release();
+			const [, configured] = await Promise.all([completing, configuring]);
+			expect(configured.version).toBe(agent.version + 1);
+			const saved = await fresh(pr);
+			expect(saved.description).toBe("After");
+			expect(saved.generation).toMatchObject({
+				agentVersion: agent.version,
+				status: "completed",
+				model: "fixture-model",
+			});
+		} finally {
+			release();
+			paused.mockRestore();
+			await completing.catch(() => {});
+		}
+	});
+	it("commits assignment and its queued task together, while invalid registry assignments roll back creation", async () => {
+		const { item, agent } = await assignedIssue();
+		expect((await fresh(item)).generation).toMatchObject({
+			status: "queued",
+			task: "issue_implementation",
+			agentId: agent.id,
+			agentVersion: agent.version,
+			bundleHash: agent.bundleHash,
+			triggerEventIds: [item.events[0].id],
+		});
+		expect(
+			await worker.claimContributionGeneration({
+				workerId: "old-protocol",
+				issueId: item.id,
+			}),
+		).toBeNull();
+		const title = `Rollback agent issue ${randomUUID()}`;
+		await expect(
+			service.createContribution(
+				{
+					kind: "issue",
+					title,
+					description: "Must roll back",
+					evidence,
+					assignee: { kind: "local_llm", agentId: randomUUID() },
+				},
+				alice,
+			),
+		).rejects.toThrow("not found");
+		const [rows] = await conn.execute<RowDataPacket[]>(
+			"SELECT id FROM tanahpedia_contribution WHERE title=?",
+			[title],
+		);
+		expect(rows).toHaveLength(0);
+	});
+	it("lets one v2 worker lease an assignment and receipts unchanged prior work without duplicate PRs", async () => {
+		const { item } = await assignedIssue();
+		const existing = await createPr(
+			[metadata(`Existing proposal ${randomUUID()}`)],
+			bot,
+			item.id,
+		);
+		const claims = await Promise.all([
+			worker.claimContributionGeneration({
+				workerId: "first",
+				issueId: item.id,
+				protocolVersion: 2,
+				supportedTasks: ["issue_implementation"],
+			}),
+			worker.claimContributionGeneration({
+				workerId: "second",
+				issueId: item.id,
+				protocolVersion: 2,
+				supportedTasks: ["issue_implementation"],
+			}),
+		]);
+		expect(claims.filter(Boolean)).toHaveLength(1);
+		const job = claims.find(
+			(value) =>
+				value && "protocolVersion" in value && value.protocolVersion === 2,
+		);
+		if (!job || !("protocolVersion" in job))
+			throw new Error("No v2 worker won the claim");
+		const related = await worker.readContributionWorkerContext({
+			...identity(job),
+			name: "related",
+			arguments: { section: "items", limit: 1 },
+		});
+		expect(related.data).toMatchObject({
+			total: 1,
+			items: [{ id: existing.id }],
+		});
+		const input = {
+			...identity(job),
+			receipts: [related.receipt],
+			content: result("Existing proposal already covers this issue"),
+		};
+		expect(await worker.completeContributionGeneration(input)).toEqual({
+			prIds: [],
+		});
+		expect(await worker.completeContributionGeneration(input)).toEqual({
+			prIds: [],
+		});
+		const saved = await fresh(item);
+		expect(saved.generation).toMatchObject({
+			status: "completed",
+			result: { outcome: "unchanged", changed: false },
+		});
+		expect(
+			saved.events.filter((event) => event.kind === "agent_response"),
+		).toHaveLength(1);
+		const [rows] = await conn.execute<RowDataPacket[]>(
+			"SELECT id FROM tanahpedia_contribution WHERE issue_id=?",
+			[item.id],
+		);
+		expect(rows.map((row) => row.id)).toEqual([existing.id]);
+	});
+	it("atomically queues one concurrent human comment, revokes the old lease and revises that same PR", async () => {
+		const agent = await installedAgent(),
+			entityId = await isolatedEntity();
+		let pr = await service.createContribution(
+			{
+				kind: "pr",
+				title: "Original agent PR",
+				description: "Original description",
+				evidence,
+				changes: [
+					{
+						kind: "metadata",
+						targetId: entityId,
+						after: { displayName: "Proposed value" },
+					},
+				],
+				assignee: { kind: "local_llm", agentId: agent.id },
+			},
+			owner,
+		);
+		const old = await claim(pr);
+		const comments = await Promise.allSettled(
+			["First feedback", "Concurrent feedback"].map((body) =>
+				service.updateContribution(
+					{ id: pr.id, version: old.version, action: "comment", body },
+					alice,
+				),
+			),
+		);
+		expect(
+			comments.filter((entry) => entry.status === "fulfilled"),
+		).toHaveLength(1);
+		expect(
+			comments.filter((entry) => entry.status === "rejected"),
+		).toHaveLength(1);
+		pr = await fresh(pr);
+		const comment = pr.events.filter((event) => event.kind === "comment");
+		expect(comment).toHaveLength(1);
+		expect(pr.generation).toMatchObject({
+			status: "queued",
+			trigger: "comment",
+			triggerEventIds: expect.arrayContaining([comment[0].id]),
+		});
+		expect(pr.generation?.id).not.toBe(old.id);
+		await expect(
+			worker.completeContributionGeneration({
+				...identity(old),
+				content: result("Stale result"),
+			}),
+		).rejects.toThrow("no longer owns");
+		expect((await fresh(pr)).generation?.status).toBe("queued");
+		const job = await claim(pr),
+			input = {
+				...identity(job),
+				content: result("Feedback addressed", comment[0].id, {
+					description: "Corrected description",
+				}),
+			};
+		await worker.completeContributionGeneration(input);
+		await worker.completeContributionGeneration(input);
+		pr = await fresh(pr);
+		expect(pr).toMatchObject({
+			title: "Original agent PR",
+			description: "Corrected description",
+			revision: 2,
+			revisionAuthor: {
+				id: `agent:${agent.id}`,
+				kind: "local_llm",
+				isDoradsoft: false,
+			},
+			assignee: { agentId: agent.id },
+		});
+		expect(pr.revisionHistory).toHaveLength(1);
+		expect(
+			pr.events.filter((event) => event.kind === "agent_response"),
+		).toHaveLength(1);
+		expect(pr.events.find((event) => event.id === comment[0].id)).toEqual(
+			comment[0],
+		);
+		expect(reviewStatus(pr)).toBe("required");
+		const [rows] = await conn.execute<RowDataPacket[]>(
+			"SELECT name FROM tanahpedia_entity WHERE id=?",
+			[entityId],
+		);
+		expect(rows[0].name).toBe(`Current ${entityId}`);
+	});
+	it("retains an approved revision after a no-op pass and never queues model-authored comments", async () => {
+		const agent = await installedAgent(),
+			entityId = await isolatedEntity();
+		let pr = await service.createContribution(
+			{
+				kind: "pr",
+				title: "Approved no-op PR",
+				description: "Unchanged",
+				evidence,
+				changes: [
+					{
+						kind: "metadata",
+						targetId: entityId,
+						after: { displayName: "Proposed" },
+					},
+				],
+				assignee: { kind: "local_llm", agentId: agent.id },
+			},
+			bot,
+		);
+		pr = await service.updateContribution(
+			{ id: pr.id, version: pr.version, action: "approve" },
+			owner,
+		);
+		pr = await service.updateContribution(
+			{
+				id: pr.id,
+				version: pr.version,
+				action: "comment",
+				body: "Please confirm",
+			},
+			alice,
+		);
+		await expect(
+			service.mergeContribution({ id: pr.id, version: pr.version }, owner),
+		).rejects.toThrow("assigned agent pass");
+		const comment = pr.events.find((event) => event.kind === "comment");
+		if (!comment) throw new Error("Feedback missing");
+		const job = await claim(pr);
+		await worker.completeContributionGeneration({
+			...identity(job),
+			content: result("Confirmed unchanged", comment.id),
+		});
+		pr = await fresh(pr);
+		expect(pr.revision).toBe(1);
+		expect(reviewStatus(pr)).toBe("approved");
+		const completedJob = pr.generation?.id;
+		pr = await service.updateContribution(
+			{
+				id: pr.id,
+				version: pr.version,
+				action: "comment",
+				body: "Model response",
+			},
+			bot,
+		);
+		expect(pr.generation).toMatchObject({
+			id: completedJob,
+			status: "completed",
+		});
+	});
+	it("rejects an authoritative tool record changed after observation without creating proposals", async () => {
+		const { item } = await assignedIssue(),
+			entityId = await isolatedEntity(),
+			job = await claim(item);
+		const read = await worker.readContributionWorkerContext({
+			...identity(job),
+			name: "record",
+			arguments: { kind: "entity", id: entityId },
+		});
+		await conn.execute(
+			"UPDATE tanahpedia_entity SET name='Changed after read' WHERE id=?",
+			[entityId],
+		);
+		const content = canonicalJson({
+			outcome: "implemented",
+			summary: "Must reject stale record",
+			responses: [],
+			pullRequests: [
+				{
+					title: "Metadata",
+					description: "Source-backed",
+					evidenceIndexes: [0],
+					changes: [
+						{
+							kind: "metadata",
+							targetId: entityId,
+							after: { displayName: "Do not save" },
+						},
+					],
+				},
+			],
+		});
+		await expect(
+			worker.completeContributionGeneration({
+				...identity(job),
+				receipts: [read.receipt],
+				content,
+			}),
+		).rejects.toThrow("tool-read record");
+		expect((await fresh(item)).generation?.status).toBe("failed");
+		const [rows] = await conn.execute<RowDataPacket[]>(
+			"SELECT id FROM tanahpedia_contribution WHERE issue_id=?",
+			[item.id],
+		);
+		expect(rows).toHaveLength(0);
 	});
 });
 
@@ -845,11 +1562,15 @@ describe("durable issue assignment", () => {
 			);
 			expect((await fresh(issue)).assignee).toEqual(assignee);
 		}
-		expect(
+		const events =
 			(await store.listContributions({ relatedTo: issue.id })).items.find(
 				(item) => item.id === issue.id,
-			)?.events,
-		).toHaveLength(5);
+			)?.events ?? [];
+		expect(events.filter((event) => event.kind === "assigned")).toHaveLength(4);
+		expect(
+			events.filter((event) => event.kind === "generation_queued"),
+		).toHaveLength(2);
+		expect(events).toHaveLength(7);
 	});
 	it("rejects stale actions and preserves discussion history", async () => {
 		const issue = await service.createContribution(

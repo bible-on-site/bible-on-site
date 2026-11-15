@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { inspect } from "node:util";
 import {
 	createContributionWorker,
+	runContributionWorker,
+	validateWorkerBundle,
 	workerAwsCredentials,
 	workerOptions,
 	workerTokenProvider,
-	runContributionWorker,
 } from "./contribution-worker.mjs";
 
 const id = "00000000-0000-4000-8000-000000000001";
@@ -30,6 +32,276 @@ const options = workerOptions(
 	["--origin", "http://127.0.0.1:3101", "--dev", "--model", "local-test"],
 	{},
 );
+
+const canonicalFixture = (value) =>
+	Array.isArray(value)
+		? `[${value.map(canonicalFixture).join(",")}]`
+		: value && typeof value === "object"
+			? `{${Object.keys(value)
+					.sort()
+					.map(
+						(key) => `${JSON.stringify(key)}:${canonicalFixture(value[key])}`,
+					)
+					.join(",")}}`
+			: JSON.stringify(value);
+function agentBundle() {
+	const payload = {
+		protocolVersion: 2,
+		version: "fixture-v1",
+		apiVersion: 1,
+		system: "Never approve or merge",
+		operationGuide: ["Only typed data"],
+		tools: [
+			{
+				name: "discussion",
+				description: "Read all pages",
+				inputSchema: { type: "object" },
+			},
+		],
+	};
+	return {
+		...payload,
+		hash: createHash("sha256").update(canonicalFixture(payload)).digest("hex"),
+	};
+}
+
+test("protocol two reads fresh context then resolves the same PR and caches only its immutable bundle", async () => {
+	const bundle = agentBundle(),
+		calls = [],
+		signals = [],
+		receipt = {
+			name: "discussion",
+			arguments: { cursor: 20 },
+			hash: "b".repeat(64),
+		};
+	let modelCalls = 0;
+	const run = createContributionWorker(options, {
+		request: async (url, request) => {
+			const target = String(url),
+				body = JSON.parse(request.body);
+			calls.push({ target, body });
+			if (target.endsWith("/claim"))
+				return Response.json({
+					...claim,
+					system: undefined,
+					protocolVersion: 2,
+					task: "pr_resolution",
+					bundleHash: bundle.hash,
+					bundleVersion: bundle.version,
+					user: '{"discussion":{"total":21}}',
+				});
+			if (target.endsWith("/bundle")) return Response.json(bundle);
+			if (target.endsWith("/context")) {
+				assert.equal(request.signal.aborted, false);
+				return Response.json({
+					data: {
+						items: [
+							{
+								id,
+								body: "The first twenty comments do not include this correction",
+							},
+						],
+						total: 21,
+						nextCursor: null,
+					},
+					receipt,
+					schema: { type: "object", title: "updated schema" },
+				});
+			}
+			if (target.endsWith("/api/chat")) {
+				signals.push(request.signal);
+				modelCalls++;
+				const result =
+					modelCalls === 1
+						? { action: "tool", name: "discussion", arguments: { cursor: 20 } }
+						: {
+								action: "complete",
+								result: {
+									outcome: "unchanged",
+									summary: "Addressed",
+									responses: [],
+								},
+							};
+				if (modelCalls === 2) {
+					assert.match(body.messages[1].content, /correction/);
+					assert.equal(body.format.title, "updated schema");
+				}
+				return Response.json({ message: { content: JSON.stringify(result) } });
+			}
+			if (target.endsWith("/complete")) {
+				if (modelCalls === 2) assert.deepEqual(body.receipts, [receipt]);
+				return Response.json({ prIds: [] });
+			}
+			throw new Error("Unexpected request");
+		},
+	});
+	assert.equal((await run()).status, "completed");
+	assert.equal((await run()).status, "completed");
+	assert.equal(
+		calls.filter((call) => call.target.endsWith("/bundle")).length,
+		1,
+	);
+	assert.deepEqual(calls[0].body.supportedTasks, [
+		"issue_implementation",
+		"pr_resolution",
+	]);
+	assert.deepEqual(
+		calls.findLast((call) => call.target.endsWith("/claim")).body.bundleHashes,
+		[bundle.hash],
+	);
+	assert.equal(
+		signals[0],
+		signals[1],
+		"all turns share the original total inference deadline",
+	);
+	assert.equal(
+		calls.find((call) => call.target.endsWith("/complete")).body
+			.protocolVersion,
+		2,
+	);
+});
+
+test("bundle identity and declarative schema are verified before model execution", () => {
+	const bundle = agentBundle();
+	assert.equal(validateWorkerBundle(bundle, bundle.hash), bundle);
+	for (const broken of [
+		{ ...bundle, system: "changed" },
+		{ ...bundle, protocolVersion: 3 },
+		{ ...bundle, tools: [{ name: "unsafe" }] },
+	])
+		assert.throws(() => validateWorkerBundle(broken, bundle.hash), /bundle/);
+});
+
+test("Ollama receives the discriminated outcome schema and fresh PR task context unchanged", async () => {
+	const bundle = agentBundle(),
+		logs = [];
+	const resultBranches = ["revised", "unchanged", "clarification"].map(
+		(outcome) => ({
+			type: "object",
+			additionalProperties: false,
+			required:
+				outcome === "revised"
+					? ["outcome", "summary", "responses", "draft"]
+					: ["outcome", "summary", "responses"],
+			properties: {
+				outcome: { const: outcome },
+				summary: { type: "string" },
+				responses: { type: "array" },
+				...(outcome === "revised" ? { draft: { type: "object" } } : {}),
+			},
+		}),
+	);
+	const schema = {
+		type: "object",
+		oneOf: [
+			{
+				type: "object",
+				additionalProperties: false,
+				required: ["action", "result"],
+				properties: {
+					action: { const: "complete" },
+					result: { type: "object", oneOf: resultBranches },
+				},
+			},
+		],
+	};
+	const run = createContributionWorker(options, {
+		log: (value) => logs.push(value),
+		request: async (url, request) => {
+			const target = String(url),
+				body = JSON.parse(request.body);
+			if (target.endsWith("/claim"))
+				return Response.json({
+					...claim,
+					protocolVersion: 2,
+					task: "pr_resolution",
+					bundleHash: bundle.hash,
+					bundleVersion: bundle.version,
+					schema,
+					user: JSON.stringify({
+						pendingFeedback: {
+							items: [{ id, body: "Correct this existing proposal title" }],
+							total: 1,
+							nextCursor: null,
+						},
+					}),
+				});
+			if (target.endsWith("/bundle")) return Response.json(bundle);
+			if (target.endsWith("/api/chat")) {
+				assert.deepEqual(body.format, schema);
+				assert.equal(body.options.num_ctx, 16384);
+				assert.equal(body.options.num_predict, 4096);
+				const user = JSON.parse(body.messages[1].content);
+				assert.equal(user.task, "pr_resolution");
+				assert.equal(
+					user.context.pendingFeedback.items[0].body,
+					"Correct this existing proposal title",
+				);
+				return Response.json({
+					message: {
+						content: JSON.stringify({
+							action: "complete",
+							result: {
+								outcome: "clarification",
+								summary: "A source identity is ambiguous",
+								responses: [],
+							},
+						}),
+					},
+				});
+			}
+			if (target.endsWith("/complete")) {
+				assert.equal(JSON.parse(body.content).draft, undefined);
+				return Response.json({ prIds: [] });
+			}
+			throw new Error("Unexpected request");
+		},
+	});
+	assert.equal((await run()).status, "completed");
+	assert.match(logs[0], /^Resolving PR /);
+	assert.ok(!logs[0].includes("Generating issue"));
+});
+
+test("tampered bundles, unsupported tools and a full model window never submit a completion", async () => {
+	for (const failure of ["bundle", "tool", "window"]) {
+		const bundle = agentBundle(),
+			actions = [];
+		const run = createContributionWorker(options, {
+			request: async (url) => {
+				const target = String(url);
+				actions.push(target);
+				if (target.endsWith("/claim"))
+					return Response.json({
+						...claim,
+						user: "{}",
+						protocolVersion: 2,
+						task: "issue_implementation",
+						bundleHash: bundle.hash,
+						bundleVersion: bundle.version,
+					});
+				if (target.endsWith("/bundle"))
+					return Response.json(
+						failure === "bundle" ? { ...bundle, system: "tampered" } : bundle,
+					);
+				if (target.endsWith("/api/chat"))
+					return Response.json({
+						...(failure === "window" ? { prompt_eval_count: 16384 } : {}),
+						message: {
+							content: JSON.stringify(
+								failure === "tool"
+									? { action: "tool", name: "merge", arguments: {} }
+									: { action: "complete", result: {} },
+							),
+						},
+					});
+				return Response.json({ updated: true });
+			},
+		});
+		assert.equal((await run()).status, "failed");
+		assert.ok(actions.at(-1).endsWith("/fail"));
+		assert.ok(!actions.some((action) => action.endsWith("/complete")));
+	}
+});
 
 test("watch resumes after a temporary claim outage and cancels its original polling delay", async () => {
 	const stop = new AbortController(),
