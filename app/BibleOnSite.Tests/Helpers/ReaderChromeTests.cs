@@ -313,7 +313,7 @@ public class ReaderChromeTests
 
     private static void SendTapped(VisualElement owner, TapGestureRecognizer gesture) =>
         typeof(TapGestureRecognizer)
-            .GetMethod("SendTapped", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetMethod("SendTapped", BindingFlags.Instance | BindingFlags.Public)!
             .Invoke(gesture, [owner, null]);
 
     private static void TapExit(ReaderExitFullscreenButton button) =>

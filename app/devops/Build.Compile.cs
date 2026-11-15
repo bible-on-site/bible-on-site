@@ -26,7 +26,7 @@ partial class Build
         {
             DotNetRestore(s => s
                 .SetProjectFile(MainProject)
-                .SetProperty("TargetFramework", "net10.0-android"));
+                .SetProperty("TargetFramework", "net11.0-android"));
         });
 
     Target RestoreWindows => _ => _
@@ -35,7 +35,7 @@ partial class Build
         {
             DotNetRestore(s => s
                 .SetProjectFile(MainProject)
-                .SetProperty("TargetFramework", "net10.0-windows10.0.19041.0"));
+                .SetProperty("TargetFramework", "net11.0-windows10.0.19041.0"));
         });
 
     Target Compile => _ => _
@@ -61,7 +61,7 @@ partial class Build
             DotNetBuild(s => s
                 .SetProjectFile(MainProject)
                 .SetConfiguration(Configuration)
-                .SetFramework("net10.0-android")
+                .SetFramework("net11.0-android")
                 .EnableNoRestore());
         });
 
@@ -91,12 +91,12 @@ partial class Build
                     // the single-framework switch would still demand the
                     // Mac Catalyst workload on machines without it.
                     settings = settings
-                        .SetProperty("TargetFrameworks", "net10.0-windows10.0.19041.0")
+                        .SetProperty("TargetFrameworks", "net11.0-windows10.0.19041.0")
                         .SetProperty("E2ECoverage", "true");
                     return settings;
                 }
                 return settings
-                    .SetFramework("net10.0-windows10.0.19041.0")
+                    .SetFramework("net11.0-windows10.0.19041.0")
                     .EnableNoRestore();
             });
             DotNetBuild(s => s
@@ -158,7 +158,7 @@ partial class Build
                 File.WriteAllText(configPath, "http://127.0.0.1:1");
                 var properties = new Dictionary<string, object>
                 {
-                    ["TargetFrameworks"] = MobileIsAndroid ? "net10.0-android" : "net10.0-ios",
+                    ["TargetFrameworks"] = MobileIsAndroid ? "net11.0-android" : "net11.0-ios",
                     ["RuntimeIdentifier"] = MobileIsAndroid ? "android-x64" : "iossimulator-arm64",
                     // #2120: e2e app builds never emit analytics. Debug already
                     // defaults DisableAnalytics on, but the explicit property
@@ -254,7 +254,7 @@ partial class Build
     /// target deliberately does not: only the Release pipeline compiles the
     /// MainActivity analytics initialization that crashed #2247 store builds.
     /// The store ships an arm64 AAB; the emulator image is x86_64, so the
-    /// guard builds the same Release pipeline (profiled AOT, R8, embedded
+    /// guard builds the same Release pipeline (CoreCLR runtime, R8, embedded
     /// assemblies, merged manifest) for the ABI the device can run — the APK
     /// format and ABI are the documented differences, not the compiled code.
     /// </summary>
@@ -275,7 +275,7 @@ partial class Build
                     .SetConfiguration("Release")
                     .SetProperties(new Dictionary<string, object>
                     {
-                        ["TargetFrameworks"] = "net10.0-android",
+                        ["TargetFrameworks"] = "net11.0-android",
                         ["RuntimeIdentifier"] = "android-x64",
                         ["RuntimeIdentifiers"] = "android-x64",
                         ["AndroidPackageFormat"] = "apk",
@@ -285,12 +285,12 @@ partial class Build
                 // Stage the checked artifact beside its provenance so a later
                 // clean/bin sweep cannot detach what was validated from what
                 // was built. release-smoke.mjs installs this exact file.
-                var apk = (SourceDirectory / "bin" / "Release" / "net10.0-android")
+                var apk = (SourceDirectory / "bin" / "Release" / "net11.0-android")
                     .GlobFiles("**/*-Signed.apk")
                     .OrderByDescending(f => File.GetLastWriteTimeUtc(f))
                     .FirstOrDefault()
                     ?? throw new InvalidOperationException(
-                        "The Release smoke build produced no signed APK under bin/Release/net10.0-android.");
+                        "The Release smoke build produced no signed APK under bin/Release/net11.0-android.");
                 var smokeDirectory = MobileE2EArtifactsDirectory / "release-smoke";
                 smokeDirectory.CreateOrCleanDirectory();
                 var staged = smokeDirectory / "app-release-smoke.apk";

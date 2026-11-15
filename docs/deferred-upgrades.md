@@ -19,7 +19,6 @@ into two categories:
 | `sunrise-sunset-js` | web/bible-on-site | 3.2.0 | 3.3.0 | [#1636](https://github.com/bible-on-site/bible-on-site/issues/1636) | 3.3.0 changes `getTwilight`/`civilDusk` so the tzeit-aware Hebrew date no longer advances after nightfall under UTC (CI). Needs the tzeit/Hebrew-date logic made timezone-robust first. |
 | `swc-plugin-coverage-instrument` | web/bible-on-site | 0.0.32 | latest | [#528](https://github.com/bible-on-site/bible-on-site/issues/528) | Tightly coupled to the Next.js version; bumping in lockstep with Next is required. Version 0.0.32 is validated with Next 16.2.12. |
 | `bson` | data | 2 | 3 | — | `mongodb` 3.5.1 (latest) still pins `bson` 2.15. Bumping `bson` to 3 on its own splits the crate so the driver's `Document`/`Bson` types no longer match. Held until the `mongodb` driver adopts `bson` 3. |
-| `CommunityToolkit.Maui.MediaElement` | app | 11.0.0 | 12.x | [#3396](https://github.com/bible-on-site/bible-on-site/issues/3396) | 12.x targets `net11.0-*` only and requires .NET MAUI 11; the app is on .NET 10 (NU1202 on every TFM). Held until the .NET 11 migration lands. |
 
 These are **hard blocks**: applying them re-introduces a known, reproduced
 failure. They remain held via `renovate.json` and `.github/dependabot.yml`
