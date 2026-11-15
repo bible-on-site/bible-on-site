@@ -77,6 +77,7 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
                 ExitFullscreenButton = ExitFullScreenButton,
                 ArticlesView = ArticlesCollection,
                 ReaderContent = MoedRowsCollection,
+                ReadingProgressIndicator = null,
                 Toolbar = ReaderToolbar,
                 Host = MainGrid,
                 ContentArea = ContentArea,
