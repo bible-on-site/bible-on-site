@@ -166,7 +166,7 @@ async function main() {
     appendFileSync(resolve(smokeArtifacts, "release-smoke.log"), `${new Date().toISOString()} ${line}\n`);
   };
   const apk = resolve(process.env.MOBILE_RELEASE_APK ?? resolve(directory,
-    "../BibleOnSite/bin/Release/net10.0-android/android-x64/com.tanah.daily929-Signed.apk"));
+    "../BibleOnSite/bin/Release/net11.0-android/android-x64/com.tanah.daily929-Signed.apk"));
   if (!apk.endsWith(".apk")) {
     throw new Error(`Release smoke APK must be an .apk file: ${apk}`);
   }

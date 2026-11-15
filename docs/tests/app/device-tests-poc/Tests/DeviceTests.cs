@@ -7,7 +7,7 @@ using Xunit;
 namespace DeviceTestApp.Tests;
 
 // Assertions copied verbatim from app/BibleOnSite.Tests/Converters/PasukMarkerTextConverterTests.cs:
-// the portable net10.0 suite runs them against linked sources; here they run inside the app on Android.
+// the portable net11.0 suite runs them against linked sources; here they run inside the app on Android.
 public class ParityTests
 {
     [Fact]
