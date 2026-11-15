@@ -62,36 +62,42 @@ export function toPreviewHtml(html: string): string {
 /**
  * The first `maxWords` whole words of an entry body's readable plain
  * text — the moed-introduction preview (#3381). Stored footnote markup
- * is canonicalized first so legacy bare-anchor markers (which carry
- * their meaning in attributes sanitization discards) become the
- * textless `data-marker` form the render path uses; marker anchors
- * whose note body never canonicalized are stripped whole before their
- * letter can merge into the neighbouring word. Script/style blocks and
- * `<sup>` markers carry no readable words and are dropped up-front;
- * block-level tag boundaries become explicit spaces so no sanitizer
- * policy can merge distinct words, entities are decoded, and remaining
- * tags collapse to whitespace. Whole words only: a truncated excerpt
- * ends exactly at a word boundary with `…`, while a body at or under
- * the limit returns intact with no marker.
+ * is canonicalized first so reference markers arrive in the textless,
+ * `<sup>`-wrapped `data-marker` form the render path uses and die with
+ * the `<sup>` strip; only the legacy bare-anchor leftovers that
+ * normalization could not resolve (no note bodies anywhere) still need
+ * whole-element removal before their marker letter merges into the
+ * neighbouring word. Anchors retargeted to `#fn:N` inside note bodies
+ * are ordinary cross-note prose links — their text stays. Script/style
+ * blocks are dropped up-front; block-level tag boundaries become
+ * explicit spaces so no sanitizer policy can merge distinct words,
+ * entities are decoded, and remaining tags collapse to whitespace.
+ * Whole words only: a truncated excerpt ends exactly at a word boundary
+ * with `…`, while a body at or under the limit returns intact with no
+ * marker.
  */
 export function toPlainTextPreview(html: string, maxWords: number): string {
 	const normalized = normalizeFootnoteHtml(html);
 	const readable = normalized
 		.replace(/<script[\s\S]*?(?:<\/script\s*>|$)/gi, " ")
 		.replace(/<style[\s\S]*?(?:<\/style\s*>|$)/gi, " ")
-		// Footnote-marker anchors whose note body is absent (or that
-		// normalization left untouched) still carry a baked-in marker as
-		// their text — strip the whole element before sanitization unwraps
-		// it and the letter merges into the neighbouring word.
-		.replace(
-			/<a\b[^>]*href="#(?:fn:\d+|fnref:\d+|note-\d+|noteref-\d+)[^"]*"[^>]*>[\s\S]*?<\/a\s*>/gi,
-			"",
-		)
-		.replace(
-			/<a\b[^>]*data-link-type="comment"[^>]*>[\s\S]*?<\/a\s*>/gi,
-			"",
-		)
+		// Canonical references are `<sup id="fnref:N">` wrappers around a
+		// textless anchor; the sup strip removes them before any anchor
+		// handling can misread a `#fn:` prose link as a marker.
 		.replace(/<sup[\s\S]*?(?:<\/sup\s*>|$)/gi, " ")
+		// Orphaned legacy markers — a `#note-N`/`#noteref-N` anchor can only
+		// survive normalization when the document has no note bodies at all,
+		// so its text is still a baked marker letter, not prose.
+		.replace(
+			/<a\b[^>]*href="#(?:note|noteref)-\d+"[^>]*>[\s\S]*?<\/a\s*>/gi,
+			"",
+		)
+		// Generated return-glyph furniture: its glyph is CSS-only, and a
+		// hand-written one must not inject text into the excerpt.
+		.replace(
+			/<a\b[^>]*(?:role="doc-backlink"|class="[^"]*footnote-backref)[^>]*>[\s\S]*?<\/a\s*>/gi,
+			"",
+		)
 		.replace(PLAIN_TEXT_BLOCK_BOUNDARY, " ")
 		.replace(/\\n/g, "");
 	// Defense in depth: extraction above is deterministic already, but the

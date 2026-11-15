@@ -130,6 +130,31 @@ describe("tanahpedia/preview-format", () => {
 			);
 		});
 
+		it("keeps cross-note prose links inside note bodies", () => {
+			// A `#note-N` link inside a note is prose, not a marker — the
+			// normalizer retargets it to `#fn:N` and the preview must keep
+			// its text (data-link-type stays on the anchor harmlessly).
+			const html =
+				"<p>גוף</p>" +
+				'<ol><li id="note-1">ראה גם <a href="#note-2" data-link-type="comment">הערה ב</a> להרחבה</li>' +
+				'<li id="note-2">טקסט שני</li></ol>';
+			expect(toPlainTextPreview(html, 20)).toBe(
+				"גוף ראה גם הערה ב להרחבה טקסט שני",
+			);
+		});
+
+		it("drops generated backref furniture without touching note prose", () => {
+			// Backrefs inside note bodies are removed by the normalizer; a
+			// stray one outside must not leak its glyph/text either.
+			const html =
+				'<p>גוף<sup id="fnref:1"><a href="#fn:1" role="doc-noteref">א</a></sup></p>' +
+				'<ol class="footnotes"><li id="fn:1"><p>טקסט ההערה.</p></li></ol>' +
+				'<p>שורה <a class="footnote-backref" role="doc-backlink" href="#fnref:1">חזרה</a> נוספת</p>';
+			expect(toPlainTextPreview(html, 20)).toBe(
+				"גוף טקסט ההערה. שורה נוספת",
+			);
+		});
+
 		it("drops script/style contents and sup markers entirely", () => {
 			// DOMPurify is a passthrough mock here; the executable-content
 			// strip runs in the formatter itself so neither pass can leak it.
