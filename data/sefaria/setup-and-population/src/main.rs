@@ -198,7 +198,9 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        std::env::temp_dir().join(format!("sefaria-setup-test-{}-{}", name, suffix))
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(".test-tmp")
+            .join(format!("sefaria-setup-test-{}-{}", name, suffix))
     }
 
     #[test]
