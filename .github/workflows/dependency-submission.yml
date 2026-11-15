@@ -65,7 +65,7 @@ jobs:
           # previous SDK under rollForward: disable — read it so the installed
           # SDK satisfies that tree's resolver instead of failing the first
           # dotnet invocation.
-          dotnet-version: ${{ matrix.source == 'base' && '' || '10.0.403' }}
+          dotnet-version: ${{ matrix.source == 'base' && '' || '11.0.100' }}
           global-json-file: global.json
       - name: 'Setup Java for the Android workload'
         uses: actions/setup-java@v6
@@ -75,10 +75,17 @@ jobs:
           java-version: "17"
           verify-signature: true
       - name: 'Install MAUI Android workload'
-        run: dotnet workload install maui-android
+        # The image's sdk-manifests can carry stale manifests from another SDK
+        # band that conflict with this leg's set at resolution time.
+        run: |
+          sudo rm -rf "$DOTNET_ROOT/sdk-manifests"
+          dotnet workload install maui-android
       - name: 'Restore NuGet projects'
         run: |
-          dotnet restore app/BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
+          # The base leg checks out the merge-base, whose csproj still targets
+          # .NET 10; the head leg targets .NET 11.
+          TFM=$([ "${{ matrix.source }}" = 'base' ] && echo 'net10.0-android' || echo 'net11.0-android')
+          dotnet restore app/BibleOnSite/BibleOnSite.csproj -p:TargetFramework=$TFM -p:RuntimeIdentifiers=android-arm64 -r android-arm64
           dotnet restore app/BibleOnSite.Tests/BibleOnSite.Tests.csproj
           dotnet restore app/BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj -p:EnableWindowsTargeting=true
           dotnet restore app/BibleOnSite.Tests.MobileE2E/BibleOnSite.Tests.MobileE2E.csproj

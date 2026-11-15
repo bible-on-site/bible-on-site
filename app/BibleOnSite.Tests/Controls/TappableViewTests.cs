@@ -122,7 +122,7 @@ public class TappableViewTests
 
         var tap = view.GestureRecognizers.OfType<TapGestureRecognizer>().Should().ContainSingle().Subject;
         typeof(TapGestureRecognizer)
-            .GetMethod("SendTapped", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetMethod("SendTapped", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)!
             .Invoke(tap, [view, null]);
 
         count.Should().Be(1);

@@ -33,7 +33,7 @@ public static class ScriptureFonts
     //   Android        Typeface.CreateFromAsset → the bundled asset filename
     //   iOS/Catalyst   CTFont/UIFont.FromName   → PostScript name (UIAppFonts)
     //   Windows        CanvasTextFormat.FontFamily → "<uri>#<family>"
-    // The net10.0 fallback keeps unit tests pinned to the same contract; the
+    // The net11.0 fallback keeps unit tests pinned to the same contract; the
     // canvas is never painted there.
 #if ANDROID
     private static readonly string CanvasName = FileName;

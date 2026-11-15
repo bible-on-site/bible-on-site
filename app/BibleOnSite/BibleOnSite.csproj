@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net10.0-android;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
+		<TargetFrameworks>net11.0-android;net11.0-ios;net11.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net11.0-windows10.0.19041.0</TargetFrameworks>
 		<!-- Uncomment to also build the tizen app. You will need to install tizen by following this: https://github.com/Samsung/Tizen.NET -->
-		<!-- <TargetFrameworks>$(TargetFrameworks);net10.0-tizen</TargetFrameworks> -->
+		<!-- <TargetFrameworks>$(TargetFrameworks);net11.0-tizen</TargetFrameworks> -->
 
 		<!-- Note for MacCatalyst:
 		The default runtime is maccatalyst-x64, except in Release config, in which case the default is maccatalyst-x64;maccatalyst-arm64.
@@ -114,11 +114,12 @@
 		<WindowsPackageType Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">None</WindowsPackageType>
 
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">15.0</SupportedOSPlatformVersion>
-		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">23.0</SupportedOSPlatformVersion>
+		<!-- .NET 11 / MAUI 11 raised the platform minimums: Android 24, Mac Catalyst 17, iOS 15. -->
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">17.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
 		<!-- For Release: embed assemblies in APK. For Debug: use Fast Deployment (much faster iteration) -->
 		<EmbedAssembliesIntoApk Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' AND '$(Configuration)' == 'Release'">true</EmbedAssembliesIntoApk>
-		<!-- Android Release: profiled AOT. The .NET 10 SDK (Microsoft.Android.Sdk 36.x)
+		<!-- Android Release: profiled AOT. The .NET 11 SDK (Microsoft.Android.Sdk 37.x)
 		     already defaults RunAOTCompilation + AndroidEnableProfiledAot to true for
 		     Release on the MonoVM runtime and feeds the bundled dotnet.aotprofile into
 		     the compiler — the pins below keep that behavior explicit and durable:
@@ -152,7 +153,7 @@
 		     members while preserving every class/interface name and all
 		     public/protected members — the exact surface JNI/ACW callbacks and the
 		     SDK's generated keep rules cover. Requires Microsoft.Android.Sdk
-		     36.1.118+ (workload set 10.0.402.1); older SDKs silently ignore the
+		     36.1.118+ (the .NET 11 set 11.0.100.1 ships 37.2.x); older SDKs silently ignore the
 		     property, so the _RequireR8ObfuscationSdkSupport target below fails
 		     Release builds on stale workloads. The SDK embeds mapping.txt as
 		     BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map and
@@ -186,7 +187,7 @@
 	</PropertyGroup>
 
 	<!-- #2708: AndroidR8ObfuscationMode only exists in Microsoft.Android.Sdk
-	     36.1.118+ (workload set 10.0.402.1); on older packs the property is a
+	     36.1.118+ (the .NET 11 set 11.0.100.1 ships 37.2.x); on older packs the property is a
 	     silent no-op and the build would ship a non-obfuscated bundle that looks
 	     compliant on paper. Fail instead of silently shipping -dontobfuscate.
 	     The version suffix is stripped so preview SDKs (e.g. 37.0.0-rc.1) compare
@@ -196,7 +197,7 @@
 		<Error Condition="'$(AndroidNETSdkVersion)' == ''"
 				Text="AndroidR8ObfuscationMode='$(AndroidR8ObfuscationMode)' requires the Android workload to report its SDK version; none was found." />
 		<Error Condition="'$(AndroidNETSdkVersion)' != '' AND $([MSBuild]::VersionLessThan($(AndroidNETSdkVersion.Split('-')[0]), '36.1.118'))"
-				Text="AndroidR8ObfuscationMode='$(AndroidR8ObfuscationMode)' requires Microsoft.Android.Sdk 36.1.118+ (workload set 10.0.402.1+); found $(AndroidNETSdkVersion). Run 'dotnet workload update' or install maui-android with --version 10.0.402.1." />
+				Text="AndroidR8ObfuscationMode='$(AndroidR8ObfuscationMode)' requires Microsoft.Android.Sdk 36.1.118+ (workload set 11.0.100.1+); found $(AndroidNETSdkVersion). Run 'dotnet workload update' or install maui-android with --version 11.0.100.1." />
 	</Target>
 
 	<ItemGroup>
@@ -433,8 +434,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.1" />
-		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="10.0.0" />
+		<PackageReference Include="CommunityToolkit.Maui" Version="17.0.0" />
+		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="12.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
 		<PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />

@@ -179,7 +179,7 @@ jobs:
             sysctl -n machdep.cpu.brand_string hw.memsize hw.ncpu
             df -h /
             echo "== xcode =="
-            sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+            sudo xcode-select --switch "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)/Contents/Developer"
             xcodebuild -version
             xcode-select -p
             ls -d /Applications/Xcode*.app
@@ -190,10 +190,10 @@ jobs:
       - name: Verify Xcode 27 layout used by iOS legs
         run: |
           set -euo pipefail
-          # app-mobile-e2e-runner.yml selects /Applications/Xcode_27.app on
-          # every iOS leg; an image without it fails every shard at setup, so
-          # the probe fails here instead — the iteration aborts cheaply.
-          test -d /Applications/Xcode_27.app/Contents/Developer
+          # app-mobile-e2e-runner.yml selects the newest /Applications/Xcode_27*.app
+          # on every iOS leg; an image without any 27.x fails every shard at
+          # setup, so the probe fails here instead — the iteration aborts cheaply.
+          ls -d /Applications/Xcode_27*.app | grep -q .
       - name: Upload probe report
         if: always()
         uses: actions/upload-artifact@v7
