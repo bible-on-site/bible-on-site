@@ -2,9 +2,9 @@ using BibleOnSite.Helpers;
 using BibleOnSite.Models;
 using BibleOnSite.Services;
 
+#if MAUI
 namespace BibleOnSite.ViewModels;
 
-#if MAUI
 internal readonly record struct PerushRow(int PerekId, int PasukNum, Pasuk Pasuk);
 
 internal sealed class UnitPerushimController<TUnit> where TUnit : class
