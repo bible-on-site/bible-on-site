@@ -8,6 +8,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { SeferLoadingIndicator } from "@/app/components/reading/SeferLoadingIndicator";
 import type { PerekObj } from "@/data/perek-dto";
 import { TABLET_MIN_WIDTH, useIsWideEnough } from "@/hooks/useIsWideEnough";
 import type { ArticleSummary } from "@/lib/articles";
@@ -38,20 +39,8 @@ import {
 // overlay — not mount the entire FlipBook tree — in the same frame.
 const Sefer = dynamic(() => import("./LoadedSefer"), {
 	ssr: false,
-	loading: () => (
-		<output className={styles.loadingContainer} aria-label="טוען תצוגת ספר...">
-			<div className={styles.loadingSpinner} />
-		</output>
-	),
+	loading: () => <SeferLoadingIndicator />,
 });
-
-function SeferLoadingIndicator() {
-	return (
-		<output className={styles.loadingContainer} aria-label="טוען תצוגת ספר...">
-			<div className={styles.loadingSpinner} />
-		</output>
-	);
-}
 
 const ClientWrapper = (props: {
 	perekObj: PerekObj;
