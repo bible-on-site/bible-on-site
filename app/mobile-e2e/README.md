@@ -256,13 +256,29 @@ provisioning inside `simctl boot`. Capture runs post-test through
 `ios-sim-state.mjs quiesce`: it removes the test app and WebDriverAgent so the
 saved state stays clean (a leftover app could make Appium skip reinstalling the
 fresh build), then shuts the device down so the directory is a consistent
-Shutdown image rather than a mid-write Booted one. Only a fully Booted device
+Shutdown image rather than a mid-write Booted one. A device the lifecycle
+measurement already powered off is booted again first — app removal needs a
+booted device, and the extra boot does not change what the directory captures.
+Only a fully Booted device
 whose UDID matches the resolved key is captured — a runtime download, a
 deregistered device or an unfinished boot all degrade to `saved=false` and the
 run simply falls back to a cold boot next time. Saves follow the same
 push/`workflow_dispatch` publishing rule as the Android caches; pull requests
 only restore. Bump `IOS_SIM_STATE_RECIPE` when the capture or restore semantics
 change.
+
+## iOS host lifecycle evidence
+
+iOS legs stream the host's CoreSimulator-side records the whole run
+(`simulator-host-live.log`, `simulator-host-classic-live.log`) so a device
+that disappears mid-suite still leaves its host-side context. After tests and
+coverage finish, `verify-ios-host-log.mjs` shuts down this job's own device
+through a recorded `xcrun simctl shutdown` and measures what the host
+observers actually retain — per source, at info and debug level, including a
+post-hoc `log show` sweep. See
+[`docs/devops/ios-host-lifecycle-evidence.md`](../../docs/devops/ios-host-lifecycle-evidence.md)
+for the capture inventory, measurement fields, reproduction command and the
+measured macOS/Xcode findings.
 
 ## Running locally
 
