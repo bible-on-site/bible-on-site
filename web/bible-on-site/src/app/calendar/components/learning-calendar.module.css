@@ -256,6 +256,23 @@ button.cell {
 	border: 0;
 }
 
+/* Flipping presentation (#2993): the page becomes a flex column at least
+   one viewport tall so .cal-book-wrap can absorb the leftover space — the
+   book's bottom-edge turn zone then stays inside the viewport instead of
+   falling below the fold. Children keep natural heights; only the wrap
+   grows. On short viewports the page simply scrolls as before. */
+.pageFlip {
+	display: flex;
+	flex-direction: column;
+	min-height: 100svh;
+	/* Trim the bottom pad so the flip toolbar clears short viewports. */
+	padding-bottom: 0.5rem;
+}
+
+.pageFlip > * {
+	flex-shrink: 0;
+}
+
 @media (max-width: 480px) {
 	.page {
 		padding: 4.5rem 0.4rem 1.25rem;

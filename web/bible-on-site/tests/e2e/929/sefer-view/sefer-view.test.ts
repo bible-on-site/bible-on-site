@@ -168,6 +168,17 @@ test.describe("Sefer view", () => {
 					'.he-book .page.current-page article span[class$="_word"]',
 				),
 			).toHaveCount(0);
+			// The held fold also exposes the next chapter's commentary panel.
+			// Its batch-loaded choices must arrive before comparing book pixels.
+			await expect(
+				page
+					.locator('.he-book [data-sefer-perush-perek="301"]')
+					.getByRole("button", {
+						name: 'בחירת רש"י',
+						exact: true,
+						includeHidden: true,
+					}),
+			).toBeAttached();
 			const point = await prepareTurnInput(page, "drag");
 			await page.mouse.move(point.x, point.y);
 			await page.mouse.down();

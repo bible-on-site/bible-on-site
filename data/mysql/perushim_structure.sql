@@ -9,12 +9,11 @@
 ;
 /*!50503 SET NAMES utf8mb4 */
 ;
-SET FOREIGN_KEY_CHECKS = 0;
+SET FOREIGN_KEY_CHECKS = 1;
 --
 -- Table structure for table `parshan` (commentator)
 --
-DROP TABLE IF EXISTS `parshan`;
-CREATE TABLE `parshan` (
+CREATE TABLE IF NOT EXISTS `parshan` (
     `id` smallint NOT NULL,
     `name` varchar(200) NOT NULL,
     `birth_year` smallint DEFAULT NULL,
@@ -24,8 +23,7 @@ CREATE TABLE `parshan` (
 --
 -- Table structure for table `perush` (commentary work)
 --
-DROP TABLE IF EXISTS `perush`;
-CREATE TABLE `perush` (
+CREATE TABLE IF NOT EXISTS `perush` (
     `id` smallint NOT NULL,
     `name` varchar(200) NOT NULL,
     `parshan_id` smallint NOT NULL,
@@ -40,8 +38,7 @@ CREATE TABLE `perush` (
 --
 -- Table structure for table `note` (commentary text per pasuk)
 --
-DROP TABLE IF EXISTS `note`;
-CREATE TABLE `note` (
+CREATE TABLE IF NOT EXISTS `note` (
     `perush_id` smallint NOT NULL,
     `perek_id` smallint NOT NULL,
     `pasuk` smallint NOT NULL,

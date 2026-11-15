@@ -52,6 +52,18 @@ for (const mode of ["leaf", "pinned", "hidden"] as const) {
 				`.he-book .page[data-page-index="${paper.index + sign * 2}"]`,
 			);
 			const content = underlay.locator(".flipbook-page-content");
+			if (!backward) {
+				// The neighboring commentary panel loads its choices asynchronously.
+				// It is still covered here, so wait for the known fixture chip to
+				// attach before measuring its text and painting during the turn.
+				await expect(
+					underlay.getByRole("button", {
+						name: 'בחירת רש"י',
+						exact: true,
+						includeHidden: true,
+					}),
+				).toBeAttached();
+			}
 			const x = paper.x + (backward ? paper.width - 10 : 10);
 			const y = paper.y + paper.height * 0.82;
 			await page.mouse.move(x, y);
