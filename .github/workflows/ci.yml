@@ -2414,7 +2414,7 @@ jobs:
         with:
           # The pinned Android SDK rejects Microsoft's five-part JDK versions.
           distribution: "temurin"
-          java-version: "21"
+          java-version: "17"
           verify-signature: true
 
       - name: Setup Python for recitation extension packaging
