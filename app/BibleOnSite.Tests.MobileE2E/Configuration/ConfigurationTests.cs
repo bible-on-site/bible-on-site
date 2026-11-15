@@ -90,4 +90,76 @@ public sealed class ConfigurationTests
         Assert.Equal(false, options["appium:fullReset"]);
         Assert.Equal(true, options["appium:forceAppLaunch"]);
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void IosCoverageSessionsDisableBackgroundAlertMonitoringBeforeTheFirstLaunch(bool coverageEnabled)
+    {
+        var configuration = new MobileTestConfiguration(MobilePlatform.IOS, "/test/app", "sim-device",
+            "/test/artifacts", new("http://localhost:4723"))
+        {
+            PrebuiltWdaPath = "/test/WebDriverAgentRunner-Runner.app"
+        };
+        var options = new IosPlatformAdapter().CreateOptions(configuration, coverageEnabled).ToDictionary();
+        Assert.Equal(!coverageEnabled, options["appium:autoAcceptAlerts"]);
+    }
+
+    [Fact]
+    public void IosFirstLaunchMergesScenarioVariablesIntoAnIndependentEnvironment()
+    {
+        var configuration = new MobileTestConfiguration(MobilePlatform.IOS, "/test/app", "sim-device",
+            "/test/artifacts", new("http://localhost:4723"))
+        {
+            PrebuiltWdaPath = "/test/WebDriverAgentRunner-Runner.app"
+        };
+        var supplied = new Dictionary<string, string>
+        {
+            ["BIBLE_E2E_PERUSHIM"] = "1",
+            [ReaderStartupReadiness.LaunchIdEnvironmentVariable] = ReaderStartupReadiness.CreateLaunchId(),
+            ["BIBLE_E2E_COVERAGE_PORT"] = "5000"
+        };
+        var adapter = new IosPlatformAdapter();
+        var first = adapter.CreateOptions(configuration, supplied).ToDictionary();
+        var arguments = Assert.IsType<Dictionary<string, object>>(first["appium:processArguments"]);
+        var environment = Assert.IsType<Dictionary<string, string>>(arguments["env"]);
+        Assert.Equal("1", environment["BIBLE_E2E"]);
+        Assert.Equal(AppCoverage.Token, environment["BIBLE_E2E_COVERAGE_TOKEN"]);
+        Assert.Equal("5000", environment["BIBLE_E2E_COVERAGE_PORT"]);
+        Assert.Equal(supplied[ReaderStartupReadiness.LaunchIdEnvironmentVariable],
+            environment[ReaderStartupReadiness.LaunchIdEnvironmentVariable]);
+        Assert.Equal("1", environment["BIBLE_E2E_PERUSHIM"]);
+        supplied["BIBLE_E2E_PERUSHIM"] = "changed after capability creation";
+        Assert.Equal("1", environment["BIBLE_E2E_PERUSHIM"]);
+
+        var next = adapter.CreateOptions(configuration).ToDictionary();
+        var nextArguments = Assert.IsType<Dictionary<string, object>>(next["appium:processArguments"]);
+        var nextEnvironment = Assert.IsType<Dictionary<string, string>>(nextArguments["env"]);
+        Assert.False(nextEnvironment.ContainsKey("BIBLE_E2E_PERUSHIM"));
+        Assert.False(nextEnvironment.ContainsKey(ReaderStartupReadiness.LaunchIdEnvironmentVariable));
+        Assert.Equal(MobilePlatformAdapter.IosE2eEnvironment["BIBLE_E2E_COVERAGE_PORT"],
+            nextEnvironment["BIBLE_E2E_COVERAGE_PORT"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void IosScenarioEnvironmentForcesOneLaunchEvenWhenTheExistingInstallIsReused(bool keepForReview)
+    {
+        var configuration = new MobileTestConfiguration(MobilePlatform.IOS, "/test/app", "sim-device",
+            "/test/artifacts", new("http://localhost:4723"))
+        {
+            PrebuiltWdaPath = "/test/WebDriverAgentRunner-Runner.app",
+            KeepAppForReview = keepForReview
+        };
+        var supplied = new Dictionary<string, string>
+        {
+            [ReaderStartupReadiness.LaunchIdEnvironmentVariable] = ReaderStartupReadiness.CreateLaunchId()
+        };
+        var adapter = new IosPlatformAdapter();
+        var options = adapter.CreateOptions(configuration, supplied).ToDictionary();
+        Assert.Equal(true, options["appium:forceAppLaunch"]);
+        Assert.Equal(keepForReview, options["appium:noReset"]);
+        Assert.Equal(false, adapter.CreateOptions(configuration).ToDictionary()["appium:forceAppLaunch"]);
+    }
 }

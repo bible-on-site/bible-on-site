@@ -33,12 +33,16 @@ public partial class PerekPickerPopup : ContentView
 
     public PerekPickerPopup()
     {
+        DebugLog.Write("[Startup] PerekPickerPopup InitializeComponent");
         InitializeComponent();
+        DebugLog.Write("[Startup] PerekPickerPopup XAML initialized");
         _scrollColumns = new PickerScrollColumns(Dispatcher,
             new PickerScrollColumn(SeferGroupList, SeferGroupUpArrow, SeferGroupDownArrow, SeferGroupItemSizer),
             new PickerScrollColumn(SeferList, SeferUpArrow, SeferDownArrow, SeferItemSizer),
             new PickerScrollColumn(PerekList, PerekUpArrow, PerekDownArrow, PerekItemSizer));
+        DebugLog.Write("[Startup] PerekPickerPopup sefer groups");
         LoadSeferGroups();
+        DebugLog.Write("[Startup] PerekPickerPopup constructed");
     }
 
     /// <summary>

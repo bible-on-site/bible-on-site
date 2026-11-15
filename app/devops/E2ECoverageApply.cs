@@ -136,6 +136,18 @@ internal static class E2ECoverageApply
     private static int? ParseId(string? value) =>
         int.TryParse(value, out var id) ? id : null;
 
+    /// <summary>Rejects a collected run that provides no evidence of working probes.</summary>
+    internal static void RequireRecordedVisits(int dumpCount, long applied, Stats stats)
+    {
+        if (dumpCount > 0 && applied <= 0)
+        {
+            throw new InvalidOperationException(
+                $"App E2E coverage collected {dumpCount} dump(s), but no recognized positive visits were applied " +
+                $"(incompatible={stats.IncompatibleDumps}, unknownPoints={stats.UnknownPointIds}). " +
+                "Check the app's instrumentation and matching build template.");
+        }
+    }
+
     /// <summary>Recomputes visited counters in the module summaries after applying dumps.</summary>
     internal static void UpdateModuleSummaries(List<XElement> modules)
     {
