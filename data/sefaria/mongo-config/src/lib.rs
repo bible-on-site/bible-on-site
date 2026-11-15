@@ -37,4 +37,12 @@ mod tests {
         );
         assert_eq!(mongodb_uri("mongo", "28017"), "mongodb://mongo:28017");
     }
+
+    #[test]
+    fn mongo_host_port_from_env_reads_process_env() {
+        assert_eq!(
+            mongo_host_port_from_env(),
+            mongo_host_port_from_vars(|key| std::env::var(key).ok())
+        );
+    }
 }
