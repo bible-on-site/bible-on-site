@@ -690,6 +690,31 @@ mod tests {
     }
 
     #[test]
+    fn verse_midrash_dispatch_preserves_paragraphs_and_ignores_a_misleading_book_id() {
+        let regular = simple_schema_doc("existing", 1, bson!([["existing note"]]));
+        let midrash = doc! {
+            "name": "מדרש תנאים", "enTitle": "Midrash Tannaim on Deuteronomy",
+            "authors": ["רבותינו זכרונם לברכה"], "sefer": 1,
+            "schema": {"depth": 3, "addressTypes": ["Integer", "Integer", "Integer"],
+                "sectionNames": ["Chapter", "Verse", "Paragraph"]},
+            "versions": [[[ ["first paragraph", "second paragraph"], ["next verse"] ]]],
+        };
+        let result = extract(&[midrash, regular]).unwrap();
+        assert_eq!(result.perushim[0].name, "existing");
+        assert_eq!(result.perushim[1].name, "מדרש תנאים");
+        assert_eq!(result.notes.len(), 4);
+        assert_eq!(result.notes[0].perek_id, 1);
+        assert_eq!(
+            (result.notes[1].perush_id, result.notes[1].perek_id),
+            (2, 154)
+        );
+        assert_eq!((result.notes[1].pasuk, result.notes[1].note_idx), (1, 0));
+        assert_eq!((result.notes[2].pasuk, result.notes[2].note_idx), (1, 1));
+        assert_eq!(result.notes[2].note_content, "second paragraph");
+        assert_eq!((result.notes[3].pasuk, result.notes[3].note_idx), (2, 0));
+    }
+
+    #[test]
     fn complex_schema_default_key() {
         // Ramban-like: versions[0] is a Document with "default" holding chapters
         let chapters = bson!([["ramban ch1 v1", "ramban ch1 v2"], ["ramban ch2 v1"]]);

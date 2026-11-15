@@ -34,6 +34,23 @@ cargo make generate-perushim-view-sqlite
 cargo make generate-perushim-view-mysql
 ```
 
+The SQL import preserves the destination database's author and work IDs by
+matching exact names. Incoming JSON/SQLite IDs are local catalog identities;
+they are remapped when importing notes into an existing web database. New
+database identities are allocated above the existing maxima.
+
+Catalogs and notes first load into temporary staging tables. An explicit
+transaction locks the existing catalogs, validates the identity maps, and
+replaces changed work/chapter notes. Published works and chapters absent from
+the incoming snapshot remain available. Derived note and commentary metrics
+for changed chapters are invalidated when those tables exist; metrics for
+unchanged chapters are retained. Ambiguous names and invalid references abort
+the import instead of attaching text to another work.
+
+The Lambda closes a failed import connection, rolling back its transaction.
+Rolling back a completed publication uses the pre-import RDS recovery point
+and the matching web/native release snapshots.
+
 ### Debug with MongoDB Compass
 
 ```bash
@@ -138,8 +155,9 @@ All resolvers check biblical verse bounds using
 Tanakh view. Notes sharing a verse receive consecutive indices, including when
 several source units or nodes map to that verse. Newly included midrashim are
 extracted after the existing commentaries. CLI generation then preserves the
-committed catalog's IDs by work/author name and appends new IDs. Existing works
-absent from the current public dump retain their metadata and bundled notes;
+committed JSON/SQLite catalog's IDs by work/author name and appends new IDs. The
+MySQL import independently preserves the web database's existing identities.
+Existing works absent from the current public dump retain their metadata and bundled notes;
 this keeps their commentary URLs available when Sefaria no longer exports an
 edition. Published chapters absent from a fresh extraction retain their bundled
 notes too; refreshed chapters use only their fresh notes. Empty new works are
@@ -242,6 +260,13 @@ Run the focused checks with `cargo test -p perushim-view`. With the Sefaria
 MongoDB dump available, run `cargo test -p perushim-view --features integration`
 (set `MONGO_HOST`, `MONGO_PORT` and `DUMP_NAME` for a non-default local database).
 The integration tests execute the actual aggregation and verify mapped notes.
+
+Integration also requires a local MySQL 8.4 server and Python dependencies from
+`tests/requirements-mysql.txt`. Set `MYSQL_IMPORT_TEST_DB_URL` to its connection
+URL, with permission to create and drop disposable databases. The harness creates
+its own UUID-named databases and exercises the actual generated SQL through both
+Lambda parsing paths with simulated S3. Set `MYSQL_IMPORT_TEST_PYTHON` to select a
+Python virtual environment. No AWS connection is used by these tests.
 
 To refresh delivered assets, generate JSON, SQLite and MySQL into `.output`
 from the last published baseline before replacing any committed files. A

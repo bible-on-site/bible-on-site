@@ -512,6 +512,63 @@ mod tests {
     }
 
     #[test]
+    fn blank_author_and_work_names_cannot_become_published_identities() {
+        for baseline_is_invalid in [false, true] {
+            for is_author in [false, true] {
+                let mut invalid = baseline();
+                if is_author {
+                    invalid.parshanim[0].name = " \t\n".into();
+                } else {
+                    invalid.perushim[0].name = " \t\n".into();
+                }
+                let result = if baseline_is_invalid {
+                    preserve(baseline(), &invalid, vec![])
+                } else {
+                    preserve(invalid, &baseline(), vec![])
+                };
+                let error = result
+                    .err()
+                    .expect("blank identities must fail")
+                    .to_string();
+                let label = if baseline_is_invalid {
+                    "baseline"
+                } else {
+                    "fresh"
+                };
+                let kind = if is_author { "author" } else { "work" };
+                assert!(error.contains(&format!("{label} {kind} name must not be empty")));
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_fresh_and_fallback_coordinates_cannot_enter_the_notes_pack() {
+        for from_fresh in [false, true] {
+            for (chapter, verse, index) in [(0, 1, 0), (930, 1, 0), (1, 0, 0), (1, 1, -1)] {
+                let mut invalid = note(4, "invalid coordinates");
+                invalid.perek_id = chapter;
+                invalid.pasuk = verse;
+                invalid.note_idx = index;
+                let mut fresh = baseline();
+                let fallback = if from_fresh {
+                    fresh.notes.push(invalid);
+                    vec![]
+                } else {
+                    vec![invalid]
+                };
+                let error = preserve(fresh, &baseline(), fallback)
+                    .err()
+                    .expect("invalid note coordinates must fail")
+                    .to_string();
+                let source = if from_fresh { "fresh" } else { "fallback" };
+                assert!(error.contains(&format!(
+                    "{source} note has invalid chapter, verse, or note index"
+                )));
+            }
+        }
+    }
+
+    #[test]
     fn unknown_author_or_note_work_mapping_is_rejected() {
         let mut fresh = baseline();
         fresh.perushim[0].parshan_id = 999;

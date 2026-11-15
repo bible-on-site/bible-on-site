@@ -295,6 +295,66 @@ mod tests {
     }
 
     #[test]
+    fn rejects_missing_required_nodes_and_wrong_declared_depth() {
+        let mut source = shimon(bson!([["main"]]), bson!([]));
+        source
+            .get_document_mut("schema")
+            .unwrap()
+            .get_array_mut("nodes")
+            .unwrap()
+            .pop();
+        let error = flatten(&source, 1).err().unwrap();
+        assert!(
+            error
+                .to_string()
+                .contains("missing expected schema node Additions")
+        );
+
+        let mut source = shimon(bson!([["main"]]), bson!([]));
+        source
+            .get_document_mut("schema")
+            .unwrap()
+            .get_array_mut("nodes")
+            .unwrap()[0]
+            .as_document_mut()
+            .unwrap()
+            .insert("depth", 3);
+        let error = flatten(&source, 1).err().unwrap();
+        assert!(format!("{error:#}").contains("Unexpected midrash depth"));
+    }
+
+    #[test]
+    fn rejects_ambiguous_default_alias_without_discarding_canonical_content() {
+        let mut source = shimon(bson!([["main"]]), bson!([]));
+        source.get_array_mut("versions").unwrap()[0]
+            .as_document_mut()
+            .unwrap()
+            .insert("", bson!([["different default"]]));
+        let error = flatten(&source, 1).err().unwrap();
+        assert!(error.to_string().contains("two nonempty default nodes"));
+        source.get_array_mut("versions").unwrap()[0]
+            .as_document_mut()
+            .unwrap()
+            .insert("", bson!([]));
+        let notes = flatten(&source, 1).unwrap();
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].note_content, "main");
+    }
+
+    #[test]
+    fn malformed_scalars_are_not_silently_treated_as_empty_source() {
+        for (source, message) in [
+            (bson!(42), "Expected midrash chapters array"),
+            (bson!([42]), "Expected midrash verses array"),
+            (bson!([[42]]), "Expected midrash paragraph string"),
+            (bson!([[true]]), "Expected midrash paragraph string"),
+        ] {
+            let error = flatten(&shimon(source, bson!([])), 1).err().unwrap();
+            assert!(error.to_string().contains(message));
+        }
+    }
+
+    #[test]
     fn retains_each_paragraph_and_accepts_known_export_empty_sentinels() {
         let source = doc! {
             "enTitle": "Midrash Tannaim on Deuteronomy",

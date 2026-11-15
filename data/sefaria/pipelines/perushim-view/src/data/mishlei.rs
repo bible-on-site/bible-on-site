@@ -223,4 +223,91 @@ mod tests {
             .is_err()
         );
     }
+
+    fn reviewed_manifest(chapters: &[Bson]) -> Manifest {
+        Manifest {
+            version_title: "test".into(),
+            unit_hashes: chapters
+                .iter()
+                .map(|chapter| {
+                    chapter
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|unit| {
+                            let mut hash = 0xcbf29ce484222325;
+                            fingerprint(unit, &mut hash).unwrap();
+                            vec![format!("{hash:016x}")]
+                        })
+                        .collect()
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn an_unreviewed_title_or_coordinate_schema_is_rejected() {
+        let error = flatten(&doc! {"enTitle": "Another Midrash"}, 1).unwrap_err();
+        assert!(error.to_string().contains("Unsupported Mishlei title"));
+        let manifest: Manifest =
+            serde_json::from_str(include_str!("mishlei_manifest.json")).unwrap();
+        for field in ["sectionNames", "addressTypes"] {
+            let mut source = doc! {
+                "enTitle": "Midrash Mishlei",
+                "versionTitles": [&manifest.version_title],
+                "schema": {"depth": 2, "sectionNames": ["Chapter", "Verse"],
+                    "addressTypes": ["Perek", "Integer"]},
+                "versions": [[]],
+            };
+            source
+                .get_document_mut("schema")
+                .unwrap()
+                .insert(field, bson!(["Verse", "Chapter"]));
+            let error = flatten(&source, 1).unwrap_err();
+            assert!(
+                error.to_string().contains(&format!("{field} changed")),
+                "{error:#}"
+            );
+        }
+    }
+
+    #[test]
+    fn changed_chapter_or_homily_boundaries_require_manual_review() {
+        let chapters = vec![bson!(["first", "second"])];
+        let manifest = reviewed_manifest(&chapters);
+        let error = flatten_units(&chapters, &Vec::new(), &manifest, 1).unwrap_err();
+        assert!(error.to_string().contains("chapter count changed"));
+        let mapping = serde_json::from_str(r#"[["Proverbs 11:21"]]"#).unwrap();
+        let error = flatten_units(&chapters, &mapping, &manifest, 1).unwrap_err();
+        assert!(error.to_string().contains("1: homily segmentation changed"));
+    }
+
+    #[test]
+    fn invalid_or_duplicate_subjects_fail_with_the_homily_coordinate() {
+        let chapters = vec![bson!(["reviewed body"])];
+        let manifest = reviewed_manifest(&chapters);
+        for (anchors, message) in [
+            (r#"[[[]]]"#, "Empty Mishlei anchor list"),
+            (r#"[["Proverbs 99:1"]]"#, "Mishlei 1:1"),
+            (
+                r#"[[["Proverbs 11:21", "Proverbs 11:21"]]]"#,
+                "Duplicate Mishlei subject",
+            ),
+        ] {
+            let mapping = serde_json::from_str(anchors).unwrap();
+            let error = flatten_units(&chapters, &mapping, &manifest, 1).unwrap_err();
+            assert!(error.to_string().contains(message), "{error:#}");
+        }
+    }
+
+    #[test]
+    fn blank_reviewed_units_do_not_consume_a_note_index() {
+        let chapters = vec![bson!([" \n ", " body "])];
+        let manifest = reviewed_manifest(&chapters);
+        let mapping = serde_json::from_str(r#"[["Proverbs 11:21", "Proverbs 11:21"]]"#).unwrap();
+        let notes = flatten_units(&chapters, &mapping, &manifest, 1).unwrap();
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].note_idx, 0);
+        assert_eq!(notes[0].note_content, "body");
+    }
 }

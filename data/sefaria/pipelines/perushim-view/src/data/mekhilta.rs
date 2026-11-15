@@ -447,6 +447,25 @@ mod tests {
         serde_json::from_str(include_str!("../../tests/fixtures/mekhilta-tractates.json")).unwrap()
     }
 
+    fn chapter_node(doc: &mut Document, index: usize) -> &mut Document {
+        doc.get_document_mut("alt_structs")
+            .unwrap()
+            .get_document_mut("Chapter")
+            .unwrap()
+            .get_array_mut("nodes")
+            .unwrap()[index]
+            .as_document_mut()
+            .unwrap()
+    }
+
+    fn rejects(doc: Document, message: &str) {
+        let error = flatten(&doc, 1).unwrap_err().to_string();
+        assert!(
+            error.contains(message),
+            "expected {message:?}, got {error:?}"
+        );
+    }
+
     #[test]
     fn pinned_biblical_shape_preserves_empty_chapters_and_note_order() {
         let notes = flatten(&biblical(), 7).unwrap();
@@ -530,6 +549,146 @@ mod tests {
     }
 
     #[test]
+    fn malformed_source_metadata_fails_before_any_paragraph_is_published() {
+        let mut doc = biblical();
+        doc.insert("enTitle", "An unrelated commentary");
+        rejects(doc, "unsupported title");
+
+        let mut doc = tractates();
+        doc.get_array_mut("versions").unwrap()[0] = bson!(17);
+        rejects(doc, "array or tractate document");
+
+        let mut doc = tractates();
+        doc.get_document_mut("schema")
+            .unwrap()
+            .get_array_mut("nodes")
+            .unwrap()[0]
+            .as_document_mut()
+            .unwrap()
+            .insert("depth", "two");
+        rejects(doc, "unsupported tractate schema");
+
+        let mut doc = tractates();
+        let nodes = doc
+            .get_document_mut("schema")
+            .unwrap()
+            .get_array_mut("nodes")
+            .unwrap();
+        nodes.push(nodes[0].clone());
+        rejects(doc, "duplicate tractate");
+
+        let mut doc = tractates();
+        doc.get_array_mut("versions").unwrap()[0]
+            .as_document_mut()
+            .unwrap()
+            .remove("Tractate Pischa");
+        rejects(doc, "missing tractate text");
+
+        let mut doc = tractates();
+        doc.get_array_mut("versions").unwrap()[0]
+            .as_document_mut()
+            .unwrap()
+            .get_array_mut("Tractate Pischa")
+            .unwrap()[0] = bson!("unsegmented text");
+        rejects(doc, "section is not an array");
+    }
+
+    #[test]
+    fn ambiguous_or_out_of_bounds_chapter_maps_cannot_reassign_notes() {
+        let mut doc = tractates();
+        chapter_node(&mut doc, 0).insert("depth", 2);
+        rejects(doc, "not indexed by individual verses");
+
+        let mut doc = tractates();
+        chapter_node(&mut doc, 1).insert("skipped_addresses", bson!([12, 12]));
+        rejects(doc, "duplicate skipped address");
+
+        let mut doc = tractates();
+        chapter_node(&mut doc, 0).insert("startingAddress", 51);
+        chapter_node(&mut doc, 0)
+            .get_array_mut("refs")
+            .unwrap()
+            .push(bson!("Mekhilta DeRabbi Yishmael, Tractate Pischa 4:4"));
+        rejects(doc, "Chapter refs exceed Exodus 12");
+
+        let mut doc = tractates();
+        let repeated = chapter_node(&mut doc, 0).clone();
+        doc.get_document_mut("alt_structs")
+            .unwrap()
+            .get_document_mut("Chapter")
+            .unwrap()
+            .get_array_mut("nodes")
+            .unwrap()
+            .push(bson!(repeated));
+        rejects(doc, "duplicate mapping for Exodus 12:6");
+
+        for (titles, expected) in [
+            (
+                bson!([{ "lang": "en", "primary": true, "text": "Chapter 41" }]),
+                "chapter outside Exodus",
+            ),
+            (
+                bson!([{ "lang": "he", "primary": true, "text": "פרק יב" }]),
+                "one primary English title",
+            ),
+            (
+                bson!([{ "lang": "en", "primary": true, "text": "Chapter twelve" }]),
+                "invalid digit",
+            ),
+        ] {
+            let mut doc = tractates();
+            chapter_node(&mut doc, 0).insert("titles", titles);
+            rejects(doc, expected);
+        }
+    }
+
+    #[test]
+    fn malformed_references_never_fall_back_to_a_whole_tractate() {
+        for (reference, expected) in [
+            ("Other Work, Tractate Pischa 4:4", "unexpected work title"),
+            (
+                "Mekhilta DeRabbi Yishmael, Tractate Unknown 4:4",
+                "unknown referenced tractate",
+            ),
+            (
+                "Mekhilta DeRabbi Yishmael, Tractate Pischa 5:24-4:4",
+                "reversed source range",
+            ),
+            (
+                "Mekhilta DeRabbi Yishmael, Tractate Pischa 4:5",
+                "referenced paragraph does not exist",
+            ),
+            (
+                "Mekhilta DeRabbi Yishmael, Tractate Pischa four:4",
+                "invalid integer address",
+            ),
+        ] {
+            let mut doc = tractates();
+            chapter_node(&mut doc, 0).insert("refs", bson!([reference]));
+            rejects(doc, expected);
+        }
+    }
+
+    #[test]
+    fn wide_bson_addresses_preserve_the_same_source_coordinates() {
+        let original = flatten(&tractates(), 8).unwrap();
+        let mut doc = tractates();
+        chapter_node(&mut doc, 0).insert("depth", 1_i64);
+        chapter_node(&mut doc, 0).insert("startingAddress", 6_i64);
+        let widened = flatten(&doc, 8).unwrap();
+        assert_eq!(
+            widened
+                .iter()
+                .map(|note| (note.perek_id, note.pasuk, note.note_idx, &note.note_content))
+                .collect::<Vec<_>>(),
+            original
+                .iter()
+                .map(|note| (note.perek_id, note.pasuk, note.note_idx, &note.note_content))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn uncovered_nonempty_source_paragraph_is_an_error() {
         let mut doc = tractates();
         let version = doc.get_array_mut("versions").unwrap()[0]
@@ -591,6 +750,46 @@ mod tests {
             .unwrap()[21] = bson!("צידה שלח להם לשבע. זה יהושע בן נון");
         let notes = flatten(&doc, 1).unwrap();
         assert_eq!((notes[0].perek_id, notes[0].pasuk), (66, 15));
+
+        // An upstream correction may supply the reviewed reference itself.
+        // Keep that source once, and reject a correction to a different verse.
+        for verse in [15, 14] {
+            let mut mapped = doc.clone();
+            mapped
+                .get_document_mut("alt_structs")
+                .unwrap()
+                .get_document_mut("Chapter")
+                .unwrap()
+                .get_array_mut("nodes")
+                .unwrap()
+                .push(bson!({
+                    "depth": 1,
+                    "sectionNames": ["Verse"],
+                    "addressTypes": ["Integer"],
+                    "titles": [{"lang": "en", "primary": true, "text": "Chapter 16"}],
+                    "startingAddress": verse,
+                    "refs": ["Mekhilta DeRabbi Yishmael, Tractate Vayassa 4:22"],
+                }));
+            if verse == 15 {
+                let mapped_notes = flatten(&mapped, 1).unwrap();
+                assert_eq!(mapped_notes.len(), 1);
+                assert_eq!(mapped_notes[0].note_content, notes[0].note_content);
+                assert_eq!((mapped_notes[0].perek_id, mapped_notes[0].pasuk), (66, 15));
+            } else {
+                rejects(mapped, "conflicting assignment");
+            }
+        }
+
+        let mut empty = doc.clone();
+        empty.get_array_mut("versions").unwrap()[0]
+            .as_document_mut()
+            .unwrap()
+            .get_array_mut("Tractate Vayassa")
+            .unwrap()[3]
+            .as_array_mut()
+            .unwrap()[21] = bson!("  ");
+        assert!(flatten(&empty, 1).unwrap().is_empty());
+
         let version = doc.get_array_mut("versions").unwrap()[0]
             .as_document_mut()
             .unwrap();
