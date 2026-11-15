@@ -18,3 +18,15 @@ Main features:
 - **Articles**: Learn articles related to the Bible.
 - **Commentaries**: Learn Bible commentaries.
 - **Recordings**: Listen to Bible recordings.
+
+## Commentary data
+
+The Sefaria pipeline includes Midrash Tanchuma, Midrash Mishlei, Midrash Tannaim
+and both Mekhilta collections. Their 8,799 notes use validated biblical divisions
+or reviewed passage-start dictionaries; supporting quotations remain in the text.
+
+MySQL imports preserve existing web work IDs and retained published chapters.
+Website builds replay the same import over a production commentary snapshot so
+prerendered pages use matching IDs and content. See the
+[commentary pipeline](../../data/sefaria/pipelines/perushim-view/README.md) for
+the mapping, source guards and publication/rollback details.
