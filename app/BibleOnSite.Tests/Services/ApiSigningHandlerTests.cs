@@ -72,6 +72,25 @@ public class ApiSigningHandlerTests
     }
 
     [Fact]
+    public async Task Send_SignsAnEmptyRequestAgainstTheRootPath()
+    {
+        var (signing, capture) = HandlersFor(_ => Task.FromResult<ApiSigningCredential?>(Credential));
+        // HttpMessageInvoker, not HttpClient: the client resolves RequestUri
+        // before the handler sees it, and the null-URI canonical needs it null.
+        using var invoker = new HttpMessageInvoker(signing);
+        // No Content and no RequestUri: the canonical falls back to an empty
+        // body hash and "/" — a second golden vector pins that contract.
+        using var request = new HttpRequestMessage();
+
+        await invoker.SendAsync(request, TestContext.Current.CancellationToken);
+
+        var signed = capture.Request!;
+        signed.Headers.GetValues(ApiSigningHandler.SignatureHeader).Should()
+            .Equal("33eb155a10367b4faa12f633e4b023992d0ed3c80d324abb1b4bb74307b39cda");
+        capture.Body.Should().BeNull();
+    }
+
+    [Fact]
     public async Task Send_WithoutCredential_IsAnUnsignedPassThrough()
     {
         var (signing, capture) = HandlersFor(_ => Task.FromResult<ApiSigningCredential?>(null));

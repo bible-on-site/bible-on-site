@@ -22,6 +22,17 @@ use super::profile::Profile;
 use super::schema_builder::{build_schema, graphql_playground, graphql_request};
 use tokio::time::Duration;
 
+/// `HOST`/`PORT` resolution for the listen socket — unset or unparseable
+/// values fall back to the local defaults rather than failing startup.
+fn bind_addr(get: impl Fn(&str) -> Option<String>) -> String {
+    let host = get("HOST").unwrap_or_else(|| "127.0.0.1".to_string());
+    let port = get("PORT")
+        .unwrap_or_else(|| "3003".to_string())
+        .parse::<u16>()
+        .unwrap_or(3003);
+    format!("{host}:{port}")
+}
+
 pub struct ActixApp {
     server: Server,
     shutdown_signal: Arc<AtomicBool>,
@@ -35,12 +46,7 @@ impl ActixApp {
         // Explicit launch configuration (CI, containers, local DB overrides) takes precedence.
         profile.load_env_file();
 
-        let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-        let port = env::var("PORT")
-            .unwrap_or_else(|_| "3003".to_string())
-            .parse::<u16>()
-            .unwrap_or(3003);
-        let listener = TcpListener::bind(format!("{}:{}", host, port))?;
+        let listener = TcpListener::bind(bind_addr(|name| env::var(name).ok()))?;
         let port = listener.local_addr().unwrap().port();
         let db: Database = Database::new().await?;
         // Derived article-search index: loads its persisted snapshot, then a
@@ -236,6 +242,25 @@ mod tests {
     /// exercise is "everything passes through", identical to a gateless app.
     fn test_gate() -> AccessGate {
         AccessGate::for_test(crate::startup::access_gate::GateMode::Observe, &[], 300)
+    }
+
+    #[actix_web::test]
+    async fn bind_addr_prefers_env_and_falls_back_to_local_defaults() {
+        let with = |pairs: &[(&str, &str)]| {
+            bind_addr(|name| {
+                pairs
+                    .iter()
+                    .find(|(key, _)| *key == name)
+                    .map(|(_, value)| value.to_string())
+            })
+        };
+        assert_eq!(with(&[]), "127.0.0.1:3003");
+        assert_eq!(
+            with(&[("HOST", "0.0.0.0"), ("PORT", "8080")]),
+            "0.0.0.0:8080"
+        );
+        // An unparseable port keeps the default rather than panicking.
+        assert_eq!(with(&[("PORT", "not-a-port")]), "127.0.0.1:3003");
     }
 
     #[actix_web::test]
