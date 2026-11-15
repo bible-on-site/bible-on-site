@@ -21,13 +21,13 @@ interface WebpackStatsLike {
 	hasErrors: () => boolean;
 	toJson: (opts: Record<string, unknown>) => {
 		errors?: { message?: string }[];
-		modules?: { name?: string }[];
+		modules?: { name?: string; moduleType?: string }[];
 	};
 }
 
-// Each `it` compiles instrumentation.ts with the production runtime constants.
-// Keep Jest's 5s default deadline as a regression check for accidental data
-// bundling; the development corpus must stay outside the production graph.
+// Mirror Next's runtime constants and raw-source corpus rule. Production must
+// exclude the development corpus; development retains its HMR dependency as
+// asset/source. Keep Jest's 5s default deadline as the regression check.
 const srcDir = path.resolve(__dirname, "../../src");
 const localModules = path.resolve(__dirname, "../../node_modules");
 const tsLoader = path.resolve(__dirname, "../util/webpack-swc-ts-loader.cjs");
@@ -52,8 +52,10 @@ afterAll(() => {
  * drop it (#3258). The edge variant uses a web target where `node:` builtins
  * are an unhandled scheme — the same UnhandledSchemeError webpack dev hit.
  */
-function compileInstrumentation(
+function compileBundle(
 	runtime: "edge" | "nodejs",
+	nodeEnv: "production" | "development" = "production",
+	entry = "./instrumentation.ts",
 ): Promise<WebpackStatsLike> {
 	const compiler = webpack({
 		// "none" skips the development-mode naming/nodeEnv plugin passes —
@@ -61,7 +63,7 @@ function compileInstrumentation(
 		mode: "none",
 		target: runtime === "nodejs" ? "node" : "webworker",
 		context: srcDir,
-		entry: "./instrumentation.ts",
+		entry,
 		output: {
 			path: makeBundleOutputDir(),
 			filename: "instrumentation.js",
@@ -74,11 +76,19 @@ function compileInstrumentation(
 			// walk; "node_modules" stays as the standard fallback.
 			modules: [localModules, "node_modules"],
 		},
-		module: { rules: [{ test: /\.tsx?$/, use: [tsLoader] }] },
+		module: {
+			rules: [
+				{ test: /\.tsx?$/, use: [tsLoader] },
+				{
+					test: /sefaria-dump-5784-sivan-4\.tanah_view\.json$/,
+					type: "asset/source",
+				},
+			],
+		},
 		plugins: [
 			new DefinePlugin({
 				"process.env.NEXT_RUNTIME": JSON.stringify(runtime),
-				"process.env.NODE_ENV": JSON.stringify("production"),
+				"process.env.NODE_ENV": JSON.stringify(nodeEnv),
 			}),
 		],
 	});
@@ -98,7 +108,7 @@ function moduleNames(stats: WebpackStatsLike): string[] {
 
 describe("instrumentation bundling", () => {
 	it("excludes the Node-only diagnostics module from the edge bundle", async () => {
-		const stats = await compileInstrumentation("edge");
+		const stats = await compileBundle("edge");
 		const errors = stats
 			.toJson({ errors: true })
 			.errors?.map((e) => e.message ?? "");
@@ -118,7 +128,7 @@ describe("instrumentation bundling", () => {
 	});
 
 	it("keeps the diagnostics module reachable in the nodejs bundle", async () => {
-		const stats = await compileInstrumentation("nodejs");
+		const stats = await compileBundle("nodejs");
 		expect(stats.hasErrors()).toBe(false);
 		const names = moduleNames(stats);
 		expect(names.some((n) => n.includes("event-loop-diagnostics"))).toBe(true);
@@ -128,5 +138,22 @@ describe("instrumentation bundling", () => {
 				n.includes("sefaria-dump-5784-sivan-4.tanah_view.json"),
 			),
 		).toEqual([]);
+	});
+
+	it("retains the raw-source corpus dependency for development HMR", async () => {
+		const stats = await compileBundle(
+			"nodejs",
+			"development",
+			"./data/db/sefarim.ts",
+		);
+		expect(stats.hasErrors()).toBe(false);
+		const modules = stats.toJson({ modules: true }).modules ?? [];
+		expect(
+			modules
+				.filter((m) =>
+					m.name?.includes("sefaria-dump-5784-sivan-4.tanah_view.json"),
+				)
+				.map((m) => m.moduleType),
+		).toEqual(["asset/source"]);
 	});
 });
