@@ -3,19 +3,27 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:models="clr-namespace:BibleOnSite.Models"
+             xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.HomeSearchPage"
              Title="חיפוש" FlowDirection="RightToLeft" Shell.NavBarIsVisible="False"
              BackgroundColor="{AppThemeBinding Light=#F2EFE6, Dark=#111C2C}">
     <Grid RowDefinitions="Auto,*">
-        <Grid Padding="12,8" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-            <Button Text="חזרה" AutomationId="HomeSearchBack" Clicked="OnBackClicked" BackgroundColor="Transparent"
-                    TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" Padding="8" FontSize="15"/>
-            <controls:SearchEntry x:Name="GlobalQuery" Grid.Column="1" AutomationId="HomeSearchInput"
-                                 Placeholder="בתנ&quot;ך ובאפליקציה" FontSize="17" TextChanged="OnQueryChanged" Completed="OnSearchSubmitted"
+        <Grid Padding="12,10" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+            <Button Text="{x:Static fonts:FluentUI.arrow_right_24_regular}" FontFamily="FluentIcons"
+                    AutomationId="HomeSearchBack" SemanticProperties.Description="חזרה" Clicked="OnBackClicked"
+                    BackgroundColor="{AppThemeBinding Light=#E4EAF4, Dark=#243C5D}" WidthRequest="52" HeightRequest="56" CornerRadius="17"
+                    TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" Padding="0" FontSize="24"/>
+            <Border Grid.Column="1" StrokeThickness="0" StrokeShape="RoundRectangle 18" Padding="14,0"
+                    BackgroundColor="{AppThemeBinding Light=White, Dark=#243C5D}">
+            <controls:SearchEntry x:Name="GlobalQuery" AutomationId="HomeSearchInput" HeightRequest="56"
+                                 Placeholder="בתנ&quot;ך ובאפליקציה" FontSize="19" TextChanged="OnQueryChanged" Completed="OnSearchSubmitted"
                                  TextColor="{AppThemeBinding Light=#192B45, Dark=#F2EFE6}"
                                  PlaceholderColor="{AppThemeBinding Light=#63738C, Dark=#B8CBE5}"/>
-            <Button Grid.Column="2" Text="ניקוי" Clicked="OnClearClicked" BackgroundColor="Transparent"
-                    TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" Padding="8" FontSize="14"/>
+            </Border>
+            <Button Grid.Column="2" AutomationId="HomeSearchClear" Text="{x:Static fonts:FluentUI.dismiss_24_regular}" FontFamily="FluentIcons"
+                    SemanticProperties.Description="ניקוי החיפוש" Clicked="OnClearClicked" WidthRequest="52" HeightRequest="56" CornerRadius="17"
+                    BackgroundColor="{AppThemeBinding Light=#E4EAF4, Dark=#243C5D}"
+                    TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" Padding="0" FontSize="23"/>
         </Grid>
         <ScrollView Grid.Row="1" AutomationId="HomeSearchResults">
             <VerticalStackLayout Padding="22,14,22,30" Spacing="22">

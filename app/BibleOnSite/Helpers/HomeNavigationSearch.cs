@@ -28,6 +28,7 @@ public static class HomeNavigationSearch
     public static IReadOnlyList<NavigationSearchItem> Find(string query)
     {
         var tokens = SearchText.Tokens(query);
+        if (tokens.Length == 0) { return Destinations.Take(4).ToArray(); }
         return Destinations.Where(item =>
         {
             var haystack = SearchText.Normalize($"{item.Title} {item.Subtitle} {item.SearchTerms}");

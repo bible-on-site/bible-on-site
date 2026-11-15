@@ -1,5 +1,14 @@
 # Native home UX preview
 
+This is a long-lived UX review branch. Keep PR #3385 in draft. Do not merge it,
+mark it ready, or enable auto-merge without Dorad's explicit instruction.
+
+Review the real emulator captures in [the GitHub comparison](review/REVIEW.md)
+or open [the static HTML gallery](review/index.html) locally. Both contain eleven
+before/after screen comparisons and a before/after continuous-scroll recording.
+Keep the baseline images fixed and update the same `assets/after/` filenames in
+each iteration so GitHub can compare images between commits.
+
 This is an opt-in Debug build for design iterations in the real MAUI app. Normal
 Debug builds and every Release build keep the existing reader startup.
 
@@ -25,11 +34,19 @@ or cached starter response, with an explicit offline label when unavailable.
 The chapter index, calendar, authors, other learning sections and settings reuse
 their existing native screens. No demonstration content is added to the database.
 
-The daily chapter and index open a reader above home, so system Back returns to
-home. The reader's labelled home action also returns there. Downward scrolling
-hides the reader toolbar; the first small upward movement restores it in place.
-Selection/search keep their action bar visible. Chapter swipes remain active,
-and the preview omits the fan's dedicated previous/next buttons.
+The daily chapter and index open a reader above home. All pages use the same
+large Back and Home controls. The preview disables the side drawer and removes
+the reader fan. The reader has one large dock for reading, commentary and
+articles; its chapter title opens the chapter picker, while the tools sheet
+contains content search and display actions. Secondary learning destinations
+live in the library rather than a row of small links on home.
+
+The reading viewport keeps fixed geometry while the toolbar moves above it.
+Android physical drag deltas drive the toolbar; list layout and fling callbacks
+cannot feed back into its visibility. The chapter heading scrolls with the text.
+A small upward gesture restores navigation without jumping to the chapter start.
+Selection, recitation, playback and search keep their action bar available.
+Chapter swipes remain active.
 
 Iteration checks: launch to home, inspect short labels and highlighted actions,
 open the daily chapter, scroll down and slightly up, swipe between chapters,

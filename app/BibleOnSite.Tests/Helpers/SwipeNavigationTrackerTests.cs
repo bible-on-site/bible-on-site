@@ -4,6 +4,50 @@ namespace BibleOnSite.Tests.Helpers;
 
 public class SwipeNavigationTrackerTests
 {
+    [Fact]
+    public void VerticalDragPublishesPhysicalDeltasAndStopsAtRelease()
+    {
+        var swipe = new SwipeNavigationTracker();
+        swipe.Begin(new(500, 1000, 1000), 19);
+        swipe.Move(new(500, 900, 1100), 24);
+        swipe.VerticalContentDelta.Should().Be(100);
+        swipe.Move(new(500, 880, 1120), 24);
+        swipe.VerticalContentDelta.Should().Be(20);
+        swipe.Move(new(500, 890, 1140), 24);
+        swipe.VerticalContentDelta.Should().Be(-10);
+        swipe.End(new(500, 890, 1150), 1080, 24, 150, true, 929);
+        swipe.VerticalContentDelta.Should().BeNull();
+        swipe.Move(new(500, 600, 1200), 24);
+        swipe.VerticalContentDelta.Should().BeNull("inertia and layout do not belong to an active finger gesture");
+    }
+
+    [Fact]
+    public void TouchJitterAndHorizontalChapterSwipesDoNotDriveToolbarVisibility()
+    {
+        var swipe = new SwipeNavigationTracker();
+        swipe.Begin(new(500, 1000, 1000), 19);
+        swipe.Move(new(502, 990, 1010), 24);
+        swipe.VerticalContentDelta.Should().BeNull();
+        swipe.Move(new(200, 990, 1100), 24);
+        swipe.VerticalContentDelta.Should().BeNull();
+        swipe.Move(new(200, 1500, 1200), 24);
+        swipe.VerticalContentDelta.Should().BeNull("a chapter gesture keeps its horizontal ownership");
+    }
+
+    [Fact]
+    public void PhysicalDragCanHideAndRevealHeaderWithoutMovingItsViewport()
+    {
+        var swipe = new SwipeNavigationTracker();
+        var header = new ReaderHeaderScrollState();
+        swipe.Begin(new(500, 1000, 1000), 19);
+        swipe.Move(new(500, 900, 1100), 24);
+        header.Update(swipe.VerticalContentDelta!.Value / 2).Should().BeFalse();
+        swipe.Cancel();
+        swipe.Begin(new(500, 1000, 2000), 19);
+        swipe.Move(new(500, 1030, 2100), 24);
+        header.Update(swipe.VerticalContentDelta!.Value / 2).Should().BeTrue();
+    }
+
     [Theory]
     [InlineData(0, 25, true)]
     [InlineData(0, 24, false)]

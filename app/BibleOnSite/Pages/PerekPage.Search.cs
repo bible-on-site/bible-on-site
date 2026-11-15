@@ -38,6 +38,11 @@ public partial class PerekPage
     private async void OnPerekSourceClicked(object? sender, EventArgs e)
     {
         ReaderMenuOverlay.Close();
+        if (Config.HomeUxPreview.Enabled)
+        {
+            PerekPickerPopup.Show(_viewModel.PerekId);
+            return;
+        }
         var sourceBounds = SearchIntroduction.IsVisible ? SearchIntroduction.Bounds : NormalNavigationTitle.Bounds;
         FinishSearchIntroduction();
         var opening = ChapterSearch.OpenAsync();

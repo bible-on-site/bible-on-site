@@ -28,6 +28,7 @@ public class HomeNavigationSearchTests
     public void EmptyQueryShowsAvailableDestinationsWithoutDuplicateRoutes()
     {
         var matches = HomeNavigationSearch.Find(" ");
+        matches.Should().HaveCount(4, "an empty search offers a few shortcuts rather than another full app menu");
         matches.Select(item => item.Route).Should().OnlyHaveUniqueItems();
         matches.Should().Contain(item => item.Route == AppRoutes.Masora);
     }
