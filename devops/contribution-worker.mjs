@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { hostname } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
@@ -13,6 +14,46 @@ const adminHosts = new Set(["admin.xn--febl3a.co.il", "admin.xn--febl3a.com"]);
 const AWS_ACCOUNT = "250598594267", // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 	AWS_REGION = "il-central-1";
 const executeFile = promisify(execFile);
+export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v2";
+const workerTasks = ["issue_implementation", "pr_resolution"];
+const canonical = (value) =>
+	Array.isArray(value)
+		? `[${value.map(canonical).join(",")}]`
+		: value !== null && typeof value === "object"
+			? `{${Object.entries(value)
+					.filter(([, v]) => v !== undefined)
+					.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+					.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`)
+					.join(",")}}`
+			: JSON.stringify(value);
+
+export function validateWorkerBundle(value, expectedHash) {
+	if (
+		!value ||
+		value.protocolVersion !== 2 ||
+		typeof value.version !== "string" ||
+		!Number.isSafeInteger(value.apiVersion) ||
+		typeof value.system !== "string" ||
+		!Array.isArray(value.operationGuide) ||
+		value.operationGuide.some((guide) => typeof guide !== "string") ||
+		!Array.isArray(value.tools) ||
+		value.tools.some(
+			(tool) =>
+				!tool ||
+				typeof tool.name !== "string" ||
+				typeof tool.description !== "string" ||
+				!tool.inputSchema,
+		)
+	)
+		throw new Error("Invalid agent bundle");
+	const { hash, ...payload } = value;
+	if (
+		hash !== expectedHash ||
+		createHash("sha256").update(canonical(payload)).digest("hex") !== hash
+	)
+		throw new Error("Agent bundle hash mismatch");
+	return value;
+}
 
 export async function workerAwsCredentials(profile, { call } = {}) {
 	const aws =
@@ -254,7 +295,8 @@ export function createContributionWorker(
 		signal,
 	} = {},
 ) {
-	async function api(action, body) {
+	const bundles = new Map();
+	async function api(action, body, executionSignal = signal) {
 		const token = options.dev ? null : await getToken();
 		const timeout = AbortSignal.timeout(API_TIMEOUT);
 		const response = await request(
@@ -263,8 +305,8 @@ export function createContributionWorker(
 				method: "POST",
 				redirect: "error",
 				signal:
-					signal && action !== "fail"
-						? AbortSignal.any([signal, timeout])
+					executionSignal && action !== "fail"
+						? AbortSignal.any([executionSignal, timeout])
 						: timeout,
 				headers: {
 					"Content-Type": "application/json",
@@ -281,13 +323,17 @@ export function createContributionWorker(
 		const job = await api("claim", {
 			workerId: options.workerId,
 			issueId: options.issueId,
+			protocolVersion: 2,
+			supportedTasks: workerTasks,
+			runtimeVersion: CONTRIBUTION_WORKER_RUNTIME_VERSION,
+			bundleHashes: [...bundles.keys()],
 		});
 		if (!job) return { status: "idle" };
 		if (
 			!UUID.test(job.id) ||
 			!UUID.test(job.issueId) ||
 			typeof job.token !== "string" ||
-			typeof job.system !== "string" ||
+			(job.protocolVersion !== 2 && typeof job.system !== "string") ||
 			typeof job.user !== "string" ||
 			!job.schema ||
 			!Number.isSafeInteger(job.version) ||
@@ -300,9 +346,132 @@ export function createContributionWorker(
 			token: job.token,
 			version: job.version,
 			apiVersion: job.apiVersion,
+			...(job.protocolVersion === 2 ? { protocolVersion: 2 } : {}),
 		};
-		log(`Generating issue ${job.issueId} with ${options.model}`);
+		log(
+			`${job.protocolVersion === 2 ? (job.task === "pr_resolution" ? "Resolving PR" : "Implementing issue") : "Generating issue"} ${job.issueId} with ${job.model || options.model}`,
+		);
 		try {
+			if (job.protocolVersion === 2) {
+				if (
+					!workerTasks.includes(job.task) ||
+					typeof job.bundleHash !== "string" ||
+					!/^[a-f0-9]{64}$/.test(job.bundleHash)
+				)
+					throw new Error("Unsupported agent task or bundle");
+				let bundle = bundles.get(job.bundleHash);
+				if (!bundle) {
+					bundle = validateWorkerBundle(
+						await api("bundle", { hash: job.bundleHash }),
+						job.bundleHash,
+					);
+					bundles.set(job.bundleHash, bundle);
+				}
+				if (
+					bundle.apiVersion !== job.apiVersion ||
+					bundle.version !== job.bundleVersion
+				)
+					throw new Error("Agent bundle version does not match the task");
+				const timeout = AbortSignal.timeout(MODEL_TIMEOUT),
+					executionSignal = signal
+						? AbortSignal.any([signal, timeout])
+						: timeout;
+				const system = [
+					bundle.system,
+					"Operation guide:",
+					...bundle.operationGuide,
+					"Read tools:",
+					JSON.stringify(bundle.tools),
+					'Every turn returns either {"action":"tool","name":"...","arguments":{...}} or {"action":"complete","result":{...}}. Tool reads do not apply changes.',
+				].join("\n");
+				const turns = [],
+					receipts = [];
+				let schema = job.schema;
+				while (true) {
+					executionSignal.throwIfAborted();
+					const response = await request(new URL("/api/chat", options.ollama), {
+						method: "POST",
+						redirect: "error",
+						signal: executionSignal,
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							model: job.model || options.model,
+							stream: false,
+							keep_alive: 0,
+							think: false,
+							format: schema,
+							options: { temperature: 0, num_predict: 4096, num_ctx: 16384 },
+							messages: [
+								{ role: "system", content: system },
+								{
+									role: "user",
+									content: canonical({
+										task: job.task,
+										context: JSON.parse(job.user),
+										turns,
+									}),
+								},
+							],
+						}),
+					});
+					if (!response.ok)
+						throw new Error(`Local model returned HTTP ${response.status}`);
+					const body = await response.json(),
+						content = body.message?.content;
+					executionSignal.throwIfAborted();
+					if (
+						typeof content !== "string" ||
+						!content.trim() ||
+						content.length > 100000
+					)
+						throw new Error("Invalid local model response");
+					if (body.prompt_eval_count >= 16384)
+						throw new Error(
+							"Agent context reached the model window; no result was applied",
+						);
+					const action = JSON.parse(content);
+					if (action.action === "complete") {
+						const result = await api(
+							"complete",
+							{
+								...identity,
+								receipts,
+								content: canonical(action.result),
+								model:
+									typeof body.model === "string"
+										? body.model
+										: job.model || options.model,
+							},
+							executionSignal,
+						);
+						return {
+							status: "completed",
+							issueId: job.issueId,
+							prIds: result.prIds,
+						};
+					}
+					if (
+						action.action !== "tool" ||
+						!bundle.tools.some((tool) => tool.name === action.name)
+					)
+						throw new Error("Unsupported agent action");
+					const read = await api(
+						"context",
+						{
+							...identity,
+							receipts,
+							name: action.name,
+							arguments: action.arguments,
+						},
+						executionSignal,
+					);
+					if (!read.receipt || !read.schema)
+						throw new Error("Invalid agent context response");
+					receipts.push(read.receipt);
+					schema = read.schema;
+					turns.push({ request: action, response: read.data });
+				}
+			}
 			const timeout = AbortSignal.timeout(MODEL_TIMEOUT);
 			const response = await request(new URL("/api/chat", options.ollama), {
 				method: "POST",

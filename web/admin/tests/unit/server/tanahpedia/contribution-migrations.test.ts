@@ -14,6 +14,17 @@ import {
 vi.mock("~/server/tanahpedia/contribution-rebase-runtime.server", () => ({
 	ensureContributionRebasesStarted: vi.fn(),
 }));
+vi.mock("~/server/tanahpedia/contribution-agent-registry.server", () => ({
+	refreshRegisteredContributionAgents: vi
+		.fn()
+		.mockResolvedValue({ updated: 0 }),
+}));
+vi.mock("~/server/tanahpedia/contribution-agent-runtime.server", () => ({
+	reconcileContributionAgentAssignments: vi
+		.fn()
+		.mockResolvedValue({ queued: 0 }),
+	ensureContributionAgentRuntimeStarted: vi.fn(),
+}));
 
 const mocks = vi.hoisted(() => ({
 	query: vi.fn(),

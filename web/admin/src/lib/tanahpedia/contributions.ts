@@ -9,6 +9,11 @@ import {
 	type FamilyUnionEndReason,
 	type FamilyUnionType,
 } from "~/server/tanahpedia/family-api-spec";
+import type {
+	ContributionAgentProvider,
+	ContributionAgentResponse,
+	ContributionAgentTask,
+} from "./contribution-agents";
 import {
 	type ContributionApiMigration,
 	migrationBlocked,
@@ -33,8 +38,8 @@ import { ADMIN_CREATABLE_ENTITY_TYPES } from "./schema-registry";
 export type Assignee =
 	| { kind: "unassigned" }
 	| { kind: "human"; id: string; name: string }
-	| { kind: "aws_llm" }
-	| { kind: "local_llm" };
+	| { kind: "aws_llm"; agentId?: string }
+	| { kind: "local_llm"; agentId?: string };
 
 export interface Contributor {
 	id: string;
@@ -150,12 +155,20 @@ export interface ContributionEvent {
 		| "merged"
 		| "generated"
 		| "generation_queued"
+		| "agent_response"
 		| "rebased";
 	actor: Contributor;
 	body: string;
 	at: string;
 	revision: number;
 	snapshot?: ContributionRevisionSnapshot;
+	responses?: ContributionAgentResponse[];
+	run?: {
+		jobId: string;
+		agentId: string;
+		bundleVersion: string;
+		model: string;
+	};
 }
 
 export interface ContributionRevisionSnapshot {
@@ -192,7 +205,13 @@ export function contributionSnapshot(
 
 export interface ContributionGeneration {
 	id: string;
-	status: "queued" | "running" | "completed" | "failed" | "cancelled";
+	status:
+		| "queued"
+		| "running"
+		| "completed"
+		| "needs_input"
+		| "failed"
+		| "cancelled";
 	requestedAt: string;
 	requestedBy: string;
 	attempts: number;
@@ -206,6 +225,22 @@ export interface ContributionGeneration {
 	outputHash: string | null;
 	prIds: string[];
 	error: string | null;
+	task?: ContributionAgentTask;
+	provider?: ContributionAgentProvider;
+	agentId?: string;
+	agentVersion?: number;
+	bundleVersion?: string;
+	bundleHash?: string;
+	triggerEventIds?: string[];
+	trigger?: "assignment" | "comment" | "edit" | "reopen" | "manual";
+	result?: {
+		outcome: "implemented" | "revised" | "clarification" | "unchanged";
+		summary: string;
+		addressedCommentIds: string[];
+		pendingCommentIds: string[];
+		revision: number;
+		changed: boolean;
+	};
 }
 
 export interface Contribution {
@@ -442,6 +477,8 @@ export function validateAssignee(value: unknown): Assignee {
 			id: textField(input.id, "assignee.id", 200),
 			name: textField(input.name, "assignee.name", 120),
 		};
+	if ((kind === "local_llm" || kind === "aws_llm") && input.agentId != null)
+		return { kind, agentId: uuidField(input.agentId, "assignee.agentId") };
 	return { kind };
 }
 
@@ -657,6 +694,14 @@ export function reviewStatus(
 export function assertMergeAllowed(pr: Contribution): void {
 	if (pr.kind !== "pr" || pr.state !== "open")
 		throw new Error("Only an open PR can be merged");
+	if (
+		["local_llm", "aws_llm"].includes(pr.assignee.kind) &&
+		pr.generation &&
+		["queued", "running"].includes(pr.generation.status)
+	)
+		throw new Error(
+			"Wait for the assigned agent pass or unassign the PR before merging",
+		);
 	if (pr.domainConflict)
 		throw new Error(
 			`Refresh the proposal's changes before merging: ${pr.domainConflict}`,

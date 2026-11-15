@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
+import type { ContributionAgentSummary } from "~/lib/tanahpedia/contribution-agents";
 import {
 	CONTRIBUTION_API_VERSION,
 	contributionApiVersion,
@@ -26,16 +27,22 @@ import {
 import {
 	createContributionItem,
 	editContributionItem,
-	generateIssuePrs,
 	getContribution,
+	getContributionAgents,
 	getContributionCatalogue,
-	getContributionLlmStatus,
 	getContributionSession,
 	getContributions,
 	mergeContributionItem,
 	recoverContributionItem,
 	updateContributionItem,
 } from "~/server/tanahpedia/contributions";
+import {
+	AgentCommentResponse,
+	AgentResponseLinks,
+	AgentWorkStatus,
+	isAgentAssigned,
+	latestAgentResponses,
+} from "./ContributionAgentWork";
 import {
 	AssigneePicker,
 	type ComposeContribution,
@@ -148,7 +155,8 @@ const EVENT_LABELS: Record<string, string> = {
 	reopened: "פתח מחדש",
 	merged: "מיזג את ההצעה",
 	generated: "יצר הצעות שינוי",
-	generation_queued: "שלח לעובד מקומי",
+	generation_queued: "שלח עבודה לסוכן",
+	agent_response: "פרסם התייחסות הסוכן",
 	rebased: "רענן את בסיס ההשוואה",
 };
 const REVIEW_LABELS = {
@@ -310,89 +318,68 @@ function AssignmentForm({
 	item,
 	busy,
 	act,
+	agents,
 }: {
 	item: Contribution;
 	busy: boolean;
+	agents: ContributionAgentSummary[];
 	act: (action: string, extra?: Record<string, unknown>) => Promise<boolean>;
 }) {
-	const [assignee, setAssignee] = useState<Assignee>(item.assignee);
+	const [draft, setDraft] = useState<{
+		assignee: Assignee;
+		version: number;
+	} | null>(null);
+	const assignee = draft?.assignee ?? item.assignee;
+	const baseVersion = draft?.version ?? item.version;
+	const stale = baseVersion !== item.version;
 	return (
 		<form
 			onSubmit={async (event) => {
 				event.preventDefault();
-				await act("assign", { assignee });
+				if (stale || busy) return;
+				if (await act("assign", { assignee, version: baseVersion }))
+					setDraft(null);
 			}}
 		>
 			<AssigneePicker
+				agents={agents}
 				value={assignee}
-				onChange={setAssignee}
+				onChange={(next) => setDraft({ assignee: next, version: baseVersion })}
 				disabled={busy || item.state !== "open"}
 			/>
+			{stale && (
+				<div role="status" className="contribution-agent-response needs_input">
+					<p>
+						הדיון עודכן מאז עריכת השיוך. הטיוטה שלך נשמרה; יש לטעון את השיוך
+						העדכני לפני שמירה.
+					</p>
+					<button
+						type="button"
+						className="contribution-button"
+						disabled={busy}
+						onClick={() => setDraft(null)}
+					>
+						טעינת השיוך העדכני
+					</button>
+				</div>
+			)}
+			{(assignee.kind === "local_llm" || assignee.kind === "aws_llm") && (
+				<p className="contribution-muted">
+					שמירת השיוך מפעילה את הסוכן על הדיון והשינויים העדכניים.
+				</p>
+			)}
 			{item.state === "open" && (
-				<button className="contribution-button" disabled={busy} type="submit">
-					שמירת שיוך
+				<button
+					className="contribution-button"
+					disabled={busy || stale}
+					type="submit"
+				>
+					{assignee.kind === "local_llm" || assignee.kind === "aws_llm"
+						? "שמירת שיוך והפעלת סוכן"
+						: "שמירת שיוך"}
 				</button>
 			)}
 		</form>
-	);
-}
-
-function LocalGenerationStatus({ item }: { item: Contribution }) {
-	const job = item.generation;
-	if (!job) return null;
-	const disconnected =
-		job.status === "running" &&
-		!(Date.parse(job.leaseExpiresAt ?? "") > Date.now());
-	const labels = {
-		queued: "ממתין לעובד בתחנת העבודה",
-		running: "המודל המקומי מכין הצעות",
-		completed: "העובד המקומי יצר הצעות לסקירה",
-		failed: "ההפקה המקומית נכשלה",
-		cancelled: "בקשת ההפקה בוטלה",
-	};
-	return (
-		<section
-			className="contribution-card contribution-card-body"
-			aria-label="התקדמות העובד המקומי"
-		>
-			<strong role="status">
-				{disconnected
-					? "העובד המקומי התנתק - ניתן לשלוח שוב"
-					: labels[job.status]}
-			</strong>
-			{job.status === "queued" && (
-				<p className="contribution-muted">
-					הבקשה תישאר בתור עד שעובד מקומי יתחבר. לא מתבצעת הפקה בענן.
-				</p>
-			)}
-			{job.worker && (
-				<p>
-					<bdi>{job.worker}</bdi>
-					{job.model && (
-						<>
-							{" "}
-							· <bdi>{job.model}</bdi>
-						</>
-					)}
-				</p>
-			)}
-			{job.error && (
-				<p className="contribution-error" role="alert">
-					{job.error}
-				</p>
-			)}
-			{job.prIds.map((id, index) => (
-				<p key={id}>
-					<Link
-						className="contribution-link"
-						to="/pull-requests"
-						search={{ id }}
-					>
-						פתיחת הצעה {index + 1} לסקירה
-					</Link>
-				</p>
-			))}
-		</section>
 	);
 }
 
@@ -404,9 +391,11 @@ function Detail({
 	act,
 	edit,
 	refresh,
+	agents,
 }: {
 	item: Contribution;
 	all: Contribution[];
+	agents: ContributionAgentSummary[];
 	actor?: Contributor;
 	busy: boolean;
 	act: (action: string, extra?: Record<string, unknown>) => Promise<boolean>;
@@ -417,30 +406,20 @@ function Detail({
 		[comment, setComment] = useState("");
 	const status = reviewStatus(item);
 	const incompatible = migrationBlocked(item);
-	const localPending = Boolean(
+	const agentPending = Boolean(
 		item.generation &&
 			(item.generation.status === "queued" ||
 				(item.generation.status === "running" &&
 					Date.parse(item.generation.leaseExpiresAt ?? "") > Date.now())),
 	);
-	const llm = useQuery({
-		queryKey: ["contributions", "llm-status"],
-		queryFn: () => getContributionLlmStatus(),
-		retry: false,
-	});
-	const generate = useMutation({
-		mutationFn: () =>
-			generateIssuePrs({ data: { id: item.id, version: item.version } }),
-		onSuccess: refresh,
-	});
+	const agentMergePending =
+		isAgentAssigned(item) &&
+		Boolean(
+			item.generation && ["queued", "running"].includes(item.generation.status),
+		);
 	const linked = all.filter((other) => other.issueId === item.id);
 	const linkedIssue = all.find((other) => other.id === item.issueId);
-	const providerReady =
-		item.assignee.kind === "local_llm"
-			? true
-			: item.assignee.kind === "aws_llm"
-				? llm.data?.aws.enabled
-				: false;
+	const commentResponses = latestAgentResponses(item.events);
 	return (
 		<>
 			<div className="contribution-heading">
@@ -590,7 +569,11 @@ function Detail({
 								aria-label="היסטוריית הדיון"
 							>
 								{item.events.map((event) => (
-									<article className="contribution-event" key={event.id}>
+									<article
+										className="contribution-event"
+										key={event.id}
+										id={`contribution-event-${event.id}`}
+									>
 										<div>
 											<strong>
 												<bdi>{event.actor.name}</bdi>
@@ -606,6 +589,24 @@ function Detail({
 												)}
 										</div>
 										{event.body && <p>{event.body}</p>}
+										{event.actor.kind === "human" &&
+											["comment", "changes_requested"].includes(event.kind) && (
+												<AgentCommentResponse
+													response={commentResponses.get(event.id)}
+													pending={
+														item.kind === "pr" &&
+														item.state === "open" &&
+														isAgentAssigned(item)
+													}
+												/>
+											)}
+										<AgentResponseLinks event={event} />
+										{event.run && (
+											<p className="contribution-muted">
+												הוראות וכלים <bdi>{event.run.bundleVersion}</bdi> ·{" "}
+												<bdi>{event.run.model}</bdi>
+											</p>
+										)}
 										{event.snapshot && (
 											<RevisionSnapshot snapshot={event.snapshot} />
 										)}
@@ -635,6 +636,13 @@ function Detail({
 											placeholder="הוספת הקשר, שאלה או משוב"
 										/>
 									</label>
+									{item.kind === "pr" &&
+										isAgentAssigned(item) &&
+										item.state === "open" && (
+											<p className="contribution-muted">
+												תגובה חדשה תפעיל אוטומטית מעבר נוסף של הסוכן המטפל.
+											</p>
+										)}
 									<div className="contribution-form-actions">
 										<button
 											className="contribution-button primary"
@@ -650,17 +658,21 @@ function Detail({
 					)}
 					{item.kind === "pr" && (
 						<section
-							className={`contribution-merge ${!incompatible && !item.domainConflict && ["approved", "exempt"].includes(status) ? "ready" : ""}`}
+							className={`contribution-merge ${!agentMergePending && !incompatible && !item.domainConflict && ["approved", "exempt"].includes(status) ? "ready" : ""}`}
 						>
 							<h3>
 								{item.state === "merged"
 									? "ההצעה מוזגה בהצלחה"
-									: REVIEW_LABELS[status]}
+									: agentMergePending
+										? "ממתין לסיום הטיפול של הסוכן"
+										: REVIEW_LABELS[status]}
 							</h3>
 							<p>
 								{item.state === "merged"
 									? "השינויים והיסטוריית המיזוג נשמרו במסד הנתונים."
-									: "במיזוג ייבדק שהנתונים עדיין תואמים להשוואה. כל השינויים יוחלו יחד, או שלא יוחל אף שינוי."}
+									: agentMergePending
+										? "המעבר שהתבקש מהסוכן עדיין פתוח. אפשר למזג לאחר סיומו או להסיר את השיוך לסוכן."
+										: "במיזוג ייבדק שהנתונים עדיין תואמים להשוואה. כל השינויים יוחלו יחד, או שלא יוחל אף שינוי."}
 							</p>
 							{item.state === "open" && (
 								<div className="contribution-form-actions">
@@ -691,6 +703,7 @@ function Detail({
 										type="button"
 										disabled={
 											busy ||
+											agentMergePending ||
 											incompatible ||
 											Boolean(item.domainConflict) ||
 											!["approved", "exempt"].includes(status)
@@ -720,28 +733,12 @@ function Detail({
 							))}
 						</details>
 					)}
-					{generate.error && (
-						<div className="contribution-error" role="alert">
-							{generate.error.message}
-						</div>
-					)}
-					{item.kind === "issue" && <LocalGenerationStatus item={item} />}
-					{generate.data && (
-						<div role="status" className="contribution-card-body">
-							נוצרו {generate.data.length} הצעות שינוי. כל אחת ממתינה לאישור
-							doradsoft.
-						</div>
-					)}
+					<AgentWorkStatus item={item} agents={agents} />
 				</div>
 				<aside className="contribution-sidebar">
 					<section>
 						<h3>אחראי</h3>
-						<AssignmentForm
-							key={JSON.stringify(item.assignee)}
-							item={item}
-							busy={busy}
-							act={act}
-						/>
+						<AssignmentForm item={item} agents={agents} busy={busy} act={act} />
 					</section>
 					{item.kind === "pr" && (
 						<section>
@@ -758,6 +755,28 @@ function Detail({
 							)}
 						</section>
 					)}
+					{isAgentAssigned(item) && item.state === "open" && (
+						<section>
+							<h3>טיפול הסוכן</h3>
+							<p className="contribution-muted">
+								השיוך מפעיל עבודה אוטומטית. תגובות אנושיות חדשות ב-PR נשלחות
+								לסוכן להמשך טיפול.
+							</p>
+							<button
+								className="contribution-button"
+								type="button"
+								disabled={busy || agentPending}
+								onClick={() => void act("run_agent")}
+							>
+								הפעלה נוספת
+							</button>
+							<p>
+								<Link className="contribution-link" to="/contribution-agents">
+									ניהול סוכנים
+								</Link>
+							</p>
+						</section>
+					)}
 					{item.kind === "issue" && item.state === "open" && (
 						<section>
 							<h3>פתרון הפנייה</h3>
@@ -768,44 +787,6 @@ function Detail({
 							>
 								פתיחת PR ידנית
 							</Link>
-							{["local_llm", "aws_llm"].includes(item.assignee.kind) && (
-								<>
-									<button
-										type="button"
-										className="contribution-button primary"
-										disabled={
-											busy ||
-											generate.isPending ||
-											localPending ||
-											!providerReady ||
-											item.evidence.length === 0
-										}
-										onClick={() =>
-											item.assignee.kind === "local_llm"
-												? void act("queue_generation")
-												: generate.mutate()
-										}
-									>
-										{item.assignee.kind === "local_llm"
-											? localPending
-												? "העובד המקומי מטפל בפנייה"
-												: "שליחה לעובד מקומי"
-											: generate.isPending
-												? "מכין הצעות..."
-												: `יצירת PRs עם ${assigneeLabel(item.assignee)}`}
-									</button>
-									{!providerReady && (
-										<p className="contribution-muted">
-											הספק שנבחר עדיין לא מוגדר בשרת.
-										</p>
-									)}
-									{item.evidence.length === 0 && (
-										<p className="contribution-muted">
-											נדרש לצרף מקור לפני יצירה.
-										</p>
-									)}
-								</>
-							)}
 						</section>
 					)}
 					{(linkedIssue || linked.length > 0) && (
@@ -896,15 +877,21 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 				? 2000
 				: false,
 	});
+	const agents = useQuery({
+		queryKey: ["contributions", "agents"],
+		queryFn: () => getContributionAgents(),
+	});
 	const catalogue = useQuery({
 		queryKey: ["contributions", "catalogue"],
 		queryFn: () => getContributionCatalogue(),
 		enabled: search.id === "new" || Boolean(editing),
 	});
+	const needsLinkedIssue =
+		kind === "pr" && search.id === "new" && Boolean(search.issueId);
 	const issue = useQuery({
 		queryKey: ["contribution", search.issueId],
 		queryFn: () => getContribution({ data: search.issueId as string }),
-		enabled: Boolean(search.issueId),
+		enabled: needsLinkedIssue,
 	});
 	const refresh = () => {
 		void queryClient.invalidateQueries({ queryKey: ["contributions"] });
@@ -925,7 +912,10 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 				? mergeContributionItem({ data })
 				: updateContributionItem({ data });
 		},
-		onSuccess: refresh,
+		onSuccess: (updated) => {
+			queryClient.setQueryData(["contribution", updated.id], updated);
+			refresh();
+		},
 	});
 	const act = async (action: string, extra?: Record<string, unknown>) => {
 		setActionError("");
@@ -982,16 +972,25 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 					<WorkflowIcon kind="pr" /> Pull requests{" "}
 					<span className="contribution-count">{counts.prs}</span>
 				</Link>
+				<Link to="/contribution-agents">סוכנים</Link>
 			</div>
 			{(list.error ||
 				detail.error ||
 				catalogue.error ||
+				(needsLinkedIssue && issue.error) ||
 				session.error ||
+				agents.error ||
 				actionError) && (
 				<div className="contribution-error" role="alert">
 					{actionError ||
-						(list.error ?? detail.error ?? catalogue.error ?? session.error)
-							?.message}
+						(
+							list.error ??
+							detail.error ??
+							catalogue.error ??
+							(needsLinkedIssue ? issue.error : null) ??
+							session.error ??
+							agents.error
+						)?.message}
 					<button
 						type="button"
 						className="contribution-button"
@@ -1029,12 +1028,15 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 							</p>
 						</div>
 					</div>
-					{catalogue.data ? (
+					{catalogue.data && (!needsLinkedIssue || issue.data) ? (
 						<div className="contribution-card">
 							<div className="contribution-card-body">
 								<ContributionComposer
-									key={editing ? editing.id : `new:${kind}`}
+									key={
+										editing ? editing.id : `new:${kind}:${search.issueId ?? ""}`
+									}
 									kind={kind}
+									agents={agents.data ?? []}
 									initial={editing ?? undefined}
 									linkedIssue={issue.data}
 									catalogue={catalogue.data}
@@ -1049,9 +1051,9 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 								/>
 							</div>
 						</div>
-					) : (
+					) : !catalogue.error && !(needsLinkedIssue && issue.error) ? (
 						<p role="status">טוען נתונים לטופס...</p>
-					)}
+					) : null}
 				</>
 			) : search.id ? (
 				item ? (
@@ -1059,6 +1061,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 						key={item.id}
 						item={item}
 						all={all}
+						agents={agents.data ?? []}
 						actor={session.data}
 						busy={mutation.isPending}
 						act={act}

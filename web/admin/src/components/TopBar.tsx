@@ -120,6 +120,13 @@ function AdminLinks() {
 			<Link to="/tanahpedia" className={linkClass} activeProps={activeLink}>
 				תנכפדיה
 			</Link>
+			<Link
+				to="/contribution-agents"
+				className={linkClass}
+				activeProps={activeLink}
+			>
+				סוכנים
+			</Link>
 		</>
 	);
 }

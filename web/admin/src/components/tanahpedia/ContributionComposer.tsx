@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import type { ContributionAgentSummary } from "~/lib/tanahpedia/contribution-agents";
 import {
 	CONTRIBUTION_RECORDS,
 	isContributionRecordKind,
@@ -46,10 +47,12 @@ export function AssigneePicker({
 	value,
 	onChange,
 	disabled = false,
+	agents = [],
 }: {
 	value: Assignee;
 	onChange: (assignee: Assignee) => void;
 	disabled?: boolean;
+	agents?: ContributionAgentSummary[];
 }) {
 	return (
 		<div className="contribution-source-fields">
@@ -90,6 +93,37 @@ export function AssigneePicker({
 						}
 						placeholder="לדוגמה doradsoft"
 					/>
+				</label>
+			)}
+			{(value.kind === "local_llm" || value.kind === "aws_llm") && (
+				<label>
+					סוכן מטפל
+					<select
+						className="contribution-input"
+						aria-label="סוכן מטפל"
+						value={value.agentId ?? ""}
+						disabled={disabled}
+						onChange={(event) =>
+							onChange({
+								kind: value.kind,
+								...(event.target.value ? { agentId: event.target.value } : {}),
+							})
+						}
+					>
+						<option value="">סוכן ברירת המחדל</option>
+						{agents
+							.filter((agent) => agent.provider === value.kind)
+							.map((agent) => (
+								<option
+									key={agent.id}
+									value={agent.id}
+									disabled={!agent.enabled}
+								>
+									{agent.name}
+									{agent.enabled ? "" : " (מושבת)"}
+								</option>
+							))}
+					</select>
 				</label>
 			)}
 		</div>
@@ -527,6 +561,7 @@ export function ContributionComposer({
 	busy,
 	onSubmit,
 	onCancel,
+	agents,
 }: {
 	kind: "issue" | "pr";
 	initial?: Contribution;
@@ -535,6 +570,7 @@ export function ContributionComposer({
 	busy: boolean;
 	onSubmit: (value: ComposeContribution) => Promise<void>;
 	onCancel: () => void;
+	agents?: ContributionAgentSummary[];
 }) {
 	const formId = useId();
 	const [title, setTitle] = useState(
@@ -563,8 +599,13 @@ export function ContributionComposer({
 				event.preventDefault();
 				setError("");
 				try {
+					const preserveMigratedEmptySequence =
+						initial?.kind === "pr" &&
+						initial.apiMigration?.status === "succeeded" &&
+						initial.changes.length === 0 &&
+						changes.length === 0;
 					const inputs =
-						kind === "pr"
+						kind === "pr" && !preserveMigratedEmptySequence
 							? validateChanges(
 									changes.map((change) => ({
 										kind: change.kind,
@@ -637,7 +678,19 @@ export function ContributionComposer({
 					}
 				/>
 			</label>
-			<AssigneePicker value={assignee} onChange={setAssignee} disabled={busy} />
+			<AssigneePicker
+				value={assignee}
+				onChange={setAssignee}
+				disabled={busy}
+				agents={agents}
+			/>
+			{(assignee.kind === "local_llm" || assignee.kind === "aws_llm") && (
+				<p className="contribution-muted" role="note">
+					שמירת השיוך מפעילה את הסוכן. הוא יקרא את{" "}
+					{kind === "pr" ? "ההצעה, השינויים והדיון" : "הפנייה, המקורות והדיון"}{" "}
+					ויכין שינויים לסקירה.
+				</p>
+			)}
 			<fieldset className="contribution-fieldset">
 				<legend>ראיות ומקורות</legend>
 				<div className="contribution-source-fields">

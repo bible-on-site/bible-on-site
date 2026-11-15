@@ -188,6 +188,16 @@ export function ensureContributionMigrationsStarted(): void {
 	if (startup) return;
 	startup = migrateOpenContributionPrs()
 		.then(async () => {
+			const { refreshRegisteredContributionAgents } = await import(
+				"./contribution-agent-registry.server"
+			);
+			await refreshRegisteredContributionAgents();
+			const {
+				reconcileContributionAgentAssignments,
+				ensureContributionAgentRuntimeStarted,
+			} = await import("./contribution-agent-runtime.server");
+			await reconcileContributionAgentAssignments();
+			ensureContributionAgentRuntimeStarted();
 			const { ensureContributionRebasesStarted } = await import(
 				"./contribution-rebase-runtime.server"
 			);

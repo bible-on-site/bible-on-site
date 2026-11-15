@@ -15,11 +15,57 @@ import { expect, test } from "../util/test-fixture";
 
 async function capture(page: Page, info: TestInfo, name: string) {
 	const path = info.outputPath(`${name}.png`);
+	await page.evaluate(() => window.scrollTo(0, 0));
 	await page.screenshot({ path, fullPage: true });
 	await info.attach(name, { path, contentType: "image/png" });
 }
 
 test.describe("Issues and typed pull requests", () => {
+	test("registers and configures a versioned agent on an existing runtime", async ({
+		page,
+	}, testInfo) => {
+		const name = `סוכן בדיקה ${randomUUID()}`;
+		await page.goto("/contribution-agents");
+		await expect(
+			page.getByRole("article", { name: "Local LLM", exact: true }),
+		).toBeVisible();
+		const install = page.getByRole("form", {
+			name: "התקנת הגדרת סוכן",
+			exact: true,
+		});
+		await install.getByLabel("שם הסוכן", { exact: true }).fill(name);
+		await install.getByLabel("מודל", { exact: true }).fill("test-local");
+		await install
+			.getByRole("button", { name: "התקנת הגדרה", exact: true })
+			.click();
+		const agent = page.getByRole("article", { name, exact: true });
+		await expect(agent).toBeVisible();
+		await expect(
+			agent.getByText("ההוראות והכלים מעודכנים", { exact: true }),
+		).toBeVisible();
+		await agent.getByLabel("סוכן פעיל", { exact: true }).uncheck();
+		await agent
+			.getByRole("button", { name: "שמירת הגדרות הסוכן", exact: true })
+			.click();
+		await expect(
+			agent.getByText("הגדרת הסוכן עודכנה", { exact: true }),
+		).toBeVisible();
+		await page.reload();
+		await expect(agent.getByLabel("מודל", { exact: true })).toHaveValue(
+			"test-local",
+		);
+		await expect(
+			agent.getByLabel("סוכן פעיל", { exact: true }),
+		).not.toBeChecked();
+		await capture(page, testInfo, "versioned-agent-configuration");
+		await page.setViewportSize({ width: 390, height: 844 });
+		await capture(page, testInfo, "versioned-agent-configuration-mobile");
+		expect(
+			await page.evaluate(
+				() => document.documentElement.scrollWidth <= innerWidth,
+			),
+		).toBe(true);
+	});
 	test("reviews a cross-category proposal with dates, names, sources and alias routing", async ({
 		page,
 	}, testInfo) => {
@@ -196,7 +242,7 @@ test.describe("Issues and typed pull requests", () => {
 			page.getByRole("combobox", { name: "תפקיד ההורה", exact: true }),
 		).toBeVisible();
 	});
-	test("a workstation worker turns a queued issue into a model-authored PR requiring review", async ({
+	test("assignment starts a workstation implementation and human PR comments trigger another reviewed pass", async ({
 		page,
 	}, testInfo) => {
 		const title = `הפקה מקומית ${randomUUID()}`;
@@ -221,11 +267,8 @@ test.describe("Issues and typed pull requests", () => {
 		await expect(page.getByRole("heading", { level: 1 })).toContainText(title);
 		const issueId = new URL(page.url()).searchParams.get("id");
 		if (!issueId) throw new Error("Created issue ID missing");
-		await page
-			.getByRole("button", { name: "שליחה לעובד מקומי", exact: true })
-			.click();
 		await expect(
-			page.getByText("ממתין לעובד בתחנת העבודה", { exact: true }),
+			page.getByText("העבודה נמצאת בתור", { exact: true }),
 		).toBeVisible();
 		let inferenceCalls = 0;
 		const ollama = createServer(async (request, response) => {
@@ -242,32 +285,66 @@ test.describe("Issues and typed pull requests", () => {
 				return;
 			}
 			inferenceCalls++;
+			const { context, turns } = JSON.parse(input.messages[1].content);
+			const issue = context.item.kind === "issue";
+			const action =
+				!issue && turns.length === 0
+					? {
+							action: "tool",
+							name: "discussion",
+							arguments: { source: "item" },
+						}
+					: {
+							action: "complete",
+							result: issue
+								? {
+										outcome: "implemented",
+										summary: "נוצרה הצעה לסקירת אדם",
+										responses: [],
+										pullRequests: [
+											{
+												title: "ערך לאברם לפי המקור",
+												description: "מטא-נתונים עם מקור; ללא טקסט לערך.",
+												evidenceIndexes: [0],
+												changes: [
+													{
+														kind: "entry",
+														after: {
+															title: "אברם",
+															uniqueName: `worker-${randomUUID()}`,
+															entityType: "PERSON",
+															displayName: "אברם",
+														},
+													},
+												],
+											},
+										],
+									}
+								: {
+										outcome: "revised",
+										summary: "תיאור ההצעה עודכן לפי ההערה",
+										responses: context.pendingCommentIds.map(
+											(commentId: string) => ({
+												commentId,
+												status: "addressed",
+												body: "תיאור ההצעה עודכן; ההערה המקורית נשמרת",
+											}),
+										),
+										draft: {
+											description:
+												"התיאור תוקן בעקבות תגובת האדם, ונדרשת סקירה מחודשת.",
+										},
+									},
+						};
+			if (!issue && turns.length)
+				expect(JSON.stringify(turns)).toContain(
+					"יש להסביר שההצעה עוסקת במטא-נתונים בלבד",
+				);
 			response.setHeader("Content-Type", "application/json");
 			response.end(
 				JSON.stringify({
 					model: "doradsoft",
-					message: {
-						content: JSON.stringify({
-							pullRequests: [
-								{
-									title: "ערך לאברם לפי המקור",
-									description: "מטא-נתונים עם מקור; ללא טקסט לערך.",
-									evidenceIndexes: [0],
-									changes: [
-										{
-											kind: "entry",
-											after: {
-												title: "אברם",
-												uniqueName: `worker-${randomUUID()}`,
-												entityType: "PERSON",
-												displayName: "אברם",
-											},
-										},
-									],
-								},
-							],
-						}),
-					},
+					message: { content: JSON.stringify(action) },
 				}),
 			);
 		});
@@ -281,28 +358,30 @@ test.describe("Issues and typed pull requests", () => {
 			const script = fileURLToPath(
 				new URL("../../../../devops/contribution-worker.mjs", import.meta.url),
 			);
-			const { stdout } = await promisify(execFile)(
-				process.execPath,
-				[
-					script,
-					"--once",
-					"--dev",
-					"--origin",
-					"http://localhost:3101",
-					"--ollama",
-					`http://127.0.0.1:${address.port}`,
-					"--model",
-					"test-local",
-					"--issue",
-					issueId,
-				],
-				{ timeout: 15000, windowsHide: true },
-			);
+			const run = async (contributionId: string) =>
+				await promisify(execFile)(
+					process.execPath,
+					[
+						script,
+						"--once",
+						"--dev",
+						"--origin",
+						"http://localhost:3101",
+						"--ollama",
+						`http://127.0.0.1:${address.port}`,
+						"--model",
+						"test-local",
+						"--issue",
+						contributionId,
+					],
+					{ timeout: 15000, windowsHide: true },
+				);
+			const { stdout } = await run(issueId);
 			expect(stdout).toContain("completed");
 			expect(stdout).not.toContain("ויולד את אברם");
 			expect(inferenceCalls).toBe(1);
 			await expect(
-				page.getByText("העובד המקומי יצר הצעות לסקירה", { exact: true }),
+				page.getByText("הסוכן סיים את העבודה", { exact: true }),
 			).toBeVisible();
 			await capture(page, testInfo, "workstation-generation-completed");
 			await page
@@ -317,6 +396,56 @@ test.describe("Issues and typed pull requests", () => {
 			await page.getByRole("tab", { name: "שינויים 1", exact: true }).click();
 			await expect(page.getByRole("table")).toContainText("אברם");
 			await capture(page, testInfo, "workstation-model-pr-review-gate");
+			const prId = new URL(page.url()).searchParams.get("id");
+			if (!prId) throw new Error("Generated PR ID missing");
+			await page.getByLabel("אחראי", { exact: true }).selectOption("local_llm");
+			await page
+				.getByRole("button", { name: "שמירת שיוך והפעלת סוכן", exact: true })
+				.click();
+			await page.getByRole("tab", { name: /^תיאור ודיון/ }).click();
+			await page
+				.getByLabel("הוספת תגובה", { exact: true })
+				.fill("יש להסביר שההצעה עוסקת במטא-נתונים בלבד");
+			await page
+				.getByRole("button", { name: "שליחת תגובה", exact: true })
+				.click();
+			await expect(
+				page.getByText("יש להסביר שההצעה עוסקת במטא-נתונים בלבד", {
+					exact: true,
+				}),
+			).toBeVisible();
+			await expect(
+				page.getByRole("button", { name: "הפעלה נוספת", exact: true }),
+			).toBeDisabled();
+			await expect(
+				page.getByRole("heading", {
+					name: "ממתין לסיום הטיפול של הסוכן",
+					exact: true,
+				}),
+			).toBeVisible();
+			await capture(page, testInfo, "agent-comment-pass-pending");
+			const revision = await run(prId);
+			expect(revision.stdout).toContain("completed");
+			await expect(
+				page.getByText("תיאור ההצעה עודכן; ההערה המקורית נשמרת", {
+					exact: true,
+				}),
+			).toBeVisible();
+			expect(inferenceCalls).toBe(3);
+			await expect(
+				page.getByText("יש להסביר שההצעה עוסקת במטא-נתונים בלבד", {
+					exact: true,
+				}),
+			).toBeVisible();
+			await expect(
+				page.getByText("התיאור תוקן בעקבות תגובת האדם, ונדרשת סקירה מחודשת.", {
+					exact: true,
+				}),
+			).toBeVisible();
+			await expect(
+				page.getByRole("button", { name: "מיזוג PR", exact: true }),
+			).toBeDisabled();
+			await capture(page, testInfo, "agent-human-comment-resolution");
 			await page
 				.getByRole("button", { name: "סגירה ללא מיזוג", exact: true })
 				.click();
@@ -361,11 +490,20 @@ test.describe("Issues and typed pull requests", () => {
 					.getByLabel("שם משתמש אחראי", { exact: true })
 					.fill("doradsoft");
 			await page
-				.getByRole("button", { name: "שמירת שיוך", exact: true })
+				.getByRole("button", {
+					name:
+						kind === "local_llm" || kind === "aws_llm"
+							? "שמירת שיוך והפעלת סוכן"
+							: "שמירת שיוך",
+					exact: true,
+				})
 				.click();
-			await expect(page.locator(".contribution-event").last()).toContainText(
-				"שינה שיוך",
-			);
+			await expect(
+				page
+					.locator(".contribution-event")
+					.filter({ hasText: "שינה שיוך" })
+					.last(),
+			).toBeVisible();
 			await page.reload();
 			await expect(page.getByLabel("אחראי", { exact: true })).toHaveValue(kind);
 		}

@@ -1,4 +1,9 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { refreshRegisteredContributionAgents } from "./contribution-agent-registry.server";
+import {
+	notifyContributionAgentWork,
+	reconcileContributionAgentAssignments,
+} from "./contribution-agent-runtime.server";
 import { migrateOpenContributionPrs } from "./contribution-migrations.server";
 
 export const MIGRATION_AUDIENCE = "tanahpedia:contributions:api-migrations";
@@ -44,7 +49,14 @@ export async function handleContributionMigrationRequest(
 		return new Response("Unauthorized", { status: 401, headers });
 	}
 	try {
-		return Response.json(await migrateOpenContributionPrs(), { headers });
+		const migration = await migrateOpenContributionPrs();
+		const agents = await refreshRegisteredContributionAgents();
+		const work = await reconcileContributionAgentAssignments();
+		notifyContributionAgentWork();
+		return Response.json(
+			{ ...migration, agents: { ...agents, ...work } },
+			{ headers },
+		);
 	} catch {
 		// Infrastructure failure must fail CD; proposal incompatibilities are
 		// counted in a successful response after their gray state is persisted.

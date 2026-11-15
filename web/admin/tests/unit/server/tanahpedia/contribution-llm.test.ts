@@ -40,8 +40,12 @@ vi.mock("~/server/tanahpedia/contribution-service.server", () => ({
 	createContribution: mocks.create,
 }));
 
+import { buildContributionAgentBundle } from "~/server/tanahpedia/contribution-agent-bundle.server";
+import { contributionAgentResultSchema } from "~/server/tanahpedia/contribution-agent-output.server";
+import { contributionAgentActionSchema } from "~/server/tanahpedia/contribution-agent-protocol";
 import {
 	assertGeneratedReferences,
+	awsGenerate,
 	contributionLlmStatus,
 	contributionOutputSchema,
 	contributionSystemPrompt,
@@ -81,6 +85,50 @@ function localOutput(output: unknown) {
 }
 
 describe("issue-to-PR LLM generation", () => {
+	it.each(["queued", "running", "completed"] as const)(
+		"does not bypass the registry through legacy generation for a %s assigned-agent job",
+		async (status) => {
+			issue.generation = {
+				id: ID,
+				status,
+				task: "issue_implementation",
+				requestedAt: "now",
+				requestedBy: "editor",
+				attempts: 0,
+				apiVersion: 4,
+				worker: null,
+				model: null,
+				leaseHash: null,
+				leaseExpiresAt: null,
+				claimedVersion: null,
+				contextHash: null,
+				outputHash: null,
+				prIds: [],
+				error: null,
+			};
+			await expect(generateContributionPrs(input)).rejects.toThrow(
+				"assigned-agent work",
+			);
+			expect(mocks.fetch).not.toHaveBeenCalled();
+			expect(mocks.send).not.toHaveBeenCalled();
+			expect(mocks.create).not.toHaveBeenCalled();
+		},
+	);
+	it("retains every issue comment rather than silently dropping the oldest after twenty", async () => {
+		issue.events = Array.from({ length: 25 }, (_, index) => ({
+			id: `${ID}-${index}`,
+			kind: "comment",
+			actor: issue.author,
+			body: `Comment ${index}`,
+			at: "now",
+			revision: 1,
+		}));
+		const prepared = await prepareContributionGeneration(input);
+		const discussion = JSON.parse(prepared.user).issue.comments;
+		expect(discussion).toHaveLength(25);
+		expect(discussion[0]).toBe("Comment 0");
+		expect(discussion[24]).toBe("Comment 24");
+	});
 	it("reports absent provider configuration without inventing a model", () => {
 		vi.stubEnv("LOCAL_LLM_MODEL", undefined);
 		vi.stubEnv("BEDROCK_MODEL_ID", undefined);
@@ -611,6 +659,34 @@ describe("issue-to-PR LLM generation", () => {
 			isDoradsoft: false,
 		});
 		expect(mocks.destroy).toHaveBeenCalledOnce();
+	});
+	it("passes the same closed tool and outcome schemas through Bedrock Converse without flattening them", async () => {
+		const current = { ...issue, kind: "pr" as const, changes: [] };
+		const schema = contributionAgentActionSchema(
+			buildContributionAgentBundle(),
+			contributionAgentResultSchema(current, {
+				people: [],
+				places: [],
+				entities: [],
+				targets: [],
+				references: {},
+			}),
+		);
+		const signal = new AbortController().signal;
+		await awsGenerate("Versioned instructions", "Current PR feedback", schema, {
+			model: "bedrock-fixture",
+			signal,
+		});
+		const command = mocks.send.mock.calls[0][0].input;
+		expect(
+			JSON.parse(command.outputConfig.textFormat.structure.jsonSchema.schema),
+		).toEqual(schema);
+		expect(mocks.send.mock.calls[0][1].abortSignal).toBe(signal);
+		expect(command.modelId).toBe("bedrock-fixture");
+		const complete = schema.oneOf.find(
+			(branch) => branch.properties.action.const === "complete",
+		);
+		expect(complete).toHaveProperty("properties.result.oneOf");
 	});
 	it("cleans up AWS clients on inference failures", async () => {
 		issue.assignee = { kind: "aws_llm" };

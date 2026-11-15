@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 	detail: vi.fn(),
 	catalogue: vi.fn(),
 	status: vi.fn(),
+	agents: vi.fn(),
 	create: vi.fn(),
 	edit: vi.fn(),
 	update: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock("~/server/tanahpedia/contributions", () => ({
 	getContribution: mocks.detail,
 	getContributionCatalogue: mocks.catalogue,
 	getContributionLlmStatus: mocks.status,
+	getContributionAgents: mocks.agents,
 	createContributionItem: mocks.create,
 	editContributionItem: mocks.edit,
 	updateContributionItem: mocks.update,
@@ -136,6 +138,7 @@ describe("issues and PR administration", () => {
 			mocks.detail,
 			mocks.catalogue,
 			mocks.status,
+			mocks.agents,
 			mocks.create,
 			mocks.edit,
 			mocks.update,
@@ -214,6 +217,7 @@ describe("issues and PR administration", () => {
 		mocks.merge.mockResolvedValue({ ...pr, state: "merged" });
 		mocks.navigate.mockResolvedValue(undefined);
 		mocks.generate.mockResolvedValue([pr]);
+		mocks.agents.mockResolvedValue([]);
 	});
 	afterEach(() => {
 		client?.clear();
@@ -248,7 +252,9 @@ describe("issues and PR administration", () => {
 		});
 		fireEvent.click(screen.getByRole("button", { name: "שליחת תגובה" }));
 		expect(await screen.findByRole("alert")).toHaveTextContent("העדכון נכשל");
-		expect(screen.getByLabelText("הוספת תגובה")).toHaveValue("Retained comment");
+		expect(screen.getByLabelText("הוספת תגובה")).toHaveValue(
+			"Retained comment",
+		);
 	});
 	it("shows migration history and raw sequences for a legacy proposal with no explicit API version", async () => {
 		mocks.search = { id: PRID };
@@ -281,26 +287,15 @@ describe("issues and PR administration", () => {
 		expect(screen.getByText("Original sequence")).toBeInTheDocument();
 		expect(screen.getByText("Recovered sequence")).toBeInTheDocument();
 	});
-	it("shows AWS generation progress until the explicit request completes", async () => {
+	it("never starts work from rendering or background reads", async () => {
 		mocks.search = { id: ID };
 		issue.assignee = { kind: "aws_llm" };
-		let finish: (value: Contribution[]) => void = () => {};
-		mocks.generate.mockReturnValue(
-			new Promise<Contribution[]>((resolve) => {
-				finish = resolve;
-			}),
-		);
 		show();
-		const button = await screen.findByRole("button", {
-			name: "יצירת PRs עם AWS LLM",
-		});
-		await waitFor(() => expect(button).toBeEnabled());
-		fireEvent.click(button);
 		expect(
-			await screen.findByRole("button", { name: "מכין הצעות..." }),
-		).toBeDisabled();
-		finish([pr]);
-		expect(await screen.findByText(/נוצרו 1/)).toBeInTheDocument();
+			await screen.findByRole("button", { name: "הפעלה נוספת" }),
+		).toBeEnabled();
+		expect(mocks.generate).not.toHaveBeenCalled();
+		expect(mocks.update).not.toHaveBeenCalled();
 	});
 	it("cancels a newly opened composer and returns to its queue", async () => {
 		mocks.search = { id: "new" };
@@ -342,16 +337,12 @@ describe("issues and PR administration", () => {
 		);
 	});
 	it.each([
-		["queued", null, "ממתין לעובד בתחנת העבודה"],
-		[
-			"running",
-			new Date(Date.now() + 60000).toISOString(),
-			"המודל המקומי מכין הצעות",
-		],
-		["running", null, "העובד המקומי התנתק - ניתן לשלוח שוב"],
-		["completed", null, "העובד המקומי יצר הצעות לסקירה"],
-		["failed", null, "ההפקה המקומית נכשלה"],
-		["cancelled", null, "בקשת ההפקה בוטלה"],
+		["queued", null, "העבודה נמצאת בתור"],
+		["running", new Date(Date.now() + 60000).toISOString(), "הסוכן מטפל בדיון"],
+		["running", null, "ממתין לעובד זמין להמשך הטיפול"],
+		["completed", null, "הסוכן סיים את העבודה"],
+		["failed", null, "עבודת הסוכן נכשלה"],
+		["cancelled", null, "עבודת הסוכן בוטלה"],
 	])(
 		"shows durable workstation generation state %s",
 		async (status, leaseExpiresAt, label) => {
@@ -384,7 +375,7 @@ describe("issues and PR administration", () => {
 				expect(screen.getByText("local-model")).toBeInTheDocument();
 			if (status === "queued" || (status === "running" && leaseExpiresAt))
 				expect(
-					screen.getByRole("button", { name: "העובד המקומי מטפל בפנייה" }),
+					screen.getByRole("button", { name: "הפעלה נוספת" }),
 				).toBeDisabled();
 		},
 	);
@@ -703,7 +694,9 @@ describe("issues and PR administration", () => {
 		fireEvent.change(screen.getByLabelText("אחראי", { exact: true }), {
 			target: { value: "aws_llm" },
 		});
-		fireEvent.click(screen.getByRole("button", { name: "שמירת שיוך" }));
+		fireEvent.click(
+			screen.getByRole("button", { name: "שמירת שיוך והפעלת סוכן" }),
+		);
 		await waitFor(() =>
 			expect(mocks.update).toHaveBeenCalledWith({
 				data: expect.objectContaining({
@@ -759,6 +752,54 @@ describe("issues and PR administration", () => {
 			}),
 		);
 	});
+	it.each([
+		["queued", null],
+		["running", "2099-01-01T00:00:00Z"],
+		["running", "2000-01-01T00:00:00Z"],
+	] as const)(
+		"blocks an approved PR while the assigned agent pass is %s even if its lease expired",
+		async (status, leaseExpiresAt) => {
+			mocks.search = { id: PRID };
+			pr.assignee = { kind: "local_llm" };
+			pr.events.push({
+				id: "approval",
+				kind: "approved",
+				actor: owner,
+				body: "Approved",
+				at: pr.createdAt,
+				revision: 1,
+			});
+			pr.generation = {
+				id: "job",
+				status,
+				leaseExpiresAt,
+				requestedAt: pr.createdAt,
+				requestedBy: owner.id,
+				attempts: 1,
+				apiVersion: CONTRIBUTION_API_VERSION,
+				worker: null,
+				model: null,
+				leaseHash: null,
+				claimedVersion: null,
+				contextHash: null,
+				outputHash: null,
+				prIds: [],
+				error: null,
+			};
+			show("pr");
+			expect(
+				await screen.findByRole("heading", {
+					name: "ממתין לסיום הטיפול של הסוכן",
+				}),
+			).toBeInTheDocument();
+			const merge = screen.getByRole("button", { name: "מיזוג PR" });
+			expect(merge).toBeDisabled();
+			expect(merge.closest("section")).not.toHaveClass("ready");
+			const rerun = screen.getByRole("button", { name: "הפעלה נוספת" });
+			if (leaseExpiresAt?.startsWith("2000")) expect(rerun).toBeEnabled();
+			else expect(rerun).toBeDisabled();
+		},
+	);
 	it("hides owner approval actions from other editors", async () => {
 		mocks.search = { id: PRID };
 		mocks.session.mockResolvedValue(alice);
@@ -769,81 +810,99 @@ describe("issues and PR administration", () => {
 		).not.toBeInTheDocument();
 		expect(screen.getByRole("button", { name: "מיזוג PR" })).toBeDisabled();
 	});
-	it("generates PRs only through the persisted LLM assignee", async () => {
-		mocks.search = { id: ID };
-		issue.assignee = { kind: "aws_llm" };
-		show();
-		const button = await screen.findByRole("button", {
-			name: "יצירת PRs עם AWS LLM",
-		});
-		await waitFor(() => expect(button).toBeEnabled());
-		fireEvent.click(button);
-		await waitFor(() =>
-			expect(mocks.generate).toHaveBeenCalledWith({
-				data: { id: ID, version: 1 },
-			}),
-		);
-		expect(await screen.findByRole("status")).toHaveTextContent("נוצרו 1");
-	});
-	it("queues workstation generation without invoking a server-side model", async () => {
-		mocks.search = { id: ID };
-		issue.assignee = { kind: "local_llm" };
-		show();
-		fireEvent.click(
-			await screen.findByRole("button", { name: "שליחה לעובד מקומי" }),
-		);
-		await waitFor(() =>
-			expect(mocks.update).toHaveBeenCalledWith({
-				data: expect.objectContaining({
-					id: ID,
-					version: 1,
-					action: "queue_generation",
+	it.each(["local_llm", "aws_llm"] as const)(
+		"offers a secondary rerun for the persisted %s assignment",
+		async (kind) => {
+			mocks.search = { id: ID };
+			issue.assignee = { kind };
+			show();
+			fireEvent.click(
+				await screen.findByRole("button", { name: "הפעלה נוספת" }),
+			);
+			await waitFor(() =>
+				expect(mocks.update).toHaveBeenCalledWith({
+					data: expect.objectContaining({
+						id: ID,
+						version: 1,
+						action: "run_agent",
+					}),
 				}),
-			}),
-		);
-		expect(mocks.generate).not.toHaveBeenCalled();
-	});
-	it("reports provider failures and unconfigured providers", async () => {
-		mocks.search = { id: ID };
-		issue.assignee = { kind: "aws_llm" };
-		mocks.status.mockResolvedValue({
-			local: { enabled: false },
-			aws: { enabled: false },
-		});
-		show();
-		expect(
-			await screen.findByText("הספק שנבחר עדיין לא מוגדר בשרת."),
-		).toBeInTheDocument();
-		expect(
-			screen.getByRole("button", { name: "יצירת PRs עם AWS LLM" }),
-		).toBeDisabled();
-	});
-	it("shows model errors without pretending PRs were generated", async () => {
-		mocks.search = { id: ID };
-		issue.assignee = { kind: "aws_llm" };
-		mocks.generate.mockRejectedValue(new Error("Invalid model output"));
-		show();
-		const button = await screen.findByRole("button", {
-			name: "יצירת PRs עם AWS LLM",
-		});
-		await waitFor(() => expect(button).toBeEnabled());
-		fireEvent.click(button);
-		expect(await screen.findByRole("alert")).toHaveTextContent(
-			"Invalid model output",
-		);
-	});
-	it("requires evidence before generation and exposes human PR creation", async () => {
+			);
+			expect(mocks.generate).not.toHaveBeenCalled();
+		},
+	);
+	it("keeps evidence and manual proposal creation available to an assigned issue", async () => {
 		mocks.search = { id: ID };
 		issue.evidence = [];
 		issue.assignee = { kind: "aws_llm" };
 		show();
 		expect(await screen.findByText(/טרם נוספו מקורות/)).toBeInTheDocument();
 		expect(
-			screen.getByRole("button", { name: "יצירת PRs עם AWS LLM" }),
-		).toBeDisabled();
-		expect(
 			screen.getByRole("link", { name: "פתיחת PR ידנית" }),
 		).toHaveAttribute("href", "/pull-requests?id=new");
+		expect(
+			screen.queryByRole("button", { name: "יצירת PRs עם AWS LLM" }),
+		).not.toBeInTheDocument();
+	});
+	it("shows immutable comment-resolution receipts on a PR and keeps owner review required", async () => {
+		mocks.search = { id: PRID };
+		pr.assignee = { kind: "aws_llm" };
+		pr.events.push(
+			{
+				id: "human-comment",
+				kind: "comment",
+				actor: alice,
+				body: "Keep this original request",
+				at: pr.createdAt,
+				revision: 1,
+			},
+			{
+				id: "response",
+				kind: "agent_response",
+				actor: { ...alice, kind: "aws_llm", name: "Agent" },
+				body: "Updated proposal",
+				at: pr.createdAt,
+				revision: 2,
+				responses: [
+					{
+						commentId: "human-comment",
+						status: "addressed",
+						body: "Corrected the date in the proposal",
+					},
+				],
+				run: {
+					jobId: "job",
+					agentId: "agent",
+					bundleVersion: "v2",
+					model: "model",
+				},
+			},
+		);
+		show("pr");
+		expect(
+			await screen.findByText("Keep this original request"),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText("Corrected the date in the proposal"),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("link", { name: "התייחסות להערה" }),
+		).toHaveAttribute("href", "#contribution-event-human-comment");
+		expect(screen.getByRole("button", { name: "מיזוג PR" })).toBeDisabled();
+		expect(screen.getByText(/תגובה חדשה תפעיל/)).toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText("הוספת תגובה"), {
+			target: { value: "Please check another source" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "שליחת תגובה" }));
+		await waitFor(() =>
+			expect(mocks.update).toHaveBeenCalledWith({
+				data: expect.objectContaining({
+					action: "comment",
+					body: "Please check another source",
+				}),
+			}),
+		);
+		expect(mocks.generate).not.toHaveBeenCalled();
 	});
 	it("renders closed discussions and allows reopening", async () => {
 		mocks.search = { id: ID };
@@ -916,6 +975,130 @@ describe("issues and PR administration", () => {
 			expect(mocks.detail.mock.calls.length).toBeGreaterThan(1),
 		);
 		expect(screen.getByLabelText("הוספת תגובה")).toHaveValue("טיוטה שלא נשלחה");
+	});
+	it("waits for the linked issue before initializing a manual PR's title and evidence", async () => {
+		mocks.search = { id: "new", issueId: ID };
+		let finish: (value: Contribution) => void = () => {};
+		mocks.detail.mockReturnValue(
+			new Promise<Contribution>((resolve) => {
+				finish = resolve;
+			}),
+		);
+		show("pr");
+		expect(await screen.findByText("טוען נתונים לטופס...")).toBeInTheDocument();
+		expect(screen.queryByRole("form")).not.toBeInTheDocument();
+		await waitFor(() => expect(mocks.catalogue).toHaveBeenCalled());
+		finish(issue);
+		expect(await screen.findByLabelText("כותרת")).toHaveValue(issue.title);
+		expect(screen.getByLabelText("הפניה למקור")).toHaveValue("בראשית א א");
+		expect(screen.getByLabelText("ציטוט רלוונטי")).toHaveValue("ציטוט");
+		fireEvent.change(screen.getByLabelText("כותרת"), {
+			target: { value: "My manual draft" },
+		});
+		issue = { ...issue, version: 2, title: "Another editor's issue title" };
+		mocks.detail.mockResolvedValue(issue);
+		await client.invalidateQueries({ queryKey: ["contribution", ID] });
+		expect(screen.getByLabelText("כותרת")).toHaveValue("My manual draft");
+	});
+	it("exposes a linked-issue failure and retries without opening a contextless composer", async () => {
+		mocks.search = { id: "new", issueId: ID };
+		mocks.detail
+			.mockRejectedValueOnce(new Error("Linked issue unavailable"))
+			.mockResolvedValue(issue);
+		show("pr");
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"Linked issue unavailable",
+		);
+		expect(screen.queryByRole("form")).not.toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: "ניסיון נוסף" }));
+		expect(await screen.findByLabelText("כותרת")).toHaveValue(issue.title);
+		expect(screen.getByLabelText("הפניה למקור")).toHaveValue("בראשית א א");
+	});
+	it("preserves a dirty assignment and its base version through a concurrent assignment update", async () => {
+		mocks.search = { id: ID };
+		show();
+		fireEvent.change(await screen.findByLabelText("אחראי", { exact: true }), {
+			target: { value: "human" },
+		});
+		fireEvent.change(screen.getByLabelText("שם משתמש אחראי"), {
+			target: { value: "My unsaved editor" },
+		});
+		issue = { ...issue, version: 2, assignee: { kind: "local_llm" } };
+		await client.invalidateQueries({ queryKey: ["contribution", ID] });
+		expect(
+			await screen.findByText(/הדיון עודכן מאז עריכת השיוך/),
+		).toBeInTheDocument();
+		expect(screen.getByLabelText("אחראי", { exact: true })).toHaveValue(
+			"human",
+		);
+		expect(screen.getByLabelText("שם משתמש אחראי")).toHaveValue(
+			"My unsaved editor",
+		);
+		const save = screen.getByRole("button", { name: "שמירת שיוך" });
+		expect(save).toBeDisabled();
+		fireEvent.submit(save.closest("form") as HTMLFormElement);
+		expect(mocks.update).not.toHaveBeenCalled();
+		fireEvent.click(screen.getByRole("button", { name: "טעינת השיוך העדכני" }));
+		expect(screen.getByLabelText("אחראי", { exact: true })).toHaveValue(
+			"local_llm",
+		);
+		fireEvent.change(screen.getByLabelText("אחראי", { exact: true }), {
+			target: { value: "aws_llm" },
+		});
+		mocks.update.mockImplementation(async ({ data }) => {
+			issue = { ...issue, version: 3, assignee: data.assignee };
+			return issue;
+		});
+		fireEvent.click(
+			screen.getByRole("button", { name: "שמירת שיוך והפעלת סוכן" }),
+		);
+		await waitFor(() =>
+			expect(mocks.update).toHaveBeenCalledWith({
+				data: {
+					id: ID,
+					version: 2,
+					action: "assign",
+					assignee: { kind: "aws_llm" },
+				},
+			}),
+		);
+		await waitFor(() =>
+			expect(
+				screen.queryByText(/הדיון עודכן מאז עריכת השיוך/),
+			).not.toBeInTheDocument(),
+		);
+	});
+	it("follows a refreshed assignment when untouched and keeps a rejected draft when edited", async () => {
+		mocks.search = { id: ID };
+		show();
+		await screen.findByLabelText("אחראי", { exact: true });
+		issue = { ...issue, version: 2, assignee: { kind: "local_llm" } };
+		await client.invalidateQueries({ queryKey: ["contribution", ID] });
+		await waitFor(() =>
+			expect(screen.getByLabelText("אחראי", { exact: true })).toHaveValue(
+				"local_llm",
+			),
+		);
+		expect(
+			screen.queryByText(/הדיון עודכן מאז עריכת השיוך/),
+		).not.toBeInTheDocument();
+		fireEvent.change(screen.getByLabelText("אחראי", { exact: true }), {
+			target: { value: "human" },
+		});
+		fireEvent.change(screen.getByLabelText("שם משתמש אחראי"), {
+			target: { value: "Keep this draft" },
+		});
+		mocks.update.mockRejectedValue(new Error("The saved version changed"));
+		fireEvent.click(screen.getByRole("button", { name: "שמירת שיוך" }));
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"The saved version changed",
+		);
+		expect(screen.getByLabelText("שם משתמש אחראי")).toHaveValue(
+			"Keep this draft",
+		);
+		expect(mocks.update).toHaveBeenCalledWith({
+			data: expect.objectContaining({ version: 2 }),
+		});
 	});
 	it("retains a comment typed while an earlier comment is being submitted", async () => {
 		let complete: (value: Contribution) => void = () => {};
