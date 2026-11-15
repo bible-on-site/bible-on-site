@@ -8,13 +8,10 @@ engines:
   metric:
     enabled: false
   # Executed on a verifier-owned MySQL 8.4 server. T-SQL SET directives,
-  # schema qualification and SQL Server compression do not apply to these
-  # MySQL files — the rollout migration's @-variables and PREPARE-driven DDL
-  # are likewise valid MySQL exercised by bulletin-rollout-mysql.test.ts.
+  # schema qualification and SQL Server compression do not apply to this fixture.
   tsqllint:
     exclude_paths:
       - "devops/github/ci/native-api-fixture-rows.sql"
-      - "data/mysql/tanah_daily_bulletin_rollout_upgrade.sql"
   # Prospector enforces D213 (summary on line two) while the repo's ruff
   # config enforces the contradictory D212 (summary on line one). The repo
   # gate wins; prospector is excluded on these files only — Bandit and the
@@ -62,6 +59,10 @@ exclude_paths:
   - "data/mysql/tanah_daily_bulletin_telegram_upgrade.sql"
   - "data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"
   - "data/mysql/tanah_daily_bulletin_join_upgrade.sql"
+  # Every SQL-dialect engine (tsqllint and the generic parser alike) rejects
+  # this MySQL file's @-variables, PREPARE-driven DDL and INSERT IGNORE; it is
+  # exercised twice against real MySQL by bulletin-rollout-mysql.test.ts.
+  - "data/mysql/tanah_daily_bulletin_rollout_upgrade.sql"
   - "data/mysql/tanah_article_covering_source_upgrade.sql"
   - "data/mysql/tanah_article_link_proposal_upgrade.sql"
   - "data/mysql/tanah_article_hebrew_date_upgrade.sql"
