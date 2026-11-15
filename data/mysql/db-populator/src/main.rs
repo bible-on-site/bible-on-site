@@ -1284,6 +1284,7 @@ mod tests {
     use clap::Parser;
     use sqlx_core::raw_sql::raw_sql;
     use std::env;
+    use std::io::Write;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1497,6 +1498,10 @@ SELECT 1";
         let base_options = MySqlConnectOptions::from_str(&server_url)
             .context("Failed to parse DB_POPULATOR_TEST_DB_URL")?
             .disable_statement_logging();
+        let mut reference_data_file =
+            tempfile::NamedTempFile::new().context("Failed to create reference fixture")?;
+        let mut commentary_data_file =
+            tempfile::NamedTempFile::new().context("Failed to create commentary fixture")?;
         let database_name = format!(
             "tanah_db_populator_test_{}_{}",
             std::process::id(),
@@ -1518,10 +1523,6 @@ SELECT 1";
         .await
         .with_context(|| format!("Failed to create test database '{}'", database_name))?;
         server_conn.close().await.ok();
-
-        let reference_data_path = env::temp_dir().join(format!("{database_name}-references.sql"));
-        let commentary_data_path =
-            env::temp_dir().join(format!("{database_name}-commentaries.sql"));
 
         let test_result = async {
             let mut conn =
@@ -2039,15 +2040,15 @@ SELECT 1";
             // Reference-data seeding is independent of this regression. Keep
             // those populated rows while exercising the real data-only CLI and
             // chunked commentary-import path with the fixture opt-out flag.
-            std::fs::write(&reference_data_path, "SELECT 1;\n")?;
-            std::fs::write(&commentary_data_path,
+            reference_data_file.write_all(b"SELECT 1;\n")?;
+            commentary_data_file.write_all(
                 "INSERT INTO note (perush_id, perek_id, pasuk, note_idx, note_content)
                  SELECT id, 1, 1, 31001, 'data-only imported note' FROM perush
-                 WHERE id = 1 AND BINARY name = BINARY 'אברבנאל';\n")?;
+                 WHERE id = 1 AND BINARY name = BINARY 'אברבנאל';\n".as_bytes())?;
             run(Cli::parse_from([
                 "db-populator", "--db-url", &populate_url, "--skip-structure", "--skip-tanah-test-data",
-                "--tanah-view-data-script", reference_data_path.to_str().context("Non-UTF-8 reference fixture path")?,
-                "--perushim-data-script", commentary_data_path.to_str().context("Non-UTF-8 commentary fixture path")?,
+                "--tanah-view-data-script", reference_data_file.path().to_str().context("Non-UTF-8 reference fixture path")?,
+                "--perushim-data-script", commentary_data_file.path().to_str().context("Non-UTF-8 commentary fixture path")?,
             ])).await?;
             anyhow::ensure!(query_scalar::<MySql, String>("SELECT name FROM perush WHERE id = 1").fetch_one(&mut conn).await? == "אברבנאל", "Data-only import changed the published work identity");
             anyhow::ensure!(query_scalar::<MySql, String>("SELECT name FROM parshan WHERE id = 1").fetch_one(&mut conn).await? == "אברבנאל", "Data-only import changed the published author identity");
@@ -2059,9 +2060,6 @@ SELECT 1";
             Ok::<(), anyhow::Error>(())
         }
         .await;
-
-        std::fs::remove_file(&reference_data_path).ok();
-        std::fs::remove_file(&commentary_data_path).ok();
 
         let mut cleanup_conn = MySqlConnection::connect_with(&base_options.database(""))
             .await

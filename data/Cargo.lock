@@ -1109,6 +1109,7 @@ dependencies = [
  "dotenvy",
  "sqlx-core",
  "sqlx-mysql",
+ "tempfile",
  "tokio",
 ]
 
