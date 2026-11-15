@@ -17,6 +17,7 @@ BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.sqlite
 !BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/*.sqlite.gz
 # iOS: decompressed into the managed asset-pack folder next to Manifest.json.
 BibleOnSite/Platforms/iOS/AssetPacks/perushim-notes/*.sqlite
+BibleOnSite/Platforms/iOS/AssetPacks/perushim-notes-slim/*.sqlite
 
 # xcodebuild derived data for the managed asset-pack downloader extension.
 extensions/AssetPackDownloader/build/

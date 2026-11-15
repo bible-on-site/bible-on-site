@@ -283,6 +283,17 @@ describe("detectChanges", () => {
 		}
 	});
 
+	for (const file of [
+		"devops/github/ci/audit-android-aab-size.mjs",
+		"devops/github/ci/audit-android-aab-size.test.mjs",
+	]) {
+		test(`${file} selects app validation without a release`, () => {
+			for (const [key, flags] of Object.entries(detectChanges([file]))) {
+				assert.deepEqual(flags, { module_changed: false, ci_changed: key === "app" }, key);
+			}
+		});
+	}
+
 	test("mobile matrix workflow changes require app checks without a release", () => {
 		const changes = detectChanges([".github/workflows/app-mobile-e2e.yml"]);
 		assert.deepEqual(changes.app, { module_changed: false, ci_changed: true });
