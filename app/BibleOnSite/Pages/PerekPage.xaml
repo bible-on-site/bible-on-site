@@ -33,8 +33,14 @@
               BackgroundColor="{AppThemeBinding Light=#F2F7FE, Dark=#20304A}">
             <controls:SharedTopBar x:Name="NormalNavigationBar" NavigationAutomationId="ReaderNavigationButton">
                 <controls:SharedTopBar.CenterContent>
-                    <Grid>
+                    <Grid ColumnDefinitions="Auto,*">
+                <Button x:Name="HomePreviewButton" AutomationId="ReaderHomeButton" Text="בית" IsVisible="False"
+                        FontSize="15" FontAttributes="Bold" HeightRequest="40" Padding="12,0" CornerRadius="14"
+                        BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
+                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                        Clicked="OnHomePreviewClicked"/>
                 <Button x:Name="NormalNavigationTitle"
+                   Grid.Column="1"
                    AutomationId="PerekSource"
                    Text="{Binding Source}"
                    FontSize="20"
@@ -51,7 +57,7 @@
                    SemanticProperties.Hint="הקישו לפתיחת החיפוש"
                    ToolTipProperties.Text="חיפוש (Ctrl+F)"
                    Clicked="OnPerekSourceClicked"/>
-                <controls:TappableView x:Name="SearchIntroduction" HorizontalOptions="Fill" VerticalOptions="Center"
+                <controls:TappableView x:Name="SearchIntroduction" Grid.Column="1" HorizontalOptions="Fill" VerticalOptions="Center"
                         Activated="OnPerekSourceClicked"
                         SemanticProperties.Hint="הקישו לפתיחת החיפוש"
                         ToolTipProperties.Text="חיפוש (Ctrl+F)">

@@ -72,6 +72,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupCarouselNavigation();
         SubscribeAppLinks();
         SetupPlatformChrome();
+        ConfigureHomeUxPreview();
         DebugLog.Write("[Startup] PerekPage constructed");
     }
 
@@ -87,6 +88,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         SetupCarouselNavigation();
         SubscribeAppLinks();
         SetupPlatformChrome();
+        ConfigureHomeUxPreview();
     }
 
     /// <summary>
@@ -317,6 +319,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// </summary>
     private void OnPasukimScrolled(object? sender, ItemsViewScrolledEventArgs e)
     {
+        if (sender is BindableObject { BindingContext: Perek current } && current.PerekId == _viewModel.PerekId)
+        {
+            UpdateHomeUxHeader(e.VerticalDelta);
+        }
         _doubleTap.Reset();
         _lastScrollTime = DateTime.Now;
         _longPressTokenSource?.Cancel();
@@ -595,7 +601,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                     // A link is dependent navigation, not a repeated tap:
                     // queue behind any in-flight transition so the
                     // return-to-reader request cannot be deduplicated away.
-                    await ShellAppNavigator.Instance.GoToQueuedAsync(AppRoutes.FlyoutPage(AppRoutes.Perek));
+                    var readerRoute = Config.HomeUxPreview.Enabled
+                        ? AppRoutes.FlyoutPage(AppRoutes.Perek, shell.CurrentState.Location.OriginalString)
+                        : AppRoutes.FlyoutPage(AppRoutes.Perek);
+                    await ShellAppNavigator.Instance.GoToQueuedAsync(readerRoute);
                 }
                 if (generation != _appLinkGeneration)
                 {
@@ -969,7 +978,8 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
         var searching = ChapterSearch.IsSearchOpen;
         Shell.SetNavBarIsVisible(this, false);
-        ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible;
+        ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible &&
+            (!Config.HomeUxPreview.Enabled || _homeUxHeader.IsVisible || selectionBarMode || searching);
         (Shell.Current as AppShell)?.SetPageNavHidden(this, selectionBarMode || searching);
         Shell.SetBackButtonBehavior(this, new BackButtonBehavior { IsVisible = !searching });
         // Selection mode paints the shared accent over the whole band; otherwise
@@ -1183,8 +1193,12 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     }
 
     /// <summary>Feeds the Debug-only תיקון scroll-offset E2E probe (#2624).</summary>
-    private void OnTikkunScrolled(object? sender, ScrolledEventArgs e) =>
+    private void OnTikkunScrolled(object? sender, ScrolledEventArgs e)
+    {
         ReaderScrollTop.NoteScrollOffset(sender, e);
+        UpdateHomeUxHeader(e.ScrollY - _homeUxTikkunOffset);
+        _homeUxTikkunOffset = e.ScrollY;
+    }
 
     /// <summary>Publishes the initial "tsy:0" so the probe is visible at rest (#2624).</summary>
     private void OnTikkunLoaded(object? sender, EventArgs e)
