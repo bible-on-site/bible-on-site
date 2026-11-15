@@ -64,10 +64,12 @@ public sealed class PasukLastLineDirectionTests(ITestOutputHelper output, Mobile
 
     // Analyzes every fully visible PasukText element: rows whose ink stops
     // short of the right edge mean a left-flushed line (the defect); a left
-    // margin means the correct RTL anchor. Only elements that actually render
-    // a short final line qualify, and at least `minimumQualifying` must — a
-    // screen full of edge-to-edge lines would silently prove nothing.
-    private int AssertShortFinalLinesFlushRight(string stage, int minimumQualifying = 2)
+    // margin means the correct RTL anchor. A large empty tail flags a
+    // measure/draw line-count mismatch between UILabel and TextKit. Only
+    // elements that actually render a short final line qualify, and at least
+    // `minimumQualifying` must — a screen full of edge-to-edge lines would
+    // silently prove nothing.
+    private void AssertShortFinalLinesFlushRight(string stage, int minimumQualifying = 2)
     {
         var window = DriverTelemetry.WindowSize(Driver!);
         var qualifying = 0;
@@ -91,21 +93,23 @@ public sealed class PasukLastLineDirectionTests(ITestOutputHelper output, Mobile
                 continue;
             }
             var profile = PasukInkAnalysis.Measure(png);
-            if (!profile.HasShortFinalLine)
+            var preview = text.Length > 24 ? text[..24] + "…" : text;
+            if (profile.HasShortFinalLine)
             {
-                continue;
+                qualifying++;
             }
-            qualifying++;
             if (profile.HasLeftFlushedLine)
             {
-                var preview = text.Length > 24 ? text[..24] + "…" : text;
-                failures.Add($"'{preview}' (ink rows: {profile.InkRows}, right-gap rows: {profile.RightGapRows})");
+                failures.Add($"'{preview}' flushed left (ink rows: {profile.InkRows}, right-gap rows: {profile.RightGapRows})");
+            }
+            if (profile.HasMissingLines)
+            {
+                failures.Add($"'{preview}' left an empty tail (empty tail rows: {profile.EmptyTailRows} of {profile.Height})");
             }
         }
         Assert.True(failures.Count == 0,
-            $"{stage}: {failures.Count} short final pasuk line(s) flushed left instead of anchoring right: {string.Join("; ", failures)}");
+            $"{stage}: {failures.Count} short final pasuk line(s) rendered wrong: {string.Join("; ", failures)}");
         Assert.True(qualifying >= minimumQualifying,
             $"{stage}: only {qualifying} PasukText element(s) rendered a short final line; the check needs at least {minimumQualifying}.");
-        return qualifying;
     }
 }

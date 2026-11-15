@@ -61,6 +61,7 @@ public sealed class PasukInkAnalysisTests
 
         Assert.True(profile.HasShortFinalLine);
         Assert.False(profile.HasLeftFlushedLine);
+        Assert.False(profile.HasMissingLines);
         Assert.Equal(0, profile.RightGapRows);
         Assert.Equal(9, profile.LeftGapRows);
     }
@@ -108,17 +109,58 @@ public sealed class PasukInkAnalysisTests
     }
 
     [Fact]
-    public void StrayAccentRowUnderAJustifiedLineDoesNotTriggerTheDefect()
+    public void StrayAccentRowsUnderAJustifiedLineNeverReadAsLeftFlushed()
     {
-        // A lone cantillation mark under the middle of a justified line can
-        // form a row whose only ink sits mid-line; up to the threshold of such
-        // strays must not read as a left-flushed line.
+        // Cantillation marks under the middle of a justified line form rows
+        // whose only ink sits mid-line. Because they never reach the left
+        // edge they count as left-gap rows, so even a cluster above the old
+        // row threshold cannot fabricate the defect.
         var profile = Measure(100, 40,
             new Line(2, 12, 0, 99),
             new Line(16, 26, 0, 99),
-            new Line(28, 29, 45, 52));
+            new Line(28, 28, 45, 52),
+            new Line(30, 30, 45, 52),
+            new Line(32, 32, 45, 52),
+            new Line(34, 34, 45, 52));
 
+        Assert.Equal(0, profile.RightGapRows);
         Assert.False(profile.HasLeftFlushedLine);
+    }
+
+    [Fact]
+    public void LeftEdgeAccentStrayDoesNotReadAsLeftFlushed()
+    {
+        // A mark under a justified line's leftmost letter does reach the left
+        // edge, but its span is far narrower than any real text line.
+        var profile = Measure(100, 40,
+            new Line(2, 12, 0, 99),
+            new Line(16, 26, 0, 99),
+            new Line(28, 34, 0, 6));
+
+        Assert.Equal(0, profile.RightGapRows);
+        Assert.False(profile.HasLeftFlushedLine);
+    }
+
+    [Fact]
+    public void MultiLineElementWithEmptyTailReportsMissingLines()
+    {
+        // If TextKit lays out fewer lines than the label was measured for, the
+        // drawn text stops high and leaves an empty tail at the bottom.
+        var profile = Measure(100, 60,
+            new Line(2, 12, 0, 99),
+            new Line(16, 26, 0, 99));
+
+        Assert.True(profile.HasMissingLines);
+    }
+
+    [Fact]
+    public void SingleShortLineSkipsTheMissingLineCheck()
+    {
+        // A one-line pasuk element has all its ink in gap rows; even a large
+        // empty tail is not a missing-line signal there.
+        var profile = Measure(100, 60, new Line(10, 24, 50, 99));
+
+        Assert.False(profile.HasMissingLines);
     }
 
     [Fact]

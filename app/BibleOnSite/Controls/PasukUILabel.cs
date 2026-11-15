@@ -18,6 +18,12 @@ namespace BibleOnSite.Controls;
 /// RTL. Measure/arrange still come from UILabel's own sizing; both engines
 /// typeset the same attributed string, so line breaking stays consistent.
 /// </summary>
+/// <remarks>
+/// TextKit splits rendering into a background pass (NSBackgroundColorAttribute
+/// runs — recitation highlighting) and a glyph pass (letters, decorations);
+/// UILabel folds both into its typesetter. DrawText performs both passes in
+/// UITextView order so highlighted spans keep their tint.
+/// </remarks>
 public sealed class PasukUILabel : MauiLabel
 {
     public override void DrawText(CGRect rect)
@@ -59,9 +65,12 @@ public sealed class PasukUILabel : MauiLabel
         textStorage.AddLayoutManager(layoutManager);
         layoutManager.AddTextContainer(textContainer);
         layoutManager.EnsureLayoutForTextContainer(textContainer);
-        layoutManager.DrawGlyphs(
-            layoutManager.GetGlyphRange(textContainer),
-            rect.Location);
+        var glyphRange = layoutManager.GetGlyphRange(textContainer);
+        // DrawGlyphs covers glyphs, attachments and decorations only — span
+        // backgrounds (the active recitation word's tint) need the layout
+        // manager's separate background pass, in the same order UITextView uses.
+        layoutManager.DrawBackground(glyphRange, rect.Location);
+        layoutManager.DrawGlyphs(glyphRange, rect.Location);
     }
 }
 #endif
