@@ -6,7 +6,8 @@
                xmlns:services="clr-namespace:BibleOnSite.Services"
                x:Class="BibleOnSite.Controls.AppDialogPopup"
                x:TypeArguments="services:AppDialogAction"
-               Padding="0" Margin="24" HorizontalOptions="Center">
+               Padding="0" Margin="24" HorizontalOptions="Center"
+               BackgroundColor="Transparent">
     <!--
         The single surface for every app-controlled blocking dialog (#2630):
         surface, radius, padding, title/body/action typography and action
