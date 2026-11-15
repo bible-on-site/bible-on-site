@@ -51,11 +51,13 @@ public class AnalyticsCollectionGuardTests
 
         // The placeholder only works if the project actually injects it for
         // DisableAnalytics builds; pin the wiring so a csproj edit cannot
-        // silently drop the protection.
+        // silently drop the protection. The condition also resolves for
+        // FirebaseEmulator builds (#3185): the suite backend is the only
+        // Firebase traffic those builds may produce.
         var csproj = File.ReadAllText(Path.Join(AppRoot, "BibleOnSite.csproj"));
         Assert.Contains("firebaseAnalyticsCollectionDeactivated=$(FirebaseAnalyticsCollectionDeactivated)", csproj);
         Assert.Contains("$(AndroidManifestPlaceholders);firebaseAnalyticsCollectionDeactivated", csproj);
-        Assert.Contains("'$(DisableAnalytics)' == '' AND '$(Configuration)' == 'Debug'", csproj);
+        Assert.Contains("'$(DisableAnalytics)' == '' AND ('$(Configuration)' == 'Debug' OR '$(FirebaseEmulator)' == 'true')", csproj);
         Assert.Contains("DISABLE_ANALYTICS", csproj);
     }
 
@@ -111,7 +113,11 @@ public class AnalyticsCollectionGuardTests
         var policy = XDocument.Load(Path.Join(AppRoot, "Pages", "TosPage.xaml"));
         var policyLink = Assert.Single(policy.Descendants()
             .Where(e => e.Attribute("AutomationId")?.Value == "PrivacyPolicyLink"));
-        Assert.Contains(policyLink.Descendants(), e => e.Attribute("Tapped")?.Value == "OnPrivacyPolicyTapped");
+        // TappableView wires the handler through Activated rather than a
+        // TapGestureRecognizer's Tapped; accept it on the link element or a descendant.
+        Assert.Contains(policyLink.DescendantsAndSelf(), e =>
+            e.Attribute("Activated")?.Value == "OnPrivacyPolicyTapped" ||
+            e.Attribute("Tapped")?.Value == "OnPrivacyPolicyTapped");
     }
 
     [Fact]

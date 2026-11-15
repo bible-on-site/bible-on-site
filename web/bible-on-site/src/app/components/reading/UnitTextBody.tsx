@@ -1,4 +1,8 @@
 import { Ptuah } from "@/app/929/[number]/components/Ptuha";
+import {
+	RecitationLink,
+	RecitationWordControl,
+} from "@/app/929/[number]/components/RecitationPlayer";
 import { Stuma } from "@/app/929/[number]/components/Stuma";
 import { TanahpediaLink } from "@/app/929/[number]/components/TanahpediaLink";
 import { renderPasukSegmentsWithEntityRefs } from "@/app/929/[number]/components/pasuk-renderer";
@@ -118,6 +122,7 @@ export function UnitTextBody({
 	boundaryMarkers,
 	emphasisMarkerKey,
 	modestPerekLabels,
+	recitationWords,
 }: {
 	ranges: ScriptureRange[];
 	entityRefsByPerek: Record<number, PerekEntityReference[]>;
@@ -147,6 +152,10 @@ export function UnitTextBody({
 	 * Haftarah text, which shares the page with an annotated Torah
 	 * reading (issue #2519). */
 	modestPerekLabels?: boolean;
+	/** Wrap each spoken word in the shared recitation control (issue
+	 * #3259): inside a `RangeRecitationPlayer` the words play and
+	 * highlight, outside one they render plain text unchanged. */
+	recitationWords?: boolean;
 }) {
 	const slices = rangesPerekSlices(ranges, pasukCount);
 	const multiPerek = new Set(slices.map((slice) => slice.perekId)).size > 1;
@@ -161,11 +170,18 @@ export function UnitTextBody({
 	}
 	// Only a coordinate's first slice emits its anchor id — an
 	// intentionally repeated pasuk renders text again, not a second id.
+	// Each rendered copy also gets a 0-based occurrence ordinal: identical
+	// copies share recording timestamps, so the recitation controls use
+	// the ordinal to tap and highlight the right instance.
 	const firstSliceByCoord = new Map<string, number>();
+	const occurrenceByPasuk = new Map<string, number>();
+	const coordCounts = new Map<string, number>();
 	slices.forEach((slice, index) => {
 		for (let pasuk = slice.startPasuk; pasuk <= slice.endPasuk; pasuk++) {
 			const coord = `${slice.perekId}-${pasuk}`;
 			if (!firstSliceByCoord.has(coord)) firstSliceByCoord.set(coord, index);
+			occurrenceByPasuk.set(`${index}-${pasuk}`, coordCounts.get(coord) ?? 0);
+			coordCounts.set(coord, (coordCounts.get(coord) ?? 0) + 1);
 		}
 	});
 	return (
@@ -176,6 +192,7 @@ export function UnitTextBody({
 					slice={slice}
 					sliceIndex={sliceIndex}
 					firstSliceByCoord={firstSliceByCoord}
+					occurrenceByPasuk={occurrenceByPasuk}
 					anchorScope={anchorScope}
 					entityRefs={entityRefsByPerek[slice.perekId] ?? []}
 					resolvePerek={resolvePerek}
@@ -186,6 +203,7 @@ export function UnitTextBody({
 					firstPosition={
 						unitPositionMarkers ? firstPositions[sliceIndex] : undefined
 					}
+					recitationWords={recitationWords}
 				/>
 			))}
 		</>
@@ -196,6 +214,7 @@ function UnitPerekSlice({
 	slice,
 	sliceIndex,
 	firstSliceByCoord,
+	occurrenceByPasuk,
 	anchorScope,
 	entityRefs,
 	resolvePerek,
@@ -204,10 +223,14 @@ function UnitPerekSlice({
 	boundaryMarkers,
 	emphasisMarkerKey,
 	firstPosition,
+	recitationWords,
 }: {
 	slice: PerekSlice;
 	sliceIndex: number;
 	firstSliceByCoord: Map<string, number>;
+	/** `"sliceIndex-pasuk"` → that rendered copy's ordinal among this
+	 * coordinate's copies (0-based, in declared reading order). */
+	occurrenceByPasuk: Map<string, number>;
 	anchorScope?: string;
 	entityRefs: PerekEntityReference[];
 	resolvePerek: UnitTextPerekResolver;
@@ -216,6 +239,7 @@ function UnitPerekSlice({
 	boundaryMarkers?: ReadonlyMap<string, readonly UnitBoundaryMarker[]>;
 	emphasisMarkerKey?: string;
 	firstPosition?: number;
+	recitationWords?: boolean;
 }) {
 	const perek = resolvePerek(slice.perekId);
 	if (!perek) return null;
@@ -344,15 +368,53 @@ function UnitPerekSlice({
 								Ptuah,
 								Stuma,
 								perekStyles.qri,
-								(entryUniqueName, children, key) => (
-									<TanahpediaLink
-										key={key}
-										entryUniqueName={entryUniqueName}
-										className={perekStyles.tanahpediaLink}
-									>
-										{children}
-									</TanahpediaLink>
-								),
+								(entryUniqueName, children, key) =>
+									recitationWords ? (
+										// Keep entity links out of listening mode so
+										// interactive elements never nest — the same
+										// RecitationLink swap the /929 reader uses. The
+										// perek scopes listening mode: a perek without a
+										// recording keeps its links even when sibling
+										// perakim in the section play.
+										<RecitationLink
+											key={key}
+											perek={slice.perekId}
+											link={
+												<TanahpediaLink
+													key={key}
+													entryUniqueName={entryUniqueName}
+													className={perekStyles.tanahpediaLink}
+												>
+													{children}
+												</TanahpediaLink>
+											}
+										>
+											{children}
+										</RecitationLink>
+									) : (
+										<TanahpediaLink
+											key={key}
+											entryUniqueName={entryUniqueName}
+											className={perekStyles.tanahpediaLink}
+										>
+											{children}
+										</TanahpediaLink>
+									),
+								recitationWords
+									? (wrappedPasuk, segment, text) => (
+											<RecitationWordControl
+												perek={slice.perekId}
+												pasuk={wrappedPasuk}
+												segment={segment}
+												occurrence={occurrenceByPasuk.get(
+													`${sliceIndex}-${wrappedPasuk}`,
+												)}
+												plainWhenInactive
+											>
+												{text}
+											</RecitationWordControl>
+										)
+									: undefined,
 							)}{" "}
 						</span>
 					);

@@ -413,9 +413,29 @@ public sealed class RecitationService
             var intervals = ranges ?? (startMs.HasValue ? new List<(double Start, double End)> { (startMs.Value, endMs!.Value) } : null);
             if (intervals != null)
             {
-                var published = track.Words.Select(w => (w.StartMs!.Value, w.EndMs!.Value))
-                    .Concat(track.Words.GroupBy(w => w.Pasuk).Select(g => (g.First().StartMs!.Value, g.Last().EndMs!.Value))).ToHashSet();
-                if (intervals.Count == 0 || intervals.Any(i => !published.Contains(i)))
+                // An interval is approved when it spans a consecutive run of the
+                // track's canonical words: its start lands on a word boundary and
+                // its end on the end of a later word in the same run. That
+                // publishes whole-pasuk spans, mid-verse Masoretic clips and
+                // multi-pasuk slices alike, while a cut inside a word or outside
+                // the track's timings is still rejected.
+                var words = track.Words.OrderBy(w => w.StartMs).ToList();
+                // Timings are millisecond values; sub-microsecond tolerance
+                // keeps exact-match semantics while satisfying fp rules.
+                const double epsilon = 1e-6;
+                bool IsApproved((double Start, double End) interval)
+                {
+                    var first = words.FindIndex(w => Math.Abs(w.StartMs!.Value - interval.Start) < epsilon);
+                    for (var i = first; i >= 0 && i < words.Count && words[i].EndMs <= interval.End + epsilon; i++)
+                    {
+                        if (Math.Abs(words[i].EndMs!.Value - interval.End) < epsilon)
+                        {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                if (intervals.Count == 0 || intervals.Any(i => !IsApproved(i)))
                 {
                     throw new InvalidDataException("Playback must use original approved intervals.");
                 }

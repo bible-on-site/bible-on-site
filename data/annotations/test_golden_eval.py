@@ -357,6 +357,45 @@ class TestResolveArticleMentions(unittest.TestCase):
 
 
 class TestScoreCase(unittest.TestCase):
+    def test_correct_link_requires_span_name_and_type_together(self):
+        rows = [
+            pred_pasuk(0, 0),
+            pred_pasuk(1, 1, name="שאול"),
+            pred_pasuk(2, 2, type_="PLACE"),
+            pred_pasuk(3, 3, name="שאול", type_="PLACE"),
+        ]
+        counts, _ = ge.score_case(rows, [gold((i, i + 1)) for i in range(4)])
+        metrics = ge.finalize(counts)
+        self.assertEqual(metrics["precision"], 1.0)
+        self.assertEqual(metrics["recall"], 1.0)
+        self.assertEqual(counts["link_hit"], 1)
+        self.assertEqual(metrics["link_precision"], 0.25)
+        self.assertEqual(metrics["link_recall"], 0.25)
+        self.assertEqual(metrics["link_f1"], 0.25)
+
+    def test_joint_link_metric_counts_explicit_alternates_but_reports_strict(self):
+        g = gold(
+            (1, 2), name="ירושלים", type_="PLACE",
+            name_alternates=["ירושלם"], type_alternates=["NATION"],
+        )
+        counts, _ = ge.score_case(
+            [pred_pasuk(1, 1, name="ירושלם", type_="NATION")], [g]
+        )
+        metrics = ge.finalize(counts)
+        self.assertEqual(metrics["link_f1"], 1.0)
+        self.assertEqual(metrics["link_f1_strict"], 0.0)
+
+    def test_held_rejected_and_partial_predictions_are_not_correct_links(self):
+        for row in (
+            pred_pasuk(1, 1, acceptance="held"),
+            pred_pasuk(1, 1, acceptance="rejected"),
+            pred_pasuk(1, 2),
+        ):
+            with self.subTest(row=row):
+                counts, _ = ge.score_case([row], [gold((1, 2))])
+                self.assertEqual(counts["link_hit"], 0)
+                self.assertEqual(ge.finalize(counts)["link_recall"], 0.0)
+
     def test_clean_auto_match_is_tp_with_hits(self):
         counts, partials = ge.score_case(
             [pred_pasuk(1, 1, type_="PLACE")], [gold((1, 2), type_="PLACE")]
@@ -543,6 +582,8 @@ class TestFinalize(unittest.TestCase):
                 "type_strict_hit": 1,
                 "name_hit": 3,
                 "name_strict_hit": 3,
+                "link_hit": 2,
+                "link_strict_hit": 1,
                 "held_hit": 0,
                 "held_correct": 0,
                 "rendered_suppressed": 0,
@@ -555,6 +596,12 @@ class TestFinalize(unittest.TestCase):
         self.assertEqual(m["precision"], 0.75)
         self.assertEqual(m["recall"], 0.75)
         self.assertEqual(m["f1"], 0.75)
+        self.assertEqual(m["link_precision"], 0.5)
+        self.assertEqual(m["link_recall"], 0.5)
+        self.assertEqual(m["link_f1"], 0.5)
+        self.assertEqual(m["link_precision_strict"], 0.25)
+        self.assertEqual(m["link_recall_strict"], 0.25)
+        self.assertEqual(m["link_f1_strict"], 0.25)
         self.assertAlmostEqual(m["type_accuracy"], 2 / 3, places=6)
         self.assertAlmostEqual(m["type_accuracy_strict"], 1 / 3, places=6)
         self.assertEqual(m["span_exactness"], 1.0)
@@ -565,6 +612,9 @@ class TestFinalize(unittest.TestCase):
         self.assertIsNone(m["precision"])
         self.assertIsNone(m["recall"])
         self.assertIsNone(m["f1"])
+        for key in ("link_precision", "link_recall", "link_f1",
+                    "link_precision_strict", "link_recall_strict", "link_f1_strict"):
+            self.assertIsNone(m[key])
 
     def test_suppression_counts_emitted_and_unemitted(self):
         counts = collections.Counter(
@@ -702,6 +752,64 @@ class TestDeterministic(unittest.TestCase):
     def test_drops_runtime(self):
         report = {"pasuk": {}, "article": {}, "runtime": {"x": 1}}
         self.assertEqual(ge.deterministic(report), {"pasuk": {}, "article": {}})
+
+
+class TestCustomGoldenDirectory(unittest.TestCase):
+    def test_write_and_check_use_selected_directory(self):
+        report = {"schema": 1, "pasuk": {}, "article": {}, "runtime": {}}
+        with tempfile.TemporaryDirectory() as directory:
+            args = ["golden_eval.py", "--gold-dir", directory, "--write", "--check"]
+            with mock.patch.object(ge, "evaluate", return_value=report), \
+                 mock.patch.object(ge, "print_report"), \
+                 mock.patch.object(ge.sys, "argv", args), \
+                 mock.patch("builtins.print"):
+                ge.main()
+            recorded = json.loads(
+                (Path(directory) / "metrics-baseline.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(recorded, ge.deterministic(report))
+
+
+class TestFrozenValidationSet(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        directory = ge.GOLDEN_DIR / "validation"
+        cls.pasuk = ge.load_golden(directory / "pesukim.json")
+        cls.article = ge.load_golden(directory / "articles.json")
+        cls.sefarim = ge.baseline.load_canonical()
+
+    def test_provisional_curation_is_explicit(self):
+        for payload in (self.pasuk, self.article):
+            self.assertFalse(payload["curation"]["human_reviewed"])
+            self.assertTrue(payload["curation"]["frozen_before_model_comparison"])
+            self.assertEqual(payload["curation"]["status"], "agent-curated-provisional")
+
+    def test_verse_coordinates_are_independent_and_spans_match_source(self):
+        def coordinate(case):
+            return case["sefer"], case.get("additional"), case["perek"], case["pasuk"]
+
+        original = ge.load_golden(ge.GOLDEN_DIR / "pesukim.json")["cases"]
+        self.assertFalse(
+            {coordinate(c) for c in original}
+            & {coordinate(c) for c in self.pasuk["cases"]}
+        )
+        self.assertGreaterEqual(len(self.pasuk["cases"]), 20)
+        for case in self.pasuk["cases"]:
+            perek, _, _ = ge.resolve_pasuk(case, self.sefarim)
+            self.assertEqual(len(ge.resolve_pasuk_mentions(case, perek)), len(case["mentions"]))
+
+    def test_article_spans_and_positive_taxonomy_coverage(self):
+        self.assertGreaterEqual(len(self.article["cases"]), 12)
+        types = set()
+        for case in self.article["cases"]:
+            self.assertEqual(len(ge.resolve_article_mentions(case)), len(case["mentions"]))
+            types.update(m["type"] for m in case["mentions"] if m.get("expected", "auto") == "auto")
+        self.assertEqual(
+            types,
+            {"PERSON", "PLACE", "NATION", "ANIMAL", "PLANT", "OBJECT",
+             "ASTRONOMICAL_OBJECT", "EVENT", "WAR", "SEFER", "SAYING", "PROPHECY",
+             "TEMPLE_TOOL"},
+        )
 
 
 class TestClean(unittest.TestCase):

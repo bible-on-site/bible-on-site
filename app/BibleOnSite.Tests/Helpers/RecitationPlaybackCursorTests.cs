@@ -60,6 +60,16 @@ public class RecitationPlaybackCursorTests
     }
 
     [Fact]
+    public void a_timelineless_clip_drops_the_bookmark_seek()
+    {
+        var cursor = new RecitationPlaybackCursor();
+        cursor.MarkResume(1, 1900);
+        // An unaligned track plays the raw file — there is no word timeline to
+        // map the bookmark into, so no seek is pending.
+        cursor.PendingSeekFor(1, continuous: true, timeline: null).Should().BeNull();
+    }
+
+    [Fact]
     public void the_bookmark_survives_preview_end_and_is_consumed_only_by_a_completed_chapter()
     {
         var cursor = new RecitationPlaybackCursor();

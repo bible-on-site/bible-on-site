@@ -168,6 +168,17 @@ test.describe("Sefer view", () => {
 					'.he-book .page.current-page article span[class$="_word"]',
 				),
 			).toHaveCount(0);
+			// The held fold also exposes the next chapter's commentary panel.
+			// Its batch-loaded choices must arrive before comparing book pixels.
+			await expect(
+				page
+					.locator('.he-book [data-sefer-perush-perek="301"]')
+					.getByRole("button", {
+						name: 'בחירת רש"י',
+						exact: true,
+						includeHidden: true,
+					}),
+			).toBeAttached();
 			const point = await prepareTurnInput(page, "drag");
 			await page.mouse.move(point.x, point.y);
 			await page.mouse.down();
@@ -196,7 +207,14 @@ test.describe("Sefer view", () => {
 					);
 				const heldPose = await pose();
 				const book = page.locator('[class*="bookArea"]');
-				const prepared = await book.screenshot({ animations: "disabled" });
+				// The full book area also covers Next's fixed development indicator.
+				// Exclude framework chrome only during capture; compare all book pixels.
+				const captureBook = () =>
+					book.screenshot({
+						animations: "disabled",
+						style: "nextjs-portal { visibility: hidden !important; }",
+					});
+				const prepared = await captureBook();
 				const restored = await page.evaluate(() => {
 					const nodes: Text[] = [];
 					for (const article of document.querySelectorAll(".he-book article")) {
@@ -227,7 +245,7 @@ test.describe("Sefer view", () => {
 				try {
 					// A missing control must never pass as two identical setups.
 					expect(restored).toBeGreaterThan(100);
-					const original = await book.screenshot({ animations: "disabled" });
+					const original = await captureBook();
 					expect(await pose()).toEqual(heldPose);
 					await testInfo.attach("prepared-page", {
 						body: prepared,

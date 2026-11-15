@@ -31,4 +31,12 @@ public static class PressArming
     /// </summary>
     public static bool IsCandidate(object? bindingContext, ParashaUnit currentUnit) =>
         ReferenceEquals(bindingContext, currentUnit);
+
+    /// <summary>
+    /// Same rule for the masora reader: unit-bound views (the unit header)
+    /// qualify; pasuk rows bind <see cref="MasoraPasukRow"/>, never the unit,
+    /// so they cannot arm here and get Down through their own Touch.
+    /// </summary>
+    public static bool IsCandidate(object? bindingContext, MasoraUnit currentUnit) =>
+        ReferenceEquals(bindingContext, currentUnit);
 }

@@ -1,0 +1,12 @@
+{
+  "enTitle": "Mekhilta d'Rabbi Yishmael",
+  "schema": {
+    "depth": 3,
+    "addressTypes": ["Perek", "Pasuk", "Integer"],
+    "sectionNames": ["Chapter", "Verse", "Paragraph"]
+  },
+  "versions": [[
+    [], [], [], [], [], [], [], [], [], [], [],
+    [["first note", "", "second note"], [], ["third note"]]
+  ]]
+}

@@ -258,6 +258,40 @@ public class ParashaViewModelTests
     }
 
     [Fact]
+    public async Task UnitSwitch_ClearsSelectionFlagsOnLeftUnitRows()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        var unit1 = fixture.Model.Unit!;
+        fixture.Model.ToggleSelectedPasuk(1, 2);
+        unit1.Rows.Where(r => r.Display is not null && r.PerekId == 1 && r.PasukNum == 2)
+            .Should().OnlyContain(r => r.Display!.Pasuk.IsSelected);
+
+        await fixture.Model.NavigateToUnitAsync(2);
+
+        // ClearSelected() can only reach the displayed unit's rows — the flag
+        // on the left unit's cached rows must be cleared by the unit change
+        // itself, or navigating back shows a phantom selection.
+        unit1.Rows.Should().OnlyContain(r => r.Display == null || !r.Display.Pasuk.IsSelected);
+    }
+
+    [Fact]
+    public async Task LoadedPasukim_CachesFullPerekForRecitationBounds()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Model.LoadByUnitIdAsync(1);
+
+        // Recitation bounds checks (track.Matches) hash the whole canonical
+        // perek — the unit's rows can't supply it; the load cache does.
+        fixture.Model.GetLoadedPasukim(1).Should().NotBeNullOrEmpty();
+        fixture.Model.GetLoadedPasukim(2).Should().NotBeNullOrEmpty();
+        fixture.Model.GetLoadedPasukim(999).Should().BeNull();
+    }
+
+    [Fact]
     public async Task GetInitialUnitId_ResolvesLastLearntPerekInsideTorahRange()
     {
         // בראשית ג sits inside unit 1's Torah range (perek 1-3).
@@ -452,7 +486,7 @@ public class ParashaViewModelTests
         fixture.Model.HasPerushim.Should().BeTrue();
         fixture.Model.FilteredPerushim.Should().NotBeEmpty();
 
-        // The selection-menu search narrows the list without hiding entries.
+        // The selection-menu search narrows the bound rows to the match (#3306).
         fixture.Model.PerushNameFilter = "Ramb";
         fixture.Model.FilteredPerushim.Select(p => p.Name).Should().Equal("Ramban");
         fixture.Model.PerushimEmptyMessage.Should().Be("לא נמצאו פירושים תואמים");
@@ -797,6 +831,12 @@ public class ParashaViewModelTests
         await fixture.Model.PreloadAdjacentRowsAsync(1);
         other.Rows.Should().NotBeEmpty();
 
+        // Recitation queries canonical pasukim for every perek a loaded
+        // unit covers — a preloaded-only perek must not come back null.
+        fixture.Model.GetLoadedPasukim(other.TorahRange.EndPerekId)
+            .Should().NotBeNullOrEmpty();
+        fixture.Model.GetLoadedPasukim(999).Should().BeNull();
+
         // A second pass finds everything already loaded — nothing to do.
         await fixture.Model.PreloadAdjacentRowsAsync(1);
 
@@ -804,6 +844,39 @@ public class ParashaViewModelTests
         await fixture.Model.PreloadAdjacentRowsAsync(999);
         await using var unloaded = new Fixture();
         await unloaded.Model.PreloadAdjacentRowsAsync(1); // service not loaded
+    }
+
+    [Fact]
+    public async Task PreloadAdjacentRows_PopulatesTheCanonicalPasukCache()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Parasha.LoadAsync(); // catalogue up, no unit navigated
+
+        fixture.Model.GetLoadedPasukim(1).Should().BeNull();
+
+        await fixture.Model.PreloadAdjacentRowsAsync(1);
+
+        // Recitation track matching hashes canonical pesukim by perek for
+        // any loaded unit — a perek reached only through preload must still
+        // resolve, not come back null (#3261 review).
+        fixture.Model.GetLoadedPasukim(1).Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task ConvenienceCtor_WithoutDedicatedSeams_DelegatesToTheFullOne()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Parasha.LoadAsync();
+
+        var model = new ParashaViewModel(
+            fixture.Parasha,
+            new PerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object)),
+            fixture.Preferences,
+            null, fixture.Notes, null, _ => false, () => 0);
+
+        model.Unit.Should().BeNull();
     }
 
     [Fact]

@@ -143,42 +143,8 @@ public class LongPressBehavior : Behavior<View>
             return;
         }
 
-        lock (_lock)
-        {
-            foreach (var behavior in _activeBehaviors)
-            {
-                // Managed candidacy check first: pasuk rows bind PasukDisplayItem
-                // and can never arm here, so every realized row skips the JNI
-                // hit-tests below. Only perek-bound views (header, tikkun flow)
-                // or pasuk-bound views of this perek reach them.
-                if (!PressArming.IsCandidate(behavior._associatedView?.BindingContext, currentPerek))
-                {
-                    continue;
-                }
-
-                if (behavior._androidView is not { IsShown: true } view)
-                {
-                    continue;
-                }
-
-                var visibleBounds = new Android.Graphics.Rect();
-                if (!view.GetGlobalVisibleRect(visibleBounds) ||
-                    !visibleBounds.Contains((int)rawX, (int)rawY))
-                {
-                    continue;
-                }
-
-                if (!behavior._press.IsPressed)
-                {
-                    var touchSlop = view.Context is { } context
-                        ? Android.Views.ViewConfiguration.Get(context)?.ScaledTouchSlop ?? 12
-                        : 12;
-                    behavior._press.Begin(rawX, rawY, touchSlop);
-                    behavior.StartLongPressTimer();
-                }
-                return;
-            }
-        }
+        ArmPressUnderPoint(rawX, rawY,
+            bindingContext => PressArming.IsCandidate(bindingContext, currentPerek));
     }
 
     /// <summary>Same unreceived-Down arming for the parasha reader's unit-bound views.</summary>
@@ -189,11 +155,33 @@ public class LongPressBehavior : Behavior<View>
             return;
         }
 
+        ArmPressUnderPoint(rawX, rawY,
+            bindingContext => PressArming.IsCandidate(bindingContext, currentUnit));
+    }
+
+    /// <summary>Same unreceived-Down arming for the masora reader's unit-bound views (#3260).</summary>
+    public static void BeginUnreceivedPress(float rawX, float rawY, MasoraUnit? currentUnit)
+    {
+        if (currentUnit == null)
+        {
+            return;
+        }
+
+        ArmPressUnderPoint(rawX, rawY,
+            bindingContext => PressArming.IsCandidate(bindingContext, currentUnit));
+    }
+
+    private static void ArmPressUnderPoint(float rawX, float rawY, Func<object?, bool> isCandidate)
+    {
         lock (_lock)
         {
             foreach (var behavior in _activeBehaviors)
             {
-                if (!PressArming.IsCandidate(behavior._associatedView?.BindingContext, currentUnit))
+                // Managed candidacy check first: pasuk rows bind their own row
+                // type and can never arm here, so every realized row skips the
+                // JNI hit-tests below. Only unit/perek-bound views (header,
+                // tikkun flow) or pasuk-bound views of this unit reach them.
+                if (!isCandidate(behavior._associatedView?.BindingContext))
                 {
                     continue;
                 }

@@ -38,18 +38,27 @@ export function verifyReleaseAssets(release, artifacts, cwd = process.cwd()) {
 		if (!files.length) throw new Error(`No release files for ${artifact.name}`);
 		for (const file of files) {
 			const name = path.basename(file);
-			if (expected.has(name))
+			const bytes = readFileSync(path.join(folder, file));
+			const candidate = {
+				size: bytes.length,
+				digest: `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
+			};
+			const previous = expected.get(name);
+			if (
+				previous &&
+				(previous.size !== candidate.size ||
+					previous.digest !== candidate.digest)
+			)
 				throw new Error(`Duplicate release asset: ${name}`);
-			expected.set(name, readFileSync(path.join(folder, file)));
+			expected.set(name, candidate);
 		}
 	}
 	if (!expected.size) throw new Error("A release requires at least one asset");
-	for (const [name, bytes] of expected) {
+	for (const [name, { size, digest }] of expected) {
 		const asset = release.assets.find((item) => item.name === name);
-		const digest = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
 		if (
 			asset?.state !== "uploaded" ||
-			asset.size !== bytes.length ||
+			asset.size !== size ||
 			(asset.digest && asset.digest !== digest)
 		) {
 			throw new Error(`Incomplete or mismatched release asset: ${name}`);

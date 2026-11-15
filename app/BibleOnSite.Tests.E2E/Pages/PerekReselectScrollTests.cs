@@ -140,6 +140,7 @@ public sealed class PerekReselectScrollTests(OfflineReaderFixture fixture)
     {
         var artifacts = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".artifacts"));
         Directory.CreateDirectory(artifacts);
-        Capture.Element(fixture.MainWindow).ToFile(Path.Join(artifacts, name));
+        using var capture = Capture.Element(fixture.MainWindow);
+        capture.ToFile(Path.Join(artifacts, name));
     }
 }

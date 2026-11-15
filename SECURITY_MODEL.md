@@ -8,7 +8,7 @@ Vulnerability reporting is in [SECURITY.md](SECURITY.md).
 - All attacker profiles below are in scope; none ruled out.
 - No asset is singled out as more critical than its scanner rating.
 - Nothing is out of scope or accepted risk.
-- Scan scope excludes `data/` content/populator, `evidence/`, `pr-*/`.
+- Scan scope excludes `data/` content/populator and `pr-*/`; a repository-root `evidence/` path cannot exist — the Root evidence guard CI job rejects it.
 
 ## Components
 | Component | Code | Trust boundary |

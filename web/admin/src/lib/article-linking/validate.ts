@@ -23,6 +23,9 @@ import type {
 	ProposalEvidence,
 } from "./types";
 
+export const AUTHOR_ATTRIBUTION_POLICY_REASON =
+	"author attribution is fixed on upload/import; link proposals cannot change it";
+
 /** The raw model JSON shape — every field optional/unchecked until validated. */
 export interface RawModelOutput {
 	proposals?: Array<{
@@ -208,19 +211,8 @@ export function normalizeTarget(
 				label: resolved.label,
 			};
 		}
-		case "author": {
-			const authorId = numeral(raw.authorId ?? raw.id);
-			const author = catalogue.authors.find((a) => a.id === authorId);
-			if (!author) {
-				return {
-					heldReason: `author ${String(raw.authorId)} not in catalogue`,
-				};
-			}
-			if (author.id === snapshot.authorId) {
-				return { heldReason: "already the current author" };
-			}
-			return { target: { authorId: author.id }, label: author.name };
-		}
+		case "author":
+			return { heldReason: AUTHOR_ATTRIBUTION_POLICY_REASON };
 		case "coveringSources": {
 			const rawCitations = Array.isArray(raw.citations)
 				? raw.citations
@@ -398,6 +390,15 @@ export function validateModelOutput(
 			malformed += 1;
 			continue;
 		}
+		if (relationshipKey === "author") {
+			// Attribution is supplied by the uploader, never inferred or offered
+			// as a reviewable draft, even when the model provides valid evidence.
+			abstentions.push({
+				relationshipKey,
+				reason: AUTHOR_ATTRIBUTION_POLICY_REASON,
+			});
+			continue;
+		}
 		const entry = relationshipFor(relationshipKey);
 		if (!entry) {
 			drafts.push(
@@ -477,15 +478,18 @@ export function validateModelOutput(
 			);
 			continue;
 		}
-		if (unanchored.length > 0 && evidence.length === 0) {
-			// Every supplied quote fails to anchor in the article text — the
-			// model hallucinated its evidence; hold rather than surface as safe.
+		if (evidence.length === 0) {
+			// Missing, unusable and hallucinated quotes all fail the evidence
+			// requirement; none can become a pending proposal for approval.
+			const evidenceReason = unanchored.length
+				? `evidence not anchored in article text: ${unanchored.slice(0, 2).join(" | ")}`
+				: "proposal carries no anchored evidence from article text";
 			drafts.push(
 				makeHeld(
 					relationshipKey,
 					action,
 					normalized.target,
-					`evidence not anchored in article text: ${unanchored.slice(0, 2).join(" | ")}`,
+					evidenceReason,
 					evidence,
 					rationale,
 					confidence,

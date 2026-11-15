@@ -34,13 +34,11 @@
             <VerticalStackLayout Spacing="0">
 
                 <!-- תצוגה -->
+                <controls:TappableView AutomationId="SettingsDisplayRow"
+                                       SemanticProperties.Description="תצוגה"
+                                       Command="{Binding OpenDisplayCommand}">
                 <Grid ColumnDefinitions="Auto,*,Auto"
-                      Padding="16,14"
-                      AutomationId="SettingsDisplayRow"
-                      SemanticProperties.Description="תצוגה">
-                    <Grid.GestureRecognizers>
-                        <TapGestureRecognizer Command="{Binding OpenDisplayCommand}"/>
-                    </Grid.GestureRecognizers>
+                      Padding="16,14">
                     <Label Text="{x:Static fonts:FluentUI.text_font_size_24_regular}"
                            FontFamily="FluentIcons"
                            FontSize="24"
@@ -63,19 +61,18 @@
                            TextColor="{StaticResource Gray400}"
                            VerticalOptions="Center"/>
                 </Grid>
+                </controls:TappableView>
 
                 <BoxView HeightRequest="1"
                          Margin="0,0,52,0"
                          BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"/>
 
                 <!-- על הפרק -->
+                <controls:TappableView AutomationId="SettingsPerekRow"
+                                       SemanticProperties.Description="על הפרק"
+                                       Command="{Binding OpenPerekCommand}">
                 <Grid ColumnDefinitions="Auto,*,Auto"
-                      Padding="16,14"
-                      AutomationId="SettingsPerekRow"
-                      SemanticProperties.Description="על הפרק">
-                    <Grid.GestureRecognizers>
-                        <TapGestureRecognizer Command="{Binding OpenPerekCommand}"/>
-                    </Grid.GestureRecognizers>
+                      Padding="16,14">
                     <Label Text="{x:Static fonts:FluentUI.calendar_today_24_regular}"
                            FontFamily="FluentIcons"
                            FontSize="24"
@@ -98,19 +95,18 @@
                            TextColor="{StaticResource Gray400}"
                            VerticalOptions="Center"/>
                 </Grid>
+                </controls:TappableView>
 
                 <BoxView HeightRequest="1"
                          Margin="0,0,52,0"
                          BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"/>
 
                 <!-- חבילות הרחבה -->
+                <controls:TappableView AutomationId="SettingsPacksRow"
+                                       SemanticProperties.Description="חבילות הרחבה"
+                                       Command="{Binding OpenExtensionPacksCommand}">
                 <Grid ColumnDefinitions="Auto,*,Auto"
-                      Padding="16,14"
-                      AutomationId="SettingsPacksRow"
-                      SemanticProperties.Description="חבילות הרחבה">
-                    <Grid.GestureRecognizers>
-                        <TapGestureRecognizer Command="{Binding OpenExtensionPacksCommand}"/>
-                    </Grid.GestureRecognizers>
+                      Padding="16,14">
                     <Label Text="{x:Static fonts:FluentUI.puzzle_piece_24_regular}"
                            FontFamily="FluentIcons"
                            FontSize="24"
@@ -134,19 +130,18 @@
                            TextColor="{StaticResource Gray400}"
                            VerticalOptions="Center"/>
                 </Grid>
+                </controls:TappableView>
 
                 <BoxView HeightRequest="1"
                          Margin="0,0,52,0"
                          BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"/>
 
                 <!-- קריינות -->
+                <controls:TappableView AutomationId="RecitationSettingsRow"
+                                       SemanticProperties.Description="קריינות"
+                                       Command="{Binding OpenRecitationCommand}">
                 <Grid ColumnDefinitions="Auto,*,Auto"
-                      Padding="16,14"
-                      AutomationId="RecitationSettingsRow"
-                      SemanticProperties.Description="קריינות">
-                    <Grid.GestureRecognizers>
-                        <TapGestureRecognizer Command="{Binding OpenRecitationCommand}"/>
-                    </Grid.GestureRecognizers>
+                      Padding="16,14">
                     <Label Text="{x:Static fonts:FluentUI.headphones_24_regular}"
                            FontFamily="FluentIcons"
                            FontSize="24"
@@ -169,19 +164,18 @@
                            TextColor="{StaticResource Gray400}"
                            VerticalOptions="Center"/>
                 </Grid>
+                </controls:TappableView>
 
                 <BoxView HeightRequest="1"
                          Margin="0,0,52,0"
                          BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"/>
 
                 <!-- שמע -->
+                <controls:TappableView AutomationId="SettingsSoundRow"
+                                       SemanticProperties.Description="שמע"
+                                       Command="{Binding OpenSoundCommand}">
                 <Grid ColumnDefinitions="Auto,*,Auto"
-                      Padding="16,14"
-                      AutomationId="SettingsSoundRow"
-                      SemanticProperties.Description="שמע">
-                    <Grid.GestureRecognizers>
-                        <TapGestureRecognizer Command="{Binding OpenSoundCommand}"/>
-                    </Grid.GestureRecognizers>
+                      Padding="16,14">
                     <Label Text="{x:Static fonts:FluentUI.speaker_2_24_regular}"
                            FontFamily="FluentIcons"
                            FontSize="24"
@@ -204,19 +198,18 @@
                            TextColor="{StaticResource Gray400}"
                            VerticalOptions="Center"/>
                 </Grid>
+                </controls:TappableView>
 
                 <BoxView HeightRequest="1"
                          Margin="0,0,52,0"
                          BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"/>
 
                 <!-- תמיכה -->
+                <controls:TappableView AutomationId="SettingsSupportRow"
+                                       SemanticProperties.Description="תמיכה"
+                                       Command="{Binding OpenSupportCommand}">
                 <Grid ColumnDefinitions="Auto,*,Auto"
-                      Padding="16,14"
-                      AutomationId="SettingsSupportRow"
-                      SemanticProperties.Description="תמיכה">
-                    <Grid.GestureRecognizers>
-                        <TapGestureRecognizer Command="{Binding OpenSupportCommand}"/>
-                    </Grid.GestureRecognizers>
+                      Padding="16,14">
                     <Label Text="{x:Static fonts:FluentUI.question_circle_24_regular}"
                            FontFamily="FluentIcons"
                            FontSize="24"
@@ -239,6 +232,7 @@
                            TextColor="{StaticResource Gray400}"
                            VerticalOptions="Center"/>
                 </Grid>
+                </controls:TappableView>
 
             </VerticalStackLayout>
         </Border>

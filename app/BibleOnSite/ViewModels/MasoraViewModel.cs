@@ -28,6 +28,8 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
     private readonly IShare _share;
     private readonly PreferencesService _preferencesService;
     private readonly Func<int, Task<List<Article>>>? _articlesLoader;
+    private readonly Func<int, bool> _hasPerekAudio;
+    private readonly Func<int, RecitationTrack?> _getTrack;
 
     // Using fields with [ObservableProperty] - the MVVMTK0045 warnings are acceptable
     // as we're not targeting AOT scenarios for WinRT marshalling.
@@ -137,7 +139,7 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
         PreferencesService preferencesService, PerushimCatalogService? catalogService,
         PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader)
         : this(masoraDataService, perekDataService, preferencesService, catalogService, notesService,
-            articlesLoader, null, null, null)
+            articlesLoader, null, null, null, null)
     {
     }
 
@@ -145,6 +147,26 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
         PreferencesService preferencesService, PerushimCatalogService? catalogService,
         PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
         IAppNavigator? navigator, IFileSystem? fileSystem, IShare? share)
+        : this(masoraDataService, perekDataService, preferencesService, catalogService, notesService,
+            articlesLoader, navigator, fileSystem, share, null)
+    {
+    }
+
+    public MasoraViewModel(MasoraDataService masoraDataService, PerekDataService perekDataService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
+        IAppNavigator? navigator, IFileSystem? fileSystem, IShare? share,
+        Func<int, bool>? hasPerekAudio)
+        : this(masoraDataService, perekDataService, preferencesService, catalogService, notesService,
+            articlesLoader, navigator, fileSystem, share, hasPerekAudio, null)
+    {
+    }
+
+    public MasoraViewModel(MasoraDataService masoraDataService, PerekDataService perekDataService,
+        PreferencesService preferencesService, PerushimCatalogService? catalogService,
+        PerushimNotesService? notesService, Func<int, Task<List<Article>>>? articlesLoader,
+        IAppNavigator? navigator, IFileSystem? fileSystem, IShare? share,
+        Func<int, bool>? hasPerekAudio, Func<int, RecitationTrack?>? getTrack)
     {
         _masoraDataService = masoraDataService;
         _perekDataService = perekDataService;
@@ -155,6 +177,8 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
         _fileSystem = fileSystem ?? FileSystem.Current;
         _share = share ?? Share.Default;
         _articlesLoader = articlesLoader;
+        _hasPerekAudio = hasPerekAudio ?? (static perekId => RecitationService.Instance.HasAudio(perekId));
+        _getTrack = getTrack ?? (static perekId => RecitationService.Instance.GetTrack(perekId));
 
         // Sync FontFactor from preferences and listen for changes
         _fontFactor = _preferencesService.PasukFontFactor;
@@ -198,15 +222,16 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
     /// <summary>Whether the current unit has any overlapping articles.</summary>
     public bool HasArticles => ArticlesCount > 0;
 
-    /// <summary>Find commentary names in the selection menu — scrolls to the
-    /// first match rather than hiding the rest.</summary>
+    /// <summary>Find commentary names in the selection menu — narrows the
+    /// visible picker rows to matching perushim (#3306).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FilteredPerushim))]
     [NotifyPropertyChangedFor(nameof(PerushimEmptyMessage))]
     private string _perushNameFilter = string.Empty;
 
-    /// <summary>Perushim matching <see cref="PerushNameFilter"/> — the list
-    /// shows all of <see cref="Perushim"/>; this drives search scroll-to.</summary>
+    /// <summary>Perushim matching <see cref="PerushNameFilter"/> — the picker
+    /// rows bind this, so typing filters the list in place; an empty filter
+    /// restores all of <see cref="Perushim"/>.</summary>
     public List<Perush> FilteredPerushim
     {
         get
@@ -225,6 +250,153 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
 
     /// <summary>Whether the current unit has any perushim.</summary>
     public bool HasPerushim => PerushimCount > 0;
+
+    /// <summary>
+    /// קריינות — mirrors the global preference (העדפות → על הפרק, default on).
+    /// Setting it writes through to <see cref="PreferencesService.QriynotEnabled"/>.
+    /// </summary>
+    public bool IsQriynotEnabled
+    {
+        get => _preferencesService.QriynotEnabled;
+        set
+        {
+            if (_preferencesService.QriynotEnabled == value)
+            {
+                return;
+            }
+
+            _preferencesService.QriynotEnabled = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowHeaderPlayButton));
+        }
+    }
+
+    /// <summary>Whether a recitation is downloaded for at least one perek of the displayed unit.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowHeaderPlayButton))]
+    private bool _hasCurrentUnitRecitation;
+
+    /// <summary>The header play button shows only while קריינות is checked and audio exists.</summary>
+    public bool ShowHeaderPlayButton => IsQriynotEnabled && HasCurrentUnitRecitation;
+
+#pragma warning disable S1172 // ObservableProperty generates this hook with both values.
+    partial void OnUnitChanged(MasoraUnit? oldValue, MasoraUnit? newValue)
+#pragma warning restore S1172
+    {
+        // Selection flags live on the rows' pasuk objects — clear them on
+        // the unit being left, or its cached rows keep showing a phantom
+        // selection after ClearSelected() only reaches the new unit's rows.
+        if (oldValue is not null && !ReferenceEquals(oldValue, newValue))
+        {
+            foreach (var pasuk in oldValue.Rows.Select(row => row.Pasuk).Where(pasuk => pasuk.IsSelected))
+            {
+                pasuk.IsSelected = false;
+            }
+        }
+
+        RefreshRecitationAvailability();
+    }
+
+    /// <summary>
+    /// Re-evaluates whether the currently displayed unit has any playable
+    /// recitation — controls the קריינות menu item and header play button.
+    /// Called when the unit changes and after the recitation package updates.
+    /// </summary>
+    public void RefreshRecitationAvailability()
+    {
+        // The shared planner is the source of truth for what unit playback
+        // would produce — a unit whose only downloaded audio is an
+        // unaligned track behind partial slices gets no clip, so offering
+        // its play button would be dead UI.
+        HasCurrentUnitRecitation = Unit is { } current &&
+            RecitationRangePlanner.SegmentsForSlices(
+                MasoraUnitText.PerekSlicesForUnit(current),
+                GetLoadedPasukim,
+                _getTrack,
+                _hasPerekAudio,
+                _preferencesService.RecitationVersePauseMs >= 0).Count > 0;
+    }
+
+    #endregion
+
+    #region Selection
+
+    /// <summary>Canonical positions of the selected pesukim — (perekId, pasukNum).</summary>
+#pragma warning disable MVVMTK0045 // Same accepted warning as the fields above.
+    [ObservableProperty]
+    private List<(int PerekId, int PasukNum)> _selectedPasukim = new();
+#pragma warning restore MVVMTK0045
+
+    /// <summary>Selected-pasuk count — drives the reader's selection bar.</summary>
+    public int SelectedPasukCount => SelectedPasukim.Count;
+
+    /// <summary>Toggles selection of a rendered pasuk (keyed canonically so a
+    /// pasuk repeated across ranges toggles once).</summary>
+    public void ToggleSelectedPasuk(int perekId, int pasukNum)
+    {
+        var list = new List<(int PerekId, int PasukNum)>(SelectedPasukim);
+        var key = (perekId, pasukNum);
+        if (list.Contains(key))
+        {
+            list.Remove(key);
+        }
+        else
+        {
+            list.Add(key);
+        }
+        SelectedPasukim = list;
+
+        if (Unit != null)
+        {
+            foreach (var row in Unit.Rows)
+            {
+                if (row.PerekId == perekId && row.PasukNum == pasukNum)
+                {
+                    row.Pasuk.IsSelected = list.Contains(key);
+                }
+            }
+        }
+        OnPropertyChanged(nameof(SelectedPasukCount));
+    }
+
+    /// <summary>Clears the whole selection.</summary>
+    public void ClearSelected()
+    {
+        if (Unit != null)
+        {
+            foreach (var pasuk in Unit.Rows.Select(row => row.Pasuk).Where(pasuk => pasuk.IsSelected))
+            {
+                pasuk.IsSelected = false;
+            }
+        }
+        SelectedPasukim = new List<(int PerekId, int PasukNum)>();
+        OnPropertyChanged(nameof(SelectedPasukCount));
+    }
+
+    /// <summary>Whether a canonical pasuk position is selected.</summary>
+    public bool IsPasukSelected(int perekId, int pasukNum) =>
+        SelectedPasukim.Contains((perekId, pasukNum));
+
+    /// <summary>Selected pesukim in reader order (for share/copy).</summary>
+    public List<(int PerekId, Pasuk Pasuk)> GetSelectedPesukim()
+    {
+        if (Unit == null || SelectedPasukim.Count == 0)
+        {
+            return new List<(int, Pasuk)>();
+        }
+        var selected = new HashSet<(int, int)>(SelectedPasukim);
+        var seen = new HashSet<(int, int)>();
+        var result = new List<(int PerekId, Pasuk Pasuk)>();
+        foreach (var row in Unit.Rows)
+        {
+            var key = (row.PerekId, row.PasukNum);
+            if (selected.Contains(key) && seen.Add(key))
+            {
+                result.Add((row.PerekId, row.Pasuk));
+            }
+        }
+        return result;
+    }
 
     #endregion
 
@@ -359,8 +531,26 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
 
         unit.Rows = await MasoraUnitText.BuildRowsAsync(
             unit,
-            perekId => _perekDataService.LoadPasukimAsync(perekId),
+            LoadAndCachePasukimAsync,
             FontFactor);
+    }
+
+    /// <summary>
+    /// Full canonical pasukim of a perek a loaded unit covers, or null until
+    /// its rows load. Recitation bounds checks (<see cref="RecitationTrack.Matches"/>)
+    /// hash the whole perek — the rows' clipped pesukim can't supply it, and
+    /// <c>Perek.Pasukim</c> only fills when the perek reader visits.
+    /// </summary>
+    public IReadOnlyList<Pasuk>? GetLoadedPasukim(int perekId) =>
+        _loadedPerekPasukim.GetValueOrDefault(perekId);
+
+    private readonly Dictionary<int, List<Pasuk>> _loadedPerekPasukim = new();
+
+    private async Task<List<Pasuk>> LoadAndCachePasukimAsync(int perekId)
+    {
+        var pasukim = await _perekDataService.LoadPasukimAsync(perekId);
+        _loadedPerekPasukim[perekId] = pasukim;
+        return pasukim;
     }
 
     /// <summary>
@@ -398,12 +588,16 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
             return;
         }
 
+        // Adjacent units share boundary perakim — one task-level cache
+        // serves the whole batch so each perek hits SQLite once. The
+        // awaits stay sequential, so a plain Dictionary suffices. Declared
+        // outside the task so its entries can join _loadedPerekPasukim on
+        // the UI context: the recitation paths query canonical pasukim by
+        // perek for any loaded unit, and a preloaded-only perek must not
+        // come back null.
+        var pasukimCache = new Dictionary<int, Task<List<Pasuk>>>();
         var loaded = await Task.Run(async () =>
         {
-            // Adjacent units share boundary perakim — one task-level cache
-            // serves the whole batch so each perek hits SQLite once. The
-            // awaits stay sequential, so a plain Dictionary suffices.
-            var pasukimCache = new Dictionary<int, Task<List<Pasuk>>>();
             Task<List<Pasuk>> LoadPasukimCached(int perekId) =>
                 pasukimCache.TryGetValue(perekId, out var pending)
                     ? pending
@@ -423,6 +617,11 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
             {
                 u.Rows = rows;
             }
+        }
+        foreach (var (perekId, pending) in pasukimCache)
+        {
+            // Every task already completed inside BuildRowsAsync.
+            _loadedPerekPasukim[perekId] = await pending;
         }
     }
 
@@ -517,6 +716,8 @@ public partial class MasoraViewModel : ObservableObject, IPerushimSheetViewModel
         OnPropertyChanged(nameof(InlineCommentaryLimit));
         OnPropertyChanged(nameof(PerushimSelectionStatus));
         OnPropertyChanged(nameof(PerushimLimitReached));
+        OnPropertyChanged(nameof(IsQriynotEnabled));
+        OnPropertyChanged(nameof(ShowHeaderPlayButton));
         if (CheckedPerushim.Count > _preferencesService.InlineCommentaryLimit)
         {
             CheckedPerushim = CheckedPerushim.Take(_preferencesService.InlineCommentaryLimit).ToList();

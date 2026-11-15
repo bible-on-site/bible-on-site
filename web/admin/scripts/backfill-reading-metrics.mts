@@ -413,10 +413,17 @@ async function backfillPerushim(): Promise<number> {
 
 	for (;;) {
 		const [rows] = await db.execute(
-			`SELECT perush_id, perek_id, pasuk, note_idx, note_content
-			 FROM note
-			 WHERE (perush_id, perek_id, pasuk, note_idx) > (?, ?, ?, ?)
-			 ORDER BY perush_id, perek_id, pasuk, note_idx
+			`SELECT n.perush_id, n.perek_id, n.pasuk, n.note_idx, n.note_content,
+					m.word_count AS stored_word_count,
+					m.cumulative_words AS stored_cumulative,
+					m.calc_version AS stored_calc_version,
+					m.source_hash AS stored_source_hash
+			 FROM note n
+			 LEFT JOIN tanah_note_metric m
+				ON m.perush_id = n.perush_id AND m.perek_id = n.perek_id
+			   AND m.pasuk = n.pasuk AND m.note_idx = n.note_idx
+			 WHERE (n.perush_id, n.perek_id, n.pasuk, n.note_idx) > (?, ?, ?, ?)
+			 ORDER BY n.perush_id, n.perek_id, n.pasuk, n.note_idx
 			 LIMIT ${BATCH}`,
 			[last.perush, last.perek, last.pasuk, last.note_idx],
 		);
@@ -426,6 +433,10 @@ async function backfillPerushim(): Promise<number> {
 			pasuk: number;
 			note_idx: number;
 			note_content: string;
+			stored_word_count: number | null;
+			stored_cumulative: number | null;
+			stored_calc_version: number | null;
+			stored_source_hash: string | null;
 		}[];
 		if (notes.length === 0) break;
 
@@ -444,26 +455,38 @@ async function backfillPerushim(): Promise<number> {
 			groupHashes.push(hash);
 			groupWords += wordCount;
 			// cumulative_words is group-positional, so a mid-group insertion
-			// legitimately rewrites later notes: upsert unconditionally.
-			await db.execute(
-				`INSERT INTO tanah_note_metric
-					(perush_id, perek_id, pasuk, note_idx, word_count, cumulative_words, calc_version, source_hash)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-				 ON DUPLICATE KEY UPDATE
-					word_count = VALUES(word_count), cumulative_words = VALUES(cumulative_words),
-					calc_version = VALUES(calc_version), source_hash = VALUES(source_hash)`,
-				[
-					note.perush_id,
-					note.perek_id,
-					note.pasuk,
-					note.note_idx,
-					wordCount,
-					groupWords,
-					READING_METRICS_CALC_VERSION,
-					hash,
-				],
-			);
-			notesWritten += 1;
+			// legitimately rewrites later notes; compare it too — only rows
+			// whose stored values differ get written, and only real writes
+			// count toward the website invalidation signal: ranged perush
+			// readers (#3108) consume these note rows directly, so a
+			// note-only repair must flush the "perushim" tag like any
+			// aggregate change.
+			const unchanged =
+				note.stored_calc_version === READING_METRICS_CALC_VERSION &&
+				note.stored_word_count === wordCount &&
+				note.stored_cumulative === groupWords &&
+				note.stored_source_hash === hash;
+			if (!unchanged) {
+				await db.execute(
+					`INSERT INTO tanah_note_metric
+						(perush_id, perek_id, pasuk, note_idx, word_count, cumulative_words, calc_version, source_hash)
+					 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+					 ON DUPLICATE KEY UPDATE
+						word_count = VALUES(word_count), cumulative_words = VALUES(cumulative_words),
+						calc_version = VALUES(calc_version), source_hash = VALUES(source_hash)`,
+					[
+						note.perush_id,
+						note.perek_id,
+						note.pasuk,
+						note.note_idx,
+						wordCount,
+						groupWords,
+						READING_METRICS_CALC_VERSION,
+						hash,
+					],
+				);
+				notesWritten += 1;
+			}
 			last = {
 				perush: note.perush_id,
 				perek: note.perek_id,
@@ -498,12 +521,12 @@ async function backfillPerushim(): Promise<number> {
 		(prunedNotes as ResultSetHeader).affectedRows +
 		(prunedTotals as ResultSetHeader).affectedRows;
 	console.log(
-		`perush: ${notesWritten} notes, ${totalsWritten} perush×perek totals written, ${totalsUnchanged} unchanged, ${pruned} stale rows pruned`,
+		`perush: ${notesWritten} notes changed, ${totalsWritten} perush×perek totals written, ${totalsUnchanged} unchanged, ${pruned} stale rows pruned`,
 	);
-	// Only aggregate changes are user-visible: notes upsert unconditionally,
-	// and a content change that keeps the group's hash identical leaves the
-	// rendered estimate unchanged too.
-	return totalsWritten + pruned;
+	// Note rows are user-visible through the ranged perush readers (#3108),
+	// so genuine note writes count toward the invalidation signal just
+	// like aggregate changes and prunes do.
+	return notesWritten + totalsWritten + pruned;
 }
 
 // ---------------------------------------------------------------------------

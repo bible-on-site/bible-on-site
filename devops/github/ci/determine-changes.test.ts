@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
 	mkdirSync,
 	mkdtempSync,
@@ -104,6 +105,20 @@ describe("explicit service release recovery selection", () => {
 });
 
 describe("detectChanges", () => {
+	test("local transcription tooling cannot select a service or data deployment", () => {
+		const files = [
+			"devops/transcription/pipeline.py",
+			"devops/transcription/sources.py",
+			"devops/transcription/model.py",
+			"devops/transcription/test_pipeline.py",
+			".github/workflows/ci-transcription.yml",
+		];
+		for (const flags of Object.values(detectChanges(files)))
+			assert.deepEqual(flags, { module_changed: false, ci_changed: false });
+		assert.equal(isDataDeployChange(files), false);
+		assert.equal(isSchemaOnlyDataChange(files), false);
+	});
+
 	describe("documentation preserves every migration routing decision", () => {
 		for (const migrations of [
 			["data/mysql/tanah_daily_bulletin_upgrade.sql"],
@@ -267,6 +282,21 @@ describe("detectChanges", () => {
 			assert.deepEqual(flags, { module_changed: false, ci_changed: true }, key);
 		}
 	});
+
+	for (const file of [
+		"devops/github/ci/audit-android-aab-size.mjs",
+		"devops/github/ci/audit-android-aab-size.test.mjs",
+	]) {
+		test(`${file} selects app validation without a release`, () => {
+			for (const [key, flags] of Object.entries(detectChanges([file]))) {
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: key === "app" },
+					key,
+				);
+			}
+		});
+	}
 
 	test("mobile matrix workflow changes require app checks without a release", () => {
 		const changes = detectChanges([".github/workflows/app-mobile-e2e.yml"]);
@@ -602,13 +632,7 @@ describe("detectChanges", () => {
 
 	test("release workflow changes validate only released modules", () => {
 		const changes = detectChanges([".github/workflows/shared-release.yml"]);
-		for (const key of [
-			"website",
-			"api",
-			"app",
-			"bulletin",
-			"admin",
-		] as const) {
+		for (const key of ["website", "api", "app", "bulletin", "admin"] as const) {
 			assert.equal(changes[key].ci_changed, true, key);
 		}
 		for (const key of ["data", "perushim_pipeline"] as const) {
@@ -768,6 +792,48 @@ const SHARED_FILES = [
 ];
 
 describe("isSchemaOnlyDataChange", () => {
+	test("the contribution upgrade retains checks without full data delivery", () => {
+		const migration = "data/mysql/tanahpedia_contribution_upgrade.sql";
+		for (const files of [
+			[migration],
+			[
+				migration,
+				"web/admin/src/server/contributions.server.ts",
+				"docs/tanahpedia/contribution-workflow.md",
+			],
+		]) {
+			assert.equal(isSchemaOnlyDataChange(files), true);
+			assert.deepEqual(detectChanges(files).data, {
+				module_changed: true,
+				ci_changed: false,
+			});
+			assert.equal(isDataDeployChange(files), false);
+		}
+		for (const content of [
+			"data/mysql/tanah_static_structure.sql",
+			"data/mysql/tanah_sefarim_and_perakim_data.sql",
+			"data/mysql/db-populator/src/main.rs",
+			"data/sefaria/pipelines/perushim-view/src/main.rs",
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+		]) {
+			assert.equal(
+				isSchemaOnlyDataChange([migration, content]),
+				false,
+				content,
+			);
+			assert.equal(
+				detectChanges([migration, content]).data.module_changed,
+				true,
+			);
+		}
+		for (const otherPath of [
+			"data/mysql/nested/tanahpedia_contribution_upgrade.sql",
+			"data/mysql/tanahpedia_contribution_upgrade.sql.bak",
+			"data/mysql/tanahpedia_unrelated_upgrade.sql",
+		])
+			assert.equal(isSchemaOnlyDataChange([otherPath]), false, otherPath);
+	});
+
 	test("the calendar converter repair requires data checks and a guarded manual deployment", () => {
 		const files = [
 			"data/sefaria/pipelines/tanah-view/src/commands/mysql.rs",
@@ -1341,6 +1407,17 @@ describe("main", () => {
 		assert.match(output, /^data_deploy_changed=false$/m);
 	});
 
+	test("a contribution migration push cannot publish the full data payload", () => {
+		const { changes, output } = run(
+			"push",
+			({ base }) => ({ before: base }),
+			"data/mysql/tanahpedia_contribution_upgrade.sql",
+		);
+		assert.deepEqual(changes.data, { module_changed: true, ci_changed: false });
+		assert.match(output, /^data_schema_only_changed=true$/m);
+		assert.match(output, /^data_deploy_changed=false$/m);
+	});
+
 	test("a deleted schema migration stays manual without asserting the SQL still exists", () => {
 		const { changes, output } = run(
 			"push",
@@ -1663,6 +1740,7 @@ fi
 			"validate_api_architectures",
 			"validate_admin_architectures",
 			"recitation_ci",
+			"transcription_ci",
 			"deploy_verifier",
 			"calendar_pdf_artifacts",
 		]) {
@@ -1733,8 +1811,16 @@ fi
 	});
 });
 
-const publisherSource = readFileSync(
+const livePublisherSource = readFileSync(
 	new URL("../../../data/annotations/publish.py", import.meta.url),
+	"utf8",
+);
+// Frozen historical input from 4c99f0eff051eb050db713e989c2ea3107c58d9a.
+// The production proof deliberately pins this exact body. New publisher
+// implementations must fail closed until independently audited; building
+// positive fixtures from today's live source would contradict that contract.
+const publisherSource = readFileSync(
+	new URL("./fixtures/publish-audited-body.py.fixture", import.meta.url),
 	"utf8",
 ).replace(
 	"node devops/export-tanahpedia-articles.mts",
@@ -1768,6 +1854,13 @@ function astDocProof(before: string, after: string): boolean {
 }
 
 describe("publisher docstring AST proof", () => {
+	test("historical fixture retains the exact independently audited body", () => {
+		assert.equal(
+			createHash("sha256").update("\0").update(publisherBody).digest("hex"),
+			"5501f7b400931ef2ddd959a0ce4e49184e66c90e60c80604ec230266aca9b107",
+		);
+	});
+
 	test("actual publisher help documents commands from the repository root", () => {
 		const root = fileURLToPath(new URL("../../../", import.meta.url));
 		const help = execFileSync(
@@ -1939,6 +2032,25 @@ function publisherFixture(
 }
 
 describe("publisher docstring release routing", () => {
+	test("keeps normal delivery for a doc edit on the live unaudited publisher body", (t) => {
+		const liveDocEnd = livePublisherSource.indexOf('\n"""') + 4;
+		assert.ok(liveDocEnd > 3);
+		const fixture = publisherFixture(t, {
+			before: livePublisherSource,
+			after:
+				'"""Updated documentation for the current publisher."""' +
+				livePublisherSource.slice(liveDocEnd),
+		});
+		assert.equal(
+			isPublishDocstringOnlyChange({ ...fixture, cwd: fixture.clone }),
+			false,
+		);
+		assert.deepEqual(fixture.run().changes.data, {
+			module_changed: true,
+			ci_changed: false,
+		});
+	});
+
 	test("uses immutable base/head blobs in a shallow checkout and selects checks only", (t) => {
 		const fixture = publisherFixture(t);
 		assert.equal(fixture.git("rev-parse", "--is-shallow-repository"), "true");
