@@ -36,6 +36,17 @@ public class FirebaseEmulatorEndpointTests
             new FirebaseEmulatorEndpoint.Endpoint(AvdLoopback, 19099, 18080));
     }
 
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(1, 65535)]
+    [InlineData(65535, 1)]
+    [InlineData(65535, 65535)]
+    public void Parse_AcceptsTcpPortBoundaries(int authPort, int firestorePort)
+    {
+        FirebaseEmulatorEndpoint.Parse($"localhost:{authPort}:{firestorePort}").Should().Be(
+            new FirebaseEmulatorEndpoint.Endpoint("localhost", authPort, firestorePort));
+    }
+
     [Fact]
     public void Parse_AllowsSinglePortOverride()
     {
@@ -80,6 +91,9 @@ public class FirebaseEmulatorEndpointTests
         AvdLoopback + ":0:8080",
         AvdLoopback + ":9099:65536",
         AvdLoopback + ":-1:8080",
+        AvdLoopback + ":65536:8080",
+        AvdLoopback + ":9099:0",
+        AvdLoopback + ":9099:-1",
         // Extra segments and trailing separators are malformed.
         AvdLoopback + ":9099:8080:extra",
         AvdLoopback + ":",
