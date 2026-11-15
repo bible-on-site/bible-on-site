@@ -58,6 +58,9 @@ public partial class AppShell : Shell, Helpers.IAdaptiveNavPane
 		if (HomeUxPreview.Enabled)
 		{
 			Routing.RegisterRoute(nameof(HomeSearchPage), typeof(HomeSearchPage));
+			Routing.RegisterRoute(nameof(HomeLibraryPage), typeof(HomeLibraryPage));
+			Routing.RegisterRoute(nameof(HomeAboutPage), typeof(HomeAboutPage));
+			FlyoutBehavior = FlyoutBehavior.Disabled;
 			ConfigureHomeUxLinks();
 		}
 
@@ -194,6 +197,12 @@ public partial class AppShell : Shell, Helpers.IAdaptiveNavPane
 
 	private void ApplyNavPane(DesktopNavPaneState state, bool presented)
 	{
+		if (HomeUxPreview.Enabled)
+		{
+			FlyoutBehavior = FlyoutBehavior.Disabled;
+			FlyoutIsPresented = false;
+			return;
+		}
 		var pinChanged = state.PanePinned != _navPane.PanePinned;
 		_navPane = state;
 		FlyoutBehavior = state.Locked ? FlyoutBehavior.Locked : FlyoutBehavior.Flyout;

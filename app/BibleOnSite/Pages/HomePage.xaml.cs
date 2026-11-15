@@ -100,12 +100,6 @@ public partial class HomePage : ContentPage, IAnalyticsScreenName
     private async void OnMasoraTapped(object? sender, TappedEventArgs e) => await OpenAsync(AppRoutes.Masora);
     private async void OnAuthorsTapped(object? sender, TappedEventArgs e) => await OpenAsync(AppRoutes.Authors);
     private async void OnPreferencesClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.Preferences);
-    private async void OnTanahpediaClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.Tanahpedia);
-    private async void OnParashaClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.ParashaList);
-    private async void OnMoadimClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.Moadim);
-    private async void OnBulletinClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.DailyBulletin);
-    private async void OnContactClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.Contact);
-    private async void OnTermsClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.Terms);
-    private async void OnDonationsClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.Donations);
+    private async void OnLibraryTapped(object? sender, TappedEventArgs e) => await OpenAsync(nameof(HomeLibraryPage));
     private async void OnRetryClicked(object? sender, EventArgs e) => await LoadDailyPerekAsync();
 }

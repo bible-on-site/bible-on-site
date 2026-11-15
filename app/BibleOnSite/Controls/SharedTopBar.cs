@@ -1,5 +1,6 @@
 using BibleOnSite.Helpers;
 using BibleOnSite.Services;
+using BibleOnSite.Config;
 
 namespace BibleOnSite.Controls;
 
@@ -21,7 +22,7 @@ namespace BibleOnSite.Controls;
 /// </summary>
 public class SharedTopBar : ContentView
 {
-    public static double BarHeight => 56;
+    public static double BarHeight => HomeUxPreview.Enabled ? 72 : 56;
     public static double EdgeWidth => 48;
     public static double PillHeight => 40;
     public static double PillCornerRadius => 14;
@@ -108,7 +109,7 @@ public class SharedTopBar : ContentView
     public static readonly BindableProperty ShowBackProperty =
         BindableProperty.Create(nameof(ShowBack), typeof(bool), typeof(SharedTopBar), CapsuleBackDefault,
             propertyChanged: (bindable, _, value) =>
-                ((SharedTopBar)bindable).BackButton.IsVisible = (bool)value);
+                ((SharedTopBar)bindable).BackButton.IsVisible = HomeUxPreview.Enabled || (bool)value);
     /// <summary>
     /// Whether the capsule reserves its Back slot at all. Driven by
     /// <see cref="BackChrome"/> from the persisted platform preference —
@@ -139,7 +140,7 @@ public class SharedTopBar : ContentView
             propertyChanged: (bindable, _, value) =>
             {
                 // Element.AutomationId may only be assigned once.
-                if (value is string id && id.Length > 0)
+                if (!HomeUxPreview.Enabled && value is string id && id.Length > 0)
                 {
                     ((SharedTopBar)bindable).NavigationButton.AutomationId = id;
                 }
@@ -171,6 +172,7 @@ public class SharedTopBar : ContentView
         ToolTipProperties.SetText(NavigationButton, "תפריט ניווט");
 #endif
         NavigationButton.Clicked += OnBarNavigationClicked;
+        if (HomeUxPreview.Enabled) { NavigationButton.AutomationId = "TopBarBackButton"; }
 
         BackButton = new Button
         {
@@ -183,7 +185,7 @@ public class SharedTopBar : ContentView
             VerticalOptions = LayoutOptions.Fill,
             IsVisible = CapsuleBackDefault,
             IsEnabled = false,
-            AutomationId = "TopBarBackButton",
+            AutomationId = HomeUxPreview.Enabled ? "TopBarHomeButton" : "TopBarBackButton",
         };
         SemanticProperties.SetDescription(BackButton, "חזור");
         ApplyBackEnabledVisual();
@@ -240,7 +242,38 @@ public class SharedTopBar : ContentView
         container.Add(_band);
         container.Add(separator);
         Content = container;
+        if (HomeUxPreview.Enabled)
+        {
+            ConfigurePreviewNavigation();
+        }
         Loaded += (_, _) => RefreshBackState();
+    }
+
+    private void ConfigurePreviewNavigation()
+    {
+        _band.Padding = new Thickness(8, 8);
+        _band.ColumnSpacing = 6;
+        _band.ColumnDefinitions[2].Width = 52;
+        _capsuleBorder.HeightRequest = 56;
+        _capsuleBorder.Padding = 0;
+        _capsuleBorder.Margin = 0;
+        _capsuleBorder.BackgroundColor = Colors.Transparent;
+        _capsule.Spacing = 6;
+        _band.SetAppThemeColor(BackgroundColorProperty, Color.FromArgb("#F2EFE6"), Color.FromArgb("#111C2C"));
+        foreach (var button in new[] { NavigationButton, BackButton })
+        {
+            button.WidthRequest = 52;
+            button.HeightRequest = 52;
+            button.CornerRadius = 16;
+            button.SetAppThemeColor(Button.BackgroundColorProperty, Color.FromArgb("#E4EAF4"), Color.FromArgb("#243C5D"));
+            button.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#1552AC"), Color.FromArgb("#AACBFF"));
+        }
+        NavigationButton.Text = BackGlyph(FlowDirection.RightToLeft);
+        SemanticProperties.SetDescription(NavigationButton, "חזרה");
+        BackButton.Text = Fonts.FluentUI.home_24_regular;
+        BackButton.IsVisible = true;
+        BackButton.IsEnabled = true;
+        SemanticProperties.SetDescription(BackButton, "מסך הבית");
     }
 
     /// <summary>
@@ -313,7 +346,11 @@ public class SharedTopBar : ContentView
             PreferencesService.Instance.InAppBackButton);
     }
 
-    private void ApplyBackGlyph() => BackButton.Text = BackGlyph(ResolveFlowDirection());
+    private void ApplyBackGlyph()
+    {
+        if (HomeUxPreview.Enabled) { NavigationButton.Text = BackGlyph(ResolveFlowDirection()); }
+        else { BackButton.Text = BackGlyph(ResolveFlowDirection()); }
+    }
 
     private FlowDirection ResolveFlowDirection()
     {
@@ -347,6 +384,13 @@ public class SharedTopBar : ContentView
     private void ApplyBackEnabledVisual()
     {
         var enabled = BackEnabled;
+        if (HomeUxPreview.Enabled)
+        {
+            NavigationButton.IsEnabled = enabled;
+            NavigationButton.Opacity = enabled ? 1 : 0.35;
+            BackButton.IsEnabled = true;
+            return;
+        }
         BackButton.IsEnabled = enabled;
         BackButton.SetAppThemeColor(Button.TextColorProperty,
             enabled ? Colors.Black : DisabledGlyphLight,
@@ -355,6 +399,11 @@ public class SharedTopBar : ContentView
 
     private void OnBackClicked(object? sender, EventArgs e)
     {
+        if (HomeUxPreview.Enabled)
+        {
+            _ = ShellAppNavigator.Instance.GoToAsync($"//{AppRoutes.Perek}");
+            return;
+        }
         // Never trust the painted state: re-derive from the live coordinator
         // first, so a stale enabled paint can't skip straight to leaving the
         // app — a disabled control must be genuinely non-actionable (#2467).
@@ -374,6 +423,12 @@ public class SharedTopBar : ContentView
 
     private void OnBarNavigationClicked(object? sender, EventArgs e)
     {
+        if (HomeUxPreview.Enabled)
+        {
+            RefreshBackState();
+            if (BackEnabled) { _ = (BackInvoker ?? InvokeSharedBack)(); }
+            return;
+        }
         if (FlyoutOpener is { } opener)
         {
             opener();
@@ -392,6 +447,7 @@ public class SharedTopBar : ContentView
     /// </summary>
     internal static void RequestNavPane(Shell? shell)
     {
+        if (HomeUxPreview.Enabled) { return; }
         if (shell is IAdaptiveNavPane adaptiveNav)
         {
             adaptiveNav.ToggleNavPane();

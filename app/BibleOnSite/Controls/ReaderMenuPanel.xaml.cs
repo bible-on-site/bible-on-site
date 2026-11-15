@@ -19,11 +19,59 @@ public partial class ReaderMenuPanel : Grid
 
     /// <summary>הסתר שם השם row tapped — the page flips the view-model flag.</summary>
     public event EventHandler? DivineNameMaskingToggled;
+    public event EventHandler? SearchRequested;
+    public event EventHandler? FullscreenRequested;
 #pragma warning restore S3264
 
     public ReaderMenuPanel()
     {
         InitializeComponent();
+        if (Config.HomeUxPreview.Enabled) { ConfigurePreviewTools(); }
+    }
+
+    private void ConfigurePreviewTools()
+    {
+        BackgroundColor = Color.FromArgb("#40000000");
+        if (Children.OfType<Border>().FirstOrDefault() is not { Content: VerticalStackLayout rows } panel) { return; }
+        panel.HorizontalOptions = LayoutOptions.Fill;
+        panel.VerticalOptions = LayoutOptions.End;
+        panel.Margin = new Thickness(16, 0, 16, 104);
+        panel.Padding = 16;
+        panel.StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 26 };
+        rows.Spacing = 4;
+        rows.Insert(0, new Label { Text = "כלי הקריאה", FontSize = 26, FontAttributes = FontAttributes.Bold, Margin = new Thickness(8, 0, 8, 10) });
+        foreach (var target in rows.Children.OfType<TappableView>())
+        {
+            target.MinimumHeightRequest = 60;
+            if (target.Content is Grid row)
+            {
+                row.MinimumHeightRequest = 60;
+                foreach (var label in row.Children.OfType<Grid>().SelectMany(grid => grid.Children.OfType<Label>()))
+                {
+                    label.FontSize = 18;
+                }
+            }
+        }
+        rows.Add(ToolAction("חיפוש בתוכן", "ReaderGlobalSearch", (_, _) => SearchRequested?.Invoke(this, EventArgs.Empty)));
+        rows.Add(ToolAction("גודל גופן ותצוגה", "ReaderDisplayPreferences", async (_, _) =>
+            await Services.ShellAppNavigator.Instance.GoToAsync(Services.AppRoutes.DisplayPreferences)));
+        rows.Add(ToolAction("מסך מלא", "FullScreenButton", (_, _) => FullscreenRequested?.Invoke(this, EventArgs.Empty)));
+        panel.Content = null;
+        panel.Content = new ScrollView { Content = rows };
+        SizeChanged += (_, _) => panel.MaximumHeightRequest = Math.Max(220, Height - 130);
+    }
+
+    private Button ToolAction(string title, string id, EventHandler selected)
+    {
+        var action = new Button
+        {
+            Text = title, AutomationId = id, HeightRequest = 56, FontSize = 17,
+            FontAttributes = FontAttributes.Bold, CornerRadius = 16, Padding = new Thickness(16, 0)
+        };
+        action.SetAppThemeColor(BackgroundColorProperty, Color.FromArgb("#E4EAF4"), Color.FromArgb("#243C5D"));
+        action.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#1552AC"), Color.FromArgb("#AACBFF"));
+        action.Clicked += (_, args) => { Close(); selected(this, args); };
+        return action;
     }
 
     /// <summary>Whether the dropdown is currently shown.</summary>

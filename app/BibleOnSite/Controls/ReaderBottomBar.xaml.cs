@@ -1,6 +1,7 @@
 namespace BibleOnSite.Controls;
 
 using BibleOnSite.Helpers;
+using BibleOnSite.Config;
 
 /// <summary>
 /// The reader's notched bottom bar — perushim chevron, text-mode, articles
@@ -11,6 +12,9 @@ using BibleOnSite.Helpers;
 public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
 #pragma warning restore S2333
 {
+    private Button? _previewText;
+    private Button? _previewPerushim;
+    private Button? _previewArticles;
     /// <summary>Height of the bar before the safe-area inset is added.</summary>
     public static double TotalHeight => 90;
 
@@ -64,6 +68,7 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
     public ReaderBottomBar()
     {
         InitializeComponent();
+        if (HomeUxPreview.Enabled) { ConfigurePreviewDock(); }
         // The bar fill is resolved from the requested theme inside
         // BottomBarDrawable.Draw — repaint it when the theme flips (#2601).
         if (Microsoft.Maui.Controls.Application.Current is { } app)
@@ -84,6 +89,10 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
 
     private void ApplyBadgeCount(int count)
     {
+        if (_previewArticles is { } preview)
+        {
+            preview.Text = count > 0 ? $"מאמרים {count}" : "מאמרים";
+        }
         ArticlesBadge.IsVisible = count > 0;
         if (count > 0)
         {
@@ -93,6 +102,7 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
 
     private void ApplyPerushimState(bool isOpen)
     {
+        ApplyPreviewDockState();
         PerushimChevronButton.Text = isOpen
             ? Fonts.FluentUI.chevron_down_24_regular
             : Fonts.FluentUI.chevron_up_24_regular;
@@ -100,6 +110,7 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
 
     private void ApplyArticlesState(bool isActive)
     {
+        ApplyPreviewDockState();
         PerushimChevronButton.IsEnabled = !isActive;
         PerushimChevronButton.Opacity = isActive ? 0.4 : 1;
         // Brand accent marks the active state, muted gray marks inactive.
@@ -114,6 +125,63 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
             ArticlesButton.SetAppThemeColor(Button.TextColorProperty,
                 Color.FromArgb("#6B7280"), Color.FromArgb("#9CA3AF"));
         }
+    }
+
+    private void ConfigurePreviewDock()
+    {
+        _previewText = PreviewAction("קריאה", "TextButton", Fonts.FluentUI.book_open_24_regular, OnTextButtonClicked);
+        _previewPerushim = PreviewAction("פירושים", "PerushimChevronButton", Fonts.FluentUI.library_24_regular, OnPerushimChevronClicked);
+        _previewArticles = PreviewAction("מאמרים", "ArticlesButton", Fonts.FluentUI.document_24_regular, OnArticlesButtonClicked);
+        var actions = new Grid
+        {
+            ColumnDefinitions = [new(GridLength.Star), new(GridLength.Star), new(GridLength.Star)],
+            ColumnSpacing = 6,
+            Padding = 6
+        };
+        actions.Add(_previewText);
+        actions.Add(_previewPerushim, 1, 0);
+        actions.Add(_previewArticles, 2, 0);
+        var surface = new Border
+        {
+            Content = actions,
+            Margin = new Thickness(14, 0, 14, 10),
+            StrokeThickness = 1,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 26 },
+            Shadow = new Shadow { Brush = Brush.Black, Offset = new Point(0, 4), Radius = 16, Opacity = 0.10f }
+        };
+        surface.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#1D2D43"));
+        surface.SetAppTheme<Brush>(Border.StrokeProperty,
+            new SolidColorBrush(Color.FromArgb("#D7E1F2")), new SolidColorBrush(Color.FromArgb("#334B6C")));
+        Children.Clear();
+        Add(surface);
+        ApplyPreviewDockState();
+    }
+
+    private static Button PreviewAction(string text, string id, string glyph, EventHandler tapped)
+    {
+        var button = new Button
+        {
+            Text = text, AutomationId = id, FontSize = 15, FontAttributes = FontAttributes.Bold,
+            CornerRadius = 19, Padding = new Thickness(4, 5), MinimumHeightRequest = 66,
+            ContentLayout = new Button.ButtonContentLayout(Button.ButtonContentLayout.ImagePosition.Top, 3),
+            ImageSource = new FontImageSource { Glyph = glyph, FontFamily = "FluentIcons", Size = 24, Color = Color.FromArgb("#2866E7") }
+        };
+        button.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#192B45"), Color.FromArgb("#F2EFE6"));
+        button.Clicked += tapped;
+        return button;
+    }
+
+    private void ApplyPreviewDockState()
+    {
+        if (_previewText is null || _previewPerushim is null || _previewArticles is null) { return; }
+        var selected = IsArticlesActive ? _previewArticles : IsPerushimOpen ? _previewPerushim : _previewText;
+        foreach (var action in new[] { _previewText, _previewPerushim, _previewArticles })
+        {
+            action.SetAppThemeColor(BackgroundColorProperty,
+                action == selected ? Color.FromArgb("#DEE7F7") : Colors.Transparent,
+                action == selected ? Color.FromArgb("#314F78") : Colors.Transparent);
+        }
+        _previewPerushim.IsEnabled = !IsArticlesActive;
     }
 
     private void OnPerushimChevronClicked(object? sender, EventArgs e) =>
