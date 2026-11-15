@@ -139,7 +139,11 @@ namespace E2eXamlFixtures
 
     internal sealed class EmptyPage
     {
-        public void InitializeComponent() { }
+        public void InitializeComponent()
+        {
+            // Preserve an empty initializer so verification rejects an artifact
+            // whose XAML compilation step produced no control construction.
+        }
     }
 
     internal sealed class ConstructionOutsideInitializerPage

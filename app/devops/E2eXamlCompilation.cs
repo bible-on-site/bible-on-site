@@ -63,7 +63,8 @@ internal static class E2eXamlCompilation
     internal static bool ConstructsControl(MetadataReader metadata, byte[] il, string controlType)
     {
         var constructsControl = false;
-        for (var offset = 0; offset < il.Length;)
+        var offset = 0;
+        while (offset < il.Length)
         {
             var first = il[offset++];
             if (first == 0xfe && offset == il.Length)
@@ -83,9 +84,8 @@ internal static class E2eXamlCompilation
             if (opcode == OpCodes.Newobj && IsConstructorOf(metadata,
                 MetadataTokens.EntityHandle(BinaryPrimitives.ReadInt32LittleEndian(il.AsSpan(offset, 4))), controlType))
             {
-                // Compiled initialization is the positive proof. A conditional
-                // Hot Reload LoadFromXaml fallback may coexist with this body;
-                // rejecting every loader reference would reject compiled XAML.
+                // Direct control construction proves compilation even when
+                // Hot Reload retains a conditional path through runtime inflation.
                 constructsControl = true;
             }
             offset += size;
