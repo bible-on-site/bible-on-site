@@ -724,17 +724,16 @@ mod tests {
     #[test]
     fn resolve_reads_the_process_environment() {
         let _guard = ENV_LOCK.lock().unwrap();
-        // Seed one variable so the restore loop below exercises both match
-        // arms; the tail restore drops the synthetic seed again.
-        // SAFETY: serialized by ENV_LOCK; nothing outlives the guard.
-        // nosemgrep — Rust 2024 requires unsafe env mutation; serialized and restored.
-        unsafe { env::set_var(TOLERANCE_ENV, "42") };
+        // The real values are captured before anything mutates them, so the
+        // restore loop below puts every variable back exactly — a pre-set
+        // tolerance included.
         let previous = [
             (MODE_ENV, env::var(MODE_ENV).ok()),
             (KEYS_ENV, env::var(KEYS_ENV).ok()),
             (TOLERANCE_ENV, env::var(TOLERANCE_ENV).ok()),
         ];
-        // nosemgrep — same serialized env setup/teardown as above.
+        // SAFETY: serialized by ENV_LOCK; nothing outlives the guard.
+        // nosemgrep — Rust 2024 requires unsafe env mutation; serialized and restored.
         unsafe {
             env::set_var(MODE_ENV, "enforce");
             env::remove_var(KEYS_ENV);
@@ -750,14 +749,18 @@ mod tests {
         let gate = AccessGate::resolve().unwrap();
         // nosemgrep — same serialized env restore as above.
         unsafe {
-            for (name, value) in previous {
+            // The probe literals keep the `Some` arm exercised even in a
+            // clean environment; the synthetic variable is never read by
+            // the gate and the trailing `None` leaves it unset.
+            for (name, value) in previous.into_iter().chain([
+                ("API_ACCESS_GATE_ENV_PROBE", Some("probe".to_string())),
+                ("API_ACCESS_GATE_ENV_PROBE", None),
+            ]) {
                 match value {
                     Some(v) => env::set_var(name, v),
                     None => env::remove_var(name),
                 }
             }
-            // The "42" seed was synthetic, not the real environment.
-            env::remove_var(TOLERANCE_ENV);
         }
         assert_eq!(gate.mode, GateMode::Observe);
         assert_eq!(gate.keys["k9"], b"s9");
