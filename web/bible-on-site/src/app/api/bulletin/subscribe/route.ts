@@ -25,6 +25,9 @@ export async function POST(request: Request) {
 		"application/json"
 			? await readBoundedJson(request, MAX_JSON_BODY_BYTES)
 			: null;
+	if (json?.status === "unreadable") {
+		console.warn("Bulletin subscribe body read failed");
+	}
 	const parsed = parseSignupBody(
 		json?.status === "parsed" ? json.value : null,
 	);
