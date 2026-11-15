@@ -50,10 +50,6 @@ public sealed class ArticlesMenuPolicyTests(ArticlesMenuFixture fixture)
         await InvokeButtonAsync("ArticlesButton");
 
         var articles = await WaitForArticlesViewAsync();
-        if (articles is null)
-        {
-            DumpCandidates("ReaderArticlesView", "PasukimCollection");
-        }
         articles.Should().NotBeNull("the articles button must swap in the article catalogue");
 
         // Articles mode: only הסתר שם השם renders — the scripture rows leave
@@ -101,6 +97,14 @@ public sealed class ArticlesMenuPolicyTests(ArticlesMenuFixture fixture)
     /// signal and does not care which window is topmost on the desktop.</summary>
     private async Task WaitForReaderAsync()
     {
+        var reader = await FindLiveReaderAsync();
+        reader.Should().NotBeNull("the perek reader must render its pasuk list");
+    }
+
+    /// <summary>Polls the live reader surface; on timeout dumps the element
+    /// tree so the null result carries its own failure evidence.</summary>
+    private async Task<AutomationElement?> FindLiveReaderAsync()
+    {
         var reader = await fixture.WaitForElementAsync(window =>
             window.FindAllDescendants(fixture.CF.ByAutomationId("PasukimCollection"))
                 .FirstOrDefault(element => IsVisibleInTree(element)
@@ -110,7 +114,7 @@ public sealed class ArticlesMenuPolicyTests(ArticlesMenuFixture fixture)
         {
             DumpCandidates("PasukimCollection", "ReaderMenuButton", "PerekSource");
         }
-        reader.Should().NotBeNull("the perek reader must render its pasuk list");
+        return reader;
     }
 
     /// <summary>Writes the main window's rendered pixels to the E2E artifacts
@@ -163,12 +167,19 @@ public sealed class ArticlesMenuPolicyTests(ArticlesMenuFixture fixture)
     /// hidden — presence in the tree is not proof, only the live box is: a
     /// hidden collection reports IsOffscreen or a zero rect.
     /// </summary>
-    private Task<AutomationElement?> WaitForArticlesViewAsync() =>
-        fixture.WaitForElementAsync(window =>
+    private async Task<AutomationElement?> WaitForArticlesViewAsync()
+    {
+        var articles = await fixture.WaitForElementAsync(window =>
             window.FindAllDescendants(fixture.CF.ByAutomationId("ReaderArticlesView"))
                 .FirstOrDefault(element => IsVisibleInTree(element)
                     && element.BoundingRectangle is { Height: > 200 }),
             TimeSpan.FromSeconds(15));
+        if (articles is null)
+        {
+            DumpCandidates("ReaderArticlesView", "PasukimCollection");
+        }
+        return articles;
+    }
 
     /// <summary>Fires the ⋮ toolbar button's real Clicked handler — the
     /// Invoke pattern drives the control without a foreground/hit-test, so a
@@ -264,18 +275,10 @@ public sealed class ArticlesMenuPolicyTests(ArticlesMenuFixture fixture)
     /// tree + real bounds is the honest "the app renders this row" signal —
     /// deliberately not FromPoint, which answers for whatever desktop window
     /// is topmost rather than for the app.</summary>
-    private AutomationElement? RenderedCheckBox(string automationId)
-    {
-        foreach (var element in fixture.MainWindow.FindAllDescendants(fixture.CF.ByAutomationId(automationId)))
-        {
-            if (IsVisibleInTree(element)
-                && element.BoundingRectangle is { Width: > 0, Height: > 0 })
-            {
-                return element;
-            }
-        }
-        return null;
-    }
+    private AutomationElement? RenderedCheckBox(string automationId) =>
+        fixture.MainWindow.FindAllDescendants(fixture.CF.ByAutomationId(automationId))
+            .FirstOrDefault(element => IsVisibleInTree(element)
+                && element.BoundingRectangle is { Width: > 0, Height: > 0 });
 
     private static FlaUI.Core.Definitions.ToggleState ToggleStateOf(AutomationElement element) =>
         element.Patterns.Toggle.TryGetPattern(out var toggle)
