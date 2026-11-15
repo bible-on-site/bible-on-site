@@ -31,6 +31,7 @@ internal static class E2eXamlCompilation
         using var stream = File.OpenRead(assemblyPath);
         using var assembly = new PEReader(stream);
         var metadata = assembly.GetMetadataReader();
+        var evidence = new List<string>();
         foreach (var type in metadata.TypeDefinitions.Select(metadata.GetTypeDefinition))
         {
             if (FullName(metadata, type.Namespace, type.Name) != pageType)
@@ -46,19 +47,26 @@ internal static class E2eXamlCompilation
                 }
                 var il = assembly.GetMethodBody(method.RelativeVirtualAddress).GetILBytes()
                     ?? throw new BadImageFormatException("InitializeComponent has no IL.");
-                if (ConstructsControl(metadata, il, controlType))
+                var targets = new List<string>();
+                if (ConstructsControl(metadata, il, controlType, targets))
                 {
                     return;
                 }
+                evidence.Add($"{il.Length} IL bytes; newobj targets: "
+                    + (targets.Count == 0 ? "none" : string.Join(", ", targets)));
             }
             break;
         }
         throw new InvalidOperationException(
             $"{assemblyPath}: {pageType}.InitializeComponent does not directly construct {controlType}. "
-            + "The E2E app must contain compiled XAML, not a runtime-only InitializeComponent stub.");
+            + "The E2E app must contain compiled XAML, not a runtime-only InitializeComponent stub. "
+            + "Observed: " + (evidence.Count == 0 ? "no initializer body" : string.Join("; ", evidence)) + ".");
     }
 
-    internal static bool ConstructsControl(MetadataReader metadata, byte[] il, string controlType)
+    internal static bool ConstructsControl(MetadataReader metadata, byte[] il, string controlType) =>
+        ConstructsControl(metadata, il, controlType, null);
+
+    private static bool ConstructsControl(MetadataReader metadata, byte[] il, string controlType, List<string>? targets)
     {
         var constructsControl = false;
         var offset = 0;
@@ -79,12 +87,18 @@ internal static class E2eXamlCompilation
             {
                 throw new BadImageFormatException("Truncated InitializeComponent instruction.");
             }
-            if (opcode == OpCodes.Newobj && IsConstructorOf(metadata,
-                MetadataTokens.EntityHandle(BinaryPrimitives.ReadInt32LittleEndian(il.AsSpan(offset, 4))), controlType))
+            if (opcode == OpCodes.Newobj)
             {
+                var handle = MetadataTokens.EntityHandle(BinaryPrimitives.ReadInt32LittleEndian(il.AsSpan(offset, 4)));
+                var target = ReadTarget(metadata, handle);
+                if (targets != null && targets.Count < 8)
+                {
+                    targets.Add($"{handle.Kind} 0x{MetadataTokens.GetToken(handle):x8} -> "
+                        + $"{target.Parent.Kind} 0x{MetadataTokens.GetToken(target.Parent):x8} {target.Type}::{target.Name}");
+                }
                 // Direct control construction proves compilation even when
                 // Hot Reload retains a conditional path through runtime inflation.
-                constructsControl = true;
+                constructsControl |= target.Name == ".ctor" && target.Type == controlType;
             }
             offset += size;
         }
@@ -121,27 +135,42 @@ internal static class E2eXamlCompilation
         return 4 + 4 * count;
     }
 
-    private static bool IsConstructorOf(MetadataReader metadata, EntityHandle handle, string controlType)
+    private static MethodTarget ReadTarget(MetadataReader metadata, EntityHandle handle)
     {
         if (handle.Kind == HandleKind.MethodDefinition)
         {
             var method = metadata.GetMethodDefinition((MethodDefinitionHandle)handle);
-            var type = metadata.GetTypeDefinition(method.GetDeclaringType());
-            return metadata.GetString(method.Name) == ".ctor"
-                && FullName(metadata, type.Namespace, type.Name) == controlType;
+            var parent = method.GetDeclaringType();
+            return new(metadata.GetString(method.Name), TypeName(metadata, parent), parent);
         }
         if (handle.Kind == HandleKind.MemberReference)
         {
             var method = metadata.GetMemberReference((MemberReferenceHandle)handle);
-            if (metadata.GetString(method.Name) != ".ctor" || method.Parent.Kind != HandleKind.TypeReference)
-            {
-                return false;
-            }
-            var type = metadata.GetTypeReference((TypeReferenceHandle)method.Parent);
-            return FullName(metadata, type.Namespace, type.Name) == controlType;
+            return new(metadata.GetString(method.Name), TypeName(metadata, method.Parent), method.Parent);
         }
-        return false;
+        return new("unknown", "unknown", default);
     }
+
+    private static string TypeName(MetadataReader metadata, EntityHandle handle) => handle.Kind switch
+    {
+        HandleKind.TypeDefinition => DefinitionName(metadata, (TypeDefinitionHandle)handle),
+        HandleKind.TypeReference => ReferenceName(metadata, (TypeReferenceHandle)handle),
+        _ => "unknown"
+    };
+
+    private static string DefinitionName(MetadataReader metadata, TypeDefinitionHandle handle)
+    {
+        var type = metadata.GetTypeDefinition(handle);
+        return FullName(metadata, type.Namespace, type.Name);
+    }
+
+    private static string ReferenceName(MetadataReader metadata, TypeReferenceHandle handle)
+    {
+        var type = metadata.GetTypeReference(handle);
+        return FullName(metadata, type.Namespace, type.Name);
+    }
+
+    private readonly record struct MethodTarget(string Name, string Type, EntityHandle Parent);
 
     private static string FullName(MetadataReader metadata, StringHandle space, StringHandle name) =>
         $"{metadata.GetString(space)}.{metadata.GetString(name)}";

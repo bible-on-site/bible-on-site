@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using System.Text;
 using Xunit;
@@ -96,6 +97,96 @@ public sealed class E2eXamlCompilationTests
 
         Assert.Throws<BadImageFormatException>(() =>
             E2eXamlCompilation.ConstructsControl(assembly.GetMetadataReader(), il, FixtureControl));
+    }
+
+    [Theory]
+    [InlineData("SharedTopBar", ".ctor", true)]
+    [InlineData("OtherControl", ".ctor", false)]
+    [InlineData("SharedTopBar", "Create", false)]
+    public void LocalMemberReferencesRequireTheExpectedControlConstructor(string control, string member, bool accepted)
+    {
+        var bytes = MemberReferenceFixture(control, member);
+        using var assembly = new PEReader(new MemoryStream(bytes));
+        var metadata = assembly.GetMetadataReader();
+        var reference = metadata.GetMemberReference(MetadataTokens.MemberReferenceHandle(1));
+        Assert.Equal(HandleKind.TypeDefinition, reference.Parent.Kind);
+        var parent = metadata.GetTypeDefinition((TypeDefinitionHandle)reference.Parent);
+        Assert.Equal(control, metadata.GetString(parent.Name));
+
+        var path = Path.Join(Path.GetTempPath(), $"e2e-xaml-{Guid.NewGuid():N}.dll");
+        try
+        {
+            File.WriteAllBytes(path, bytes);
+            if (accepted)
+            {
+                E2eXamlCompilation.VerifyPerekPage(path);
+            }
+            else
+            {
+                var failure = Assert.Throws<InvalidOperationException>(() => E2eXamlCompilation.VerifyPerekPage(path));
+                Assert.Contains("MemberReference 0x0a000001 -> TypeDefinition 0x0200000", failure.Message);
+                Assert.Contains($"BibleOnSite.Controls.{control}::{member}", failure.Message);
+                Assert.Contains("IL bytes", failure.Message);
+            }
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    // XamlC's imported local constructor can be a MemberRef whose parent is a
+    // TypeDef. C# emits a MethodDef for the same call, so ordinary C# fixtures
+    // cannot exercise this distinct, valid metadata representation.
+    private static byte[] MemberReferenceFixture(string control, string member)
+    {
+        var metadata = new MetadataBuilder();
+        metadata.AddModule(0, metadata.GetOrAddString("E2eXamlFixture.dll"),
+            metadata.GetOrAddGuid(Guid.NewGuid()), default, default);
+        metadata.AddAssembly(metadata.GetOrAddString("E2eXamlFixture"), new Version(1, 0), default, default, default, default);
+        var runtime = metadata.AddAssemblyReference(metadata.GetOrAddString("System.Runtime"),
+            new Version(10, 0), default, default, default, default);
+        var objectType = metadata.AddTypeReference(runtime,
+            metadata.GetOrAddString("System"), metadata.GetOrAddString("Object"));
+        var noFields = MetadataTokens.FieldDefinitionHandle(1);
+        metadata.AddTypeDefinition(TypeAttributes.NotPublic, default, metadata.GetOrAddString("<Module>"),
+            default, noFields, MetadataTokens.MethodDefinitionHandle(1));
+        metadata.AddTypeDefinition(TypeAttributes.Public, metadata.GetOrAddString("BibleOnSite.Pages"),
+            metadata.GetOrAddString("PerekPage"), objectType, noFields, MetadataTokens.MethodDefinitionHandle(1));
+        var sharedTopBar = metadata.AddTypeDefinition(TypeAttributes.Public, metadata.GetOrAddString("BibleOnSite.Controls"),
+            metadata.GetOrAddString("SharedTopBar"), objectType, noFields, MetadataTokens.MethodDefinitionHandle(2));
+        var otherControl = metadata.AddTypeDefinition(TypeAttributes.Public, metadata.GetOrAddString("BibleOnSite.Controls"),
+            metadata.GetOrAddString("OtherControl"), objectType, noFields, MetadataTokens.MethodDefinitionHandle(4));
+        // Instance method, zero parameters, void return type.
+        var signature = metadata.GetOrAddBlob(new byte[] { 0x20, 0, 0x01 });
+        var target = metadata.AddMemberReference(control == "SharedTopBar" ? sharedTopBar : otherControl,
+            metadata.GetOrAddString(member), signature);
+
+        var bodies = new BlobBuilder();
+        var bodyEncoder = new MethodBodyStreamEncoder(bodies);
+        var instructions = new InstructionEncoder(new BlobBuilder());
+        instructions.OpCode(ILOpCode.Newobj);
+        instructions.Token(target);
+        instructions.OpCode(ILOpCode.Pop);
+        instructions.OpCode(ILOpCode.Ret);
+        var initializer = bodyEncoder.AddMethodBody(instructions, maxStack: 1);
+        var empty = new InstructionEncoder(new BlobBuilder());
+        empty.OpCode(ILOpCode.Ret);
+        var emptyBody = bodyEncoder.AddMethodBody(empty);
+        var noParameters = MetadataTokens.ParameterHandle(1);
+        metadata.AddMethodDefinition(MethodAttributes.Public, MethodImplAttributes.IL,
+            metadata.GetOrAddString("InitializeComponent"), signature, initializer, noParameters);
+        metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+            MethodImplAttributes.IL, metadata.GetOrAddString(".ctor"), signature, emptyBody, noParameters);
+        metadata.AddMethodDefinition(MethodAttributes.Public, MethodImplAttributes.IL,
+            metadata.GetOrAddString("Create"), signature, emptyBody, noParameters);
+        metadata.AddMethodDefinition(MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
+            MethodImplAttributes.IL, metadata.GetOrAddString(".ctor"), signature, emptyBody, noParameters);
+
+        var image = new BlobBuilder();
+        new ManagedPEBuilder(new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll),
+            new MetadataRootBuilder(metadata), bodies, flags: CorFlags.ILOnly).Serialize(image);
+        return image.ToArray();
     }
 }
 
