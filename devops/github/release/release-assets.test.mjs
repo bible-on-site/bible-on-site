@@ -125,7 +125,34 @@ test("interrupted, truncated and changed uploads cannot be published", (t) => {
 		);
 	}
 });
-test("missing files and duplicate names fail before publication", (t) => {
+test("identical payloads shared across platforms require one verified release asset", (t) => {
+	const { root, artifacts, asset } = fixture(t);
+	mkdirSync(join(root, "windows"));
+	writeFileSync(join(root, "windows/app.ipa"), "signed original binary");
+	const shared = [...artifacts, { ...artifacts[0], path: "windows" }];
+	verifyReleaseAssets({ assets: [asset] }, shared, root);
+	assert.throws(
+		() =>
+			verifyReleaseAssets(
+				{ assets: [{ ...asset, digest: "wrong" }] },
+				shared,
+				root,
+			),
+		/Incomplete or mismatched/,
+	);
+	writeFileSync(join(root, "windows/app.ipa"), "changed original bytes");
+	assert.throws(
+		() => verifyReleaseAssets({ assets: [asset] }, shared, root),
+		/Duplicate release asset/,
+	);
+	writeFileSync(join(root, "windows/app.ipa"), "different length");
+	assert.throws(
+		() => verifyReleaseAssets({ assets: [asset] }, shared, root),
+		/Duplicate release asset/,
+	);
+});
+
+test("missing files and empty artifact lists fail before publication", (t) => {
 	const { root, artifacts, asset } = fixture(t);
 	assert.throws(
 		() =>
@@ -135,15 +162,6 @@ test("missing files and duplicate names fail before publication", (t) => {
 				root,
 			),
 		/No release files/,
-	);
-	assert.throws(
-		() =>
-			verifyReleaseAssets(
-				{ assets: [asset] },
-				[...artifacts, ...artifacts],
-				root,
-			),
-		/Duplicate release asset/,
 	);
 	assert.throws(
 		() => verifyReleaseAssets({ assets: [] }, [], root),
