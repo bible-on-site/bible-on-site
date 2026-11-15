@@ -202,7 +202,7 @@ public partial class MasoraPage
         _unitRecitationSelection = true;
         _lastLongPressTime = DateTime.Now;
         UpdateSelectionBar();
-        TriggerHapticFeedback();
+        SelectionHaptics.Trigger();
     }
 
     private async void OnHeaderPointerPressed(object? sender, PointerEventArgs e)
@@ -383,7 +383,7 @@ public partial class MasoraPage
             UpdatePasukSelection();
             if (wasEmpty && _viewModel.SelectedPasukCount > 0)
             {
-                TriggerHapticFeedback();
+                SelectionHaptics.Trigger();
             }
         }
 #endif
@@ -432,7 +432,7 @@ public partial class MasoraPage
                     UpdateSelectionBar();
                     if (wasEmpty && _viewModel.SelectedPasukCount > 0)
                     {
-                        TriggerHapticFeedback();
+                        SelectionHaptics.Trigger();
                     }
                 });
             }
@@ -457,7 +457,7 @@ public partial class MasoraPage
             UpdateSelectionBar();
             if (wasEmpty && _viewModel.SelectedPasukCount > 0)
             {
-                TriggerHapticFeedback();
+                SelectionHaptics.Trigger();
             }
         }
 #endif
@@ -828,7 +828,7 @@ public partial class MasoraPage
         }
 
         await Clipboard.SetTextAsync(text);
-        TriggerHapticFeedback();
+        SelectionHaptics.Trigger();
         // Inline feedback: the bar flashes the clipboard-checkmark glyph.
         await SelectionBar.FlashCopiedAsync();
     }
@@ -846,24 +846,5 @@ public partial class MasoraPage
         var lines = selected.Select(item =>
             $"{PerekDataService.Instance.GetPerekSource(item.PerekId) ?? string.Empty} {item.Pasuk.PasukNumHeb}. {item.Pasuk.Text}");
         return $"{_viewModel.Heading}\n\n{string.Join("\n", lines)}";
-    }
-
-    /// <summary>Triggers haptic feedback (vibration) for selection mode entry.</summary>
-    private static void TriggerHapticFeedback()
-    {
-        try
-        {
-#if ANDROID
-            Vibration.Vibrate(TimeSpan.FromMilliseconds(50));
-#elif IOS
-            HapticFeedback.Perform(HapticFeedbackType.LongPress);
-#endif
-        }
-        #pragma warning disable S2221 // Deliberate failure boundary: haptic feedback is best-effort
-        catch (Exception ex) //NOSONAR — haptic feedback is best-effort.
-        {
-            #pragma warning restore S2221
-            Console.Error.WriteLine($"Haptic feedback failed: {ex.Message}");
-        }
     }
 }
