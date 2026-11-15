@@ -34,3 +34,15 @@ Iteration checks: launch to home, inspect short labels and highlighted actions,
 open the daily chapter, scroll down and slightly up, swipe between chapters,
 return home, choose a chapter in the index, visit the calendar and a content
 destination, then return. Repeat with large text and both appearance modes.
+
+Run the native smoke checks against the installed preview (Python standard
+library and ADB only):
+
+```powershell
+python BibleOnSite.Tests.E2E/Android/home_ux_preview.py `
+  --serial emulator-5564 --artifacts <output-directory>
+```
+
+The checks exercise real native controls, record screenshots, and verify toolbar
+visibility, chapter swipes, system Back, index selection and destination returns.
+Keep that emulator free of manual input during the run.
