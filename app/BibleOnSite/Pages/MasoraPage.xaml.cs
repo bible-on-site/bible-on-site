@@ -17,7 +17,7 @@ using Microsoft.Maui.Layouts;
 // Codacy: S2333 false positive — partial is required by the XAML code
 // generator and by the back-handling partial parts.
 #pragma warning disable S2333
-public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
+public partial class MasoraPage : ContentPage, IQueryAttributable, IAnalyticsScreenName //NOSONAR
 #pragma warning restore S2333
 {
     private readonly MasoraViewModel _viewModel;
@@ -109,6 +109,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 IsSelectableUnit = unitId => unitId > 0,
                 CurrentUnitId = () => _viewModel.UnitId,
                 NavigateToUnitAsync = unitId => _viewModel.NavigateToUnitAsync(unitId),
+                ArticlesVisibilityChanged = _ => SetAnalyticsScreenForUnit(),
             });
     }
 
@@ -258,6 +259,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         _carousel.ScrollToUnit(index);
 
         ClearAllSelections();
+        SetAnalyticsScreenForUnit();
         _chrome.RefreshPrevNext();
 
         _ = UpdateArticlesCountAsync();
@@ -322,6 +324,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         base.OnNavigatedTo(args);
         CarouselLoadingOverlay.ReaderNavigatedTo();
         _carousel.ReaderNavigatedTo();
+        SetAnalyticsScreenForUnit();
     }
 
     protected override void OnNavigatedFrom(NavigatedFromEventArgs args)
@@ -375,6 +378,10 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
             // Hide loading overlay — carousel is ready
             CarouselLoadingOverlay.Hide();
             _carousel.ResnapAfterLoad();
+
+            // The initial visit's screen_view: NavigatedTo fired before the
+            // unit resolved, so the resolved-identity emit lives here (#3378).
+            SetAnalyticsScreenForUnit();
 
             // Update articles count badge
             await UpdateArticlesCountAsync();
@@ -443,6 +450,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
         // Synchronous state update — fast, no guard needed.
         _viewModel.Unit = unit;
+        SetAnalyticsScreenForUnit();
         _chrome.RefreshPrevNext();
 
         // Fire async tasks in the background — never block the next swipe
@@ -517,6 +525,35 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         }
         await _viewModel.LoadArticlesAsync(unit);
         ArticlesCollection.ItemsSource = _viewModel.Articles;
+    }
+
+    #endregion
+
+    #region Analytics
+
+    /// <summary>
+    /// The reader reports its own logical screen from page lifecycle and
+    /// carousel swipes — transitions a Shell-level screen_view would
+    /// double-count — so the Shell report is suppressed.
+    /// </summary>
+    public AnalyticsScreen? AnalyticsScreen => null;
+
+    /// <summary>
+    /// Emits the visible surface's screen_view once the masora unit resolves
+    /// (#3378): the reader itself (Masora/{id} + unit heading) or, while the
+    /// articles view is up, its masora-scoped list. A pre-load NavigatedTo
+    /// with id 0 never emits — the post-load call owns the initial visit.
+    /// </summary>
+    private void SetAnalyticsScreenForUnit()
+    {
+        if (_viewModel.UnitId <= 0)
+        {
+            return;
+        }
+        AnalyticsScreens.Report(_chrome.IsShowingArticles
+            ? AnalyticsScreens.ForArticlesList("ReaderArticles", ArticlesListScope.Masora,
+                _viewModel.UnitId, _viewModel.Heading)
+            : AnalyticsScreens.ForMasora(_viewModel.UnitId, _viewModel.Heading));
     }
 
     #endregion

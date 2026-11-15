@@ -255,7 +255,7 @@ public class ReaderChromeTests
             Toolbar.Arrange(new Rect(0, 0, 400, 56));
         }
 
-        public ReaderChrome CreateChrome(bool withFullscreenHandler = true, Func<bool>? scrollReadingToStart = null, bool includeProgressIndicator = true)
+        public ReaderChrome CreateChrome(bool withFullscreenHandler = true, Func<bool>? scrollReadingToStart = null, bool includeProgressIndicator = true, Action<bool>? articlesVisibilityChanged = null)
         {
             return new ReaderChrome(
                 new ReaderChromeSurfaces
@@ -287,6 +287,7 @@ public class ReaderChromeTests
                     FullscreenStateChanged = withFullscreenHandler
                         ? isFullScreen => FullscreenChanges.Add(isFullScreen)
                         : null,
+                    ArticlesVisibilityChanged = articlesVisibilityChanged,
                 });
         }
 
@@ -732,5 +733,89 @@ public class ReaderChromeTests
 
         FluentActions.Invoking(() => rig.Articles.RaiseSelected(article)).Should().NotThrow();
         rig.Selections.Should().Equal(new int?[] { 5 }, "the highlight still lands even when navigation fails");
+    }
+
+    // — Articles-visibility notifications (#3378) —————————————————————————
+    // The readers re-report their analytics surface when the articles view
+    // swaps in/out — the coordinator publishes the settled transition.
+
+    [Fact]
+    public void ArticlesButton_ShowsArticles_NotifiesVisibilityOnce()
+    {
+        var changes = new List<bool>();
+        var rig = new Rig();
+        _ = rig.CreateChrome(articlesVisibilityChanged: changes.Add);
+
+        rig.BottomBar.RaiseArticles();
+
+        changes.Should().Equal(new[] { true },
+            "the articles swap settling is the reader's cue to report the scoped list surface");
+    }
+
+    [Fact]
+    public void TextButton_FromArticles_NotifiesVisibilityBackToReader()
+    {
+        var changes = new List<bool>();
+        var rig = new Rig();
+        _ = rig.CreateChrome(articlesVisibilityChanged: changes.Add);
+        rig.BottomBar.RaiseArticles();
+        rig.BottomBar.RaiseTextMode();
+
+        changes.Should().Equal(new[] { true, false },
+            "showing then hiding the articles view publishes both transitions");
+    }
+
+    [Fact]
+    public void ArticlesButton_SecondTap_DoesNotReNotify()
+    {
+        var changes = new List<bool>();
+        var rig = new Rig();
+        _ = rig.CreateChrome(articlesVisibilityChanged: changes.Add);
+        rig.BottomBar.RaiseArticles();
+
+        rig.BottomBar.RaiseArticles();
+
+        changes.Should().Equal(new[] { true },
+            "an already-open articles view publishes nothing — the surface never changed");
+    }
+
+    [Fact]
+    public void ArticlesButton_WhenReloadThrows_DoesNotNotify()
+    {
+        var changes = new List<bool>();
+        var rig = new Rig();
+        _ = new ReaderChrome(
+            new ReaderChromeSurfaces
+            {
+                BottomBar = rig.BottomBar,
+                PerushimSheet = rig.Sheet,
+                FanMenu = rig.Fan,
+                PreviousSatellite = rig.Prev,
+                NextSatellite = rig.Next,
+                ExitFullscreenButton = rig.ExitButton,
+                ArticlesView = rig.Articles,
+                ReaderContent = rig.Content,
+                ReadingProgressIndicator = rig.Progress,
+                Toolbar = rig.Toolbar,
+                Host = rig.Host,
+                ContentArea = rig.ContentArea,
+            },
+            new ReaderChromeActions
+            {
+                ReloadArticlesAsync = () => throw new InvalidOperationException("service down"),
+                CurrentUnit = () => rig.Unit,
+                SelectArticle = _ => { },
+                CanGoPrevious = () => true,
+                CanGoNext = () => true,
+                IsSelectableUnit = _ => true,
+                CurrentUnitId = () => 1,
+                NavigateToUnitAsync = _ => Task.CompletedTask,
+                ArticlesVisibilityChanged = changes.Add,
+            });
+
+        rig.BottomBar.RaiseArticles();
+
+        changes.Should().BeEmpty(
+            "a failed articles load never swapped the surfaces — no phantom list visit reports");
     }
 }
