@@ -19,6 +19,19 @@ describe("TosSection", () => {
 		).toBeInTheDocument();
 	});
 
+	it("separates the brand font license from third-party font rights", () => {
+		render(<TosSection />);
+		const fontSection = document.getElementById("fontLicense");
+		expect(fontSection).toHaveTextContent("Al Heperek Font");
+		expect(fontSection).toHaveTextContent("צפייה בתוכן ושימוש רגיל");
+		expect(fontSection).toHaveTextContent("הרשאה מראש ובכתב");
+		expect(fontSection).toHaveTextContent("סעיף זה אינו מגביל זכויות");
+		expect(fontSection).toHaveTextContent("רישיון GPL של Taamey D");
+		expect(
+			screen.getByRole("link", { name: "רישיון גופן על הפרק" }),
+		).toHaveAttribute("href", "/font-license.txt");
+	});
+
 	it("renders Sefaria and Dan Beeri links", () => {
 		render(<TosSection />);
 		const sefaria = screen.getByRole("link", { name: "ספאריה" });

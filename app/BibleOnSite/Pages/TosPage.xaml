@@ -35,6 +35,37 @@
             <!-- Divider -->
             <BoxView HeightRequest="1" Color="{StaticResource Gray300}" Margin="0,8"/>
 
+            <!-- Brand Font License Section -->
+            <VerticalStackLayout Spacing="8">
+                <Label Text="גופן המיתוג"
+                       FontSize="18"
+                       FontAttributes="Bold"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
+                <Label Text="גופן על הפרק (Al Heperek Font) וקובצי המקור שלו כפופים לרישיון נפרד ומוגבל. צפייה בתוכן ושימוש רגיל באתר וביישומון מותרים בהתאם לתנאי השימוש. הצגת הגופן כחלק מהאתר או מהיישומון אינה מעניקה רישיון לשימוש עצמאי בקובצי הגופן."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="שימוש עצמאי בקובצי הגופן, לרבות העתקה, הפצה, אירוח מחדש, שינוי או הטמעה בפרויקט אחר, מחייב הרשאה מראש ובכתב מבעל הזכויות, בהתאם לרישיון גופן על הפרק."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+                <Label Text="רישיון גופן על הפרק"
+                       FontSize="14"
+                       TextColor="{StaticResource Primary}"
+                       TextDecorations="Underline">
+                    <Label.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnFontLicenseTapped"/>
+                    </Label.GestureRecognizers>
+                </Label>
+                <Label Text="גופן Taamey D המשמש לטקסט עם טעמים וגופני צד שלישי אחרים ממשיכים להיות כפופים לרישיונותיהם. סעיף זה אינו מגביל זכויות המוקנות לפי רישיונות אלה, לרבות רישיון GPL של Taamey D."
+                       FontSize="14"
+                       LineHeight="1.4"
+                       TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"/>
+            </VerticalStackLayout>
+
+            <!-- Divider -->
+            <BoxView HeightRequest="1" Color="{StaticResource Gray300}" Margin="0,8"/>
+
             <!-- Tanachpedia Section -->
             <VerticalStackLayout Spacing="8">
                 <Label Text="תנכפדיה"

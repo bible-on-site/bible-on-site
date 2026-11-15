@@ -1,3 +1,5 @@
+using BibleOnSite.Config;
+
 namespace BibleOnSite.Pages;
 
 public partial class TosPage : ContentPage
@@ -5,6 +7,12 @@ public partial class TosPage : ContentPage
     public TosPage()
     {
         InitializeComponent();
+    }
+
+    private async void OnFontLicenseTapped(object? sender, TappedEventArgs e)
+    {
+        var licenseUri = new Uri(new Uri(AppConfig.Instance.TosUrl), "/font-license.txt");
+        await Launcher.OpenAsync(licenseUri);
     }
 
     private async void OnSefariaTapped(object? sender, TappedEventArgs e)
