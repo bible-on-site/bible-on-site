@@ -244,8 +244,15 @@ public partial class AppShell : Shell, Helpers.IAdaptiveNavPane
 
 	internal void CompleteStartup()
 	{
-		if (ReaderContent.Content is PerekPage)
+		if (ReaderContent.Content is PerekPage or HomePage)
 		{
+			return;
+		}
+
+        if (HomeUxPreview.Enabled)
+		{
+			ReaderContent.ContentTemplate = null;
+			ReaderContent.Content = new HomePage();
 			return;
 		}
 

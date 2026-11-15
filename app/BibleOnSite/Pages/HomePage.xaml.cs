@@ -1,0 +1,114 @@
+using BibleOnSite.Services;
+using BibleOnSite.Helpers;
+
+namespace BibleOnSite.Pages;
+
+/// <summary>Native home UX preview; uses the packaged catalog and existing destinations.</summary>
+public partial class HomePage : ContentPage, IAnalyticsScreenName
+{
+    private int _dailyPerekId;
+    private bool _loading;
+    public string AnalyticsScreenName => "Home";
+
+    public HomePage()
+    {
+        InitializeComponent();
+#if ANDROID || IOS
+        var statusBar = new CommunityToolkit.Maui.Behaviors.StatusBarBehavior
+        {
+            ApplyOn = CommunityToolkit.Maui.Behaviors.StatusBarApplyOn.OnPageNavigatedTo
+        };
+        statusBar.SetBinding(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarColorProperty,
+            new Binding(nameof(BackgroundColor), source: this));
+        statusBar.SetAppTheme(CommunityToolkit.Maui.Behaviors.StatusBarBehavior.StatusBarStyleProperty,
+            CommunityToolkit.Maui.Core.StatusBarStyle.DarkContent,
+            CommunityToolkit.Maui.Core.StatusBarStyle.LightContent);
+        Behaviors.Add(statusBar);
+#endif
+    }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        AppLinkHelper.TargetRequested += OnAppLinkRequested;
+        if (AppLinkHelper.PendingTarget is not null)
+        {
+            await ShellAppNavigator.Instance.GoToQueuedAsync(AppRoutes.CalendarReader);
+            return;
+        }
+        await LoadDailyPerekAsync();
+    }
+
+    protected override void OnDisappearing()
+    {
+        AppLinkHelper.TargetRequested -= OnAppLinkRequested;
+        base.OnDisappearing();
+    }
+
+    private async void OnAppLinkRequested(object? sender, AppLinkHelper.AppLinkTarget target) =>
+        await ShellAppNavigator.Instance.GoToQueuedAsync(AppRoutes.CalendarReader);
+
+    private async Task LoadDailyPerekAsync()
+    {
+        if (_loading) { return; }
+        _loading = true;
+        HomeError.IsVisible = false;
+        try
+        {
+            var catalog = PerekDataService.Instance;
+            await catalog.LoadAsync();
+            _dailyPerekId = catalog.GetTodaysPerekId();
+            var perek = catalog.GetPerek(_dailyPerekId)
+                ?? throw new InvalidOperationException("The daily chapter is absent from the catalog.");
+            var verses = await catalog.LoadPasukimAsync(_dailyPerekId);
+            DailySource.Text = catalog.GetPerekSource(_dailyPerekId);
+            DailyTitle.Text = perek.Header;
+            DailyTitle.IsVisible = !string.IsNullOrWhiteSpace(perek.Header);
+            VerseCount.Text = $"{verses.Count} פסוקים";
+            var starter = StarterService.Instance;
+            ArticleCount.Text = starter.IsLoaded
+                ? $"{starter.GetDailyPerekArticlesCount(_dailyPerekId)} מאמרים היום"
+                : "מאמרים בחיבור לרשת";
+            DailyPerekCard.IsEnabled = true;
+        }
+        #pragma warning disable S2221 // UI failure boundary: a catalog failure keeps other destinations available and offers retry.
+        catch (Exception ex) //NOSONAR — a catalog failure leaves the other home destinations available and offers a retry.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"[Home] Daily chapter load failed: {ex}");
+            DailySource.Text = "הפרק היומי";
+            DailyPerekCard.IsEnabled = false;
+            HomeError.IsVisible = true;
+        }
+        finally { _loading = false; }
+    }
+
+    protected override bool OnBackButtonPressed()
+    {
+        if (HomeIndexPicker.IsVisible)
+        {
+            HomeIndexPicker.Hide();
+            return true;
+        }
+        return base.OnBackButtonPressed();
+    }
+
+    private static Task OpenAsync(string route) => ShellAppNavigator.Instance.GoToAsync(route);
+    private async void OnDailyPerekTapped(object? sender, TappedEventArgs e) =>
+        await OpenAsync($"{AppRoutes.CalendarReader}?perekId={_dailyPerekId}");
+    private void OnIndexTapped(object? sender, TappedEventArgs e) => HomeIndexPicker.Show(Math.Max(1, _dailyPerekId));
+    private async void OnIndexPerekSelected(int perekId) =>
+        await OpenAsync($"{AppRoutes.CalendarReader}?perekId={perekId}");
+    private async void OnCalendarTapped(object? sender, TappedEventArgs e) => await OpenAsync(AppRoutes.LearningCalendar);
+    private async void OnMasoraTapped(object? sender, TappedEventArgs e) => await OpenAsync(AppRoutes.Masora);
+    private async void OnAuthorsTapped(object? sender, TappedEventArgs e) => await OpenAsync(AppRoutes.Authors);
+    private async void OnPreferencesClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.Preferences);
+    private async void OnTanahpediaClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.Tanahpedia);
+    private async void OnParashaClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.ParashaList);
+    private async void OnMoadimClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.Moadim);
+    private async void OnBulletinClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.DailyBulletin);
+    private async void OnContactClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.Contact);
+    private async void OnTermsClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.Terms);
+    private async void OnDonationsClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.Donations);
+    private async void OnRetryClicked(object? sender, EventArgs e) => await LoadDailyPerekAsync();
+}
