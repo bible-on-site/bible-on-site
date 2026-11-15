@@ -259,7 +259,7 @@ public class SharedTopBar : ContentView
         _capsuleBorder.Margin = 0;
         _capsuleBorder.BackgroundColor = Colors.Transparent;
         _capsule.Spacing = 6;
-        _band.SetAppThemeColor(BackgroundColorProperty, Color.FromArgb("#F2EFE6"), Color.FromArgb("#111C2C"));
+        _band.SetAppThemeColor(BackgroundColorProperty, Color.FromArgb("#F5F7FB"), Color.FromArgb("#111C2C"));
         foreach (var button in new[] { NavigationButton, BackButton })
         {
             button.WidthRequest = 52;

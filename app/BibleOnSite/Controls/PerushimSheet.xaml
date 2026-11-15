@@ -46,11 +46,14 @@
                      HorizontalOptions="Center"
                      Margin="0,0,0,4"/>
             <!-- Title -->
-            <Label Text="פירושים"
+            <Label x:Name="PerushimHeading" Text="פירושים"
                    FontSize="18"
                    FontAttributes="Bold"
                    HorizontalTextAlignment="Center"
                    TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
+            <Label x:Name="PreviewInstructions" IsVisible="False" Text="בחרו אילו פירושים יוצגו לצד הפסוקים"
+                   FontSize="14" HorizontalTextAlignment="Center" Margin="0,2,0,6"
+                   TextColor="{AppThemeBinding Light=#63738C, Dark=#B8CBE5}"/>
             <!-- Divider -->
             <VerticalStackLayout Spacing="4">
                 <VerticalStackLayout.Triggers>

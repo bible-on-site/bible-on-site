@@ -5,12 +5,12 @@
              xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.HomePage"
              Title="בית" FlowDirection="RightToLeft" Shell.NavBarIsVisible="False"
-             BackgroundColor="{AppThemeBinding Light=#F2EFE6, Dark=#111C2C}">
+             BackgroundColor="{AppThemeBinding Light=#F5F7FB, Dark=#111C2C}">
     <ContentPage.Resources>
         <Style x:Key="HomeHeading" TargetType="Label">
             <Setter Property="FontSize" Value="19"/>
             <Setter Property="FontAttributes" Value="Bold"/>
-            <Setter Property="TextColor" Value="{AppThemeBinding Light=#192B45, Dark=#F2EFE6}"/>
+            <Setter Property="TextColor" Value="{AppThemeBinding Light=#192B45, Dark=#F5F7FB}"/>
         </Style>
         <Style x:Key="HomeSecondary" TargetType="Label">
             <Setter Property="FontSize" Value="13"/>
@@ -26,7 +26,7 @@
                                    HorizontalOptions="Center" VerticalOptions="Center" AutomationProperties.IsInAccessibleTree="False"/>
                         </Border>
                         <Label Text="על הפרק" FontSize="22" FontAttributes="Bold" CharacterSpacing="-0.5"
-                               TextColor="{AppThemeBinding Light=#192B45, Dark=#F2EFE6}" VerticalOptions="Center"/>
+                               TextColor="{AppThemeBinding Light=#192B45, Dark=#F5F7FB}" VerticalOptions="Center"/>
                     </HorizontalStackLayout>
                     <Button Grid.Column="1" Text="העדפות" AutomationId="HomePreferences" Clicked="OnPreferencesClicked"
                             FontSize="17" FontAttributes="Bold" HeightRequest="56" MinimumWidthRequest="118" Padding="14,0" CornerRadius="18" ContentLayout="Left,8"
@@ -55,7 +55,7 @@
 
                 <Grid ColumnDefinitions="*,Auto">
                     <Label Text="פרק אחד.&#10;עולם שלם." FontSize="43" FontAttributes="Bold" CharacterSpacing="-0.5" LineHeight="1.02"
-                           TextColor="{AppThemeBinding Light=#192B45, Dark=#F2EFE6}"/>
+                           TextColor="{AppThemeBinding Light=#192B45, Dark=#F5F7FB}"/>
                     <VerticalStackLayout Grid.Column="1" VerticalOptions="End" Spacing="4" Margin="0,0,0,7">
                         <BoxView HeightRequest="5" WidthRequest="35" Color="#2866E7" HorizontalOptions="End"/>
                         <Label x:Name="TodayLabel" Text="היום" FontSize="13" TextColor="{AppThemeBinding Light=#63738C, Dark=#B8CBE5}"/>
@@ -126,23 +126,30 @@
                         </controls:TappableView>
                     </Grid>
                     <controls:TappableView AutomationId="HomeMasora" Activated="OnMasoraTapped" SemanticProperties.Description="מסורה על הפרק">
-                        <Grid ColumnDefinitions="*,Auto" Padding="4,12" MinimumHeightRequest="72">
-                            <VerticalStackLayout Spacing="4" VerticalOptions="Center">
+                        <Border BackgroundColor="{AppThemeBinding Light=White, Dark=#233956}" StrokeThickness="0" StrokeShape="RoundRectangle 22" Padding="18">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16" MinimumHeightRequest="58">
+                            <Label Text="{x:Static fonts:FluentUI.book_open_24_regular}" FontFamily="FluentIcons" FontSize="30"
+                                   TextColor="{AppThemeBinding Light=#2866E7, Dark=#AACBFF}" VerticalOptions="Center"/>
+                            <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
                                 <Label Text="מסורה" Style="{StaticResource HomeHeading}"/>
                                 <Label Text="חלוקה מסורתית" Style="{StaticResource HomeSecondary}"/>
                             </VerticalStackLayout>
-                            <Label Grid.Column="1" Text="←" FontSize="24" TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" VerticalOptions="Center" AutomationProperties.IsInAccessibleTree="False"/>
+                            <Label Grid.Column="2" Text="←" FontSize="24" TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" VerticalOptions="Center" AutomationProperties.IsInAccessibleTree="False"/>
                         </Grid>
+                        </Border>
                     </controls:TappableView>
-                    <BoxView HeightRequest="1" Color="{AppThemeBinding Light=#D5DDEA, Dark=#334B6C}"/>
                     <controls:TappableView AutomationId="HomeAuthors" Activated="OnAuthorsTapped" SemanticProperties.Description="רבנים וכותבים">
-                        <Grid ColumnDefinitions="*,Auto" Padding="4,12" MinimumHeightRequest="72">
-                            <VerticalStackLayout Spacing="4" VerticalOptions="Center">
+                        <Border BackgroundColor="{AppThemeBinding Light=White, Dark=#233956}" StrokeThickness="0" StrokeShape="RoundRectangle 22" Padding="18">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16" MinimumHeightRequest="58">
+                            <Label Text="{x:Static fonts:FluentUI.people_24_regular}" FontFamily="FluentIcons" FontSize="30"
+                                   TextColor="{AppThemeBinding Light=#2866E7, Dark=#AACBFF}" VerticalOptions="Center"/>
+                            <VerticalStackLayout Grid.Column="1" Spacing="4" VerticalOptions="Center">
                                 <Label Text="עוד קולות" Style="{StaticResource HomeHeading}"/>
                                 <Label Text="רבנים וכותבים" Style="{StaticResource HomeSecondary}"/>
                             </VerticalStackLayout>
-                            <Label Grid.Column="1" Text="←" FontSize="24" TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" VerticalOptions="Center" AutomationProperties.IsInAccessibleTree="False"/>
+                            <Label Grid.Column="2" Text="←" FontSize="24" TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" VerticalOptions="Center" AutomationProperties.IsInAccessibleTree="False"/>
                         </Grid>
+                        </Border>
                     </controls:TappableView>
                 </VerticalStackLayout>
 

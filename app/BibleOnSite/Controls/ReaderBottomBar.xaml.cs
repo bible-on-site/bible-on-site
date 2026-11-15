@@ -15,8 +15,10 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
     private Button? _previewText;
     private Button? _previewPerushim;
     private Button? _previewArticles;
+    private Border? _previewArticleBadge;
+    private Label? _previewArticleCount;
     /// <summary>Height of the bar before the safe-area inset is added.</summary>
-    public static double TotalHeight => 90;
+    public static double TotalHeight => HomeUxPreview.Enabled ? 108 : 90;
 
 #pragma warning disable S3264 // Subscribed by the reader pages' code-behind; Codacy's per-file analysis misses them.
     /// <summary>Perushim chevron tapped — the page toggles the perushim sheet.</summary>
@@ -89,9 +91,11 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
 
     private void ApplyBadgeCount(int count)
     {
-        if (_previewArticles is { } preview)
+        if (_previewArticles is { } preview && _previewArticleBadge is { } badge && _previewArticleCount is { } label)
         {
-            preview.Text = count > 0 ? $"מאמרים {count}" : "מאמרים";
+            badge.IsVisible = count > 0;
+            label.Text = count.ToString();
+            SemanticProperties.SetDescription(preview, count > 0 ? $"מאמרי הפרק, {count} מאמרים" : "מאמרי הפרק");
         }
         ArticlesBadge.IsVisible = count > 0;
         if (count > 0)
@@ -129,9 +133,35 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
 
     private void ConfigurePreviewDock()
     {
-        _previewText = PreviewAction("קריאה", "TextButton", Fonts.FluentUI.book_open_24_regular, OnTextButtonClicked);
-        _previewPerushim = PreviewAction("פירושים", "PerushimChevronButton", Fonts.FluentUI.library_24_regular, OnPerushimChevronClicked);
-        _previewArticles = PreviewAction("מאמרים", "ArticlesButton", Fonts.FluentUI.document_24_regular, OnArticlesButtonClicked);
+        HeightRequest = TotalHeight;
+        Loaded += (_, _) =>
+        {
+            for (Element? ancestor = Parent; ancestor is not null; ancestor = ancestor.Parent)
+            {
+                if (ancestor is ContentPage page)
+                {
+                    page.Resources["BottomBarTotalHeight"] = Math.Max(TotalHeight, HeightRequest);
+                    break;
+                }
+            }
+        };
+        _previewText = PreviewAction("תצוגת\nהטקסט", "TextButton", Fonts.FluentUI.text_font_size_24_regular, OnPreviewDisplayClicked);
+        _previewPerushim = PreviewAction("בחירת\nפירושים", "PerushimChevronButton", Fonts.FluentUI.text_bullet_list_square_24_regular, OnPerushimChevronClicked);
+        _previewArticles = PreviewAction("מאמרי\nהפרק", "ArticlesButton", Fonts.FluentUI.document_24_regular, OnArticlesButtonClicked);
+        SemanticProperties.SetDescription(_previewPerushim, "בחירת הפירושים שיוצגו לצד הפסוקים");
+        _previewArticleCount = new Label { FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = Colors.White };
+        _previewArticleBadge = new Border
+        {
+            Content = _previewArticleCount, BackgroundColor = Color.FromArgb("#2866E7"),
+            StrokeThickness = 0, StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 10 },
+            Padding = new Thickness(6, 1), HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Start,
+            Margin = new Thickness(32, 0, 0, 0), InputTransparent = true, IsVisible = false,
+            AutomationId = "ReaderArticlesCount"
+        };
+        AutomationProperties.SetIsInAccessibleTree(_previewArticleBadge, false);
+        var articles = new Grid();
+        articles.Add(_previewArticles);
+        articles.Add(_previewArticleBadge);
         var actions = new Grid
         {
             ColumnDefinitions = [new(GridLength.Star), new(GridLength.Star), new(GridLength.Star)],
@@ -140,7 +170,7 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
         };
         actions.Add(_previewText);
         actions.Add(_previewPerushim, 1, 0);
-        actions.Add(_previewArticles, 2, 0);
+        actions.Add(articles, 2, 0);
         var surface = new Border
         {
             Content = actions,
@@ -154,19 +184,23 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
             new SolidColorBrush(Color.FromArgb("#D7E1F2")), new SolidColorBrush(Color.FromArgb("#334B6C")));
         Children.Clear();
         Add(surface);
+        ApplyBadgeCount(ArticlesBadgeCount);
         ApplyPreviewDockState();
     }
 
     private static Button PreviewAction(string text, string id, string glyph, EventHandler tapped)
     {
+        var icon = new FontImageSource { Glyph = glyph, FontFamily = "FluentIcons", Size = 24 };
+        icon.SetAppThemeColor(FontImageSource.ColorProperty, Color.FromArgb("#1552AC"), Color.FromArgb("#AACBFF"));
         var button = new Button
         {
-            Text = text, AutomationId = id, FontSize = 15, FontAttributes = FontAttributes.Bold,
-            CornerRadius = 19, Padding = new Thickness(4, 5), MinimumHeightRequest = 66,
+            Text = text, AutomationId = id, FontSize = 14, FontAttributes = FontAttributes.Bold,
+            LineBreakMode = LineBreakMode.WordWrap,
+            CornerRadius = 19, Padding = new Thickness(4, 5), MinimumHeightRequest = 78,
             ContentLayout = new Button.ButtonContentLayout(Button.ButtonContentLayout.ImagePosition.Top, 3),
-            ImageSource = new FontImageSource { Glyph = glyph, FontFamily = "FluentIcons", Size = 24, Color = Color.FromArgb("#2866E7") }
+            ImageSource = icon
         };
-        button.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#192B45"), Color.FromArgb("#F2EFE6"));
+        button.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#192B45"), Color.FromArgb("#F5F7FB"));
         button.Clicked += tapped;
         return button;
     }
@@ -174,14 +208,26 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
     private void ApplyPreviewDockState()
     {
         if (_previewText is null || _previewPerushim is null || _previewArticles is null) { return; }
-        var selected = IsArticlesActive ? _previewArticles : IsPerushimOpen ? _previewPerushim : _previewText;
+        var selected = IsArticlesActive ? _previewArticles : IsPerushimOpen ? _previewPerushim : null;
+        _previewText.Text = IsArticlesActive ? "חזרה\nלפסוקים" : "תצוגת\nהטקסט";
+        SemanticProperties.SetDescription(_previewText, IsArticlesActive ? "חזרה לפסוקי הפרק" : "שינוי גודל הגופן ותצוגת הטקסט");
+        if (_previewText.ImageSource is FontImageSource icon)
+        {
+            icon.Glyph = IsArticlesActive ? Fonts.FluentUI.book_open_24_regular : Fonts.FluentUI.text_font_size_24_regular;
+        }
         foreach (var action in new[] { _previewText, _previewPerushim, _previewArticles })
         {
             action.SetAppThemeColor(BackgroundColorProperty,
-                action == selected ? Color.FromArgb("#DEE7F7") : Colors.Transparent,
-                action == selected ? Color.FromArgb("#314F78") : Colors.Transparent);
+                action == selected ? Color.FromArgb("#DEE7F7") : Color.FromArgb("#F5F7FB"),
+                action == selected ? Color.FromArgb("#314F78") : Color.FromArgb("#233956"));
         }
         _previewPerushim.IsEnabled = !IsArticlesActive;
+    }
+
+    private async void OnPreviewDisplayClicked(object? sender, EventArgs e)
+    {
+        if (IsArticlesActive) { OnTextButtonClicked(sender, e); }
+        else { await Services.ShellAppNavigator.Instance.GoToAsync(Services.AppRoutes.DisplayPreferences); }
     }
 
     private void OnPerushimChevronClicked(object? sender, EventArgs e) =>

@@ -4,10 +4,17 @@ This is a long-lived UX review branch. Keep PR #3385 in draft. Do not merge it,
 mark it ready, or enable auto-merge without Dorad's explicit instruction.
 
 Review the real emulator captures in [the GitHub comparison](review/REVIEW.md)
-or open [the static HTML gallery](review/index.html) locally. Both contain eleven
-before/after screen comparisons and a before/after continuous-scroll recording.
+or open [the static HTML gallery](review/index.html) locally. Both contain thirteen
+screen comparisons against the actual default branch (`master`), plus a
+before/after continuous-scroll recording. Before is always on the right and
+After on the left, including the GitHub-rendered Markdown tables.
 Keep the baseline images fixed and update the same `assets/after/` filenames in
-each iteration so GitHub can compare images between commits.
+each iteration so GitHub can compare images between commits. Never use a prior
+UX iteration as the Before baseline. The default-branch commit is documented in
+`review/comparisons.json`. Update descriptions there and run
+`python review/generate.py` from this directory to rebuild both review formats.
+The daily chapter card remains the home centerpiece; the library is an
+additional destination, not a replacement home screen.
 
 This is an opt-in Debug build for design iterations in the real MAUI app. Normal
 Debug builds and every Release build keep the existing reader startup.
@@ -36,9 +43,11 @@ their existing native screens. No demonstration content is added to the database
 
 The daily chapter and index open a reader above home. All pages use the same
 large Back and Home controls. The preview disables the side drawer and removes
-the reader fan. The reader has one large dock for reading, commentary and
-articles; its chapter title opens the chapter picker, while the tools sheet
-contains content search and display actions. Secondary learning destinations
+the reader fan. Its dock uses explicit action labels: `תצוגת הטקסט` opens actual
+font/display preferences, `בחירת פירושים` opens the picker for inline commentary,
+and `מאמרי הפרק` opens articles with a separate count badge. In articles mode the
+first action becomes `חזרה לפסוקים`. Its chapter title opens the chapter picker;
+the tools sheet contains content search and other reading options. Secondary learning destinations
 live in the library rather than a row of small links on home.
 
 The reading viewport keeps fixed geometry while the toolbar moves above it.
@@ -54,7 +63,8 @@ return home, choose a chapter in the index, visit the calendar and a content
 destination, then return. Repeat with large text and both appearance modes.
 
 The editorial home uses blue for primary actions, oversized Hebrew typography
-and a warm paper surface. Global search stays fixed at the top while the home
+and cool neutral surfaces. The library shares the daily card's dark blue,
+oversized type and faint background glyphs. Global search stays fixed at the top while the home
 content scrolls. It finds app destinations immediately from a local catalog
 (including synonyms), alongside the existing content-search results. Selecting
 a destination or content hit opens its real native page. The separate chapter
@@ -77,5 +87,7 @@ The checks exercise real native controls, record screenshots, and verify toolbar
 visibility, chapter swipes, system Back, index selection, populated calendar,
 destination returns, navigation search, content-result navigation, articles after
 a hidden text toolbar, and app links with two reader instances. An Android
-ANR fails the run immediately and records its screen.
+ANR fails the run immediately and records its screen. The reading-options check
+also verifies the display-settings destination, commentary explanation and
+contextual return-to-verses action.
 Keep that emulator free of manual input during the run.

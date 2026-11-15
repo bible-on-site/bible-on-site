@@ -241,6 +241,33 @@ def check_global_search(device, check):
     device.home()
 
 
+def check_reading_options(device, check):
+    device.tap("HomeDailyPerek")
+    items = device.wait(lambda ns: source(ns) and device.verses(ns), "Daily reader")
+    check.assertEqual(find(items, "TextButton").get("text").replace("\n", " "), "תצוגת הטקסט")
+    check.assertEqual(find(items, "PerushimChevronButton").get("text").replace("\n", " "), "בחירת פירושים")
+    check.assertEqual(find(items, "ArticlesButton").get("text").replace("\n", " "), "מאמרי הפרק")
+    device.tap("TextButton")
+    device.wait(lambda ns: find(ns, "FontPreviewText") is not None,
+                "Text appearance action opens actual rendering preferences")
+    device.capture("display-options")
+    device.back()
+    device.wait(lambda ns: source(ns) and device.verses(ns), "Return to reader")
+    device.tap("PerushimChevronButton")
+    device.wait(lambda ns: find(ns, "בחרו אילו פירושים יוצגו לצד הפסוקים") is not None,
+                "Commentary picker explains its rendering effect")
+    device.capture("commentary")
+    device.back()
+    device.tap("ArticlesButton")
+    items = device.wait(lambda ns: find(ns, "TextButton") is not None and not device.verses(ns), "Articles")
+    check.assertEqual(find(items, "TextButton").get("text").replace("\n", " "), "חזרה לפסוקים")
+    device.tap("TextButton")
+    items = device.wait(lambda ns: device.verses(ns), "Return to chapter text")
+    check.assertEqual(find(items, "TextButton").get("text").replace("\n", " "), "תצוגת הטקסט")
+    device.tap("TopBarHomeButton")
+    device.home()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
@@ -261,6 +288,8 @@ def main():
     checks.append("check_destinations")
     check_global_search(device, check)
     checks.append("check_global_search")
+    check_reading_options(device, check)
+    checks.append("check_reading_options")
     result = {"serial": args.serial, "passed": checks}
     (args.artifacts / "results.json").write_text(
         json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")

@@ -40,6 +40,11 @@ public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
     public PerushimSheet()
     {
         InitializeComponent();
+        if (Config.HomeUxPreview.Enabled)
+        {
+            PerushimHeading.Text = "הפירושים שיופיעו בפרק";
+            PreviewInstructions.IsVisible = true;
+        }
     }
 
     /// <summary>
