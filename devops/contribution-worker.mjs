@@ -118,7 +118,7 @@ export function workerOptions(args, env = process.env) {
 	const options = {
 		origin: env.CONTRIBUTION_ADMIN_ORIGIN || "https://admin.xn--febl3a.co.il",
 		ollama: env.LOCAL_LLM_URL || "http://127.0.0.1:11434",
-		model: env.LOCAL_LLM_MODEL || "qwen3:4b",
+		model: env.LOCAL_LLM_MODEL || "qwen3:8b",
 		workerId: env.CONTRIBUTION_WORKER_ID || hostname(),
 		profile: env.CONTRIBUTION_AWS_PROFILE || "AdministratorAccess-250598594267",
 		watch: false,

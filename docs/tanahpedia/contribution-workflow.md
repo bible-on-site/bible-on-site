@@ -121,7 +121,7 @@ feature. Local inference runs on the workstation, through an outbound worker;
 the deployed admin does not connect to workstation localhost. No hosted OpenAI
 fallback is used for issue generation.
 
-Run Ollama with `qwen3:4b`, sign into the existing AWS SSO profile, then run
+Run Ollama with `qwen3:8b`, sign into the existing AWS SSO profile, then run
 `node devops/contribution-worker.mjs --watch`. The worker defaults to the
 production admin and `AdministratorAccess-250598594267`. Use `--once` for one
 job, `--issue <UUID>` to select an issue, or `--origin http://localhost:3102 --dev`
@@ -175,6 +175,13 @@ replacement. The server rejected this unchanged proposal, and the synthetic issu
 and earlier incorrect creation proposal were closed without applying content.
 Structured output does not guarantee that a small model follows the requested
 edit; an editor can retry with another local model or create the PR manually.
+The final workstation check restored missing bundled CUDA libraries and detected
+the RTX 4070 Laptop GPU without changing its driver. `qwen3:8b` then produced the
+correct v4 title edit on the same issue: approximately 7.5 seconds of inference,
+with the unchanged 120-second deadline and 16K context. The visual diff showed
+the requested replacement, model authorship and the mandatory owner review.
+That synthetic PR and issue were closed without applying content. The worker now
+defaults to this tested 8B model; `--model` or `LOCAL_LLM_MODEL` can override it.
 
 ## API evolution
 
