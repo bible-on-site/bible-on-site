@@ -1,0 +1,14 @@
+{
+  "issue": 3400,
+  "device": "Android emulator (emulator-5556, 1080x2400 Debug build)",
+  "before": {
+    "file": "3400-picker-qit-top-of-list-before.png",
+    "state": "Reader at תהילים קיט; picker open with כתובים/תהילים preselected but the פרק column sits at א-י — the selected chapter is ~118 rows below and never reaches the viewport.",
+    "source": "MobileE2E failure capture from the un-fixed run (item=absent poll timeout)."
+  },
+  "after": {
+    "file": "3400-picker-qit-centered-after.png",
+    "state": "Same opening path on the fixed build: the פרק column opens centered on the selected קיט (קיד-קכג visible, both boundary arrows report more content).",
+    "source": "adb screencap during manual verification of the fixed Debug build."
+  }
+}
