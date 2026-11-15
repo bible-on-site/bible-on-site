@@ -1,4 +1,4 @@
-import type { Locator } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "../util/playwright/test-fixture";
 
 /**
@@ -50,7 +50,91 @@ async function worstViewportEscape(locator: Locator): Promise<number> {
 	});
 }
 
+function spouseRailBeforeHydration(width: number) {
+	return async ({ page }: { page: Page }) => {
+		// The real server-rendered tree must fit while client code is still
+		// loading. Keep CSS and the server response, but prevent hydration
+		// from replacing the initial spouse rail before we measure it.
+		await page.route(
+			(url) =>
+				url.pathname.startsWith("/_next/") && url.pathname.endsWith(".js"),
+			(route) => route.abort(),
+		);
+		await page.setViewportSize({ width, height: 1100 });
+		await page.goto(SHIMSHON_URL);
+
+		const familyRegion = page.getByRole("region", { name: "משפחה" });
+		await expect(familyRegion).toBeVisible();
+		const rail = familyRegion.locator("[data-spouse-rail]");
+		await expect(rail).toHaveAttribute("data-spouse-rail", "rail");
+		await expect(page.locator("[data-family-vertical]")).toHaveCount(0);
+		const cards = rail.getByTestId("family-spouse-card");
+		await expect(cards).toHaveCount(3);
+		for (const card of await cards.all()) {
+			// Bring lower cards into view without horizontally scrolling a
+			// clipped rail into a temporarily passing position.
+			await card.evaluate((element) =>
+				window.scrollTo(
+					0,
+					window.scrollY + element.getBoundingClientRect().top - 100,
+				),
+			);
+			await expect(card).toBeInViewport({ ratio: 1 });
+		}
+		const overlaps = await cards.evaluateAll((elements) => {
+			const boxes = elements.map((element) => element.getBoundingClientRect());
+			return boxes.flatMap((box, index) =>
+				boxes
+					.slice(index + 1)
+					.map((other) =>
+						Math.min(
+							Math.min(box.right, other.right) - Math.max(box.left, other.left),
+							Math.min(box.bottom, other.bottom) - Math.max(box.top, other.top),
+						),
+					),
+			);
+		});
+		expect(Math.max(...overlaps)).toBeLessThanOrEqual(1);
+
+		expect(await horizontalOverflow(page.locator("body"))).toBeLessThanOrEqual(
+			1,
+		);
+		expect(await horizontalOverflow(familyRegion)).toBeLessThanOrEqual(1);
+		expect(await worstViewportEscape(familyRegion)).toBeLessThanOrEqual(1);
+	};
+}
+
 test.describe("Tanahpedia person family tree responsive layout", () => {
+	// Literal titles keep every SSR case in the deterministic impact collector.
+	test(
+		"keeps spouse cards within the viewport before hydration at 600px",
+		spouseRailBeforeHydration(600),
+	);
+	test(
+		"keeps spouse cards within the viewport before hydration at 601px",
+		spouseRailBeforeHydration(601),
+	);
+	test(
+		"keeps spouse cards within the viewport before hydration at 700px",
+		spouseRailBeforeHydration(700),
+	);
+	test(
+		"keeps spouse cards within the viewport before hydration at 767px",
+		spouseRailBeforeHydration(767),
+	);
+	test(
+		"keeps spouse cards within the viewport before hydration at 768px",
+		spouseRailBeforeHydration(768),
+	);
+	test(
+		"keeps spouse cards within the viewport before hydration at 850px",
+		spouseRailBeforeHydration(850),
+	);
+	test(
+		"keeps spouse cards within the viewport before hydration at 1100px",
+		spouseRailBeforeHydration(1100),
+	);
+
 	test("renders the Jacob spouses-with-children matrix per viewport", async ({
 		page,
 		isWideEnough,
@@ -173,14 +257,10 @@ test.describe("Tanahpedia person family tree responsive layout", () => {
 			// Vertical order: parents above focal, siblings below focal, spouses
 			// after siblings, each mother above her children.
 			const treeText = (await familyRegion.textContent()) ?? "";
-			expect(treeText.indexOf("יצחק")).toBeLessThan(
-				treeText.indexOf("יעקב"),
-			);
+			expect(treeText.indexOf("יצחק")).toBeLessThan(treeText.indexOf("יעקב"));
 			expect(treeText.indexOf("יעקב")).toBeLessThan(treeText.indexOf("עשו"));
 			expect(treeText.indexOf("עשו")).toBeLessThan(treeText.indexOf("לאה"));
-			expect(treeText.indexOf("לאה")).toBeLessThan(
-				treeText.indexOf("ראובן"),
-			);
+			expect(treeText.indexOf("לאה")).toBeLessThan(treeText.indexOf("ראובן"));
 
 			// No card anywhere in the tree may be clipped off the viewport.
 			expect(await worstViewportEscape(familyRegion)).toBeLessThanOrEqual(1);

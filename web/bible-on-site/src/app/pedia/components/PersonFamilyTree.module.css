@@ -688,6 +688,16 @@
   --matrix-spouse-mid-px: 36px;
 }
 
+/* Keep the server-rendered spouse rail within its available width before the
+   client can measure it and select the responsive layout. */
+.spouseOnlyMatrix {
+  max-width: 100%;
+}
+
+.spouseOnlyMatrix .card {
+  max-width: 100%;
+}
+
 /* קו אנכי ממרכז המכולה למטה עד קו הנישואין האופקי */
 .spouseChildrenMatrixOuter::before {
   content: "";
