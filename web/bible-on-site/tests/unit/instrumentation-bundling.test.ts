@@ -26,8 +26,8 @@ interface WebpackStatsLike {
 }
 
 // Each `it` compiles the real instrumentation, diagnostics and canonical
-// loader graph. Mirror Next's raw-source corpus rule: the default JSON parser
-// needlessly parses/code-generates the 43 MB corpus and exceeds the deadline.
+// loader graph. Production must leave the development corpus dependency out
+// of that graph; emitting its 43 MB source exceeded this test's deadline.
 // Jest's 5s default stays in place as the regression check.
 const srcDir = path.resolve(__dirname, "../../src");
 const localModules = path.resolve(__dirname, "../../node_modules");
@@ -139,11 +139,9 @@ describe("instrumentation bundling", () => {
 			true,
 		);
 		expect(
-			modules
-				.filter((m) =>
-					m.name?.includes("sefaria-dump-5784-sivan-4.tanah_view.json"),
-				)
-				.map((m) => m.moduleType),
-		).toEqual(["asset/source"]);
+			modules.filter((m) =>
+				m.name?.includes("sefaria-dump-5784-sivan-4.tanah_view.json"),
+			),
+		).toEqual([]);
 	});
 });
