@@ -1,13 +1,198 @@
-"""Native home UX smoke checks for an installed HomeUxPreview Debug build."""
+"""Native home UX checks for an installed HomeUxPreview Debug build."""
 
 import argparse
 import json
 import os
 from pathlib import Path
 import re
-import subprocess
+import subprocess  # nosec B404: validated Android SDK executable, argv only.
+from threading import Event
 import time
-import xml.etree.ElementTree as ET
+import unittest
+
+from defusedxml import ElementTree
+
+
+def find(items, selector):
+    return next((n for n in items if (
+        n.get("resource-id", "").endswith("/" + selector)
+        or n.get("text") == selector
+    )), None)
+
+
+def bounds(node):
+    return list(map(int, re.findall(r"-?\d+", node.get("bounds", ""))))
+
+
+def source(items):
+    value = find(items, "PerekSource")
+    return value.get("text", "") if value is not None else ""
+
+
+class NativeDevice:
+    def __init__(self, args):
+        executable = Path(args.adb).resolve(strict=True)
+        if executable.name.lower() not in ("adb", "adb.exe"):
+            raise ValueError("Expected an Android SDK adb executable")
+        if not re.fullmatch(r"[A-Za-z0-9_.:-]+", args.serial):
+            raise ValueError("Expected an emulator serial")
+        self.base = [str(executable), "-s", args.serial]
+        self.artifacts = args.artifacts
+        self.artifacts.mkdir(parents=True, exist_ok=True)
+        self.poll_interval = Event()
+        dimensions = re.findall(r"(\d+)x(\d+)", self.adb("shell", "wm", "size").decode())
+        self.width, self.height = map(int, dimensions[-1])
+
+    def adb(self, *parts):
+        return subprocess.check_output(self.base + list(map(str, parts)), timeout=40)  # nosec B603: validated SDK argv, no shell.  # nosemgrep
+
+    def nodes(self):
+        response = self.adb("shell", "uiautomator", "dump", "/sdcard/home-ux.xml")
+        if b"dumped to:" not in response:
+            return []
+        raw = self.adb("shell", "cat", "/sdcard/home-ux.xml")
+        (self.artifacts / "last.xml").write_bytes(raw)
+        return list(ElementTree.fromstring(raw).iter("node"))
+
+    def wait(self, predicate, description):
+        deadline = time.monotonic() + 90
+        while time.monotonic() < deadline:
+            items = self.nodes()
+            if predicate(items):
+                return items
+            self.poll_interval.wait(0.3)
+        raise AssertionError(description)
+
+    def tap(self, selector):
+        items = self.wait(lambda ns: find(ns, selector) is not None, selector)
+        x1, y1, x2, y2 = bounds(find(items, selector))
+        self.adb("shell", "input", "tap", (x1 + x2) // 2, (y1 + y2) // 2)
+
+    def verses(self, items):
+        return [n for n in items if (
+            n.get("resource-id", "").endswith("/PasukText")
+            and bounds(n)[2] - bounds(n)[0] > self.width / 2
+        )]
+
+    def capture(self, name):
+        self.adb("shell", "screencap", "-p", "/sdcard/home-ux.png")
+        self.adb("pull", "/sdcard/home-ux.png", self.artifacts / f"{name}.png")
+        (self.artifacts / f"{name}.xml").write_bytes(
+            self.adb("shell", "cat", "/sdcard/home-ux.xml")
+        )
+
+    def swipe(self, x1, y1, x2, y2):
+        self.adb("shell", "input", "swipe", round(x1 * self.width),
+                 round(y1 * self.height), round(x2 * self.width),
+                 round(y2 * self.height), 600)
+
+    def home(self):
+        return self.wait(lambda ns: find(ns, "HomeDailySource") is not None
+                         and find(ns, "HomeDailySource").get("text")
+                         not in ("", "טוען את הפרק..."), "Expected home")
+
+    def back(self):
+        self.adb("shell", "input", "keyevent", 4)
+
+
+def check_home_and_daily(device, check):
+    package = "com.tanah.daily929"
+    device.adb("shell", "am", "force-stop", package)
+    device.adb("shell", "monkey", "-p", package,
+               "-c", "android.intent.category.LAUNCHER", 1)
+    items = device.home()
+    daily_source = find(items, "HomeDailySource").get("text")
+    check.assertTrue(daily_source)
+    check.assertIsNotNone(find(items, "HomeGlobalSearch"), "Global search missing at top")
+    check.assertIn("פסוקים", find(items, "HomeVerseCount").get("text", ""))
+    device.capture("home")
+    device.tap("HomeDailyPerek")
+    device.wait(lambda ns: source(ns) == daily_source and device.verses(ns),
+                "Daily reader")
+    device.capture("daily-reader")
+    device.back()
+    device.home()
+
+
+def check_index(device, check):
+    device.tap("HomeIndex")
+    device.wait(lambda ns: find(ns, "PerekPickerConfirm") is not None, "Index")
+    device.capture("index")
+    device.back()
+    device.wait(lambda ns: find(ns, "PerekPickerConfirm") is None, "Dismiss index")
+    device.home()
+    device.tap("HomeIndex")
+    for label in ("תורה", "בראשית", "א", "PerekPickerConfirm"):
+        device.tap(label)
+    items = device.wait(lambda ns: source(ns) == "בראשית א" and device.verses(ns),
+                        "Index reader")
+    check.assertIsNotNone(find(items, "ReaderMenuButton"), "Reader menu clipped")
+    check.assertIsNotNone(find(items, "ReaderHomeButton"), "Home action clipped")
+
+
+def check_scroll_and_swipe(device, check):
+    device.swipe(0.5, 0.76, 0.5, 0.34)
+    items = device.wait(
+        lambda ns: find(ns, "ReaderHomeButton") is None and device.verses(ns),
+        "Toolbar did not hide during downward scroll")
+    check.assertNotEqual(device.verses(items)[0].get("text", "").split(" ", 1)[0],
+                         "א", "Downward scroll did not advance the text")
+    device.capture("reader-toolbar-hidden")
+    device.swipe(0.5, 0.50, 0.5, 0.55)
+    items = device.wait(
+        lambda ns: find(ns, "ReaderHomeButton") is not None and device.verses(ns),
+        "Toolbar did not return on small upward movement")
+    check.assertNotEqual(device.verses(items)[0].get("text", "").split(" ", 1)[0],
+                         "א", "Header reveal jumped to chapter start")
+    device.capture("reader-toolbar-restored")
+    device.swipe(0.8, 0.55, 0.2, 0.55)
+    if source(device.nodes()) == "בראשית א":
+        device.swipe(0.2, 0.55, 0.8, 0.55)
+    device.wait(lambda ns: source(ns) == "בראשית ב" and device.verses(ns),
+                "Chapter swipe")
+    device.tap("ReaderHomeButton")
+    device.home()
+
+
+def check_destinations(device):
+    device.tap("HomeCalendar")
+    device.wait(lambda ns: find(ns, "CalendarViewMonth") is not None, "Calendar")
+    device.capture("calendar")
+    device.back()
+    device.home()
+    device.swipe(0.5, 0.8, 0.5, 0.55)
+    device.tap("HomeAuthors")
+    device.wait(lambda ns: find(ns, "AuthorsNavigationButton") is not None,
+                "Authors screen")
+    device.capture("authors")
+    device.back()
+    device.home()
+
+
+def check_global_search(device, check):
+    device.tap("HomeGlobalSearch")
+    device.wait(lambda ns: find(ns, "HomeSearchInput") is not None, "Global search")
+    device.tap("HomeSearchInput")
+    device.adb("shell", "input", "text", "calendar")
+    items = device.wait(lambda ns: find(ns, "לוח שנה") is not None,
+                        "Navigation result for calendar")
+    check.assertIsNotNone(find(items, "HomeNavigationResult"))
+    device.capture("navigation-search")
+    device.tap("לוח שנה")
+    device.wait(lambda ns: find(ns, "CalendarViewMonth") is not None,
+                "Navigation search opens calendar")
+    device.back()
+    device.wait(lambda ns: find(ns, "HomeSearchInput") is not None, "Search history")
+    device.tap("ניקוי")
+    device.tap("HomeSearchInput")
+    device.adb("shell", "input", "text", "1")
+    device.wait(lambda ns: find(ns, "HomeContentResult") is not None,
+                "Global content search returns chapter hits")
+    device.capture("content-search")
+    device.tap("HomeContentResult")
+    device.wait(lambda ns: source(ns) and device.verses(ns), "Content search reader")
+    device.tap("ReaderHomeButton")
+    device.home()
 
 
 def main():
@@ -19,157 +204,20 @@ def main():
     parser.add_argument("--serial", required=True)
     parser.add_argument("--artifacts", required=True, type=Path)
     args = parser.parse_args()
-    args.artifacts.mkdir(parents=True, exist_ok=True)
-    device = [args.adb, "-s", args.serial]
-    package = "com.tanah.daily929"
+    device = NativeDevice(args)
+    check = unittest.TestCase()
     checks = []
-
-    def adb(*parts):
-        return subprocess.run(
-            [*device, *map(str, parts)], check=True, capture_output=True,
-            timeout=40,
-        ).stdout
-
-    dimensions = re.findall(r"(\d+)x(\d+)", adb("shell", "wm", "size").decode())
-    width, height = map(int, dimensions[-1])
-
-    def bounds(node):
-        return list(map(int, re.findall(r"-?\d+", node.get("bounds", ""))))
-
-    def nodes():
-        response = adb("shell", "uiautomator", "dump", "/sdcard/home-ux.xml")
-        if b"dumped to:" not in response:
-            return []
-        raw = adb("shell", "cat", "/sdcard/home-ux.xml")
-        (args.artifacts / "last.xml").write_bytes(raw)
-        return list(ET.fromstring(raw).iter("node"))
-
-    def find(items, selector):
-        return next((n for n in items if (
-            n.get("resource-id", "").endswith("/" + selector)
-            or n.get("text") == selector
-        )), None)
-
-    def wait(predicate, description):
-        deadline = time.monotonic() + 90
-        while time.monotonic() < deadline:
-            items = nodes()
-            if predicate(items):
-                return items
-            time.sleep(0.3)
-        raise AssertionError(description)
-
-    def tap(selector):
-        items = wait(lambda ns: find(ns, selector) is not None, selector)
-        x1, y1, x2, y2 = bounds(find(items, selector))
-        adb("shell", "input", "tap", (x1 + x2) // 2, (y1 + y2) // 2)
-
-    def source(items):
-        value = find(items, "PerekSource")
-        return value.get("text", "") if value is not None else ""
-
-    def verses(items):
-        return [n for n in items if (
-            n.get("resource-id", "").endswith("/PasukText")
-            and bounds(n)[2] - bounds(n)[0] > width / 2
-        )]
-
-    def capture(name):
-        adb("shell", "screencap", "-p", "/sdcard/home-ux.png")
-        adb("pull", "/sdcard/home-ux.png", args.artifacts / f"{name}.png")
-        (args.artifacts / f"{name}.xml").write_bytes(
-            adb("shell", "cat", "/sdcard/home-ux.xml")
-        )
-
-    def swipe(x1, y1, x2, y2):
-        adb("shell", "input", "swipe", round(x1 * width), round(y1 * height),
-            round(x2 * width), round(y2 * height), 600)
-
-    def passed(name):
-        checks.append(name)
-        print(f"PASS {name}", flush=True)
-
-    def home():
-        return wait(lambda ns: find(ns, "HomeDailySource") is not None
-                    and find(ns, "HomeDailySource").get("text")
-                    not in ("", "טוען את הפרק..."),
-                    "Expected home after Back")
-
-    adb("shell", "am", "force-stop", package)
-    adb("shell", "monkey", "-p", package,
-        "-c", "android.intent.category.LAUNCHER", 1)
-    items = home()
-    daily_source = find(items, "HomeDailySource").get("text")
-    assert daily_source and daily_source != "טוען את הפרק..."
-    assert "פסוקים" in find(items, "HomeVerseCount").get("text", "")
-    capture("home")
-    passed("native home with daily source and real counters")
-
-    tap("HomeDailyPerek")
-    wait(lambda ns: source(ns) == daily_source and verses(ns), "Daily reader")
-    capture("daily-reader")
-    adb("shell", "input", "keyevent", 4)
-    home()
-    passed("daily chapter opens and system Back returns home")
-
-    tap("HomeIndex")
-    wait(lambda ns: find(ns, "PerekPickerConfirm") is not None, "Index")
-    capture("index")
-    adb("shell", "input", "keyevent", 4)
-    wait(lambda ns: find(ns, "PerekPickerConfirm") is None, "Dismiss index")
-    home()
-    passed("system Back dismisses the index before leaving home")
-
-    tap("HomeIndex")
-    tap("תורה")
-    tap("בראשית")
-    tap("א")
-    tap("PerekPickerConfirm")
-    items = wait(lambda ns: source(ns) == "בראשית א" and verses(ns), "Index reader")
-    assert find(items, "ReaderMenuButton") is not None, "Reader menu clipped"
-    assert find(items, "ReaderHomeButton") is not None, "Home action clipped"
-    passed("index opens chosen chapter and both toolbar actions fit")
-
-    swipe(0.5, 0.76, 0.5, 0.34)
-    items = wait(lambda ns: find(ns, "ReaderHomeButton") is None and verses(ns),
-                 "Toolbar did not hide during downward scroll")
-    first_before = verses(items)[0].get("text", "").split(" ", 1)[0]
-    assert first_before != "א", "Downward scroll did not advance the text"
-    capture("reader-toolbar-hidden")
-    swipe(0.5, 0.50, 0.5, 0.55)
-    items = wait(lambda ns: find(ns, "ReaderHomeButton") is not None and verses(ns),
-                 "Toolbar did not return on small upward movement")
-    first_after = verses(items)[0].get("text", "").split(" ", 1)[0]
-    assert first_after != "א", "Header reveal jumped to chapter start"
-    capture("reader-toolbar-restored")
-    passed("toolbar hides and returns mid-chapter without a jump to the start")
-
-    swipe(0.8, 0.55, 0.2, 0.55)
-    items = nodes()
-    if source(items) == "בראשית א":
-        swipe(0.2, 0.55, 0.8, 0.55)
-    wait(lambda ns: source(ns) == "בראשית ב" and verses(ns), "Chapter swipe")
-    passed("horizontal chapter swipe remains available")
-    tap("ReaderHomeButton")
-    home()
-    passed("labelled home action returns home")
-
-    tap("HomeCalendar")
-    wait(lambda ns: find(ns, "CalendarViewMonth") is not None, "Calendar")
-    capture("calendar")
-    adb("shell", "input", "keyevent", 4)
-    home()
-    tap("HomeAuthors")
-    wait(lambda ns: find(ns, "HomeScrollView") is None, "Authors screen")
-    capture("authors")
-    adb("shell", "input", "keyevent", 4)
-    home()
-    passed("calendar and authors reuse native destinations and return home")
-
+    for scenario in (check_home_and_daily, check_index, check_scroll_and_swipe):
+        scenario(device, check)
+        checks.append(scenario.__name__)
+        print(f"PASS {scenario.__name__}", flush=True)
+    check_destinations(device)
+    checks.append("check_destinations")
+    check_global_search(device, check)
+    checks.append("check_global_search")
     result = {"serial": args.serial, "passed": checks}
     (args.artifacts / "results.json").write_text(
-        json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
+        json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
     print(json.dumps(result, ensure_ascii=True), flush=True)
 
 

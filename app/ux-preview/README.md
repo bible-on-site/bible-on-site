@@ -8,6 +8,7 @@ From `app/`, using the repository's pinned .NET SDK and MAUI Android workload:
 ```powershell
 dotnet build BibleOnSite/BibleOnSite.csproj -f net10.0-android -c Debug `
   -p:TargetFrameworks=net10.0-android -p:RuntimeIdentifier=android-x64 `
+  -p:RuntimeIdentifiers=android-x64 `
   -p:EmbedAssembliesIntoApk=true -p:HomeUxPreview=true
 ```
 
@@ -35,10 +36,22 @@ open the daily chapter, scroll down and slightly up, swipe between chapters,
 return home, choose a chapter in the index, visit the calendar and a content
 destination, then return. Repeat with large text and both appearance modes.
 
-Run the native smoke checks against the installed preview (Python standard
-library and ADB only):
+The editorial home uses blue for primary actions, oversized Hebrew typography
+and a warm paper surface. Global search stays fixed at the top while the home
+content scrolls. It finds app destinations immediately from a local catalog
+(including synonyms), alongside the existing content-search results. Selecting
+a destination or content hit opens its real native page. The separate chapter
+picker is labelled `אינדקס התנ"ך`; the masora subtitle is `חלוקה מסורתית`.
+
+After the first installation, iterate with `-t:Install`,
+`-p:EmbedAssembliesIntoApk=false` and `-p:Device=<emulator-serial>` to deploy
+updated assemblies to that emulator. Restart the app after deploying.
+
+Run the native smoke checks against the installed preview (Python, defusedxml
+and ADB):
 
 ```powershell
+python -m pip install -r BibleOnSite.Tests.E2E/Android/requirements-home-ux.txt
 python BibleOnSite.Tests.E2E/Android/home_ux_preview.py `
   --serial emulator-5564 --artifacts <output-directory>
 ```
