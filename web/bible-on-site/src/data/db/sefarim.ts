@@ -31,16 +31,21 @@ function sourceSefarim(): Sefarim {
 		// biome-ignore lint/security/noGlobalEval: fixed local module, only in the test environment
 		return eval("require('./sefaria-dump-5784-sivan-4.tanah_view.json')") as Sefarim;
 	}
-	if (process.env.NODE_ENV === "production") return canonicalSefarim();
-	// The development dependency remains in the module graph so edits trigger HMR.
-	const loaded = require("./sefaria-dump-5784-sivan-4.tanah_view.json") as
-		| string
-		| Sefarim
-		| { default: string | Sefarim };
-	const data = typeof loaded === "object" && "default" in loaded
-		? loaded.default
-		: loaded;
-	return typeof data === "string" ? (JSON.parse(data) as Sefarim) : data;
+	if (process.env.NODE_ENV === "production") {
+		return canonicalSefarim();
+	} else {
+		// Keep this dependency in an explicit development branch: webpack does
+		// not prune a require after a production early return and would embed
+		// another 43 MB corpus in every production loader bundle.
+		const loaded = require("./sefaria-dump-5784-sivan-4.tanah_view.json") as
+			| string
+			| Sefarim
+			| { default: string | Sefarim };
+		const data = typeof loaded === "object" && "default" in loaded
+			? loaded.default
+			: loaded;
+		return typeof data === "string" ? (JSON.parse(data) as Sefarim) : data;
+	}
 }
 
 const sefarim: Sefarim = Array.from(sourceSefarim());
