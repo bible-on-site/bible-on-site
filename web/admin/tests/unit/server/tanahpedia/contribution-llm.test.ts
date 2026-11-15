@@ -10,9 +10,13 @@ const mocks = vi.hoisted(() => ({
 	send: vi.fn(),
 	destroy: vi.fn(),
 	fetch: vi.fn(),
+	clientSettings: vi.fn(),
 }));
 vi.mock("@aws-sdk/client-bedrock-runtime", () => ({
 	BedrockRuntimeClient: class {
+		constructor(settings: unknown) {
+			mocks.clientSettings(settings);
+		}
 		send = mocks.send;
 		destroy = mocks.destroy;
 	},
@@ -77,6 +81,87 @@ function localOutput(output: unknown) {
 }
 
 describe("issue-to-PR LLM generation", () => {
+	it("reports absent provider configuration without inventing a model", () => {
+		vi.stubEnv("LOCAL_LLM_MODEL", undefined);
+		vi.stubEnv("BEDROCK_MODEL_ID", undefined);
+		expect(contributionLlmStatus()).toMatchObject({
+			local: { model: "" },
+			aws: { model: "", enabled: false },
+		});
+	});
+	it("retains an explicit deletion of a supplied existing structured fact", async () => {
+		issue.description = `Remove the unsupported fact ${ID}`;
+		mocks.catalogue.mockResolvedValue({
+			people: [],
+			places: [],
+			entities: [],
+			targets: [
+				{
+					id: ID,
+					kind: "person_birth_date",
+					after: { personId: ID, birthDate: 57840101 },
+				},
+			],
+		});
+		localOutput({
+			pullRequests: [
+				{
+					...draft,
+					changes: [{ kind: "person_birth_date", targetId: ID, after: null }],
+				},
+			],
+		});
+		await generateContributionPrs(input);
+		expect(mocks.create.mock.calls[0][0].changes).toEqual([
+			{ kind: "person_birth_date", targetId: ID, after: null },
+		]);
+	});
+	it("does not match punctuation-only candidate names and retains the configured model when a local response omits it", async () => {
+		mocks.catalogue.mockResolvedValue({
+			people: [{ id: ID, name: "---" }],
+			places: [],
+			entities: [],
+			targets: [],
+		});
+		mocks.fetch.mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				message: { content: JSON.stringify({ pullRequests: [draft] }) },
+			}),
+		});
+		await generateContributionPrs(input);
+		const supplied = JSON.parse(
+			JSON.parse(mocks.fetch.mock.calls[0][1].body).messages[1].content,
+		);
+		expect(supplied.catalogue.people).toEqual([]);
+		expect(mocks.create.mock.calls[0][2].model).toBe("local-test");
+	});
+	it.each([
+		["eu-west-1", "eu-west-1"],
+		["", "us-east-1"],
+	])(
+		"uses the AWS region fallback %s and ignores non-text provider blocks",
+		async (region, expected) => {
+			issue.assignee = { kind: "aws_llm" };
+			vi.stubEnv("BEDROCK_REGION", "");
+			vi.stubEnv("AWS_REGION", region);
+			mocks.send.mockResolvedValue({
+				output: {
+					message: {
+						content: [
+							{ toolUse: {} },
+							{ text: JSON.stringify({ pullRequests: [draft] }) },
+						],
+					},
+				},
+			});
+			await generateContributionPrs(input);
+			expect(mocks.clientSettings).toHaveBeenCalledWith(
+				expect.objectContaining({ region: expected }),
+			);
+			expect(mocks.destroy).toHaveBeenCalled();
+		},
+	);
 	it("explains available title-edit fields to the model instead of supplying only decoder vocabulary", async () => {
 		issue.description = `עדכן כותרת של אברהם, targetId ${ID}`;
 		mocks.catalogue.mockResolvedValue({
@@ -657,6 +742,9 @@ describe("issue-to-PR LLM generation", () => {
 		);
 	});
 	it("includes matching candidates and related row IDs without picking among duplicate names", async () => {
+		issue.events = [
+			{ kind: "comment", body: "Use the supplied source" },
+		] as Contribution["events"];
 		issue.description = "אדם";
 		mocks.catalogue.mockResolvedValue({
 			people: [
@@ -666,7 +754,17 @@ describe("issue-to-PR LLM generation", () => {
 			],
 			places: [{ id: "place", name: "אדם" }],
 			entities: [{ id: "entity", name: "אדם" }],
-			targets: [{ id: "edge", after: { parentId: ID } }],
+			targets: [
+				{ id: "edge", after: { parentId: ID } },
+				{
+					id: "alias",
+					kind: "alias_mapping",
+					after: {
+						targets: [{ entryId: ID, label: "" }],
+						altGroupId: "existing-alternative",
+					},
+				},
+			],
 		});
 		await generateContributionPrs(input);
 		const user = JSON.parse(
@@ -674,6 +772,14 @@ describe("issue-to-PR LLM generation", () => {
 		);
 		expect(user.catalogue.people).toHaveLength(2);
 		expect(user.catalogue.targets[0].id).toBe("edge");
+		expect(user.issue.comments).toEqual(["Use the supplied source"]);
+		expect(
+			user.catalogue.targets.map((target: { id: string }) => target.id),
+		).toContain("alias");
+		expect(user.catalogue.references.alternative).toContainEqual({
+			id: "existing-alternative",
+			name: "קבוצת דעות חלופיות",
+		});
 		expect(contributionSystemPrompt()).toContain("untrusted data");
 	});
 	it("matches numeric references by named fields or chapter labels, never by unrelated digits", async () => {

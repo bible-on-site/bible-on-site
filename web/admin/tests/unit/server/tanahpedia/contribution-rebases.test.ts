@@ -103,6 +103,53 @@ beforeEach(() => {
 	});
 });
 describe("pending proposal base refresh", () => {
+	it("reads JSON-encoded queue snapshots and handles non-Error refresh failures", async () => {
+		mocks.query.mockImplementation(async (sql: string, params: unknown[]) =>
+			sql.includes("MAX(number)")
+				? [{ lastNumber: 2 }]
+				: params[0] === 0
+					? [{ id: ID, number: 1, data: JSON.stringify(pending) }]
+					: [],
+		);
+		mocks.prepare.mockRejectedValue("non-Error failure");
+		expect((await refreshPendingContributionBases(trigger)).blocked).toBe(1);
+		expect(item(ID).domainConflict).toBe(
+			"The target can no longer be refreshed",
+		);
+	});
+	it.each(["closed", "retargeted"])(
+		"rechecks a proposal that was %s after its queue snapshot",
+		async (race) => {
+			const snapshot = structuredClone(pending);
+			if (race === "closed") pending.state = "closed";
+			else pending.changes[0].targetId = OTHER;
+			mocks.items.set(ID, pending);
+			mocks.query.mockImplementation(async (sql: string, params: unknown[]) =>
+				sql.includes("MAX(number)")
+					? [{ lastNumber: 2 }]
+					: params[0] === 0
+						? [{ id: ID, number: 1, data: snapshot }]
+						: [],
+			);
+			await refreshPendingContributionBases(trigger);
+			expect(mocks.prepare).not.toHaveBeenCalled();
+			expect(item(ID).version).toBe(1);
+		},
+	);
+	it("does not repeat work after another runtime acknowledged the durable marker", async () => {
+		delete trigger.rebasePending;
+		mocks.items.set(OTHER, trigger);
+		await resumePendingContributionRebases();
+		expect(mocks.prepare).not.toHaveBeenCalled();
+	});
+	it("does not save a second acknowledgement when a concurrent runtime already cleared it", async () => {
+		mocks.prepare.mockImplementation(async () => {
+			delete item(OTHER).rebasePending;
+			return pending.changes;
+		});
+		await resumePendingContributionRebases();
+		expect(item(OTHER).version).toBe(trigger.version);
+	});
 	it("refreshes address proposals when an unrelated record changes the shared public namespace", async () => {
 		pending.changes = [
 			{

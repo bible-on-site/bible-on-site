@@ -53,6 +53,26 @@ function reviewed(
 }
 
 describe("typed contribution domain API", () => {
+	it("requires choosing an existing alias before editing its complete target set", async () => {
+		mocks.one.mockResolvedValue({ name: "Alias" });
+		mocks.query.mockResolvedValue([{ entryId: ID, label: "" }]);
+		await expect(
+			prepareChanges(conn, [
+				{
+					kind: "alias_mapping",
+					after: { name: "Alias", targets: [{ entryId: OTHER, label: "" }] },
+				},
+			]),
+		).rejects.toThrow("Choose the existing alias");
+	});
+	it("rejects an existing-entry title operation when its target no longer exists", async () => {
+		mocks.one.mockResolvedValue(null);
+		await expect(
+			prepareChanges(conn, [
+				{ kind: "entry_title", targetId: ID, after: { title: "New title" } },
+			]),
+		).rejects.toThrow("Record not found");
+	});
 	it("rejects creation at an existing canonical address before any writes", async () => {
 		mocks.one.mockResolvedValue(null);
 		mocks.query
@@ -406,11 +426,18 @@ describe("typed contribution domain API", () => {
 									latitude: "31.5",
 									longitude: "35.2",
 								},
+								{
+									id: "without-coordinates",
+									label: "Unlocated",
+									placeId: ID,
+									latitude: null,
+									longitude: null,
+								},
 							]
 						: [],
 		);
 		const result = await contributionCatalogue(conn);
-		expect(result.targets).toHaveLength(3);
+		expect(result.targets).toHaveLength(4);
 		expect(result.targets[2].after).toMatchObject({
 			latitude: 31.5,
 			longitude: 35.2,

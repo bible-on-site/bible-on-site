@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
 import type { Contribution, Contributor } from "~/lib/tanahpedia/contributions";
+import { contributionSnapshot } from "~/lib/tanahpedia/contributions";
 
 const mocks = vi.hoisted(() => ({
 	search: {} as Record<string, unknown>,
@@ -216,6 +217,216 @@ describe("issues and PR administration", () => {
 	});
 	afterEach(() => {
 		client?.clear();
+	});
+	it("clears search and assignee filters without retaining empty URL values", async () => {
+		mocks.search = { q: "term", assignee: "human" };
+		show();
+		fireEvent.change(await screen.findByLabelText("חיפוש דיונים"), {
+			target: { value: "" },
+		});
+		fireEvent.change(screen.getByLabelText("סינון לפי אחראי"), {
+			target: { value: "" },
+		});
+		expect(mocks.navigate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				search: expect.objectContaining({ q: undefined }),
+				replace: true,
+			}),
+		);
+		expect(mocks.navigate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				search: expect.objectContaining({ assignee: undefined }),
+			}),
+		);
+	});
+	it("keeps an unsent comment after a non-Error update failure", async () => {
+		mocks.search = { id: ID };
+		mocks.update.mockRejectedValue("disconnected");
+		show();
+		fireEvent.change(await screen.findByLabelText("הוספת תגובה"), {
+			target: { value: "Retained comment" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "שליחת תגובה" }));
+		expect(await screen.findByRole("alert")).toHaveTextContent("העדכון נכשל");
+		expect(screen.getByLabelText("הוספת תגובה")).toHaveValue("Retained comment");
+	});
+	it("shows migration history and raw sequences for a legacy proposal with no explicit API version", async () => {
+		mocks.search = { id: PRID };
+		pr.apiVersion = undefined;
+		pr.apiMigrationHistory = [
+			{
+				id: "failed",
+				status: "failed",
+				from: 1,
+				to: 2,
+				at: pr.updatedAt,
+				steps: [],
+				error: "Retained migration failure",
+				sequence: "Original sequence",
+			},
+			{
+				id: "success",
+				status: "succeeded",
+				from: 2,
+				to: 3,
+				at: pr.updatedAt,
+				steps: [],
+				error: null,
+				sequence: "Recovered sequence",
+			},
+		];
+		show("pr");
+		fireEvent.click(await screen.findByRole("tab", { name: "שינויים 1" }));
+		expect(screen.getByText("Retained migration failure")).toBeInTheDocument();
+		expect(screen.getByText("Original sequence")).toBeInTheDocument();
+		expect(screen.getByText("Recovered sequence")).toBeInTheDocument();
+	});
+	it("shows AWS generation progress until the explicit request completes", async () => {
+		mocks.search = { id: ID };
+		issue.assignee = { kind: "aws_llm" };
+		let finish: (value: Contribution[]) => void = () => {};
+		mocks.generate.mockReturnValue(
+			new Promise<Contribution[]>((resolve) => {
+				finish = resolve;
+			}),
+		);
+		show();
+		const button = await screen.findByRole("button", {
+			name: "יצירת PRs עם AWS LLM",
+		});
+		await waitFor(() => expect(button).toBeEnabled());
+		fireEvent.click(button);
+		expect(
+			await screen.findByRole("button", { name: "מכין הצעות..." }),
+		).toBeDisabled();
+		finish([pr]);
+		expect(await screen.findByText(/נוצרו 1/)).toBeInTheDocument();
+	});
+	it("cancels a newly opened composer and returns to its queue", async () => {
+		mocks.search = { id: "new" };
+		show("pr");
+		fireEvent.click(await screen.findByRole("button", { name: "ביטול" }));
+		expect(mocks.navigate).toHaveBeenCalledWith({
+			to: "/pull-requests",
+			search: {},
+		});
+	});
+	it("navigates a newly saved PR to the PR discussion", async () => {
+		mocks.search = { id: "new" };
+		mocks.create.mockResolvedValue(pr);
+		show("pr");
+		fireEvent.change(await screen.findByLabelText("כותרת"), {
+			target: { value: "Create entry" },
+		});
+		fireEvent.change(screen.getByLabelText("תיאור"), {
+			target: { value: "Supported shell" },
+		});
+		fireEvent.change(screen.getByLabelText("סוג שינוי"), {
+			target: { value: "entry" },
+		});
+		fireEvent.change(screen.getByLabelText("שם ייחודי"), {
+			target: { value: "new-entry" },
+		});
+		fireEvent.change(screen.getAllByLabelText("כותרת")[1], {
+			target: { value: "New entry" },
+		});
+		fireEvent.change(screen.getByLabelText("שם תצוגה"), {
+			target: { value: "New person" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "פתיחת PR" }));
+		await waitFor(() =>
+			expect(mocks.navigate).toHaveBeenCalledWith({
+				to: "/pull-requests",
+				search: { id: PRID },
+			}),
+		);
+	});
+	it.each([
+		["queued", null, "ממתין לעובד בתחנת העבודה"],
+		[
+			"running",
+			new Date(Date.now() + 60000).toISOString(),
+			"המודל המקומי מכין הצעות",
+		],
+		["running", null, "העובד המקומי התנתק - ניתן לשלוח שוב"],
+		["completed", null, "העובד המקומי יצר הצעות לסקירה"],
+		["failed", null, "ההפקה המקומית נכשלה"],
+		["cancelled", null, "בקשת ההפקה בוטלה"],
+	])(
+		"shows durable workstation generation state %s",
+		async (status, leaseExpiresAt, label) => {
+			mocks.search = { id: ID };
+			issue.assignee = { kind: "local_llm" };
+			issue.generation = {
+				id: PRID,
+				status: status as NonNullable<Contribution["generation"]>["status"],
+				requestedAt: issue.createdAt,
+				requestedBy: owner.id,
+				attempts: 1,
+				apiVersion: CONTRIBUTION_API_VERSION,
+				worker: status === "queued" ? null : "Workstation",
+				model: status === "completed" ? "local-model" : null,
+				leaseHash: null,
+				leaseExpiresAt,
+				claimedVersion: null,
+				contextHash: null,
+				outputHash: null,
+				prIds: status === "completed" ? [PRID] : [],
+				error: status === "failed" ? "Invalid model output" : null,
+			};
+			show();
+			expect(await screen.findByText(String(label))).toBeInTheDocument();
+			if (status === "failed")
+				expect(screen.getByRole("alert")).toHaveTextContent(
+					"Invalid model output",
+				);
+			if (status === "completed")
+				expect(screen.getByText("local-model")).toBeInTheDocument();
+			if (status === "queued" || (status === "running" && leaseExpiresAt))
+				expect(
+					screen.getByRole("button", { name: "העובד המקומי מטפל בפנייה" }),
+				).toBeDisabled();
+		},
+	);
+	it("shows content conflicts and AWS authorship while retaining the proposal for repair", async () => {
+		mocks.search = { id: PRID };
+		pr.domainConflict = "The cited fact changed";
+		pr.author = {
+			id: "aws:model",
+			name: "AWS model",
+			kind: "aws_llm",
+			isDoradsoft: false,
+		};
+		show("pr");
+		expect(
+			await screen.findByText("The cited fact changed"),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText("AWS LLM", { selector: ".contribution-type" }),
+		).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "מיזוג PR" })).toBeDisabled();
+	});
+	it("retains stale review snapshots and the pending refresh marker after a content merge", async () => {
+		mocks.search = { id: PRID };
+		const snapshot = contributionSnapshot({ ...pr, apiVersion: undefined });
+		pr.events.push({
+			id: "old-review",
+			kind: "approved",
+			actor: owner,
+			at: pr.updatedAt,
+			revision: 1,
+			body: "Reviewed previous proposal",
+			snapshot,
+		});
+		pr.revision = 2;
+		pr.state = "merged";
+		pr.rebasePending = true;
+		show("pr");
+		expect(
+			await screen.findByText(/רענון ההשוואות של ההצעות הממתינות נמצא בתור/),
+		).toBeInTheDocument();
+		expect(screen.getByText("Reviewed previous proposal")).toBeInTheDocument();
+		expect(screen.getByText(/גרסה קודמת/)).toBeInTheDocument();
 	});
 	it("loads another keyset page and retains independently computed queue counts", async () => {
 		mocks.list.mockImplementation(async ({ data }) => ({

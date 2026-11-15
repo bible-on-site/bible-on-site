@@ -1801,6 +1801,15 @@ describe("all category contribution operations against canonical MySQL", () => {
 		};
 		await mergeChanges([{ kind: "alias_mapping", targetId: id, after }]);
 		expect(await current("alias_mapping", id)).toEqual(after);
+		const { specialContributionTargets } = await import(
+			"~/server/tanahpedia/contribution-specials.server"
+		);
+		const targets = await store.withContributions(specialContributionTargets);
+		expect(
+			targets.filter(
+				(target) => target.kind === "alias_mapping" && target.label === name,
+			),
+		).toEqual([{ kind: "alias_mapping", id, label: name, after }]);
 		const proposal = await service.createContribution(
 			{
 				kind: "pr",
@@ -2288,6 +2297,21 @@ describe("all category contribution operations against canonical MySQL", () => {
 			...after,
 			sourceText: "מקור נוסף",
 		});
+		const { specialContributionTargets } = await import(
+			"~/server/tanahpedia/contribution-specials.server"
+		);
+		const targets = await store.withContributions(specialContributionTargets);
+		expect(targets).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({ kind: "source_reference", id, after: moved }),
+				expect.objectContaining({
+					kind: "source_reference",
+					id: sibling,
+					label: "מקור נוסף",
+					after: { ...after, sourceText: "מקור נוסף" },
+				}),
+			]),
+		);
 		await mergeChanges([
 			{ kind: "source_reference", targetId: id, after: null },
 		]);

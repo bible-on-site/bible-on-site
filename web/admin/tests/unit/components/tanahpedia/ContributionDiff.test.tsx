@@ -4,6 +4,117 @@ import { ContributionDiff } from "~/components/tanahpedia/ContributionDiff";
 import type { ReviewedChange } from "~/lib/tanahpedia/contributions";
 
 describe("typed contribution diff", () => {
+	it("renders unresolved names, unlabeled alias targets, booleans and partial legacy dates", () => {
+		render(
+			<ContributionDiff
+				changes={[
+					{
+						kind: "alias_mapping",
+						targetId: "alias",
+						before: null,
+						after: {
+							name: "Alias",
+							targets: [{ entryId: "raw-id", label: "" }],
+						},
+						labels: {},
+					},
+					{
+						kind: "prophecy_quality",
+						targetId: "quality",
+						before: { isGood: false },
+						after: { isGood: true },
+						labels: {},
+					},
+					{
+						kind: "person_death_date",
+						targetId: "death",
+						before: { deathDate: 0 },
+						after: { deathDate: -1 },
+						labels: {},
+					},
+					{
+						kind: "person_birth_date",
+						targetId: "birth",
+						before: { birthDate: 100 },
+						after: { birthDate: 57849901 },
+						labels: {},
+					},
+				]}
+			/>,
+		);
+		expect(screen.getByText("raw-id")).toBeInTheDocument();
+		expect(screen.getByText("פורענות")).toBeInTheDocument();
+		expect(screen.getByText("טובה")).toBeInTheDocument();
+		expect(screen.getByText("טרם נפטר")).toBeInTheDocument();
+		expect(screen.getByText("? תשרי ?")).toBeInTheDocument();
+		expect(screen.getByText("1 ? 5784")).toBeInTheDocument();
+	});
+	it("renders structured cited claims and synchronized MAIN names alongside the reviewed values", () => {
+		render(
+			<ContributionDiff
+				changes={[
+					{
+						kind: "metadata",
+						targetId: "person",
+						before: { displayName: "Old" },
+						after: { displayName: "New" },
+						personNames: [{ id: "main", name: "Old main" }],
+						labels: {},
+					},
+					{
+						kind: "source_reference",
+						targetId: "source",
+						before: null,
+						after: {
+							targetKind: "person_birth_date",
+							targetId: "fact",
+							sourceType: "other",
+							sourceText: "Source",
+						},
+						sourceTarget: {
+							kind: "person_birth_date",
+							id: "fact",
+							state: {
+								personId: "person",
+								birthDate: 57840000,
+								altGroupId: null,
+								legacyField: "Retained source fact",
+							},
+						},
+						labels: { "personId:person": "Named person" },
+					},
+					{
+						kind: "source_reference",
+						targetId: "source2",
+						before: null,
+						after: {
+							targetKind: "parent_child",
+							targetId: "edge",
+							sourceType: "tanah",
+							perekId: 1,
+							pasukNumber: 2,
+						},
+						sourceTarget: {
+							kind: "parent_child",
+							id: "edge",
+							state: {
+								parentId: "parent",
+								childId: "child",
+								sourceCitation: "בראשית א ב",
+							},
+						},
+						labels: { parent: "Parent", child: "Child" },
+					},
+				]}
+			/>,
+		);
+		expect(screen.getAllByLabelText("הטענה המצוטטת")).toHaveLength(2);
+		expect(screen.getByText("Named person")).toBeInTheDocument();
+		expect(screen.getByText("legacyField")).toBeInTheDocument();
+		expect(screen.getByText("Parent")).toBeInTheDocument();
+		expect(screen.getByText("? לא ידוע 5784")).toBeInTheDocument();
+		expect(screen.getByText(/Old main/)).toHaveTextContent("New");
+	});
 	it("displays free metadata that matches an object prototype property", () => {
 		render(
 			<ContributionDiff

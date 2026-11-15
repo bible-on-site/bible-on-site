@@ -181,6 +181,7 @@ describe("workstation generation leases", () => {
 		"api",
 		"version",
 		"expiry",
+		"missing-expiry",
 		"catalogue",
 	])("rejects %s drift before creating any proposals", async (kind) => {
 		const input = await claimed(),
@@ -191,6 +192,7 @@ describe("workstation generation leases", () => {
 		if (kind === "api") input.apiVersion = CONTRIBUTION_API_VERSION + 1;
 		if (kind === "version") item.version++;
 		if (kind === "expiry") job().leaseExpiresAt = "2000-01-01T00:00:00Z";
+		if (kind === "missing-expiry") job().leaseExpiresAt = null;
 		if (kind === "catalogue")
 			mocks.prepare.mockImplementationOnce(async () => ({
 				issue: structuredClone(item),
@@ -242,5 +244,13 @@ describe("workstation generation leases", () => {
 		expect(job().error).toBe(
 			"Generation storage unavailable. Request generation again.",
 		);
+	});
+	it("does not expose a non-Error provider rejection in the saved failure message", async () => {
+		const input = await claimed();
+		mocks.create.mockRejectedValueOnce("private provider payload");
+		await expect(completeContributionGeneration(input)).rejects.toBe(
+			"private provider payload",
+		);
+		expect(job().error).toBe("Invalid local model output");
 	});
 });

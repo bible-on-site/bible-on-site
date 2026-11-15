@@ -7,5 +7,17 @@ export default defineConfig({
 		environment: "node",
 		include: ["tests/integration/contributions-mysql.test.ts"],
 		fileParallelism: false,
+		coverage: {
+			provider: "v8",
+			include: ["src/**/*.{ts,tsx}"],
+			exclude: [
+				"src/routeTree.gen.ts",
+				"src/test/**",
+				"**/*.d.ts",
+				"**/*.test.ts",
+			],
+			reporter: ["text-summary", "json", "lcov"],
+			reportsDirectory: "./.coverage/mysql",
+		},
 	},
 });

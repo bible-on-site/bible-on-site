@@ -6,6 +6,7 @@ import {
 	validateContributionField,
 	validateContributionRecord,
 } from "~/lib/tanahpedia/contribution-records";
+import { validateSpecialChange } from "~/lib/tanahpedia/contribution-specials";
 import {
 	validateChange,
 	validateChanges,
@@ -14,6 +15,28 @@ import {
 const ID = "00000000-0000-4000-8000-000000000001",
 	OTHER = "00000000-0000-4000-8000-000000000002";
 describe("category contribution contract", () => {
+	it("refuses unknown special operations and aliases that collide with public categories", () => {
+		expect(() => validateSpecialChange({ kind: "unknown", after: {} })).toThrow(
+			"Unsupported special change",
+		);
+		expect(() =>
+			validateSpecialChange({
+				kind: "alias_mapping",
+				after: { name: "אישים", targets: [{ entryId: ID, label: "" }] },
+			}),
+		).toThrow("reserved for a category");
+	});
+	it("rejects an alias target list beyond the reviewed operation bound", () => {
+		expect(() =>
+			validateSpecialChange({
+				kind: "alias_mapping",
+				after: {
+					name: "Alias",
+					targets: Array(41).fill({ entryId: ID, label: "" }),
+				},
+			}),
+		).toThrow("1-40 targets");
+	});
 	it("treats mixed-case stored IDs as one identity without changing their spelling", () => {
 		const id = "Abcdef00-0000-4000-8000-000000000001";
 		expect(contributionRecordId(id, "record")).toBe(id);

@@ -5,6 +5,7 @@ import {
 	type ContributionCatalogue,
 	ContributionComposer,
 } from "~/components/tanahpedia/ContributionComposer";
+import type { Contribution } from "~/lib/tanahpedia/contributions";
 import {
 	FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
 	FAMILY_UNION_TYPES,
@@ -105,6 +106,72 @@ function description() {
 }
 
 describe("contribution composer", () => {
+	it("edits an existing metadata proposal and independently controls linked-issue closure", async () => {
+		const initial = {
+			kind: "pr",
+			title: "Existing proposal",
+			description: "Evidence supplied",
+			assignee: { kind: "unassigned" },
+			evidence: [],
+			issueId: OTHER,
+			closeIssue: true,
+			changes: [
+				{
+					kind: "metadata",
+					targetId: ID,
+					before: { displayName: "Old" },
+					after: { displayName: "Proposed" },
+					labels: {},
+				},
+			],
+		} as unknown as Contribution;
+		const { submit } = setup("pr", { initial });
+		expect(screen.getByLabelText("שם תצוגה")).toHaveValue("Proposed");
+		fireEvent.change(screen.getByLabelText("יישות"), {
+			target: { value: "" },
+		});
+		fireEvent.change(screen.getByLabelText("יישות"), { target: { value: ID } });
+		fireEvent.change(screen.getByLabelText("שם תצוגה"), {
+			target: { value: "Repaired" },
+		});
+		fireEvent.click(screen.getByLabelText("סגירת הפנייה המקושרת לאחר מיזוג"));
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					closeIssue: false,
+					changes: [
+						{
+							kind: "metadata",
+							targetId: ID,
+							after: { displayName: "Repaired" },
+						},
+					],
+				}),
+			),
+		);
+	});
+	it("retains both evidence rows while editing only the selected citation and note", () => {
+		setup();
+		fireEvent.click(screen.getByText("+ הוספת מקור"));
+		fireEvent.click(screen.getByText("+ הוספת מקור"));
+		fireEvent.change(screen.getAllByLabelText("הפניה למקור")[1], {
+			target: { value: "Second citation" },
+		});
+		fireEvent.change(screen.getAllByLabelText("מה המקור מוכיח?")[1], {
+			target: { value: "Second note" },
+		});
+		expect(screen.getAllByLabelText("הפניה למקור")[0]).toHaveValue("");
+		expect(screen.getAllByLabelText("מה המקור מוכיח?")[1]).toHaveValue(
+			"Second note",
+		);
+	});
+	it("keeps a draft after a non-Error transport rejection", async () => {
+		setup("issue", { onSubmit: vi.fn().mockRejectedValue("disconnected") });
+		description();
+		fireEvent.submit(screen.getByRole("form"));
+		expect(await screen.findByRole("alert")).toHaveTextContent("השמירה נכשלה");
+	});
 	it("offers exactly the four requested assignee kinds", () => {
 		const change = vi.fn();
 		render(<AssigneePicker value={{ kind: "unassigned" }} onChange={change} />);

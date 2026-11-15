@@ -35,6 +35,67 @@ beforeEach(() => {
 	mocks.names.mockResolvedValue([{ id: nameId, name: "Main name" }]);
 	mocks.sourceLabels.mockResolvedValue({});
 });
+it("locks multiple legacy metadata targets in a deterministic order", async () => {
+	const contract = currentContributionApiContract({} as never);
+	await convertApiVersionAsync(
+		[{ ...legacy, targetId: nameId }, legacy] as unknown,
+		1,
+		contract.version,
+		contract.adapters,
+	);
+	expect(mocks.read.mock.calls.map((args) => args[2])).toEqual([id, nameId]);
+});
+it("upgrades root-entity citations without inventing structured-fact preconditions", async () => {
+	mocks.source.mockResolvedValue(null);
+	const contract = currentContributionApiContract({} as never);
+	const operation = {
+		kind: "source_reference",
+		targetId: nameId,
+		before: null,
+		after: {
+			targetKind: "entity",
+			targetId: id,
+			sourceType: "other",
+			sourceText: "Source",
+			perekId: null,
+			pasukNumber: null,
+			perushId: null,
+		},
+		labels: {},
+	};
+	const result = await convertApiVersionAsync(
+		[operation] as unknown,
+		2,
+		contract.version,
+		contract.adapters,
+	);
+	expect(validateApiSequence(result.payload)[0]).not.toHaveProperty(
+		"sourceTarget",
+	);
+	expect(mocks.sourceLabels).not.toHaveBeenCalled();
+});
+it("rejects converted payloads whose base or proposal would be silently normalized", () => {
+	const operation = { ...legacy, personNames: [] };
+	for (const side of ["before", "after"] as const)
+		expect(() =>
+			validateApiSequence([
+				{
+					...operation,
+					[side]: { ...operation[side], displayName: " padded " },
+				},
+			]),
+		).toThrow("unsupported fields");
+});
+it.each([null, Array(41).fill(legacy)])(
+	"rejects invalid v2 sequence bounds before source lookup",
+	async (payload) => {
+		const contract = currentContributionApiContract({} as never);
+		await expect(
+			convertApiVersionAsync(payload, 2, contract.version, contract.adapters),
+		).rejects.toThrow("Unsupported API v2 sequence");
+		expect(mocks.source).not.toHaveBeenCalled();
+	},
+);
 it("adds v4 edit vocabulary without resolving content or changing the reviewed creation", async () => {
 	const source = [
 		{

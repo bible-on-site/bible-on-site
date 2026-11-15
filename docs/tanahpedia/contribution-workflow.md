@@ -333,9 +333,13 @@ worker before removing its scope. Existing general admin service access remains
 unchanged because its original scope and client settings are preserved.
 
 Validation tasks: `bun run test:unit`, `bun run coverage:unit`,
-`bun run test:contributions:mysql`, `bun run lint`, and `bun run build` in
+`bun run coverage:contributions:mysql`, `bun run lint`, and `bun run build` in
 `web/admin`. The MySQL suite creates and removes its own random loopback-only
 database from the canonical repository schema; it never edits the local corpus.
+Unit and native MySQL coverage use the same V8 provider and source coordinates,
+and both are required in the published admin report. Browser coverage confirms
+hits on that combined universe without adding instrumenter-specific coordinates.
+Coverage targets remain unchanged.
 
 Local browser validation uses the task-specific `tanah_e2e_4243` fixture database.
 The shared `tanah_test` corpus no longer contained its required article/author

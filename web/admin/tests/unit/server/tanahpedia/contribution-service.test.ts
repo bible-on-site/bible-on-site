@@ -111,6 +111,17 @@ const input = {
 async function pr(actor = alice) {
 	return createContribution(input, actor);
 }
+it.each([null, Array(41).fill(change)])(
+	"rejects invalid raw-recovery sequence bounds before loading a proposal",
+	async (sequence) => {
+		await expect(
+			recoverContributionSequence(
+				{ id: ID, version: 1, apiVersion: CONTRIBUTION_API_VERSION, sequence },
+				alice,
+			),
+		).rejects.toThrow("Recovery requires at most 40 operations");
+	},
+);
 
 it("recovers a gray PR by re-preparing its base and recording an authored revision", async () => {
 	const item = await pr();

@@ -35,6 +35,7 @@ it.each([
 	expect(() => validateContributionList(raw)).toThrow(),
 );
 it("normalizes optional queue filters", () => {
+	expect(validateContributionList({ q: "" }).q).toBeUndefined();
 	expect(validateContributionList(undefined).q).toBeUndefined();
 	expect(
 		validateContributionList({
