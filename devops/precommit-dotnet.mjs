@@ -16,10 +16,10 @@ import { getStagedChanges, runIn } from "./precommit-changes.mjs";
 // The MAUI app is multi-TFM; build only the TFM this platform actually carries.
 const APP_TFM =
 	process.platform === "win32"
-		? "net10.0-windows10.0.19041.0"
+		? "net11.0-windows10.0.19041.0"
 		: process.platform === "darwin"
-			? "net10.0-maccatalyst"
-			: "net10.0-android";
+			? "net11.0-maccatalyst"
+			: "net11.0-android";
 
 /**
  * Project dir → build args (after `dotnet build`, run from repo root).

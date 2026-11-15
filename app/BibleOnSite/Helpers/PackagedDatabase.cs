@@ -76,7 +76,7 @@ public static class PackagedDatabase
 
     /// <summary>
     /// The installed app's "version+build" identity, or null where no app
-    /// identity exists — the net10.0 reference assembly used by unit tests
+    /// identity exists — the net11.0 reference assembly used by unit tests
     /// throws its internal <c>NotImplementedInReferenceAssemblyException</c>,
     /// which can only be matched by name from outside that assembly. A null
     /// version never writes or matches a marker, keeping those hosts on the

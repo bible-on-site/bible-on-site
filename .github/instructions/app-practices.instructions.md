@@ -12,7 +12,7 @@ applyTo: "app/**"
 ## Agent behavior
 
 - **Read the full terminal output of every command.** "Build FAILED", `error XA…`/`error CS…`, a non-zero exit, "Exception", or "FATAL" means report the failure with the error and fix it — never report success. For background processes, read the terminal file for the real output and exit state.
-- After editing XAML or C#, run `dotnet build` from `app/BibleOnSite` (e.g. `-f net10.0-android`, `-f net10.0-windows10.0.19041.0`) and finish with 0 errors and 0 warnings.
+- After editing XAML or C#, run `dotnet build` from `app/BibleOnSite` (e.g. `-f net11.0-android`, `-f net11.0-windows10.0.19041.0`) and finish with 0 errors and 0 warnings.
 
 ## Testing
 
@@ -58,10 +58,10 @@ RunAndroid automatically starts the emulator and the API server (unless `--api-e
 cmd //c "taskkill /F /IM dotnet.exe"
 
 # Fast Deploy from app/BibleOnSite (~10s incremental)
-dotnet build -t:Install -f net10.0-android -c Debug
+dotnet build -t:Install -f net11.0-android -c Debug
 
 # Full APK (first deploy or after wipe, ~90s)
-dotnet build -t:Install -f net10.0-android -c Debug --property:EmbedAssembliesIntoApk=true
+dotnet build -t:Install -f net11.0-android -c Debug --property:EmbedAssembliesIntoApk=true
 
 # Force stop + launch (adb: $LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe)
 adb shell am force-stop com.tanah.daily929
@@ -110,7 +110,7 @@ One-time pairing from the device's Wireless debugging screen: `adb pair <pairing
 dotnet run --project devops -- RunAndroid --full-apk   # from app/
 
 # Nuke targets the emulator, so install to the WiFi device manually
-adb -s <device-ip:port> install -r --no-incremental bin/Debug/net10.0-android/com.tanah.daily929-Signed.apk
+adb -s <device-ip:port> install -r --no-incremental bin/Debug/net11.0-android/com.tanah.daily929-Signed.apk
 adb -s <device-ip:port> shell am force-stop com.tanah.daily929
 adb -s <device-ip:port> shell am start -n com.tanah.daily929/crc640368fd9db13d8734.MainActivity
 ```
