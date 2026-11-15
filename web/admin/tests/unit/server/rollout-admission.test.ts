@@ -95,12 +95,14 @@ const state = {
 						row.status === "pending" &&
 						this.subscribers.get(row.subscriber_id)?.consent_status ===
 							"pending" &&
-						// NOT EXISTS an outstanding reservation for this member.
-						![...this.admissions.values()].some(
-							(entry) =>
-								entry.status === "reserved" &&
-								entry.subscriber_id === row.subscriber_id,
-						),
+						// The selection excludes members held by an outstanding
+						// reservation; the held-check drops that predicate.
+						(!sql.includes("NOT EXISTS") ||
+							![...this.admissions.values()].some(
+								(entry) =>
+									entry.status === "reserved" &&
+									entry.subscriber_id === row.subscriber_id,
+							)),
 				)
 				.sort((a, b) => a.position - b.position)[0];
 			return next ? [{ subscriber_id: next.subscriber_id }] : [];
@@ -607,6 +609,36 @@ describe("original-cohort admission sweep", () => {
 			subscriber_id: 2,
 		});
 		expect(state.cohort.get(1)?.status).toBe("pending");
+	});
+	it("keeps running when the only eligible member is held by an older reservation", async () => {
+		seed([{ id: 1, email: "held@x.invalid", consent: "pending" }]);
+		state.admissions.set("original|2026-11-01", {
+			cohort: "original",
+			local_date: "2026-11-01",
+			subscriber_id: 1,
+			status: "reserved",
+			last_error: null,
+		});
+		m.ensureSubscribed.mockRejectedValueOnce(new Error("timeout"));
+		await reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00"));
+		// Nobody selectable does not mean the cohort is done: member 1 is still
+		// held by yesterday's reservation, so today idles and the rollout keeps
+		// running instead of completing over a still-retrying member.
+		expect(state.rollout.state).toBe("running");
+		expect(state.admissions.get("original|2026-11-02")).toMatchObject({
+			status: "reserved",
+			subscriber_id: null,
+		});
+		m.ensureSubscribed.mockResolvedValueOnce("subscribed");
+		await reconcileRolloutAdmission(undefined, at("2026-11-02T12:00:00"));
+		expect(state.subscribers.get(1)?.consent_status).toBe("confirmed");
+		expect(state.admissions.get("original|2026-11-01")).toMatchObject({
+			status: "admitted",
+			subscriber_id: 1,
+		});
+		// With the last member admitted and no reservation outstanding, the
+		// same sweep may now legitimately complete the rollout.
+		expect(state.rollout.state).toBe("completed");
 	});
 	it("bounds same-day re-selection so an all-ineligible day still converges", async () => {
 		seed(

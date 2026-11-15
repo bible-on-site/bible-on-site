@@ -66,8 +66,9 @@ const INELIGIBLE = new Set(["unsubscribed", "bounced", "complained"]);
  * Claims the local day's reservation and selects the next eligible member, or
  * re-selects inside the same day's reservation after an ineligible candidate.
  * Returns `null` when nothing may proceed: rollout not running, the day is
- * already admitted/exhausted, or the cohort is done (recorded `exhausted` and
- * the rollout completes).
+ * already admitted/exhausted, every eligible member is held by an outstanding
+ * reservation (the day idles — the rollout keeps running), or the cohort is
+ * done (recorded `exhausted` and the rollout completes).
  */
 async function claimOrReselect(
 	connection: PoolConnection,
@@ -133,6 +134,20 @@ async function claimOrReselect(
 		[cohort],
 	);
 	if (!next) {
+		// An empty selection is not exhaustion while eligible members remain —
+		// they are all held by outstanding reservations that keep retrying
+		// under their own dates. The day idles (still a running rollout): if a
+		// held member is excluded or activated today, a later sweep can claim
+		// whoever is next under this same reservation.
+		const held = await txQueryOne<{ subscriber_id: number }>(
+			connection,
+			`SELECT c.subscriber_id FROM tanah_daily_bulletin_email_cohort c
+			 JOIN tanah_daily_bulletin_subscriber s ON s.id = c.subscriber_id
+			 WHERE c.cohort = ? AND c.status = 'pending' AND s.consent_status = 'pending'
+			 LIMIT 1`,
+			[cohort],
+		);
+		if (held) return null;
 		await txExecute(
 			connection,
 			"UPDATE tanah_daily_bulletin_email_admission SET status = 'exhausted' WHERE cohort = ? AND local_date = ? AND status = 'reserved' AND subscriber_id IS NULL",

@@ -669,6 +669,53 @@ describe("admission sweep on the real schema", () => {
 			subscriber_id: 10,
 		});
 	});
+	it("idles rather than completing while the last eligible member is reserved", async () => {
+		await seedSubscribers();
+		await enrollCohort();
+		// Only member 10 is still eligible (11 excluded below, 12 unsubscribed
+		// at seed, 13 already confirmed); an older reservation holds it.
+		await admin.query(
+			"UPDATE tanah_daily_bulletin_subscriber SET consent_status = 'unsubscribed' WHERE id = 11",
+		);
+		await admin.query(
+			"INSERT INTO tanah_daily_bulletin_email_admission (cohort, local_date, subscriber_id, status) VALUES ('original', '2026-10-30', 10, 'reserved')",
+		);
+		sesFailures.add("first@example.invalid");
+		await rolloutState.setRolloutState({ action: "enable", revision: 0 });
+		await admission.reconcileRolloutAdmission(
+			undefined,
+			at(`${localDate}T06:00:00`),
+		);
+		// The empty selection is not exhaustion: member 10 is held, so the day
+		// idles and the rollout keeps running for the still-retrying member.
+		expect((await admissionRows()).at(-1)).toMatchObject({
+			local_date: expect.anything(),
+			status: "reserved",
+			subscriber_id: null,
+		});
+		expect(
+			await db.queryOne<{ state: string }>(
+				"SELECT state FROM tanah_daily_bulletin_email_rollout WHERE id = 1",
+			),
+		).toMatchObject({ state: "running" });
+		// Provider recovery settles the member under its original date; with
+		// nobody pending the rollout now legitimately completes.
+		sesFailures.clear();
+		await admission.reconcileRolloutAdmission(
+			undefined,
+			at(`${localDate}T09:00:00`),
+		);
+		expect(await consentOf(10)).toBe("confirmed");
+		expect((await admissionRows())[0]).toMatchObject({
+			status: "admitted",
+			subscriber_id: 10,
+		});
+		expect(
+			await db.queryOne<{ state: string }>(
+				"SELECT state FROM tanah_daily_bulletin_email_rollout WHERE id = 1",
+			),
+		).toMatchObject({ state: "completed" });
+	});
 	it("stops new admissions while paused but keeps deliveries licensed", async () => {
 		await seedSubscribers();
 		await enrollCohort();

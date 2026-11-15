@@ -24,7 +24,7 @@ The existing email worker's periodic outbox sweep calls `reconcileRolloutAdmissi
 
 Pausing or disabling freezes in-flight reservations: the sweep performs no provider calls and no consent changes while stopped, and a reservation interrupted mid-check cannot commit activation after the control row changed. Re-enabling resumes the same recorded member under its original date. Sweep-level failures are recorded on the control row (`last_error`) and surface in the panel alongside the day's reservation.
 
-Older `reserved` rows settle before each day's new claim, and only for their already-recorded member — a missed day is never caught up and no past date activates a substitute. A same-day reservation interrupted mid-flight resumes the same recorded member rather than leaking a second activation. When no eligible member remains the reservation is recorded `exhausted` and the rollout completes itself.
+Older `reserved` rows settle before each day's new claim, and only for their already-recorded member — a missed day is never caught up and no past date activates a substitute. A same-day reservation interrupted mid-flight resumes the same recorded member rather than leaking a second activation. When every remaining eligible member is held by an outstanding reservation the day simply idles — an empty selection is not exhaustion while retryable members still exist — and only when no pending member remains at all is the reservation recorded `exhausted` and the rollout completes itself.
 
 ## Limited-cohort delivery
 
