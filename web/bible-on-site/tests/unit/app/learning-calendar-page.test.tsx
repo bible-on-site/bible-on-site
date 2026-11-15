@@ -1,13 +1,42 @@
 /**
  * @jest-environment jsdom
  */
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 jest.mock("next/navigation", () => ({
 	useRouter: jest.fn(),
 	useSearchParams: jest.fn(),
 }));
+
+// The flip book is code-split; unit tests stub it and drive its props
+// directly instead of loading the engine.
+const mockFlipBookProps: {
+	current: {
+		months: {
+			ref: { year: number; month: number };
+			cells: unknown[];
+		}[];
+		requestedMonth: { year: number; month: number };
+		onMonthChange: (month: { year: number; month: number }) => void;
+		onToday: () => void;
+		onShowOverview: () => void;
+		isDimmed?: (day: unknown) => boolean;
+	} | null;
+} = { current: null };
+
+jest.mock("@/app/calendar/components/CalendarFlipBook", () => {
+	const React = jest.requireActual<typeof import("react")>("react");
+	return {
+		CalendarFlipBook: (props: typeof mockFlipBookProps.current) => {
+			mockFlipBookProps.current = props;
+			return React.createElement("div", {
+				"data-testid": "calendar-flip-book",
+				"data-month-count": props?.months.length ?? 0,
+			});
+		},
+	};
+});
 
 import { LearningCalendar } from "@/app/calendar/components/LearningCalendar";
 import {
@@ -56,6 +85,14 @@ describe("LearningCalendar", () => {
 			push: mockPush,
 		});
 		setSearchParam(null);
+		mockFlipBookProps.current = null;
+		window.localStorage.clear();
+		// jsdom lacks rAF unless pretendToBeVisual is on; focus restore in
+		// the flip toolbar path needs a synchronous stub.
+		window.requestAnimationFrame = (callback: FrameRequestCallback) => {
+			callback(0);
+			return 0;
+		};
 	});
 
 	it("renders the current Hebrew month with study and review days", () => {
@@ -945,6 +982,219 @@ describe("LearningCalendar", () => {
 			expect(cell.tagName).toBe("SPAN");
 			expect(within(cell).queryByText("בראשית א")).toBeNull();
 			expect(within(cell).queryByText("חזרה")).toBeNull();
+		});
+	});
+
+	describe("vertical flip presentation (#2993)", () => {
+		it("offers the presentation toggle only outside month view", () => {
+			render(<LearningCalendar {...cycleStartProps} />);
+			expect(
+				screen.queryByRole("button", { name: "דפדוף" }),
+			).not.toBeInTheDocument();
+
+			setSearchParam("578609", { view: "year" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			expect(
+				screen.getByRole("button", { name: "דפדוף" }),
+			).toBeInTheDocument();
+			expect(
+				screen.getByRole("button", { name: "סקירה" }),
+			).toBeInTheDocument();
+		});
+
+		it("mounts the flip book and syncs ?flip=1 when דפדוף is selected", async () => {
+			setSearchParam("578609", { view: "year" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			expect(
+				screen.queryByTestId("calendar-flip-book"),
+			).not.toBeInTheDocument();
+
+			fireEvent.click(screen.getByRole("button", { name: "דפדוף" }));
+
+			// next/dynamic resolves the code-split book asynchronously.
+			const book = await screen.findByTestId("calendar-flip-book");
+			// 5786 is a regular (non-leap) year: 12 month sheets.
+			expect(book).toHaveAttribute("data-month-count", "12");
+			expect(mockFlipBookProps.current?.requestedMonth).toEqual({
+				year: 5786,
+				month: 9,
+			});
+			expect(mockReplace).toHaveBeenCalledWith(
+				"?month=578609&view=year&flip=1",
+				{ scroll: false },
+			);
+			expect(window.localStorage.getItem("calendarFlipView")).toBe("flip");
+		});
+
+		it("honours the ?flip=1 deep link without a click", async () => {
+			setSearchParam("578609", { view: "year", flip: "1" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			expect(
+				await screen.findByTestId("calendar-flip-book"),
+			).toBeInTheDocument();
+			// The overview grid stays unmounted while flipping.
+			expect(
+				document.querySelector("[class*='yearGrid']"),
+			).toBeNull();
+		});
+
+		it("honours the persisted flip preference on year view", async () => {
+			window.localStorage.setItem("calendarFlipView", "flip");
+			setSearchParam("578609", { view: "year" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			expect(
+				await screen.findByTestId("calendar-flip-book"),
+			).toBeInTheDocument();
+		});
+
+		it("ignores invalid stored preferences", async () => {
+			window.localStorage.setItem("calendarFlipView", "bogus");
+			setSearchParam("578609", { view: "year" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			// Give the lazy boundary a chance to resolve, then assert absence.
+			await act(async () => {
+				await new Promise((resolve) => setTimeout(resolve, 20));
+			});
+			expect(
+				screen.queryByTestId("calendar-flip-book"),
+			).not.toBeInTheDocument();
+			expect(mockFlipBookProps.current).toBeNull();
+		});
+
+		it("reports flipped months back through ?month=", async () => {
+			setSearchParam("578609", { view: "year", flip: "1" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			await screen.findByTestId("calendar-flip-book");
+			mockReplace.mockClear();
+
+			act(() => {
+				mockFlipBookProps.current?.onMonthChange({
+					year: 5786,
+					month: 3,
+				});
+			});
+
+			expect(mockReplace).toHaveBeenCalledWith(
+				"?month=578603&view=year&flip=1",
+				{ scroll: false },
+			);
+		});
+
+		it("returns to the overview grid and drops flip=1", async () => {
+			setSearchParam("578609", { view: "year", flip: "1" });
+			const { container, rerender } = render(
+				<LearningCalendar {...cycleStartProps} />,
+			);
+			await screen.findByTestId("calendar-flip-book");
+			mockReplace.mockClear();
+
+			act(() => {
+				mockFlipBookProps.current?.onShowOverview();
+			});
+
+			expect(mockReplace).toHaveBeenCalledWith(
+				"?month=578609&view=year",
+				{ scroll: false },
+			);
+			expect(window.localStorage.getItem("calendarFlipView")).toBe(
+				"overview",
+			);
+			// The mocked router does not feed the new query back; emulate the
+			// committed navigation so ?flip=1 is actually gone.
+			setSearchParam("578609", { view: "year" });
+			rerender(<LearningCalendar {...cycleStartProps} />);
+
+			expect(
+				screen.queryByTestId("calendar-flip-book"),
+			).not.toBeInTheDocument();
+			expect(
+				container.querySelector("[class*='yearGrid']"),
+			).not.toBeNull();
+		});
+
+		it("builds cycle books with boundary months inside the window", async () => {
+			setSearchParam("578512", { view: "cycle", cycle: "4", flip: "1" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			await screen.findByTestId("calendar-flip-book");
+			const props = mockFlipBookProps.current;
+			expect(props).not.toBeNull();
+			// Cycle 4 spans more than a year of months; the first sheet must be
+			// the cycle's start month and every sheet carries month cells.
+			expect(props?.months.length).toBeGreaterThan(12);
+			expect(props?.months[0].cells.length).toBeGreaterThan(0);
+			expect(props?.isDimmed).toBeDefined();
+		});
+
+		it("requests the cycle's start month when picking a cycle whose start lies in the displayed year", async () => {
+			// Regression: cycle 4 starts Elul 5785 — inside the displayed year —
+			// so the scope key does not remount and the mounted book must follow
+			// the committed month, not stay on Tishrei.
+			setSearchParam("578501", { view: "year", flip: "1" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			await screen.findByTestId("calendar-flip-book");
+			expect(mockFlipBookProps.current?.requestedMonth).toEqual({
+				year: 5785,
+				month: 1,
+			});
+
+			fireEvent.change(
+				screen.getByRole("combobox", { name: "בחירת מחזור לימוד" }),
+				{ target: { value: "4" } },
+			);
+
+			expect(mockFlipBookProps.current?.requestedMonth).toEqual({
+				year: 5785,
+				month: 12,
+			});
+			expect(mockReplace).toHaveBeenCalledWith(
+				expect.stringContaining("month=578512"),
+				{ scroll: false },
+			);
+		});
+
+		it("does not replay a Today target after picking another year", async () => {
+			// Regression: Today records Elul 5785; the year change then remounts
+			// the book — the new instance must open on the year-selected Elul
+			// 5786, never on the retained Today month clamped into the new scope.
+			setSearchParam("578601", { view: "year", flip: "1" });
+			render(<LearningCalendar {...cycleStartProps} />);
+			await screen.findByTestId("calendar-flip-book");
+
+			act(() => mockFlipBookProps.current?.onToday());
+			expect(mockFlipBookProps.current?.requestedMonth).toEqual({
+				year: 5785,
+				month: 12,
+			});
+
+			fireEvent.change(screen.getByRole("combobox", { name: "שנה" }), {
+				target: { value: "5786" },
+			});
+
+			expect(mockFlipBookProps.current?.requestedMonth).toEqual({
+				year: 5786,
+				month: 12,
+			});
+			expect(mockFlipBookProps.current).not.toHaveProperty("jumpRequest");
+			expect(mockReplace).toHaveBeenCalledWith(
+				expect.stringContaining("month=578612"),
+				{ scroll: false },
+			);
+		});
+
+		it("follows committed ?month= changes inside the book's scope", async () => {
+			setSearchParam("578601", { view: "year", flip: "1" });
+			const { rerender } = render(<LearningCalendar {...cycleStartProps} />);
+			await screen.findByTestId("calendar-flip-book");
+
+			// Another month of the same displayed year: the scope key does not
+			// remount, so the mounted book must follow the committed URL month.
+			setSearchParam("578603", { view: "year", flip: "1" });
+			rerender(<LearningCalendar {...cycleStartProps} />);
+
+			expect(mockFlipBookProps.current?.requestedMonth).toEqual({
+				year: 5786,
+				month: 3,
+			});
 		});
 	});
 
