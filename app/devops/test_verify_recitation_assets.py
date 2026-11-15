@@ -171,7 +171,7 @@ class ReleaseArtifactTests(unittest.TestCase):
         if "no-payload" not in problems:
             (payload_dir / "recitation-1.zip").write_bytes(
                 b"corrupt" if "staged-mismatch" in problems else audio)
-        perushim_dir = root / "AssetPacks" / "perushim-notes"
+        perushim_dir = root / "AssetPacks" / "perushim-notes-slim"
         perushim_dir.mkdir(parents=True, exist_ok=True)
         notes = "sefaria-dump-5784-sivan-4.perushim_notes.sqlite"
         index = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"
@@ -180,7 +180,7 @@ class ReleaseArtifactTests(unittest.TestCase):
             selectors = [{"file": notes}] + ([] if "perushim-missing-index" in problems else [{"file": index}])
             if "nested-perushim-selector" in problems:
                 selectors.append({"file": f"nested/{index}"})
-            manifest = {"assetPackID": "perushim-notes", "downloadPolicy": {"onDemand": {}},
+            manifest = {"assetPackID": "perushim-notes-slim", "downloadPolicy": {"onDemand": {}},
                         "fileSelectors": selectors, "platforms": ["iOS"]}
             (perushim_dir / "Manifest.json").write_text(json.dumps(manifest))
         for name, data in perushim_payloads.items():
@@ -192,7 +192,7 @@ class ReleaseArtifactTests(unittest.TestCase):
                 b"notes bytes" if name == notes else b"index bytes")
             (payload_dir / name).write_bytes(data)
         if "no-perushim-aar" not in problems:
-            (archive_dir / "perushim-notes.aar").write_bytes(b"aar bytes")
+            (archive_dir / "perushim-notes-slim.aar").write_bytes(b"aar bytes")
 
         # Stands in for `aa` extraction: serves the bytes the archive carried.
         archived = b"corrupt" if "corrupt-archive" in problems else audio
@@ -226,6 +226,18 @@ class ReleaseArtifactTests(unittest.TestCase):
                 else:
                     with self.assertRaises(ValueError):
                         verify_module.verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
+
+    def test_ios_rejects_republishing_the_legacy_pack_identifier(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            audio, catalog = self.book(opus=True)
+            package, packs, aars, payloads, extract = self._write_ios_fixture(
+                root, audio, root / "catalog.json", catalog)
+            legacy = packs / "perushim-notes"
+            legacy.mkdir()
+            (legacy / "Manifest.json").write_text(json.dumps({"assetPackID": "perushim-notes"}))
+            with self.assertRaisesRegex(ValueError, "Legacy iOS perushim-notes must not be republished"):
+                verify_module.verify(package, root / "catalog.json", "iOS", packs, aars, payloads, extract)
 
     def test_aa_payload_propagates_decoder_errors_for_invalid_and_truncated_archives(self):
         for encoded in (b"not an apple archive", b"pbze"):
@@ -284,7 +296,7 @@ class ReleaseArtifactTests(unittest.TestCase):
             plan = json.loads((aars / verify_module.PACK_MANIFEST).read_text(encoding="utf-8"))
             self.assertEqual(plan["version"], 1)
             self.assertEqual({pack["id"] for pack in plan["packs"]},
-                             {"recitation-1", "perushim-notes"})
+                             {"recitation-1", "perushim-notes-slim"})
             for pack in plan["packs"]:
                 pack_dir = packs / pack["id"]
                 manifest_bytes = (pack_dir / "Manifest.json").read_bytes()
