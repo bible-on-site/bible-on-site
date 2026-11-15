@@ -187,6 +187,15 @@ async function assertNewEntryAddressFree(
 		throw new Error(
 			"New-entry address belongs to an existing alias; review an explicit alias change first",
 		);
+	const canonical = await txQuery<{ id: string }>(
+		conn,
+		"SELECT id FROM tanahpedia_entry WHERE unique_name=? FOR SHARE",
+		[name],
+	);
+	if (canonical.length)
+		throw new Error(
+			"New-entry address already belongs to an existing entry; use existing-entry edits",
+		);
 }
 
 export async function prepareChanges(

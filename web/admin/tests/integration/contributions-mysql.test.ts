@@ -970,10 +970,6 @@ describe("reviewed transactional PR merging", () => {
 	});
 	it("rolls back earlier operations when a later operation fails", async () => {
 		const taken = `duplicate-${randomUUID()}`;
-		await conn.execute(
-			"INSERT INTO tanahpedia_entry (id, unique_name, title, content) VALUES (?, ?, 'Existing', '<p></p>')",
-			[randomUUID(), taken],
-		);
 		const valid = `new-${randomUUID()}`;
 		const pr = await createPr(
 			[
@@ -1000,6 +996,11 @@ describe("reviewed transactional PR merging", () => {
 			],
 			owner,
 		);
+		// The address is free when reviewed, then an independent writer claims it.
+		await conn.execute(
+			"INSERT INTO tanahpedia_entry (id, unique_name, title, content) VALUES (?, ?, 'Existing', '<p></p>')",
+			[randomUUID(), taken],
+		);
 		await expect(
 			service.mergeContribution({ id: pr.id, version: pr.version }, owner),
 		).rejects.toThrow();
@@ -1013,6 +1014,32 @@ describe("reviewed transactional PR merging", () => {
 		);
 		expect(entities).toHaveLength(0);
 		expect((await fresh(pr)).state).toBe("open");
+	});
+	it("rejects a new creation at an already occupied canonical address under database collation", async () => {
+		const name = `Canonical-${randomUUID()}`;
+		const id = randomUUID();
+		await conn.execute(
+			"INSERT INTO tanahpedia_entry (id,unique_name,title,content) VALUES (?,?,'Existing','<p></p>')",
+			[id, name],
+		);
+		await expect(
+			createPr([
+				{
+					kind: "entry",
+					after: {
+						title: "Replacement",
+						uniqueName: name.toUpperCase(),
+						entityType: "PERSON",
+						displayName: "Replacement",
+					},
+				},
+			]),
+		).rejects.toThrow("already belongs to an existing entry");
+		const [rows] = await conn.execute<RowDataPacket[]>(
+			"SELECT title FROM tanahpedia_entry WHERE id=?",
+			[id],
+		);
+		expect(rows[0].title).toBe("Existing");
 	});
 	it("creates an audited entry shell and typed root without prose", async () => {
 		const uniqueName = `shell-${randomUUID()}`;

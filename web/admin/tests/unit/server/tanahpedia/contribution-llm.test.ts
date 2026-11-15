@@ -42,6 +42,7 @@ import {
 	contributionOutputSchema,
 	contributionSystemPrompt,
 	generateContributionPrs,
+	prepareContributionGeneration,
 } from "~/server/tanahpedia/contribution-llm.server";
 
 const ID = "00000000-0000-4000-8000-000000000001";
@@ -76,6 +77,27 @@ function localOutput(output: unknown) {
 }
 
 describe("issue-to-PR LLM generation", () => {
+	it("explains available title-edit fields to the model instead of supplying only decoder vocabulary", async () => {
+		issue.description = `עדכן כותרת של אברהם, targetId ${ID}`;
+		mocks.catalogue.mockResolvedValue({
+			people: [],
+			places: [],
+			entities: [],
+			references: { entry: [{ id: ID, name: "אברהם" }] },
+			targets: [{ id: ID, kind: "entry_title", after: { title: "אברהם" } }],
+		});
+		const context = await prepareContributionGeneration(input);
+		expect(context.system).toContain("entry_title (כותרת ערך קיים)");
+		expect(context.system).toContain("after:{title}");
+		expect(context.system).not.toContain("king_reign (");
+		const supplied = JSON.parse(context.user).catalogue.targets[0];
+		expect(supplied.current).toEqual({ title: "אברהם" });
+		expect(supplied.after).toBeUndefined();
+		expect(context.modelCatalogue.targets[0].after).toEqual({ title: "אברהם" });
+		expect(context.system).toContain(
+			"targets[].current contains existing values",
+		);
+	});
 	it("grounds every additional operation in the supplied typed candidates", () => {
 		const references = Object.fromEntries(
 			[

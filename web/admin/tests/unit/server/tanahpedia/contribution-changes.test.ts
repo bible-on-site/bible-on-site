@@ -53,6 +53,26 @@ function reviewed(
 }
 
 describe("typed contribution domain API", () => {
+	it("rejects creation at an existing canonical address before any writes", async () => {
+		mocks.one.mockResolvedValue(null);
+		mocks.query
+			.mockResolvedValueOnce([])
+			.mockResolvedValueOnce([{ id: OTHER }]);
+		await expect(
+			prepareChanges(conn, [
+				{
+					kind: "entry",
+					after: {
+						title: "Title",
+						uniqueName: "occupied",
+						entityType: "PERSON",
+						displayName: "Name",
+					},
+				},
+			]),
+		).rejects.toThrow("existing entry");
+		expect(mocks.execute).not.toHaveBeenCalled();
+	});
 	it("sends title-only changes through entry revision history without a proposed body or address", async () => {
 		await applyChange(
 			conn,

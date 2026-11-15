@@ -100,6 +100,11 @@ The queues are `/issues` and `/pull-requests` in the existing authenticated admi
 The four assignee kinds remain available even when a model is not configured.
 Assignment never spends inference tokens. The explicit generation button uses
 the issue's saved assignee, evidence, discussion and matching catalogue records.
+Model-facing target records label existing values as `current`; proposed changes
+use `after`. The prompt explains each available operation and illustrates a title
+replacement. A creation at an occupied canonical address fails validation before
+any proposal is saved; an already pending creation follows the content-rebase
+conversion described below.
 
 Server-only environment variables:
 
@@ -164,6 +169,12 @@ synthetic evidence and the owner review gate, and was closed without applying it
 Smaller models can choose an incorrect relationship even with valid JSON;
 structured output constrains the operation protocol, while source correctness
 still requires human review. Unknown IDs and invented source citations are rejected.
+An additional real v4 title-edit check exposed a `qwen3:4b` limitation: it selected
+the right operation but copied the current title despite describing the requested
+replacement. The server rejected this unchanged proposal, and the synthetic issue
+and earlier incorrect creation proposal were closed without applying content.
+Structured output does not guarantee that a small model follows the requested
+edit; an editor can retry with another local model or create the PR manually.
 
 ## API evolution
 
