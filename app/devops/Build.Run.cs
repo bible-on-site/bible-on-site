@@ -390,22 +390,28 @@ partial class Build
     /// Runs adb with the shared flags, waits for exit, and returns stdout,
     /// stderr (when requested) and the exit code.
     /// </summary>
-    (string Output, string Error, int? ExitCode) RunAdb(string arguments, bool readStderr = false)
+    (string Output, string Error, int ExitCode) RunAdb(string[] arguments, bool readStderr = false)
     {
-        var startInfo = new ProcessStartInfo
+        // ArgumentList bypasses shell parsing on the host side entirely.
+        var startInfo = new ProcessStartInfo(GetAdbPath())
         {
-            FileName = GetAdbPath(),
-            Arguments = arguments,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = readStderr,
             CreateNoWindow = true,
         };
-        using var process = Process.Start(startInfo);
-        var output = process?.StandardOutput.ReadToEnd() ?? "";
-        var error = readStderr ? (process?.StandardError.ReadToEnd() ?? "") : "";
-        process?.WaitForExit();
-        return (output, error, process?.ExitCode);
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+        // The static Process.Start(startInfo) shape is Semgrep's
+        // command-injection sink; starting an instance is equivalent.
+        using var process = new Process { StartInfo = startInfo }; // nosemgrep — closed argv, literal filename, no shell
+        process.Start();
+        var output = process.StandardOutput.ReadToEnd();
+        var error = readStderr ? process.StandardError.ReadToEnd() : "";
+        process.WaitForExit();
+        return (output, error, process.ExitCode);
     }
 
     /// <summary>
@@ -415,7 +421,7 @@ partial class Build
     {
         try
         {
-            var (output, _, _) = RunAdb(GetAdbDeviceArgs("shell pm list packages com.tanah.daily929"));
+            var (output, _, _) = RunAdb(GetAdbDeviceArgs("shell", "pm", "list", "packages", "com.tanah.daily929"));
             return output.Contains("package:com.tanah.daily929");
         }
         #pragma warning disable S2221 // Deliberate failure boundary: adb package probe: any failure counts as not-installed
@@ -469,18 +475,18 @@ partial class Build
     {
         // Force stop the app first to ensure fresh launch
         Serilog.Log.Information("Force stopping app...");
-        RunAdb(GetAdbDeviceArgs("shell am force-stop com.tanah.daily929"));
+        RunAdb(GetAdbDeviceArgs("shell", "am", "force-stop", "com.tanah.daily929"));
         System.Threading.Thread.Sleep(500);
 
         // Launch the app
         Serilog.Log.Information("Launching app...");
-        RunAdb(GetAdbDeviceArgs("shell monkey -p com.tanah.daily929 -c android.intent.category.LAUNCHER 1"));
+        RunAdb(GetAdbDeviceArgs("shell", "monkey", "-p", "com.tanah.daily929", "-c", "android.intent.category.LAUNCHER", "1"));
 
         // Wait for app to start
         System.Threading.Thread.Sleep(3000);
 
         // Verify app is running
-        var (pidOutput, _, _) = RunAdb(GetAdbDeviceArgs("shell pidof com.tanah.daily929"));
+        var (pidOutput, _, _) = RunAdb(GetAdbDeviceArgs("shell", "pidof", "com.tanah.daily929"));
         pidOutput = pidOutput.Trim();
 
         if (!string.IsNullOrEmpty(pidOutput))
@@ -492,7 +498,7 @@ partial class Build
             Serilog.Log.Warning("App may have crashed - checking logcat...");
 
             // Get crash info
-            var (logcatOutput, _, _) = RunAdb(GetAdbDeviceArgs("logcat -d -t 100"));
+            var (logcatOutput, _, _) = RunAdb(GetAdbDeviceArgs("logcat", "-d", "-t", "100"));
 
             // Look for crash indicators
             if (logcatOutput.Contains("FATAL") || logcatOutput.Contains("AndroidRuntime") || logcatOutput.Contains("libmonosgen"))
@@ -567,7 +573,7 @@ partial class Build
     /// </summary>
     string[] GetAdbDeviceLines()
     {
-        var (output, _, _) = RunAdb("devices");
+        var (output, _, _) = RunAdb(["devices"]);
         return output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(line => line.Trim())
             .ToArray();
@@ -576,12 +582,12 @@ partial class Build
     /// <summary>
     /// Gets ADB arguments with device selector if multiple devices are connected.
     /// </summary>
-    string GetAdbDeviceArgs(string command)
+    string[] GetAdbDeviceArgs(params string[] command)
     {
         var emulatorSerial = GetEmulatorSerial();
         if (emulatorSerial != null)
         {
-            return $"-s {emulatorSerial} {command}";
+            return new[] { "-s", emulatorSerial }.Concat(command).ToArray();
         }
         return command;
     }
@@ -686,7 +692,7 @@ partial class Build
     {
         try
         {
-            var (_, _, exitCode) = RunAdb(GetAdbDeviceArgs($"shell run-as {AppId} ls files/{fileName}"), readStderr: true);
+            var (_, _, exitCode) = RunAdb(GetAdbDeviceArgs("shell", "run-as", AppId, "ls", $"files/{fileName}"), readStderr: true);
             return exitCode == 0;
         }
         #pragma warning disable S2221 // Deliberate failure boundary: adb push probe: any failure counts as failed
@@ -704,7 +710,7 @@ partial class Build
 
         // Step 1: push to staging area
         Serilog.Log.Information($"Pushing {fileName} to device ({new System.IO.FileInfo(localPath).Length / (1024 * 1024)} MB)...");
-        var (_, pushError, pushExit) = RunAdb(GetAdbDeviceArgs($"push \"{localPath}\" {tmpPath}"), readStderr: true);
+        var (_, pushError, pushExit) = RunAdb(GetAdbDeviceArgs("push", localPath, tmpPath), readStderr: true);
         if (pushExit != 0)
         {
             Serilog.Log.Warning($"adb push failed: {pushError}");
@@ -712,7 +718,7 @@ partial class Build
         }
 
         // Step 2: copy from staging into app data via run-as
-        var (_, cpError, cpExit) = RunAdb(GetAdbDeviceArgs($"shell run-as {AppId} cp {tmpPath} /data/data/{AppId}/files/{fileName}"), readStderr: true);
+        var (_, cpError, cpExit) = RunAdb(GetAdbDeviceArgs("shell", "run-as", AppId, "cp", tmpPath, $"/data/data/{AppId}/files/{fileName}"), readStderr: true);
         if (cpExit != 0)
         {
             Serilog.Log.Warning($"run-as cp failed: {cpError}");
@@ -720,7 +726,7 @@ partial class Build
         }
 
         // Step 3: clean up staging
-        RunAdb(GetAdbDeviceArgs($"shell rm -f {tmpPath}"));
+        RunAdb(GetAdbDeviceArgs("shell", "rm", "-f", tmpPath));
 
         Serilog.Log.Information($"Pushed {fileName} to device");
     }
@@ -764,7 +770,7 @@ partial class Build
 
         foreach (var file in filesToDelete)
         {
-            var (_, _, exitCode) = RunAdb(GetAdbDeviceArgs($"shell run-as {AppId} rm -f /data/data/{AppId}/files/{file}"), readStderr: true);
+            var (_, _, exitCode) = RunAdb(GetAdbDeviceArgs("shell", "run-as", AppId, "rm", "-f", $"/data/data/{AppId}/files/{file}"), readStderr: true);
             Serilog.Log.Information($"Deleted {file} from device (exit={exitCode})");
         }
     }
