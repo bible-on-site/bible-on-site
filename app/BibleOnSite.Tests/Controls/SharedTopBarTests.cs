@@ -46,11 +46,39 @@ public class SharedTopBarTests : IDisposable
         bar.BackButton.Text.Should().Be(Fonts.FluentUI.home_24_regular);
         SemanticProperties.GetDescription(bar.BackButton).Should().Be("מסך הבית");
         SemanticProperties.GetDescription(bar.NavigationButton).Should().Be("חזרה");
+        var pill = new ToolbarPill();
+        pill.HeightRequest.Should().Be(bar.BackButton.HeightRequest);
+        pill.BackgroundColor.Should().Be(bar.BackButton.BackgroundColor);
+        band.ColumnDefinitions[2].Width.Value.Should().Be(0, "an empty action slot must not steal search width");
+        bar.TrailingContent = new Button();
+        band.ColumnDefinitions[2].Width.Value.Should().Be(52);
+        bar.TrailingContent.IsVisible = false;
+        band.ColumnDefinitions[2].Width.Value.Should().Be(0, "a hidden clear action must not reserve width either");
+        bar.TrailingContent.IsVisible = true;
+        band.ColumnDefinitions[2].Width.Value.Should().Be(52);
+        bar.TrailingContent = null;
+        band.ColumnDefinitions[2].Width.Value.Should().Be(0);
         foreach (var button in new[] { bar.NavigationButton, bar.BackButton })
         {
             button.WidthRequest.Should().BeGreaterThanOrEqualTo(48);
             button.HeightRequest.Should().BeGreaterThanOrEqualTo(48);
         }
+    }
+
+    [Fact]
+    public void Preview_HomeReturnsToTheRootIndependentlyOfBackState()
+    {
+        HomeUxPreview.TestEnabled = true;
+        var navigator = new Mock<IAppNavigator>();
+        navigator.Setup(n => n.GoToAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+        var bar = new SharedTopBar { Navigator = navigator.Object, ShowBack = false };
+        bar.RefreshBackState(0);
+
+        bar.BackButton.SendClicked();
+
+        navigator.Verify(n => n.GoToAsync($"//{AppRoutes.Perek}"), Times.Once);
+        bar.NavigationButton.IsEnabled.Should().BeFalse();
+        bar.BackButton.IsEnabled.Should().BeTrue();
     }
 
     [Fact]

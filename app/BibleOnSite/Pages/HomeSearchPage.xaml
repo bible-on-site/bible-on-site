@@ -2,87 +2,8 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:controls="clr-namespace:BibleOnSite.Controls"
-             xmlns:models="clr-namespace:BibleOnSite.Models"
-             xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.HomeSearchPage"
              Title="חיפוש" FlowDirection="RightToLeft" Shell.NavBarIsVisible="False"
              BackgroundColor="{AppThemeBinding Light=#F5F7FB, Dark=#111C2C}">
-    <Grid RowDefinitions="Auto,*">
-        <Grid Padding="12,10" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-            <Button Text="{x:Static fonts:FluentUI.arrow_right_24_regular}" FontFamily="FluentIcons"
-                    AutomationId="HomeSearchBack" SemanticProperties.Description="חזרה" Clicked="OnBackClicked"
-                    BackgroundColor="{AppThemeBinding Light=#E4EAF4, Dark=#243C5D}" WidthRequest="52" HeightRequest="56" CornerRadius="17"
-                    TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" Padding="0" FontSize="24"/>
-            <Border Grid.Column="1" StrokeThickness="0" StrokeShape="RoundRectangle 18" Padding="14,0"
-                    BackgroundColor="{AppThemeBinding Light=White, Dark=#243C5D}">
-            <controls:SearchEntry x:Name="GlobalQuery" AutomationId="HomeSearchInput" HeightRequest="56"
-                                 Placeholder="בתנ&quot;ך ובאפליקציה" FontSize="19" TextChanged="OnQueryChanged" Completed="OnSearchSubmitted"
-                                 TextColor="{AppThemeBinding Light=#192B45, Dark=#F5F7FB}"
-                                 PlaceholderColor="{AppThemeBinding Light=#63738C, Dark=#B8CBE5}"/>
-            </Border>
-            <Button Grid.Column="2" AutomationId="HomeSearchClear" Text="{x:Static fonts:FluentUI.dismiss_24_regular}" FontFamily="FluentIcons"
-                    SemanticProperties.Description="ניקוי החיפוש" Clicked="OnClearClicked" WidthRequest="52" HeightRequest="56" CornerRadius="17"
-                    BackgroundColor="{AppThemeBinding Light=#E4EAF4, Dark=#243C5D}"
-                    TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" Padding="0" FontSize="23"/>
-        </Grid>
-        <ScrollView Grid.Row="1" AutomationId="HomeSearchResults">
-            <VerticalStackLayout Padding="22,14,22,30" Spacing="22">
-                <VerticalStackLayout x:Name="NavigationSection" Spacing="8">
-                    <Label Text="ניווט באפליקציה" FontSize="21" FontAttributes="Bold"
-                           TextColor="{AppThemeBinding Light=#192B45, Dark=#F5F7FB}"/>
-                    <VerticalStackLayout x:Name="NavigationResults" Spacing="4">
-                        <BindableLayout.ItemTemplate>
-                            <DataTemplate x:DataType="models:NavigationSearchItem">
-                                <controls:TappableView Activated="OnNavigationResultTapped" CommandParameter="{Binding .}">
-                                    <Border BackgroundColor="{AppThemeBinding Light=#E4EAF4, Dark=#243C5D}"
-                                            StrokeThickness="0" StrokeShape="RoundRectangle 14" Padding="16,13">
-                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                            <VerticalStackLayout Spacing="4">
-                                                <Label Text="{Binding Title}" AutomationId="HomeNavigationResult" FontSize="17" FontAttributes="Bold"
-                                                       TextColor="{AppThemeBinding Light=#192B45, Dark=#F5F7FB}"/>
-                                                <Label Text="{Binding Subtitle}" FontSize="13"
-                                                       TextColor="{AppThemeBinding Light=#63738C, Dark=#B8CBE5}"/>
-                                            </VerticalStackLayout>
-                                            <Label Grid.Column="1" Text="←" FontSize="22" VerticalOptions="Center"
-                                                   TextColor="{AppThemeBinding Light=#2866E7, Dark=#AACBFF}" AutomationProperties.IsInAccessibleTree="False"/>
-                                        </Grid>
-                                    </Border>
-                                </controls:TappableView>
-                            </DataTemplate>
-                        </BindableLayout.ItemTemplate>
-                    </VerticalStackLayout>
-                </VerticalStackLayout>
-                <VerticalStackLayout x:Name="ContentSection" IsVisible="False" Spacing="10">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <Label Text="בתנ&quot;ך ובתוכן" FontSize="21" FontAttributes="Bold"
-                               TextColor="{AppThemeBinding Light=#192B45, Dark=#F5F7FB}"/>
-                        <ActivityIndicator x:Name="ContentLoading" Grid.Column="1" Color="#2866E7" WidthRequest="24" HeightRequest="24"/>
-                    </Grid>
-                    <Label x:Name="SearchStatus" AutomationId="HomeSearchStatus" FontSize="13"
-                           TextColor="{AppThemeBinding Light=#63738C, Dark=#B8CBE5}"/>
-                    <Label x:Name="SearchAvailability" IsVisible="False" FontSize="13"
-                           TextColor="{AppThemeBinding Light=#63738C, Dark=#B8CBE5}"/>
-                    <VerticalStackLayout x:Name="ContentResults" Spacing="8">
-                        <BindableLayout.ItemTemplate>
-                            <DataTemplate x:DataType="models:SearchResult">
-                                <controls:TappableView Activated="OnContentResultTapped" CommandParameter="{Binding .}">
-                                    <Border BackgroundColor="{AppThemeBinding Light=White, Dark=#1D2D43}"
-                                            StrokeThickness="0" StrokeShape="RoundRectangle 14" Padding="16">
-                                        <VerticalStackLayout Spacing="6">
-                                            <Label Text="{Binding Category}" FontSize="12" TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}"/>
-                                            <Label Text="{Binding Title}" AutomationId="HomeContentResult" FontSize="17" FontAttributes="Bold"
-                                                   TextColor="{AppThemeBinding Light=#192B45, Dark=#F5F7FB}"/>
-                                            <Label Text="{Binding SubtitleHtml}" TextType="Html" FontSize="14" MaxLines="3" LineBreakMode="TailTruncation"
-                                                   TextColor="{AppThemeBinding Light=#63738C, Dark=#B8CBE5}"/>
-                                        </VerticalStackLayout>
-                                    </Border>
-                                </controls:TappableView>
-                            </DataTemplate>
-                        </BindableLayout.ItemTemplate>
-                    </VerticalStackLayout>
-                </VerticalStackLayout>
-            </VerticalStackLayout>
-        </ScrollView>
-        <controls:PerekPickerPopup x:Name="SearchIndexPicker" Grid.RowSpan="2" ZIndex="100" PerekSelected="OnIndexPerekSelected"/>
-    </Grid>
+    <controls:FloatingSearchBar x:Name="UnifiedSearch" ResultSelected="OnResultSelected"/>
 </ContentPage>

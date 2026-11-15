@@ -24,8 +24,8 @@ public class SharedTopBar : ContentView
 {
     public static double BarHeight => HomeUxPreview.Enabled ? 72 : 56;
     public static double EdgeWidth => 48;
-    public static double PillHeight => 40;
-    public static double PillCornerRadius => 14;
+    public static double PillHeight => HomeUxPreview.Enabled ? 52 : 40;
+    public static double PillCornerRadius => HomeUxPreview.Enabled ? 16 : 14;
 
     internal static readonly Color BandLight = Color.FromArgb("#F2F7FE");
     internal static readonly Color BandDark = Color.FromArgb("#20304A");
@@ -86,6 +86,8 @@ public class SharedTopBar : ContentView
     /// </summary>
     public Func<bool>? BackInvoker { get; set; }
 
+    internal IAppNavigator Navigator { get; set; } = ShellAppNavigator.Instance;
+
     public static readonly BindableProperty CenterContentProperty =
         BindableProperty.Create(nameof(CenterContent), typeof(View), typeof(SharedTopBar),
             propertyChanged: (bindable, _, value) => ((SharedTopBar)bindable)._centerHost.Content = (View?)value);
@@ -98,12 +100,42 @@ public class SharedTopBar : ContentView
 
     public static readonly BindableProperty TrailingContentProperty =
         BindableProperty.Create(nameof(TrailingContent), typeof(View), typeof(SharedTopBar),
-            propertyChanged: (bindable, _, value) => ((SharedTopBar)bindable)._trailingHost.Content = (View?)value);
+            propertyChanged: (bindable, previous, value) => ((SharedTopBar)bindable).SetTrailingContent((View?)previous, (View?)value));
     /// <summary>Content placed in the trailing slot (page menu, clear button).</summary>
     public View? TrailingContent
     {
         get => (View?)GetValue(TrailingContentProperty);
         set => SetValue(TrailingContentProperty, value);
+    }
+
+    private void SetTrailingContent(View? previous, View? content)
+    {
+        if (previous is not null) { previous.PropertyChanged -= OnTrailingContentChanged; }
+        _trailingHost.Content = content;
+        if (content is not null) { content.PropertyChanged += OnTrailingContentChanged; }
+        if (HomeUxPreview.Enabled && content is Button action)
+        {
+            action.WidthRequest = action.HeightRequest = 52;
+            action.CornerRadius = 16;
+            action.Padding = 0;
+            action.VerticalOptions = LayoutOptions.Center;
+            action.SetAppThemeColor(Button.BackgroundColorProperty, Color.FromArgb("#E4EAF4"), Color.FromArgb("#243C5D"));
+            action.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#1552AC"), Color.FromArgb("#AACBFF"));
+        }
+        UpdatePreviewTrailingWidth();
+    }
+
+    private void OnTrailingContentChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(IsVisible)) { UpdatePreviewTrailingWidth(); }
+    }
+
+    private void UpdatePreviewTrailingWidth()
+    {
+        if (HomeUxPreview.Enabled)
+        {
+            _band.ColumnDefinitions[2].Width = TrailingContent?.IsVisible == true ? 52 : 0;
+        }
     }
 
     public static readonly BindableProperty ShowBackProperty =
@@ -253,7 +285,7 @@ public class SharedTopBar : ContentView
     {
         _band.Padding = new Thickness(8, 8);
         _band.ColumnSpacing = 6;
-        _band.ColumnDefinitions[2].Width = 52;
+        UpdatePreviewTrailingWidth();
         _capsuleBorder.HeightRequest = 56;
         _capsuleBorder.Padding = 0;
         _capsuleBorder.Margin = 0;
@@ -401,7 +433,7 @@ public class SharedTopBar : ContentView
     {
         if (HomeUxPreview.Enabled)
         {
-            _ = ShellAppNavigator.Instance.GoToAsync($"//{AppRoutes.Perek}");
+            _ = Navigator.GoToAsync($"//{AppRoutes.Perek}");
             return;
         }
         // Never trust the painted state: re-derive from the live coordinator

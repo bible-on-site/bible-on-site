@@ -4,7 +4,7 @@ This is a long-lived UX review branch. Keep PR #3385 in draft. Do not merge it,
 mark it ready, or enable auto-merge without Dorad's explicit instruction.
 
 Review the real emulator captures in [the GitHub comparison](review/REVIEW.md)
-or open [the static HTML gallery](review/index.html) locally. Both contain thirteen
+or open [the static HTML gallery](review/index.html) locally. Both contain fourteen
 screen comparisons against the actual default branch (`master`), plus a
 before/after continuous-scroll recording. Before is always on the right and
 After on the left, including the GitHub-rendered Markdown tables.
@@ -47,13 +47,15 @@ the reader fan. Its dock uses explicit action labels: `תצוגת הטקסט` op
 font/display preferences, `בחירת פירושים` opens the picker for inline commentary,
 and `מאמרי הפרק` opens articles with a separate count badge. In articles mode the
 first action becomes `חזרה לפסוקים`. Its chapter title opens the chapter picker;
-the tools sheet contains content search and other reading options. Secondary learning destinations
+the tools sheet opens search and other reading options. Secondary learning destinations
 live in the library rather than a row of small links on home.
 
-The reading viewport keeps fixed geometry while the toolbar moves above it.
-Android physical drag deltas drive the toolbar; list layout and fling callbacks
-cannot feed back into its visibility. The chapter heading scrolls with the text.
-A small upward gesture restores navigation without jumping to the chapter start.
+The reading viewport keeps fixed geometry throughout the controls' animations.
+Both bars remain visible on entry and during a drag in any direction. After the
+drag ends and 1.8 seconds pass without activity, the top bar slides out and the
+bottom bar fades away. Another drag immediately brings both back. The cooldown
+is never armed by initial loading. Open tools, commentary, selection and playback
+hold the controls visible. The chapter heading scrolls with the text.
 Selection, recitation, playback and search keep their action bar available.
 Chapter swipes remain active.
 
@@ -64,11 +66,13 @@ destination, then return. Repeat with large text and both appearance modes.
 
 The editorial home uses blue for primary actions, oversized Hebrew typography
 and cool neutral surfaces. The library shares the daily card's dark blue,
-oversized type and faint background glyphs. Global search stays fixed at the top while the home
-content scrolls. It finds app destinations immediately from a local catalog
-(including synonyms), alongside the existing content-search results. Selecting
-a destination or content hit opens its real native page. The separate chapter
-picker is labelled `אינדקס התנ"ך`; the masora subtitle is `חלוקה מסורתית`.
+oversized type and faint background glyphs. Search stays fixed above home content
+and uses the existing `FloatingSearchBar` and `SearchViewModel`. Its `מה לחפש`
+selector now includes `מסך`, with local screen matches in the same result list as
+scripture and articles. Screen search is available offline and independent of
+the book filter. The shared search kind is available in regular builds as well;
+only the home/startup and chrome redesign are Debug opt-ins. The Bible picker is
+labelled `ניווט בתנ"ך`; the masora subtitle is `חלוקה מסורתית`.
 
 After the first installation, iterate with `-t:Install`,
 `-p:EmbedAssembliesIntoApk=false` and `-p:Device=<emulator-serial>` to deploy
@@ -89,5 +93,8 @@ destination returns, navigation search, content-result navigation, articles afte
 a hidden text toolbar, and app links with two reader instances. An Android
 ANR fails the run immediately and records its screen. The reading-options check
 also verifies the display-settings destination, commentary explanation and
-contextual return-to-verses action.
+position above the dock, Screen filter and result navigation, Bible navigation
+picker selection, and contextual return-to-verses action. The explicit fullscreen
+action is absent from the preview. Title surfaces and buttons share a 52dp height;
+hidden trailing actions do not reserve horizontal space.
 Keep that emulator free of manual input during the run.

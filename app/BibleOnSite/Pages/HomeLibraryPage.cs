@@ -50,9 +50,9 @@ public class HomeLibraryPage : ContentPage, IAnalyticsScreenName
         Content = grid;
     }
 
-    private static Label Text(string text, double size, bool bold)
+    private static Label Text(string value, double size, bool bold)
     {
-        var label = new Label { Text = text, FontSize = size, FontAttributes = bold ? FontAttributes.Bold : FontAttributes.None };
+        var label = new Label { Text = value, FontSize = size, FontAttributes = bold ? FontAttributes.Bold : FontAttributes.None };
         label.SetAppThemeColor(Label.TextColorProperty, Color.FromArgb("#192B45"), Color.FromArgb("#F5F7FB"));
         return label;
     }

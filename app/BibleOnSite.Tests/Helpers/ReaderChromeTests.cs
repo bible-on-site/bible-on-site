@@ -26,6 +26,25 @@ namespace BibleOnSite.Tests.Helpers;
 public class ReaderChromeTests
 {
     [Fact]
+    public void PreviewHidesTheLegacyFanWhenTheReadingDockIsCreated()
+    {
+        BibleOnSite.Config.HomeUxPreview.TestEnabled = true;
+        try
+        {
+            var rig = new Rig();
+            rig.Fan.IsVisible = true;
+            _ = rig.CreateChrome();
+
+            rig.Fan.IsVisible.Should().BeFalse();
+            rig.BottomBar.IsVisible.Should().BeTrue();
+        }
+        finally
+        {
+            BibleOnSite.Config.HomeUxPreview.TestEnabled = null;
+        }
+    }
+
+    [Fact]
     public void TextReselect_UsesTheExplicitNonCarouselScrollAction()
     {
         using var seams = new Seams();

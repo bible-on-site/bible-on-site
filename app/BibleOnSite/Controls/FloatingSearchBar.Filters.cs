@@ -16,7 +16,11 @@ public partial class FloatingSearchBar
 
     public void HandleBack()
     {
-        if (FilterSheetOverlay.IsVisible)
+        if (NavigationPicker.IsVisible)
+        {
+            NavigationPicker.Hide();
+        }
+        else if (FilterSheetOverlay.IsVisible)
         {
             _ = CloseFilterSheetAsync();
         }
@@ -28,7 +32,7 @@ public partial class FloatingSearchBar
 
     private void UpdateFilterSummaries()
     {
-        var kinds = Enum.GetValues<SearchFilter>().Where(_viewModel.IsFilterEnabled).Select(filter => filter.GetHebrewName()).ToArray();
+        var kinds = _viewModel.KindOptions.Where(_viewModel.IsFilterEnabled).Select(filter => filter.GetHebrewName()).ToArray();
         KindsChipText.Text = SearchSelectionSummary.Describe(kinds, "מה לחפש", _kindsExplicit);
         var books = PerekDataService.Instance.Perakim?.Values.DistinctBy(perek => perek.SeferId)
             .Where(perek => _viewModel.IsSeferFilterEnabled(perek.SeferId)).OrderBy(perek => perek.SeferId)

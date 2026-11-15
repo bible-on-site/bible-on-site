@@ -9,7 +9,11 @@ namespace BibleOnSite.Pages;
 public partial class PerekPage
 #pragma warning restore S2333
 {
-    private readonly ReaderHeaderScrollState _homeUxHeader = new();
+    private readonly ReaderChromeIdleState _homeUxControls = new();
+    private IDispatcherTimer? _homeUxIdleTimer;
+    private bool? _homeUxVisibleTarget;
+    private bool _homeUxActive;
+    private const string HomeUxChromeAnimation = "HomeUxChrome";
 #if !ANDROID
     private double _homeUxTikkunOffset;
 #endif
@@ -23,6 +27,7 @@ public partial class PerekPage
         NormalNavigationTitle.HeightRequest = 52;
         NormalNavigationTitle.FontSize = 22;
         NormalNavigationTitle.CornerRadius = 16;
+        NormalNavigationTitle.SetAppThemeColor(BackgroundColorProperty, Color.FromArgb("#E4EAF4"), Color.FromArgb("#243C5D"));
         SemanticProperties.SetHint(NormalNavigationTitle, "בחירת ספר ופרק");
         ToolTipProperties.SetText(NormalNavigationTitle, "בחירת ספר ופרק");
         ReaderMenuButton.WidthRequest = 52;
@@ -58,7 +63,7 @@ public partial class PerekPage
             {
                 // Articles replace the scrolling surface, so they must not
                 // inherit a toolbar hidden by the preceding text scroll.
-                RevealHomeUxHeader();
+                RevealHomeUxControls();
             }
         };
         FanMenu.Satellites.Remove(PrevPerekButton);
@@ -67,16 +72,27 @@ public partial class PerekPage
         {
             if (e.PropertyName is nameof(_viewModel.Perek) or nameof(_viewModel.SelectedPasukNums))
             {
-                _homeUxHeader.Reset();
 #if !ANDROID
                 _homeUxTikkunOffset = 0;
 #endif
-                ApplyHomeUxHeader(true);
+                RevealHomeUxControls();
             }
         };
         ReaderMenuOverlay.SearchRequested += async (_, _) =>
             await ShellAppNavigator.Instance.GoToAsync(nameof(HomeSearchPage));
-        ReaderMenuOverlay.FullscreenRequested += (_, _) => _chrome.ToggleFullScreen();
+        Appearing += (_, _) =>
+        {
+            _homeUxActive = true;
+            _homeUxControls.Reset();
+            _homeUxIdleTimer?.Stop();
+            ApplyHomeUxControls(true, false);
+        };
+        Disappearing += (_, _) =>
+        {
+            _homeUxActive = false;
+            _homeUxIdleTimer?.Stop();
+            this.AbortAnimation(HomeUxChromeAnimation);
+        };
     }
 
     private void ConfigureHomeUxReadingSurface(CollectionView? list)
@@ -100,27 +116,78 @@ public partial class PerekPage
         }
     }
 
-    private void ApplyHomeUxHeader(bool visible)
+    private void ApplyHomeUxControls(bool visible, bool animate = true)
     {
-        ReaderToolbar.TranslationY = visible ? 0 : -SharedTopBar.BarHeight;
+        if (animate && _homeUxVisibleTarget == visible) { return; }
+        _homeUxVisibleTarget = visible;
+        this.AbortAnimation(HomeUxChromeAnimation);
         ReaderToolbar.InputTransparent = !visible;
+        BottomBar.InputTransparent = !visible;
+        AutomationProperties.SetExcludedWithChildren(BottomBar, !visible);
+        var targetY = visible ? 0 : -SharedTopBar.BarHeight;
+        var targetOpacity = visible ? 1d : 0d;
+        if (!animate)
+        {
+            ReaderToolbar.TranslationY = targetY;
+            BottomBar.Opacity = targetOpacity;
+            return;
+        }
+        var startY = ReaderToolbar.TranslationY;
+        var startOpacity = BottomBar.Opacity;
+        new Animation(progress =>
+        {
+            ReaderToolbar.TranslationY = startY + (targetY - startY) * progress;
+            BottomBar.Opacity = startOpacity + (targetOpacity - startOpacity) * progress;
+        }).Commit(this, HomeUxChromeAnimation, 16, visible ? 160u : 240u, Easing.CubicOut);
     }
 
-    private void UpdateHomeUxHeader(double delta)
+    private void UpdateHomeUxScroll(double delta)
     {
         if (!HomeUxPreview.Enabled) { return; }
         if (ExitFullScreenButton.IsVisible) { return; }
-        var keepVisible = ReaderSurfaceState.IsActive(_viewModel.SelectedPasukNums.Count,
-            _chapterRecitationSelection, _focusedPasuk != null, _recitationCursor.PlayingKey != null)
-            || _chrome.IsShowingArticles || ChapterSearch.IsSearchOpen || ReaderMenuOverlay.IsVisible;
-        ApplyHomeUxHeader(_homeUxHeader.Update(delta, keepVisible));
+        if (!double.IsFinite(delta) || Math.Abs(delta) < 0.5) { return; }
+        _homeUxControls.NoteScroll(Environment.TickCount64);
+        ApplyHomeUxControls(true);
+        StartHomeUxIdleTimer();
     }
 
-    private void RevealHomeUxHeader()
+    private bool KeepHomeUxControlsVisible => ReaderSurfaceState.IsActive(_viewModel.SelectedPasukNums.Count,
+            _chapterRecitationSelection, _focusedPasuk != null, _recitationCursor.PlayingKey != null)
+            || _chrome.IsShowingArticles || ChapterSearch.IsSearchOpen || ReaderMenuOverlay.IsVisible
+            || PerushimPanel.IsOpen || PerekPickerPopup.IsVisible;
+
+    private void OnHomeUxReadingDragChanged(bool dragging)
     {
         if (!HomeUxPreview.Enabled || ExitFullScreenButton.IsVisible) { return; }
-        _homeUxHeader.Reset();
-        ApplyHomeUxHeader(true);
+        if (dragging) { _homeUxControls.DragStarted(Environment.TickCount64); }
+        else { _homeUxControls.DragEnded(Environment.TickCount64); }
+        ApplyHomeUxControls(true);
+        StartHomeUxIdleTimer();
+    }
+
+    private void StartHomeUxIdleTimer()
+    {
+        if (!_homeUxActive || !_homeUxControls.HasInteracted) { return; }
+        if (_homeUxIdleTimer is null)
+        {
+            _homeUxIdleTimer = Dispatcher.CreateTimer();
+            _homeUxIdleTimer.Interval = TimeSpan.FromMilliseconds(100);
+            _homeUxIdleTimer.Tick += (_, _) =>
+            {
+                var visible = _homeUxControls.Tick(Environment.TickCount64, KeepHomeUxControlsVisible);
+                ApplyHomeUxControls(visible);
+                if (!visible) { _homeUxIdleTimer.Stop(); }
+            };
+        }
+        _homeUxIdleTimer.Start();
+    }
+
+    private void RevealHomeUxControls()
+    {
+        if (!HomeUxPreview.Enabled || ExitFullScreenButton.IsVisible) { return; }
+        _homeUxControls.Reveal(Environment.TickCount64);
+        ApplyHomeUxControls(true);
+        StartHomeUxIdleTimer();
     }
 
     private async void OnHomePreviewClicked(object? sender, EventArgs e) =>

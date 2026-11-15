@@ -70,7 +70,11 @@ class NativeDevice:
 
     def tap(self, selector):
         items = self.wait(lambda ns: find(ns, selector) is not None, selector)
-        x1, y1, x2, y2 = bounds(find(items, selector))
+        self.tap_node(find(items, selector))
+
+    def tap_node(self, node):
+        """Tap an observed stable control without waiting through its idle timeout."""
+        x1, y1, x2, y2 = bounds(node)
         self.adb("shell", "input", "tap", (x1 + x2) // 2, (y1 + y2) // 2)
 
     def verses(self, items):
@@ -136,40 +140,44 @@ def check_index(device, check):
 
 
 def check_scroll_and_swipe(device, check):
-    viewport = bounds(find(device.nodes(), "PasukimCollection"))
+    initial = device.nodes()
+    viewport = bounds(find(initial, "PasukimCollection"))
+    menu = find(initial, "ReaderMenuButton")
+    articles = find(initial, "ArticlesButton")
+    home = find(initial, "TopBarHomeButton")
     device.swipe(0.5, 0.76, 0.5, 0.34)
     items = device.wait(
-        lambda ns: find(ns, "TopBarHomeButton") is None and device.verses(ns),
-        "Toolbar did not hide during downward scroll")
+        lambda ns: find(ns, "TopBarHomeButton") is None and find(ns, "TextButton") is None and device.verses(ns),
+        "Both controls did not hide after the drag cooldown")
     check.assertEqual(bounds(find(items, "PasukimCollection")), viewport,
                       "Hiding the toolbar resized the reading viewport")
     check.assertNotEqual(device.verses(items)[0].get("text", "").split(" ", 1)[0],
                          "א", "Downward scroll did not advance the text")
     device.capture("reader-toolbar-hidden")
     device.swipe(0.5, 0.50, 0.5, 0.55)
+    # The menu holds the revealed controls while UiAutomator waits for idle.
+    # Coordinates came from this same fixed overlay before the drag.
+    device.tap_node(menu)
     items = device.wait(
-        lambda ns: find(ns, "TopBarHomeButton") is not None and device.verses(ns),
-        "Toolbar did not return on small upward movement")
+        lambda ns: find(ns, "ReaderGlobalSearch") is not None and find(ns, "TextButton") is not None and device.verses(ns),
+        "The next drag did not restore both controls")
     check.assertEqual(bounds(find(items, "PasukimCollection")), viewport,
                       "Revealing the toolbar resized the reading viewport")
     check.assertNotEqual(device.verses(items)[0].get("text", "").split(" ", 1)[0],
                          "א", "Header reveal jumped to chapter start")
     device.capture("reader-toolbar-restored")
-    device.swipe(0.8, 0.55, 0.2, 0.55)
-    if source(device.nodes()) == "בראשית א":
-        device.swipe(0.2, 0.55, 0.8, 0.55)
+    device.back()
+    device.swipe(0.2, 0.55, 0.8, 0.55)
+    device.tap_node(menu)
     device.wait(lambda ns: source(ns) == "בראשית ב" and device.verses(ns),
                 "Chapter swipe")
-    device.swipe(0.5, 0.76, 0.5, 0.34)
-    device.wait(lambda ns: find(ns, "TopBarHomeButton") is None, "Hidden text toolbar")
-    device.tap("ArticlesButton")
+    device.back()
+    device.tap_node(articles)
     device.wait(lambda ns: find(ns, "TopBarHomeButton") is not None and not device.verses(ns),
                 "Articles restore reader navigation")
     device.capture("articles-with-navigation")
     device.tap("TextButton")
-    device.wait(lambda ns: find(ns, "TopBarHomeButton") is not None and device.verses(ns),
-                "Return from articles to text")
-    device.tap("TopBarHomeButton")
+    device.tap_node(home)
     device.home()
 
 
@@ -179,10 +187,10 @@ def check_stacked_reader_links(device, check):
     device.wait(lambda ns: source(ns) == daily_source and device.verses(ns), "Daily reader")
     device.tap("ReaderMenuButton")
     device.tap("ReaderGlobalSearch")
-    device.tap("HomeSearchInput")
+    device.tap("PerekSearchInput")
     device.adb("shell", "input", "text", "1")
-    device.wait(lambda ns: find(ns, "HomeContentResult") is not None, "Reader search results")
-    device.tap("HomeContentResult")
+    device.wait(lambda ns: find(ns, "SearchResultTitle") is not None, "Reader search results")
+    device.tap("SearchResultTitle")
     device.wait(lambda ns: source(ns) == "בראשית א" and device.verses(ns), "Nested search reader")
     device.adb("shell", "am", "start", "-W", "-a", "android.intent.action.VIEW", "-d",
                "https://xn--febl3a.co.il/929/2", "-p", "com.tanah.daily929")
@@ -191,9 +199,9 @@ def check_stacked_reader_links(device, check):
     check.assertEqual(source(items), "בראשית ב")
     device.capture("nested-reader-app-link")
     device.back()
-    device.wait(lambda ns: find(ns, "HomeSearchBack") is not None,
+    device.wait(lambda ns: find(ns, "SearchNavigationButton") is not None,
                 "Underlying reader retains search history")
-    device.tap("HomeSearchBack")
+    device.tap("SearchNavigationButton")
     device.wait(lambda ns: source(ns) == daily_source and device.verses(ns),
                 "App link did not change the hidden daily reader")
     device.tap("TopBarHomeButton")
@@ -217,26 +225,50 @@ def check_destinations(device):
 
 def check_global_search(device, check):
     device.tap("HomeGlobalSearch")
-    device.wait(lambda ns: find(ns, "HomeSearchInput") is not None
-                and find(ns, "HomeSearchInput").get("focused") == "true", "Focused global search")
+    device.wait(lambda ns: find(ns, "PerekSearchInput") is not None
+                and find(ns, "PerekSearchInput").get("focused") == "true", "Focused global search")
+    device.tap("SearchKindsTab")
+    items = device.wait(lambda ns: find(ns, "SearchKindScreen") is not None, "Screen kind in the existing search")
+    check.assertEqual(find(items, "SearchKindScreen").get("checked"), "true")
+    device.capture("screen-search-kind")
+    device.tap("SearchSheetDismissButton")
+    device.tap("PerekSearchInput")
     device.adb("shell", "input", "text", "calendar")
     items = device.wait(lambda ns: find(ns, "לוח שנה") is not None,
                         "Navigation result for calendar")
-    check.assertIsNotNone(find(items, "HomeNavigationResult"))
+    check.assertIsNotNone(find(items, "SearchResultTitle"))
+    check.assertIsNotNone(find(items, "מסך"))
     device.capture("navigation-search")
     device.tap("לוח שנה")
     device.wait(lambda ns: find(ns, "MonthWeek") is not None,
                 "Navigation search opens calendar")
     device.back()
-    device.wait(lambda ns: find(ns, "HomeSearchInput") is not None, "Search history")
-    device.tap("HomeSearchClear")
-    device.tap("HomeSearchInput")
+    device.wait(lambda ns: find(ns, "PerekSearchInput") is not None, "Search history")
+    device.tap("ClearSearchButton")
+    device.tap("PerekSearchInput")
     device.adb("shell", "input", "text", "1")
-    device.wait(lambda ns: find(ns, "HomeContentResult") is not None,
+    device.wait(lambda ns: find(ns, "SearchResultTitle") is not None,
                 "Global content search returns chapter hits")
     device.capture("content-search")
-    device.tap("HomeContentResult")
+    device.tap("SearchResultTitle")
     device.wait(lambda ns: source(ns) and device.verses(ns), "Content search reader")
+    device.tap("TopBarHomeButton")
+    device.home()
+
+
+def check_screen_navigation(device, check):
+    device.tap("HomeGlobalSearch")
+    device.wait(lambda ns: find(ns, "PerekSearchInput") is not None, "Shared search")
+    device.tap("PerekSearchInput")
+    device.adb("shell", "input", "text", "index")
+    device.wait(lambda ns: find(ns, 'ניווט בתנ"ך') is not None, "Bible navigation screen result")
+    device.tap('ניווט בתנ"ך')
+    device.wait(lambda ns: find(ns, "PerekPickerConfirm") is not None, "Bible navigation picker")
+    device.capture("screen-navigation-picker")
+    for label in ("תורה", "בראשית", "א", "PerekPickerConfirm"):
+        device.tap(label)
+    items = device.wait(lambda ns: source(ns) == "בראשית א" and device.verses(ns), "Navigation result reader")
+    check.assertEqual(source(items), "בראשית א")
     device.tap("TopBarHomeButton")
     device.home()
 
@@ -254,15 +286,16 @@ def check_reading_options(device, check):
     device.back()
     device.wait(lambda ns: source(ns) and device.verses(ns), "Return to reader")
     device.tap("PerushimChevronButton")
-    device.wait(lambda ns: find(ns, "בחרו אילו פירושים יוצגו לצד הפסוקים") is not None,
+    items = device.wait(lambda ns: find(ns, "בחרו אילו פירושים יוצגו לצד הפסוקים") is not None,
                 "Commentary picker explains its rendering effect")
+    check.assertLessEqual(bounds(find(items, "PerushimContentViewport"))[3], bounds(find(items, "TextButton"))[1])
     device.capture("commentary")
     device.back()
     device.tap("ArticlesButton")
     items = device.wait(lambda ns: find(ns, "TextButton") is not None and not device.verses(ns), "Articles")
     check.assertEqual(find(items, "TextButton").get("text").replace("\n", " "), "חזרה לפסוקים")
     device.tap("TextButton")
-    items = device.wait(lambda ns: device.verses(ns), "Return to chapter text")
+    items = device.wait(device.verses, "Return to chapter text")
     check.assertEqual(find(items, "TextButton").get("text").replace("\n", " "), "תצוגת הטקסט")
     device.tap("TopBarHomeButton")
     device.home()
@@ -288,6 +321,8 @@ def main():
     checks.append("check_destinations")
     check_global_search(device, check)
     checks.append("check_global_search")
+    check_screen_navigation(device, check)
+    checks.append("check_screen_navigation")
     check_reading_options(device, check)
     checks.append("check_reading_options")
     result = {"serial": args.serial, "passed": checks}
