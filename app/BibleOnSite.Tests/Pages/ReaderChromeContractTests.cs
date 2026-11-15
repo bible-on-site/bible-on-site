@@ -85,6 +85,42 @@ public class ReaderChromeContractTests
             "the articles/text swap state is owned by the coordinator, not duplicated per page");
     }
 
+    // — Menu content mode (#3401): the ⋮ menu follows the articles/text swap —
+
+    [Theory]
+    // Only readers carrying a ⋮ options menu hand it to the coordinator;
+    // readers without one declare the null surface explicitly.
+    [InlineData("PerekPage.xaml.cs", "MenuPanel = ReaderMenuOverlay")]
+    [InlineData("ParashaPage.xaml.cs", "MenuPanel = ReaderMenuOverlay")]
+    [InlineData("MasoraPage.xaml.cs", "MenuPanel = null")]
+    [InlineData("MoedPage.xaml.cs", "MenuPanel = null")]
+    public void Reader_declares_its_menu_surface_to_the_coordinator(string codeFile, string menuSurface)
+    {
+        var code = CodeBehind(codeFile);
+        code.Should().Contain(menuSurface,
+            "the coordinator drives the menu's articles mode — a page that hides the wiring leaves stale actions (#3401)");
+    }
+
+    [Fact]
+    public void MenuPanel_hides_scripture_rows_by_mode_not_the_masking_row()
+    {
+        var doc = XDocument.Load(Path.Join(AppRoot, "Controls", "ReaderMenuPanel.xaml"));
+        var rows = doc.Descendants(Controls + "TappableView").ToList();
+        rows.Should().HaveCount(3, "the menu is שניים מקרא, תיקון קוראים and הסתר שם השם");
+
+        var scriptureRows = rows
+            .Where(row => row.Attribute("IsVisible")?.Value.Contains("IsArticlesMode") == true)
+            .ToList();
+        scriptureRows.Should().HaveCount(2,
+            "both scripture actions collapse on the shared mode — no blank space, hit target or a11y stop (#3401)");
+        scriptureRows.Select(row => row.Attribute("Activated")?.Value)
+            .Should().BeEquivalentTo("OnShnayimMikraTapped", "OnTikkunKorimTapped");
+
+        var maskingRow = rows.Single(row => row.Attribute("Activated")?.Value == "OnDivineNameMaskingTapped");
+        maskingRow.Attribute("IsVisible").Should().BeNull(
+            "הסתר שם השם is the one action that still applies to article content");
+    }
+
     private static string FindAppRoot()
     {
         var dir = AppContext.BaseDirectory;

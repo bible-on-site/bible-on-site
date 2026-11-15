@@ -154,6 +154,9 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 ExitFullscreenButton = ExitFullScreenButton,
                 ArticlesView = ArticlesCollection,
                 ReaderContent = ParashaCarousel,
+                // The ⋮ menu follows the articles/text swap — articles show
+                // only הסתר שם השם (#3401).
+                MenuPanel = ReaderMenuOverlay,
                 // This reader has no reading-position indicator yet.
                 ReadingProgressIndicator = null,
                 Toolbar = ReaderToolbar,
