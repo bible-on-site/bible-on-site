@@ -247,7 +247,7 @@ partial class Build
     /// target deliberately does not: only the Release pipeline compiles the
     /// MainActivity analytics initialization that crashed #2247 store builds.
     /// The store ships an arm64 AAB; the emulator image is x86_64, so the
-    /// guard builds the same Release pipeline (profiled AOT, R8, embedded
+    /// guard builds the same Release pipeline (CoreCLR runtime, R8, embedded
     /// assemblies, merged manifest) for the ABI the device can run — the APK
     /// format and ABI are the documented differences, not the compiled code.
     /// </summary>
