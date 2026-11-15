@@ -1805,11 +1805,16 @@ describe("all category contribution operations against canonical MySQL", () => {
 			"~/server/tanahpedia/contribution-specials.server"
 		);
 		const targets = await store.withContributions(specialContributionTargets);
-		expect(
-			targets.filter(
-				(target) => target.kind === "alias_mapping" && target.label === name,
-			),
-		).toEqual([{ kind: "alias_mapping", id, label: name, after }]);
+		const aliases = targets.filter(
+			(target) => target.kind === "alias_mapping" && target.label === name,
+		);
+		expect(aliases).toHaveLength(1);
+		expect(aliases[0]).toMatchObject({
+			kind: "alias_mapping",
+			label: name,
+			after,
+		});
+		expect(await current("alias_mapping", aliases[0].id)).toEqual(after);
 		const proposal = await service.createContribution(
 			{
 				kind: "pr",
