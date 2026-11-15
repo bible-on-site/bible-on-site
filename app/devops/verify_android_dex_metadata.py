@@ -74,7 +74,7 @@ def load_r8_metadata(archive: zipfile.ZipFile) -> dict:
     if R8_METADATA_ENTRY not in archive.namelist():
         raise ValueError(
             f"AAB is missing {R8_METADATA_ENTRY} — the .NET for Android SDK must be "
-            "36.1.118+ (workload set 10.0.402.1+) for R8 to emit build metadata that "
+            "36.1.118+ (workload set 11.0.100.1+) for R8 to emit build metadata that "
             "Play reads for code-optimization scoring."
         )
     raw = archive.read(R8_METADATA_ENTRY)

@@ -25,7 +25,7 @@ dotnet tool install microsoft.dotnet.xharness.cli --tool-path ./tools \
 dotnet build -c Release -p:AndroidPackageFormat=apk -p:RunAOTCompilation=false
 
 ./tools/xharness android test \
-  --app bin/Release/net10.0-android/com.bibleonsite.devicetests-Signed.apk \
+  --app bin/Release/net11.0-android/com.bibleonsite.devicetests-Signed.apk \
   --package-name com.bibleonsite.devicetests \
   --instrumentation com.bibleonsite.devicetests.TestInstrumentation \
   --output-directory ./results --device-id <udid> --timeout 00:05:00
