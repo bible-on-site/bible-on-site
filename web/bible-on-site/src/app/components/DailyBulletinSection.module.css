@@ -1,10 +1,18 @@
-/* Daily bulletin join section (#2941).
-   Sits right after the hero: the hero's bottom divider paints #d8ebff, so this
-   section shares that background and flows seamlessly into the sefarim
-   section below it. White cards carry the visual separation. */
+/* Daily bulletin join section (#2941; own visual band per #3267).
+   Rule: each independent top-level landing feature owns a distinct visual
+   band — never merge independent features into one continuous band (see
+   docs/practices/implementation.md). This band is the white island between
+   the hero's blue and the sefarim shelf's light blue — the section-color
+   game: the hero's bottom divider paints this band's white, and the shared
+   SectionDivider invades this band with the shelf's surface
+   (--divider-paint) in an asymmetric wave at the bottom edge. */
 
 .section {
-	background-color: #d8ebff;
+	/* Paints the shared bottom edge with the NEXT section's surface — the
+	   sefarim shelf's #d8ebff (#16283f dark, set below). Keep in sync with
+	   TanahSefarimSection.module.css. */
+	--divider-paint: #d8ebff;
+	background-color: #fff;
 	box-sizing: border-box;
 	min-width: 0;
 	overflow: hidden;
@@ -165,13 +173,14 @@
 	}
 }
 
-/* Dark mode: the hero's bottom divider permanently paints this band light
-   blue, so the section stays light in dark mode too — text color and the
-   control tokens are re-pinned to their light-mode values (color is set
-   directly because inherited `color` is already resolved at body), and
-   color-scheme keeps the signup controls light. */
+/* Dark mode: this band stays light by design — the cards and signup form
+   keep their light tokens (color is set directly because inherited `color`
+   is already resolved at body, and color-scheme keeps the signup controls
+   light) — while the shared bottom edge re-paints the shelf's dark surface
+   so the boundary stays seamless. */
 @media (prefers-color-scheme: dark) {
 	.section {
+		--divider-paint: #16283f;
 		--link-accent: var(--accent-600, #1552ac);
 		--link-accent-hover: var(--accent-700, #11469c);
 		--muted-text: #666;
