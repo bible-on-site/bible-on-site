@@ -75,11 +75,15 @@ jobs:
           java-version: "17"
           verify-signature: true
       - name: 'Install MAUI Android workload'
-        # The image's sdk-manifests can carry stale manifests from another SDK
-        # band that conflict with this leg's set at resolution time.
+        # The head leg installs the .NET 11 set; foreign-band sdk-manifests
+        # claiming the same packs abort the install — drop them first.
         run: |
-          sudo rm -rf "$DOTNET_ROOT/sdk-manifests"
-          dotnet workload install maui-android
+          if [ "${{ matrix.source }}" = 'head' ]; then
+            for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
+            dotnet workload install maui-android --version 11.0.100.1
+          else
+            dotnet workload install maui-android
+          fi
       - name: 'Restore NuGet projects'
         run: |
           # The base leg checks out the merge-base, whose csproj still targets

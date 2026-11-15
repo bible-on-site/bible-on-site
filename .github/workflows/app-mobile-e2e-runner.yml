@@ -501,10 +501,9 @@ jobs:
       - name: Install MAUI workload
         if: inputs.mode != 'prebuilt-run'
         # 11.0.100.1 selects the iOS 27.2 / Android 37.2 SDKs under SDK 11.
-        # The image's sdk-manifests can carry stale .NET 10-band manifests that
-        # conflict with the 11-band set at resolution time — drop them first.
+        # Foreign-band sdk-manifests claiming the same packs abort the install.
         run: |
-          sudo rm -rf "$DOTNET_ROOT/sdk-manifests"
+          for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
           dotnet workload install ${{ inputs.workload }} --version ${{ steps.workload-set.outputs.version }}
 
       # Background like the other cache saves: compression and upload stay off
