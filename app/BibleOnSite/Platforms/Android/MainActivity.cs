@@ -39,6 +39,15 @@ public class MainActivity : MauiAppCompatActivity
         {
             Services.SearchIndexService.MarkE2eCoverageToken(e2eCoverageToken);
         }
+#if FIREBASE_EMULATOR
+        // #3185: the Firebase emulator endpoint rides the same launch channel —
+        // persisted so the relaunches whose extras adb drops still resolve it.
+        var firebaseEmulator = Intent?.GetStringExtra(Services.FirebaseEmulatorEndpoint.EnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(firebaseEmulator))
+        {
+            Services.FirebaseEmulatorEndpoint.MarkEmulatorLaunch(firebaseEmulator);
+        }
+#endif
         base.OnCreate(savedInstanceState);
         // MAUI's own MauiOnBackPressedCallback is only enabled while
         // Window.CanConsumeBackNavigation reports in-app history, so at the
@@ -86,6 +95,13 @@ public class MainActivity : MauiAppCompatActivity
             Services.SearchIndexService.MarkE2eLaunchFromIntent();
             Plugin.Firebase.Analytics.CrossFirebaseAnalytics.Current.IsAnalyticsCollectionEnabled = false;
             Console.WriteLine("[Analytics] collection enabled=false (e2e relaunch)");
+        }
+#endif
+#if FIREBASE_EMULATOR
+        var firebaseEmulator = intent?.GetStringExtra(Services.FirebaseEmulatorEndpoint.EnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(firebaseEmulator))
+        {
+            Services.FirebaseEmulatorEndpoint.MarkEmulatorLaunch(firebaseEmulator);
         }
 #endif
         HandleAppLinkIntent(intent);
