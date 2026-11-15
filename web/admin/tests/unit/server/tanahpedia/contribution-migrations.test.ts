@@ -33,6 +33,7 @@ import {
 	ensureContributionMigrationsStarted,
 	migrateContributionSequence,
 	migrateOpenContributionPrs,
+	readCurrentContribution,
 } from "~/server/tanahpedia/contribution-migrations.server";
 
 const id = "00000000-0000-4000-8000-000000000001";
@@ -87,6 +88,64 @@ function pr(): Contribution {
 }
 beforeEach(() => vi.clearAllMocks());
 describe("pending PR API migration", () => {
+	it("upgrades a late legacy PR on read, retaining approval and making repeated reads idempotent", async () => {
+		const item = pr();
+		item.apiVersion = 3;
+		const original = structuredClone(item);
+		mocks.read.mockResolvedValue(item);
+		mocks.save.mockImplementationOnce(async (_conn, saved) => {
+			saved.version++;
+		});
+		const result = await readCurrentContribution({} as never, id);
+		expect(result.apiVersion).toBe(CONTRIBUTION_API_VERSION);
+		expect(result.events).toEqual(original.events);
+		expect(result.revision).toBe(original.revision);
+		expect(result.version).toBe(original.version + 1);
+		expect(reviewStatus(result)).toBe("approved");
+		expect(result.apiMigration?.sequence).toBe(
+			JSON.stringify(original.changes),
+		);
+		await readCurrentContribution({} as never, id);
+		expect(mocks.save).toHaveBeenCalledOnce();
+		expect(mocks.read).toHaveBeenCalledWith({}, id, true);
+	});
+	it("persists a failed late migration for raw repair without changing approval or the original sequence", async () => {
+		const item = pr();
+		item.apiVersion = 999;
+		const original = structuredClone(item);
+		mocks.read.mockResolvedValue(item);
+		const result = await readCurrentContribution({} as never, id);
+		expect(migrationBlocked(result)).toBe(true);
+		expect(result.changes).toEqual(original.changes);
+		expect(result.events).toEqual(original.events);
+		expect(result.revision).toBe(original.revision);
+		expect(result.state).toBe("open");
+		expect(mocks.save).toHaveBeenCalledOnce();
+	});
+	it("checks the caller's version before touching a legacy sequence", async () => {
+		const item = pr();
+		item.apiVersion = 3;
+		mocks.read.mockResolvedValue(item);
+		await expect(
+			readCurrentContribution({} as never, id, () => {
+				throw new Error("Reload");
+			}),
+		).rejects.toThrow("Reload");
+		expect(item.apiVersion).toBe(3);
+		expect(mocks.save).not.toHaveBeenCalled();
+	});
+	it("leaves current and finalized discussions unchanged", async () => {
+		for (const fields of [
+			{},
+			{ kind: "issue" as const, apiVersion: 1 },
+			{ state: "closed" as const, apiVersion: 1 },
+		]) {
+			const item = { ...pr(), ...fields };
+			mocks.read.mockResolvedValue(item);
+			expect(await readCurrentContribution({} as never, id)).toBe(item);
+		}
+		expect(mocks.save).not.toHaveBeenCalled();
+	});
 	it("propagates a database failure from an asynchronous adapter without marking the PR incompatible", async () => {
 		const item = pr();
 		item.apiVersion = 1;

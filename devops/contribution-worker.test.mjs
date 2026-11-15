@@ -249,6 +249,7 @@ test("claims work, uses only local inference and submits an authority-free resul
 					assert.equal(request.headers.Authorization, undefined);
 					assert.deepEqual(body.format, claim.schema);
 					assert.equal(body.think, false);
+					assert.equal(body.keep_alive, 0);
 					assert.equal(body.model, "local-test");
 					return Response.json({
 						model: "doradsoft",

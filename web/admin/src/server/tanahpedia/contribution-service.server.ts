@@ -28,6 +28,7 @@ import {
 	prepareChanges,
 	readChangeState,
 } from "./contribution-changes.server";
+import { readCurrentContribution } from "./contribution-migrations.server";
 import { contributionApplyRank } from "./contribution-records.server";
 import {
 	assertDistinctContributionAliases,
@@ -401,9 +402,16 @@ export async function mergeContribution(
 ): Promise<Contribution> {
 	const input = record(raw),
 		id = uuidField(input.id, "id");
+	const prepared = await withContributions((conn) =>
+		readCurrentContribution(conn, id, (item) =>
+			assertVersion(item, input.version),
+		),
+	);
 	let merged = await withContributions(async (conn) => {
 		const item = await readContribution(conn, id, true);
-		assertVersion(item, input.version);
+		// Only the protocol migration may advance this request's version. An
+		// intervening authored edit/review still requires the caller to reload.
+		assertVersion(item, prepared.version);
 		assertMergeAllowed(item);
 		await applyReviewedChanges(conn, item);
 		item.state = "merged";

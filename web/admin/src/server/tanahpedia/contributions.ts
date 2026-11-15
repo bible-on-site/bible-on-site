@@ -10,6 +10,7 @@ import {
 	contributionLlmStatus,
 	generateContributionPrs,
 } from "./contribution-llm.server";
+import { readCurrentContribution } from "./contribution-migrations.server";
 import {
 	createContribution,
 	editContribution,
@@ -19,7 +20,6 @@ import {
 } from "./contribution-service.server";
 import {
 	listContributions,
-	readContribution,
 	withContributions,
 } from "./contribution-store.server";
 
@@ -36,7 +36,7 @@ export const getContribution = createServerFn({ method: "GET" })
 	.validator((id: unknown) => uuidField(id, "id"))
 	.handler(async ({ data }) => {
 		await contributionIdentity();
-		return withContributions((conn) => readContribution(conn, data));
+		return withContributions((conn) => readCurrentContribution(conn, data));
 	});
 export const getContributionCatalogue = createServerFn({
 	method: "GET",

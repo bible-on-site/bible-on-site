@@ -182,6 +182,8 @@ with the unchanged 120-second deadline and 16K context. The visual diff showed
 the requested replacement, model authorship and the mandatory owner review.
 That synthetic PR and issue were closed without applying content. The worker now
 defaults to this tested 8B model; `--model` or `LOCAL_LLM_MODEL` can override it.
+Each worker request unloads the model on completion, returning its memory to the
+workstation between jobs instead of retaining an idle model while other apps run.
 
 ## API evolution
 
@@ -228,6 +230,12 @@ repository's `cd-aws.yml` on master, with a dedicated audience and immutable
 repository ID. It does not accept browser sessions or ordinary service tokens.
 The [GitHub OIDC claims](https://docs.github.com/en/actions/reference/security/oidc)
 provide these deployment identity restrictions without a new stored secret or IAM grant.
+
+Opening or merging a PR also upgrades a legacy sequence saved by an old admin
+process after a deployment scan. Merge commits this protocol-only check first;
+even a refused merge leaves a failed conversion gray and recoverable. It retains
+the existing approval. The subsequent content transaction checks the version
+again, so a concurrent authored edit or review still requires a reload.
 
 The keyset scan visits all open PRs rather than the UI's initial result limit.
 Each PR migrates in its own locked transaction. Successful conversions update

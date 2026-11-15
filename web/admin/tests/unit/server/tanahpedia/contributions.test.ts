@@ -29,8 +29,10 @@ vi.mock("~/server/tanahpedia/contribution-identity.server", () => ({
 }));
 vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
 	listContributions: mocks.list,
-	readContribution: mocks.read,
 	withContributions: (fn: (conn: object) => unknown) => fn({}),
+}));
+vi.mock("~/server/tanahpedia/contribution-migrations.server", () => ({
+	readCurrentContribution: mocks.read,
 }));
 vi.mock("~/server/tanahpedia/contribution-changes.server", () => ({
 	contributionCatalogue: mocks.catalogue,

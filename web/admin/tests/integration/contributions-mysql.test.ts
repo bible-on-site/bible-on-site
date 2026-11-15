@@ -703,41 +703,83 @@ describe("durable issue assignment", () => {
 			(await getPersons()).find((person) => person.id === ids.person)?.name,
 		).toBe("Updated person");
 	});
-	it("automatically upgrades an approved v1 person rename and keeps its approval usable", async () => {
-		let pr = await createPr([metadata("Legacy upgraded person")]);
-		await store.withContributions(async (tx) => {
-			const item = await store.readContribution(tx, pr.id, true);
-			item.apiVersion = 1;
-			delete item.changes[0].personNames;
-			await store.saveContribution(tx, item);
-		});
-		pr = await fresh(pr);
+	it.each(["deployment", "read", "merge"])(
+		"automatically upgrades an approved v1 person rename via %s without renewed review",
+		async (path) => {
+			let pr = await createPr([metadata(`Legacy upgraded person ${path}`)]);
+			await store.withContributions(async (tx) => {
+				const item = await store.readContribution(tx, pr.id, true);
+				item.apiVersion = 1;
+				delete item.changes[0].personNames;
+				await store.saveContribution(tx, item);
+			});
+			pr = await fresh(pr);
+			pr = await service.updateContribution(
+				{ id: pr.id, version: pr.version, action: "approve" },
+				owner,
+			);
+			const approved = structuredClone(pr.events),
+				revision = pr.revision,
+				original = structuredClone(pr.changes);
+			const { migrateOpenContributionPrs, readCurrentContribution } =
+				await import("~/server/tanahpedia/contribution-migrations.server");
+			if (path === "deployment") await migrateOpenContributionPrs();
+			else if (path === "read")
+				await store.withContributions((tx) =>
+					readCurrentContribution(tx, pr.id),
+				);
+			else
+				await service.mergeContribution(
+					{ id: pr.id, version: pr.version },
+					owner,
+				);
+			pr = await fresh(pr);
+			expect(pr.apiVersion).toBe(CONTRIBUTION_API_VERSION);
+			expect(pr.apiMigration?.status).toBe("succeeded");
+			expect(pr.events.slice(0, approved.length)).toEqual(approved);
+			expect(pr.revision).toBe(revision);
+			expect(JSON.parse(pr.apiMigration?.sequence ?? "null")).toEqual(original);
+			expect(pr.changes[0].personNames?.length).toBeGreaterThan(0);
+			if (pr.state !== "merged")
+				expect(
+					(
+						await service.mergeContribution(
+							{ id: pr.id, version: pr.version },
+							owner,
+						)
+					).state,
+				).toBe("merged");
+		},
+	);
+	it("commits a gray migration failure even when a direct merge is rejected", async () => {
+		let pr = await createPr([metadata("Late incompatible proposal")]);
 		pr = await service.updateContribution(
 			{ id: pr.id, version: pr.version, action: "approve" },
 			owner,
 		);
-		const approved = structuredClone(pr.events),
-			revision = pr.revision,
-			original = structuredClone(pr.changes);
-		const { migrateOpenContributionPrs } = await import(
-			"~/server/tanahpedia/contribution-migrations.server"
+		await store.withContributions(async (tx) => {
+			const old = await store.readContribution(tx, pr.id, true);
+			old.apiVersion = 999;
+			await store.saveContribution(tx, old);
+		});
+		const original = await fresh(pr);
+		await expect(
+			service.mergeContribution(
+				{ id: original.id, version: original.version },
+				owner,
+			),
+		).rejects.toThrow("Couldn't migrate");
+		const failed = await fresh(pr);
+		expect(failed.apiMigration?.status).toBe("failed");
+		expect(failed.changes).toEqual(original.changes);
+		expect(failed.events).toEqual(original.events);
+		expect(failed.revision).toBe(original.revision);
+		expect(failed.state).toBe("open");
+		expect(failed.version).toBe(original.version + 1);
+		await service.updateContribution(
+			{ id: failed.id, version: failed.version, action: "close" },
+			owner,
 		);
-		await migrateOpenContributionPrs();
-		pr = await fresh(pr);
-		expect(pr.apiVersion).toBe(CONTRIBUTION_API_VERSION);
-		expect(pr.apiMigration?.status).toBe("succeeded");
-		expect(pr.events).toEqual(approved);
-		expect(pr.revision).toBe(revision);
-		expect(JSON.parse(pr.apiMigration?.sequence ?? "null")).toEqual(original);
-		expect(pr.changes[0].personNames?.length).toBeGreaterThan(0);
-		expect(
-			(
-				await service.mergeContribution(
-					{ id: pr.id, version: pr.version },
-					owner,
-				)
-			).state,
-		).toBe("merged");
 	});
 	it("prepares and merges person renames concurrently with the same lock order", async () => {
 		const pr = await createPr([metadata("Concurrent merge")], owner);

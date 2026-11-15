@@ -312,6 +312,8 @@ export function createContributionWorker(
 				body: JSON.stringify({
 					model: options.model,
 					stream: false,
+					// Return memory to the user's workstation between queued jobs.
+					keep_alive: 0,
 					think: false,
 					format: job.schema,
 					options: { temperature: 0, num_predict: 4096, num_ctx: 16384 },

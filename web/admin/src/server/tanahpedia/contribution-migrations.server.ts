@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { PoolConnection } from "mysql2/promise";
 import {
 	type AsyncApiVersionAdapter,
 	convertApiVersionAsync,
@@ -96,6 +97,31 @@ export async function migrateContributionSequence(
 		structuredClone(migration),
 	];
 	return migration.status === "succeeded" ? "migrated" : "failed";
+}
+
+/** Cover proposals saved by an old process after the deployment scan. Callers
+ * commit this protocol-only transaction before attempting content writes, so a
+ * refused merge cannot roll back the gray recovery state or a successful upgrade. */
+export async function readCurrentContribution(
+	conn: PoolConnection,
+	id: string,
+	beforeMigration?: (item: Contribution) => void,
+): Promise<Contribution> {
+	const item = await readContribution(conn, id, true);
+	beforeMigration?.(item);
+	if (
+		item.kind === "pr" &&
+		item.state === "open" &&
+		(contributionApiVersion(item) !== CONTRIBUTION_API_VERSION ||
+			item.apiMigration?.status === "failed")
+	) {
+		const outcome = await migrateContributionSequence(
+			item,
+			currentContributionApiContract(conn),
+		);
+		if (outcome !== "unchanged") await saveContribution(conn, item);
+	}
+	return item;
 }
 
 /** Keyset scan covers every open PR, independently of the UI's page size.

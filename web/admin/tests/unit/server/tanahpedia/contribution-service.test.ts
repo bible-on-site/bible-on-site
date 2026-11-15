@@ -20,12 +20,15 @@ const mocks = vi.hoisted(() => ({
 	entities: vi.fn(),
 	entries: vi.fn(),
 	query: vi.fn(),
+	afterTransaction: vi.fn(),
 }));
 vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
 	withContributions: async (fn: (conn: object) => Promise<unknown>) => {
 		const previous = structuredClone(mocks.items);
 		try {
-			return await fn({});
+			const result = await fn({});
+			await mocks.afterTransaction();
+			return result;
 		} catch (error) {
 			mocks.items.clear();
 			for (const [id, item] of previous) mocks.items.set(id, item);
@@ -180,6 +183,7 @@ describe("contribution lifecycle", () => {
 			mocks.entities,
 			mocks.entries,
 			mocks.query,
+			mocks.afterTransaction,
 		])
 			mock.mockReset();
 		mocks.prepare.mockImplementation(async (_conn, inputs) =>
@@ -511,6 +515,39 @@ describe("contribution lifecycle", () => {
 			mergeContribution({ id: item.id, version: item.version }, alice),
 		).rejects.toThrow("Conflict");
 		expect(mocks.apply).not.toHaveBeenCalled();
+	});
+	it("rejects an authored edit between migration preflight and content locking", async () => {
+		const item = await pr(owner);
+		mocks.afterTransaction.mockImplementationOnce(() => {
+			const edited = mocks.items.get(item.id);
+			if (!edited) throw new Error("Missing fixture");
+			edited.version++;
+			edited.revision++;
+			edited.revisionAuthor = alice;
+			edited.description = "Concurrent authored edit";
+		});
+		await expect(
+			mergeContribution({ id: item.id, version: item.version }, owner),
+		).rejects.toThrow("Reload");
+		expect(mocks.apply).not.toHaveBeenCalled();
+		expect(mocks.items.get(item.id)?.description).toBe(
+			"Concurrent authored edit",
+		);
+	});
+	it("retains an automatic API upgrade when the later content transaction fails", async () => {
+		const item = await pr(owner);
+		item.apiVersion = 2;
+		mocks.items.set(item.id, structuredClone(item));
+		mocks.apply.mockRejectedValue(new Error("FK failure"));
+		await expect(
+			mergeContribution({ id: item.id, version: item.version }, owner),
+		).rejects.toThrow("FK failure");
+		const saved = mocks.items.get(item.id);
+		expect(saved?.apiVersion).toBe(CONTRIBUTION_API_VERSION);
+		expect(saved?.apiMigration?.status).toBe("succeeded");
+		expect(saved?.revision).toBe(item.revision);
+		expect(saved?.events).toEqual(item.events);
+		expect(saved?.state).toBe("open");
 	});
 	it("applies an approved operation and invalidates only after commit", async () => {
 		let item = await pr();
