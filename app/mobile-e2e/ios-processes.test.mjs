@@ -70,6 +70,7 @@ function diagnosticFixture(t) {
       ? { stdout: `${args[1]} 259 W 0 0 main-thread\n`, stderr: "" }
       : { stdout: OWNED, stderr: "" };
     if (args.includes("screenshot")) writeFileSync(args.at(-1), "frame");
+    if (command === "/usr/bin/sample") writeFileSync(args.at(-1), "sampled native stack");
     return { stdout: "captured", stderr: "" };
   };
   const now = () => Date.parse("2026-10-28T16:33:00Z");
@@ -126,8 +127,8 @@ test("failure handoff samples the pinned process while all existing caps remain 
   request.pending = false; request.status = 500;
   f.calls.length = 0;
   assert.deepEqual(await diagnostics.failure(failureSignal()), { status: "captured", pid: 8421 });
-  assert.deepEqual(f.calls.map(x => x.command), [inspectorPath, "xcrun", inspectorPath, "sudo"]);
-  assert.deepEqual(f.calls.map(x => x.options.timeout), [5000, 5000, 5000, 10000]);
+  assert.deepEqual(f.calls.map(x => x.command), [inspectorPath, "xcrun", inspectorPath, "/usr/bin/sample", inspectorPath, "sudo"]);
+  assert.deepEqual(f.calls.map(x => x.options.timeout), [5000, 5000, 5000, 5000, 5000, 10000]);
   assert.ok(f.calls.every(x => x.options.signal === f.calls[0].options.signal));
   assert.ok(f.calls.at(-1).args.includes("8421"));
   assert.ok(f.calls.at(-1).args.includes("settings set target.detach-on-error true"));
@@ -137,6 +138,8 @@ test("failure handoff samples the pinned process while all existing caps remain 
   // Kernel thread rows still land when host debugger channels cannot run.
   assert.equal(readFileSync(join(f.directory, `native-failure-${failureSignal().id}-threads-8421.txt`), "utf8"),
     "8421 259 W 0 0 main-thread\n");
+  assert.equal(readFileSync(join(f.directory, `native-failure-${failureSignal().id}-sample-8421.txt`), "utf8"),
+    "sampled native stack");
 });
 
 for (const listing of ["", "9912 L " + appPath(udid), "8421 L " + appPath("B8D3DB6B-98FB-4E92-9ACE-9BC307F7FDE7"), "8421 Z " + appPath(udid)]) {
@@ -209,6 +212,10 @@ test("a stuck simulator frame cannot block the independently captured pinned sta
       f.calls.push({ command, args, options });
       if (command === inspectorPath) return { stdout: args[0] === "--threads" ? "8421 259 W 0 0 main-thread\n" : OWNED, stderr: "" };
       if (args.includes("screenshot")) return frame;
+      if (command === "/usr/bin/sample") {
+        writeFileSync(args.at(-1), "sampled native stack");
+        return { stdout: "", stderr: "" };
+      }
       assert.equal(command, "sudo");
       assert.ok(f.calls.some(call => call.args.includes("screenshot")));
       finishFrame(Object.assign(new Error("simulator unresponsive"), { killed: true, signal: "SIGTERM" }));
@@ -218,7 +225,7 @@ test("a stuck simulator frame cannot block the independently captured pinned sta
   assert.equal(result.frameError.signal, "SIGTERM");
   assert.equal(readFileSync(join(f.directory, "stuck-frame-stack-8421.txt"), "utf8"), "pinned stack");
   assert.equal(readFileSync(join(f.directory, "stuck-frame-threads-8421.txt"), "utf8"), "8421 259 W 0 0 main-thread\n");
-  assert.deepEqual(f.calls.map(call => call.options.timeout), [5000, 5000, 5000, 10000]);
+  assert.deepEqual(f.calls.map(call => call.options.timeout), [5000, 5000, 5000, 5000, 5000, 10000]);
   assert.ok(f.calls.every(call => call.options.signal === f.calls[0].options.signal));
   assert.ok(f.calls.every(call => !call.args.includes("spawn") && call.command !== "ps"));
 });
@@ -240,6 +247,134 @@ test("a killed kernel thread capture retains its own error beside surviving evid
   assert.equal(JSON.parse(readFileSync(join(f.directory, "dead-threads-threads-error.json"), "utf8")).signal, "SIGTERM");
   assert.equal(readFileSync(join(f.directory, "dead-threads-stack-8421.txt"), "utf8"), "pinned stack");
   assert.equal(readFileSync(join(f.directory, "dead-threads.png"), "utf8"), "frame");
+});
+
+test("a native sample finishes before debugger attachment and survives a failed debugger", async t => {
+  const f = diagnosticFixture(t);
+  let finishSample;
+  const sample = new Promise(resolve => { finishSample = resolve; });
+  const sampling = samplePinnedIosApp({ udid, pid: 8421,
+    prefix: join(f.directory, "sample-before-debugger"), deadlineUtc: failureSignal().deadlineUtc, now: f.now,
+    execute: async (command, args, options) => {
+      if (command === "/usr/bin/sample") {
+        f.calls.push({ command, args, options });
+        assert.deepEqual(args, ["8421", "1", "-file", join(f.directory, "sample-before-debugger-sample-8421.txt")]);
+        writeFileSync(args.at(-1), "native call tree\nmain-thread waiting in InitializeComponent");
+        await sample;
+        return { stdout: "", stderr: "" };
+      }
+      if (command === "sudo") {
+        f.calls.push({ command, args, options });
+        throw Object.assign(new Error("debugger attach timed out"), { killed: true, signal: "SIGTERM" });
+      }
+      return f.execute(command, args, options);
+    } });
+  await new Promise(setImmediate);
+  assert.ok(f.calls.some(call => call.command === "/usr/bin/sample"));
+  assert.ok(f.calls.every(call => call.command !== "sudo"), "LLDB cannot suspend an active sample");
+  finishSample();
+  const result = await sampling;
+  assert.equal(result.status, "error");
+  assert.equal(result.error.signal, "SIGTERM");
+  assert.equal(readFileSync(join(f.directory, "sample-before-debugger-sample-8421.txt"), "utf8"),
+    "native call tree\nmain-thread waiting in InitializeComponent");
+  assert.equal(JSON.parse(readFileSync(join(f.directory, "sample-before-debugger-stack-error.json"), "utf8")).signal,
+    "SIGTERM");
+});
+
+test("a killed native sample retains partial output and falls back to the existing debugger", async t => {
+  const f = diagnosticFixture(t);
+  const sampleKilled = Object.assign(new Error("sample timed out"), { killed: true, signal: "SIGTERM" });
+  const result = await samplePinnedIosApp({ udid, pid: 8421,
+    prefix: join(f.directory, "partial-sample"), deadlineUtc: failureSignal().deadlineUtc, now: f.now,
+    execute: async (command, args, options) => {
+      if (command === "/usr/bin/sample") {
+        f.calls.push({ command, args, options });
+        writeFileSync(args.at(-1), "partial native call tree");
+        throw sampleKilled;
+      }
+      return f.execute(command, args, options);
+    } });
+  assert.equal(result.status, "captured", "a successful debugger remains usable after a failed sample");
+  assert.equal(result.sampleError.signal, "SIGTERM");
+  assert.equal(readFileSync(join(f.directory, "partial-sample-sample-8421.txt"), "utf8"), "partial native call tree");
+  assert.equal(JSON.parse(readFileSync(join(f.directory, "partial-sample-sample-error.json"), "utf8")).signal, "SIGTERM");
+  assert.equal(readFileSync(join(f.directory, "partial-sample-stack-8421.txt"), "utf8"), "captured");
+  assert.ok(f.calls.at(-1).args.includes("--attach-pid"));
+});
+
+for (const listing of ["", "8421 Z " + appPath(udid), "8421 L " + appPath("B8D3DB6B-98FB-4E92-9ACE-9BC307F7FDE7")]) {
+  test(`a process replaced during sample never reaches debugger attachment: ${listing.trim()}`, async t => {
+    const f = diagnosticFixture(t);
+    let sampled = false;
+    const result = await samplePinnedIosApp({ udid, pid: 8421,
+      prefix: join(f.directory, "replaced-after-sample"), deadlineUtc: failureSignal().deadlineUtc, now: f.now,
+      execute: async (command, args, options) => {
+        if (sampled && command === inspectorPath && args[0] !== "--threads") {
+          f.calls.push({ command, args, options });
+          return { stdout: listing, stderr: "" };
+        }
+        const captured = await f.execute(command, args, options);
+        if (command === "/usr/bin/sample") sampled = true;
+        return captured;
+      } });
+    assert.equal(result.status, "error");
+    assert.equal(result.error.message, "Pinned process no longer belongs to this simulator; no debugger attached.");
+    assert.ok(f.calls.every(call => call.command !== "sudo"));
+    assert.equal(readFileSync(join(f.directory, "replaced-after-sample-process-8421.txt"), "utf8"), OWNED);
+    assert.equal(readFileSync(join(f.directory, "replaced-after-sample-before-debugger-processes.txt"), "utf8"), listing);
+    assert.equal(readFileSync(join(f.directory, "replaced-after-sample-sample-8421.txt"), "utf8"), "sampled native stack");
+  });
+}
+
+test("ownership inspection and native sampling share the existing fifteen-second debugger budget", async t => {
+  const f = diagnosticFixture(t);
+  let clock = f.now();
+  const result = await samplePinnedIosApp({ udid, pid: 8421,
+    prefix: join(f.directory, "remaining-budget"), deadlineUtc: "2026-10-28T17:33:00Z", now: () => clock,
+    execute: async (command, args, options) => {
+      if (command === inspectorPath && args[0] !== "--threads" && f.calls.length === 0) clock += 5000;
+      if (command === "/usr/bin/sample") clock += 3000;
+      return f.execute(command, args, options);
+    } });
+  assert.equal(result.status, "captured");
+  assert.deepEqual(f.calls.map(call => call.options.timeout), [5000, 5000, 5000, 5000, 5000, 7000]);
+  assert.ok(f.calls.every(call => call.options.signal === f.calls[0].options.signal));
+});
+
+test("a native sample cannot start a debugger after consuming the remaining handoff deadline", async t => {
+  const f = diagnosticFixture(t);
+  let clock = f.now();
+  const result = await samplePinnedIosApp({ udid, pid: 8421,
+    prefix: join(f.directory, "sample-deadline"), deadlineUtc: "2026-10-28T16:33:05Z", now: () => clock,
+    execute: async (command, args, options) => {
+      if (command === inspectorPath && args[0] !== "--threads") clock += 1000;
+      if (command === "/usr/bin/sample") clock += 4000;
+      return f.execute(command, args, options);
+    } });
+  assert.equal(result.status, "error");
+  assert.equal(result.error.message, "Failure sampling deadline expired.");
+  assert.equal(f.calls.at(-1).command, "/usr/bin/sample");
+  assert.equal(f.calls.at(-1).options.timeout, 4000);
+  assert.equal(readFileSync(join(f.directory, "sample-deadline-sample-8421.txt"), "utf8"), "sampled native stack");
+  assert.ok(f.calls.every(call => call.command !== "sudo"));
+});
+
+test("handoff cancellation during sample prevents another ownership probe or debugger attachment", async t => {
+  const f = diagnosticFixture(t);
+  const cancellation = new AbortController();
+  const result = await samplePinnedIosApp({ udid, pid: 8421,
+    prefix: join(f.directory, "cancelled-after-sample"), deadlineUtc: failureSignal().deadlineUtc, now: f.now,
+    signal: cancellation.signal,
+    execute: async (command, args, options) => {
+      const captured = await f.execute(command, args, options);
+      if (command === "/usr/bin/sample") cancellation.abort(new Error("handoff cancelled during sample"));
+      return captured;
+    } });
+  assert.equal(result.status, "error");
+  assert.equal(result.error.message, "handoff cancelled during sample");
+  assert.equal(f.calls.at(-1).command, "/usr/bin/sample");
+  assert.ok(f.calls.every(call => call.options.signal.aborted));
 });
 
 test("a failed debugger still waits for frame capture before releasing the scenario handoff", async t => {

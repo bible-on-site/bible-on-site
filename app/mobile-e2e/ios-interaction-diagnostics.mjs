@@ -53,11 +53,27 @@ async function capturePinnedThreads({ inspectorPath, pid, destination, errorPath
 
 export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execute, inspectorPath, devicesRoot,
   now = Date.now, signal: handoffSignal }) {
-  const remaining = Math.min(15000, Date.parse(deadlineUtc) - now());
+  const startedAt = now();
+  const remaining = Math.min(15000, Date.parse(deadlineUtc) - startedAt);
   if (!Number.isSafeInteger(pid) || pid <= 1) return { status: 'unknown', pid: null };
   if (!Number.isFinite(remaining) || remaining <= 0) return { status: 'expired', pid };
   const deadlineSignal = AbortSignal.timeout(Math.floor(remaining));
   const signal = handoffSignal ? AbortSignal.any([handoffSignal, deadlineSignal]) : deadlineSignal;
+  const deadline = startedAt + remaining;
+  let sampleError;
+  function stackOptions(cap) {
+    signal.throwIfAborted();
+    const timeout = Math.floor(Math.min(cap, deadline - now()));
+    if (timeout <= 0) throw new Error('Failure sampling deadline expired.');
+    return { timeout, signal };
+  }
+  async function inspectPinnedProcess(options) {
+    const listing = await execute(inspectorPath, [String(pid)], { ...options, windowsHide: true });
+    if (listing.stderr?.trim()) throw new Error(`App process inspection failed: ${listing.stderr.trim()}`);
+    const observedPids = ownedIosTestAppProcesses(listing.stdout, udid, devicesRoot)
+      .filter(record => !record.state.startsWith('Z')).map(record => record.pid);
+    return { listing: listing.stdout, observedPids };
+  }
   try {
     signal.throwIfAborted();
     if (typeof inspectorPath !== 'string' || !posix.isAbsolute(inspectorPath)) {
@@ -66,17 +82,13 @@ export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execu
     // The simulator may be the stalled component. Confirm only the pinned
     // PID through the host kernel, without another CoreSimulator RPC or ps's
     // Mach task inspection. The executable path proves this device owns it.
-    const listing = await execute(inspectorPath, [String(pid)],
-      { timeout: 5000, signal, windowsHide: true });
-    if (listing.stderr?.trim()) throw new Error(`App process inspection failed: ${listing.stderr.trim()}`);
-    writeFileSync(`${prefix}-processes.txt`, listing.stdout);
-    const observedPids = ownedIosTestAppProcesses(listing.stdout, udid, devicesRoot)
-      .filter(record => !record.state.startsWith('Z')).map(record => record.pid);
+    const { listing, observedPids } = await inspectPinnedProcess({ timeout: 5000, signal });
+    writeFileSync(`${prefix}-processes.txt`, listing);
     if (!observedPids.includes(pid)) {
       return { status: 'exited', pid, observedPids,
         reason: 'Pinned process is no longer this device\'s running app; no replacement sampled.' };
     }
-    writeFileSync(`${prefix}-process-${pid}.txt`, listing.stdout);
+    writeFileSync(`${prefix}-process-${pid}.txt`, listing);
     let frameError;
     let threadsError;
     signal.throwIfAborted();
@@ -102,11 +114,29 @@ export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execu
         options: { timeout: 5000, signal } })
         .then(error => { threadsError = error; }),
       (async () => {
+        // A one-second profile can preserve native call stacks even when a
+        // later debugger handshake fails. Write directly to the artifact so
+        // partial output survives a killed sample process. Never run sample
+        // concurrently with LLDB, which would suspend its sampling target.
+        try {
+          await execute('/usr/bin/sample', [String(pid), '1', '-file', `${prefix}-sample-${pid}.txt`],
+            stackOptions(5000));
+        } catch (error) {
+          sampleError = errorDetails(error);
+          writeFileSync(`${prefix}-sample-error.json`, JSON.stringify(sampleError, null, 2));
+        }
+        // The pinned app can exit while sample runs. Prove ownership again
+        // before a debugger may attach to a potentially reused host PID.
+        const beforeDebugger = await inspectPinnedProcess(stackOptions(5000));
+        writeFileSync(`${prefix}-before-debugger-processes.txt`, beforeDebugger.listing);
+        if (!beforeDebugger.observedPids.includes(pid)) {
+          throw new Error('Pinned process no longer belongs to this simulator; no debugger attached.');
+        }
         const captured = await execute('sudo', ['-n', 'xcrun', 'lldb', '--no-lldbinit', '--batch',
           '--one-line-before-file', 'settings set target.preload-symbols false',
           '--one-line-before-file', 'settings set target.detach-on-error true',
           '--attach-pid', String(pid), '--one-line', 'thread backtrace -c 40 all',
-          '--one-line', 'process detach'], { timeout: 10000, signal });
+          '--one-line', 'process detach'], stackOptions(10000));
         writeFileSync(`${prefix}-stack-${pid}.txt`, captured.stdout + captured.stderr);
       })(),
     ]);
@@ -114,11 +144,12 @@ export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execu
     if (frame.status === 'rejected') throw frame.reason;
     if (threads.status === 'rejected') throw threads.reason;
     return { status: (frameError || threadsError) ? 'error' : 'captured', pid,
-      ...(frameError ? { frameError } : {}), ...(threadsError ? { threadsError } : {}) };
+      ...(frameError ? { frameError } : {}), ...(threadsError ? { threadsError } : {}),
+      ...(sampleError ? { sampleError } : {}) };
   } catch (error) {
     const details = errorDetails(error);
     writeFileSync(`${prefix}-stack-error.json`, JSON.stringify(details, null, 2));
-    return { status: 'error', pid, error: details };
+    return { status: 'error', pid, error: details, ...(sampleError ? { sampleError } : {}) };
   }
 }
 

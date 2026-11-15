@@ -217,6 +217,7 @@ partial class Build
                 {
                     BuildE2ECoverageRecorder("Debug");
                     properties["E2ECoverage"] = "true";
+                    E2eXamlCompilation.Configure(properties);
                 }
                 DotNetBuild(s => s
                     .SetProjectFile(MainProject)
@@ -225,6 +226,11 @@ partial class Build
 
                 if (MobileE2ECoverage)
                 {
+                    // Inspect the delivered IL, after XamlC and coverage weaving:
+                    // Debug's validation-only task otherwise leaves runtime inflation.
+                    E2eXamlCompilation.VerifyPerekPage(SourceDirectory / "bin" / "Debug"
+                        / (string)properties["TargetFrameworks"]
+                        / (string)properties["RuntimeIdentifier"] / "BibleOnSite.dll");
                     PublishE2ECoverageBuildArtifacts();
                 }
             }

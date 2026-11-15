@@ -28,7 +28,9 @@ public partial class FocusedPasukOverlay : Grid
 
     public FocusedPasukOverlay()
     {
+        DebugLog.Write("[Startup] FocusedPasukOverlay InitializeComponent");
         InitializeComponent();
+        DebugLog.Write("[Startup] FocusedPasukOverlay constructed");
     }
 
     /// <summary>Header text — the focused pasuk's full source (sefer/perek/pasuk).</summary>
