@@ -47,6 +47,10 @@ for changed chapters are invalidated when those tables exist; metrics for
 unchanged chapters are retained. Ambiguous names and invalid references abort
 the import instead of attaching text to another work.
 
+Website builds clone the production commentary catalogs and notes before
+replaying the same import. This keeps prerendered work IDs and retained
+chapters consistent with the destination database.
+
 The Lambda closes a failed import connection, rolling back its transaction.
 Rolling back a completed publication uses the pre-import RDS recovery point
 and the matching web/native release snapshots.
