@@ -3,7 +3,7 @@ import { appendFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { compareVersions, loadIosSimulatorDriver, selectSimulator } from "./simulator.mjs";
+import { compareVersions, loadIosNativeSimulator, loadIosSimulatorDriver, selectSimulator } from "./simulator.mjs";
 
 function handedOffSimulator(env, sdk) {
   const udid = env.MOBILE_UDID;
@@ -19,6 +19,20 @@ function handedOffSimulator(env, sdk) {
   return { udid, version, state: "Booting" };
 }
 
+function nativeIosVersion(identifier) {
+  const prefix = "com.apple.CoreSimulator.SimRuntime.iOS-";
+  if (typeof identifier !== "string" || !identifier.startsWith(prefix)) return undefined;
+  const parts = identifier.slice(prefix.length).split("-", 4);
+  if (parts.length > 3) return undefined;
+  for (const part of parts) {
+    if (part.length === 0) return undefined;
+    for (const character of part) {
+      if (character < "0" || character > "9") return undefined;
+    }
+  }
+  return parts.join(".");
+}
+
 export async function bootIos({
   mode = "boot",
   env = process.env,
@@ -26,6 +40,7 @@ export async function bootIos({
   downloadPlatform = () => execFileSync("xcodebuild", ["-downloadPlatform", "iOS"], { stdio: "inherit", timeout: 900000 }),
   execute = promisify(execFile),
   loadDriver = loadIosSimulatorDriver,
+  loadNativeDriver = loadIosNativeSimulator,
   log = console.log,
 } = {}) {
   if (!["start", "wait", "boot", "resolve"].includes(mode)) throw new Error(`Unknown ios:boot mode '${mode}'.`);
@@ -71,13 +86,29 @@ export async function bootIos({
   }
   kick(primary);
   const { getSimulator } = await loadDriver();
+  const warmup = async () => {
+    if (!env.DEVELOPER_DIR) return getSimulator(primary.udid);
+    // The workflow already selected this Xcode. The pinned native wrapper's
+    // default discovery shells out to xcode-select even with DEVELOPER_DIR.
+    const { NativeSimctl } = await loadNativeDriver();
+    const devices = await new NativeSimctl({ developerDir: env.DEVELOPER_DIR }).getDevices();
+    const owned = devices.find((device) => device.udid.toLowerCase() === primary.udid.toLowerCase());
+    if (!owned) throw new Error(`No native simulator found with owned UDID '${primary.udid}'.`);
+    const runtime = nativeIosVersion(owned.runtimeIdentifier);
+    if (!runtime || compareVersions(runtime, primary.version) !== 0) {
+      throw new Error(`Native simulator '${primary.udid}' does not match expected iOS runtime ${primary.version}.`);
+    }
+    // Keep Appium's Xcode compatibility check while reusing the exact native
+    // identity just verified, rather than enumerating it a second time.
+    return getSimulator(primary.udid, { checkExistence: false });
+  };
   // Monitor without -b: it never re-issues a boot, and still waits out a Booted
   // device whose startup is in progress. Warm the locked driver's native bridge
   // for this exact UDID before allowing the test session to start.
   await Promise.all([
     execute("xcrun", ["simctl", "bootstatus", primary.udid], { encoding: "utf8", timeout: 300000 })
       .then(({ stdout }) => process.stdout.write(stdout)),
-    getSimulator(primary.udid),
+    warmup(),
   ]);
   log("Appium CoreSimulator lookup is ready.");
   const envLines = `MOBILE_UDID=${primary.udid}\nMOBILE_OS_VERSION=${primary.version}\n`;

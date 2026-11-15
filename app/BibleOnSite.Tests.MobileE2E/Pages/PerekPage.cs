@@ -8,11 +8,12 @@ namespace BibleOnSite.Tests.MobileE2E.Pages;
 
 public sealed class PerekPage(AppiumDriver driver, MobilePlatformAdapter platform)
 {
-    // The first native snapshot on a cold simulator can finish after the
-    // loading page has been replaced, while returning that earlier empty tree.
-    // Allow another snapshot before applying the normal interaction deadlines.
-    public void WaitForStartup() => WaitFor("PerekSource",
-        element => !string.IsNullOrWhiteSpace(element.Text));
+    public void WaitForStartup() => WaitForStartup(TimeSpan.FromSeconds(45));
+
+    // Instrumented iOS startup spends part of the same budget waiting for the
+    // reader's non-accessibility readiness signal before its first snapshot.
+    public void WaitForStartup(TimeSpan remaining) => WaitFor("PerekSource",
+        element => !string.IsNullOrWhiteSpace(element.Text), remaining);
 
     public AppiumElement WaitFor(string automationId) => WaitFor(automationId, _ => true);
 

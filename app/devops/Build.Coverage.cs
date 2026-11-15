@@ -237,6 +237,7 @@ partial class Build
         var applied = E2ECoverageApply.ApplyDumps(modules,
             dumpFiles.Select(f => (Name: (string)f, Json: File.ReadAllText(f))).ToList(),
             out var stats, m => Serilog.Log.Warning(m));
+        E2ECoverageApply.RequireRecordedVisits(dumpFiles.Count, applied, stats);
 
         var appliedPath = coverageApp / "coverage.opencover.xml";
         E2ECoverageApply.UpdateModuleSummaries(modules);
