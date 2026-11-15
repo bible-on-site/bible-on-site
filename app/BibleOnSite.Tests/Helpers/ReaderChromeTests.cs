@@ -215,7 +215,10 @@ public class ReaderChromeTests
 
     private sealed class FakeMenuPanel : IReaderMenuSurface
     {
-        public bool IsArticlesMode { get; set; }
+        // A backing field keeps Codacy's cross-file view honest — the
+        // coordinator assigns through the interface, which S3459 misses.
+        private bool _isArticlesMode;
+        public bool IsArticlesMode { get => _isArticlesMode; set => _isArticlesMode = value; }
     }
 
     /// <summary>

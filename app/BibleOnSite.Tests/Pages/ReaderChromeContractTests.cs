@@ -87,9 +87,10 @@ public class ReaderChromeContractTests
 
     // — Menu content mode (#3401): the ⋮ menu follows the articles/text swap —
 
+    /// <summary>Only readers carrying a ⋮ options menu hand it to the
+    /// coordinator — readers without one declare the null surface
+    /// explicitly so the swap contract stays complete.</summary>
     [Theory]
-    // Only readers carrying a ⋮ options menu hand it to the coordinator;
-    // readers without one declare the null surface explicitly.
     [InlineData("PerekPage.xaml.cs", "MenuPanel = ReaderMenuOverlay")]
     [InlineData("ParashaPage.xaml.cs", "MenuPanel = ReaderMenuOverlay")]
     [InlineData("MasoraPage.xaml.cs", "MenuPanel = null")]
