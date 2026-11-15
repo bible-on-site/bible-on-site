@@ -1,5 +1,6 @@
 using BibleOnSite.Services;
 using BibleOnSite.Helpers;
+using System.Globalization;
 
 namespace BibleOnSite.Pages;
 
@@ -15,6 +16,7 @@ public partial class HomePage : ContentPage, IAnalyticsScreenName
     public HomePage()
     {
         InitializeComponent();
+        TodayLabel.Text = DateTime.Today.ToString("dddd", CultureInfo.GetCultureInfo("he-IL"));
 #if ANDROID || IOS
         var statusBar = new CommunityToolkit.Maui.Behaviors.StatusBarBehavior
         {
@@ -32,25 +34,13 @@ public partial class HomePage : ContentPage, IAnalyticsScreenName
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        AppLinkHelper.TargetRequested += OnAppLinkRequested;
-        if (AppLinkHelper.PendingTarget is not null)
+        if (AppLinkHelper.PendingTarget is not null && Shell.Current is AppShell shell)
         {
-            await ShellAppNavigator.Instance.GoToQueuedAsync(AppRoutes.CalendarReader);
-            return;
+            await shell.OpenHomeUxAppLinkAsync();
+            if (shell.CurrentPage != this) { return; }
         }
         await LoadDailyPerekAsync();
     }
-
-    protected override void OnDisappearing()
-    {
-        AppLinkHelper.TargetRequested -= OnAppLinkRequested;
-        base.OnDisappearing();
-    }
-
-    #pragma warning disable S1172 // EventHandler<AppLinkTarget> requires both delegate parameters.
-    private async void OnAppLinkRequested(object? sender, AppLinkHelper.AppLinkTarget target) =>
-        await ShellAppNavigator.Instance.GoToQueuedAsync(AppRoutes.CalendarReader);
-    #pragma warning restore S1172
 
     private async Task LoadDailyPerekAsync()
     {
@@ -66,6 +56,7 @@ public partial class HomePage : ContentPage, IAnalyticsScreenName
                 ?? throw new InvalidOperationException("The daily chapter is absent from the catalog.");
             var verses = await catalog.LoadPasukimAsync(_dailyPerekId);
             DailySource.Text = catalog.GetPerekSource(_dailyPerekId);
+            DailyGlyph.Text = perek.PerekNumber.ToHebrewLetters();
             DailyTitle.Text = perek.Header;
             DailyTitle.IsVisible = !string.IsNullOrWhiteSpace(perek.Header);
             VerseCount.Text = $"{verses.Count} פסוקים";
@@ -98,6 +89,8 @@ public partial class HomePage : ContentPage, IAnalyticsScreenName
     }
 
     private static Task OpenAsync(string route) => ShellAppNavigator.Instance.GoToAsync(route);
+    private async void OnGlobalSearchTapped(object? sender, TappedEventArgs e) =>
+        await OpenAsync(nameof(HomeSearchPage));
     private async void OnDailyPerekTapped(object? sender, TappedEventArgs e) =>
         await OpenAsync($"{AppRoutes.CalendarReader}?perekId={_dailyPerekId}");
     private void OnIndexTapped(object? sender, TappedEventArgs e) => HomeIndexPicker.Show(Math.Max(1, _dailyPerekId));
