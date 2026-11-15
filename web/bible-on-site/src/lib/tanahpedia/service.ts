@@ -1,4 +1,5 @@
 import { query } from "../api-client";
+import { getEntryMetric, metricOrFallback } from "../reading-metrics";
 import type {
 	CategoryHomepage,
 	CategoryKey,
@@ -49,9 +50,9 @@ export const CATEGORY_LABELS: Record<CategoryKey, string> = {
 
 export const ENTITY_TYPES = Object.keys(ENTITY_TYPE_LABELS) as EntityType[];
 
-export async function getEntries(limit = 50, offset = 0): Promise<Entry[]> {
-	return query<Entry>(
-		"SELECT id, unique_name AS uniqueName, title, content, created_at AS createdAt, updated_at AS updatedAt FROM tanahpedia_entry ORDER BY title LIMIT ? OFFSET ?",
+export async function getEntries(limit = 50, offset = 0): Promise<EntryStub[]> {
+	return query<EntryStub>(
+		"SELECT id, unique_name AS uniqueName, title FROM tanahpedia_entry ORDER BY title LIMIT ? OFFSET ?",
 		[String(limit), String(offset)],
 	);
 }
@@ -66,29 +67,35 @@ export async function getEntryByUniqueName(
 	if (entries.length === 0) return null;
 
 	const entry = entries[0];
-	const entities = await query<{
-		id: string;
-		entryId: string;
-		entityId: string;
-		entityType: EntityType;
-		entityName: string;
-	}>(
-		`SELECT ee.id, ee.entry_id AS entryId, ee.entity_id AS entityId,
-		        e.entity_type AS entityType, e.name AS entityName
-		 FROM tanahpedia_entry_entity ee
-		 JOIN tanahpedia_entity e ON e.id = ee.entity_id
-		 WHERE ee.entry_id = ?`,
-		[entry.id],
-	);
+	// Stored reading metric (#2607): degrades to null when the schema is not
+	// deployed yet, and a failed metric read must not take down the entry.
+	// The metric and entity lookups are independent — issue them together.
+	const [metric, entities] = await Promise.all([
+		metricOrFallback(`entry ${entry.id}`, null, () => getEntryMetric(entry.id)),
+		query<{
+			id: string;
+			entryId: string;
+			entityId: string;
+			entityType: EntityType;
+			entityName: string;
+		}>(
+			`SELECT ee.id, ee.entry_id AS entryId, ee.entity_id AS entityId,
+			        e.entity_type AS entityType, e.name AS entityName
+			 FROM tanahpedia_entry_entity ee
+			 JOIN tanahpedia_entity e ON e.id = ee.entity_id
+			 WHERE ee.entry_id = ?`,
+			[entry.id],
+		),
+	]);
 
-	return { ...entry, entities };
+	return { ...entry, ...(metric ? { metric } : {}), entities };
 }
 
 export async function getEntriesByEntityType(
 	entityType: EntityType,
-): Promise<Entry[]> {
-	return query<Entry>(
-		`SELECT DISTINCT ent.id, ent.unique_name AS uniqueName, ent.title, ent.content, ent.created_at AS createdAt, ent.updated_at AS updatedAt
+): Promise<EntryStub[]> {
+	return query<EntryStub>(
+		`SELECT DISTINCT ent.id, ent.unique_name AS uniqueName, ent.title
      FROM tanahpedia_entry ent
      JOIN tanahpedia_entry_entity ee ON ee.entry_id = ent.id
      JOIN tanahpedia_entity e ON e.id = ee.entity_id
@@ -732,10 +739,58 @@ export async function getCategoryCounts(): Promise<
 	return counts;
 }
 
-export async function getRecentEntries(limit = 10): Promise<Entry[]> {
-	return query<Entry>(
-		"SELECT id, unique_name AS uniqueName, title, content, created_at AS createdAt, updated_at AS updatedAt FROM tanahpedia_entry ORDER BY updated_at DESC LIMIT ?",
+export async function getRecentEntries(limit = 10): Promise<EntryStub[]> {
+	return query<EntryStub>(
+		"SELECT id, unique_name AS uniqueName, title FROM tanahpedia_entry ORDER BY updated_at DESC LIMIT ?",
 		[String(limit)],
+	);
+}
+
+/**
+ * Summary-only recent entries — same ordering as getRecentEntries but
+ * without the (potentially large) content body. Powers the /pedia
+ * landing list, which renders titles only.
+ */
+export async function getRecentEntrySummaries(
+	limit = 10,
+): Promise<EntryStub[]> {
+	return query<EntryStub>(
+		"SELECT id, unique_name AS uniqueName, title FROM tanahpedia_entry ORDER BY updated_at DESC LIMIT ?",
+		[String(limit)],
+	);
+}
+
+/**
+ * Summary-only entries of one entity type, ordered by title — the same
+ * row set as getEntriesByEntityType without the content body. Powers the
+ * entry-page sibling dropdown.
+ */
+export async function getEntityTypeEntrySummaries(
+	entityType: EntityType,
+): Promise<EntryStub[]> {
+	return query<EntryStub>(
+		`SELECT DISTINCT ent.id, ent.unique_name AS uniqueName, ent.title
+	     FROM tanahpedia_entry ent
+	     JOIN tanahpedia_entry_entity ee ON ee.entry_id = ent.id
+	     JOIN tanahpedia_entity e ON e.id = ee.entity_id
+	     WHERE e.entity_type = ?
+	     ORDER BY ent.title`,
+		[entityType],
+	);
+}
+
+/**
+ * Summary-only version of getEntries — same title ordering, without the
+ * content body. Used by the entry-page sibling dropdown when an entry
+ * has no primary entity type.
+ */
+export async function getAllEntrySummaries(
+	limit = 50,
+	offset = 0,
+): Promise<EntryStub[]> {
+	return query<EntryStub>(
+		"SELECT id, unique_name AS uniqueName, title FROM tanahpedia_entry ORDER BY title LIMIT ? OFFSET ?",
+		[String(limit), String(offset)],
 	);
 }
 
@@ -789,7 +844,8 @@ export async function getEntriesBySynonym(
 	const byEntry = new Map<string, SynonymTarget>();
 	for (const row of rows) {
 		const current = byEntry.get(row.entryId);
-		if (!current || (!current.label && row.label)) byEntry.set(row.entryId, row);
+		if (!current || (!current.label && row.label))
+			byEntry.set(row.entryId, row);
 	}
 	return [...byEntry.values()];
 }
@@ -812,37 +868,84 @@ export async function getAllEntityTypeParams(): Promise<
 }
 
 // ─── Today in Tanah ─────────────────────────────────────────
-// Returns events whose start_date Hebrew month+day matches the given month+day.
-
-export interface TodayInTanahEvent {
-	entityId: string;
-	entityName: string;
-	entryUniqueName: string | null;
-	entryTitle: string | null;
-	startDate: number | null;
-}
-
-export async function getTodayInTanahEvents(
+// Anniversaries match the Hebrew month and day, regardless of year.
+//
+// `month_day` is a stored generated column (`col % 10000`) on every
+// anniversary date column, so each EXISTS below is an index seek instead
+// of a modulo-forced full scan. It reproduces the old predicate exactly:
+// NULL dates stay NULL (never match) and the 99991229 "forever"
+// sentinel yields month_day 1229, which can only match on T'kufat
+// Kislev — same as the previous explicit guards.
+export async function getTodayInTanahEntities(
 	hebrewMonth: number,
 	hebrewDay: number,
-): Promise<TodayInTanahEvent[]> {
+): Promise<EntityWithEntries[]> {
 	const monthDay = hebrewMonth * 100 + hebrewDay;
-	return query<TodayInTanahEvent>(
-		`SELECT
+	const rows = await query<{
+		entityId: string;
+		entityName: string;
+		entityType: EntityType;
+		entryId: string | null;
+		entryUniqueName: string | null;
+		entryTitle: string | null;
+	}>(
+		`SELECT DISTINCT
 		   e.id AS entityId,
 		   e.name AS entityName,
+		   e.entity_type AS entityType,
+		   ent.id AS entryId,
 		   ent.unique_name AS entryUniqueName,
-		   ent.title AS entryTitle,
-		   edr.start_date AS startDate
-		 FROM tanahpedia_event_date_range edr
-		 JOIN tanahpedia_event ev ON ev.id = edr.event_id
-		 JOIN tanahpedia_entity e ON e.id = ev.entity_id
+		   ent.title AS entryTitle
+		 FROM tanahpedia_entity e
 		 LEFT JOIN tanahpedia_entry_entity ee ON ee.entity_id = e.id
 		 LEFT JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
-		 WHERE (edr.start_date % 10000) = ?
-		 ORDER BY edr.start_date`,
-		[String(monthDay)],
+		 WHERE EXISTS (
+		   SELECT 1 FROM tanahpedia_event ev
+		   JOIN tanahpedia_event_date_range d ON d.event_id = ev.id
+		   WHERE ev.entity_id = e.id AND (d.start_month_day = ? OR d.end_month_day = ?)
+		 ) OR EXISTS (
+		   SELECT 1 FROM tanahpedia_saying s
+		   WHERE s.entity_id = e.id AND s.month_day = ?
+		 ) OR EXISTS (
+		   SELECT 1 FROM tanahpedia_person p
+		   WHERE p.entity_id = e.id AND (
+		     EXISTS (
+		       SELECT 1 FROM tanahpedia_person_birth_date d WHERE d.person_id = p.id
+		       AND d.month_day = ?
+		     ) OR EXISTS (
+		       SELECT 1 FROM tanahpedia_person_death_date d WHERE d.person_id = p.id
+		       AND d.month_day = ?
+		     ) OR EXISTS (
+		       SELECT 1 FROM tanahpedia_person_union u
+		       WHERE (u.person1_id = p.id OR u.person2_id = p.id) AND (u.start_month_day = ? OR u.end_month_day = ?)
+		     )
+		   )
+		 )
+		 ORDER BY e.name, e.id, ent.title, ent.id`,
+		Array(7).fill(monthDay),
 	);
+
+	const entities = new Map<string, EntityWithEntries>();
+	for (const row of rows) {
+		let entity = entities.get(row.entityId);
+		if (!entity) {
+			entity = {
+				entityId: row.entityId,
+				entityName: row.entityName,
+				entityType: row.entityType,
+				linkedEntries: [],
+			};
+			entities.set(row.entityId, entity);
+		}
+		if (row.entryId && row.entryUniqueName) {
+			entity.linkedEntries.push({
+				id: row.entryId,
+				uniqueName: row.entryUniqueName,
+				title: row.entryTitle ?? row.entityName,
+			});
+		}
+	}
+	return [...entities.values()];
 }
 
 // ─── Tanah al haperek integration ─────────────────────────
@@ -858,12 +961,249 @@ export interface PerekEntityReference {
 	segmentEnd: number | null;
 }
 
-export async function getEntityReferencesForPerek(
-	perekId: number,
-): Promise<PerekEntityReference[]> {
+/** Reference row carrying its chapter for a multi-chapter query. */
+export interface PerekScopedEntityReference extends PerekEntityReference {
+	perekId: number;
+}
+
+export interface EntryTanahOccurrence {
+	perekId: number;
+	pasukNumber: number;
+	segmentStart: number | null;
+	segmentEnd: number | null;
+}
+
+/** Verse references for every entity linked to an entry, regardless of type. */
+export async function getEntryOccurrences(
+	entryId: string,
+): Promise<EntryTanahOccurrence[]> {
+	return query<EntryTanahOccurrence>(
+		`SELECT DISTINCT
+		   ets.perek_id AS perekId,
+		   ets.pasuk_number AS pasukNumber,
+		   ets.segment_start AS segmentStart,
+		   ets.segment_end AS segmentEnd
+		 FROM tanahpedia_entity_tanah_source ets
+		 JOIN tanahpedia_entry_entity ee ON ee.entity_id = ets.entity_id
+		 WHERE ee.entry_id = ?
+		 ORDER BY ets.perek_id, ets.pasuk_number, ets.segment_start, ets.segment_end`,
+		[entryId],
+	);
+}
+
+/**
+ * Mention decorations (annotation pipeline, #2516) resolved against the
+ * CURRENT entry table. Inference persists name-keyed rows; this cheap join
+ * is the only place they meet live entries — a mention resolves iff its
+ * normalized intended_name hits exactly one entry unique_name or synonym
+ * (ambiguous names stay unresolved). Callers treat unresolved rows as
+ * plain text: `buildEntityRefLookup` drops null `entryUniqueName`, so
+ * entry create/delete flips presentation without any re-inference.
+ *
+ * Name resolution joins on the indexed generated `normalized_name` column
+ * (REPLACE(name, '-', ' ')) of entry and synonym via a correlated scalar
+ * subquery, so each decoration costs two index lookups instead of a scan
+ * of the whole namespace on a REPLACE() expression.
+ *
+ * Resolves mentions for exactly these chapters in one parameterized query.
+ */
+export function getMentionReferencesForPereks(
+	perekIds: number[],
+): Promise<PerekScopedEntityReference[]> {
+	return queryPerekMentionReferences(perekIds);
+}
+
+// Mention name resolution: the indexed generated normalized_name columns on
+// entry and synonym (REPLACE(name, '-', ' '), see
+// data/mysql/tanahpedia_alter_normalized_name.sql) resolve each decoration to
+// its single matching entry in two index lookups.
+const MENTION_RESOLUTION_INDEXED = `LEFT JOIN tanahpedia_entry ent ON ent.id = (
+			   SELECT MIN(m.entry_id)
+			   FROM (
+			     SELECT e.id AS entry_id FROM tanahpedia_entry e
+			     WHERE e.normalized_name = d.intended_name
+			     UNION ALL
+			     SELECT s.entry_id FROM tanahpedia_entry_synonym s
+			     WHERE s.normalized_name = d.intended_name
+			   ) m
+			   HAVING COUNT(DISTINCT m.entry_id) <= 1
+			 )`;
+
+// Ambiguous names (>= 2 distinct candidate entries) resolve to nothing: the
+// decoration is excluded, matching the pre-migration GROUP BY/HAVING row set.
+const MENTION_AMBIGUITY_GUARD = `(
+			   SELECT COUNT(DISTINCT m2.entry_id)
+			   FROM (
+			     SELECT e2.id AS entry_id FROM tanahpedia_entry e2
+			     WHERE e2.normalized_name = d.intended_name
+			     UNION ALL
+			     SELECT s2.entry_id FROM tanahpedia_entry_synonym s2
+			     WHERE s2.normalized_name = d.intended_name
+			   ) m2
+			 ) <= 1`;
+
+// Pre-migration shape kept for the window before Data CD applies the
+// normalized_name alter: identical rows via the non-sargable REPLACE() join.
+const MENTION_RESOLUTION_LEGACY = `LEFT JOIN (
+			   SELECT e.id AS entryId, e.unique_name AS resolvedName FROM tanahpedia_entry e
+			   UNION ALL
+			   SELECT s.entry_id AS entryId, s.name AS resolvedName FROM tanahpedia_entry_synonym s
+			 ) names ON REPLACE(names.resolvedName, '-', ' ') = d.intended_name
+			 LEFT JOIN tanahpedia_entry ent ON ent.id = names.entryId`;
+
+function isMissingNormalizedNameColumn(error: unknown): boolean {
+	if (error instanceof Error && error.message.includes("normalized_name"))
+		return true;
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"code" in error &&
+		(error as { code?: unknown }).code === "ER_BAD_FIELD_ERROR"
+	);
+}
+
+async function queryPerekMentionReferences(
+	perekIds: number[],
+): Promise<PerekScopedEntityReference[]> {
+	if (perekIds.length === 0) return [];
+	// Only placeholder count and fixed SQL fragments vary; IDs stay bound values.
+	const predicate = `IN (${perekIds.map(() => "?").join(", ")})`;
 	try {
-		return await query<PerekEntityReference>(
+		return await query<PerekScopedEntityReference>(
 			`SELECT
+			   d.perek_id AS perekId,
+			   ent.id AS entityId,
+			   ent.title AS entityName,
+			   d.entity_type AS entityType,
+			   ent.unique_name AS entryUniqueName,
+			   d.pasuk_number AS pasukNumber,
+			   d.segment_start AS segmentStart,
+			   d.segment_end AS segmentEnd
+			 FROM tanahpedia_mention_decoration d
+			 ${MENTION_RESOLUTION_INDEXED}
+			 WHERE d.source_kind = 'pasuk' AND d.perek_id ${predicate}
+			   AND d.acceptance IN ('auto', 'manual')
+			   AND ${MENTION_AMBIGUITY_GUARD}
+			 ORDER BY d.perek_id, pasukNumber, segmentStart, (d.acceptance = 'manual') DESC`,
+			perekIds.map(String),
+		).catch((error) => {
+			if (!isMissingNormalizedNameColumn(error)) throw error;
+			// The columns only land when Data CD applies the alter; until
+			// then resolve through the pre-migration REPLACE() join so a
+			// website released ahead of it keeps working.
+			console.warn(
+				"tanahpedia normalized_name not deployed yet; falling back to REPLACE() mention resolution",
+			);
+			return query<PerekScopedEntityReference>(
+				`SELECT
+				   d.perek_id AS perekId,
+				   ANY_VALUE(ent.id) AS entityId,
+				   ANY_VALUE(ent.title) AS entityName,
+				   d.entity_type AS entityType,
+				   ANY_VALUE(ent.unique_name) AS entryUniqueName,
+				   d.pasuk_number AS pasukNumber,
+				   d.segment_start AS segmentStart,
+				   d.segment_end AS segmentEnd
+				 FROM tanahpedia_mention_decoration d
+				 ${MENTION_RESOLUTION_LEGACY}
+				 WHERE d.source_kind = 'pasuk' AND d.perek_id ${predicate}
+				   AND d.acceptance IN ('auto', 'manual')
+				 GROUP BY d.id
+				 HAVING COUNT(DISTINCT names.entryId) <= 1
+				 ORDER BY d.perek_id, pasukNumber, segmentStart, (d.acceptance = 'manual') DESC`,
+				perekIds.map(String),
+			);
+		});
+	} catch (error) {
+		console.error(
+			`Failed to fetch mention references for pereks ${perekIds.join(", ")}:`,
+			error instanceof Error ? error.message : error,
+		);
+		throw error;
+	}
+}
+
+export interface ArticleMentionReference {
+	entryUniqueName: string | null;
+	spanStart: number;
+	spanEnd: number;
+	/** Exact stored substring at [spanStart, spanEnd) — integrity-checked before decoration. */
+	surface: string;
+}
+
+/**
+ * Article mention decorations (#2516) resolved against the CURRENT entry
+ * table — the same live name join as getMentionReferencesForPereks, keyed
+ * by character offsets into `tanah_article.content`. `contentHash` is the
+ * staleness key: decorations computed for an older revision simply match
+ * nothing, so article edits degrade to plain text rather than landing
+ * anchors on the wrong offsets.
+ */
+export async function getMentionReferencesForArticle(
+	articleId: number,
+	contentHash: string,
+): Promise<ArticleMentionReference[]> {
+	try {
+		return await query<ArticleMentionReference>(
+			`SELECT
+			   ent.unique_name AS entryUniqueName,
+			   d.span_start AS spanStart,
+			   d.span_end AS spanEnd,
+			   d.surface AS surface
+			 FROM tanahpedia_mention_decoration d
+			 ${MENTION_RESOLUTION_INDEXED}
+			 WHERE d.source_kind = 'article' AND d.article_id = ? AND d.content_hash = ?
+			   AND d.acceptance IN ('auto', 'manual')
+			   AND ${MENTION_AMBIGUITY_GUARD}
+			 ORDER BY spanStart, (d.acceptance = 'manual') DESC`,
+			[String(articleId), contentHash],
+		).catch((error) => {
+			if (!isMissingNormalizedNameColumn(error)) throw error;
+			console.warn(
+				"tanahpedia normalized_name not deployed yet; falling back to REPLACE() mention resolution",
+			);
+			return query<ArticleMentionReference>(
+				`SELECT
+				   ANY_VALUE(ent.unique_name) AS entryUniqueName,
+				   d.span_start AS spanStart,
+				   d.span_end AS spanEnd,
+				   d.surface AS surface
+				 FROM tanahpedia_mention_decoration d
+				 ${MENTION_RESOLUTION_LEGACY}
+				 WHERE d.source_kind = 'article' AND d.article_id = ? AND d.content_hash = ?
+				   AND d.acceptance IN ('auto', 'manual')
+				 GROUP BY d.id
+				 HAVING COUNT(DISTINCT names.entryId) <= 1
+				 ORDER BY spanStart, (d.acceptance = 'manual') DESC`,
+				[String(articleId), contentHash],
+			);
+		});
+	} catch (error) {
+		console.error(
+			`Failed to fetch mention references for article ${articleId}:`,
+			error instanceof Error ? error.message : error,
+		);
+		return [];
+	}
+}
+
+/** Load curated references for exactly these chapters, preserving row order. */
+export function getEntityReferencesForPereks(
+	perekIds: number[],
+): Promise<PerekScopedEntityReference[]> {
+	return queryPerekEntityReferences(perekIds);
+}
+
+async function queryPerekEntityReferences(
+	perekIds: number[],
+): Promise<PerekScopedEntityReference[]> {
+	if (perekIds.length === 0) return [];
+	// Only placeholder count and fixed SQL fragments vary; IDs stay bound values.
+	const predicate = `IN (${perekIds.map(() => "?").join(", ")})`;
+	try {
+		return await query<PerekScopedEntityReference>(
+			`SELECT
+			   ets.perek_id AS perekId,
 			   ets.entity_id AS entityId,
 			   e.name AS entityName,
 			   e.entity_type AS entityType,
@@ -875,15 +1215,17 @@ export async function getEntityReferencesForPerek(
 			 JOIN tanahpedia_entity e ON e.id = ets.entity_id
 			 LEFT JOIN tanahpedia_entry_entity ee ON ee.entity_id = e.id
 			 LEFT JOIN tanahpedia_entry ent ON ent.id = ee.entry_id
-			 WHERE ets.perek_id = ?
-			 ORDER BY ets.pasuk_number, ets.segment_start`,
-			[String(perekId)],
+			 WHERE ets.perek_id ${predicate}
+			 ORDER BY ets.perek_id, ets.pasuk_number, ets.segment_start`,
+			perekIds.map(String),
 		);
 	} catch (error) {
 		console.error(
-			`Failed to fetch entity references for perek ${perekId}:`,
+			`Failed to fetch entity references for pereks ${perekIds.join(", ")}:`,
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// Reject so a transient failure cannot become a permanently cached
+		// empty decoration set — the caller degrades only on a missing schema.
+		throw error;
 	}
 }

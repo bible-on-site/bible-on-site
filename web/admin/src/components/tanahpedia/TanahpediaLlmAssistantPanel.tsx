@@ -24,7 +24,10 @@ interface EntryFormSlice {
 interface TanahpediaLlmAssistantPanelProps {
 	entryId: string;
 	formData: EntryFormSlice;
-	onApplyEntryFields: (patch: Partial<EntryFormSlice>) => void;
+	onApplyEntryFields: (
+		patch: Partial<EntryFormSlice>,
+		meta?: { notesForEditor?: string },
+	) => void;
 }
 
 export function TanahpediaLlmAssistantPanel({
@@ -59,17 +62,23 @@ export function TanahpediaLlmAssistantPanel({
 	const applyMutation = useMutation({
 		mutationFn: async (proposal: TanahpediaLlmProposal) => {
 			if (proposal.entry) {
-				onApplyEntryFields({
-					...(proposal.entry.title !== undefined
-						? { title: proposal.entry.title }
-						: {}),
-					...(proposal.entry.unique_name !== undefined
-						? { unique_name: proposal.entry.unique_name }
-						: {}),
-					...(proposal.entry.contentHtml !== undefined
-						? { content: proposal.entry.contentHtml }
-						: {}),
-				});
+				// The proposal merges into the form and autosaves — tagged
+				// source=llm-assistant with the model's notes, so the applied
+				// change lands in the revision history instead of bypassing it.
+				onApplyEntryFields(
+					{
+						...(proposal.entry.title !== undefined
+							? { title: proposal.entry.title }
+							: {}),
+						...(proposal.entry.unique_name !== undefined
+							? { unique_name: proposal.entry.unique_name }
+							: {}),
+						...(proposal.entry.contentHtml !== undefined
+							? { content: proposal.entry.contentHtml }
+							: {}),
+					},
+					{ notesForEditor: proposal.notesForEditor },
+				);
 			}
 			const linked = proposal.linkedEntities ?? [];
 			let structural =
@@ -152,8 +161,8 @@ export function TanahpediaLlmAssistantPanel({
 					עוזר LLM (הצעות בלבד)
 				</h2>
 				<p className="text-sm text-indigo-900/85 leading-relaxed">
-					המודל מקבל את תוכן ה־HTML, פירוט היישויות המקושרות ותקציר סכמת ה־DB.
-					הפלט הוא JSON לאישור — אין גישה ישירה של המודל למסד הנתונים.
+					המודל מקבל את תוכן ה-HTML, פירוט היישויות המקושרות ותקציר סכמת ה-DB.
+					הפלט הוא JSON לאישור - אין גישה ישירה של המודל למסד הנתונים.
 				</p>
 			</div>
 

@@ -6,3 +6,18 @@
   align-items: stretch;
   justify-content: stretch;
 }
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-color-scheme: dark) {
+  .page {
+    background: #0f1219;
+  }
+}

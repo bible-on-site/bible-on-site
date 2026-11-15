@@ -119,6 +119,103 @@ function childEdge({
 }
 
 describe("PersonFamilyTree", () => {
+	it("preserves all sources when several undated union opinions include a forbidden relationship", () => {
+		render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					spouses: [
+						spouseEdge({
+							id: "partner",
+							name: "בת זוג",
+							unionOrder: null,
+							altGroupId: "a",
+							sourceCitation: "מקור ראשון",
+						}),
+						spouseEdge({
+							id: "partner",
+							name: "בת זוג",
+							unionOrder: null,
+							altGroupId: "b",
+							sourceCitation: "מקור שני",
+						}),
+						spouseEdge({
+							id: "partner",
+							name: "בת זוג",
+							unionOrder: null,
+							unionType: "FORBIDDEN_WITH_GENTILE",
+							altGroupId: "c",
+							sourceCitation: "מקור שלישי",
+						}),
+					],
+				}}
+			/>,
+		);
+		expect(screen.getAllByTestId("family-spouse-card")).toHaveLength(2);
+		for (const source of ["מקור ראשון", "מקור שני", "מקור שלישי"])
+			expect(screen.getByText(source)).toBeVisible();
+	});
+
+	it("keeps chronological children with an unknown co-parent in the loose swimlane", () => {
+		const { container } = render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					spouses: [
+						spouseEdge({ id: "one", name: "ראשונה" }),
+						spouseEdge({ id: "two", name: "שנייה" }),
+					],
+					children: [
+						childEdge({
+							id: "one-child",
+							name: "ראשון",
+							birthOrder: 1,
+							coParentEntityId: "one",
+						}),
+						childEdge({ id: "loose", name: "שני", birthOrder: 2 }),
+						childEdge({
+							id: "two-child",
+							name: "שלישי",
+							birthOrder: 3,
+							coParentEntityId: "two",
+						}),
+					],
+				}}
+			/>,
+		);
+		expect(
+			container.querySelector("[data-matrix-column-trunk]"),
+		).not.toBeNull();
+		expect(
+			screen
+				.getAllByTestId("family-child-card")
+				.map((card) => card.querySelector("a")?.textContent),
+		).toEqual(["ראשון", "שני", "שלישי"]);
+	});
+
+	it("orders the default child group before an alternate group even when birth order differs", () => {
+		render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					children: [
+						childEdge({ id: "default", name: "ילד רגיל", birthOrder: 2 }),
+						childEdge({
+							id: "alternate",
+							name: "ילד חלופי",
+							birthOrder: 1,
+							altGroupId: "a",
+						}),
+					],
+				}}
+			/>,
+		);
+		expect(
+			screen
+				.getAllByTestId("family-child-card")
+				.map((card) => card.querySelector("a")?.textContent),
+		).toEqual(["ילד רגיל", "ילד חלופי"]);
+	});
 	it("renders nothing when no edges", () => {
 		const { container } = render(<PersonFamilyTree summary={baseSummary} />);
 		expect(container.firstChild).toBeNull();
@@ -381,8 +478,8 @@ describe("PersonFamilyTree", () => {
 		};
 		render(<PersonFamilyTree summary={summary} />);
 		expect(screen.getByText("דלילה")).toBeInTheDocument();
-		expect(screen.getByText("שיטה א׳")).toBeInTheDocument();
-		expect(screen.getByText("שיטה ב׳")).toBeInTheDocument();
+		expect(screen.getByText("שיטה א'")).toBeInTheDocument();
+		expect(screen.getByText("שיטה ב'")).toBeInTheDocument();
 		expect(screen.getByText("משנה תורה")).toBeInTheDocument();
 		expect(screen.getByText('רש"י')).toBeInTheDocument();
 		expect(screen.queryByText("חלופי")).not.toBeInTheDocument();
@@ -419,7 +516,7 @@ describe("PersonFamilyTree", () => {
 		};
 		render(<PersonFamilyTree summary={summary} />);
 		expect(screen.getAllByText("דלילה").length).toBe(1);
-		expect(screen.getByText("שיטה א׳")).toBeInTheDocument();
+		expect(screen.getByText("שיטה א'")).toBeInTheDocument();
 	});
 
 	it("shows the shared personal source on a merged multi-opinion spouse card", () => {
@@ -525,9 +622,9 @@ describe("PersonFamilyTree", () => {
 			],
 		};
 		render(<PersonFamilyTree summary={summary} />);
-		// Parent card and the focal card (own source derived from parent rows) both link it.
+		// The child's card is the single place for parent relationship evidence.
 		const links = screen.getAllByRole("link", { name: "בראשית כח" });
-		expect(links.length).toBe(2);
+		expect(links.length).toBe(1);
 		for (const link of links) {
 			expect(link.getAttribute("href")).toMatch(/^\/929\/\d+$/);
 		}
@@ -555,13 +652,13 @@ describe("PersonFamilyTree", () => {
 			],
 		};
 		render(<PersonFamilyTree summary={summary} />);
-		// Deduped: parent cards (2) + focal card (1); identical citation not repeated in focal.
+		// One shared verse supports both parents and appears once on the child.
 		expect(screen.getAllByRole("link", { name: "בראשית כה כו" }).length).toBe(
-			3,
+			1,
 		);
 	});
 
-	it("keeps a non-Tanach parent source on that parent's card only", () => {
+	it("shows distinct father and mother sources once each on the child", () => {
 		const summary: PersonFamilySummary = {
 			...baseSummary,
 			focalDisplayName: "אברהם",
@@ -583,12 +680,38 @@ describe("PersonFamilyTree", () => {
 			],
 		};
 		render(<PersonFamilyTree summary={summary} />);
-		// The aggadic source attests the motherhood claim, so it stays on the mother card.
+		// Both sources are needed when they support different parent links.
 		expect(screen.getAllByText('בבא בתרא צא ע"א').length).toBe(1);
-		// The Tanach birth record still reaches the focal card (mother card has none).
 		expect(screen.getAllByRole("link", { name: "בראשית יא כו" }).length).toBe(
-			2,
+			1,
 		);
+	});
+
+	it("prefers the shared verse when one parent also has another source", () => {
+		const summary: PersonFamilySummary = {
+			...baseSummary,
+			parents: [
+				{
+					related: related("p1", "יצחק", "entry-p1", "MALE"),
+					parentRole: "FATHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: "בראשית כה כו\nבראשית כח",
+				},
+				{
+					related: related("p2", "רבקה", "entry-p2", "FEMALE"),
+					parentRole: "MOTHER",
+					relationshipType: "BIOLOGICAL",
+					altGroupId: null,
+					sourceCitation: "בראשית כה כו",
+				},
+			],
+		};
+		render(<PersonFamilyTree summary={summary} />);
+		expect(screen.getAllByRole("link", { name: "בראשית כה כו" })).toHaveLength(
+			1,
+		);
+		expect(screen.queryByRole("link", { name: "בראשית כח" })).toBeNull();
 	});
 
 	it("shows a sibling's source inside the sibling card", () => {
@@ -729,6 +852,8 @@ describe("PersonFamilyTree", () => {
 		expect(
 			screen.getByRole("group", { name: /ילדים מ.רחל/ }),
 		).toBeInTheDocument();
+		expect(screen.getByText("סדר 1")).toBeInTheDocument();
+		expect(screen.getByText("סדר 2")).toBeInTheDocument();
 	});
 
 	it("sorts parents by role and renders unlinked names with relationship labels", () => {
@@ -1246,8 +1371,12 @@ describe("PersonFamilyTree", () => {
 
 		render(<PersonFamilyTree summary={summary} />);
 
-		expect(screen.getAllByText(new RegExp(sara)).length).toBeGreaterThan(0);
-		expect(screen.getAllByText(new RegExp(hagar)).length).toBeGreaterThan(0);
+		expect(
+			screen.getAllByText((content) => content.includes(sara)).length,
+		).toBeGreaterThan(0);
+		expect(
+			screen.getAllByText((content) => content.includes(hagar)).length,
+		).toBeGreaterThan(0);
 		expect(
 			screen.getByText(/\u05dc\u05d0 \u05de\u05d6\u05d5\u05d4\u05d4/),
 		).toBeInTheDocument();
@@ -1339,6 +1468,8 @@ describe("PersonFamilyTree", () => {
 		expect(cards[0].parentElement).toHaveClass("childRowThree");
 		expect(container.querySelector("[data-matrix-spouse-card]")).toBeNull();
 		expect(container.querySelector("[data-matrix-mobile]")).toBeNull();
+		expect(screen.queryByText("ילדים מ-חוה")).not.toBeInTheDocument();
+		expect(screen.queryByText("סדר 1")).not.toBeInTheDocument();
 	});
 
 	it("renders Jacob chronology swimlanes when enough known children are present", () => {
@@ -1863,10 +1994,14 @@ describe("PersonFamilyTree", () => {
 		render(<PersonFamilyTree summary={summary} />);
 
 		expect(
-			screen.getByRole("group", { name: new RegExp(leah) }),
+			screen.getByRole("group", {
+				name: (name) => name.includes(leah),
+			}),
 		).toBeInTheDocument();
 		expect(
-			screen.getByRole("group", { name: new RegExp(rachel) }),
+			screen.getByRole("group", {
+				name: (name) => name.includes(rachel),
+			}),
 		).toBeInTheDocument();
 		const treeText =
 			screen.getByRole("region", { name: /\u05de\u05e9\u05e4\u05d7\u05d4/ })
@@ -2202,5 +2337,166 @@ describe("shouldCollapseSpouseMatrix", () => {
 				naturalWidth: 900,
 			}),
 		).toBe(false);
+	});
+});
+
+describe("family tree incomplete and alternate relationships", () => {
+	afterEach(() => {
+		delete (window as { matchMedia?: unknown }).matchMedia;
+		jest.restoreAllMocks();
+	});
+
+	it.each([false, true])(
+		"sorts unnamed co-parents safely in either insertion order (%s)",
+		(reverse) => {
+			const children = [
+				childEdge({ id: "one", name: "א", coParentEntityId: "unnamed-one" }),
+				childEdge({ id: "two", name: "ב", coParentEntityId: "unnamed-two" }),
+				childEdge({ id: "loose", name: "ת" }),
+			];
+			if (reverse) children.reverse();
+			render(<PersonFamilyTree summary={{ ...baseSummary, children }} />);
+			const cards = screen.getAllByTestId("family-child-card");
+			expect(cards).toHaveLength(3);
+			expect(cards[2]).toHaveTextContent("ת");
+		},
+	);
+
+	it("orders default and alternate parent and child groups without losing relationships", () => {
+		const parent = (
+			id: string,
+			parentRole: string,
+			altGroupId: string | null,
+		) => ({
+			related: related(id, id),
+			parentRole,
+			relationshipType: "BIOLOGICAL",
+			altGroupId,
+			sourceCitation: null,
+		});
+		render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					parents: [
+						parent("default", "FATHER", null),
+						parent("alt-father", "FATHER", "a"),
+						parent("alt-mother", "MOTHER", "a"),
+						parent("other", "MOTHER", "b"),
+					],
+					children: [
+						childEdge({ id: "default-child", name: "א" }),
+						childEdge({ id: "alternate-child", name: "ב", altGroupId: "a" }),
+						childEdge({ id: "other-child", name: "ג", altGroupId: "b" }),
+					],
+				}}
+			/>,
+		);
+		expect(screen.getByText("default")).toBeVisible();
+		expect(screen.getByText("alt-father")).toBeVisible();
+		expect(screen.getByText("alt-mother")).toBeVisible();
+		expect(screen.getAllByTestId("family-child-card")).toHaveLength(3);
+	});
+
+	it("shows a union end reason even when its date is unknown", () => {
+		render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					spouses: [
+						spouseEdge({
+							id: "ended",
+							name: "בת זוג",
+							unionEndReason: "DIVORCE",
+						}),
+					],
+				}}
+			/>,
+		);
+		expect(screen.getByRole("region", { name: /משפחה/ })).toHaveTextContent(
+			"גירושין",
+		);
+	});
+
+	it("sorts same-type spouse opinions by their distinct union orders", () => {
+		render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					spouses: [
+						spouseEdge({
+							id: "partner",
+							name: "בת זוג",
+							unionType: "MARRIAGE",
+							unionOrder: 2,
+							altGroupId: "opinion",
+							sourceCitation: "דעה שנייה",
+						}),
+						spouseEdge({
+							id: "partner",
+							name: "בת זוג",
+							unionType: "MARRIAGE",
+							unionOrder: 1,
+							altGroupId: "opinion",
+							sourceCitation: "דעה ראשונה",
+						}),
+					],
+				}}
+			/>,
+		);
+		const text =
+			screen.getByRole("region", { name: /משפחה/ }).textContent ?? "";
+		expect(text.indexOf("דעה ראשונה")).toBeLessThan(text.indexOf("דעה שנייה"));
+	});
+
+	it("renders narrow children without requiring spouse data or modern media-query listeners", () => {
+		Object.defineProperty(window, "matchMedia", {
+			configurable: true,
+			value: jest.fn(() => ({ matches: true })),
+		});
+		const { container } = render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					children: [childEdge({ id: "only", name: "ילד" })],
+				}}
+			/>,
+		);
+		expect(container.querySelector("[data-family-vertical]")).not.toBeNull();
+		expect(screen.getByTestId("family-child-card")).toHaveTextContent("ילד");
+		expect(screen.queryByTestId("family-spouse-card")).toBeNull();
+	});
+
+	it("renders a narrow spouse column with no children beside a populated one", () => {
+		Object.defineProperty(window, "matchMedia", {
+			configurable: true,
+			value: jest.fn(() => ({
+				matches: true,
+				addEventListener: jest.fn(),
+				removeEventListener: jest.fn(),
+			})),
+		});
+		const { container } = render(
+			<PersonFamilyTree
+				summary={{
+					...baseSummary,
+					spouses: [
+						spouseEdge({ id: "one", name: "ראשונה" }),
+						spouseEdge({ id: "two", name: "שנייה" }),
+					],
+					children: [
+						childEdge({
+							id: "child",
+							name: "ילד",
+							coParentEntityId: "one",
+							coParentDisplayName: "ראשונה",
+						}),
+					],
+				}}
+			/>,
+		);
+		expect(container.querySelector("[data-matrix-mobile]")).not.toBeNull();
+		expect(screen.getAllByTestId("family-spouse-card")).toHaveLength(2);
+		expect(screen.getAllByTestId("family-child-card")).toHaveLength(1);
 	});
 });

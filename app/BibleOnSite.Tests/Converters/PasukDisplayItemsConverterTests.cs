@@ -1,0 +1,189 @@
+using System.Globalization;
+using BibleOnSite.Converters;
+using BibleOnSite.Helpers;
+using BibleOnSite.Models;
+using FluentAssertions;
+
+namespace BibleOnSite.Tests.Converters;
+
+public class PasukDisplayItemsConverterTests
+{
+    private static Pasuk PasukOf(int num) => new()
+    {
+        PasukNum = num,
+        Text = "x",
+        Segments = [new PasukSegment { Type = SegmentType.Ktiv, Value = "x" }]
+    };
+
+    private static object Convert(params object[] values) =>
+        new PasukDisplayItemsConverter().Convert(
+            values, typeof(object), null!, CultureInfo.InvariantCulture);
+
+    [Fact]
+    public void empty_values_array_produces_no_items()
+    {
+        var items = Convert().Should().BeAssignableTo<IReadOnlyList<PasukDisplayItem>>().Subject;
+
+        items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void non_list_first_value_produces_no_items()
+    {
+        var items = Convert("not a list").Should().BeAssignableTo<IReadOnlyList<PasukDisplayItem>>().Subject;
+
+        items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void one_item_per_pasuk_without_the_repeat_flag()
+    {
+        var items = Convert(new List<Pasuk> { PasukOf(1), PasukOf(2) })
+            .Should().BeAssignableTo<IReadOnlyList<PasukDisplayItem>>().Subject;
+
+        items.Should().HaveCount(2);
+        items.Select(i => i.Pasuk.PasukNum).Should().Equal(1, 2);
+        items.Should().OnlyContain(i => !i.IsRepeatedCopy);
+    }
+
+    [Fact]
+    public void each_pasuk_repeats_once_when_the_flag_is_true()
+    {
+        var items = Convert(new List<Pasuk> { PasukOf(1), PasukOf(2) }, true)
+            .Should().BeAssignableTo<IReadOnlyList<PasukDisplayItem>>().Subject;
+
+        items.Should().HaveCount(4);
+        items.Select(i => i.Pasuk.PasukNum).Should().Equal(1, 1, 2, 2);
+        items.Select(i => i.IsRepeatedCopy).Should().Equal(false, true, false, true);
+        // The perush host rides the second copy: מקרא, מקרא, פירוש (#2403).
+        items.Select(i => i.IsLastCopy).Should().Equal(false, true, false, true);
+    }
+
+    [Fact]
+    public void a_non_bool_second_value_does_not_repeat()
+    {
+        var items = Convert(new List<Pasuk> { PasukOf(1) }, "true")
+            .Should().BeAssignableTo<IReadOnlyList<PasukDisplayItem>>().Subject;
+
+        items.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void the_font_factor_input_scales_the_carried_sizes()
+    {
+        var items = Convert(new List<Pasuk> { PasukOf(1) }, true, 1.5)
+            .Should().BeAssignableTo<IReadOnlyList<PasukDisplayItem>>().Subject;
+
+        // Repeated and original copies alike render at the configured size.
+        items.Should().OnlyContain(i =>
+            Math.Abs(i.FontSize - 27) < 0.001 && Math.Abs(i.MarkerFontSize - 24) < 0.001);
+    }
+
+    [Fact]
+    public void a_missing_font_factor_uses_the_base_sizes()
+    {
+        var items = Convert(new List<Pasuk> { PasukOf(1) })
+            .Should().BeAssignableTo<IReadOnlyList<PasukDisplayItem>>().Subject;
+
+        items[0].FontSize.Should().Be(PasukDisplayItems.PasukFontSizeBase);
+    }
+
+    [Fact]
+    public void repeated_identical_inputs_reuse_the_built_items_list()
+    {
+        var converter = new PasukDisplayItemsConverter();
+        var pesukim = new List<Pasuk> { PasukOf(1), PasukOf(2) };
+
+        var first = converter.Convert(
+            [pesukim, false, 1.0, 0], typeof(object), null!, CultureInfo.InvariantCulture);
+        var second = converter.Convert(
+            [pesukim, false, 1.0, 0], typeof(object), null!, CultureInfo.InvariantCulture);
+
+        second.Should().BeSameAs(first);
+    }
+
+    [Fact]
+    public void toggling_back_to_a_seen_input_tuple_reuses_its_list()
+    {
+        var converter = new PasukDisplayItemsConverter();
+        var pesukim = new List<Pasuk> { PasukOf(1) };
+
+        var singles = converter.Convert(
+            [pesukim, false, 1.0, 0], typeof(object), null!, CultureInfo.InvariantCulture);
+        var doubled = converter.Convert(
+            [pesukim, true, 1.0, 0], typeof(object), null!, CultureInfo.InvariantCulture);
+        var singlesAgain = converter.Convert(
+            [pesukim, false, 1.0, 0], typeof(object), null!, CultureInfo.InvariantCulture);
+
+        doubled.Should().NotBeSameAs(singles);
+        singlesAgain.Should().BeSameAs(singles);
+    }
+
+    [Fact]
+    public void a_masking_revision_bump_rebuilds_the_items_list()
+    {
+        // values[3] is a change-only input: a הסתר שם השם bump must produce a
+        // fresh IList so realized/recycled rows re-read Pasuk.FormattedText.
+        var converter = new PasukDisplayItemsConverter();
+        var pesukim = new List<Pasuk> { PasukOf(1) };
+
+        var initial = converter.Convert(
+            [pesukim, false, 1.0, 0], typeof(object), null!, CultureInfo.InvariantCulture);
+        var revised = converter.Convert(
+            [pesukim, false, 1.0, 1], typeof(object), null!, CultureInfo.InvariantCulture);
+
+        var items = revised.Should().BeAssignableTo<IReadOnlyList<PasukDisplayItem>>().Subject;
+        items.Should().NotBeSameAs((IReadOnlyList<PasukDisplayItem>)initial);
+        items.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void a_new_pesukim_list_instance_rebuilds_even_when_content_matches()
+    {
+        var converter = new PasukDisplayItemsConverter();
+
+        var first = converter.Convert(
+            [new List<Pasuk> { PasukOf(1) }, false, 1.0, 0], typeof(object), null!, CultureInfo.InvariantCulture);
+        var second = converter.Convert(
+            [new List<Pasuk> { PasukOf(1) }, false, 1.0, 0], typeof(object), null!, CultureInfo.InvariantCulture);
+
+        second.Should().NotBeSameAs(first);
+    }
+
+    [Fact]
+    public void an_empty_pesukim_list_produces_no_items()
+    {
+        var items = Convert(new List<Pasuk>()).Should().BeAssignableTo<IReadOnlyList<PasukDisplayItem>>().Subject;
+
+        items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void a_fifth_distinct_input_tuple_evicts_the_oldest_entry()
+    {
+        var converter = new PasukDisplayItemsConverter();
+        var pesukim = new List<Pasuk> { PasukOf(1) };
+        object ConvertTuple(int revision) => converter.Convert(
+            [pesukim, false, 1.0, revision], typeof(object), null!, CultureInfo.InvariantCulture);
+
+        var first = ConvertTuple(0);
+        for (var revision = 1; revision <= 4; revision++)
+        {
+            ConvertTuple(revision);
+        }
+
+        ConvertTuple(0).Should().NotBeSameAs(first,
+            "the 4-entry cap evicts the oldest tuple, so it rebuilds instead of reusing");
+    }
+
+    [Fact]
+    public void convert_back_is_not_supported()
+    {
+        var converter = new PasukDisplayItemsConverter();
+
+        var act = () => converter.ConvertBack(
+            new object(), [typeof(object)], null!, CultureInfo.InvariantCulture);
+
+        act.Should().Throw<NotSupportedException>();
+    }
+}

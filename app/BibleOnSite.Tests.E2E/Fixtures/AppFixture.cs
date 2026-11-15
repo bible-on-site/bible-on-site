@@ -2,6 +2,11 @@ using FlaUI.Core.Conditions;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Net.Sockets;
+using System.Text.Json;
+using System.Drawing;
+using System.Runtime.InteropServices;
+using FlaUI.Core.Input;
+using FlaUI.Core.WindowsAPI;
 
 namespace BibleOnSite.Tests.E2E.Fixtures;
 
@@ -12,11 +17,23 @@ namespace BibleOnSite.Tests.E2E.Fixtures;
 /// </summary>
 public class AppFixture : IAsyncLifetime
 {
+    protected virtual bool RequiresApi => true;
+
+    /// <summary>Extra environment variables passed to the launched app —
+    /// e2e mode presets the app reads at boot (e.g. BIBLE_E2E_TIKKUN).</summary>
+    protected virtual IEnumerable<KeyValuePair<string, string>> LaunchEnvironment =>
+        [];
     private Application? _app;
     private UIA3Automation? _automation;
     private Process? _appProcess;
     private Process? _apiProcess;
+    private StreamWriter? _appLog;
+    private Exception? _drainFailure;
+    private Task[] _drains = [];
+    private readonly CancellationTokenSource _drainStop = new();
+    private int _isDisposing;
     private bool _weStartedApi;
+    private DateTime _apiStartedAt;
 
     private const string ApiUrl = "http://localhost:3003";
 
@@ -31,9 +48,12 @@ public class AppFixture : IAsyncLifetime
     public UIA3Automation Automation => _automation ?? throw new InvalidOperationException("Automation not initialized.");
 
     /// <summary>
-    /// Gets the main window of the application.
+    /// Gets the main window of the application. The inner wait stays short so a
+    /// transient UIA attach stall is retried by the caller's own budget
+    /// (WaitForElementAsync catches the timeout FlaUI wraps it in) instead of
+    /// one ElementFromHandle call spending the whole deadline at once.
     /// </summary>
-    public Window MainWindow => App.GetMainWindow(Automation, TimeSpan.FromSeconds(10))
+    public Window MainWindow => App.GetMainWindow(Automation, TimeSpan.FromSeconds(2))
         ?? throw new InvalidOperationException("Main window not found within timeout.");
 
     /// <summary>
@@ -53,14 +73,14 @@ public class AppFixture : IAsyncLifetime
             var baseDir = Path.GetDirectoryName(typeof(AppFixture).Assembly.Location)
                 ?? throw new InvalidOperationException("Cannot determine assembly location");
             // Go up 6 levels (win-x64 -> net10.0... -> Debug -> bin -> BibleOnSite.Tests.E2E -> app) then into web/api
-            return Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "..", "web", "api"));
+            return Path.GetFullPath(Path.Join(baseDir, "..", "..", "..", "..", "..", "..", "web", "api"));
         }
     }
 
     /// <summary>
     /// Path to the built MAUI Windows executable.
     /// From: app\BibleOnSite.Tests.E2E\bin\Debug\net10.0-windows10.0.19041.0\win-x64\
-    /// To:   app\BibleOnSite\bin\Debug\net10.0-windows10.0.19041.0\win10-x64\
+    /// To:   app\BibleOnSite\bin\Debug\net10.0-windows10.0.19041.0\win-x64\
     /// </summary>
     private static string AppPath
     {
@@ -70,8 +90,8 @@ public class AppFixture : IAsyncLifetime
                 ?? throw new InvalidOperationException("Cannot determine assembly location");
 
             // Navigate from test output to app output (go up to app/, then into BibleOnSite/bin/...)
-            var appDir = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "..", "BibleOnSite", "bin", "Debug", "net10.0-windows10.0.19041.0", "win10-x64"));
-            var exePath = Path.Combine(appDir, "BibleOnSite.exe");
+            var appDir = Path.GetFullPath(Path.Join(baseDir, "..", "..", "..", "..", "..", "BibleOnSite", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64"));
+            var exePath = Path.Join(appDir, "BibleOnSite.exe");
 
             if (!File.Exists(exePath))
             {
@@ -131,30 +151,37 @@ public class AppFixture : IAsyncLifetime
 
         Console.WriteLine($"Starting API server from {ApiDirectory}...");
         _weStartedApi = true;
+        _apiStartedAt = DateTime.UtcNow;
 
-        // Use cmd.exe /c to run cargo make in a shell context (ensures PATH is available)
+        // Launch the API directly; the inherited PATH locates Cargo.
         var startInfo = new ProcessStartInfo
         {
-            FileName = "cmd.exe",
-            Arguments = "/c cargo make run-api-test",
+            FileName = "cargo",
+            Arguments = "run --locked",
             WorkingDirectory = ApiDirectory,
-            UseShellExecute = true,
-            CreateNoWindow = false,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden,
         };
 
+        startInfo.Environment["PROFILE"] = "test";
         _apiProcess = Process.Start(startInfo);
         if (_apiProcess == null)
         {
             throw new InvalidOperationException("Failed to start API server process");
         }
 
-        // Wait for API to be ready (max 120 seconds - Rust compilation can take a while)
-        var timeout = DateTime.Now.AddSeconds(120);
+        // A new worktree may need its first Rust build before the API can listen.
+        var timeout = DateTime.Now.AddSeconds(600);
         var attempts = 0;
         while (DateTime.Now < timeout)
         {
             attempts++;
             await Task.Delay(2000);
+            if (_apiProcess.HasExited)
+            {
+                throw new InvalidOperationException("API process exited before becoming ready");
+            }
             if (IsApiRunning())
             {
                 Console.WriteLine($"API server started successfully (after ~{attempts * 2} seconds)");
@@ -166,40 +193,59 @@ public class AppFixture : IAsyncLifetime
             }
         }
 
-        throw new InvalidOperationException("API server did not respond within 120 seconds");
+        throw new InvalidOperationException("API server did not respond within 600 seconds");
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
+        SetProcessDPIAware(); //NOSONAR — process DPI awareness has no managed API; synthetic-input coordinates must map to physical pixels.
+        // Keep the default 2s connection timeout: a slow provider attach is
+        // retried by the caller's own budget — WaitForElementAsync already
+        // catches the UIA_TIMEOUT COMException FlaUI wraps — rather than
+        // letting one query block for fifteen seconds and mask a real stall.
         _automation = new UIA3Automation();
 
         // Ensure API is running first (reuse if already running)
-        await EnsureApiRunningAsync();
+        if (RequiresApi)
+        {
+            await EnsureApiRunningAsync();
+        }
 
-        // Kill any existing BibleOnSite processes to ensure clean start
+        // Only clean up this checkout's test app, never another running checkout.
         foreach (var proc in Process.GetProcessesByName("BibleOnSite"))
         {
-            try { proc.Kill(); proc.WaitForExit(2000); } catch { }
+            try
+            {
+                if (string.Equals(proc.MainModule?.FileName, AppPath, StringComparison.OrdinalIgnoreCase))
+                { proc.Kill(); proc.WaitForExit(2000); }
+            }
+            catch { /* A process that exits during enumeration needs no further cleanup. */ }
         }
         await Task.Delay(1000); // Give time for processes to fully terminate
 
         // Start the application using dotnet run (which handles Windows App SDK properly)
-        var projectDir = Path.GetFullPath(Path.Combine(AppPath, "..", "..", "..", "..", "..")); // Go up to BibleOnSite project folder
+        var projectDir = Path.GetFullPath(Path.Join(AppPath, "..", "..", "..", "..", "..")); // Go up to BibleOnSite project folder
         var startInfo = new ProcessStartInfo
         {
             FileName = "dotnet",
             Arguments = "run -f net10.0-windows10.0.19041.0 --no-build",
             WorkingDirectory = projectDir,
             UseShellExecute = false,
-            CreateNoWindow = false,
-            RedirectStandardOutput = false,
-            RedirectStandardError = false,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
         };
 
-        // Set API_URL to use local test API
-        startInfo.EnvironmentVariables["API_URL"] = ApiUrl;
+        // Offline fixtures use a closed endpoint even when a development API is running.
+        var launchApiUrl = RequiresApi ? ApiUrl : "http://127.0.0.1:1";
+        startInfo.EnvironmentVariables["API_URL"] = launchApiUrl;
+        foreach (var pair in LaunchEnvironment)
+        {
+            startInfo.EnvironmentVariables[pair.Key] = pair.Value;
+        }
 
-        Console.WriteLine($"Starting app from {projectDir} with API_URL={ApiUrl}");
+        Console.WriteLine($"Starting app from {projectDir} with API_URL={launchApiUrl}");
 
         _appProcess = Process.Start(startInfo);
 
@@ -208,53 +254,84 @@ public class AppFixture : IAsyncLifetime
             throw new InvalidOperationException("Failed to start dotnet run process");
         }
 
-        // Wait for the app to start and initialize
-        await Task.Delay(8000); // Give app more time to compile if needed and fully initialize
+        // Drain the app's stdout/stderr so its startup stages show up in test
+        // output instead of deadlocking the app on a full pipe buffer. A copy
+        // also goes to .artifacts/app-log-<fixture>.txt — the test host swallows
+        // console output on a passing run, so the file is the durable diagnostic
+        // sink. Collection fixtures initialize in parallel, so each fixture
+        // type gets its own file instead of racing one shared path.
+        var appLogName = $"app-log-{GetType().Name}.txt";
+        var appLogPath = Path.GetFullPath(Path.Join(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".artifacts", appLogName));
+        Directory.CreateDirectory(Path.GetDirectoryName(appLogPath)!);
+        var appLog = new StreamWriter(appLogPath, append: false) { AutoFlush = true };
+        _appLog = appLog;
+        _drains = [DrainPipe(_appProcess.StandardOutput, "[app]", appLog),
+            DrainPipe(_appProcess.StandardError, "[app:err]", appLog)];
 
-        // Find the actual BibleOnSite.exe process that dotnet run started
+        // dotnet run evaluates the project even with --no-build, so the app
+        // process can spawn seconds after the launcher returns on a loaded
+        // host. Poll for it instead of sampling a fixed point after 8s —
+        // keeping the original combined budget: 8s spawn grace followed by
+        // the 60s window wait below now share one deadline.
+        var startupDeadline = DateTime.UtcNow.AddSeconds(8 + 60);
         Process? targetProcess = null;
-        var processes = Process.GetProcessesByName("BibleOnSite");
-
-        Console.WriteLine($"Found {processes.Length} BibleOnSite processes");
-
-        foreach (var proc in processes)
+        Process? fallback = null;
+        while (targetProcess == null && DateTime.UtcNow < startupDeadline)
         {
-            try
-            {
-                proc.Refresh();
-                if (proc.MainWindowHandle != IntPtr.Zero)
-                {
-                    Console.WriteLine($"Process {proc.Id} has a main window");
-                    targetProcess = proc;
-                    break;
-                }
-            }
-            catch
-            {
-                // Skip processes that can't be queried
-            }
-        }
-
-        // If no process with window found, try to use the first one that hasn't exited
-        if (targetProcess == null)
-        {
+            var processes = Process.GetProcessesByName("BibleOnSite");
             foreach (var proc in processes)
             {
                 try
                 {
                     proc.Refresh();
-                    if (!proc.HasExited)
+                    if (!string.Equals(proc.MainModule?.FileName, AppPath, StringComparison.OrdinalIgnoreCase))
                     {
-                        Console.WriteLine($"Using process {proc.Id} (no window handle but still running)");
+                        continue;
+                    }
+
+                    if (proc.MainWindowHandle != IntPtr.Zero)
+                    {
+                        Console.WriteLine($"Process {proc.Id} has a main window");
                         targetProcess = proc;
                         break;
+                    }
+
+                    if (!proc.HasExited)
+                    {
+                        // Prefer the latest alive match — an earlier
+                        // fallback may exit while another instance stays.
+                        fallback = proc;
                     }
                 }
                 catch
                 {
-                    // Skip
+                    // Skip processes that can't be queried
                 }
             }
+
+            // Release every snapshot handle except the selected ones.
+            foreach (var proc in processes)
+            {
+                if (!ReferenceEquals(proc, targetProcess) && !ReferenceEquals(proc, fallback))
+                {
+                    proc.Dispose();
+                }
+            }
+
+            if (targetProcess == null)
+            {
+                await Task.Delay(500);
+            }
+        }
+
+        if (targetProcess == null && fallback is { HasExited: false })
+        {
+            Console.WriteLine($"Using process {fallback.Id} (no window handle but still running)");
+            targetProcess = fallback;
+        }
+        else if (!ReferenceEquals(fallback, targetProcess))
+        {
+            fallback?.Dispose();
         }
 
         if (targetProcess == null)
@@ -265,10 +342,11 @@ public class AppFixture : IAsyncLifetime
         // Attach FlaUI to the BibleOnSite process (not the dotnet process)
         _app = Application.Attach(targetProcess.Id);
 
-        // Wait for main window to be available (startup can be slow on first run)
-        var timeout = DateTime.UtcNow.AddSeconds(60);
+        // Wait for main window to be available (startup can be slow on first
+        // run). This shares the startup deadline: process discovery simply
+        // started earlier than the old fixed 8s sample allowed.
         Exception? lastException = null;
-        while (DateTime.UtcNow < timeout)
+        while (DateTime.UtcNow < startupDeadline)
         {
             try
             {
@@ -304,20 +382,62 @@ public class AppFixture : IAsyncLifetime
         }
 
         throw new InvalidOperationException(
-            "Main window not found after 60 seconds.",
+            "Main window not found within the 68-second startup window.",
             lastException);
     }
 
-    public async Task DisposeAsync()
+    /// <summary>
+    /// Mirrors one redirected pipe into the console and the app log file.
+    /// Closed/disposed pipe reads are expected during teardown. Other failures,
+    /// including an <see cref="IOException"/> from a log write, are recorded so a
+    /// dead drain, which can leave the app blocked on a full pipe, fails the
+    /// run instead of vanishing silently.
+    /// </summary>
+    private Task DrainPipe(StreamReader reader, string prefix, StreamWriter appLog) => Task.Run(async () =>
     {
         try
         {
+            while (true)
+            {
+                string? line;
+                try
+                {
+                    line = await reader.ReadLineAsync(_drainStop.Token);
+                }
+                catch (Exception exception) when (Volatile.Read(ref _isDisposing) != 0 &&
+                    exception is IOException or ObjectDisposedException or OperationCanceledException)
+                {
+                    // The pipe closes when the app process exits at teardown.
+                    break;
+                }
+                if (line is null)
+                {
+                    break;
+                }
+                Console.WriteLine($"{prefix} {line}");
+                lock (appLog) { appLog.WriteLine($"{prefix} {line}"); }
+            }
+        }
+        catch (Exception exception) //NOSONAR — background drain failures must be retained and fail fixture teardown.
+        {
+            Interlocked.CompareExchange(ref _drainFailure, exception, null);
+        }
+    });
+
+    public async ValueTask DisposeAsync()
+    {
+        Interlocked.Exchange(ref _isDisposing, 1);
+        try
+        {
+            // Pull the app-process coverage snapshot while the instrumented
+            // app is still running (#1232); the endpoint dies with the process.
+            await CollectAppCoverageAsync();
             _app?.Close();
             await Task.Delay(500);
 
             if (_appProcess != null && !_appProcess.HasExited)
             {
-                _appProcess.Kill();
+                _appProcess.Kill(entireProcessTree: true);
                 await _appProcess.WaitForExitAsync();
             }
 
@@ -325,8 +445,26 @@ public class AppFixture : IAsyncLifetime
             if (_weStartedApi && _apiProcess != null && !_apiProcess.HasExited)
             {
                 Console.WriteLine("Stopping API server (we started it)...");
-                _apiProcess.Kill();
+                _apiProcess.Kill(entireProcessTree: true);
                 await _apiProcess.WaitForExitAsync();
+            }
+            // Cargo can detach its API child before the launcher exits.
+            if (_weStartedApi)
+            {
+                var executable = Path.Join(ApiDirectory, "target", "debug", "api.exe");
+                foreach (var process in Process.GetProcessesByName("api"))
+                {
+                    using (process)
+                    {
+                        try
+                        {
+                            if (process.StartTime.ToUniversalTime() >= _apiStartedAt &&
+                                string.Equals(process.MainModule?.FileName, executable, StringComparison.OrdinalIgnoreCase))
+                            { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); }
+                        }
+                        catch (InvalidOperationException) { /* The owned API process exited during cleanup. */ }
+                    }
+                }
             }
         }
         catch
@@ -335,28 +473,186 @@ public class AppFixture : IAsyncLifetime
         }
         finally
         {
-            _automation?.Dispose();
-            _appProcess?.Dispose();
-            _apiProcess?.Dispose();
+            // `using var` aliases keep the field lifetimes spanning
+            // Initialize/Dispose while disposing in the original order:
+            // automation, then app process, then API process.
+            using var apiProcess = _apiProcess;
+            using var appProcess = _appProcess;
+            using var automation = _automation;
+            using var drainStop = _drainStop;
+            try
+            {
+                using var appLog = _appLog;
+                await drainStop.CancelAsync();
+                // Join before checking the retained failure or closing the
+                // shared writer: a late stdout/stderr failure cannot escape
+                // teardown, and no write can race log disposal.
+                await Task.WhenAll(_drains);
+            }
+            catch (IOException) when (_drainFailure is not null)
+            {
+                // Preserve the original drain cause if flushing fails too.
+            }
+        }
+        if (_drainFailure is { } failure)
+        {
+            // Surface the retained cause after cleanup has completed.
+            throw new InvalidOperationException(
+                "App output drain failed during the run.", failure);
         }
     }
+
+    /// <summary>
+    /// Exports real app-process coverage from an E2E-instrumented build
+    /// (#1232). Enabled by E2E_COVERAGE=1 with the dump written under
+    /// E2E_ARTIFACTS (default app/.artifacts/e2e) in the same
+    /// app-e2e-coverage-dump/1 shape the mobile harness produces, so the
+    /// CoverageMobileE2E merge handles every platform identically.
+    /// </summary>
+    private static async Task CollectAppCoverageAsync()
+    {
+        var enabled = Environment.GetEnvironmentVariable("E2E_COVERAGE");
+        if (!string.Equals(enabled, "1", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(enabled, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+        var port = int.TryParse(Environment.GetEnvironmentVariable("E2E_COVERAGE_PORT"), out var configured) && configured > 0
+            ? configured
+            : 4787;
+        string? path = null;
+        try
+        {
+            var artifacts = Environment.GetEnvironmentVariable("E2E_ARTIFACTS")
+                ?? Path.GetFullPath(Path.Join(AppPath, "..", "..", "..", "..", "..", "..", ".artifacts", "e2e"));
+            var directory = Path.Join(artifacts, "app-coverage");
+            Directory.CreateDirectory(directory);
+            path = Path.Join(directory, $"windows-{DateTime.UtcNow:yyyyMMddHHmmss}.json");
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var snapshot = await client.GetStringAsync($"http://127.0.0.1:{port}/coverage");
+            using var parsed = JsonDocument.Parse(snapshot);
+            var record = new
+            {
+                kind = "app-e2e-coverage-dump/1",
+                test = "fixture",
+                platform = "windows",
+                outcome = "passed",
+                collectedUtc = DateTime.UtcNow.ToString("o"),
+                snapshot = parsed.RootElement.Clone()
+            };
+            File.WriteAllText(path, JsonSerializer.Serialize(record, new JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch (Exception exception) when (exception is HttpRequestException
+            or TaskCanceledException or JsonException or IOException
+            or UnauthorizedAccessException or InvalidOperationException)
+        {
+            if (path != null)
+            {
+                File.WriteAllText(path + ".coverage-error.txt", exception.ToString());
+            }
+            Console.WriteLine($"App coverage dump failed: {exception}");
+        }
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool SetProcessDPIAware(); //NOSONAR — DPI awareness has no managed equivalent.
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow(); //NOSONAR — no managed API reports the foreground HWND; UIA focus is not the same check.
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(Point point); //NOSONAR — HWND hit-testing is Win32-only; UIA FromPoint can return a child element instead of the covering window.
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId); //NOSONAR — HWND→PID mapping has no managed API.
+    /// <summary>Explicit activation before a native gesture scenario. Every
+    /// gesture still verifies foreground and hit-test ownership, so a user
+    /// switching applications stops input rather than clicking another app.</summary>
+    public void ActivateWindow()
+    {
+        MainWindow.SetForeground();
+        AssertForeground();
+    }
+    private void AssertOwnedWindow(IntPtr window)
+    {
+        GetWindowThreadProcessId(window, out var processId); //NOSONAR — HWND→PID mapping has no managed API.
+        if (processId != App.ProcessId)
+        {
+            throw new InvalidOperationException($"Native gesture tests require an isolated desktop with BibleOnSite in the foreground (expected process {App.ProcessId}, actual {processId}). No input was sent.");
+        }
+    }
+
+    public void AssertForeground() => AssertOwnedWindow(GetForegroundWindow()); //NOSONAR — foreground HWND lookup has no managed equivalent.
+
+    /// <summary>Fail before synthetic input if another app covers the test window.</summary>
+    public void Click(AutomationElement element) => Click(element, MouseButton.Left, false);
+    public void Click(AutomationElement element, MouseButton button) => Click(element, button, false);
+    public void Click(AutomationElement element, bool doubleClick) => Click(element, MouseButton.Left, doubleClick);
+
+    public void Click(AutomationElement element, MouseButton button, bool doubleClick)
+    {
+        AssertForeground();
+        Point point;
+        try { point = element.GetClickablePoint(); }
+        catch (FlaUI.Core.Exceptions.NoClickablePointException) when (!element.IsOffscreen && element.BoundingRectangle.Width > 0 && element.BoundingRectangle.Height > 0)
+        {
+            // WinUI text inside CollectionView items may omit the clickable-point provider.
+            var bounds = element.BoundingRectangle;
+            point = new Point((int)(bounds.Left + bounds.Width / 2), (int)(bounds.Top + bounds.Height / 2));
+        }
+        AssertOwnedWindow(WindowFromPoint(point)); //NOSONAR — HWND hit-testing has no managed equivalent; the ownership guard must see the covering window, not a UIA child.
+        if (doubleClick)
+        {
+            Mouse.DoubleClick(point);
+        }
+        else
+        {
+            Mouse.Click(point, button);
+        }
+    }
+
+    /// <summary>Clicks a physical point inside an element's bounds — for
+    /// targets whose meaningful region is offset from the element's own
+    /// clickable point (e.g. dead space under a short canvas).</summary>
+    public void ClickAt(Point point)
+    {
+        AssertForeground();
+        AssertOwnedWindow(WindowFromPoint(point)); //NOSONAR — HWND hit-testing has no managed equivalent; the ownership guard must see the covering window, not a UIA child.
+        Mouse.Click(point);
+    }
+
+    /// <summary>
+    /// Waits for an element to appear in the UI.
+    /// </summary>
+    public Task<AutomationElement?> WaitForElementAsync(
+        Func<Window, AutomationElement?> finder)
+        => WaitForElementAsync(finder, TimeSpan.FromSeconds(10));
 
     /// <summary>
     /// Waits for an element to appear in the UI.
     /// </summary>
     public async Task<AutomationElement?> WaitForElementAsync(
         Func<Window, AutomationElement?> finder,
-        TimeSpan? timeout = null)
+        TimeSpan timeout)
     {
-        timeout ??= TimeSpan.FromSeconds(10);
         var sw = Stopwatch.StartNew();
 
         while (sw.Elapsed < timeout)
         {
-            var element = finder(MainWindow);
-            if (element != null)
+            try
             {
-                return element;
+                var element = finder(MainWindow);
+                if (element != null)
+                {
+                    return element;
+                }
+            }
+            catch (COMException ex) when (ex.HResult == unchecked((int)0x80131505))
+            {
+                // WinUI can briefly time out while its first visual tree is being built.
+            }
+            catch (TimeoutException ex) when (ex.InnerException is COMException { HResult: unchecked((int)0x80131505) })
+            {
+                // FlaUI wraps the same UIA_TIMEOUT COMException in
+                // System.TimeoutException ("UIA Timeout") — retry it too or a
+                // single transient attach race fails the whole wait.
             }
             await Task.Delay(100);
         }

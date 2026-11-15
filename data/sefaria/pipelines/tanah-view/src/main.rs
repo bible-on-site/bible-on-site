@@ -12,6 +12,10 @@ use tanah_view::{aggregation, commands, models::Sefer};
 #[command(name = "tanah-view")]
 #[command(about = "Generate Tanah view from MongoDB Sefaria data")]
 struct Cli {
+    /// Durable recitation intermediate database (independent of Sefaria output)
+    #[arg(long)]
+    recitation_db: Option<std::path::PathBuf>,
+
     /// Output format
     #[arg(long, value_enum)]
     format: Option<OutputFormat>,
@@ -21,8 +25,35 @@ struct Cli {
     dump_name: String,
 
     /// Output to dependent modules (web/bible-on-site for JSON, app/BibleOnSite for SQLite)
-    #[arg(long)]
+    // Field name keeps the legacy spelling so the flag's primary name is the
+    // explicit `long` below; the misspelled flag stays accepted via `alias`.
+    #[arg(
+        long = "output-to-dependent-modules",
+        alias = "output-to-dependant-modules"
+    )]
     output_to_dependant_modules: bool,
+
+    /// Read the canonical corpus from a tanah_view JSON export instead of
+    /// MongoDB. The JSON is the already-merged corpus the website consumes,
+    /// so SQLite regenerated from it keeps website/app parity by
+    /// construction (the recitation merge is skipped — its output is
+    /// already inside the export).
+    #[arg(long)]
+    from_json: Option<std::path::PathBuf>,
+
+    /// Verify the מסורה division against the Tanach Yomi sedarim reference
+    /// fixture and write a markdown report + expected snapshot instead of
+    /// exporting. Requires --format sedarim-report.
+    #[arg(long)]
+    sedarim_reference: Option<std::path::PathBuf>,
+
+    /// Override the markdown report output path (with --format sedarim-report).
+    #[arg(long)]
+    report_out: Option<std::path::PathBuf>,
+
+    /// Override the expected-snapshot output path (with --format sedarim-report).
+    #[arg(long)]
+    expected_out: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -31,6 +62,9 @@ enum OutputFormat {
     Mysql,
     Sqlite,
     CompassStages,
+    /// Verify the מסורה division against the sedarim reference fixture;
+    /// writes a markdown report and the expected verification snapshot.
+    SedarimReport,
 }
 
 #[tokio::main]
@@ -42,11 +76,27 @@ async fn main() -> Result<()> {
         return commands::compass_stages::generate();
     }
 
-    let format = cli
-        .format
-        .context("--format is required for json/sqlite output")?;
+    let format = require_format(cli.format)?;
 
-    let sefarim = fetch_from_mongodb(&cli.dump_name).await?;
+    if matches!(format, OutputFormat::SedarimReport) && cli.sedarim_reference.is_none() {
+        anyhow::bail!("--format sedarim-report requires --sedarim-reference <fixture.json>");
+    }
+
+    let sefarim = match &cli.from_json {
+        Some(path) => load_from_json(path)?,
+        None => {
+            let mut sefarim = fetch_from_mongodb(&cli.dump_name).await?;
+            let default_recitation_db =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../recitation/recitation.sqlite");
+            tanah_view::recitation::merge(
+                &mut sefarim,
+                cli.recitation_db
+                    .as_deref()
+                    .unwrap_or(&default_recitation_db),
+            )?;
+            sefarim
+        }
+    };
 
     // TODO: Validate sefarim against tanah_view.schema.json before generating output
     // This will ensure the aggregation pipeline output matches the expected schema
@@ -62,9 +112,38 @@ async fn main() -> Result<()> {
             commands::sqlite::generate(&sefarim, &cli.dump_name, cli.output_to_dependant_modules)?
         }
         OutputFormat::CompassStages => unreachable!("Handled above"),
+        OutputFormat::SedarimReport => commands::sedarim_report::generate(
+            &sefarim,
+            &cli.dump_name,
+            cli.sedarim_reference.as_deref().expect("checked above"),
+            cli.report_out.as_deref(),
+            cli.expected_out.as_deref(),
+        )?,
     }
 
     Ok(())
+}
+
+/// `--format` is only optional for the self-contained compass-stages mode,
+/// which is handled before this call.
+fn require_format(format: Option<OutputFormat>) -> Result<OutputFormat> {
+    format.context("--format is required for json/sqlite output")
+}
+
+/// Load the canonical corpus from a tanah_view JSON export (the same
+/// `Vec<Sefer>` the MongoDB aggregation produces, with the recitation
+/// merge already applied at export time).
+fn load_from_json(path: &Path) -> Result<Vec<Sefer>> {
+    let json = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read corpus {}", path.display()))?;
+    let sefarim: Vec<Sefer> = serde_json::from_str(&json)
+        .with_context(|| format!("Failed to parse corpus {}", path.display()))?;
+    println!(
+        "✅ Loaded {} sefarim from {}",
+        sefarim.len(),
+        path.display()
+    );
+    Ok(sefarim)
 }
 
 async fn fetch_from_mongodb(dump_name: &str) -> Result<Vec<Sefer>> {
@@ -144,10 +223,14 @@ mod tests {
     }
 
     #[test]
-    fn cli_accepts_all_output_formats_and_dependant_output_flag() {
-        let json = cli_from(&["--format", "json", "--output-to-dependant-modules"]);
+    fn cli_accepts_all_output_formats_and_dependent_output_flag() {
+        let json = cli_from(&["--format", "json", "--output-to-dependent-modules"]);
         assert!(matches!(json.format, Some(OutputFormat::Json)));
         assert!(json.output_to_dependant_modules);
+
+        // Backward compatibility: the pre-rename misspelled flag stays accepted.
+        let aliased = cli_from(&["--format", "json", "--output-to-dependant-modules"]);
+        assert!(aliased.output_to_dependant_modules);
 
         let mysql = cli_from(&["--format", "mysql"]);
         assert!(matches!(mysql.format, Some(OutputFormat::Mysql)));
@@ -164,6 +247,37 @@ mod tests {
         let cli = cli_from(&["--dump-name", "sefaria-dump-custom"]);
 
         assert_eq!(cli.dump_name, "sefaria-dump-custom");
+    }
+
+    #[test]
+    fn cli_accepts_from_json_corpus_path() {
+        let cli = cli_from(&["--format", "sqlite", "--from-json", "dump.tanah_view.json"]);
+
+        assert!(cli.from_json.is_some());
+        assert_eq!(
+            cli.from_json.as_deref(),
+            Some(std::path::Path::new("dump.tanah_view.json"))
+        );
+    }
+
+    #[test]
+    fn load_from_json_reads_checked_in_corpus() {
+        let corpus_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(
+            "../../../../web/bible-on-site/src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json",
+        );
+        let sefarim = load_from_json(&corpus_path).unwrap();
+        assert_eq!(sefarim.len(), 35);
+        assert_eq!(sefarim[0].name, "בראשית");
+    }
+
+    #[test]
+    fn require_format_rejects_none_and_passes_each_format() {
+        assert!(require_format(None).is_err());
+        assert!(matches!(
+            require_format(Some(OutputFormat::Json)).unwrap(),
+            OutputFormat::Json
+        ));
+        assert!(require_format(Some(OutputFormat::Sqlite)).is_ok());
     }
 
     #[test]

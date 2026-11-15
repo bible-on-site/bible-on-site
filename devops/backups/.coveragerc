@@ -1,0 +1,11 @@
+[run]
+branch = True
+data_file = .coverage/db-backup/.coverage
+source = devops/backups
+omit =
+    */test_*.py
+    */integration_test.py
+
+[report]
+fail_under = 90
+show_missing = True

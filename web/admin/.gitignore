@@ -4,7 +4,7 @@ logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
+bun-debug.log*
 lerna-debug.log*
 
 node_modules
@@ -34,6 +34,14 @@ coverage
 .env.local
 *.local
 
+# Generated build/config artifacts
+app.config.timestamp_*.js
+tsconfig.tsbuildinfo
+
 # Test results
 test-results
 playwright-report
+.playwright-report
+.playwright-results
+monocart-report/
+.vitest

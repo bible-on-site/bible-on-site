@@ -1,0 +1,454 @@
+/* ===================================================================
+ * Vertical spiral learning calendar (#2993).
+ * Book chrome (page positioning, scrollports, binding strip, toolbar)
+ * comes from html-flip-book-react/styles.css; this file styles the
+ * calendar faces (covers, title page, month sheets) and the host
+ * layout around the engine.
+ * =================================================================== */
+
+.cal-book-wrap {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	/* Inside .pageFlip the wrap absorbs all space left under the calendar
+	   chrome, so the book — and its bottom-edge turn zone — always fits the
+	   viewport. Outside that layout it simply sizes to content. */
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.cal-book-area {
+	position: relative;
+	width: min(100%, 660px);
+	/* Flex-sized by .cal-book-wrap; the floor keeps month grids usable on
+	   short viewports where the page scrolls instead. */
+	flex: 1 1 auto;
+	min-height: 340px;
+	margin: 0 auto;
+}
+
+/* Hide the not-yet-initialized book shell (same trick as the Sefer
+   reader): the engine adds .flipbook in the same synchronous pass that
+   measures pages, so the first painted frame already has geometry. */
+.cal-book-area > .cal-book:not(.flipbook) {
+	display: none;
+}
+
+.cal-book {
+	/* Stretch to .cal-book-area's used box. A percentage height cannot
+	   resolve through the area's flex-resolved (indefinite) height and
+	   collapses the engine's clientHeight to 0; absolute insets always
+	   resolve against the containing block's used size. */
+	position: absolute;
+	inset: 0;
+	width: auto;
+	height: auto;
+	overflow: hidden;
+	/* Desk-like backdrop so the page margins around the square sheets
+	   read as an intentional stand rather than empty space. */
+	background:
+		radial-gradient(
+			ellipse at 50% 30%,
+			var(--surface-elevated) 0%,
+			var(--surface-muted) 78%
+		);
+	border-radius: 12px;
+}
+
+/* The engine positions .page absolutely; give the faces a paper tone
+   that follows the site theme (dark mode gets dark "paper"). */
+.cal-book .flipbook-page-content > * {
+	background: var(--surface-elevated);
+	color: var(--foreground);
+}
+
+.cal-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* ---------- covers & endpapers ---------- */
+
+.cal-cover {
+	position: relative;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background:
+		radial-gradient(
+			ellipse at 30% 18%,
+			rgb(255 255 255 / 0.07),
+			transparent 55%
+		),
+		linear-gradient(180deg, #2e3d5c 0%, #22304a 55%, #1b2740 100%);
+	color: #f4f1e8;
+	overflow: hidden;
+}
+
+.cal-cover--back {
+	background: linear-gradient(180deg, #1b2740 0%, #22304a 45%, #2e3d5c 100%);
+}
+
+.cal-cover__body {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.5em;
+	text-align: center;
+	padding: 1em;
+	container-type: inline-size;
+}
+
+.cal-cover__title {
+	margin: 0;
+	font-size: clamp(1.4rem, 9cqi, 2.6rem);
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
+}
+
+.cal-cover__scope {
+	margin: 0;
+	font-size: clamp(0.85rem, 4.5cqi, 1.2rem);
+	color: rgb(244 241 232 / 0.85);
+}
+
+.cal-interior {
+	height: 100%;
+	background:
+		radial-gradient(
+			ellipse at 50% 0%,
+			var(--surface-muted) 0%,
+			var(--surface-elevated) 70%
+		);
+}
+
+/* ---------- title page ---------- */
+
+.cal-title-page {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 0.6em;
+	text-align: center;
+	padding: 1.2em;
+	container-type: inline-size;
+}
+
+.cal-title-page__title {
+	margin: 0;
+	font-size: clamp(1.2rem, 7cqi, 2rem);
+	font-weight: 700;
+}
+
+.cal-title-page__scope {
+	margin: 0;
+	font-size: clamp(0.9rem, 4cqi, 1.15rem);
+	font-weight: 600;
+	color: var(--link-accent);
+}
+
+.cal-title-page__detail {
+	margin: 0;
+	font-size: clamp(0.75rem, 3.4cqi, 0.95rem);
+	color: var(--muted-text);
+}
+
+.cal-title-page__hint {
+	margin: 0.4em 0 0;
+	font-size: clamp(0.75rem, 3.6cqi, 1rem);
+	color: var(--muted-text);
+	border: 1px dashed var(--border-subtle);
+	border-radius: 8px;
+	padding: 0.5em 0.9em;
+}
+
+.cal-title-page__legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4em 1em;
+	justify-content: center;
+	list-style: none;
+	margin: 0.6em 0 0;
+	padding: 0;
+	font-size: clamp(0.7rem, 3.2cqi, 0.9rem);
+	color: var(--muted-text);
+}
+
+.cal-title-page__legend li {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4em;
+}
+
+.cal-legend__swatch {
+	width: 0.85em;
+	height: 0.85em;
+	border-radius: 3px;
+	border: 1px solid var(--border-subtle);
+	display: inline-block;
+}
+
+.cal-legend__study {
+	background: var(--surface-muted);
+}
+
+.cal-legend__review {
+	background: var(--surface-elevated);
+	border-style: dashed;
+}
+
+.cal-legend__none {
+	background: transparent;
+}
+
+/* ---------- month sheet ---------- */
+
+.cal-sheet {
+	display: flex;
+	flex-direction: column;
+	min-height: 100%;
+	/* Sizes every descendant font/space in % of the page width, so a
+	   month grid stays proportional from desktop to phone. */
+	container-type: inline-size;
+	/* Top/bottom padding clears the spiral binding strip the engine draws
+	   across the page edges at the binding line (~bindingSize/2 each side). */
+	padding: 11% 5% 10%;
+	box-sizing: border-box;
+	font-family: inherit;
+}
+
+.cal-sheet__head {
+	flex-shrink: 0;
+	margin-bottom: 1.5%;
+}
+
+.cal-sheet__title {
+	margin: 0;
+	font-size: 5.4cqw;
+	font-weight: 700;
+	text-align: center;
+	color: var(--foreground);
+}
+
+.cal-sheet__weekdays,
+.cal-sheet__grid {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+}
+
+.cal-sheet__weekdays {
+	flex-shrink: 0;
+	margin-bottom: 0.8%;
+}
+
+.cal-sheet__weekday {
+	text-align: center;
+	font-size: 2.7cqw;
+	font-weight: 700;
+	color: var(--muted-text);
+}
+
+.cal-sheet__grid {
+	flex: 1;
+	min-height: 0;
+	grid-auto-rows: 1fr;
+	gap: 1%;
+}
+
+/* ---------- month sheet card back ---------- */
+
+/* The decorative face beneath each month grid: the printed card back of a
+   spiral calendar's month divider — visible under the sheet and while it
+   lifts over the binding. Tonal, not interactive. Scoped under .cal-book so
+   it ties the page-content default's specificity and wins by order. */
+.cal-book .cal-sheet-back {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	min-height: 100%;
+	container-type: inline-size;
+	padding: 11% 8% 10%;
+	box-sizing: border-box;
+	background:
+		radial-gradient(
+			ellipse at 50% 0%,
+			var(--surface-elevated) 0%,
+			var(--surface-muted) 75%
+		);
+	border-top: 2cqw solid var(--border-subtle);
+}
+
+.cal-sheet-back__tab {
+	margin-top: 6%;
+	padding: 0.35em 1.1em;
+	border: 1px solid var(--border-subtle);
+	border-radius: 999px;
+	font-size: 3.6cqw;
+	font-weight: 700;
+	color: var(--muted-text);
+	white-space: nowrap;
+}
+
+.cal-sheet-back__rule {
+	margin-top: 8%;
+	width: 62%;
+	height: 3px;
+	border-radius: 999px;
+	background: linear-gradient(
+		90deg,
+		transparent,
+		var(--border-subtle) 20% 80%,
+		transparent
+	);
+}
+
+/* Bottom-edge turn affordance: sits inside the engine's bottom 22%
+   turn zone and visually marks where a drag turns the page. */
+.cal-sheet__grip {
+	flex-shrink: 0;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	height: 5%;
+	min-height: 14px;
+}
+
+.cal-sheet__gripDots {
+	width: 18%;
+	max-width: 64px;
+	height: 5px;
+	border-radius: 999px;
+	background: linear-gradient(
+		90deg,
+		transparent,
+		var(--border-subtle) 20% 80%,
+		transparent
+	);
+}
+
+/* ---------- day cells ---------- */
+
+.cal-cell {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2%;
+	min-width: 0;
+	min-height: 0;
+	padding: 2% 1%;
+	border: 1px solid var(--border-subtle);
+	border-radius: 6%;
+	background: var(--surface-muted);
+	color: var(--foreground);
+	font: inherit;
+	overflow: hidden;
+}
+
+.cal-cell--blank {
+	border-color: transparent;
+	background: transparent;
+}
+
+button.cal-cell {
+	cursor: pointer;
+}
+
+button.cal-cell:hover {
+	border-color: var(--link-accent);
+	background: var(--surface-elevated);
+}
+
+button.cal-cell:focus-visible {
+	outline: 2px solid var(--link-accent);
+	outline-offset: 1px;
+}
+
+.cal-cell__day {
+	font-weight: 700;
+	font-size: 4.4cqw;
+	line-height: 1.15;
+}
+
+.cal-cell__perek {
+	font-size: 2.35cqw;
+	line-height: 1.2;
+	text-align: center;
+	color: var(--pasuk-num-color, var(--muted-text));
+	word-break: break-word;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.cal-cell--review {
+	background: var(--surface-elevated);
+	border-style: dashed;
+}
+
+/* Friday cell spanning the merged Friday+Saturday review block (#2365). */
+.cal-cell--merged {
+	grid-column: span 2;
+}
+
+.cal-cell__mergedDate {
+	display: block;
+	line-height: 1.1;
+}
+
+.cal-cell--review .cal-cell__perek {
+	color: var(--muted-text);
+}
+
+.cal-cell__review {
+	font-size: 1.9cqw;
+	font-weight: 700;
+	color: var(--muted-text);
+	border: 1px solid var(--border-subtle);
+	border-radius: 999px;
+	padding: 0 0.5em;
+	line-height: 1.4;
+}
+
+.cal-cell--none {
+	background: transparent;
+	border-color: transparent;
+	color: var(--muted-text);
+}
+
+.cal-cell--dimmed {
+	opacity: 0.3;
+}
+
+.cal-cell--today {
+	border: 2px solid var(--link-accent);
+}
+
+.cal-cell--today .cal-cell__day {
+	color: var(--link-accent);
+}
+
+/* On very small pages the review badge would shrink below legibility;
+   the dashed review styling + aria-label still carry the distinction. */
+@container (max-width: 300px) {
+	.cal-cell__review {
+		display: none;
+	}
+
+	.cal-cell__perek {
+		font-size: 2.1cqw;
+	}
+}

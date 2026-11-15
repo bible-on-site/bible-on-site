@@ -7,7 +7,7 @@
   padding: 12px 16px;
   background: #fff;
   border: 1px solid #c7d2fe;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow: 0 4px 16px rgba(49, 46, 129, 0.14);
   pointer-events: auto;
   direction: rtl;
@@ -44,4 +44,23 @@
   -webkit-line-clamp: 8;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+  .pasukTooltip {
+    background: #1a1f2e;
+    border-color: #3b4370;
+  }
+
+  .pasukTooltipReference {
+    color: #c7d2fe;
+  }
+
+  .pasukTooltipText {
+    color: #d7dae0;
+  }
+
+  .pasukTooltipNote {
+    color: var(--muted-text, #9aa0a6);
+  }
 }

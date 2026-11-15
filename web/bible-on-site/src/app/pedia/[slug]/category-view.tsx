@@ -1,12 +1,24 @@
+import DOMPurify from "isomorphic-dompurify";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { JsonLd } from "@/app/components/JsonLd";
+import { demoteHeadings } from "@/lib/html-headings";
+import { pageMetadata } from "@/lib/seo/opengraph";
 import { buildCategoryGraph } from "@/lib/seo/tanahpedia-jsonld";
-import type { ResolvedCategoryRoute } from "@/lib/tanahpedia/category-slug";
+import {
+	CATEGORY_HIERARCHY,
+	labelForCategoryKey,
+} from "@/lib/tanahpedia/category-hierarchy";
+import {
+	categoryHref,
+	type ResolvedCategoryRoute,
+} from "@/lib/tanahpedia/category-slug";
+import { normalizeFootnoteHtml } from "@/lib/tanahpedia/normalize-footnotes";
 import {
 	CATEGORY_LABELS,
 	ENTITY_TYPE_LABELS,
 	getAnimalsByClassification,
+	getCategoryCounts,
 	getCategoryHomepage,
 	getEntitiesWithEntries,
 	getEntitiesWithEntriesByRole,
@@ -33,11 +45,11 @@ export function categoryLabel(resolved: ResolvedCategoryRoute): string {
 
 export function categoryMetadata(resolved: ResolvedCategoryRoute): Metadata {
 	const label = categoryLabel(resolved);
-	return {
+	return pageMetadata({
 		title: `${label} | תנכפדיה`,
 		description: `רשימת ${label} בתנ"ך`,
-		alternates: { canonical: resolved.canonicalPath },
-	};
+		canonical: resolved.canonicalPath,
+	});
 }
 
 function loadEntities(
@@ -53,6 +65,21 @@ function loadEntities(
 			: getAnimalsByClassification("kind", sub as AnimalKind);
 	}
 	return getEntitiesWithEntries(entityType);
+}
+
+/** Other categories that have entries, in landing-page order, for the empty state. */
+async function loadPopulatedCategories(
+	current: CategoryKey,
+): Promise<CategoryKey[]> {
+	try {
+		const counts = await getCategoryCounts();
+		return CATEGORY_HIERARCHY.flatMap((cat) => [
+			cat.type,
+			...(cat.children ?? []),
+		]).filter((key) => key !== current && counts[key] > 0);
+	} catch {
+		return [];
+	}
 }
 
 export async function CategoryView({
@@ -89,6 +116,11 @@ export async function CategoryView({
 
 	const label = categoryLabel(resolved);
 	const currentCategory: CategoryKey = sub ?? entityType;
+
+	const isEmpty = !listLoadError && entities.length === 0;
+	const populatedCategories = isEmpty
+		? await loadPopulatedCategories(currentCategory)
+		: [];
 
 	const listItems = entities.flatMap((entity) =>
 		entity.linkedEntries.map((le) => ({
@@ -128,25 +160,55 @@ export async function CategoryView({
 
 			{homepage?.content && !sub && (
 				<div
-					// biome-ignore lint/security/noDangerouslySetInnerHtml: admin-authored content
-					dangerouslySetInnerHTML={{ __html: homepage.content }}
+					className={styles.homepageContent}
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
+					dangerouslySetInnerHTML={{
+						__html: DOMPurify.sanitize(
+							normalizeFootnoteHtml(demoteHeadings(homepage.content)),
+						),
+					}}
 				/>
 			)}
 
-			{homepage?.layoutType === "MAP" && entityType === "PLACE" && (
+			{entityType === "PLACE" && placeMapMarkers.length > 0 && (
 				<TanahpediaPlacesMap markers={placeMapMarkers} />
 			)}
 
-			<section>
-				<h2 className={styles.sectionTitle}>
-					{entities.length} {label}
-				</h2>
-				<ul className={styles.entityList}>
-					{entities.map((entity) => (
-						<EntityListItem key={entity.entityId} entity={entity} />
-					))}
-				</ul>
-			</section>
+			{isEmpty ? (
+				<section className={styles.emptyState}>
+					<h2 className={styles.emptyStateTitle}>
+						עדיין אין ערכים בקטגוריה זו
+					</h2>
+					<p className={styles.emptyStateText}>
+						ערכים בנושא {label} יתווספו לתנכפדיה בקרוב.
+						{populatedCategories.length > 0
+							? " בינתיים אפשר לעיין בקטגוריות אחרות:"
+							: null}
+					</p>
+					{populatedCategories.length > 0 ? (
+						<ul className={styles.emptyStateLinks}>
+							{populatedCategories.map((key) => (
+								<li key={key}>
+									<Link href={categoryHref(key)} className={styles.entityBadge}>
+										{labelForCategoryKey(key)}
+									</Link>
+								</li>
+							))}
+						</ul>
+					) : null}
+				</section>
+			) : (
+				<section>
+					<h2 className={styles.sectionTitle}>
+						{entities.length} {label}
+					</h2>
+					<ul className={styles.entityList}>
+						{entities.map((entity) => (
+							<EntityListItem key={entity.entityId} entity={entity} />
+						))}
+					</ul>
+				</section>
+			)}
 
 			<div className={styles.backLinkWrapper}>
 				<Link href="/pedia" className={styles.backLink}>

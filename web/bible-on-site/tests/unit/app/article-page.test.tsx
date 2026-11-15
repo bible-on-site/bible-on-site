@@ -17,6 +17,20 @@ jest.mock("next/cache", () => ({
 	unstable_cache: (fn: (...args: never[]) => unknown) => fn,
 }));
 
+jest.mock("../../../src/lib/seo/perek-images-data", () => ({
+	getPerekImagesByChapter: jest.fn(async () => ({})),
+}));
+
+jest.mock("../../../src/lib/tanahpedia/perek-entity-refs", () => ({
+	fetchAllEntityRefs: jest.fn(async () => ({})),
+}));
+
+// Decoration wiring is covered by article-mention-refs.test.ts; here the
+// page only needs the stored content to pass through.
+jest.mock("../../../src/lib/tanahpedia/article-mention-refs", () => ({
+	decorateArticleContent: jest.fn(async (article: unknown) => article),
+}));
+
 jest.mock("next/navigation", () => ({
 	notFound: jest.fn(() => {
 		throw new Error("NEXT_NOT_FOUND");
@@ -66,9 +80,12 @@ jest.mock("../../../src/data/db/tanah-view-types", () => ({
 	),
 }));
 
-jest.mock("../../../src/app/929/[number]/components/ArticlesSection", () => ({
-	ArticlesSection: () => <div data-testid="articles-section" />,
-}));
+jest.mock(
+	"../../../src/app/929/[number]/components/DailyArticlesSection",
+	() => ({
+		DailyArticlesSection: () => <div data-testid="articles-section" />,
+	}),
+);
 
 jest.mock("../../../src/app/929/[number]/components/Breadcrumb", () => ({
 	__esModule: true,
@@ -87,11 +104,18 @@ jest.mock("../../../src/app/929/[number]/components/SeferComposite", () => ({
 
 jest.mock("../../../src/app/929/[number]/[slug]/ScrollToArticle", () => ({
 	ScrollToSlug: () => null,
-	ScrollToArticle: () => null,
+}));
+
+jest.mock("../../../src/app/929/[number]/[slug]/ScrollToArticleMatch", () => ({
+	ScrollToArticleMatch: () => null,
 }));
 
 jest.mock("../../../src/app/929/[number]/[slug]/ScrollToPerushPasuk", () => ({
 	ScrollToPerushPasukNote: () => null,
+}));
+
+jest.mock("../../../src/app/929/[number]/components/ScrollToPasuk", () => ({
+	ScrollToPasuk: () => null,
 }));
 
 jest.mock("../../../src/app/929/[number]/components/Ptuha", () => ({
@@ -102,7 +126,8 @@ jest.mock("../../../src/app/929/[number]/components/Stuma", () => ({
 	Stuma: () => <span data-testid="stuma" />,
 }));
 
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
+import DOMPurify from "isomorphic-dompurify";
 import ArticlePage, {
 	generateMetadata,
 	generateStaticParams,
@@ -124,6 +149,10 @@ import {
 	getPerushDetail,
 	getPerushimByPerekId,
 } from "../../../src/lib/perushim";
+import { SITE_ORIGIN } from "../../../src/lib/seo/jsonld";
+import { NOT_FOUND_METADATA } from "../../../src/lib/seo/missing-page";
+import type { PerekIllustration } from "../../../src/lib/seo/perek-illustrations";
+import { getPerekImagesByChapter } from "../../../src/lib/seo/perek-images-data";
 
 const mockGetArticleById = getArticleById as jest.MockedFunction<
 	typeof getArticleById
@@ -155,6 +184,27 @@ const mockGetAllPerushPerekNamePairs =
 	getAllPerushPerekNamePairs as jest.MockedFunction<
 		typeof getAllPerushPerekNamePairs
 	>;
+const mockGetPerekImagesByChapter =
+	getPerekImagesByChapter as jest.MockedFunction<
+		typeof getPerekImagesByChapter
+	>;
+
+const sampleIllustration: PerekIllustration = {
+	id: 7,
+	src: "https://cdn.example.com/ill-display.jpg",
+	width: 800,
+	height: 600,
+	avifSrcSet: "",
+	socialSrc: "https://cdn.example.com/ill-social.jpg",
+	socialWidth: 1200,
+	socialHeight: 630,
+	alt: "איור לפרק",
+	caption: "איור",
+	captionMarkdown: null,
+	verseRanges: [],
+	description: null,
+	credit: null,
+};
 
 const sampleArticle = {
 	id: 42,
@@ -180,13 +230,14 @@ const sampleArticleSummary = {
 };
 
 const recordingTimeFrame: Timeframe = {
-	from: { type: "string" as const, pattern: "^\\d{2}:\\d{2}:\\d{2}$" as const },
-	to: { type: "string" as const, pattern: "^\\d{2}:\\d{2}:\\d{2}$" as const },
+	from: "00:00:00",
+	to: "00:00:00",
 };
 
 describe("[slug] page", () => {
 	beforeEach(() => {
 		jest.clearAllMocks();
+		mockGetPerekImagesByChapter.mockResolvedValue({});
 	});
 
 	describe("generateStaticParams", () => {
@@ -221,10 +272,32 @@ describe("[slug] page", () => {
 				params: Promise.resolve({ number: "5", slug: "42" }),
 			});
 
-			expect(result).toEqual({
-				title: 'מאמר לדוגמא | הרב ישראל | תנ"ך באתר',
-				description: "תקציר המאמר",
+			expect(result.title).toBe('מאמר לדוגמא | הרב ישראל | תנ"ך על הפרק');
+			expect(result.description).toBe("תקציר המאמר");
+			expect(result.alternates).toEqual({
+				canonical: "/929/5/42",
 			});
+			expect(result.openGraph).toEqual(
+				expect.objectContaining({
+					title: 'מאמר לדוגמא | הרב ישראל | תנ"ך על הפרק',
+					description: "תקציר המאמר",
+					url: `${SITE_ORIGIN}/929/5/42`,
+					siteName: 'תנ"ך על הפרק',
+					locale: "he_IL",
+					type: "article",
+					// OGP requires article:author to be a profile URL.
+					authors: [
+						`${SITE_ORIGIN}/929/authors/${encodeURIComponent("הרב ישראל")}`,
+					],
+					images: [
+						expect.objectContaining({
+							url: "https://example.com/1.jpg",
+							alt: "הרב ישראל",
+							type: "image/jpeg",
+						}),
+					],
+				}),
+			);
 		});
 
 		it("uses content stripped of HTML when abstract is empty", async () => {
@@ -276,9 +349,7 @@ describe("[slug] page", () => {
 				params: Promise.resolve({ number: "5", slug: "999" }),
 			});
 
-			expect(result).toEqual({
-				title: 'מאמר לא נמצא | תנ"ך באתר',
-			});
+			expect(result).toEqual(NOT_FOUND_METADATA);
 		});
 
 		it("returns perush metadata when slug is non-numeric (perush name)", async () => {
@@ -323,7 +394,71 @@ describe("[slug] page", () => {
 			});
 
 			expect(result.title).toContain('רש"י');
-			expect(result.title).toContain('תנ"ך באתר');
+			expect(result.title).toContain('תנ"ך על הפרק');
+			expect(result.openGraph?.siteName).toBe('תנ"ך על הפרק');
+			expect(result.alternates?.canonical).toBe(
+				`/929/5/${encodeURIComponent('רש"י')}`,
+			);
+			expect(result.openGraph?.url).toBe(
+				`${SITE_ORIGIN}/929/5/${encodeURIComponent('רש"י')}`,
+			);
+			// No perush detail mocked → templated fallback description
+			expect(result.description).toContain("פירוש");
+		});
+
+		it("derives perush description from note content", async () => {
+			const perek = {
+				perekId: 5,
+				perekHeb: "ה",
+				header: "בראשית ה",
+				date: [],
+				star_rise: [],
+				helek: "תורה",
+				sefer: "בראשית",
+				source: "בראשית ה",
+				pesukim: [],
+			} as unknown as PerekObj & Perek;
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
+			]);
+			mockGetPerekByPerekId.mockReturnValue(perek);
+			mockGetSeferByName.mockReturnValue({
+				name: "בראשית",
+				helek: "תורה",
+				pesukimCount: 1,
+				perekFrom: 5,
+				perekTo: 5,
+				tanachUsName: "Genesis",
+				perakim: [perek],
+			});
+			mockGetPerushDetail.mockResolvedValue({
+				id: 1,
+				parshanId: 1,
+				name: 'רש"י',
+				parshanName: 'רש"י',
+				notes: [
+					{
+						pasuk: 1,
+						noteIdx: 0,
+						noteContent: "<p>בבקשה ורצון&quot;.</p>",
+					},
+				],
+			});
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
+			});
+
+			expect(result.description).toContain("בבקשה ורצון");
+			expect(result.description).not.toContain("<");
+			expect((result.openGraph as { type?: string } | null)?.type).toBe(
+				"article",
+			);
+			// Parshanim have no public profile URL — OGP requires author to be
+			// a URL, so the perush page emits no article:author at all.
+			expect(
+				(result.openGraph as { authors?: string[] } | null)?.authors,
+			).toBeUndefined();
 		});
 
 		it("returns not-found metadata when perush name not found", async () => {
@@ -333,7 +468,102 @@ describe("[slug] page", () => {
 				params: Promise.resolve({ number: "5", slug: "unknown" }),
 			});
 
-			expect(result).toEqual({ title: 'פירוש לא נמצא | תנ"ך באתר' });
+			expect(result).toEqual(NOT_FOUND_METADATA);
+		});
+
+		it("prefers the perek illustration over the author portrait and emits the sefer section", async () => {
+			mockGetArticleById.mockResolvedValue(sampleArticle);
+			mockGetPerekByPerekId.mockReturnValue({
+				sefer: "בראשית",
+			} as unknown as PerekObj & Perek);
+			mockGetPerekImagesByChapter.mockResolvedValue({
+				5: [sampleIllustration],
+			});
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+
+			expect(result.openGraph?.images).toEqual([
+				expect.objectContaining({
+					url: "https://cdn.example.com/ill-social.jpg",
+					width: 1200,
+					height: 630,
+					alt: "איור לפרק",
+				}),
+			]);
+			expect((result.openGraph as { section?: string } | null)?.section).toBe(
+				"בראשית",
+			);
+		});
+
+		it("returns shared missing-page metadata for an out-of-range perek", async () => {
+			// The render now 404s out-of-range perekIds like /929/999999 does;
+			// metadata stays on the identical contract without a DB lookup
+			// (issue #2935).
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "930", slug: "42" }),
+			});
+
+			expect(result).toEqual(NOT_FOUND_METADATA);
+			expect(mockGetArticleById).not.toHaveBeenCalled();
+		});
+
+		it("returns shared missing-page metadata for a perek-mismatched article", async () => {
+			// /929/5/<article-on-perek-6> renders notFound() — the metadata
+			// must not advertise the article title/OG on a 404 (issue #2935).
+			mockGetArticleById.mockResolvedValue({
+				...sampleArticle,
+				perekId: 6,
+			});
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+
+			expect(result).toEqual(NOT_FOUND_METADATA);
+		});
+
+		it("falls back to the author portrait when the illustration map is unavailable", async () => {
+			mockGetArticleById.mockResolvedValue(sampleArticle);
+			mockGetPerekImagesByChapter.mockResolvedValue(null as never);
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+
+			expect(result.openGraph?.images).toEqual([
+				expect.objectContaining({
+					url: "https://example.com/1.jpg",
+					alt: "הרב ישראל",
+				}),
+			]);
+		});
+
+		it("uses the perek illustration for the perush OG image when present", async () => {
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
+			]);
+			mockGetPerekByPerekId.mockReturnValue({
+				sefer: "בראשית",
+				source: "בראשית ה",
+			} as unknown as PerekObj & Perek);
+			mockGetPerekImagesByChapter.mockResolvedValue({
+				5: [sampleIllustration],
+			});
+
+			const result = await generateMetadata({
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
+			});
+
+			expect(result.openGraph?.images).toEqual([
+				expect.objectContaining({
+					url: "https://cdn.example.com/ill-social.jpg",
+					width: 1200,
+					height: 630,
+					alt: "איור לפרק",
+				}),
+			]);
 		});
 	});
 
@@ -420,11 +650,22 @@ describe("[slug] page", () => {
 			const jsx = await ArticlePage({
 				params: Promise.resolve({ number: "5", slug: "42" }),
 			});
-			render(jsx);
+			const { container } = render(jsx);
 
 			expect(screen.getByText("מאמר לדוגמא")).toBeTruthy();
 			expect(screen.getByText("הרב ישראל")).toBeTruthy();
-			expect(screen.getByText("חזרה לפרק →")).toBeTruthy();
+			// The unified command row (#2786): a real link back to the perek route.
+			const back = screen.getByRole("link", { name: "חזרה לפרק" });
+			expect(back.getAttribute("href")).toBe("/929/5");
+			expect(container.querySelector("#article-view h1")?.textContent).toBe(
+				"מאמר לדוגמא",
+			);
+			const articleView = container.querySelector("#article-view") as Element;
+			const chapterText = container.querySelector(".perekText") as Element;
+			expect(
+				articleView.compareDocumentPosition(chapterText) &
+					Node.DOCUMENT_POSITION_FOLLOWING,
+			).toBeTruthy();
 		});
 
 		it("renders all segment types (ktiv, qri+different, ptuha, stuma, maqaf)", async () => {
@@ -434,19 +675,54 @@ describe("[slug] page", () => {
 				params: Promise.resolve({ number: "5", slug: "42" }),
 			});
 			const { container } = render(jsx);
-			const html = container.innerHTML;
+			const chapterText = container.querySelector(".perekText") as HTMLElement;
 
-			// ktiv text rendered directly
-			expect(screen.getByText("כתיב")).toBeTruthy();
-			// qri with different ktiv renders parenthesised with label
-			expect(html).toContain("קרי");
-			// regular qri (no ktivOffset) rendered as-is
-			expect(screen.getByText("רגיל")).toBeTruthy();
-			// ptuha and stuma mocks rendered
-			expect(screen.getByTestId("ptuha")).toBeTruthy();
-			expect(screen.getByTestId("stuma")).toBeTruthy();
-			// maqaf trailing character: "מלה־" — should not add space after it
-			expect(screen.getByText("מלה־")).toBeTruthy();
+			// Preserve the complete verse and spacing without requiring word wrappers.
+			expect(chapterText.querySelector("#pasuk-1")?.textContent).toBe(
+				"א כתיב (קרי)   רגיל מלה־ ",
+			);
+			// Different qri keeps its parenthesised text and label.
+			expect(chapterText.querySelector(".qri")?.textContent).toBe("(קרי)");
+			expect(chapterText.querySelector(".qri [data-qri-label]")).not.toBeNull();
+			expect(chapterText.querySelector("label")).toBeNull();
+			expect(within(chapterText).getByTestId("ptuha")).toBeTruthy();
+			expect(within(chapterText).getByTestId("stuma")).toBeTruthy();
+		});
+
+		it("renders the unified command row with return and share (#2786)", async () => {
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: "42" }),
+			});
+			const { container } = render(jsx);
+
+			const articleView = container.querySelector("#article-view");
+			expect(articleView).not.toBeNull();
+			// The command row trails the article: the main content stays on
+			// top on the standalone route (review ask).
+			const group = within(articleView as HTMLElement).getByRole("group", {
+				name: "פעולות מאמר",
+			});
+			expect(articleView?.lastElementChild).toBe(group.parentElement);
+			const header = articleView?.querySelector("header");
+			expect(
+				header != null &&
+					!!(header.compareDocumentPosition(group) &
+						Node.DOCUMENT_POSITION_FOLLOWING),
+			).toBe(true);
+			expect(
+				within(group)
+					.getByRole("link", { name: "חזרה לפרק" })
+					.getAttribute("href"),
+			).toBe("/929/5");
+			expect(within(group).getByRole("button", { name: "שתף" })).toBeTruthy();
+			// No fullscreen command on a route that is already a full page.
+			expect(
+				within(group).queryByRole("button", { name: "מסך מלא" }),
+			).toBeNull();
+			// The obsolete bottom-only back row is gone.
+			expect(
+				within(articleView as HTMLElement).queryByText("חזרה לפרק →"),
+			).toBeNull();
 		});
 
 		it("calls notFound when perekId is NaN", async () => {
@@ -455,6 +731,20 @@ describe("[slug] page", () => {
 			await expect(
 				ArticlePage({
 					params: Promise.resolve({ number: "abc", slug: "42" }),
+				}),
+			).rejects.toThrow("NEXT_NOT_FOUND");
+
+			expect(notFound).toHaveBeenCalled();
+		});
+
+		it("calls notFound for an out-of-range perek instead of 500ing", async () => {
+			// Live hole closed by #2935: /929/999999/1 used to throw inside
+			// getPerekByPerekId and answer 500. It must 404 like /929/999999.
+			const { notFound } = jest.requireMock("next/navigation");
+
+			await expect(
+				ArticlePage({
+					params: Promise.resolve({ number: "999999", slug: "42" }),
 				}),
 			).rejects.toThrow("NEXT_NOT_FOUND");
 
@@ -500,6 +790,7 @@ describe("[slug] page", () => {
 			mockGetPerushimByPerekId.mockResolvedValue([perush]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
@@ -514,6 +805,50 @@ describe("[slug] page", () => {
 			expect(screen.getByText("חזרה לפרק →")).toBeTruthy();
 		});
 
+		it("renders the expanded perush above the sefer composite with an h1", async () => {
+			const perek = {
+				perekId: 5,
+				perekHeb: "ה",
+				header: "בראשית ה",
+				date: [],
+				star_rise: [],
+				helek: "תורה",
+				sefer: "בראשית",
+				source: "בראשית ה",
+				pesukim: [],
+			} as unknown as PerekObj & Perek;
+			mockGetPerekByPerekId.mockReturnValue(perek);
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
+			]);
+			mockGetPerushDetail.mockResolvedValue({
+				id: 1,
+				parshanId: 1,
+				name: 'רש"י',
+				parshanName: 'רש"י',
+				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
+			});
+
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
+			});
+			const { container } = render(jsx);
+
+			const perushView = container.querySelector("#perush-view");
+			const seferComposite = screen.getByTestId("sefer-composite");
+			expect(perushView).toBeTruthy();
+			expect(
+				perushView &&
+					seferComposite.compareDocumentPosition(perushView) &
+						Node.DOCUMENT_POSITION_PRECEDING,
+			).toBeTruthy();
+			const h1 = within(perushView as HTMLElement).getByRole("heading", {
+				level: 1,
+			});
+			expect(h1.textContent).toContain('רש"י');
+			expect(h1.textContent).toContain("בראשית ה");
+		});
+
 		it("marks perush notes with pasuk data for client-side deep-link highlighting", async () => {
 			const perush = {
 				id: 1,
@@ -524,6 +859,7 @@ describe("[slug] page", () => {
 			mockGetPerushimByPerekId.mockResolvedValue([perush]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [
@@ -549,6 +885,54 @@ describe("[slug] page", () => {
 			expect(container.querySelector(".noteHighlight")).toBeNull();
 		});
 
+		it("renders a share link to the canonical perush path", async () => {
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
+			]);
+			mockGetPerushDetail.mockResolvedValue({
+				id: 1,
+				parshanId: 1,
+				name: 'רש"י',
+				parshanName: 'רש"י',
+				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
+			});
+
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
+			});
+			render(jsx);
+
+			const shareLink = screen.getByRole("link", { name: "שיתוף" });
+			expect(shareLink.getAttribute("href")).toBe(
+				`/929/5/${encodeURIComponent('רש"י')}`,
+			);
+		});
+
+		// jest.setup.js mocks isomorphic-dompurify as pass-through, so this
+		// asserts the contract: every note goes through DOMPurify.sanitize.
+		it("passes each perush note through DOMPurify.sanitize", async () => {
+			const sanitizeSpy = jest.spyOn(DOMPurify, "sanitize");
+			const rawNote =
+				'<p>בטוח</p><script>alert("x")</script><img src="x" onerror="alert(1)">';
+			mockGetPerushimByPerekId.mockResolvedValue([
+				{ id: 1, name: 'רש"י', parshanName: 'רש"י', noteCount: 10 },
+			]);
+			mockGetPerushDetail.mockResolvedValue({
+				id: 1,
+				parshanId: 1,
+				name: 'רש"י',
+				parshanName: 'רש"י',
+				notes: [{ pasuk: 1, noteIdx: 0, noteContent: rawNote }],
+			});
+
+			const jsx = await ArticlePage({
+				params: Promise.resolve({ number: "5", slug: 'רש"י' }),
+			});
+			render(jsx);
+
+			expect(sanitizeSpy).toHaveBeenCalledWith(rawNote);
+		});
+
 		it("decodes percent-encoded slug to match perush name", async () => {
 			const perush = {
 				id: 1,
@@ -559,6 +943,7 @@ describe("[slug] page", () => {
 			mockGetPerushimByPerekId.mockResolvedValue([perush]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: "דעת זקנים",
 				parshanName: "בעלי התוספות",
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
@@ -570,9 +955,13 @@ describe("[slug] page", () => {
 					slug: "%D7%93%D7%A2%D7%AA%20%D7%96%D7%A7%D7%A0%D7%99%D7%9D",
 				}),
 			});
-			render(jsx);
+			const { container } = render(jsx);
 
-			expect(screen.getAllByText("דעת זקנים").length).toBeGreaterThanOrEqual(1);
+			expect(
+				container
+					.querySelector("#perush-view h1")
+					?.textContent?.includes("דעת זקנים"),
+			).toBeTruthy();
 		});
 
 		it("calls notFound when perush name not in perushim list", async () => {
@@ -611,6 +1000,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "note" }],
@@ -643,6 +1033,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],
@@ -675,6 +1066,7 @@ describe("[slug] page", () => {
 			]);
 			mockGetPerushDetail.mockResolvedValue({
 				id: 1,
+				parshanId: 1,
 				name: 'רש"י',
 				parshanName: 'רש"י',
 				notes: [{ pasuk: 1, noteIdx: 0, noteContent: "<p>פירוש</p>" }],

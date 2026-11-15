@@ -1,6 +1,6 @@
 import {
-	PEREK_VIEW_MODE_STORAGE_KEY,
 	getStoredPerekViewMode,
+	PEREK_VIEW_MODE_STORAGE_KEY,
 	pathnameWithBookQuery,
 	setStoredPerekViewMode,
 } from "../../../src/lib/perek-view-preference";
@@ -8,6 +8,25 @@ import {
 describe("perek-view-preference", () => {
 	beforeEach(() => {
 		localStorage.clear();
+	});
+
+	afterEach(() => jest.restoreAllMocks());
+
+	it("falls back safely when private-mode storage cannot be read or written", () => {
+		jest.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+			throw new DOMException("Access denied", "SecurityError");
+		});
+		jest.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+			throw new DOMException("Quota exceeded", "QuotaExceededError");
+		});
+		expect(getStoredPerekViewMode()).toBeNull();
+		expect(() => setStoredPerekViewMode("book")).not.toThrow();
+	});
+
+	it("accepts query strings prefixed with a question mark", () => {
+		expect(pathnameWithBookQuery("/929/1", "?book=&x=2", false)).toBe(
+			"/929/1?x=2",
+		);
 	});
 
 	it("setStoredPerekViewMode and getStoredPerekViewMode roundtrip", () => {
@@ -33,9 +52,9 @@ describe("perek-view-preference", () => {
 	});
 
 	it("pathnameWithBookQuery removes book", () => {
-		expect(pathnameWithBookQuery("/929/5", "book=&x=2", false)).toBe(
-			"/929/5?x=2",
-		);
+		expect(
+			pathnameWithBookQuery("/929/5", "book=&toc=&bookPage=תוכן&x=2", false),
+		).toBe("/929/5?x=2");
 	});
 
 	it("pathnameWithBookQuery omits ? when empty", () => {

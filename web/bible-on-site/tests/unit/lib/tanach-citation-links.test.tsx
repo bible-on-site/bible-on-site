@@ -35,6 +35,28 @@ describe("renderCitationWithTanachLinks", () => {
 		expect(a.getAttribute("href")).toMatch(/^\/929\/\d+#pasuk-32$/);
 	});
 
+	it("removes numeral punctuation from displayed scripture references", () => {
+		const nodes = renderCitationWithTanachLinks('בראשית י"א י"ח', "cite");
+		render(<div>{nodes}</div>);
+		const link = screen.getByRole("link", { name: "בראשית יא יח" });
+		expect(link.getAttribute("href")).toMatch(/^\/929\/\d+#pasuk-18$/);
+	});
+
+	it.each([
+		["(יהושע י״א, י״ח).", "יהושע יא יח", "#pasuk-18"],
+		["שמואל א׳ ג׳, ד׳", "שמואל א ג ד", "#pasuk-4"],
+		["בראשית ל, ו־ח", "בראשית ל ו-ח", "#pasuk-6"],
+		["בראשית ל ו–ח", "בראשית ל ו-ח", "#pasuk-6"],
+	])("normalizes legacy citation punctuation in %s", (text, label, anchor) => {
+		render(<div>{renderCitationWithTanachLinks(text, "cite")}</div>);
+		expect(
+			screen
+				.getByRole("link", { name: label })
+				.getAttribute("href")
+				?.endsWith(anchor),
+		).toBe(true);
+	});
+
 	it("anchors a pasuk range at its first pasuk", () => {
 		const nodes = renderCitationWithTanachLinks("בראשית ל ו-ח", "cite");
 		render(<div>{nodes}</div>);
@@ -178,6 +200,221 @@ describe("build929PerushHref", () => {
 });
 
 describe("renderFamilyTreeCitationLine", () => {
+	it("keeps Midrash Mishlei's original homily coordinates unlinked", () => {
+		const line = "מדרש משלי יא ב";
+		const { container } = render(
+			<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+		);
+
+		expect(container.textContent).toBe(line);
+		expect(container.querySelector("a")).toBeNull();
+	});
+
+	it("links an explicit Bible reference after the complete Midrash Mishlei name", () => {
+		const line = "מדרש משלי על משלי יא כא";
+		const expectedHref = build929PerushHref("משלי", "יא", "כא", "מדרש משלי");
+		const { container } = render(
+			<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+		);
+
+		expect(container.textContent).toBe(line);
+		expect(container.querySelectorAll("a")).toHaveLength(1);
+		expect(screen.getByRole("link", { name: line })).toHaveAttribute(
+			"href",
+			expectedHref,
+		);
+	});
+
+	it.each(["מדרש תנחומא בראשית ט ב", "מדרש משלי משלי יא כא"])(
+		"keeps ambiguous midrash source coordinates literal in %s",
+		(line) => {
+			const { container } = render(
+				<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+			);
+
+			expect(container.textContent).toBe(line);
+			expect(container.querySelector("a")).toBeNull();
+		},
+	);
+
+	it("links an explicit Bible reference introduced by על after the Tanchuma name", () => {
+		const line = "מדרש תנחומא על בראשית יח יז";
+		const { container } = render(
+			<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+		);
+
+		expect(container.textContent).toBe(line);
+		expect(container.querySelectorAll("a")).toHaveLength(1);
+		expect(screen.getByRole("link", { name: line })).toHaveAttribute(
+			"href",
+			build929PerushHref("בראשית", "יח", "יז", "מדרש תנחומא"),
+		);
+	});
+
+	it.each(["מדרש משלי יא ב", "מדרש תנחומא בראשית ט ב"])(
+		"keeps %s literal while linking surrounding Bible references",
+		(sourceCitation) => {
+			const line = `בראשית א א; ${sourceCitation}; שמות א ב`;
+			const { container } = render(
+				<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+			);
+
+			expect(container.textContent).toBe(line);
+			expect(container.querySelectorAll("a")).toHaveLength(2);
+			expect(screen.getByRole("link", { name: "בראשית א א" })).toHaveAttribute(
+				"href",
+				"/929/1#pasuk-1",
+			);
+			expect(screen.getByRole("link", { name: "שמות א ב" })).toHaveAttribute(
+				"href",
+				"/929/51#pasuk-2",
+			);
+		},
+	);
+
+	it.each([
+		{
+			line: 'רש"י בראשית א א; מדרש תנחומא בראשית ט ב; שמות א ב',
+			links: [
+				{
+					label: 'רש"י בראשית א א',
+					href: build929PerushHref("בראשית", "א", "א", 'רש"י'),
+				},
+				{ label: "שמות א ב", href: "/929/51#pasuk-2" },
+			],
+		},
+		{
+			line: 'בראשית א א; מדרש תנחומא בראשית ט ב; רש"י שמות א ב',
+			links: [
+				{ label: "בראשית א א", href: "/929/1#pasuk-1" },
+				{
+					label: 'רש"י שמות א ב',
+					href: build929PerushHref("שמות", "א", "ב", 'רש"י'),
+				},
+			],
+		},
+	])("renders each commentary clause safely in $line", ({ line, links }) => {
+		const { container } = render(
+			<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+		);
+
+		expect(container.textContent).toBe(line);
+		expect(container.querySelectorAll("a")).toHaveLength(links.length);
+		for (const { label, href } of links) {
+			expect(screen.getByRole("link", { name: label })).toHaveAttribute(
+				"href",
+				href,
+			);
+		}
+	});
+
+	it.each([
+		'רש"י על בראשית א א',
+		'רש"י: (בראשית א א)',
+		'רש"י — על (בראשית א א)',
+		'רש"י (הערה (מורחבת)): בראשית א א',
+	])("links a commentary separated by punctuation or על in %s", (line) => {
+		const { container } = render(
+			<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+		);
+
+		expect(container.textContent).toBe(line);
+		expect(container.querySelectorAll("a")).toHaveLength(1);
+		expect(screen.getByRole("link")).toHaveAttribute(
+			"href",
+			build929PerushHref("בראשית", "א", "א", 'רש"י'),
+		);
+	});
+
+	it("accepts Unicode punctuation outside the BMP as a citation separator", () => {
+		const line = 'רש"י \u{10100} על בראשית א א';
+		const { container } = render(
+			<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+		);
+
+		expect(container.textContent).toBe(line);
+		expect(container.querySelectorAll("a")).toHaveLength(1);
+		expect(screen.getByRole("link", { name: line })).toHaveAttribute(
+			"href",
+			build929PerushHref("בראשית", "א", "א", 'רש"י'),
+		);
+	});
+
+	it.each([
+		'רש"י על על בראשית א א',
+		'רש"י ע ל בראשית א א',
+		'רש"י בפירושו על בראשית א א',
+		'רש"י ע בראשית א א',
+	])(
+		"does not bind a commentary across extra or incomplete words in %s",
+		(line) => {
+			const { container } = render(
+				<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+			);
+
+			expect(container.textContent).toBe(line);
+			expect(container.querySelectorAll("a")).toHaveLength(1);
+			expect(screen.getByRole("link", { name: "בראשית א א" })).toHaveAttribute(
+				"href",
+				"/929/1#pasuk-1",
+			);
+		},
+	);
+
+	it("links a citation after a deeply nested annotation while preserving its text", () => {
+		const line = `רש"י ${"(".repeat(512)}הערה${")".repeat(512)}: בראשית א א`;
+		const { container } = render(
+			<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+		);
+
+		expect(container.textContent).toBe(line);
+		expect(container.querySelectorAll("a")).toHaveLength(1);
+		expect(container.querySelector("a")).toHaveAttribute(
+			"href",
+			build929PerushHref("בראשית", "א", "א", 'רש"י'),
+		);
+	});
+
+	it.each([
+		{
+			line: 'רש"י (הערה (מורחבת): בראשית א א',
+			linkText: "בראשית א א",
+			href: "/929/1#pasuk-1",
+		},
+		{
+			line: 'רש"י ((הערה): בראשית א א',
+			linkText: 'רש"י ((הערה): בראשית א א',
+			href: build929PerushHref("בראשית", "א", "א", 'רש"י'),
+		},
+		{
+			line: 'רש"י ) (הערה): בראשית א א',
+			linkText: 'רש"י ) (הערה): בראשית א א',
+			href: build929PerushHref("בראשית", "א", "א", 'רש"י'),
+		},
+	])(
+		"preserves unmatched parentheses and respects matched annotations in $line",
+		({ line, linkText, href }) => {
+			const { container } = render(
+				<div>{renderFamilyTreeCitationLine(line, "cite")}</div>,
+			);
+
+			expect(container.textContent).toBe(line);
+			expect(container.querySelectorAll("a")).toHaveLength(1);
+			expect(screen.getByRole("link", { name: linkText })).toHaveAttribute(
+				"href",
+				href,
+			);
+		},
+	);
+
+	it("keeps punctuation in a commentator name while unquoting verse numerals", () => {
+		render(
+			<div>{renderFamilyTreeCitationLine('רש"י בראשית י״א י״ח', "cite")}</div>,
+		);
+		const link = screen.getByRole("link", { name: 'רש"י בראשית יא יח' });
+		expect(link.getAttribute("href")).toContain("pasuk=18");
+	});
+
 	it("falls back to ordinary Tanach links when the special citation has no pasuk", () => {
 		const nodes = renderFamilyTreeCitationLine(
 			"\u05d4\u05db\u05ea\u05d1 \u05d5\u05d4\u05e7\u05d1\u05dc\u05d4: \u05d1\u05e8\u05d0\u05e9\u05d9\u05ea \u05dc\u05d1",

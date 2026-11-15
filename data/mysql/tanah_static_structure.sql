@@ -69,6 +69,10 @@ CREATE TABLE `tanah_perek` (
     `id` int NOT NULL,
     `perek` int DEFAULT NULL,
     `header` varchar(180) DEFAULT NULL,
+    -- Canonical number of pesukim in the perek (corpus-derived, filled by
+    -- tanah_perek_pasuk_count_data.sql and by regenerated tanah view data).
+    -- NULL until the counts data runs = bound unknown, not zero pesukim.
+    `pasuk_count` smallint DEFAULT NULL,
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */
@@ -136,7 +140,8 @@ SELECT p.id,
     pd.date,
     pd.hebdate,
     pd.star_rise AS tseit,
-    p.header
+    p.header,
+    p.pasuk_count
 FROM tanah_perek p
     JOIN tanah_sefer s ON p.id BETWEEN s.perek_id_from AND s.perek_id_to
     LEFT JOIN tanah_perek_date pd ON pd.perek_id = p.id

@@ -31,11 +31,6 @@ pub fn load(data_root: &Path) -> Result<Vec<PerekHeader>> {
     Ok(headers)
 }
 
-/// Extracts just the header strings in order (for MongoDB aggregation).
-pub fn to_header_strings(headers: &[PerekHeader]) -> Vec<String> {
-    headers.iter().map(|h| h.header.clone()).collect()
-}
-
 /// Converts headers to BSON array format for MongoDB aggregation.
 pub fn to_bson_array(headers: &[PerekHeader]) -> Bson {
     let bson_headers: Vec<Bson> = headers
@@ -60,28 +55,6 @@ mod tests {
         assert!(headers.len() <= 929, "Should not exceed 929 perek headers");
         assert_eq!(headers[0].header, "בריאת העולם");
         assert_eq!(headers[0].sefer, "בראשית");
-    }
-
-    #[test]
-    fn to_header_strings_preserves_order_and_values() {
-        let headers = vec![
-            PerekHeader {
-                id: 2,
-                sefer: "Book".to_string(),
-                perek: 2,
-                header: "Second".to_string(),
-                qualified: true,
-            },
-            PerekHeader {
-                id: 1,
-                sefer: "Book".to_string(),
-                perek: 1,
-                header: "First".to_string(),
-                qualified: false,
-            },
-        ];
-
-        assert_eq!(to_header_strings(&headers), vec!["Second", "First"]);
     }
 
     #[test]

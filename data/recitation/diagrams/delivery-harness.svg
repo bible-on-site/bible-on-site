@@ -1,0 +1,104 @@
+<?xml version="1.0" ?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+
+
+  <title id="title">Quality has a harness. Delivery has layers.</title>
+  <desc id="desc">Accepted timing data reaches both readers through repeatable builds and verification of the actual release.</desc>
+
+
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1">
+      <stop stop-color="#081322"/>
+      <stop offset="1" stop-color="#14263b"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop stop-color="#7957db" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#7957db" stop-opacity="0"/>
+    </radialGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10" fill="#7892b5"/>
+    </marker>
+  </defs>
+
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <ellipse cx="920" cy="300" rx="690" ry="480" fill="url(#glow)"/>
+
+
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <text x="48" y="52" fill="#7ad4e8" font-size="15" font-weight="700">TANAH / RECITATION ENGINEERING</text>
+    <text x="48" y="108" fill="#f6f9ff" font-size="42" font-weight="700">Quality has a harness. Delivery has layers.</text>
+    <text x="48" y="148" fill="#b0c2db" font-size="20" font-weight="400">Accepted timing data reaches both readers through repeatable builds and verification of the actual release.</text>
+    <rect x="48" y="188" width="466" height="314" rx="20" fill="#13283b" stroke="#396084"/>
+    <rect x="540" y="188" width="504" height="314" rx="20" fill="#23213a" stroke="#66518a"/>
+    <rect x="1070" y="188" width="482" height="314" rx="20" fill="#112e2d" stroke="#348e83"/>
+    <g transform="translate(72 210)" fill="none" stroke="#72c8ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 10L3 28l14 18 M39 10l14 18-14 18 M32 8l-9 40"/>
+    </g>
+    <text x="145" y="240" fill="#72c8ff" font-size="19" font-weight="700">PROCESS + INVARIANTS</text>
+    <text x="73" y="300" fill="#a9bad2" font-size="18" font-weight="400">Python unittest</text>
+    <text x="73" y="332" fill="#a9bad2" font-size="18" font-weight="400">Pinned-model numerical regression tests</text>
+    <text x="73" y="364" fill="#a9bad2" font-size="18" font-weight="400">Source identity and complete word coverage</text>
+    <text x="73" y="396" fill="#a9bad2" font-size="18" font-weight="400">Sefaria / Python merge agreement</text>
+    <text x="73" y="428" fill="#a9bad2" font-size="18" font-weight="400">Repeatable SQLite → canonical JSON export</text>
+    <rect x="73" y="457" width="265" height="32" rx="16" fill="#101d30" stroke="#72c8ff"/>
+    <text x="87" y="479" fill="#72c8ff" font-size="14" font-weight="600">Real RustFS S3 integration</text>
+    <g transform="translate(564 210)" fill="none" stroke="#c4a0ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M28 3l22 8v17c0 14-22 26-22 26S6 42 6 28V11z M17 27l8 8 15-17"/>
+    </g>
+    <text x="639" y="240" fill="#c4a0ff" font-size="19" font-weight="700">CI / TEST HARNESS</text>
+    <text x="564" y="300" fill="#a9bad2" font-size="18" font-weight="400">GitHub Actions</text>
+    <text x="564" y="332" fill="#a9bad2" font-size="18" font-weight="400">Jest + React component tests</text>
+    <text x="564" y="364" fill="#a9bad2" font-size="18" font-weight="400">Playwright: real decoding + browser layout</text>
+    <text x="564" y="396" fill="#a9bad2" font-size="18" font-weight="400">xUnit: native timeline + qri/ktiv rendering</text>
+    <text x="564" y="428" fill="#a9bad2" font-size="18" font-weight="400">Docker image API / exact accepted payload</text>
+    <rect x="564" y="457" width="267" height="32" rx="16" fill="#101d30" stroke="#c4a0ff"/>
+    <text x="578" y="479" fill="#c4a0ff" font-size="14" font-weight="600">RustFS: CORS / hash / HTTP 206</text>
+    <g transform="translate(1094 210)" fill="none" stroke="#7ce7bb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="28" cy="10" rx="23" ry="8"/>
+      <path d="M5 10v32c0 10 46 10 46 0V10 M5 26c0 10 46 10 46 0"/>
+    </g>
+    <text x="1166" y="240" fill="#7ce7bb" font-size="19" font-weight="700">IMMUTABLE DELIVERY</text>
+    <text x="1094" y="300" fill="#a9bad2" font-size="18" font-weight="400">Versioned release commit</text>
+    <text x="1094" y="332" fill="#a9bad2" font-size="18" font-weight="400">Website image → AWS ECR → running site</text>
+    <text x="1094" y="364" fill="#a9bad2" font-size="18" font-weight="400">CD checks API word rows + source MP3s</text>
+    <text x="1094" y="396" fill="#a9bad2" font-size="18" font-weight="400">Separate native recitation extension</text>
+    <text x="1094" y="428" fill="#a9bad2" font-size="18" font-weight="400">Users retain all or selected books offline</text>
+    <rect x="1094" y="457" width="222" height="32" rx="16" fill="#101d30" stroke="#7ce7bb"/>
+    <text x="1108" y="479" fill="#7ce7bb" font-size="14" font-weight="600">Independent of perushim</text>
+    <path d="M514 348L540 348" stroke="#7892b5" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+    <path d="M1044 348L1070 348" stroke="#7892b5" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+    <rect x="48" y="531" width="996" height="175" rx="20" fill="#15283c" stroke="#53728d"/>
+    <g transform="translate(73 553)" fill="none" stroke="#82cee8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="11" y="2" width="34" height="52" rx="8"/>
+      <path d="M22 8h12 M25 47h6"/>
+    </g>
+    <text x="149" y="584" fill="#82cee8" font-size="19" font-weight="700">ON-DEVICE QA, WITHOUT BORROWING THE ALIGNMENT GPU</text>
+    <text x="149" y="622" fill="#a9bad2" font-size="17" font-weight="400">Android API 35 · Google Emulator 37.2.12 · software SwiftShader rendering</text>
+    <text x="149" y="649" fill="#a9bad2" font-size="17" font-weight="400">Isolated ADB server / dedicated QA device; installed app gestures and PCM checked</text>
+    <text x="149" y="676" fill="#a9bad2" font-size="17" font-weight="400">Screenshots verify moving word backgrounds, pause stability and unchanged text</text>
+    <rect x="1070" y="531" width="482" height="175" rx="20" fill="#112e2d" stroke="#348e83"/>
+    <g transform="translate(1096 553)" fill="none" stroke="#7ce7bb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="7" width="52" height="42" rx="7"/>
+      <path d="M2 19h52 M10 13h1 M18 13h1 M26 13h1"/>
+    </g>
+    <text x="1170" y="582" fill="#7ce7bb" font-size="20" font-weight="700">TWO READERS</text>
+    <text x="1096" y="631" fill="#a9bad2" font-size="18" font-weight="400">Website: Next.js / React / Web Audio</text>
+    <text x="1096" y="662" fill="#a9bad2" font-size="18" font-weight="400">App: .NET MAUI / native MediaElement</text>
+    <rect x="48" y="736" width="1504" height="132" rx="20" fill="#0a192a" stroke="#3c5674"/>
+    <text x="74" y="772" fill="#b0cdeb" font-size="17" font-weight="700">THE LAST MILE: A WORD LIGHTS UP WHEN THE AUDIO CLOCK ENTERS ITS APPROVED INTERVAL</text>
+    <rect x="74" y="794" width="281" height="46" rx="12" fill="#15263d" stroke="#72c8ff"/>
+    <text x="89" y="823" fill="#72c8ff" font-size="17" font-weight="600">Verified MP3 / exact PCM</text>
+    <rect x="394" y="794" width="252" height="46" rx="12" fill="#15263d" stroke="#c4a0ff"/>
+    <text x="409" y="823" fill="#c4a0ff" font-size="17" font-weight="600">Actual playback clock</text>
+    <rect x="683" y="794" width="282" height="46" rx="12" fill="#15263d" stroke="#7ce7bb"/>
+    <text x="698" y="823" fill="#7ce7bb" font-size="17" font-weight="600">Canonical word lookup</text>
+    <rect x="1002" y="794" width="270" height="46" rx="12" fill="#15263d" stroke="#f7cf80"/>
+    <text x="1017" y="823" fill="#f7cf80" font-size="17" font-weight="600">Existing hover colors</text>
+    <path d="M355 817L394 817" stroke="#7892b5" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+    <path d="M646 817L683 817" stroke="#7892b5" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+    <path d="M965 817L1002 817" stroke="#7892b5" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+    <text x="1300" y="810" fill="#bfd0e5" font-size="16" font-weight="600">Pause holds.</text>
+    <text x="1300" y="836" fill="#bfd0e5" font-size="16" font-weight="600">Silence clears.</text>
+  </g>
+</svg>

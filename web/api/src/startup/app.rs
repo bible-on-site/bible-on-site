@@ -2,7 +2,7 @@ use std::{
     env, io,
     net::TcpListener,
     sync::{
-        Arc,
+        Arc, LazyLock,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -15,7 +15,9 @@ use serde::Serialize;
 use tracing_actix_web::TracingLogger;
 
 use crate::providers::Database;
+use crate::services::article_search::{self, ArticleSearchIndex};
 
+use super::profile::Profile;
 use super::schema_builder::{build_schema, graphql_playground, graphql_request};
 use tokio::time::Duration;
 
@@ -26,33 +28,39 @@ pub struct ActixApp {
 
 impl ActixApp {
     pub async fn new() -> Result<Self, Error> {
-        let profile: String = env::var("PROFILE").unwrap_or_else(|_| "prod".to_string());
-        let env_file_name = if profile == "prod" {
-            ".env".to_string()
-        } else {
-            format!(".{}.env", profile)
-        };
-        if let Err(e) = dotenvy::from_filename_override(env_file_name.clone()) {
-            tracing::warn!("Failed to load {} file: {}", env_file_name, e);
-            tracing::warn!("Using default environment variables");
-        }
+        // Resolve the environment once: env-file selection and the dev-tooling
+        // route policy share one explicit profile so they cannot diverge.
+        let profile = Profile::resolve();
+        // Explicit launch configuration (CI, containers, local DB overrides) takes precedence.
+        profile.load_env_file();
 
         let host = env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
         let port = env::var("PORT")
             .unwrap_or_else(|_| "3003".to_string())
             .parse::<u16>()
             .unwrap_or(3003);
-        let listener = TcpListener::bind(format!("{}:{}", &host, &port))?;
+        let listener = TcpListener::bind(format!("{}:{}", host, port))?;
         let port = listener.local_addr().unwrap().port();
         let db: Database = Database::new().await?;
+        // Derived article-search index: loads its persisted snapshot, then a
+        // background worker keeps it in sync with tanah_article via the queue
+        // table and periodic hash reconcile.
+        let article_index = ArticleSearchIndex::new(db.clone());
+        tokio::spawn(article_search::run_worker(article_index.clone()));
         let shutdown_signal = Arc::new(AtomicBool::new(false));
         let server = HttpServer::new({
             let shutdown_signal = shutdown_signal.clone();
+            let article_index = article_index.clone();
             move || {
                 App::new()
                     .wrap(Compress::default())
                     .wrap(TracingLogger::default())
-                    .configure(Self::build_app_config(&db, shutdown_signal.clone()))
+                    .configure(Self::build_app_config(
+                        &db,
+                        &article_index,
+                        shutdown_signal.clone(),
+                        &profile,
+                    ))
             }
         })
         .listen_auto_h2c(listener)?
@@ -80,27 +88,49 @@ impl ActixApp {
         self.server.await
     }
 
+    /// `profile` is the single resolved environment: development tooling is
+    /// registered only when it explicitly allows it, so production and any
+    /// unrecognized configuration expose nothing extra.
     pub fn build_app_config(
         db: &Database,
+        article_index: &ArticleSearchIndex,
         shutdown_signal: Arc<AtomicBool>,
+        profile: &Profile,
     ) -> impl Fn(&mut web::ServiceConfig) {
         let db = db.clone();
+        let article_index = article_index.clone();
+        let dev_tools = profile.dev_tools_enabled();
         move |cfg: &mut web::ServiceConfig| {
-            cfg.app_data(web::Data::new(build_schema(&db)))
+            // Keep unmatched requests on a uniform non-disclosing 404:
+            // actix-web's built-in default answers 405 + Allow when a path
+            // matches but its method guard rejects, which would reveal that
+            // a resource exists at the path (e.g. POST-only GraphQL root).
+            cfg.default_service(web::to(|| async { HttpResponse::NotFound().finish() }))
+                .app_data(web::Data::new(build_schema(&db, &article_index)))
+                .app_data(web::Data::new(article_index.clone()))
                 .service(web::resource("/").guard(guard::Post()).to(graphql_request))
                 .service(
+                    web::resource("/health")
+                        .guard(guard::Any(guard::Get()).or(guard::Head()))
+                        .to(health_check),
+                )
+                .service(
+                    web::resource("/health/ready")
+                        .guard(guard::Any(guard::Get()).or(guard::Head()))
+                        .to(readiness_check),
+                );
+
+            // Development tooling exists only for an explicit dev/test
+            // profile. Without the GET "/" resource the root stays a POST-only
+            // GraphQL endpoint, and the shutdown control route stays
+            // unregistered — both yield the same non-disclosing 404.
+            if dev_tools {
+                cfg.service(
                     web::resource("/")
                         .guard(guard::Get())
                         .to(graphql_playground),
                 )
-                .service(
-                    web::resource("/health")
-                        .guard(guard::Get())
-                        .to(health_check),
-                );
-
-            if env::var("PROFILE").unwrap_or_default() != "prod" {
-                cfg.service(web::resource("/api/shutdown").guard(guard::Post()).to({
+                .service(web::resource("/api/shutdown").guard(guard::Post()).to({
                     let shutdown_signal = shutdown_signal.clone();
                     move || {
                         let shutdown_signal = shutdown_signal.clone();
@@ -125,13 +155,36 @@ struct HealthResponse {
     version: &'static str,
 }
 
-/// GET /health — returns API status and version (embedded at compile time).
+// An opaque process marker lets deployment checks distinguish old and new
+// instances of the same release without exposing AWS metadata or changing JSON.
+const HEALTH_INSTANCE_HEADER: &str = "x-tanahpedia-instance";
+static HEALTH_INSTANCE: LazyLock<String> = LazyLock::new(|| uuid::Uuid::new_v4().to_string());
+
+/// GET/HEAD /health — returns API status and version (embedded at compile time).
 /// Used by ECS health checks and for version introspection.
 async fn health_check() -> HttpResponse {
-    HttpResponse::Ok().json(HealthResponse {
-        status: "ok",
-        version: env!("CARGO_PKG_VERSION"),
-    })
+    HttpResponse::Ok()
+        .insert_header((HEALTH_INSTANCE_HEADER, HEALTH_INSTANCE.as_str()))
+        .json(HealthResponse {
+            status: "ok",
+            version: env!("CARGO_PKG_VERSION"),
+        })
+}
+
+/// Dependency readiness is separate from the stable liveness/version contract.
+async fn readiness_check(index: web::Data<ArticleSearchIndex>) -> HttpResponse {
+    let ready = index.is_ready().await;
+    let mut response = if ready {
+        HttpResponse::Ok()
+    } else {
+        HttpResponse::ServiceUnavailable()
+    };
+    response
+        .insert_header((HEALTH_INSTANCE_HEADER, HEALTH_INSTANCE.as_str()))
+        .json(HealthResponse {
+            status: if ready { "ready" } else { "not_ready" },
+            version: env!("CARGO_PKG_VERSION"),
+        })
 }
 
 #[cfg(test)]
@@ -140,7 +193,7 @@ mod tests {
     use actix_web::{
         App,
         body::to_bytes,
-        http::{StatusCode, header},
+        http::{Method, StatusCode, header},
         test,
     };
     use sea_orm::{DatabaseBackend, MockDatabase};
@@ -153,6 +206,185 @@ mod tests {
                 )
                 .into_connection(),
         )
+    }
+
+    /// Explicit non-production profile — preserves the test-harness contract
+    /// (dev tooling registered) without touching process env.
+    fn test_profile() -> Profile {
+        Profile::from_name(Some("test"))
+    }
+
+    #[actix_web::test]
+    async fn readiness_route_requires_initialized_live_worker_and_preserves_liveness() {
+        use crate::services::article_search::{lsa, store};
+        use sea_orm::{MockExecResult, Value};
+        use std::collections::BTreeMap;
+        let model = lsa::LsaModel::train(Vec::new(), Vec::new(), &[]);
+        let row = |pairs: Vec<(&str, Value)>| -> BTreeMap<String, Value> {
+            pairs
+                .into_iter()
+                .map(|(key, value)| (key.to_owned(), value))
+                .collect()
+        };
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_exec_results(vec![
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1
+                    };
+                    3
+                ])
+                .append_query_results([
+                    vec![row(vec![
+                        ("schema_version", store::SCHEMA_VERSION.into()),
+                        ("model_epoch", 1_i32.into()),
+                        ("doc_count", 0_i32.into()),
+                        ("model", lsa::serialize_model(&model).into()),
+                    ])],
+                    vec![],
+                    vec![row(vec![("ready", 1_i32.into())])],
+                    vec![row(vec![("ready", 1_i32.into())])],
+                ])
+                .into_connection(),
+        );
+        let index = ArticleSearchIndex::new(db.clone());
+        let app = test::init_service(App::new().configure(ActixApp::build_app_config(
+            &db,
+            &index,
+            Arc::new(AtomicBool::new(false)),
+            &test_profile(),
+        )))
+        .await;
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get().uri("/health/ready").to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let body = to_bytes(response.into_body())
+            .await
+            .expect("readiness body");
+        assert_eq!(
+            std::str::from_utf8(&body).expect("UTF8"),
+            format!(
+                r#"{{"status":"not_ready","version":"{}"}}"#,
+                env!("CARGO_PKG_VERSION")
+            )
+        );
+        let worker = tokio::spawn(article_search::run_worker(index));
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
+        for method in [Method::GET, Method::HEAD] {
+            let response = test::call_service(
+                &app,
+                test::TestRequest::default()
+                    .method(method)
+                    .uri("/health/ready")
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(
+                response.headers().get(HEALTH_INSTANCE_HEADER).unwrap(),
+                HEALTH_INSTANCE.as_str()
+            );
+        }
+        for method in [
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+            Method::TRACE,
+            Method::CONNECT,
+        ] {
+            let response = test::call_service(
+                &app,
+                test::TestRequest::default()
+                    .method(method)
+                    .uri("/health/ready")
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        }
+        worker.abort();
+        let _ = worker.await;
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get().uri("/health/ready").to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let response =
+            test::call_service(&app, test::TestRequest::get().uri("/health").to_request()).await;
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[actix_web::test]
+    async fn health_routes_identify_the_same_process_without_changing_json() {
+        let db = mock_database();
+        let article_index = ArticleSearchIndex::new(db.clone());
+        let app = test::init_service(App::new().configure(ActixApp::build_app_config(
+            &db,
+            &article_index,
+            Arc::new(AtomicBool::new(false)),
+            &test_profile(),
+        )))
+        .await;
+        let mut instance = None;
+        for (method, path, expected) in [
+            (Method::GET, "/health", StatusCode::OK),
+            (Method::HEAD, "/health", StatusCode::OK),
+            (
+                Method::GET,
+                "/health/ready",
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
+            (
+                Method::HEAD,
+                "/health/ready",
+                StatusCode::SERVICE_UNAVAILABLE,
+            ),
+        ] {
+            let response = test::call_service(
+                &app,
+                test::TestRequest::default()
+                    .method(method.clone())
+                    .uri(path)
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), expected);
+            let value = response
+                .headers()
+                .get("x-tanahpedia-instance")
+                .expect("health routing must identify the serving process")
+                .to_str()
+                .expect("instance identifier is ASCII")
+                .to_owned();
+            assert_eq!(uuid::Uuid::parse_str(&value).unwrap().get_version_num(), 4);
+            assert_eq!(value.len(), 36);
+            if let Some(ref previous) = instance {
+                assert_eq!(&value, previous);
+            } else {
+                instance = Some(value);
+            }
+            if method == Method::GET {
+                let body = to_bytes(response.into_body()).await.unwrap();
+                let status = if path == "/health" { "ok" } else { "not_ready" };
+                assert_eq!(
+                    std::str::from_utf8(&body).unwrap(),
+                    format!(
+                        r#"{{"status":"{}","version":"{}"}}"#,
+                        status,
+                        env!("CARGO_PKG_VERSION")
+                    )
+                );
+            }
+        }
     }
 
     #[actix_web::test]
@@ -169,38 +401,273 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn build_app_config_wires_health_playground_and_graphql_post() {
+    async fn health_route_accepts_head_and_rejects_other_methods() {
         let db = mock_database();
-        let shutdown_signal = Arc::new(AtomicBool::new(false));
-        let app = test::init_service(
-            App::new().configure(ActixApp::build_app_config(&db, shutdown_signal)),
-        )
+        let article_index = ArticleSearchIndex::new(db.clone());
+        let app = test::init_service(App::new().configure(ActixApp::build_app_config(
+            &db,
+            &article_index,
+            Arc::new(AtomicBool::new(false)),
+            &test_profile(),
+        )))
         .await;
 
-        let health_response =
-            test::call_service(&app, test::TestRequest::get().uri("/health").to_request()).await;
-        assert_eq!(health_response.status(), StatusCode::OK);
-
-        let playground_response =
-            test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
-        assert_eq!(playground_response.status(), StatusCode::OK);
-        assert_eq!(
-            playground_response
-                .headers()
-                .get(header::CONTENT_TYPE)
-                .and_then(|value| value.to_str().ok()),
-            Some("text/html; charset=utf-8")
-        );
-
-        let graphql_response = test::call_service(
+        let response = test::call_service(
             &app,
-            test::TestRequest::post()
-                .uri("/")
-                .insert_header((header::CONTENT_TYPE, "application/json"))
-                .set_payload(r#"{"query":"{ __typename }"}"#)
+            test::TestRequest::default()
+                .method(Method::HEAD)
+                .uri("/health")
                 .to_request(),
         )
         .await;
-        assert_eq!(graphql_response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(header::CONTENT_TYPE).unwrap(),
+            "application/json"
+        );
+
+        for method in [
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+            Method::TRACE,
+            Method::CONNECT,
+        ] {
+            let response = test::call_service(
+                &app,
+                test::TestRequest::default()
+                    .method(method.clone())
+                    .uri("/health")
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method}");
+        }
+    }
+
+    #[actix_web::test]
+    async fn health_head_has_no_body_over_http() {
+        let db = mock_database();
+        let article_index = ArticleSearchIndex::new(db.clone());
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind health test listener");
+        let address = listener.local_addr().expect("health test address");
+        let server = HttpServer::new(move || {
+            App::new().configure(ActixApp::build_app_config(
+                &db,
+                &article_index,
+                Arc::new(AtomicBool::new(false)),
+                &test_profile(),
+            ))
+        })
+        .workers(1)
+        .disable_signals()
+        .listen(listener)
+        .expect("listen for health test")
+        .run();
+        let handle = server.handle();
+        let server_task = actix_web::rt::spawn(server);
+        let response = tokio::task::spawn_blocking(move || {
+            use std::io::{Read, Write};
+
+            let timeout = Duration::from_secs(5);
+            let mut stream = std::net::TcpStream::connect_timeout(&address, timeout)?;
+            stream.set_read_timeout(Some(timeout))?;
+            stream.set_write_timeout(Some(timeout))?;
+            stream.write_all(
+                b"HEAD /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+            )?;
+            let mut response = String::new();
+            stream.read_to_string(&mut response)?;
+            Ok::<_, io::Error>(response)
+        })
+        .await;
+        handle.stop(true).await;
+        server_task
+            .await
+            .expect("health server task")
+            .expect("health server");
+        let response = response
+            .expect("health client task")
+            .expect("health request");
+        let (headers, body) = response.split_once("\r\n\r\n").expect("HTTP response");
+        assert!(headers.starts_with("HTTP/1.1 200 OK"));
+        assert!(
+            headers
+                .to_ascii_lowercase()
+                .contains("content-type: application/json")
+        );
+        assert!(body.is_empty(), "HEAD must not send the GET response body");
+    }
+
+    /// Explicit prod, missing, blank and unrecognized configuration all take
+    /// the production posture: no IDE at the root GET route (or through a
+    /// query string, Accept header, HEAD request or alias) and no shutdown
+    /// control route — while the public POST read and health checks stay up.
+    #[actix_web::test]
+    async fn production_posture_hides_dev_tooling_but_keeps_public_routes() {
+        for profile_name in [
+            None,
+            Some(""),
+            Some("   "),
+            Some("prod"),
+            Some("production"),
+            Some("staging"),
+            Some("PROD"),
+        ] {
+            let db = mock_database();
+            let article_index = ArticleSearchIndex::new(db.clone());
+            let app = test::init_service(App::new().configure(ActixApp::build_app_config(
+                &db,
+                &article_index,
+                Arc::new(AtomicBool::new(false)),
+                &Profile::from_name(profile_name),
+            )))
+            .await;
+
+            for method in [Method::GET, Method::HEAD] {
+                let response = test::call_service(
+                    &app,
+                    test::TestRequest::default()
+                        .method(method.clone())
+                        .uri("/")
+                        .to_request(),
+                )
+                .await;
+                assert_eq!(
+                    response.status(),
+                    StatusCode::NOT_FOUND,
+                    "{method} / for PROFILE={profile_name:?}"
+                );
+            }
+            for uri in ["/?playground", "/playground", "/graphql"] {
+                let response = test::call_service(
+                    &app,
+                    test::TestRequest::get()
+                        .uri(uri)
+                        .insert_header((header::ACCEPT, "text/html"))
+                        .to_request(),
+                )
+                .await;
+                assert_eq!(
+                    response.status(),
+                    StatusCode::NOT_FOUND,
+                    "GET {uri} for PROFILE={profile_name:?}"
+                );
+            }
+            let response = test::call_service(
+                &app,
+                test::TestRequest::post().uri("/api/shutdown").to_request(),
+            )
+            .await;
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "POST /api/shutdown for PROFILE={profile_name:?}"
+            );
+
+            let graphql_response = test::call_service(
+                &app,
+                test::TestRequest::post()
+                    .uri("/")
+                    .insert_header((header::CONTENT_TYPE, "application/json"))
+                    .set_payload(r#"{"query":"{ __typename }"}"#)
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(
+                graphql_response.status(),
+                StatusCode::OK,
+                "POST / for PROFILE={profile_name:?}"
+            );
+            for method in [Method::GET, Method::HEAD] {
+                let response = test::call_service(
+                    &app,
+                    test::TestRequest::default()
+                        .method(method.clone())
+                        .uri("/health")
+                        .to_request(),
+                )
+                .await;
+                assert_eq!(
+                    response.status(),
+                    StatusCode::OK,
+                    "{method} /health for PROFILE={profile_name:?}"
+                );
+            }
+        }
+    }
+
+    /// Explicit dev/test profiles keep the local tooling: the Playground at
+    /// GET / and the shutdown control route used by the e2e harness (posted
+    /// to a signal flag not wired to a running server — no live shutdown).
+    #[actix_web::test]
+    async fn dev_profiles_serve_playground_and_shutdown_route() {
+        for profile_name in ["dev", "test"] {
+            let db = mock_database();
+            let article_index = ArticleSearchIndex::new(db.clone());
+            let app = test::init_service(App::new().configure(ActixApp::build_app_config(
+                &db,
+                &article_index,
+                Arc::new(AtomicBool::new(false)),
+                &Profile::from_name(Some(profile_name)),
+            )))
+            .await;
+
+            let playground_response =
+                test::call_service(&app, test::TestRequest::get().uri("/").to_request()).await;
+            assert_eq!(
+                playground_response.status(),
+                StatusCode::OK,
+                "GET / for PROFILE={profile_name}"
+            );
+            assert_eq!(
+                playground_response
+                    .headers()
+                    .get(header::CONTENT_TYPE)
+                    .and_then(|value| value.to_str().ok()),
+                Some("text/html; charset=utf-8")
+            );
+            let body = to_bytes(playground_response.into_body())
+                .await
+                .expect("playground body");
+            assert!(
+                String::from_utf8_lossy(&body)
+                    .to_lowercase()
+                    .contains("graphql"),
+                "playground HTML must be served for PROFILE={profile_name}"
+            );
+
+            let response = test::call_service(
+                &app,
+                test::TestRequest::post().uri("/api/shutdown").to_request(),
+            )
+            .await;
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "POST /api/shutdown for PROFILE={profile_name}"
+            );
+
+            let graphql_response = test::call_service(
+                &app,
+                test::TestRequest::post()
+                    .uri("/")
+                    .insert_header((header::CONTENT_TYPE, "application/json"))
+                    .set_payload(r#"{"query":"{ __typename }"}"#)
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(
+                graphql_response.status(),
+                StatusCode::OK,
+                "POST / for PROFILE={profile_name}"
+            );
+            let health_response =
+                test::call_service(&app, test::TestRequest::get().uri("/health").to_request())
+                    .await;
+            assert_eq!(health_response.status(), StatusCode::OK);
+        }
     }
 }

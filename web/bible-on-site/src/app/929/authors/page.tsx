@@ -4,6 +4,7 @@ import Link from "next/link";
 import { query } from "../../../lib/api-client";
 import { authorNameToSlug, getAuthorImageUrl } from "../../../lib/authors";
 import { buildAuthorsListGraph } from "../../../lib/seo/core-jsonld";
+import { pageMetadata } from "../../../lib/seo/opengraph";
 import { JsonLd } from "../../components/JsonLd";
 import styles from "./page.module.css";
 
@@ -28,7 +29,7 @@ async function getAllAuthors(): Promise<AuthorSummary[]> {
 		const rows = await query<AuthorRow>(
 			`SELECT a.id, a.name, a.details
 			 FROM tanah_author a
-			 WHERE EXISTS (SELECT 1 FROM tanah_article art WHERE art.author_id = a.id)
+			 WHERE EXISTS (SELECT 1 FROM tanah_article art WHERE art.author_id = a.id AND art.perek_id BETWEEN 1 AND 929)
 			 ORDER BY a.name ASC`,
 		);
 
@@ -43,7 +44,8 @@ async function getAllAuthors(): Promise<AuthorSummary[]> {
 			"Failed to fetch authors:",
 			error instanceof Error ? error.message : error,
 		);
-		return [];
+		// A database failure must not become an indefinitely cached empty page.
+		throw error;
 	}
 }
 
@@ -59,10 +61,11 @@ const getCachedAuthors = unstable_cache(
 	},
 );
 
-export const metadata = {
+export const metadata = pageMetadata({
 	title: 'הרבנים | תנ"ך באתר',
 	description: 'רשימת הרבנים וכותבי המאמרים באתר תנ"ך על הפרק',
-};
+	canonical: "/929/authors",
+});
 
 export default async function AuthorsPage() {
 	const authors = await getCachedAuthors();

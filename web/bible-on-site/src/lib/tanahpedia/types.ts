@@ -1,3 +1,5 @@
+import type { ReadingMetric } from "../reading-metrics";
+
 export type EntityType =
 	| "PERSON"
 	| "PLACE"
@@ -35,6 +37,11 @@ export interface Entry {
 	content: string | null;
 	createdAt: string;
 	updatedAt: string;
+	/**
+	 * Stored reading metric over the entry content (#2607). `null`/absent =
+	 * not computed; zeros = verified empty body.
+	 */
+	metric?: ReadingMetric | null;
 }
 
 export interface EntrySynonym {
@@ -359,6 +366,7 @@ export interface Saying {
 	id: string;
 	entityId: string;
 	content: string | null;
+	sayingDate: number | null;
 }
 
 export interface SayingLocation {

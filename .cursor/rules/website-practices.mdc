@@ -12,17 +12,17 @@ When asked to **inspire from legacy website** or reference the old website imple
 
 ## Development
 
-- Use Playwright at http://localhost:3001 (`npm run dev` if needed).
+- Use Playwright at http://localhost:3001 (`bun run dev` if needed).
 - **Prefer server components for content**: content-rich (text, articles, sections) → SSG/SSR only for SEO and AIO. Use client components only for interactive/glue (navigation, animation, scroll, menu). Keep client components minimal and isolated; content should remain server-rendered.
 
 ## Commands
 
 | Task | Command |
 | ---- | ------- |
-| Unit Tests | `npm run test:unit` |
-| E2E Tests | `npm run test:e2e` |
-| Unit Coverage | `npm run coverage:unit` |
-| E2E Coverage | `npm run coverage:e2e` |
+| Unit Tests | `bun run test:unit` |
+| E2E Tests | `bun run test:e2e` |
+| Unit Coverage | `bun run coverage:unit` |
+| E2E Coverage | `bun run coverage:e2e` |
 
 ## Implementation Notes
 
@@ -32,3 +32,4 @@ When asked to **inspire from legacy website** or reference the old website imple
 ## Styling Guidelines
 
 - **Do not mix font families**: Use `font-family: inherit` to maintain consistency with the website's global font. Avoid introducing custom fonts (like "Lora", "Roboto", etc.) in component styles.
+- **One feature per landing visual section** (#3267): each independent top-level landing-page feature owns a dedicated visual band with a distinct surface and a NON-SYMMETRIC artistic boundary (the site's multi-lobe wave language — never a symmetric dome) — semantic `<section>` tags alone do not count when the backgrounds still merge. Render the shared `SectionDivider` component at the shared edge and set `--divider-paint` to the neighbor's surface color. Full rule: `docs/practices/implementation.md` → web/bible-on-site → *Landing page visual sections*.

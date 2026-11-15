@@ -7,38 +7,61 @@ use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
 
 use crate::common::auth::ApiAuth;
 use crate::providers::Database;
+use crate::resolvers::article_relationships_resolver;
 use crate::resolvers::articles_resolver;
-use crate::resolvers::authors_resolver;
+use crate::resolvers::dedications_resolver;
+use crate::resolvers::moed_resolver;
 use crate::resolvers::perakim_resolver;
 use crate::resolvers::sefarim_resolver;
 use crate::resolvers::starter_resolver;
+use crate::resolvers::tanahpedia_aliases_resolver;
+use crate::resolvers::tanahpedia_entity_resolver;
+use crate::resolvers::tanahpedia_entries_resolver;
 use crate::resolvers::tanahpedia_family_resolver;
 use crate::resolvers::tanahpedia_revisions_resolver;
+use crate::services::article_search::ArticleSearchIndex;
 
 #[derive(MergedObject, Default)]
 pub struct QueryRoot(
+    article_relationships_resolver::ArticleRelationshipsQuery,
     articles_resolver::ArticlesQuery,
-    authors_resolver::AuthorsQuery,
+    dedications_resolver::DedicationsQuery,
+    moed_resolver::MoedQuery,
     perakim_resolver::PerakimQuery,
     sefarim_resolver::SefarimQuery,
     starter_resolver::StarterQuery,
+    tanahpedia_aliases_resolver::TanahpediaAliasesQuery,
+    tanahpedia_entries_resolver::TanahpediaEntriesQuery,
+    tanahpedia_entity_resolver::TanahpediaEntityQuery,
     tanahpedia_family_resolver::TanahpediaFamilyQuery,
     tanahpedia_revisions_resolver::TanahpediaRevisionsQuery,
 );
 
 #[derive(MergedObject, Default)]
 pub struct MutationRoot(
+    article_relationships_resolver::ArticleRelationshipsMutation,
+    dedications_resolver::DedicationsMutation,
+    moed_resolver::MoedMutation,
+    tanahpedia_aliases_resolver::TanahpediaAliasesMutation,
     tanahpedia_family_resolver::TanahpediaFamilyMutation,
     tanahpedia_revisions_resolver::TanahpediaRevisionsMutation,
 );
 
-pub fn build_schema(database: &Database) -> Schema<QueryRoot, MutationRoot, EmptySubscription> {
+pub fn build_schema(
+    database: &Database,
+    index: &ArticleSearchIndex,
+) -> Schema<QueryRoot, MutationRoot, EmptySubscription> {
+    // Introspection policy: `__schema`/`__type` stay enabled. The schema is
+    // public source in this repository and anonymous POST reads are already
+    // permitted, so disabling it would add no protection; access control
+    // stays on mutations via `ApiAuth`.
     Schema::build(
         QueryRoot::default(),
         MutationRoot::default(),
         EmptySubscription,
     )
     .data(database.to_owned())
+    .data(index.to_owned())
     .finish()
 }
 
@@ -61,6 +84,9 @@ pub async fn graphql_request(
     schema.execute(gql_req.into_inner().data(auth)).await.into()
 }
 
+/// Development tooling only — `build_app_config` registers this route
+/// exclusively for explicit dev/test profiles; production leaves GET /
+/// unregistered so the root stays a POST-only GraphQL endpoint.
 pub async fn graphql_playground() -> Result<HttpResponse> {
     let source = playground_source(GraphQLPlaygroundConfig::new("/"));
     Ok(HttpResponse::Ok()
@@ -72,7 +98,7 @@ pub async fn graphql_playground() -> Result<HttpResponse> {
 mod tests {
     use super::*;
     use async_graphql::Request;
-    use sea_orm::{DatabaseBackend, MockDatabase, MockExecResult, Value};
+    use sea_orm::{DatabaseBackend, DbErr, MockDatabase, MockExecResult, Value};
     use std::collections::BTreeMap;
 
     fn article_model(id: i32, perek_id: i16, author_id: i16) -> entities::article::Model {
@@ -84,6 +110,7 @@ mod tests {
             name: format!("Article {id}"),
             priority: id as i8,
             content: Some(format!("content-{id}")),
+            coverage_verified: false,
         }
     }
 
@@ -93,6 +120,22 @@ mod tests {
             name: format!("Author {id}"),
             details: format!("Details {id}"),
         }
+    }
+
+    /// Raw row shape of `articles_service::ArticleSummary` (starter query never selects `content`).
+    fn article_summary_row(id: i32, perek_id: i16, author_id: i16) -> BTreeMap<String, Value> {
+        mock_row([
+            ("id", id.into()),
+            ("perek_id", perek_id.into()),
+            ("author_id", author_id.into()),
+            (
+                "article_abstract",
+                Value::String(Some(format!("abstract-{id}"))),
+            ),
+            ("name", format!("Article {id}").into()),
+            ("priority", Value::TinyInt(Some(1))),
+            ("coverage_verified", Value::Bool(Some(false))),
+        ])
     }
 
     fn perek_model(id: i32, perek_id: i32, sefer_id: i32) -> entities::perek::Model {
@@ -109,6 +152,7 @@ mod tests {
             hebdate: None,
             tseit: None,
             header: Some("Header".to_string()),
+            pasuk_count: Some(31),
         }
     }
 
@@ -129,6 +173,7 @@ mod tests {
             source: "gpt-test".to_string(),
             notes: Some("review note".to_string()),
             status: "PENDING".to_string(),
+            base_revision_id: None,
             created_at: now,
             updated_at: now,
         }
@@ -143,6 +188,21 @@ mod tests {
             .collect()
     }
 
+    fn article_metric_model(id: i32) -> entities::tanah_article_metric::Model {
+        entities::tanah_article_metric::Model {
+            article_id: id,
+            word_count: Some(500),
+            estimated_seconds: Some(137),
+            words_per_minute: 220,
+            calc_version: 1,
+            source_hash: "c".repeat(64),
+            computed_at: chrono::NaiveDate::from_ymd_opt(2026, 7, 19)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+        }
+    }
+
     #[tokio::test]
     async fn schema_executes_article_resolver_queries() {
         let db = Database::from_connection(
@@ -150,57 +210,418 @@ mod tests {
                 .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
                     [vec![article_model(7, 42, 3)]],
                 )
+                // articleById metric attach
+                .append_query_results::<
+                    entities::tanah_article_metric::Model,
+                    Vec<entities::tanah_article_metric::Model>,
+                    _,
+                >([vec![article_metric_model(7)]])
+                // articleById progressUnits
+                .append_query_results::<
+                    entities::tanah_article_metric_block::Model,
+                    Vec<entities::tanah_article_metric_block::Model>,
+                    _,
+                >([vec![
+                    entities::tanah_article_metric_block::Model {
+                        article_id: 7,
+                        block_idx: 0,
+                        word_count: 200,
+                        cumulative_words: 200,
+                        calc_version: 1,
+                    },
+                    entities::tanah_article_metric_block::Model {
+                        article_id: 7,
+                        block_idx: 1,
+                        word_count: 300,
+                        cumulative_words: 500,
+                        calc_version: 1,
+                    },
+                ]])
                 .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
                     [vec![article_model(8, 42, 3), article_model(9, 42, 4)]],
                 )
+                // articlesByPerekId metric attach
+                .append_query_results::<
+                    entities::tanah_article_metric::Model,
+                    Vec<entities::tanah_article_metric::Model>,
+                    _,
+                >([vec![article_metric_model(9)]])
                 .into_connection(),
         );
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let by_id = schema
             .execute(Request::new(
-                "{ articleById(id: 7) { id perekId authorId name articleContent } }",
+                "{ articleById(id: 7) { id perekId authorId name articleContent readingMetric { wordCount estimatedSeconds wordsPerMinute calcVersion sourceHash } progressUnits { key wordCount cumulativeWords } } }",
             ))
             .await;
         assert!(by_id.errors.is_empty(), "{:?}", by_id.errors);
         let by_id_json = by_id.data.into_json().unwrap();
         assert_eq!(by_id_json["articleById"]["id"], 7);
         assert_eq!(by_id_json["articleById"]["articleContent"], "content-7");
+        let metric = &by_id_json["articleById"]["readingMetric"];
+        assert_eq!(metric["wordCount"], 500);
+        assert_eq!(metric["estimatedSeconds"], 137);
+        assert_eq!(metric["wordsPerMinute"], 220);
+        assert_eq!(metric["calcVersion"], 1);
+        let units = by_id_json["articleById"]["progressUnits"]
+            .as_array()
+            .unwrap();
+        assert_eq!(units.len(), 2);
+        assert_eq!(units[0]["key"], "0");
+        assert_eq!(units[1]["cumulativeWords"], 500);
 
         let by_perek = schema
             .execute(Request::new(
-                "{ articlesByPerekId(perekId: 42) { id authorId name } }",
+                "{ articlesByPerekId(perekId: 42) { id authorId name readingMetric { wordCount } } }",
             ))
             .await;
         assert!(by_perek.errors.is_empty(), "{:?}", by_perek.errors);
         let by_perek_json = by_perek.data.into_json().unwrap();
         assert_eq!(by_perek_json["articlesByPerekId"][0]["id"], 8);
         assert_eq!(by_perek_json["articlesByPerekId"][1]["authorId"], 4);
+        // Only article 9 has a metric row in the mock; article 8 degrades to null.
+        assert!(by_perek_json["articlesByPerekId"][0]["readingMetric"].is_null());
+        assert_eq!(
+            by_perek_json["articlesByPerekId"][1]["readingMetric"]["wordCount"],
+            500
+        );
+    }
+
+    #[tokio::test]
+    async fn article_queries_without_metrics_only_read_their_content() {
+        for query in [
+            "{ articleById(id: 7) { id name } }",
+            "{ articlesByPerekId(perekId: 42) { id name } }",
+            "{ articlesByAuthorId(authorId: 3) { id name } }",
+        ] {
+            // No optional-schema response is queued: any extra database read
+            // exhausts this mock and makes the GraphQL operation fail.
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<entities::article::Model, Vec<_>, _>([vec![
+                        article_model(7, 42, 3),
+                    ]])
+                    .into_connection(),
+            );
+            let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+            let response = schema.execute(Request::new(query)).await;
+            assert!(response.errors.is_empty(), "{query}: {:?}", response.errors);
+            let json = response.data.into_json().unwrap();
+            assert!(!json.is_null());
+        }
+    }
+
+    #[tokio::test]
+    async fn article_metric_selection_keeps_aliases_and_named_fragments() {
+        for query in [
+            "{ articleById(id: 7) { id ...MetricFields } } fragment MetricFields on Article { estimate: readingMetric { wordCount } }",
+            "{ articlesByAuthorId(authorId: 3) { id estimate: readingMetric { wordCount } } }",
+        ] {
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results::<entities::article::Model, Vec<_>, _>([vec![
+                        article_model(7, 42, 3),
+                    ]])
+                    .append_query_results::<entities::tanah_article_metric::Model, Vec<_>, _>([
+                        vec![article_metric_model(7)],
+                    ])
+                    .into_connection(),
+            );
+            let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+            let response = schema.execute(Request::new(query)).await;
+            assert!(response.errors.is_empty(), "{query}: {:?}", response.errors);
+            let json = response.data.into_json().unwrap();
+            let article = if query.contains("articlesByAuthorId") {
+                &json["articlesByAuthorId"][0]
+            } else {
+                &json["articleById"]
+            };
+            assert_eq!(article["estimate"]["wordCount"], 500);
+        }
+    }
+
+    #[tokio::test]
+    async fn search_hit_metrics_follow_nested_field_selection() {
+        use crate::services::article_search::{lsa, store};
+        for selected in [false, true] {
+            let model = lsa::LsaModel {
+                dims: 1,
+                vocab: vec!["alpha".into()],
+                index: [("alpha".into(), 0)].into_iter().collect(),
+                idf: vec![1.0],
+                basis: vec![1.0],
+            };
+            let mut mock = MockDatabase::new(DatabaseBackend::MySql).append_query_results([
+                vec![mock_row([
+                    ("schema_version", store::SCHEMA_VERSION.into()),
+                    ("model_epoch", 7_i32.into()),
+                    ("doc_count", 1_i32.into()),
+                    ("model", lsa::serialize_model(&model).into()),
+                ])],
+                vec![mock_row([
+                    ("article_id", 7_i32.into()),
+                    ("model_epoch", 7_i32.into()),
+                    ("plain_len", 4_i32.into()),
+                    ("vector", lsa::serialize_vector(&[1.0]).into()),
+                    ("terms", lsa::serialize_terms(&[(0, 4)]).into()),
+                ])],
+                vec![mock_row([("model_epoch", 7_i32.into())])],
+                vec![mock_row([
+                    ("id", 7_i32.into()),
+                    ("perek_id", 42_i16.into()),
+                    ("author_id", 3_i16.into()),
+                    ("author_name", "Fixture author".into()),
+                    ("name", "Alpha article".into()),
+                    ("abstract", Option::<String>::None.into()),
+                    ("content", "alpha article".into()),
+                    ("sefer_name", "Fixture".into()),
+                    ("additional_letter", Option::<String>::None.into()),
+                    ("perek_in_context", 1_i32.into()),
+                ])],
+            ]);
+            if selected {
+                mock = mock
+                    .append_query_results::<entities::tanah_article_metric::Model, Vec<_>, _>([
+                        vec![article_metric_model(7)],
+                    ]);
+            }
+            let db = Database::from_connection(mock.into_connection());
+            let index = ArticleSearchIndex::new(db.clone());
+            index.load().await.unwrap();
+            let schema = build_schema(&db, &index);
+            let fields = if selected {
+                "articleId estimate: readingMetric { wordCount }"
+            } else {
+                "articleId"
+            };
+            let response = schema
+                .execute(Request::new(format!(
+                    "{{ searchArticles(phrase: \"alpha\") {{ total hits {{ {fields} }} }} }}"
+                )))
+                .await;
+            assert!(response.errors.is_empty(), "{:?}", response.errors);
+            let json = response.data.into_json().unwrap();
+            assert_eq!(json["searchArticles"]["total"], 1);
+            let hit = &json["searchArticles"]["hits"][0];
+            assert_eq!(hit["articleId"], 7);
+            if selected {
+                assert_eq!(hit["estimate"]["wordCount"], 500);
+            } else {
+                assert!(hit.get("estimate").is_none());
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn empty_search_metric_selection_needs_no_database_rows() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let response = schema.execute(Request::new(
+            "{ searchArticles(phrase: \"בראשית\") { total hits { readingMetric { wordCount } } } }",
+        )).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(
+            response.data.into_json().unwrap()["searchArticles"]["total"],
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn schema_article_by_id_exposes_verified_covering_sources() {
+        let mut verified_article = article_model(7, 42, 3);
+        verified_article.coverage_verified = true;
+        let created_at = chrono::NaiveDate::from_ymd_opt(2026, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
+                    [vec![verified_article]],
+                )
+                .append_query_results::<
+                    entities::article_covering_source::Model,
+                    Vec<entities::article_covering_source::Model>,
+                    _,
+                >([vec![
+                    entities::article_covering_source::Model {
+                        article_id: 7,
+                        perek_id: 42,
+                        pasuk: 3,
+                        created_at: created_at.and_utc(),
+                    },
+                    entities::article_covering_source::Model {
+                        article_id: 7,
+                        perek_id: 43,
+                        pasuk: 1,
+                        created_at: created_at.and_utc(),
+                    },
+                ]])
+                .into_connection(),
+        );
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+
+        let response = schema
+            .execute(Request::new(
+                "{ articleById(id: 7) { id perekId coverageVerified coveringSources { perekId pasuk } } }",
+            ))
+            .await;
+
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let json = response.data.into_json().unwrap();
+        let article = &json["articleById"];
+        assert_eq!(article["coverageVerified"], true);
+        assert_eq!(article["coveringSources"].as_array().unwrap().len(), 2);
+        assert_eq!(article["coveringSources"][0]["perekId"], 42);
+        assert_eq!(article["coveringSources"][0]["pasuk"], 3);
+        assert_eq!(article["coveringSources"][1]["perekId"], 43);
+    }
+
+    #[tokio::test]
+    async fn schema_executes_article_search_on_empty_index() {
+        // No persisted state row → the snapshot stays empty and the query
+        // resolves to an empty page rather than erroring.
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+
+        let response = schema
+            .execute(Request::new(
+                "{ searchArticles(phrase: \"בראשית\") { total hits { articleId name score excerpt } } }",
+            ))
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let json = response.data.into_json().unwrap();
+        assert_eq!(json["searchArticles"]["total"], 0);
+        assert_eq!(json["searchArticles"]["hits"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn schema_article_search_serves_warm_snapshot_when_probe_fails() {
+        // A failing state probe must not fail the query — the warm (here
+        // empty) snapshot is served instead.
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                .append_query_errors([DbErr::Custom("probe down".to_string())])
+                .into_connection(),
+        );
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+
+        let response = schema
+            .execute(Request::new(
+                "{ searchArticles(phrase: \"בראשית\") { total } }",
+            ))
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert_eq!(
+            response.data.into_json().unwrap()["searchArticles"]["total"],
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn schema_article_search_rejects_invalid_arguments() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+
+        for query in [
+            "{ searchArticles(phrase: \"x\", limit: 0) { total } }",
+            "{ searchArticles(phrase: \"x\", limit: 51) { total } }",
+            "{ searchArticles(phrase: \"x\", offset: -1) { total } }",
+            "{ searchArticles(phrase: \"x\", offset: 1001) { total } }",
+        ] {
+            let response = schema.execute(Request::new(query)).await;
+            assert!(!response.errors.is_empty(), "{query} should fail");
+        }
+        let long_phrase = format!(
+            "{{ searchArticles(phrase: \"{}\") {{ total }} }}",
+            "א".repeat(257)
+        );
+        let response = schema.execute(Request::new(long_phrase)).await;
+        assert!(!response.errors.is_empty());
     }
 
     #[tokio::test]
     async fn schema_executes_perek_resolver_queries() {
+        let perek_metric = entities::tanah_perek_metric::Model {
+            perek_id: 1,
+            word_count: Some(361),
+            estimated_seconds: Some(99),
+            words_per_minute: 220,
+            calc_version: 1,
+            source_hash: "d".repeat(64),
+            computed_at: chrono::NaiveDate::from_ymd_opt(2026, 7, 19)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+        };
         let db = Database::from_connection(
             MockDatabase::new(DatabaseBackend::MySql)
                 .append_query_results::<entities::perek::Model, Vec<entities::perek::Model>, _>([
                     vec![perek_model(1, 1, 1)],
                 ])
+                // perekByPerekId metric attach
+                .append_query_results::<
+                    entities::tanah_perek_metric::Model,
+                    Vec<entities::tanah_perek_metric::Model>,
+                    _,
+                >([vec![perek_metric]])
+                // perekByPerekId progressUnits
+                .append_query_results::<
+                    entities::tanah_perek_pasuk_metric::Model,
+                    Vec<entities::tanah_perek_pasuk_metric::Model>,
+                    _,
+                >([vec![
+                    entities::tanah_perek_pasuk_metric::Model {
+                        perek_id: 1,
+                        pasuk: 1,
+                        word_count: 7,
+                        cumulative_words: 7,
+                        calc_version: 1,
+                    },
+                    entities::tanah_perek_pasuk_metric::Model {
+                        perek_id: 1,
+                        pasuk: 2,
+                        word_count: 11,
+                        cumulative_words: 18,
+                        calc_version: 1,
+                    },
+                ]])
                 .append_query_results::<entities::perek::Model, Vec<entities::perek::Model>, _>([
                     vec![perek_model(2, 2, 1), perek_model(3, 3, 1)],
                 ])
+                // perakimBySeferId metric attach — no rows
+                .append_query_results::<
+                    entities::tanah_perek_metric::Model,
+                    Vec<entities::tanah_perek_metric::Model>,
+                    _,
+                >([vec![]])
                 .into_connection(),
         );
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let one = schema
             .execute(Request::new(
-                "{ perekByPerekId(perekId: 1) { id perekId seferId compiledSource } }",
+                "{ perekByPerekId(perekId: 1) { id perekId seferId compiledSource readingMetric { wordCount estimatedSeconds } progressUnits { key wordCount cumulativeWords } } }",
             ))
             .await;
         assert!(one.errors.is_empty(), "{:?}", one.errors);
         let one_json = one.data.into_json().unwrap();
         assert_eq!(one_json["perekByPerekId"]["perekId"], 1);
-        assert_eq!(one_json["perekByPerekId"]["compiledSource"], "Genesis א'");
+        assert_eq!(one_json["perekByPerekId"]["compiledSource"], "Genesis א");
+        assert_eq!(
+            one_json["perekByPerekId"]["readingMetric"]["wordCount"],
+            361
+        );
+        let units = one_json["perekByPerekId"]["progressUnits"]
+            .as_array()
+            .unwrap();
+        assert_eq!(units.len(), 2);
+        assert_eq!(units[0]["key"], "1");
+        assert_eq!(units[1]["cumulativeWords"], 18);
 
         let by_sefer = schema
             .execute(Request::new(
@@ -222,36 +643,47 @@ mod tests {
                 .append_query_results::<entities::author::Model, Vec<entities::author::Model>, _>([
                     vec![author_model(3), author_model(4)],
                 ])
-                .append_query_results::<entities::article::Model, Vec<entities::article::Model>, _>(
-                    [vec![article_model(1, 1, 3), article_model(2, 2, 4)]],
-                )
+                // No Hebrew-date override result is queued (#3098): this
+                // selection does not ask for articleHebrewDateOverrides, so
+                // the gated lookup must not run — a regression would consume
+                // the summaries rows into the wrong shape and fail.
+                // Starter fetches article summaries only (no content column); author
+                // and perek counts are derived from these rows in memory.
                 .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
                     vec![
-                        mock_row([("author_id", 3_i16.into()), ("count", 5_i64.into())]),
-                        mock_row([("author_id", 4_i16.into()), ("count", 0_i64.into())]),
+                        article_summary_row(1, 1, 3),
+                        article_summary_row(2, 2, 4),
+                        article_summary_row(3, 929, 3),
                     ],
                 ])
-                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
-                    vec![
-                        mock_row([("perek_id", 1_i16.into()), ("count", 2_i64.into())]),
-                        mock_row([("perek_id", 929_i16.into()), ("count", 7_i64.into())]),
-                    ],
-                ])
+                // Starter article metric attach — one batched IN query.
+                .append_query_results::<
+                    entities::tanah_article_metric::Model,
+                    Vec<entities::tanah_article_metric::Model>,
+                    _,
+                >([vec![article_metric_model(2)]])
                 .into_connection(),
         );
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let response = schema
             .execute(Request::new(
-                "{ starter { authors { id name articlesCount } articles { id name } perekArticlesCounters } }",
+                "{ starter { authors { id name articlesCount } articles { id name readingMetric { wordCount estimatedSeconds } } perekArticlesCounters } }",
             ))
             .await;
 
         assert!(response.errors.is_empty(), "{:?}", response.errors);
         let json = response.data.into_json().unwrap();
-        assert_eq!(json["starter"]["authors"][0]["articlesCount"], 5);
-        assert_eq!(json["starter"]["authors"][1]["articlesCount"], 0);
+        // Author counts come from the fetched articles, not a separate scan.
+        assert_eq!(json["starter"]["authors"][0]["articlesCount"], 2);
+        assert_eq!(json["starter"]["authors"][1]["articlesCount"], 1);
         assert_eq!(json["starter"]["articles"][1]["id"], 2);
+        // Only article 2 has a metric row in the mock; article 1 → null.
+        assert!(json["starter"]["articles"][0]["readingMetric"].is_null());
+        assert_eq!(
+            json["starter"]["articles"][1]["readingMetric"]["wordCount"],
+            500
+        );
         assert_eq!(
             json["starter"]["perekArticlesCounters"]
                 .as_array()
@@ -259,8 +691,9 @@ mod tests {
                 .len(),
             929
         );
-        assert_eq!(json["starter"]["perekArticlesCounters"][0], 2);
-        assert_eq!(json["starter"]["perekArticlesCounters"][928], 7);
+        assert_eq!(json["starter"]["perekArticlesCounters"][0], 1);
+        assert_eq!(json["starter"]["perekArticlesCounters"][1], 1);
+        assert_eq!(json["starter"]["perekArticlesCounters"][928], 1);
     }
 
     #[tokio::test]
@@ -274,12 +707,18 @@ mod tests {
                 >([vec![revision_model("rev-1", Some("entry-1"))]])
                 .into_connection(),
         );
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let response = schema
-            .execute(Request::new(
-                r#"{ tanahpediaEntryRevisions(status: "PENDING", entryId: "entry-1") { id entryId proposedTitle source notes status createdAt } }"#,
-            ))
+            .execute(
+                Request::new(
+                    r#"{ tanahpediaEntryRevisions(status: "PENDING", entryId: "entry-1") { id entryId proposedTitle source notes status createdAt } }"#,
+                )
+                .data(crate::common::auth::ApiAuth::with_revision_api_key(
+                    Some("revision-test-key".to_string()),
+                    Some("revision-test-key".to_string()),
+                )),
+            )
             .await;
 
         assert!(response.errors.is_empty(), "{:?}", response.errors);
@@ -296,7 +735,7 @@ mod tests {
     async fn schema_executes_all_tanahpedia_family_resolvers() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let response = schema
             .execute(
@@ -332,7 +771,7 @@ mod tests {
     async fn schema_rejects_revision_mutations_without_api_auth() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
 
         let submit = schema
             .execute(
@@ -351,13 +790,22 @@ mod tests {
             )
             .await;
         assert!(!apply.errors.is_empty());
+
+        let list = schema
+            .execute(
+                Request::new(r#"{ tanahpediaEntryRevisions { id } }"#)
+                    .data(crate::common::auth::ApiAuth::new(None)),
+            )
+            .await;
+        assert_eq!(list.errors.len(), 1, "{:?}", list.errors);
+        assert_eq!(list.errors[0].message, "Revision API is not configured");
     }
 
     #[tokio::test]
     async fn schema_rejects_family_mutations_without_api_auth() {
         let db =
             Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
         let operations = [
             r#"mutation { putTanahpediaEntryEntityLink(input: { id: "ee", entryUniqueName: "entry", entityId: "e" }) { id } }"#,
             r#"mutation { deleteTanahpediaEntryEntityLink(id: "ee") { id } }"#,
@@ -411,7 +859,7 @@ mod tests {
                 }])
                 .into_connection(),
         );
-        let response = build_schema(&db)
+        let response = build_schema(&db, &ArticleSearchIndex::new(db.clone()))
             .execute(
                 Request::new(
                     r#"mutation { putTanahpediaEntryEntityLink(input: { id: "entry-entity-1", entryUniqueName: "שמשון", entityId: "entity-1" }) { id entryId entityId } }"#,
@@ -449,7 +897,7 @@ mod tests {
                 ])
                 .into_connection(),
         );
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
         let response = schema
             .execute(
                 Request::new(
@@ -535,7 +983,7 @@ mod tests {
                 ])
                 .into_connection(),
         );
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
         let auth = || {
             crate::common::auth::ApiAuth::with_revision_api_key(
                 Some("family-test-key".to_string()),
@@ -632,7 +1080,7 @@ mod tests {
                 .append_exec_results([exec_result.clone(), exec_result.clone(), exec_result])
                 .into_connection(),
         );
-        let schema = build_schema(&db);
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
         let auth = || {
             crate::common::auth::ApiAuth::with_revision_api_key(
                 Some("family-test-key".to_string()),
@@ -650,5 +1098,321 @@ mod tests {
             let response = schema.execute(Request::new(operation).data(auth())).await;
             assert!(response.errors.is_empty(), "{:?}", response.errors);
         }
+    }
+
+    #[tokio::test]
+    async fn schema_rejects_dedication_operations_without_api_auth() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let operations = [
+            r#"{ dedicationsAdmin { id } }"#,
+            r#"mutation { createDedication(input: { subject: "x" }) { id } }"#,
+            r#"mutation { updateDedication(id: 1, input: { subject: "x" }) { id } }"#,
+            r#"mutation { deleteDedication(id: 1) }"#,
+        ];
+
+        for operation in operations {
+            let response = schema
+                .execute(Request::new(operation).data(crate::common::auth::ApiAuth::new(None)))
+                .await;
+            assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+            assert_eq!(
+                response.errors[0].message,
+                "Dedication API is not configured"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn schema_executes_authorized_dedication_create() {
+        use crate::services::dedications_service::{KIND_SEFER_DED, urow};
+        use entities::{dedication, dedication_dedication_type, dedication_type, sefer};
+
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                // purpose validation
+                .append_query_results::<
+                    dedication_type::Model,
+                    Vec<dedication_type::Model>,
+                    _,
+                >([vec![dedication_type::Model {
+                    id: 1,
+                    description: "לע\"נ".to_string(),
+                }]])
+                // sefer target validation (מלאכי, perakim 565-567)
+                .append_query_results::<sefer::Model, Vec<sefer::Model>, _>([vec![
+                    sefer::Model {
+                        id: 24,
+                        name: "מלאכי".to_string(),
+                        tanach_us_name: None,
+                        perek_id_from: 565,
+                        perek_id_to: 567,
+                    },
+                ]])
+                // insert dedication + purpose link + sefer link
+                .append_exec_results([
+                    MockExecResult {
+                        last_insert_id: 42,
+                        rows_affected: 1,
+                    },
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                ])
+                // find_aggregate: the new row, then its union of link rows.
+                .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
+                    dedication::Model {
+                        id: 42,
+                        subject: "מוקדש".to_string(),
+                        expires_at: None,
+                    },
+                ]])
+                .append_query_results([vec![urow(
+                    KIND_SEFER_DED,
+                    Some(42),
+                    Some(24),
+                    None,
+                    None,
+                    None,
+                )]])
+                .append_query_results::<
+                    dedication_dedication_type::Model,
+                    Vec<dedication_dedication_type::Model>,
+                    _,
+                >([vec![dedication_dedication_type::Model {
+                    dedication_id: 42,
+                    dedication_type_id: 1,
+                }]])
+                .append_query_results::<
+                    dedication_type::Model,
+                    Vec<dedication_type::Model>,
+                    _,
+                >([vec![dedication_type::Model {
+                    id: 1,
+                    description: "לע\"נ".to_string(),
+                }]])
+                .into_connection(),
+        );
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+
+        let response = schema
+            .execute(
+                Request::new(
+                    r#"mutation { createDedication(input: { subject: "מוקדש", purposeTypeIds: [1], targets: [{ kind: SEFER, seferId: 24 }] }) { id subject purposes expiresAt scopes { kind seferId } } }"#,
+                )
+                .data(crate::common::auth::ApiAuth::with_dedication_api_key(
+                    Some("dedication-test-key".to_string()),
+                    Some("dedication-test-key".to_string()),
+                )),
+            )
+            .await;
+
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let json = response.data.into_json().unwrap();
+        let created = &json["createDedication"];
+        assert_eq!(created["id"], 42);
+        assert_eq!(created["subject"], "מוקדש");
+        assert_eq!(created["purposes"][0], "לע\"נ");
+        assert!(created["expiresAt"].is_null());
+        assert_eq!(created["scopes"][0]["kind"], "SEFER");
+        assert_eq!(created["scopes"][0]["seferId"], 24);
+    }
+
+    #[tokio::test]
+    async fn schema_resolves_public_dedications_for_sefer_context() {
+        use crate::services::dedications_service::{KIND_HELEK, KIND_SEFER, KIND_SEFER_DED, urow};
+        use entities::{dedication, dedication_dedication_type, dedication_type};
+
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                // ancestor expansion: canonical sefer + helek union
+                .append_query_results([vec![
+                    urow(KIND_SEFER, Some(24), Some(565), Some(567), None, None),
+                    urow(KIND_HELEK, Some(1), Some(1), Some(5), None, None),
+                ]])
+                // sefer-scope link union — one matches sefer 24
+                .append_query_results([vec![
+                    urow(KIND_SEFER_DED, Some(42), Some(24), None, None, None),
+                    urow(KIND_SEFER_DED, Some(43), Some(7), None, None, None),
+                ]])
+                // hydrate: dedication 42 (+43 filtered out upstream)
+                .append_query_results::<dedication::Model, Vec<dedication::Model>, _>([vec![
+                    dedication::Model {
+                        id: 42,
+                        subject: "מרדכי בן זאב".to_string(),
+                        expires_at: None,
+                    },
+                ]])
+                .append_query_results::<
+                    dedication_dedication_type::Model,
+                    Vec<dedication_dedication_type::Model>,
+                    _,
+                >([vec![dedication_dedication_type::Model {
+                    dedication_id: 42,
+                    dedication_type_id: 1,
+                }]])
+                .append_query_results::<
+                    dedication_type::Model,
+                    Vec<dedication_type::Model>,
+                    _,
+                >([vec![dedication_type::Model {
+                    id: 1,
+                    description: "לע\"נ".to_string(),
+                }]])
+                .into_connection(),
+        );
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+
+        let response = schema
+            .execute(Request::new(
+                r#"{ dedications(context: { seferIds: [24] }) { id subject purposes scopes { kind seferId } } }"#,
+            ))
+            .await;
+
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let json = response.data.into_json().unwrap();
+        let dedications = json["dedications"].as_array().unwrap();
+        assert_eq!(dedications.len(), 1);
+        assert_eq!(dedications[0]["id"], 42);
+        assert_eq!(dedications[0]["subject"], "מרדכי בן זאב");
+        assert_eq!(dedications[0]["scopes"][0]["kind"], "SEFER");
+    }
+    #[tokio::test]
+    async fn schema_rejects_alias_operations_without_api_auth() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let operations = [
+            r#"{ tanahpediaNameStatus(name: "משה") { kind } }"#,
+            r#"{ tanahpediaEntryAliases(entryId: "e1") { name } }"#,
+            r#"mutation { saveTanahpediaAlias(input: { name: "משה", targets: [{ entryId: "e1" }], expectedTargets: [] }) { name } }"#,
+            r#"mutation { removeTanahpediaEntryFromAlias(name: "משה", entryId: "e1") { name } }"#,
+            r#"mutation { deleteTanahpediaAlias(name: "משה") { name } }"#,
+        ];
+
+        for operation in operations {
+            let response = schema
+                .execute(Request::new(operation).data(crate::common::auth::ApiAuth::new(None)))
+                .await;
+            assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+            assert_eq!(response.errors[0].message, "Revision API is not configured");
+        }
+    }
+
+    #[tokio::test]
+    async fn schema_executes_authorized_alias_queries_and_mutation() {
+        use entities::tanahpedia::entry;
+
+        let target_row = |entry_id: &str| {
+            [
+                ("entry_id", Value::from(entry_id.to_string())),
+                ("unique_name", Value::from("משה-רבנו".to_string())),
+                ("title", Value::from("משה רבנו".to_string())),
+                ("label", Value::String(None)),
+            ]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect::<BTreeMap<String, Value>>()
+        };
+        let db = Database::from_connection(
+            MockDatabase::new(DatabaseBackend::MySql)
+                // tanahpediaNameStatus → alias: holder none, then target rows.
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![target_row("e1")],
+                ])
+                // tanahpediaEntryAliases → names, then per-name targets + holder.
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![[("name", Value::from("משה".to_string()))]
+                        .into_iter()
+                        .map(|(k, v)| (k.to_string(), v))
+                        .collect::<BTreeMap<String, Value>>()],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![target_row("e1")],
+                ])
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![]])
+                // saveTanahpediaAlias → lock, holder none, current empty,
+                // existing unique_name, then delete + insert execs.
+                .append_query_results::<entities::tanahpedia::entry_synonym::Model, Vec<entities::tanahpedia::entry_synonym::Model>, _>([
+                    vec![],
+                ])
+                .append_query_results::<entry::Model, Vec<entry::Model>, _>([vec![]])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![],
+                ])
+                .append_query_results::<BTreeMap<String, Value>, Vec<BTreeMap<String, Value>>, _>([
+                    vec![[("unique_name", Value::from("משה-רבנו".to_string()))]
+                        .into_iter()
+                        .map(|(k, v)| (k.to_string(), v))
+                        .collect::<BTreeMap<String, Value>>()],
+                ])
+                .append_exec_results([
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                    MockExecResult {
+                        last_insert_id: 0,
+                        rows_affected: 1,
+                    },
+                ])
+                .into_connection(),
+        );
+        let schema = build_schema(&db, &ArticleSearchIndex::new(db.clone()));
+        let auth = || {
+            crate::common::auth::ApiAuth::with_revision_api_key(
+                Some("alias-test-key".to_string()),
+                Some("alias-test-key".to_string()),
+            )
+        };
+
+        let status = schema
+            .execute(
+                Request::new(
+                    r#"{ tanahpediaNameStatus(name: "משה") { kind name aliasTargets { entryId title label } } }"#,
+                )
+                .data(auth()),
+            )
+            .await;
+        assert!(status.errors.is_empty(), "{:?}", status.errors);
+        let status_json = status.data.into_json().unwrap()["tanahpediaNameStatus"].clone();
+        assert_eq!(status_json["kind"], "alias");
+        assert_eq!(status_json["aliasTargets"][0]["entryId"], "e1");
+
+        let aliases = schema
+            .execute(
+                Request::new(
+                    r#"{ tanahpediaEntryAliases(entryId: "e1") { name kind targets { entryId } isSelfMain reservedCategory shadowedByCanonical { id } } }"#,
+                )
+                .data(auth()),
+            )
+            .await;
+        assert!(aliases.errors.is_empty(), "{:?}", aliases.errors);
+        let alias_json = aliases.data.into_json().unwrap()["tanahpediaEntryAliases"].clone();
+        assert_eq!(alias_json[0]["name"], "משה");
+        assert_eq!(alias_json[0]["kind"], "alias");
+        assert_eq!(alias_json[0]["isSelfMain"], false);
+
+        let saved = schema
+            .execute(
+                Request::new(
+                    r#"mutation { saveTanahpediaAlias(input: { name: "משה", targets: [{ entryId: "e1" }], expectedTargets: [] }) { name kind targetCount revalidation } }"#,
+                )
+                .data(auth()),
+            )
+            .await;
+        assert!(saved.errors.is_empty(), "{:?}", saved.errors);
+        let saved_json = saved.data.into_json().unwrap()["saveTanahpediaAlias"].clone();
+        assert_eq!(saved_json["kind"], "alias");
+        assert_eq!(saved_json["targetCount"], 1);
+        // No WEBSITE_URL/REVALIDATE_SECRET on the test box → documented no-op.
+        assert_eq!(saved_json["revalidation"], "SKIPPED");
     }
 }

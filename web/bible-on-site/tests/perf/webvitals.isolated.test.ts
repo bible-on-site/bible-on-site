@@ -1,8 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { Page, TestInfo } from "@playwright/test"; // import { test, expect } from "@playwright/test";
-import { errors } from "@playwright/test"; // import { test, expect } from "@playwright/test";
-import { type BencherMeasure, reportBenchmark } from "../util/benchmark";
+import { devices, type Page, type TestInfo } from "@playwright/test";
+import {
+	budgetedTimingBenchmarkEntry,
+	reportBenchmark,
+	webVitalsMeasure,
+} from "../util/benchmark";
+import { SeferPage } from "../util/playwright/page-objects/sefer-page";
 import { expect, test as testBase } from "../util/playwright/test-fixture";
 
 const test = testBase.extend({
@@ -40,7 +44,11 @@ type WebVitalsMetricsClient = {
 } & {
 	[K in keyof WebVitalsMetrics as `on${K}`]: CallableFunction;
 };
-const testWebVitals = async ({ page }: { page: Page }, testInfo: TestInfo) => {
+const testWebVitals = async (
+	{ page }: { page: Page },
+	testInfo: TestInfo,
+	device: string,
+) => {
 	const webVitalsScript = readFileSync(
 		resolve(__dirname, "../../node_modules/web-vitals/dist/web-vitals.iife.js"),
 		"utf8",
@@ -83,39 +91,70 @@ const testWebVitals = async ({ page }: { page: Page }, testInfo: TestInfo) => {
 			};
 		webVitals.onCLS(handleMetric("CLS"), { reportAllChanges: true });
 		webVitals.onFCP(handleMetric("FCP"));
-		webVitals.onINP(handleMetric("INP"), { reportAllChanges: true });
-		webVitals.onLCP(handleMetric("LCP"));
+		webVitals.onINP(handleMetric("INP"), {
+			reportAllChanges: true,
+			durationThreshold: 16,
+		});
+		webVitals.onLCP(handleMetric("LCP"), { reportAllChanges: true });
 		webVitals.onTTFB(handleMetric("TTFB"));
 	});
 
-	// TODO: refactor into test-utils into something like `simulateRandomUserInteraction(page, tags = ["button, "label", "input"], maxElements = 10)`
+	// Exercise real controls with their normal actionability checks. Sampling
+	// hidden elements with 100ms clicks can perform an action and still time out,
+	// leaving an unbounded retry loop while the menu blocks later controls.
+	const menu = page.getByRole("button", { name: "תפריט ראשי", exact: true });
+	await menu.click();
+	await expect(menu).toHaveAttribute("aria-expanded", "true");
+	await page.keyboard.press("Escape");
+	await expect(menu).toHaveAttribute("aria-expanded", "false");
+	if (testInfo.title !== "/" && device === "desktop") {
+		const reader = new SeferPage(page);
+		await reader.openSeferView();
+		await reader.verifyPesukimAreVisible();
+		await reader.closeSeferView();
+	}
 
-	let wasAnyElementClicked = false;
-	do {
-		const elements = page.locator("button, label, input");
-		const elementsFlat = (await elements.all()).flat();
-		const SAMPLE_SIZE = 10;
-		for (const element of elementsFlat.slice(
-			0,
-			Math.min(elementsFlat.length, SAMPLE_SIZE),
-		)) {
-			try {
-				await element.click({ timeout: 100 }); // Try to click the element with a timeout
-				wasAnyElementClicked = true;
-			} catch (error) {
-				// timout error is not an error
-				if (!(error instanceof errors.TimeoutError)) {
-					console.log(error);
-				}
-			}
-		}
-	} while (!wasAnyElementClicked); // repeat until at least one element was clicked
-
-	await page.locator("body").dispatchEvent("onbeforeunload");
-
-	const webVitalsMetrics: WebVitalsMetricsResult = await page.evaluate(() => {
-		return (window as unknown as { results: WebVitalsMetricsResult }).results;
-	});
+	// INP is reported after the next paint/idle callback. Reading immediately
+	// after a click used to silently skip homepage INP as NaN. A synthetic
+	// "onbeforeunload" event does not finalize Web Vitals.
+	let webVitalsMetrics: WebVitalsMetricsResult;
+	try {
+		await page.waitForFunction(() =>
+			Object.values(
+				(window as unknown as { results: WebVitalsMetricsResult }).results,
+			).every((metric) => Number.isFinite(metric.measure)),
+		);
+	} finally {
+		webVitalsMetrics = await page.evaluate(
+			() => (window as unknown as { results: WebVitalsMetricsResult }).results,
+		);
+		const diagnostic = JSON.stringify(
+			{
+				url: page.url(),
+				device,
+				environment: "ci-lab",
+				metrics: webVitalsMetrics,
+			},
+			null,
+			2,
+		);
+		const diagnosticsDir = resolve(
+			__dirname,
+			"../../.playwright-report/perf/diagnostics/webvitals",
+		);
+		mkdirSync(diagnosticsDir, { recursive: true });
+		writeFileSync(
+			resolve(
+				diagnosticsDir,
+				`${device}${testInfo.title.replace(/\//g, "_")}.json`,
+			),
+			diagnostic,
+		);
+		await testInfo.attach("web-vitals", {
+			body: diagnostic,
+			contentType: "application/json",
+		});
+	}
 
 	console.log("Web Vitals Analysis:", webVitalsMetrics);
 
@@ -124,22 +163,27 @@ const testWebVitals = async ({ page }: { page: Page }, testInfo: TestInfo) => {
 			keyof WebVitalsMetrics,
 			WebVitalsMetric,
 		];
-		// Skip NaN values (e.g., INP when no interaction occurred)
-		if (Number.isNaN(metric.measure)) {
-			continue;
-		}
+		expect(
+			Number.isFinite(metric.measure),
+			`${metricName} must be collected for ${testInfo.title} (${device})`,
+		).toBe(true);
 
 		// Map Web Vitals metric names to unified Bencher measures
-		// CLS is a ratio (unitless), all others are timing (milliseconds)
-		const measure: BencherMeasure = metricName === "CLS" ? "ratio" : "time_ms";
+		// CLS is a unitless ratio, all others are timing (milliseconds)
+		const measure = webVitalsMeasure(metricName);
 
-		// Export metric to benchmark file for historical tracking (Bencher format)
-		reportBenchmark({
-			name: `webvitals: ${metricName} (${testInfo.title})`,
-			measure,
-			value: metric.measure,
-			upperValue: metric.max,
-		});
+		// Export metric to benchmark file for historical tracking (Bencher
+		// format). Timings normalize onto frame_budget_ratio against their
+		// own "good" budget: at 5-48ms with 8ms reporting granularity, a
+		// percentage of history alerts on runner noise (#2971).
+		reportBenchmark(
+			budgetedTimingBenchmarkEntry({
+				name: `webvitals: ${metricName} (${testInfo.title}, ${device})`,
+				measure,
+				value: metric.measure,
+				upperValue: metric.max,
+			}),
+		);
 		expect(metric.measure).toBeLessThan(metric.max);
 	}
 };
@@ -181,7 +225,22 @@ async function warmUpPageIfNeeded(page: Page, testInfo: TestInfo) {
 	}
 }
 
-test("/", testWebVitals);
-test("/929/567", testWebVitals);
-test("/929/1", testWebVitals);
-test("/929/686", testWebVitals);
+for (const device of ["desktop", "mobile"] as const) {
+	test.describe(device, () => {
+		const descriptor =
+			devices[device === "mobile" ? "Pixel 5" : "Desktop Chrome"];
+		// defaultBrowserType is worker-scoped and cannot vary inside describe.
+		test.use({
+			viewport: descriptor.viewport,
+			userAgent: descriptor.userAgent,
+			deviceScaleFactor: descriptor.deviceScaleFactor,
+			isMobile: descriptor.isMobile,
+			hasTouch: descriptor.hasTouch,
+		});
+		for (const route of ["/", "/929/567", "/929/1", "/929/686"]) {
+			test(route, async ({ page }, testInfo) =>
+				testWebVitals({ page }, testInfo, device),
+			);
+		}
+	});
+}

@@ -1,0 +1,15 @@
+# Optional dependencies for `encoders.py` and `publish.py --retype`
+# (issue #2516). The rest of data/annotations is stdlib-only;
+# these are needed ONLY to run a real encoder — re-running the measured
+# comparison (golden/encoder-metrics/*.json is the recorded artifact) or
+# a hybrid publish run. CI never installs this; tests inject
+# `entities_fn` fakes instead.
+#
+# Install into a local venv:
+#   python -m venv .venv
+#   .venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0+cpu
+#   .venv/bin/pip install -r data/annotations/requirements-encoders.txt
+# The explicit CPU wheel keeps this environment CUDA-free. GPU inference
+# uses the separate requirements-cuda-cu126.txt profile.
+torch==2.15.0
+transformers==5.22.2

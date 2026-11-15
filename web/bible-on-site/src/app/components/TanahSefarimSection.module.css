@@ -3,6 +3,8 @@
   text-align: center;
   width: 100%;
   z-index: 1;
+  /* The bulletin's shared bottom edge paints this color via --divider-paint
+     (#3267) — keep the two values in sync, including the dark value below. */
   background-color: #d8ebff;
   padding: 2em 0 5em;
   scroll-margin-top: 1em;
@@ -15,12 +17,12 @@
   color: #333;
 }
 
-.header h1 {
+.header h2 {
   font-size: 1.6em;
   margin: 0.3em 0;
 }
 
-.header h2 {
+.header h3 {
   font-size: 1em;
   margin: 0.2em 0;
   color: #555;
@@ -44,7 +46,7 @@
   width: 40px;
   height: 40px;
   border: 3px solid #d8ebff;
-  border-top-color: #1552ac;
+  border-top-color: var(--accent-600);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -101,5 +103,26 @@
 @media screen and (min-width: 2560px) {
   .bottomDivider {
     background-image: url(/root/sefarim-bottom-devider-xl.svg);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .section {
+    /* Mirrored in DailyBulletinSection's dark --divider-paint. */
+    background-color: #16283f;
+  }
+
+  .header,
+  .header h2 {
+    color: #e8eaed;
+  }
+
+  .header h3 {
+    color: var(--muted-text, #9aa0a6);
+  }
+
+  .spinner {
+    border-color: #2d3548;
+    border-top-color: var(--accent-300);
   }
 }

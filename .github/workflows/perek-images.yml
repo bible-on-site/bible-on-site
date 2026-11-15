@@ -1,0 +1,40 @@
+name: Perek Image Tools
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "devops/perek-images/**"
+      - "package.json"
+      - ".github/workflows/perek-images.yml"
+  push:
+    branches: [master]
+    paths:
+      - "devops/perek-images/**"
+      - "package.json"
+      - ".github/workflows/perek-images.yml"
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-images:
+    name: Encode and validate images
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup bun, Node.js and dependencies
+        id: bun-cache
+        uses: ./.github/actions/setup-js
+        with:
+          module: perek-images
+          directory: devops/perek-images
+      - name: Save bun store cache
+        if: ${{ github.ref == 'refs/heads/master' && steps.bun-cache.outputs.cache-hit != 'true' }}
+        uses: ./.github/actions/save-bun-store
+        with:
+          key: ${{ steps.bun-cache.outputs.cache-primary-key }}
+      - run: bun run --cwd devops/perek-images test

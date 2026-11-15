@@ -28,20 +28,30 @@
         "Clean",
         "Compile",
         "CompileAndroid",
+        "CompileAndroidReleaseSmoke",
         "CompileE2E",
+        "CompileMobileE2E",
         "CompileTests",
         "CompileWindows",
         "CoverageAll",
+        "CoverageE2EWindows",
         "CoverageIntegration",
         "CoverageMerge",
+        "CoverageMobileE2E",
         "CoverageUnit",
         "DeployGooglePlay",
         "DeployMsStore",
         "Dev",
         "Lint",
+        "ListMobileE2E",
         "Package",
+        "PackageAndroidSymbols",
         "PackagePrepare",
+        "PackageWindowsExtensionPacks",
+        "PrepareAndroidRecitation",
         "PrepareApiConfig",
+        "PrepareIosRecitation",
+        "PrepareWindowsRecitation",
         "ResetAndroidData",
         "Restore",
         "RestoreAndroid",
@@ -52,10 +62,14 @@
         "RunMac",
         "RunWindows",
         "StartApi",
+        "SyncGooglePlayListing",
         "Test",
         "TestE2E",
         "TestIntegration",
+        "TestMobileE2E",
+        "TestMobileE2EUnit",
         "TestUnit",
+        "VerifyAndroidSymbols",
         "Version"
       ]
     },
@@ -150,6 +164,10 @@
           "type": "string",
           "description": "Android keystore password"
         },
+        "AndroidSymbolsPath": {
+          "type": "string",
+          "description": "Path to native debug symbols zip for Google Play upload"
+        },
         "ApiEnv": {
           "type": "string",
           "description": "API environment: dev (local) or prod (remote). Default: dev"
@@ -194,6 +212,10 @@
           "description": "Maximum number of flights to keep (older flights will be deleted). Default: 5",
           "format": "int32"
         },
+        "MobilePlatform": {
+          "type": "string",
+          "description": "Mobile E2E platform: Android or iOS"
+        },
         "MsixPath": {
           "type": "string",
           "description": "Path to MSIX file for Microsoft Store upload"
@@ -213,6 +235,10 @@
         "Production": {
           "type": "boolean",
           "description": "Deploy to production instead of flight/internal (requires store review)"
+        },
+        "ReleaseNotesFile": {
+          "type": "string",
+          "description": "Path to the Hebrew store release-notes text file for this version"
         },
         "Solution": {
           "type": "string",

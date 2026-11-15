@@ -13,36 +13,97 @@ on:
         description: "CI run ID that created the artifact"
         required: false
         type: string
+      inspect_ios_build:
+        description: "Read the exact Apple build state without deploying"
+        required: false
+        default: false
+        type: boolean
+      release_notes_override:
+        description: "Validated Hebrew store-notes text replacing the generated notes for this exact release"
+        required: false
+        type: string
+
+# Keep every dispatch; never interrupt a production write.
+concurrency:
+  group: ${{ github.repository }}-cd-app
+  cancel-in-progress: false
+  queue: max
 
 jobs:
   deploy_google_play:
+    timeout-minutes: 60
     name: Deploy to Google Play (Internal Track)
-    if: ${{ github.event.client_payload.android_artifact_name != '' }}
+    if: ${{ (github.event.client_payload.artifacts.android_artifact_name || github.event.client_payload.android_artifact_name) != '' }}
     permissions:
-      contents: read
+      # contents:write attaches the notes manifest to the GitHub release.
+      contents: write
+      actions: read
+      deployments: write
     runs-on: ubuntu-latest
 
     env:
       MODULE_VERSION: ${{ github.event.client_payload.module_version }}
-      ANDROID_ARTIFACT_NAME: ${{ github.event.client_payload.android_artifact_name }}
+      ANDROID_ARTIFACT_NAME: ${{ github.event.client_payload.artifacts.android_artifact_name || github.event.client_payload.android_artifact_name }}
       CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
       APP_DIRECTORY: app
 
     steps:
-      - name: Checkout
+      - name: Checkout deployment automation
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.client_payload.ref }}
+          ref: ${{ github.sha }}
+
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: app
+          DEPLOY_TARGET: app-android
+        run: node devops/github/release/check-deployment.mjs
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
+          # Store notes diff the curated entry directory between the
+          # delivered baseline tag and this tag — full history is required.
+          fetch-depth: 0
+
+      - name: Generate Hebrew store release notes
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: store_notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STORE_NOTES_OVERRIDE: ${{ inputs.release_notes_override || github.event.client_payload.release_notes_override }}
+        # RUNNER_TEMP copy comes from the deployment guard so a redeployed
+        # tag that predates these helpers still generates notes.
+        run: |
+          node "$RUNNER_TEMP/store-release-notes.mjs" --generate \
+            --target app-android \
+            --version "${{ env.MODULE_VERSION }}" \
+            --tag "app-v${{ env.MODULE_VERSION }}" \
+            --out-dir "$RUNNER_TEMP/store-notes"
+
+      - name: Attach the notes manifest to the release
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Evidence only — a failed attach must not flip binary delivery. The
+        # per-attempt name keeps earlier manifests immutable across reruns.
+        run: |
+          cp "$RUNNER_TEMP/store-notes/release-notes-manifest.json" "$RUNNER_TEMP/store-notes-app-android-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json" &&
+          gh release upload "app-v${{ env.MODULE_VERSION }}" "$RUNNER_TEMP/store-notes-app-android-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json" ||
+          echo "::warning::Store-notes manifest attach failed — evidence stays in this job log"
 
       - name: Restore Android AAB
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.ANDROID_ARTIFACT_NAME }}
-          path: ${{ env.APP_DIRECTORY }}/.artifacts
-          run-id: ${{ env.CI_RUN_ID }}
-          github-token: ${{ secrets.BOT_PAT }}
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "*.aab" --dir "${{ env.APP_DIRECTORY }}/.artifacts"
 
       - name: Find AAB file
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: find_aab
         run: |
           AAB_FILE=$(find ${{ env.APP_DIRECTORY }}/.artifacts -name "*.aab" | head -1)
@@ -55,66 +116,173 @@ jobs:
           echo "AAB_FILE=$AAB_FILE" >> $GITHUB_OUTPUT
           echo "Found AAB: $AAB_FILE"
 
+      # Releases built before symbols packaging (#1162) carry no symbols asset;
+      # warn-and-skip so a rollback of such a release still deploys.
+      - name: Restore native debug symbols
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: find_symbols
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${{ github.repository }}/releases/tags/app-v${{ env.MODULE_VERSION }}" --jq '.assets[].name' | grep -q '\-native-symbols\.zip$'; then
+            gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "*-native-symbols.zip" --dir "${{ env.APP_DIRECTORY }}/.artifacts" --clobber
+            SYMBOLS_FILE=$(realpath $(find ${{ env.APP_DIRECTORY }}/.artifacts -name "*-native-symbols.zip" | head -1))
+            echo "SYMBOLS_FILE=$SYMBOLS_FILE" >> $GITHUB_OUTPUT
+            echo "Found native symbols: $SYMBOLS_FILE"
+          else
+            echo "::warning::No native debug symbols asset on release app-v${{ env.MODULE_VERSION }} — uploading bundle without them"
+          fi
+
       - name: Setup .NET
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "10.0.x"
+          global-json-file: global.json
+
+      # #2708: last gate before upload — the restored bundle must carry the
+      # r8.json build metadata and deobfuscation map Play scores against its
+      # technical quality thresholds (>=25% from February 2027). The checkout is
+      # the release's own source ref: a rollback of a pre-#2708 build has no
+      # verifier to run, so warn-and-skip instead of blocking the rollback.
+      - name: Verify AAB DEX optimization metadata
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        run: |
+          if [ -f app/devops/verify_android_dex_metadata.py ]; then
+            python3 app/devops/verify_android_dex_metadata.py --package "${{ steps.find_aab.outputs.AAB_FILE }}"
+          else
+            echo "::warning::Verifier not present at ${{ steps.guard.outputs.ref }} — skipping metadata check for a pre-#2708 artifact."
+          fi
 
       - name: Write service account key
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         run: |
           echo '${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}' > ${{ runner.temp }}/service-account.json
 
       - name: Restore dotnet tools
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
 
       - name: Upload to Google Play
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.APP_DIRECTORY }}
         run: |
           dotnet run --project devops -- DeployGooglePlay \
             --aab-path "${{ steps.find_aab.outputs.AAB_FILE }}" \
-            --google-play-key-file "${{ runner.temp }}/service-account.json"
+            --android-symbols-path "${{ steps.find_symbols.outputs.SYMBOLS_FILE }}" \
+            --google-play-key-file "${{ runner.temp }}/service-account.json" \
+            --release-notes-file "$RUNNER_TEMP/store-notes/release-notes.txt"
+
+      # The binary already shipped; recording the notes-phase failure is what
+      # keeps the announcements baseline honest — a green deploy here would
+      # permanently skip these features for this audience.
+      - name: Record notes-phase failure after binary delivery
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        run: |
+          if grep -q '"error"' "$RUNNER_TEMP/store-notes/release-notes-manifest.json"; then
+            echo "::error::Hebrew store-notes generation failed — the binary shipped without notes; the failed deployment record keeps the features announceable on the next release"
+            exit 1
+          fi
+
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"
 
       - name: Cleanup
-        if: always()
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: rm -f ${{ runner.temp }}/service-account.json
 
       - name: Deployment Summary
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: |
           echo "## Android Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ env.MODULE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Track:** Internal" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** Deployed ✅" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ job.status == 'success' && 'Deployed ✅' || 'Failed ❌ — see the upload step log for the actionable cause' }}" >> $GITHUB_STEP_SUMMARY
 
   deploy_microsoft_store:
+    timeout-minutes: 60
     name: Deploy to Microsoft Store
-    if: ${{ github.event.client_payload.windows_artifact_name != '' }}
+    if: ${{ (github.event.client_payload.artifacts.windows_artifact_name || github.event.client_payload.windows_artifact_name) != '' }}
     permissions:
-      contents: read
+      # contents:write attaches the notes manifest to the GitHub release.
+      contents: write
+      actions: read
+      deployments: write
     runs-on: windows-latest
 
     env:
       MODULE_VERSION: ${{ github.event.client_payload.module_version }}
-      WINDOWS_ARTIFACT_NAME: ${{ github.event.client_payload.windows_artifact_name }}
+      WINDOWS_ARTIFACT_NAME: ${{ github.event.client_payload.artifacts.windows_artifact_name || github.event.client_payload.windows_artifact_name }}
       CI_RUN_ID: ${{ github.event.client_payload.ci_run_id }}
       APP_DIRECTORY: app
 
     steps:
-      - name: Checkout
+      - name: Checkout deployment automation
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.client_payload.ref }}
+          ref: ${{ github.sha }}
+
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: app
+          DEPLOY_TARGET: app-windows
+        run: node devops/github/release/check-deployment.mjs
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
+          # Store notes diff the curated entry directory between the
+          # delivered baseline tag and this tag — full history is required.
+          fetch-depth: 0
+
+      - name: Generate Hebrew store release notes
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: store_notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STORE_NOTES_OVERRIDE: ${{ inputs.release_notes_override || github.event.client_payload.release_notes_override }}
+        # RUNNER_TEMP copy comes from the deployment guard so a redeployed
+        # tag that predates these helpers still generates notes.
+        run: |
+          node "${{ runner.temp }}/store-release-notes.mjs" --generate `
+            --target app-windows `
+            --version "${{ env.MODULE_VERSION }}" `
+            --tag "app-v${{ env.MODULE_VERSION }}" `
+            --out-dir "${{ runner.temp }}/store-notes"
+
+      - name: Attach the notes manifest to the release
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Evidence only — a failed attach must not flip binary delivery. The
+        # per-attempt name keeps earlier manifests immutable across reruns.
+        run: |
+          try {
+            cp "${{ runner.temp }}/store-notes/release-notes-manifest.json" "${{ runner.temp }}/store-notes-app-windows-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json" -ErrorAction Stop
+            gh release upload "app-v${{ env.MODULE_VERSION }}" "${{ runner.temp }}/store-notes-app-windows-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json"
+            if ($LASTEXITCODE -ne 0) { throw "gh release upload failed" }
+          } catch {
+            Write-Host "::warning::Store-notes manifest attach failed — evidence stays in this job log"
+          }
 
       - name: Restore Windows MSIX
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.WINDOWS_ARTIFACT_NAME }}
-          path: ${{ env.APP_DIRECTORY }}/.artifacts
-          run-id: ${{ env.CI_RUN_ID }}
-          github-token: ${{ secrets.BOT_PAT }}
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "BibleOnSite*.msix" --dir "${{ env.APP_DIRECTORY }}/.artifacts"
 
       - name: Find MSIX file
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: find_msix
         shell: pwsh
         run: |
@@ -130,14 +298,21 @@ jobs:
           Write-Host "Found MSIX: $msixPath"
 
       - name: Setup .NET
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "10.0.x"
+          global-json-file: global.json
 
       - name: Setup Microsoft Store Developer CLI
-        uses: microsoft/setup-msstore-cli@v1
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: microsoft/microsoft-store-apppublisher@v1.4
+        with:
+          # Pin the last-validated release instead of tracking 'latest' so an
+          # untested upstream CLI release cannot silently break deployments.
+          version: v0.4.3
 
       - name: Configure Microsoft Store Developer CLI
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         shell: pwsh
         run: |
           msstore reconfigure `
@@ -147,59 +322,144 @@ jobs:
             --clientSecret ${{ secrets.MS_STORE_CLIENT_SECRET }}
 
       - name: Restore dotnet tools
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.APP_DIRECTORY }}
         run: dotnet tool restore
 
       - name: Upload to Microsoft Store
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         working-directory: ${{ env.APP_DIRECTORY }}
         shell: pwsh
         env:
           PARTNER_CENTER_TENANT_ID: ${{ secrets.MS_STORE_TENANT_ID }}
           PARTNER_CENTER_CLIENT_ID: ${{ secrets.MS_STORE_CLIENT_ID }}
           PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.MS_STORE_CLIENT_SECRET }}
+          # Lets the deploy read this workflow's own job logs to recover the
+          # 25-flight cap when Partner Center's listflights endpoint cannot
+          # enumerate the flights it must delete. See ms-store-flights.mjs.
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Create a new flight for each deployment (avoids issues with Partner Center-created submissions)
           # MaxFlightsToKeep=15 ensures we stay well under the 25 flight limit
           dotnet run --project devops -- DeployMsStore `
             --msix-path "${{ steps.find_msix.outputs.MSIX_FILE }}" `
             --ms-store-flight-group-id "${{ secrets.MS_STORE_FLIGHT_GROUP_ID }}" `
-            --max-flights-to-keep 15
+            --max-flights-to-keep 15 `
+            --release-notes-file "${{ runner.temp }}/store-notes/release-notes.txt"
+
+      # The binary already shipped; recording the notes-phase failure is what
+      # keeps the announcements baseline honest — a green deploy here would
+      # permanently skip these features for this audience.
+      - name: Record notes-phase failure after binary delivery
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        run: |
+          if (Select-String -Path "${{ runner.temp }}/store-notes/release-notes-manifest.json" -Pattern '"error"' -Quiet) {
+            Write-Host "::error::Hebrew store-notes generation failed — the binary shipped without notes; the failed deployment record keeps the features announceable on the next release"
+            exit 1
+          }
+
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"
 
       - name: Deployment Summary
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         shell: pwsh
         run: |
           "## Windows Deployment Summary" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "**Version:** ${{ env.MODULE_VERSION }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           "**Target:** Microsoft Store (Internal Flight)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          "**Status:** Submitted ✅" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          "**Status:** ${{ job.status == 'success' && 'Submitted ✅' || 'Failed ❌ — see the upload step log for the Partner Center error' }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
   deploy_app_store:
+    timeout-minutes: 60
     name: Deploy to App Store (TestFlight)
-    if: ${{ github.event.client_payload.ios_artifact_name != '' || inputs.ios_artifact_name != '' }}
+    if: ${{ ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
     permissions:
-      contents: read
+      # contents:write publishes the asset-pack publication receipt beside the
+      # release assets; the receipt is the provenance record reused packs need.
+      contents: write
+      actions: read
+      deployments: write
     runs-on: macos-15
+
+    # The resolved release identity feeds the public-notes job — it stays
+    # available even when the guard skips a rerun as already delivered.
+    outputs:
+      ref: ${{ steps.guard.outputs.ref }}
+      module_version: ${{ steps.export_version.outputs.v }}
 
     env:
       MODULE_VERSION: ${{ github.event.client_payload.module_version || '0.0.0' }}
-      IOS_ARTIFACT_NAME: ${{ github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
+      IOS_ARTIFACT_NAME: ${{ github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
       CI_RUN_ID: ${{ github.event.client_payload.ci_run_id || inputs.ci_run_id }}
       APP_DIRECTORY: app
 
     steps:
-      - name: Checkout
+      - name: Checkout deployment automation
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Check deployment source and freshness
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_MODULE: app
+          DEPLOY_TARGET: app-ios
+        run: node devops/github/release/check-deployment.mjs
+
+      - name: Export the resolved release identity
+        id: export_version
+        if: ${{ steps.guard.outputs.deploy == 'true' || steps.guard.outputs.ref != '' }}
+        run: echo "v=${{ env.MODULE_VERSION }}" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve TestFlight recovery automation
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        run: |
+          cp devops/github/release/testflight-build.mjs "$RUNNER_TEMP/testflight-build.mjs"
+          cp devops/github/release/asset-pack-upload.mjs "$RUNNER_TEMP/asset-pack-upload.mjs"
+
+      - name: Checkout artifact source
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.guard.outputs.ref }}
 
       - name: Restore iOS IPA
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.IOS_ARTIFACT_NAME }}
-          path: ${{ env.APP_DIRECTORY }}/.artifacts
-          run-id: ${{ env.CI_RUN_ID }}
-          github-token: ${{ secrets.BOT_PAT }}
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "*.ipa" --dir "${{ env.APP_DIRECTORY }}/.artifacts"
+
+      - name: Restore iOS asset packs
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: assetpacks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Releases from before the Background Assets migration carry no .aar
+          # files; their ODR-era builds need none, so skip quietly for those.
+          ASSETS_JSON=$(gh release view "app-v${{ env.MODULE_VERSION }}" --json assets)
+          AAR_COUNT=$(jq '[.assets[].name | select(endswith(".aar"))] | length' <<<"$ASSETS_JSON")
+          echo "aar_count=$AAR_COUNT" >> "$GITHUB_OUTPUT"
+          if [ "$AAR_COUNT" -gt 0 ]; then
+            gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "*.aar" --dir "${{ env.APP_DIRECTORY }}/.artifacts/assetpacks" --clobber
+            # asset-packs.json is the CI-verified pack plan; it rides with the
+            # .aar assets so reuse can be decided here without rebuilding. Older
+            # releases lack it and fall back to uploading every pack.
+            if [ "$(jq '[.assets[].name | select(. == "asset-packs.json")] | length' <<<"$ASSETS_JSON")" -gt 0 ]; then
+              gh release download "app-v${{ env.MODULE_VERSION }}" --pattern "asset-packs.json" --dir "${{ env.APP_DIRECTORY }}/.artifacts/assetpacks" --clobber
+            fi
+          fi
 
       - name: Find IPA file
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         id: find_ipa
         run: |
           IPA_FILE=$(find ${{ env.APP_DIRECTORY }}/.artifacts -name "*.ipa" | head -1)
@@ -212,6 +472,7 @@ jobs:
           echo "Found IPA: $IPA_FILE"
 
       - name: Setup App Store Connect API Key
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
         env:
           API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
           API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
@@ -232,49 +493,194 @@ jobs:
           echo "API_KEY_PATH=$HOME/private_keys/api_key.json" >> $GITHUB_ENV
 
       - name: Install Fastlane
-        run: gem install fastlane -NV
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        # macos-15's image ships fastlane; install only when it is missing.
+        run: command -v fastlane >/dev/null 2>&1 || gem install fastlane -NV
 
-      # TODO: Split upload and distribution into separate workflows (see #1183)
-      # This stdout checker is a workaround for Apple's submission limit errors -
-      # we consider the job successful if the build was processed, even if
-      # external distribution fails due to rate limits.
-      - name: Upload to TestFlight and Distribute to Beta Group
+      - name: Check the exact TestFlight build before uploading
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: testflight
         env:
-          TESTFLIGHT_BETA_GROUP: ${{ secrets.TESTFLIGHT_BETA_GROUP_NAME }}
+          GH_TOKEN: ${{ github.token }}
+          IPA_FILE: ${{ steps.find_ipa.outputs.IPA_FILE }}
+          ARTIFACT_REF: ${{ steps.guard.outputs.ref }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+        run: node "$RUNNER_TEMP/testflight-build.mjs" preflight
+
+      - name: Upload the missing TestFlight build once
+        if: ${{ steps.guard.outputs.deploy == 'true' && steps.testflight.outputs.upload == 'true' }}
+        id: upload
+        env:
+          IPA_FILE: ${{ steps.find_ipa.outputs.IPA_FILE }}
         run: |
           set +e
-          OUTPUT=$(fastlane pilot upload \
-            --ipa "${{ steps.find_ipa.outputs.IPA_FILE }}" \
-            --api_key_path "${{ env.API_KEY_PATH }}" \
-            --skip_waiting_for_build_processing false \
-            --distribute_external true \
-            --groups "${TESTFLIGHT_BETA_GROUP}" \
-            --beta_app_description "בכ\"ט כסלו תשע\"ה(21 דצמ' 14) התחילה תכנית לימוד תנ\"ך יומי של משרד החינוך, פרק ליום. כחודש לאחר מכן עלה לרשת אתר לימוד תנך באותו פורמט אשר מתעדכן מיום ליום במאמרים של רבנים. כמו כן יש רעיונות נוספים שעתידים להתחדש, תעקבו אחרינו! לימוד פורה, תנך.co.il" \
-            --beta_app_feedback_email "tanah.site@gmail.com" \
-            --beta_app_review_info '{"contact_email":"tanah.site@gmail.com","contact_first_name":"Dorad","contact_last_name":"Levinshtein","contact_phone":"+372 5707 8640"}' \
-            --changelog "Automated build v${{ env.MODULE_VERSION }}" 2>&1)
-          EXIT_CODE=$?
-          echo "$OUTPUT"
+          fastlane pilot upload --ipa "$IPA_FILE" --api_key_path "$API_KEY_PATH" \
+            --skip_submission true --skip_waiting_for_build_processing true 2>&1 | tee "$RUNNER_TEMP/testflight-upload.log"
+          EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          # Fail immediately for Apple's definitive signing/package rejections.
+          # Transport failures and duplicate uploads still require the exact-build
+          # API verification below; neither permits another upload.
+          node "$RUNNER_TEMP/testflight-build.mjs" upload-result "$RUNNER_TEMP/testflight-upload.log" "$EXIT_CODE"
 
-          if echo "$OUTPUT" | grep -q "Successfully finished processing the build"; then
-            echo "✅ Build was uploaded and processed successfully"
-            if [ $EXIT_CODE -ne 0 ]; then
-              echo "::warning::Distribution may have failed (e.g., submission limits) - manual distribution may be required"
-            fi
-            exit 0
-          else
-            echo "❌ Build upload/processing failed"
-            exit $EXIT_CODE
+      - name: Verify Apple accepted and processed the exact build
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        env:
+          IPA_FILE: ${{ steps.find_ipa.outputs.IPA_FILE }}
+          UPLOAD_EXIT_CODE: ${{ steps.upload.outputs.exit_code || '0' }}
+        run: node "$RUNNER_TEMP/testflight-build.mjs" postflight
+
+      - name: Publish managed asset packs to App Store Connect
+        if: ${{ steps.guard.outputs.deploy == 'true' && steps.assetpacks.outputs.aar_count != '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Managed Background Assets travel beside the IPA: each .aar was built
+          # by xcrun ba-package and uploaded to the app release by CI. altool
+          # authenticates with the same AuthKey in ~/private_keys provisioned
+          # above and associates each pack with the app's numeric Apple ID.
+          # The verified pack plan lets unchanged packs reuse their existing
+          # App Store Connect version instead of uploading duplicates; the run
+          # writes a publication receipt back onto the release.
+          # --upload-asset-pack exists only in the Xcode 26+ altool; macos-15
+          # still defaults xcode-select to Xcode 16, so switch toolchains first.
+          XCODE_PATH=$(ls -d /Applications/Xcode_2[6-9]*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE_PATH" ]; then
+            echo "::error::No Xcode 26+ installation found — altool --upload-asset-pack is unavailable"
+            exit 1
           fi
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+          node "$RUNNER_TEMP/asset-pack-upload.mjs" "${{ env.APP_DIRECTORY }}/.artifacts/assetpacks" \
+            --release "app-v${{ env.MODULE_VERSION }}" --repository "${{ github.repository }}"
+
+      - name: Record deployment result
+        if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.guard.outputs.deployment_id }}
+          DEPLOYMENT_RESULT: ${{ job.status }}
+        run: node "${{ runner.temp }}/deployment-state.mjs"
 
       - name: Cleanup
-        if: always()
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: rm -rf $HOME/private_keys
 
       - name: Deployment Summary
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         run: |
           echo "## iOS Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ env.MODULE_VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "**Target:** TestFlight" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** Uploaded ✅" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ job.status == 'success' && 'Uploaded ✅' || 'Failed ❌ — see the failing step log for the actionable cause' }}" >> $GITHUB_STEP_SUMMARY
+
+  # Public App Store What's New is its own phase with its own retry path: it
+  # runs whenever the binary phase succeeded — including dispatches the
+  # app-ios guard skipped as already delivered — so an editable version
+  # record created after the TestFlight upload can still receive the notes.
+  # No deployment record and no binary ever move in this job.
+  publish_app_store_notes:
+    timeout-minutes: 60
+    name: Publish Hebrew What's New to the App Store
+    needs: deploy_app_store
+    if: ${{ always() && needs.deploy_app_store.result == 'success' && needs.deploy_app_store.outputs.ref != '' && ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
+    permissions:
+      # contents:write attaches the notes manifest to the GitHub release.
+      contents: write
+      actions: read
+    runs-on: macos-15
+
+    env:
+      MODULE_VERSION: ${{ needs.deploy_app_store.outputs.module_version }}
+      ARTIFACT_REF: ${{ needs.deploy_app_store.outputs.ref }}
+
+    steps:
+      - name: Checkout deployment automation
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Preserve notes publication automation
+        run: |
+          for helper in store-release-notes.mjs appstore-whatsnew.mjs testflight-build.mjs deployment-state.mjs gh-api.mjs; do
+            cp "devops/github/release/$helper" "$RUNNER_TEMP/$helper"
+          done
+
+      - name: Checkout the released source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.ARTIFACT_REF }}
+          # Notes diff the curated entry directory between the delivered
+          # baseline tag and this tag — full history is required.
+          fetch-depth: 0
+
+      - name: Setup App Store Connect API Key
+        env:
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+        run: |
+          mkdir -p $HOME/private_keys
+          echo -n "$API_KEY_BASE64" | base64 --decode > $HOME/private_keys/AuthKey_${API_KEY_ID}.p8
+          cat > $HOME/private_keys/api_key.json << EOF
+          {
+            "key_id": "${API_KEY_ID}",
+            "issuer_id": "${API_ISSUER_ID}",
+            "key": "$(cat $HOME/private_keys/AuthKey_${API_KEY_ID}.p8 | sed 's/$/\\n/' | tr -d '\n')",
+            "in_house": false
+          }
+          EOF
+          echo "API_KEY_PATH=$HOME/private_keys/api_key.json" >> $GITHUB_ENV
+
+      # Writes only onto an editable version record (prepare_for_submission
+      # and rejected states); when none exists yet the notes still attach to
+      # the release for the next submission. An attempted publication that
+      # errored fails the step — the job rerun is the no-reupload retry.
+      - name: Publish Hebrew What's New on the editable version record
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STORE_NOTES_OVERRIDE: ${{ inputs.release_notes_override || github.event.client_payload.release_notes_override }}
+        run: |
+          node "$RUNNER_TEMP/appstore-whatsnew.mjs" publish \
+            --version "$MODULE_VERSION" \
+            --tag "app-v$MODULE_VERSION" \
+            --out-dir "$RUNNER_TEMP/store-notes-public"
+          # Evidence only — a failed attach must not flip the notes result.
+          cp "$RUNNER_TEMP/store-notes-public/release-notes-manifest.json" "$RUNNER_TEMP/store-notes-app-store-public-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json" &&
+          gh release upload "app-v$MODULE_VERSION" "$RUNNER_TEMP/store-notes-app-store-public-manifest-${{ github.run_id }}-${{ github.run_attempt }}.json" ||
+          echo "::warning::Store-notes manifest attach failed — evidence stays in this job log"
+          if grep -q '"error"' "$RUNNER_TEMP/store-notes-public/release-notes-manifest.json"; then
+            echo "::error::Hebrew whatsNew publication failed — rerun this job to retry without touching the build"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: ${{ always() }}
+        run: rm -rf $HOME/private_keys
+
+  distribute_app_store:
+    name: Distribute to TestFlight
+    needs: deploy_app_store
+    if: ${{ always() && needs.deploy_app_store.result == 'success' && ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
+    permissions:
+      contents: read
+      actions: read
+      deployments: write
+    uses: ./.github/workflows/testflight-distribution.yml
+    with:
+      ios_artifact_name: ${{ github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name || inputs.ios_artifact_name }}
+      ci_run_id: ${{ github.event.client_payload.ci_run_id || inputs.ci_run_id }}
+      parent_lock_held: true
+      release_notes_override: ${{ inputs.release_notes_override || github.event.client_payload.release_notes_override }}
+    secrets: inherit
+
+  inspect_app_store:
+    if: ${{ inputs.inspect_ios_build }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/testflight-status.yml
+    with:
+      ios_artifact_name: ${{ inputs.ios_artifact_name }}
+    secrets: inherit

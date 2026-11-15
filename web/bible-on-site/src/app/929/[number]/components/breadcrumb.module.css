@@ -36,28 +36,30 @@
   font-size: 16px;
   line-height: 1;
   margin: 0 8px;
-  color: #999;
+  color: var(--muted-text, #999);
   font-weight: normal;
 }
 
 .breadcrumb li a {
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   text-decoration: underline;
-  color: #0066cc;
+  color: var(--link-accent, #0066cc);
   transition:
     color 0.2s ease,
     background-color 0.2s ease;
 }
 
-.breadcrumb li a:hover {
-  color: #0052a3;
-  text-decoration: underline;
-  background-color: #f0f0f0;
+@media (hover: hover) {
+  .breadcrumb li a:hover {
+    color: var(--link-accent, #0052a3);
+    text-decoration: underline;
+    background-color: #f0f0f0;
+  }
 }
 
 .breadcrumb li a:focus {
-  outline: 2px solid #0066cc;
+  outline: 2px solid var(--link-accent, #0066cc);
   outline-offset: 2px;
   border-radius: 2px;
 }
@@ -73,18 +75,20 @@
   border: none;
   cursor: pointer;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font: inherit;
   color: inherit;
   transition: background-color 0.2s ease;
 }
 
-.active > button:hover {
-  background-color: #f0f0f0;
+@media (hover: hover) {
+  .active > button:hover {
+    background-color: #f0f0f0;
+  }
 }
 
 .active > button:focus {
-  outline: 2px solid #0066cc;
+  outline: 2px solid var(--link-accent, #0066cc);
   outline-offset: 2px;
 }
 
@@ -127,14 +131,28 @@
   margin-top: 0;
   background-color: #fff;
   border: 1px solid #ddd;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   min-width: 150px;
 }
 
-.drop-container:hover .drop {
+.drop-container > [aria-expanded="true"] + .drop {
   display: block;
+}
+
+/* Hover previews stay mouse-only (touch keeps sticky :hover) and yield to an open selector. */
+@media (hover: hover) {
+  .drop-container:hover .drop {
+    display: block;
+  }
+
+  .breadcrumb:has([aria-expanded="true"])
+    .drop-container:hover
+    > [aria-expanded="false"]
+    + .drop {
+    display: none;
+  }
 }
 
 .drop-container {
@@ -161,28 +179,32 @@
     color 0.2s ease;
 }
 
-.drop ul li a:hover {
-  background-color: #f5f5f5;
-  color: #0066cc;
+@media (hover: hover) {
+  .drop ul li a:hover {
+    background-color: #f5f5f5;
+    color: var(--link-accent, #0066cc);
+  }
 }
 
 .drop ul li a:focus {
   outline: none;
   background-color: #e6f2ff;
-  color: #0066cc;
+  color: var(--link-accent, #0066cc);
 }
 
 .small {
   font-size: 9px;
   margin-right: 4px;
-  color: #666;
+  color: var(--muted-text, #666);
   transition:
     transform 0.2s ease,
     margin 0.2s ease;
 }
 
-.drop-container:hover .small {
-  transform: translateY(1px);
+@media (hover: hover) {
+  .drop-container:hover .small {
+    transform: translateY(1px);
+  }
 }
 
 @media (max-width: 480px) {
@@ -207,6 +229,20 @@
 
   .small {
     margin-right: 2px;
+  }
+
+  /* Dropdowns opened from end-side buttons would overflow the left edge, so anchor them to the breadcrumb row. */
+  .breadcrumb {
+    position: relative;
+  }
+
+  .drop-container {
+    position: static;
+  }
+
+  .drop {
+    max-width: calc(100vw - 16px);
+    overflow: auto;
   }
 }
 
@@ -331,10 +367,16 @@
   color: #222;
 }
 
-.drop .tanahpedia-category-parent:hover,
 .drop .tanahpedia-category-parent:focus {
   background-color: #f5f5f5;
-  color: #0066cc;
+  color: var(--link-accent, #0066cc);
+}
+
+@media (hover: hover) {
+  .drop .tanahpedia-category-parent:hover {
+    background-color: #f5f5f5;
+    color: var(--link-accent, #0066cc);
+  }
 }
 
 .drop .tanahpedia-nested {
@@ -356,8 +398,110 @@
   color: #444;
 }
 
-.drop .tanahpedia-nested li a:hover,
 .drop .tanahpedia-nested li a:focus {
   background-color: #f0f6ff;
-  color: #0066cc;
+  color: var(--link-accent, #0066cc);
+}
+
+@media (hover: hover) {
+  .drop .tanahpedia-nested li a:hover {
+    background-color: #f0f6ff;
+    color: var(--link-accent, #0066cc);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .breadcrumb {
+    color: #b8c2d9;
+  }
+
+  .breadcrumb > li:not(:last-child):after {
+    color: var(--muted-text, #64748b);
+  }
+
+  .breadcrumb li a {
+    color: var(--accent-300);
+  }
+
+  @media (hover: hover) {
+    .breadcrumb li a:hover {
+      color: var(--accent-200);
+      background-color: #232a45;
+    }
+  }
+
+  .active {
+    color: #e8eaed;
+  }
+
+  @media (hover: hover) {
+    .active > button:hover {
+      background-color: #232a45;
+    }
+  }
+
+  .bg-white {
+    background-color: #1a1f2e;
+  }
+
+  .drop {
+    background-color: #1a1f2e;
+    border-color: #2d3548;
+  }
+
+  .drop ul li a {
+    color: #e8eaed;
+  }
+
+  @media (hover: hover) {
+    .drop ul li a:hover {
+      background-color: #232a45;
+      color: var(--accent-300);
+    }
+  }
+
+  .drop ul li a:focus {
+    background-color: #232a45;
+    color: var(--accent-300);
+  }
+
+  .small {
+    color: var(--muted-text, #9aa0a6);
+  }
+
+  .drop .tanahpedia-category-parent {
+    color: #e8eaed;
+  }
+
+  .drop .tanahpedia-category-parent:focus {
+    background-color: #232a45;
+    color: var(--accent-300);
+  }
+
+  @media (hover: hover) {
+    .drop .tanahpedia-category-parent:hover {
+      background-color: #232a45;
+      color: var(--accent-300);
+    }
+  }
+
+  .drop .tanahpedia-nested li a {
+    color: #b8c2d9;
+  }
+
+  .drop .tanahpedia-nested li a:focus {
+    background-color: #232a45;
+    color: var(--accent-300);
+  }
+
+  @media (hover: hover) {
+    .drop .tanahpedia-nested li a:hover {
+      background-color: #232a45;
+      color: var(--accent-300);
+    }
+  }
+}
+
+.active > button:active:not(:disabled) {
+  scale: var(--press-scale);
 }

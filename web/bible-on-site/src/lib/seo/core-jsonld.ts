@@ -1,17 +1,22 @@
-import type { Graph, Thing } from "schema-dts";
+import type { AudioObject, Graph, Thing } from "schema-dts";
 import type { PerekObj } from "@/data/perek-dto";
 import type { Article } from "@/lib/articles";
 import type { AuthorDetails } from "@/lib/authors";
 import type { PerushDetail } from "@/lib/perushim";
+import type { ReadingMetric } from "@/lib/reading-metrics";
+import { isoDurationSeconds } from "@/lib/reading-metrics";
+import type { Recitation } from "@/lib/recitation";
 import {
 	absUrl,
 	breadcrumbNode,
 	buildGraph,
 	hasContent,
 	nodeId,
+	ORG_ID,
 	plainText,
 	WEBSITE_ID,
 } from "./jsonld";
+import type { PerekIllustration } from "./perek-illustrations";
 
 const HOME_LABEL = "בית";
 
@@ -68,15 +73,41 @@ function tanahAndSeferNodes(seferName: string, helek: string): Thing[] {
 }
 
 /**
+ * Reading-metric fields (#2607) shared by every content node — the SAME
+ * stored complete-text baseline the UI shows (`זמן קריאה משוער`), never a
+ * `plainText`-derived count and never personal progress.
+ */
+function metricFields(
+	metric: ReadingMetric | null | undefined,
+): Record<string, unknown> {
+	if (!metric) return {};
+	return {
+		...(metric.wordCount != null ? { wordCount: metric.wordCount } : {}),
+		...(metric.estimatedSeconds != null
+			? { timeRequired: isoDurationSeconds(metric.estimatedSeconds) }
+			: {}),
+	};
+}
+
+/**
  * Build the `@graph` for a perek text page (`/929/[number]`).
  *
  * Thin: one `Chapter` node in the Tanah → Sefer → Chapter hierarchy plus a
  * breadcrumb. The visible perek text is left in the page HTML (already
  * crawlable) rather than duplicated into an `articleBody`.
  */
-export function buildPerekGraph(perekObj: PerekObj): Graph {
+export function buildPerekGraph(
+	perekObj: PerekObj,
+	images: PerekIllustration[] = [],
+	recitation?: Pick<
+		Recitation,
+		"perekId" | "audioUrl" | "durationMs" | "audioSha256"
+	> | null,
+	metric?: ReadingMetric | null,
+): Graph {
 	const path = perekPath(perekObj.perekId);
 	const url = absUrl(path);
+	const illustration = images[0];
 	const chapterId = nodeId(path, "chapter");
 	const breadcrumb = breadcrumbNode(
 		[
@@ -91,6 +122,8 @@ export function buildPerekGraph(perekObj: PerekObj): Graph {
 		name: perekObj.source,
 		inLanguage: "he",
 		isPartOf: { "@id": seferId(perekObj.sefer) },
+		...metricFields(metric),
+		...(images.length ? { image: images.map((image) => image.src) } : {}),
 	};
 	const webPage: Record<string, unknown> = {
 		"@type": "WebPage",
@@ -101,8 +134,41 @@ export function buildPerekGraph(perekObj: PerekObj): Graph {
 		isPartOf: { "@id": WEBSITE_ID },
 		about: { "@id": chapterId },
 		breadcrumb: { "@id": breadcrumb["@id"] },
+		...(illustration
+			? {
+					primaryImageOfPage: {
+						"@type": "ImageObject",
+						contentUrl: absUrl(illustration.src),
+						caption: illustration.caption,
+						width: illustration.width,
+						height: illustration.height,
+					},
+				}
+			: {}),
 	};
+	const audioId = nodeId(path, "recitation");
+	const audio: AudioObject | null =
+		recitation && recitation.perekId === perekObj.perekId
+			? {
+					"@type": "AudioObject",
+					"@id": audioId,
+					name: `הקראת ${perekObj.source}`,
+					contentUrl: recitation.audioUrl,
+					url: `${url}?book`,
+					encodingFormat: "audio/mpeg",
+					duration: `PT${recitation.durationMs / 1000}S`,
+					inLanguage: "he",
+					isAccessibleForFree: true,
+					sha256: recitation.audioSha256,
+					encodesCreativeWork: { "@id": chapterId },
+				}
+			: null;
+	if (audio) {
+		chapter.encoding = { "@id": audioId };
+		webPage.audio = { "@id": audioId };
+	}
 	return buildGraph([
+		...(audio ? [audio] : []),
 		webPage as unknown as Thing,
 		breadcrumb,
 		chapter as unknown as Thing,
@@ -147,9 +213,11 @@ export function buildArticleGraph(input: ArticleGraphInput): Graph {
 		url,
 		inLanguage: "he",
 		author: { "@id": authorNodeId },
+		publisher: { "@id": ORG_ID },
 		about: { "@id": chapterId },
 		isPartOf: { "@id": WEBSITE_ID },
 		mainEntityOfPage: url,
+		...metricFields(article.metric),
 	};
 	const descSource = article.abstract ?? article.content ?? "";
 	if (hasContent(descSource)) {
@@ -162,6 +230,7 @@ export function buildArticleGraph(input: ArticleGraphInput): Graph {
 		name: article.name,
 		inLanguage: "he",
 		isPartOf: { "@id": WEBSITE_ID },
+		mainEntity: { "@id": articleNode["@id"] },
 		breadcrumb: { "@id": breadcrumb["@id"] },
 	};
 	return buildGraph([
@@ -215,10 +284,16 @@ export function buildPerushGraph(input: PerushGraphInput): Graph {
 		url,
 		inLanguage: "he",
 		author: { "@id": commentatorId },
+		publisher: { "@id": ORG_ID },
 		about: { "@id": chapterId },
 		isPartOf: { "@id": WEBSITE_ID },
 		mainEntityOfPage: url,
+		...metricFields(perush.metric),
 	};
+	const notesHtml = perush.notes.map((note) => note.noteContent).join(" ");
+	if (hasContent(notesHtml)) {
+		articleNode.description = plainText(notesHtml, 300);
+	}
 	const webPage: Record<string, unknown> = {
 		"@type": "WebPage",
 		"@id": nodeId(path, "webpage"),
@@ -226,6 +301,7 @@ export function buildPerushGraph(input: PerushGraphInput): Graph {
 		name: title,
 		inLanguage: "he",
 		isPartOf: { "@id": WEBSITE_ID },
+		mainEntity: { "@id": articleNode["@id"] },
 		breadcrumb: { "@id": breadcrumb["@id"] },
 	};
 	return buildGraph([

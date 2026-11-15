@@ -4,17 +4,24 @@
 # Build: docker build -t sefaria-mongo:latest .
 # Run: docker run -d -p 27017:27017 sefaria-mongo:latest
 #
-# CRITICAL: The mongo:7 image declares /data/db as a VOLUME, which means
-# any data written there during build is LOST when the container runs.
-# To work around this, we restore to /mongodb-data (not a volume) and
-# copy it to /data/db at container startup via a custom entrypoint.
+# Restore outside the default /data/db volume. Existing volume users copy the
+# fixture on first start; ephemeral CI selects /mongodb-data directly, avoiding
+# that full copy. BuildKit retains writes inside declared volumes too:
+# https://docs.docker.com/reference/dockerfile/#volume
 
-FROM mongo:7
+# Pin version+digest: the derived image is tagged by this directory's git tree
+# hash, so the FROM line is the only lever that forces a rebuild when the base
+# moves. 9.0.4 recognizes Ubuntu's backported kernel patch level
+# (SERVER-131779), which lets mongod start on ubuntu-26.04 runners (#2524).
+FROM mongo:9.0.4@sha256:452bdaf2127b8ff851e31410a267809b9829eded219979f2210e7c7efb85a058
+
+# Fail the build if any stage of a pipeline (e.g. find | head) exits nonzero.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Install curl for downloading the dump
 # Use --no-install-recommends per Codacy guidelines
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl=8.18.* \
     && rm -rf /var/lib/apt/lists/*
 
 # Download and extract Sefaria dump
@@ -24,56 +31,32 @@ ENV DUMP_URL=https://storage.googleapis.com/sefaria-mongo-backup/dump_small.tar.
 # Download, extract, and prepare the dump for mongorestore
 # The archive extracts to a directory - we find it dynamically and rename to /dump
 WORKDIR /tmp
-RUN curl -L ${DUMP_URL} -o dump.tar.gz \
+RUN curl --fail --show-error --location "${DUMP_URL}" -o dump.tar.gz \
     && tar -xzf dump.tar.gz \
     && rm dump.tar.gz \
     && ls -la \
-    && EXTRACTED_DIR=$(find . -maxdepth 1 -type d ! -name '.' | head -1) \
+    && EXTRACTED_DIR=$(find . -mindepth 1 -maxdepth 1 -type d -print -quit) \
     && echo "Found extracted directory: $EXTRACTED_DIR" \
     && mv "$EXTRACTED_DIR" /dump
 
-# Restore MongoDB data at BUILD TIME to /mongodb-data (NOT /data/db which is a volume!)
-# We use shell background process (&) instead of --fork which doesn't work in buildkit
-# IMPORTANT: sync before shutdown to ensure all data is flushed to disk
-# NOTE: In MongoDB 7.x, --nojournal was removed. We use a tmpfs-like approach for performance.
-RUN mkdir -p /mongodb-data && \
-    mongod --dbpath /mongodb-data --bind_ip 127.0.0.1 & \
-    MONGOD_PID=$! && \
-    echo "Waiting for MongoDB to start (PID: $MONGOD_PID)..." && \
-    for i in $(seq 1 60); do \
-        if mongosh --quiet --eval "db.runCommand({ping:1})" 2>/dev/null; then \
-            echo "MongoDB is ready after attempt $i"; \
-            break; \
-        fi; \
-        echo "Attempt $i/60: waiting..."; \
-        sleep 1; \
-    done && \
-    echo "Running mongorestore..." && \
-    mongorestore --drop /dump && \
-    echo "mongorestore completed. Document count:" && \
-    mongosh --quiet --eval "db.getSiblingDB('sefaria').texts.countDocuments({})" && \
-    echo "Flushing data to disk..." && \
-    sync && \
-    echo "Stopping MongoDB gracefully..." && \
-    mongosh --quiet --eval "db.adminCommand({shutdown:1})" || true && \
-    sleep 2 && \
-    wait $MONGOD_PID 2>/dev/null || true && \
-    sync && \
-    echo "Cleaning up dump files..." && \
-    rm -rf /dump && \
-    echo "Build-time restore complete! Data is in /mongodb-data"
+# Do not mask a failed restore behind shutdown cleanup. The supervised child
+# owns its files as mongodb, so direct CI startup needs no ownership copy-up.
+COPY restore.sh /usr/local/bin/restore-sefaria-data.sh
+RUN sed -i 's/\r$//' /usr/local/bin/restore-sefaria-data.sh \
+    && chmod +x /usr/local/bin/restore-sefaria-data.sh \
+    && /usr/local/bin/restore-sefaria-data.sh \
+    && rm -rf /dump
 
 # Verify the data was actually written to disk in a separate RUN layer
 # This ensures buildkit commits the /mongodb-data directory to the image
 RUN echo "Verifying /mongodb-data exists and has data..." && \
-    ls -la /mongodb-data && \
     du -sh /mongodb-data && \
     test -d /mongodb-data && \
-    test "$(ls -A /mongodb-data)" && \
-    echo "Verification passed: /mongodb-data contains $(ls -1 /mongodb-data | wc -l) items"
+    test -n "$(find /mongodb-data -mindepth 1 -print -quit)" && \
+    echo "Verification passed: /mongodb-data contains $(find /mongodb-data -mindepth 1 -maxdepth 1 | wc -l) items"
 
-# Create a custom entrypoint script that copies data from /mongodb-data to /data/db
-# on first startup, then starts mongod normally
+# Keep the existing default entrypoint and persistent-volume initialization.
+# Ephemeral CI explicitly uses the official entrypoint with --dbpath /mongodb-data.
 # Use sed to ensure LF line endings (in case of CRLF from Windows)
 COPY entrypoint.sh /entrypoint.sh
 RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh

@@ -2,10 +2,7 @@
  * @jest-environment jsdom
  */
 import { render } from "@testing-library/react";
-import {
-	ScrollToArticle,
-	ScrollToSlug,
-} from "@/app/929/[number]/[slug]/ScrollToArticle";
+import { ScrollToSlug } from "@/app/929/[number]/[slug]/ScrollToArticle";
 
 describe("ScrollToSlug", () => {
 	beforeEach(() => {
@@ -71,31 +68,15 @@ describe("ScrollToSlug", () => {
 
 		expect(document.getElementById("nonexistent")).toBeNull();
 	});
-});
 
-describe("ScrollToArticle (backward-compat)", () => {
-	beforeEach(() => {
-		jest.useFakeTimers();
-	});
-
-	afterEach(() => {
-		jest.useRealTimers();
-		document.body.innerHTML = "";
-	});
-
-	it("scrolls to article-view element with instant behavior", () => {
-		const scrollIntoView = jest.fn();
+	it("cancels pending scrolling when navigation unmounts the component", () => {
 		const div = document.createElement("div");
 		div.id = "article-view";
-		div.scrollIntoView = scrollIntoView;
+		div.scrollIntoView = jest.fn();
 		document.body.appendChild(div);
-
-		render(<ScrollToArticle />);
+		const { unmount } = render(<ScrollToSlug />);
+		unmount();
 		jest.advanceTimersByTime(100);
-
-		expect(scrollIntoView).toHaveBeenCalledWith({
-			behavior: "instant",
-			block: "start",
-		});
+		expect(div.scrollIntoView).not.toHaveBeenCalled();
 	});
 });
