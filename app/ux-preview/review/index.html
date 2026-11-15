@@ -16,12 +16,12 @@
     <a href="https://github.com/bible-on-site/bible-on-site/pull/3385">הדיון ב-PR #3385</a><a href="REVIEW.md">ההשוואה ב-GitHub</a>
     <a href="current.html">המסכים הנוכחיים</a></div>
 </header>
-<nav aria-label="מעבר בין ההשוואות"><div class="nav-inner"><a href="#home">הבית והפרק היומי</a><a href="#home-navigation">ניווט בבית</a><a href="#reader">כלי הקריאה</a><a href="#reader-scrolled">גלילה</a><a href="#reader-tools">אפשרויות נוספות</a><a href="#display-options">תצוגת הטקסט</a><a href="#commentary">בחירת פירושים</a><a href="#articles">מאמרי הפרק</a><a href="#library">ספרייה</a><a href="#search">חיפוש</a><a href="#search-kinds">מה לחפש</a><a href="#calendar">לוח שנה</a><a href="#authors">רבנים וכותבים</a><a href="#preferences">העדפות</a><a href="#motion">וידאו גלילה</a></div></nav>
+<nav aria-label="מעבר בין ההשוואות"><div class="nav-inner"><a href="#home">הבית והפרק היומי</a><a href="#home-navigation">ניווט בבית</a><a href="#reader">כלי הקריאה</a><a href="#reader-scrolled">גלילה</a><a href="#reader-tools">אפשרויות נוספות</a><a href="#display-options">תצוגת הטקסט</a><a href="#commentary">בחירת פירושים</a><a href="#articles">מאמרי הפרק</a><a href="#home-parasha">פרשות בבית</a><a href="#home-moadim">מועדים בבית</a><a href="#home-community">קשר ותרומות</a><a href="#search">חיפוש</a><a href="#search-kinds">מה לחפש</a><a href="#calendar">לוח שנה</a><a href="#authors">רבנים וכותבים</a><a href="#preferences">העדפות</a><a href="#motion">וידאו גלילה</a></div></nav>
 <main>
 <!-- Generated from comparisons.json. Before always refers to the documented default-branch commit. -->
 <article id="home">
   <div class="section-head"><span class="number">01</span><h2>כניסה לאפליקציה - הפרק היומי במרכז</h2></div>
-  <p class="change">ב-master הכניסה היא ישירות לפסוקי הפרק. בהצעה החדשה נכנסים לבית עם כרטיס הפרק היומי הכהה, הכותרת הגדולה והכפתור הכחול. הכרטיס נשמר; הספרייה היא מסך נוסף ולא תחליף לבית.</p>
+  <p class="change">ב-master הכניסה היא ישירות לפסוקי הפרק. בהצעה החדשה נכנסים לבית עם כרטיס הפרק היומי הכהה, כותרת גדולה וכפתור כחול. כל יעדי הלימוד והקשר נמצאים בהמשך אותו דף.</p>
   <div class="pair" dir="rtl">
     <figure class="before"><figcaption>לפני - הענף הראשי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/reader.png" alt="הכניסה הקיימת: ישירות לקורא" loading="lazy"></div><p class="caption">הכניסה הקיימת: ישירות לקורא</p></figure>
     <figure class="after"><figcaption>אחרי - הצעת UX</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/home.png" alt="הבית החדש עם כרטיס הפרק היומי" loading="lazy"></div><p class="caption">הבית החדש עם כרטיס הפרק היומי</p></figure>
@@ -29,7 +29,7 @@
 </article>
 <article id="home-navigation">
   <div class="section-head"><span class="number">02</span><h2>מגלים עוד - בלי רשימת קישורים קטנים</h2></div>
-  <p class="change">במקום להגיע לכל יעד דרך מגירת הניווט, הבית מציג את הכניסות המרכזיות בכרטיסים גדולים. מסורה היא חלוקה מסורתית; רבנים וכותבים והספרייה מקבלים כניסות מובחנות.</p>
+  <p class="change">הבית מערבב אריחים ברוחב מלא עם זוגות אריחים קטנים. הפרק היומי, הפרשות והמועדים מקבלים מקום מרכזי; יתר היעדים נפתחים ישירות מאריח בודד.</p>
   <div class="pair" dir="rtl">
     <figure class="before"><figcaption>לפני - הענף הראשי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/navigation.png" alt="מגירת הניווט ב-master" loading="lazy"></div><p class="caption">מגירת הניווט ב-master</p></figure>
     <figure class="after"><figcaption>אחרי - הצעת UX</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/home-navigation.png" alt="הכניסות בהמשך הבית" loading="lazy"></div><p class="caption">הכניסות בהמשך הבית</p></figure>
@@ -83,16 +83,32 @@
     <figure class="after"><figcaption>אחרי - הצעת UX</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/articles.png" alt="מאמרים וחזרה מפורשת לפסוקים" loading="lazy"></div><p class="caption">מאמרים וחזרה מפורשת לפסוקים</p></figure>
   </div>
 </article>
-<article id="library">
-  <div class="section-head"><span class="number">09</span><h2>עוד עולמות - באותה שפה של הכרטיס היומי</h2></div>
-  <p class="change">לספרייה אין מסך מקביל ב-master: התכנים נפתחים שם ממגירת הניווט. בהצעה הם מקבלים מסך נוסף עם כרטיסים כהים וכחולים, טיפוגרפיה גדולה וסמלים ברקע. הבית והכרטיס היומי נשארים במקומם.</p>
+<article id="home-parasha">
+  <div class="section-head"><span class="number">09</span><h2>פרשה על הפרק - אריח רחב בבית</h2></div>
+  <p class="change">פרשות התורה מקבלות אריח ברוחב מלא, עם כותרת גדולה, ספר פתוח ברקע וכפתור כחול. מעליו ומתחתיו משולבים זוגות אריחים קטנים.</p>
   <div class="pair" dir="rtl">
-    <figure class="before"><figcaption>לפני - הענף הראשי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/navigation.png" alt="היעדים במגירת הניווט ב-master" loading="lazy"></div><p class="caption">היעדים במגירת הניווט ב-master</p></figure>
-    <figure class="after"><figcaption>אחרי - הצעת UX</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/library.png" alt="מסך ספרייה נוסף - לא מסך הבית" loading="lazy"></div><p class="caption">מסך ספרייה נוסף - לא מסך הבית</p></figure>
+    <figure class="before"><figcaption>לפני - הענף הראשי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/navigation.png" alt="פרשות התורה דרך המגירה ב-master" loading="lazy"></div><p class="caption">פרשות התורה דרך המגירה ב-master</p></figure>
+    <figure class="after"><figcaption>אחרי - הצעת UX</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/home-parasha.png" alt="אריח פרשות ברוחב מלא בתוך הבית" loading="lazy"></div><p class="caption">אריח פרשות ברוחב מלא בתוך הבית</p></figure>
+  </div>
+</article>
+<article id="home-moadim">
+  <div class="section-head"><span class="number">10</span><h2>מועדים על הפרק - מקום למעגל השנה</h2></div>
+  <p class="change">אריח המועדים ממשיך את השפה של הפרק היומי בכחול עמוק, עם לוח שנה עדין ברקע וכניסה ישירה לחגים ולמועדים. תנכפדיה ומסורה מופיעות מעליו באריחים בודדים.</p>
+  <div class="pair" dir="rtl">
+    <figure class="before"><figcaption>לפני - הענף הראשי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/navigation.png" alt="מועדים דרך המגירה ב-master" loading="lazy"></div><p class="caption">מועדים דרך המגירה ב-master</p></figure>
+    <figure class="after"><figcaption>אחרי - הצעת UX</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/home-moadim.png" alt="אריח מועדים רחב בין זוגות האריחים" loading="lazy"></div><p class="caption">אריח מועדים רחב בין זוגות האריחים</p></figure>
+  </div>
+</article>
+<article id="home-community">
+  <div class="section-head"><span class="number">11</span><h2>יצירת קשר ותרומות - קרוב לתוכן</h2></div>
+  <p class="change">יצירת קשר ותרומות מקבלות אריחים בודדים ונוחים ללחיצה בהמשך הבית, לצד רבנים וכותבים והעלון היומי. כל אריח פותח ישירות את המסך הקיים.</p>
+  <div class="pair" dir="rtl">
+    <figure class="before"><figcaption>לפני - הענף הראשי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/navigation.png" alt="קשר ותמיכה דרך המגירה ב-master" loading="lazy"></div><p class="caption">קשר ותמיכה דרך המגירה ב-master</p></figure>
+    <figure class="after"><figcaption>אחרי - הצעת UX</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/home-community.png" alt="אריחים קטנים ליצירת קשר ולתרומות" loading="lazy"></div><p class="caption">אריחים קטנים ליצירת קשר ולתרומות</p></figure>
   </div>
 </article>
 <article id="search">
-  <div class="section-head"><span class="number">10</span><h2>חיפוש בתוכן וגם ביעדי האפליקציה</h2></div>
+  <div class="section-head"><span class="number">12</span><h2>חיפוש בתוכן וגם ביעדי האפליקציה</h2></div>
   <p class="change">זהו החיפוש הקיים של האפליקציה, עם אותם סינון, מיון ותוצאות. מסכים נמצאים בו כסוג תוצאה נוסף, ללא רשימת ניווט נפרדת. הכניסה מהבית ומכלי הקריאה מובילה לאותו רכיב חיפוש.</p>
   <div class="pair" dir="rtl">
     <figure class="before"><figcaption>לפני - הענף הראשי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/search.png" alt="החיפוש בקורא הקיים" loading="lazy"></div><p class="caption">החיפוש בקורא הקיים</p></figure>
@@ -100,7 +116,7 @@
   </div>
 </article>
 <article id="search-kinds">
-  <div class="section-head"><span class="number">11</span><h2>מה לחפש - גם מסך</h2></div>
+  <div class="section-head"><span class="number">13</span><h2>מה לחפש - גם מסך</h2></div>
   <p class="change">מסך נוסף לבורר מה לחפש ומופיע ראשון כדי שיהיה קל לגלות אותו. אפשר לחפש למשל לוח שנה, העדפות או ניווט בתנ&quot;ך באותה רשימת תוצאות שבה מחפשים פסוקים ומאמרים.</p>
   <div class="pair" dir="rtl">
     <figure class="before"><figcaption>לפני - הענף הראשי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/search.png" alt="החיפוש ובורר מה לחפש ב-master" loading="lazy"></div><p class="caption">החיפוש ובורר מה לחפש ב-master</p></figure>
@@ -108,7 +124,7 @@
   </div>
 </article>
 <article id="calendar">
-  <div class="section-head"><span class="number">12</span><h2>לוח לימוד יומי - כחול על רקע קריר ובהיר</h2></div>
+  <div class="section-head"><span class="number">14</span><h2>לוח לימוד יומי - כחול על רקע קריר ובהיר</h2></div>
   <p class="change">מעטפת בהירה וקרירה עם גובה ורדיוס אחידים לכותרת ולכפתורי הניווט. כפתורי הבית והחזרה גדולים ומופיעים באותם מקומות.</p>
   <div class="pair" dir="rtl">
     <figure class="before"><figcaption>לפני - הענף הראשי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/calendar.png" alt="לוח השנה ב-master" loading="lazy"></div><p class="caption">לוח השנה ב-master</p></figure>
@@ -116,7 +132,7 @@
   </div>
 </article>
 <article id="authors">
-  <div class="section-head"><span class="number">13</span><h2>רבנים וכותבים - חזרה ובית באותה שפה</h2></div>
+  <div class="section-head"><span class="number">15</span><h2>רבנים וכותבים - חזרה ובית באותה שפה</h2></div>
   <p class="change">שדה החיפוש ממלא את כל הרוחב שנשאר לצד בית וחזרה. כפתור ניקוי מוסתר אינו שומר מקום ריק. רקעי הכותרת וכפתורי הסרגל בעלי גובה ורדיוס אחידים.</p>
   <div class="pair" dir="rtl">
     <figure class="before"><figcaption>לפני - הענף הראשי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/authors.jpg" alt="רבנים וכותבים ב-master" loading="lazy"></div><p class="caption">רבנים וכותבים ב-master</p></figure>
@@ -124,7 +140,7 @@
   </div>
 </article>
 <article id="preferences">
-  <div class="section-head"><span class="number">14</span><h2>העדפות - כניסה בולטת וחזרה צפויה</h2></div>
+  <div class="section-head"><span class="number">16</span><h2>העדפות - כניסה בולטת וחזרה צפויה</h2></div>
   <p class="change">בבית יש כפתור העדפות גדול עם אייקון. בתוך ההגדרות נשמר אותו ניווט חזרה ובית, ללא תפריט צד מקביל.</p>
   <div class="pair" dir="rtl">
     <figure class="before"><figcaption>לפני - הענף הראשי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/preferences.png" alt="העדפות ב-master" loading="lazy"></div><p class="caption">העדפות ב-master</p></figure>
@@ -132,7 +148,7 @@
   </div>
 </article>
 <article id="motion">
-  <div class="section-head"><span class="number">15</span><h2>גלילה בתנועה - master מול הצעת ה-UX</h2></div>
+  <div class="section-head"><span class="number">17</span><h2>גלילה בתנועה - master מול הצעת ה-UX</h2></div>
   <p class="change">הקלטות אמיתיות מהאפליקציה. בהצעה החדשה יש הפסקות בין הגרירות כדי להדגים את ההשהיה, הדעיכה והחזרה.</p>
   <div class="pair" dir="rtl">
     <figure><figcaption>לפני - הענף הראשי</figcaption>
