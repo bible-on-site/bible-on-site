@@ -15,14 +15,14 @@ SEARCH_INDEX = "sefaria-dump-5784-sivan-4.hebrew_search.sqlite"
 NOTES_DIRECTORIES = {
     "Android": "Platforms/Android/AssetPacks/perushim_notes",
     # App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
-    "iOS": "Platforms/iOS/AssetPacks/perushim-notes",
+    "iOS": "Platforms/iOS/AssetPacks/perushim-notes-slim",
     # MSIX optional package: one ExtensionPacks directory per deliverable pack.
     "Windows": "Platforms/Windows/ExtensionPacks/perushim_notes",
 }
 # The prebuilt search index rides in the same asset pack as the notes payload.
 SEARCH_INDEX_DIRECTORIES = {
     "Android": "Platforms/Android/AssetPacks/perushim_notes",
-    "iOS": "Platforms/iOS/AssetPacks/perushim-notes",
+    "iOS": "Platforms/iOS/AssetPacks/perushim-notes-slim",
     "Windows": "Platforms/Windows/ExtensionPacks/perushim_notes",
 }
 
@@ -92,21 +92,36 @@ def validate_search_index(index_path: Path, notes_timestamp: int, tanah_view: Pa
         if index.execute("SELECT COUNT(*) FROM verses_documents").fetchone()[0] == 0:
             raise ValueError("Search index has no verses documents")
         index.execute("SELECT term FROM notes_vocab LIMIT 1").fetchall()
-        index.execute(
-            "SELECT PerekId, PasukNum, PerushId, SeferId, c.Text FROM notes JOIN notes_documents c ON c.rowid=notes.rowid WHERE notes MATCH ? LIMIT 1",
-            ("בראשית",),
-        ).fetchall()
+        # Two documents layouts exist: the slim one stores the note's identity
+        # (NoteIdx) so hit bodies resolve from the notes blob, and the legacy
+        # one stored a copy of the text. Baseline artifacts can still carry the
+        # fat layout, so validate whichever is present coherently.
+        notes_columns = {row[1] for row in index.execute("PRAGMA table_info(notes_documents)")}
+        if "NoteIdx" in notes_columns and "Text" not in notes_columns:
+            index.execute(
+                "SELECT PerekId, PasukNum, PerushId, SeferId, c.NoteIdx FROM notes JOIN notes_documents c ON c.rowid=notes.rowid WHERE notes MATCH ? LIMIT 1",
+                ("בראשית",),
+            ).fetchall()
+        elif "Text" in notes_columns:
+            index.execute(
+                "SELECT PerekId, PasukNum, PerushId, SeferId, c.Text FROM notes JOIN notes_documents c ON c.rowid=notes.rowid WHERE notes MATCH ? LIMIT 1",
+                ("בראשית",),
+            ).fetchall()
+        else:
+            raise ValueError("notes_documents matches neither the slim nor the legacy layout")
         if index.execute("SELECT COUNT(*) FROM notes_documents").fetchone()[0] == 0:
             raise ValueError("Search index has no notes documents")
 
 
 def prepare_assets(source: Path, app_directory: Path, platform: str) -> int:
     destination = NOTES_DIRECTORIES[platform]
-    if platform == "iOS":
-        # A legacy perushim_notes dir lingers on checkouts that generated the
-        # underscore pack — PackageIosAssetPacks archives any dir with a manifest.
-        shutil.rmtree(app_directory / "Platforms/iOS/AssetPacks/perushim_notes", ignore_errors=True)
     count = validate_pair(source, app_directory / "Resources/Raw" / TANAH)
+    if platform == "iOS":
+        # Only the new identifier may carry slim indexes. Never archive a stale
+        # local legacy manifest: Apple would deliver it to older app builds too.
+        for legacy in ("perushim_notes", "perushim-notes"):
+            shutil.rmtree(app_directory / "Platforms/iOS/AssetPacks" / legacy, ignore_errors=True)
+            (app_directory.parent / ".artifacts/assetpacks" / f"{legacy}.aar").unlink(missing_ok=True)
     catalog_directory = app_directory / "Resources/Raw"
     notes_directory = app_directory / destination
     catalog_directory.mkdir(parents=True, exist_ok=True)

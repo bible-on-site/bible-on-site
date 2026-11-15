@@ -1,7 +1,19 @@
 [
 	{
 		"$match": {
-			"$expr": { "$eq": ["$title", "$$idx_title"] },
+			"$expr": {
+				"$and": [
+					{ "$eq": ["$title", "$$idx_title"] },
+					{ "$or": [
+						{ "$ne": ["$$idx_title", "Midrash Tanchuma"] },
+						{ "$eq": ["$versionTitle", "Midrash Tanchuma -- Torat Emet"] }
+					] },
+					{ "$or": [
+						{ "$ne": ["$$idx_title", "Midrash Mishlei"] },
+						{ "$eq": ["$versionTitle", "מדרש משלי - שלמה באבער"] }
+					] }
+				]
+			},
 			"language": "he",
 			"versionTitle": {
 				"$nin": [
@@ -44,5 +56,5 @@
 	{ "$addFields": { "versionSize": { "$bsonSize": "$$ROOT" } } },
 	{ "$sort": { "versionSize": -1, "versionTitle": 1 } },
 	{ "$limit": 1 },
-	{ "$project": { "chapter": 1 } }
+	{ "$project": { "chapter": 1, "versionTitle": 1 } }
 ]

@@ -249,9 +249,10 @@ jobs:
       # --- End RDS Access Setup ---
 
       # --- Local SSG database (website only) ---
-      # Bake SSG pages from the post-deploy data state: a prod RDS dump minus the
-      # dynamic content tables, plus a replay of the deploy manifest carrying the
-      # fresh perushim artifact. Falls back to querying prod RDS when no perushim
+      # Bake SSG pages from the post-deploy data state: a prod RDS dump plus a
+      # replay of the deploy manifest carrying the fresh perushim artifact.
+      # Preserve commentary identities and chapters retained by that replay.
+      # Falls back to querying prod RDS when no perushim
       # artifact is available (e.g. an expired baseline).
       - name: Set up local MySQL for SSG build data
         if: ${{ env.IS_NPM == 'true' && inputs.perushim_data_artifact != '' }}
@@ -296,14 +297,13 @@ jobs:
           curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
             https://truststore.pki.rds.amazonaws.com/il-central-1/il-central-1-bundle.pem \
             --output "$RDS_CA_BUNDLE"
-          # parshan/perush/note are redeployed from the manifest below, so the
-          # dump carries every static, tanahpedia and metrics table as it runs on prod.
+          # Commentary catalogs and notes must be cloned before the additive
+          # replay, so SSG uses the same IDs and retained chapters as RDS.
           mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" \
             --ssl-ca="$RDS_CA_BUNDLE" --ssl-mode=VERIFY_IDENTITY \
             --single-transaction --quick --no-tablespaces --column-statistics=0 \
             --set-gtid-purged=OFF --default-character-set=utf8mb4 \
             --databases "$DB_NAME" \
-            --ignore-table="$DB_NAME.parshan" --ignore-table="$DB_NAME.perush" --ignore-table="$DB_NAME.note" \
             | sed -e 's/DEFINER[ ]*=[ ]*[^ ]* / /g' \
             | mysql -h 127.0.0.1 -u root -ptest_123
           unset MYSQL_PWD

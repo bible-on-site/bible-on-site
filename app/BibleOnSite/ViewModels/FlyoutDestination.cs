@@ -14,6 +14,7 @@ public enum FlyoutDestination
 	LearningCalendar,
 	Masora,
 	Parasha,
+	Moadim,
 	Authors,
 	DailyBulletin,
 	Terms,

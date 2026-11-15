@@ -1,6 +1,7 @@
 import type mysql from "mysql2/promise";
 import { hasBulletinArticleText } from "~/lib/bulletin-article";
 import { hebrewBulletinMonthDay } from "~/lib/daily-bulletin";
+import { MAX_DAY_FOR_HEBREW_MONTH } from "~/lib/hebrew-calendar";
 import { execute, query, txExecute, txQuery } from "./db";
 
 /**
@@ -13,28 +14,6 @@ export interface HebrewDateAssignment {
 	hebrew_month: number;
 	hebrew_day: number;
 }
-
-/**
- * Maximum day each uniform Hebrew month can reach in some year: Cheshvan and
- * Kislev vary 29/30 so 30 stays valid input for them; Tevet, non-leap Adar,
- * Iyar, Tammuz, Elul and Adar II never reach 30.
- */
-const MAX_DAY_FOR_HEBREW_MONTH: Record<number, number> = {
-	1: 30,
-	2: 30,
-	3: 30,
-	4: 29,
-	5: 30,
-	6: 29,
-	7: 30,
-	8: 29,
-	9: 30,
-	10: 29,
-	11: 30,
-	12: 29,
-	13: 30,
-	14: 29,
-};
 
 /**
  * Whether a query failure means the Hebrew-date schema is not deployed yet —

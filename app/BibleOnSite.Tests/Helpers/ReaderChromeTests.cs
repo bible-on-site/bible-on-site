@@ -25,6 +25,20 @@ namespace BibleOnSite.Tests.Helpers;
 [Collection("Application state")]
 public class ReaderChromeTests
 {
+    [Fact]
+    public void TextReselect_UsesTheExplicitNonCarouselScrollAction()
+    {
+        using var seams = new Seams();
+        var rig = new Rig();
+        var calls = 0;
+        _ = rig.CreateChrome(scrollReadingToStart: () => { calls++; return true; });
+        ReaderChrome.ScrollToStart = (_, _) => throw new InvalidOperationException("must not search carousel descendants");
+
+        rig.BottomBar.RaiseTextMode();
+
+        calls.Should().Be(1);
+    }
+
     /// <summary>
     /// Attaches a mocked MAUI context to a view tree so <c>FadeToAsync</c>
     /// resolves an animation manager; <see cref="TickAll"/> lands every queued
@@ -213,6 +227,7 @@ public class ReaderChromeTests
         public readonly ReaderFanMenuSatellite Next = new();
         public readonly ReaderExitFullscreenButton ExitButton = new();
         public readonly Grid Content = new();
+        public readonly ProgressBar Progress = new();
         public readonly Grid Toolbar = new();
         public readonly Grid Host = new();
         public readonly Grid ContentArea = new();
@@ -240,7 +255,7 @@ public class ReaderChromeTests
             Toolbar.Arrange(new Rect(0, 0, 400, 56));
         }
 
-        public ReaderChrome CreateChrome(bool withFullscreenHandler = true)
+        public ReaderChrome CreateChrome(bool withFullscreenHandler = true, Func<bool>? scrollReadingToStart = null, bool includeProgressIndicator = true)
         {
             return new ReaderChrome(
                 new ReaderChromeSurfaces
@@ -253,6 +268,7 @@ public class ReaderChromeTests
                     ExitFullscreenButton = ExitButton,
                     ArticlesView = Articles,
                     ReaderContent = Content,
+                    ReadingProgressIndicator = includeProgressIndicator ? Progress : null,
                     Toolbar = Toolbar,
                     Host = Host,
                     ContentArea = ContentArea,
@@ -261,6 +277,7 @@ public class ReaderChromeTests
                 {
                     ReloadArticlesAsync = () => { ReloadCount++; return Task.CompletedTask; },
                     CurrentUnit = () => Unit,
+                    ScrollReadingToStart = scrollReadingToStart,
                     SelectArticle = id => Selections.Add(id),
                     CanGoPrevious = () => CanPrev,
                     CanGoNext = () => CanNext,
@@ -437,6 +454,7 @@ public class ReaderChromeTests
                 ExitFullscreenButton = rig.ExitButton,
                 ArticlesView = rig.Articles,
                 ReaderContent = rig.Content,
+                ReadingProgressIndicator = rig.Progress,
                 Toolbar = rig.Toolbar,
                 Host = rig.Host,
                 ContentArea = rig.ContentArea,
@@ -456,6 +474,8 @@ public class ReaderChromeTests
         FluentActions.Invoking(() => rig.BottomBar.RaiseArticles()).Should().NotThrow(
             "a failing articles load degrades to a log line, never a reader crash");
         chrome.IsShowingArticles.Should().BeTrue();
+        rig.Progress.IsVisible.Should().BeTrue(
+            "a failed articles load never swapped the surfaces — the reading view and its indicator stay up");
     }
 
     [Fact]
@@ -474,6 +494,50 @@ public class ReaderChromeTests
         rig.Articles.IsVisible.Should().BeFalse();
         rig.Content.IsVisible.Should().BeTrue();
         rig.BottomBar.IsArticlesActive.Should().BeFalse();
+    }
+
+    // — Reading-progress placement (issue #3364) ———————————————————————————
+
+    [Fact]
+    public void ArticlesButton_ShowsArticles_HidesTheReadingProgressIndicator()
+    {
+        var rig = new Rig();
+        _ = rig.CreateChrome();
+        rig.Progress.IsVisible.Should().BeTrue("the indicator rides the reading view");
+
+        rig.BottomBar.RaiseArticles();
+
+        rig.Content.IsVisible.Should().BeFalse();
+        rig.Progress.IsVisible.Should().BeFalse(
+            "the perek hairline belongs to the hidden reading content — it must not paint over the articles list (#3364)");
+    }
+
+    [Fact]
+    public void TextButton_FromArticles_RestoresTheReadingProgressIndicator()
+    {
+        var rig = new Rig();
+        _ = rig.CreateChrome();
+        rig.BottomBar.RaiseArticles();
+        rig.Progress.IsVisible.Should().BeFalse();
+
+        rig.BottomBar.RaiseTextMode();
+
+        rig.Progress.IsVisible.Should().BeTrue(
+            "returning to scripture restores the perek's own reading position (#3364)");
+    }
+
+    [Fact]
+    public void ArticlesButton_WithoutProgressIndicator_StillSwapsViews()
+    {
+        var rig = new Rig();
+        var chrome = rig.CreateChrome(includeProgressIndicator: false);
+
+        rig.BottomBar.RaiseArticles();
+
+        chrome.IsShowingArticles.Should().BeTrue();
+        rig.Content.IsVisible.Should().BeFalse();
+        rig.Articles.IsVisible.Should().BeTrue(
+            "readers with no progress indicator (parasha, masora) keep the swap");
     }
 
     [Fact]

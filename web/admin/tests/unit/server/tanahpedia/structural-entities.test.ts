@@ -292,7 +292,7 @@ describe("saying dates", () => {
 		};
 		queryMock.mockResolvedValue([row]);
 		const result = await getEntryStructuralContext({ data: "entry-1" });
-		expect(result.linkedEntities).toEqual([row]);
+		expect(result.linkedEntities).toEqual([{ ...row, externalReferences: [] }]);
 		expect(queryOneMock).not.toHaveBeenCalled();
 	});
 	it.each([24480906, 906, 24480900, 24480000, 0, null])(
@@ -364,6 +364,7 @@ describe("saying dates", () => {
 					entityId: "entity",
 					entityType: type,
 					displayName: "אמרה",
+					externalReferences: [],
 				},
 			]);
 		},

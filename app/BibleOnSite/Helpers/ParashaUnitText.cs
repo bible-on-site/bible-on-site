@@ -20,7 +20,7 @@ public static class ParashaUnitText
     /// slices; callers dedupe by perek id where a set is needed.
     /// </summary>
     public static List<MasoraUnitText.PerekSlice> PerekSlicesForUnit(ParashaUnit unit) =>
-        unit.AllRanges().SelectMany(MasoraUnitText.PerekSlicesForRange).ToList();
+        unit.AllRanges().SelectMany(range => MasoraUnitText.PerekSlicesForRange(range)).ToList();
 
     /// <summary>Distinct perek ids the unit's readings overlap, in first-appearance order.</summary>
     public static List<int> PerekIdsForUnit(ParashaUnit unit)
@@ -115,7 +115,7 @@ public static class ParashaUnitText
     /// ("ישעיהו מב ה - ירמיהו ב ג").
     /// </summary>
     public static string RangeLabel(
-        ScriptureRange range,
+        IScriptureRange range,
         Func<int, string?> perekSource,
         Func<int, (string SeferName, int PerekNumber, int? Additional)?> perekInfo)
     {

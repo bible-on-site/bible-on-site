@@ -847,6 +847,39 @@ public class ParashaViewModelTests
     }
 
     [Fact]
+    public async Task PreloadAdjacentRows_PopulatesTheCanonicalPasukCache()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Parasha.LoadAsync(); // catalogue up, no unit navigated
+
+        fixture.Model.GetLoadedPasukim(1).Should().BeNull();
+
+        await fixture.Model.PreloadAdjacentRowsAsync(1);
+
+        // Recitation track matching hashes canonical pesukim by perek for
+        // any loaded unit — a perek reached only through preload must still
+        // resolve, not come back null (#3261 review).
+        fixture.Model.GetLoadedPasukim(1).Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task ConvenienceCtor_WithoutDedicatedSeams_DelegatesToTheFullOne()
+    {
+        await using var fixture = new Fixture();
+        await fixture.Initialize();
+        await fixture.Parasha.LoadAsync();
+
+        var model = new ParashaViewModel(
+            fixture.Parasha,
+            new PerekDataService(new LocalDatabaseService(fixture.Storage.FileSystem.Object)),
+            fixture.Preferences,
+            null, fixture.Notes, null, _ => false, () => 0);
+
+        model.Unit.Should().BeNull();
+    }
+
+    [Fact]
     public async Task TikkunMode_RestoresMarksWhenDisabled()
     {
         await using var fixture = new Fixture();

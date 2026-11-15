@@ -4,10 +4,23 @@
 import { NextRequest } from "next/server";
 import { config, proxy } from "@/proxy";
 
-function makeRequest(pathname: string, opts?: { ua?: string }): NextRequest {
+function makeRequest(
+	pathname: string,
+	opts?: { ua?: string; accept?: string; method?: string },
+): NextRequest {
 	const headers: Record<string, string> = {};
 	if (opts?.ua) headers["user-agent"] = opts.ua;
-	return new NextRequest(new URL(pathname, "https://localhost"), { headers });
+	if (opts?.accept) headers.accept = opts.accept;
+	return new NextRequest(new URL(pathname, "https://localhost"), {
+		headers,
+		method: opts?.method ?? "GET",
+	});
+}
+
+/** The decoded x-middleware-rewrite destination of a proxy rewrite. */
+function rewrittenPath(response: Response | undefined): string | null {
+	const rewrite = response?.headers.get("x-middleware-rewrite");
+	return rewrite ? decodeURIComponent(new URL(rewrite).pathname) : null;
 }
 
 describe("proxy", () => {
@@ -70,10 +83,6 @@ describe("proxy", () => {
 		});
 
 		it.each([
-			"/פרשה",
-			"/פרשה/בראשית",
-			"/פרשה/לך-לך",
-			"/פרשה/וזאת-הברכה",
 			// Unknown and out-of-range segments fall through to the router's
 			// 404 — the proxy never redirects to a dead end.
 			"/פרשה/55",
@@ -82,11 +91,15 @@ describe("proxy", () => {
 			// Three-segment paths skip unit canonicalization entirely
 			// (book chrome gets its own noindex handling above).
 			"/פרשה/בראשית/not-a-cover",
-			"/929/153",
 			"/other/1",
-			"/%invalid/1",
-		])("leaves canonical, unknown, and non-unit %s untouched", async (path) => {
-			expect(await proxy(makeRequest(path))).toBeUndefined();
+		])("leaves non-unit %s untouched", async (path) => {
+			const result = await proxy(makeRequest(path));
+			expect(result?.headers.get("location")).toBeNull();
+			expect(result?.headers.get("x-robots-tag")).toBeNull();
+		});
+
+		it("returns undefined for an undecodable path", async () => {
+			expect(await proxy(makeRequest("/%invalid/1"))).toBeUndefined();
 		});
 	});
 
@@ -114,27 +127,24 @@ describe("proxy", () => {
 		});
 
 		it.each([
-			"/פרשה",
-			"/פרשה/בראשית",
-			"/פרשה/וזאת-הברכה",
-			"/פרשה/בראשית?utm_source=test",
-			"/פרשה/not-a-book/כריכה",
-			"/פרשה/בראשית/not-a-book-page",
-			"/929/153",
 			"/929/1/123?book&article=123",
 			"/929/1/Rashi?perush=Rashi",
 			"/other?perush=Rashi",
 			"/parasha-other/1?book",
 			"/%invalid/1?book",
-		])("does not exclude base content or unrelated %s", async (path) => {
-			expect(await proxy(makeRequest(path))).toBeUndefined();
+		])("does not exclude unrelated %s", async (path) => {
+			const response = await proxy(makeRequest(path));
+			// Corpus paths now pass through with discovery Link headers —
+			// the assertion that matters is that noindex never leaks out
+			// of the parasha family.
+			expect(response?.headers.get("x-robots-tag") ?? null).toBeNull();
 		});
 
 		it("does not carry a variant's exclusion into later base requests", async () => {
 			for (const suffix of ["", "?perush=Rashi", "", "?book", ""]) {
 				const response = await proxy(makeRequest(`/פרשה/בראשית${suffix}`));
 				expect(response?.headers.get("x-robots-tag")).toBe(
-					suffix ? "noindex, follow" : undefined,
+					suffix ? "noindex, follow" : null,
 				);
 			}
 		});
@@ -157,9 +167,9 @@ describe("proxy", () => {
 		});
 	});
 
-	describe("blocked bots", () => {
+	describe("crawler buckets (issue #3257)", () => {
 		it.each([
-			"Bytespider",
+			// The unrelated SEO/scraper bucket stays blocked.
 			"MJ12bot/v1.4.8",
 			"AhrefsBot/7.0",
 			"SemrushBot/7~bl",
@@ -169,50 +179,98 @@ describe("proxy", () => {
 			"MegaIndex.ru/2.0",
 			"Sogou web spider/4.0",
 			"DataForSeoBot/1.0",
-		])("returns 403 for blocked bot: %s", async (ua) => {
+		])("keeps the pure-harvest bucket blocked: %s gets 403", async (ua) => {
 			const result = await proxy(makeRequest("/929/1", { ua }));
 			expect(result?.status).toBe(403);
 		});
 
-		it("does not block legitimate crawlers like Googlebot", async () => {
-			const result = await proxy(
-				makeRequest("/929/1", { ua: "Googlebot/2.1" }),
-			);
-			expect(result).toBeUndefined();
+		it.each([
+			// Search + AI crawlers and every other agent.
+			"Googlebot/2.1",
+			"GPTBot/1.2",
+			"ClaudeBot/1.0",
+			"meta-externalagent/1.1",
+			"CCBot/2.0",
+			"Google-Extended",
+			"Applebot-Extended",
+			"Diffbot/0.1",
+			"TikTokSpider/1.0",
+			"Bytespider",
+			"OAI-SearchBot/1.0",
+			// Browsers and unknown agents.
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+			"totally-unknown-agent/9.9",
+		])("serves the public corpus to %s exactly like a browser", async (ua) => {
+			const result = await proxy(makeRequest("/929/1", { ua }));
+			expect(result?.status).not.toBe(403);
+			expect(result?.headers.get("x-middleware-next")).toBe("1");
 		});
 
-		it("does not block AI training crawlers like meta-externalagent", async () => {
-			const result = await proxy(
-				makeRequest("/929/1", {
-					ua: "meta-externalagent/1.1 (+https://developers.facebook.com/docs/sharing/webmasters/crawler)",
-				}),
-			);
-			expect(result).toBeUndefined();
-		});
-
-		it("does not block regular browsers", async () => {
-			const result = await proxy(
-				makeRequest("/929/1", {
-					ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-				}),
-			);
-			expect(result).toBeUndefined();
+		it("returns the same response shape with no user-agent", async () => {
+			const result = await proxy(makeRequest("/929/1"));
+			expect(result?.headers.get("x-middleware-next")).toBe("1");
 		});
 	});
 
-	describe("non-blocked requests", () => {
-		it("returns undefined for regular page requests", async () => {
-			const result = await proxy(
-				makeRequest("/929/1", {
-					ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-				}),
-			);
-			expect(result).toBeUndefined();
+	describe("agent discovery headers (issue #3257)", () => {
+		it.each([
+			"/",
+			"/929",
+			"/929/1",
+			"/פרשה",
+			"/מסורה/7",
+			"/pedia",
+			"/dev/dashboard",
+			// Even a defunct `.md` path gets the same plain pass-through —
+			// there is no Markdown representation to discover (PR #3299
+			// review).
+			"/929/1.md",
+		])("advertises the agent guide + catalogs on %s", async (path) => {
+			const response = await proxy(makeRequest(path));
+			expect(response?.headers.get("x-middleware-next")).toBe("1");
+			const link = response?.headers.get("link") ?? "";
+			expect(link).toContain('</llms.txt>; rel="help"');
+			expect(link).toContain('rel="api-catalog"');
+			expect(link).toContain('</sitemap.xml>; rel="sitemap"');
+			// No alternate representation and no negotiation contract.
+			expect(link).not.toContain('rel="alternate"');
+			expect(response?.headers.get("vary")).toBeNull();
 		});
 
-		it("returns undefined when no user-agent is set", async () => {
-			const result = await proxy(makeRequest("/929/1"));
-			expect(result).toBeUndefined();
+		it("leaves API calls untouched", async () => {
+			expect(await proxy(makeRequest("/api/search?q=x"))).toBeUndefined();
+			expect(
+				await proxy(makeRequest("/api/tanahpedia/preview/moshe")),
+			).toBeUndefined();
+		});
+
+		it.each(["GET", "HEAD"])(
+			"preserves the catalog handler's canonical Link header on %s",
+			async (method) => {
+				expect(
+					await proxy(makeRequest("/.well-known/api-catalog", { method })),
+				).toBeUndefined();
+			},
+		);
+
+		it("never rewrites or redirects for .md or a markdown Accept", async () => {
+			for (const path of ["/929/1.md", "/929/1", "/פרשה/בראשית.md"]) {
+				for (const accept of [undefined, "text/markdown", "*/*"]) {
+					const response = await proxy(
+						makeRequest(path, accept ? { accept } : {}),
+					);
+					expect(rewrittenPath(response)).toBeNull();
+					expect(response?.headers.get("location")).toBeNull();
+					expect(response?.headers.get("x-middleware-next")).toBe("1");
+				}
+			}
+		});
+
+		it("does not add discovery headers to writes or bypassed paths", async () => {
+			expect(
+				await proxy(makeRequest("/929/1", { method: "POST" })),
+			).toBeUndefined();
+			expect(await proxy(makeRequest("/api/health"))).toBeUndefined();
 		});
 	});
 
@@ -248,18 +306,18 @@ describe("proxy", () => {
 			);
 		});
 
-		it("leaves the tanahpedia preview API untouched", async () => {
-			const result = await proxy(makeRequest("/api/tanahpedia/preview/moshe"));
-			expect(result).toBeUndefined();
+		it("does not redirect an already-canonical category slug", async () => {
+			// /pedia/אישים resolves to the canonical Hebrew slug with no
+			// filters — no redirect, just the corpus discovery headers.
+			const result = await proxy(
+				makeRequest(`/pedia/${encodeURIComponent("אישים")}`),
+			);
+			expect(result?.headers.get("location")).toBeNull();
+			expect(result?.headers.get("x-middleware-next")).toBe("1");
 		});
 
-		it.each([
-			"/pedia",
-			`/pedia/${encodeURIComponent("אישים")}`,
-			`/pedia/${encodeURIComponent("נביאים")}`,
-			`/pedia/${encodeURIComponent("משה-רבנו")}`,
-		])("leaves canonical %s untouched", async (path) => {
-			const result = await proxy(makeRequest(path));
+		it("leaves the tanahpedia preview API untouched", async () => {
+			const result = await proxy(makeRequest("/api/tanahpedia/preview/moshe"));
 			expect(result).toBeUndefined();
 		});
 	});
@@ -284,27 +342,21 @@ describe("proxy", () => {
 		it("passes through when no key is configured", async () => {
 			delete process.env.INDEXNOW_KEY;
 			const result = await proxy(makeRequest(`/${KEY}.txt`));
-			expect(result).toBeUndefined();
+			// A plain pass-through (discovery headers only) — the key body
+			// is never emitted.
+			expect(result?.headers.get("x-middleware-next")).toBe("1");
 		});
 
 		it("passes through for a different .txt path", async () => {
 			process.env.INDEXNOW_KEY = KEY;
 			const result = await proxy(makeRequest("/other.txt"));
-			expect(result).toBeUndefined();
+			expect(result?.headers.get("x-middleware-next")).toBe("1");
 		});
 
 		it("does not serve the key under a nested path", async () => {
 			process.env.INDEXNOW_KEY = KEY;
 			const result = await proxy(makeRequest(`/sub/${KEY}.txt`));
-			expect(result).toBeUndefined();
-		});
-	});
-
-	describe("config", () => {
-		it("exports a matcher that excludes _next/static, _next/image, and favicon.ico", () => {
-			expect(config.matcher).toEqual([
-				"/((?!_next/static|_next/image|favicon.ico).*)",
-			]);
+			expect(result?.headers.get("x-middleware-next")).toBe("1");
 		});
 	});
 
@@ -319,16 +371,29 @@ describe("proxy", () => {
 				configuredProxy = require("@/proxy").proxy;
 			});
 			try {
-				expect(
-					await configuredProxy(makeRequest("/929/1", { ua: "Bytespider" })),
-				).toBeUndefined();
+				// An allowed bot reaches the public discovery-header branch.
+				const result = await configuredProxy(
+					makeRequest("/929/1", { ua: "AhrefsBot/7.0" }),
+				);
+				expect(result?.status).not.toBe(403);
 			} finally {
 				jest.restoreAllMocks();
 			}
 		});
+
 		it("blocks bots by default (env var not set)", async () => {
-			const result = await proxy(makeRequest("/929/1", { ua: "Bytespider" }));
+			const result = await proxy(
+				makeRequest("/929/1", { ua: "AhrefsBot/7.0" }),
+			);
 			expect(result?.status).toBe(403);
+		});
+	});
+
+	describe("config", () => {
+		it("exports a matcher that excludes _next/static, _next/image, and favicon.ico", () => {
+			expect(config.matcher).toEqual([
+				"/((?!_next/static|_next/image|favicon.ico).*)",
+			]);
 		});
 	});
 });
