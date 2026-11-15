@@ -427,13 +427,62 @@ describe("registered agent configuration and immutable declarations", () => {
 		const update = mocks.execute.mock.calls.find((call) =>
 			call[1].startsWith("UPDATE"),
 		);
-		expect(JSON.parse(update?.[2][1])).toMatchObject({
+		expect(JSON.parse(update?.[2][3])).toMatchObject({
 			provider: "aws_llm",
 			model: "selected:model",
 			enabled: false,
 			version: 4,
 			bundleHash: mocks.bundle.hash,
 		});
+	});
+	it("batches multiple release upgrades with independent expected versions in one write", async () => {
+		const old = {
+			installedVersion: "tanahpedia-agents-v1",
+			bundleHash: "b".repeat(64),
+		};
+		mocks.rows.mockResolvedValue([
+			row(agent(old)),
+			row(
+				agent({
+					...old,
+					id: DEFAULT_AWS_AGENT_ID,
+					version: 7,
+					provider: "aws_llm",
+					model: "chosen:model",
+					enabled: false,
+				}),
+			),
+		]);
+		mocks.execute.mockImplementation(async (_conn, sql) => ({
+			affectedRows: sql.startsWith("UPDATE") ? 2 : 1,
+		}));
+		expect(await refreshRegisteredContributionAgents()).toEqual({
+			updated: 2,
+			unchanged: 0,
+		});
+		const writes = mocks.execute.mock.calls.filter((call) =>
+			call[1].startsWith("UPDATE"),
+		);
+		expect(writes).toHaveLength(1);
+		const args = writes[0][2];
+		expect(args.slice(0, 4)).toEqual([
+			DEFAULT_LOCAL_AGENT_ID,
+			4,
+			DEFAULT_AWS_AGENT_ID,
+			8,
+		]);
+		expect(JSON.parse(args[7])).toMatchObject({
+			model: "chosen:model",
+			enabled: false,
+			version: 8,
+			bundleHash: mocks.bundle.hash,
+		});
+		expect(args.slice(8)).toEqual([
+			DEFAULT_LOCAL_AGENT_ID,
+			3,
+			DEFAULT_AWS_AGENT_ID,
+			7,
+		]);
 	});
 	it("fails a deployment refresh when an expected registration write does not commit", async () => {
 		mocks.rows.mockResolvedValue([

@@ -6,6 +6,10 @@ import type {
 	ContributionAgentTask,
 	RegisteredContributionAgent,
 } from "~/lib/tanahpedia/contribution-agents";
+import {
+	DEFAULT_AWS_AGENT_ID,
+	DEFAULT_LOCAL_AGENT_ID,
+} from "~/lib/tanahpedia/contribution-agents";
 import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
 import {
 	type Contribution,
@@ -18,6 +22,7 @@ import { txQuery } from "../db";
 import { buildContributionAgentBundle } from "./contribution-agent-bundle.server";
 import {
 	type AgentCatalogue,
+	lockContributionAgentContext,
 	mergeAgentCatalogues,
 	readContributionAgentInitialContext,
 	readContributionAgentTool,
@@ -147,24 +152,59 @@ export async function claimContributionAgentWork(
 	const tasks = input.supportedTasks as ContributionAgentTask[];
 	const issueId =
 		input.issueId == null ? null : uuidField(input.issueId, "issueId");
+	const defaultAgentId =
+		provider === "local_llm" ? DEFAULT_LOCAL_AGENT_ID : DEFAULT_AWS_AGENT_ID;
+	const legacyJob =
+		"JSON_EXTRACT(c.data,'$.generation.task') IS NULL AND JSON_EXTRACT(c.data,'$.generation.bundleHash') IS NULL AND JSON_EXTRACT(c.data,'$.generation.bundleVersion') IS NULL";
 	return withContributions(async (conn) => {
 		const incompatibleIds: string[] = [];
 		for (let examined = 0; examined < 20; examined++) {
+			// Filter release identities before LIMIT. Registry subqueries stay
+			// non-locking; agent locks follow contribution locks during execution.
 			const rows = await txQuery<{ id: string }>(
 				conn,
-				`SELECT id FROM tanahpedia_contribution WHERE state='open'
-			AND JSON_UNQUOTE(JSON_EXTRACT(data,'$.assignee.kind'))=?
-			AND ((kind='issue' AND ?=1) OR (kind='pr' AND ?=1))
-			AND (JSON_UNQUOTE(JSON_EXTRACT(data,'$.generation.status'))='queued'
-			OR (JSON_UNQUOTE(JSON_EXTRACT(data,'$.generation.status'))='running' AND JSON_UNQUOTE(JSON_EXTRACT(data,'$.generation.leaseExpiresAt'))<=?))
-			${issueId ? "AND id=?" : ""}
-			${incompatibleIds.length ? `AND id NOT IN (${incompatibleIds.map(() => "?").join(",")})` : ""}
-			ORDER BY number LIMIT 1 FOR UPDATE SKIP LOCKED`,
+				`SELECT c.id FROM tanahpedia_contribution c WHERE c.state='open'
+			AND JSON_UNQUOTE(JSON_EXTRACT(c.data,'$.assignee.kind'))=?
+			AND ((c.kind='issue' AND ?=1) OR (c.kind='pr' AND ?=1))
+			AND (JSON_UNQUOTE(JSON_EXTRACT(c.data,'$.generation.status'))='queued'
+			OR (JSON_UNQUOTE(JSON_EXTRACT(c.data,'$.generation.status'))='running' AND JSON_UNQUOTE(JSON_EXTRACT(c.data,'$.generation.leaseExpiresAt'))<=?))
+			AND ((${legacyJob}) OR (
+			JSON_UNQUOTE(JSON_EXTRACT(c.data,'$.generation.task'))=IF(c.kind='issue','issue_implementation','pr_resolution')
+			AND JSON_UNQUOTE(JSON_EXTRACT(c.data,'$.generation.bundleHash'))=?
+			AND JSON_UNQUOTE(JSON_EXTRACT(c.data,'$.generation.bundleVersion'))=?
+			AND JSON_EXTRACT(c.data,'$.generation.apiVersion')=?))
+			AND (EXISTS (
+			SELECT 1 FROM tanahpedia_contribution_agent registered
+			WHERE registered.id=COALESCE(JSON_UNQUOTE(JSON_EXTRACT(c.data,'$.assignee.agentId')),?)
+			AND JSON_UNQUOTE(JSON_EXTRACT(registered.data,'$.provider'))=?
+			AND JSON_UNQUOTE(JSON_EXTRACT(registered.data,'$.bundleHash'))=?
+			AND JSON_UNQUOTE(JSON_EXTRACT(registered.data,'$.installedVersion'))=?
+			AND JSON_EXTRACT(registered.data,'$.bundle.protocolVersion')=?
+			AND JSON_EXTRACT(registered.data,'$.bundle.apiVersion')=?
+			AND JSON_UNQUOTE(JSON_EXTRACT(registered.data,'$.bundle.hash'))=?
+			AND JSON_UNQUOTE(JSON_EXTRACT(registered.data,'$.bundle.version'))=?)
+			OR ((${legacyJob}) AND JSON_EXTRACT(c.data,'$.assignee.agentId') IS NULL
+			AND NOT EXISTS (SELECT 1 FROM tanahpedia_contribution_agent missing WHERE missing.id=?)))
+			${issueId ? "AND c.id=?" : ""}
+			${incompatibleIds.length ? `AND c.id NOT IN (${incompatibleIds.map(() => "?").join(",")})` : ""}
+			ORDER BY c.number LIMIT 1 FOR UPDATE SKIP LOCKED`,
 				[
 					provider,
 					Number(tasks.includes("issue_implementation")),
 					Number(tasks.includes("pr_resolution")),
 					new Date().toISOString(),
+					LOCAL_AGENT_BUNDLE.hash,
+					LOCAL_AGENT_BUNDLE.version,
+					LOCAL_AGENT_BUNDLE.apiVersion,
+					defaultAgentId,
+					provider,
+					LOCAL_AGENT_BUNDLE.hash,
+					LOCAL_AGENT_BUNDLE.version,
+					LOCAL_AGENT_BUNDLE.protocolVersion,
+					LOCAL_AGENT_BUNDLE.apiVersion,
+					LOCAL_AGENT_BUNDLE.hash,
+					LOCAL_AGENT_BUNDLE.version,
+					defaultAgentId,
 					...(issueId ? [issueId] : []),
 					...incompatibleIds,
 				],
@@ -212,6 +252,27 @@ export async function claimContributionAgentWork(
 				await saveContribution(conn, item);
 				continue;
 			}
+			await touchContributionAgent(
+				conn,
+				agent.id,
+				typeof input.runtimeVersion === "string"
+					? textField(input.runtimeVersion, "runtimeVersion", 128)
+					: "protocol-2",
+			);
+			const lockedAgent = await getAssignedContributionAgent(
+				conn,
+				item.assignee,
+				true,
+			);
+			if (
+				!locallyImplementedAgent(lockedAgent) ||
+				lockedAgent.id !== agent.id ||
+				lockedAgent.version !== agent.version ||
+				lockedAgent.provider !== provider ||
+				!lockedAgent.enabled ||
+				!lockedAgent.model
+			)
+				return null;
 			const context = await readContributionAgentInitialContext(conn, item);
 			const token = randomBytes(32).toString("hex");
 			Object.assign(job, {
@@ -232,13 +293,6 @@ export async function claimContributionAgentWork(
 				contextHash: context.hash,
 			});
 			await saveContribution(conn, item);
-			await touchContributionAgent(
-				conn,
-				agent.id,
-				typeof input.runtimeVersion === "string"
-					? textField(input.runtimeVersion, "runtimeVersion", 128)
-					: "protocol-2",
-			);
 			return {
 				id: job.id,
 				issueId: item.id,
@@ -296,7 +350,7 @@ async function prepareAgentLease(
 		throw new ContributionWorkerConflict(
 			"The assigned agent configuration or bundle changed during execution",
 		);
-	const initial = await readContributionAgentInitialContext(conn, item);
+	const initial = await readContributionAgentInitialContext(conn, item, lock);
 	if (initial.hash !== job.contextHash)
 		throw new ContributionWorkerConflict(
 			"The contribution or its context changed during execution",
@@ -311,6 +365,7 @@ async function prepareAgentLease(
 			item,
 			receipt.name,
 			receipt.arguments,
+			lock,
 		);
 		if (receiptHash(result) !== receipt.hash)
 			throw new ContributionWorkerConflict(
@@ -325,6 +380,7 @@ async function prepareAgentLease(
 		lease,
 		catalogue: mergeAgentCatalogues(...catalogues),
 		receipts,
+		relatedIds: initial.relatedIds,
 	};
 }
 
@@ -414,24 +470,22 @@ export async function completeContributionAgentWork(
 				bundleVersion: context.agent.installedVersion,
 				model: context.agent.model ?? "worker-selected",
 			};
-			Object.assign(job, {
-				status:
-					result.outcome === "clarification" ? "needs_input" : "completed",
-				outputHash,
-				model: context.agent.model ?? textField(input.model, "model", 255),
-				prIds,
-				error: null,
-				result: {
-					outcome: result.outcome,
-					summary: result.summary,
-					addressedCommentIds: result.responses
-						.filter((response) => response.status === "addressed")
-						.map((response) => response.commentId),
-					pendingCommentIds: pendingContributionAgentComments(item),
-					revision: item.revision,
-					changed,
-				},
-			});
+			job.status =
+				result.outcome === "clarification" ? "needs_input" : "completed";
+			job.outputHash = outputHash;
+			job.model = context.agent.model ?? textField(input.model, "model", 255);
+			job.prIds = prIds;
+			job.error = null;
+			job.result = {
+				outcome: result.outcome,
+				summary: result.summary,
+				addressedCommentIds: result.responses
+					.filter((response) => response.status === "addressed")
+					.map((response) => response.commentId),
+				pendingCommentIds: pendingContributionAgentComments(item),
+				revision: item.revision,
+				changed,
+			};
 		};
 		if (result.outcome === "implemented") {
 			const initial = {
@@ -456,6 +510,11 @@ export async function completeContributionAgentWork(
 					actor,
 					promptVersion: context.agent.installedVersion,
 					beforeCreate: async (conn) => {
+						await lockContributionAgentContext(
+							conn,
+							context.item,
+							context.relatedIds,
+						);
 						await prepareAgentLease(conn, raw, true);
 					},
 					afterCreate: (_conn, item, prs) =>
@@ -469,6 +528,13 @@ export async function completeContributionAgentWork(
 			return { prIds: prs.map((pr) => pr.id) };
 		}
 		return await withContributions(async (conn) => {
+			// No consistent read may precede the dependency locks: otherwise a
+			// REPEATABLE READ snapshot could predate a waited-for linked edit.
+			await lockContributionAgentContext(
+				conn,
+				context.item,
+				context.relatedIds,
+			);
 			const item = await readContribution(conn, lease.issueId, true);
 			if (replay(item)) return { prIds: item.generation?.prIds ?? [] };
 			await prepareAgentLease(conn, raw, true);

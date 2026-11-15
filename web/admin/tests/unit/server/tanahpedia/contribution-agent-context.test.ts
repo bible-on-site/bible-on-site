@@ -8,6 +8,7 @@ import type {
 } from "~/lib/tanahpedia/contributions";
 import {
 	type AgentCatalogue,
+	lockContributionAgentContext,
 	mergeAgentCatalogues,
 	readContributionAgentInitialContext,
 	readContributionAgentTool,
@@ -212,6 +213,368 @@ beforeEach(() => {
 });
 
 describe("complete contribution agent context", () => {
+	it("locks a prepared PR's issue before deduplicated ordered sibling primary keys without a consistent or range read", async () => {
+		const order: unknown[] = [];
+		mocks.item.mockImplementation(async (_conn, requestedId, lock) => {
+			order.push({ operation: "read", id: requestedId, lock });
+			return requestedId === issueId ? issue : { ...item, id: requestedId };
+		});
+		await lockContributionAgentContext(conn, item, [
+			personId,
+			id.toUpperCase(),
+			id,
+		]);
+		expect(order).toEqual([
+			{ operation: "read", id: issueId, lock: true },
+			{ operation: "read", id, lock: true },
+			{ operation: "read", id: personId, lock: true },
+		]);
+		expect(mocks.one).not.toHaveBeenCalled();
+		expect(mocks.query).not.toHaveBeenCalled();
+	});
+
+	it("locks an issue and all its proposals when completing issue implementation", async () => {
+		await lockContributionAgentContext(conn, issue, [id]);
+		expect(mocks.item.mock.calls).toEqual([
+			[conn, issueId, true],
+			[conn, id, true],
+		]);
+		expect(mocks.query).not.toHaveBeenCalled();
+	});
+
+	it("locks an empty issue graph without taking a sibling index gap lock", async () => {
+		await lockContributionAgentContext(conn, issue, []);
+		expect(mocks.item).toHaveBeenCalledExactlyOnceWith(conn, issueId, true);
+		expect(mocks.query).not.toHaveBeenCalled();
+	});
+
+	it("locks an unlinked PR alone and rejects a newly linked parent without acquiring it after the PR", async () => {
+		item.issueId = null;
+		await lockContributionAgentContext(conn, item, []);
+		expect(mocks.item).toHaveBeenCalledExactlyOnceWith(conn, id, true);
+		expect(mocks.query).not.toHaveBeenCalled();
+		const prepared = structuredClone(item);
+		item.issueId = issueId;
+		await expect(
+			lockContributionAgentContext(conn, prepared, []),
+		).rejects.toThrow("context changed");
+		expect(
+			mocks.item.mock.calls.every((call) => call[1] === id && call[2] === true),
+		).toBe(true);
+		expect(mocks.query).not.toHaveBeenCalled();
+	});
+
+	it("rejects a missing or moved PR from the locked issue graph", async () => {
+		await expect(
+			lockContributionAgentContext(conn, item, [personId]),
+		).rejects.toThrow("context changed");
+		expect(mocks.item).toHaveBeenCalledExactlyOnceWith(conn, issueId, true);
+	});
+
+	it("rejects a sibling that changed ownership without locking its new parent", async () => {
+		mocks.item.mockImplementation(async (_conn, requestedId) =>
+			requestedId === issueId ? issue : { ...item, issueId: personId },
+		);
+		await expect(
+			lockContributionAgentContext(conn, item, [id]),
+		).rejects.toThrow("context changed");
+		expect(mocks.item.mock.calls).toEqual([
+			[conn, issueId, true],
+			[conn, id, true],
+		]);
+	});
+
+	it("rejects a changed root kind before locking any sibling rows", async () => {
+		issue.kind = "pr";
+		await expect(
+			lockContributionAgentContext(conn, item, [id]),
+		).rejects.toThrow("context changed");
+		expect(mocks.query).not.toHaveBeenCalled();
+	});
+
+	it("does not retry failed graph locks", async () => {
+		const failure = new Error("Database lock failed");
+		mocks.item.mockRejectedValue(failure);
+		await expect(lockContributionAgentContext(conn, item, [id])).rejects.toBe(
+			failure,
+		);
+		expect(mocks.item).toHaveBeenCalledTimes(1);
+	});
+
+	it.each(Object.keys(REFERENCE_SELECTS).filter((kind) => kind !== "perek"))(
+		"locks the authoritative %s projection directly during final validation",
+		async (kind) => {
+			const row = { id: personId, name: "Current reference" };
+			mocks.one.mockResolvedValue(row);
+			const result = await readContributionAgentTool(
+				conn,
+				item,
+				"record",
+				{ kind, id: personId },
+				true,
+			);
+			expect(result.data).toMatchObject({ record: row });
+			const sql = mocks.one.mock.calls[0][1] as string;
+			expect(sql.startsWith(`${REFERENCE_SELECTS[kind]} WHERE `)).toBe(true);
+			expect(sql.endsWith("=? FOR UPDATE NOWAIT")).toBe(true);
+			expect(sql).not.toContain("SELECT candidate");
+			expect(mocks.one.mock.calls[0][2]).toEqual([personId]);
+		},
+	);
+
+	it("locks a person name, its person and entity with current direct join projections", async () => {
+		mocks.one.mockImplementation(async (_conn, sql) => {
+			if (
+				sql ===
+				`${REFERENCE_SELECTS.person_name} WHERE n.id=? FOR UPDATE NOWAIT`
+			)
+				return { id: nameId, name: "Current name", ownerId: personId };
+			if (sql === `${REFERENCE_SELECTS.person} WHERE r.id=? FOR UPDATE NOWAIT`)
+				return { id: personId, name: "Current person", ownerId: entityId };
+			if (sql === `${REFERENCE_SELECTS.entity} WHERE id=? FOR UPDATE NOWAIT`)
+				return { id: entityId, name: "Current entity" };
+			throw new Error(`Unexpected SQL: ${sql}`);
+		});
+		const result = await readContributionAgentTool(
+			conn,
+			item,
+			"record",
+			{ kind: "person_name", id: nameId },
+			true,
+		);
+		expect(result.catalogue.people).toEqual([
+			{ id: personId, name: "Current person" },
+		]);
+		expect(result.catalogue.entities).toEqual([
+			{ id: entityId, name: "Current entity" },
+		]);
+		expect(mocks.one).toHaveBeenCalledTimes(3);
+	});
+
+	it("locks the physical perek label dependencies without the view's unrelated date joins", async () => {
+		mocks.one.mockResolvedValue({ id: 929, name: "דברי הימים ב 36" });
+		await readContributionAgentTool(
+			conn,
+			item,
+			"record",
+			{ kind: "perek", id: 929 },
+			true,
+		);
+		const sql = mocks.one.mock.calls[0][1] as string;
+		expect(sql).toContain("FROM tanah_perek p JOIN tanah_sefer s");
+		expect(sql).toContain("LEFT JOIN tanah_additional a");
+		expect(sql).toContain(
+			"CASE WHEN a.id IS NOT NULL THEN p.id-a.perek_from+1 ELSE p.id-s.perek_id_from+1 END",
+		);
+		expect(sql.endsWith("WHERE p.id=? FOR UPDATE NOWAIT")).toBe(true);
+		expect(sql).not.toContain("tanah_perek_view");
+		expect(sql).not.toContain("tanah_perek_date");
+	});
+
+	it("locks a place identification directly rather than a derived union or view", async () => {
+		mocks.one.mockResolvedValue({
+			id: personId,
+			name: "Current identification",
+		});
+		await readContributionAgentTool(
+			conn,
+			item,
+			"record",
+			{ kind: "place_identification", id: personId },
+			true,
+		);
+		expect(mocks.one).toHaveBeenCalledWith(
+			conn,
+			expect.stringContaining("WHERE i.id=? FOR UPDATE NOWAIT"),
+			[personId],
+		);
+	});
+
+	it("uses the actually locked reference projection when a search snapshot contains an older label", async () => {
+		mocks.one.mockImplementation(async (_conn, sql) =>
+			sql.startsWith("SELECT COUNT(*)")
+				? { total: 1 }
+				: { id: entityId, name: "Locked current name" },
+		);
+		mocks.query.mockResolvedValue([
+			{ id: entityId, name: "Old consistent snapshot" },
+		]);
+		const result = await readContributionAgentTool(
+			conn,
+			item,
+			"search",
+			{ kind: "entity", query: "name" },
+			true,
+		);
+		expect(result.data).toMatchObject({
+			items: [{ id: entityId, name: "Locked current name" }],
+			records: [{ kind: "entity", current: { name: "Locked current name" } }],
+		});
+		expect(JSON.stringify(result)).not.toContain("Old consistent snapshot");
+	});
+
+	it("does not authorize a search record that disappears before its current lock read", async () => {
+		mocks.one.mockImplementation(async (_conn, sql) =>
+			sql.startsWith("SELECT COUNT(*)") ? { total: 1 } : null,
+		);
+		mocks.query.mockResolvedValue([{ id: entityId, name: "Deleted record" }]);
+		const result = await readContributionAgentTool(
+			conn,
+			item,
+			"search",
+			{ kind: "entity", query: "" },
+			true,
+		);
+		expect(result.data).toMatchObject({
+			items: [],
+			records: [{ kind: "entity", id: entityId, current: null }],
+		});
+		expect(result.catalogue.entities).toEqual([]);
+	});
+
+	it("fails closed on a busy reference without falling back to an unlocked read or retrying", async () => {
+		const busy = Object.assign(new Error("Reference is locked"), {
+			code: "ER_LOCK_NOWAIT",
+		});
+		mocks.one.mockRejectedValue(busy);
+		await expect(
+			readContributionAgentTool(
+				conn,
+				item,
+				"record",
+				{ kind: "entity", id: entityId },
+				true,
+			),
+		).rejects.toBe(busy);
+		expect(mocks.one).toHaveBeenCalledExactlyOnceWith(
+			conn,
+			`${REFERENCE_SELECTS.entity} WHERE id=? FOR UPDATE NOWAIT`,
+			[entityId],
+		);
+	});
+
+	it("pins an alternative group's existence with one exact member key instead of locking the group range", async () => {
+		mocks.one
+			.mockResolvedValueOnce({ id: personId })
+			.mockResolvedValueOnce({ id });
+		const result = await readContributionAgentTool(
+			conn,
+			item,
+			"record",
+			{ kind: "alternative", id },
+			true,
+		);
+		expect(result.catalogue.references.alternative).toEqual([
+			{ id, name: "קבוצת דעות חלופיות" },
+		]);
+		expect(mocks.one.mock.calls.map((call) => [call[1], call[2]])).toEqual([
+			[
+				"SELECT id FROM tanahpedia_person_parent_child WHERE alt_group_id=? ORDER BY id LIMIT 1",
+				[id],
+			],
+			[
+				"SELECT alt_group_id AS id FROM tanahpedia_person_parent_child WHERE id=? AND alt_group_id=? FOR UPDATE NOWAIT",
+				[personId, id],
+			],
+		]);
+	});
+
+	it("preserves the actual stored alternative ID when request casing differs", async () => {
+		const groupId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+		mocks.one.mockResolvedValueOnce({
+			id: groupId,
+			name: "קבוצת דעות חלופיות",
+		});
+		const initial = await readContributionAgentTool(conn, item, "record", {
+			kind: "alternative",
+			id: groupId.toUpperCase(),
+		});
+		mocks.one
+			.mockResolvedValueOnce({ id: personId })
+			.mockResolvedValueOnce({ id: groupId });
+		const final = await readContributionAgentTool(
+			conn,
+			item,
+			"record",
+			{ kind: "alternative", id: groupId.toUpperCase() },
+			true,
+		);
+		expect(final).toEqual(initial);
+		expect(final.catalogue.references.alternative).toEqual([
+			{ id: groupId, name: "קבוצת דעות חלופיות" },
+		]);
+	});
+
+	it("rejects a moved alternative witness instead of using its old snapshot or searching for an unlocked replacement", async () => {
+		mocks.one
+			.mockResolvedValueOnce({ id: personId })
+			.mockResolvedValueOnce(null);
+		const result = await readContributionAgentTool(
+			conn,
+			item,
+			"record",
+			{ kind: "alternative", id },
+			true,
+		);
+		expect(result.data).toMatchObject({ record: null });
+		expect(result.catalogue.references.alternative).toBeUndefined();
+		expect(mocks.one).toHaveBeenCalledTimes(2);
+	});
+
+	it("does not invent absent alternative groups or take an empty locking range", async () => {
+		mocks.one.mockResolvedValue(null);
+		const result = await readContributionAgentTool(
+			conn,
+			item,
+			"record",
+			{ kind: "alternative", id },
+			true,
+		);
+		expect(result.data).toMatchObject({ record: null });
+		expect(result.catalogue.references.alternative).toBeUndefined();
+		expect(mocks.one.mock.calls.length).toBeGreaterThan(2);
+		expect(
+			mocks.one.mock.calls.every((call) => !call[1].includes("FOR UPDATE")),
+		).toBe(true);
+	});
+
+	it("keeps the current issue's virtual alternative group independent of physical members", async () => {
+		const result = await readContributionAgentTool(
+			conn,
+			item,
+			"record",
+			{ kind: "alternative", id: issueId },
+			true,
+		);
+		expect(result.catalogue.references.alternative).toEqual([
+			{ id: issueId, name: "קבוצת דעות חדשה לפנייה" },
+		]);
+		expect(mocks.one).not.toHaveBeenCalled();
+	});
+
+	it("propagates final reference mode through initial exact proposal context without changing its fingerprint", async () => {
+		item.changes = [
+			{
+				kind: "metadata",
+				targetId: entityId,
+				before: { displayName: "Stable" },
+				after: { displayName: "Edited" },
+				labels: {},
+			},
+		];
+		mocks.state.mockResolvedValue({ displayName: "Stable" });
+		references.set(`entity:${entityId}`, { id: entityId, name: "Stable" });
+		const initial = await readContributionAgentInitialContext(conn, item);
+		mocks.one.mockResolvedValue({ id: entityId, name: "Stable" });
+		const final = await readContributionAgentInitialContext(conn, item, true);
+		expect(final.hash).toBe(initial.hash);
+		expect(final.data).toEqual(initial.data);
+		expect(mocks.one).toHaveBeenLastCalledWith(
+			conn,
+			`${REFERENCE_SELECTS.entity} WHERE id=? FOR UPDATE NOWAIT`,
+			[entityId],
+		);
+	});
 	it("pages all discussion events, including reviews and authors, beyond the old last-20 window", async () => {
 		item.events = Array.from({ length: 71 }, (_, index) =>
 			event(index, index % 2 ? "changes_requested" : "comment"),
@@ -288,6 +651,9 @@ describe("complete contribution agent context", () => {
 	it("indexes existing linked PRs and pages their full proposals beyond the UI's 100-item cap", async () => {
 		const related = relatedFixture(131);
 		const initial = await readContributionAgentInitialContext(conn, item);
+		expect(initial.relatedIds).toEqual(related.map((proposal) => proposal.id));
+		expect(initial.relatedIds).toHaveLength(131);
+		expect(initial.data).not.toHaveProperty("relatedIds");
 		expect(initial.data).toMatchObject({
 			related: { total: 131, nextCursor: 10 },
 		});

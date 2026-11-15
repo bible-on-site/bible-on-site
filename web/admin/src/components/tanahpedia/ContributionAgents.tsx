@@ -5,6 +5,7 @@ import type {
 	ContributionAgentProvider,
 	ContributionAgentSummary,
 } from "~/lib/tanahpedia/contribution-agents";
+import { CONTRIBUTION_UI } from "~/lib/tanahpedia/contributions";
 import {
 	getContributionAgents,
 	installContributionAgent,
@@ -13,7 +14,7 @@ import {
 
 const AGENTS_QUERY = ["contributions", "agents"];
 const providerName = (provider: ContributionAgentProvider) =>
-	provider === "local_llm" ? "Local LLM" : "AWS LLM";
+	provider === "local_llm" ? CONTRIBUTION_UI.localLlm : CONTRIBUTION_UI.awsLlm;
 const draftOf = (agent: ContributionAgentSummary) => ({
 	name: agent.name,
 	model: agent.model ?? "",
@@ -306,8 +307,10 @@ export function ContributionAgents() {
 								setModel(next === "local_llm" ? "qwen3:8b" : "");
 							}}
 						>
-							<option value="local_llm">Local LLM - עובד בתחנת העבודה</option>
-							<option value="aws_llm">AWS LLM</option>
+							<option value="local_llm">
+								{CONTRIBUTION_UI.localLlm} - עובד בתחנת העבודה
+							</option>
+							<option value="aws_llm">{CONTRIBUTION_UI.awsLlm}</option>
 						</select>
 					</label>
 					<label>

@@ -135,8 +135,9 @@ Run Ollama with `qwen3:8b`, sign into the existing AWS SSO profile, then run
 `node devops/contribution-worker.mjs --watch`. The worker defaults to the
 production admin and `AdministratorAccess-250598594267`. Use `--once` for one
 job, `--issue <UUID>` to select an issue, or `--origin http://localhost:3102 --dev`
-for an explicitly local preview. `--model` and `--ollama` select another local
-model or inference endpoint. The user requested automatic startup at Windows
+for an explicitly local preview. `--ollama` selects the local inference endpoint;
+`--model` supplies the legacy generation fallback. Assignment-driven runs use
+their registered model, which is changed on the Agents page. The user requested automatic startup at Windows
 sign-in; its launcher lives outside the repository so archiving this worktree
 does not remove it.
 
@@ -194,7 +195,8 @@ correct v4 title edit on the same issue: approximately 7.5 seconds of inference,
 with the unchanged 120-second deadline and 16K context. The visual diff showed
 the requested replacement, model authorship and the mandatory owner review.
 That synthetic PR and issue were closed without applying content. The worker now
-defaults to this tested 8B model; `--model` or `LOCAL_LLM_MODEL` can override it.
+defaults to this tested 8B model. `LOCAL_LLM_MODEL` sets the default for new local
+registrations; existing registered model choices survive CD and are edited in admin.
 Each inference request unloads the model on completion, returning its memory to the
 workstation between jobs instead of retaining an idle model while other apps run.
 
@@ -225,7 +227,11 @@ and continuation cursors instead of silently dropping older comments. The model
 can retrieve all relevant dynamic context within the existing inference deadline
 and context window; the complete database is not inserted into every prompt.
 Completion rechecks context fingerprints and tool-read records so concurrent
-changes cannot silently apply a stale result.
+changes cannot silently apply a stale result. The final transaction locks the
+linked issue and its related proposals before validating that context, retaining
+those locks through completion. Merging a linked PR uses the same issue-first
+order. Compatibility filtering runs before candidate pagination, so older
+incompatible work cannot hide a supported assignment later in the queue.
 
 Updating a configuration or bundle replaces incompatible pending work without
 changing the proposal's review revision. During a rolling deployment, a server

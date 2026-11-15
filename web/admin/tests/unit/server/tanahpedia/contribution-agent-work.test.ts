@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
 	queue: vi.fn(),
 	read: vi.fn(),
 	assigned: vi.fn(),
+	lockContext: vi.fn(),
+	touch: vi.fn(),
 }));
 vi.mock("~/server/db", () => ({ txQuery: mocks.query }));
 vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
@@ -31,11 +33,12 @@ vi.mock("~/server/tanahpedia/contribution-agent-registry.server", () => ({
 	getAssignedContributionAgent: mocks.assigned,
 	getRegisteredContributionAgent: async () => structuredClone(mocks.agent),
 	readContributionAgentBundle: async () => structuredClone(mocks.agent?.bundle),
-	touchContributionAgent: vi.fn(),
+	touchContributionAgent: mocks.touch,
 }));
 vi.mock("~/server/tanahpedia/contribution-agent-context.server", () => ({
 	readContributionAgentInitialContext: mocks.initial,
 	readContributionAgentTool: mocks.tool,
+	lockContributionAgentContext: mocks.lockContext,
 	mergeAgentCatalogues: (...catalogues: { entities: unknown[] }[]) => ({
 		...catalogues[0],
 		entities: catalogues.flatMap((catalogue) => catalogue.entities),
@@ -218,6 +221,7 @@ beforeEach(() => {
 		data: { item: { id }, discussion: { total: 21 } },
 		catalogue: empty,
 		hash: "fresh-initial-context",
+		relatedIds: [],
 	});
 	mocks.tool.mockResolvedValue({
 		data: {
@@ -254,6 +258,83 @@ async function claim() {
 }
 
 describe("assignment-driven leased contribution work", () => {
+	it("locks the complete contribution graph before final item, agent and domain reads for a PR revision", async () => {
+		const input = await claim(),
+			order: string[] = [];
+		mocks.lockContext.mockImplementation(async () => {
+			order.push("graph");
+		});
+		mocks.read.mockImplementation(async () => {
+			order.push("item");
+			return structuredClone(mocks.item);
+		});
+		mocks.assigned.mockImplementation(async (_conn, _assignee, lock) => {
+			order.push(lock ? "locked-agent" : "agent");
+			return structuredClone(mocks.agent);
+		});
+		mocks.initial.mockImplementation(async () => {
+			order.push("domain");
+			return {
+				data: {},
+				catalogue: empty,
+				hash: "fresh-initial-context",
+				relatedIds: [],
+			};
+		});
+		await completeContributionAgentWork({
+			...input,
+			content: output("revised", { draft: { title: "Reviewed correction" } }),
+		});
+		const final = order.slice(order.indexOf("graph"));
+		expect(final[0]).toBe("graph");
+		expect(final.indexOf("item")).toBeGreaterThan(0);
+		expect(final.indexOf("locked-agent")).toBeGreaterThan(
+			final.indexOf("item"),
+		);
+		expect(final.indexOf("domain")).toBeGreaterThan(
+			final.indexOf("locked-agent"),
+		);
+		expect(mocks.initial.mock.calls.at(-1)?.[2]).toBe(true);
+		expect(mocks.lockContext).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ id, kind: "pr" }),
+			[],
+		);
+	});
+	it("locks and records the accepted agent configuration before reading domain context", async () => {
+		await claim();
+		const locked = mocks.assigned.mock.calls.findIndex(
+			(call) => call[2] === true,
+		);
+		expect(locked).toBeGreaterThanOrEqual(0);
+		expect(mocks.touch.mock.invocationCallOrder[0]).toBeLessThan(
+			mocks.assigned.mock.invocationCallOrder[locked],
+		);
+		expect(mocks.assigned.mock.invocationCallOrder[locked]).toBeLessThan(
+			mocks.initial.mock.invocationCallOrder[0],
+		);
+	});
+	it.each(["version", "bundle", "disabled"])(
+		"does not spend a lease when %s races the final claim configuration lock",
+		async (changed) => {
+			const prior = structuredClone(agent()),
+				locked = structuredClone(agent());
+			if (changed === "version") locked.version++;
+			if (changed === "bundle") locked.bundleHash = "b".repeat(64);
+			if (changed === "disabled") locked.enabled = false;
+			mocks.assigned.mockResolvedValueOnce(prior).mockResolvedValueOnce(locked);
+			const original = structuredClone(current());
+			expect(
+				await claimContributionGeneration({
+					workerId: "race",
+					protocolVersion: 2,
+					supportedTasks: ["pr_resolution"],
+				}),
+			).toBeNull();
+			expect(current()).toEqual(original);
+			expect(mocks.initial).not.toHaveBeenCalled();
+		},
+	);
 	it("persists valid clarification without a draft while preserving the approved proposal", async () => {
 		current().events.push({
 			id: "approved",
@@ -391,7 +472,7 @@ describe("assignment-driven leased contribution work", () => {
 			expect(current()).toEqual(original);
 			expect(mocks.queue).not.toHaveBeenCalled();
 			expect(mocks.initial).not.toHaveBeenCalled();
-			expect(mocks.query.mock.calls[1][1]).toContain("AND id NOT IN (?)");
+			expect(mocks.query.mock.calls[1][1]).toContain("AND c.id NOT IN (?)");
 			expect(mocks.query.mock.calls[1][2]).toContain(id);
 		},
 	);
@@ -437,6 +518,7 @@ describe("assignment-driven leased contribution work", () => {
 			},
 			catalogue: empty,
 			hash: "prior-work",
+			relatedIds: [commentId],
 		});
 		const input = await claim(),
 			request = { ...input, content: output("unchanged") };
@@ -570,6 +652,27 @@ describe("assignment-driven leased contribution work", () => {
 			}),
 		});
 		expect(result.prIds).toEqual([id]);
+		expect(mocks.lockContext).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ id, kind: "issue" }),
+			[],
+		);
+		expect(mocks.lockContext.mock.invocationCallOrder[0]).toBeLessThan(
+			mocks.assigned.mock.invocationCallOrder[
+				mocks.assigned.mock.calls.length - 1
+			],
+		);
+		expect(mocks.assigned.mock.calls.at(-1)?.[2]).toBe(true);
+		expect(mocks.initial.mock.calls.at(-1)?.[2]).toBe(true);
+		expect(
+			mocks.assigned.mock.invocationCallOrder[
+				mocks.assigned.mock.calls.length - 1
+			],
+		).toBeLessThan(
+			mocks.initial.mock.invocationCallOrder[
+				mocks.initial.mock.calls.length - 1
+			],
+		);
 		expect(mocks.create.mock.calls[0][2]).toMatchObject({
 			actor: { id: `agent:${jobId}`, isDoradsoft: false },
 			promptVersion: agent().installedVersion,
@@ -630,6 +733,18 @@ describe("assignment-driven leased contribution work", () => {
 		});
 		expect(mocks.revise).toHaveBeenCalledTimes(1);
 		expect(mocks.create).not.toHaveBeenCalled();
+		const lockedReads = mocks.tool.mock.calls
+			.map((call, index) => ({ call, index }))
+			.filter(({ call }) => call[4] === true);
+		expect(lockedReads).toHaveLength(1);
+		expect(lockedReads[0].call.slice(2)).toEqual([
+			"record",
+			{ kind: "entity", id },
+			true,
+		]);
+		expect(mocks.lockContext.mock.invocationCallOrder[0]).toBeLessThan(
+			mocks.tool.mock.invocationCallOrder[lockedReads[0].index],
+		);
 	});
 	it("writes one authored same-PR revision and an idempotent immutable response receipt", async () => {
 		const input = await claim(),

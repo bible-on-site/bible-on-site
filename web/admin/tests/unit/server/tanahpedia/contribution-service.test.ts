@@ -12,6 +12,7 @@ vi.mock("~/server/tanahpedia/contribution-rebases.server", () => ({
 
 const mocks = vi.hoisted(() => ({
 	items: new Map<string, Contribution>(),
+	lockedReads: [] as string[],
 	prepare: vi.fn(),
 	read: vi.fn(),
 	apply: vi.fn(),
@@ -43,7 +44,8 @@ vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
 			throw error;
 		}
 	},
-	readContribution: async (_conn: object, id: string) => {
+	readContribution: async (_conn: object, id: string, lock = false) => {
+		if (lock) mocks.lockedReads.push(id);
 		const item = mocks.items.get(id);
 		if (!item) throw new Error("not found");
 		return structuredClone(item);
@@ -194,6 +196,7 @@ const action = (item: Contribution, name: string, extra = {}) => ({
 describe("contribution lifecycle", () => {
 	beforeEach(() => {
 		mocks.items.clear();
+		mocks.lockedReads.length = 0;
 		for (const mock of [
 			mocks.prepare,
 			mocks.read,
@@ -877,6 +880,7 @@ describe("contribution lifecycle", () => {
 		);
 		await mergeContribution({ id: item.id, version: item.version }, owner);
 		expect(mocks.items.get(linked.id)?.state).toBe("closed");
+		expect(mocks.lockedReads.slice(-2)).toEqual([linked.id, item.id]);
 	});
 	it("requires review when another editor changes an owner-authored PR", async () => {
 		const original = await pr(owner);
@@ -917,6 +921,7 @@ describe("contribution lifecycle", () => {
 		);
 		await mergeContribution({ id: item.id, version: item.version }, owner);
 		expect(mocks.items.get(linked.id)?.state).toBe("open");
+		expect(mocks.lockedReads.slice(-2)).toEqual([linked.id, item.id]);
 	});
 	it("keeps an already-closed source issue unchanged", async () => {
 		let linked = await issue();

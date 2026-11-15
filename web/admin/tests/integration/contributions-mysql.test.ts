@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import mysql, {
 	type Connection,
@@ -557,6 +557,67 @@ describe("pre-upgrade workstation generation with actual MySQL transactions", ()
 });
 
 describe("assignment-driven agents with actual MySQL transactions", () => {
+	async function outdatedAgents() {
+		const specifications = [
+			{
+				provider: "local_llm",
+				model: "fixture-local:8b",
+				enabled: true,
+				version: 4,
+				release: "tanahpedia-agents-v1",
+				seen: "2026-11-01T01:02:03.000Z",
+				runtime: "local-fixture",
+			},
+			{
+				provider: "aws_llm",
+				model: "vendor.fixture:0",
+				enabled: false,
+				version: 9,
+				release: "tanahpedia-agents-v2",
+				seen: "2026-11-02T04:05:06.000Z",
+				runtime: "aws-fixture",
+			},
+		] as const;
+		return Promise.all(
+			specifications.map(async (specification) => {
+				const installed = await registry.installRegisteredContributionAgent({
+					name: `Release fixture ${randomUUID()}`,
+					provider: specification.provider,
+					model: specification.model,
+					enabled: specification.enabled,
+				});
+				const persisted = await store.withContributions((tx) =>
+					registry.getRegisteredContributionAgent(tx, installed.id),
+				);
+				const { hash: _hash, ...declaration } = persisted.bundle;
+				const payload = { ...declaration, version: specification.release };
+				const bundle = {
+					...payload,
+					hash: createHash("sha256")
+						.update(canonicalJson(payload))
+						.digest("hex"),
+				};
+				const previous = {
+					...persisted,
+					version: specification.version,
+					installedVersion: bundle.version,
+					bundleHash: bundle.hash,
+					bundle,
+					lastSeenAt: specification.seen,
+					runtimeVersion: specification.runtime,
+				};
+				await conn.execute(
+					"INSERT IGNORE INTO tanahpedia_contribution_agent_bundle (hash,version,data) VALUES (?,?,?)",
+					[bundle.hash, bundle.version, JSON.stringify(bundle)],
+				);
+				await conn.execute(
+					"UPDATE tanahpedia_contribution_agent SET version=?,data=? WHERE id=?",
+					[previous.version, JSON.stringify(previous), previous.id],
+				);
+				return previous;
+			}),
+		);
+	}
 	async function installedAgent() {
 		return registry.installRegisteredContributionAgent({
 			name: `Fixture agent ${randomUUID()}`,
@@ -625,6 +686,268 @@ describe("assignment-driven agents with actual MySQL transactions", () => {
 		);
 		return id;
 	}
+	function graphGate() {
+		let enter = () => {},
+			release = () => {};
+		const reached = new Promise<void>((resolve) => {
+			enter = resolve;
+		});
+		const pending = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		return { enter, release, reached, pending };
+	}
+	async function linkedGraph(kind: "issue" | "pr") {
+		const agent = await installedAgent();
+		let issue = await service.createContribution(
+			{
+				kind: "issue",
+				title: `Graph issue ${randomUUID()}`,
+				description: "Implement a new independently evidenced facet",
+				evidence,
+			},
+			alice,
+		);
+		const makePr = async (assigned: boolean) =>
+			service.createContribution(
+				{
+					kind: "pr",
+					issueId: issue.id,
+					title: `Graph PR ${randomUUID()}`,
+					description: "Original graph proposal",
+					evidence,
+					assignee: assigned
+						? { kind: "local_llm", agentId: agent.id }
+						: { kind: "unassigned" },
+					changes: [
+						{
+							kind: "metadata",
+							targetId: await isolatedEntity(),
+							after: { displayName: "Proposed graph value" },
+						},
+					],
+				},
+				alice,
+			);
+		const sibling = await makePr(false);
+		let subject: Contribution;
+		if (kind === "pr") subject = await makePr(true);
+		else {
+			issue = await service.updateContribution(
+				{
+					id: issue.id,
+					version: issue.version,
+					action: "assign",
+					assignee: { kind: "local_llm", agentId: agent.id },
+				},
+				alice,
+			);
+			subject = issue;
+		}
+		return { issue, subject, sibling, agent };
+	}
+	function editDiscussion(item: Contribution, version = item.version) {
+		return service.editContribution(
+			{
+				id: item.id,
+				version,
+				title: item.title,
+				description: "Concurrent human edit",
+				evidence: item.evidence,
+				assignee: item.assignee,
+				closeIssue: item.closeIssue,
+				changes: item.changes.map(({ kind, targetId, after }) => ({
+					kind,
+					targetId,
+					after,
+				})),
+			},
+			alice,
+		);
+	}
+	async function assertPinnedContribution(id: string) {
+		const probe = await db.pool.getConnection();
+		try {
+			await probe.beginTransaction();
+			await expect(
+				probe.execute(
+					"SELECT id FROM tanahpedia_contribution WHERE id=? FOR UPDATE NOWAIT",
+					[id],
+				),
+			).rejects.toMatchObject({ code: "ER_LOCK_NOWAIT" });
+		} finally {
+			await probe.rollback();
+			probe.release();
+		}
+	}
+	function implementation(uniqueName: string) {
+		return canonicalJson({
+			outcome: "implemented",
+			summary: "Created an independent draft for review",
+			responses: [],
+			pullRequests: [
+				{
+					title: "Graph implementation",
+					description: "Metadata only, no canonical writes",
+					evidenceIndexes: [0],
+					changes: [
+						{
+							kind: "entry",
+							after: {
+								title: "Graph fixture",
+								uniqueName,
+								entityType: "PERSON",
+								displayName: "Graph fixture",
+							},
+						},
+					],
+				},
+			],
+		});
+	}
+	async function referenceFixture(
+		kind: "entity" | "person_name" | "perek" | "alternative",
+	) {
+		if (kind === "entity") {
+			const id = await isolatedEntity();
+			return {
+				kind,
+				id,
+				probes: [
+					{
+						sql: "SELECT id FROM tanahpedia_entity WHERE id=? FOR UPDATE NOWAIT",
+						id,
+					},
+				],
+				change: (tx: Connection | PoolConnection) =>
+					tx.execute("UPDATE tanahpedia_entity SET name=? WHERE id=?", [
+						"Changed after preparation",
+						id,
+					]),
+				cleanup: () =>
+					conn.execute("DELETE FROM tanahpedia_entity WHERE id=?", [id]),
+			};
+		}
+		if (kind === "person_name") {
+			const entity = await isolatedEntity(),
+				person = randomUUID(),
+				id = randomUUID();
+			await conn.execute(
+				"INSERT INTO tanahpedia_person(id,entity_id) VALUES(?,?)",
+				[person, entity],
+			);
+			await conn.execute(
+				"INSERT INTO tanahpedia_person_name(id,person_id,name,name_type_id) SELECT ?,?,'Fixture name',id FROM tanahpedia_lookup_name_type WHERE name='MAIN'",
+				[id, person],
+			);
+			return {
+				kind,
+				id,
+				probes: [
+					{
+						sql: "SELECT id FROM tanahpedia_person_name WHERE id=? FOR UPDATE NOWAIT",
+						id,
+					},
+					{
+						sql: "SELECT id FROM tanahpedia_person WHERE id=? FOR UPDATE NOWAIT",
+						id: person,
+					},
+					{
+						sql: "SELECT id FROM tanahpedia_entity WHERE id=? FOR UPDATE NOWAIT",
+						id: entity,
+					},
+				],
+				change: (tx: Connection | PoolConnection) =>
+					tx.execute("UPDATE tanahpedia_entity SET name=? WHERE id=?", [
+						"Changed joined owner",
+						entity,
+					]),
+				cleanup: async () => {
+					await conn.execute("DELETE FROM tanahpedia_person_name WHERE id=?", [
+						id,
+					]);
+					await conn.execute("DELETE FROM tanahpedia_person WHERE id=?", [
+						person,
+					]);
+					await conn.execute("DELETE FROM tanahpedia_entity WHERE id=?", [
+						entity,
+					]);
+				},
+			};
+		}
+		if (kind === "perek") {
+			const id = 990001,
+				sefer = 99001,
+				additional = 99002;
+			await conn.execute(
+				"INSERT INTO tanah_sefer(id,name,perek_id_from,perek_id_to) VALUES(?,'ספר בדיקה',?,?)",
+				[sefer, id, id],
+			);
+			await conn.execute(
+				"INSERT INTO tanah_perek(id,perek,pasuk_count) VALUES(?,1,1)",
+				[id],
+			);
+			await conn.execute(
+				"INSERT INTO tanah_additional(id,sefer_id,letter,tanach_us_name,perek_from,perek_to) VALUES(?,?,'ב','fixture',?,?)",
+				[additional, sefer, id, id],
+			);
+			return {
+				kind,
+				id,
+				probes: [
+					{
+						sql: "SELECT id FROM tanah_perek WHERE id=? FOR UPDATE NOWAIT",
+						id,
+					},
+					{
+						sql: "SELECT id FROM tanah_sefer WHERE id=? FOR UPDATE NOWAIT",
+						id: sefer,
+					},
+					{
+						sql: "SELECT id FROM tanah_additional WHERE id=? FOR UPDATE NOWAIT",
+						id: additional,
+					},
+				],
+				change: (tx: Connection | PoolConnection) =>
+					tx.execute("UPDATE tanah_sefer SET name=? WHERE id=?", [
+						"שם ספר מעודכן",
+						sefer,
+					]),
+				cleanup: async () => {
+					await conn.execute("DELETE FROM tanah_perek WHERE id=?", [id]);
+					await conn.execute("DELETE FROM tanah_additional WHERE id=?", [
+						additional,
+					]);
+					await conn.execute("DELETE FROM tanah_sefer WHERE id=?", [sefer]);
+				},
+			};
+		}
+		const id = randomUUID(),
+			witness = randomUUID();
+		await conn.execute(
+			"INSERT INTO tanahpedia_person_parent_child(id,parent_id,child_id,relationship_type_id,parent_role_id,alt_group_id) SELECT ?,?,?,t.id,r.id,? FROM tanahpedia_lookup_parent_child_type t JOIN tanahpedia_lookup_parent_role r WHERE t.name='BIOLOGICAL' AND r.name='FATHER'",
+			[witness, ids.parent, ids.person, id],
+		);
+		return {
+			kind,
+			id,
+			probes: [
+				{
+					sql: "SELECT id FROM tanahpedia_person_parent_child WHERE id=? FOR UPDATE NOWAIT",
+					id: witness,
+				},
+			],
+			change: (tx: Connection | PoolConnection) =>
+				tx.execute(
+					"UPDATE tanahpedia_person_parent_child SET alt_group_id=? WHERE id=?",
+					[randomUUID(), witness],
+				),
+			cleanup: () =>
+				conn.execute("DELETE FROM tanahpedia_person_parent_child WHERE id=?", [
+					witness,
+				]),
+		};
+	}
 	it("persists registry declarations once per hash and rejects concurrent configuration updates", async () => {
 		const installed = await installedAgent();
 		const persisted = await store.withContributions((tx) =>
@@ -661,6 +984,178 @@ describe("assignment-driven agents with actual MySQL transactions", () => {
 			[installed.bundleHash],
 		);
 		expect(bundles).toHaveLength(1);
+	});
+	it("upgrades multiple distinct registrations in one CAS batch and stores JSON objects while preserving configuration and heartbeat", async () => {
+		const previous = await outdatedAgents();
+		const execute = vi.spyOn(db, "txExecute");
+		try {
+			expect(
+				(await registry.refreshRegisteredContributionAgents()).updated,
+			).toBe(2);
+			const batches = execute.mock.calls.filter((call) =>
+				call[1].startsWith("UPDATE tanahpedia_contribution_agent SET"),
+			);
+			expect(batches).toHaveLength(1);
+			expect(batches[0][1]).toContain("version = CASE id");
+			for (const before of previous) {
+				const [rows] = await conn.execute<RowDataPacket[]>(
+					"SELECT version,JSON_TYPE(data) AS data_type,data FROM tanahpedia_contribution_agent WHERE id=?",
+					[before.id],
+				);
+				expect(rows[0].data_type).toBe("OBJECT");
+				const after =
+					typeof rows[0].data === "string"
+						? JSON.parse(rows[0].data)
+						: rows[0].data;
+				expect(rows[0].version).toBe(before.version + 1);
+				expect(after).toMatchObject({
+					version: before.version + 1,
+					name: before.name,
+					provider: before.provider,
+					model: before.model,
+					enabled: before.enabled,
+					lastSeenAt: before.lastSeenAt,
+					runtimeVersion: before.runtimeVersion,
+					createdAt: before.createdAt,
+				});
+				expect(after.bundleHash).not.toBe(before.bundleHash);
+				expect(after.bundle.hash).toBe(after.bundleHash);
+				expect(after.bundle.version).toBe(after.installedVersion);
+			}
+		} finally {
+			execute.mockRestore();
+		}
+	});
+	it("rolls back every registration in a release batch when one expected version is lost", async () => {
+		const previous = await outdatedAgents();
+		const execute = db.txExecute;
+		let intercepted = false;
+		const race = vi
+			.spyOn(db, "txExecute")
+			.mockImplementation(async (...args) => {
+				if (
+					args[1].startsWith(
+						"UPDATE tanahpedia_contribution_agent SET version = CASE",
+					)
+				) {
+					intercepted = true;
+					// Inject real version drift inside the transaction after validation,
+					// so one SQL predicate misses and the other update must roll back.
+					await args[0].execute(
+						"UPDATE tanahpedia_contribution_agent SET version=version+1 WHERE id=?",
+						[previous[0].id],
+					);
+				}
+				return execute(...args);
+			});
+		try {
+			await expect(
+				registry.refreshRegisteredContributionAgents(),
+			).rejects.toThrow("release update conflicted");
+			expect(intercepted).toBe(true);
+			for (const before of previous) {
+				const saved = await store.withContributions((tx) =>
+					registry.getRegisteredContributionAgent(tx, before.id),
+				);
+				expect(saved).toEqual(before);
+			}
+		} finally {
+			race.mockRestore();
+			// Keep later integration cases on the implemented current declaration.
+			await registry.refreshRegisteredContributionAgents();
+		}
+	});
+	it("claims compatible work behind twenty unsupported queued requests without changing skipped jobs", async () => {
+		worker ??= await import("~/server/tanahpedia/contribution-worker.server");
+		const agent = await installedAgent();
+		// This suite owns its disposable schema. Temporarily hide earlier cases'
+		// requests so this unfiltered claim measures only the ordered fixture.
+		const [pending] = await conn.execute<RowDataPacket[]>(
+			"SELECT id,data FROM tanahpedia_contribution WHERE state='open' AND JSON_UNQUOTE(JSON_EXTRACT(data,'$.assignee.kind'))='local_llm' AND JSON_UNQUOTE(JSON_EXTRACT(data,'$.generation.status')) IN ('queued','running')",
+		);
+		const created: string[] = [];
+		try {
+			for (const row of pending)
+				await conn.execute(
+					"UPDATE tanahpedia_contribution SET data=JSON_SET(data,'$.generation.status','cancelled') WHERE id=?",
+					[row.id],
+				);
+			const unsupported: Contribution[] = [];
+			for (let index = 0; index < 20; index++) {
+				const kind = index % 2 === 0 ? "issue" : "pr";
+				const item = await service.createContribution(
+					{
+						kind,
+						title: `Unsupported fixture ${index}`,
+						description:
+							"Older saved declaration awaiting release reconciliation",
+						evidence,
+						assignee: { kind: "local_llm", agentId: agent.id },
+						...(kind === "pr"
+							? {
+									changes: [
+										{
+											kind: "metadata",
+											targetId: await isolatedEntity(),
+											after: { displayName: `Proposed ${index}` },
+										},
+									],
+								}
+							: {}),
+					},
+					alice,
+				);
+				created.push(item.id);
+				unsupported.push(item);
+				await conn.execute(
+					"UPDATE tanahpedia_contribution SET data=JSON_SET(data,'$.generation.bundleHash',?,'$.generation.bundleVersion',?) WHERE id=?",
+					["b".repeat(64), "tanahpedia-agents-v1", item.id],
+				);
+			}
+			const compatible = await service.createContribution(
+				{
+					kind: "issue",
+					title: "Twenty-first compatible request",
+					description: "Current declaration",
+					evidence,
+					assignee: { kind: "local_llm", agentId: agent.id },
+				},
+				alice,
+			);
+			created.push(compatible.id);
+			const ids = unsupported.map((item) => item.id);
+			const select = `SELECT id,version,data FROM tanahpedia_contribution WHERE id IN (${ids.map(() => "?").join(",")}) ORDER BY number`;
+			const [before] = await conn.execute<RowDataPacket[]>(select, ids);
+			const claimed = await worker.claimContributionGeneration({
+				protocolVersion: 2,
+				supportedTasks: ["issue_implementation", "pr_resolution"],
+				workerId: "starvation-fixture",
+			});
+			expect(claimed).toMatchObject({
+				issueId: compatible.id,
+				protocolVersion: 2,
+			});
+			const [after] = await conn.execute<RowDataPacket[]>(select, ids);
+			expect(after).toEqual(before);
+			expect((await fresh(compatible)).generation).toMatchObject({
+				status: "running",
+				attempts: 1,
+			});
+		} finally {
+			if (created.length)
+				await conn.execute(
+					`UPDATE tanahpedia_contribution SET state='closed',data=JSON_SET(data,'$.state','closed','$.generation.status','cancelled') WHERE id IN (${created.map(() => "?").join(",")})`,
+					created,
+				);
+			for (const row of pending)
+				await conn.execute(
+					"UPDATE tanahpedia_contribution SET data=? WHERE id=?",
+					[
+						typeof row.data === "string" ? row.data : JSON.stringify(row.data),
+						row.id,
+					],
+				);
+		}
 	});
 	it("serializes concurrent startup default seeding and refresh without lock-upgrade deadlock or config changes", async () => {
 		await registry.listContributionAgents();
@@ -959,6 +1454,376 @@ describe("assignment-driven agents with actual MySQL transactions", () => {
 			release();
 			paused.mockRestore();
 			await completing.catch(() => {});
+		}
+	});
+	it.each(["issue", "pr"] as const)(
+		"holds linked issue and sibling PR dependencies after final %s validation until commit",
+		async (kind) => {
+			const graph = await linkedGraph(kind),
+				job = await claim(graph.subject),
+				gate = graphGate();
+			const revise = service.applyContributionAgentRevision,
+				create = service.createContribution;
+			const pause =
+				kind === "pr"
+					? vi
+							.spyOn(service, "applyContributionAgentRevision")
+							.mockImplementationOnce(async (...args) => {
+								gate.enter();
+								await gate.pending;
+								return revise(...args);
+							})
+					: vi
+							.spyOn(service, "createContribution")
+							.mockImplementationOnce(async (...args) => {
+								gate.enter();
+								await gate.pending;
+								return create(...args);
+							});
+			const uniqueName = `graph-${randomUUID()}`;
+			const completing = worker.completeContributionGeneration({
+				...identity(job),
+				content:
+					kind === "pr"
+						? result("Validated linked graph", undefined, {
+								description: "Model revised graph proposal",
+							})
+						: implementation(uniqueName),
+			});
+			let edits: Promise<PromiseSettledResult<Contribution>[]> | undefined;
+			try {
+				await Promise.race([
+					gate.reached,
+					completing.then(() => {
+						throw new Error("Completion skipped its post-validation barrier");
+					}),
+				]);
+				await assertPinnedContribution(graph.issue.id);
+				await assertPinnedContribution(graph.sibling.id);
+				edits = Promise.allSettled([
+					editDiscussion(
+						graph.issue,
+						kind === "issue" ? job.version : graph.issue.version,
+					),
+					editDiscussion(graph.sibling),
+				]);
+				gate.release();
+				const completed = await completing;
+				const edited = await edits;
+				expect(edited[1].status).toBe("fulfilled");
+				if (kind === "pr") expect(edited[0].status).toBe("fulfilled");
+				else {
+					expect(edited[0].status).toBe("rejected");
+					if (edited[0].status === "rejected")
+						expect(edited[0].reason.message).toContain("changed");
+				}
+				const saved = await fresh(graph.subject);
+				expect(saved.generation?.status).toBe("completed");
+				if (kind === "pr") {
+					expect(saved.description).toBe("Model revised graph proposal");
+					expect(saved.revision).toBe(2);
+				} else {
+					expect(completed.prIds).toHaveLength(1);
+					const [rows] = await conn.execute<RowDataPacket[]>(
+						"SELECT id FROM tanahpedia_entry WHERE unique_name=?",
+						[uniqueName],
+					);
+					expect(rows).toHaveLength(0);
+				}
+			} finally {
+				gate.release();
+				pause.mockRestore();
+				await Promise.allSettled([completing, ...(edits ? [edits] : [])]);
+			}
+		},
+	);
+	it("serializes simultaneous same-issue PR completions and rejects the stale graph without deadlock", async () => {
+		const graph = await linkedGraph("pr");
+		const sibling = await service.updateContribution(
+			{
+				id: graph.sibling.id,
+				version: graph.sibling.version,
+				action: "assign",
+				assignee: { kind: "local_llm", agentId: graph.agent.id },
+			},
+			alice,
+		);
+		const firstJob = await claim(graph.subject),
+			secondJob = await claim(sibling),
+			gate = graphGate(),
+			secondGate = graphGate();
+		const context = await import(
+				"~/server/tanahpedia/contribution-agent-context.server"
+			),
+			lock = context.lockContributionAgentContext,
+			revise = service.applyContributionAgentRevision;
+		const observe = vi
+			.spyOn(context, "lockContributionAgentContext")
+			.mockImplementation((...args) => {
+				const locking = lock(...args);
+				if (args[1].id === sibling.id) secondGate.enter();
+				return locking;
+			});
+		const pause = vi
+			.spyOn(service, "applyContributionAgentRevision")
+			.mockImplementationOnce(async (...args) => {
+				gate.enter();
+				await gate.pending;
+				return revise(...args);
+			});
+		const first = worker.completeContributionGeneration({
+			...identity(firstJob),
+			content: result("First graph revision", undefined, {
+				description: "First completed graph revision",
+			}),
+		});
+		let second:
+			| ReturnType<typeof worker.completeContributionGeneration>
+			| undefined;
+		let both:
+			| Promise<PromiseSettledResult<Awaited<typeof first>>[]>
+			| undefined;
+		try {
+			await Promise.race([
+				gate.reached,
+				first.then(() => {
+					throw new Error("First completion skipped its barrier");
+				}),
+			]);
+			second = worker.completeContributionGeneration({
+				...identity(secondJob),
+				content: result("Second graph revision", undefined, {
+					description: "Stale second graph revision",
+				}),
+			});
+			both = Promise.allSettled([first, second]);
+			await Promise.race([
+				secondGate.reached,
+				second.then(() => {
+					throw new Error("Second completion skipped the graph lock");
+				}),
+			]);
+			gate.release();
+			const completed = await both;
+			expect(completed[0].status).toBe("fulfilled");
+			expect(completed[1].status).toBe("rejected");
+			if (completed[1].status === "rejected") {
+				expect(completed[1].reason.code).not.toBe("ER_LOCK_DEADLOCK");
+				expect(completed[1].reason.message).toContain("context changed");
+			}
+			expect((await fresh(graph.subject)).description).toBe(
+				"First completed graph revision",
+			);
+			expect((await fresh(sibling)).description).toBe(
+				"Original graph proposal",
+			);
+		} finally {
+			gate.release();
+			await (both ?? Promise.allSettled([first, ...(second ? [second] : [])]));
+			pause.mockRestore();
+			observe.mockRestore();
+		}
+	});
+	it("completes two different issues with empty sibling sets without a range-gap insertion deadlock", async () => {
+		const firstGraph = await assignedIssue(),
+			secondGraph = await assignedIssue();
+		const jobs = await Promise.all([
+				claim(firstGraph.item),
+				claim(secondGraph.item),
+			]),
+			gate = graphGate();
+		const create = service.createContribution;
+		let reached = 0;
+		const pause = vi
+			.spyOn(service, "createContribution")
+			.mockImplementation(async (...args) => {
+				if (args[1].kind === "local_llm") {
+					reached++;
+					if (reached === 2) gate.enter();
+					await gate.pending;
+				}
+				return create(...args);
+			});
+		const completions = jobs.map((job) =>
+			worker.completeContributionGeneration({
+				...identity(job),
+				content: implementation(`empty-graph-${randomUUID()}`),
+			}),
+		);
+		const completed = Promise.allSettled(completions);
+		try {
+			await Promise.race([
+				gate.reached,
+				...completions.map((completion) =>
+					completion.then(() => {
+						throw new Error(
+							"Implementation skipped its final creation barrier",
+						);
+					}),
+				),
+			]);
+			gate.release();
+			for (const entry of await completed) {
+				expect(entry.status).toBe("fulfilled");
+				if (entry.status === "fulfilled")
+					expect(entry.value.prIds).toHaveLength(1);
+			}
+			expect((await fresh(firstGraph.item)).generation?.status).toBe(
+				"completed",
+			);
+			expect((await fresh(secondGraph.item)).generation?.status).toBe(
+				"completed",
+			);
+		} finally {
+			gate.release();
+			await completed;
+			pause.mockRestore();
+		}
+	});
+	it.each(["entity", "person_name", "perek", "alternative"] as const)(
+		"pins authoritative %s reference rows after final receipt validation through proposal creation",
+		async (kind) => {
+			const reference = await referenceFixture(kind),
+				{ item } = await assignedIssue(),
+				job = await claim(item),
+				gate = graphGate();
+			const read = await worker.readContributionWorkerContext({
+				...identity(job),
+				name: "record",
+				arguments: { kind, id: reference.id },
+			});
+			const create = service.createContribution;
+			const pause = vi
+				.spyOn(service, "createContribution")
+				.mockImplementationOnce(async (...args) => {
+					gate.enter();
+					await gate.pending;
+					return create(...args);
+				});
+			const completing = worker.completeContributionGeneration({
+				...identity(job),
+				receipts: [read.receipt],
+				content: implementation(`reference-${randomUUID()}`),
+			});
+			try {
+				await Promise.race([
+					gate.reached,
+					completing.then(() => {
+						throw new Error("Completion skipped the final reference barrier");
+					}),
+				]);
+				const probe = await db.pool.getConnection();
+				try {
+					await probe.beginTransaction();
+					for (const point of reference.probes)
+						await expect(
+							probe.execute(point.sql, [point.id]),
+						).rejects.toMatchObject({ code: "ER_LOCK_NOWAIT" });
+				} finally {
+					await probe.rollback();
+					probe.release();
+				}
+				gate.release();
+				expect((await completing).prIds).toHaveLength(1);
+			} finally {
+				gate.release();
+				await completing.catch(() => {});
+				pause.mockRestore();
+				await reference.cleanup();
+			}
+		},
+	);
+	it.each([
+		["entity", "record"],
+		["person_name", "record"],
+		["perek", "record"],
+		["alternative", "record"],
+		["entity", "search"],
+	] as const)(
+		"rejects a fresh %s %s change committed after the final transaction snapshot but before its locking read",
+		async (kind, toolName) => {
+			const reference = await referenceFixture(kind),
+				{ item } = await assignedIssue(),
+				job = await claim(item);
+			const args =
+				toolName === "record"
+					? { kind, id: reference.id }
+					: { kind, query: String(reference.id), limit: 10 };
+			const read = await worker.readContributionWorkerContext({
+				...identity(job),
+				name: toolName,
+				arguments: args,
+			});
+			const writer = await db.pool.getConnection();
+			await writer.beginTransaction();
+			await reference.change(writer);
+			const context = await import(
+					"~/server/tanahpedia/contribution-agent-context.server"
+				),
+				original = context.readContributionAgentTool;
+			let committed = false;
+			const commitAfterSnapshot = vi
+				.spyOn(context, "readContributionAgentTool")
+				.mockImplementation(async (...params) => {
+					if (params[4] && params[2] === toolName && !committed) {
+						await writer.commit();
+						committed = true;
+					}
+					return original(...params);
+				});
+			try {
+				await expect(
+					worker.completeContributionGeneration({
+						...identity(job),
+						receipts: [read.receipt],
+						content: implementation(`stale-reference-${randomUUID()}`),
+					}),
+				).rejects.toThrow("tool-read record");
+				expect(committed).toBe(true);
+				expect((await fresh(item)).generation?.status).toBe("failed");
+				const [created] = await conn.execute<RowDataPacket[]>(
+					"SELECT id FROM tanahpedia_contribution WHERE issue_id=?",
+					[item.id],
+				);
+				expect(created).toHaveLength(0);
+			} finally {
+				commitAfterSnapshot.mockRestore();
+				await writer.rollback();
+				writer.release();
+				await reference.cleanup();
+			}
+		},
+	);
+	it("fails closed immediately when an authoritative reference is busy during final validation", async () => {
+		const reference = await referenceFixture("entity"),
+			{ item } = await assignedIssue(),
+			job = await claim(item);
+		const read = await worker.readContributionWorkerContext({
+			...identity(job),
+			name: "record",
+			arguments: { kind: "entity", id: reference.id },
+		});
+		const writer = await db.pool.getConnection();
+		try {
+			await writer.beginTransaction();
+			await reference.change(writer);
+			await expect(
+				worker.completeContributionGeneration({
+					...identity(job),
+					receipts: [read.receipt],
+					content: implementation(`busy-reference-${randomUUID()}`),
+				}),
+			).rejects.toMatchObject({ code: "ER_LOCK_NOWAIT" });
+			expect((await fresh(item)).generation?.status).toBe("failed");
+			const [created] = await conn.execute<RowDataPacket[]>(
+				"SELECT id FROM tanahpedia_contribution WHERE issue_id=?",
+				[item.id],
+			);
+			expect(created).toHaveLength(0);
+		} finally {
+			await writer.rollback();
+			writer.release();
+			await reference.cleanup();
 		}
 	});
 	it("commits assignment and its queued task together, while invalid registry assignments roll back creation", async () => {
