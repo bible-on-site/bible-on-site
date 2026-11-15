@@ -6,7 +6,7 @@
              xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Pages.HomeSearchPage"
              Title="חיפוש" FlowDirection="RightToLeft" Shell.NavBarIsVisible="False"
-             BackgroundColor="{AppThemeBinding Light=#F2EFE6, Dark=#111C2C}">
+             BackgroundColor="{AppThemeBinding Light=#F5F7FB, Dark=#111C2C}">
     <Grid RowDefinitions="Auto,*">
         <Grid Padding="12,10" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
             <Button Text="{x:Static fonts:FluentUI.arrow_right_24_regular}" FontFamily="FluentIcons"
@@ -17,7 +17,7 @@
                     BackgroundColor="{AppThemeBinding Light=White, Dark=#243C5D}">
             <controls:SearchEntry x:Name="GlobalQuery" AutomationId="HomeSearchInput" HeightRequest="56"
                                  Placeholder="בתנ&quot;ך ובאפליקציה" FontSize="19" TextChanged="OnQueryChanged" Completed="OnSearchSubmitted"
-                                 TextColor="{AppThemeBinding Light=#192B45, Dark=#F2EFE6}"
+                                 TextColor="{AppThemeBinding Light=#192B45, Dark=#F5F7FB}"
                                  PlaceholderColor="{AppThemeBinding Light=#63738C, Dark=#B8CBE5}"/>
             </Border>
             <Button Grid.Column="2" AutomationId="HomeSearchClear" Text="{x:Static fonts:FluentUI.dismiss_24_regular}" FontFamily="FluentIcons"
@@ -29,7 +29,7 @@
             <VerticalStackLayout Padding="22,14,22,30" Spacing="22">
                 <VerticalStackLayout x:Name="NavigationSection" Spacing="8">
                     <Label Text="ניווט באפליקציה" FontSize="21" FontAttributes="Bold"
-                           TextColor="{AppThemeBinding Light=#192B45, Dark=#F2EFE6}"/>
+                           TextColor="{AppThemeBinding Light=#192B45, Dark=#F5F7FB}"/>
                     <VerticalStackLayout x:Name="NavigationResults" Spacing="4">
                         <BindableLayout.ItemTemplate>
                             <DataTemplate x:DataType="models:NavigationSearchItem">
@@ -39,7 +39,7 @@
                                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                                             <VerticalStackLayout Spacing="4">
                                                 <Label Text="{Binding Title}" AutomationId="HomeNavigationResult" FontSize="17" FontAttributes="Bold"
-                                                       TextColor="{AppThemeBinding Light=#192B45, Dark=#F2EFE6}"/>
+                                                       TextColor="{AppThemeBinding Light=#192B45, Dark=#F5F7FB}"/>
                                                 <Label Text="{Binding Subtitle}" FontSize="13"
                                                        TextColor="{AppThemeBinding Light=#63738C, Dark=#B8CBE5}"/>
                                             </VerticalStackLayout>
@@ -55,7 +55,7 @@
                 <VerticalStackLayout x:Name="ContentSection" IsVisible="False" Spacing="10">
                     <Grid ColumnDefinitions="*,Auto">
                         <Label Text="בתנ&quot;ך ובתוכן" FontSize="21" FontAttributes="Bold"
-                               TextColor="{AppThemeBinding Light=#192B45, Dark=#F2EFE6}"/>
+                               TextColor="{AppThemeBinding Light=#192B45, Dark=#F5F7FB}"/>
                         <ActivityIndicator x:Name="ContentLoading" Grid.Column="1" Color="#2866E7" WidthRequest="24" HeightRequest="24"/>
                     </Grid>
                     <Label x:Name="SearchStatus" AutomationId="HomeSearchStatus" FontSize="13"
@@ -71,7 +71,7 @@
                                         <VerticalStackLayout Spacing="6">
                                             <Label Text="{Binding Category}" FontSize="12" TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}"/>
                                             <Label Text="{Binding Title}" AutomationId="HomeContentResult" FontSize="17" FontAttributes="Bold"
-                                                   TextColor="{AppThemeBinding Light=#192B45, Dark=#F2EFE6}"/>
+                                                   TextColor="{AppThemeBinding Light=#192B45, Dark=#F5F7FB}"/>
                                             <Label Text="{Binding SubtitleHtml}" TextType="Html" FontSize="14" MaxLines="3" LineBreakMode="TailTruncation"
                                                    TextColor="{AppThemeBinding Light=#63738C, Dark=#B8CBE5}"/>
                                         </VerticalStackLayout>

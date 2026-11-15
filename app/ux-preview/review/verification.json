@@ -1,11 +1,7 @@
 {
+  "baseline_branch": "master",
+  "baseline_commit": "95c202eb5276e285e870b0187129daba9a732a54",
   "viewport_initial": [
-    27,
-    128,
-    1059,
-    2337
-  ],
-  "viewport_after_hide_and_reveal": [
     27,
     128,
     1059,
@@ -18,13 +14,12 @@
     2337
   ],
   "passed": [
-    "large touch targets",
-    "no legacy reader menus",
-    "four search shortcuts",
+    "explicit display and commentary actions",
+    "separate article badge",
+    "return to verses from articles",
+    "no legacy reader navigation",
     "constant viewport",
     "small upward reveal",
-    "articles transition",
-    "fullscreen without legacy fan",
     "continuous gestures"
   ]
 }
