@@ -80,6 +80,23 @@ describe("s3 image helpers", () => {
 		},
 	);
 
+	it("falls back to the default bucket when S3_BUCKET is unset", async () => {
+		vi.stubEnv("S3_ENDPOINT", "");
+		vi.stubEnv("S3_REGION", "il-central-1");
+		vi.stubEnv("ASSETS_BASE_URL", "");
+		vi.stubEnv("S3_BUCKET", "");
+		const { getAuthorImageUrl, uploadImage } = await loadS3();
+
+		expect(getAuthorImageUrl(7)).toBe(
+			"https://bible-on-site-assets.s3.il-central-1.amazonaws.com/authors/high-res/7.jpg",
+		);
+		await uploadImage(Buffer.from("img"), "image/png", 3);
+		const command = sendMock.mock.calls[0]?.[0] as {
+			input: Record<string, unknown>;
+		};
+		expect(command.input.Bucket).toBe("bible-on-site-assets");
+	});
+
 	describe("when no custom endpoint is configured (AWS)", () => {
 		it("builds the standard public URL for author images", async () => {
 			vi.stubEnv("S3_ENDPOINT", "");
