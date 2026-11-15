@@ -39,6 +39,8 @@ export function monitorNativeInteractions(capture, {
       if (stopped || !info.pending || info.capturedAt) return;
       cancel(request.timer);
       info.capturedAt = now();
+      // Completion can update the live request before the queued capture runs.
+      Object.defineProperty(info, 'capturedWhilePending', { value: true, enumerable: true });
       const completion = Promise.resolve().then(() => capture(key, info))
         .catch(error => { failure ??= error; })
         .finally(() => captures.delete(completion));

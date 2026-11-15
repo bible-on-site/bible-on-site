@@ -44,8 +44,11 @@ public partial class ReaderArticlesView : CollectionView, IReaderArticlesSurface
 
     public ReaderArticlesView()
     {
+        DebugLog.Write("[Startup] ReaderArticlesView InitializeComponent");
         InitializeComponent();
+        DebugLog.Write("[Startup] ReaderArticlesView XAML initialized");
         SelectionChanged += OnSelectionChanged;
+        DebugLog.Write("[Startup] ReaderArticlesView constructed");
     }
 
     private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
