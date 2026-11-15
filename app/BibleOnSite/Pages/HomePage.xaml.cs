@@ -4,7 +4,9 @@ using BibleOnSite.Helpers;
 namespace BibleOnSite.Pages;
 
 /// <summary>Native home UX preview; uses the packaged catalog and existing destinations.</summary>
+#pragma warning disable S2333 // The MAUI XAML compiler generates the other half of this page.
 public partial class HomePage : ContentPage, IAnalyticsScreenName
+#pragma warning restore S2333
 {
     private int _dailyPerekId;
     private bool _loading;
@@ -45,8 +47,10 @@ public partial class HomePage : ContentPage, IAnalyticsScreenName
         base.OnDisappearing();
     }
 
+    #pragma warning disable S1172 // EventHandler<AppLinkTarget> requires both delegate parameters.
     private async void OnAppLinkRequested(object? sender, AppLinkHelper.AppLinkTarget target) =>
         await ShellAppNavigator.Instance.GoToQueuedAsync(AppRoutes.CalendarReader);
+    #pragma warning restore S1172
 
     private async Task LoadDailyPerekAsync()
     {
