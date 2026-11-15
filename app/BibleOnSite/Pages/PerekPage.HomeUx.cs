@@ -5,7 +5,9 @@ using BibleOnSite.Services;
 
 namespace BibleOnSite.Pages;
 
+#pragma warning disable S2333 // Reader controls and lifecycle belong to the other XAML/code-behind partials.
 public partial class PerekPage
+#pragma warning restore S2333
 {
     private readonly ReaderHeaderScrollState _homeUxHeader = new();
     private double _homeUxTikkunOffset;
