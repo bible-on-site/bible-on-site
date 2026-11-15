@@ -7,7 +7,7 @@
 //!   near-empty stub alongside the real text (e.g. "Radak on Genesis" has 29
 //!   segments while its "Vocalized Edition" has 2370), so taking whichever
 //!   version happened to come first silently dropped most of the commentary
-//! - Only project the `chapter` field (actual text content)
+//! - Project the text and selected edition title, so manual maps can verify it
 //!
 //! This avoids the 16MB BSON document size limit that occurs when naively
 //! joining large commentaries (e.g., Rashi on Torah has 21MB+ of text data).
@@ -93,7 +93,7 @@ mod tests {
     }
 
     #[test]
-    fn projects_only_chapter_after_selection() {
+    fn projects_chapter_and_edition_title_after_selection() {
         let pipeline = sub_pipeline();
         let names = stage_names(&pipeline);
         let project_at = names
@@ -108,6 +108,7 @@ mod tests {
         );
         let project = pipeline[project_at].get_document("$project").unwrap();
         assert_eq!(as_int(project, "chapter"), 1);
+        assert_eq!(as_int(project, "versionTitle"), 1);
     }
 
     #[test]

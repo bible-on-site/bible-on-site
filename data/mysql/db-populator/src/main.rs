@@ -317,7 +317,7 @@ async fn run(cli: Cli) -> Result<()> {
 
         let perushim_structure_path = base_path.join(&cli.perushim_structure_script);
         if perushim_structure_path.exists() {
-            execute_script(&mut conn, &perushim_structure_path, "perushim-structure").await?;
+            rebuild_local_perushim_structure(&mut conn, &perushim_structure_path).await?;
         }
 
         apply_tanahpedia_rebuild_structure(&mut conn, &tanahpedia_scripts).await?;
@@ -369,18 +369,6 @@ async fn run(cli: Cli) -> Result<()> {
 
         let perushim_data_path = base_path.join(&cli.perushim_data_script);
         if perushim_data_path.exists() {
-            // Truncate perushim tables before loading full dataset — test data
-            // (tanah_test_data.sql) may have already inserted rows with the same PKs.
-            let truncate_sql = "SET FOREIGN_KEY_CHECKS = 0;\
-                                TRUNCATE TABLE note;\
-                                TRUNCATE TABLE perush;\
-                                TRUNCATE TABLE parshan;\
-                                SET FOREIGN_KEY_CHECKS = 1;";
-            raw_sql(truncate_sql)
-                .execute(&mut conn)
-                .await
-                .context("Failed to truncate perushim tables before data load")?;
-
             execute_script_chunked(&mut conn, &perushim_data_path, "perushim-data").await?;
         }
 
@@ -408,6 +396,28 @@ async fn run(cli: Cli) -> Result<()> {
     println!("Database population completed successfully");
 
     Ok(())
+}
+
+/// The CLI full-structure path rebuilds a local bootstrap database, including
+/// the fixed-ID commentary fixtures. Production deployment uses the additive
+/// schema file directly. Data-only imports never call this reset.
+async fn rebuild_local_perushim_structure(
+    conn: &mut MySqlConnection,
+    structure_path: &Path,
+) -> Result<()> {
+    raw_sql(
+        "SET FOREIGN_KEY_CHECKS = 0;
+         DROP TABLE IF EXISTS tanah_note_metric;
+         DROP TABLE IF EXISTS tanah_perush_metric;
+         DROP TABLE IF EXISTS note;
+         DROP TABLE IF EXISTS perush;
+         DROP TABLE IF EXISTS parshan;
+         SET FOREIGN_KEY_CHECKS = 1;",
+    )
+    .execute(&mut *conn)
+    .await
+    .context("Failed to rebuild local commentary bootstrap tables")?;
+    execute_script(conn, structure_path, "perushim-structure").await
 }
 
 struct TanahpediaScripts {
@@ -1274,6 +1284,7 @@ mod tests {
     use clap::Parser;
     use sqlx_core::raw_sql::raw_sql;
     use std::env;
+    use std::io::Write;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1487,6 +1498,10 @@ SELECT 1";
         let base_options = MySqlConnectOptions::from_str(&server_url)
             .context("Failed to parse DB_POPULATOR_TEST_DB_URL")?
             .disable_statement_logging();
+        let mut reference_data_file =
+            tempfile::NamedTempFile::new().context("Failed to create reference fixture")?;
+        let mut commentary_data_file =
+            tempfile::NamedTempFile::new().context("Failed to create commentary fixture")?;
         let database_name = format!(
             "tanah_db_populator_test_{}_{}",
             std::process::id(),
@@ -1994,6 +2009,52 @@ SELECT 1";
                 database_name
             );
             run(Cli::parse_from(["db-populator", "--db-url", &populate_url])).await?;
+
+            // Full local bootstrap must be repeatable even though the deployed
+            // commentary schema is additive. Its fixed-ID fixtures need empty
+            // commentary tables, and old derived metrics must not follow reused IDs.
+            raw_sql("INSERT INTO perush (id, name, parshan_id) VALUES (30000, 'local bootstrap marker', 1);
+                INSERT INTO tanah_perush_metric
+                    (perush_id, perek_id, words_per_minute, calc_version, source_hash)
+                    VALUES (30000, 1, 200, 1, REPEAT('a', 64));")
+                .execute(&mut conn).await?;
+            run(Cli::parse_from(["db-populator", "--db-url", &populate_url])).await?;
+            anyhow::ensure!(query_scalar::<MySql, String>("SELECT name FROM perush WHERE id = 1").fetch_one(&mut conn).await? == "רש\"י", "Repeated bootstrap did not restore the Rashi fixture");
+            anyhow::ensure!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM perush WHERE id = 30000").fetch_one(&mut conn).await? == 0, "Full bootstrap retained an old commentary row");
+            anyhow::ensure!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_perush_metric WHERE perush_id = 30000").fetch_one(&mut conn).await? == 0, "Full bootstrap retained metrics for a reused commentary identity");
+
+            // Model a published catalog whose ID 1 is Abarbanel, not the local
+            // fixture Rashi. Move any optional corpus entry out of the way so
+            // this published title stays exact-name unique in either setup.
+            raw_sql("UPDATE perush SET name = CONCAT(name, ' previous catalog') WHERE id <> 1 AND BINARY name = BINARY 'אברבנאל';
+                UPDATE parshan SET name = CONCAT(name, ' previous catalog') WHERE id <> 1 AND BINARY name = BINARY 'אברבנאל';
+                UPDATE parshan SET name = 'אברבנאל' WHERE id = 1;
+                UPDATE perush SET name = 'אברבנאל' WHERE id = 1;
+                INSERT INTO note (perush_id, perek_id, pasuk, note_idx, note_content)
+                    VALUES (1, 1, 1, 31000, 'published note retained');
+                INSERT INTO tanahpedia_source_group (id, target_table, target_id)
+                    VALUES ('fff00000-0000-4000-8000-000000000001', 'test', 'fff00000-0000-4000-8000-000000000002');
+                INSERT INTO tanahpedia_tanah_source (id, source_group_id, perush_id, perek_id)
+                    VALUES ('fff00000-0000-4000-8000-000000000003', 'fff00000-0000-4000-8000-000000000001', 1, 1);")
+                .execute(&mut conn).await?;
+            // Reference-data seeding is independent of this regression. Keep
+            // those populated rows while exercising the real data-only CLI and
+            // chunked commentary-import path with the fixture opt-out flag.
+            reference_data_file.write_all(b"SELECT 1;\n")?;
+            commentary_data_file.write_all(
+                "INSERT INTO note (perush_id, perek_id, pasuk, note_idx, note_content)
+                 SELECT id, 1, 1, 31001, 'data-only imported note' FROM perush
+                 WHERE id = 1 AND BINARY name = BINARY 'אברבנאל';\n".as_bytes())?;
+            run(Cli::parse_from([
+                "db-populator", "--db-url", &populate_url, "--skip-structure", "--skip-tanah-test-data",
+                "--tanah-view-data-script", reference_data_file.path().to_str().context("Non-UTF-8 reference fixture path")?,
+                "--perushim-data-script", commentary_data_file.path().to_str().context("Non-UTF-8 commentary fixture path")?,
+            ])).await?;
+            anyhow::ensure!(query_scalar::<MySql, String>("SELECT name FROM perush WHERE id = 1").fetch_one(&mut conn).await? == "אברבנאל", "Data-only import changed the published work identity");
+            anyhow::ensure!(query_scalar::<MySql, String>("SELECT name FROM parshan WHERE id = 1").fetch_one(&mut conn).await? == "אברבנאל", "Data-only import changed the published author identity");
+            anyhow::ensure!(query_scalar::<MySql, String>("SELECT note_content FROM note WHERE perush_id = 1 AND perek_id = 1 AND pasuk = 1 AND note_idx = 31000").fetch_one(&mut conn).await? == "published note retained", "Data-only import removed a published note");
+            anyhow::ensure!(query_scalar::<MySql, String>("SELECT note_content FROM note WHERE perush_id = 1 AND perek_id = 1 AND pasuk = 1 AND note_idx = 31001").fetch_one(&mut conn).await? == "data-only imported note", "Data-only commentary SQL did not execute");
+            anyhow::ensure!(query_scalar::<MySql, String>("SELECT p.name FROM tanahpedia_tanah_source AS source JOIN perush AS p ON p.id = source.perush_id WHERE source.id = 'fff00000-0000-4000-8000-000000000003'").fetch_one(&mut conn).await? == "אברבנאל", "Data-only import changed the target of a published Tanahpedia foreign key");
 
             conn.close().await.ok();
             Ok::<(), anyhow::Error>(())
