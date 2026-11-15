@@ -20,8 +20,12 @@ const mocks = vi.hoisted(() => ({
 	ensure: vi.fn(),
 	read: vi.fn(),
 	save: vi.fn(),
+	refreshDeferred: vi.fn(),
 }));
 vi.mock("~/server/db", () => ({ query: mocks.query }));
+vi.mock("~/server/tanahpedia/contribution-rebases.server", () => ({
+	refreshDeferredContributionBase: mocks.refreshDeferred,
+}));
 vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
 	ensureContributionSchema: mocks.ensure,
 	readContribution: mocks.read,
@@ -88,6 +92,22 @@ function pr(): Contribution {
 }
 beforeEach(() => vi.clearAllMocks());
 describe("pending PR API migration", () => {
+	it.each([3, CONTRIBUTION_API_VERSION])(
+		"reconciles separately deferred content after making API %s current",
+		async (version) => {
+			const item = pr();
+			item.apiVersion = version;
+			item.deferredContentMerge = { id: "merged-content", number: 2 };
+			mocks.read.mockResolvedValue(item);
+			mocks.refreshDeferred.mockImplementationOnce(async (_conn, value) => {
+				expect(value.apiVersion).toBe(CONTRIBUTION_API_VERSION);
+				delete value.deferredContentMerge;
+			});
+			await readCurrentContribution({} as never, id);
+			expect(mocks.refreshDeferred).toHaveBeenCalledWith({}, item);
+			expect(item.deferredContentMerge).toBeUndefined();
+		},
+	);
 	it("upgrades a late legacy PR on read, retaining approval and making repeated reads idempotent", async () => {
 		const item = pr();
 		item.apiVersion = 3;
@@ -112,6 +132,7 @@ describe("pending PR API migration", () => {
 	it("persists a failed late migration for raw repair without changing approval or the original sequence", async () => {
 		const item = pr();
 		item.apiVersion = 999;
+		item.deferredContentMerge = { id: "merged-content", number: 2 };
 		const original = structuredClone(item);
 		mocks.read.mockResolvedValue(item);
 		const result = await readCurrentContribution({} as never, id);
@@ -120,6 +141,8 @@ describe("pending PR API migration", () => {
 		expect(result.events).toEqual(original.events);
 		expect(result.revision).toBe(original.revision);
 		expect(result.state).toBe("open");
+		expect(result.deferredContentMerge).toEqual(original.deferredContentMerge);
+		expect(mocks.refreshDeferred).not.toHaveBeenCalled();
 		expect(mocks.save).toHaveBeenCalledOnce();
 	});
 	it("checks the caller's version before touching a legacy sequence", async () => {

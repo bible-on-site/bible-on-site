@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { PoolConnection } from "mysql2/promise";
 import {
 	CONTRIBUTION_API_VERSION,
 	migrationBlocked,
@@ -48,14 +49,14 @@ function affected(
 	addressesChanged: boolean,
 ): boolean {
 	return (
-		Boolean(item.domainConflict) ||
+		Boolean(item.domainConflict || item.deferredContentMerge) ||
 		(addressesChanged && changesAddressSpace(item)) ||
 		[...identifiers(item.changes)].some((id) => changed.has(id))
 	);
 }
 function changedSequence(
 	item: Contribution,
-	trigger: Contribution,
+	trigger: Pick<Contribution, "number">,
 	error?: string,
 ): void {
 	const snapshot = contributionSnapshot(item);
@@ -75,6 +76,67 @@ function changedSequence(
 			: `בסיס ההשוואה רוענן אחרי PR #${trigger.number}. הערכים המוצעים נשמרו; נדרשת סקירה מחודשת של doradsoft.`,
 	});
 }
+async function refreshContributionBase(
+	conn: PoolConnection,
+	item: Contribution,
+	trigger: Pick<Contribution, "number">,
+): Promise<"refreshed" | "blocked" | "unchanged"> {
+	const deferred = Boolean(item.deferredContentMerge);
+	delete item.deferredContentMerge;
+	let next: Contribution["changes"];
+	try {
+		const inputs = validateChanges(
+			item.changes.map((c) => ({
+				kind: c.kind,
+				targetId: c.targetId,
+				after: c.after,
+			})),
+		);
+		next = await prepareChanges(conn, inputs, { refresh: true });
+	} catch (error) {
+		// A storage failure rolls back this transaction and retains its marker.
+		if (error && typeof error === "object" && "code" in error) throw error;
+		const message =
+			error instanceof Error
+				? error.message
+				: "The target can no longer be refreshed";
+		if (item.domainConflict === message) {
+			if (deferred) await saveContribution(conn, item);
+			return "unchanged";
+		}
+		changedSequence(item, trigger, message);
+		item.domainConflict = message;
+		await saveContribution(conn, item);
+		return "blocked";
+	}
+	if (sameState(next, item.changes) && !item.domainConflict) {
+		if (deferred) await saveContribution(conn, item);
+		return "unchanged";
+	}
+	changedSequence(item, trigger);
+	item.changes = next;
+	delete item.domainConflict;
+	item.apiVersion = CONTRIBUTION_API_VERSION;
+	await saveContribution(conn, item);
+	return "refreshed";
+}
+
+/** API conversion itself retains approval. Reconcile a separately recorded
+ * content merge only after the sequence is executable in the latest API. */
+export async function refreshDeferredContributionBase(
+	conn: PoolConnection,
+	item: Contribution,
+): Promise<void> {
+	if (
+		item.kind !== "pr" ||
+		item.state !== "open" ||
+		migrationBlocked(item) ||
+		!item.deferredContentMerge
+	)
+		return;
+	await refreshContributionBase(conn, item, item.deferredContentMerge);
+}
+
 export async function refreshPendingContributionBases(trigger: Contribution) {
 	const changed = identifiers(trigger.changes);
 	const addressesChanged = changesAddressSpace(trigger);
@@ -130,51 +192,25 @@ export async function refreshPendingContributionBases(trigger: Contribution) {
 					? (JSON.parse(row.data) as Contribution)
 					: row.data;
 			if (
-				!affected(candidate, changed, addressesChanged) ||
-				migrationBlocked(candidate)
+				!affected(candidate, changed, addressesChanged) &&
+				!migrationBlocked(candidate)
 			)
 				continue;
 			const outcome = await withContributions(async (conn) => {
 				const item = await readContribution(conn, row.id, true);
-				if (
-					item.kind !== "pr" ||
-					item.state !== "open" ||
-					migrationBlocked(item) ||
-					!affected(item, changed, addressesChanged)
-				)
+				if (item.kind !== "pr" || item.state !== "open") return "unchanged";
+				if (migrationBlocked(item)) {
+					if (!item.deferredContentMerge) {
+						item.deferredContentMerge = {
+							id: trigger.id,
+							number: trigger.number,
+						};
+						await saveContribution(conn, item);
+					}
 					return "unchanged";
-				let next: Contribution["changes"];
-				try {
-					const inputs = validateChanges(
-						item.changes.map((c) => ({
-							kind: c.kind,
-							targetId: c.targetId,
-							after: c.after,
-						})),
-					);
-					next = await prepareChanges(conn, inputs, { refresh: true });
-				} catch (error) {
-					// Storage failures must retain the durable merge marker for replay.
-					if (error && typeof error === "object" && "code" in error)
-						throw error;
-					const message =
-						error instanceof Error
-							? error.message
-							: "The target can no longer be refreshed";
-					if (item.domainConflict === message) return "unchanged";
-					changedSequence(item, trigger, message);
-					item.domainConflict = message;
-					await saveContribution(conn, item);
-					return "blocked";
 				}
-				if (sameState(next, item.changes) && !item.domainConflict)
-					return "unchanged";
-				changedSequence(item, trigger);
-				item.changes = next;
-				delete item.domainConflict;
-				item.apiVersion = CONTRIBUTION_API_VERSION;
-				await saveContribution(conn, item);
-				return "refreshed";
+				if (!affected(item, changed, addressesChanged)) return "unchanged";
+				return refreshContributionBase(conn, item, trigger);
 			});
 			if (outcome !== "unchanged") result[outcome]++;
 		}

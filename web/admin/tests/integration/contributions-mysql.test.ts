@@ -2708,6 +2708,160 @@ describe("post-merge sequence refresh and renewed owner review", () => {
 		expect(repaired.domainConflict).toBeUndefined();
 		expect((await merge(repaired)).state).toBe("merged");
 	});
+	it.each([true, false])(
+		"reconciles a deferred comparison after API recovery; content changed: %s",
+		async (changed) => {
+			const pending = await approved(
+				await proposed([metadata(`Deferred proposed ${randomUUID()}`)]),
+			);
+			const migrations = await import(
+				"~/server/tanahpedia/contribution-migrations.server"
+			);
+			await store.withContributions(async (tx) => {
+				const old = await store.readContribution(tx, pending.id, true);
+				old.apiVersion = 999;
+				await store.saveContribution(tx, old);
+			});
+			await migrations.migrateOpenContributionPrs();
+			const gray = await fresh(pending);
+			const trigger = await merge(
+				await proposed(
+					changed
+						? [metadata(`Deferred current ${randomUUID()}`)]
+						: [
+								{
+									kind: "place",
+									after: {
+										placeId: ids.place,
+										modernName: `Unrelated ${randomUUID()}`,
+										latitude: 31,
+										longitude: 35,
+										altGroupId: null,
+									},
+								},
+							],
+					owner,
+				),
+			);
+			const waiting = await fresh(pending);
+			expect(waiting.changes).toEqual(gray.changes);
+			expect(waiting.revision).toBe(gray.revision);
+			expect(waiting.events).toEqual(gray.events);
+			expect(waiting.deferredContentMerge?.id).toBe(trigger.id);
+			if (changed) {
+				await merge(
+					await proposed(
+						[
+							{
+								kind: "place",
+								after: {
+									placeId: ids.place,
+									modernName: `Later unrelated ${randomUUID()}`,
+									latitude: 32,
+									longitude: 35,
+									altGroupId: null,
+								},
+							},
+						],
+						owner,
+					),
+				);
+				expect((await fresh(pending)).version).toBe(waiting.version);
+			}
+			const contract = {
+				version: CONTRIBUTION_API_VERSION,
+				adapters: [
+					{
+						from: 999,
+						to: CONTRIBUTION_API_VERSION,
+						id: "recover-test-contract",
+						convert: (payload: unknown) => payload,
+					},
+				],
+			};
+			if (changed) {
+				const changes = await import(
+					"~/server/tanahpedia/contribution-changes.server"
+				);
+				const failure = vi
+					.spyOn(changes, "prepareChanges")
+					.mockRejectedValueOnce(
+						Object.assign(new Error("Injected deferred storage failure"), {
+							code: "ER_SERVER_SHUTDOWN",
+						}),
+					);
+				try {
+					await expect(
+						migrations.migrateOpenContributionPrs(contract),
+					).rejects.toThrow("Injected deferred storage failure");
+				} finally {
+					failure.mockRestore();
+				}
+				const interrupted = await fresh(pending);
+				expect(interrupted.deferredContentMerge).toEqual(
+					waiting.deferredContentMerge,
+				);
+				expect(interrupted.apiVersion).toBe(999);
+			}
+			await migrations.migrateOpenContributionPrs(contract);
+			const recovered = await fresh(pending);
+			expect(recovered.apiMigration?.status).toBe("succeeded");
+			expect(recovered.deferredContentMerge).toBeUndefined();
+			expect(recovered.changes[0].after).toEqual(gray.changes[0].after);
+			if (changed) {
+				expect(recovered.changes[0].before).not.toEqual(gray.changes[0].before);
+				expect(reviewStatus(recovered)).toBe("required");
+				expect(recovered.revisionAuthor?.kind).toBe("system");
+			} else {
+				expect(recovered.revision).toBe(gray.revision);
+				expect(reviewStatus(recovered)).toBe("approved");
+			}
+			await service.updateContribution(
+				{ id: recovered.id, version: recovered.version, action: "close" },
+				owner,
+			);
+		},
+	);
+	it.each(["read", "merge"])(
+		"reconciles deferred content on a late API upgrade through %s",
+		async (path) => {
+			const pending = await approved(
+				await proposed([metadata(`Late deferred proposed ${randomUUID()}`)]),
+			);
+			await store.withContributions(async (tx) => {
+				const old = await store.readContribution(tx, pending.id, true);
+				old.apiVersion = 3;
+				await store.saveContribution(tx, old);
+			});
+			await merge(
+				await proposed(
+					[metadata(`Late deferred current ${randomUUID()}`)],
+					owner,
+				),
+			);
+			const waiting = await fresh(pending);
+			expect(waiting.deferredContentMerge).toBeDefined();
+			if (path === "read") {
+				const { readCurrentContribution } = await import(
+					"~/server/tanahpedia/contribution-migrations.server"
+				);
+				await store.withContributions((tx) =>
+					readCurrentContribution(tx, pending.id),
+				);
+			} else await expect(merge(waiting)).rejects.toThrow("Approval");
+			const recovered = await fresh(pending);
+			expect(recovered.apiVersion).toBe(CONTRIBUTION_API_VERSION);
+			expect(recovered.deferredContentMerge).toBeUndefined();
+			expect(recovered.changes[0].before).not.toEqual(
+				waiting.changes[0].before,
+			);
+			expect(reviewStatus(recovered)).toBe("required");
+			await service.updateContribution(
+				{ id: recovered.id, version: recovered.version, action: "close" },
+				owner,
+			);
+		},
+	);
 	it("durably resumes a post-commit refresh failure without applying the content merge twice", async () => {
 		const pending = await proposed([
 			{

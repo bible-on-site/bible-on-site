@@ -235,6 +235,7 @@ export interface Contribution {
 	revisionHistory?: ContributionRevisionSnapshot[];
 	domainConflict?: string;
 	rebasePending?: boolean;
+	deferredContentMerge?: { id: string; number: number };
 }
 
 export interface ContributionListRequest {

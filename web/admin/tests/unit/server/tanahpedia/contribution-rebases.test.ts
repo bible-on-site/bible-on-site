@@ -26,6 +26,7 @@ vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
 }));
 
 import {
+	refreshDeferredContributionBase,
 	refreshPendingContributionBases,
 	resumePendingContributionRebases,
 } from "~/server/tanahpedia/contribution-rebases.server";
@@ -187,12 +188,73 @@ describe("pending proposal base refresh", () => {
 			displayName: "current",
 		});
 	});
-	it("leaves incompatible API sequences untouched", async () => {
+	it("retains an incompatible raw sequence and durably defers its content comparison", async () => {
 		const old = { ...pending, apiVersion: CONTRIBUTION_API_VERSION + 1 };
 		mocks.items.set(ID, old);
 		await refreshPendingContributionBases(trigger);
 		expect(mocks.prepare).not.toHaveBeenCalled();
-		expect(mocks.items.get(ID)).toEqual(old);
+		const waiting = item(ID);
+		expect(waiting.changes).toEqual(old.changes);
+		expect(waiting.events).toEqual(old.events);
+		expect(waiting.revision).toBe(old.revision);
+		expect(waiting.deferredContentMerge).toEqual({
+			id: trigger.id,
+			number: trigger.number,
+		});
+		await refreshPendingContributionBases(trigger);
+		expect(item(ID).version).toBe(waiting.version);
+		await refreshPendingContributionBases({
+			...trigger,
+			id: "later-merge",
+			number: 3,
+		});
+		expect(item(ID).version).toBe(waiting.version);
+		expect(item(ID).deferredContentMerge).toEqual(waiting.deferredContentMerge);
+	});
+	it.each([true, false])(
+		"reconciles a recovered sequence and renews review only for changed content: %s",
+		async (changed) => {
+			const recovered = {
+				...structuredClone(pending),
+				deferredContentMerge: { id: trigger.id, number: trigger.number },
+			};
+			if (!changed) mocks.prepare.mockResolvedValue(pending.changes);
+			await refreshDeferredContributionBase({} as never, recovered);
+			expect(recovered.deferredContentMerge).toBeUndefined();
+			expect(recovered.changes[0].after).toEqual(pending.changes[0].after);
+			expect(recovered.evidence).toEqual(pending.evidence);
+			expect(recovered.revision).toBe(pending.revision + (changed ? 1 : 0));
+			expect(reviewStatus(recovered)).toBe(
+				changed ? "required" : reviewStatus(pending),
+			);
+		},
+	);
+	it("clears a deferred marker without duplicating an existing content conflict", async () => {
+		const recovered = {
+			...structuredClone(pending),
+			domainConflict: "Target missing",
+			deferredContentMerge: { id: trigger.id, number: trigger.number },
+		};
+		mocks.prepare.mockRejectedValue(new Error("Target missing"));
+		await refreshDeferredContributionBase({} as never, recovered);
+		expect(recovered.deferredContentMerge).toBeUndefined();
+		expect(recovered.revision).toBe(pending.revision);
+		expect(recovered.events).toEqual(pending.events);
+	});
+	it("waits for an open, compatible proposal with deferred content", async () => {
+		const marker = { id: trigger.id, number: trigger.number };
+		for (const fields of [
+			{},
+			{ state: "closed" as const, deferredContentMerge: marker },
+			{ kind: "issue" as const, deferredContentMerge: marker },
+			{ apiVersion: 999, deferredContentMerge: marker },
+		]) {
+			await refreshDeferredContributionBase({} as never, {
+				...structuredClone(pending),
+				...fields,
+			});
+		}
+		expect(mocks.prepare).not.toHaveBeenCalled();
 	});
 	it("scans but does not rewrite unrelated proposals", async () => {
 		trigger.changes = [

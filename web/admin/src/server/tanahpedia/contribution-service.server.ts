@@ -409,8 +409,8 @@ export async function mergeContribution(
 	);
 	let merged = await withContributions(async (conn) => {
 		const item = await readContribution(conn, id, true);
-		// Only the protocol migration may advance this request's version. An
-		// intervening authored edit/review still requires the caller to reload.
+		// Preparation may migrate the API or reconcile deferred comparisons.
+		// Any later authored edit/review still requires the caller to reload.
 		assertVersion(item, prepared.version);
 		assertMergeAllowed(item);
 		await applyReviewedChanges(conn, item);

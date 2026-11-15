@@ -8,6 +8,7 @@ import {
 	CONTRIBUTION_API_VERSION,
 	type ContributionApiMigration,
 	contributionApiVersion,
+	migrationBlocked,
 	validateApiSequence,
 } from "~/lib/tanahpedia/contribution-api";
 import type { Contribution } from "~/lib/tanahpedia/contributions";
@@ -99,9 +100,9 @@ export async function migrateContributionSequence(
 	return migration.status === "succeeded" ? "migrated" : "failed";
 }
 
-/** Cover proposals saved by an old process after the deployment scan. Callers
- * commit this protocol-only transaction before attempting content writes, so a
- * refused merge cannot roll back the gray recovery state or a successful upgrade. */
+/** Cover proposals saved by an old process after the deployment scan, then
+ * reconcile separately deferred content comparisons. Commit preparation before
+ * applying content so a refused merge retains its recovery state and upgrade. */
 export async function readCurrentContribution(
 	conn: PoolConnection,
 	id: string,
@@ -121,7 +122,19 @@ export async function readCurrentContribution(
 		);
 		if (outcome !== "unchanged") await saveContribution(conn, item);
 	}
+	await reconcileDeferredContent(conn, item);
 	return item;
+}
+
+async function reconcileDeferredContent(
+	conn: PoolConnection,
+	item: Contribution,
+) {
+	if (!item.deferredContentMerge || migrationBlocked(item)) return;
+	const { refreshDeferredContributionBase } = await import(
+		"./contribution-rebases.server"
+	);
+	await refreshDeferredContributionBase(conn, item);
 }
 
 /** Keyset scan covers every open PR, independently of the UI's page size.
@@ -156,6 +169,7 @@ export async function migrateOpenContributionPrs(
 					contract ?? currentContributionApiContract(conn),
 				);
 				if (outcome !== "unchanged") await saveContribution(conn, item);
+				await reconcileDeferredContent(conn, item);
 				return item.apiMigration?.status === "failed" && item.state === "open"
 					? "failed"
 					: outcome;

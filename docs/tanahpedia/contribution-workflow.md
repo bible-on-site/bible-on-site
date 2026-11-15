@@ -232,10 +232,15 @@ The [GitHub OIDC claims](https://docs.github.com/en/actions/reference/security/o
 provide these deployment identity restrictions without a new stored secret or IAM grant.
 
 Opening or merging a PR also upgrades a legacy sequence saved by an old admin
-process after a deployment scan. Merge commits this protocol-only check first;
+process after a deployment scan. Merge commits compatibility and comparison checks first;
 even a refused merge leaves a failed conversion gray and recoverable. It retains
 the existing approval. The subsequent content transaction checks the version
 again, so a concurrent authored edit or review still requires a reload.
+Content merges encountered while a PR is gray retain a deferred comparison marker
+without touching its raw sequence or approval. After API recovery, the comparison
+is refreshed separately: intervening content changes require owner review, while
+an unchanged comparison retains approval. Storage failures retain the marker for
+retry. This keeps API conversion and content review as distinct policies.
 
 The keyset scan visits all open PRs rather than the UI's initial result limit.
 Each PR migrates in its own locked transaction. Successful conversions update
