@@ -489,7 +489,9 @@ test("production export overrides setup-mysql's local CA and verifies the RDS ho
 	assert.ok(dump.includes(`--ssl-ca=${bundle}`));
 	assert.ok(dump.includes("--ssl-mode=VERIFY_IDENTITY"));
 	assert.ok(dump.includes("--single-transaction"));
-	assert.ok(dump.includes("--ignore-table=fixture.note"));
+	const databaseArgument = dump.indexOf("--databases");
+	assert.notEqual(databaseArgument, -1);
+	assert.equal(dump[databaseArgument + 1], "fixture");
 	assert.deepEqual(f.args(f.env.IMPORT_ARGS), [
 		"-h",
 		"127.0.0.1",

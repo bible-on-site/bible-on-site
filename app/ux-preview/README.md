@@ -4,7 +4,7 @@ This is a long-lived UX review branch. Keep PR #3385 in draft. Do not merge it,
 mark it ready, or enable auto-merge without Dorad's explicit instruction.
 
 Review the real emulator captures in [the GitHub comparison](review/REVIEW.md)
-or open [the static HTML gallery](review/index.html) locally. Both contain fourteen
+or open [the static HTML gallery](review/index.html) locally. Both contain sixteen
 screen comparisons against the actual default branch (`master`), plus a
 before/after continuous-scroll recording. Before is always on the right and
 After on the left, including the GitHub-rendered Markdown tables.
@@ -13,8 +13,9 @@ each iteration so GitHub can compare images between commits. Never use a prior
 UX iteration as the Before baseline. The default-branch commit is documented in
 `review/comparisons.json`. Update descriptions there and run
 `python review/generate.py` from this directory to rebuild both review formats.
-The daily chapter card remains the home centerpiece; the library is an
-additional destination, not a replacement home screen.
+The daily chapter card remains the home centerpiece. Parasha and holiday cards
+also span both columns, interspersed with pairs of single-column destinations.
+All destinations open directly from home; there is no separate library page.
 
 This is an opt-in Debug build for design iterations in the real MAUI app. Normal
 Debug builds and every Release build keep the existing reader startup.
@@ -47,8 +48,8 @@ the reader fan. Its dock uses explicit action labels: `תצוגת הטקסט` op
 font/display preferences, `בחירת פירושים` opens the picker for inline commentary,
 and `מאמרי הפרק` opens articles with a separate count badge. In articles mode the
 first action becomes `חזרה לפסוקים`. Its chapter title opens the chapter picker;
-the tools sheet opens search and other reading options. Secondary learning destinations
-live in the library rather than a row of small links on home.
+the tools sheet opens search and other reading options. Secondary destinations
+have full-surface, single-column tiles within the same scrolling home page.
 
 The reading viewport keeps fixed geometry throughout the controls' animations.
 Both bars remain visible on entry and during a drag in any direction. After the
@@ -65,8 +66,10 @@ return home, choose a chapter in the index, visit the calendar and a content
 destination, then return. Repeat with large text and both appearance modes.
 
 The editorial home uses blue for primary actions, oversized Hebrew typography
-and cool neutral surfaces. The library shares the daily card's dark blue,
-oversized type and faint background glyphs. Search stays fixed above home content
+and cool neutral surfaces. The wide parasha and holiday cards share the daily
+card's dark blue, oversized type and faint background glyphs. Small tiles for
+Tanahpedia, traditional masora, authors, the bulletin, contact and donations
+alternate between the wide cards. Search stays fixed above home content
 and uses the existing `FloatingSearchBar` and `SearchViewModel`. Its `מה לחפש`
 selector now includes `מסך`, with local screen matches in the same result list as
 scripture and articles. Screen search is available offline and independent of

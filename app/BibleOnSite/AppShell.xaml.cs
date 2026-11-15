@@ -58,8 +58,6 @@ public partial class AppShell : Shell, Helpers.IAdaptiveNavPane
 		if (HomeUxPreview.Enabled)
 		{
 			Routing.RegisterRoute(nameof(HomeSearchPage), typeof(HomeSearchPage));
-			Routing.RegisterRoute(nameof(HomeLibraryPage), typeof(HomeLibraryPage));
-			Routing.RegisterRoute(nameof(HomeAboutPage), typeof(HomeAboutPage));
 			FlyoutBehavior = FlyoutBehavior.Disabled;
 			ConfigureHomeUxLinks();
 		}
