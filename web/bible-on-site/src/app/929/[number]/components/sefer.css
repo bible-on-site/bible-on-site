@@ -35,13 +35,6 @@ html[data-sefer-view]:not(:has(> body > .perek-layout)) {
 	position: relative;
 }
 
-/* Prepare the current paper's clip mask before the first drag. Promoting only
-   clipping keeps the resting glyph rendering intact and avoids allocating the
-   mask in the first response frame. Leaf owns its inline hint while moving. */
-.he-book .page--paper.current-page:not(.page--folded) {
-	will-change: clip-path;
-}
-
 /* Prepare the covered back face before the next turn starts. Keep the hint
    off the current spread and hover folds to preserve their text antialiasing.
    Leaf owns the inline hint throughout an active drag or animation. */

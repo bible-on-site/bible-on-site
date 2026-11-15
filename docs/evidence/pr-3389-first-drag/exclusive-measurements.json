@@ -1,0 +1,4203 @@
+{
+  "notice": "Supersedes the earlier shared-host comparison. No clipping rule is retained.",
+  "summary": {
+    "label": "Exclusive host validation after peer stopped heavy work",
+    "plannedPairs": 3,
+    "trialCount": 6,
+    "firstInputResponseMs": [
+      {
+        "pair": 1,
+        "variant": "baseline",
+        "response": 95.8,
+        "maxResponse": 103.3,
+        "blockingMax": 0,
+        "guestIdlePercent": 90.47717842323651
+      },
+      {
+        "pair": 1,
+        "variant": "clip",
+        "response": 97.7,
+        "maxResponse": 97.7,
+        "blockingMax": 0,
+        "guestIdlePercent": 90.52590572652902
+      },
+      {
+        "pair": 2,
+        "variant": "baseline",
+        "response": 85.5,
+        "maxResponse": 96.5,
+        "blockingMax": 0,
+        "guestIdlePercent": 89.60434445306439
+      },
+      {
+        "pair": 2,
+        "variant": "clip",
+        "response": 84.8,
+        "maxResponse": 93.8,
+        "blockingMax": 0,
+        "guestIdlePercent": 90.35047792444242
+      },
+      {
+        "pair": 3,
+        "variant": "baseline",
+        "response": 76.3,
+        "maxResponse": 97,
+        "blockingMax": 0,
+        "guestIdlePercent": 89.9855792340971
+      },
+      {
+        "pair": 3,
+        "variant": "clip",
+        "response": 74.6,
+        "maxResponse": 107.7,
+        "blockingMax": 0,
+        "guestIdlePercent": 90.05006257822278
+      }
+    ],
+    "pretrialWindows": {
+      "idlePercent": 84,
+      "processorPercent": 3
+    },
+    "pretrialGuestLoad": [
+      0.03,
+      0.27,
+      0.88
+    ],
+    "pretrialContainers": {
+      "ourApp": "0.00%",
+      "peerApp": "0.00%",
+      "ourMySQL": "0.54%",
+      "peerMySQL": "0.58%",
+      "rustFS": "2.60%",
+      "buildKit": "0.04%"
+    },
+    "interpretation": "The proposed clip preparation improvement was not reproduced when heavy host work was excluded. No CSS change retained. Original deadlines and all samples retained.",
+    "posttrialWindows": {
+      "idlePercent": 88,
+      "processorPercent": 14
+    },
+    "posttrialAppContainerCPU": "0.00%",
+    "fullBaseline": {
+      "cases": 12,
+      "passed": 12,
+      "duration": "1.5 minutes",
+      "worstResponseMs": 110.3,
+      "maxBlockingMs": 14.3,
+      "qualificationFailures": 0
+    }
+  },
+  "cpuTrials": [
+    {
+      "pair": 1,
+      "variant": "baseline",
+      "exitCode": 0,
+      "before": {
+        "at": "2026-11-15T13:06:21.107Z",
+        "load": [
+          0.02,
+          0.27,
+          0.88
+        ],
+        "cpus": [
+          {
+            "user": 261430,
+            "nice": 0,
+            "sys": 179930,
+            "idle": 72171060,
+            "irq": 0
+          },
+          {
+            "user": 199820,
+            "nice": 0,
+            "sys": 111430,
+            "idle": 72329620,
+            "irq": 0
+          },
+          {
+            "user": 280210,
+            "nice": 0,
+            "sys": 201550,
+            "idle": 72148490,
+            "irq": 0
+          },
+          {
+            "user": 169530,
+            "nice": 0,
+            "sys": 125010,
+            "idle": 72357110,
+            "irq": 0
+          },
+          {
+            "user": 259660,
+            "nice": 0,
+            "sys": 174620,
+            "idle": 72216380,
+            "irq": 0
+          },
+          {
+            "user": 234890,
+            "nice": 0,
+            "sys": 96360,
+            "idle": 72422300,
+            "irq": 0
+          },
+          {
+            "user": 265950,
+            "nice": 0,
+            "sys": 179170,
+            "idle": 72254500,
+            "irq": 0
+          },
+          {
+            "user": 238920,
+            "nice": 0,
+            "sys": 121380,
+            "idle": 72406610,
+            "irq": 0
+          },
+          {
+            "user": 247100,
+            "nice": 0,
+            "sys": 169740,
+            "idle": 72298020,
+            "irq": 0
+          },
+          {
+            "user": 169180,
+            "nice": 0,
+            "sys": 95680,
+            "idle": 72494060,
+            "irq": 0
+          },
+          {
+            "user": 281900,
+            "nice": 0,
+            "sys": 188560,
+            "idle": 72239870,
+            "irq": 0
+          },
+          {
+            "user": 158090,
+            "nice": 0,
+            "sys": 93560,
+            "idle": 72503130,
+            "irq": 0
+          },
+          {
+            "user": 260130,
+            "nice": 0,
+            "sys": 169390,
+            "idle": 72273050,
+            "irq": 0
+          },
+          {
+            "user": 152020,
+            "nice": 0,
+            "sys": 90450,
+            "idle": 72520810,
+            "irq": 0
+          },
+          {
+            "user": 276140,
+            "nice": 0,
+            "sys": 181640,
+            "idle": 72254450,
+            "irq": 0
+          },
+          {
+            "user": 207510,
+            "nice": 0,
+            "sys": 94550,
+            "idle": 72461010,
+            "irq": 0
+          },
+          {
+            "user": 276050,
+            "nice": 0,
+            "sys": 173650,
+            "idle": 72266980,
+            "irq": 0
+          },
+          {
+            "user": 210230,
+            "nice": 0,
+            "sys": 87770,
+            "idle": 72465760,
+            "irq": 0
+          },
+          {
+            "user": 287300,
+            "nice": 0,
+            "sys": 178120,
+            "idle": 72221860,
+            "irq": 0
+          },
+          {
+            "user": 226750,
+            "nice": 0,
+            "sys": 100200,
+            "idle": 72425730,
+            "irq": 0
+          }
+        ],
+        "proc": "cpu  466281 0 281276 144673094 70063 0 50120 0 0 0"
+      },
+      "after": {
+        "at": "2026-11-15T13:06:28.419Z",
+        "load": [
+          0.4,
+          0.34,
+          0.9
+        ],
+        "cpus": [
+          {
+            "user": 261630,
+            "nice": 0,
+            "sys": 180120,
+            "idle": 72177950,
+            "irq": 0
+          },
+          {
+            "user": 201140,
+            "nice": 0,
+            "sys": 111590,
+            "idle": 72335080,
+            "irq": 0
+          },
+          {
+            "user": 280410,
+            "nice": 0,
+            "sys": 201620,
+            "idle": 72155470,
+            "irq": 0
+          },
+          {
+            "user": 169630,
+            "nice": 0,
+            "sys": 125070,
+            "idle": 72364140,
+            "irq": 0
+          },
+          {
+            "user": 259920,
+            "nice": 0,
+            "sys": 174690,
+            "idle": 72223250,
+            "irq": 0
+          },
+          {
+            "user": 237560,
+            "nice": 0,
+            "sys": 96470,
+            "idle": 72426760,
+            "irq": 0
+          },
+          {
+            "user": 266140,
+            "nice": 0,
+            "sys": 179230,
+            "idle": 72261390,
+            "irq": 0
+          },
+          {
+            "user": 240000,
+            "nice": 0,
+            "sys": 121630,
+            "idle": 72412510,
+            "irq": 0
+          },
+          {
+            "user": 248610,
+            "nice": 0,
+            "sys": 170570,
+            "idle": 72302970,
+            "irq": 0
+          },
+          {
+            "user": 169220,
+            "nice": 0,
+            "sys": 95730,
+            "idle": 72501260,
+            "irq": 0
+          },
+          {
+            "user": 282870,
+            "nice": 0,
+            "sys": 189100,
+            "idle": 72245610,
+            "irq": 0
+          },
+          {
+            "user": 158230,
+            "nice": 0,
+            "sys": 93620,
+            "idle": 72510190,
+            "irq": 0
+          },
+          {
+            "user": 260460,
+            "nice": 0,
+            "sys": 169520,
+            "idle": 72279900,
+            "irq": 0
+          },
+          {
+            "user": 152290,
+            "nice": 0,
+            "sys": 90470,
+            "idle": 72527810,
+            "irq": 0
+          },
+          {
+            "user": 276220,
+            "nice": 0,
+            "sys": 181770,
+            "idle": 72261480,
+            "irq": 0
+          },
+          {
+            "user": 207560,
+            "nice": 0,
+            "sys": 94670,
+            "idle": 72468100,
+            "irq": 0
+          },
+          {
+            "user": 276220,
+            "nice": 0,
+            "sys": 173720,
+            "idle": 72273930,
+            "irq": 0
+          },
+          {
+            "user": 210590,
+            "nice": 0,
+            "sys": 87940,
+            "idle": 72472490,
+            "irq": 0
+          },
+          {
+            "user": 287630,
+            "nice": 0,
+            "sys": 178270,
+            "idle": 72228620,
+            "irq": 0
+          },
+          {
+            "user": 226960,
+            "nice": 0,
+            "sys": 100250,
+            "idle": 72432720,
+            "irq": 0
+          }
+        ],
+        "proc": "cpu  467329 0 281605 144686171 70156 0 50159 0 0 0"
+      },
+      "guestIdlePercent": 90.47717842323651,
+      "result": {
+        "output": ".task-tmp/exclusive-perf/exclusive-1-baseline",
+        "variant": "baseline",
+        "metrics": {
+          "responseMs": [
+            95.8,
+            60,
+            60.2,
+            103.3,
+            50,
+            101.7
+          ],
+          "responseP95Ms": 103.3,
+          "responseMaxMs": 103.3,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 50,
+          "firstTurn": {
+            "responseP95Ms": 95.8,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 66.6
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 103.3,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 50
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "blockingOverLimitCount": 0,
+          "beforeInput": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "firstTurn": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          }
+        },
+        "originalOutput": ".task-tmp/local-perf/baseline-1794747981985"
+      }
+    },
+    {
+      "pair": 1,
+      "variant": "clip",
+      "exitCode": 0,
+      "before": {
+        "at": "2026-11-15T13:06:28.438Z",
+        "load": [
+          0.4,
+          0.34,
+          0.9
+        ],
+        "cpus": [
+          {
+            "user": 261630,
+            "nice": 0,
+            "sys": 180120,
+            "idle": 72177960,
+            "irq": 0
+          },
+          {
+            "user": 201140,
+            "nice": 0,
+            "sys": 111590,
+            "idle": 72335100,
+            "irq": 0
+          },
+          {
+            "user": 280410,
+            "nice": 0,
+            "sys": 201620,
+            "idle": 72155490,
+            "irq": 0
+          },
+          {
+            "user": 169630,
+            "nice": 0,
+            "sys": 125070,
+            "idle": 72364160,
+            "irq": 0
+          },
+          {
+            "user": 259920,
+            "nice": 0,
+            "sys": 174690,
+            "idle": 72223270,
+            "irq": 0
+          },
+          {
+            "user": 237560,
+            "nice": 0,
+            "sys": 96470,
+            "idle": 72426780,
+            "irq": 0
+          },
+          {
+            "user": 266140,
+            "nice": 0,
+            "sys": 179230,
+            "idle": 72261410,
+            "irq": 0
+          },
+          {
+            "user": 240000,
+            "nice": 0,
+            "sys": 121630,
+            "idle": 72412530,
+            "irq": 0
+          },
+          {
+            "user": 248610,
+            "nice": 0,
+            "sys": 170570,
+            "idle": 72302990,
+            "irq": 0
+          },
+          {
+            "user": 169220,
+            "nice": 0,
+            "sys": 95730,
+            "idle": 72501280,
+            "irq": 0
+          },
+          {
+            "user": 282870,
+            "nice": 0,
+            "sys": 189100,
+            "idle": 72245630,
+            "irq": 0
+          },
+          {
+            "user": 158230,
+            "nice": 0,
+            "sys": 93620,
+            "idle": 72510210,
+            "irq": 0
+          },
+          {
+            "user": 260460,
+            "nice": 0,
+            "sys": 169520,
+            "idle": 72279910,
+            "irq": 0
+          },
+          {
+            "user": 152290,
+            "nice": 0,
+            "sys": 90470,
+            "idle": 72527830,
+            "irq": 0
+          },
+          {
+            "user": 276220,
+            "nice": 0,
+            "sys": 181770,
+            "idle": 72261500,
+            "irq": 0
+          },
+          {
+            "user": 207560,
+            "nice": 0,
+            "sys": 94670,
+            "idle": 72468120,
+            "irq": 0
+          },
+          {
+            "user": 276220,
+            "nice": 0,
+            "sys": 173720,
+            "idle": 72273950,
+            "irq": 0
+          },
+          {
+            "user": 210590,
+            "nice": 0,
+            "sys": 87940,
+            "idle": 72472510,
+            "irq": 0
+          },
+          {
+            "user": 287630,
+            "nice": 0,
+            "sys": 178270,
+            "idle": 72228640,
+            "irq": 0
+          },
+          {
+            "user": 226960,
+            "nice": 0,
+            "sys": 100250,
+            "idle": 72432730,
+            "irq": 0
+          }
+        ],
+        "proc": "cpu  467329 0 281605 144686207 70156 0 50159 0 0 0"
+      },
+      "after": {
+        "at": "2026-11-15T13:06:34.93Z",
+        "load": [
+          0.45,
+          0.35,
+          0.9
+        ],
+        "cpus": [
+          {
+            "user": 261910,
+            "nice": 0,
+            "sys": 180200,
+            "idle": 72183920,
+            "irq": 0
+          },
+          {
+            "user": 201330,
+            "nice": 0,
+            "sys": 111630,
+            "idle": 72341260,
+            "irq": 0
+          },
+          {
+            "user": 280760,
+            "nice": 0,
+            "sys": 201770,
+            "idle": 72161380,
+            "irq": 0
+          },
+          {
+            "user": 169670,
+            "nice": 0,
+            "sys": 125110,
+            "idle": 72370480,
+            "irq": 0
+          },
+          {
+            "user": 260100,
+            "nice": 0,
+            "sys": 174710,
+            "idle": 72229430,
+            "irq": 0
+          },
+          {
+            "user": 241430,
+            "nice": 0,
+            "sys": 96670,
+            "idle": 72429160,
+            "irq": 0
+          },
+          {
+            "user": 266280,
+            "nice": 0,
+            "sys": 179330,
+            "idle": 72267590,
+            "irq": 0
+          },
+          {
+            "user": 240170,
+            "nice": 0,
+            "sys": 121670,
+            "idle": 72418760,
+            "irq": 0
+          },
+          {
+            "user": 248920,
+            "nice": 0,
+            "sys": 170640,
+            "idle": 72309010,
+            "irq": 0
+          },
+          {
+            "user": 169270,
+            "nice": 0,
+            "sys": 95780,
+            "idle": 72507690,
+            "irq": 0
+          },
+          {
+            "user": 283140,
+            "nice": 0,
+            "sys": 189180,
+            "idle": 72251720,
+            "irq": 0
+          },
+          {
+            "user": 158620,
+            "nice": 0,
+            "sys": 93720,
+            "idle": 72516150,
+            "irq": 0
+          },
+          {
+            "user": 260620,
+            "nice": 0,
+            "sys": 169610,
+            "idle": 72286070,
+            "irq": 0
+          },
+          {
+            "user": 152550,
+            "nice": 0,
+            "sys": 90570,
+            "idle": 72533870,
+            "irq": 0
+          },
+          {
+            "user": 278120,
+            "nice": 0,
+            "sys": 182900,
+            "idle": 72264940,
+            "irq": 0
+          },
+          {
+            "user": 207640,
+            "nice": 0,
+            "sys": 94710,
+            "idle": 72474430,
+            "irq": 0
+          },
+          {
+            "user": 276350,
+            "nice": 0,
+            "sys": 173810,
+            "idle": 72280130,
+            "irq": 0
+          },
+          {
+            "user": 211160,
+            "nice": 0,
+            "sys": 88020,
+            "idle": 72478300,
+            "irq": 0
+          },
+          {
+            "user": 287780,
+            "nice": 0,
+            "sys": 178370,
+            "idle": 72234780,
+            "irq": 0
+          },
+          {
+            "user": 227000,
+            "nice": 0,
+            "sys": 100280,
+            "idle": 72439120,
+            "irq": 0
+          }
+        ],
+        "proc": "cpu  468282 0 281868 144697830 70238 0 50204 0 0 0"
+      },
+      "guestIdlePercent": 90.52590572652902,
+      "result": {
+        "output": ".task-tmp/exclusive-perf/exclusive-1-clip",
+        "variant": "clip",
+        "metrics": {
+          "responseMs": [
+            97.7,
+            59.2,
+            47.9,
+            66.7,
+            84.1,
+            57
+          ],
+          "responseP95Ms": 97.7,
+          "responseMaxMs": 97.7,
+          "frameGapMaxMs": 66.6,
+          "frameGapP95Ms": 33.4,
+          "firstTurn": {
+            "responseP95Ms": 97.7,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 66.6
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 84.1,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "blockingOverLimitCount": 0,
+          "beforeInput": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "firstTurn": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          }
+        },
+        "originalOutput": ".task-tmp/local-perf/clip-1794747989091"
+      }
+    },
+    {
+      "pair": 2,
+      "variant": "baseline",
+      "exitCode": 0,
+      "before": {
+        "at": "2026-11-15T13:06:34.94Z",
+        "load": [
+          0.45,
+          0.35,
+          0.9
+        ],
+        "cpus": [
+          {
+            "user": 261910,
+            "nice": 0,
+            "sys": 180200,
+            "idle": 72183930,
+            "irq": 0
+          },
+          {
+            "user": 201330,
+            "nice": 0,
+            "sys": 111630,
+            "idle": 72341270,
+            "irq": 0
+          },
+          {
+            "user": 280760,
+            "nice": 0,
+            "sys": 201770,
+            "idle": 72161390,
+            "irq": 0
+          },
+          {
+            "user": 169670,
+            "nice": 0,
+            "sys": 125110,
+            "idle": 72370490,
+            "irq": 0
+          },
+          {
+            "user": 260100,
+            "nice": 0,
+            "sys": 174710,
+            "idle": 72229440,
+            "irq": 0
+          },
+          {
+            "user": 241430,
+            "nice": 0,
+            "sys": 96670,
+            "idle": 72429170,
+            "irq": 0
+          },
+          {
+            "user": 266280,
+            "nice": 0,
+            "sys": 179330,
+            "idle": 72267600,
+            "irq": 0
+          },
+          {
+            "user": 240170,
+            "nice": 0,
+            "sys": 121670,
+            "idle": 72418770,
+            "irq": 0
+          },
+          {
+            "user": 248920,
+            "nice": 0,
+            "sys": 170640,
+            "idle": 72309020,
+            "irq": 0
+          },
+          {
+            "user": 169270,
+            "nice": 0,
+            "sys": 95780,
+            "idle": 72507700,
+            "irq": 0
+          },
+          {
+            "user": 283140,
+            "nice": 0,
+            "sys": 189180,
+            "idle": 72251730,
+            "irq": 0
+          },
+          {
+            "user": 158620,
+            "nice": 0,
+            "sys": 93720,
+            "idle": 72516170,
+            "irq": 0
+          },
+          {
+            "user": 260620,
+            "nice": 0,
+            "sys": 169610,
+            "idle": 72286080,
+            "irq": 0
+          },
+          {
+            "user": 152550,
+            "nice": 0,
+            "sys": 90570,
+            "idle": 72533880,
+            "irq": 0
+          },
+          {
+            "user": 278120,
+            "nice": 0,
+            "sys": 182900,
+            "idle": 72264950,
+            "irq": 0
+          },
+          {
+            "user": 207640,
+            "nice": 0,
+            "sys": 94710,
+            "idle": 72474440,
+            "irq": 0
+          },
+          {
+            "user": 276350,
+            "nice": 0,
+            "sys": 173810,
+            "idle": 72280140,
+            "irq": 0
+          },
+          {
+            "user": 211160,
+            "nice": 0,
+            "sys": 88020,
+            "idle": 72478310,
+            "irq": 0
+          },
+          {
+            "user": 287780,
+            "nice": 0,
+            "sys": 178370,
+            "idle": 72234790,
+            "irq": 0
+          },
+          {
+            "user": 227000,
+            "nice": 0,
+            "sys": 100280,
+            "idle": 72439130,
+            "irq": 0
+          }
+        ],
+        "proc": "cpu  468282 0 281868 144697850 70238 0 50205 0 0 0"
+      },
+      "after": {
+        "at": "2026-11-15T13:06:41.456Z",
+        "load": [
+          0.66,
+          0.4,
+          0.91
+        ],
+        "cpus": [
+          {
+            "user": 262070,
+            "nice": 0,
+            "sys": 180260,
+            "idle": 72190050,
+            "irq": 0
+          },
+          {
+            "user": 201950,
+            "nice": 0,
+            "sys": 111750,
+            "idle": 72346830,
+            "irq": 0
+          },
+          {
+            "user": 281170,
+            "nice": 0,
+            "sys": 202090,
+            "idle": 72167080,
+            "irq": 0
+          },
+          {
+            "user": 170930,
+            "nice": 0,
+            "sys": 125820,
+            "idle": 72374840,
+            "irq": 0
+          },
+          {
+            "user": 260360,
+            "nice": 0,
+            "sys": 174830,
+            "idle": 72235490,
+            "irq": 0
+          },
+          {
+            "user": 241450,
+            "nice": 0,
+            "sys": 96700,
+            "idle": 72435590,
+            "irq": 0
+          },
+          {
+            "user": 266440,
+            "nice": 0,
+            "sys": 179440,
+            "idle": 72273840,
+            "irq": 0
+          },
+          {
+            "user": 240290,
+            "nice": 0,
+            "sys": 121750,
+            "idle": 72425070,
+            "irq": 0
+          },
+          {
+            "user": 249510,
+            "nice": 0,
+            "sys": 170780,
+            "idle": 72314870,
+            "irq": 0
+          },
+          {
+            "user": 170130,
+            "nice": 0,
+            "sys": 95870,
+            "idle": 72513280,
+            "irq": 0
+          },
+          {
+            "user": 283380,
+            "nice": 0,
+            "sys": 189380,
+            "idle": 72257690,
+            "irq": 0
+          },
+          {
+            "user": 159030,
+            "nice": 0,
+            "sys": 93780,
+            "idle": 72522140,
+            "irq": 0
+          },
+          {
+            "user": 260920,
+            "nice": 0,
+            "sys": 169700,
+            "idle": 72292130,
+            "irq": 0
+          },
+          {
+            "user": 152670,
+            "nice": 0,
+            "sys": 90650,
+            "idle": 72540110,
+            "irq": 0
+          },
+          {
+            "user": 278460,
+            "nice": 0,
+            "sys": 182950,
+            "idle": 72271010,
+            "irq": 0
+          },
+          {
+            "user": 211210,
+            "nice": 0,
+            "sys": 94800,
+            "idle": 72477200,
+            "irq": 0
+          },
+          {
+            "user": 276740,
+            "nice": 0,
+            "sys": 174140,
+            "idle": 72285910,
+            "irq": 0
+          },
+          {
+            "user": 211520,
+            "nice": 0,
+            "sys": 88110,
+            "idle": 72484340,
+            "irq": 0
+          },
+          {
+            "user": 287960,
+            "nice": 0,
+            "sys": 178470,
+            "idle": 72240970,
+            "irq": 0
+          },
+          {
+            "user": 227110,
+            "nice": 0,
+            "sys": 100330,
+            "idle": 72445460,
+            "irq": 0
+          }
+        ],
+        "proc": "cpu  469330 0 282160 144709400 70316 0 50269 0 0 0"
+      },
+      "guestIdlePercent": 89.60434445306439,
+      "result": {
+        "output": ".task-tmp/exclusive-perf/exclusive-2-baseline",
+        "variant": "baseline",
+        "metrics": {
+          "responseMs": [
+            85.5,
+            65,
+            50,
+            52.3,
+            48.8,
+            96.5
+          ],
+          "responseP95Ms": 96.5,
+          "responseMaxMs": 96.5,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 49.9,
+          "firstTurn": {
+            "responseP95Ms": 85.5,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 96.5,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 49.9
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "blockingOverLimitCount": 0,
+          "beforeInput": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "firstTurn": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          }
+        },
+        "originalOutput": ".task-tmp/local-perf/baseline-1794747995617"
+      }
+    },
+    {
+      "pair": 2,
+      "variant": "clip",
+      "exitCode": 0,
+      "before": {
+        "at": "2026-11-15T13:06:41.482Z",
+        "load": [
+          0.66,
+          0.4,
+          0.91
+        ],
+        "cpus": [
+          {
+            "user": 262070,
+            "nice": 0,
+            "sys": 180260,
+            "idle": 72190080,
+            "irq": 0
+          },
+          {
+            "user": 201950,
+            "nice": 0,
+            "sys": 111750,
+            "idle": 72346850,
+            "irq": 0
+          },
+          {
+            "user": 281170,
+            "nice": 0,
+            "sys": 202090,
+            "idle": 72167100,
+            "irq": 0
+          },
+          {
+            "user": 170930,
+            "nice": 0,
+            "sys": 125820,
+            "idle": 72374870,
+            "irq": 0
+          },
+          {
+            "user": 260360,
+            "nice": 0,
+            "sys": 174830,
+            "idle": 72235510,
+            "irq": 0
+          },
+          {
+            "user": 241450,
+            "nice": 0,
+            "sys": 96700,
+            "idle": 72435610,
+            "irq": 0
+          },
+          {
+            "user": 266440,
+            "nice": 0,
+            "sys": 179440,
+            "idle": 72273860,
+            "irq": 0
+          },
+          {
+            "user": 240290,
+            "nice": 0,
+            "sys": 121750,
+            "idle": 72425100,
+            "irq": 0
+          },
+          {
+            "user": 249510,
+            "nice": 0,
+            "sys": 170780,
+            "idle": 72314900,
+            "irq": 0
+          },
+          {
+            "user": 170130,
+            "nice": 0,
+            "sys": 95870,
+            "idle": 72513310,
+            "irq": 0
+          },
+          {
+            "user": 283380,
+            "nice": 0,
+            "sys": 189380,
+            "idle": 72257720,
+            "irq": 0
+          },
+          {
+            "user": 159030,
+            "nice": 0,
+            "sys": 93780,
+            "idle": 72522170,
+            "irq": 0
+          },
+          {
+            "user": 260920,
+            "nice": 0,
+            "sys": 169700,
+            "idle": 72292160,
+            "irq": 0
+          },
+          {
+            "user": 152670,
+            "nice": 0,
+            "sys": 90650,
+            "idle": 72540130,
+            "irq": 0
+          },
+          {
+            "user": 278460,
+            "nice": 0,
+            "sys": 182950,
+            "idle": 72271030,
+            "irq": 0
+          },
+          {
+            "user": 211210,
+            "nice": 0,
+            "sys": 94800,
+            "idle": 72477230,
+            "irq": 0
+          },
+          {
+            "user": 276740,
+            "nice": 0,
+            "sys": 174140,
+            "idle": 72285940,
+            "irq": 0
+          },
+          {
+            "user": 211520,
+            "nice": 0,
+            "sys": 88110,
+            "idle": 72484370,
+            "irq": 0
+          },
+          {
+            "user": 287960,
+            "nice": 0,
+            "sys": 178470,
+            "idle": 72241000,
+            "irq": 0
+          },
+          {
+            "user": 227110,
+            "nice": 0,
+            "sys": 100330,
+            "idle": 72445490,
+            "irq": 0
+          }
+        ],
+        "proc": "cpu  469330 0 282160 144709452 70316 0 50271 0 0 0"
+      },
+      "after": {
+        "at": "2026-11-15T13:06:48.136Z",
+        "load": [
+          1.89,
+          0.68,
+          1
+        ],
+        "cpus": [
+          {
+            "user": 262230,
+            "nice": 0,
+            "sys": 180340,
+            "idle": 72196420,
+            "irq": 0
+          },
+          {
+            "user": 202010,
+            "nice": 0,
+            "sys": 111820,
+            "idle": 72353330,
+            "irq": 0
+          },
+          {
+            "user": 281260,
+            "nice": 0,
+            "sys": 202140,
+            "idle": 72173460,
+            "irq": 0
+          },
+          {
+            "user": 171310,
+            "nice": 0,
+            "sys": 125890,
+            "idle": 72381020,
+            "irq": 0
+          },
+          {
+            "user": 260750,
+            "nice": 0,
+            "sys": 175110,
+            "idle": 72241460,
+            "irq": 0
+          },
+          {
+            "user": 242530,
+            "nice": 0,
+            "sys": 97420,
+            "idle": 72440510,
+            "irq": 0
+          },
+          {
+            "user": 267150,
+            "nice": 0,
+            "sys": 179930,
+            "idle": 72279200,
+            "irq": 0
+          },
+          {
+            "user": 240750,
+            "nice": 0,
+            "sys": 121840,
+            "idle": 72431150,
+            "irq": 0
+          },
+          {
+            "user": 249740,
+            "nice": 0,
+            "sys": 170910,
+            "idle": 72320880,
+            "irq": 0
+          },
+          {
+            "user": 170280,
+            "nice": 0,
+            "sys": 95930,
+            "idle": 72519640,
+            "irq": 0
+          },
+          {
+            "user": 283530,
+            "nice": 0,
+            "sys": 189490,
+            "idle": 72264060,
+            "irq": 0
+          },
+          {
+            "user": 162780,
+            "nice": 0,
+            "sys": 93930,
+            "idle": 72524830,
+            "irq": 0
+          },
+          {
+            "user": 261370,
+            "nice": 0,
+            "sys": 169840,
+            "idle": 72298210,
+            "irq": 0
+          },
+          {
+            "user": 152930,
+            "nice": 0,
+            "sys": 90710,
+            "idle": 72546500,
+            "irq": 0
+          },
+          {
+            "user": 278740,
+            "nice": 0,
+            "sys": 183010,
+            "idle": 72277250,
+            "irq": 0
+          },
+          {
+            "user": 211250,
+            "nice": 0,
+            "sys": 94850,
+            "idle": 72483710,
+            "irq": 0
+          },
+          {
+            "user": 277610,
+            "nice": 0,
+            "sys": 174340,
+            "idle": 72291530,
+            "irq": 0
+          },
+          {
+            "user": 211550,
+            "nice": 0,
+            "sys": 88150,
+            "idle": 72490960,
+            "irq": 0
+          },
+          {
+            "user": 288150,
+            "nice": 0,
+            "sys": 178560,
+            "idle": 72247360,
+            "irq": 0
+          },
+          {
+            "user": 227120,
+            "nice": 0,
+            "sys": 100370,
+            "idle": 72452050,
+            "irq": 0
+          }
+        ],
+        "proc": "cpu  470304 0 282458 144721363 70395 0 50337 0 0 0"
+      },
+      "guestIdlePercent": 90.35047792444242,
+      "result": {
+        "output": ".task-tmp/exclusive-perf/exclusive-2-clip",
+        "variant": "clip",
+        "metrics": {
+          "responseMs": [
+            84.8,
+            50.5,
+            47,
+            51.8,
+            43.4,
+            93.8
+          ],
+          "responseP95Ms": 93.8,
+          "responseMaxMs": 93.8,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 33.5,
+          "firstTurn": {
+            "responseP95Ms": 84.8,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.3
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 93.8,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.5
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "blockingOverLimitCount": 0,
+          "beforeInput": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "firstTurn": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          }
+        },
+        "originalOutput": ".task-tmp/local-perf/clip-1794748002335"
+      }
+    },
+    {
+      "pair": 3,
+      "variant": "baseline",
+      "exitCode": 0,
+      "before": {
+        "at": "2026-11-15T13:06:48.154Z",
+        "load": [
+          1.89,
+          0.68,
+          1
+        ],
+        "cpus": [
+          {
+            "user": 262230,
+            "nice": 0,
+            "sys": 180340,
+            "idle": 72196430,
+            "irq": 0
+          },
+          {
+            "user": 202010,
+            "nice": 0,
+            "sys": 111820,
+            "idle": 72353340,
+            "irq": 0
+          },
+          {
+            "user": 281260,
+            "nice": 0,
+            "sys": 202140,
+            "idle": 72173480,
+            "irq": 0
+          },
+          {
+            "user": 171310,
+            "nice": 0,
+            "sys": 125890,
+            "idle": 72381030,
+            "irq": 0
+          },
+          {
+            "user": 260750,
+            "nice": 0,
+            "sys": 175110,
+            "idle": 72241480,
+            "irq": 0
+          },
+          {
+            "user": 242530,
+            "nice": 0,
+            "sys": 97420,
+            "idle": 72440530,
+            "irq": 0
+          },
+          {
+            "user": 267150,
+            "nice": 0,
+            "sys": 179930,
+            "idle": 72279220,
+            "irq": 0
+          },
+          {
+            "user": 240750,
+            "nice": 0,
+            "sys": 121840,
+            "idle": 72431170,
+            "irq": 0
+          },
+          {
+            "user": 249740,
+            "nice": 0,
+            "sys": 170910,
+            "idle": 72320900,
+            "irq": 0
+          },
+          {
+            "user": 170280,
+            "nice": 0,
+            "sys": 95930,
+            "idle": 72519660,
+            "irq": 0
+          },
+          {
+            "user": 283530,
+            "nice": 0,
+            "sys": 189490,
+            "idle": 72264070,
+            "irq": 0
+          },
+          {
+            "user": 162780,
+            "nice": 0,
+            "sys": 93930,
+            "idle": 72524850,
+            "irq": 0
+          },
+          {
+            "user": 261370,
+            "nice": 0,
+            "sys": 169840,
+            "idle": 72298230,
+            "irq": 0
+          },
+          {
+            "user": 152930,
+            "nice": 0,
+            "sys": 90710,
+            "idle": 72546520,
+            "irq": 0
+          },
+          {
+            "user": 278740,
+            "nice": 0,
+            "sys": 183010,
+            "idle": 72277270,
+            "irq": 0
+          },
+          {
+            "user": 211250,
+            "nice": 0,
+            "sys": 94850,
+            "idle": 72483730,
+            "irq": 0
+          },
+          {
+            "user": 277610,
+            "nice": 0,
+            "sys": 174340,
+            "idle": 72291540,
+            "irq": 0
+          },
+          {
+            "user": 211550,
+            "nice": 0,
+            "sys": 88150,
+            "idle": 72490980,
+            "irq": 0
+          },
+          {
+            "user": 288150,
+            "nice": 0,
+            "sys": 178560,
+            "idle": 72247380,
+            "irq": 0
+          },
+          {
+            "user": 227120,
+            "nice": 0,
+            "sys": 100370,
+            "idle": 72452060,
+            "irq": 0
+          }
+        ],
+        "proc": "cpu  470304 0 282458 144721397 70395 0 50337 0 0 0"
+      },
+      "after": {
+        "at": "2026-11-15T13:06:54.429Z",
+        "load": [
+          1.9,
+          0.7,
+          1
+        ],
+        "cpus": [
+          {
+            "user": 262490,
+            "nice": 0,
+            "sys": 180430,
+            "idle": 72202370,
+            "irq": 0
+          },
+          {
+            "user": 202130,
+            "nice": 0,
+            "sys": 111890,
+            "idle": 72359440,
+            "irq": 0
+          },
+          {
+            "user": 283050,
+            "nice": 0,
+            "sys": 202350,
+            "idle": 72177680,
+            "irq": 0
+          },
+          {
+            "user": 171880,
+            "nice": 0,
+            "sys": 126030,
+            "idle": 72386490,
+            "irq": 0
+          },
+          {
+            "user": 261990,
+            "nice": 0,
+            "sys": 175760,
+            "idle": 72245650,
+            "irq": 0
+          },
+          {
+            "user": 243210,
+            "nice": 0,
+            "sys": 97520,
+            "idle": 72446040,
+            "irq": 0
+          },
+          {
+            "user": 267390,
+            "nice": 0,
+            "sys": 180020,
+            "idle": 72285170,
+            "irq": 0
+          },
+          {
+            "user": 240960,
+            "nice": 0,
+            "sys": 121920,
+            "idle": 72437070,
+            "irq": 0
+          },
+          {
+            "user": 250230,
+            "nice": 0,
+            "sys": 170970,
+            "idle": 72326630,
+            "irq": 0
+          },
+          {
+            "user": 170430,
+            "nice": 0,
+            "sys": 95950,
+            "idle": 72525760,
+            "irq": 0
+          },
+          {
+            "user": 285620,
+            "nice": 0,
+            "sys": 189620,
+            "idle": 72268130,
+            "irq": 0
+          },
+          {
+            "user": 162880,
+            "nice": 0,
+            "sys": 93970,
+            "idle": 72530920,
+            "irq": 0
+          },
+          {
+            "user": 261510,
+            "nice": 0,
+            "sys": 169890,
+            "idle": 72304260,
+            "irq": 0
+          },
+          {
+            "user": 153050,
+            "nice": 0,
+            "sys": 90770,
+            "idle": 72552650,
+            "irq": 0
+          },
+          {
+            "user": 279720,
+            "nice": 0,
+            "sys": 183420,
+            "idle": 72282100,
+            "irq": 0
+          },
+          {
+            "user": 211320,
+            "nice": 0,
+            "sys": 94880,
+            "idle": 72489880,
+            "irq": 0
+          },
+          {
+            "user": 277890,
+            "nice": 0,
+            "sys": 174480,
+            "idle": 72297440,
+            "irq": 0
+          },
+          {
+            "user": 211590,
+            "nice": 0,
+            "sys": 88190,
+            "idle": 72497140,
+            "irq": 0
+          },
+          {
+            "user": 288260,
+            "nice": 0,
+            "sys": 178640,
+            "idle": 72253350,
+            "irq": 0
+          },
+          {
+            "user": 227410,
+            "nice": 0,
+            "sys": 100410,
+            "idle": 72458020,
+            "irq": 0
+          }
+        ],
+        "proc": "cpu  471301 0 282711 144732629 70476 0 50418 0 0 0"
+      },
+      "guestIdlePercent": 89.9855792340971,
+      "result": {
+        "output": ".task-tmp/exclusive-perf/exclusive-3-baseline",
+        "variant": "baseline",
+        "metrics": {
+          "responseMs": [
+            76.3,
+            57.1,
+            68.2,
+            49.2,
+            42.6,
+            97
+          ],
+          "responseP95Ms": 97,
+          "responseMaxMs": 97,
+          "frameGapMaxMs": 50,
+          "frameGapP95Ms": 33.4,
+          "firstTurn": {
+            "responseP95Ms": 76.3,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 97,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "blockingOverLimitCount": 0,
+          "beforeInput": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "firstTurn": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          }
+        },
+        "originalOutput": ".task-tmp/local-perf/baseline-1794748008845"
+      }
+    },
+    {
+      "pair": 3,
+      "variant": "clip",
+      "exitCode": 0,
+      "before": {
+        "at": "2026-11-15T13:06:54.438Z",
+        "load": [
+          1.9,
+          0.7,
+          1
+        ],
+        "cpus": [
+          {
+            "user": 262500,
+            "nice": 0,
+            "sys": 180430,
+            "idle": 72202380,
+            "irq": 0
+          },
+          {
+            "user": 202130,
+            "nice": 0,
+            "sys": 111890,
+            "idle": 72359450,
+            "irq": 0
+          },
+          {
+            "user": 283060,
+            "nice": 0,
+            "sys": 202350,
+            "idle": 72177690,
+            "irq": 0
+          },
+          {
+            "user": 171880,
+            "nice": 0,
+            "sys": 126030,
+            "idle": 72386500,
+            "irq": 0
+          },
+          {
+            "user": 261990,
+            "nice": 0,
+            "sys": 175760,
+            "idle": 72245660,
+            "irq": 0
+          },
+          {
+            "user": 243210,
+            "nice": 0,
+            "sys": 97520,
+            "idle": 72446050,
+            "irq": 0
+          },
+          {
+            "user": 267390,
+            "nice": 0,
+            "sys": 180020,
+            "idle": 72285180,
+            "irq": 0
+          },
+          {
+            "user": 240960,
+            "nice": 0,
+            "sys": 121920,
+            "idle": 72437070,
+            "irq": 0
+          },
+          {
+            "user": 250230,
+            "nice": 0,
+            "sys": 170970,
+            "idle": 72326630,
+            "irq": 0
+          },
+          {
+            "user": 170430,
+            "nice": 0,
+            "sys": 95950,
+            "idle": 72525770,
+            "irq": 0
+          },
+          {
+            "user": 285620,
+            "nice": 0,
+            "sys": 189620,
+            "idle": 72268130,
+            "irq": 0
+          },
+          {
+            "user": 162880,
+            "nice": 0,
+            "sys": 93970,
+            "idle": 72530930,
+            "irq": 0
+          },
+          {
+            "user": 261510,
+            "nice": 0,
+            "sys": 169890,
+            "idle": 72304270,
+            "irq": 0
+          },
+          {
+            "user": 153050,
+            "nice": 0,
+            "sys": 90770,
+            "idle": 72552660,
+            "irq": 0
+          },
+          {
+            "user": 279730,
+            "nice": 0,
+            "sys": 183420,
+            "idle": 72282110,
+            "irq": 0
+          },
+          {
+            "user": 211320,
+            "nice": 0,
+            "sys": 94880,
+            "idle": 72489890,
+            "irq": 0
+          },
+          {
+            "user": 277890,
+            "nice": 0,
+            "sys": 174480,
+            "idle": 72297440,
+            "irq": 0
+          },
+          {
+            "user": 211590,
+            "nice": 0,
+            "sys": 88190,
+            "idle": 72497150,
+            "irq": 0
+          },
+          {
+            "user": 288260,
+            "nice": 0,
+            "sys": 178640,
+            "idle": 72253360,
+            "irq": 0
+          },
+          {
+            "user": 227410,
+            "nice": 0,
+            "sys": 100410,
+            "idle": 72458020,
+            "irq": 0
+          }
+        ],
+        "proc": "cpu  471304 0 282711 144732646 70476 0 50418 0 0 0"
+      },
+      "after": {
+        "at": "2026-11-15T13:07:00.88Z",
+        "load": [
+          1.9,
+          0.72,
+          1.01
+        ],
+        "cpus": [
+          {
+            "user": 262690,
+            "nice": 0,
+            "sys": 180560,
+            "idle": 72208440,
+            "irq": 0
+          },
+          {
+            "user": 202140,
+            "nice": 0,
+            "sys": 111900,
+            "idle": 72365800,
+            "irq": 0
+          },
+          {
+            "user": 283300,
+            "nice": 0,
+            "sys": 202410,
+            "idle": 72183810,
+            "irq": 0
+          },
+          {
+            "user": 171890,
+            "nice": 0,
+            "sys": 126070,
+            "idle": 72392540,
+            "irq": 0
+          },
+          {
+            "user": 263440,
+            "nice": 0,
+            "sys": 176710,
+            "idle": 72249670,
+            "irq": 0
+          },
+          {
+            "user": 243710,
+            "nice": 0,
+            "sys": 97730,
+            "idle": 72451750,
+            "irq": 0
+          },
+          {
+            "user": 267540,
+            "nice": 0,
+            "sys": 180090,
+            "idle": 72291260,
+            "irq": 0
+          },
+          {
+            "user": 241120,
+            "nice": 0,
+            "sys": 121970,
+            "idle": 72443340,
+            "irq": 0
+          },
+          {
+            "user": 250450,
+            "nice": 0,
+            "sys": 171040,
+            "idle": 72332730,
+            "irq": 0
+          },
+          {
+            "user": 170790,
+            "nice": 0,
+            "sys": 96050,
+            "idle": 72531820,
+            "irq": 0
+          },
+          {
+            "user": 285870,
+            "nice": 0,
+            "sys": 189910,
+            "idle": 72273990,
+            "irq": 0
+          },
+          {
+            "user": 163010,
+            "nice": 0,
+            "sys": 94020,
+            "idle": 72537160,
+            "irq": 0
+          },
+          {
+            "user": 261870,
+            "nice": 0,
+            "sys": 169990,
+            "idle": 72310170,
+            "irq": 0
+          },
+          {
+            "user": 153080,
+            "nice": 0,
+            "sys": 90780,
+            "idle": 72559000,
+            "irq": 0
+          },
+          {
+            "user": 279960,
+            "nice": 0,
+            "sys": 183560,
+            "idle": 72288020,
+            "irq": 0
+          },
+          {
+            "user": 211440,
+            "nice": 0,
+            "sys": 94950,
+            "idle": 72496150,
+            "irq": 0
+          },
+          {
+            "user": 278080,
+            "nice": 0,
+            "sys": 174570,
+            "idle": 72303620,
+            "irq": 0
+          },
+          {
+            "user": 212530,
+            "nice": 0,
+            "sys": 88370,
+            "idle": 72502470,
+            "irq": 0
+          },
+          {
+            "user": 288880,
+            "nice": 0,
+            "sys": 178730,
+            "idle": 72259030,
+            "irq": 0
+          },
+          {
+            "user": 231130,
+            "nice": 0,
+            "sys": 100540,
+            "idle": 72460690,
+            "irq": 0
+          }
+        ],
+        "proc": "cpu  472292 0 282995 144744155 70564 0 50472 0 0 0"
+      },
+      "guestIdlePercent": 90.05006257822278,
+      "result": {
+        "output": ".task-tmp/exclusive-perf/exclusive-3-clip",
+        "variant": "clip",
+        "metrics": {
+          "responseMs": [
+            74.6,
+            70.3,
+            49.9,
+            63,
+            53.7,
+            107.7
+          ],
+          "responseP95Ms": 107.7,
+          "responseMaxMs": 107.7,
+          "frameGapMaxMs": 66.6,
+          "frameGapP95Ms": 50,
+          "firstTurn": {
+            "responseP95Ms": 74.6,
+            "frameGapMaxMs": 49.9,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 107.7,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 50
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "blockingOverLimitCount": 0,
+          "beforeInput": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "firstTurn": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          }
+        },
+        "originalOutput": ".task-tmp/local-perf/clip-1794748015044"
+      }
+    }
+  ],
+  "samples": [
+    {
+      "trial": "exclusive-1-baseline",
+      "data": {
+        "variant": "baseline",
+        "browser": "158.0.8127.18",
+        "samples": {
+          "inputs": [
+            {
+              "at": 1434.800000011921,
+              "trusted": true,
+              "chapter": 125,
+              "firstMotion": 1490.4000000059605,
+              "responseFrame": 1530.6000000089407,
+              "settled": 1977.4000000059605,
+              "frameStart": 0,
+              "frameEnd": 17
+            },
+            {
+              "at": 2005.2000000029802,
+              "trusted": true,
+              "chapter": 126,
+              "firstMotion": 2025.7000000029802,
+              "responseFrame": 2065.2000000029802,
+              "settled": 2521.7000000029802,
+              "frameStart": 19,
+              "frameEnd": 32
+            },
+            {
+              "at": 2628.5,
+              "trusted": true,
+              "chapter": 127,
+              "firstMotion": 2649.2000000029802,
+              "responseFrame": 2688.7000000029802,
+              "settled": 3164.9000000059605,
+              "frameStart": 39,
+              "frameEnd": 52
+            },
+            {
+              "at": 3217.5,
+              "trusted": true,
+              "chapter": 128,
+              "firstMotion": 3279.7000000029802,
+              "responseFrame": 3320.800000011921,
+              "settled": 3782.9000000059605,
+              "frameStart": 54,
+              "frameEnd": 70
+            },
+            {
+              "at": 3894.300000011921,
+              "trusted": true,
+              "chapter": 129,
+              "firstMotion": 3914,
+              "responseFrame": 3944.300000011921,
+              "settled": 4389.9000000059605,
+              "frameStart": 76,
+              "frameEnd": 93
+            },
+            {
+              "at": 4425.5,
+              "trusted": true,
+              "chapter": 130,
+              "firstMotion": 4497.9000000059605,
+              "responseFrame": 4527.20000000298,
+              "settled": 4984.70000000298,
+              "frameStart": 95,
+              "frameEnd": 115
+            }
+          ],
+          "frames": [
+            33.40000000000009,
+            66.59999999999991,
+            33.30000000000018,
+            33.399999999999864,
+            33.299999999999955,
+            33.40000000000009,
+            16.59999999999991,
+            33.40000000000009,
+            33.299999999999955,
+            16.700000000000045,
+            16.59999999999991,
+            16.600000000000136,
+            33.399999999999864,
+            16.600000000000136,
+            16.799999999999955,
+            33.299999999999955,
+            16.600000000000136,
+            50,
+            33.399999999999864,
+            16.700000000000045,
+            50,
+            33.30000000000018,
+            50,
+            49.899999999999636,
+            50,
+            33.40000000000009,
+            33.30000000000018,
+            33.29999999999973,
+            33.40000000000009,
+            33.40000000000009,
+            16.59999999999991,
+            33.30000000000018,
+            33.40000000000009,
+            33.19999999999982,
+            33.40000000000009,
+            16.699999999999818,
+            16.59999999999991,
+            16.700000000000273,
+            16.59999999999991,
+            16.699999999999818,
+            33.40000000000009,
+            49.90000000000009,
+            33.40000000000009,
+            33.29999999999973,
+            50.100000000000364,
+            49.899999999999636,
+            33.30000000000018,
+            50.09999999999991,
+            33.30000000000018,
+            33.29999999999973,
+            33.40000000000009,
+            33.30000000000018,
+            33.29999999999973,
+            66.70000000000027,
+            33.40000000000009,
+            16.59999999999991,
+            50,
+            50,
+            33.29999999999973,
+            50,
+            33.30000000000018,
+            33.40000000000009,
+            16.59999999999991,
+            33.40000000000009,
+            33.29999999999973,
+            16.700000000000273,
+            33.29999999999973,
+            16.600000000000364,
+            33.399999999999636,
+            16.600000000000364,
+            50.09999999999991,
+            33.29999999999973,
+            50,
+            16.600000000000364,
+            16.699999999999818,
+            16.699999999999818,
+            16.700000000000273,
+            33.29999999999973,
+            33.30000000000018,
+            33.40000000000009,
+            33.29999999999973,
+            33.30000000000018,
+            16.699999999999818,
+            33.30000000000018,
+            16.600000000000364,
+            33.399999999999636,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            16.699999999999818,
+            33.20000000000073,
+            33.399999999999636,
+            33.399999999999636,
+            49.900000000000546,
+            33.399999999999636,
+            33.30000000000018,
+            33.399999999999636,
+            33.30000000000018,
+            16.600000000000364,
+            33.399999999999636,
+            33.30000000000018,
+            16.699999999999818,
+            16.600000000000364,
+            33.399999999999636,
+            16.600000000000364,
+            16.699999999999818,
+            33.399999999999636,
+            16.600000000000364,
+            16.600000000000364,
+            16.699999999999818,
+            33.399999999999636,
+            16.600000000000364,
+            16.699999999999818,
+            33.30000000000018,
+            33.399999999999636,
+            49.900000000000546,
+            16.799999999999272,
+            16.600000000000364,
+            16.699999999999818,
+            16.600000000000364,
+            16.699999999999818,
+            16.699999999999818,
+            16.600000000000364,
+            16.699999999999818
+          ],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          },
+          "repeatedFrameTimestamps": [],
+          "longAnimationFramesSupported": true,
+          "longAnimationFrames": [
+            {
+              "name": "long-animation-frame",
+              "entryType": "long-animation-frame",
+              "startTime": 1437.1000000089407,
+              "duration": 70.70000000298023,
+              "navigationId": 1796,
+              "paintTime": 1507.800000011921,
+              "presentationTime": 1564,
+              "renderStart": 1489.4000000059605,
+              "styleAndLayoutStart": 1490.4000000059605,
+              "firstUIEventTimestamp": 1434.800000011921,
+              "blockingDuration": 0,
+              "styleDuration": 6.3,
+              "layoutDuration": 1.6,
+              "scripts": [
+                {
+                  "name": "script",
+                  "entryType": "script",
+                  "startTime": 1463.1000000089407,
+                  "duration": 25.399999991059303,
+                  "navigationId": 1796,
+                  "invoker": "DOMWindow.onpointermove",
+                  "invokerType": "event-listener",
+                  "windowAttribution": "self",
+                  "executionStart": 1463.1000000089407,
+                  "forcedStyleAndLayoutDuration": 0,
+                  "forcedStyleDuration": 0,
+                  "forcedLayoutDuration": 0,
+                  "pauseDuration": 0,
+                  "sourceURL": "http://127.0.0.1:3001/_next/static/chunks/30bm7j_nc6q6f.js",
+                  "sourceFunctionName": "",
+                  "sourceCharPosition": 2812
+                }
+              ]
+            },
+            {
+              "name": "long-animation-frame",
+              "entryType": "long-animation-frame",
+              "startTime": 3183.9000000059605,
+              "duration": 50.29999999701977,
+              "navigationId": 1817,
+              "paintTime": 3234.2000000029802,
+              "presentationTime": 3272,
+              "renderStart": 3216.4000000059605,
+              "styleAndLayoutStart": 3217.7000000029802,
+              "firstUIEventTimestamp": 3166.9000000059605,
+              "blockingDuration": 0,
+              "styleDuration": 4.6,
+              "layoutDuration": 9.9,
+              "scripts": []
+            },
+            {
+              "name": "long-animation-frame",
+              "entryType": "long-animation-frame",
+              "startTime": 4409.9000000059605,
+              "duration": 53.400000005960464,
+              "navigationId": 1831,
+              "paintTime": 4463.300000011921,
+              "presentationTime": 4492,
+              "renderStart": 4424.4000000059605,
+              "styleAndLayoutStart": 4424.9000000059605,
+              "firstUIEventTimestamp": 4392,
+              "blockingDuration": 0,
+              "styleDuration": 5,
+              "layoutDuration": 30.5,
+              "scripts": []
+            }
+          ]
+        },
+        "metrics": {
+          "responseMs": [
+            95.8,
+            60,
+            60.2,
+            103.3,
+            50,
+            101.7
+          ],
+          "responseP95Ms": 103.3,
+          "responseMaxMs": 103.3,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 50,
+          "firstTurn": {
+            "responseP95Ms": 95.8,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 66.6
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 103.3,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 50
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "blockingOverLimitCount": 0,
+          "beforeInput": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "firstTurn": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          }
+        }
+      }
+    },
+    {
+      "trial": "exclusive-1-clip",
+      "data": {
+        "variant": "clip",
+        "browser": "158.0.8127.18",
+        "samples": {
+          "inputs": [
+            {
+              "at": 1145.7000000029802,
+              "trusted": true,
+              "chapter": 125,
+              "firstMotion": 1200,
+              "responseFrame": 1243.4000000059605,
+              "settled": 1680.2000000029802,
+              "frameStart": 0,
+              "frameEnd": 19
+            },
+            {
+              "at": 1718.2999999970198,
+              "trusted": true,
+              "chapter": 126,
+              "firstMotion": 1736.2999999970198,
+              "responseFrame": 1777.5,
+              "settled": 2225.7000000029802,
+              "frameStart": 21,
+              "frameEnd": 43
+            },
+            {
+              "at": 2343.0999999940395,
+              "trusted": true,
+              "chapter": 127,
+              "firstMotion": 2359.5999999940395,
+              "responseFrame": 2391,
+              "settled": 2840.2999999970198,
+              "frameStart": 50,
+              "frameEnd": 73
+            },
+            {
+              "at": 2866,
+              "trusted": true,
+              "chapter": 128,
+              "firstMotion": 2913.5,
+              "responseFrame": 2932.7000000029802,
+              "settled": 3387.7000000029802,
+              "frameStart": 75,
+              "frameEnd": 95
+            },
+            {
+              "at": 3506.2000000029802,
+              "trusted": true,
+              "chapter": 129,
+              "firstMotion": 3559.2999999970198,
+              "responseFrame": 3590.2999999970198,
+              "settled": 4035.7000000029802,
+              "frameStart": 102,
+              "frameEnd": 125
+            },
+            {
+              "at": 4061.7000000029802,
+              "trusted": true,
+              "chapter": 130,
+              "firstMotion": 4106.29999999702,
+              "responseFrame": 4118.70000000298,
+              "settled": 4579.29999999702,
+              "frameStart": 127,
+              "frameEnd": 145
+            }
+          ],
+          "frames": [
+            33.40000000000009,
+            66.59999999999991,
+            33.299999999999955,
+            33.40000000000009,
+            33.299999999999955,
+            33.299999999999955,
+            16.700000000000045,
+            16.700000000000045,
+            16.59999999999991,
+            33.40000000000009,
+            16.59999999999991,
+            16.700000000000045,
+            16.600000000000136,
+            16.699999999999818,
+            16.700000000000045,
+            16.600000000000136,
+            33.399999999999864,
+            16.600000000000136,
+            16.699999999999818,
+            33.40000000000009,
+            50,
+            16.59999999999991,
+            50,
+            33.30000000000018,
+            16.699999999999818,
+            33.30000000000018,
+            33.399999999999864,
+            16.600000000000136,
+            16.699999999999818,
+            16.700000000000045,
+            16.600000000000136,
+            16.699999999999818,
+            16.700000000000045,
+            16.600000000000136,
+            16.699999999999818,
+            16.600000000000136,
+            16.700000000000045,
+            16.699999999999818,
+            16.700000000000273,
+            33.29999999999973,
+            16.59999999999991,
+            16.700000000000273,
+            16.699999999999818,
+            33.40000000000009,
+            33.19999999999982,
+            16.800000000000182,
+            33.19999999999982,
+            16.800000000000182,
+            16.5,
+            16.699999999999818,
+            16.700000000000273,
+            16.699999999999818,
+            33.30000000000018,
+            33.40000000000009,
+            33.29999999999973,
+            16.59999999999991,
+            16.700000000000273,
+            16.699999999999818,
+            16.59999999999991,
+            16.700000000000273,
+            16.59999999999991,
+            16.699999999999818,
+            16.700000000000273,
+            16.699999999999818,
+            16.700000000000273,
+            16.59999999999991,
+            16.59999999999991,
+            16.699999999999818,
+            16.700000000000273,
+            16.59999999999991,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            33.30000000000018,
+            33.40000000000009,
+            16.59999999999991,
+            16.699999999999818,
+            33.40000000000009,
+            33.30000000000018,
+            33.29999999999973,
+            33.30000000000018,
+            33.40000000000009,
+            16.59999999999991,
+            33.40000000000009,
+            16.699999999999818,
+            16.59999999999991,
+            16.700000000000273,
+            16.59999999999991,
+            33.40000000000009,
+            16.699999999999818,
+            16.59999999999991,
+            33.30000000000018,
+            16.699999999999818,
+            16.600000000000364,
+            33.399999999999636,
+            16.700000000000273,
+            50,
+            33.29999999999973,
+            16.700000000000273,
+            16.59999999999991,
+            16.699999999999818,
+            16.700000000000273,
+            33.29999999999973,
+            16.700000000000273,
+            33.29999999999973,
+            16.600000000000364,
+            33.29999999999973,
+            33.5,
+            16.59999999999991,
+            16.700000000000273,
+            16.59999999999991,
+            33.30000000000018,
+            16.699999999999818,
+            16.699999999999818,
+            16.700000000000273,
+            16.59999999999991,
+            16.59999999999991,
+            16.700000000000273,
+            16.699999999999818,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            16.600000000000364,
+            16.699999999999818,
+            16.59999999999991,
+            33.40000000000009,
+            16.699999999999818,
+            33.30000000000018,
+            16.59999999999991,
+            16.700000000000273,
+            33.30000000000018,
+            50.099999999999454,
+            33.30000000000018,
+            33.399999999999636,
+            33.30000000000018,
+            16.600000000000364,
+            33.399999999999636,
+            16.600000000000364,
+            33.399999999999636,
+            16.699999999999818,
+            33.20000000000073,
+            16.699999999999818,
+            16.599999999999454,
+            33.400000000000546,
+            16.699999999999818,
+            33.30000000000018,
+            33.30000000000018,
+            50,
+            33.399999999999636,
+            16.600000000000364,
+            16.699999999999818,
+            16.699999999999818,
+            16.600000000000364,
+            16.799999999999272,
+            16.5
+          ],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          },
+          "repeatedFrameTimestamps": [],
+          "longAnimationFramesSupported": true,
+          "longAnimationFrames": [
+            {
+              "name": "long-animation-frame",
+              "entryType": "long-animation-frame",
+              "startTime": 1146.5999999940395,
+              "duration": 72.80000001192093,
+              "navigationId": 9836,
+              "paintTime": 1219.4000000059605,
+              "presentationTime": 1280,
+              "renderStart": 1199.9000000059605,
+              "styleAndLayoutStart": 1200,
+              "firstUIEventTimestamp": 1145.7000000029802,
+              "blockingDuration": 0,
+              "styleDuration": 6.5,
+              "layoutDuration": 2.4,
+              "scripts": [
+                {
+                  "name": "script",
+                  "entryType": "script",
+                  "startTime": 1176.2999999970198,
+                  "duration": 22.5,
+                  "navigationId": 9836,
+                  "invoker": "DOMWindow.onpointermove",
+                  "invokerType": "event-listener",
+                  "windowAttribution": "self",
+                  "executionStart": 1176.2999999970198,
+                  "forcedStyleAndLayoutDuration": 0,
+                  "forcedStyleDuration": 0,
+                  "forcedLayoutDuration": 0,
+                  "pauseDuration": 0,
+                  "sourceURL": "http://127.0.0.1:3001/_next/static/chunks/30bm7j_nc6q6f.js",
+                  "sourceFunctionName": "",
+                  "sourceCharPosition": 2812
+                }
+              ]
+            }
+          ]
+        },
+        "metrics": {
+          "responseMs": [
+            97.7,
+            59.2,
+            47.9,
+            66.7,
+            84.1,
+            57
+          ],
+          "responseP95Ms": 97.7,
+          "responseMaxMs": 97.7,
+          "frameGapMaxMs": 66.6,
+          "frameGapP95Ms": 33.4,
+          "firstTurn": {
+            "responseP95Ms": 97.7,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 66.6
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 84.1,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 33.4
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "blockingOverLimitCount": 0,
+          "beforeInput": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "firstTurn": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          }
+        }
+      }
+    },
+    {
+      "trial": "exclusive-2-baseline",
+      "data": {
+        "variant": "baseline",
+        "browser": "158.0.8127.18",
+        "samples": {
+          "inputs": [
+            {
+              "at": 1138.7999999970198,
+              "trusted": true,
+              "chapter": 125,
+              "firstMotion": 1184.5,
+              "responseFrame": 1224.2999999970198,
+              "settled": 1649.0999999940395,
+              "frameStart": 0,
+              "frameEnd": 21
+            },
+            {
+              "at": 1674.2000000029802,
+              "trusted": true,
+              "chapter": 126,
+              "firstMotion": 1699,
+              "responseFrame": 1739.2000000029802,
+              "settled": 2176,
+              "frameStart": 23,
+              "frameEnd": 44
+            },
+            {
+              "at": 2286.5,
+              "trusted": true,
+              "chapter": 127,
+              "firstMotion": 2303.2000000029802,
+              "responseFrame": 2336.5,
+              "settled": 2785.5,
+              "frameStart": 51,
+              "frameEnd": 74
+            },
+            {
+              "at": 2813.2000000029802,
+              "trusted": true,
+              "chapter": 128,
+              "firstMotion": 2847.0999999940395,
+              "responseFrame": 2865.5,
+              "settled": 3310.7000000029802,
+              "frameStart": 76,
+              "frameEnd": 94
+            },
+            {
+              "at": 3416.0999999940395,
+              "trusted": true,
+              "chapter": 129,
+              "firstMotion": 3438.3999999910593,
+              "responseFrame": 3464.8999999910593,
+              "settled": 3931.8999999910593,
+              "frameStart": 99,
+              "frameEnd": 118
+            },
+            {
+              "at": 3965.2000000029802,
+              "trusted": true,
+              "chapter": 130,
+              "firstMotion": 4045,
+              "responseFrame": 4061.7000000029802,
+              "settled": 4512.5,
+              "frameStart": 120,
+              "frameEnd": 138
+            }
+          ],
+          "frames": [
+            16.59999999999991,
+            66.70000000000005,
+            33.40000000000009,
+            33.299999999999955,
+            16.59999999999991,
+            33.40000000000009,
+            16.59999999999991,
+            16.700000000000045,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            16.700000000000045,
+            16.59999999999991,
+            33.40000000000009,
+            16.59999999999991,
+            16.700000000000045,
+            33.40000000000009,
+            33.299999999999955,
+            16.700000000000045,
+            50,
+            33.299999999999955,
+            16.59999999999991,
+            33.40000000000009,
+            33.299999999999955,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            16.600000000000136,
+            16.699999999999818,
+            33.40000000000009,
+            16.59999999999991,
+            16.700000000000045,
+            16.700000000000045,
+            16.59999999999991,
+            16.600000000000136,
+            16.799999999999955,
+            16.59999999999991,
+            16.700000000000273,
+            16.699999999999818,
+            33.30000000000018,
+            33.399999999999636,
+            33.20000000000027,
+            16.699999999999818,
+            16.700000000000273,
+            16.699999999999818,
+            16.699999999999818,
+            16.600000000000364,
+            33.29999999999973,
+            16.700000000000273,
+            33.29999999999973,
+            33.40000000000009,
+            16.59999999999991,
+            16.700000000000273,
+            16.699999999999818,
+            16.59999999999991,
+            16.59999999999991,
+            16.800000000000182,
+            16.59999999999991,
+            16.700000000000273,
+            16.699999999999818,
+            16.59999999999991,
+            16.700000000000273,
+            16.59999999999991,
+            16.699999999999818,
+            16.700000000000273,
+            16.699999999999818,
+            16.59999999999991,
+            16.59999999999991,
+            33.40000000000009,
+            33.40000000000009,
+            33.19999999999982,
+            16.700000000000273,
+            33.29999999999973,
+            33.40000000000009,
+            33.30000000000018,
+            33.40000000000009,
+            33.29999999999973,
+            16.59999999999991,
+            16.700000000000273,
+            33.29999999999973,
+            16.700000000000273,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            33.30000000000018,
+            16.59999999999991,
+            16.699999999999818,
+            33.40000000000009,
+            16.700000000000273,
+            33.19999999999982,
+            33.40000000000009,
+            50.09999999999991,
+            33.19999999999982,
+            16.700000000000273,
+            16.699999999999818,
+            16.700000000000273,
+            50,
+            33.29999999999973,
+            16.59999999999991,
+            33.40000000000009,
+            33.30000000000018,
+            16.59999999999991,
+            33.40000000000009,
+            16.699999999999818,
+            16.700000000000273,
+            33.29999999999973,
+            16.59999999999991,
+            16.700000000000273,
+            16.699999999999818,
+            16.59999999999991,
+            16.700000000000273,
+            16.59999999999991,
+            33.40000000000009,
+            50,
+            33.40000000000009,
+            49.899999999999636,
+            16.700000000000273,
+            33.29999999999973,
+            33.30000000000018,
+            33.30000000000018,
+            33.399999999999636,
+            33.400000000000546,
+            16.599999999999454,
+            33.30000000000018,
+            33.399999999999636,
+            33.30000000000018,
+            33.30000000000018,
+            16.699999999999818,
+            16.600000000000364,
+            16.699999999999818,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            33.400000000000546,
+            49.899999999999636,
+            50,
+            16.699999999999818,
+            16.600000000000364,
+            16.800000000000182,
+            16.599999999999454,
+            16.699999999999818,
+            16.600000000000364,
+            16.699999999999818,
+            16.699999999999818
+          ],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          },
+          "repeatedFrameTimestamps": [],
+          "longAnimationFramesSupported": true,
+          "longAnimationFrames": [
+            {
+              "name": "long-animation-frame",
+              "entryType": "long-animation-frame",
+              "startTime": 1139.5,
+              "duration": 60.70000000298023,
+              "navigationId": 235,
+              "paintTime": 1200.2000000029802,
+              "presentationTime": 1252,
+              "renderStart": 1184.3999999910593,
+              "styleAndLayoutStart": 1185.2000000029802,
+              "firstUIEventTimestamp": 1138.7999999970198,
+              "blockingDuration": 0,
+              "styleDuration": 5,
+              "layoutDuration": 1.3,
+              "scripts": [
+                {
+                  "name": "script",
+                  "entryType": "script",
+                  "startTime": 1165.8999999910593,
+                  "duration": 18.400000005960464,
+                  "navigationId": 235,
+                  "invoker": "DOMWindow.onpointermove",
+                  "invokerType": "event-listener",
+                  "windowAttribution": "self",
+                  "executionStart": 1165.8999999910593,
+                  "forcedStyleAndLayoutDuration": 0,
+                  "forcedStyleDuration": 0,
+                  "forcedLayoutDuration": 0,
+                  "pauseDuration": 0,
+                  "sourceURL": "http://127.0.0.1:3001/_next/static/chunks/30bm7j_nc6q6f.js",
+                  "sourceFunctionName": "",
+                  "sourceCharPosition": 2812
+                }
+              ]
+            }
+          ]
+        },
+        "metrics": {
+          "responseMs": [
+            85.5,
+            65,
+            50,
+            52.3,
+            48.8,
+            96.5
+          ],
+          "responseP95Ms": 96.5,
+          "responseMaxMs": 96.5,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 49.9,
+          "firstTurn": {
+            "responseP95Ms": 85.5,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 96.5,
+            "frameGapMaxMs": 50.1,
+            "frameGapP95Ms": 49.9
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "blockingOverLimitCount": 0,
+          "beforeInput": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "firstTurn": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          }
+        }
+      }
+    },
+    {
+      "trial": "exclusive-2-clip",
+      "data": {
+        "variant": "clip",
+        "browser": "158.0.8127.18",
+        "samples": {
+          "inputs": [
+            {
+              "at": 1129.7999999970198,
+              "trusted": true,
+              "chapter": 125,
+              "firstMotion": 1177,
+              "responseFrame": 1214.5999999940395,
+              "settled": 1646.3999999910593,
+              "frameStart": 0,
+              "frameEnd": 21
+            },
+            {
+              "at": 1671.5999999940395,
+              "trusted": true,
+              "chapter": 126,
+              "firstMotion": 1684.199999988079,
+              "responseFrame": 1722.0999999940395,
+              "settled": 2164.5999999940395,
+              "frameStart": 23,
+              "frameEnd": 44
+            },
+            {
+              "at": 2278.0999999940395,
+              "trusted": true,
+              "chapter": 127,
+              "firstMotion": 2294.3999999910593,
+              "responseFrame": 2325.0999999940395,
+              "settled": 2778.0999999940395,
+              "frameStart": 51,
+              "frameEnd": 74
+            },
+            {
+              "at": 2806.199999988079,
+              "trusted": true,
+              "chapter": 128,
+              "firstMotion": 2833.5,
+              "responseFrame": 2858,
+              "settled": 3305,
+              "frameStart": 76,
+              "frameEnd": 96
+            },
+            {
+              "at": 3409.3999999910593,
+              "trusted": true,
+              "chapter": 129,
+              "firstMotion": 3428.199999988079,
+              "responseFrame": 3452.7999999970198,
+              "settled": 3902.8999999910593,
+              "frameStart": 102,
+              "frameEnd": 122
+            },
+            {
+              "at": 3941.8999999910593,
+              "trusted": true,
+              "chapter": 130,
+              "firstMotion": 4002.0999999940395,
+              "responseFrame": 4035.699999988079,
+              "settled": 4480.5999999940395,
+              "frameStart": 124,
+              "frameEnd": 143
+            }
+          ],
+          "frames": [
+            16.600000000000136,
+            66.70000000000005,
+            33.299999999999955,
+            16.700000000000045,
+            33.299999999999955,
+            33.299999999999955,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            16.700000000000045,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            16.700000000000045,
+            33.299999999999955,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            33.299999999999955,
+            33.40000000000009,
+            16.699999999999818,
+            33.200000000000045,
+            33.40000000000009,
+            33.299999999999955,
+            16.700000000000045,
+            33.299999999999955,
+            33.299999999999955,
+            16.700000000000045,
+            16.700000000000045,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            33.299999999999955,
+            16.700000000000045,
+            16.59999999999991,
+            16.800000000000182,
+            16.59999999999991,
+            16.699999999999818,
+            16.600000000000364,
+            33.29999999999973,
+            33.40000000000009,
+            33.40000000000009,
+            16.59999999999991,
+            16.699999999999818,
+            16.600000000000364,
+            16.699999999999818,
+            16.699999999999818,
+            16.600000000000364,
+            33.399999999999636,
+            33.30000000000018,
+            16.59999999999991,
+            33.40000000000009,
+            33.30000000000018,
+            16.699999999999818,
+            16.699999999999818,
+            16.600000000000364,
+            16.699999999999818,
+            16.59999999999991,
+            16.700000000000273,
+            16.699999999999818,
+            16.59999999999991,
+            16.800000000000182,
+            16.59999999999991,
+            16.59999999999991,
+            16.700000000000273,
+            16.699999999999818,
+            16.699999999999818,
+            16.600000000000364,
+            16.59999999999991,
+            33.5,
+            33.19999999999982,
+            16.700000000000273,
+            16.699999999999818,
+            16.59999999999991,
+            50,
+            16.700000000000273,
+            33.29999999999973,
+            33.40000000000009,
+            16.59999999999991,
+            33.30000000000018,
+            16.699999999999818,
+            16.700000000000273,
+            33.399999999999636,
+            16.600000000000364,
+            16.699999999999818,
+            16.699999999999818,
+            16.600000000000364,
+            33.29999999999973,
+            16.700000000000273,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            50,
+            33.30000000000018,
+            16.699999999999818,
+            16.59999999999991,
+            16.59999999999991,
+            16.700000000000273,
+            16.799999999999727,
+            33.30000000000018,
+            33.30000000000018,
+            33.29999999999973,
+            33.40000000000009,
+            16.59999999999991,
+            16.700000000000273,
+            16.59999999999991,
+            16.699999999999818,
+            16.59999999999991,
+            16.700000000000273,
+            16.699999999999818,
+            16.59999999999991,
+            33.40000000000009,
+            16.700000000000273,
+            16.699999999999818,
+            16.59999999999991,
+            16.700000000000273,
+            50,
+            16.59999999999991,
+            50,
+            50,
+            16.699999999999818,
+            33.30000000000018,
+            33.29999999999973,
+            33.40000000000009,
+            33.29999999999973,
+            33.30000000000018,
+            16.800000000000182,
+            16.600000000000364,
+            33.29999999999927,
+            16.700000000000728,
+            16.599999999999454,
+            33.400000000000546,
+            16.599999999999454,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            16.700000000000728,
+            33.29999999999927,
+            33.400000000000546,
+            33.30000000000018,
+            50,
+            16.699999999999818,
+            16.599999999999454,
+            16.700000000000728,
+            16.599999999999454,
+            16.800000000000182,
+            16.600000000000364,
+            16.599999999999454,
+            16.699999999999818
+          ],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          },
+          "repeatedFrameTimestamps": [],
+          "longAnimationFramesSupported": true,
+          "longAnimationFrames": [
+            {
+              "name": "long-animation-frame",
+              "entryType": "long-animation-frame",
+              "startTime": 1131.0999999940395,
+              "duration": 61.20000000298023,
+              "navigationId": 6457,
+              "paintTime": 1192.2999999970198,
+              "presentationTime": 1244,
+              "renderStart": 1176.8999999910593,
+              "styleAndLayoutStart": 1177.3999999910593,
+              "firstUIEventTimestamp": 1129.7999999970198,
+              "blockingDuration": 0,
+              "styleDuration": 5.1,
+              "layoutDuration": 2.1,
+              "scripts": [
+                {
+                  "name": "script",
+                  "entryType": "script",
+                  "startTime": 1156.5,
+                  "duration": 19.799999997019768,
+                  "navigationId": 6457,
+                  "invoker": "DOMWindow.onpointermove",
+                  "invokerType": "event-listener",
+                  "windowAttribution": "self",
+                  "executionStart": 1156.5,
+                  "forcedStyleAndLayoutDuration": 0,
+                  "forcedStyleDuration": 0,
+                  "forcedLayoutDuration": 0,
+                  "pauseDuration": 0,
+                  "sourceURL": "http://127.0.0.1:3001/_next/static/chunks/30bm7j_nc6q6f.js",
+                  "sourceFunctionName": "",
+                  "sourceCharPosition": 2812
+                }
+              ]
+            },
+            {
+              "name": "long-animation-frame",
+              "entryType": "long-animation-frame",
+              "startTime": 3829.5,
+              "duration": 52.29999999701977,
+              "navigationId": 6492,
+              "paintTime": 3881.7999999970198,
+              "presentationTime": 3936,
+              "renderStart": 3857.3999999910593,
+              "styleAndLayoutStart": 3865.3999999910593,
+              "firstUIEventTimestamp": 0,
+              "blockingDuration": 0,
+              "styleDuration": 9.8,
+              "layoutDuration": 1.5,
+              "scripts": [
+                {
+                  "name": "script",
+                  "entryType": "script",
+                  "startTime": 3857.3999999910593,
+                  "duration": 6.9000000059604645,
+                  "navigationId": 6492,
+                  "invoker": "FrameRequestCallback",
+                  "invokerType": "user-callback",
+                  "windowAttribution": "self",
+                  "executionStart": 3857.3999999910593,
+                  "forcedStyleAndLayoutDuration": 0,
+                  "forcedStyleDuration": 0,
+                  "forcedLayoutDuration": 0,
+                  "pauseDuration": 0,
+                  "sourceURL": "http://127.0.0.1:3001/_next/static/chunks/30bm7j_nc6q6f.js",
+                  "sourceFunctionName": "h",
+                  "sourceCharPosition": 65999
+                }
+              ]
+            },
+            {
+              "name": "long-animation-frame",
+              "entryType": "long-animation-frame",
+              "startTime": 3922.5999999940395,
+              "duration": 54.20000000298023,
+              "navigationId": 6492,
+              "paintTime": 3976.7999999970198,
+              "presentationTime": 4012,
+              "renderStart": 3940.699999988079,
+              "styleAndLayoutStart": 3941.5,
+              "firstUIEventTimestamp": 3904,
+              "blockingDuration": 0,
+              "styleDuration": 5.1,
+              "layoutDuration": 26.5,
+              "scripts": [
+                {
+                  "name": "script",
+                  "entryType": "script",
+                  "startTime": 3924.199999988079,
+                  "duration": 5,
+                  "navigationId": 6492,
+                  "invoker": "MessagePort.onmessage",
+                  "invokerType": "event-listener",
+                  "windowAttribution": "self",
+                  "executionStart": 3924.199999988079,
+                  "forcedStyleAndLayoutDuration": 0,
+                  "forcedStyleDuration": 0,
+                  "forcedLayoutDuration": 0,
+                  "pauseDuration": 0,
+                  "sourceURL": "http://127.0.0.1:3001/_next/static/chunks/3s1evtogy_f18.js",
+                  "sourceFunctionName": "z",
+                  "sourceCharPosition": 224966
+                }
+              ]
+            }
+          ]
+        },
+        "metrics": {
+          "responseMs": [
+            84.8,
+            50.5,
+            47,
+            51.8,
+            43.4,
+            93.8
+          ],
+          "responseP95Ms": 93.8,
+          "responseMaxMs": 93.8,
+          "frameGapMaxMs": 66.7,
+          "frameGapP95Ms": 33.5,
+          "firstTurn": {
+            "responseP95Ms": 84.8,
+            "frameGapMaxMs": 66.7,
+            "frameGapP95Ms": 33.3
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 93.8,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.5
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "blockingOverLimitCount": 0,
+          "beforeInput": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "firstTurn": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          }
+        }
+      }
+    },
+    {
+      "trial": "exclusive-3-baseline",
+      "data": {
+        "variant": "baseline",
+        "browser": "158.0.8127.18",
+        "samples": {
+          "inputs": [
+            {
+              "at": 1019.4000000059605,
+              "trusted": true,
+              "chapter": 125,
+              "firstMotion": 1062.4000000059605,
+              "responseFrame": 1095.7000000029802,
+              "settled": 1538,
+              "frameStart": 0,
+              "frameEnd": 22
+            },
+            {
+              "at": 1565.5999999940395,
+              "trusted": true,
+              "chapter": 126,
+              "firstMotion": 1582.0999999940395,
+              "responseFrame": 1622.7000000029802,
+              "settled": 2056.0999999940395,
+              "frameStart": 24,
+              "frameEnd": 44
+            },
+            {
+              "at": 2167.9000000059605,
+              "trusted": true,
+              "chapter": 127,
+              "firstMotion": 2203.4000000059605,
+              "responseFrame": 2236.0999999940395,
+              "settled": 2670.2999999970198,
+              "frameStart": 51,
+              "frameEnd": 73
+            },
+            {
+              "at": 2698.9000000059605,
+              "trusted": true,
+              "chapter": 128,
+              "firstMotion": 2725.5,
+              "responseFrame": 2748.0999999940395,
+              "settled": 3189.7999999970198,
+              "frameStart": 75,
+              "frameEnd": 95
+            },
+            {
+              "at": 3299.9000000059605,
+              "trusted": true,
+              "chapter": 129,
+              "firstMotion": 3318.9000000059605,
+              "responseFrame": 3342.5,
+              "settled": 3778.7999999970198,
+              "frameStart": 101,
+              "frameEnd": 120
+            },
+            {
+              "at": 3813.5999999940395,
+              "trusted": true,
+              "chapter": 130,
+              "firstMotion": 3897.2999999970198,
+              "responseFrame": 3910.5999999940395,
+              "settled": 4361.20000000298,
+              "frameStart": 122,
+              "frameEnd": 143
+            }
+          ],
+          "frames": [
+            16.634000000000015,
+            50,
+            33.299999999999955,
+            33.299999999999955,
+            16.700000000000045,
+            33.40000000000009,
+            16.59999999999991,
+            16.700000000000045,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            33.299999999999955,
+            16.700000000000045,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            16.700000000000045,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            33.299999999999955,
+            33.299999999999955,
+            16.700000000000045,
+            50,
+            33.299999999999955,
+            33.40000000000009,
+            16.59999999999991,
+            33.299999999999955,
+            16.700000000000045,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            16.700000000000045,
+            16.59999999999991,
+            33.40000000000009,
+            16.59999999999991,
+            16.700000000000045,
+            16.700000000000045,
+            33.299999999999955,
+            16.600000000000136,
+            16.799999999999955,
+            16.59999999999991,
+            33.299999999999955,
+            33.40000000000009,
+            16.699999999999818,
+            33.20000000000027,
+            16.699999999999818,
+            16.700000000000273,
+            16.59999999999991,
+            16.699999999999818,
+            16.700000000000273,
+            33.29999999999973,
+            33.40000000000009,
+            16.59999999999991,
+            33.30000000000018,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            16.700000000000273,
+            16.699999999999818,
+            16.699999999999818,
+            16.600000000000364,
+            16.59999999999991,
+            16.699999999999818,
+            33.40000000000009,
+            16.59999999999991,
+            16.700000000000273,
+            16.59999999999991,
+            16.799999999999727,
+            16.600000000000364,
+            16.699999999999818,
+            33.30000000000018,
+            33.29999999999973,
+            16.700000000000273,
+            16.59999999999991,
+            16.699999999999818,
+            33.40000000000009,
+            33.19999999999982,
+            33.5,
+            33.20000000000027,
+            16.699999999999818,
+            33.40000000000009,
+            16.59999999999991,
+            16.59999999999991,
+            16.700000000000273,
+            33.40000000000009,
+            16.59999999999991,
+            16.699999999999818,
+            16.59999999999991,
+            33.40000000000009,
+            16.700000000000273,
+            16.699999999999818,
+            16.59999999999991,
+            33.40000000000009,
+            33.19999999999982,
+            33.40000000000009,
+            16.700000000000273,
+            33.29999999999973,
+            16.59999999999991,
+            16.700000000000273,
+            16.699999999999818,
+            33.40000000000009,
+            33.19999999999982,
+            33.30000000000018,
+            16.800000000000182,
+            33.29999999999973,
+            16.59999999999991,
+            16.700000000000273,
+            33.40000000000009,
+            16.59999999999991,
+            16.59999999999991,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            16.700000000000273,
+            16.59999999999991,
+            33.40000000000009,
+            16.699999999999818,
+            33.30000000000018,
+            33.29999999999973,
+            50,
+            16.700000000000273,
+            33.29999999999973,
+            33.40000000000009,
+            33.30000000000018,
+            33.29999999999973,
+            16.600000000000364,
+            33.399999999999636,
+            16.700000000000273,
+            33.29999999999973,
+            16.699999999999818,
+            16.700000000000728,
+            16.599999999999454,
+            33.30000000000018,
+            16.699999999999818,
+            16.699999999999818,
+            16.700000000000728,
+            16.599999999999454,
+            16.600000000000364,
+            16.800000000000182,
+            16.599999999999454,
+            50,
+            33.400000000000546,
+            33.29999999999927,
+            16.700000000000728,
+            16.599999999999454,
+            16.699999999999818,
+            16.600000000000364,
+            16.699999999999818,
+            16.699999999999818,
+            16.600000000000364,
+            16.699999999999818,
+            16.699999999999818
+          ],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          },
+          "repeatedFrameTimestamps": [],
+          "longAnimationFramesSupported": true,
+          "longAnimationFrames": [
+            {
+              "name": "long-animation-frame",
+              "entryType": "long-animation-frame",
+              "startTime": 1020.2000000029802,
+              "duration": 56.29999999701977,
+              "navigationId": 4500,
+              "paintTime": 1076.5,
+              "presentationTime": 1128,
+              "renderStart": 1062.2999999970198,
+              "styleAndLayoutStart": 1062.4000000059605,
+              "firstUIEventTimestamp": 1019.4000000059605,
+              "blockingDuration": 0,
+              "styleDuration": 5,
+              "layoutDuration": 0.9,
+              "scripts": [
+                {
+                  "name": "script",
+                  "entryType": "script",
+                  "startTime": 1045,
+                  "duration": 16.700000002980232,
+                  "navigationId": 4500,
+                  "invoker": "DOMWindow.onpointermove",
+                  "invokerType": "event-listener",
+                  "windowAttribution": "self",
+                  "executionStart": 1045,
+                  "forcedStyleAndLayoutDuration": 0,
+                  "forcedStyleDuration": 0,
+                  "forcedLayoutDuration": 0,
+                  "pauseDuration": 0,
+                  "sourceURL": "http://127.0.0.1:3001/_next/static/chunks/30bm7j_nc6q6f.js",
+                  "sourceFunctionName": "",
+                  "sourceCharPosition": 2812
+                }
+              ]
+            }
+          ]
+        },
+        "metrics": {
+          "responseMs": [
+            76.3,
+            57.1,
+            68.2,
+            49.2,
+            42.6,
+            97
+          ],
+          "responseP95Ms": 97,
+          "responseMaxMs": 97,
+          "frameGapMaxMs": 50,
+          "frameGapP95Ms": 33.4,
+          "firstTurn": {
+            "responseP95Ms": 76.3,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 97,
+            "frameGapMaxMs": 50,
+            "frameGapP95Ms": 33.4
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "blockingOverLimitCount": 0,
+          "beforeInput": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "firstTurn": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          }
+        }
+      }
+    },
+    {
+      "trial": "exclusive-3-clip",
+      "data": {
+        "variant": "clip",
+        "browser": "158.0.8127.18",
+        "samples": {
+          "inputs": [
+            {
+              "at": 1000,
+              "trusted": true,
+              "chapter": 125,
+              "firstMotion": 1041.6000000089407,
+              "responseFrame": 1074.6000000089407,
+              "settled": 1529.2000000029802,
+              "frameStart": 0,
+              "frameEnd": 23
+            },
+            {
+              "at": 1555.4000000059605,
+              "trusted": true,
+              "chapter": 126,
+              "firstMotion": 1580.4000000059605,
+              "responseFrame": 1625.7000000029802,
+              "settled": 2062.2000000029802,
+              "frameStart": 25,
+              "frameEnd": 46
+            },
+            {
+              "at": 2182.2999999970198,
+              "trusted": true,
+              "chapter": 127,
+              "firstMotion": 2199.2000000029802,
+              "responseFrame": 2232.2000000029802,
+              "settled": 2694.9000000059605,
+              "frameStart": 54,
+              "frameEnd": 76
+            },
+            {
+              "at": 2725.6000000089407,
+              "trusted": true,
+              "chapter": 128,
+              "firstMotion": 2756.2000000029802,
+              "responseFrame": 2788.6000000089407,
+              "settled": 3239.2000000029802,
+              "frameStart": 78,
+              "frameEnd": 97
+            },
+            {
+              "at": 3346.7000000029802,
+              "trusted": true,
+              "chapter": 129,
+              "firstMotion": 3367.6000000089407,
+              "responseFrame": 3400.4000000059605,
+              "settled": 3851,
+              "frameStart": 103,
+              "frameEnd": 118
+            },
+            {
+              "at": 3890.2999999970198,
+              "trusted": true,
+              "chapter": 130,
+              "firstMotion": 3968.2999999970198,
+              "responseFrame": 3998,
+              "settled": 4469,
+              "frameStart": 120,
+              "frameEnd": 137
+            }
+          ],
+          "frames": [
+            16.700000000000045,
+            49.899999999999864,
+            33.40000000000009,
+            33.299999999999955,
+            16.700000000000045,
+            33.299999999999955,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            16.600000000000136,
+            16.799999999999955,
+            16.59999999999991,
+            16.600000000000136,
+            16.699999999999818,
+            16.700000000000045,
+            16.700000000000045,
+            16.700000000000045,
+            16.59999999999991,
+            16.700000000000045,
+            16.59999999999991,
+            16.800000000000182,
+            16.59999999999991,
+            33.299999999999955,
+            33.299999999999955,
+            33.30000000000018,
+            16.699999999999818,
+            50,
+            33.40000000000009,
+            33.299999999999955,
+            16.700000000000045,
+            33.299999999999955,
+            16.600000000000136,
+            16.699999999999818,
+            16.700000000000045,
+            16.600000000000136,
+            16.699999999999818,
+            33.40000000000009,
+            16.59999999999991,
+            16.700000000000045,
+            16.600000000000136,
+            16.699999999999818,
+            16.600000000000136,
+            16.799999999999955,
+            16.59999999999991,
+            16.700000000000045,
+            16.700000000000045,
+            49.90000000000009,
+            33.40000000000009,
+            16.59999999999991,
+            16.699999999999818,
+            16.700000000000273,
+            16.59999999999991,
+            16.699999999999818,
+            16.700000000000273,
+            16.59999999999991,
+            33.40000000000009,
+            16.699999999999818,
+            33.30000000000018,
+            33.29999999999973,
+            33.30000000000018,
+            16.699999999999818,
+            16.59999999999991,
+            16.700000000000273,
+            16.699999999999818,
+            16.700000000000273,
+            16.59999999999991,
+            16.59999999999991,
+            16.699999999999818,
+            16.700000000000273,
+            16.699999999999818,
+            16.700000000000273,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            16.59999999999991,
+            16.700000000000273,
+            49.899999999999636,
+            33.40000000000009,
+            16.59999999999991,
+            16.700000000000273,
+            33.29999999999973,
+            33.40000000000009,
+            33.30000000000018,
+            33.29999999999973,
+            33.40000000000009,
+            33.30000000000018,
+            16.59999999999991,
+            33.40000000000009,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            16.700000000000273,
+            16.59999999999991,
+            16.699999999999818,
+            16.700000000000273,
+            49.899999999999636,
+            33.40000000000009,
+            33.30000000000018,
+            16.699999999999818,
+            16.59999999999991,
+            16.700000000000273,
+            16.699999999999818,
+            33.30000000000018,
+            50,
+            33.29999999999973,
+            50,
+            50,
+            33.30000000000018,
+            33.40000000000009,
+            16.699999999999818,
+            33.20000000000027,
+            16.699999999999818,
+            33.30000000000018,
+            16.799999999999727,
+            16.59999999999991,
+            16.700000000000273,
+            33.29999999999973,
+            50,
+            50,
+            33.40000000000009,
+            33.20000000000027,
+            33.399999999999636,
+            50,
+            33.400000000000546,
+            33.29999999999927,
+            16.600000000000364,
+            33.399999999999636,
+            16.600000000000364,
+            33.30000000000018,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            33.30000000000018,
+            16.699999999999818,
+            33.30000000000018,
+            33.399999999999636,
+            66.60000000000036,
+            50,
+            16.699999999999818,
+            16.600000000000364,
+            16.699999999999818,
+            16.699999999999818,
+            33.399999999999636,
+            16.600000000000364
+          ],
+          "visibility": {
+            "started": "visible",
+            "stopped": "visible",
+            "startedFocused": true,
+            "stoppedFocused": true,
+            "changes": []
+          },
+          "repeatedFrameTimestamps": [],
+          "longAnimationFramesSupported": true,
+          "longAnimationFrames": [
+            {
+              "name": "long-animation-frame",
+              "entryType": "long-animation-frame",
+              "startTime": 1000.6000000089407,
+              "duration": 56.099999994039536,
+              "navigationId": 7061,
+              "paintTime": 1056.7000000029802,
+              "presentationTime": 1108,
+              "renderStart": 1041.6000000089407,
+              "styleAndLayoutStart": 1041.6000000089407,
+              "firstUIEventTimestamp": 1000,
+              "blockingDuration": 0,
+              "styleDuration": 4.9,
+              "layoutDuration": 1.1,
+              "scripts": [
+                {
+                  "name": "script",
+                  "entryType": "script",
+                  "startTime": 1025.2000000029802,
+                  "duration": 15.799999997019768,
+                  "navigationId": 7061,
+                  "invoker": "DOMWindow.onpointermove",
+                  "invokerType": "event-listener",
+                  "windowAttribution": "self",
+                  "executionStart": 1025.2000000029802,
+                  "forcedStyleAndLayoutDuration": 0,
+                  "forcedStyleDuration": 0,
+                  "forcedLayoutDuration": 0,
+                  "pauseDuration": 0,
+                  "sourceURL": "http://127.0.0.1:3001/_next/static/chunks/30bm7j_nc6q6f.js",
+                  "sourceFunctionName": "",
+                  "sourceCharPosition": 2812
+                }
+              ]
+            },
+            {
+              "name": "long-animation-frame",
+              "entryType": "long-animation-frame",
+              "startTime": 3870.9000000059605,
+              "duration": 58.70000000298023,
+              "navigationId": 7096,
+              "paintTime": 3929.6000000089407,
+              "presentationTime": 3960,
+              "renderStart": 3888.7999999970198,
+              "styleAndLayoutStart": 3888.9000000059605,
+              "firstUIEventTimestamp": 3852.1000000089407,
+              "blockingDuration": 0,
+              "styleDuration": 6.1,
+              "layoutDuration": 30.7,
+              "scripts": []
+            },
+            {
+              "name": "long-animation-frame",
+              "entryType": "long-animation-frame",
+              "startTime": 4488,
+              "duration": 52.79999999701977,
+              "navigationId": 7103,
+              "paintTime": 4540.79999999702,
+              "presentationTime": 4576,
+              "renderStart": 4499.29999999702,
+              "styleAndLayoutStart": 4502.29999999702,
+              "firstUIEventTimestamp": 0,
+              "blockingDuration": 0,
+              "styleDuration": 7.6,
+              "layoutDuration": 28.8,
+              "scripts": [
+                {
+                  "name": "script",
+                  "entryType": "script",
+                  "startTime": 4489.100000008941,
+                  "duration": 5.199999988079071,
+                  "navigationId": 7103,
+                  "invoker": "MessagePort.onmessage",
+                  "invokerType": "event-listener",
+                  "windowAttribution": "self",
+                  "executionStart": 4489.100000008941,
+                  "forcedStyleAndLayoutDuration": 0,
+                  "forcedStyleDuration": 0,
+                  "forcedLayoutDuration": 0,
+                  "pauseDuration": 0,
+                  "sourceURL": "http://127.0.0.1:3001/_next/static/chunks/3s1evtogy_f18.js",
+                  "sourceFunctionName": "z",
+                  "sourceCharPosition": 224966
+                }
+              ]
+            }
+          ]
+        },
+        "metrics": {
+          "responseMs": [
+            74.6,
+            70.3,
+            49.9,
+            63,
+            53.7,
+            107.7
+          ],
+          "responseP95Ms": 107.7,
+          "responseMaxMs": 107.7,
+          "frameGapMaxMs": 66.6,
+          "frameGapP95Ms": 50,
+          "firstTurn": {
+            "responseP95Ms": 74.6,
+            "frameGapMaxMs": 49.9,
+            "frameGapP95Ms": 33.4
+          },
+          "consecutiveTurns": {
+            "responseP95Ms": 107.7,
+            "frameGapMaxMs": 66.6,
+            "frameGapP95Ms": 50
+          }
+        },
+        "blocking": {
+          "blockingDurationMaxMs": 0,
+          "blockingOverLimitCount": 0,
+          "beforeInput": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "firstTurn": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          },
+          "consecutiveTurns": {
+            "blockingDurationMaxMs": 0,
+            "blockingOverLimitCount": 0
+          }
+        }
+      }
+    }
+  ]
+}
