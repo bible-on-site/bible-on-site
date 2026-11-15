@@ -102,6 +102,21 @@ public static class MauiProgram
         });
 #endif
 #if ANDROID
+        // MAUI 11 workaround (dotnet/maui#13185 resurfacing): ScrollViewHandler's
+        // new InsertInsetView AddViews the content's platform view, which crashes
+        // with "child already has a parent" when the view is still attached to a
+        // discarded handler tree — the Shell flyout re-render hits exactly that
+        // (its templated ScrollView subtree keeps a stale handler). Detach the
+        // stale native content before the framework's Content mapper runs.
+        Microsoft.Maui.Handlers.ScrollViewHandler.Mapper.PrependToMapping("Content", (handler, scrollView) =>
+        {
+            if (scrollView?.PresentedContent?.Handler?.PlatformView is Android.Views.View nativeContent &&
+                nativeContent.Parent is Android.Views.ViewGroup staleParent)
+            {
+                staleParent.RemoveView(nativeContent);
+            }
+        });
+
         // Increase CarouselView's internal RecyclerView cache so pre-rendered views
         // aren't evicted after ~2 swipes. This eliminates the ~250ms lag when visiting
         // a perek for the first time.

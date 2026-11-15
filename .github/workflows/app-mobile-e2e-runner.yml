@@ -88,17 +88,17 @@ jobs:
       # the toolchain cache id and the workload install read from here, and the
       # Verify step asserts the resolved SDK matches. SDK installation itself
       # is pinned by the root global.json, which must stay identical to this.
-      DOTNET_SDK_VERSION: "10.0.403"
-      # Workload sets are band-scoped (10.0.4xx), not SDK-locked: 10.0.401.1 is
-      # the last set selecting iOS 27.0, which the xcode-27 image's Xcode 27.0
-      # supports. 10.0.402.1 selects iOS 27.1 requiring Xcode 27.1 — deferred
-      # until the runner image ships it; see #2566.
-      MAUI_WORKLOAD_SET: "10.0.401.1"
-      # The Android legs are not Xcode-bound: 10.0.402.1 pins Android SDK
-      # 36.1.118, the first servicing release honoring AndroidR8ObfuscationMode
-      # and emitting the r8.json metadata Play scores — the Release smoke APK is
-      # the pre-merge guard that obfuscated builds still launch (#2708, #2373).
-      MAUI_WORKLOAD_SET_ANDROID: "10.0.402.1"
+      DOTNET_SDK_VERSION: "11.0.100"
+      # .NET 11 workload sets are band-scoped to 11.0.1xx; 11.0.100.1 is the
+      # band's first set and selects iOS 27.2 (Xcode 27.2 required) — the
+      # xcode-27 image's newest Xcode_27* is selected below; #2566 tracked the
+      # earlier deferral while the image lagged.
+      MAUI_WORKLOAD_SET: "11.0.100.1"
+      # The Android legs pin the same 11.0.100.1 set: it ships Android SDK
+      # 37.2.x, which honors AndroidR8ObfuscationMode and emits the r8.json
+      # metadata Play scores — the Release smoke APK is the pre-merge guard
+      # that obfuscated builds still launch (#2708, #2373).
+      MAUI_WORKLOAD_SET_ANDROID: "11.0.100.1"
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -184,9 +184,12 @@ jobs:
 
       - name: Select compatible Xcode
         if: inputs.platform == 'iOS'
+        # The .NET 11 iOS workload (27.2.x) requires the newest Xcode 27.x the
+        # image carries; sort -V picks 27.2 over 27.0 when both are present.
         run: |
-          sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
-          echo "DEVELOPER_DIR=/Applications/Xcode_27.app/Contents/Developer" >> "$GITHUB_ENV"
+          XCODE_DIR="$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)/Contents/Developer"
+          sudo xcode-select --switch "$XCODE_DIR"
+          echo "DEVELOPER_DIR=$XCODE_DIR" >> "$GITHUB_ENV"
 
       # Xcode or the workload invalidates compiled intermediates — stamp every
       # iOS cache key with the toolchain so a mismatched restore can't happen.
@@ -323,7 +326,7 @@ jobs:
       # consumers verify the identical delivered runtime and configuration.
       - name: Verify real test-host reporting and shutdown
         if: inputs.mode != 'prebuilt-run' && inputs.mode != 'release-smoke'
-        run: node app/mobile-e2e/verify-reporting.mjs app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll "$MOBILE_E2E_DOTNET_STACK" "$MOBILE_E2E_ARTIFACTS"
+        run: node app/mobile-e2e/verify-reporting.mjs app/BibleOnSite.Tests.MobileE2E/bin/Debug/net11.0/BibleOnSite.Tests.MobileE2E.dll "$MOBILE_E2E_DOTNET_STACK" "$MOBILE_E2E_ARTIFACTS"
 
       # Validate before booting either device: cold simulator startup competes
       # with cache extraction and subprocess tests. The asynchronous boot still
@@ -424,7 +427,7 @@ jobs:
         if: inputs.mode == 'prebuilt-run'
         run: |
           node app/mobile-e2e/ios-build-artifact.mjs restore "$GITHUB_WORKSPACE" "${{ runner.temp }}/ios-e2e-build" "$MOBILE_E2E_ARTIFACTS" "${{ github.sha }}" "${{ steps.toolchain.outputs.id }}"
-          codesign --verify --deep --strict app/BibleOnSite/bin/Debug/net10.0-ios/iossimulator-arm64/BibleOnSite.app
+          codesign --verify --deep --strict app/BibleOnSite/bin/Debug/net11.0-ios/iossimulator-arm64/BibleOnSite.app
 
       - name: Validate restored runtimes without NuGet cache
         if: inputs.mode == 'prebuilt-run'
@@ -433,7 +436,7 @@ jobs:
           NUGET_PACKAGES: ${{ runner.temp }}/ios-prebuilt-empty-nuget
         run: |
           dotnet devops/bin/Debug/_build.dll ListMobileE2E --configuration Debug
-          dotnet BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll --filter-query '/[(Category=Unit)]' --progress off
+          dotnet BibleOnSite.Tests.MobileE2E/bin/Debug/net11.0/BibleOnSite.Tests.MobileE2E.dll --filter-query '/[(Category=Unit)]' --progress off
           echo "NUGET_PACKAGES=$NUGET_PACKAGES" >> "$GITHUB_ENV"
 
       # bun install --frozen-lockfile is done, so node_modules is frozen. Background cache publication
@@ -500,10 +503,12 @@ jobs:
 
       - name: Install MAUI workload
         if: inputs.mode != 'prebuilt-run'
-        # 10.0.401.1 selects the iOS 27.0 SDK, which requires Xcode 27.0; see #1871.
-        # maui-android resolves to 10.0.402.1 (Android SDK 36.1.118) for #2708's
-        # obfuscation support; iOS stays pinned until #2566 ships Xcode 27.1.
-        run: dotnet workload install ${{ inputs.workload }} --version ${{ steps.workload-set.outputs.version }}
+        # 11.0.100.1 selects the iOS 27.2 / Android 37.2 SDKs under SDK 11.
+        # Foreign-band sdk-manifests claiming the same packs abort the install.
+        run: |
+          for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
+          dotnet workload update
+          dotnet workload install ${{ inputs.workload }} --version ${{ steps.workload-set.outputs.version }}
 
       # Background like the other cache saves: compression and upload stay off
       # the build's critical path; the wait-all gate still bounds it.

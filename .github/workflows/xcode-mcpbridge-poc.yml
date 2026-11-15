@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Select compatible Xcode
-        run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+        run: sudo xcode-select --switch "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)/Contents/Developer"
 
       - name: Verify mcpbridge exists
         run: |

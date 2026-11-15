@@ -136,7 +136,7 @@ owner-side smoke against the same Emulator Suite:
    --only auth,firestore --host 0.0.0.0` so the device can reach it; keep the
    emulator and the device on one LAN).
 2. Build the Firebase-emulator Debug app:
-   `dotnet build app/BibleOnSite -f net10.0-ios -c Debug -p:FirebaseEmulator=true`
+   `dotnet build app/BibleOnSite -f net11.0-ios -c Debug -p:FirebaseEmulator=true`
    (the e2e CI artifact already carries the flag).
 3. Launch with the endpoint —
    simulator: `SIMCTL_CHILD_BIBLE_FIREBASE_EMULATOR=127.0.0.1:9099:8080 xcrun simctl launch booted com.tanah.daily929`;

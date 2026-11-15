@@ -27,7 +27,7 @@ partial class Build
         // coverlet.MTP cannot instrument the test assembly (it is the MTP controller
         // process, coverlet#1911), so coverage runs through coverlet.console which
         // instruments on disk before spawning the test app.
-        var testBinaryDirectory = TestProject.Parent / "bin" / Configuration / "net10.0";
+        var testBinaryDirectory = TestProject.Parent / "bin" / Configuration / "net11.0";
         var resultsRelative = Path.GetRelativePath(RootDirectory, outputDirectory);
         ProcessTasks.StartProcess(DotNetPath,
                 $"tool run coverlet \"{testBinaryDirectory}\" --target dotnet" +
