@@ -23,15 +23,30 @@
 		<!-- Define MAUI symbol for conditional compilation -->
 		<DefineConstants>$(DefineConstants);MAUI</DefineConstants>
 
+		<!-- Firebase emulator gating (#3185): CompileMobileE2E passes
+		     -p:FirebaseEmulator=true so FIREBASE_EMULATOR compiles the Auth and
+		     Firestore redirect to the local Emulator Suite through
+		     FirebaseEmulatorEndpoint. The endpoint resolves only when the
+		     suite's launch env, intent extra or marker file supplies it — an
+		     emulator build can never reach the production backend, it just
+		     stays local-only. Off by default and never set for release. -->
+		<FirebaseEmulator Condition="'$(FirebaseEmulator)' == ''">false</FirebaseEmulator>
+		<DefineConstants Condition="'$(FirebaseEmulator)' == 'true'">$(DefineConstants);FIREBASE_EMULATOR</DefineConstants>
+
 		<!-- Analytics gating (#2120): Debug builds — local dev and every mobile-e2e
 		     build (CompileMobileE2E also passes -p:DisableAnalytics=true explicitly
 		     so the protection is build-flag driven, not just configuration-derived) —
 		     get DISABLE_ANALYTICS: AnalyticsService becomes a no-op, the iOS Firebase
 		     init is skipped entirely, and firebase_analytics_collection_deactivated
 		     is baked into the Android manifest. Release builds default to analytics
-		     on; pass -p:DisableAnalytics=false to force a Debug build back on. -->
-		<DisableAnalytics Condition="'$(DisableAnalytics)' == '' AND '$(Configuration)' == 'Debug'">true</DisableAnalytics>
-		<DefineConstants Condition="'$(DisableAnalytics)' == 'true'">$(DefineConstants);DISABLE_ANALYTICS</DefineConstants>
+		     on; pass -p:DisableAnalytics=false to force a Debug build back on.
+		     Emulator builds force the same posture so the suite backend is the
+		     only Firebase traffic they can produce — and the force is carried by
+		     the define, not the soft toggle: an explicit -p:DisableAnalytics=false
+		     may re-open analytics on a plain Debug build but can never re-open the
+		     production backend on an emulator build. -->
+		<DisableAnalytics Condition="'$(DisableAnalytics)' == '' AND ('$(Configuration)' == 'Debug' OR '$(FirebaseEmulator)' == 'true')">true</DisableAnalytics>
+		<DefineConstants Condition="'$(DisableAnalytics)' == 'true' OR '$(FirebaseEmulator)' == 'true'">$(DefineConstants);DISABLE_ANALYTICS</DefineConstants>
 
 		<!-- Push gating (#1097): Debug builds and every mobile-e2e build (which sets
 		     DisableAnalytics explicitly) get DISABLE_PUSH — PushNotificationService
@@ -42,7 +57,11 @@
 		     can opt in with -p:DisablePush=false, which also drives the iOS
 		     CrossFirebase.Initialize call the Messaging SDK depends on while the
 		     plist flag still keeps analytics collection off. -->
-		<DisablePush Condition="'$(DisablePush)' == ''">$(DisableAnalytics)</DisablePush>
+		<!-- Push inherits the analytics isolation, and the emulator force the
+		     same way: an emulator build never wires the Messaging SDK, which the
+		     emulator suite cannot route anyway. -->
+		<DisablePush Condition="'$(DisablePush)' == '' AND ('$(DisableAnalytics)' == 'true' OR '$(FirebaseEmulator)' == 'true')">true</DisablePush>
+		<DisablePush Condition="'$(DisablePush)' == ''">false</DisablePush>
 		<DefineConstants Condition="'$(DisablePush)' == 'true'">$(DefineConstants);DISABLE_PUSH</DefineConstants>
 
 		<!-- #1097: stays false until the App ID's Push Notifications capability is
@@ -78,12 +97,12 @@
 		<ApplicationId>com.tanah.daily929</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>5.1.20</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>5.1.22</ApplicationDisplayVersion>
 		<!-- Platform build number = major*10^7 + minor*10^5 + patch (5.1.0 -> 50100000) for
 		     every store that accepts large integers: Android versionCode (continuing Play
 		     Store's 40000017 base) and Apple CFBundleVersion, which must never regress
 		     across marketing versions, including on minor bumps where the patch resets. -->
-		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">50100020</ApplicationVersion>
+		<ApplicationVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) != 'windows'">50100022</ApplicationVersion>
 		<!-- Windows MSIX merges the display version and this value into a 4-part version.
 		     The Microsoft Store reserves the revision component, so it stays 0 (the Nuke
 		     packer also pins it); the leading marketing version keeps packages strictly
@@ -195,9 +214,10 @@
 		<MauiImage Include="Resources\Images\*" />
 		<!-- Launcher icons are not runtime images on iOS; bundle the same artwork for the loading page. -->
 		<MauiImage Include="Resources\AppIcon\appicon.svg" Link="loading_logo.svg" BaseSize="150,150" />
-		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
 
 		<!-- Custom Fonts -->
+		<EmbeddedResource Include="Resources/Fonts/TaameyD-Regular.ttf" LogicalName="TikkunFont.ttf" />
+		<EmbeddedResource Include="Resources/Fonts/TaameyD-outlines.json" LogicalName="TikkunFont.outlines.json" />
 		<MauiFont Include="Resources\Fonts\*.ttf;Resources\Fonts\*.otf" />
 		<!-- The MauiFont glob covers the TTF only — ship the font's GPL
 		     attribution inside the package too (#2623). -->
@@ -219,7 +239,7 @@
 	     true; everything else resolves to false so production analytics keep
 	     working. The fallback guarantees the placeholder is always defined. -->
 	<PropertyGroup>
-		<FirebaseAnalyticsCollectionDeactivated Condition="'$(DisableAnalytics)' == 'true'">true</FirebaseAnalyticsCollectionDeactivated>
+		<FirebaseAnalyticsCollectionDeactivated Condition="'$(DisableAnalytics)' == 'true' OR '$(FirebaseEmulator)' == 'true'">true</FirebaseAnalyticsCollectionDeactivated>
 		<FirebaseAnalyticsCollectionDeactivated Condition="'$(FirebaseAnalyticsCollectionDeactivated)' == ''">false</FirebaseAnalyticsCollectionDeactivated>
 	</PropertyGroup>
 	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
@@ -318,10 +338,10 @@
 	     sit next to Manifest.json so `xcrun ba-package` can archive the pack for App Store Connect upload.
 	     The prebuilt search index rides in the same pack — the manifest selects it and the
 	     managed-delivery extraction requires it. -->
-	<Target Name="DecompressPerushimNotesIos" BeforeTargets="PrepareForBuild;Build" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND&#xD;&#xA;			((!Exists('Platforms\iOS\AssetPacks\perushim-notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')) OR&#xD;&#xA;			(!Exists('Platforms\iOS\AssetPacks\perushim-notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')))">
-		<MakeDir Directories="Platforms\iOS\AssetPacks\perushim-notes" />
-		<Exec Condition="!Exists('Platforms\iOS\AssetPacks\perushim-notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')" Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/AssetPacks/perushim-notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
-		<Exec Condition="!Exists('Platforms\iOS\AssetPacks\perushim-notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/AssetPacks/perushim-notes/sefaria-dump-5784-sivan-4.hebrew_search.sqlite'" />
+	<Target Name="DecompressPerushimNotesIos" BeforeTargets="PrepareForBuild;Build" Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND&#xD;&#xA;			((!Exists('Platforms\iOS\AssetPacks\perushim-notes-slim\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')) OR&#xD;&#xA;			(!Exists('Platforms\iOS\AssetPacks\perushim-notes-slim\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND&#xD;&#xA;			Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')))">
+		<MakeDir Directories="Platforms\iOS\AssetPacks\perushim-notes-slim" />
+		<Exec Condition="!Exists('Platforms\iOS\AssetPacks\perushim-notes-slim\sefaria-dump-5784-sivan-4.perushim_notes.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')" Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/AssetPacks/perushim-notes-slim/sefaria-dump-5784-sivan-4.perushim_notes.sqlite'" />
+		<Exec Condition="!Exists('Platforms\iOS\AssetPacks\perushim-notes-slim\sefaria-dump-5784-sivan-4.hebrew_search.sqlite') AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz')" Command="gunzip -c '$(MSBuildProjectDirectory)/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.hebrew_search.sqlite.gz' &gt; '$(MSBuildProjectDirectory)/Platforms/iOS/AssetPacks/perushim-notes-slim/sefaria-dump-5784-sivan-4.hebrew_search.sqlite'" />
 	</Target>
 
 	<!-- Managed Background Assets need an ExtensionKit downloader extension embedded at
@@ -408,8 +428,8 @@
 	<!-- Simulator/local Debug installs cannot fetch a store-hosted asset pack (the
 	     downloader extension is only embedded for signed Release packaging). -->
 	<ItemGroup Condition="($([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios' OR $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst') AND '$(Configuration)' == 'Debug' AND Exists('Platforms\Android\AssetPacks\perushim_notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz')">
-		<MauiAsset Include="Platforms\iOS\AssetPacks\perushim-notes\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
-		<MauiAsset Include="Platforms\iOS\AssetPacks\perushim-notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\iOS\AssetPacks\perushim-notes\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" LogicalName="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" />
+		<MauiAsset Include="Platforms\iOS\AssetPacks\perushim-notes-slim\sefaria-dump-5784-sivan-4.perushim_notes.sqlite" LogicalName="sefaria-dump-5784-sivan-4.perushim_notes.sqlite" />
+		<MauiAsset Include="Platforms\iOS\AssetPacks\perushim-notes-slim\sefaria-dump-5784-sivan-4.hebrew_search.sqlite" Condition="Exists('Platforms\iOS\AssetPacks\perushim-notes-slim\sefaria-dump-5784-sivan-4.hebrew_search.sqlite')" LogicalName="sefaria-dump-5784-sivan-4.hebrew_search.sqlite" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -419,6 +439,7 @@
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
 		<PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />
 		<PackageReference Include="HtmlAgilityPack" Version="1.13.1" />
+		<PackageReference Include="HarfBuzzSharp" Version="14.4.0.100" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.130" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.15" />
 		<PackageReference Include="sqlite-net-pcl" Version="1.11.285" />

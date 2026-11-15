@@ -86,11 +86,13 @@ public static class RecitationRangePlanner
                     ? sliceWords.GroupBy(w => w.Pasuk).OrderBy(g => g.Key)
                         .Select(g => (g.First().StartMs!.Value, g.Last().EndMs!.Value)).ToList()
                     : [(sliceWords[0].StartMs!.Value, sliceWords[^1].EndMs!.Value)];
-                segments.Add(new RecitationSegment(slice.PerekId, pasukim, null, null, ranges));
+                segments.Add(new RecitationSegment(slice.PerekId, pasukim, null, null, ranges)
+                    { RangeId = slice.RangeId });
             }
             else if (wholePerek)
             {
-                segments.Add(new RecitationSegment(slice.PerekId, pasukim, null, null, null));
+                segments.Add(new RecitationSegment(slice.PerekId, pasukim, null, null, null)
+                    { RangeId = slice.RangeId });
             }
             // A partial slice on an unaligned track has no approved boundary — skip.
         }

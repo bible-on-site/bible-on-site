@@ -17,6 +17,9 @@ vi.mock("~/server/email-worker-runtime.server", () => ({
 vi.mock("~/server/dedication-expiry", () => ({
 	rescanDedicationExpiries: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("~/server/tanahpedia/contribution-migrations.server", () => ({
+	ensureContributionMigrationsStarted: vi.fn(),
+}));
 
 vi.mock("~/server/auth", () => ({
 	buildClearSessionCookie: vi.fn(),

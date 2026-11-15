@@ -16,3 +16,6 @@ sqlx-core = { version = "0.9", features = ["_rt-tokio"] }
 # MySQL's default caching_sha2_password auth needs RSA key exchange on
 # non-TLS connections (as used here), so enable the rsa feature explicitly.
 sqlx-mysql = { version = "0.9", features = ["rsa"] }
+
+[dev-dependencies]
+tempfile = "3"

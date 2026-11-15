@@ -1,6 +1,7 @@
 {
 	"enTitle": "$title",
 	"alt_structs": 1,
+	"versionTitles": "$versions.versionTitle",
 	"authors": {
 		"$cond": {
 			"if": { "$ne": ["$authors", []] },
@@ -31,6 +32,10 @@
 		"else": {
 			"$switch": {
 				"branches": [
+					{
+						"case": { "$in": ["$title", ["Midrash Tanchuma", "Mekhilta d'Rabbi Yishmael", "Mekhilta DeRabbi Yishmael"]] },
+						"then": ["רבותינו זכרונם לברכה"]
+					},
 					{
 						"case": { "$eq": ["$title", "Maskil LeDavid"] },
 						"then": ["דוד פארדו"]

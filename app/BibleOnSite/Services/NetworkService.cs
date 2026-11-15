@@ -16,7 +16,22 @@ public class NetworkService
     private readonly IConnectivity _connectivity;
     private readonly Func<Task> _refresh;
 
-    private NetworkService() : this(Connectivity.Current, () => StarterService.Instance.TryRefreshAsync()) { }
+    private NetworkService() : this(Connectivity.Current, RefreshAllBound) { }
+
+    /// <summary>The production refresh set — bound lazily so the singletons
+    /// resolve on recovery, not at construction.</summary>
+    internal static Task RefreshAllBound() =>
+        RefreshAllAsync(StarterService.Instance, MoedService.Instance);
+
+    /// <summary>Every API-backed cache refreshes together on connectivity
+    /// recovery — starter data first, then the moadim catalogue (#3261), so a
+    /// catalogue edit lands without an app-store release. Internal so the
+    /// refresh set itself is unit-testable with in-memory services.</summary>
+    internal static async Task RefreshAllAsync(StarterService starter, MoedService moed)
+    {
+        await starter.TryRefreshAsync();
+        await moed.TryRefreshAsync();
+    }
 
     public NetworkService(IConnectivity connectivity, Func<Task> refresh)
     {

@@ -93,6 +93,8 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 ExitFullscreenButton = ExitFullScreenButton,
                 ArticlesView = ArticlesCollection,
                 ReaderContent = MasoraCarousel,
+                // This reader has no reading-position indicator yet.
+                ReadingProgressIndicator = null,
                 Toolbar = ReaderToolbar,
                 Host = MainGrid,
                 ContentArea = ContentArea,
@@ -315,6 +317,20 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
         _platformChrome.ScheduleHistoryRefresh();
     }
 
+    protected override void OnNavigatedTo(NavigatedToEventArgs args)
+    {
+        base.OnNavigatedTo(args);
+        CarouselLoadingOverlay.ReaderNavigatedTo();
+        _carousel.ReaderNavigatedTo();
+    }
+
+    protected override void OnNavigatedFrom(NavigatedFromEventArgs args)
+    {
+        CarouselLoadingOverlay.ReaderNavigatedFrom();
+        _carousel.ReaderNavigatedFrom();
+        base.OnNavigatedFrom(args);
+    }
+
     private void OnReaderListLoaded(object? sender, EventArgs e) =>
         _platformChrome.ReaderSurfaceRealized();
 
@@ -358,6 +374,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
 
             // Hide loading overlay — carousel is ready
             CarouselLoadingOverlay.Hide();
+            _carousel.ResnapAfterLoad();
 
             // Update articles count badge
             await UpdateArticlesCountAsync();

@@ -37,9 +37,19 @@ public sealed class FirebaseUserIdentity : IUserIdentity, IDisposable
                     _authInitAttempted = true;
                     try
                     {
-                        _auth = CrossFirebaseAuth.Current;
-                        _authStateListener = _auth.AddAuthStateListener(
+                        var auth = CrossFirebaseAuth.Current;
+#if FIREBASE_EMULATOR
+                        // The native redirect must run before any auth
+                        // operation; this getter is the first access. Current
+                        // is non-null here — FirebaseUsable required it.
+                        // _auth is only assigned after the redirect lands: a
+                        // half-configured client pointing at production is
+                        // never exposed.
+                        FirebaseEmulatorRedirect.UseAuthEmulator(FirebaseEmulatorEndpoint.Current!);
+#endif
+                        _authStateListener = auth.AddAuthStateListener(
                             _ => UserChanged?.Invoke(this, EventArgs.Empty));
+                        _auth = auth;
                     }
 #pragma warning disable S2221 // Deliberate failure boundary: missing Firebase config leaves the app local-only.
                     catch (Exception ex) //NOSONAR — missing Firebase config leaves the app local-only.
@@ -54,7 +64,17 @@ public sealed class FirebaseUserIdentity : IUserIdentity, IDisposable
     }
 
     private static bool FirebaseUsable =>
-#if DISABLE_ANALYTICS
+#if FIREBASE_EMULATOR
+        // #3185: an emulator build may only ever reach the Firebase Emulator
+        // Suite — the launch channel supplies the endpoint, and without it the
+        // app stays local-only. It never falls through to production, and it
+        // never depends on the DISABLE_ANALYTICS or e2e-marker posture.
+#if IOS
+        MauiProgram.IsFirebaseInitialized && FirebaseEmulatorEndpoint.Current != null;
+#else
+        FirebaseEmulatorEndpoint.Current != null;
+#endif
+#elif DISABLE_ANALYTICS
         // Same build flag as analytics: test builds must not emit user data.
         false;
 #elif IOS

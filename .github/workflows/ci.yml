@@ -168,7 +168,7 @@ env:
   # its .gz exceeds GitHub's 100 MB push limit).
   PERUSHIM_SEARCH_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.hebrew_search.sqlite
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
-  PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim-notes
+  PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim-notes-slim
   PERUSHIM_PIPELINE_DIRECTORY: data/sefaria/pipelines/perushim-view
   SEFARIA_MONGO_IMAGE_ARTIFACT_NAME: sefaria-mongo-image
   SEFARIA_MONGO_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/sefaria-mongo
@@ -1994,24 +1994,26 @@ jobs:
           retention-days: 90
           overwrite: true
 
-      # The published admin report merges both test layers: unit's V8 report
-      # is the canonical universe (every eligible source file enumerated);
-      # the istanbul-instrumented E2E layer only confirms hits on shared
-      # coordinates (--hits-only, #2270) and can never extend or dilute the
-      # denominator. Both inputs are required — a missing layer fails the
+      # The published admin report merges all three test layers. Unit and MySQL
+      # use the same V8 provider and enumerate every eligible source file;
+      # together they establish canonical source coordinates. The separately
+      # instrumented E2E layer only confirms hits on shared coordinates
+      # (--hits-only, #2270) and can never extend or dilute the
+      # denominator. All inputs are required — a missing layer fails the
       # job instead of publishing a partial report as complete (#2707).
-      - name: Merge test coverage (unit + E2E into one admin report)
+      - name: Merge test coverage (unit + MySQL + E2E into one admin report)
         run: bun run coverage:merge
 
       - name: Store Admin Coverage Report (wf)
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
-          # Unit + e2e files too: kept as per-layer diagnostics; the merged
+          # Unit + MySQL + E2E files too: kept as per-layer diagnostics; the merged
           # file is the single report Codecov's `admin` flag and the
           # cross-module merge consume.
           path: |
             ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
+            ${{ env.ADMIN_DIRECTORY }}/.coverage/mysql/lcov.info
             ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
             ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
           retention-days: 90
@@ -2369,6 +2371,7 @@ jobs:
         determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
+        perushim_data,
       ]
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false') }}
     defaults:
@@ -2376,6 +2379,7 @@ jobs:
         working-directory: ${{ env.APP_DIRECTORY }}
     permissions:
       contents: read
+      actions: read
 
     env:
       RUSTC_WRAPPER: sccache
@@ -2385,6 +2389,11 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+
+      - name: Setup Node.js for AAB audit
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -2410,7 +2419,8 @@ jobs:
       - name: Setup Java for Android release validation
         uses: actions/setup-java@v6
         with:
-          distribution: "microsoft"
+          # The pinned Android SDK rejects Microsoft's five-part JDK versions.
+          distribution: "temurin"
           java-version: "17"
           verify-signature: true
 
@@ -2446,23 +2456,49 @@ jobs:
           path: .cache/recitation-assets/*.ogg
           key: ${{ steps.recitation_audio.outputs.cache-primary-key }}
 
+      - name: Download paired Perushim assets
+        if: needs.perushim_data.result != 'skipped'
+        uses: actions/download-artifact@v8
+        with:
+          name: perushim-sqlite-v2-indexed.${{ github.run_id }}
+          path: ${{ runner.temp }}/app-ci-perushim
+
+      - name: Download paired Perushim assets (master baseline)
+        if: needs.perushim_data.result == 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          artifact_id=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=perushim-sqlite-v2-indexed.master" --jq '[.artifacts[] | select(.expired == false)] | first | .id')
+          test -n "$artifact_id" && test "$artifact_id" != "null"
+          mkdir -p "$RUNNER_TEMP/app-ci-perushim"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip" > "$RUNNER_TEMP/app-ci-perushim.zip"
+          unzip -o "$RUNNER_TEMP/app-ci-perushim.zip" -d "$RUNNER_TEMP/app-ci-perushim"
+
+      - name: Prepare matching Perushim catalog, notes and search index
+        run: python3 devops/prepare_perushim_assets.py --source "$RUNNER_TEMP/app-ci-perushim" --app-directory BibleOnSite --platform Android
+
       - name: Verify Android release package
         run: |
           # Workload set 10.0.402.1 pins Android SDK 36.1.118 — the first servicing
           # release honoring AndroidR8ObfuscationMode and emitting r8.json (#2708).
           dotnet workload install maui-android --version 10.0.402.1
           dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
-          # Compile with the checked-in notes fixture; store packages use the paired release artifact.
-          NOTES_GZ="BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
-          if [ -f "$NOTES_GZ" ] && [ ! -f "${NOTES_GZ%.gz}" ]; then
-            gzip -dc "$NOTES_GZ" > "${NOTES_GZ%.gz}"
-          fi
           # Exercise D8 and release linking before merging, without store signing keys.
           dotnet build BibleOnSite/BibleOnSite.csproj --no-restore -c Release -f net10.0-android -r android-arm64 -p:RuntimeIdentifiers=android-arm64 -p:AndroidPackageFormats=aab
           # #2708: the bundle must carry r8.json (enabled stages plus the
           # no*Percentage stats Play scores) and proguard.map; the verifier
           # enforces each Play score ≥25% over the 10 MB DEX threshold.
           python3 devops/verify_android_dex_metadata.py --package "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)"
+
+      - name: Audit real Android bundle sizes and asset-pack layout
+        run: node ../devops/github/ci/audit-android-aab-size.mjs --package "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)" --json-out .artifacts/aab-size-report.json
+
+      - name: Upload Android bundle size report
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-aab-size-report.${{ github.run_id }}
+          path: app/.artifacts/aab-size-report.json
+          if-no-files-found: error
 
       # #2970: the release packaging job is master-only. Exercise the real
       # symbols path here — produce the archive from this build's
@@ -2509,6 +2545,9 @@ jobs:
 
       - name: Test Android DEX metadata verification
         run: python3 -m unittest discover -s devops -p test_verify_android_dex_metadata.py
+
+      - name: Test Android AAB size and layout audit
+        run: node --test ../devops/github/ci/audit-android-aab-size.test.mjs
 
       - name: Setup Python for signing validation tests
         uses: actions/setup-python@v7
@@ -2994,6 +3033,9 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: python devops/deploy/data-deploy/validate_lambda_parser.py --parse-only
 
+      - name: Install commentary import regression dependencies
+        run: python -m pip install --disable-pip-version-check -r sefaria/pipelines/perushim-view/tests/requirements-mysql.txt
+
       - name: Unit Test
         id: unit-test
         env:
@@ -3067,6 +3109,7 @@ jobs:
           MONGO_HOST: localhost
           MONGO_PORT: 27017
           DUMP_NAME: sefaria
+          MYSQL_IMPORT_TEST_DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_perushim_import_test
         run: cargo make coverage-integration
 
       - name: Store Data Integration JUnit Report
@@ -3789,8 +3832,8 @@ jobs:
           gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
           unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.ADMIN_COVERAGE_DIRECTORY }}"
 
-      # The `admin` flag carries one merged report: unit's canonical V8
-      # universe plus the hits the E2E layer confirmed on shared coordinates
+      # The `admin` flag carries one merged report: unit + MySQL canonical V8
+      # coverage plus hits the E2E layer confirmed on shared coordinates
       # (merged in the Admin CI job). Per-layer files stay in the coverage
       # artifact as diagnostics only.
       - name: Publish Admin Coverage To Codecov
@@ -4200,7 +4243,8 @@ jobs:
     # already forces data_ci success whenever data checks were needed.
     # Schema-only changes require a separately approved, selective migration.
     # Skip this entire job: success would supersede older queued data deployments.
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && (needs.data_ci.result == 'success' || needs.data_ci.result == 'skipped') && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_deploy_changed == 'true' || needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true') && needs.determine_changes.outputs.data_schema_only_changed == 'false' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    # Cancellation must also stop the always() job before it can dispatch Data CD.
+    if: ${{ always() && !cancelled() && needs.cross_module_ci.result == 'success' && (needs.data_ci.result == 'success' || needs.data_ci.result == 'skipped') && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_deploy_changed == 'true' || needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true') && needs.determine_changes.outputs.data_schema_only_changed == 'false' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read

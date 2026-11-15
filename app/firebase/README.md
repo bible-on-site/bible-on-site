@@ -93,3 +93,66 @@ provider to resume sync. This rollback does not change the database region.
 
 Debug and e2e builds (`DISABLE_ANALYTICS`, `BIBLE_E2E` marker) never sign in
 or emit to Firebase — same posture as analytics collection.
+
+## Emulator regression path (#3185)
+
+Routine device verification runs entirely against the local Firebase Emulator
+Suite — never production:
+
+- `firebase.json` pins Auth `9099` and Firestore `8080`; `package.json` carries
+  `firebase-tools` and `bun run emulators:start` boots just those two services
+  against project `tanah-al-haperek` (matching `firestore.rules`).
+- `CompileMobileE2E` builds pass `-p:FirebaseEmulator=true` → `FIREBASE_EMULATOR`.
+  That build may only reach the Emulator Suite: it resolves
+  `BIBLE_FIREBASE_EMULATOR` (`host` or `host:authPort:firestorePort`) at launch
+  and stays local-only when it is absent or malformed — it can never fall
+  through to production. Plugin.Firebase has no emulator surface, so
+  `FirebaseEmulatorRedirect` calls the native SDKs' `useEmulator` on the same
+  singletons the plugin wraps.
+- iOS receives the value through the launch environment; Android cannot carry
+  process environment, so the suite sends it as an intent extra and
+  `MainActivity` persists it to `files/firebase-emulator` — the marker file is
+  what later `activateApp` relaunches (which drop extras) resolve.
+- `FirebaseEmulatorSyncTests` (mobile-e2e) opts in only when the run provides
+  `MOBILE_FIREBASE_EMULATOR`. The Android CI leg installs `app/firebase`,
+  starts the suite and exports that variable; other legs leave it unset and
+  the scenarios skip. `FirebaseEmulatorBackend` verifies committed
+  Auth/Firestore state over the emulator's REST surface (the `Bearer owner`
+  admin token is test-only), so the assertions observe the same data the
+  app's native adapters produced.
+- Covered behavior: silent anonymous sign-in with no dialog, `users/{uid}`
+  persistence matching the codec schema, persistence of a pre-existing local
+  preference across the first merge, relaunch keeping the same installation
+  identity, unknown-entry carry-through, per-user rules isolation, offline
+  saves staying local (dead endpoint) and converging after recovery.
+
+### Owner-side iOS smoke (physical device / simulator)
+
+The shared-Appium leg is Android-only for now, so iOS verification is an
+owner-side smoke against the same Emulator Suite:
+
+1. `cd app/firebase && bun install && bun run emulators:start`
+   (physical iPhone: `firebase emulators:start --project tanah-al-haperek
+   --only auth,firestore --host 0.0.0.0` so the device can reach it; keep the
+   emulator and the device on one LAN).
+2. Build the Firebase-emulator Debug app:
+   `dotnet build app/BibleOnSite -f net10.0-ios -c Debug -p:FirebaseEmulator=true`
+   (the e2e CI artifact already carries the flag).
+3. Launch with the endpoint —
+   simulator: `SIMCTL_CHILD_BIBLE_FIREBASE_EMULATOR=127.0.0.1:9099:8080 xcrun simctl launch booted com.tanah.daily929`;
+   device: `xcrun devicectl device process launch --device <udid> --environment-variables '{"BIBLE_FIREBASE_EMULATOR":"<mac-lan-ip>:9099:8080"}' com.tanah.daily929`
+   (or the equivalent Xcode scheme environment variable).
+4. Expected: the reader appears with **no** login sheet, consent screen,
+   account picker, or error dialog. Within ~30s the emulator shows one
+   anonymous account (`/v1/projects/tanah-al-haperek/accounts:batchGet`,
+   `Bearer owner`) and one `users/{uid}` document under Firestore REST.
+5. Toggle a display preference, then force-quit and relaunch with the same
+   env: the same `uid` document gains the new entry — the installation
+   identity and cloud value persist across relaunch.
+6. Offline/recovery: relaunch with a dead port
+   (`<host>:19099:18081`) — preference changes save locally with no dialog;
+   relaunching with the live endpoint converges the same `uid` document.
+7. Isolation: a second emulator sign-in (REST `accounts:signUp`) cannot read
+   `users/{uid}` (`403`), matching `firestore.rules`.
+8. Cleanup: delete the app's `users/{uid}` document and account through the
+   emulator REST surface and sign off in the tracking issue.
