@@ -73,7 +73,7 @@ describe("tanahpedia/preview-format", () => {
 
 		it("keeps at most the requested whole words and marks truncation", () => {
 			const all = words(25);
-			const out = toPlainTextPreview(`<p>${all}</p>`, 20);
+			const out = toPlainTextPreview(["<p>", all, "</p>"].join(""), 20);
 			expect(out).toBe(`${words(20)}…`);
 			// The cut lands on a word boundary — no partial word, no space
 			// before the ellipsis.
@@ -81,13 +81,52 @@ describe("tanahpedia/preview-format", () => {
 		});
 
 		it("returns the body intact when it fits the word cap", () => {
-			expect(toPlainTextPreview(`<p>${words(20)}</p>`, 20)).toBe(words(20));
+			expect(
+				toPlainTextPreview(["<p>", words(20), "</p>"].join(""), 20),
+			).toBe(words(20));
 			expect(toPlainTextPreview("<p>אחת שתיים</p>", 20)).toBe("אחת שתיים");
 		});
 
 		it("honours block boundaries so adjacent words never merge", () => {
 			expect(toPlainTextPreview("<p>אחת</p><p>שתיים</p>", 20)).toBe(
 				"אחת שתיים",
+			);
+			// Boundaries are marked before sanitization, so stripped block
+			// tags can never concatenate sibling items either.
+			expect(
+				toPlainTextPreview("<ol><li>אחת</li><li>שתיים</li></ol>", 20),
+			).toBe("אחת שתיים");
+			expect(
+				toPlainTextPreview(
+					"<table><tr><td>אחת</td><td>שתיים</td></tr></table>" +
+						"<div>שלוש</div><section><ul><li>ארבע</li></ul></section>",
+					20,
+				),
+			).toBe("אחת שתיים שלוש ארבע");
+		});
+
+		it("drops bare-anchor footnote markers instead of merging their letters", () => {
+			// Legacy generation (#2615): the marker is a plain anchor whose
+			// text is the marker letter — unwrapped, it would merge into the
+			// neighbouring word.
+			expect(
+				toPlainTextPreview(
+					'<p>חברו<a href="#note-54" data-link-type="comment">נד</a> בעולם.</p>',
+					20,
+				),
+			).toBe("חברו בעולם.");
+			// A marker whose note body never canonicalizes still drops.
+			expect(
+				toPlainTextPreview('<p>מילה<a href="#note-2">ב</a> נוספת.</p>', 20),
+			).toBe("מילה נוספת.");
+		});
+
+		it("omits canonical footnote refs and keeps note prose readable", () => {
+			const html =
+				'<p>גוף הערך<sup id="fnref:1"><a href="#fn:1" role="doc-noteref">א</a></sup> ממשיך.</p>' +
+				'<ol class="footnotes"><li id="fn:1"><p>טקסט ההערה.</p></li></ol>';
+			expect(toPlainTextPreview(html, 20)).toBe(
+				"גוף הערך ממשיך. טקסט ההערה.",
 			);
 		});
 

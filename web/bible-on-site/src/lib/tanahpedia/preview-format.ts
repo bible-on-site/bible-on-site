@@ -1,5 +1,6 @@
 import DOMPurify from "isomorphic-dompurify";
 import { plainText } from "../seo/jsonld";
+import { normalizeFootnoteHtml } from "./normalize-footnotes";
 
 /**
  * HTML → safe snippet for Tanahpedia hover preview API.
@@ -9,6 +10,17 @@ import { plainText } from "../seo/jsonld";
 const PREVIEW_OUTPUT_TAGS = ["h2", "h3", "h4", "br"];
 /** Structural tags we still need to transform below before the final allowlist. */
 const PREVIEW_INPUT_TAGS = ["p", "sup", "hr", ...PREVIEW_OUTPUT_TAGS];
+
+/**
+ * Block-level containers whose tag boundaries are word breaks. Turned
+ * into spaces BEFORE sanitization so the boundary survives no matter
+ * which tags the sanitizer keeps: a stripped block tag must not merge
+ * two words the reader sees separately (an `</li><li>` boundary), while
+ * a stripped inline tag (`a`, `span`, `b`, `em` …) correctly lets its
+ * text flow into the neighbouring word.
+ */
+const PLAIN_TEXT_BLOCK_BOUNDARY =
+	/<\/?(?:address|article|aside|blockquote|caption|dd|details|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|legend|li|main|nav|ol|p|pre|section|summary|table|tbody|td|tfoot|th|thead|tr|ul|br)\b[^>]*>/gi;
 
 const ELLIPSIS = "…";
 
@@ -49,28 +61,47 @@ export function toPreviewHtml(html: string): string {
 
 /**
  * The first `maxWords` whole words of an entry body's readable plain
- * text — the moed-introduction preview (#3381). Script/style blocks
- * carry no readable words and are dropped up-front (belt to the
- * sanitizer's suspenders); the same vetted sanitize as `toPreviewHtml`
- * then removes every unsafe construct, `<sup>` footnote/UI markers are
- * removed rather than flattening their digits into words, entities are
- * decoded and block tags become word boundaries — `</p><p>` can never
- * merge two words. Whole words only: a truncated excerpt ends exactly
- * at a word boundary with `…`, while a body at or under the limit
- * returns intact with no marker.
+ * text — the moed-introduction preview (#3381). Stored footnote markup
+ * is canonicalized first so legacy bare-anchor markers (which carry
+ * their meaning in attributes sanitization discards) become the
+ * textless `data-marker` form the render path uses; marker anchors
+ * whose note body never canonicalized are stripped whole before their
+ * letter can merge into the neighbouring word. Script/style blocks and
+ * `<sup>` markers carry no readable words and are dropped up-front;
+ * block-level tag boundaries become explicit spaces so no sanitizer
+ * policy can merge distinct words, entities are decoded, and remaining
+ * tags collapse to whitespace. Whole words only: a truncated excerpt
+ * ends exactly at a word boundary with `…`, while a body at or under
+ * the limit returns intact with no marker.
  */
 export function toPlainTextPreview(html: string, maxWords: number): string {
-	const withoutExecutable = html
+	const normalized = normalizeFootnoteHtml(html);
+	const readable = normalized
 		.replace(/<script[\s\S]*?(?:<\/script\s*>|$)/gi, " ")
-		.replace(/<style[\s\S]*?(?:<\/style\s*>|$)/gi, " ");
-	const safe = DOMPurify.sanitize(withoutExecutable, {
-		ALLOWED_TAGS: PREVIEW_INPUT_TAGS,
+		.replace(/<style[\s\S]*?(?:<\/style\s*>|$)/gi, " ")
+		// Footnote-marker anchors whose note body is absent (or that
+		// normalization left untouched) still carry a baked-in marker as
+		// their text — strip the whole element before sanitization unwraps
+		// it and the letter merges into the neighbouring word.
+		.replace(
+			/<a\b[^>]*href="#(?:fn:\d+|fnref:\d+|note-\d+|noteref-\d+)[^"]*"[^>]*>[\s\S]*?<\/a\s*>/gi,
+			"",
+		)
+		.replace(
+			/<a\b[^>]*data-link-type="comment"[^>]*>[\s\S]*?<\/a\s*>/gi,
+			"",
+		)
+		.replace(/<sup[\s\S]*?(?:<\/sup\s*>|$)/gi, " ")
+		.replace(PLAIN_TEXT_BLOCK_BOUNDARY, " ")
+		.replace(/\\n/g, "");
+	// Defense in depth: extraction above is deterministic already, but the
+	// vetted sanitize guarantees nothing unsafe survives if a transform
+	// ever lets markup through — the output is plain text regardless.
+	const safe = DOMPurify.sanitize(readable, {
+		ALLOWED_TAGS: [],
 		ALLOWED_ATTR: [],
 	});
-	const text = plainText(
-		safe.replace(/\\n/g, "").replace(/<sup[\s\S]*?(?:<\/sup\s*>|$)/gi, " "),
-		Number.MAX_SAFE_INTEGER,
-	);
+	const text = plainText(safe, Number.MAX_SAFE_INTEGER);
 	if (!text) return "";
 	const words = text.split(" ");
 	const head = words.slice(0, maxWords).join(" ");

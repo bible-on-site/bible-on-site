@@ -44,7 +44,7 @@ const entry = (content: string | null, uniqueName = "פסח"): EntryRow => ({
 /** Dispatch the entry-body read; synonym resolution is mocked directly. */
 function stubEntries(rowsByName: Record<string, EntryRow[]>) {
 	mockQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
-		if (!/FROM tanahpedia_entry\s+WHERE unique_name/.test(sql))
+		if (!sql.includes("FROM tanahpedia_entry"))
 			throw new Error(`unstubbed SQL: ${sql}`);
 		return rowsByName[String(params?.[0])] ?? [];
 	});
@@ -71,7 +71,9 @@ describe("getMoedEntryPreview", () => {
 
 	it("previews the first 20 words of a directly named entry and links it canonically", async () => {
 		const words = Array.from({ length: 24 }, (_, i) => `מילה${i + 1}`);
-		stubEntries({ פסח: [entry(`<p>${words.join(" ")}</p>`)] });
+		stubEntries({
+			פסח: [entry(["<p>", words.join(" "), "</p>"].join(""))],
+		});
 		const preview = await getMoedEntryPreview("פסח");
 		expect(preview).toEqual({
 			href: `/pedia/${encodeURIComponent("פסח")}`,
