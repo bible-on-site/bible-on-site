@@ -17,6 +17,17 @@ public sealed class PickerScrollColumn(CollectionView list, Label up, Label down
     /// <summary>Last reported visible-item indices (-1 until the first Scrolled event).</summary>
     public int FirstVisibleIndex { get; internal set; } = -1;
     public int LastVisibleIndex { get; internal set; } = -1;
+
+    /// <summary>The platform reported at least one realized range for the current content.</summary>
+    internal bool HasReportedScroll { get; set; }
+
+    /// <summary>
+    /// A selected item whose centering was requested but not yet confirmed by
+    /// a platform Scrolled event — kept so a dropped platform scroll can be
+    /// re-issued once items provably exist, and dropped once a real scroll
+    /// lands elsewhere or the selection moves on.
+    /// </summary>
+    public object? PendingScrollItem { get; internal set; }
 }
 
 /// <summary>
@@ -43,7 +54,30 @@ public sealed class PickerScrollColumns
     {
         _dispatcher = dispatcher;
         _columns = columns;
+        foreach (var column in _columns)
+        {
+            column.List.HandlerChanged += OnColumnHandlerChanged;
+        }
     }
+
+    // Seams so unit tests drive the arranged-viewport and platform-scroll
+    // branches without a native handler — the same pattern as the platform
+    // seams in ReaderScrollTop.
+    internal Func<CollectionView, bool> HasViewport { get; set; } =
+        list => list.Handler is not null && list.Height > 0;
+
+    internal Action<CollectionView, object> CenterOnItem { get; set; } =
+        (list, item) => list.ScrollTo(item, position: ScrollToPosition.Center, animate: false);
+
+    /// <summary>
+    /// How many items the column's viewport holds, from the arranged list and
+    /// item-sizer heights. Without a real arrange (unit tests) a single-item
+    /// estimate keeps the anchor honest instead of inventing a viewport.
+    /// </summary>
+    internal Func<PickerScrollColumn, int> ItemCapacity { get; set; } =
+        column => column.List.Height > 0 && column.Sizer.Height > 0
+            ? Math.Max(1, (int)(column.List.Height / column.Sizer.Height))
+            : 1;
 
     /// <summary>Records a column's reported visible range and refreshes its arrows.</summary>
     public void HandleScrolled(object? sender, int firstVisibleIndex, int lastVisibleIndex)
@@ -54,9 +88,43 @@ public sealed class PickerScrollColumns
             return;
         }
 
+        var firstReport = !column.HasReportedScroll;
+        column.HasReportedScroll = true;
         column.FirstVisibleIndex = firstVisibleIndex;
         column.LastVisibleIndex = lastVisibleIndex;
+        ResolvePendingScroll(column, firstReport, firstVisibleIndex, lastVisibleIndex);
         Refresh(column);
+    }
+
+    /// <summary>
+    /// A platform scroll issued while the list had no realized items can be
+    /// discarded when the adapter commits. The first Scrolled event a list ever
+    /// reports is its initial realization — before that there is nothing for a
+    /// user to scroll — so a report that still misses the pending item means
+    /// the issued scroll was dropped and one re-issue, now against realized
+    /// items, lands it. Any later miss is a user scroll, which wins (#3400).
+    /// </summary>
+    private void ResolvePendingScroll(PickerScrollColumn column, bool firstReport, int first, int last)
+    {
+        var item = column.PendingScrollItem;
+        if (item == null)
+        {
+            return;
+        }
+
+        var index = (column.List.ItemsSource as System.Collections.IList)?.IndexOf(item) ?? -1;
+        if (index >= 0 && index >= first && index <= last)
+        {
+            column.PendingScrollItem = null;
+        }
+        else if (firstReport)
+        {
+            _dispatcher.Dispatch(() => TryPendingScroll(column));
+        }
+        else
+        {
+            column.PendingScrollItem = null;
+        }
     }
 
     /// <summary>Resets a column after its size changed: more items may fit without scrolling.</summary>
@@ -71,7 +139,19 @@ public sealed class PickerScrollColumns
         // Fall back to the size estimate until the next Scrolled event.
         column.FirstVisibleIndex = -1;
         column.LastVisibleIndex = -1;
+        // The size change is also the arrange signal a deferred
+        // scroll-to-selection waits for.
+        TryPendingScroll(column);
         Refresh(column);
+    }
+
+    private void OnColumnHandlerChanged(object? sender, EventArgs e)
+    {
+        var column = ColumnFor(sender);
+        if (column != null)
+        {
+            TryPendingScroll(column);
+        }
     }
 
     /// <summary>Recomputes every column's arrows after the next layout pass.</summary>
@@ -97,7 +177,86 @@ public sealed class PickerScrollColumns
 
         column.FirstVisibleIndex = -1;
         column.LastVisibleIndex = -1;
+        column.HasReportedScroll = false;
         _dispatcher.Dispatch(() => Refresh(column));
+    }
+
+    /// <summary>
+    /// Positions the column at its current <c>SelectedItem</c>.
+    /// A just-shown popup — or a just-replaced item source — has no arranged
+    /// viewport to scroll against yet, so the request is recorded and issued
+    /// once the list owns a real height: from the next size change or from the
+    /// dispatcher pass that follows the pending layout, whichever comes first
+    /// (#3400). Centered in the viewport where the list extent allows it.
+    /// </summary>
+    public void ScrollSelectedIntoView(CollectionView list)
+    {
+        var column = ColumnFor(list);
+        var item = list.SelectedItem;
+        if (column == null || item == null)
+        {
+            return;
+        }
+
+        column.PendingScrollItem = item;
+        _dispatcher.Dispatch(() => TryPendingScroll(column));
+    }
+
+    private void TryPendingScroll(PickerScrollColumn column)
+    {
+        var item = column.PendingScrollItem;
+        if (item == null)
+        {
+            return;
+        }
+
+        if (!HasViewport(column.List))
+        {
+            // Still unarranged — the next size change retries.
+            return;
+        }
+
+        // A later opening records its own target, and a user tap replaces the
+        // selection; scroll only while the recorded item is still the selected
+        // one so stale work never repositions a newer target.
+        if (!Equals(column.List.SelectedItem, item))
+        {
+            column.PendingScrollItem = null;
+            return;
+        }
+
+        CenterOnItem(column.List, item);
+        // The request stays pending until the platform's Scrolled confirms the
+        // item landed inside the realized range — a scroll issued before items
+        // existed can be dropped when the adapter commits (#3400).
+        AnchorPredictedRange(column, item);
+        Refresh(column);
+    }
+
+    /// <summary>
+    /// Points the arrows at the range centering the item should produce — the
+    /// item centered when the list overflows, the whole list when it fits
+    /// (an already-visible target scrolls nowhere, so no Scrolled ever comes),
+    /// clamped at both ends — until the platform's Scrolled replaces it.
+    /// </summary>
+    private void AnchorPredictedRange(PickerScrollColumn column, object item)
+    {
+        if (column.List.ItemsSource is not System.Collections.IList items)
+        {
+            return;
+        }
+
+        var index = items.IndexOf(item);
+        var count = items.Count;
+        if (index < 0 || count == 0)
+        {
+            return;
+        }
+
+        var capacity = ItemCapacity(column);
+        var first = Math.Max(0, Math.Min(index - capacity / 2, count - capacity));
+        column.FirstVisibleIndex = first;
+        column.LastVisibleIndex = Math.Min(count - 1, first + capacity - 1);
     }
 
     private PickerScrollColumn? ColumnFor(object? sender) =>

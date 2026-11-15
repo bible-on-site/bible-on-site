@@ -207,4 +207,281 @@ public class PickerScrollColumnsTests
         SemanticProperties.GetDescription(up).Should().Be(TopBoundary);
         SemanticProperties.GetDescription(down).Should().Be(BottomBoundary);
     }
+
+    // #3400 — the picker opens centered on the current unit, so
+    // ScrollSelectedIntoView records the selection and lands the platform
+    // scroll once the list owns an arranged viewport.
+
+    private static int SelectedItemAt(CollectionView list, int index) =>
+        ((List<int>)list.ItemsSource!)[index];
+
+    [Fact]
+    public void ScrollSelectedIntoView_WithoutSelection_RecordsNothing()
+    {
+        var column = MakeColumn(20, out var list, out _, out _);
+        var dispatcher = InlineDispatcher();
+        var columns = new PickerScrollColumns(dispatcher.Object, column);
+
+        columns.ScrollSelectedIntoView(list);
+
+        column.PendingScrollItem.Should().BeNull();
+        dispatcher.Verify(d => d.Dispatch(It.IsAny<Action>()), Times.Never);
+    }
+
+    [Fact]
+    public void ScrollSelectedIntoView_UnknownList_RecordsNothing()
+    {
+        var column = MakeColumn(20, out _, out _, out _);
+        var dispatcher = InlineDispatcher();
+        var columns = new PickerScrollColumns(dispatcher.Object, column);
+        var foreign = new CollectionView { ItemsSource = new List<int> { 1 }, SelectedItem = 1 };
+
+        columns.ScrollSelectedIntoView(foreign);
+
+        column.PendingScrollItem.Should().BeNull();
+        dispatcher.Verify(d => d.Dispatch(It.IsAny<Action>()), Times.Never);
+    }
+
+    [Fact]
+    public void ScrollSelectedIntoView_WhenArranged_CentersItemAndAnchorsArrows()
+    {
+        var column = MakeColumn(20, out var list, out var up, out var down);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        list.SelectedItem = SelectedItemAt(list, 9);
+        columns.HasViewport = _ => true;
+        var scrolled = new List<object>();
+        columns.CenterOnItem = (_, item) => scrolled.Add(item);
+
+        columns.ScrollSelectedIntoView(list);
+
+        scrolled.Should().Equal(SelectedItemAt(list, 9));
+        // Pending until the platform's Scrolled confirms the landing —
+        // an issued scroll can still be dropped before items realize.
+        column.PendingScrollItem.Should().Be(SelectedItemAt(list, 9));
+        // The anchored index, not the stale top-of-list estimate, drives the
+        // arrows until the platform's own Scrolled event reports the range.
+        column.FirstVisibleIndex.Should().Be(9);
+        column.LastVisibleIndex.Should().Be(9);
+        SemanticProperties.GetDescription(up).Should().Be(MoreAbove);
+        SemanticProperties.GetDescription(down).Should().Be(MoreBelow);
+    }
+
+    [Fact]
+    public void ScrollSelectedIntoView_PredictedRange_AnchorsWholeViewportAroundItem()
+    {
+        var column = MakeColumn(150, out var list, out var up, out var down);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        list.SelectedItem = SelectedItemAt(list, 118);
+        columns.HasViewport = _ => true;
+        columns.CenterOnItem = (_, _) => { };
+        columns.ItemCapacity = _ => 11;
+
+        columns.ScrollSelectedIntoView(list);
+
+        // תהילים קיט: centered in an 11-row viewport — the platform's real
+        // landing replaces the prediction with its own measured range.
+        column.FirstVisibleIndex.Should().Be(113);
+        column.LastVisibleIndex.Should().Be(123);
+        SemanticProperties.GetDescription(up).Should().Be(MoreAbove);
+        SemanticProperties.GetDescription(down).Should().Be(MoreBelow);
+    }
+
+    [Fact]
+    public void ScrollSelectedIntoView_PredictedRange_ClampsAtListEnd()
+    {
+        var column = MakeColumn(150, out var list, out var up, out var down);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        list.SelectedItem = SelectedItemAt(list, 149);
+        columns.HasViewport = _ => true;
+        columns.CenterOnItem = (_, _) => { };
+        columns.ItemCapacity = _ => 11;
+
+        columns.ScrollSelectedIntoView(list);
+
+        // תהילים קנ: centering the last item clamps at the bottom edge.
+        column.FirstVisibleIndex.Should().Be(139);
+        column.LastVisibleIndex.Should().Be(149);
+        SemanticProperties.GetDescription(up).Should().Be(MoreAbove);
+        SemanticProperties.GetDescription(down).Should().Be(BottomBoundary);
+    }
+
+    [Fact]
+    public void ScrollSelectedIntoView_WholeListFits_AnchorsEveryItem()
+    {
+        var column = MakeColumn(5, out var list, out var up, out var down);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        list.SelectedItem = SelectedItemAt(list, 4);
+        columns.HasViewport = _ => true;
+        columns.CenterOnItem = (_, _) => { };
+        columns.ItemCapacity = _ => 11;
+
+        columns.ScrollSelectedIntoView(list);
+
+        // איכה ה: all five items fit, the platform scrolls nowhere and no
+        // Scrolled ever arrives — the predicted whole-list range is final.
+        column.FirstVisibleIndex.Should().Be(0);
+        column.LastVisibleIndex.Should().Be(4);
+        SemanticProperties.GetDescription(up).Should().Be(TopBoundary);
+        SemanticProperties.GetDescription(down).Should().Be(BottomBoundary);
+    }
+
+    [Fact]
+    public void ScrollSelectedIntoView_AtLastItem_AnchorsBottomBoundary()
+    {
+        var column = MakeColumn(20, out var list, out var up, out var down);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        list.SelectedItem = SelectedItemAt(list, 19);
+        columns.HasViewport = _ => true;
+        columns.CenterOnItem = (_, _) => { };
+
+        columns.ScrollSelectedIntoView(list);
+
+        SemanticProperties.GetDescription(up).Should().Be(MoreAbove);
+        SemanticProperties.GetDescription(down).Should().Be(BottomBoundary);
+    }
+
+    [Fact]
+    public void ScrollSelectedIntoView_WhenUnarranged_WaitsForTheSizeChange()
+    {
+        var column = MakeColumn(20, out var list, out _, out _);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        list.SelectedItem = SelectedItemAt(list, 9);
+        var scrolled = new List<object>();
+        columns.HasViewport = _ => false;
+        columns.CenterOnItem = (_, item) => scrolled.Add(item);
+
+        columns.ScrollSelectedIntoView(list);
+
+        // The dispatch fires but no arranged viewport exists yet — the
+        // request stays pending instead of issuing a doomed platform scroll.
+        scrolled.Should().BeEmpty();
+        column.PendingScrollItem.Should().Be(SelectedItemAt(list, 9));
+
+        // The first arrange delivers the viewport: the pending scroll lands.
+        columns.HasViewport = _ => true;
+        columns.HandleSizeChanged(list);
+
+        scrolled.Should().Equal(SelectedItemAt(list, 9));
+        column.PendingScrollItem.Should().Be(SelectedItemAt(list, 9));
+    }
+
+    [Fact]
+    public void PendingScroll_LandsOnceOnceConfirmedAcrossSizeChanges()
+    {
+        var column = MakeColumn(20, out var list, out _, out _);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        list.SelectedItem = SelectedItemAt(list, 9);
+        columns.HasViewport = _ => true;
+        var scrolled = new List<object>();
+        columns.CenterOnItem = (_, item) => scrolled.Add(item);
+
+        columns.ScrollSelectedIntoView(list);   // the dispatch already lands it
+        columns.HandleScrolled(list, firstVisibleIndex: 5, lastVisibleIndex: 13);
+        column.PendingScrollItem.Should().BeNull();
+        columns.HandleSizeChanged(list);        // a later arrange must not repeat it
+
+        scrolled.Should().Equal(SelectedItemAt(list, 9));
+    }
+
+    [Fact]
+    public void PendingScroll_WhileUnconfirmed_ReissuesOnTheNextArrange()
+    {
+        var column = MakeColumn(20, out var list, out _, out _);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        list.SelectedItem = SelectedItemAt(list, 9);
+        columns.HasViewport = _ => true;
+        var scrolled = new List<object>();
+        columns.CenterOnItem = (_, item) => scrolled.Add(item);
+
+        columns.ScrollSelectedIntoView(list);
+        columns.HandleSizeChanged(list);        // no Scrolled yet — retry is safe
+
+        scrolled.Should().Equal(SelectedItemAt(list, 9), SelectedItemAt(list, 9));
+    }
+
+    [Fact]
+    public void PendingScroll_FirstReportMissingItem_ReissuesOnce()
+    {
+        var column = MakeColumn(20, out var list, out _, out _);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        list.SelectedItem = SelectedItemAt(list, 15);
+        columns.HasViewport = _ => true;
+        var scrolled = new List<object>();
+        columns.CenterOnItem = (_, item) => scrolled.Add(item);
+        columns.ScrollSelectedIntoView(list);
+
+        // The list's first-ever report is its initial realization — items now
+        // provably exist yet the target never landed: the issued scroll was
+        // dropped by the adapter commit, so one re-issue goes out.
+        columns.HandleScrolled(list, firstVisibleIndex: 0, lastVisibleIndex: 9);
+
+        scrolled.Should().Equal(SelectedItemAt(list, 15), SelectedItemAt(list, 15));
+        column.PendingScrollItem.Should().Be(SelectedItemAt(list, 15));
+
+        // A later miss is a real scroll elsewhere (the user won) — abandon.
+        columns.HandleScrolled(list, firstVisibleIndex: 0, lastVisibleIndex: 8);
+        column.PendingScrollItem.Should().BeNull();
+        scrolled.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void PendingScroll_ReportContainingItem_Confirms()
+    {
+        var column = MakeColumn(20, out var list, out var up, out var down);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        list.SelectedItem = SelectedItemAt(list, 15);
+        columns.HasViewport = _ => true;
+        columns.CenterOnItem = (_, _) => { };
+        columns.ScrollSelectedIntoView(list);
+
+        columns.HandleScrolled(list, firstVisibleIndex: 11, lastVisibleIndex: 19);
+
+        column.PendingScrollItem.Should().BeNull();
+        column.FirstVisibleIndex.Should().Be(11);
+        column.LastVisibleIndex.Should().Be(19);
+        SemanticProperties.GetDescription(up).Should().Be(MoreAbove);
+        SemanticProperties.GetDescription(down).Should().Be(BottomBoundary);
+    }
+
+    [Fact]
+    public void PendingScroll_WhenSelectionMoved_SkipsTheStaleItem()
+    {
+        var column = MakeColumn(20, out var list, out _, out _);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        var items = (List<int>)list.ItemsSource!;
+        list.SelectedItem = items[9];
+        var scrolled = new List<object>();
+        columns.HasViewport = _ => false;
+        columns.CenterOnItem = (_, item) => scrolled.Add(item);
+        columns.ScrollSelectedIntoView(list);   // recorded, still unarranged
+
+        // A newer opening (or a user tap) replaces the selection before the
+        // arrange lands — the stale request is dropped, never re-scrolling.
+        list.SelectedItem = items[2];
+        columns.HasViewport = _ => true;
+        columns.HandleSizeChanged(list);
+
+        scrolled.Should().BeEmpty();
+        column.PendingScrollItem.Should().BeNull();
+    }
+
+    [Fact]
+    public void PendingScroll_AfterRealizedScroll_ArrowsFollowTheRealRange()
+    {
+        var column = MakeColumn(20, out var list, out var up, out var down);
+        var columns = new PickerScrollColumns(InlineDispatcher().Object, column);
+        list.SelectedItem = SelectedItemAt(list, 19);
+        columns.HasViewport = _ => true;
+        columns.CenterOnItem = (_, _) => { };
+        columns.ScrollSelectedIntoView(list);
+
+        // The platform's own Scrolled event replaces the anchor with the
+        // realized viewport.
+        columns.HandleScrolled(list, firstVisibleIndex: 14, lastVisibleIndex: 19);
+
+        column.FirstVisibleIndex.Should().Be(14);
+        column.LastVisibleIndex.Should().Be(19);
+        SemanticProperties.GetDescription(up).Should().Be(MoreAbove);
+        SemanticProperties.GetDescription(down).Should().Be(BottomBoundary);
+    }
 }

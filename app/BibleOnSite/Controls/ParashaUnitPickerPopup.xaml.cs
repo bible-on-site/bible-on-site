@@ -107,13 +107,10 @@ public partial class ParashaUnitPickerPopup : ContentView //NOSONAR
         if (sefer != null)
         {
             SeferList.SelectedItem = sefer;
-            SeferList.ScrollTo(sefer, position: ScrollToPosition.Center, animate: false);
+            _scrollColumns.ScrollSelectedIntoView(SeferList);
         }
         UnitList.SelectedItem = _unitsInSefer.FirstOrDefault(u => u.UnitId == currentUnitId);
-        if (UnitList.SelectedItem != null)
-        {
-            UnitList.ScrollTo(UnitList.SelectedItem, position: ScrollToPosition.Center, animate: false);
-        }
+        _scrollColumns.ScrollSelectedIntoView(UnitList);
     }
 
     private void OnColumnScrolled(object? sender, ItemsViewScrolledEventArgs e) =>
