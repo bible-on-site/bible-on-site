@@ -457,7 +457,7 @@ public class HtmlViewTests
 
     #region Async ContentLoader Pipeline Tests
 
-    // On the plain net10.0 test host MainThread.BeginInvokeOnMainThread throws
+    // On the plain net11.0 test host MainThread.BeginInvokeOnMainThread throws
     // NotImplementedInReferenceAssemblyException, so the platform publish
     // closures inside LoadCellContentAsync cannot run here — they are covered
     // on device. These tests cover the whole pipeline up to that seam: the
