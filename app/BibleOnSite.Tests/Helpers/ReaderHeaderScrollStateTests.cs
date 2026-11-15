@@ -41,6 +41,18 @@ public class ReaderHeaderScrollStateTests
         Assert.True(state.Update(4));
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void ChapterRecitationAndPlaybackKeepActionsVisibleWithoutSelectedVerses(bool chapterRecitation, bool playing)
+    {
+        var state = new ReaderHeaderScrollState();
+        state.Update(50);
+        var active = ReaderSurfaceState.IsActive(0, chapterRecitation, focusedPasuk: false, playing);
+
+        Assert.True(state.Update(200, keepVisible: active));
+    }
+
     [Fact]
     public void ChapterResetRestoresHeader()
     {
