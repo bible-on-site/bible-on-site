@@ -92,9 +92,8 @@ row-based notes DB, emits v2, and verifies every decoded record against the sour
 `--format sqlite` also emits a ready-to-query FTS5 search index next to the
 notes DB (verses + notes documents, `search_metadata` fingerprints binding it
 to the exact generation it was built from). The app adopts it instead of
-re-importing ~363K notes on-device. Its `.gz` is **not** committed — at ~121 MB
-it exceeds GitHub's push limit — so the index travels via CI artifacts into the
-same PAD/ODR pack.
+re-importing ~372K notes on-device. Its `.gz` is **not** committed. The index
+travels via CI artifacts into the same PAD/ODR pack.
 
 Rebuilding only the index without MongoDB:
 `--format search-index --input <v2 notes.sqlite> --output <index.sqlite>`
