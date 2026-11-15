@@ -20,6 +20,7 @@
 	"tanahpedia_alter_person_source_citation.sql",
 	"tanahpedia_alter_child_birth_order.sql",
 	"tanahpedia_alter_entry_revision_history.sql",
+	"tanahpedia_contribution_upgrade.sql",
 	"tanahpedia_alter_saying_date.sql",
 	"tanahpedia_alter_today_anniversary_month_day.sql",
 	"tanahpedia_alter_mention_decoration.sql",

@@ -43,6 +43,7 @@ import {
 	rejectEntryRevision,
 	restoreEntryRevision,
 	saveEntryRevisioned,
+	saveEntryTitleRevisioned,
 } from "~/server/tanahpedia/revisions";
 import { __resetRevalidateForTests } from "~/server/website-revalidate";
 
@@ -83,6 +84,33 @@ describe("saveEntryRevisioned", () => {
 		transactionMock.mockReset();
 		txExecuteMock.mockReset();
 		txQueryOneMock.mockReset();
+	});
+	it("rejects an empty title in metadata-only revision mode before any write", async () => {
+		await expect(
+			saveEntryRevisioned(
+				fakeConn,
+				{
+					id: "entry-1",
+					title: " ",
+					unique_name: "",
+					content: "",
+					baseRevisionId: null,
+				},
+				{ metadataOnly: true },
+			),
+		).rejects.toThrow("כותרת הערך חייבת להיות מלאה");
+		expect(txExecuteMock).not.toHaveBeenCalled();
+	});
+	it("rejects a title-only change whose entry disappeared", async () => {
+		txQueryOneMock.mockResolvedValueOnce(null);
+		await expect(
+			saveEntryTitleRevisioned(fakeConn, {
+				id: "gone",
+				title: "New title",
+				source: "contribution-pr",
+			}),
+		).rejects.toThrow("Entry not found");
+		expect(txExecuteMock).not.toHaveBeenCalled();
 	});
 
 	it("rejects a missing entry", async () => {
