@@ -184,7 +184,9 @@ jobs:
 
       - name: Select compatible Xcode
         if: inputs.platform == 'iOS'
-        run: sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_27.app/Contents/Developer
+          echo "DEVELOPER_DIR=/Applications/Xcode_27.app/Contents/Developer" >> "$GITHUB_ENV"
 
       # Xcode or the workload invalidates compiled intermediates — stamp every
       # iOS cache key with the toolchain so a mismatched restore can't happen.

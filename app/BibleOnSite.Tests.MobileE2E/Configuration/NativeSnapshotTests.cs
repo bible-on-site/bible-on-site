@@ -164,6 +164,21 @@ public sealed class NativeSnapshotTests
     }
 
     [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void ExpiredStartupBudgetCannotStartAnotherNativeLookup(int milliseconds)
+    {
+        var executor = new SnapshotExecutor([Entry("ready")]);
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var page = new PerekPage(driver, new IosPlatformAdapter());
+
+        Assert.Throws<WebDriverTimeoutException>(() =>
+            page.WaitForStartup(TimeSpan.FromMilliseconds(milliseconds)));
+
+        Assert.Equal(0, executor.Lookups);
+    }
+
+    [Theory]
     [InlineData("visible")]
     [InlineData("hidden")]
     [InlineData("frame")]

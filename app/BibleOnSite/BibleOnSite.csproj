@@ -476,6 +476,7 @@
 	     ============================================================ -->
 	<PropertyGroup>
 		<AltCoverVersion>9.0.145</AltCoverVersion>
+		<DefineConstants Condition="'$(E2ECoverage)' == 'true'">$(DefineConstants);E2E_COVERAGE</DefineConstants>
 		<_E2EAltCoverTool Condition="'$(NuGetPackageRoot)' != ''">$(NuGetPackageRoot)altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>
 		<_E2EAltCoverTool Condition="'$(_E2EAltCoverTool)' == '' AND '$(NUGET_PACKAGES)' != ''">$(NUGET_PACKAGES)\altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>
 		<_E2EAltCoverTool Condition="'$(_E2EAltCoverTool)' == '' AND '$(USERPROFILE)' != ''">$(USERPROFILE)\.nuget\packages\altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>
@@ -494,8 +495,8 @@
 
 	<!-- Weave coverage calls into the compiled assembly. Runs after XamlC so
 	     Debug (Runtime inflator / validate-only) and Release (IL rewrite)
-	     both instrument the final IL. The pristine assembly is preserved for
-	     restore on plain builds. -->
+	     both instrument the final IL. The pre-weave checkpoint still contains
+	     E2E-only compiled code and cannot replace a plain compiler output. -->
 	<Target Name="_E2ECoverageInstrument" AfterTargets="XamlC" Condition="'$(E2ECoverage)' == 'true'"
 			Inputs="$(IntermediateOutputPath)$(TargetFileName);$(IntermediateOutputPath)$(TargetName).pdb"
 			Outputs="$(IntermediateOutputPath)e2e-coverage.stamp">
@@ -517,19 +518,16 @@
 		<Message Importance="high" Text="E2E coverage: instrumented $(TargetFileName); OpenCover template at $(_E2EAltDir)template.opencover.xml" />
 	</Target>
 
-	<!-- Plain builds after an instrumented one restore the untouched assembly
-	     so coverage instrumentation never leaks into non-test builds. -->
-	<Target Name="_E2ECoverageRestore" AfterTargets="XamlC" Condition="'$(E2ECoverage)' != 'true'">
-		<PropertyGroup>
-			<_E2EWasInstrumented Condition="Exists('$(IntermediateOutputPath)e2e-coverage.stamp')">true</_E2EWasInstrumented>
-		</PropertyGroup>
-		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetName).uninstrumented.dll" DestinationFiles="$(IntermediateOutputPath)$(TargetFileName)"
-				Condition="'$(_E2EWasInstrumented)' == 'true' AND Exists('$(IntermediateOutputPath)$(TargetName).uninstrumented.dll')" />
-		<Copy SourceFiles="$(IntermediateOutputPath)$(TargetName).uninstrumented.pdb" DestinationFiles="$(IntermediateOutputPath)$(TargetName).pdb"
-				Condition="'$(_E2EWasInstrumented)' == 'true' AND Exists('$(IntermediateOutputPath)$(TargetName).uninstrumented.pdb')" />
-		<Delete Files="$(TargetDir)$(TargetFileName);$(TargetDir)$(TargetName).pdb;$(TargetDir)AltCover.Recorder.g.dll" Condition="'$(_E2EWasInstrumented)' == 'true'" />
-		<Delete Files="$(IntermediateOutputPath)e2e-coverage.stamp" Condition="'$(_E2EWasInstrumented)' == 'true'" />
-		<Message Importance="high" Text="E2E coverage: restored uninstrumented $(TargetFileName)" Condition="'$(_E2EWasInstrumented)' == 'true'" />
+	<!-- Invalidate coverage outputs before the ordinary compiler checks its
+	     incremental inputs. A pre-weave backup was compiled with E2E_COVERAGE;
+	     copying it after XamlC would overwrite fresh plain code and retain its
+	     recorder reference after the recorder DLL was removed. -->
+	<Target Name="_E2ECoverageRestore" BeforeTargets="CoreCompile"
+			Condition="'$(E2ECoverage)' != 'true' AND '$(DesignTimeBuild)' != 'true' AND '$(SkipCompilerExecution)' != 'true' AND Exists('$(IntermediateOutputPath)e2e-coverage.stamp')">
+		<Delete Files="$(IntermediateOutputPath)$(TargetFileName);$(IntermediateOutputPath)$(TargetName).pdb;$(IntermediateOutputPath)$(TargetName).uninstrumented.dll;$(IntermediateOutputPath)$(TargetName).uninstrumented.pdb" />
+		<Delete Files="$(TargetDir)$(TargetFileName);$(TargetDir)$(TargetName).pdb;$(TargetDir)AltCover.Recorder.g.dll;$(TargetDir)AltCover.Recorder.g.pdb" />
+		<Delete Files="$(IntermediateOutputPath)e2e-coverage.stamp" />
+		<Message Importance="high" Text="E2E coverage: invalidated test outputs before compiling plain $(TargetFileName)" />
 	</Target>
 
 </Project>
