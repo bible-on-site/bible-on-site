@@ -6,7 +6,7 @@ using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using BibleOnSite.Controls;
 using BibleOnSite.Handlers;
-#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH)
+#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH || FIREBASE_EMULATOR)
 using Plugin.Firebase.Core.Platforms.iOS;
 #endif
 #if IOS && !DISABLE_ANALYTICS
@@ -167,7 +167,11 @@ public static class MauiProgram
                 return true;
             }));
 #endif
-#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH)
+#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH || FIREBASE_EMULATOR)
+			// FIREBASE_EMULATOR (#3185): the Auth/Firestore SDKs need the same
+			// CrossFirebase.Initialize before UseEmulator can redirect them to
+			// the local suite. Analytics collection stays off — neither the
+			// manifest flag nor this block's analytics path is enabled.
 			events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
 			{
 				try
