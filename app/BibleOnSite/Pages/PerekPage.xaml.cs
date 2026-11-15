@@ -408,6 +408,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         // Cold-start main-thread work is done — release the deferred e2e
         // search-index warmup so it cannot starve the accessibility snapshot.
         Services.SearchIndexService.NotifyStartupSettled();
+#if E2E_COVERAGE
+        AltCover.Recorder.Instance.MarkStartupReady();
+#endif
         _platformChrome.ScheduleHistoryRefresh();
     }
 
@@ -445,10 +448,14 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             // CarouselView resets Position to 0 when ItemsSource changes.
             // Force it to the correct position without animation.
             var targetPos = _viewModel.PerekId - 1;
+            DebugLog.Write("[PerekLoad] stage=initial-scroll-start");
             PerekCarousel.ScrollTo(targetPos, animate: false);
+            DebugLog.Write("[PerekLoad] stage=initial-scroll-complete");
 
             // Yield so the CarouselView processes the scroll + layout pass.
+            DebugLog.Write("[PerekLoad] stage=initial-layout-yield");
             await Task.Delay(50);
+            DebugLog.Write("[PerekLoad] stage=initial-layout-resumed");
 
             // A navigation during layout owns the reader now. Check before
             // writing the carousel position as well as the search landing.
@@ -458,7 +465,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             }
 
             // Sync the ViewModel position (two-way binding may lag)
+            DebugLog.Write("[PerekLoad] stage=initial-position-start");
             _viewModel.CarouselPosition = targetPos;
+            DebugLog.Write("[PerekLoad] stage=initial-position-complete");
         }
         finally
         {
@@ -466,12 +475,18 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
 
         // Hide loading overlay — carousel is ready
+        DebugLog.Write("[PerekLoad] stage=initial-overlay-hide-start");
         CarouselLoadingOverlay.Hide();
+        DebugLog.Write("[PerekLoad] stage=initial-overlay-hide-complete");
         // Windows: a carousel realized mid Shell push can keep its items panel
         // anchored at a stale offset — re-anchor natively once settled.
+        DebugLog.Write("[PerekLoad] stage=initial-resnap-start");
         _carousel.ResnapAfterLoad();
+        DebugLog.Write("[PerekLoad] stage=initial-resnap-complete");
 
+        DebugLog.Write("[PerekLoad] stage=initial-search-landing-start");
         await ApplySearchReaderLocationAsync();
+        DebugLog.Write("[PerekLoad] stage=initial-search-landing-complete");
         _ = _viewModel.PreloadAdjacentPasukimAsync(_viewModel.PerekId);
         StartSearchIntroduction();
 

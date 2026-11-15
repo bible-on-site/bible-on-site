@@ -21,16 +21,17 @@ function errorDetails(error) {
     signal: error.signal, stdout: error.stdout, stderr: error.stderr };
 }
 
-// Kernel thread rows are the only native critical-path evidence guaranteed to
-// land while the runner is saturated: proc_pidinfo thread flavors copy
-// proc-table state inside one syscall each — no task_for_pid, no suspension,
-// no debugger handshake, no CoreSimulator RPC. During the original stall the
-// 5s simctl frame, a 10s lldb attach and (in a later run) a 1s `sample` all
+// Kernel thread rows preserve an instantaneous host-kernel view:
+// proc_pidinfo thread flavors copy proc-table state inside one syscall each —
+// no task_for_pid, suspension, debugger handshake or CoreSimulator RPC.
+// During the original stall a 5s simctl frame, a 10s lldb attach and (in a later
+// run) a 1s `sample` all
 // died inside their existing caps with zero output, while this inspector's
 // kernel listing finished. The read does not touch the target, so it is also
 // safe next to a potentially healthy app at the pending-request threshold.
-// One instantaneous enumeration per event — state letter, name, cpu and sleep
-// counters answer "runnable progress vs kernel-blocked" without sampling.
+// Each event records waiting/runnable state and thread names. CPU and sleep
+// values may be zero or unavailable; these rows alone do not establish CPU
+// occupancy, garbage collection or the call a waiting thread is blocked in.
 async function capturePinnedThreads({ inspectorPath, pid, destination, errorPath, execute, options }) {
   let details;
   if (typeof inspectorPath !== 'string' || !posix.isAbsolute(inspectorPath)) {
@@ -166,7 +167,10 @@ export function iosInteractionDiagnostics({ artifacts, udid, nativeLog, execute,
         identityError = errorDetails(error);
         console.error("Could not read the pending interaction's passive app identity:", error.message);
       }
-      const record = { request, pid, observedAt: new Date(now()).toISOString(),
+      const capturedRequest = Object.freeze({ sessionId: request.sessionId,
+        startedAt: request.startedAt, capturedAt: request.capturedAt,
+        pending: (request.capturedWhilePending ?? request.pending) === true });
+      const record = { request, capturedRequest, pid, observedAt: new Date(now()).toISOString(),
         source: 'existing UDID-scoped native log', ...(identityError ? { identityError } : {}), prefix };
       records.push(record);
       writeFileSync(`${prefix}.json`, JSON.stringify(record, null, 2));
@@ -193,12 +197,27 @@ export function iosInteractionDiagnostics({ artifacts, udid, nativeLog, execute,
       return record;
     },
     async failure(request, { signal } = {}) {
-      // Successful earlier requests (for example the calendar) cannot provide
-      // a later test's identity. A failed native command may already be gone.
       const failedAt = Date.parse(request.failedAtUtc);
-      const record = records.findLast(entry => entry.request.sessionId === request.sessionId
-        && Date.parse(entry.request.capturedAt) <= failedAt
-        && (entry.request.pending || entry.request.status >= 400));
+      const hasScenarioBoundary = request.scenarioStartedAtUtc != null;
+      const scenarioStartedAt = typeof request.scenarioStartedAtUtc === 'string'
+        ? Date.parse(request.scenarioStartedAtUtc) : NaN;
+      const record = records.findLast(entry => {
+        const captured = entry.capturedRequest;
+        const capturedAt = Date.parse(captured.capturedAt);
+        if (captured.sessionId !== request.sessionId || !Number.isFinite(failedAt)
+          || !Number.isFinite(capturedAt) || capturedAt > failedAt) return false;
+        if (!hasScenarioBoundary) {
+          // Older callers cannot prove that a completed successful request
+          // belongs to this scenario, so retain their conservative selection.
+          return entry.request.pending || entry.request.status >= 400;
+        }
+        const startedAt = Date.parse(captured.startedAt);
+        // A slow lookup can complete with HTTP 200 and an empty result before
+        // its page poll fails. Keep its original pin only within this scenario.
+        return captured.pending && Number.isFinite(scenarioStartedAt) && scenarioStartedAt <= failedAt
+          && Number.isFinite(startedAt) && startedAt >= scenarioStartedAt
+          && startedAt <= capturedAt && capturedAt >= scenarioStartedAt;
+      });
       const prefix = resolve(artifacts, `native-failure-${request.id}`);
       const result = record
         ? await samplePinnedIosApp({ udid, pid: record.pid, prefix,

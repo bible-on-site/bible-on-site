@@ -472,6 +472,7 @@
 	     ============================================================ -->
 	<PropertyGroup>
 		<AltCoverVersion>9.0.145</AltCoverVersion>
+		<DefineConstants Condition="'$(E2ECoverage)' == 'true'">$(DefineConstants);E2E_COVERAGE</DefineConstants>
 		<_E2EAltCoverTool Condition="'$(NuGetPackageRoot)' != ''">$(NuGetPackageRoot)altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>
 		<_E2EAltCoverTool Condition="'$(_E2EAltCoverTool)' == '' AND '$(NUGET_PACKAGES)' != ''">$(NUGET_PACKAGES)\altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>
 		<_E2EAltCoverTool Condition="'$(_E2EAltCoverTool)' == '' AND '$(USERPROFILE)' != ''">$(USERPROFILE)\.nuget\packages\altcover\$(AltCoverVersion)\tools\net8.0\AltCover.dll</_E2EAltCoverTool>

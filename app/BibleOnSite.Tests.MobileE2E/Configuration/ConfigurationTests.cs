@@ -90,4 +90,18 @@ public sealed class ConfigurationTests
         Assert.Equal(false, options["appium:fullReset"]);
         Assert.Equal(true, options["appium:forceAppLaunch"]);
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void IosCoverageSessionsDisableBackgroundAlertMonitoringBeforeTheFirstLaunch(bool coverageEnabled)
+    {
+        var configuration = new MobileTestConfiguration(MobilePlatform.IOS, "/test/app", "sim-device",
+            "/test/artifacts", new("http://localhost:4723"))
+        {
+            PrebuiltWdaPath = "/test/WebDriverAgentRunner-Runner.app"
+        };
+        var options = new IosPlatformAdapter().CreateOptions(configuration, coverageEnabled).ToDictionary();
+        Assert.Equal(!coverageEnabled, options["appium:autoAcceptAlerts"]);
+    }
 }

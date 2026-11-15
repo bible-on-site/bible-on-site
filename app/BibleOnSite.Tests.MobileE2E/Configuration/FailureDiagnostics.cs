@@ -18,8 +18,13 @@ internal static class FailureDiagnostics
         WaitForCapture(Environment.GetEnvironmentVariable(DirectoryVariable), test, sessionId, log, CaptureBudget,
             notificationPort: Environment.GetEnvironmentVariable(PortVariable));
 
+    internal static void BeforeFailure(string test, string? sessionId, Action<string> log, DateTimeOffset scenarioStartedAtUtc) =>
+        WaitForCapture(Environment.GetEnvironmentVariable(DirectoryVariable), test, sessionId, log, CaptureBudget,
+            notificationPort: Environment.GetEnvironmentVariable(PortVariable), scenarioStartedAtUtc: scenarioStartedAtUtc);
+
     internal static void WaitForCapture(string? directory, string test, string? sessionId,
-        Action<string> log, TimeSpan budget, Action<string>? published = null, string? notificationPort = null)
+        Action<string> log, TimeSpan budget, Action<string>? published = null, string? notificationPort = null,
+        DateTimeOffset? scenarioStartedAtUtc = null)
     {
         if (string.IsNullOrEmpty(directory))
         {
@@ -48,6 +53,7 @@ internal static class FailureDiagnostics
                 id,
                 test,
                 sessionId,
+                scenarioStartedAtUtc,
                 failedAtUtc,
                 deadlineUtc = failedAtUtc + budget,
             }));

@@ -206,7 +206,10 @@ public abstract class MobilePlatformAdapter
         }
     }
 
-    public AppiumOptions CreateOptions(MobileTestConfiguration configuration)
+    public AppiumOptions CreateOptions(MobileTestConfiguration configuration) =>
+        CreateOptions(configuration, AppCoverage.Enabled);
+
+    internal AppiumOptions CreateOptions(MobileTestConfiguration configuration, bool coverageEnabled)
     {
         var android = configuration.Platform == MobilePlatform.Android;
         var options = new AppiumOptions
@@ -258,7 +261,11 @@ public abstract class MobilePlatformAdapter
         else
         {
             options.AddAdditionalAppiumOption("bundleId", "com.tanah.daily929");
-            options.AddAdditionalAppiumOption("autoAcceptAlerts", true);
+            // WDA's automatic alert monitor snapshots every active app. Keep
+            // it off while the coverage startup endpoint owns synchronization.
+            // Coverage scenarios handle any alerts explicitly for the whole
+            // session: re-enabling requires a selector that changes acceptance.
+            options.AddAdditionalAppiumOption("autoAcceptAlerts", !coverageEnabled);
             options.AddAdditionalAppiumOption("enforceAppInstall", true);
             options.AddAdditionalAppiumOption("isHeadless", true);
             // run.mjs exports device/lifecycle/crash logs independently. Appium's
@@ -501,9 +508,20 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     public override string AppId => "com.tanah.daily929";
 
     public override void RestartApp(AppiumDriver driver,
-        IReadOnlyDictionary<string, string>? environment)
+        IReadOnlyDictionary<string, string>? environment) =>
+        RestartApp(driver, environment, AppCoverage.Enabled);
+
+    internal void RestartApp(AppiumDriver driver,
+        IReadOnlyDictionary<string, string>? environment, bool coverageEnabled)
     {
+        if (coverageEnabled)
+        {
+            SuppressStartupAlertMonitoring(driver);
+        }
         driver.TerminateApp(AppId);
+        // Correct the device while the AUT is stopped. An orientation read
+        // after launch can otherwise request an early accessibility snapshot.
+        EnsurePortrait(driver);
         // Activation brings a running app forward. After termination, XCTest's
         // activate path can block without launching a new process. Always use
         // the explicit launch path and replace its complete environment, so
@@ -521,8 +539,12 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
             ["bundleId"] = AppId,
             ["environment"] = env
         });
-        EnsurePortrait(driver);
     }
+
+    internal static void SuppressStartupAlertMonitoring(AppiumDriver driver) =>
+        // Pinned WDA 16.17.7 disables FBAlertsMonitor for an empty selector.
+        // Updating defaultAlertAction alone leaves its background scans active.
+        ((IOSDriver)driver).SetSetting("autoClickAlertSelector", "");
 
     // XCTDaemon budgets each launch (~30s observed); on a loaded simulator
     // SpringBoard can still be releasing the terminated instance when the

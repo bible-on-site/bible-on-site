@@ -240,6 +240,19 @@ public sealed class DeviceSessionRecoveryTests
         Assert.Equal("1", session.LastEnvironment?["BIBLE_E2E_PERUSHIM"]);
     }
 
+    [Fact]
+    public void StartupIdentityReachesTheRestartAlongsideScenarioEnvironment()
+    {
+        var session = new FakeSession(_artifacts);
+        var test = new EnvironmentDeviceTest(new ListOutput(_log), session);
+        var launchId = Guid.NewGuid().ToString("D");
+
+        test.Reacquire(launchId);
+
+        Assert.Equal("1", session.LastEnvironment?["BIBLE_E2E_PERUSHIM"]);
+        Assert.Equal(launchId, session.LastEnvironment?[ReaderStartupReadiness.LaunchIdEnvironmentVariable]);
+    }
+
     private sealed class ListOutput(List<string> lines) : ITestOutputHelper
     {
         public string Output => string.Join("\n", lines);
@@ -285,5 +298,6 @@ public sealed class DeviceSessionRecoveryTests
         protected override IReadOnlyDictionary<string, string> LaunchEnvironment =>
             new Dictionary<string, string> { ["BIBLE_E2E_PERUSHIM"] = "1" };
         public void Reacquire() => AcquireSession();
+        public void Reacquire(string launchId) => AcquireSession(launchId);
     }
 }

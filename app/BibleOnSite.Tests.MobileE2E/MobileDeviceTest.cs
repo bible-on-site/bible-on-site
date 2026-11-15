@@ -137,6 +137,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     private void Run(Action body, string name)
     {
+        var scenarioStartedAtUtc = DateTimeOffset.UtcNow;
         // The caller-member name is the [Fact]/[Theory] method; combining it
         // with the declaring type reproduces the xUnit FullyQualifiedName the
         // coverage tree uses as test identity (#2085). That identity also names
@@ -157,7 +158,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         }
         catch
         {
-            FailureDiagnostics.BeforeFailure(test, Driver?.SessionId?.ToString(), Output.WriteLine);
+            FailureDiagnostics.BeforeFailure(test, Driver?.SessionId?.ToString(), Output.WriteLine, scenarioStartedAtUtc);
             FailureDiagnostics.PreserveFailure(WriteDriverTelemetry, Output.WriteLine);
             FailureDiagnostics.PreserveFailure(() =>
             {
@@ -205,9 +206,20 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         // Attribute session creation, app restart, startup wait and coverage
         // collection to the scenario that follows them.
         DriverTelemetry.Reset();
-        AcquireSession();
+        var launchId = Configuration.Platform == MobilePlatform.IOS && AppCoverage.Enabled
+            ? ReaderStartupReadiness.CreateLaunchId()
+            : null;
+        AcquireSession(launchId);
         Page = new(Driver!, Platform);
-        Page.WaitForStartup();
+        if (launchId == null)
+        {
+            Page.WaitForStartup();
+        }
+        else
+        {
+            var remaining = ReaderStartupReadiness.WaitForReady(launchId, TimeSpan.FromSeconds(45));
+            Page.WaitForStartup(remaining);
+        }
         // Launch code (App.xaml.cs, MauiProgram, startup navigation) only ever
         // runs before the first reset; attribute it to a startup dump so the
         // merged report still counts it (#1232). Later connects overwrite it —
@@ -218,7 +230,21 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     // Unit coverage substitutes IMobileDeviceSession to observe this path
     // without a device.
-    protected void AcquireSession() => _session.Acquire(LaunchEnvironment);
+    protected void AcquireSession() => AcquireSession(null);
+
+    protected void AcquireSession(string? launchId)
+    {
+        if (launchId == null)
+        {
+            _session.Acquire(LaunchEnvironment);
+            return;
+        }
+        var environment = LaunchEnvironment is { } supplied
+            ? new Dictionary<string, string>(supplied)
+            : new Dictionary<string, string>();
+        environment[ReaderStartupReadiness.LaunchIdEnvironmentVariable] = launchId;
+        _session.Acquire(environment);
+    }
 
     protected void SaveDiagnostics(string name, string outcome) =>
         SaveDiagnostics(name, outcome, null);

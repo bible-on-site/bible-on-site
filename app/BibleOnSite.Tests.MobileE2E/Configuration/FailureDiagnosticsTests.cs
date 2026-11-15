@@ -65,6 +65,7 @@ public sealed class FailureDiagnosticsTests : IDisposable
                 Assert.Equal($"{id}.request.json", Path.GetFileName(request));
                 Assert.Equal("test identity", root.GetProperty("test").GetString());
                 Assert.Equal("session identity", root.GetProperty("sessionId").GetString());
+                Assert.Equal(JsonValueKind.Null, root.GetProperty("scenarioStartedAtUtc").ValueKind);
                 Assert.Equal(TimeSpan.FromSeconds(1),
                     root.GetProperty("deadlineUtc").GetDateTimeOffset() - root.GetProperty("failedAtUtc").GetDateTimeOffset());
                 Assert.False(File.Exists(request + ".tmp"));
@@ -153,8 +154,23 @@ public sealed class FailureDiagnosticsTests : IDisposable
         Environment.SetEnvironmentVariable(FailureDiagnostics.PortVariable, supervisor.Port);
         var failure = new InvalidOperationException("original scenario failure");
         var scenario = new FakeDeviceTest(new ListOutput(_log), new FakeSession(artifacts));
-        var continuation = StartClient(() => Assert.Throws<InvalidOperationException>(() => scenario.Execute(() => throw failure)));
-        await observed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var beforeScenario = DateTimeOffset.UtcNow;
+        DateTimeOffset bodyStartedAt = default;
+        var continuation = StartClient(() => Assert.Throws<InvalidOperationException>(() => scenario.Execute(() =>
+        {
+            bodyStartedAt = DateTimeOffset.UtcNow;
+            throw failure;
+        })));
+        var observedRequest = await observed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        using (var json = JsonDocument.Parse(File.ReadAllText(observedRequest)))
+        {
+            var root = json.RootElement;
+            var scenarioStart = root.GetProperty("scenarioStartedAtUtc").GetDateTimeOffset();
+            Assert.InRange(scenarioStart, beforeScenario, bodyStartedAt);
+            Assert.True(scenarioStart <= root.GetProperty("failedAtUtc").GetDateTimeOffset());
+            Assert.Equal(TimeSpan.FromSeconds(15),
+                root.GetProperty("deadlineUtc").GetDateTimeOffset() - root.GetProperty("failedAtUtc").GetDateTimeOffset());
+        }
         Assert.False(continuation.IsCompleted);
         Assert.False(Directory.Exists(artifacts));
         release.SetResult();

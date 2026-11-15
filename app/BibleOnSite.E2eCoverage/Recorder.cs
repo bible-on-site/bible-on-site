@@ -51,6 +51,9 @@ namespace AltCover.Recorder
 		public static long Timer => DateTime.UtcNow.Ticks - StartedTicks;
 		public static string Token => string.Empty;
 
+		/// <summary>Publishes reader readiness without asking the UI accessibility tree.</summary>
+		public static void MarkStartupReady() => CoverageEndpoint.MarkStartupReady();
+
 		/// <summary>Records one sequence/branch point visit in <paramref name="moduleId"/>.</summary>
 		public static void Visit(string moduleId, int pointId)
 		{

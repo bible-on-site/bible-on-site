@@ -17,6 +17,7 @@ namespace AltCover.Recorder
 	///
 	/// Routes:
 	///   GET  /coverage/health — liveness probe for harness readiness checks
+	///   GET  /coverage/startup — reader readiness and this process's launch ID
 	///   GET  /coverage        — current hit snapshot (altcover-visits/1 JSON)
 	///   POST /coverage/reset  — clear hits so per-test dumps stay attributed
 	///
@@ -36,7 +37,10 @@ namespace AltCover.Recorder
 		private const string TokenHeader = "x-bible-coverage-token";
 		private const string TokenFileName = "e2e-coverage-token";
 		private static readonly byte[] HealthBody = Encoding.UTF8.GetBytes("{\"ok\":true}");
+		private static readonly StartupState Startup = new();
 		private static int _started;
+
+		internal static void MarkStartupReady() => Startup.MarkReady();
 
 		internal static int Port
 		{
@@ -89,7 +93,7 @@ namespace AltCover.Recorder
 			}
 		}
 
-		internal static void ServeConnections(TcpListener listener)
+		internal static void ServeConnections(TcpListener listener, StartupState? startup = null)
 		{
 			while (true)
 			{
@@ -105,11 +109,11 @@ namespace AltCover.Recorder
 				}
 				// The listener already owns a dedicated background thread. Sending
 				// requests back to the app pool can starve coverage during startup.
-				Serve(client);
+				Serve(client, startup ?? Startup);
 			}
 		}
 
-		private static void Serve(TcpClient client)
+		private static void Serve(TcpClient client, StartupState startup)
 		{
 			using (client)
 			{
@@ -137,6 +141,10 @@ namespace AltCover.Recorder
 					{
 						case ("GET", "/coverage/health"):
 							WriteResponse(stream, 200, "application/json", HealthBody);
+							break;
+						case ("GET", "/coverage/startup"):
+							WriteResponse(stream, 200, "application/json",
+								Encoding.UTF8.GetBytes(startup.SnapshotJson()));
 							break;
 						case ("GET", "/coverage"):
 							WriteResponse(stream, 200, "application/json",
@@ -337,5 +345,28 @@ namespace AltCover.Recorder
 			stream.Write(head, 0, head.Length);
 			stream.Write(body, 0, body.Length);
 		}
+	}
+
+	/// <summary>A process-local signal, independent of coverage resets and UI queries.</summary>
+	internal sealed class StartupState
+	{
+		private readonly string? _launchId;
+		private int _ready;
+
+		internal StartupState() : this(Environment.GetEnvironmentVariable("BIBLE_E2E_LAUNCH_ID")) { }
+
+		internal StartupState(string? launchId)
+		{
+			// Only a canonical GUID shape may reach the hand-built JSON. Capture
+			// it once so an environment change cannot impersonate another launch.
+			_launchId = launchId?.Length == 36 && Guid.TryParseExact(launchId, "D", out var parsed)
+				? parsed.ToString("D") : null;
+		}
+
+		internal void MarkReady() => Volatile.Write(ref _ready, 1);
+
+		internal string SnapshotJson() => "{\"ok\":true,\"ready\":"
+			+ (Volatile.Read(ref _ready) == 1 ? "true" : "false")
+			+ ",\"launchId\":" + (_launchId == null ? "null" : "\"" + _launchId + "\"") + "}";
 	}
 }

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { iosInteractionDiagnostics as makeDiagnostics, readLoggedIosAppPid, sampleIosFallback, samplePinnedIosApp as samplePinned } from "./ios-interaction-diagnostics.mjs";
 import { iosAppLogPids, iosAppPids } from "./ios-processes.mjs";
+import { monitorNativeInteractions } from "./native-hang-monitor.mjs";
 
 
 const udid = "CD85F334-D4C3-44B6-A7B8-EAABB9C6C1B4";
@@ -84,7 +85,7 @@ function failureSignal(extra = {}) {
 
 function pendingRequest(sequence, request = "SettingsDisplayRow") {
   return { sequence, command: "POST /session/session-1/elements", request,
-    sessionId: "session-1", capturedAt: "2026-10-28T16:32:45Z", pending: true };
+    sessionId: "session-1", startedAt: "2026-10-28T16:32:20Z", capturedAt: "2026-10-28T16:32:45Z", pending: true };
 }
 
 test("passive identity reads a bounded existing log tail without process probes", (t) => {
@@ -163,6 +164,75 @@ test("successful earlier captures and a different session cannot identify the fa
   f.calls.length = 0;
   assert.equal((await diagnostics.failure(failureSignal())).status, "unknown");
   assert.equal((await diagnostics.failure(failureSignal({ sessionId: "other-session" }))).status, "unknown");
+  assert.deepEqual(f.calls, []);
+});
+
+test("a completed HTTP 200 lookup retains its pending capture identity within the failed scenario", async t => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f });
+  let capture;
+  let threshold;
+  const timestamps = ["2026-10-28T16:32:20Z", "2026-10-28T16:32:45Z", "2026-10-28T16:32:58Z"];
+  const monitor = monitorNativeInteractions(async (command, request) => {
+    capture = await diagnostics.capture(command, request);
+  }, { schedule: callback => { threshold = callback; }, cancel: () => undefined, now: () => timestamps.shift() });
+  monitor.write('[HTTP] --> POST /session/session-1/elements {"value":"CircularMenuButton"}\n');
+  threshold();
+  // The response arrives before the queued capture has begun reading the request.
+  monitor.write('[HTTP] <-- POST /session/session-1/elements 200 122700 ms\n');
+  await monitor.stop();
+  assert.ok(Object.isFrozen(capture.capturedRequest));
+  assert.equal(capture.request.pending, false);
+  assert.equal(capture.request.status, 200);
+  assert.equal(capture.request.capturedWhilePending, true);
+  assert.throws(() => { capture.request.capturedWhilePending = false; }, TypeError);
+  assert.equal(capture.capturedRequest.pending, true);
+  assert.ok(f.calls.every(call => call.command !== "/usr/bin/sample" && call.command !== "sudo"));
+  f.calls.length = 0;
+
+  const failure = failureSignal({ scenarioStartedAtUtc: "2026-10-28T16:32:10Z" });
+  assert.deepEqual(await diagnostics.failure(failure), { status: "captured", pid: 8421 });
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failure.id}.json`), "utf8"));
+  assert.equal(evidence.observation.request.status, 200);
+  assert.equal(evidence.observation.request.pending, false);
+  assert.equal(evidence.observation.capturedRequest.pending, true);
+  assert.equal(evidence.request.scenarioStartedAtUtc, failure.scenarioStartedAtUtc);
+  assert.ok(f.calls.some(call => call.command === "sudo"));
+});
+
+for (const [label, observation, failure] of [
+  ["earlier passing calendar", {}, { scenarioStartedAtUtc: "2026-10-28T16:32:50Z" }],
+  ["request crossing the scenario boundary", { capturedAt: "2026-10-28T16:32:55Z" }, { scenarioStartedAtUtc: "2026-10-28T16:32:50Z" }],
+  ["different session", {}, { scenarioStartedAtUtc: "2026-10-28T16:32:10Z", sessionId: "other-session" }],
+  ["capture after failure", { capturedAt: "2026-10-28T16:33:01Z" }, { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["invalid capture time", { capturedAt: "not-a-date" }, { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["missing request start", { startedAt: undefined }, { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["invalid boundary", {}, { scenarioStartedAtUtc: "not-a-date" }],
+  ["boundary after failure", {}, { scenarioStartedAtUtc: "2026-10-28T16:33:01Z" }],
+  ["capture preceding request", { startedAt: "2026-10-28T16:32:50Z" }, { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["request already complete at capture", { pending: false }, { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+  ["explicitly nonpending capture", { capturedWhilePending: false }, { scenarioStartedAtUtc: "2026-10-28T16:32:10Z" }],
+]) test(`scenario boundary rejects ${label} without sampling`, async t => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f });
+  const request = { ...pendingRequest(1), ...observation };
+  await diagnostics.capture(request.command, request);
+  request.pending = false;
+  request.status = 200;
+  f.calls.length = 0;
+
+  assert.equal((await diagnostics.failure(failureSignal(failure))).status, "unknown");
+  assert.deepEqual(f.calls, []);
+});
+
+test("an invalid failure time cannot select a legacy pending capture", async t => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f });
+  const request = pendingRequest(1);
+  await diagnostics.capture(request.command, request);
+  f.calls.length = 0;
+
+  assert.equal((await diagnostics.failure(failureSignal({ failedAtUtc: "not-a-date" }))).status, "unknown");
   assert.deepEqual(f.calls, []);
 });
 
