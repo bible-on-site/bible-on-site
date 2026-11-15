@@ -20,7 +20,6 @@ public partial class ReaderMenuPanel : Grid
     /// <summary>הסתר שם השם row tapped — the page flips the view-model flag.</summary>
     public event EventHandler? DivineNameMaskingToggled;
     public event EventHandler? SearchRequested;
-    public event EventHandler? FullscreenRequested;
 #pragma warning restore S3264
 
     public ReaderMenuPanel()
@@ -52,10 +51,9 @@ public partial class ReaderMenuPanel : Grid
                 }
             }
         }
-        rows.Add(ToolAction("חיפוש בתוכן", "ReaderGlobalSearch", (_, _) => SearchRequested?.Invoke(this, EventArgs.Empty)));
-        rows.Add(ToolAction("מסך מלא", "FullScreenButton", (_, _) => FullscreenRequested?.Invoke(this, EventArgs.Empty)));
+        rows.Add(ToolAction("חיפוש", "ReaderGlobalSearch", (_, _) => SearchRequested?.Invoke(this, EventArgs.Empty)));
         panel.Content = null;
-        panel.Content = new ScrollView { Content = rows };
+        panel.Content = new ScrollView { Content = rows, VerticalOptions = LayoutOptions.Start };
         SizeChanged += (_, _) => panel.MaximumHeightRequest = Math.Max(220, Height - ReaderBottomBar.TotalHeight - 40);
     }
 

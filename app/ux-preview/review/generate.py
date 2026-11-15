@@ -22,7 +22,11 @@ def main():
     catalog = json.loads((ROOT / "comparisons.json").read_text(encoding="utf-8"))
     comparisons = catalog["comparisons"]
     baseline = f'{catalog["baseline_branch"]} / {catalog["baseline_commit"][:9]}'
-    intro = 'כל צילומי ה"לפני" הם מהענף הראשי של המאגר, ולא מאיטרציות קודמות בענף ה-UX. מימין: המצב הקיים. משמאל: ההצעה הנוכחית. כל הצילומים והסרטונים נלקחו מהאפליקציה האמיתית באמולטור Android.'
+    intro = (
+        'כל צילומי ה"לפני" הם מהענף הראשי של המאגר, ולא מאיטרציות קודמות בענף ה-UX. '
+        'מימין: המצב הקיים. משמאל: ההצעה הנוכחית. '
+        'כל הצילומים והסרטונים נלקחו מהאפליקציה האמיתית באמולטור Android.'
+    )
     nav = ''.join(f'<a href="#{escape(item["id"])}">{escape(item["label"])}</a>' for item in comparisons)
     sections = []
     markdown = [
@@ -38,7 +42,10 @@ def main():
         figures = []
         for side, img in [('before', before), ('after', after)]:
             label = 'לפני - הענף הראשי' if side == 'before' else 'אחרי - הצעת UX'
-            figures.append(f'<figure class="{side}"><figcaption>{label}</figcaption><div class="phone">{img}</div><p class="caption">{escape(item[side + "_caption"])}</p></figure>')
+            figures.append(
+                f'<figure class="{side}"><figcaption>{label}</figcaption><div class="phone">{img}</div>'
+                f'<p class="caption">{escape(item[side + "_caption"])}</p></figure>'
+            )
         sections.append(
             f'<article id="{escape(item["id"])}">\n'
             f'  <div class="section-head"><span class="number">{number:02}</span><h2>{escape(item["title"])}</h2></div>\n'
@@ -53,20 +60,24 @@ def main():
             f'<td align="right">{after.replace("width=\"1080\" height=\"2400\"", "width=\"300\"")}<br>{escape(item["after_caption"])}</td>',
             '</tr></tbody></table>', ''
         ])
-    sections.append('''<article id="motion">
-  <div class="section-head"><span class="number">14</span><h2>גלילה בתנועה - master מול הצעת ה-UX</h2></div>
-  <p class="change">אותן שמונה מחוות באמולטור, כולל שינויי כיוון ותנועה קצרה לכיוון תחילת הפרק. אלה הקלטות מסך אמיתיות.</p>
+    sections.append(f'''<article id="motion">
+  <div class="section-head"><span class="number">{len(comparisons) + 1:02}</span><h2>גלילה בתנועה - master מול הצעת ה-UX</h2></div>
+  <p class="change">הקלטות אמיתיות מהאפליקציה. בהצעה החדשה יש הפסקות בין הגרירות כדי להדגים את ההשהיה, הדעיכה והחזרה.</p>
   <div class="pair" dir="rtl">
-    <figure><figcaption>לפני - הענף הראשי</figcaption><video controls muted playsinline preload="metadata" src="assets/before/reader-scroll.mp4"></video></figure>
-    <figure class="after"><figcaption>אחרי - הצעת UX</figcaption><video controls muted playsinline preload="metadata" src="assets/after/reader-scroll.mp4"></video></figure>
+    <figure><figcaption>לפני - הענף הראשי</figcaption>
+      <video controls muted playsinline preload="metadata" src="assets/before/reader-scroll.mp4"></video></figure>
+    <figure class="after"><figcaption>אחרי - הצעת UX</figcaption>
+      <video controls muted playsinline preload="metadata" src="assets/after/reader-scroll.mp4"></video></figure>
   </div>
 </article>''')
     markdown.extend([
         '## גלילה בתנועה', '',
         '[לפני - master](assets/before/reader-scroll.mp4) · [אחרי - הצעת UX](assets/after/reader-scroll.mp4)', '',
-        'אותן שמונה מחוות באמולטור. הסרטונים מיועדים לביקורת התנועה; הצילומים המלאים מיועדים לביקורת הטקסט והפריסה.', '',
+        'הקלטות מסך אמיתיות. בהצעה החדשה יש הפסקות בין הגרירות כדי להדגים את ההשהיה, הדעיכה והחזרה.', '',
         '## עדכון הביקורת', '',
-        'מעדכנים את צילומי `assets/after/` ואת התיאורים ב-`comparisons.json`, ואז מריצים `python generate.py`. צילומי ה-`before` חייבים להישאר מהענף הראשי, עם קומיט בסיס מתועד. לא מציבים צילום מאיטרציה קודמת של ענף ה-UX בעמודת "לפני".', ''
+        ('מעדכנים את צילומי `assets/after/` ואת התיאורים ב-`comparisons.json`, ואז מריצים `python generate.py`. '
+         'צילומי ה-`before` חייבים להישאר מהענף הראשי, עם קומיט בסיס מתועד. '
+         'לא מציבים צילום מאיטרציה קודמת של ענף ה-UX בעמודת "לפני".'), ''
     ])
     html = f'''<!doctype html>
 <html lang="he" dir="rtl">
@@ -82,7 +93,9 @@ def main():
   <h1>הפרק היומי במרכז.<br>עוד עולמות מסביב.</h1>
   <p class="intro">{escape(intro)}</p>
   <div class="notice">{escape(NOTICE)}</div>
-  <div class="meta"><span>עודכן: {catalog['updated']}</span><span>בסיס: <bdi>{baseline}</bdi></span><a href="{PR_URL}">הדיון ב-PR #3385</a><a href="REVIEW.md">ההשוואה ב-GitHub</a><a href="current.html">המסכים הנוכחיים</a></div>
+  <div class="meta"><span>עודכן: {catalog['updated']}</span><span>בסיס: <bdi>{baseline}</bdi></span>
+    <a href="{PR_URL}">הדיון ב-PR #3385</a><a href="REVIEW.md">ההשוואה ב-GitHub</a>
+    <a href="current.html">המסכים הנוכחיים</a></div>
 </header>
 <nav aria-label="מעבר בין ההשוואות"><div class="nav-inner">{nav}<a href="#motion">וידאו גלילה</a></div></nav>
 <main>

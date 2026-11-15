@@ -101,11 +101,11 @@
                         <Label Text="לאן הסקרנות לוקחת אותך?" Style="{StaticResource HomeHeading}" FontSize="18"/>
                     </Grid>
                     <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-                        <controls:TappableView AutomationId="HomeIndex" Activated="OnIndexTapped" SemanticProperties.Description="חיפוש לפי אינדקס">
+                        <controls:TappableView AutomationId="HomeIndex" Activated="OnIndexTapped" SemanticProperties.Description="ניווט בתנ&quot;ך לפי ספר ופרק">
                             <Border StrokeThickness="0" StrokeShape="RoundRectangle 20" BackgroundColor="{AppThemeBinding Light=#DEE7F7, Dark=#233956}" Padding="17" MinimumHeightRequest="110">
                                 <Grid RowDefinitions="*,Auto" RowSpacing="12">
                                     <Grid ColumnDefinitions="*,Auto">
-                                        <Label Text="אינדקס התנ&quot;ך" Style="{StaticResource HomeHeading}" FontSize="18"/>
+                                        <Label Text="ניווט בתנ&quot;ך" Style="{StaticResource HomeHeading}" FontSize="18"/>
                                         <Label Grid.Column="1" Text="{x:Static fonts:FluentUI.library_24_regular}" FontFamily="FluentIcons" FontSize="27"
                                                TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" AutomationProperties.IsInAccessibleTree="False"/>
                                     </Grid>

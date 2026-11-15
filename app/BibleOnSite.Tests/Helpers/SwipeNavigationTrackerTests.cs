@@ -4,6 +4,22 @@ namespace BibleOnSite.Tests.Helpers;
 
 public class SwipeNavigationTrackerTests
 {
+    [Theory]
+    [InlineData(30, 30, true)]
+    [InlineData(-30, -30, true)]
+    [InlineData(30, 0, true)]
+    [InlineData(0, 30, true)]
+    [InlineData(7, 7, false)]
+    public void ReadingDragIncludesDiagonalMotionWithoutChangingChapterAxisRules(float dx, float dy, bool expected)
+    {
+        var swipe = new SwipeNavigationTracker();
+        swipe.Begin(new(500, 1000, 1000), 19);
+        swipe.Move(new(500 + dx, 1000 + dy, 1100), 24);
+        swipe.IsDragging.Should().Be(expected);
+        swipe.Cancel();
+        swipe.IsDragging.Should().BeFalse();
+    }
+
     [Fact]
     public void VerticalDragPublishesPhysicalDeltasAndStopsAtRelease()
     {
@@ -22,7 +38,7 @@ public class SwipeNavigationTrackerTests
     }
 
     [Fact]
-    public void TouchJitterAndHorizontalChapterSwipesDoNotDriveToolbarVisibility()
+    public void TouchJitterAndHorizontalChapterSwipesDoNotPublishVerticalDeltas()
     {
         var swipe = new SwipeNavigationTracker();
         swipe.Begin(new(500, 1000, 1000), 19);
@@ -38,14 +54,20 @@ public class SwipeNavigationTrackerTests
     public void PhysicalDragCanHideAndRevealHeaderWithoutMovingItsViewport()
     {
         var swipe = new SwipeNavigationTracker();
-        var header = new ReaderHeaderScrollState();
+        var header = new ReaderChromeIdleState();
         swipe.Begin(new(500, 1000, 1000), 19);
         swipe.Move(new(500, 900, 1100), 24);
-        header.Update(swipe.VerticalContentDelta!.Value / 2).Should().BeFalse();
+        swipe.IsDragging.Should().BeTrue();
+        header.DragStarted(1100);
+        header.IsVisible.Should().BeTrue();
+        header.DragEnded(1200);
+        header.Tick(1200 + ReaderChromeIdleState.CooldownMilliseconds, false).Should().BeFalse();
         swipe.Cancel();
         swipe.Begin(new(500, 1000, 2000), 19);
         swipe.Move(new(500, 1030, 2100), 24);
-        header.Update(swipe.VerticalContentDelta!.Value / 2).Should().BeTrue();
+        swipe.IsDragging.Should().BeTrue();
+        header.DragStarted(4000);
+        header.IsVisible.Should().BeTrue();
     }
 
     [Theory]
@@ -208,7 +230,9 @@ public class SwipeNavigationTrackerTests
     public void MoveWithoutBegin_IsIgnored()
     {
         var swipe = new SwipeNavigationTracker();
+        swipe.IsDragging.Should().BeFalse();
         swipe.Move(new(600, 1010, 1600), 24);
+        swipe.IsDragging.Should().BeFalse();
         swipe.End(new(200, 1000, 1100), 1080, 24, 150, true, 929).Should().BeNull();
     }
 
