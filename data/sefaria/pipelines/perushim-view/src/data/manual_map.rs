@@ -76,3 +76,27 @@ pub(super) fn resolve_ref(
         verse as i64,
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bson::bson;
+
+    #[test]
+    fn source_fingerprints_reject_non_text_values_instead_of_coercing_them() {
+        for source in [
+            bson!(null),
+            bson!(false),
+            bson!(1),
+            bson!({"text": "body"}),
+            bson!(["body", 1]),
+        ] {
+            let error = fingerprint(&source, &mut 0xcbf29ce484222325).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("Unsupported mapped source text type")
+            );
+        }
+    }
+}

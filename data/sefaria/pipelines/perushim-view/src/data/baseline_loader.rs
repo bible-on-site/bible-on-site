@@ -247,6 +247,21 @@ mod tests {
         notes: std::path::PathBuf,
     }
 
+    fn archive_sqlite(path: &Path, archive: &Path) {
+        let mut input = File::open(path).unwrap();
+        let mut encoder = GzEncoder::new(File::create(archive).unwrap(), Compression::fast());
+        io::copy(&mut input, &mut encoder).unwrap();
+        encoder.finish().unwrap();
+    }
+
+    fn edit_archive(fixture: &Fixture, edit: impl FnOnce(&Connection)) {
+        let path = fixture._temp.path().join("source.sqlite");
+        let connection = Connection::open(&path).unwrap();
+        edit(&connection);
+        connection.close().unwrap();
+        archive_sqlite(&path, &fixture.notes);
+    }
+
     fn fixture(snapshot: &str, corrupt_present_chapter: bool) -> Fixture {
         let temp = tempfile::tempdir().unwrap();
         let parshanim = temp.path().join("parshanim.json");
@@ -294,10 +309,7 @@ mod tests {
         conn.execute("INSERT INTO note_blob VALUES(2,?1)", [second_blob])
             .unwrap();
         conn.close().unwrap();
-        let mut input = File::open(&path).unwrap();
-        let mut encoder = GzEncoder::new(File::create(&notes).unwrap(), Compression::fast());
-        io::copy(&mut input, &mut encoder).unwrap();
-        encoder.finish().unwrap();
+        archive_sqlite(&path, &notes);
         Fixture {
             _temp: temp,
             parshanim,
@@ -441,5 +453,187 @@ mod tests {
             .unwrap();
         assert!(error.to_string().contains("Invalid bundled parshanim JSON"));
         assert_eq!(fs::read_to_string(&f.parshanim).unwrap(), "broken JSON");
+    }
+
+    #[test]
+    fn bundled_entry_point_rejects_a_fresh_note_without_a_work() {
+        let result = preserve_bundled(Extracted {
+            parshanim: Vec::new(),
+            perushim: Vec::new(),
+            notes: vec![note(9999, "orphan")],
+        });
+        assert!(
+            result
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("Fresh note references unknown work ID 9999")
+        );
+    }
+
+    #[test]
+    fn a_new_work_keeps_its_fresh_notes_while_old_chapters_are_recovered() {
+        let f = fixture(r#"{"1":"present","2":"missing"}"#, false);
+        let mut source = fresh(vec![note(10, "new work text")]);
+        source.perushim.push(Perush {
+            id: 10,
+            name: "new work".into(),
+            parshan_id: 8,
+            comp_date: None,
+            pub_date: None,
+            priority: 400,
+        });
+        let result = preserve_from_paths(source, &f.parshanim, &f.perushim, &f.notes).unwrap();
+        let work = result
+            .perushim
+            .iter()
+            .find(|p| p.name == "new work")
+            .unwrap();
+        assert_eq!(work.id, 3);
+        assert_eq!(result.notes.len(), 4);
+        assert!(
+            result
+                .notes
+                .iter()
+                .any(|n| n.perush_id == work.id && n.note_content == "new work text")
+        );
+    }
+
+    #[test]
+    fn fully_refreshed_chapters_do_not_open_any_cached_blob() {
+        let f = fixture(r#"{"1":"present","2":"missing"}"#, true);
+        edit_archive(&f, |connection| {
+            connection
+                .execute("UPDATE note_blob SET data=?1", [vec![0_u8]])
+                .unwrap();
+        });
+        let mut second = note(9, "fresh second chapter");
+        second.perek_id = 2;
+        let mut source = fresh(vec![
+            note(9, "fresh present"),
+            second,
+            note(10, "fresh missing"),
+        ]);
+        source.perushim.push(Perush {
+            id: 10,
+            name: "missing".into(),
+            parshan_id: 8,
+            comp_date: None,
+            pub_date: None,
+            priority: 200,
+        });
+        let result = preserve_from_paths(source, &f.parshanim, &f.perushim, &f.notes).unwrap();
+        assert_eq!(result.notes.len(), 3);
+        assert!(
+            result
+                .notes
+                .iter()
+                .all(|n| n.note_content.starts_with("fresh"))
+        );
+    }
+
+    #[test]
+    fn missing_or_malformed_catalog_files_report_the_failed_input() {
+        let f = fixture(r#"{"1":"present","2":"missing"}"#, false);
+        let absent = f._temp.path().join("absent.json");
+        let error = load_catalog(&absent, &f.perushim).err().unwrap();
+        assert!(error.to_string().contains("Read bundled parshanim JSON"));
+        let error = load_catalog(&f.parshanim, &absent).err().unwrap();
+        assert!(error.to_string().contains("Read bundled perushim JSON"));
+        fs::write(&f.perushim, "broken work JSON").unwrap();
+        let error = load_catalog(&f.parshanim, &f.perushim).err().unwrap();
+        assert!(error.to_string().contains("Invalid bundled perushim JSON"));
+    }
+
+    #[test]
+    fn absent_archive_and_invalid_pack_metadata_fail_closed() {
+        for (sql, expected) in [
+            (
+                "UPDATE _metadata SET value='1' WHERE key='schema_version'",
+                "Bundled notes require schema_version 2, found 1",
+            ),
+            (
+                "DELETE FROM _metadata WHERE key='schema_version'",
+                "Bundled notes lack schema_version metadata",
+            ),
+            (
+                "DELETE FROM _metadata WHERE key='perush_catalog'",
+                "Bundled notes lack perush_catalog metadata",
+            ),
+            (
+                "UPDATE _metadata SET value='{' WHERE key='perush_catalog'",
+                "Bundled notes contain invalid perush_catalog JSON",
+            ),
+        ] {
+            let f = fixture(r#"{"1":"present","2":"missing"}"#, false);
+            edit_archive(&f, |connection| connection.execute_batch(sql).unwrap());
+            let error = preserve_from_paths(fresh(Vec::new()), &f.parshanim, &f.perushim, &f.notes)
+                .err()
+                .unwrap();
+            assert!(error.to_string().contains(expected));
+        }
+        let f = fixture(r#"{"1":"present","2":"missing"}"#, false);
+        fs::remove_file(&f.notes).unwrap();
+        let error = preserve_from_paths(fresh(Vec::new()), &f.parshanim, &f.perushim, &f.notes)
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("Open bundled notes gzip"));
+    }
+
+    #[test]
+    fn untrusted_index_and_blob_work_ids_are_rejected() {
+        let f = fixture(r#"{"1":"present","2":"missing"}"#, false);
+        edit_archive(&f, |connection| {
+            connection
+                .execute_batch("INSERT INTO perek_perush VALUES(1,99)")
+                .unwrap();
+        });
+        let error = preserve_from_paths(fresh(Vec::new()), &f.parshanim, &f.perushim, &f.notes)
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("unknown commentary ID 99"));
+
+        let f = fixture(r#"{"1":"present","2":"missing"}"#, false);
+        edit_archive(&f, |connection| {
+            let unknown = note(99, "wrong attribution");
+            connection
+                .execute(
+                    "UPDATE note_blob SET data=?1 WHERE perek_id=1",
+                    [note_blob::encode_perek_blob(&[&unknown]).unwrap()],
+                )
+                .unwrap();
+        });
+        let error = preserve_from_paths(fresh(Vec::new()), &f.parshanim, &f.perushim, &f.notes)
+            .err()
+            .unwrap();
+        assert!(
+            error
+                .to_string()
+                .contains("Bundled perek 1 contains unknown commentary ID 99")
+        );
+    }
+
+    #[test]
+    fn corrupt_needed_blobs_and_missing_indexed_chapters_are_rejected() {
+        let f = fixture(r#"{"1":"present","2":"missing"}"#, true);
+        let error = preserve_from_paths(fresh(Vec::new()), &f.parshanim, &f.perushim, &f.notes)
+            .err()
+            .unwrap();
+        assert!(
+            error
+                .to_string()
+                .contains("Corrupt bundled note_blob for perek 2")
+        );
+
+        let f = fixture(r#"{"1":"present","2":"missing"}"#, false);
+        edit_archive(&f, |connection| {
+            connection
+                .execute_batch("DELETE FROM note_blob WHERE perek_id=2")
+                .unwrap();
+        });
+        let error = preserve_from_paths(fresh(Vec::new()), &f.parshanim, &f.perushim, &f.notes)
+            .err()
+            .unwrap();
+        assert!(error.to_string().contains("chapters absent from note_blob"));
     }
 }

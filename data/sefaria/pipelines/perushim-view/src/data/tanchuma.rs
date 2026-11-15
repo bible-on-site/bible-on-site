@@ -383,4 +383,137 @@ mod tests {
             assert!(resolve_ref(reference, &counts).is_err(), "{reference}");
         }
     }
+
+    #[test]
+    fn only_empty_approved_prefaces_can_precede_required_parashot() {
+        let manifest: Manifest =
+            serde_json::from_str(include_str!("tanchuma_manifest.json")).unwrap();
+        let document = |version: Document| {
+            doc! {"versionTitles": [&manifest.version_title], "versions": [version]}
+        };
+        let error = flatten(
+            &document(doc! {"Foreword": [" ", ["", []]], "Introduction": "\n"}),
+            1,
+        )
+        .unwrap_err();
+        // Approved empty metadata is accepted, but a missing Torah section is not.
+        assert!(
+            error
+                .to_string()
+                .contains("Missing Tanchuma parashah: Bereshit")
+        );
+        for version in [
+            doc! {"Foreword": "unreviewed preface"},
+            doc! {"Introduction": null},
+            doc! {"Appendix": []},
+        ] {
+            let error = flatten(&document(version), 1).unwrap_err();
+            assert!(error.to_string().contains("Unmapped Tanchuma node"));
+        }
+    }
+
+    #[test]
+    fn source_validation_preserves_single_string_simanim_and_detects_resegmentation() {
+        let source = bson!(["indivisible homily"]);
+        let mut hash = 0xcbf29ce484222325;
+        fingerprint(&source, &mut hash).unwrap();
+        let mut expected = SourceSection {
+            hash: format!("{hash:016x}"),
+            reviewed_hashes: Vec::new(),
+            paragraph_counts: vec![1],
+            paragraph_hashes: vec![vec![Vec::new()]],
+        };
+        validate_source("sample", &source, &expected).unwrap();
+        expected.paragraph_counts[0] = 2;
+        let error = validate_source("sample", &source, &expected).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("sample 1: paragraph count changed")
+        );
+    }
+
+    #[test]
+    fn malformed_source_segmentation_is_rejected_before_notes_are_returned() {
+        let counts = serde_json::from_str(include_str!("verse_counts.json")).unwrap();
+        for (source, anchors, message) in [
+            (
+                bson!([]),
+                r#"[["Genesis 1:1"]]"#,
+                "dictionary siman count mismatch",
+            ),
+            (
+                bson!([1]),
+                r#"[["Genesis 1:1"]]"#,
+                "Unsupported Tanchuma siman",
+            ),
+            (
+                bson!([["first", "second"]]),
+                r#"[["Genesis 1:1"]]"#,
+                "dictionary paragraph count mismatch",
+            ),
+        ] {
+            let mapping: Vec<Vec<Option<Anchor>>> = serde_json::from_str(anchors).unwrap();
+            let error = flatten_parashah(
+                &mut Vec::new(),
+                &mut HashMap::new(),
+                1,
+                "sample",
+                &source,
+                &mapping,
+                &counts,
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains(message), "{error:#}");
+        }
+    }
+
+    #[test]
+    fn invalid_and_duplicate_targets_fail_with_the_source_coordinate() {
+        let source = bson!(["body"]);
+        let counts = serde_json::from_str(include_str!("verse_counts.json")).unwrap();
+        for (anchors, message) in [
+            (r#"[[[]]]"#, "Empty Tanchuma anchor list"),
+            (r#"[["Genesis 1:32"]]"#, "Tanchuma sample 1:1"),
+            (
+                r#"[[["Genesis 1:1", "Genesis 1:1"]]]"#,
+                "Duplicate Tanchuma anchor",
+            ),
+        ] {
+            let mapping: Vec<Vec<Option<Anchor>>> = serde_json::from_str(anchors).unwrap();
+            let error = flatten_parashah(
+                &mut Vec::new(),
+                &mut HashMap::new(),
+                1,
+                "sample",
+                &source,
+                &mapping,
+                &counts,
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains(message), "{error:#}");
+        }
+    }
+
+    #[test]
+    fn blank_reviewed_paragraphs_do_not_emit_notes_or_consume_note_indices() {
+        let source = bson!([" \n", " body "]);
+        let mapping: Vec<Vec<Option<Anchor>>> =
+            serde_json::from_str(r#"[["Genesis 1:1"], ["Genesis 1:1"]]"#).unwrap();
+        let counts = serde_json::from_str(include_str!("verse_counts.json")).unwrap();
+        let mut notes = Vec::new();
+        flatten_parashah(
+            &mut notes,
+            &mut HashMap::new(),
+            1,
+            "sample",
+            &source,
+            &mapping,
+            &counts,
+        )
+        .unwrap();
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].note_idx, 0);
+        assert_eq!(notes[0].note_content, "body");
+    }
 }
