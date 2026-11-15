@@ -1,0 +1,30 @@
+{
+  "viewport_initial": [
+    27,
+    128,
+    1059,
+    2337
+  ],
+  "viewport_after_hide_and_reveal": [
+    27,
+    128,
+    1059,
+    2337
+  ],
+  "viewport_after_continuous_gestures": [
+    27,
+    128,
+    1059,
+    2337
+  ],
+  "passed": [
+    "large touch targets",
+    "no legacy reader menus",
+    "four search shortcuts",
+    "constant viewport",
+    "small upward reveal",
+    "articles transition",
+    "fullscreen without legacy fan",
+    "continuous gestures"
+  ]
+}

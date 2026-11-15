@@ -70,8 +70,8 @@ public sealed class ReaderCarouselActions
     /// </summary>
     public Action<float, float>? ArmUnreceivedPress { get; init; }
 
-    /// <summary>Reveals navigation on upward content intent even while a native list is settling.</summary>
-    public Action? UpwardContentDrag { get; init; }
+    /// <summary>Physical vertical content motion in density-independent units, without layout or fling echoes.</summary>
+    public Action<double>? VerticalContentDrag { get; init; }
 }
 
 /// <summary>
@@ -437,9 +437,10 @@ public sealed class ReaderCarousel
             ? Android.Views.ViewConfiguration.Get(view.Context!)?.ScaledTouchSlop ?? 12
             : 12;
         _swipe.Move(position, slop);
-        if (_swipe.IsUpwardContentDrag(slop))
+        if (_swipe.VerticalContentDelta is { } delta)
         {
-            _actions.UpwardContentDrag?.Invoke();
+            var density = (_ui.Carousel.Handler?.PlatformView as Android.Views.View)?.Resources?.DisplayMetrics?.Density ?? 1;
+            _actions.VerticalContentDrag?.Invoke(delta / density);
         }
     }
 

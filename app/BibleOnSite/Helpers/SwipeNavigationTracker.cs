@@ -11,16 +11,22 @@ public sealed class SwipeNavigationTracker
     private TouchPosition? _start;
     private int _startPosition;
     private bool _horizontal;
+    private bool _vertical;
     private TouchPosition? _last;
 
     /// <summary>Last finger position observed while the gesture was active.</summary>
     public TouchPosition? Last => _last;
+
+    /// <summary>Content motion from the current physical drag, before native scrolling or layout.</summary>
+    public double? VerticalContentDelta { get; private set; }
 
     public void Begin(TouchPosition start, int position)
     {
         _start = start;
         _startPosition = position;
         _horizontal = false;
+        _vertical = false;
+        VerticalContentDelta = null;
         _last = start;
     }
 
@@ -31,21 +37,35 @@ public sealed class SwipeNavigationTracker
     /// </summary>
     public void Move(TouchPosition position, double touchSlop)
     {
+        VerticalContentDelta = null;
         if (_start == null)
         {
             return;
         }
 
-        _last = position;
+        var previous = _last ?? _start.Value;
         var dx = Math.Abs(position.X - _start.Value.X);
         var dy = Math.Abs(position.Y - _start.Value.Y);
         if (dx > touchSlop && dx > dy)
         {
             _horizontal = true;
         }
+        if (dy > touchSlop && dy > dx * 1.5)
+        {
+            _vertical = true;
+        }
+        if (_vertical && !_horizontal)
+        {
+            VerticalContentDelta = previous.Y - position.Y;
+        }
+        _last = position;
     }
 
-    public void Cancel() => _start = null;
+    public void Cancel()
+    {
+        _start = null;
+        VerticalContentDelta = null;
+    }
 
     /// <summary>Finger-down motion that moves content toward its beginning.</summary>
     public bool IsUpwardContentDrag(double touchSlop) =>

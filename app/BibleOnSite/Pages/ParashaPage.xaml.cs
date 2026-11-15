@@ -172,6 +172,12 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 NavigateToUnitAsync = unitId => _viewModel.NavigateToUnitAsync(unitId),
                 FullscreenStateChanged = OnReaderFullscreenStateChanged,
             });
+        if (Config.HomeUxPreview.Enabled)
+        {
+            ReaderMenuOverlay.SearchRequested += async (_, _) =>
+                await ShellAppNavigator.Instance.GoToAsync(nameof(HomeSearchPage));
+            ReaderMenuOverlay.FullscreenRequested += (_, _) => _chrome.ToggleFullScreen();
+        }
     }
 
     /// <summary>

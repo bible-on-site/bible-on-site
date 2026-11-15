@@ -16,14 +16,6 @@
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="TextColor" Value="{AppThemeBinding Light=#63738C, Dark=#B8CBE5}"/>
         </Style>
-        <Style x:Key="HomeLink" TargetType="Button">
-            <Setter Property="BackgroundColor" Value="Transparent"/>
-            <Setter Property="TextColor" Value="{AppThemeBinding Light=#334B6C, Dark=#B8CBE5}"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Padding" Value="8,12"/>
-            <Setter Property="MinimumHeightRequest" Value="48"/>
-            <Setter Property="CornerRadius" Value="12"/>
-        </Style>
     </ContentPage.Resources>
     <Grid RowDefinitions="Auto,*">
             <VerticalStackLayout Grid.Row="0" Padding="22,8,22,12" Spacing="10" MaximumWidthRequest="680" HorizontalOptions="Fill">
@@ -36,7 +28,15 @@
                         <Label Text="על הפרק" FontSize="22" FontAttributes="Bold" CharacterSpacing="-0.5"
                                TextColor="{AppThemeBinding Light=#192B45, Dark=#F2EFE6}" VerticalOptions="Center"/>
                     </HorizontalStackLayout>
-                    <Button Grid.Column="1" Text="העדפות" Style="{StaticResource HomeLink}" Clicked="OnPreferencesClicked"/>
+                    <Button Grid.Column="1" Text="העדפות" AutomationId="HomePreferences" Clicked="OnPreferencesClicked"
+                            FontSize="17" FontAttributes="Bold" HeightRequest="56" MinimumWidthRequest="118" Padding="14,0" CornerRadius="18" ContentLayout="Left,8"
+                            BackgroundColor="{AppThemeBinding Light=#E4EAF4, Dark=#243C5D}"
+                            TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}">
+                        <Button.ImageSource>
+                            <FontImageSource Glyph="{x:Static fonts:FluentUI.settings_24_regular}" FontFamily="FluentIcons" Size="22"
+                                             Color="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}"/>
+                        </Button.ImageSource>
+                    </Button>
                 </Grid>
                 <controls:TappableView AutomationId="HomeGlobalSearch" Activated="OnGlobalSearchTapped" SemanticProperties.Description="חיפוש בתנ&quot;ך ובפריטי הניווט באפליקציה">
                     <Border BackgroundColor="{AppThemeBinding Light=White, Dark=#1D2D43}" Stroke="{AppThemeBinding Light=#D7E1F2, Dark=#334B6C}"
@@ -99,7 +99,6 @@
                 <VerticalStackLayout Spacing="12">
                     <Grid ColumnDefinitions="*,Auto">
                         <Label Text="לאן הסקרנות לוקחת אותך?" Style="{StaticResource HomeHeading}" FontSize="18"/>
-                        <Label Grid.Column="1" Text="לגלות עוד" Style="{StaticResource HomeSecondary}" VerticalOptions="Center"/>
                     </Grid>
                     <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
                         <controls:TappableView AutomationId="HomeIndex" Activated="OnIndexTapped" SemanticProperties.Description="חיפוש לפי אינדקס">
@@ -127,37 +126,41 @@
                         </controls:TappableView>
                     </Grid>
                     <controls:TappableView AutomationId="HomeMasora" Activated="OnMasoraTapped" SemanticProperties.Description="מסורה על הפרק">
-                        <Grid ColumnDefinitions="*,Auto" Padding="0,7" MinimumHeightRequest="54">
-                            <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
+                        <Grid ColumnDefinitions="*,Auto" Padding="4,12" MinimumHeightRequest="72">
+                            <VerticalStackLayout Spacing="4" VerticalOptions="Center">
                                 <Label Text="מסורה" Style="{StaticResource HomeHeading}"/>
-                                <Label Text="חלוקה מסורתית" Style="{StaticResource HomeSecondary}" VerticalOptions="Center"/>
-                            </HorizontalStackLayout>
+                                <Label Text="חלוקה מסורתית" Style="{StaticResource HomeSecondary}"/>
+                            </VerticalStackLayout>
                             <Label Grid.Column="1" Text="←" FontSize="24" TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" VerticalOptions="Center" AutomationProperties.IsInAccessibleTree="False"/>
                         </Grid>
                     </controls:TappableView>
                     <BoxView HeightRequest="1" Color="{AppThemeBinding Light=#D5DDEA, Dark=#334B6C}"/>
                     <controls:TappableView AutomationId="HomeAuthors" Activated="OnAuthorsTapped" SemanticProperties.Description="רבנים וכותבים">
-                        <Grid ColumnDefinitions="*,Auto" Padding="0,7" MinimumHeightRequest="54">
-                            <HorizontalStackLayout Spacing="10" VerticalOptions="Center">
+                        <Grid ColumnDefinitions="*,Auto" Padding="4,12" MinimumHeightRequest="72">
+                            <VerticalStackLayout Spacing="4" VerticalOptions="Center">
                                 <Label Text="עוד קולות" Style="{StaticResource HomeHeading}"/>
-                                <Label Text="רבנים וכותבים" Style="{StaticResource HomeSecondary}" VerticalOptions="Center"/>
-                            </HorizontalStackLayout>
+                                <Label Text="רבנים וכותבים" Style="{StaticResource HomeSecondary}"/>
+                            </VerticalStackLayout>
                             <Label Grid.Column="1" Text="←" FontSize="24" TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" VerticalOptions="Center" AutomationProperties.IsInAccessibleTree="False"/>
                         </Grid>
                     </controls:TappableView>
                 </VerticalStackLayout>
 
-                <FlexLayout Wrap="Wrap" JustifyContent="Start">
-                    <Button Text="תנכפדיה" Style="{StaticResource HomeLink}" Clicked="OnTanahpediaClicked"/>
-                    <Button Text="פרשת השבוע" Style="{StaticResource HomeLink}" Clicked="OnParashaClicked"/>
-                    <Button Text="מועדים" Style="{StaticResource HomeLink}" Clicked="OnMoadimClicked"/>
-                    <Button Text="עלון יומי" Style="{StaticResource HomeLink}" Clicked="OnBulletinClicked"/>
-                </FlexLayout>
-                <FlexLayout Wrap="Wrap" JustifyContent="Center">
-                    <Button Text="צור קשר" Style="{StaticResource HomeLink}" Clicked="OnContactClicked"/>
-                    <Button Text="תנאי שימוש" Style="{StaticResource HomeLink}" Clicked="OnTermsClicked"/>
-                    <Button Text="תרומות" Style="{StaticResource HomeLink}" Clicked="OnDonationsClicked"/>
-                </FlexLayout>
+                <controls:TappableView AutomationId="HomeLibrary" Activated="OnLibraryTapped">
+                    <Border StrokeThickness="0" StrokeShape="RoundRectangle 22" Padding="22" MinimumHeightRequest="96"
+                            BackgroundColor="{AppThemeBinding Light=#DEE7F7, Dark=#233956}">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
+                            <Label Text="{x:Static fonts:FluentUI.library_24_regular}" FontFamily="FluentIcons" FontSize="30"
+                                   TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" VerticalOptions="Center"/>
+                            <VerticalStackLayout Grid.Column="1" Spacing="5" VerticalOptions="Center">
+                                <Label Text="הספרייה" Style="{StaticResource HomeHeading}" FontSize="22"/>
+                                <Label Text="עוד דרכים לגלות וללמוד" Style="{StaticResource HomeSecondary}"/>
+                            </VerticalStackLayout>
+                            <Label Grid.Column="2" Text="←" FontSize="28" VerticalOptions="Center"
+                                   TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}"/>
+                        </Grid>
+                    </Border>
+                </controls:TappableView>
             </VerticalStackLayout>
         </ScrollView>
         <controls:PerekPickerPopup x:Name="HomeIndexPicker" Grid.RowSpan="2" AutomationId="HomeIndexPicker" PerekSelected="OnIndexPerekSelected" ZIndex="100"/>

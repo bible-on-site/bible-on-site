@@ -148,6 +148,7 @@ public sealed class ReaderChrome
     {
         _ui = surfaces;
         _actions = actions;
+        if (Config.HomeUxPreview.Enabled) { _ui.FanMenu.IsVisible = false; }
 
         _ui.BottomBar.PerushimToggleRequested += OnPerushimToggleRequested;
         _ui.BottomBar.TextModeRequested += OnTextModeRequested;
@@ -217,7 +218,7 @@ public sealed class ReaderChrome
         _ui.ExitFullscreenButton.IsVisible = false;
         _ui.Toolbar.IsVisible = true;
         _ui.BottomBar.IsVisible = true;
-        _ui.FanMenu.IsVisible = true;
+        _ui.FanMenu.IsVisible = !Config.HomeUxPreview.Enabled;
         _actions.FullscreenStateChanged?.Invoke(false);
     }
 

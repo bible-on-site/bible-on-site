@@ -173,6 +173,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         {
             ChapterSearch.Close();
         }
+        else if (Config.HomeUxPreview.Enabled)
+        {
+            RevealHomeUxHeader();
+        }
         Shell.SetNavBarIsVisible(this, false);
         _platformChrome.RefreshNativeBack();
     }
@@ -237,7 +241,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 IsSwipeSuppressed = () => _chrome.IsShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen,
 #if ANDROID
                 ArmUnreceivedPress = (x, y) => LongPressBehavior.BeginUnreceivedPress(x, y, _viewModel.Perek),
-                UpwardContentDrag = RevealHomeUxHeader,
+                VerticalContentDrag = UpdateHomeUxHeader,
 #endif
             });
     }
@@ -320,10 +324,12 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     /// </summary>
     private void OnPasukimScrolled(object? sender, ItemsViewScrolledEventArgs e)
     {
+#if !ANDROID
         if (sender is BindableObject { BindingContext: Perek current } && current.PerekId == _viewModel.PerekId)
         {
             UpdateHomeUxHeader(e.VerticalDelta);
         }
+#endif
         _doubleTap.Reset();
         _lastScrollTime = DateTime.Now;
         _longPressTokenSource?.Cancel();
@@ -418,8 +424,16 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         _platformChrome.ScheduleHistoryRefresh();
     }
 
-    private void OnReaderListLoaded(object? sender, EventArgs e) =>
+    private void OnReaderListLoaded(object? sender, EventArgs e)
+    {
+        // Android is still walking its child array during Loaded. Reparenting
+        // the chapter header here synchronously corrupts that attachment pass.
+        if (sender is CollectionView list && Config.HomeUxPreview.Enabled)
+        {
+            Dispatcher.Dispatch(() => ConfigureHomeUxReadingSurface(list));
+        }
         _platformChrome.ReaderSurfaceRealized();
+    }
 
     /// <summary>
     /// Runs the full first-load sequence for this reader: resolve the perek to
@@ -982,8 +996,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
         var searching = ChapterSearch.IsSearchOpen;
         Shell.SetNavBarIsVisible(this, false);
-        ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible &&
-            (!Config.HomeUxPreview.Enabled || _homeUxHeader.IsVisible || selectionBarMode || searching);
+        ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible;
+        if (Config.HomeUxPreview.Enabled)
+        {
+            ApplyHomeUxHeader(_homeUxHeader.IsVisible || selectionBarMode || searching);
+        }
         (Shell.Current as AppShell)?.SetPageNavHidden(this, selectionBarMode || searching);
         Shell.SetBackButtonBehavior(this, new BackButtonBehavior { IsVisible = !searching });
         // Selection mode paints the shared accent over the whole band; otherwise
@@ -1200,8 +1217,10 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     private void OnTikkunScrolled(object? sender, ScrolledEventArgs e)
     {
         ReaderScrollTop.NoteScrollOffset(sender, e);
+#if !ANDROID
         UpdateHomeUxHeader(e.ScrollY - _homeUxTikkunOffset);
         _homeUxTikkunOffset = e.ScrollY;
+#endif
     }
 
     /// <summary>Publishes the initial "tsy:0" so the probe is visible at rest (#2624).</summary>

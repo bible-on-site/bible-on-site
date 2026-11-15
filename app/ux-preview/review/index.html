@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>על הפרק - ביקורת UX: לפני ואחרי</title>
+  <link rel="stylesheet" href="review.css">
+</head>
+<body>
+<header>
+  <div class="eyebrow">על הפרק / ביקורת חוויית משתמש / סבב 02</div>
+  <h1>אותה אפליקציה.<br>דרך ברורה יותר ללמוד.</h1>
+  <p class="intro">צילומים אמיתיים מהאפליקציה באמולטור. כל זוג מציג את המצב שהתקבל עליו משוב ואת האיטרציה שבאה אחריו. השינויים נשמרים בענף, כך שאפשר לעבור עליהם גם ב-GitHub.</p>
+  <div class="notice">ענף ביקורת מתמשך. ה-PR נשאר בטיוטה. אין למזג או להפעיל מיזוג אוטומטי בלי הוראה מפורשת מדורד.</div>
+  <div class="meta"><span>עודכן: 15 בנובמבר 2026</span><span>Android / תצוגה אמיתית</span><a href="https://github.com/bible-on-site/bible-on-site/pull/3385">דיון ושינויים ב-PR #3385</a><a href="REVIEW.md">השוואה ב-Markdown</a></div>
+</header>
+<nav aria-label="מעבר בין ההשוואות"><div class="nav-inner">
+  <a href="#home">בית</a><a href="#home-navigation">ניווט בבית</a><a href="#reader">קריאה</a><a href="#reader-scrolled">גלילה</a><a href="#reader-tools">כלי קריאה</a><a href="#articles">מאמרים</a><a href="#library">ספרייה</a><a href="#search">חיפוש</a><a href="#calendar">לוח שנה</a><a href="#authors">רבנים וכותבים</a><a href="#preferences">העדפות</a><a href="#motion">וידאו גלילה</a>
+</div></nav>
+<main>
+  <!-- Stable section IDs and screenshot filenames keep each iteration's Git diff focused. -->
+  <article id="home">
+    <div class="section-head"><span class="number">01</span><h2>בית - לשמור את הכיוון, לשפר את הלחיצה</h2></div>
+    <p class="change">העיצוב של הבית נשמר. כפתור ההעדפות מקבל משטח ברור, אייקון ושטח לחיצה גדול; החיפוש נשאר קבוע מעל התוכן.</p>
+    <div class="pair">
+      <figure><figcaption>לפני <small>סבב 01</small></figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/home.png" alt="מסך הבית לפני השינוי, עם קישור טקסט קטן להעדפות" loading="lazy"></div></figure>
+      <figure class="after"><figcaption>אחרי <small>סבב 02</small></figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/home.png" alt="מסך הבית עם כפתור העדפות גדול וברור" loading="lazy"></div></figure>
+    </div>
+  </article>
+  <article id="home-navigation">
+    <div class="section-head"><span class="number">02</span><h2>ניווט בבית - פחות אפשרויות בבת אחת</h2></div>
+    <p class="change">קישורי הטקסט הקטנים בתחתית הוחלפו בכניסה אחת לספרייה. מסורה והרבנים מוצגים כשורות נוחות ללחיצה, עם תיאור מתחת לכותרת.</p>
+    <div class="pair">
+      <figure><figcaption>לפני</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/home-navigation.png" alt="האפשרויות המפוזרות בתחתית הבית" loading="lazy"></div></figure>
+      <figure class="after"><figcaption>אחרי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/home-navigation.png" alt="ניווט ממוקד ושורות גדולות בבית" loading="lazy"></div></figure>
+    </div>
+  </article>
+  <article id="reader">
+    <div class="section-head"><span class="number">03</span><h2>קריאה - מעטפת אחת</h2></div>
+    <p class="change">התפריט הצדדי והמניפה הוסרו מהסקיצה. למעלה יש חזרה, בית ובחירת פרק; למטה פס פעולות אחד: קריאה, פירושים ומאמרים.</p>
+    <div class="pair">
+      <figure><figcaption>לפני</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/reader.png" alt="הקורא עם תפריט עליון ומניפת ניווט תחתונה" loading="lazy"></div></figure>
+      <figure class="after"><figcaption>אחרי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/reader.png" alt="הקורא עם ניווט אחיד ופס פעולות קריאה גדול" loading="lazy"></div></figure>
+    </div>
+  </article>
+  <article id="reader-scrolled">
+    <div class="section-head"><span class="number">04</span><h2>גלילה - הטקסט נשאר יציב</h2></div>
+    <p class="change">אזור הקריאה שומר על גודל קבוע. הכותרת נעה מעליו, לפי תנועת האצבע, בלי לשנות את גודל הרשימה ובלי לקבל משוב חוזר מהפריסה.</p>
+    <div class="pair">
+      <figure><figcaption>לפני</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/reader-scrolled.png" alt="מצב הקריאה לאחר גלילה בגרסה הקודמת" loading="lazy"></div></figure>
+      <figure class="after"><figcaption>אחרי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/reader-scrolled.png" alt="הקורא לאחר גלילה עם אזור תוכן קבוע" loading="lazy"></div></figure>
+    </div>
+  </article>
+  <article id="reader-tools">
+    <div class="section-head"><span class="number">05</span><h2>כלי קריאה - במקום תפריט צפוף</h2></div>
+    <p class="change">אפשרויות הקריאה מרוכזות בגיליון רחב עם שורות וכפתורים גדולים. הגיליון כולל חיפוש, תצוגה ומסך מלא.</p>
+    <div class="pair">
+      <figure><figcaption>לפני</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/reader-tools.png" alt="תפריט הקריאה הקטן בגרסה הקודמת" loading="lazy"></div></figure>
+      <figure class="after"><figcaption>אחרי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/reader-tools.png" alt="גיליון כלי הקריאה עם פעולות גדולות" loading="lazy"></div></figure>
+    </div>
+  </article>
+  <article id="articles">
+    <div class="section-head"><span class="number">06</span><h2>מאמרים - אותו קורא, אותה דרך חזרה</h2></div>
+    <p class="change">המעבר למאמרים שומר את מסגרת הניווט ואת פס הפעולות החדש. אפשר לחזור לקריאה בלי לפתוח תפריט נוסף.</p>
+    <div class="pair">
+      <figure><figcaption>לפני</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/articles.png" alt="מאמרי הפרק עם המעטפת הקודמת" loading="lazy"></div></figure>
+      <figure class="after"><figcaption>אחרי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/articles.png" alt="מאמרי הפרק עם פס הפעולות המאוחד" loading="lazy"></div></figure>
+    </div>
+  </article>
+  <article id="library">
+    <div class="section-head"><span class="number">07</span><h2>הספרייה - בית ברור לתכנים הנוספים</h2></div>
+    <p class="change">קודם האפשרויות היו מפוזרות בתחתית הבית. כעת תנכפדיה, פרשת השבוע, מועדים ועלון יומי מקבלים עמוד עם כרטיסים גדולים. מידע ועזרה נמצאים ברמה נפרדת.</p>
+    <div class="pair">
+      <figure><figcaption>לפני <small>האפשרויות בתחתית הבית</small></figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/library.png" alt="קישורי התוכן הנוסף בתחתית הבית" loading="lazy"></div></figure>
+      <figure class="after"><figcaption>אחרי <small>מסך ספרייה חדש</small></figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/library.png" alt="מסך הספרייה החדש עם כרטיסי תוכן גדולים" loading="lazy"></div></figure>
+    </div>
+  </article>
+  <article id="search">
+    <div class="section-head"><span class="number">08</span><h2>חיפוש - שדה וכפתורים שנוח ללחוץ</h2></div>
+    <p class="change">שדה החיפוש מקבל משטח ברור. כפתורי החזרה והניקוי גדולים ומובחנים, וברירת המחדל מציגה ארבעה קיצורי דרך בלבד. חיפוש עדיין מוצא גם מסכים וגם תוכן.</p>
+    <div class="pair">
+      <figure><figcaption>לפני</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/search.png" alt="מסך החיפוש עם כפתורי טקסט קטנים" loading="lazy"></div></figure>
+      <figure class="after"><figcaption>אחרי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/search.png" alt="החיפוש עם שדה ברור וכפתורים גדולים" loading="lazy"></div></figure>
+    </div>
+  </article>
+  <article id="calendar">
+    <div class="section-head"><span class="number">09</span><h2>לוח שנה - ניווט משותף</h2></div>
+    <p class="change">גם במסך קיים יש כעת חזרה ובית באותם מקומות ובאותם גדלים. תפריט הניווט הישן אינו נפתח משם.</p>
+    <div class="pair">
+      <figure><figcaption>לפני</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/calendar.png" alt="לוח השנה עם הניווט הקודם" loading="lazy"></div></figure>
+      <figure class="after"><figcaption>אחרי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/calendar.png" alt="לוח השנה עם כפתורי חזרה ובית אחידים" loading="lazy"></div></figure>
+    </div>
+  </article>
+  <article id="authors">
+    <div class="section-head"><span class="number">10</span><h2>רבנים וכותבים - אותה מעטפת</h2></div>
+    <p class="change">רשימת הכותבים מקבלת את אותו ניווט חזרה ובית. אין מסלול ניווט מקביל דרך תפריט צד.</p>
+    <div class="pair">
+      <figure><figcaption>לפני</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/authors.jpg" alt="מסך הכותבים לפני איחוד הניווט" loading="lazy"></div></figure>
+      <figure class="after"><figcaption>אחרי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/authors.jpg" alt="מסך הכותבים עם ניווט חזרה ובית" loading="lazy"></div></figure>
+    </div>
+  </article>
+  <article id="preferences">
+    <div class="section-head"><span class="number">11</span><h2>העדפות - כניסה ברורה, חזרה צפויה</h2></div>
+    <p class="change">הכניסה מהבית היא כפתור גדול, ובתוך ההעדפות נשמר אותו מבנה ניווט. ההגדרות עצמן ממשיכות להשתמש במסכים האמיתיים של האפליקציה.</p>
+    <div class="pair">
+      <figure><figcaption>לפני</figcaption><div class="phone"><img width="1080" height="2400" src="assets/before/preferences.png" alt="מסך ההעדפות עם תפריט הניווט הקודם" loading="lazy"></div></figure>
+      <figure class="after"><figcaption>אחרי</figcaption><div class="phone"><img width="1080" height="2400" src="assets/after/preferences.png" alt="מסך ההעדפות עם כפתורי חזרה ובית גדולים" loading="lazy"></div></figure>
+    </div>
+  </article>
+  <article id="motion">
+    <div class="section-head"><span class="number">12</span><h2>אותן מחוות, לפני ואחרי</h2></div>
+    <p class="change">גלילה רציפה באמולטור, כולל שינויי כיוון ותנועה קצרה כלפי תחילת הפרק. הסרטונים הם הקלטות מסך, לא אנימציה של העיצוב.</p>
+    <div class="pair">
+      <figure><figcaption>לפני</figcaption><video controls muted playsinline preload="metadata" src="assets/before/reader-scroll.mp4"></video></figure>
+      <figure class="after"><figcaption>אחרי</figcaption><video controls muted playsinline preload="metadata" src="assets/after/reader-scroll.mp4"></video></figure>
+    </div>
+    <p class="video-note">הצילומים המלאים למעלה משמשים לביקורת על הטקסט והפריסה; הווידאו מיועד להשוואת התנועה.</p>
+  </article>
+  <section class="log" aria-labelledby="log-title">
+    <h2 id="log-title">יומן סבבים</h2>
+    <table><thead><tr><th>סבב</th><th>משוב</th><th>כיוון השינוי</th></tr></thead><tbody>
+      <tr><td>01</td><td>הבית יפה, אבל הניווט נשאר מפוזר; הכפתורים קטנים והגלילה מהבהבת.</td><td>תיעוד המצב לפני השינוי.</td></tr>
+      <tr><td>02</td><td>לאחד את המעטפת ולייצב את הקריאה.</td><td>בית כנקודת ניווט, פס קריאה אחד, ספרייה נפרדת, כפתורים גדולים וכותרת מעל אזור תוכן קבוע.</td></tr>
+    </tbody></table>
+  </section>
+</main>
+<footer>לצפייה מקומית פותחים את index.html יחד עם תיקיית assets. לביקורת בתוך GitHub פותחים את REVIEW.md ובוחרים rich diff בלשונית Files changed.</footer>
+</body>
+</html>
