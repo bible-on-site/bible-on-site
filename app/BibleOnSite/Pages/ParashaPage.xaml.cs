@@ -176,7 +176,6 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         {
             ReaderMenuOverlay.SearchRequested += async (_, _) =>
                 await ShellAppNavigator.Instance.GoToAsync(nameof(HomeSearchPage));
-            ReaderMenuOverlay.FullscreenRequested += (_, _) => _chrome.ToggleFullScreen();
         }
     }
 

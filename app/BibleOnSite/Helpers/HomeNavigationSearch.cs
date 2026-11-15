@@ -13,7 +13,7 @@ public static class HomeNavigationSearch
         new("לוח שנה", "לוח הלימוד והפרק לפי תאריך", AppRoutes.LearningCalendar, "calendar date תאריך לוח לימוד יומי"),
         new("מסורה", "חלוקה מסורתית", AppRoutes.Masora, "masora פרשיות חלוקה מסורתית"),
         new("רבנים וכותבים", "לימוד ומאמרים מזוויות נוספות", AppRoutes.Authors, "authors רבנים כותבים מאמרים"),
-        new("אינדקס התנ\"ך", "בחירת ספר ופרק", IndexAction, "index bible ספר פרק חיפוש אינדקס"),
+        new("ניווט בתנ\"ך", "בחירת ספר ופרק", IndexAction, "index bible ספר פרק חיפוש אינדקס התנ\"ך"),
         new("העדפות", "הגדרות התצוגה והלימוד", AppRoutes.Preferences, "settings preferences הגדרות גופן תצוגה"),
         new("תנכפדיה", "אנשים, מקומות ומושגים", AppRoutes.Tanahpedia, "tanahpedia encyclopedia אנציקלופדיה מפה מקומות"),
         new("פרשת השבוע", "פרשות התורה", AppRoutes.ParashaList, "parasha פרשה שבוע תורה"),

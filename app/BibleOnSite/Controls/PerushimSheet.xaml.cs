@@ -62,6 +62,14 @@ public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
 
         _panelHeight = (hostHeight * 0.33) + 90; // Default: 33% + bottom bar
         _expandedHeight = Math.Max(_panelHeight, maxExpandedHeight);
+        if (Config.HomeUxPreview.Enabled)
+        {
+            var dock = (Parent as Layout)?.Children.OfType<ReaderBottomBar>().FirstOrDefault();
+            Margin = new Thickness(12, 0, 12, Math.Max(dock?.Height ?? 0, ReaderBottomBar.TotalHeight) + 8);
+            var available = Math.Max(0, maxExpandedHeight - Margin.VerticalThickness);
+            _panelHeight = Math.Min(_panelHeight, available);
+            _expandedHeight = available;
+        }
 
         if (IsOpen)
         {

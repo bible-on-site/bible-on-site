@@ -19,9 +19,11 @@ public class ToolbarPill : Border
         StrokeThickness = 0;
         Padding = new Thickness(12, 0);
         HeightRequest = SharedTopBar.PillHeight;
-        Margin = new Thickness(4, 0);
+        Margin = Config.HomeUxPreview.Enabled ? 0 : new Thickness(4, 0);
         VerticalOptions = LayoutOptions.Center;
         HorizontalOptions = LayoutOptions.Fill;
-        this.SetAppThemeColor(BackgroundColorProperty, LightColor, DarkColor);
+        this.SetAppThemeColor(BackgroundColorProperty,
+            Config.HomeUxPreview.Enabled ? Color.FromArgb("#E4EAF4") : LightColor,
+            Config.HomeUxPreview.Enabled ? Color.FromArgb("#243C5D") : DarkColor);
     }
 }

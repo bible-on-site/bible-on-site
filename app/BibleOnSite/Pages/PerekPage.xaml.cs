@@ -175,7 +175,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         }
         else if (Config.HomeUxPreview.Enabled)
         {
-            RevealHomeUxHeader();
+            RevealHomeUxControls();
         }
         Shell.SetNavBarIsVisible(this, false);
         _platformChrome.RefreshNativeBack();
@@ -238,10 +238,11 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 CurrentPosition = () => _viewModel.CarouselPosition,
                 ItemCount = () => _viewModel.CarouselPerakim.Count,
                 IsLoading = () => _isLoading,
-                IsSwipeSuppressed = () => _chrome.IsShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen,
+                IsSwipeSuppressed = () => _chrome.IsShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen
+                    || PerushimPanel.IsOpen || ReaderMenuOverlay.IsVisible,
 #if ANDROID
                 ArmUnreceivedPress = (x, y) => LongPressBehavior.BeginUnreceivedPress(x, y, _viewModel.Perek),
-                VerticalContentDrag = UpdateHomeUxHeader,
+                ReadingDragChanged = OnHomeUxReadingDragChanged,
 #endif
             });
     }
@@ -327,7 +328,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 #if !ANDROID
         if (sender is BindableObject { BindingContext: Perek current } && current.PerekId == _viewModel.PerekId)
         {
-            UpdateHomeUxHeader(e.VerticalDelta);
+            UpdateHomeUxScroll(e.VerticalDelta);
         }
 #endif
         _doubleTap.Reset();
@@ -999,7 +1000,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         ReaderToolbar.IsVisible = !ExitFullScreenButton.IsVisible;
         if (Config.HomeUxPreview.Enabled)
         {
-            ApplyHomeUxHeader(_homeUxHeader.IsVisible || selectionBarMode || searching);
+            ApplyHomeUxControls(_homeUxControls.IsVisible || selectionBarMode || searching);
         }
         (Shell.Current as AppShell)?.SetPageNavHidden(this, selectionBarMode || searching);
         Shell.SetBackButtonBehavior(this, new BackButtonBehavior { IsVisible = !searching });
@@ -1218,7 +1219,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
     {
         ReaderScrollTop.NoteScrollOffset(sender, e);
 #if !ANDROID
-        UpdateHomeUxHeader(e.ScrollY - _homeUxTikkunOffset);
+        UpdateHomeUxScroll(e.ScrollY - _homeUxTikkunOffset);
         _homeUxTikkunOffset = e.ScrollY;
 #endif
     }

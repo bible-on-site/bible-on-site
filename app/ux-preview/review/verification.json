@@ -1,25 +1,80 @@
 {
-  "baseline_branch": "master",
-  "baseline_commit": "95c202eb5276e285e870b0187129daba9a732a54",
-  "viewport_initial": [
+  "screen_kind_present": true,
+  "authors_search_bounds": [
+    36,
+    154,
+    753,
+    291
+  ],
+  "home_button_bounds": [
+    769,
+    154,
+    906,
+    291
+  ],
+  "commentary_bounds": [
+    33,
+    1006,
+    1045,
+    2030
+  ],
+  "dock_button_bounds": [
+    711,
+    2072,
+    1024,
+    2294
+  ],
+  "viewport_before": [
     27,
     128,
     1059,
     2337
   ],
-  "viewport_after_continuous_gestures": [
+  "viewport_after": [
     27,
     128,
     1059,
     2337
   ],
   "passed": [
-    "explicit display and commentary actions",
-    "separate article badge",
-    "return to verses from articles",
-    "no legacy reader navigation",
-    "constant viewport",
-    "small upward reveal",
-    "continuous gestures"
-  ]
+    "shared search Screen kind",
+    "Screen result navigation category",
+    "full-width equal-height header",
+    "commentary sheet above dock",
+    "no explicit fullscreen action",
+    "initial controls visible",
+    "both controls hidden after cooldown",
+    "second drag and repeated cooldown",
+    "constant viewport"
+  ],
+  "baseline_branch": "master",
+  "baseline_commit": "95c202eb5276e285e870b0187129daba9a732a54",
+  "cooldown_ms": 1800,
+  "viewport_before_recording": [
+    27,
+    128,
+    1059,
+    2337
+  ],
+  "viewport_after_recording": [
+    27,
+    128,
+    1059,
+    2337
+  ],
+  "native_smoke": [
+    "check_home_and_daily",
+    "check_index",
+    "check_scroll_and_swipe",
+    "check_stacked_reader_links",
+    "check_destinations",
+    "check_global_search",
+    "check_screen_navigation",
+    "check_reading_options"
+  ],
+  "unit_tests_passed": 4284,
+  "host_application_lines_covered": 20246,
+  "host_application_lines_total": 20343,
+  "instrumented_changed_application_lines_covered": 161,
+  "instrumented_changed_application_lines_total": 161
 }

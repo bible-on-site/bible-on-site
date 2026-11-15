@@ -12,10 +12,12 @@ public sealed class SwipeNavigationTracker
     private int _startPosition;
     private bool _horizontal;
     private bool _vertical;
+    private bool _dragging;
     private TouchPosition? _last;
 
     /// <summary>Last finger position observed while the gesture was active.</summary>
     public TouchPosition? Last => _last;
+    public bool IsDragging => _start is not null && _dragging;
 
     /// <summary>Content motion from the current physical drag, before native scrolling or layout.</summary>
     public double? VerticalContentDelta { get; private set; }
@@ -26,6 +28,7 @@ public sealed class SwipeNavigationTracker
         _startPosition = position;
         _horizontal = false;
         _vertical = false;
+        _dragging = false;
         VerticalContentDelta = null;
         _last = start;
     }
@@ -46,6 +49,7 @@ public sealed class SwipeNavigationTracker
         var previous = _last ?? _start.Value;
         var dx = Math.Abs(position.X - _start.Value.X);
         var dy = Math.Abs(position.Y - _start.Value.Y);
+        _dragging |= dx > touchSlop || dy > touchSlop;
         if (dx > touchSlop && dx > dy)
         {
             _horizontal = true;
