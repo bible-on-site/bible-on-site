@@ -4239,7 +4239,8 @@ jobs:
     # already forces data_ci success whenever data checks were needed.
     # Schema-only changes require a separately approved, selective migration.
     # Skip this entire job: success would supersede older queued data deployments.
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && (needs.data_ci.result == 'success' || needs.data_ci.result == 'skipped') && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_deploy_changed == 'true' || needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true') && needs.determine_changes.outputs.data_schema_only_changed == 'false' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    # Cancellation must also stop the always() job before it can dispatch Data CD.
+    if: ${{ always() && !cancelled() && needs.cross_module_ci.result == 'success' && (needs.data_ci.result == 'success' || needs.data_ci.result == 'skipped') && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_deploy_changed == 'true' || needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true') && needs.determine_changes.outputs.data_schema_only_changed == 'false' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read
