@@ -169,7 +169,7 @@ beforeAll(async () => {
 		.join("\n");
 	await conn.query("SET FOREIGN_KEY_CHECKS = 0");
 	for (const match of (canonical + referenceDDL).matchAll(
-		/CREATE TABLE `([^`]+)` \([\s\S]*?\) ENGINE[^;]*;/g,
+		/CREATE TABLE (?:IF NOT EXISTS )?`([^`]+)` \([\s\S]*?\) ENGINE[^;]*;/g,
 	)) {
 		// nosemgrep: javascript.lang.security.audit.db.formatted-sql-string, node-mysql-sqli -- DDL comes only from fixed repository schema files in a disposable loopback database.
 		if (needed.delete(match[1])) await conn.query(match[0]);
