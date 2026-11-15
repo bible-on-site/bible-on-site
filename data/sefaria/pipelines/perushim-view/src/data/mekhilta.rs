@@ -275,9 +275,15 @@ fn flatten_tractates(
         );
     }
     let mut notes = Vec::new();
+    let mut emitted = HashSet::new();
     for (target, sources) in target_sources {
         let mut note_idx = 0;
         for source in sources {
+            // Chapter metadata may associate one indivisible paragraph with
+            // several verses. The sorted targets select its passage's first.
+            if !emitted.insert(source) {
+                continue;
+            }
             if let Some(text) = source_text.get(&source) {
                 notes.push(make_note(perush_id, target, note_idx, text));
                 note_idx += 1;
@@ -480,6 +486,33 @@ mod tests {
         assert_eq!(notes[0].note_content, "end of section four");
         assert_eq!(notes[1].note_content, "end of section five");
         assert_eq!(notes[4].note_content, "last included paragraph");
+
+        let mut shared = tractates();
+        let nodes = shared
+            .get_document_mut("alt_structs")
+            .unwrap()
+            .get_document_mut("Chapter")
+            .unwrap()
+            .get_array_mut("nodes")
+            .unwrap();
+        nodes[1]
+            .as_document_mut()
+            .unwrap()
+            .get_array_mut("refs")
+            .unwrap()
+            .push(bson!(
+                "Mekhilta DeRabbi Yishmael, Tractate Vayehi Beshalach 3:18-27"
+            ));
+        let first_verse_notes = flatten(&shared, 2).unwrap();
+        assert_eq!(first_verse_notes.len(), notes.len());
+        assert_eq!(
+            first_verse_notes
+                .iter()
+                .map(|n| (n.perek_id, n.pasuk, n.note_idx))
+                .collect::<Vec<_>>(),
+            addresses,
+            "A shared source paragraph belongs at the first verse of its passage"
+        );
     }
 
     #[test]
@@ -624,9 +657,10 @@ mod tests {
             let source = &doc.get_array("versions").unwrap()[0];
             let source_count = nonempty_paragraphs(source);
             assert!(source_count > 0, "selected Mekhilta version is empty");
-            assert!(
-                notes.len() >= source_count,
-                "source paragraphs were dropped"
+            assert_eq!(
+                notes.len(),
+                source_count,
+                "keep every source paragraph once"
             );
             let verses: HashSet<_> = notes.iter().map(|n| (n.perek_id, n.pasuk)).collect();
             let keys: HashSet<_> = notes
@@ -655,9 +689,9 @@ mod tests {
                 // where several source paragraphs share one biblical verse.
                 assert!(notes.len() > verses.len());
                 if source_count == 2043 {
-                    // Full current source audited with its Chapter refs and
-                    // the two reviewed gap assignments: 41 repeated targets.
-                    assert_eq!(notes.len(), 2084);
+                    // Shared verse ranges use their first verse; both reviewed
+                    // gap assignments remain present without repeating text.
+                    assert_eq!(notes.len(), 2043);
                 }
             }
             works += 1;

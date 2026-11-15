@@ -149,7 +149,8 @@ mod tests {
                 match anchor {
                     None => placeholders.push((c + 1, u + 1)),
                     Some(anchor) => {
-                        assert!(!anchor.refs().is_empty());
+                        assert_eq!(anchor.refs().len(), 1, "Use the passage's first verse");
+                        assert!(anchor.refs()[0].starts_with(&format!("Proverbs {}:", c + 1)));
                         let mut seen = HashSet::new();
                         for reference in anchor.refs() {
                             assert!(seen.insert(resolve_ref(reference, &counts).unwrap()));

@@ -147,6 +147,12 @@ not added to the catalog. The bundled notes' catalog
 identity must match the committed web catalog before any fallback is accepted.
 Mapping errors stop generation before JSON, SQLite, or MySQL output is written.
 
+Anchors identify the original passage being explained. Supporting quotations
+from Nevi'im/Ketuvim, and comparisons to other passages, do not become targets.
+A source unit explaining a set of pesukim is attached to the first verse of
+that passage, with its full text retained. A unit that clearly moves to a
+separate Torah passage can have another passage-start anchor.
+
 #### Tanchuma dictionary
 
 The selected edition is **Midrash Tanchuma -- Torat Emet**. Its 54 parashot,
@@ -162,17 +168,20 @@ references, so they are not used as automatic assignments.
 
 Each parashah key contains a siman list; each siman contains a paragraph list.
 A paragraph entry is a canonical reference such as `"Genesis 1:1"`, an array
-of references when an indivisible paragraph explains several verses, or `null`
-for an explicitly reviewed unit without a biblical subject. A source siman
+of passage starts when an indivisible paragraph explains separate Torah
+passages, or `null` for an explicitly reviewed unit without an identifiable
+Torah context. A source siman
 stored as one string has one paragraph entry. Original text is retained intact.
 
-The anchors describe the passage's exegetical subjects. Proems and continuations
-can share a siman's subject; incidental quotations are not treated as subjects.
-Some source units cross chapters and some explain verses outside the parashah
-or outside the Torah. Those passages have their actual subjects mapped rather
-than being forced into a parashah's first verse. Only three slots are omitted:
-Bereshit 13:1 (a standalone dream anecdote without a biblical lemma), Masei 13:2
-and V'Zot HaBerachah 7:2 (book-ending colophons).
+Proems and continuations remain attached to their Torah context. For example,
+Vayikra 8 explains the opening Leviticus 1:1-2 passage and the separate
+bird-offering passage at 1:14. It therefore has anchors at 1:1 and 1:14; its
+extended Jonah discussion remains supporting material. All Tanchuma targets
+are in the Torah. Eleven slots are explicitly omitted: Bereshit 13:1-5 and
+Toldot 14:1-3 are detached anecdotes and Nevi'im/Ketuvim appendices without a defensible Torah
+context; Masei 5:1 is a standalone Joshua/Achan exposition; Masei 13:2 and
+V'Zot HaBerachah 7:2 are book-ending colophons.
+The remaining 2,110 paragraphs produce 2,258 Torah passage-start assignments.
 
 [`tanchuma_manifest.json`](src/data/tanchuma_manifest.json) records edition,
 source revision, reading order, paragraph counts and text fingerprints.
@@ -194,11 +203,12 @@ must receive their own reviewed mappings before inclusion.
 
 Midrash Mishlei's schema labels its second address `Verse`, but the Buber text
 uses packed homily numbers: source 11:2 explains Proverbs 11:21, and source 31:2
-explains Proverbs 31:10-11. Its
+explains Proverbs 31:10-11 and is attached to 31:10. Its
 [`mishlei_mapping.json`](src/data/mishlei_mapping.json) maps all 140 source slots
-at their deepest text granularity, producing 397 verse assignments. The two
+at their deepest text granularity, producing 138 passage-start assignments. The two
 literal missing-chapter placeholders at source 3:1 and 18:1 are explicitly null.
-Original homily text is preserved, including when several subjects share it.
+Original homily text is preserved in full; supporting quotations do not create
+additional targets.
 [`mishlei_manifest.json`](src/data/mishlei_manifest.json) pins the Buber edition
 and exact reviewed source texts; ten citation/text corrections between the
 2024 export and current dump have been manually checked. Unknown changes fail
@@ -210,7 +220,10 @@ The newer Mekhilta layout requires both `startingAddress` and
 ranges are expanded exactly. Two missing source paragraphs have explicit,
 guarded assignments in [`mekhilta.rs`](src/data/mekhilta.rs): Vayassa 4:22 to
 Exodus 16:15 and Nezikin 16:28 to Exodus 22:14. Every nonempty selected paragraph
-must be covered. In the pinned dump, ordinary fullest-version selection keeps
+must be covered. Shared source paragraphs are emitted once, at the first verse
+of their mapped passage. In the current tractate layout this preserves all
+2,043 paragraphs without repeating them at overlapping verse addresses.
+In the pinned dump, ordinary fullest-version selection keeps
 805 Wikisource paragraphs at 309 verses; this is not a merge of all editions.
 
 מדרש אגדה is deliberately excluded: its apparent verse structure contains
@@ -219,9 +232,9 @@ mixed numbering and erroneous coordinates. See
 מדרש שכל טוב also needs a manual audit: supplementary paragraphs stored under
 Genesis 15:21 and 19:35 explain other verses, including other chapters, despite
 having valid coordinates. See [the supplementary-paragraph mapping follow-up](https://github.com/bible-on-site/bible-on-site/issues/3371).
-לקח טוב also contains misplaced paragraphs and appended collections, including
-material for Exodus 27:21 under 27:20 and the next parashah's proem under
-Leviticus 5:26. See [the complete paragraph-audit follow-up](https://github.com/bible-on-site/bible-on-site/issues/3374).
+לקח טוב also contains appended collections, including the next parashah's proem
+under Leviticus 5:26, which needs its own Torah context. See
+[the complete paragraph-audit follow-up](https://github.com/bible-on-site/bible-on-site/issues/3374).
 Other literary midrashim such as רבה and פרקי דרבי אליעזר are not automatically
 included. Their chapter numbers need separate, reviewed verse maps.
 
@@ -231,7 +244,8 @@ MongoDB dump available, run `cargo test -p perushim-view --features integration`
 The integration tests execute the actual aggregation and verify mapped notes.
 
 To refresh delivered assets, generate JSON, SQLite and MySQL into `.output`
-before replacing any committed files. Publish the three web files (parshanim,
+from the last published baseline before replacing any committed files. A
+discarded draft pack must not become a fallback for another draft. Publish the three web files (parshanim,
 perushim and perush-names) together with the app catalog and notes gzip. Validate
 the matching catalog/notes/search SQLite triple with
 `app/devops/prepare_perushim_assets.py`; the search index ships through the CI
