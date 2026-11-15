@@ -79,14 +79,14 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             // the session still re-attempts teardown before creating anything.
             if (!TransportRecovery(exception))
             {
-                SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
+                SaveStartupDiagnostics(exception);
                 throw;
             }
             Output.WriteLine($"{Configuration.Platform}: adb transport recovered; acquiring the session once more.");
         }
         catch (Exception exception)
         {
-            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
+            SaveStartupDiagnostics(exception);
             throw;
         }
         try
@@ -95,10 +95,20 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         }
         catch (Exception exception)
         {
-            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
+            SaveStartupDiagnostics(exception);
             throw;
         }
         return default;
+    }
+
+    private void SaveStartupDiagnostics(Exception exception)
+    {
+        var name = $"SessionStartup-{Guid.NewGuid():N}";
+        if (exception is ReaderStartupTimeoutException readinessFailure)
+        {
+            FailureDiagnostics.BeforeStartupFailure(name, Driver?.SessionId?.ToString(), Output.WriteLine, readinessFailure);
+        }
+        FailureDiagnostics.PreserveFailure(() => SaveDiagnostics(name, "failed", exception), Output.WriteLine);
     }
 
     // The collection fixture owns the driver's lifetime, so a finished test

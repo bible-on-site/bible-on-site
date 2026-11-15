@@ -61,21 +61,19 @@ internal static class E2eXamlCompilation
     private static bool ConstructsControl(MetadataReader metadata, byte[] il, string controlType, List<string>? targets)
     {
         var constructsControl = false;
-        foreach (var instruction in E2eIl.Read(il))
+        foreach (var (handle, target) in E2eIl.Read(il)
+            .Where(instruction => instruction.Opcode == OpCodes.Newobj)
+            .Select(instruction => MetadataTokens.EntityHandle(instruction.Operand))
+            .Select(handle => (Handle: handle, Target: E2eIl.ReadMethodTarget(metadata, handle))))
         {
-            if (instruction.Opcode == OpCodes.Newobj)
+            if (targets != null && targets.Count < 8)
             {
-                var handle = MetadataTokens.EntityHandle(instruction.Operand);
-                var target = E2eIl.ReadMethodTarget(metadata, handle);
-                if (targets != null && targets.Count < 8)
-                {
-                    targets.Add($"{handle.Kind} 0x{MetadataTokens.GetToken(handle):x8} -> "
-                        + $"{target.Parent.Kind} 0x{MetadataTokens.GetToken(target.Parent):x8} {target.Type}::{target.Name}");
-                }
-                // Direct control construction proves compilation even when
-                // Hot Reload retains a conditional path through runtime inflation.
-                constructsControl |= target.Name == ".ctor" && target.Type == controlType;
+                targets.Add($"{handle.Kind} 0x{MetadataTokens.GetToken(handle):x8} -> "
+                    + $"{target.Parent.Kind} 0x{MetadataTokens.GetToken(target.Parent):x8} {target.Type}::{target.Name}");
             }
+            // Direct control construction proves compilation even when
+            // Hot Reload retains a conditional path through runtime inflation.
+            constructsControl |= target.Name == ".ctor" && target.Type == controlType;
         }
         return constructsControl;
     }

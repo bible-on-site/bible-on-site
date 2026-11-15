@@ -22,9 +22,15 @@ internal static class FailureDiagnostics
         WaitForCapture(Environment.GetEnvironmentVariable(DirectoryVariable), test, sessionId, log, CaptureBudget,
             notificationPort: Environment.GetEnvironmentVariable(PortVariable), scenarioStartedAtUtc: scenarioStartedAtUtc);
 
+    internal static void BeforeStartupFailure(string test, string? sessionId, Action<string> log,
+        ReaderStartupTimeoutException failure) =>
+        WaitForCapture(Environment.GetEnvironmentVariable(DirectoryVariable), test, sessionId, log, CaptureBudget,
+            notificationPort: Environment.GetEnvironmentVariable(PortVariable),
+            scenarioStartedAtUtc: failure.StartedAtUtc, startupFailure: failure);
+
     internal static void WaitForCapture(string? directory, string test, string? sessionId,
         Action<string> log, TimeSpan budget, Action<string>? published = null, string? notificationPort = null,
-        DateTimeOffset? scenarioStartedAtUtc = null)
+        DateTimeOffset? scenarioStartedAtUtc = null, ReaderStartupTimeoutException? startupFailure = null)
     {
         if (string.IsNullOrEmpty(directory))
         {
@@ -48,15 +54,21 @@ internal static class FailureDiagnostics
             var ack = Path.Join(directory, $"{id}.ack.json");
             var request = Path.Join(directory, $"{id}.request.json");
             var temporary = request + ".tmp";
-            File.WriteAllText(temporary, JsonSerializer.Serialize(new
+            var payload = new Dictionary<string, object?>
             {
-                id,
-                test,
-                sessionId,
-                scenarioStartedAtUtc,
-                failedAtUtc,
-                deadlineUtc = failedAtUtc + budget,
-            }));
+                ["id"] = id,
+                ["test"] = test,
+                ["sessionId"] = sessionId,
+                ["scenarioStartedAtUtc"] = scenarioStartedAtUtc,
+                ["failedAtUtc"] = failedAtUtc,
+                ["deadlineUtc"] = failedAtUtc + budget,
+            };
+            if (startupFailure != null)
+            {
+                payload["failurePhase"] = "reader-startup";
+                payload["launchId"] = startupFailure.LaunchId;
+            }
+            File.WriteAllText(temporary, JsonSerializer.Serialize(payload));
             File.Move(temporary, request);
             published?.Invoke(request);
 

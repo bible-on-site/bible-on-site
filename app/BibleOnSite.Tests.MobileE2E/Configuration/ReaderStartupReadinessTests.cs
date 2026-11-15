@@ -91,7 +91,7 @@ public sealed class ReaderStartupReadinessTests
     {
         var clock = new FakeClock();
         var timeouts = new List<TimeSpan>();
-        var exception = Assert.Throws<TimeoutException>(() => ReaderStartupReadiness.WaitForReady(
+        var exception = Assert.Throws<ReaderStartupTimeoutException>(() => ReaderStartupReadiness.WaitForReady(
             LaunchId, TimeSpan.FromMilliseconds(450), timeout =>
             {
                 timeouts.Add(timeout);
@@ -110,7 +110,7 @@ public sealed class ReaderStartupReadinessTests
     {
         var clock = new FakeClock();
         var reads = 0;
-        Assert.Throws<TimeoutException>(() => ReaderStartupReadiness.WaitForReady(
+        Assert.Throws<ReaderStartupTimeoutException>(() => ReaderStartupReadiness.WaitForReady(
             LaunchId, TimeSpan.FromSeconds(45), timeout =>
             {
                 Assert.Equal(TimeSpan.FromSeconds(10), timeout);
@@ -127,7 +127,7 @@ public sealed class ReaderStartupReadinessTests
     [InlineData(-1)]
     public void ExhaustedBudgetNeverQueriesTheEndpoint(int milliseconds)
     {
-        Assert.Throws<TimeoutException>(() => ReaderStartupReadiness.WaitForReady(LaunchId,
+        Assert.Throws<ReaderStartupTimeoutException>(() => ReaderStartupReadiness.WaitForReady(LaunchId,
             TimeSpan.FromMilliseconds(milliseconds), _ => throw new InvalidOperationException(),
             () => TimeSpan.Zero, _ => throw new InvalidOperationException()));
     }

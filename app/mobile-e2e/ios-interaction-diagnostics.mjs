@@ -21,6 +21,27 @@ function errorDetails(error) {
     signal: error.signal, stdout: error.stdout, stderr: error.stderr };
 }
 
+function startupUtcInstant(value) {
+  if (typeof value !== 'string' || value.trim() !== value
+    || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,7})?(?:Z|\+00:00)$/.test(value)) return NaN;
+  const instant = Date.parse(value);
+  return Number.isFinite(instant) && new Date(instant).toISOString().slice(0, 19) === value.slice(0, 19)
+    ? instant : NaN;
+}
+
+function confirmedReaderStartupFailure(request, currentTime) {
+  const started = startupUtcInstant(request.scenarioStartedAtUtc);
+  const failed = startupUtcInstant(request.failedAtUtc);
+  const deadline = startupUtcInstant(request.deadlineUtc);
+  return request.failurePhase === 'reader-startup'
+    && typeof request.launchId === 'string' && request.launchId.length === 36
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(request.launchId)
+    && typeof request.sessionId === 'string' && request.sessionId.length > 0 && request.sessionId.length <= 128
+    && !/[^A-Za-z0-9-]/.test(request.sessionId)
+    && Number.isFinite(started) && Number.isFinite(failed) && Number.isFinite(deadline)
+    && started <= failed && failed <= currentTime && failed <= deadline && deadline - failed <= 15000;
+}
+
 // Kernel thread rows preserve an instantaneous host-kernel view:
 // proc_pidinfo thread flavors copy proc-table state inside one syscall each —
 // no task_for_pid, suspension, debugger handshake or CoreSimulator RPC.
@@ -197,6 +218,29 @@ export function iosInteractionDiagnostics({ artifacts, udid, nativeLog, execute,
       return record;
     },
     async failure(request, { signal } = {}) {
+      const prefix = resolve(artifacts, `native-failure-${request.id}`);
+      if (request.failurePhase != null || request.launchId != null) {
+        // A startup gate intentionally makes no native queries. Its explicit
+        // confirmed-failure handoff may pin from the existing device log now;
+        // an older interaction belongs to a different phase and cannot help.
+        let observation = null;
+        let result = { status: 'unknown', pid: null, reason: 'Reader startup failure context is incomplete or invalid.' };
+        const observedAt = now();
+        if (confirmedReaderStartupFailure(request, observedAt)) {
+          let pid = null;
+          let identityError;
+          try { pid = readPid(); }
+          catch (error) { identityError = errorDetails(error); }
+          observation = { pid, observedAt: new Date(observedAt).toISOString(),
+            source: 'existing UDID-scoped native log at confirmed reader-startup failure',
+            failurePhase: request.failurePhase, launchId: request.launchId, sessionId: request.sessionId,
+            scenarioStartedAtUtc: request.scenarioStartedAtUtc, ...(identityError ? { identityError } : {}) };
+          result = await samplePinnedIosApp({ udid, pid, prefix,
+            deadlineUtc: request.deadlineUtc, execute, inspectorPath, devicesRoot, now, signal });
+        }
+        writeFileSync(`${prefix}.json`, JSON.stringify({ request, observation, result }, null, 2));
+        return result;
+      }
       const failedAt = Date.parse(request.failedAtUtc);
       const hasScenarioBoundary = request.scenarioStartedAtUtc != null;
       const scenarioStartedAt = typeof request.scenarioStartedAtUtc === 'string'
@@ -218,7 +262,6 @@ export function iosInteractionDiagnostics({ artifacts, udid, nativeLog, execute,
           && Number.isFinite(startedAt) && startedAt >= scenarioStartedAt
           && startedAt <= capturedAt && capturedAt >= scenarioStartedAt;
       });
-      const prefix = resolve(artifacts, `native-failure-${request.id}`);
       const result = record
         ? await samplePinnedIosApp({ udid, pid: record.pid, prefix,
           deadlineUtc: request.deadlineUtc, execute, inspectorPath, devicesRoot, now, signal })

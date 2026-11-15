@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using BibleOnSite.Tests.MobileE2E.Platforms;
+using OpenQA.Selenium;
 using OpenQA.Selenium.Appium;
 using Xunit;
 
@@ -66,6 +67,8 @@ public sealed class FailureDiagnosticsTests : IDisposable
                 Assert.Equal("test identity", root.GetProperty("test").GetString());
                 Assert.Equal("session identity", root.GetProperty("sessionId").GetString());
                 Assert.Equal(JsonValueKind.Null, root.GetProperty("scenarioStartedAtUtc").ValueKind);
+                Assert.False(root.TryGetProperty("failurePhase", out _));
+                Assert.False(root.TryGetProperty("launchId", out _));
                 Assert.Equal(TimeSpan.FromSeconds(1),
                     root.GetProperty("deadlineUtc").GetDateTimeOffset() - root.GetProperty("failedAtUtc").GetDateTimeOffset());
                 Assert.False(File.Exists(request + ".tmp"));
@@ -188,6 +191,77 @@ public sealed class FailureDiagnosticsTests : IDisposable
         var scenario = new FakeDeviceTest(new ListOutput(_log), new FakeSession(Path.Join(_directory, "artifacts")));
         Assert.Same(failure, Assert.Throws<InvalidOperationException>(() => scenario.Execute(() => throw failure)));
         Assert.Contains(_log, line => line.Contains("handshake failed"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReadinessFailureCapturesCurrentLaunchBeforeAnyScreenshot(bool afterDriverRecovery)
+    {
+        var artifacts = Path.Join(_directory, "startup-artifacts");
+        var observed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var supervisor = new Supervisor(_directory, async (id, stream, cancellation) =>
+        {
+            var request = Path.Join(_directory, $"{id}.request.json");
+            observed.TrySetResult(request);
+            await release.Task.WaitAsync(cancellation);
+            Acknowledge(request);
+            Reply(id, stream, cancellation);
+        });
+        Environment.SetEnvironmentVariable(FailureDiagnostics.DirectoryVariable, _directory);
+        Environment.SetEnvironmentVariable(FailureDiagnostics.PortVariable, supervisor.Port);
+        var executor = new StartupExecutor();
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var session = new StartupSession(artifacts, driver);
+        var test = new StartupDeviceTest(new ListOutput(_log), session, afterDriverRecovery);
+        var previousRecovery = MobileDeviceTest.TransportRecovery;
+        var recoveries = 0;
+        MobileDeviceTest.TransportRecovery = _ =>
+        {
+            recoveries++;
+            return false;
+        };
+        try
+        {
+            var beforeConnect = DateTimeOffset.UtcNow;
+            var continuation = StartClient(() => Assert.Throws<ReaderStartupTimeoutException>(
+                () => test.InitializeAsync().GetAwaiter().GetResult()));
+            var request = await observed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            DateTimeOffset readinessStartedAt;
+            using (var json = JsonDocument.Parse(File.ReadAllText(request)))
+            {
+                var root = json.RootElement;
+                Assert.Equal("reader-startup", root.GetProperty("failurePhase").GetString());
+                Assert.Equal(StartupDeviceTest.LaunchId, root.GetProperty("launchId").GetString());
+                Assert.Equal("startup-session", root.GetProperty("sessionId").GetString());
+                readinessStartedAt = root.GetProperty("scenarioStartedAtUtc").GetDateTimeOffset();
+                Assert.InRange(readinessStartedAt, beforeConnect, root.GetProperty("failedAtUtc").GetDateTimeOffset());
+                Assert.Equal(TimeSpan.FromSeconds(15),
+                    root.GetProperty("deadlineUtc").GetDateTimeOffset() - root.GetProperty("failedAtUtc").GetDateTimeOffset());
+            }
+            Assert.False(continuation.IsCompleted);
+            Assert.False(Directory.Exists(artifacts));
+            Assert.DoesNotContain(DriverCommand.Screenshot, executor.Commands);
+            Assert.DoesNotContain(DriverCommand.GetPageSource, executor.Commands);
+            Assert.Equal(afterDriverRecovery ? 2 : 1, session.Acquisitions);
+            Assert.Equal(afterDriverRecovery ? 2 : 1, test.Connects);
+            Assert.Equal(afterDriverRecovery ? 1 : 0, recoveries);
+
+            release.SetResult();
+            var failure = await continuation.WaitAsync(TimeSpan.FromSeconds(5));
+            await supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(readinessStartedAt, failure.StartedAtUtc);
+            Assert.Equal(StartupDeviceTest.LaunchId, failure.LaunchId);
+            Assert.Single(Directory.GetFiles(_directory, "*.request.json"));
+            Assert.Single(Directory.GetFiles(artifacts, "SessionStartup-*-failed.png"));
+            Assert.Single(Directory.GetFiles(artifacts, "SessionStartup-*-failed.xml"));
+        }
+        finally
+        {
+            release.TrySetResult();
+            MobileDeviceTest.TransportRecovery = previousRecovery;
+        }
     }
 
     [Fact]
@@ -364,5 +438,59 @@ public sealed class FailureDiagnosticsTests : IDisposable
         : MobileDeviceTest(output, session)
     {
         public void Execute(Action body) => Scenario(body);
+    }
+
+    private sealed class StartupSession(string artifacts, AppiumDriver driver) : IMobileDeviceSession
+    {
+        public MobilePlatformAdapter Adapter { get; } = new IosPlatformAdapter();
+        public MobileTestConfiguration Configuration { get; } = new(MobilePlatform.IOS,
+            "/test/app", "test-device", artifacts, new Uri("http://127.0.0.1:4723"));
+        public AppiumDriver Driver { get; } = driver;
+        public int Acquisitions { get; private set; }
+        public void Acquire(IReadOnlyDictionary<string, string>? environment) => Acquisitions++;
+    }
+
+    private sealed class StartupDeviceTest(ITestOutputHelper output, IMobileDeviceSession session, bool driverFailureFirst)
+        : MobileDeviceTest(output, session)
+    {
+        internal const string LaunchId = "7cc4c496-4e24-478c-93eb-d62e9ec0077c";
+        public int Connects { get; private set; }
+        protected override void Connect()
+        {
+            Connects++;
+            AcquireSession();
+            if (driverFailureFirst && Connects == 1)
+            {
+                throw new UnknownErrorException("invalid session id");
+            }
+            var elapsed = TimeSpan.Zero;
+            ReaderStartupReadiness.WaitForReady(LaunchId, TimeSpan.FromSeconds(45), _ =>
+            {
+                elapsed = TimeSpan.FromSeconds(45);
+                throw new HttpRequestException("Connection refused (127.0.0.1:4787)");
+            }, () => elapsed, _ => throw new InvalidOperationException("The readiness budget is already exhausted."));
+        }
+    }
+
+    private sealed class StartupExecutor : ICommandExecutor
+    {
+        private readonly Dictionary<string, CommandInfo> _commands = [];
+        public List<string> Commands { get; } = [];
+        public bool TryAddCommand(string name, CommandInfo? info) =>
+            info != null && _commands.TryAdd(name, info);
+        public void Dispose() => _commands.Clear();
+        public Response Execute(Command command) => ExecuteAsync(command).GetAwaiter().GetResult();
+        public Task<Response> ExecuteAsync(Command command)
+        {
+            Commands.Add(command.Name);
+            object? value = command.Name switch
+            {
+                var name when name == DriverCommand.NewSession => new Dictionary<string, object> { ["platformName"] = "iOS" },
+                var name when name == DriverCommand.Screenshot => "AA==",
+                var name when name == DriverCommand.GetPageSource => "<App />",
+                _ => null
+            };
+            return Task.FromResult(new Response("startup-session", value, WebDriverResult.Success));
+        }
     }
 }

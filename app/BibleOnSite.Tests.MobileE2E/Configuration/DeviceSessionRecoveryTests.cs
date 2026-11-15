@@ -141,7 +141,7 @@ public sealed class DeviceSessionRecoveryTests
         };
         try
         {
-            var failure = await Assert.ThrowsAsync<TimeoutException>(() => test.InitializeAsync().AsTask());
+            var failure = await Assert.ThrowsAsync<ReaderStartupTimeoutException>(() => test.InitializeAsync().AsTask());
             Assert.Contains("did not settle within 45 seconds", failure.Message);
             Assert.Contains("Connection refused (127.0.0.1:4787)", failure.Message);
             Assert.False(DeviceSessionDeath.Matches(failure));
@@ -154,6 +154,38 @@ public sealed class DeviceSessionRecoveryTests
         finally
         {
             MobileDeviceTest.TransportRecovery = previous;
+        }
+    }
+
+    [Fact]
+    public async Task OccupiedStartupArtifactPathCannotReplaceTheReadinessTimeout()
+    {
+        File.WriteAllText(_artifacts, "existing file must survive");
+        var session = new FakeSession(_artifacts);
+        var failure = new ReaderStartupTimeoutException("7cc4c496-4e24-478c-93eb-d62e9ec0077c",
+            DateTimeOffset.UtcNow, "Reader startup timed out: Connection refused (127.0.0.1:4787)");
+        var test = new StartupFaultDeviceTest(new ListOutput(_log), session, failure);
+        var previous = MobileDeviceTest.TransportRecovery;
+        var recoveries = 0;
+        MobileDeviceTest.TransportRecovery = _ =>
+        {
+            recoveries++;
+            return true;
+        };
+        try
+        {
+            var thrown = await Assert.ThrowsAsync<ReaderStartupTimeoutException>(() => test.InitializeAsync().AsTask());
+            Assert.Same(failure, thrown);
+            Assert.Equal(1, test.Connects);
+            Assert.Equal(1, session.Acquisitions);
+            Assert.Equal(0, recoveries);
+            Assert.Equal("existing file must survive", File.ReadAllText(_artifacts));
+            Assert.Contains(_log, line => line.Contains("Failure diagnostics failed"));
+        }
+        finally
+        {
+            MobileDeviceTest.TransportRecovery = previous;
+            File.Delete(_artifacts);
         }
     }
 
@@ -350,6 +382,18 @@ public sealed class DeviceSessionRecoveryTests
                     elapsed = TimeSpan.FromSeconds(45);
                     throw new HttpRequestException("Connection refused (127.0.0.1:4787)");
                 }, () => elapsed, _ => throw new InvalidOperationException("The readiness budget is already exhausted."));
+        }
+    }
+
+    private sealed class StartupFaultDeviceTest(ITestOutputHelper output, IMobileDeviceSession session,
+        ReaderStartupTimeoutException failure) : MobileDeviceTest(output, session)
+    {
+        public int Connects { get; private set; }
+        protected override void Connect()
+        {
+            Connects++;
+            AcquireSession();
+            throw failure;
         }
     }
 }

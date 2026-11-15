@@ -83,6 +83,11 @@ function failureSignal(extra = {}) {
     failedAtUtc: "2026-10-28T16:33:00Z", deadlineUtc: "2026-10-28T16:33:15Z", ...extra };
 }
 
+function startupFailure(extra = {}) {
+  return failureSignal({ failurePhase: "reader-startup", launchId: "815d55be-d9fc-47ac-85d8-983b58a43998",
+    scenarioStartedAtUtc: "2026-10-28T16:32:10Z", ...extra });
+}
+
 function pendingRequest(sequence, request = "SettingsDisplayRow") {
   return { sequence, command: "POST /session/session-1/elements", request,
     sessionId: "session-1", startedAt: "2026-10-28T16:32:20Z", capturedAt: "2026-10-28T16:32:45Z", pending: true };
@@ -141,6 +146,171 @@ test("failure handoff samples the pinned process while all existing caps remain 
     "8421 259 W 0 0 main-thread\n");
   assert.equal(readFileSync(join(f.directory, `native-failure-${failureSignal().id}-sample-8421.txt`), "utf8"),
     "sampled native stack");
+});
+
+test("confirmed reader startup failure pins its current app without any pending native request", async t => {
+  const f = diagnosticFixture(t);
+  let reads = 0;
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
+    readPid() { reads++; return 8421; } });
+  assert.equal(reads, 0, "healthy startup does not inspect or pin an app");
+  assert.deepEqual(f.calls, []);
+  const failure = startupFailure();
+
+  assert.deepEqual(await diagnostics.failure(failure), { status: "captured", pid: 8421 });
+  assert.equal(reads, 1);
+  assert.deepEqual(f.calls.map(call => call.command),
+    [inspectorPath, "xcrun", inspectorPath, "/usr/bin/sample", inspectorPath, "sudo"]);
+  assert.deepEqual(f.calls.map(call => call.options.timeout), [5000, 5000, 5000, 5000, 5000, 10000]);
+  assert.ok(f.calls.every(call => call.options.signal === f.calls[0].options.signal));
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failure.id}.json`), "utf8"));
+  assert.equal(evidence.observation.pid, 8421);
+  assert.equal(evidence.observation.failurePhase, "reader-startup");
+  assert.equal(evidence.observation.launchId, failure.launchId);
+  assert.equal(evidence.observation.sessionId, failure.sessionId);
+  assert.equal(evidence.observation.source, "existing UDID-scoped native log at confirmed reader-startup failure");
+  assert.equal(evidence.observation.observedAt, new Date(f.now()).toISOString());
+  assert.equal(evidence.observation.request, undefined);
+});
+
+test("reader startup accepts .NET UTC timestamps with seven fractional digits and an explicit offset", async t => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f });
+  const failure = startupFailure({ scenarioStartedAtUtc: "2026-10-28T16:32:10.0123456+00:00",
+    failedAtUtc: "2026-10-28T16:32:59.1234567+00:00", deadlineUtc: "2026-10-28T16:33:14.1234567+00:00" });
+
+  assert.deepEqual(await diagnostics.failure(failure), { status: "captured", pid: 8421 });
+  assert.ok(f.calls.some(call => call.command === "/usr/bin/sample"));
+  assert.ok(f.calls.some(call => call.command === "sudo"));
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failure.id}.json`), "utf8"));
+  assert.equal(evidence.observation.scenarioStartedAtUtc, failure.scenarioStartedAtUtc);
+  assert.equal(evidence.request.deadlineUtc, failure.deadlineUtc);
+});
+
+test("reader startup never attributes an earlier interaction's PID to the current launch", async t => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
+    execute: async (command, args, options) => {
+      const result = await f.execute(command, args, options);
+      return command === inspectorPath && args[0] !== "--threads"
+        ? { stdout: "9912 L " + appPath(udid), stderr: "" } : result;
+    } });
+  const earlier = pendingRequest(1, "terminate_app");
+  await diagnostics.capture(earlier.command, earlier);
+  earlier.pending = false;
+  earlier.status = 500;
+  writeFileSync(f.nativeLog, "2026-10-28 16:32:59.000 Df BibleOnSite[9912:def] current launch\n");
+  f.calls.length = 0;
+
+  assert.deepEqual(await diagnostics.failure(startupFailure()), { status: "captured", pid: 9912 });
+  assert.deepEqual(f.calls[0].args, ["9912"]);
+  assert.ok(f.calls.every(call => !call.args.includes("8421")));
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failureSignal().id}.json`), "utf8"));
+  assert.equal(evidence.observation.pid, 9912);
+  assert.equal(evidence.observation.capturedRequest, undefined);
+});
+
+test("ordinary failure with null startup fields retains its original interaction pin", async t => {
+  const f = diagnosticFixture(t);
+  let reads = 0;
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
+    readPid() { reads++; return reads === 1 ? 8421 : 9912; } });
+  const request = pendingRequest(1);
+  await diagnostics.capture(request.command, request);
+  f.calls.length = 0;
+
+  assert.deepEqual(await diagnostics.failure(failureSignal({ failurePhase: null, launchId: null })),
+    { status: "captured", pid: 8421 });
+  assert.equal(reads, 1, "ordinary failures cannot select a newly logged process");
+  assert.deepEqual(f.calls[0].args, ["8421"]);
+});
+
+for (const [label, context] of [
+  ["missing phase", { failurePhase: undefined }],
+  ["null phase", { failurePhase: null }],
+  ["ordinary phase", { failurePhase: "scenario" }],
+  ["missing launch identity", { launchId: undefined }],
+  ["null launch identity", { launchId: null }],
+  ["malformed launch identity", { launchId: "not-a-guid" }],
+  ["noncanonical launch identity", { launchId: "815D55BE-D9FC-47AC-85D8-983B58A43998" }],
+  ["launch identity with newline", { launchId: "815d55be-d9fc-47ac-85d8-983b58a43998\n" }],
+  ["missing session", { sessionId: undefined }],
+  ["null session", { sessionId: null }],
+  ["empty session", { sessionId: "" }],
+  ["blank session", { sessionId: " " }],
+  ["malformed session", { sessionId: "session/other" }],
+  ["session with newline", { sessionId: "session-1\n" }],
+  ["missing startup boundary", { scenarioStartedAtUtc: undefined }],
+  ["invalid startup boundary", { scenarioStartedAtUtc: "not-a-date" }],
+  ["non-UTC startup boundary", { scenarioStartedAtUtc: "2026-10-28T18:32:10+02:00" }],
+  ["startup boundary with newline", { scenarioStartedAtUtc: "2026-10-28T16:32:10Z\n" }],
+  ["startup after failure", { scenarioStartedAtUtc: "2026-10-28T16:33:01Z" }],
+  ["missing failure time", { failedAtUtc: undefined }],
+  ["invalid calendar failure time", { failedAtUtc: "2026-02-30T16:33:00Z" }],
+  ["failure time with newline", { failedAtUtc: "2026-10-28T16:33:00Z\n" }],
+  ["future failure time", { failedAtUtc: "2026-10-28T16:33:01Z" }],
+  ["missing deadline", { deadlineUtc: undefined }],
+  ["invalid deadline", { deadlineUtc: "not-a-date" }],
+  ["deadline before failure", { deadlineUtc: "2026-10-28T16:32:59Z" }],
+  ["expanded deadline", { deadlineUtc: "2026-10-28T16:33:16Z" }],
+]) test(`incomplete reader startup context rejects ${label} without pinning or attaching`, async t => {
+  const f = diagnosticFixture(t);
+  let reads = 0;
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
+    readPid() { reads++; return 8421; } });
+  const earlier = pendingRequest(1);
+  await diagnostics.capture(earlier.command, earlier);
+  f.calls.length = 0;
+  reads = 0;
+
+  assert.equal((await diagnostics.failure(startupFailure(context))).status, "unknown");
+  assert.equal(reads, 0, "invalid startup context cannot fall back to an earlier interaction");
+  assert.deepEqual(f.calls, []);
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failureSignal().id}.json`), "utf8"));
+  assert.equal(evidence.observation, null);
+});
+
+test("failed startup PID reads retain their error and never inspect a replacement", async t => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
+    readPid() { throw new Error("startup native log unavailable"); } });
+  assert.deepEqual(await diagnostics.failure(startupFailure()), { status: "unknown", pid: null });
+  assert.deepEqual(f.calls, []);
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failureSignal().id}.json`), "utf8"));
+  assert.equal(evidence.observation.pid, null);
+  assert.equal(evidence.observation.identityError.message, "startup native log unavailable");
+});
+
+for (const listing of ["", "9912 L " + appPath(udid), "8421 L " + appPath("B8D3DB6B-98FB-4E92-9ACE-9BC307F7FDE7"), "8421 Z " + appPath(udid)]) {
+  test(`startup ownership rejection never chooses another app: ${listing.trim()}`, async t => {
+    const f = diagnosticFixture(t);
+    const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
+      execute: async (command, args, options) => {
+        f.calls.push({ command, args, options });
+        return { stdout: listing, stderr: "" };
+      } });
+    const result = await diagnostics.failure(startupFailure());
+    assert.equal(result.status, "exited");
+    assert.equal(result.pid, 8421);
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.calls[0].command, inspectorPath);
+    assert.deepEqual(f.calls[0].args, ["8421"]);
+  });
+}
+
+test("reader startup capture retains the remaining deadline and handoff cancellation", async t => {
+  const f = diagnosticFixture(t);
+  const expired = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
+    now: () => f.now() + 15000 });
+  assert.deepEqual(await expired.failure(startupFailure()), { status: "expired", pid: 8421 });
+  assert.deepEqual(f.calls, []);
+  const cancellation = new AbortController();
+  cancellation.abort(new Error("startup handoff ended"));
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f });
+  const result = await diagnostics.failure(startupFailure(), { signal: cancellation.signal });
+  assert.equal(result.status, "error");
+  assert.equal(result.error.message, "startup handoff ended");
+  assert.deepEqual(f.calls, []);
 });
 
 for (const listing of ["", "9912 L " + appPath(udid), "8421 L " + appPath("B8D3DB6B-98FB-4E92-9ACE-9BC307F7FDE7"), "8421 Z " + appPath(udid)]) {

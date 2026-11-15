@@ -25,6 +25,7 @@ internal static class ReaderStartupReadiness
     internal static TimeSpan WaitForReady(string launchId, TimeSpan budget,
         Func<TimeSpan, string> readStatus, Func<TimeSpan> elapsed, Action<TimeSpan> pause)
     {
+        var startedAtUtc = DateTimeOffset.UtcNow;
         if (!Guid.TryParseExact(launchId, "D", out var parsed) || parsed.ToString("D") != launchId)
         {
             throw new ArgumentException("Reader startup requires a canonical launch UUID.", nameof(launchId));
@@ -63,7 +64,7 @@ internal static class ReaderStartupReadiness
         }
         // Endpoint availability does not establish Appium session health. Its
         // error text must never enter the driver's death/transport classifiers.
-        throw new TimeoutException(
+        throw new ReaderStartupTimeoutException(launchId, startedAtUtc,
             $"Reader startup did not settle within {budget.TotalSeconds} seconds. {lastObservation}");
     }
 
@@ -76,4 +77,11 @@ internal static class ReaderStartupReadiness
         response.EnsureSuccessStatusCode();
         return response.Content.ReadAsStringAsync(cancellation.Token).GetAwaiter().GetResult();
     }
+}
+
+internal sealed class ReaderStartupTimeoutException(string launchId, DateTimeOffset startedAtUtc, string message)
+    : TimeoutException(message)
+{
+    internal string LaunchId { get; } = launchId;
+    internal DateTimeOffset StartedAtUtc { get; } = startedAtUtc;
 }
