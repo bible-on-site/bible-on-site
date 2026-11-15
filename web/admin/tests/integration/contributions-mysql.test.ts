@@ -805,6 +805,58 @@ describe("assignment-driven agents with actual MySQL transactions", () => {
 			],
 		});
 	}
+	function referenceLock(
+		probe: PoolConnection,
+		point: {
+			kind:
+				| "entity"
+				| "person_name"
+				| "person"
+				| "perek"
+				| "tanah_sefer"
+				| "tanah_additional"
+				| "parent_child";
+			id: string | number;
+		},
+	) {
+		switch (point.kind) {
+			case "entity":
+				return probe.execute(
+					"SELECT id FROM tanahpedia_entity WHERE id=? FOR UPDATE NOWAIT",
+					[point.id],
+				);
+			case "person_name":
+				return probe.execute(
+					"SELECT id FROM tanahpedia_person_name WHERE id=? FOR UPDATE NOWAIT",
+					[point.id],
+				);
+			case "person":
+				return probe.execute(
+					"SELECT id FROM tanahpedia_person WHERE id=? FOR UPDATE NOWAIT",
+					[point.id],
+				);
+			case "perek":
+				return probe.execute(
+					"SELECT id FROM tanah_perek WHERE id=? FOR UPDATE NOWAIT",
+					[point.id],
+				);
+			case "tanah_sefer":
+				return probe.execute(
+					"SELECT id FROM tanah_sefer WHERE id=? FOR UPDATE NOWAIT",
+					[point.id],
+				);
+			case "tanah_additional":
+				return probe.execute(
+					"SELECT id FROM tanah_additional WHERE id=? FOR UPDATE NOWAIT",
+					[point.id],
+				);
+			case "parent_child":
+				return probe.execute(
+					"SELECT id FROM tanahpedia_person_parent_child WHERE id=? FOR UPDATE NOWAIT",
+					[point.id],
+				);
+		}
+	}
 	async function referenceFixture(
 		kind: "entity" | "person_name" | "perek" | "alternative",
 	) {
@@ -815,7 +867,7 @@ describe("assignment-driven agents with actual MySQL transactions", () => {
 				id,
 				probes: [
 					{
-						sql: "SELECT id FROM tanahpedia_entity WHERE id=? FOR UPDATE NOWAIT",
+						kind: "entity" as const,
 						id,
 					},
 				],
@@ -845,15 +897,15 @@ describe("assignment-driven agents with actual MySQL transactions", () => {
 				id,
 				probes: [
 					{
-						sql: "SELECT id FROM tanahpedia_person_name WHERE id=? FOR UPDATE NOWAIT",
+						kind: "person_name" as const,
 						id,
 					},
 					{
-						sql: "SELECT id FROM tanahpedia_person WHERE id=? FOR UPDATE NOWAIT",
+						kind: "person" as const,
 						id: person,
 					},
 					{
-						sql: "SELECT id FROM tanahpedia_entity WHERE id=? FOR UPDATE NOWAIT",
+						kind: "entity" as const,
 						id: entity,
 					},
 				],
@@ -896,15 +948,15 @@ describe("assignment-driven agents with actual MySQL transactions", () => {
 				id,
 				probes: [
 					{
-						sql: "SELECT id FROM tanah_perek WHERE id=? FOR UPDATE NOWAIT",
+						kind: "perek" as const,
 						id,
 					},
 					{
-						sql: "SELECT id FROM tanah_sefer WHERE id=? FOR UPDATE NOWAIT",
+						kind: "tanah_sefer" as const,
 						id: sefer,
 					},
 					{
-						sql: "SELECT id FROM tanah_additional WHERE id=? FOR UPDATE NOWAIT",
+						kind: "tanah_additional" as const,
 						id: additional,
 					},
 				],
@@ -933,7 +985,7 @@ describe("assignment-driven agents with actual MySQL transactions", () => {
 			id,
 			probes: [
 				{
-					sql: "SELECT id FROM tanahpedia_person_parent_child WHERE id=? FOR UPDATE NOWAIT",
+					kind: "parent_child" as const,
 					id: witness,
 				},
 			],
@@ -1716,9 +1768,9 @@ describe("assignment-driven agents with actual MySQL transactions", () => {
 				try {
 					await probe.beginTransaction();
 					for (const point of reference.probes)
-						await expect(
-							probe.execute(point.sql, [point.id]),
-						).rejects.toMatchObject({ code: "ER_LOCK_NOWAIT" });
+						await expect(referenceLock(probe, point)).rejects.toMatchObject({
+							code: "ER_LOCK_NOWAIT",
+						});
 				} finally {
 					await probe.rollback();
 					probe.release();
