@@ -50,6 +50,8 @@ const result = spawnSync(
 		"devops/deploy/ecr-deploy/api-rollout.test.mjs",
 		"devops/deploy/ecr-deploy/api-rollout-cli.test.mjs",
 		"devops/github/release/api-image-assets.test.mjs",
+		"devops/github/release/release-assets.test.mjs",
+		"devops/github/release/shared-release.test.mjs",
 		"devops/github/release/website-handover-lock.test.mjs",
 		"devops/github/release/check-deployment.test.mjs",
 		"devops/github/release/recovery-request.test.mjs",
