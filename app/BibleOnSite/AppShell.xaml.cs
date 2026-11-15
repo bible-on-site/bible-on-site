@@ -55,6 +55,11 @@ public partial class AppShell : Shell, Helpers.IAdaptiveNavPane
 		Routing.RegisterRoute(AppRoutes.Masora, typeof(MasoraPage));
 		Routing.RegisterRoute(AppRoutes.Moadim, typeof(MoadimListPage));
 		Routing.RegisterRoute(AppRoutes.Moed, typeof(MoedPage));
+		if (HomeUxPreview.Enabled)
+		{
+			Routing.RegisterRoute(nameof(HomeSearchPage), typeof(HomeSearchPage));
+			ConfigureHomeUxLinks();
+		}
 
 		// One styled presenter for every blocking dialog — alerts, confirmations
 		// and the exit/stay prompt — so colors, order, radius and typography
