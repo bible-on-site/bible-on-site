@@ -22,6 +22,31 @@ function stubRequiredAuthEnv() {
 }
 
 describe("verifyServiceAccessToken", () => {
+	it("separates worker-only tokens from general admin service tokens", async () => {
+		stubRequiredAuthEnv();
+		vi.stubEnv("COGNITO_SERVICE_CLIENT_ID", "svc-client");
+		const auth = await loadAuth();
+		jwtVerifyMock.mockResolvedValue({
+			payload: {
+				token_use: "access",
+				client_id: "svc-client",
+				scope: "admin-api/contributions",
+			},
+		});
+		expect(await auth.verifyContributionWorkerAccessToken("worker")).toBe(true);
+		expect(await auth.verifyServiceAccessToken("worker")).toBe(false);
+		jwtVerifyMock.mockResolvedValue({
+			payload: {
+				token_use: "access",
+				client_id: "svc-client",
+				scope: "admin-api/service",
+			},
+		});
+		expect(await auth.verifyContributionWorkerAccessToken("service")).toBe(
+			false,
+		);
+		expect(await auth.verifyServiceAccessToken("service")).toBe(true);
+	});
 	beforeEach(() => {
 		jwtVerifyMock.mockReset();
 		stubRequiredAuthEnv();
