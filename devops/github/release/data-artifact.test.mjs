@@ -105,7 +105,8 @@ const producingRun = {
 	head_sha: producingRef,
 };
 const inputSha = "e".repeat(40);
-const baselineRequest = (overrides = {}) =>
+const baselineRequest =
+	(overrides = {}) =>
 	(url) => {
 		if (url.includes("/artifacts?name="))
 			return { artifacts: overrides.artifacts ?? [baseline] };
@@ -172,7 +173,12 @@ test("a baseline whose declared source disagrees with the archive fails closed",
 	assert.throws(
 		() =>
 			resolveSqlArtifact(
-				{ ...input, artifactId: "80", sourceRunId: "8", sourceRef: producingRef },
+				{
+					...input,
+					artifactId: "80",
+					sourceRunId: "8",
+					sourceRef: producingRef,
+				},
 				(url) => (url.endsWith("/artifacts/80") ? baseline : producingRun),
 			),
 		/not by run 8/,
@@ -182,7 +188,10 @@ test("a baseline whose declared source disagrees with the archive fails closed",
 test("baselines from fork, PR or non-CI runs are never trusted", () => {
 	for (const [candidate, message] of [
 		[
-			{ ...baseline, workflow_run: { ...baseline.workflow_run, head_repository_id: 2 } },
+			{
+				...baseline,
+				workflow_run: { ...baseline.workflow_run, head_repository_id: 2 },
+			},
 			/fork/,
 		],
 	]) {
@@ -266,32 +275,29 @@ test("the newest incompatible baseline does not shadow an older compatible one",
 		workflow_run: { ...baseline.workflow_run, id: 8, head_sha: staleRef },
 	};
 	const staleRun = { ...producingRun, head_sha: staleRef };
-	const result = resolveSqlArtifact(
-		{ ...input, baseline: true },
-		(url) => {
-			if (url.includes("/artifacts?name="))
-				return { artifacts: [incompatible, baseline] };
-			if (url.endsWith("/actions/runs/8")) return staleRun;
-			if (url.endsWith("/actions/runs/7")) return producingRun;
-			if (url.includes("/contents/"))
-				return url.includes(`ref=${staleRef}`)
-					? [
-							{ name: "perushim-view", sha: "f".repeat(40) },
-							{
-								name: "sefaria-dump-5784-sivan-4.tanah_view.sqlite",
-								sha: inputSha,
-							},
-						]
-					: [
-							{ name: "perushim-view", sha: inputSha },
-							{
-								name: "sefaria-dump-5784-sivan-4.tanah_view.sqlite",
-								sha: inputSha,
-							},
-						];
-			throw new Error(`Unexpected API call: ${url}`);
-		},
-	);
+	const result = resolveSqlArtifact({ ...input, baseline: true }, (url) => {
+		if (url.includes("/artifacts?name="))
+			return { artifacts: [incompatible, baseline] };
+		if (url.endsWith("/actions/runs/8")) return staleRun;
+		if (url.endsWith("/actions/runs/7")) return producingRun;
+		if (url.includes("/contents/"))
+			return url.includes(`ref=${staleRef}`)
+				? [
+						{ name: "perushim-view", sha: "f".repeat(40) },
+						{
+							name: "sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+							sha: inputSha,
+						},
+					]
+				: [
+						{ name: "perushim-view", sha: inputSha },
+						{
+							name: "sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+							sha: inputSha,
+						},
+					];
+		throw new Error(`Unexpected API call: ${url}`);
+	});
 	assert.equal(result.artifactId, "80");
 });
 
@@ -302,10 +308,12 @@ test("release_data binds the baseline source only when the producer is skipped",
 	).replace(/\r/g, "");
 	assert.match(
 		ci,
-		/^      data_deploy_changed: \$\{\{ steps\.determine\.outputs\.data_deploy_changed \}\}$/m,
+		/^ {6}data_deploy_changed: \$\{\{ steps\.determine\.outputs\.data_deploy_changed \}\}$/m,
 	);
-	const release = ci.split("  release_data:\n")[1].split("\n  bump_versions:")[0];
-	const condition = release.match(/^    if: (.+)$/m)?.[1];
+	const release = ci
+		.split("  release_data:\n")[1]
+		.split("\n  bump_versions:")[0];
+	const condition = release.match(/^ {4}if: (.+)$/m)?.[1];
 	assert.ok(condition, "Data release requires a job-level condition");
 	// Delivery intent = payload inputs only. Shared CI plumbing
 	// (data_ci_changed) can never enter this job: the producer skips such runs
@@ -314,11 +322,14 @@ test("release_data binds the baseline source only when the producer is skipped",
 	assert.ok(condition.includes("data_deploy_changed == 'true'"));
 	assert.ok(condition.includes("perushim_pipeline_module_changed == 'true'"));
 	assert.ok(condition.includes("data_schema_only_changed == 'false'"));
+	assert.ok(condition.includes("!cancelled()"));
 	assert.ok(!condition.includes("data_ci_changed"));
 	// The whole job must skip — not succeed as a no-op — so a run without
 	// delivery intent cannot supersede queued data deployments.
 	assert.ok(condition.includes("perushim_data.result == 'skipped'"));
-	const bind = release.split("- name: Bind SQL artifact source")[1].split("\n      - name:")[0];
+	const bind = release
+		.split("- name: Bind SQL artifact source")[1]
+		.split("\n      - name:")[0];
 	assert.match(
 		bind,
 		/SQL_FROM_BASELINE: \$\{\{ needs\.perushim_data\.result == 'skipped' \}\}/,

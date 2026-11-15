@@ -10,11 +10,11 @@
 
 import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
+import { parseRecoveryRequest } from "../release/recovery-request.mjs";
 import {
 	isPublishDocstringOnlyChange,
 	PUBLISH_SOURCE_PATH,
 } from "./publish-docstring.mts";
-import { parseRecoveryRequest } from "../release/recovery-request.mjs";
 
 interface ModuleRule {
 	directory: string;
@@ -314,6 +314,9 @@ export function isSchemaOnlyDataChange(files: string[]): boolean {
 				// Archive tables use the separately approved selective migration;
 				// adding them must not invoke the production data populator.
 				file === "data/mysql/private_archive_upgrade.sql" ||
+				// Admin initializes its additive contribution table at startup;
+				// this migration must not publish the full production data payload.
+				file === "data/mysql/tanahpedia_contribution_upgrade.sql" ||
 				bulletinMigrations.has(file) ||
 				// The bootstrap's migration-preservation tests accompany this
 				// additive upgrade; they must not trigger a production data rebuild.
