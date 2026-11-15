@@ -168,6 +168,8 @@ Resources:
       Scopes:
         - ScopeName: service
           ScopeDescription: Machine-to-machine access to the admin HTTP API
+        - ScopeName: contributions
+          ScopeDescription: Claim queued workstation generation and submit PR drafts only
 
   AdminServiceAppClient:
     Type: AWS::Cognito::UserPoolClient
@@ -189,6 +191,7 @@ Resources:
         - client_credentials
       AllowedOAuthScopes:
         - admin-api/service
+        - admin-api/contributions
       AllowedOAuthFlowsUserPoolClient: true
 
 Outputs:

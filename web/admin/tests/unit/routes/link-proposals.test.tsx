@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LinkProposal } from "~/lib/article-linking/types";
 
@@ -90,6 +91,20 @@ function renderPage() {
 }
 
 describe("LinkProposalsPage", () => {
+	it("keeps SSR generation controls disabled even with a cached capability response", () => {
+		const client = new QueryClient();
+		client.setQueryData(["link-pipeline-status"], status);
+		const { component: Page } = Route as unknown as {
+			component: () => React.ReactElement;
+		};
+		const html = renderToStaticMarkup(
+			<QueryClientProvider client={client}>
+				<Page />
+			</QueryClientProvider>,
+		);
+		expect(html).toMatch(/<fieldset disabled=""/);
+		client.clear();
+	});
 	beforeEach(() => {
 		for (const mock of Object.values(server)) {
 			if (typeof mock === "function" && "mockReset" in mock) mock.mockReset();
@@ -117,15 +132,15 @@ describe("LinkProposalsPage", () => {
 			};
 		};
 		expect(validateSearch({ articleId: 6 })).toEqual({ articleId: 6 });
-		expect(validateSearch({ articleId: "x" })).toEqual({ articleId: undefined });
+		expect(validateSearch({ articleId: "x" })).toEqual({
+			articleId: undefined,
+		});
 		expect(validateSearch({})).toEqual({ articleId: undefined });
 	});
 
 	it("renders the capability surface and an empty queue", async () => {
 		renderPage();
-		expect(
-			await screen.findByText(/חוזה קשרים v3/),
-		).toBeInTheDocument();
+		expect(await screen.findByText(/חוזה קשרים v3/)).toBeInTheDocument();
 		expect(screen.getByText(/LLM זמין/)).toBeInTheDocument();
 		expect(screen.getByText(/נתיב כתיבה מוגדר/)).toBeInTheDocument();
 		expect(screen.getByText(/ממתין לסכמה: moadim/)).toBeInTheDocument();
@@ -147,6 +162,7 @@ describe("LinkProposalsPage", () => {
 
 	it("requires at least one article id before generating", async () => {
 		renderPage();
+		await waitFor(() => expect(screen.getByText("הפק הצעות")).toBeEnabled());
 		fireEvent.click(screen.getByText("הפק הצעות"));
 		expect(
 			await screen.findByText(/יש להזין לפחות מזהה מאמר אחד/),
@@ -156,6 +172,7 @@ describe("LinkProposalsPage", () => {
 
 	it("runs generation with engine, force and dry-run options", async () => {
 		renderPage();
+		await waitFor(() => expect(screen.getByText("הפק הצעות")).toBeEnabled());
 		fireEvent.change(screen.getByPlaceholderText("123, 456"), {
 			target: { value: "7, 8, abc, -3" },
 		});
@@ -176,6 +193,7 @@ describe("LinkProposalsPage", () => {
 	it("reports generation errors in the notice", async () => {
 		server.generateLinkProposals.mockRejectedValue(new Error("db down"));
 		renderPage();
+		await waitFor(() => expect(screen.getByText("הפק הצעות")).toBeEnabled());
 		fireEvent.change(screen.getByPlaceholderText("123, 456"), {
 			target: { value: "7" },
 		});
@@ -192,6 +210,7 @@ describe("LinkProposalsPage", () => {
 			],
 		});
 		renderPage();
+		await waitFor(() => expect(screen.getByText("הפק הצעות")).toBeEnabled());
 		fireEvent.change(screen.getByPlaceholderText("123, 456"), {
 			target: { value: "7,8" },
 		});
@@ -236,9 +255,7 @@ describe("LinkProposalsPage", () => {
 	it("reports partial apply failures in the notice", async () => {
 		server.listLinkProposals.mockResolvedValue([proposal({ id: "a" })]);
 		server.applyLinkProposals.mockResolvedValue({
-			outcomes: [
-				{ id: "a", outcome: "conflict", detail: "x" },
-			] as never,
+			outcomes: [{ id: "a", outcome: "conflict", detail: "x" }] as never,
 		});
 		renderPage();
 		fireEvent.click(await screen.findByText(/החל את כל המאושרות \(1\)/));
