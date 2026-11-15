@@ -187,6 +187,22 @@ test("reader startup accepts .NET UTC timestamps with seven fractional digits an
   assert.equal(evidence.request.deadlineUtc, failure.deadlineUtc);
 });
 
+for (const [label, context] of [
+  ["a one-character ASCII session", { sessionId: "A" }],
+  ["a hyphen-only session", { sessionId: "-" }],
+  ["a 128-character mixed ASCII session", { sessionId: "Az09-".repeat(25) + "aZ9" }],
+  ["a canonical all-zero launch UUID", { launchId: "00000000-0000-0000-0000-000000000000" }],
+]) test(`reader startup accepts ${label}`, async t => {
+  const f = diagnosticFixture(t);
+  const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f });
+  const failure = startupFailure(context);
+
+  assert.deepEqual(await diagnostics.failure(failure), { status: "captured", pid: 8421 });
+  const evidence = JSON.parse(readFileSync(join(f.directory, `native-failure-${failure.id}.json`), "utf8"));
+  assert.equal(evidence.observation.sessionId, failure.sessionId);
+  assert.equal(evidence.observation.launchId, failure.launchId);
+});
+
 test("reader startup never attributes an earlier interaction's PID to the current launch", async t => {
   const f = diagnosticFixture(t);
   const diagnostics = iosInteractionDiagnostics({ artifacts: f.directory, udid, ...f,
@@ -233,12 +249,18 @@ for (const [label, context] of [
   ["null launch identity", { launchId: null }],
   ["malformed launch identity", { launchId: "not-a-guid" }],
   ["noncanonical launch identity", { launchId: "815D55BE-D9FC-47AC-85D8-983B58A43998" }],
+  ["misplaced launch separator", { launchId: "815d55bead9fc-47ac-85d8-983b58a43998" }],
+  ["nonhex launch character", { launchId: "g15d55be-d9fc-47ac-85d8-983b58a43998" }],
+  ["separator in launch hex", { launchId: "815d55be-d9fc-47ac-85d8-983b58a4399-" }],
   ["launch identity with newline", { launchId: "815d55be-d9fc-47ac-85d8-983b58a43998\n" }],
   ["missing session", { sessionId: undefined }],
   ["null session", { sessionId: null }],
   ["empty session", { sessionId: "" }],
   ["blank session", { sessionId: " " }],
   ["malformed session", { sessionId: "session/other" }],
+  ["overlong session", { sessionId: "A".repeat(129) }],
+  ["non-ASCII session", { sessionId: "sessiön-1" }],
+  ["session underscore", { sessionId: "session_1" }],
   ["session with newline", { sessionId: "session-1\n" }],
   ["missing startup boundary", { scenarioStartedAtUtc: undefined }],
   ["invalid startup boundary", { scenarioStartedAtUtc: "not-a-date" }],

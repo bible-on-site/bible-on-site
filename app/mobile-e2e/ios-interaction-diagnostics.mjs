@@ -29,15 +29,35 @@ function startupUtcInstant(value) {
     ? instant : NaN;
 }
 
+function validStartupLaunchId(value) {
+  if (typeof value !== 'string' || value.length !== 36) return false;
+  for (let index = 0; index < value.length; index++) {
+    if (index === 8 || index === 13 || index === 18 || index === 23) {
+      if (value[index] !== '-') return false;
+    } else {
+      const code = value.charCodeAt(index);
+      if (!(code >= 48 && code <= 57) && !(code >= 97 && code <= 102)) return false;
+    }
+  }
+  return true;
+}
+
+function validStartupSessionId(value) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 128) return false;
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code !== 45 && !(code >= 48 && code <= 57)
+      && !(code >= 65 && code <= 90) && !(code >= 97 && code <= 122)) return false;
+  }
+  return true;
+}
+
 function confirmedReaderStartupFailure(request, currentTime) {
   const started = startupUtcInstant(request.scenarioStartedAtUtc);
   const failed = startupUtcInstant(request.failedAtUtc);
   const deadline = startupUtcInstant(request.deadlineUtc);
   return request.failurePhase === 'reader-startup'
-    && typeof request.launchId === 'string' && request.launchId.length === 36
-    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(request.launchId)
-    && typeof request.sessionId === 'string' && request.sessionId.length > 0 && request.sessionId.length <= 128
-    && !/[^A-Za-z0-9-]/.test(request.sessionId)
+    && validStartupLaunchId(request.launchId) && validStartupSessionId(request.sessionId)
     && Number.isFinite(started) && Number.isFinite(failed) && Number.isFinite(deadline)
     && started <= failed && failed <= currentTime && failed <= deadline && deadline - failed <= 15000;
 }

@@ -245,6 +245,8 @@ public sealed class FailureDiagnosticsTests : IDisposable
             Assert.DoesNotContain(DriverCommand.Screenshot, executor.Commands);
             Assert.DoesNotContain(DriverCommand.GetPageSource, executor.Commands);
             Assert.Equal(afterDriverRecovery ? 2 : 1, session.Acquisitions);
+            Assert.Equal(StartupDeviceTest.LaunchId,
+                session.LastEnvironment?[ReaderStartupReadiness.LaunchIdEnvironmentVariable]);
             Assert.Equal(afterDriverRecovery ? 2 : 1, test.Connects);
             Assert.Equal(afterDriverRecovery ? 1 : 0, recoveries);
 
@@ -447,7 +449,12 @@ public sealed class FailureDiagnosticsTests : IDisposable
             "/test/app", "test-device", artifacts, new Uri("http://127.0.0.1:4723"));
         public AppiumDriver Driver { get; } = driver;
         public int Acquisitions { get; private set; }
-        public void Acquire(IReadOnlyDictionary<string, string>? environment) => Acquisitions++;
+        public IReadOnlyDictionary<string, string>? LastEnvironment { get; private set; }
+        public void Acquire(IReadOnlyDictionary<string, string>? environment)
+        {
+            Acquisitions++;
+            LastEnvironment = environment;
+        }
     }
 
     private sealed class StartupDeviceTest(ITestOutputHelper output, IMobileDeviceSession session, bool driverFailureFirst)
@@ -458,7 +465,7 @@ public sealed class FailureDiagnosticsTests : IDisposable
         protected override void Connect()
         {
             Connects++;
-            AcquireSession();
+            AcquireSession(LaunchId);
             if (driverFailureFirst && Connects == 1)
             {
                 throw new UnknownErrorException("invalid session id");
