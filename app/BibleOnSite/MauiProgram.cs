@@ -6,7 +6,7 @@ using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 using BibleOnSite.Controls;
 using BibleOnSite.Handlers;
-#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH)
+#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH || FIREBASE_EMULATOR)
 using Plugin.Firebase.Core.Platforms.iOS;
 #endif
 #if IOS && !DISABLE_ANALYTICS
@@ -66,6 +66,9 @@ public static class MauiProgram
                 // Native Button host gives flyout rows keyboard focus,
                 // Enter/Space activation and hover/focus visuals (#2766).
                 handlers.AddHandler<FlyoutMenuRow, FlyoutMenuRowHandler>();
+                // Every gesture-only tappable row/card/chip/link gets the
+                // same Button host: tab stop + Enter/Space + UIA Invoke (#3252).
+                handlers.AddHandler<TappableView, TappableViewHandler>();
                 // The draggable exit-fullscreen circle gets the same
                 // treatment: tab stop + Enter/Space + UIA button role (#2766).
                 handlers.AddHandler<ReaderExitFullscreenButton, ReaderExitFullscreenButtonHandler>();
@@ -164,7 +167,11 @@ public static class MauiProgram
                 return true;
             }));
 #endif
-#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH)
+#if IOS && (!DISABLE_ANALYTICS || !DISABLE_PUSH || FIREBASE_EMULATOR)
+			// FIREBASE_EMULATOR (#3185): the Auth/Firestore SDKs need the same
+			// CrossFirebase.Initialize before UseEmulator can redirect them to
+			// the local suite. Analytics collection stays off — neither the
+			// manifest flag nor this block's analytics path is enabled.
 			events.AddiOS(iOS => iOS.WillFinishLaunching((_, __) =>
 			{
 				try
@@ -228,9 +235,6 @@ public static class MauiProgram
         // Register ViewModels
         builder.Services.AddTransient<PerekViewModel>();
         builder.Services.AddTransient<PreferencesViewModel>();
-
-        // Register Pages
-        builder.Services.AddTransient<MainPage>();
 
 #if DEBUG
         builder.Logging.AddDebug();

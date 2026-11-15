@@ -7,9 +7,31 @@ export function lighthouseBenchmarkName(path, device, name) {
 }
 
 /**
- * TBT can approach zero, so a percentage of historical milliseconds is not
- * the browser test's blocking-time gate. Use its unchanged budget for both
- * Lighthouse reporting paths, as for the other blocking-time benchmarks.
+ * Interaction/response audits whose millisecond scale sits under the
+ * runner-jitter floor of a percentage-of-history threshold — the same
+ * false-alert class as `sefer-flip/*-drag-blocked` (#2971). Each bound is
+ * the metric's own published boundary so a Bencher alert means a real
+ * budget breach, not a fraction of near-zero history; raw milliseconds
+ * remain in the Lighthouse JSON, HTML and summary reports.
+ */
+const AUDIT_TIMING_BUDGETS_MS = {
+	// The audit's own pass target (TARGET_MS in the Lighthouse audit):
+	// localhost responses measure 3-7ms, so a 5% percentage boundary is
+	// sub-millisecond runner noise (alerted #2971).
+	"server-response-time": 100,
+	// FID — deprecated and known-failing its 0.9-score bound (~130ms p10) on
+	// throttled CI (known-issues/lighthouse/max-potential-fid.yml), so the
+	// audit's own 0.5-score median of 250ms is the meaningful degradation
+	// signal.
+	"max-potential-fid": 250,
+};
+
+/**
+ * Budgeted audits can approach zero, so a percentage of historical
+ * milliseconds is not the browser test's gate: TBT uses its unchanged
+ * calibrated budget for both Lighthouse reporting paths, as for the other
+ * blocking-time benchmarks, and the small interaction/response audits in
+ * AUDIT_TIMING_BUDGETS_MS use their own published bounds (#2971).
  * Raw milliseconds remain in the Lighthouse JSON, HTML and summary reports.
  * @param {import("../tests/util/benchmark").BenchmarkEntry} entry
  * @param {string} auditId
@@ -17,14 +39,19 @@ export function lighthouseBenchmarkName(path, device, name) {
  * @returns {import("../tests/util/benchmark").BenchmarkEntry}
  */
 export function lighthouseBenchmarkEntry(entry, auditId, blockingBudgetMs) {
-	if (auditId !== "total-blocking-time" || entry.measure !== "time_ms")
-		return entry;
-	if (!Number.isFinite(blockingBudgetMs) || blockingBudgetMs <= 0)
-		throw new Error("Lighthouse blocking budget must be finite and positive");
+	if (entry.measure !== "time_ms") return entry;
+	let budgetMs;
+	if (auditId === "total-blocking-time") {
+		if (!Number.isFinite(blockingBudgetMs) || blockingBudgetMs <= 0)
+			throw new Error("Lighthouse blocking budget must be finite and positive");
+		budgetMs = blockingBudgetMs;
+	} else if (Object.hasOwn(AUDIT_TIMING_BUDGETS_MS, auditId)) {
+		budgetMs = AUDIT_TIMING_BUDGETS_MS[auditId];
+	} else return entry;
 	return {
 		...entry,
 		measure: "frame_budget_ratio",
-		value: entry.value / blockingBudgetMs,
+		value: entry.value / budgetMs,
 		upperValue: 1,
 	};
 }

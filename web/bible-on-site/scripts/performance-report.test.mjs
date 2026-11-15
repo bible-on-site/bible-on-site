@@ -183,6 +183,43 @@ test("TBT normalization preserves raw evidence and other benchmark measures", ()
 	}
 });
 
+test("sub-50ms interaction audits report against their own published bounds", () => {
+	// #2971: 3-7ms TTFB and 39-143ms FID readings sit under the runner-jitter
+	// floor of a 5%-of-history threshold — the same false-alert class as
+	// sefer-flip/*-drag-blocked. Each audit reports against its own
+	// published bound instead, as the Web Vitals timings already do.
+	for (const [auditId, budget] of [
+		["server-response-time", 100],
+		["max-potential-fid", 250],
+	]) {
+		for (const value of [0, 4, budget - 1, budget, budget + 1]) {
+			const entry = { name: `audit: ${auditId}`, measure: "time_ms", value };
+			const result = lighthouseBenchmarkEntry(entry, auditId, 5000);
+			assert.equal(result.name, entry.name);
+			assert.equal(result.measure, "frame_budget_ratio");
+			assert.equal(result.upperValue, 1);
+			assert.equal(result.value, value / budget);
+			assert.equal(result.value > result.upperValue, value > budget);
+			assert.equal(entry.value, value);
+			assert.equal(entry.measure, "time_ms");
+		}
+	}
+	// The static per-audit budgets do not consult the TBT budget argument.
+	assert.equal(
+		lighthouseBenchmarkEntry(
+			{ name: "audit: server-response-time", measure: "time_ms", value: 4 },
+			"server-response-time",
+			Number.NaN,
+		).value,
+		4 / 100,
+	);
+	// Neighbouring audits keep the shared percentage threshold.
+	for (const auditId of ["interactive", "bootup-time", "redirects"]) {
+		const entry = { name: `audit: ${auditId}`, measure: "time_ms", value: 49 };
+		assert.equal(lighthouseBenchmarkEntry(entry, auditId, 5000), entry);
+	}
+});
+
 function fixture(url = "https://example.com/", lcp = 2000) {
 	return {
 		requestedUrl: url,

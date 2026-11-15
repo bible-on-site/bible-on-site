@@ -27,13 +27,14 @@
                      tappable on any width, including with increased text size. -->
                 <VerticalStackLayout Spacing="10">
 
+                    <controls:TappableView AutomationId="PerekTodaysOption"
+                                           SemanticProperties.Description="הפרק של היום"
+                                           Command="{Binding SelectTodaysPerekCommand}">
                     <Border Padding="14,12"
                             StrokeShape="RoundRectangle 10"
                             Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
                             StrokeThickness="1.5"
-                            BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}"
-                            AutomationId="PerekTodaysOption"
-                            SemanticProperties.Description="הפרק של היום">
+                            BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
                         <Border.Triggers>
                             <DataTrigger TargetType="Border"
                                          Binding="{Binding IsPerekToLoadTodays}"
@@ -44,9 +45,6 @@
                             </DataTrigger>
                         </Border.Triggers>
                         <Grid ColumnDefinitions="Auto,*">
-                            <Grid.GestureRecognizers>
-                                <TapGestureRecognizer Command="{Binding SelectTodaysPerekCommand}"/>
-                            </Grid.GestureRecognizers>
                             <Label Text="{x:Static fonts:FluentUI.checkmark_circle_24_regular}"
                                    FontFamily="FluentIcons"
                                    FontSize="22"
@@ -73,14 +71,16 @@
                             </VerticalStackLayout>
                         </Grid>
                     </Border>
+                    </controls:TappableView>
 
+                    <controls:TappableView AutomationId="PerekLastLearntOption"
+                                           SemanticProperties.Description="האחרון שלמדתי"
+                                           Command="{Binding SelectLastLearntPerekCommand}">
                     <Border Padding="14,12"
                             StrokeShape="RoundRectangle 10"
                             Stroke="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
                             StrokeThickness="1.5"
-                            BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}"
-                            AutomationId="PerekLastLearntOption"
-                            SemanticProperties.Description="האחרון שלמדתי">
+                            BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}">
                         <Border.Triggers>
                             <DataTrigger TargetType="Border"
                                          Binding="{Binding IsPerekToLoadLastLearnt}"
@@ -91,9 +91,6 @@
                             </DataTrigger>
                         </Border.Triggers>
                         <Grid ColumnDefinitions="Auto,*">
-                            <Grid.GestureRecognizers>
-                                <TapGestureRecognizer Command="{Binding SelectLastLearntPerekCommand}"/>
-                            </Grid.GestureRecognizers>
                             <Label Text="{x:Static fonts:FluentUI.checkmark_circle_24_regular}"
                                    FontFamily="FluentIcons"
                                    FontSize="22"
@@ -120,6 +117,7 @@
                             </VerticalStackLayout>
                         </Grid>
                     </Border>
+                    </controls:TappableView>
                 </VerticalStackLayout>
             </VerticalStackLayout>
 

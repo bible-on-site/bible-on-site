@@ -104,6 +104,20 @@ export async function verifyIdToken(token: string): Promise<boolean> {
 export async function verifyServiceAccessToken(
 	token: string,
 ): Promise<boolean> {
+	return verifyScopedServiceToken(token, COGNITO_SERVICE_SCOPE);
+}
+
+/** Worker-only tokens cannot authenticate the general admin M2M surface. */
+export async function verifyContributionWorkerAccessToken(
+	token: string,
+): Promise<boolean> {
+	return verifyScopedServiceToken(token, "admin-api/contributions");
+}
+
+async function verifyScopedServiceToken(
+	token: string,
+	requiredScope: string,
+): Promise<boolean> {
 	if (!COGNITO_SERVICE_CLIENT_ID) return false;
 	try {
 		const { payload } = await jwtVerify(token, jwks, { issuer: ISSUER });
@@ -111,7 +125,7 @@ export async function verifyServiceAccessToken(
 		if (payload.client_id !== COGNITO_SERVICE_CLIENT_ID) return false;
 		const scopes =
 			typeof payload.scope === "string" ? payload.scope.split(" ") : [];
-		return scopes.includes(COGNITO_SERVICE_SCOPE);
+		return scopes.includes(requiredScope);
 	} catch {
 		return false;
 	}

@@ -9,6 +9,10 @@ plugs in by emitting the same contract row shape.
 
 Metrics definitions (matching the issue's acceptance list):
 
+- link_precision / link_recall / link_f1: a correct link must match the
+  exact source span, entity type AND intended name together. These are
+  the primary model-selection metrics; correct detection with a wrong
+  target is still an incorrect link. Strict variants reject alternates.
 - precision: rendered (`auto`/`manual`) predictions exactly matching a
   gold mention / all rendered predictions — the resolver renders both
   (`service.ts`: `acceptance IN ('auto','manual')`). `held`/`rejected`
@@ -294,6 +298,14 @@ def score_case(predictions, golds):
             counts["type_strict_hit"] += pred["type"] == gold["type"]
             counts["name_hit"] += pred["name"] in gold["names"]
             counts["name_strict_hit"] += pred["name"] == gold["name"]
+            counts["link_hit"] += (
+                pred["type"] in gold["types"]
+                and pred["name"] in gold["names"]
+            )
+            counts["link_strict_hit"] += (
+                pred["type"] == gold["type"]
+                and pred["name"] == gold["name"]
+            )
         elif rendered:
             counts["rendered_suppressed"] += 1
         elif auto_gold:
@@ -333,6 +345,16 @@ def finalize(counts):
         return round(num / den, 6) if den else None
 
     return {
+        "link_precision": ratio(counts["link_hit"], auto_preds),
+        "link_recall": ratio(counts["link_hit"], counts["gold_auto"]),
+        "link_f1": ratio(
+            2 * counts["link_hit"], auto_preds + counts["gold_auto"]
+        ),
+        "link_precision_strict": ratio(counts["link_strict_hit"], auto_preds),
+        "link_recall_strict": ratio(counts["link_strict_hit"], counts["gold_auto"]),
+        "link_f1_strict": ratio(
+            2 * counts["link_strict_hit"], auto_preds + counts["gold_auto"]
+        ),
         "precision": ratio(tp, auto_preds),
         "recall": ratio(tp, counts["gold_auto"]),
         "f1": ratio(
@@ -555,6 +577,7 @@ def main():
         help="record current metrics as the new baseline",
     )
     args = parser.parse_args()
+    metrics_path = args.gold_dir / METRICS_PATH.name
 
     report = evaluate(args.gold_dir)
     print_report(report)
@@ -563,17 +586,17 @@ def main():
             json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8"
         )
     if args.write:
-        METRICS_PATH.write_text(
+        metrics_path.write_text(
             json.dumps(deterministic(report), ensure_ascii=False, indent=1),
             encoding="utf-8",
         )
-        print(f"recorded baseline metrics at {METRICS_PATH}")
+        print(f"recorded baseline metrics at {metrics_path}")
     if args.check:
-        recorded = json.loads(METRICS_PATH.read_text(encoding="utf-8"))
+        recorded = json.loads(metrics_path.read_text(encoding="utf-8"))
         if deterministic(report) != recorded:
             print(
                 "METRICS DRIFT: deterministic metrics differ from "
-                f"{METRICS_PATH} — regenerate with --write if the "
+                f"{metrics_path} — regenerate with --write if the "
                 "pipeline change is deliberate.",
                 file=sys.stderr,
             )

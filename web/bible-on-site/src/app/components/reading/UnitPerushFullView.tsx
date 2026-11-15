@@ -6,8 +6,12 @@ import { useMemo } from "react";
 import styles from "@/app/929/[number]/components/perushim-section.module.css";
 import { ShareButton } from "@/app/929/[number]/components/ShareButton";
 import seferStyles from "@/app/929/[number]/components/sefer.module.css";
+import pageStyles from "@/app/929/[number]/[slug]/page.module.css";
 import { demoteHeadings } from "@/lib/html-headings";
 import type { RangedPerushNote } from "@/lib/perushim";
+import { rangedNotesReadingMetrics } from "@/lib/perushim/ranged-metrics";
+import { ReadingProgress } from "@/app/components/ReadingProgress";
+import { ReadingTime } from "@/app/components/ReadingTime";
 import unitStyles from "./unit-book.module.css";
 import { scrollToUnitTextPasuk } from "./unit-book-navigation";
 
@@ -79,6 +83,13 @@ export function UnitPerushFullView({
 		return { groups: result, multiPerek: perekIds.size > 1 };
 	}, [notes]);
 
+	// Persisted note metrics (#3108): an unknown count anywhere in the
+	// range leaves metric/units absent — no badge, no progress bar.
+	const { metric, units } = useMemo(
+		() => rangedNotesReadingMetrics(notes),
+		[notes],
+	);
+
 	return (
 		<section
 			className={`${styles.perushimSection} ${seferStyles.perushFullViewInBook}`}
@@ -92,6 +103,10 @@ export function UnitPerushFullView({
 				<div className={styles.fullViewTitle}>
 					<h2 className={styles.sectionTitle}>{name}</h2>
 					<span className={styles.parshanSubtitle}>{parshanName}</span>
+					<ReadingTime
+						estimatedSeconds={metric?.estimatedSeconds}
+						className={pageStyles.readingTime}
+					/>
 				</div>
 				{sharePath && (
 					<ShareButton
@@ -104,6 +119,16 @@ export function UnitPerushFullView({
 			<div
 				className={`${styles.notesContainer} ${seferStyles.perushNotesInBook}`}
 			>
+				{/* The notes container is the book page's nested scroller —
+				 * the bar sticks to its top edge and measures the note
+				 * elements it scrolls past, keyed by `data-reading-unit`. */}
+				<ReadingProgress
+					units={units}
+					scroller={`.${styles.notesContainer}`}
+					content={`.${styles.notesContainer}`}
+					unitSelector='[data-reading-unit="{key}"]'
+					stickyTop="0px"
+				/>
 				{groups.length === 0 ? (
 					<p className={styles.emptyMessage}>{emptyMessage}</p>
 				) : (
@@ -139,6 +164,7 @@ export function UnitPerushFullView({
 									<div
 										key={`${note.perekId}-${note.pasuk}-${note.noteIdx}`}
 										className={styles.noteContent}
+										data-reading-unit={`${note.perekId}:${note.pasuk}:${note.noteIdx}`}
 										// nosemgrep -- DOMPurify-sanitized perush note
 										// biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized with DOMPurify
 										dangerouslySetInnerHTML={{

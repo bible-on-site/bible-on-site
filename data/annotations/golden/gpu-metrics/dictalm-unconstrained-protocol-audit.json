@@ -1,0 +1,231 @@
+{
+  "cache_snapshot_files": 12,
+  "matched_files": 12,
+  "unmatched_files": [],
+  "distinct_source_contexts": 8,
+  "protocol_valid_files": 0,
+  "requests": [
+    {
+      "file": "e000bc0a47a47dc7420448f139105cf336693bc85f170f766b82b268130d0f07.json",
+      "matches": [
+        {
+          "source": [
+            "pasuk",
+            2,
+            14
+          ],
+          "case_id": "validation-0-None-2-14",
+          "unit_start": 0,
+          "unit_end": 11,
+          "protocol_valid": false,
+          "failure": "invalid mention schema"
+        }
+      ]
+    },
+    {
+      "file": "1f37f971d833a4f5a3e1744c5c783923896f2200b71e602f58a3b7464d084233.json",
+      "matches": [
+        {
+          "source": [
+            "pasuk",
+            3,
+            1
+          ],
+          "case_id": "validation-0-None-3-1",
+          "unit_start": 0,
+          "unit_end": 15,
+          "protocol_valid": false,
+          "failure": "output is not valid JSON"
+        }
+      ]
+    },
+    {
+      "file": "a57cf9a2ac7c0550f970f2649fe5d8ca05213deaeaeedbb2f2b646f02ec0ea4c.json",
+      "matches": [
+        {
+          "source": [
+            "pasuk",
+            3,
+            1
+          ],
+          "case_id": "validation-0-None-3-1",
+          "unit_start": 8,
+          "unit_end": 21,
+          "protocol_valid": false,
+          "failure": "output is not valid JSON"
+        }
+      ]
+    },
+    {
+      "file": "1c8ccb7397588ef2d79e898524e6ca4cd8b8b31a67d7a7de6a4a8e5112c9ccd1.json",
+      "matches": [
+        {
+          "source": [
+            "pasuk",
+            81,
+            2
+          ],
+          "case_id": "validation-1-None-31-2",
+          "unit_start": 0,
+          "unit_end": 9,
+          "protocol_valid": false,
+          "failure": "output is not valid JSON"
+        }
+      ]
+    },
+    {
+      "file": "eb4789b3772be5b69254380ff6cacb22ecf945a885c5df72300dfd2569f661e4.json",
+      "matches": [
+        {
+          "source": [
+            "pasuk",
+            130,
+            16
+          ],
+          "case_id": "validation-3-None-13-16",
+          "unit_start": 0,
+          "unit_end": 14,
+          "protocol_valid": false,
+          "failure": "output is not valid JSON"
+        }
+      ]
+    },
+    {
+      "file": "9cbbd3a999dff5f42b06d013bceaa6b8f563cc01476646176495d891390fded5.json",
+      "matches": [
+        {
+          "source": [
+            "pasuk",
+            187,
+            1
+          ],
+          "case_id": "validation-4-None-34-1",
+          "unit_start": 0,
+          "unit_end": 15,
+          "protocol_valid": false,
+          "failure": "output is not valid JSON"
+        }
+      ]
+    },
+    {
+      "file": "eb101329ed0f548673cd02b54196f1539aa1c047832ab149e656e0307c71981b.json",
+      "matches": [
+        {
+          "source": [
+            "pasuk",
+            187,
+            1
+          ],
+          "case_id": "validation-4-None-34-1",
+          "unit_start": 8,
+          "unit_end": 21,
+          "protocol_valid": false,
+          "failure": "output is not valid JSON"
+        }
+      ]
+    },
+    {
+      "file": "b37fa9e016623f0c3b4a9998d8378e21bfee525b90e22fa239c8e96d6ddeaeca.json",
+      "matches": [
+        {
+          "source": [
+            "pasuk",
+            189,
+            1
+          ],
+          "case_id": "validation-5-None-2-1",
+          "unit_start": 0,
+          "unit_end": 15,
+          "protocol_valid": false,
+          "failure": "invalid mention schema"
+        }
+      ]
+    },
+    {
+      "file": "480ce5dc7c8cfcdd45d733caf23af240192da4dcee19872a61ec9f53efb21050.json",
+      "matches": [
+        {
+          "source": [
+            "pasuk",
+            189,
+            1
+          ],
+          "case_id": "validation-5-None-2-1",
+          "unit_start": 8,
+          "unit_end": 23,
+          "protocol_valid": false,
+          "failure": "invalid mention schema"
+        }
+      ]
+    },
+    {
+      "file": "aac701109dcba792b8966b145fb4b0cded6f296a95bb6dc2a3957bb8d2bcd82b.json",
+      "matches": [
+        {
+          "source": [
+            "pasuk",
+            189,
+            1
+          ],
+          "case_id": "validation-5-None-2-1",
+          "unit_start": 16,
+          "unit_end": 25,
+          "protocol_valid": false,
+          "failure": "output is not valid JSON"
+        }
+      ]
+    },
+    {
+      "file": "0965bc839f47ae3d3fa2b88773390678739e22954ac2ac24d5348acea2184449.json",
+      "matches": [
+        {
+          "source": [
+            "pasuk",
+            215,
+            4
+          ],
+          "case_id": "validation-6-None-4-4",
+          "unit_start": 0,
+          "unit_end": 10,
+          "protocol_valid": false,
+          "failure": "output is not valid JSON"
+        }
+      ]
+    },
+    {
+      "file": "ff7f5316e9f22150f975a1cc99af28e6f3c197cd3a974f67174562e0bba107f6.json",
+      "matches": [
+        {
+          "source": [
+            "pasuk",
+            235,
+            10
+          ],
+          "case_id": "validation-7-0-3-10",
+          "unit_start": 0,
+          "unit_end": 13,
+          "protocol_valid": false,
+          "failure": "output is not valid JSON"
+        }
+      ]
+    }
+  ],
+  "method": "Exhaustive original-unit windows of size 1..16; exact cached revision plus canonical serialized message SHA256 matches. Matching messages prove context identity without inferring from model output or requiring model/tokenizer inference.",
+  "status": "failed_protocol_qualification",
+  "semantic_benchmark_completed": false,
+  "semantic_metrics": null,
+  "candidate": {
+    "hf_repo": "dicta-il/DictaLM-3.0-1.7B-Instruct",
+    "revision": "5add44d6941d6ffb9eb6cc6b516f9fb4fd472494",
+    "device": "cuda:0",
+    "dtype": "bfloat16",
+    "constrained_json": false
+  },
+  "prompt_version": "local-detect-v1",
+  "stopping_rule": {
+    "consecutive_invalid_requests": 8,
+    "minimum_distinct_source_contexts": 4,
+    "declared_after_initial_failures": true,
+    "first_eight_distinct_contexts": 6
+  }
+}

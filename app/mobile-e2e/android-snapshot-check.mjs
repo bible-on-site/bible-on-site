@@ -203,10 +203,10 @@ function shutdownWatchdog(line, owners, previous, inspectProcess, observedOwners
 			(!watchdogArguments(identity.arguments, owner) && !(previous && identity.arguments?.length === 0)) ||
 			(!watchdogArguments(displayed, owner) && !(previous && displayed.length === 1)))
 			throw new Error("Cannot verify the SDK shutdown watchdog; refusing the next launch.");
-	} else if (!previous) {
-		// An unrecorded zombie has no executable/argv left to verify.
-		return null;
 	}
+	// The first native lookup can race the helper's exit after PS captured it.
+	// Retain that exit proof only to wait for fresh PS/ADB absence; this helper
+	// is never a termination candidate and cannot authorize lock cleanup yet.
 	const target = observedOwners.get(owner.pid) ?? inspectProcess(owner.pid);
 	if ((target.startTime !== undefined && target.startTime !== owner.startTime) ||
 		(!target.exited && (target.device !== owner.device || target.inode !== owner.inode ||

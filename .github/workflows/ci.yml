@@ -66,6 +66,12 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
+  # Codecov's CLI collapses gh-readonly-queue/<base>/... to the base branch.
+  # Isolate every queue upload, including early test_results without coverage,
+  # so it cannot replace master's badge/baseline with a synthetic commit.
+  # Other events keep the action's native PR/fork/push SHA and branch handling;
+  # an admin merge is covered by its own master push, independently of the queue.
+  CODECOV_BRANCH_OVERRIDE: ${{ github.event_name == 'merge_group' && github.ref_name || '' }}
   API_CARGO_FILE: web/api/Cargo.toml
   API_COVERAGE_ARTIFACT_NAME_MASTER: api-coverage.master
   API_COVERAGE_ARTIFACT_NAME_WF: api-coverage.${{ github.run_id }}
@@ -162,7 +168,7 @@ env:
   # its .gz exceeds GitHub's 100 MB push limit).
   PERUSHIM_SEARCH_SQLITE_FILENAME: sefaria-dump-5784-sivan-4.hebrew_search.sqlite
   PERUSHIM_NOTES_ANDROID_ASSET_RELDIR: Platforms/Android/AssetPacks/perushim_notes
-  PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim-notes
+  PERUSHIM_NOTES_IOS_ASSETPACK_RELDIR: Platforms/iOS/AssetPacks/perushim-notes-slim
   PERUSHIM_PIPELINE_DIRECTORY: data/sefaria/pipelines/perushim-view
   SEFARIA_MONGO_IMAGE_ARTIFACT_NAME: sefaria-mongo-image
   SEFARIA_MONGO_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/sefaria-mongo
@@ -186,6 +192,26 @@ jobs:
         run: |
           bun run test:workflow-timeouts
           bun run verify:workflow-timeouts
+
+  root_evidence_guard:
+    timeout-minutes: 5
+    name: Root evidence guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-js
+        with:
+          module: devops
+          directory: devops
+      # Unconditional index scan, independent of determine_changes (#3319):
+      # a PR that only adds root evidence must fail here.
+      - name: Reject tracked repository-root evidence
+        working-directory: devops
+        run: |
+          bun run test:root-evidence-guard
+          bun run verify:root-evidence-guard
 
   setup_env:
     timeout-minutes: 60
@@ -1130,7 +1156,9 @@ jobs:
           key: ${{ steps.bun-cache.outputs.playwright-cache-primary-key }}
 
       - name: Test performance reporting
-        run: bun run test:perf-reporting
+        run: |
+          bun run test:perf-reporting
+          node --test "$GITHUB_WORKSPACE/devops/github/ci/bencher-report.test.mjs"
 
       - name: Perf Test
         id: bun-perf-test
@@ -1162,6 +1190,7 @@ jobs:
 
       - name: Track Performance with Bencher
         env:
+          GH_TOKEN: ${{ github.token }}
           BENCHER_PROJECT: bible-on-site-website
           BENCHER_BRANCH: ${{ github.head_ref || github.ref_name }} # PR source branch, or branch name on push
         run: |
@@ -1178,7 +1207,7 @@ jobs:
           # --threshold-max-sample-size _ to leave it unset (#2718).
           # Frame blocking can also be zero. Its normalized measure uses
           # the browser test's existing CPU-scaled budget: 1 means the limit.
-          bencher run \
+          node "$GITHUB_WORKSPACE/devops/github/ci/bencher-report.mjs" bencher run \
             --project "$BENCHER_PROJECT" \
             --token "${{ secrets.BENCHER_API_TOKEN }}" \
             --branch "$BENCHER_BRANCH" \
@@ -1965,24 +1994,26 @@ jobs:
           retention-days: 90
           overwrite: true
 
-      # The published admin report merges both test layers: unit's V8 report
-      # is the canonical universe (every eligible source file enumerated);
-      # the istanbul-instrumented E2E layer only confirms hits on shared
-      # coordinates (--hits-only, #2270) and can never extend or dilute the
-      # denominator. Both inputs are required — a missing layer fails the
+      # The published admin report merges all three test layers. Unit and MySQL
+      # use the same V8 provider and enumerate every eligible source file;
+      # together they establish canonical source coordinates. The separately
+      # instrumented E2E layer only confirms hits on shared coordinates
+      # (--hits-only, #2270) and can never extend or dilute the
+      # denominator. All inputs are required — a missing layer fails the
       # job instead of publishing a partial report as complete (#2707).
-      - name: Merge test coverage (unit + E2E into one admin report)
+      - name: Merge test coverage (unit + MySQL + E2E into one admin report)
         run: bun run coverage:merge
 
       - name: Store Admin Coverage Report (wf)
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ADMIN_COVERAGE_ARTIFACT_NAME_WF }}
-          # Unit + e2e files too: kept as per-layer diagnostics; the merged
+          # Unit + MySQL + E2E files too: kept as per-layer diagnostics; the merged
           # file is the single report Codecov's `admin` flag and the
           # cross-module merge consume.
           path: |
             ${{ env.ADMIN_UNIT_COVERAGE_REPORT }}
+            ${{ env.ADMIN_DIRECTORY }}/.coverage/mysql/lcov.info
             ${{ env.ADMIN_E2E_COVERAGE_REPORT }}
             ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
           retention-days: 90
@@ -2306,6 +2337,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ steps.list_api_junit_files.outputs.junit_files }}
           flags: api
@@ -2339,6 +2371,7 @@ jobs:
         determine_changes,
         determine_baseline_availability,
         determine_docker_image_availability,
+        perushim_data,
       ]
     if: ${{ always() && !cancelled() && !failure() && (needs.determine_changes.outputs.app_module_changed == 'true' || needs.determine_changes.outputs.app_ci_changed == 'true' || needs.determine_baseline_availability.outputs.is_app_master_coverage_available == 'false') }}
     defaults:
@@ -2346,6 +2379,7 @@ jobs:
         working-directory: ${{ env.APP_DIRECTORY }}
     permissions:
       contents: read
+      actions: read
 
     env:
       RUSTC_WRAPPER: sccache
@@ -2355,6 +2389,11 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+
+      - name: Setup Node.js for AAB audit
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -2380,7 +2419,8 @@ jobs:
       - name: Setup Java for Android release validation
         uses: actions/setup-java@v6
         with:
-          distribution: "microsoft"
+          # The pinned Android SDK rejects Microsoft's five-part JDK versions.
+          distribution: "temurin"
           java-version: "17"
           verify-signature: true
 
@@ -2416,23 +2456,49 @@ jobs:
           path: .cache/recitation-assets/*.ogg
           key: ${{ steps.recitation_audio.outputs.cache-primary-key }}
 
+      - name: Download paired Perushim assets
+        if: needs.perushim_data.result != 'skipped'
+        uses: actions/download-artifact@v8
+        with:
+          name: perushim-sqlite-v2-indexed.${{ github.run_id }}
+          path: ${{ runner.temp }}/app-ci-perushim
+
+      - name: Download paired Perushim assets (master baseline)
+        if: needs.perushim_data.result == 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          artifact_id=$(gh api "repos/${{ github.repository }}/actions/artifacts?name=perushim-sqlite-v2-indexed.master" --jq '[.artifacts[] | select(.expired == false)] | first | .id')
+          test -n "$artifact_id" && test "$artifact_id" != "null"
+          mkdir -p "$RUNNER_TEMP/app-ci-perushim"
+          gh api "repos/${{ github.repository }}/actions/artifacts/$artifact_id/zip" > "$RUNNER_TEMP/app-ci-perushim.zip"
+          unzip -o "$RUNNER_TEMP/app-ci-perushim.zip" -d "$RUNNER_TEMP/app-ci-perushim"
+
+      - name: Prepare matching Perushim catalog, notes and search index
+        run: python3 devops/prepare_perushim_assets.py --source "$RUNNER_TEMP/app-ci-perushim" --app-directory BibleOnSite --platform Android
+
       - name: Verify Android release package
         run: |
           # Workload set 10.0.402.1 pins Android SDK 36.1.118 — the first servicing
           # release honoring AndroidR8ObfuscationMode and emitting r8.json (#2708).
           dotnet workload install maui-android --version 10.0.402.1
           dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
-          # Compile with the checked-in notes fixture; store packages use the paired release artifact.
-          NOTES_GZ="BibleOnSite/Platforms/Android/AssetPacks/perushim_notes/sefaria-dump-5784-sivan-4.perushim_notes.sqlite.gz"
-          if [ -f "$NOTES_GZ" ] && [ ! -f "${NOTES_GZ%.gz}" ]; then
-            gzip -dc "$NOTES_GZ" > "${NOTES_GZ%.gz}"
-          fi
           # Exercise D8 and release linking before merging, without store signing keys.
           dotnet build BibleOnSite/BibleOnSite.csproj --no-restore -c Release -f net10.0-android -r android-arm64 -p:RuntimeIdentifiers=android-arm64 -p:AndroidPackageFormats=aab
           # #2708: the bundle must carry r8.json (enabled stages plus the
           # no*Percentage stats Play scores) and proguard.map; the verifier
           # enforces each Play score ≥25% over the 10 MB DEX threshold.
           python3 devops/verify_android_dex_metadata.py --package "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)"
+
+      - name: Audit real Android bundle sizes and asset-pack layout
+        run: node ../devops/github/ci/audit-android-aab-size.mjs --package "$(find BibleOnSite/bin/Release -name '*.aab' -print -quit)" --json-out .artifacts/aab-size-report.json
+
+      - name: Upload Android bundle size report
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-aab-size-report.${{ github.run_id }}
+          path: app/.artifacts/aab-size-report.json
+          if-no-files-found: error
 
       # #2970: the release packaging job is master-only. Exercise the real
       # symbols path here — produce the archive from this build's
@@ -2479,6 +2545,9 @@ jobs:
 
       - name: Test Android DEX metadata verification
         run: python3 -m unittest discover -s devops -p test_verify_android_dex_metadata.py
+
+      - name: Test Android AAB size and layout audit
+        run: node --test ../devops/github/ci/audit-android-aab-size.test.mjs
 
       - name: Setup Python for signing validation tests
         uses: actions/setup-python@v7
@@ -2541,6 +2610,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
           flags: app
@@ -2573,6 +2643,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.APP_DIRECTORY }}/BibleOnSite.Tests/TestResults/test-results.xml
           flags: app
@@ -2745,6 +2816,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.BULLETIN_DIRECTORY }}/.junit-report/unit/results.xml
           flags: bulletin
@@ -2961,6 +3033,9 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: python devops/deploy/data-deploy/validate_lambda_parser.py --parse-only
 
+      - name: Install commentary import regression dependencies
+        run: python -m pip install --disable-pip-version-check -r sefaria/pipelines/perushim-view/tests/requirements-mysql.txt
+
       - name: Unit Test
         id: unit-test
         env:
@@ -2981,6 +3056,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.DATA_DIRECTORY }}/.junit-report/unit/results.xml
           flags: data
@@ -3033,6 +3109,7 @@ jobs:
           MONGO_HOST: localhost
           MONGO_PORT: 27017
           DUMP_NAME: sefaria
+          MYSQL_IMPORT_TEST_DB_URL: mysql://root:test_123@127.0.0.1:3306/tanah_perushim_import_test
         run: cargo make coverage-integration
 
       - name: Store Data Integration JUnit Report
@@ -3049,6 +3126,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.DATA_DIRECTORY }}/.junit-report/integration/results.xml
           flags: data-integration
@@ -3310,6 +3388,7 @@ jobs:
         if: ${{ needs.website_e2e.result != 'skipped' }}
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           working-directory: ${{ env.TMP_WEBSITE_JUNIT_REPORTS_DIRECTORY }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ steps.list_files.outputs.junit_files }}
@@ -3320,6 +3399,10 @@ jobs:
     name: Database backup recovery
     uses: ./.github/workflows/ci-db-backup.yml
 
+  transcription_ci:
+    name: Local transcription
+    uses: ./.github/workflows/ci-transcription.yml
+
   cross_module_ci:
     timeout-minutes: 10
     name: Cross Module CI
@@ -3327,6 +3410,7 @@ jobs:
     needs:
       [
         workflow_timeouts,
+        root_evidence_guard,
         setup_env,
         determine_changes,
         website_performance,
@@ -3350,6 +3434,7 @@ jobs:
         recitation_ci,
         deploy_verifier,
         database_backups,
+        transcription_ci,
         perushim_data,
         determine_baseline_availability,
         determine_docker_image_availability,
@@ -3373,8 +3458,18 @@ jobs:
             exit 1
           fi
 
+          if [ "${{ needs.root_evidence_guard.result }}" != "success" ]; then
+            echo "Root evidence guard did not pass."
+            exit 1
+          fi
+
           if [ "${{ needs.database_backups.result }}" != "success" ]; then
             echo "Database backup and restore validation did not pass."
+            exit 1
+          fi
+
+          if [ "${{ needs.transcription_ci.result }}" != "success" ]; then
+            echo "Local transcription validation did not pass."
             exit 1
           fi
 
@@ -3630,6 +3725,7 @@ jobs:
       - name: Publish Website Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.WEBSITE_MERGED_COVERAGE_REPORT }}
           disable_search: true
@@ -3659,6 +3755,7 @@ jobs:
       - name: Publish API Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.API_COVERAGE_REPORT }}
           disable_search: true
@@ -3708,6 +3805,7 @@ jobs:
       - name: Publish Bulletin Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.BULLETIN_COVERAGE_REPORT }}
           disable_search: true
@@ -3734,13 +3832,14 @@ jobs:
           gh api "repos/${{ github.repository }}/actions/artifacts/$ARTIFACT_ID/zip" > "$RUNNER_TEMP/$ARTIFACT_NAME.zip"
           unzip -o "$RUNNER_TEMP/$ARTIFACT_NAME.zip" -d "${{ env.ADMIN_COVERAGE_DIRECTORY }}"
 
-      # The `admin` flag carries one merged report: unit's canonical V8
-      # universe plus the hits the E2E layer confirmed on shared coordinates
+      # The `admin` flag carries one merged report: unit + MySQL canonical V8
+      # coverage plus hits the E2E layer confirmed on shared coordinates
       # (merged in the Admin CI job). Per-layer files stay in the coverage
       # artifact as diagnostics only.
       - name: Publish Admin Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.ADMIN_MERGED_COVERAGE_REPORT }}
           disable_search: true
@@ -3770,6 +3869,7 @@ jobs:
       - name: Publish Data Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.DATA_COVERAGE_REPORT }}
           disable_search: true
@@ -3797,6 +3897,12 @@ jobs:
         with:
           name: database-backup-coverage-${{ github.run_id }}
           path: .coverage/db-backup
+
+      - name: Restore transcription coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: transcription-coverage-${{ github.run_id }}
+          path: .coverage/transcription
 
       - name: Measure release and image-publisher regression coverage
         working-directory: ${{ env.DEVOPS_DIRECTORY }}
@@ -3923,6 +4029,7 @@ jobs:
       - name: Publish App Coverage To Codecov
         uses: codecov/codecov-action@v7
         with:
+          override_branch: ${{ env.CODECOV_BRANCH_OVERRIDE }}
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ${{ env.APP_COVERAGE_REPORT }}
           disable_search: true
@@ -4136,7 +4243,8 @@ jobs:
     # already forces data_ci success whenever data checks were needed.
     # Schema-only changes require a separately approved, selective migration.
     # Skip this entire job: success would supersede older queued data deployments.
-    if: ${{ always() && needs.cross_module_ci.result == 'success' && (needs.data_ci.result == 'success' || needs.data_ci.result == 'skipped') && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_deploy_changed == 'true' || needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true') && needs.determine_changes.outputs.data_schema_only_changed == 'false' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
+    # Cancellation must also stop the always() job before it can dispatch Data CD.
+    if: ${{ always() && !cancelled() && needs.cross_module_ci.result == 'success' && (needs.data_ci.result == 'success' || needs.data_ci.result == 'skipped') && (needs.perushim_data.result == 'success' || needs.perushim_data.result == 'skipped') && (needs.determine_changes.outputs.data_module_changed == 'true' || needs.determine_changes.outputs.data_deploy_changed == 'true' || needs.determine_changes.outputs.perushim_pipeline_module_changed == 'true') && needs.determine_changes.outputs.data_schema_only_changed == 'false' && needs.setup_env.outputs.is_master_branch == 'true' && github.event_name == 'push' }}
     permissions:
       contents: read
       actions: read

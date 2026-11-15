@@ -56,7 +56,9 @@ test.describe("Link Proposals", () => {
 		const applyButton = page.getByRole("button", { name: "החל על המאמר" });
 		if ((await applyButton.count()) > 0) {
 			await applyButton.first().click();
-			await expect(page.getByText(/שגיאה בהחלה|ARTICLE_API_KEY/)).toBeVisible();
+			// The queue also shows a standing "ARTICLE_API_KEY חסר" warning —
+			// assert on the apply error itself, not that banner.
+			await expect(page.getByText(/שגיאה בהחלה/)).toBeVisible();
 		}
 
 		// Reject another pending proposal — live data untouched by design.

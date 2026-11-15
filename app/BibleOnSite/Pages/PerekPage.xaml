@@ -51,15 +51,16 @@
                    SemanticProperties.Hint="הקישו לפתיחת החיפוש"
                    ToolTipProperties.Text="חיפוש (Ctrl+F)"
                    Clicked="OnPerekSourceClicked"/>
-                <Border x:Name="SearchIntroduction" HorizontalOptions="Fill" VerticalOptions="Center"
-                        HeightRequest="40" Margin="4,0" Padding="12,0" StrokeThickness="0" StrokeShape="RoundRectangle 14"
-                        BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}">
-                    <Border.GestureRecognizers>
-                        <TapGestureRecognizer Tapped="OnPerekSourceClicked"/>
-                    </Border.GestureRecognizers>
-                    <Label x:Name="SearchIntroductionText" Text="חיפוש בתנ&quot;ך..." FontSize="20" VerticalOptions="Center"
-                           HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
-                </Border>
+                <controls:TappableView x:Name="SearchIntroduction" HorizontalOptions="Fill" VerticalOptions="Center"
+                        Activated="OnPerekSourceClicked"
+                        SemanticProperties.Hint="הקישו לפתיחת החיפוש"
+                        ToolTipProperties.Text="חיפוש (Ctrl+F)">
+                    <Border HeightRequest="40" Margin="4,0" Padding="12,0" StrokeThickness="0" StrokeShape="RoundRectangle 14"
+                            BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}">
+                        <Label x:Name="SearchIntroductionText" Text="חיפוש בתנ&quot;ך..." FontSize="20" VerticalOptions="Center"
+                               HorizontalTextAlignment="Center" TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
+                    </Border>
+                </controls:TappableView>
                     </Grid>
                 </controls:SharedTopBar.CenterContent>
                 <controls:SharedTopBar.TrailingContent>

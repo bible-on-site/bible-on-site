@@ -73,19 +73,19 @@
                     </OnPlatform>
                 </VerticalStackLayout.HorizontalOptions>
                 <!-- Author section -->
+                <controls:TappableView HorizontalOptions="Center"
+                                       Command="{Binding GoToAuthorCommand}"
+                                       SemanticProperties.Description="{Binding AuthorName}">
                 <VerticalStackLayout HorizontalOptions="Center"
                                      Spacing="8"
                                      Margin="0,16,0,0">
-                    <!-- Author Image (tappable) -->
+                    <!-- Author Image -->
                     <Border WidthRequest="80"
                             HeightRequest="80"
                             StrokeShape="RoundRectangle 40"
                             Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                             StrokeThickness="2"
                             HorizontalOptions="Center">
-                        <Border.GestureRecognizers>
-                            <TapGestureRecognizer Command="{Binding GoToAuthorCommand}"/>
-                        </Border.GestureRecognizers>
                         <Image Source="{Binding AuthorImageUrl}"
                                Aspect="AspectFill"
                                WidthRequest="76"
@@ -96,12 +96,9 @@
                     <Label Text="{Binding AuthorName}"
                            FontSize="16"
                            HorizontalTextAlignment="Center"
-                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}">
-                        <Label.GestureRecognizers>
-                            <TapGestureRecognizer Command="{Binding GoToAuthorCommand}"/>
-                        </Label.GestureRecognizers>
-                    </Label>
+                           TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"/>
                 </VerticalStackLayout>
+                </controls:TappableView>
 
                 <!-- Reading-time badge over the full article body (issue #2607);
                      hidden when the metric is unknown or verified-empty. -->

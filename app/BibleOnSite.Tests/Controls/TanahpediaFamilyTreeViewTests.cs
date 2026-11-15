@@ -26,24 +26,21 @@ public class TanahpediaFamilyTreeViewTests
         }
     }
 
-    private static IEnumerable<TapGestureRecognizer> TapRecognizers(IVisualTreeElement? root)
+    private static IEnumerable<TappableView> TappableViews(IVisualTreeElement? root)
     {
         if (root is null)
         {
             yield break;
         }
-        if (root is View view)
+        if (root is TappableView tappable)
         {
-            foreach (var recognizer in view.GestureRecognizers.OfType<TapGestureRecognizer>())
-            {
-                yield return recognizer;
-            }
+            yield return tappable;
         }
         foreach (var child in root.GetVisualChildren())
         {
-            foreach (var recognizer in TapRecognizers(child))
+            foreach (var tappableView in TappableViews(child))
             {
-                yield return recognizer;
+                yield return tappableView;
             }
         }
     }
@@ -135,7 +132,7 @@ public class TanahpediaFamilyTreeViewTests
             EntryTappedCommand = command,
         };
 
-        var taps = TapRecognizers(view.Content).ToList();
+        var taps = TappableViews(view.Content).ToList();
 
         // Exactly one card links - the spouse with an EntryUniqueName.
         taps.Should().ContainSingle();

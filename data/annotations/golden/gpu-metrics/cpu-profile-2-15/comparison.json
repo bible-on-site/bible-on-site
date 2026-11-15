@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "device": "cpu",
+  "dtype": "float32",
+  "threads": 2,
+  "interop_threads": 1,
+  "torch": "2.15.0+cpu",
+  "transformers": "5.22.2",
+  "cuda_masked": true,
+  "completed": true,
+  "adapter_override": false,
+  "splits": {
+    "development": {
+      "pasuk": {
+        "counts": true,
+        "metrics": true,
+        "per_case": true,
+        "per_category": true
+      },
+      "article": {
+        "counts": true,
+        "metrics": true,
+        "per_case": true,
+        "per_category": true
+      }
+    },
+    "validation": {
+      "pasuk": {
+        "counts": true,
+        "metrics": true,
+        "per_case": true,
+        "per_category": true
+      },
+      "article": {
+        "counts": true,
+        "metrics": true,
+        "per_case": true,
+        "per_category": true
+      }
+    }
+  },
+  "source_sha256": {
+    "encoders.py": "2d47ae17a987e480387aba20a6125e777e017de59a437cf2a5cbe97a3cbd5c3e",
+    "baseline.py": "bbe0d039abc5cf4d29c7526fc3841e9797ead4e3f343c61b57654ce38017010b",
+    "baseline_articles.py": "aca6849f04bc8108552e400b03f13fc42a6d9beb5040f0abecbe912ca2caf534",
+    "golden_eval.py": "b485b6aa38a327ec293ff121baf981d26eff7db6360b07debd889efa3345c966"
+  },
+  "cuda_initialized": false
+}

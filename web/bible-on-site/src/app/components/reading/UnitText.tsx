@@ -27,6 +27,7 @@ export function SharedUnitText({
 	boundaryMarkers,
 	emphasisMarkerKey,
 	modestPerekLabels,
+	recitationWords,
 }: {
 	ranges: ScriptureRange[];
 	entityRefsByPerek: Record<number, PerekEntityReference[]>;
@@ -50,6 +51,10 @@ export function SharedUnitText({
 	/** Forwarded to UnitTextBody — modest perek labels without markers
 	 * (parasha-reader chrome, issue #2519). */
 	modestPerekLabels?: boolean;
+	/** Forwarded to UnitTextBody — wrap words in the shared recitation
+	 * control so an enclosing range player can play/highlight them
+	 * (issue #3259). */
+	recitationWords?: boolean;
 }) {
 	return (
 		<article className={perekStyles.perekText} data-unit-text={scrollScope}>
@@ -65,6 +70,7 @@ export function SharedUnitText({
 				boundaryMarkers={boundaryMarkers}
 				emphasisMarkerKey={emphasisMarkerKey}
 				modestPerekLabels={modestPerekLabels}
+				recitationWords={recitationWords}
 				resolvePerek={(perekId) => {
 					const perek = getPerekByPerekId(perekId);
 					return perek

@@ -11,20 +11,24 @@ import { ARTICLE_RELATIONSHIP_REGISTRY } from "~/lib/article-relationships";
 import type { TargetCatalogue } from "./catalogue";
 
 /**
- * Bump when the prompt or the output contract changes — recorded on every
- * proposal so generations stay traceable and reruns re-checkpoint.
+ * Bump when the LLM prompt or output contract changes — recorded on LLM
+ * proposals so generations stay traceable and reruns re-checkpoint.
  */
-export const LINK_PROMPT_VERSION = "linking-v1";
+export const LINK_PROMPT_VERSION = "linking-v2";
 
 export const HEURISTIC_GENERATOR_ID = "heuristic-citations:v1";
+/** Keep historical heuristic checkpoints/dedupe stable across LLM prompt edits. */
+export const HEURISTIC_PROMPT_VERSION = "linking-v1";
 
 export function buildArticleLinkSystemPrompt(): string {
-	const catalogueLines = ARTICLE_RELATIONSHIP_REGISTRY.relationships.map(
-		(entry) =>
-			`- ${entry.key} (${entry.status}): ${entry.meaning} Cardinality: ${entry.cardinality}. Operations: ${
-				entry.operations.length ? entry.operations.join("/") : "none yet"
-			}.`,
-	);
+	const catalogueLines = ARTICLE_RELATIONSHIP_REGISTRY.relationships
+		.filter((entry) => entry.key !== "author")
+		.map(
+			(entry) =>
+				`- ${entry.key} (${entry.status}): ${entry.meaning} Cardinality: ${entry.cardinality}. Operations: ${
+					entry.operations.length ? entry.operations.join("/") : "none yet"
+				}.`,
+		);
 	return [
 		"You draft article relationship-link proposals for human review in a",
 		"Jewish-content admin (Tanah/מאמרים). Hebrew is the primary language.",
@@ -40,7 +44,10 @@ export function buildArticleLinkSystemPrompt(): string {
 		"  NOT proof the article's whole verified coverage should change. Use",
 		'  action "add" for individual pasuk mentions; "replace" only when the',
 		"  article demonstrably claims to cover that whole set.",
-		"- Do not invent authorship, dedication intent or other editorial facts.",
+		"- Author attribution is fixed explicitly on upload/import. The current",
+		"  author is authoritative context, never a proposal target. Never infer,",
+		"  guess or propose authorship changes, even with apparent text evidence.",
+		"- Do not invent dedication intent or other editorial facts.",
 		"  If a supported type lacks evidence, abstain — do not guess.",
 		"- pending-schema relationships (recurringHebrewDate, moadim) may be",
 		"  proposed only when the text explicitly gives the target — they are",
@@ -58,14 +65,13 @@ export function buildArticleLinkSystemPrompt(): string {
 				proposals: [
 					{
 						relationshipKey:
-							"coveringSources|primaryPerek|author|dedicationAssignments|recurringHebrewDate|moadim",
+							"coveringSources|primaryPerek|dedicationAssignments|recurringHebrewDate|moadim",
 						action: "add|remove|replace",
 						target: {
 							'citations — coveringSources: [{sefer:"שם הספר",additional:"א"?,perek:"יח",pasuk:"ב" or "ב-ה"}]':
 								null,
 							'perek — primaryPerek: {sefer:"...",additional?:"א",perek:"יח"}':
 								null,
-							"authorId — author: number from the AUTHOR CATALOGUE only": null,
 							'dedicationId — dedicationAssignments: number from the DEDICATION CATALOGUE only; expiresAt?:"YYYY-MM-DD HH:mm"':
 								null,
 							'month+day — recurringHebrewDate: {month:"ניסן",day:15}': null,
@@ -77,7 +83,7 @@ export function buildArticleLinkSystemPrompt(): string {
 					},
 				],
 				abstentions: [
-					{ relationshipKey: "author", reason: "no evidence in text" },
+					{ relationshipKey: "coveringSources", reason: "no evidence in text" },
 				],
 			},
 			null,
@@ -121,9 +127,6 @@ export function buildArticleLinkUserMessage(
 		"",
 		"=== Current relationships (authoritative baseline) ===",
 		JSON.stringify(context.current),
-		"",
-		"=== AUTHOR CATALOGUE (valid authorId targets) ===",
-		JSON.stringify(context.catalogue.authors),
 		"",
 		"=== DEDICATION CATALOGUE (valid dedicationId targets) ===",
 		JSON.stringify(context.catalogue.dedications),

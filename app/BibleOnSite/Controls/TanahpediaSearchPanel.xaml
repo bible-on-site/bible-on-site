@@ -53,13 +53,14 @@
   </Border>
   <ScrollView Grid.Row="1" Orientation="Horizontal" HorizontalScrollBarVisibility="Never" AutomationId="TanahpediaSearchFilterChips">
    <HorizontalStackLayout Padding="16,8" Spacing="8">
-    <Border Style="{StaticResource FilterChip}" AutomationId="TanahpediaSearchKindsTab">
-     <Border.GestureRecognizers><TapGestureRecognizer Tapped="OnKindsTabClicked"/></Border.GestureRecognizers>
-     <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
-      <Label x:Name="KindsChipText" AutomationId="TanahpediaSearchKindsSummary" Style="{StaticResource ChipText}"/>
-      <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
-     </Grid>
-    </Border>
+    <controls:TappableView AutomationId="TanahpediaSearchKindsTab" Activated="OnKindsTabClicked">
+     <Border Style="{StaticResource FilterChip}">
+      <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="6">
+       <Label x:Name="KindsChipText" AutomationId="TanahpediaSearchKindsSummary" Style="{StaticResource ChipText}"/>
+       <Label Grid.Column="1" Style="{StaticResource ChipChevron}"/>
+      </Grid>
+     </Border>
+    </controls:TappableView>
    </HorizontalStackLayout>
   </ScrollView>
   <VerticalStackLayout Grid.Row="2" Padding="16,4" Spacing="4">

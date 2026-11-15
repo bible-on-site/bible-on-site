@@ -154,6 +154,8 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 ExitFullscreenButton = ExitFullScreenButton,
                 ArticlesView = ArticlesCollection,
                 ReaderContent = ParashaCarousel,
+                // This reader has no reading-position indicator yet.
+                ReadingProgressIndicator = null,
                 Toolbar = ReaderToolbar,
                 Host = MainGrid,
                 ContentArea = ContentArea,
@@ -484,6 +486,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
 
         // Hide loading overlay — carousel is ready
         CarouselLoadingOverlay.Hide();
+        _carousel.ResnapAfterLoad();
 
         // A search-result link lands inside the selected reading instance.
         await ApplySearchReaderLocationAsync();
@@ -601,7 +604,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         || ChapterSearch.IsSearchOpen
         || ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
             _unitRecitationSelection, _focusedPasuk != null,
-            _recitationCursor.PlayingKey != null);
+            Recitation.Cursor.PlayingKey != null);
 
     private void OnUnitPickerClicked(object? sender, EventArgs e)
     {
@@ -707,7 +710,16 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     protected override void OnNavigatedTo(NavigatedToEventArgs args)
     {
         base.OnNavigatedTo(args);
+        CarouselLoadingOverlay.ReaderNavigatedTo();
+        _carousel.ReaderNavigatedTo();
         SetAnalyticsScreenForUnit();
+    }
+
+    protected override void OnNavigatedFrom(NavigatedFromEventArgs args)
+    {
+        CarouselLoadingOverlay.ReaderNavigatedFrom();
+        _carousel.ReaderNavigatedFrom();
+        base.OnNavigatedFrom(args);
     }
 
     /// <summary>Logs current parasha screen to analytics (legacy-style: ParashaAlHaperek/{unitId}).</summary>

@@ -841,4 +841,39 @@ describe("ParashaSefer", () => {
 		expect(window.location.search).not.toContain("haftaraPerush=");
 		expect(mockBlankPages.get("1:haftara")?.initialSlug).toBeUndefined();
 	});
+	it("flags only recorded perakim playable and renders unit dedications", () => {
+		const props = baseProps();
+		const recorded: Perek = {
+			...perek(3),
+			recitation: {
+				version: 1,
+				audioUrl: "https://example.com/1.mp3",
+				audioSha256: "a".repeat(64),
+				textSha256: "b".repeat(64),
+				durationMs: 1000,
+				alignmentStatus: "ready",
+			},
+		};
+		// Unit 1's Torah reading spans perakim 1-6 and its Haftarah perek
+		// 335 — both recorded. Perakim 2-6 stay unmapped and are skipped.
+		props.perekById = new Map<number, Perek>([
+			[1, recorded],
+			[335, recorded],
+		]);
+		render(
+			<ParashaSefer
+				{...props}
+				dedicationsByUnit={{ 1: ["לעילוי נשמת המחבר"] }}
+			/>,
+		);
+		expect(screen.getByText("לעילוי נשמת המחבר")).toBeInTheDocument();
+		const toggles = screen.getAllByRole("button", { name: "מצב הקראה" });
+		// Unit 1 Torah + Haftarah are recorded; unit 2's Torah reading
+		// (perakim 6-11) has no corpus perek at all → disabled.
+		expect(toggles).toHaveLength(3);
+		expect(toggles[0]).toBeEnabled();
+		expect(toggles[1]).toBeEnabled();
+		expect(toggles[2]).toBeDisabled();
+		expect(toggles[2]).toHaveAttribute("title", "אין הקלטה לקריאה זו");
+	});
 });

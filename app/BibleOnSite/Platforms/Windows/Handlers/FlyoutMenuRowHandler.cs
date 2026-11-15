@@ -30,29 +30,14 @@ public sealed class FlyoutMenuRowHandler : ViewHandler<FlyoutMenuRow, Microsoft.
 	{
 	}
 
-	protected override Microsoft.UI.Xaml.Controls.Button CreatePlatformView()
-	{
-		var button = new Microsoft.UI.Xaml.Controls.Button
-		{
-			// Transparent at rest; WinUI's visual states still paint the
-			// theme PointerOver/Pressed brushes and the focus rectangle.
-			Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent),
-			BorderThickness = new Microsoft.UI.Xaml.Thickness(0),
-			Padding = new Microsoft.UI.Xaml.Thickness(0),
-			CornerRadius = new Microsoft.UI.Xaml.CornerRadius(6),
-			HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch,
-			HorizontalContentAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch,
-			VerticalContentAlignment = Microsoft.UI.Xaml.VerticalAlignment.Stretch,
-		};
-		return button;
-	}
+	protected override Microsoft.UI.Xaml.Controls.Button CreatePlatformView() => NativeRowButton.Create();
 
 	protected override void ConnectHandler(Microsoft.UI.Xaml.Controls.Button platformView)
 	{
 		base.ConnectHandler(platformView);
 		if (VirtualView.Content is { } content && MauiContext is { } context)
 		{
-			platformView.Content = content.ToPlatform(context);
+			NativeRowButton.SetContent(platformView, content, context);
 		}
 		platformView.Click += OnButtonClick;
 	}
