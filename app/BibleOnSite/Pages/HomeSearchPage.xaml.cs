@@ -61,6 +61,12 @@ public partial class HomeSearchPage : ContentPage, IAnalyticsScreenName
         {
             // A replacement query or navigation owns the visible results.
         }
+        #pragma warning disable S2221 // UI failure boundary: keep local navigation usable after a content-search failure.
+        catch (Exception ex) when (ex is not OutOfMemoryException) //NOSONAR - the view model already exposes the search error.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"[HomeSearch] Content search failed: {ex}");
+        }
     }
 
     private void OnSearchStateChanged(object? sender, PropertyChangedEventArgs e)
