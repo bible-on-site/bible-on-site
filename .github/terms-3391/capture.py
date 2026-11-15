@@ -16,7 +16,10 @@ def adb(*args, timeout=20):
     return subprocess.check_output(["adb", "-s", "emulator-5554", *map(str, args)], timeout=timeout)
 
 def dump():
-    adb("shell", "uiautomator", "dump", "/sdcard/terms-evidence.xml")
+    status = adb("shell", "uiautomator", "dump", "/sdcard/terms-evidence.xml")
+    if b"dumped to:" not in status:
+        print("Android window has no accessibility root yet:", status[:160], flush=True)
+        return ET.Element("hierarchy")
     return ET.fromstring(adb("exec-out", "cat", "/sdcard/terms-evidence.xml"))
 
 def values(node):
@@ -67,7 +70,11 @@ for side, expected_sha, target in (
     assert hashlib.file_digest(apk.open("rb"), "sha256").hexdigest() == expected_sha
     adb("install", "-r", "-g", apk, timeout=60)
     adb("shell", "pm", "clear", APP)
-    adb("shell", "monkey", "-p", APP, "-c", "android.intent.category.LAUNCHER", "1")
+    resolved = adb("shell", "cmd", "package", "resolve-activity", "--brief", "-a",
+                   "android.intent.action.MAIN", "-c", "android.intent.category.LAUNCHER", APP)
+    component = resolved.decode().strip().splitlines()[-1]
+    assert component.startswith(APP + "/"), component
+    adb("shell", "am", "start", "-W", "-n", component)
     try:
         menu = seek(lambda p: "פתיחת תפריט הניווט" in p or any(s.endswith("NavigationButton") for s in p))
         tap(menu)
