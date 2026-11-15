@@ -76,5 +76,67 @@
   "host_application_lines_covered": 20246,
   "host_application_lines_total": 20343,
   "instrumented_changed_application_lines_covered": 161,
-  "instrumented_changed_application_lines_total": 161
+  "instrumented_changed_application_lines_total": 161,
+  "home_tiles": {
+    "daily_width": 965,
+    "tiles": {
+      "HomeParasha": [
+        57,
+        491,
+        1022,
+        566
+      ],
+      "HomeTanahpedia": [
+        555,
+        491,
+        1022,
+        381
+      ],
+      "HomeMasora": [
+        57,
+        491,
+        523,
+        381
+      ],
+      "HomeMoadim": [
+        57,
+        491,
+        1022,
+        1101
+      ],
+      "HomeAuthors": [
+        555,
+        1154,
+        1022,
+        1585
+      ],
+      "HomeContact": [
+        555,
+        1637,
+        1022,
+        2068
+      ],
+      "HomeDonations": [
+        57,
+        1637,
+        523,
+        2068
+      ]
+    },
+    "destinations": [
+      "HomeParasha",
+      "HomeTanahpedia",
+      "HomeMasora",
+      "HomeMoadim",
+      "HomeAuthors",
+      "HomeContact",
+      "HomeDonations",
+      "HomeIndex",
+      "HomeCalendar"
+    ],
+    "passed": true,
+    "holiday_catalogue_state": "Existing production GraphQL catalogue returned Internal Server Error; native destination navigation verified."
+  },
+  "comparison_count": 16,
+  "rds_contract_tests_passed": 92
 }

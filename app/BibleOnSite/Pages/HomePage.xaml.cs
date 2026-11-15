@@ -100,6 +100,10 @@ public partial class HomePage : ContentPage, IAnalyticsScreenName
     private async void OnMasoraTapped(object? sender, TappedEventArgs e) => await OpenAsync(AppRoutes.Masora);
     private async void OnAuthorsTapped(object? sender, TappedEventArgs e) => await OpenAsync(AppRoutes.Authors);
     private async void OnPreferencesClicked(object? sender, EventArgs e) => await OpenAsync(AppRoutes.Preferences);
-    private async void OnLibraryTapped(object? sender, TappedEventArgs e) => await OpenAsync(nameof(HomeLibraryPage));
+    private async void OnDestinationTapped(object? sender, TappedEventArgs e)
+    {
+        _ = sender; // The XAML activation carries the destination in its parameter.
+        if (e.Parameter is string route) { await OpenAsync(route); }
+    }
     private async void OnRetryClicked(object? sender, EventArgs e) => await LoadDailyPerekAsync();
 }

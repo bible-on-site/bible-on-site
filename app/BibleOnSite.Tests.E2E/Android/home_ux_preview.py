@@ -96,9 +96,24 @@ class NativeDevice:
                  round(y2 * self.height), 600)
 
     def home(self):
+        self.wait(lambda ns: find(ns, "HomeGlobalSearch") is not None, "Home search header")
+        self.scroll_to("HomeDailyPerek", upward=True)
         return self.wait(lambda ns: find(ns, "HomeDailySource") is not None
                          and find(ns, "HomeDailySource").get("text")
                          not in ("", "טוען את הפרק..."), "Expected home")
+
+    def scroll_to(self, selector, upward=False):
+        """Find a fully usable home tile in the scrollable layout."""
+        for _ in range(6):
+            items = self.nodes()
+            node = find(items, selector)
+            if node is not None:
+                _, top, _, bottom = bounds(node)
+                if top >= self.height * 0.24 and bottom <= self.height * 0.97:
+                    return node
+            start, end = (0.35, 0.85) if upward else (0.8, 0.4)
+            self.swipe(0.5, start, 0.5, end)
+        raise AssertionError(f"Home tile is not reachable: {selector}")
 
     def back(self):
         self.adb("shell", "input", "keyevent", 4)
@@ -214,8 +229,7 @@ def check_destinations(device):
     device.capture("calendar")
     device.back()
     device.home()
-    device.swipe(0.5, 0.8, 0.5, 0.55)
-    device.tap("HomeAuthors")
+    device.tap_node(device.scroll_to("HomeAuthors"))
     device.wait(lambda ns: find(ns, "TopBarHomeButton") is not None,
                 "Authors screen")
     device.capture("authors")
