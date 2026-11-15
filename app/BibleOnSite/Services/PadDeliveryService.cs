@@ -27,14 +27,15 @@ namespace BibleOnSite.Services;
 /// </summary>
 public sealed partial class PadDeliveryService : IPadDeliveryService
 {
-#if IOS || MACCATALYST
-    // App Store Connect accepts only alphanumerics and hyphens in asset-pack IDs.
-    private const string PerushimNotesPackName = "perushim-notes";
-#else
     private const string PerushimNotesPackName = "perushim_notes";
-#endif
+    // Apple serves a channel's latest pack to older app builds too. Keep the
+    // legacy perushim-notes pack intact: its clients require documents.Text.
+    internal const string IosPerushimNotesPackName = "perushim-notes-slim";
 
-    internal static string PayloadFileName(string packName) => packName == PerushimNotesPackName
+    private static bool IsNotesPack(string packName) =>
+        packName == PerushimNotesPackName || packName == IosPerushimNotesPackName;
+
+    internal static string PayloadFileName(string packName) => IsNotesPack(packName)
         ? "sefaria-dump-5784-sivan-4.perushim_notes.sqlite" : packName + ".zip";
 
     /// <summary>
@@ -49,7 +50,7 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     internal static IReadOnlyList<string> ReleasePayloadFiles(string packName)
     {
         var files = new List<string> { PayloadFileName(packName) };
-        if (packName == PerushimNotesPackName)
+        if (IsNotesPack(packName))
         {
             files.Add(PerushimNotesService.SearchIndexDbName);
         }
@@ -195,7 +196,7 @@ public sealed partial class PadDeliveryService : IPadDeliveryService
     /// </summary>
     internal static bool PackPayloadComplete(string directory, string packName) =>
         File.Exists(Path.Join(directory, PayloadFileName(packName))) &&
-        (packName != PerushimNotesPackName ||
+        (!IsNotesPack(packName) ||
             File.Exists(Path.Join(directory, PerushimNotesService.SearchIndexDbName)));
 
     /// <inheritdoc />
@@ -768,13 +769,9 @@ partial class PadDeliveryService
     [SupportedOSPlatform("maccatalyst26.0")]
     private static async Task<string?> SaveAssetPackPayloadAsync(string cacheDir, string packName)
     {
-        if (!await SavePackFileAsync(cacheDir, packName, PayloadFileName(packName), required: true))
+        foreach (var file in ReleasePayloadFiles(packName))
         {
-            return null;
-        }
-        if (packName == PerushimNotesPackName)
-        {
-            if (!await SavePackFileAsync(cacheDir, packName, PerushimNotesService.SearchIndexDbName, required: true))
+            if (!await SavePackFileAsync(cacheDir, packName, file, required: true))
             {
                 return null;
             }

@@ -145,6 +145,8 @@ export const MODULES = {
 			".github/workflows/app-package.yml",
 			".github/workflows/app-mobile-e2e.yml",
 			".github/workflows/app-mobile-e2e-runner.yml",
+			"devops/github/ci/audit-android-aab-size.mjs",
+			"devops/github/ci/audit-android-aab-size.test.mjs",
 			"devops/github/ci/e2e-impact",
 			"devops/e2e-coverage-trees",
 			// The cross-module job merges the app's coverage layers with it.
