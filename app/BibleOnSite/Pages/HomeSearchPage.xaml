@@ -11,7 +11,7 @@
             <Button Text="חזרה" AutomationId="HomeSearchBack" Clicked="OnBackClicked" BackgroundColor="Transparent"
                     TextColor="{AppThemeBinding Light=#1552AC, Dark=#AACBFF}" Padding="8" FontSize="15"/>
             <controls:SearchEntry x:Name="GlobalQuery" Grid.Column="1" AutomationId="HomeSearchInput"
-                                 Placeholder="בתנ&quot;ך ובאפליקציה" FontSize="17" TextChanged="OnQueryChanged"
+                                 Placeholder="בתנ&quot;ך ובאפליקציה" FontSize="17" TextChanged="OnQueryChanged" Completed="OnSearchSubmitted"
                                  TextColor="{AppThemeBinding Light=#192B45, Dark=#F2EFE6}"
                                  PlaceholderColor="{AppThemeBinding Light=#63738C, Dark=#B8CBE5}"/>
             <Button Grid.Column="2" Text="ניקוי" Clicked="OnClearClicked" BackgroundColor="Transparent"

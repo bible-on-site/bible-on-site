@@ -33,7 +33,7 @@ public partial class HomeSearchPage : ContentPage, IAnalyticsScreenName
     {
         _debounce?.Cancel();
         _content.CancelSearch();
-        GlobalQuery.Unfocus();
+        _ = HideKeyboardAsync();
         base.OnDisappearing();
     }
 
@@ -89,7 +89,7 @@ public partial class HomeSearchPage : ContentPage, IAnalyticsScreenName
     private async void OnNavigationResultTapped(object? sender, TappedEventArgs e)
     {
         if (e.Parameter is not NavigationSearchItem item) { return; }
-        GlobalQuery.Unfocus();
+        await HideKeyboardAsync();
         if (item.Route == HomeNavigationSearch.IndexAction)
         {
             SearchIndexPicker.Show(PerekDataService.Instance.GetTodaysPerekId());
@@ -101,7 +101,7 @@ public partial class HomeSearchPage : ContentPage, IAnalyticsScreenName
     private async void OnContentResultTapped(object? sender, TappedEventArgs e)
     {
         if (e.Parameter is not SearchResult result) { return; }
-        GlobalQuery.Unfocus();
+        await HideKeyboardAsync();
         var navigator = ShellAppNavigator.Instance;
         switch (result)
         {
@@ -134,7 +134,28 @@ public partial class HomeSearchPage : ContentPage, IAnalyticsScreenName
 
     private async void OnIndexPerekSelected(int perekId) =>
         await ShellAppNavigator.Instance.GoToAsync($"{AppRoutes.CalendarReader}?perekId={perekId}");
-    private async void OnBackClicked(object? sender, EventArgs e) =>
+    private async void OnBackClicked(object? sender, EventArgs e)
+    {
+        await HideKeyboardAsync();
         await ShellAppNavigator.Instance.GoToAsync("..");
+    }
+
+    private void OnSearchSubmitted(object? sender, EventArgs e) => _ = HideKeyboardAsync();
+
+    private async Task HideKeyboardAsync()
+    {
+        try
+        {
+            // Unfocus alone can leave Android's IME over the destination page.
+            await GlobalQuery.HideSoftInputAsync(CancellationToken.None);
+        }
+        #pragma warning disable S2221 // UI failure boundary: keyboard dismissal is best-effort during navigation.
+        catch (Exception ex) when (ex is not OutOfMemoryException) //NOSONAR - an unavailable native keyboard must not block navigation.
+        {
+            #pragma warning restore S2221
+            Console.Error.WriteLine($"[HomeSearch] Keyboard dismissal failed: {ex}");
+        }
+        GlobalQuery.Unfocus();
+    }
     private void OnClearClicked(object? sender, EventArgs e) => GlobalQuery.Text = string.Empty;
 }
