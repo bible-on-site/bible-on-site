@@ -4,7 +4,10 @@
 // publish: it removes the test app and WebDriverAgent so the captured device
 // stays clean (a leftover app could make Appium skip reinstalling the fresh
 // build), then shuts the device down so the saved directory is a consistent
-// Shutdown state instead of a mid-write Booted one.
+// Shutdown state instead of a mid-write Booted one. On runs where the host
+// lifecycle measurement already powered this job's device off, quiesce boots
+// it again first: app removal needs a booted device, and the extra boot does
+// not change what the saved directory captures.
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
@@ -60,7 +63,25 @@ export async function quiesce({
     return false;
   }
   const directory = deviceDirectory(udid);
-  if (deviceState(currentDevices(run), udid) !== "Booted") {
+  let state = deviceState(currentDevices(run), udid);
+  // The host lifecycle measurement ends with this job's own device powered
+  // off. Booting it again restores the app-removal channel; the capture still
+  // ends on the same consistent Shutdown image.
+  if (state === "Shutdown") {
+    try {
+      run("xcrun", ["simctl", "boot", udid]);
+    } catch (error) {
+      observe({ saved: false, reason: "device boot failed", error: String(error) });
+      return false;
+    }
+    const bootStarted = now();
+    while (state !== "Booted" && now() - bootStarted < timeout) {
+      await sleep(POLL_INTERVAL_MS);
+      state = deviceState(currentDevices(run), udid);
+      observe({ state, elapsedMs: now() - bootStarted, boot: true });
+    }
+  }
+  if (state !== "Booted") {
     observe({ saved: false, reason: "device is not fully booted" });
     return false;
   }
@@ -103,7 +124,7 @@ export async function quiesce({
   }
   const started = now();
   while (now() - started < timeout) {
-    const state = deviceState(currentDevices(run), udid);
+    state = deviceState(currentDevices(run), udid);
     observe({ state, elapsedMs: now() - started });
     if (state === "Shutdown") {
       const saved = deviceStateConsistent(directory, dirExists);
