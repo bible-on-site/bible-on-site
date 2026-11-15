@@ -51,6 +51,10 @@ Website builds clone the production commentary catalogs and notes before
 replaying the same import. This keeps prerendered work IDs and retained
 chapters consistent with the destination database.
 
+Full local bootstraps reset commentary fixtures and derived metrics before
+loading fixed-ID seeds. Data-only imports retain the additive schema. Test
+fixtures that read canonical DDL must accept `CREATE TABLE IF NOT EXISTS`.
+
 The Lambda closes a failed import connection, rolling back its transaction.
 Rolling back a completed publication uses the pre-import RDS recovery point
 and the matching web/native release snapshots.
