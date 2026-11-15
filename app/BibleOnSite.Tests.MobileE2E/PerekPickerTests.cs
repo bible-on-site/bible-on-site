@@ -89,6 +89,12 @@ public sealed class PerekPickerTests(ITestOutputHelper output, MobileDeviceSessi
         OpenPicker();
 
         AssertItemFullyInsidePerekColumn("קיט");
+        // Centered, not just inside: realized items flank the selection on
+        // both sides, so an edge-pinned landing cannot pass this test.
+        var rendered = Page.RenderedElements("PickerPerekItem").ToList();
+        var target = rendered.First(element => element.Text == "קיט");
+        Assert.Contains(rendered, element => element.Frame.Location.Y < target.Frame.Location.Y);
+        Assert.Contains(rendered, element => element.Frame.Location.Y > target.Frame.Location.Y);
         // The preselection is real — the confirm button only enables once a
         // perek is selected.
         Page.WaitFor("PerekPickerConfirm", element => element.Enabled);
