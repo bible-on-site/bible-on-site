@@ -434,7 +434,11 @@
 
 	<ItemGroup>
 		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.1" />
-		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="12.0.0" />
+		<!-- Held at the last .NET 10 line: 12.x targets net11.0 only and needs
+		     .NET MAUI 11 — tracked in
+		     https://github.com/bible-on-site/bible-on-site/issues/3396 (mirrored by
+		     the renovate.json allowedVersions pin). -->
+		<PackageReference Include="CommunityToolkit.Maui.MediaElement" Version="11.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="GraphQL.Client" Version="6.1.0" />
 		<PackageReference Include="GraphQL.Client.Serializer.SystemTextJson" Version="6.1.0" />

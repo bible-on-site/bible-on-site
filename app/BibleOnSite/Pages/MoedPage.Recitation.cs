@@ -550,7 +550,7 @@ public partial class MoedPage
         _focusedClipEnd = row.ClipEndIndex;
         // A double tap's first press paused this row's preview through the
         // shared toggle — opening its focused view resumes it.
-        if (_recitation?.PlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused &&
+        if (_recitation?.PlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused or RecitationPlaybackState.Buffering &&
             Recitation.Cursor.ResumesOnPasukFocus(MoedRecitation.PasukKey(row),
                 _recitation.PlayerState == RecitationPlaybackState.Playing))
         {
@@ -780,7 +780,7 @@ public partial class MoedPage
         var recitationVisual =
             RecitationPlayerState == RecitationPlaybackState.Playing && Recitation.Cursor.BarIssued
                 ? ReaderSelectionBar.RecitationVisual.Pause
-                : RecitationPlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused
+                : RecitationPlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused or RecitationPlaybackState.Buffering
                     ? ReaderSelectionBar.RecitationVisual.Resume : ReaderSelectionBar.RecitationVisual.Play;
         var hint = Recitation.Busy ? "טוען את הקלטת המועד..." :
             !_viewModel.HasCurrentUnitRecitation ? "אין הקלטה למועד זה - הורידו את הקלטות הספר בהעדפות" :

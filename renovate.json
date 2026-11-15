@@ -102,6 +102,16 @@
 			"allowedVersions": "<10.1"
 		},
 		{
+			"description": "CommunityToolkit.Maui.MediaElement 12+ targets net11.0 only and requires .NET MAUI 11 while the app is on .NET 10 — lift once the .NET 11 migration lands; see https://github.com/bible-on-site/bible-on-site/issues/3396",
+			"matchManagers": [
+				"nuget"
+			],
+			"matchPackageNames": [
+				"CommunityToolkit.Maui.MediaElement"
+			],
+			"allowedVersions": "<12"
+		},
+		{
 			"description": "requirements.txt is hashed into the preserved golden baseline (benchmark.py BASELINE_FILES); any bump fails data/recitation tests with 'The original fallback pipeline changed'. Upgrade only together with a golden re-baseline; see https://github.com/bible-on-site/bible-on-site/issues/2057",
 			"matchManagers": [
 				"pip_requirements"
