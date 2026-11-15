@@ -93,6 +93,8 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
                 ExitFullscreenButton = ExitFullScreenButton,
                 ArticlesView = ArticlesCollection,
                 ReaderContent = MasoraCarousel,
+                // This reader has no reading-position indicator yet.
+                ReadingProgressIndicator = null,
                 Toolbar = ReaderToolbar,
                 Host = MainGrid,
                 ContentArea = ContentArea,
