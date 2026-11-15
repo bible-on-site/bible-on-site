@@ -444,7 +444,8 @@ jobs:
         if: inputs.platform == 'Android'
         uses: actions/setup-java@v6
         with:
-          distribution: microsoft
+          # Five-part Microsoft versions bypass validation: dotnet/android#13524.
+          distribution: temurin
           java-version: "21"
           verify-signature: true
 

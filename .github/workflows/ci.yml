@@ -2410,8 +2410,9 @@ jobs:
       - name: Setup Java for Android release validation
         uses: actions/setup-java@v6
         with:
-          distribution: "microsoft"
-          java-version: "17"
+          # Five-part Microsoft versions bypass validation: dotnet/android#13524.
+          distribution: "temurin"
+          java-version: "21"
           verify-signature: true
 
       - name: Setup Python for recitation extension packaging

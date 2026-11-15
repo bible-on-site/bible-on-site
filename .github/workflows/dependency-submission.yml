@@ -70,8 +70,9 @@ jobs:
       - name: 'Setup Java for the Android workload'
         uses: actions/setup-java@v6
         with:
-          distribution: "microsoft"
-          java-version: "17"
+          # Five-part Microsoft versions bypass validation: dotnet/android#13524.
+          distribution: "temurin"
+          java-version: "21"
           verify-signature: true
       - name: 'Install MAUI Android workload'
         run: dotnet workload install maui-android
