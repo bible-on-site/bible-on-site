@@ -289,7 +289,11 @@ describe("detectChanges", () => {
 	]) {
 		test(`${file} selects app validation without a release`, () => {
 			for (const [key, flags] of Object.entries(detectChanges([file]))) {
-				assert.deepEqual(flags, { module_changed: false, ci_changed: key === "app" }, key);
+				assert.deepEqual(
+					flags,
+					{ module_changed: false, ci_changed: key === "app" },
+					key,
+				);
 			}
 		});
 	}
@@ -628,13 +632,7 @@ describe("detectChanges", () => {
 
 	test("release workflow changes validate only released modules", () => {
 		const changes = detectChanges([".github/workflows/shared-release.yml"]);
-		for (const key of [
-			"website",
-			"api",
-			"app",
-			"bulletin",
-			"admin",
-		] as const) {
+		for (const key of ["website", "api", "app", "bulletin", "admin"] as const) {
 			assert.equal(changes[key].ci_changed, true, key);
 		}
 		for (const key of ["data", "perushim_pipeline"] as const) {
@@ -794,6 +792,48 @@ const SHARED_FILES = [
 ];
 
 describe("isSchemaOnlyDataChange", () => {
+	test("the contribution upgrade retains checks without full data delivery", () => {
+		const migration = "data/mysql/tanahpedia_contribution_upgrade.sql";
+		for (const files of [
+			[migration],
+			[
+				migration,
+				"web/admin/src/server/contributions.server.ts",
+				"docs/tanahpedia/contribution-workflow.md",
+			],
+		]) {
+			assert.equal(isSchemaOnlyDataChange(files), true);
+			assert.deepEqual(detectChanges(files).data, {
+				module_changed: true,
+				ci_changed: false,
+			});
+			assert.equal(isDataDeployChange(files), false);
+		}
+		for (const content of [
+			"data/mysql/tanah_static_structure.sql",
+			"data/mysql/tanah_sefarim_and_perakim_data.sql",
+			"data/mysql/db-populator/src/main.rs",
+			"data/sefaria/pipelines/perushim-view/src/main.rs",
+			"app/BibleOnSite/Resources/Raw/sefaria-dump-5784-sivan-4.tanah_view.sqlite",
+		]) {
+			assert.equal(
+				isSchemaOnlyDataChange([migration, content]),
+				false,
+				content,
+			);
+			assert.equal(
+				detectChanges([migration, content]).data.module_changed,
+				true,
+			);
+		}
+		for (const otherPath of [
+			"data/mysql/nested/tanahpedia_contribution_upgrade.sql",
+			"data/mysql/tanahpedia_contribution_upgrade.sql.bak",
+			"data/mysql/tanahpedia_unrelated_upgrade.sql",
+		])
+			assert.equal(isSchemaOnlyDataChange([otherPath]), false, otherPath);
+	});
+
 	test("the calendar converter repair requires data checks and a guarded manual deployment", () => {
 		const files = [
 			"data/sefaria/pipelines/tanah-view/src/commands/mysql.rs",
@@ -1361,6 +1401,17 @@ describe("main", () => {
 			"push",
 			({ base }) => ({ before: base }),
 			"data/mysql/private_archive_upgrade.sql",
+		);
+		assert.deepEqual(changes.data, { module_changed: true, ci_changed: false });
+		assert.match(output, /^data_schema_only_changed=true$/m);
+		assert.match(output, /^data_deploy_changed=false$/m);
+	});
+
+	test("a contribution migration push cannot publish the full data payload", () => {
+		const { changes, output } = run(
+			"push",
+			({ base }) => ({ before: base }),
+			"data/mysql/tanahpedia_contribution_upgrade.sql",
 		);
 		assert.deepEqual(changes.data, { module_changed: true, ci_changed: false });
 		assert.match(output, /^data_schema_only_changed=true$/m);
@@ -1986,7 +2037,8 @@ describe("publisher docstring release routing", () => {
 		assert.ok(liveDocEnd > 3);
 		const fixture = publisherFixture(t, {
 			before: livePublisherSource,
-			after: '"""Updated documentation for the current publisher."""' +
+			after:
+				'"""Updated documentation for the current publisher."""' +
 				livePublisherSource.slice(liveDocEnd),
 		});
 		assert.equal(
