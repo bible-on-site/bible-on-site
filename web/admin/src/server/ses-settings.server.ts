@@ -12,6 +12,7 @@ import type {
 	EmailReadiness,
 	SubscriberChange,
 } from "~/lib/bulletin-email";
+import { rolloutDelivers } from "~/lib/bulletin-rollout";
 import {
 	execute,
 	query,
@@ -20,6 +21,11 @@ import {
 	txExecute,
 	txQueryOne,
 } from "./db";
+import {
+	getBulletinRolloutSummary,
+	readRolloutDeliveryState,
+	rolloutDeliveryStateForUpdate,
+} from "./rollout-state.server";
 import {
 	SesClient,
 	type SesConfig,
@@ -179,14 +185,29 @@ export async function getBulletinEmailState(
 			realRecipients: 0,
 			unverifiedRecipients: 0,
 			job: null,
+			rollout: null,
+			rolloutJob: null,
 		};
 	const { readLatestEmailJob } = await import("./ses-delivery.server");
 	const settings = await readAudienceSettings();
-	const [summary, job] = await Promise.all([
+	const [summary, job, rollout, realJob] = await Promise.all([
 		subscriberSummary(),
 		readLatestEmailJob(date, settings.audience),
+		getBulletinRolloutSummary(),
+		// The limited-cohort job is a second 'real' job; show it only while the
+		// global audience itself stays on test.
+		settings.audience === "real"
+			? Promise.resolve(null)
+			: readLatestEmailJob(date, "real"),
 	]);
-	return { settings, readiness, ...summary, job };
+	return {
+		settings,
+		readiness,
+		...summary,
+		job,
+		rollout,
+		rolloutJob: settings.audience === "real" ? job : realJob,
+	};
 }
 
 export async function setEmailAudience(
@@ -262,10 +283,7 @@ export async function changeSubscriber(value: SubscriberChange): Promise<void> {
 	const client = new SesClient(runtime);
 	let result: "subscribed" | "opted_out";
 	try {
-		result = await client.ensureSubscribedContact(
-			value.email,
-			value.audience,
-		);
+		result = await client.ensureSubscribedContact(value.email, value.audience);
 	} finally {
 		client.destroy();
 	}
@@ -299,11 +317,16 @@ export async function reserveSendSlot(
 			connection,
 			"SELECT audience, revision, DATE_FORMAT(next_send_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS next_send_at, DATE_FORMAT(UTC_TIMESTAMP(3), '%Y-%m-%dT%H:%i:%s.%fZ') AS now_at FROM tanah_daily_bulletin_email_settings WHERE id = 1 FOR UPDATE",
 		);
-		if (
-			!settings ||
-			settings.audience !== expectedAudience ||
-			Number(settings.revision) !== expectedRevision
-		)
+		if (!settings || Number(settings.revision) !== expectedRevision)
+			throw new SesSuppressedError();
+		// A 'real' job may also be licensed by the original-cohort rollout while
+		// the global audience deliberately stays on test (#3382). The FOR UPDATE
+		// read serializes against an operator disable.
+		const rollout =
+			expectedAudience === "real"
+				? await rolloutDeliveryStateForUpdate(connection)
+				: null;
+		if (settings.audience !== expectedAudience && !rolloutDelivers(rollout))
 			throw new SesSuppressedError();
 		const subscriber = await txQueryOne<{
 			consent_status: string;
@@ -338,14 +361,15 @@ export async function reserveSendSlot(
 		revision: number;
 		consent_status: string;
 	}>(
-		"SELECT s.audience, s.revision, p.consent_status FROM tanah_daily_bulletin_email_settings s JOIN tanah_daily_bulletin_subscriber p ON p.id = ? WHERE s.id = 1 AND p.audience = s.audience",
-		[subscriberId],
+		"SELECT s.audience, s.revision, p.consent_status FROM tanah_daily_bulletin_email_settings s JOIN tanah_daily_bulletin_subscriber p ON p.id = ? AND p.audience = ? WHERE s.id = 1",
+		[subscriberId, expectedAudience],
 	);
 	if (
 		!latest ||
-		latest.audience !== expectedAudience ||
 		Number(latest.revision) !== expectedRevision ||
-		latest.consent_status !== "confirmed"
+		latest.consent_status !== "confirmed" ||
+		(latest.audience !== expectedAudience &&
+			!rolloutDelivers(await readRolloutDeliveryState()))
 	)
 		throw new SesSuppressedError();
 }

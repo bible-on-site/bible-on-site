@@ -102,6 +102,8 @@ function configured(): BulletinEmailState {
 		realRecipients: 52,
 		unverifiedRecipients: 22,
 		job: null,
+		rollout: null,
+		rolloutJob: null,
 	};
 }
 let serverState: BulletinEmailState;
