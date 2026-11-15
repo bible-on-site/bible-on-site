@@ -17,7 +17,10 @@ function canonicalSefarim(): Sefarim {
 	const data = JSON.parse(
 		brotliDecompressSync(
 			readFileSync(
-				resolve(process.cwd(), "src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json.br"),
+				resolve(
+					process.cwd(),
+					"src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json.br",
+				),
 			),
 		).toString("utf8"),
 	) as Sefarim;
@@ -29,23 +32,23 @@ function sourceSefarim(): Sefarim {
 	if (process.env.IS_TEST_ENV) {
 		// Keep Jest's fixture-module replacement separate from the production file.
 		// biome-ignore lint/security/noGlobalEval: fixed local module, only in the test environment
-		return eval("require('./sefaria-dump-5784-sivan-4.tanah_view.json')") as Sefarim;
+		return eval(
+			"require('./sefaria-dump-5784-sivan-4.tanah_view.json')",
+		) as Sefarim;
 	}
-	if (process.env.NODE_ENV === "production") {
-		return canonicalSefarim();
-	} else {
-		// Keep this dependency in an explicit development branch: webpack does
-		// not prune a require after a production early return and would embed
-		// another 43 MB corpus in every production loader bundle.
-		const loaded = require("./sefaria-dump-5784-sivan-4.tanah_view.json") as
-			| string
-			| Sefarim
-			| { default: string | Sefarim };
-		const data = typeof loaded === "object" && "default" in loaded
-			? loaded.default
-			: loaded;
-		return typeof data === "string" ? (JSON.parse(data) as Sefarim) : data;
-	}
+	// A compile-time branch keeps the development dependency available for HMR
+	// while excluding its 40 MB JSON from production bundles. An early return
+	// leaves the later require reachable to webpack's dependency parser.
+	const loaded =
+		process.env.NODE_ENV === "production"
+			? canonicalSefarim()
+			: (require("./sefaria-dump-5784-sivan-4.tanah_view.json") as
+					| string
+					| Sefarim
+					| { default: string | Sefarim });
+	const data =
+		typeof loaded === "object" && "default" in loaded ? loaded.default : loaded;
+	return typeof data === "string" ? (JSON.parse(data) as Sefarim) : data;
 }
 
 const sefarim: Sefarim = Array.from(sourceSefarim());
