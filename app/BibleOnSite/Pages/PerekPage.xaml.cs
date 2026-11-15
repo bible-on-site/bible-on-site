@@ -237,6 +237,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 IsSwipeSuppressed = () => _chrome.IsShowingArticles || _focusedPasuk != null || ChapterSearch.IsSearchOpen,
 #if ANDROID
                 ArmUnreceivedPress = (x, y) => LongPressBehavior.BeginUnreceivedPress(x, y, _viewModel.Perek),
+                UpwardContentDrag = RevealHomeUxHeader,
 #endif
             });
     }

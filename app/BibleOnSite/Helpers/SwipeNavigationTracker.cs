@@ -47,6 +47,11 @@ public sealed class SwipeNavigationTracker
 
     public void Cancel() => _start = null;
 
+    /// <summary>Finger-down motion that moves content toward its beginning.</summary>
+    public bool IsUpwardContentDrag(double touchSlop) =>
+        !_horizontal && _start is { } start && _last is { } last &&
+        last.Y - start.Y > touchSlop && last.Y - start.Y > Math.Abs(last.X - start.X) * 1.5;
+
     public int? End(TouchPosition release, double pageWidth, double touchSlop,
         double minimumFlingVelocity, bool rightToLeft, int pageCount)
     {

@@ -5,6 +5,46 @@ namespace BibleOnSite.Tests.Helpers;
 public class SwipeNavigationTrackerTests
 {
     [Theory]
+    [InlineData(0, 25, true)]
+    [InlineData(0, 24, false)]
+    [InlineData(0, -100, false)]
+    [InlineData(15, 25, true)]
+    [InlineData(30, 25, false)]
+    [InlineData(0, 0, false)]
+    public void UpwardContentIntent_RequiresVerticalMotionBeyondTouchSlop(float dx, float dy, bool expected)
+    {
+        var swipe = new SwipeNavigationTracker();
+        swipe.Begin(new(500, 1000, 1000), 19);
+        swipe.Move(new(500 + dx, 1000 + dy, 1100), 24);
+
+        swipe.IsUpwardContentDrag(24).Should().Be(expected);
+        swipe.End(new(500 + dx, 1000 + dy, 1100), 1080, 24, 150, true, 929);
+        swipe.IsUpwardContentDrag(24).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CancelledGesture_DoesNotRevealReaderChrome()
+    {
+        var swipe = new SwipeNavigationTracker();
+        swipe.Begin(new(500, 1000, 1000), 19);
+        swipe.Move(new(500, 1100, 1100), 24);
+        swipe.Cancel();
+
+        swipe.IsUpwardContentDrag(24).Should().BeFalse();
+    }
+
+    [Fact]
+    public void HorizontalGestureTurningVertical_KeepsItsChapterIntent()
+    {
+        var swipe = new SwipeNavigationTracker();
+        swipe.Begin(new(500, 1000, 1000), 19);
+        swipe.Move(new(200, 1010, 1100), 24);
+        swipe.Move(new(200, 1600, 1200), 24);
+
+        swipe.IsUpwardContentDrag(24).Should().BeFalse();
+    }
+
+    [Theory]
     [InlineData(850, 200, true, 18)]
     [InlineData(200, 850, true, 20)]
     [InlineData(850, 200, false, 20)]
