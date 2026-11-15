@@ -23,9 +23,10 @@ public partial class HomeSearchPage : ContentPage, IAnalyticsScreenName
         _content.PropertyChanged += OnSearchStateChanged;
     }
 
-    protected override void OnAppearing()
+    protected override void OnNavigatedTo(NavigatedToEventArgs args)
     {
-        base.OnAppearing();
+        base.OnNavigatedTo(args);
+        // The entry's native handler must exist before a cold search can focus.
         Dispatcher.Dispatch(() => GlobalQuery.Focus());
     }
 
@@ -55,6 +56,7 @@ public partial class HomeSearchPage : ContentPage, IAnalyticsScreenName
         try
         {
             await Task.Delay(250, token);
+            _content.SetPerushim(await PerushimCatalogService.Instance.GetAllPerushimAsync().WaitAsync(token));
             await _content.SearchAsync(token);
         }
         catch (OperationCanceledException)
@@ -66,6 +68,12 @@ public partial class HomeSearchPage : ContentPage, IAnalyticsScreenName
         {
             #pragma warning restore S2221
             Console.Error.WriteLine($"[HomeSearch] Content search failed: {ex}");
+            if (!token.IsCancellationRequested)
+            {
+                SearchStatus.Text = "שגיאה בחיפוש. נסו שוב";
+                ContentLoading.IsRunning = false;
+                ContentLoading.IsVisible = false;
+            }
         }
     }
 

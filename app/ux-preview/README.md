@@ -58,6 +58,7 @@ python BibleOnSite.Tests.E2E/Android/home_ux_preview.py `
 
 The checks exercise real native controls, record screenshots, and verify toolbar
 visibility, chapter swipes, system Back, index selection, populated calendar,
-destination returns, navigation search and content-result navigation. An Android
+destination returns, navigation search, content-result navigation, articles after
+a hidden text toolbar, and app links with two reader instances. An Android
 ANR fails the run immediately and records its screen.
 Keep that emulator free of manual input during the run.

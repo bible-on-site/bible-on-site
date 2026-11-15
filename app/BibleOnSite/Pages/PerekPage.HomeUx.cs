@@ -31,6 +31,15 @@ public partial class PerekPage
                 ReadingProgressBar.TranslationY = offset;
             }
         };
+        PerekCarousel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PerekCarousel.IsVisible) && !PerekCarousel.IsVisible)
+            {
+                // Articles replace the scrolling surface, so they must not
+                // inherit a toolbar hidden by the preceding text scroll.
+                RevealHomeUxHeader();
+            }
+        };
         FanMenu.Satellites.Remove(PrevPerekButton);
         FanMenu.Satellites.Remove(NextPerekButton);
         _viewModel.PropertyChanged += (_, e) =>
@@ -48,8 +57,9 @@ public partial class PerekPage
     {
         if (!HomeUxPreview.Enabled) { return; }
         if (ExitFullScreenButton.IsVisible) { return; }
-        var keepVisible = _viewModel.SelectedPasukNums.Count > 0 || ChapterSearch.IsSearchOpen
-            || ReaderMenuOverlay.IsVisible;
+        var keepVisible = ReaderSurfaceState.IsActive(_viewModel.SelectedPasukNums.Count,
+            _chapterRecitationSelection, _focusedPasuk != null, _recitationCursor.PlayingKey != null)
+            || _chrome.IsShowingArticles || ChapterSearch.IsSearchOpen || ReaderMenuOverlay.IsVisible;
         ReaderToolbar.IsVisible = _homeUxHeader.Update(delta, keepVisible);
     }
 
