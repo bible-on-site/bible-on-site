@@ -75,20 +75,24 @@ jobs:
           java-version: "17"
           verify-signature: true
       - name: 'Install MAUI Android workload'
-        # The head leg installs the .NET 11 set; foreign-band sdk-manifests
-        # claiming the same packs abort the install — drop them first.
+        # The head leg pins the workload set matching its SDK band; the base
+        # leg resolves whatever set its merge-base SDK band serves. Foreign-band
+        # sdk-manifests claiming the same packs abort the install — drop them.
         run: |
+          band=$(dotnet --version)
           if [ "${{ matrix.source }}" = 'head' ]; then
-            for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
-            dotnet workload install maui-android --version 11.0.100.1
+            for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "$band" ] || sudo rm -rf "$d"; done
+            dotnet workload install maui-android --version "$band.1"
           else
             dotnet workload install maui-android
           fi
       - name: 'Restore NuGet projects'
         run: |
-          # The base leg checks out the merge-base, whose csproj still targets
-          # .NET 10; the head leg targets .NET 11.
-          TFM=$([ "${{ matrix.source }}" = 'base' ] && echo 'net10.0-android' || echo 'net11.0-android')
+          # Read the Android TFM from whichever tree is checked out — the
+          # merge-base targets an older .NET, head the current one — so the
+          # restore always matches the snapshot instead of pinning a version.
+          TFM=$(grep -o 'net[0-9.]*-android' app/BibleOnSite/BibleOnSite.csproj | head -1)
+          echo "Restoring $TFM for ${{ matrix.source }}"
           dotnet restore app/BibleOnSite/BibleOnSite.csproj -p:TargetFramework=$TFM -p:RuntimeIdentifiers=android-arm64 -r android-arm64
           dotnet restore app/BibleOnSite.Tests/BibleOnSite.Tests.csproj
           dotnet restore app/BibleOnSite.Tests.E2E/BibleOnSite.Tests.E2E.csproj -p:EnableWindowsTargeting=true
