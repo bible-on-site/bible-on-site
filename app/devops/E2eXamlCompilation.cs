@@ -31,16 +31,14 @@ internal static class E2eXamlCompilation
         using var stream = File.OpenRead(assemblyPath);
         using var assembly = new PEReader(stream);
         var metadata = assembly.GetMetadataReader();
-        foreach (var typeHandle in metadata.TypeDefinitions)
+        foreach (var type in metadata.TypeDefinitions.Select(metadata.GetTypeDefinition))
         {
-            var type = metadata.GetTypeDefinition(typeHandle);
             if (FullName(metadata, type.Namespace, type.Name) != pageType)
             {
                 continue;
             }
-            foreach (var methodHandle in type.GetMethods())
+            foreach (var method in type.GetMethods().Select(metadata.GetMethodDefinition))
             {
-                var method = metadata.GetMethodDefinition(methodHandle);
                 if (metadata.GetString(method.Name) != "InitializeComponent"
                     || method.RelativeVirtualAddress == 0)
                 {
