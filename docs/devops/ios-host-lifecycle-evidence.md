@@ -17,11 +17,15 @@ the run (`stopNativeLogStreams`, five-second cap each):
 ## Bounded shutdown check (`verify-ios-host-log.mjs`)
 
 Runs as the *Measure simulator host lifecycle evidence* step in
-`app-mobile-e2e-runner.yml`, on `pull_request` and `merge_group` iOS legs once
-the pilot and coverage steps succeed. It deliberately shuts down **only this
-job's own device** — never `all`, never a device that fails the identity and
-Booted-state guard — and measures what host logging retains. The job VM is
-disposable; other simulators and jobs are untouched.
+`app-mobile-e2e-runner.yml`, on `pull_request`, `merge_group` and
+`workflow_dispatch` iOS legs once the pilot and coverage steps succeed. It
+deliberately shuts down **only this job's own device** — never `all`, never a
+device that fails the identity and Booted-state guard — and measures what host
+logging retains. The job VM is disposable; other simulators and jobs are
+untouched. On `workflow_dispatch` legs the later simulator-state capture
+(`ios-sim-state.mjs quiesce`) finds this device powered off and boots it again
+before removing the test apps, so the saved image still ends on the same
+consistent Shutdown state.
 
 Stages (each with its own cap; see the file for exact bounds):
 

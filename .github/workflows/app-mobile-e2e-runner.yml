@@ -855,6 +855,8 @@ jobs:
       # PR/queue jobs do not save simulator-state caches. After their tests and
       # coverage finish, measure host logging across one controlled shutdown of
       # this job's exact device; no extra simulator boot or test retry is needed.
+      # Dispatch legs measure too — their quiesce step reboots the powered-off
+      # device before the cache capture it still publishes.
       - name: Measure simulator host lifecycle evidence
         if: inputs.platform == 'iOS' && (github.event_name == 'pull_request' || github.event_name == 'merge_group' || github.event_name == 'workflow_dispatch') && steps.pilot-ios.outcome == 'success' && steps.coverage-apply.outcome == 'success'
         run: node app/mobile-e2e/verify-ios-host-log.mjs
