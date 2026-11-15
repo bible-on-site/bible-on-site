@@ -207,9 +207,17 @@ public abstract class MobilePlatformAdapter
     }
 
     public AppiumOptions CreateOptions(MobileTestConfiguration configuration) =>
-        CreateOptions(configuration, AppCoverage.Enabled);
+        CreateOptions(configuration, null);
 
-    internal AppiumOptions CreateOptions(MobileTestConfiguration configuration, bool coverageEnabled)
+    public AppiumOptions CreateOptions(MobileTestConfiguration configuration,
+        IReadOnlyDictionary<string, string>? environment) =>
+        CreateOptions(configuration, AppCoverage.Enabled, environment);
+
+    internal AppiumOptions CreateOptions(MobileTestConfiguration configuration, bool coverageEnabled) =>
+        CreateOptions(configuration, coverageEnabled, null);
+
+    internal AppiumOptions CreateOptions(MobileTestConfiguration configuration, bool coverageEnabled,
+        IReadOnlyDictionary<string, string>? environment)
     {
         var android = configuration.Platform == MobilePlatform.Android;
         var options = new AppiumOptions
@@ -239,7 +247,9 @@ public abstract class MobilePlatformAdapter
         // package already runs — a prior class's mid-navigation screen would
         // then leak into the next session. forceAppLaunch keeps every session
         // start on the deterministic fresh launch the suite relies on.
-        options.AddAdditionalAppiumOption("forceAppLaunch", android && reuseInstalledApp);
+        // iOS must apply the scenario environment even if a prior process is
+        // still alive (for example after session recovery or review reuse).
+        options.AddAdditionalAppiumOption("forceAppLaunch", android ? reuseInstalledApp : environment != null);
         options.AddAdditionalAppiumOption("newCommandTimeout", 120);
         if (android)
         {
@@ -338,7 +348,7 @@ public abstract class MobilePlatformAdapter
             options.AddAdditionalAppiumOption("processArguments",
                 new Dictionary<string, object>
                 {
-                    ["env"] = new Dictionary<string, string>(IosE2eEnvironment)
+                    ["env"] = IosLaunchEnvironment(environment)
                 });
         }
         return options;
@@ -353,6 +363,19 @@ public abstract class MobilePlatformAdapter
             ["BIBLE_E2E_COVERAGE_PORT"] = AppCoverage.Port.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["BIBLE_E2E_COVERAGE_TOKEN"] = AppCoverage.Token
         };
+
+    internal static Dictionary<string, string> IosLaunchEnvironment(IReadOnlyDictionary<string, string>? environment)
+    {
+        var merged = new Dictionary<string, string>(IosE2eEnvironment);
+        if (environment != null)
+        {
+            foreach (var (key, value) in environment)
+            {
+                merged[key] = value;
+            }
+        }
+        return merged;
+    }
 
     public static MobilePlatformAdapter For(MobilePlatform platform) => platform switch
     {
@@ -526,18 +549,10 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
         // activate path can block without launching a new process. Always use
         // the explicit launch path and replace its complete environment, so
         // synthetic commentary variables cannot leak into the next scenario.
-        var env = new Dictionary<string, string>(IosE2eEnvironment);
-        if (environment != null)
-        {
-            foreach (var (key, value) in environment)
-            {
-                env[key] = value;
-            }
-        }
         Relaunch(driver, "mobile: launchApp", new Dictionary<string, object>
         {
             ["bundleId"] = AppId,
-            ["environment"] = env
+            ["environment"] = IosLaunchEnvironment(environment)
         });
     }
 

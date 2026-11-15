@@ -25,6 +25,7 @@ public interface IMobileDeviceSession
 public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
 {
     private readonly MobileDeviceSessionFactory _sessions = new();
+    private readonly Func<Uri, AppiumOptions, AppiumDriver> _createDriver;
 
     public MobilePlatformAdapter Adapter { get; }
     public MobileTestConfiguration Configuration { get; }
@@ -39,6 +40,13 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
     {
         Configuration = configuration;
         Adapter = MobilePlatformAdapter.For(configuration.Platform);
+        _createDriver = Adapter.CreateDriver;
+    }
+
+    internal MobileDeviceSession(MobileTestConfiguration configuration,
+        Func<Uri, AppiumOptions, AppiumDriver> createDriver) : this(configuration)
+    {
+        _createDriver = createDriver;
     }
 
     public ValueTask InitializeAsync() => default;
@@ -67,13 +75,13 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
         var created = Driver == null;
         if (created)
         {
-            CreateWithOneRetry();
+            CreateWithOneRetry(environment);
         }
         // A brand-new session already launched the app with the suite
-        // environment, so a scenario with no extra variables has nothing to
-        // restart — and the app is mid cold-start then, exactly the window a
-        // terminate+launch cycle can wedge in.
-        if (created && environment == null)
+        // environment. iOS also receives the scenario variables and launch ID
+        // through processArguments, so it must finish that single cold start
+        // instead of being terminated while still initializing.
+        if (created && (environment == null || Configuration.Platform == MobilePlatform.IOS))
         {
             return;
         }
@@ -83,8 +91,7 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
         }
         catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
         {
-            Rebuild();
-            Adapter.RestartApp(Driver!, environment);
+            Rebuild(environment);
         }
         catch (WebDriverException exception) when (DeviceTransportLoss.Matches(exception)
             && MobileDeviceTest.TransportRecovery(exception))
@@ -100,12 +107,11 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
             // the session id stays allocated (iOS shard: 'mobileLaunchApp' did
             // not receive any response within 120000 ms). Rebuild once rather
             // than issue the launch again into the same dead agent.
-            Rebuild();
-            Adapter.RestartApp(Driver!, environment);
+            Rebuild(environment);
         }
     }
 
-    private void Rebuild()
+    private void Rebuild(IReadOnlyDictionary<string, string>? environment)
     {
         try
         {
@@ -115,26 +121,32 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
         {
             // The dropped session has nothing left for Appium to clean.
         }
-        Create();
+        Create(environment);
+        // iOS session creation already launched with the current environment.
+        // Android retains its existing activation path after replacement.
+        if (Configuration.Platform != MobilePlatform.IOS)
+        {
+            Adapter.RestartApp(Driver!, environment);
+        }
     }
 
-    private void CreateWithOneRetry()
+    private void CreateWithOneRetry(IReadOnlyDictionary<string, string>? environment)
     {
         try
         {
-            Create();
+            Create(environment);
         }
         catch (WebDriverException exception) when (DeviceSessionDeath.Matches(exception))
         {
             // Confirmed deaths need no gate; recovery only heals adb when the
             // death rode a dropped transport.
             MobileDeviceTest.TransportRecovery(exception);
-            Create();
+            Create(environment);
         }
         catch (WebDriverException exception) when (DeviceTransportLoss.Matches(exception)
             && MobileDeviceTest.TransportRecovery(exception))
         {
-            Create();
+            Create(environment);
         }
     }
 
@@ -164,10 +176,10 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
         }
     }
 
-    private void Create()
+    private void Create(IReadOnlyDictionary<string, string>? environment)
     {
         Driver = _sessions.Create(() =>
-            Adapter.CreateDriver(Configuration.Server, Adapter.CreateOptions(Configuration)));
+            _createDriver(Configuration.Server, Adapter.CreateOptions(Configuration, environment)));
         Adapter.OnSessionRecreated();
     }
 }

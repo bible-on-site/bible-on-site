@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using BibleOnSite.Tests.MobileE2E.Configuration;
 using BibleOnSite.Tests.MobileE2E.Pages;
 using BibleOnSite.Tests.MobileE2E.Platforms;
@@ -214,11 +215,20 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         if (launchId == null)
         {
             Page.WaitForStartup();
+            if (Configuration.Platform == MobilePlatform.IOS)
+            {
+                MobilePlatformAdapter.EnsurePortrait(Driver!);
+            }
         }
         else
         {
-            var remaining = ReaderStartupReadiness.WaitForReady(launchId, TimeSpan.FromSeconds(45));
-            Page.WaitForStartup(remaining);
+            var budget = TimeSpan.FromSeconds(45);
+            var startup = Stopwatch.StartNew();
+            _ = ReaderStartupReadiness.WaitForReady(launchId, budget);
+            // Creation/recovery can inherit landscape. Read orientation only
+            // after readiness, counting correction in the same startup budget.
+            MobilePlatformAdapter.EnsurePortrait(Driver!);
+            Page.WaitForStartup(budget - startup.Elapsed);
         }
         // Launch code (App.xaml.cs, MauiProgram, startup navigation) only ever
         // runs before the first reset; attribute it to a startup dump so the

@@ -145,13 +145,14 @@ public sealed class ReaderStartupReadinessTests
     public void HttpRequestAuthenticatesAndCarriesCancellation()
     {
         var endpoint = new Uri("http://127.0.0.1:4787/coverage/startup");
+        using var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(ReadyResponse()) };
         using var handler = new StatusHandler((request, cancellation) =>
         {
             Assert.Equal(HttpMethod.Get, request.Method);
             Assert.Equal(endpoint, request.RequestUri);
             Assert.Equal(AppCoverage.Token, Assert.Single(request.Headers.GetValues("X-Bible-Coverage-Token")));
             Assert.True(cancellation.CanBeCanceled);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(ReadyResponse()) });
+            return Task.FromResult(response);
         });
         using var client = new HttpClient(handler);
         Assert.Equal(ReadyResponse(), ReaderStartupReadiness.ReadStatus(client, endpoint, TimeSpan.FromSeconds(1)));
@@ -160,8 +161,8 @@ public sealed class ReaderStartupReadinessTests
     [Fact]
     public void HttpErrorsReachThePollingPolicy()
     {
-        using var handler = new StatusHandler((_, _) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized)));
+        using var response = new HttpResponseMessage(HttpStatusCode.Unauthorized);
+        using var handler = new StatusHandler((_, _) => Task.FromResult(response));
         using var client = new HttpClient(handler);
         Assert.Throws<HttpRequestException>(() => ReaderStartupReadiness.ReadStatus(client,
             new Uri("http://127.0.0.1:4787/coverage/startup"), TimeSpan.FromSeconds(1)));
