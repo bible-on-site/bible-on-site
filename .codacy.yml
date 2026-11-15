@@ -59,6 +59,9 @@ exclude_paths:
   - "data/mysql/tanah_daily_bulletin_telegram_upgrade.sql"
   - "data/mysql/tanah_daily_bulletin_whatsapp_upgrade.sql"
   - "data/mysql/tanah_daily_bulletin_join_upgrade.sql"
+  # MySQL PREPARE-driven additive rollout schema, exercised twice by
+  # bulletin-rollout-mysql.test.ts through the deployment parser.
+  - "data/mysql/tanah_daily_bulletin_rollout_upgrade.sql"
   - "data/mysql/tanah_article_covering_source_upgrade.sql"
   - "data/mysql/tanah_article_link_proposal_upgrade.sql"
   - "data/mysql/tanah_article_hebrew_date_upgrade.sql"

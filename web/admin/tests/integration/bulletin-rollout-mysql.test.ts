@@ -237,6 +237,10 @@ async function apply(sql: string): Promise<void> {
 	}
 }
 
+async function migrate(statements: string[]): Promise<void> {
+	for (const statement of statements) await admin.query(statement); // nosemgrep: node-mysql-sqli -- statements are parsed from repo-owned migration SQL files, never user input
+}
+
 const members: CohortSnapshotMember[] = [
 	{
 		subscriberId: 10,
@@ -346,12 +350,10 @@ beforeAll(async () => {
 		"CREATE TABLE tanah_article (id MEDIUMINT PRIMARY KEY,name VARCHAR(700),content MEDIUMTEXT,distributable BOOLEAN NOT NULL,untouched VARCHAR(100) NOT NULL DEFAULT 'retain') ENGINE=InnoDB",
 	);
 	// Base bulletin schema, then this rollout's upgrade — through the deployment parser.
-	for (const statement of parseMigration("tanah_daily_bulletin_upgrade.sql"))
-		await admin.query(statement);
-	for (const statement of parseMigration(
-		"tanah_daily_bulletin_rollout_upgrade.sql",
-	))
-		await admin.query(statement);
+	await migrate([
+		...parseMigration("tanah_daily_bulletin_upgrade.sql"),
+		...parseMigration("tanah_daily_bulletin_rollout_upgrade.sql"),
+	]);
 	await db.execute(
 		`INSERT INTO tanah_daily_bulletin
 		(bulletin_date,perek_id,article_id,input_json,subject,source,email_html,pdf_data,filename)
@@ -409,10 +411,7 @@ describe("rollout schema upgrade", () => {
 		expect(rollout).toHaveLength(1);
 		expect(rollout[0]).toMatchObject({ state: "disabled", cohort: "original" });
 		// Applying the migration a second time must be a no-op.
-		for (const statement of parseMigration(
-			"tanah_daily_bulletin_rollout_upgrade.sql",
-		))
-			await admin.query(statement);
+		await migrate(parseMigration("tanah_daily_bulletin_rollout_upgrade.sql"));
 		expect(
 			await db.query<RowDataPacket>(
 				"SELECT * FROM tanah_daily_bulletin_email_rollout",
