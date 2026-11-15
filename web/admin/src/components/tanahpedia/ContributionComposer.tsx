@@ -1,0 +1,815 @@
+import { useId, useState } from "react";
+import {
+	CONTRIBUTION_RECORDS,
+	isContributionRecordKind,
+} from "~/lib/tanahpedia/contribution-records";
+import type { ChangeState } from "~/lib/tanahpedia/contributions";
+import {
+	type Assignee,
+	CHANGE_LABELS,
+	type ChangeInput,
+	CONTRIBUTION_UI,
+	type Contribution,
+	type Evidence,
+	FIELD_LABELS,
+	validateChanges,
+} from "~/lib/tanahpedia/contributions";
+import { ENTITY_TYPE_LABELS } from "~/lib/tanahpedia/labels";
+import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
+import {
+	FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES,
+	FAMILY_PARENT_ROLES,
+	FAMILY_UNION_END_REASONS,
+	FAMILY_UNION_TYPES,
+} from "~/server/tanahpedia/family-api-spec";
+import {
+	ContributionRecordFields,
+	draftField,
+	HebrewDateField,
+	recordFieldValue,
+} from "./ContributionRecordFields";
+
+export interface ContributionCatalogue {
+	references?: Record<string, { id: string | number; name: string }[]>;
+	people: { id: string; name: string }[];
+	places: { id: string; name: string }[];
+	entities: { id: string; name: string; entityType: string }[];
+	targets: {
+		kind: string;
+		id: string;
+		label: string;
+		after: ChangeState;
+	}[];
+}
+
+export function AssigneePicker({
+	value,
+	onChange,
+	disabled = false,
+}: {
+	value: Assignee;
+	onChange: (assignee: Assignee) => void;
+	disabled?: boolean;
+}) {
+	return (
+		<div className="contribution-source-fields">
+			<label>
+				אחראי
+				<select
+					className="contribution-input"
+					aria-label="אחראי"
+					value={value.kind}
+					disabled={disabled}
+					onChange={(event) => {
+						const kind = event.target.value as Assignee["kind"];
+						onChange(kind === "human" ? { kind, id: "", name: "" } : { kind });
+					}}
+				>
+					<option value="unassigned">ללא שיוך</option>
+					<option value="human">עורך אנושי</option>
+					<option value="aws_llm">{CONTRIBUTION_UI.awsLlm}</option>
+					<option value="local_llm">{CONTRIBUTION_UI.localLlm}</option>
+				</select>
+			</label>
+			{value.kind === "human" && (
+				<label>
+					שם משתמש
+					<input
+						className="contribution-input"
+						aria-label="שם משתמש אחראי"
+						value={value.name}
+						required
+						maxLength={120}
+						disabled={disabled}
+						onChange={(event) =>
+							onChange({
+								kind: "human",
+								id: event.target.value,
+								name: event.target.value,
+							})
+						}
+						placeholder="לדוגמה doradsoft"
+					/>
+				</label>
+			)}
+		</div>
+	);
+}
+
+type DraftChange = {
+	key: string;
+	kind: ChangeInput["kind"];
+	targetId: string;
+	deleting: boolean;
+	fields: Record<string, string>;
+};
+const NUMBERS = new Set([
+	"latitude",
+	"longitude",
+	"birthOrder",
+	"unionOrder",
+	"startDate",
+	"endDate",
+]);
+const DEFAULTS: Record<ChangeInput["kind"], Record<string, string>> = {
+	...(Object.fromEntries(
+		Object.entries(CONTRIBUTION_RECORDS).map(([kind, spec]) => [
+			kind,
+			Object.fromEntries(
+				Object.entries(spec.fields).map(([key, f]) => [
+					key,
+					f.type === "boolean"
+						? "true"
+						: f.type === "enum"
+							? (f.options?.[0] ?? "")
+							: "",
+				]),
+			),
+		]),
+	) as Record<keyof typeof CONTRIBUTION_RECORDS, Record<string, string>>),
+	alias_mapping: { name: "", targets: "[]" },
+	source_reference: {
+		targetKind: "entity",
+		targetId: "",
+		sourceType: "tanah",
+		perekId: "",
+		pasukNumber: "",
+		perushId: "",
+		sourceText: "",
+	},
+	parent_child: {
+		parentId: "",
+		childId: "",
+		relationshipType: "BIOLOGICAL",
+		parentRole: "FATHER",
+		sourceCitation: "",
+		birthOrder: "",
+		altGroupId: "",
+	},
+	union: {
+		person1Id: "",
+		person2Id: "",
+		unionType: "MARRIAGE",
+		unionOrder: "",
+		startDate: "",
+		endDate: "",
+		endReason: "",
+		sourceCitation: "",
+		personSourceCitation: "",
+		altGroupId: "",
+	},
+	place: {
+		placeId: "",
+		modernName: "",
+		latitude: "",
+		longitude: "",
+		altGroupId: "",
+	},
+	metadata: { displayName: "" },
+	entry: { title: "", uniqueName: "", entityType: "PERSON", displayName: "" },
+};
+const OPTIONS: Record<string, readonly string[]> = {
+	parentRole: FAMILY_PARENT_ROLES,
+	endReason: ["", ...FAMILY_UNION_END_REASONS],
+	entityType: ADMIN_CREATABLE_ENTITY_TYPES,
+};
+const OPTION_LABELS: Record<string, string> = {
+	BIOLOGICAL: "ביולוגי",
+	ADOPTIVE: "אימוץ",
+	STEP: "חורג",
+	FOSTER: "אומנה",
+	FATHER: "אב",
+	MOTHER: "אם",
+	MARRIAGE: "נישואין",
+	PILEGESH: "פילגש",
+	FORBIDDEN_WITH_GENTILE: "קשר עם נכרי",
+	BANNED_INCEST: "עריות",
+	BETROTHAL: "אירוסין",
+	DEATH: "פטירה",
+	DIVORCE: "גירושין",
+	...ENTITY_TYPE_LABELS,
+};
+
+function newChange(kind: ChangeInput["kind"] = "parent_child"): DraftChange {
+	return {
+		key: crypto.randomUUID(),
+		kind,
+		targetId: "",
+		deleting: false,
+		fields: { ...DEFAULTS[kind] },
+	};
+}
+
+function fromReviewed(change: Contribution["changes"][number]): DraftChange {
+	return {
+		key: crypto.randomUUID(),
+		kind: change.kind,
+		targetId: change.targetId,
+		deleting: change.after === null,
+		fields: Object.fromEntries(
+			Object.entries(change.after ?? change.before ?? {}).map(
+				([key, value]) => [key, draftField(value)],
+			),
+		),
+	};
+}
+
+function ChangeFields({
+	value,
+	onChange,
+	catalogue,
+}: {
+	value: DraftChange;
+	onChange: (value: DraftChange) => void;
+	catalogue: ContributionCatalogue;
+}) {
+	const targets = catalogue.targets.filter(
+		(target) => target.kind === value.kind,
+	);
+	const structured =
+		isContributionRecordKind(value.kind) ||
+		value.kind === "alias_mapping" ||
+		value.kind === "source_reference";
+	const updateOnly =
+		isContributionRecordKind(value.kind) &&
+		CONTRIBUTION_RECORDS[value.kind].updateOnly;
+	const family = value.kind === "parent_child" || value.kind === "union";
+	return (
+		<div className="contribution-change-fields">
+			<label>
+				סוג שינוי
+				<select
+					className="contribution-input"
+					value={family ? "family" : value.kind}
+					onChange={(event) =>
+						onChange(
+							newChange(
+								event.target.value === "family"
+									? "parent_child"
+									: (event.target.value as ChangeInput["kind"]),
+							),
+						)
+					}
+				>
+					<option value="family">קשר משפחתי</option>
+					{Object.entries(CHANGE_LABELS)
+						.filter(
+							([key]) =>
+								key !== "parent_child" &&
+								key !== "union" &&
+								!isContributionRecordKind(key),
+						)
+						.map(([key, label]) => (
+							<option key={key} value={key}>
+								{label}
+							</option>
+						))}
+					{[
+						...new Set(
+							Object.values(CONTRIBUTION_RECORDS).map((spec) => spec.category),
+						),
+					].map((category) => (
+						<optgroup key={category} label={category}>
+							{Object.entries(CONTRIBUTION_RECORDS)
+								.filter(([, spec]) => spec.category === category)
+								.map(([key, spec]) => (
+									<option key={key} value={key}>
+										{spec.label}
+									</option>
+								))}
+						</optgroup>
+					))}
+				</select>
+			</label>
+			{family && (
+				<label>
+					סוג קשר משפחתי
+					<select
+						className="contribution-input"
+						disabled={value.deleting}
+						value={`${value.kind}:${value.fields[value.kind === "parent_child" ? "relationshipType" : "unionType"]}`}
+						onChange={(event) => {
+							const [kind, type] = event.target.value.split(":") as [
+								"parent_child" | "union",
+								string,
+							];
+							const next = kind === value.kind ? value : newChange(kind);
+							onChange({
+								...next,
+								fields: {
+									...next.fields,
+									[kind === "parent_child" ? "relationshipType" : "unionType"]:
+										type,
+								},
+							});
+						}}
+					>
+						<optgroup label="הורות">
+							{FAMILY_PARENT_CHILD_RELATIONSHIP_TYPES.map((type) => (
+								<option key={type} value={`parent_child:${type}`}>
+									{OPTION_LABELS[type]}
+								</option>
+							))}
+						</optgroup>
+						<optgroup label="קשרי זוגיות">
+							{FAMILY_UNION_TYPES.map((type) => (
+								<option key={type} value={`union:${type}`}>
+									{OPTION_LABELS[type]}
+								</option>
+							))}
+						</optgroup>
+					</select>
+				</label>
+			)}
+			{!["metadata", "entry"].includes(value.kind) && (
+				<>
+					<label>
+						{structured ? "רשומה קיימת" : "קשר או זיהוי קיים"}
+						<select
+							className="contribution-input"
+							value={value.targetId}
+							onChange={(event) => {
+								const target = targets.find(
+									(item) => item.id === event.target.value,
+								);
+								onChange(
+									target
+										? {
+												...value,
+												targetId: target.id,
+												fields: Object.fromEntries(
+													Object.entries(target.after).map(([key, item]) => [
+														key,
+														draftField(item),
+													]),
+												),
+											}
+										: { ...newChange(value.kind), key: value.key },
+								);
+							}}
+						>
+							<option value="">
+								{updateOnly
+									? "בחירת רשומה"
+									: structured
+										? "יצירת רשומה חדשה"
+										: "יצירת קשר או זיהוי חדש"}
+							</option>
+							{targets.map((target) => (
+								<option key={target.id} value={target.id}>
+									{target.label}
+								</option>
+							))}
+						</select>
+					</label>
+					{value.targetId && !updateOnly && (
+						<label>
+							<span>
+								<input
+									type="checkbox"
+									checked={value.deleting}
+									onChange={(event) =>
+										onChange({ ...value, deleting: event.target.checked })
+									}
+								/>{" "}
+								מחיקת הקשר או הזיהוי
+							</span>
+						</label>
+					)}
+				</>
+			)}
+			{value.kind === "metadata" && (
+				<label>
+					יישות
+					<select
+						className="contribution-input"
+						required
+						value={value.targetId}
+						onChange={(event) =>
+							onChange({ ...value, targetId: event.target.value })
+						}
+					>
+						<option value="">בחירת יישות</option>
+						{catalogue.entities.map((entity) => (
+							<option key={entity.id} value={entity.id}>
+								{entity.name} (
+								{ENTITY_TYPE_LABELS[
+									entity.entityType as keyof typeof ENTITY_TYPE_LABELS
+								] ?? entity.entityType}
+								)
+							</option>
+						))}
+					</select>
+				</label>
+			)}
+			{!value.deleting && structured && (
+				<ContributionRecordFields
+					kind={value.kind}
+					fields={value.fields}
+					onChange={(fields) => onChange({ ...value, fields })}
+					catalogue={catalogue}
+				/>
+			)}
+			{!value.deleting && !structured && (
+				<div className="contribution-form-grid">
+					{Object.entries(value.fields)
+						.filter(
+							([field]) =>
+								field !== "relationshipType" && field !== "unionType",
+						)
+						.map(([field, current]) => {
+							const choices = [
+								"parentId",
+								"childId",
+								"person1Id",
+								"person2Id",
+							].includes(field)
+								? catalogue.people
+								: field === "placeId"
+									? catalogue.places
+									: null;
+							const update = (next: string) =>
+								onChange({
+									...value,
+									fields: { ...value.fields, [field]: next },
+								});
+							if (field === "startDate" || field === "endDate")
+								return (
+									<HebrewDateField
+										key={field}
+										label={FIELD_LABELS[field]}
+										value={current}
+										onChange={update}
+									/>
+								);
+							return (
+								<label key={field} htmlFor={`${value.key}-${field}`}>
+									{FIELD_LABELS[field] ?? field}
+									{choices ? (
+										<select
+											id={`${value.key}-${field}`}
+											className="contribution-input"
+											required
+											value={current}
+											onChange={(event) => update(event.target.value)}
+										>
+											<option value="">בחירה</option>
+											{choices.map((choice) => (
+												<option key={choice.id} value={choice.id}>
+													{choice.name}
+												</option>
+											))}
+										</select>
+									) : OPTIONS[field] ? (
+										<select
+											id={`${value.key}-${field}`}
+											className="contribution-input"
+											value={current}
+											onChange={(event) => update(event.target.value)}
+										>
+											{OPTIONS[field].map((option) => (
+												<option key={option} value={option}>
+													{OPTION_LABELS[option] ?? (option || "ללא")}
+												</option>
+											))}
+										</select>
+									) : (
+										<input
+											id={`${value.key}-${field}`}
+											className="contribution-input"
+											value={current}
+											type={NUMBERS.has(field) ? "number" : "text"}
+											step={
+												["latitude", "longitude"].includes(field) ? "any" : "1"
+											}
+											maxLength={
+												field === "sourceCitation" ||
+												field === "personSourceCitation"
+													? 400
+													: 255
+											}
+											required={["displayName", "title", "uniqueName"].includes(
+												field,
+											)}
+											onChange={(event) => update(event.target.value)}
+										/>
+									)}
+								</label>
+							);
+						})}
+				</div>
+			)}
+			{value.kind === "entry" && (
+				<p className="contribution-muted">
+					הערך ייווצר ללא טקסט חופשי, עם יישות מקושרת לפי הסוג שנבחר.
+				</p>
+			)}
+		</div>
+	);
+}
+
+export interface ComposeContribution {
+	kind: "issue" | "pr";
+	title: string;
+	description: string;
+	assignee: Assignee;
+	evidence: Evidence[];
+	changes: ChangeInput[];
+	issueId: string | null;
+	closeIssue: boolean;
+}
+
+export function ContributionComposer({
+	kind,
+	initial,
+	linkedIssue,
+	catalogue,
+	busy,
+	onSubmit,
+	onCancel,
+}: {
+	kind: "issue" | "pr";
+	initial?: Contribution;
+	linkedIssue?: Contribution;
+	catalogue: ContributionCatalogue;
+	busy: boolean;
+	onSubmit: (value: ComposeContribution) => Promise<void>;
+	onCancel: () => void;
+}) {
+	const formId = useId();
+	const [title, setTitle] = useState(
+		initial?.title ?? linkedIssue?.title ?? "",
+	);
+	const [description, setDescription] = useState(initial?.description ?? "");
+	const [assignee, setAssignee] = useState<Assignee>(
+		initial?.assignee ?? { kind: "unassigned" },
+	);
+	const [evidence, setEvidence] = useState<(Evidence & { key: string })[]>(() =>
+		(initial?.evidence ?? linkedIssue?.evidence ?? []).map((source) => ({
+			...source,
+			key: crypto.randomUUID(),
+		})),
+	);
+	const [changes, setChanges] = useState<DraftChange[]>(
+		() => initial?.changes.map(fromReviewed) ?? [newChange()],
+	);
+	const [closeIssue, setCloseIssue] = useState(initial?.closeIssue ?? true);
+	const [error, setError] = useState("");
+	return (
+		<form
+			className="contribution-form"
+			aria-label={kind === "issue" ? "טופס פנייה" : "טופס הצעת שינוי"}
+			onSubmit={async (event) => {
+				event.preventDefault();
+				setError("");
+				try {
+					const inputs =
+						kind === "pr"
+							? validateChanges(
+									changes.map((change) => ({
+										kind: change.kind,
+										targetId: change.targetId || undefined,
+										after: change.deleting
+											? null
+											: Object.fromEntries(
+													Object.entries(change.fields).map(([key, value]) => [
+														key,
+														isContributionRecordKind(change.kind) ||
+														change.kind === "alias_mapping" ||
+														change.kind === "source_reference"
+															? recordFieldValue(change.kind, key, value)
+															: NUMBERS.has(key)
+																? value === ""
+																	? null
+																	: Number(value)
+																: value,
+													]),
+												),
+									})),
+								)
+							: [];
+					await onSubmit({
+						kind,
+						title,
+						description,
+						assignee,
+						evidence: evidence.map(({ key: _key, ...source }) => source),
+						changes: inputs,
+						issueId: initial?.issueId ?? linkedIssue?.id ?? null,
+						closeIssue,
+					});
+				} catch (failure) {
+					setError(failure instanceof Error ? failure.message : "השמירה נכשלה");
+				}
+			}}
+		>
+			{error && (
+				<div className="contribution-error" role="alert">
+					{error}
+				</div>
+			)}
+			<label htmlFor={`${formId}-title`}>
+				כותרת
+				<input
+					id={`${formId}-title`}
+					className="contribution-input"
+					value={title}
+					onChange={(event) => setTitle(event.target.value)}
+					required
+					maxLength={255}
+					placeholder="תיאור קצר וממוקד"
+				/>
+			</label>
+			<label htmlFor={`${formId}-description`}>
+				תיאור
+				<textarea
+					id={`${formId}-description`}
+					className="contribution-input"
+					rows={6}
+					value={description}
+					onChange={(event) => setDescription(event.target.value)}
+					required
+					maxLength={20000}
+					placeholder={
+						kind === "issue"
+							? "מה חסר או דורש תיקון? מה ידוע ומה עדיין לא ברור?"
+							: "מה משתנה, מדוע, וכיצד המקורות תומכים בשינוי?"
+					}
+				/>
+			</label>
+			<AssigneePicker value={assignee} onChange={setAssignee} disabled={busy} />
+			<fieldset className="contribution-fieldset">
+				<legend>ראיות ומקורות</legend>
+				<div className="contribution-source-fields">
+					{evidence.map((source, index) => (
+						<fieldset key={source.key} className="contribution-fieldset">
+							<legend>מקור {index + 1}</legend>
+							<div className="contribution-source-fields">
+								{(
+									[
+										["citation", "הפניה למקור"],
+										["url", "קישור למקור (אופציונלי)"],
+										["quote", "ציטוט רלוונטי"],
+										["note", "מה המקור מוכיח?"],
+									] as const
+								).map(([key, label]) => (
+									<label key={key} htmlFor={`${source.key}-${key}`}>
+										{label}
+										{key === "quote" || key === "note" ? (
+											<textarea
+												id={`${source.key}-${key}`}
+												className="contribution-input"
+												value={source[key] ?? ""}
+												onChange={(event) =>
+													setEvidence(
+														evidence.map((item) =>
+															item.key === source.key
+																? { ...item, [key]: event.target.value }
+																: item,
+														),
+													)
+												}
+											/>
+										) : (
+											<input
+												id={`${source.key}-${key}`}
+												className="contribution-input"
+												type={key === "url" ? "url" : "text"}
+												required={key === "citation"}
+												value={source[key] ?? ""}
+												onChange={(event) =>
+													setEvidence(
+														evidence.map((item) =>
+															item.key === source.key
+																? { ...item, [key]: event.target.value }
+																: item,
+														),
+													)
+												}
+											/>
+										)}
+									</label>
+								))}
+								<button
+									className="contribution-button danger"
+									type="button"
+									onClick={() =>
+										setEvidence(
+											evidence.filter((item) => item.key !== source.key),
+										)
+									}
+								>
+									הסרת מקור {index + 1}
+								</button>
+							</div>
+						</fieldset>
+					))}
+					<button
+						className="contribution-button"
+						type="button"
+						disabled={evidence.length >= 30}
+						onClick={() =>
+							setEvidence([
+								...evidence,
+								{
+									key: crypto.randomUUID(),
+									citation: "",
+									quote: "",
+									note: "",
+									url: null,
+								},
+							])
+						}
+					>
+						+ הוספת מקור
+					</button>
+					{kind === "pr" && (
+						<p className="contribution-muted">
+							לכל PR נדרש לפחות מקור אחד. הוספת מקור אינה מאמתת אותו אוטומטית.
+						</p>
+					)}
+				</div>
+			</fieldset>
+			{kind === "pr" && (
+				<fieldset className="contribution-fieldset">
+					<legend>שינויים מוצעים</legend>
+					<div className="contribution-change-fields">
+						{changes.map((change, index) => (
+							<fieldset className="contribution-fieldset" key={change.key}>
+								<legend>שינוי {index + 1}</legend>
+								<ChangeFields
+									value={change}
+									catalogue={catalogue}
+									onChange={(next) =>
+										setChanges(
+											changes.map((item) =>
+												item.key === change.key
+													? { ...next, key: change.key }
+													: item,
+											),
+										)
+									}
+								/>
+								<button
+									type="button"
+									className="contribution-button danger"
+									disabled={changes.length === 1}
+									onClick={() =>
+										setChanges(
+											changes.filter((item) => item.key !== change.key),
+										)
+									}
+								>
+									הסרת שינוי
+								</button>
+							</fieldset>
+						))}
+						<button
+							className="contribution-button"
+							type="button"
+							disabled={changes.length >= 40}
+							onClick={() => setChanges([...changes, newChange()])}
+						>
+							+ הוספת שינוי
+						</button>
+					</div>
+				</fieldset>
+			)}
+			{kind === "pr" && (linkedIssue || initial?.issueId) && (
+				<label>
+					<span>
+						<input
+							type="checkbox"
+							checked={closeIssue}
+							onChange={(event) => setCloseIssue(event.target.checked)}
+						/>{" "}
+						סגירת הפנייה המקושרת לאחר מיזוג
+					</span>
+				</label>
+			)}
+			<div className="contribution-form-actions">
+				<button
+					type="button"
+					className="contribution-button"
+					disabled={busy}
+					onClick={onCancel}
+				>
+					ביטול
+				</button>
+				<button
+					type="submit"
+					className="contribution-button primary"
+					disabled={busy}
+				>
+					{busy
+						? "שומר..."
+						: initial
+							? "שמירת עדכון"
+							: kind === "issue"
+								? "פתיחת פנייה"
+								: "פתיחת PR"}
+				</button>
+			</div>
+		</form>
+	);
+}

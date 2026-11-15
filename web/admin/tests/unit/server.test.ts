@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const archiveHttpMock = vi.hoisted(() => vi.fn());
+vi.mock("~/server/tanahpedia/contribution-migrations.server", () => ({
+	ensureContributionMigrationsStarted: vi.fn(),
+}));
 vi.mock("~/server/archive/http", () => ({
 	handleArchiveRequest: archiveHttpMock,
 }));
