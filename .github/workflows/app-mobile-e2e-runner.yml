@@ -444,7 +444,7 @@ jobs:
         if: inputs.platform == 'Android'
         uses: actions/setup-java@v6
         with:
-          # Five-part Microsoft versions bypass validation: dotnet/android#13524.
+          # The pinned Android SDK rejects Microsoft's five-part JDK versions.
           distribution: temurin
           java-version: "21"
           verify-signature: true

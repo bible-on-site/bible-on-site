@@ -15,8 +15,10 @@ import { Route as ArchiveSettingsRouteImport } from './routes/archive-settings'
 import { Route as ArticlesRouteImport } from './routes/articles'
 import { Route as BulletinsRouteImport } from './routes/bulletins'
 import { Route as DedicationsRouteImport } from './routes/dedications'
+import { Route as IssuesRouteImport } from './routes/issues'
 import { Route as LinkProposalsRouteImport } from './routes/link-proposals'
 import { Route as MoadimRouteImport } from './routes/moadim'
+import { Route as PullRequestsRouteImport } from './routes/pull-requests'
 import { Route as RabbisRouteImport } from './routes/rabbis'
 import { Route as TanahpediaRouteImport } from './routes/tanahpedia'
 import { Route as ArchiveIndexRouteImport } from './routes/archive.index'
@@ -58,6 +60,11 @@ const DedicationsRoute = DedicationsRouteImport.update({
   path: '/dedications',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IssuesRoute = IssuesRouteImport.update({
+  id: '/issues',
+  path: '/issues',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LinkProposalsRoute = LinkProposalsRouteImport.update({
   id: '/link-proposals',
   path: '/link-proposals',
@@ -66,6 +73,11 @@ const LinkProposalsRoute = LinkProposalsRouteImport.update({
 const MoadimRoute = MoadimRouteImport.update({
   id: '/moadim',
   path: '/moadim',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PullRequestsRoute = PullRequestsRouteImport.update({
+  id: '/pull-requests',
+  path: '/pull-requests',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RabbisRoute = RabbisRouteImport.update({
@@ -126,8 +138,10 @@ export interface FileRoutesByFullPath {
   '/articles': typeof ArticlesRouteWithChildren
   '/bulletins': typeof BulletinsRoute
   '/dedications': typeof DedicationsRoute
+  '/issues': typeof IssuesRoute
   '/link-proposals': typeof LinkProposalsRoute
   '/moadim': typeof MoadimRoute
+  '/pull-requests': typeof PullRequestsRoute
   '/rabbis': typeof RabbisRouteWithChildren
   '/tanahpedia': typeof TanahpediaRouteWithChildren
   '/archive/$': typeof ArchiveSplatRoute
@@ -145,8 +159,10 @@ export interface FileRoutesByTo {
   '/articles': typeof ArticlesRouteWithChildren
   '/bulletins': typeof BulletinsRoute
   '/dedications': typeof DedicationsRoute
+  '/issues': typeof IssuesRoute
   '/link-proposals': typeof LinkProposalsRoute
   '/moadim': typeof MoadimRoute
+  '/pull-requests': typeof PullRequestsRoute
   '/rabbis': typeof RabbisRouteWithChildren
   '/tanahpedia': typeof TanahpediaRouteWithChildren
   '/archive/$': typeof ArchiveSplatRoute
@@ -166,8 +182,10 @@ export interface FileRoutesById {
   '/articles': typeof ArticlesRouteWithChildren
   '/bulletins': typeof BulletinsRoute
   '/dedications': typeof DedicationsRoute
+  '/issues': typeof IssuesRoute
   '/link-proposals': typeof LinkProposalsRoute
   '/moadim': typeof MoadimRoute
+  '/pull-requests': typeof PullRequestsRoute
   '/rabbis': typeof RabbisRouteWithChildren
   '/tanahpedia': typeof TanahpediaRouteWithChildren
   '/archive/$': typeof ArchiveSplatRoute
@@ -188,8 +206,10 @@ export interface FileRouteTypes {
     | '/articles'
     | '/bulletins'
     | '/dedications'
+    | '/issues'
     | '/link-proposals'
     | '/moadim'
+    | '/pull-requests'
     | '/rabbis'
     | '/tanahpedia'
     | '/archive/$'
@@ -207,8 +227,10 @@ export interface FileRouteTypes {
     | '/articles'
     | '/bulletins'
     | '/dedications'
+    | '/issues'
     | '/link-proposals'
     | '/moadim'
+    | '/pull-requests'
     | '/rabbis'
     | '/tanahpedia'
     | '/archive/$'
@@ -227,8 +249,10 @@ export interface FileRouteTypes {
     | '/articles'
     | '/bulletins'
     | '/dedications'
+    | '/issues'
     | '/link-proposals'
     | '/moadim'
+    | '/pull-requests'
     | '/rabbis'
     | '/tanahpedia'
     | '/archive/$'
@@ -248,8 +272,10 @@ export interface RootRouteChildren {
   ArticlesRoute: typeof ArticlesRouteWithChildren
   BulletinsRoute: typeof BulletinsRoute
   DedicationsRoute: typeof DedicationsRoute
+  IssuesRoute: typeof IssuesRoute
   LinkProposalsRoute: typeof LinkProposalsRoute
   MoadimRoute: typeof MoadimRoute
+  PullRequestsRoute: typeof PullRequestsRoute
   RabbisRoute: typeof RabbisRouteWithChildren
   TanahpediaRoute: typeof TanahpediaRouteWithChildren
 }
@@ -298,6 +324,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DedicationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/issues': {
+      id: '/issues'
+      path: '/issues'
+      fullPath: '/issues'
+      preLoaderRoute: typeof IssuesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/link-proposals': {
       id: '/link-proposals'
       path: '/link-proposals'
@@ -310,6 +343,13 @@ declare module '@tanstack/react-router' {
       path: '/moadim'
       fullPath: '/moadim'
       preLoaderRoute: typeof MoadimRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pull-requests': {
+      id: '/pull-requests'
+      path: '/pull-requests'
+      fullPath: '/pull-requests'
+      preLoaderRoute: typeof PullRequestsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/rabbis': {
@@ -446,8 +486,10 @@ const rootRouteChildren: RootRouteChildren = {
   ArticlesRoute: ArticlesRouteWithChildren,
   BulletinsRoute: BulletinsRoute,
   DedicationsRoute: DedicationsRoute,
+  IssuesRoute: IssuesRoute,
   LinkProposalsRoute: LinkProposalsRoute,
   MoadimRoute: MoadimRoute,
+  PullRequestsRoute: PullRequestsRoute,
   RabbisRoute: RabbisRouteWithChildren,
   TanahpediaRoute: TanahpediaRouteWithChildren,
 }

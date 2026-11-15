@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("~/server/tanahpedia/contribution-migrations.server", () => ({
+	ensureContributionMigrationsStarted: vi.fn(),
+}));
+
 // Issue #2611 regression: an expired Cognito session used to return the
 // login 302 for server-function calls too, which a cross-origin fetch cannot
 // follow — the client saw an opaque network error and autosave retried
@@ -58,6 +62,22 @@ async function loadEntry(): Promise<ServerEntry> {
 	} & ServerEntry;
 	return mod.default ?? mod;
 }
+
+it.each(["/api/contributions/migrate", "/api/contributions/worker/claim"])(
+	"routes unauthenticated machine requests to their own authorization boundary: %s",
+	async (path) => {
+		handlerFetchMock.mockClear();
+		vi.stubEnv("SKIP_AUTH", "false");
+		const entry = await loadEntry();
+		const response = await entry.fetch(
+			new Request(`https://admin.test${path}`, { method: "POST" }),
+		);
+		expect(response.status).toBe(401);
+		expect(response.headers.get("location")).toBeNull();
+		expect(handlerFetchMock).not.toHaveBeenCalled();
+		vi.unstubAllEnvs();
+	},
+);
 
 function serverFnRequest(): Request {
 	return new Request("https://admin.test/_serverFn/abc123", {
