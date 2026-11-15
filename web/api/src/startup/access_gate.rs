@@ -854,6 +854,7 @@ mod tests {
         let previous = env::var(REVISION_ENV).ok();
         // SAFETY: serialized by ENV_LOCK; the variable is restored before
         // the lock is released.
+        // nosemgrep — Rust 2024 requires unsafe env mutation; serialized and restored.
         unsafe { env::set_var(REVISION_ENV, "mgr-key") };
         let response = aw_test::call_service(
             &app,
@@ -874,7 +875,9 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         match previous {
             // SAFETY: see above.
+            // nosemgrep — same serialized env restore as above.
             Some(value) => unsafe { env::set_var(REVISION_ENV, value) },
+            // nosemgrep — same serialized env restore as above.
             None => unsafe { env::remove_var(REVISION_ENV) },
         }
     }

@@ -14,7 +14,8 @@ namespace BibleOnSite.Tests.Services;
 public class ApiSigningHandlerTests
 {
     private const string GoldenKeyId = "poc-key-1";
-    private const string GoldenSecret = "poc-secret-do-not-use-in-prod";
+    // Test-only golden vector for the byte-exact HMAC assertion — never a real credential.
+    private const string GoldenSecret = "poc-secret-do-not-use-in-prod"; // nosemgrep
     private const long GoldenTimestamp = 1_770_000_000;
     private const string GoldenNonce = "01ab23cd45ef";
     private const string GoldenBody = "{\"query\":\"{ starter { generatedAt } }\"}";
