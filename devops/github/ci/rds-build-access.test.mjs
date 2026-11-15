@@ -489,7 +489,15 @@ test("production export overrides setup-mysql's local CA and verifies the RDS ho
 	assert.ok(dump.includes(`--ssl-ca=${bundle}`));
 	assert.ok(dump.includes("--ssl-mode=VERIFY_IDENTITY"));
 	assert.ok(dump.includes("--single-transaction"));
-	assert.ok(dump.includes("--ignore-table=fixture.note"));
+	// SSG needs the catalogs and existing note chapters together to preserve
+	// production commentary IDs and chapters absent from the incoming pack.
+	assert.ok(dump.includes("--databases"));
+	assert.equal(dump.at(-1), "fixture");
+	assert.ok(
+		!dump.some((option) => option.startsWith("--ignore-table")),
+		"the full snapshot must retain parshan, perush and note",
+	);
+	assert.ok(!dump.includes("--no-data"));
 	assert.deepEqual(f.args(f.env.IMPORT_ARGS), [
 		"-h",
 		"127.0.0.1",
