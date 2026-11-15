@@ -85,6 +85,27 @@ public abstract class MobilePlatformAdapter
     public abstract void GoBack(AppiumDriver driver);
     public virtual void DismissSearchSheet(AppiumDriver driver) => GoBack(driver);
 
+    /// <summary>
+    /// Scrolls the page's scrollable surface one viewport down so a deeper
+    /// section (e.g. הסתר שם השם under תצוגה preferences) enters view. Prefers
+    /// the driver's own scroll command — a pointer drag that starts on a
+    /// Switch or Slider row revalues that control instead of scrolling — and
+    /// falls back to a center-anchored drag only when the surface reports the
+    /// gesture cannot move it.
+    /// </summary>
+    public abstract void ScrollPageDown(AppiumDriver driver);
+
+    /// <summary>
+    /// The vertical band where an injected gesture may begin without tripping
+    /// system navigation: below the status-bar shade strip and above the
+    /// gesture-pill strip. A touch starting outside it is claimed as
+    /// Home/Overview or edge-back before the page sees it — the full-window
+    /// scrollGesture probe swiped up from ~95% height and the launcher
+    /// swallowed the app (LAUNCHER_TASK_DISMISS_SWIPE_UP).
+    /// </summary>
+    internal static System.Drawing.Rectangle PageGestureBand(System.Drawing.Size window) =>
+        new(0, window.Height / 5, window.Width, window.Height * 3 / 5);
+
     public void RevealTrailingSearchChips(AppiumDriver driver)
     {
         var chips = driver.FindElement(AutomationId("SearchFilterChips"));
@@ -356,6 +377,121 @@ public sealed class AndroidPlatformAdapter : MobilePlatformAdapter
         By.XPath($"//*[{string.Join(" or ", ids.Select(id => $"@resource-id='com.tanah.daily929:id/{id}'"))}]");
     public override By FlyoutButton => AutomationId("ReaderNavigationButton");
     public override void GoBack(AppiumDriver driver) => driver.Navigate().Back();
+    public override void ScrollPageDown(AppiumDriver driver)
+    {
+        var window = DriverTelemetry.WindowSize(driver);
+        // The driver-level scroll gesture drives the scrollable surface itself.
+        // Constrain its swipe to the page band: the full-window probe started
+        // inside the system gesture strip and gesture navigation claimed it
+        // as Home/Overview. It returns false when the surface ignores the
+        // accessibility scroll action — MauiScrollView does not answer it —
+        // in which case the injected drag takes over (see ScrollTikkunDown).
+        var band = PageGestureBand(window);
+        var scrolled = driver.ExecuteScript("mobile: scrollGesture", new Dictionary<string, object>
+        {
+            ["left"] = 0,
+            ["top"] = band.Top,
+            ["width"] = window.Width,
+            ["height"] = band.Height,
+            ["direction"] = "down",
+            ["percent"] = 0.9,
+        });
+        if (scrolled is not bool ok || !ok)
+        {
+            DragWindowDown(driver, window);
+        }
+    }
+
+    /// <summary>
+    /// Fallback for surfaces that ignore the accessibility scroll action: one
+    /// drag at horizontal center from the lower fifth of the window to the
+    /// upper fifth. The start point must sit clear of gesture-claiming
+    /// controls: a SeekBar or Switch claims the pointer on ACTION_DOWN and
+    /// blocks parent interception, so a drag beginning on a full-width font
+    /// Slider changes — and persists — the preference instead of scrolling.
+    /// </summary>
+    private static void DragWindowDown(AppiumDriver driver, System.Drawing.Size window)
+    {
+        var finger = new PointerInputDevice(PointerKind.Touch, "finger");
+        var sequence = new ActionSequence(finger, 0);
+        var x = window.Width / 2;
+        var startY = DragStartClearOfControls(driver, x, window.Height);
+        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x, startY, TimeSpan.Zero));
+        sequence.AddAction(finger.CreatePointerDown(MouseButton.Left));
+        sequence.AddAction(finger.CreatePointerMove(CoordinateOrigin.Viewport, x,
+            Math.Max(startY - window.Height * 3 / 5, window.Height / 10), TimeSpan.FromMilliseconds(350)));
+        sequence.AddAction(finger.CreatePointerUp(MouseButton.Left));
+        driver.PerformActions([sequence]);
+    }
+
+    /// <summary>
+    /// Picks the drag start y nearest the window's lower fifth whose (x, y)
+    /// point does not land inside a gesture-claiming control (SeekBar, Switch,
+    /// EditText) in the current page source. Scans downward first — never past
+    /// the gesture-navigation strip the page band marks — then upward, and
+    /// falls back to the lower fifth when no clear point exists.
+    /// </summary>
+    private static int DragStartClearOfControls(AppiumDriver driver, int x, int windowHeight)
+    {
+        var claimed = new List<System.Drawing.Rectangle>();
+        try
+        {
+            foreach (var node in System.Xml.Linq.XDocument.Parse(driver.PageSource).Descendants())
+            {
+                var cls = node.Attribute("class")?.Value;
+                if (cls is null ||
+                    (!cls.Contains("SeekBar") && !cls.Contains("Switch") && !cls.Contains("EditText")))
+                {
+                    continue;
+                }
+                var bounds = System.Text.RegularExpressions.Regex.Match(
+                    node.Attribute("bounds")?.Value ?? "", @"\[(\d+),(\d+)\]\[(\d+),(\d+)\]");
+                if (bounds.Success)
+                {
+                    var left = int.Parse(bounds.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+                    var top = int.Parse(bounds.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+                    claimed.Add(new System.Drawing.Rectangle(left, top,
+                        int.Parse(bounds.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture) - left,
+                        int.Parse(bounds.Groups[4].Value, System.Globalization.CultureInfo.InvariantCulture) - top));
+                }
+            }
+        }
+        catch (Exception exception) when (exception is WebDriverException or System.Xml.XmlException)
+        {
+            // Without a source snapshot the drag keeps its historical start.
+            return windowHeight * 4 / 5;
+        }
+        return ChooseDragStartClearOfControls(x, windowHeight, claimed);
+    }
+
+    /// <summary>
+    /// The (x, y)-scan behind <see cref="DragStartClearOfControls"/>: prefers
+    /// the window's lower fifth, steps below claiming controls while a start
+    /// remains above the gesture strip (bottom ~15%), then scans upward above
+    /// the status-bar strip (top fifth).
+    /// </summary>
+    internal static int ChooseDragStartClearOfControls(
+        int x, int windowHeight, IReadOnlyList<System.Drawing.Rectangle> claimed)
+    {
+        var preferred = windowHeight * 4 / 5;
+        var maxStart = windowHeight * 17 / 20;
+        bool Clear(int y) => claimed.All(r => !r.Contains(x, y));
+        var y = preferred;
+        while (y < maxStart && !Clear(y))
+        {
+            y = claimed.Where(r => r.Contains(x, y)).Max(r => r.Bottom) + 1;
+        }
+        if (y < maxStart)
+        {
+            return y;
+        }
+        y = preferred - 1;
+        while (y > windowHeight / 5 && !Clear(y))
+        {
+            y = claimed.Where(r => r.Contains(x, y)).Min(r => r.Top) - 1;
+        }
+        return y > windowHeight / 5 ? y : preferred;
+    }
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         new AndroidTimedDriver(server, options);
 }
@@ -471,6 +607,11 @@ public sealed class IosPlatformAdapter : MobilePlatformAdapter
     }
     private static bool PageChanged(AppiumDriver driver, string before) =>
         !string.Equals(driver.PageSource, before, StringComparison.Ordinal);
+    public override void ScrollPageDown(AppiumDriver driver) =>
+        driver.ExecuteScript("mobile: scroll", new Dictionary<string, object>
+        {
+            ["direction"] = "down",
+        });
     public override AppiumDriver CreateDriver(Uri server, AppiumOptions options) =>
         // The five-minute client budget fits inside the ten-minute per-test hang
         // guard, together with the scenario.
