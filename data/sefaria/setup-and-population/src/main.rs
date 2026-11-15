@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use std::env;
+use mongo_config::mongo_host_port_from_env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -127,17 +127,6 @@ fn run_populate() -> Result<()> {
     Ok(())
 }
 
-fn mongo_host_port_from_env() -> (String, String) {
-    mongo_host_port_from_vars(|key| env::var(key).ok())
-}
-
-fn mongo_host_port_from_vars(mut get_var: impl FnMut(&str) -> Option<String>) -> (String, String) {
-    (
-        get_var("MONGO_HOST").unwrap_or_else(|| "localhost".to_string()),
-        get_var("MONGO_PORT").unwrap_or_else(|| "27017".to_string()),
-    )
-}
-
 fn find_sefaria_dump_dir(raw_dir: &Path) -> Result<PathBuf> {
     if !raw_dir.exists() {
         anyhow::bail!(
@@ -209,7 +198,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        env::temp_dir().join(format!("sefaria-setup-test-{}-{}", name, suffix))
+        std::env::temp_dir().join(format!("sefaria-setup-test-{}-{}", name, suffix))
     }
 
     #[test]
@@ -229,22 +218,6 @@ mod tests {
         assert_eq!(
             command.get_about().map(|about| about.to_string()),
             Some("Setup and populate MongoDB with Sefaria data".to_string())
-        );
-    }
-
-    #[test]
-    fn mongo_host_port_uses_defaults_and_env_overrides() {
-        assert_eq!(
-            mongo_host_port_from_vars(|_| None),
-            ("localhost".to_string(), "27017".to_string())
-        );
-        assert_eq!(
-            mongo_host_port_from_vars(|key| match key {
-                "MONGO_HOST" => Some("mongo".to_string()),
-                "MONGO_PORT" => Some("28017".to_string()),
-                _ => None,
-            }),
-            ("mongo".to_string(), "28017".to_string())
         );
     }
 
