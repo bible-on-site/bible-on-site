@@ -1,4 +1,5 @@
 using BibleOnSite.Controls;
+using BibleOnSite.Config;
 using BibleOnSite.Helpers;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
@@ -24,8 +25,80 @@ public class SharedTopBarTests : IDisposable
 
     public void Dispose()
     {
+        HomeUxPreview.TestEnabled = null;
         BackChrome.TestPlatform = null;
         PreferencesService.ResetForTesting();
+    }
+
+    [Fact]
+    public void Preview_UsesLargeLabelledBackAndHomeActions()
+    {
+        HomeUxPreview.TestEnabled = true;
+        var bar = new SharedTopBar { NavigationAutomationId = "LegacyMenu", ShowBack = false };
+        var band = ((Grid)bar.Content!).Children.OfType<Grid>().Single();
+
+        band.HeightRequest.Should().Be(72);
+        band.BackgroundColor.Should().Be(Color.FromArgb("#F5F7FB"));
+        bar.NavigationButton.AutomationId.Should().Be("TopBarBackButton");
+        bar.BackButton.AutomationId.Should().Be("TopBarHomeButton");
+        bar.BackButton.IsVisible.Should().BeTrue("Home remains available when the old Back preference is hidden");
+        bar.BackButton.IsEnabled.Should().BeTrue();
+        bar.BackButton.Text.Should().Be(Fonts.FluentUI.home_24_regular);
+        SemanticProperties.GetDescription(bar.BackButton).Should().Be("מסך הבית");
+        SemanticProperties.GetDescription(bar.NavigationButton).Should().Be("חזרה");
+        foreach (var button in new[] { bar.NavigationButton, bar.BackButton })
+        {
+            button.WidthRequest.Should().BeGreaterThanOrEqualTo(48);
+            button.HeightRequest.Should().BeGreaterThanOrEqualTo(48);
+        }
+    }
+
+    [Fact]
+    public void Preview_BackRevalidatesTheLiveSurfaceAndNeverOpensADrawer()
+    {
+        HomeUxPreview.TestEnabled = true;
+        var bar = new SharedTopBar();
+        var ownsSurface = true;
+        var backCalls = 0;
+        var flyoutCalls = 0;
+        bar.BackStateProvider = () => ownsSurface;
+        bar.BackInvoker = () => { backCalls++; return true; };
+        bar.FlyoutOpener = () => flyoutCalls++;
+        bar.RefreshBackState();
+        bar.NavigationButton.SendClicked();
+        backCalls.Should().Be(1);
+
+        ownsSurface = false;
+        bar.NavigationButton.SendClicked();
+        backCalls.Should().Be(1, "a stale painted Back must not leave the root");
+        bar.NavigationButton.IsEnabled.Should().BeFalse();
+        bar.BackButton.IsEnabled.Should().BeTrue("Home is independent of the Back stack");
+        flyoutCalls.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(FlowDirection.LeftToRight, Fonts.FluentUI.arrow_left_24_regular)]
+    [InlineData(FlowDirection.RightToLeft, Fonts.FluentUI.arrow_right_24_regular)]
+    public void Preview_BackArrowFollowsDirectionWithoutReplacingHome(FlowDirection direction, string glyph)
+    {
+        HomeUxPreview.TestEnabled = true;
+        var bar = new SharedTopBar();
+        _ = new ContentPage { FlowDirection = direction, Content = bar };
+
+        bar.NavigationButton.Text.Should().Be(glyph);
+        bar.BackButton.Text.Should().Be(Fonts.FluentUI.home_24_regular);
+    }
+
+    [Fact]
+    public void Preview_DisablesLegacyDrawerRequests()
+    {
+        HomeUxPreview.TestEnabled = true;
+        var shell = new AdaptiveShellStub();
+
+        SharedTopBar.RequestNavPane(shell);
+
+        shell.Toggles.Should().Be(0);
+        shell.FlyoutIsPresented.Should().BeFalse();
     }
 
     [Fact]

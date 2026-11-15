@@ -35,7 +35,7 @@ public partial class ReaderMenuPanel : Grid
         if (Children.OfType<Border>().FirstOrDefault() is not { Content: VerticalStackLayout rows } panel) { return; }
         panel.HorizontalOptions = LayoutOptions.Fill;
         panel.VerticalOptions = LayoutOptions.End;
-        panel.Margin = new Thickness(16, 0, 16, 104);
+        panel.Margin = new Thickness(16, 0, 16, ReaderBottomBar.TotalHeight + 14);
         panel.Padding = 16;
         panel.StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 26 };
         rows.Spacing = 4;
@@ -53,12 +53,10 @@ public partial class ReaderMenuPanel : Grid
             }
         }
         rows.Add(ToolAction("חיפוש בתוכן", "ReaderGlobalSearch", (_, _) => SearchRequested?.Invoke(this, EventArgs.Empty)));
-        rows.Add(ToolAction("גודל גופן ותצוגה", "ReaderDisplayPreferences", async (_, _) =>
-            await Services.ShellAppNavigator.Instance.GoToAsync(Services.AppRoutes.DisplayPreferences)));
         rows.Add(ToolAction("מסך מלא", "FullScreenButton", (_, _) => FullscreenRequested?.Invoke(this, EventArgs.Empty)));
         panel.Content = null;
         panel.Content = new ScrollView { Content = rows };
-        SizeChanged += (_, _) => panel.MaximumHeightRequest = Math.Max(220, Height - 130);
+        SizeChanged += (_, _) => panel.MaximumHeightRequest = Math.Max(220, Height - ReaderBottomBar.TotalHeight - 40);
     }
 
     private Button ToolAction(string title, string id, EventHandler selected)

@@ -1,120 +1,166 @@
-# על הפרק - ביקורת UX: לפני ואחרי
+# על הפרק - לפני ואחרי מול הענף הראשי
 
 ענף ביקורת מתמשך. ה-PR נשאר בטיוטה. אין למזג או להפעיל מיזוג אוטומטי בלי הוראה מפורשת מדורד.
 
-[PR #3385](https://github.com/bible-on-site/bible-on-site/pull/3385) · [דף HTML להשוואה בדפדפן](index.html)
+[PR #3385](https://github.com/bible-on-site/bible-on-site/pull/3385) · [גלריית HTML בדפדפן](index.html) · [המסכים הנוכחיים](current.html)
 
-כל התמונות והסרטונים הם צילומים אמיתיים מהאפליקציה באמולטור Android. צילומי ה"לפני" נשמרים כבסיס קבוע; קובצי ה"אחרי" מתעדכנים בשמות קבועים בכל סבב, כדי ש-GitHub יציג גם את השינוי בתמונות בין הקומיטים.
+כל צילומי ה"לפני" הם מהענף הראשי של המאגר, ולא מאיטרציות קודמות בענף ה-UX. מימין: המצב הקיים. משמאל: ההצעה הנוכחית. כל הצילומים והסרטונים נלקחו מהאפליקציה האמיתית באמולטור Android.
 
-ב-GitHub אפשר לפתוח את ה-Markdown בתצוגה מעוצבת, ולבחור rich diff ב-Files changed. [תיעוד GitHub](https://docs.github.com/en/repositories/working-with-files/using-files/working-with-non-code-files). ה-HTML עצמו נשמר כקוד; לתצוגה שלו פותחים מקומית את index.html עם תיקיית assets.
+בסיס צילומי "לפני": `master / 95c202eb5`. עודכן: 2026-11-15.
 
-עודכן: 15 בנובמבר 2026. סבב 02. הבסיס לצילומי "לפני": `ee7e5f952`.
+הכרטיס היומי נשאר במרכז הבית. הספרייה היא מסך נוסף. צילומי "אחרי" מתעדכנים באותם שמות קבצים; היסטוריית האיטרציות נשמרת ב-Git.
 
-## בית - לשמור את הכיוון, לשפר את הלחיצה
+GitHub מציג את ה-Markdown כתוכן מעוצב ותומך ב-rich diff ב-Files changed. ה-HTML נשמר כקוד ונפתח מקומית עם קובצי ה-CSS וה-assets.
 
-העיצוב של הבית נשמר. כפתור ההעדפות מקבל משטח ברור, אייקון ושטח לחיצה גדול; החיפוש נשאר קבוע מעל התוכן.
+## כניסה לאפליקציה - הפרק היומי במרכז
 
-| לפני | אחרי |
-| --- | --- |
-| <img src="assets/before/home.png" alt="מסך הבית לפני השינוי, עם קישור טקסט קטן להעדפות" width="300"> | <img src="assets/after/home.png" alt="מסך הבית עם כפתור העדפות גדול וברור" width="300"> |
+ב-master הכניסה היא ישירות לפסוקי הפרק. בהצעה החדשה נכנסים לבית עם כרטיס הפרק היומי הכהה, הכותרת הגדולה והכפתור הכחול. הכרטיס נשמר; הספרייה היא מסך נוסף ולא תחליף לבית.
 
-## ניווט בבית - פחות אפשרויות בבת אחת
+<table dir="rtl">
+<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
+<tbody><tr>
+<td align="right"><img width="300" src="assets/before/reader.png" alt="הכניסה הקיימת: ישירות לקורא" loading="lazy"><br>הכניסה הקיימת: ישירות לקורא</td>
+<td align="right"><img width="300" src="assets/after/home.png" alt="הבית החדש עם כרטיס הפרק היומי" loading="lazy"><br>הבית החדש עם כרטיס הפרק היומי</td>
+</tr></tbody></table>
 
-קישורי הטקסט הקטנים בתחתית הוחלפו בכניסה אחת לספרייה. מסורה והרבנים מוצגים כשורות נוחות ללחיצה, עם תיאור מתחת לכותרת.
+## מגלים עוד - בלי רשימת קישורים קטנים
 
-| לפני | אחרי |
-| --- | --- |
-| <img src="assets/before/home-navigation.png" alt="האפשרויות המפוזרות בתחתית הבית" width="300"> | <img src="assets/after/home-navigation.png" alt="ניווט ממוקד ושורות גדולות בבית" width="300"> |
+במקום להגיע לכל יעד דרך מגירת הניווט, הבית מציג את הכניסות המרכזיות בכרטיסים גדולים. מסורה היא חלוקה מסורתית; רבנים וכותבים והספרייה מקבלים כניסות מובחנות.
 
-## קריאה - מעטפת אחת
+<table dir="rtl">
+<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
+<tbody><tr>
+<td align="right"><img width="300" src="assets/before/navigation.png" alt="מגירת הניווט ב-master" loading="lazy"><br>מגירת הניווט ב-master</td>
+<td align="right"><img width="300" src="assets/after/home-navigation.png" alt="הכניסות בהמשך הבית" loading="lazy"><br>הכניסות בהמשך הבית</td>
+</tr></tbody></table>
 
-התפריט הצדדי והמניפה הוסרו מהסקיצה. למעלה יש חזרה, בית ובחירת פרק; למטה פס פעולות אחד: קריאה, פירושים ומאמרים.
+## כלים שמשנים את הקריאה - עם שמות של פעולות
 
-| לפני | אחרי |
-| --- | --- |
-| <img src="assets/before/reader.png" alt="הקורא עם תפריט עליון ומניפת ניווט תחתונה" width="300"> | <img src="assets/after/reader.png" alt="הקורא עם ניווט אחיד ופס פעולות קריאה גדול" width="300"> |
+תצוגת הטקסט פותחת גודל גופן ותצוגה. בחירת פירושים קובעת אילו פירושים יוצגו לצד הפסוקים. מאמרי הפרק פותחים תוכן נוסף, עם מונה נפרד. הכפתורים אינם מוצגים כשלוש לשוניות ניווט מקבילות.
 
-## גלילה - הטקסט נשאר יציב
+<table dir="rtl">
+<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
+<tbody><tr>
+<td align="right"><img width="300" src="assets/before/reader.png" alt="הקורא ופס האייקונים הקיים" loading="lazy"><br>הקורא ופס האייקונים הקיים</td>
+<td align="right"><img width="300" src="assets/after/reader.png" alt="פעולות מפורשות וכפתורים גדולים" loading="lazy"><br>פעולות מפורשות וכפתורים גדולים</td>
+</tr></tbody></table>
 
-אזור הקריאה שומר על גודל קבוע. הכותרת נעה מעליו, לפי תנועת האצבע, בלי לשנות את גודל הרשימה ובלי לקבל משוב חוזר מהפריסה.
+## גלילה - אזור הקריאה נשאר יציב
 
-| לפני | אחרי |
-| --- | --- |
-| <img src="assets/before/reader-scrolled.png" alt="מצב הקריאה לאחר גלילה בגרסה הקודמת" width="300"> | <img src="assets/after/reader-scrolled.png" alt="הקורא לאחר גלילה עם אזור תוכן קבוע" width="300"> |
+הכותרת יכולה להיעלם בגלילה ולחזור בתנועה קצרה כלפי תחילת הפרק. היא נעה מעל אזור התוכן בלי לשנות את גודלו ובלי להחזיר את הקורא לראש הפרק.
 
-## כלי קריאה - במקום תפריט צפוף
+<table dir="rtl">
+<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
+<tbody><tr>
+<td align="right"><img width="300" src="assets/before/reader-scrolled.png" alt="הקורא הקיים אחרי גלילה" loading="lazy"><br>הקורא הקיים אחרי גלילה</td>
+<td align="right"><img width="300" src="assets/after/reader-scrolled.png" alt="הגלילה בהצעת ה-UX" loading="lazy"><br>הגלילה בהצעת ה-UX</td>
+</tr></tbody></table>
 
-אפשרויות הקריאה מרוכזות בגיליון רחב עם שורות וכפתורים גדולים. הגיליון כולל חיפוש, תצוגה ומסך מלא.
+## אפשרויות הקריאה - גיליון נוח ללחיצה
 
-| לפני | אחרי |
-| --- | --- |
-| <img src="assets/before/reader-tools.png" alt="תפריט הקריאה הקטן בגרסה הקודמת" width="300"> | <img src="assets/after/reader-tools.png" alt="גיליון כלי הקריאה עם פעולות גדולות" width="300"> |
+שניים מקרא, תיקון קוראים והסתרת שם השם מוצגים בשורות גדולות. חיפוש ומסך מלא נמצאים באותו גיליון; הגדרות הגופן זמינות ישירות מפס כלי הקריאה.
 
-## מאמרים - אותו קורא, אותה דרך חזרה
+<table dir="rtl">
+<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
+<tbody><tr>
+<td align="right"><img width="300" src="assets/before/reader-tools.png" alt="התפריט הקטן ב-master" loading="lazy"><br>התפריט הקטן ב-master</td>
+<td align="right"><img width="300" src="assets/after/reader-tools.png" alt="גיליון האפשרויות החדש" loading="lazy"><br>גיליון האפשרויות החדש</td>
+</tr></tbody></table>
 
-המעבר למאמרים שומר את מסגרת הניווט ואת פס הפעולות החדש. אפשר לחזור לקריאה בלי לפתוח תפריט נוסף.
+## תצוגת הטקסט - הפעולה מובילה לשינוי התצוגה
 
-| לפני | אחרי |
-| --- | --- |
-| <img src="assets/before/articles.png" alt="מאמרי הפרק עם המעטפת הקודמת" width="300"> | <img src="assets/after/articles.png" alt="מאמרי הפרק עם פס הפעולות המאוחד" width="300"> |
+המסך משנה את גודל הגופן והתצוגה בפועל. הוא נגיש כעת מהקורא בכפתור עם אייקון גודל אות ושם מפורש, במקום כפתור בשם קריאה. המעטפת משתמשת באפור קריר, לבן וכחול.
 
-## הספרייה - בית ברור לתכנים הנוספים
+<table dir="rtl">
+<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
+<tbody><tr>
+<td align="right"><img width="300" src="assets/before/display-options.png" alt="העדפות התצוגה ב-master" loading="lazy"><br>העדפות התצוגה ב-master</td>
+<td align="right"><img width="300" src="assets/after/display-options.png" alt="הכניסה הישירה מתצוגת הטקסט" loading="lazy"><br>הכניסה הישירה מתצוגת הטקסט</td>
+</tr></tbody></table>
 
-קודם האפשרויות היו מפוזרות בתחתית הבית. כעת תנכפדיה, פרשת השבוע, מועדים ועלון יומי מקבלים עמוד עם כרטיסים גדולים. מידע ועזרה נמצאים ברמה נפרדת.
+## בוחרים אילו פירושים יופיעו לצד הפסוקים
 
-| לפני | אחרי |
-| --- | --- |
-| <img src="assets/before/library.png" alt="קישורי התוכן הנוסף בתחתית הבית" width="300"> | <img src="assets/after/library.png" alt="מסך הספרייה החדש עם כרטיסי תוכן גדולים" width="300"> |
+הכפתור נקרא בחירת פירושים, והגיליון מסביר את התוצאה של הבחירה. כך ברור שזהו כלי לשינוי תוכן הפרק המוצג, ולא מעבר למסך לימוד אחר.
 
-## חיפוש - שדה וכפתורים שנוח ללחוץ
+<table dir="rtl">
+<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
+<tbody><tr>
+<td align="right"><img width="300" src="assets/before/commentary.png" alt="גיליון הפירושים הקיים" loading="lazy"><br>גיליון הפירושים הקיים</td>
+<td align="right"><img width="300" src="assets/after/commentary.png" alt="כותרת והסבר שמתארים את הפעולה" loading="lazy"><br>כותרת והסבר שמתארים את הפעולה</td>
+</tr></tbody></table>
 
-שדה החיפוש מקבל משטח ברור. כפתורי החזרה והניקוי גדולים ומובחנים, וברירת המחדל מציגה ארבעה קיצורי דרך בלבד. חיפוש עדיין מוצא גם מסכים וגם תוכן.
+## מאמרי הפרק - תוכן נוסף עם דרך חזרה ברורה
 
-| לפני | אחרי |
-| --- | --- |
-| <img src="assets/before/search.png" alt="מסך החיפוש עם כפתורי טקסט קטנים" width="300"> | <img src="assets/after/search.png" alt="החיפוש עם שדה ברור וכפתורים גדולים" width="300"> |
+המספר מופיע כתג נפרד מהכיתוב. כשמציגים מאמרים, הכפתור הראשון משתנה לחזרה לפסוקים. במצב זה הוא מחזיר לטקסט, ובמצב הפסוקים הוא פותח את תצוגת הטקסט.
 
-## לוח שנה - ניווט משותף
+<table dir="rtl">
+<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
+<tbody><tr>
+<td align="right"><img width="300" src="assets/before/articles.png" alt="מאמרי הפרק ב-master" loading="lazy"><br>מאמרי הפרק ב-master</td>
+<td align="right"><img width="300" src="assets/after/articles.png" alt="מאמרים וחזרה מפורשת לפסוקים" loading="lazy"><br>מאמרים וחזרה מפורשת לפסוקים</td>
+</tr></tbody></table>
 
-גם במסך קיים יש כעת חזרה ובית באותם מקומות ובאותם גדלים. תפריט הניווט הישן אינו נפתח משם.
+## עוד עולמות - באותה שפה של הכרטיס היומי
 
-| לפני | אחרי |
-| --- | --- |
-| <img src="assets/before/calendar.png" alt="לוח השנה עם הניווט הקודם" width="300"> | <img src="assets/after/calendar.png" alt="לוח השנה עם כפתורי חזרה ובית אחידים" width="300"> |
+לספרייה אין מסך מקביל ב-master: התכנים נפתחים שם ממגירת הניווט. בהצעה הם מקבלים מסך נוסף עם כרטיסים כהים וכחולים, טיפוגרפיה גדולה וסמלים ברקע. הבית והכרטיס היומי נשארים במקומם.
 
-## רבנים וכותבים - אותה מעטפת
+<table dir="rtl">
+<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
+<tbody><tr>
+<td align="right"><img width="300" src="assets/before/navigation.png" alt="היעדים במגירת הניווט ב-master" loading="lazy"><br>היעדים במגירת הניווט ב-master</td>
+<td align="right"><img width="300" src="assets/after/library.png" alt="מסך ספרייה נוסף - לא מסך הבית" loading="lazy"><br>מסך ספרייה נוסף - לא מסך הבית</td>
+</tr></tbody></table>
 
-רשימת הכותבים מקבלת את אותו ניווט חזרה ובית. אין מסלול ניווט מקביל דרך תפריט צד.
+## חיפוש בתוכן וגם ביעדי האפליקציה
 
-| לפני | אחרי |
-| --- | --- |
-| <img src="assets/before/authors.jpg" alt="מסך הכותבים לפני איחוד הניווט" width="300"> | <img src="assets/after/authors.jpg" alt="מסך הכותבים עם ניווט חזרה ובית" width="300"> |
+החיפוש נגיש בראש הבית ומוצא גם מסכים כמו לוח השנה והעדפות. כפתורי החזרה והניקוי גדולים, וברירת המחדל מציגה ארבעה קיצורי דרך.
 
-## העדפות - כניסה ברורה, חזרה צפויה
+<table dir="rtl">
+<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
+<tbody><tr>
+<td align="right"><img width="300" src="assets/before/search.png" alt="החיפוש בקורא הקיים" loading="lazy"><br>החיפוש בקורא הקיים</td>
+<td align="right"><img width="300" src="assets/after/search.png" alt="החיפוש הגלובלי החדש" loading="lazy"><br>החיפוש הגלובלי החדש</td>
+</tr></tbody></table>
 
-הכניסה מהבית היא כפתור גדול, ובתוך ההעדפות נשמר אותו מבנה ניווט. ההגדרות עצמן ממשיכות להשתמש במסכים האמיתיים של האפליקציה.
+## לוח לימוד יומי - כחול על רקע קריר ובהיר
 
-| לפני | אחרי |
-| --- | --- |
-| <img src="assets/before/preferences.png" alt="מסך ההעדפות עם תפריט הניווט הקודם" width="300"> | <img src="assets/after/preferences.png" alt="מסך ההעדפות עם כפתורי חזרה ובית גדולים" width="300"> |
+הרקע החום-אפרפר הוחלף באפור בהיר קריר, כדי שהכחול יתחבר למשטחים הלבנים וללוח הקיים. כפתורי הבית והחזרה גדולים ומופיעים באותם מקומות.
 
-## אותן מחוות, לפני ואחרי
+<table dir="rtl">
+<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
+<tbody><tr>
+<td align="right"><img width="300" src="assets/before/calendar.png" alt="לוח השנה ב-master" loading="lazy"><br>לוח השנה ב-master</td>
+<td align="right"><img width="300" src="assets/after/calendar.png" alt="לוח השנה עם המעטפת החדשה" loading="lazy"><br>לוח השנה עם המעטפת החדשה</td>
+</tr></tbody></table>
 
-גלילה רציפה באמולטור, כולל שינויי כיוון ותנועה קצרה כלפי תחילת הפרק. הסרטונים הם הקלטות מסך, לא אנימציה של העיצוב.
+## רבנים וכותבים - חזרה ובית באותה שפה
 
-[וידאו לפני](assets/before/reader-scroll.mp4) · [וידאו אחרי](assets/after/reader-scroll.mp4)
+מסך הכותבים שומר את התוכן הקיים ומקבל את הניווט המשותף. הכניסה מהבית היא כרטיס גדול ומובחן.
 
-## מה לבדוק בסבב הזה
+<table dir="rtl">
+<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
+<tbody><tr>
+<td align="right"><img width="300" src="assets/before/authors.jpg" alt="רבנים וכותבים ב-master" loading="lazy"><br>רבנים וכותבים ב-master</td>
+<td align="right"><img width="300" src="assets/after/authors.jpg" alt="המסך בהצעת ה-UX" loading="lazy"><br>המסך בהצעת ה-UX</td>
+</tr></tbody></table>
 
-- האם הדרך מהבית לקריאה, לספרייה ולחזרה ברורה?
-- האם כפתורי ההעדפות והניווט נוחים ללחיצה?
-- האם הכותרת מסתתרת וחוזרת בלי קפיצות או הבהובים?
-- האם מעבר למאמרים ולמסך מלא שומר על אותה מעטפת?
-- מה עדיין דורש עיצוב נוסף במסכים המשניים?
+## העדפות - כניסה בולטת וחזרה צפויה
 
-## עדכון הסבב הבא
+בבית יש כפתור העדפות גדול עם אייקון. בתוך ההגדרות נשמר אותו ניווט חזרה ובית, ללא תפריט צד מקביל.
 
-1. משאירים את צילומי הבסיס תחת `assets/before/`.
-2. מצלמים שוב את אותם המצבים באמולטור ומעדכנים את הקבצים התואמים תחת `assets/after/`.
-3. מעדכנים את הסעיפים הרלוונטיים ב-HTML וב-Markdown ואת יומן הסבבים.
-4. דוחפים לענף הביקורת ומשאירים את ה-PR בטיוטה. אין מיזוג בלי הוראה מפורשת.
+<table dir="rtl">
+<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
+<tbody><tr>
+<td align="right"><img width="300" src="assets/before/preferences.png" alt="העדפות ב-master" loading="lazy"><br>העדפות ב-master</td>
+<td align="right"><img width="300" src="assets/after/preferences.png" alt="העדפות עם המעטפת החדשה" loading="lazy"><br>העדפות עם המעטפת החדשה</td>
+</tr></tbody></table>
+
+## גלילה בתנועה
+
+[לפני - master](assets/before/reader-scroll.mp4) · [אחרי - הצעת UX](assets/after/reader-scroll.mp4)
+
+אותן שמונה מחוות באמולטור. הסרטונים מיועדים לביקורת התנועה; הצילומים המלאים מיועדים לביקורת הטקסט והפריסה.
+
+## עדכון הביקורת
+
+מעדכנים את צילומי `assets/after/` ואת התיאורים ב-`comparisons.json`, ואז מריצים `python generate.py`. צילומי ה-`before` חייבים להישאר מהענף הראשי, עם קומיט בסיס מתועד. לא מציבים צילום מאיטרציה קודמת של ענף ה-UX בעמודת "לפני".

@@ -19,10 +19,12 @@ public partial class PerekPage
         if (!HomeUxPreview.Enabled) { return; }
         HomePreviewButton.IsVisible = false;
         FanMenu.IsVisible = false;
-        ReaderToolbar.SetAppThemeColor(BackgroundColorProperty, Color.FromArgb("#F2EFE6"), Color.FromArgb("#111C2C"));
+        ReaderToolbar.SetAppThemeColor(BackgroundColorProperty, Color.FromArgb("#F5F7FB"), Color.FromArgb("#111C2C"));
         NormalNavigationTitle.HeightRequest = 52;
         NormalNavigationTitle.FontSize = 22;
         NormalNavigationTitle.CornerRadius = 16;
+        SemanticProperties.SetHint(NormalNavigationTitle, "בחירת ספר ופרק");
+        ToolTipProperties.SetText(NormalNavigationTitle, "בחירת ספר ופרק");
         ReaderMenuButton.WidthRequest = 52;
         ReaderMenuButton.HeightRequest = 52;
         ReaderMenuButton.CornerRadius = 16;
@@ -37,6 +39,17 @@ public partial class PerekPage
         MainGrid.IsClippedToBounds = true;
         ContentArea.Margin = new Thickness(0, -SharedTopBar.BarHeight, 0, 0);
         ReaderToolbar.ZIndex = 500;
+#if ANDROID
+        ReaderToolbar.Loaded += (_, _) =>
+        {
+            // RecyclerView children can otherwise paint above the nested
+            // navigation capsule when the content extends under the toolbar.
+            if (ReaderToolbar.Handler?.PlatformView is Android.Views.View nativeBar)
+            {
+                nativeBar.Elevation = 8 * (nativeBar.Resources?.DisplayMetrics?.Density ?? 1);
+            }
+        };
+#endif
         ReadingProgressBar.TranslationY = -SharedTopBar.BarHeight;
         ArticlesCollection.Margin = new Thickness(0, SharedTopBar.BarHeight, 0, 0);
         PerekCarousel.PropertyChanged += (_, e) =>
