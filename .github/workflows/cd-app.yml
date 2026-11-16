@@ -665,7 +665,8 @@ jobs:
     needs: deploy_app_store
     if: ${{ always() && needs.deploy_app_store.result == 'success' && ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
     permissions:
-      contents: read
+      # The called workflow uploads the release-notes manifest to the release.
+      contents: write
       actions: read
       deployments: write
     uses: ./.github/workflows/testflight-distribution.yml
