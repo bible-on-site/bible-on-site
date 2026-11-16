@@ -199,6 +199,9 @@ beforeAll(async () => {
  CREATE TABLE tanah_perek_view (id INT NOT NULL PRIMARY KEY,sefer_name VARCHAR(255) NOT NULL,additional_letter VARCHAR(2) NULL,perek_in_context INT NOT NULL,pasuk_count INT NULL) ENGINE=InnoDB;
  INSERT INTO tanah_perek_view VALUES (1,'בראשית',NULL,1,31),(2,'בראשית',NULL,2,25);
  INSERT INTO tanah_dedication VALUES (9,'הקדשת בדיקה');INSERT INTO tanah_moed VALUES (3,'מועד בדיקה');`);
+	await conn.query(
+		"ALTER TABLE tanah_perek_view ADD perek_id INT GENERATED ALWAYS AS(id) VIRTUAL",
+	);
 	const referenceSchema = readFileSync(
 		new URL(
 			"../../../../data/mysql/tanah_static_structure.sql",
@@ -318,6 +321,408 @@ afterAll(async () => {
 });
 
 describe("Article link contribution transactions", () => {
+	const coverageDraft = (
+		articleId: string,
+		perekId: number,
+		pasuk: number,
+	) => ({
+		title: "קישורים לבדיקה",
+		description: "הצעה לסקירה",
+		evidenceIndexes: [0],
+		changes: [
+			{
+				kind: "article_links",
+				targetId: articleId,
+				after: {
+					commands: [
+						{
+							relationshipKey: "coveringSources",
+							action: "add",
+							target: { pasukCoordinates: [{ perekId, pasuk }] },
+						},
+					],
+				},
+			},
+		],
+	});
+	async function claimedArticleTask(existing?: Contribution, body?: string) {
+		const registry = await import(
+				"~/server/tanahpedia/contribution-agent-registry.server"
+			),
+			worker = await import("~/server/tanahpedia/contribution-worker.server");
+		const agent = await registry.installRegisteredContributionAgent({
+			name: "Literal guard fixture",
+			provider: "local_llm",
+			model: "fixture-model",
+			enabled: true,
+		});
+		let item =
+			existing ??
+			(await service.createContribution(
+				{
+					kind: "issue",
+					title: "מקורות מפורשים",
+					description: "קישורים למאמר 1",
+					evidence,
+					scope: { kind: "article_links", targetId: "1" },
+				},
+				human,
+			));
+		item = await service.updateContribution(
+			{
+				...action(item, "assign"),
+				assignee: { kind: "local_llm", agentId: agent.id },
+			},
+			human,
+		);
+		if (body)
+			item = await service.updateContribution(
+				{ ...action(item, "comment"), body },
+				human,
+			);
+		const job = await worker.claimContributionGeneration({
+			workerId: "literal-guard-fixture",
+			protocolVersion: 2,
+			supportedTasks: ["issue_implementation", "pr_resolution"],
+			issueId: item.id,
+		});
+		if (!job || !("protocolVersion" in job) || job.protocolVersion !== 2)
+			throw new Error("Missing literal fixture lease");
+		const identity = {
+			issueId: job.issueId,
+			jobId: job.id,
+			version: job.version,
+			token: job.token,
+			apiVersion: job.apiVersion,
+			protocolVersion: 2,
+			model: "fixture-model",
+		};
+		const read = await worker.readContributionWorkerContext({
+			...identity,
+			name: "article_text",
+			arguments: { id: "1" },
+		});
+		return { item, worker, identity, receipts: [read.receipt] };
+	}
+	it("rejects an invented verse1 beside a valid literal26 before inserting any modern PR", async () => {
+		await conn.execute(
+			"UPDATE tanah_article SET content='<p>בראשית א כו.</p>' WHERE id=1",
+		);
+		const task = await claimedArticleTask();
+		await expect(
+			task.worker.completeContributionGeneration({
+				...task.identity,
+				receipts: task.receipts,
+				content: JSON.stringify({
+					outcome: "implemented",
+					summary: "קישורים",
+					responses: [],
+					pullRequests: [coverageDraft("1", 1, 26), coverageDraft("1", 1, 1)],
+				}),
+			}),
+		).rejects.toThrow("explicit literal citations");
+		const [prs] = await conn.execute(
+			"SELECT id FROM tanahpedia_contribution WHERE issue_id=?",
+			[task.item.id],
+		);
+		expect(prs).toEqual([]);
+		expect(api.write).not.toHaveBeenCalled();
+	});
+	it.each(["paired mismatch", "unresolved", "stale source", "stale chapter"])(
+		"rejects a retained generator's %s atomically across all drafts",
+		async (mode) => {
+			await conn.execute(
+				"UPDATE tanah_article SET content='<p>בראשית א כו.</p>' WHERE id=1",
+			);
+			await conn.execute("UPDATE tanah_article SET content=? WHERE id=2", [
+				mode === "unresolved" ? "<p>בראשית ב כו.</p>" : "<p>בראשית ב ג.</p>",
+			]);
+			const issue = await service.createContribution(
+				{
+					kind: "issue",
+					title: "בדיקת מפיק קודם",
+					description: "מקורות מאמרים",
+					evidence,
+					assignee: { kind: "local_llm" },
+				},
+				human,
+			);
+			const context = await import(
+					"~/server/tanahpedia/contribution-agent-context.server"
+				),
+				llm = await import("~/server/tanahpedia/contribution-llm.server");
+			let modelCatalogue = await store.withContributions((tx) =>
+				context.readContributionArticleGroundingContext(tx, issue.id, [
+					"1",
+					"2",
+				]),
+			);
+			if (mode === "unresolved") {
+				const chapter = await store.withContributions((tx) =>
+					context.readContributionAgentTool(tx, issue, "record", {
+						kind: "perek",
+						id: 2,
+					}),
+				);
+				modelCatalogue = context.mergeAgentCatalogues(
+					modelCatalogue,
+					chapter.catalogue,
+				);
+			}
+			if (mode === "stale source")
+				await conn.execute(
+					"UPDATE tanah_article SET content='<p>המקור הוסר</p>' WHERE id=2",
+				);
+			if (mode === "stale chapter")
+				await conn.execute("UPDATE tanah_perek SET pasuk_count=2 WHERE id=2");
+			try {
+				const second =
+					mode === "paired mismatch"
+						? coverageDraft("2", 1, 3)
+						: coverageDraft("2", 2, mode === "unresolved" ? 26 : 3);
+				await expect(
+					llm.createGeneratedContributionPrs(
+						{ issue, provider: "local_llm", modelCatalogue },
+						{
+							model: "fixture-model",
+							content: JSON.stringify({
+								pullRequests: [coverageDraft("1", 1, 26), second],
+							}),
+						},
+					),
+				).rejects.toThrow(/literal citations|chapter changed/);
+				const [prs] = await conn.execute(
+					"SELECT id FROM tanahpedia_contribution WHERE issue_id=?",
+					[issue.id],
+				);
+				expect(prs).toEqual([]);
+				expect(api.write).not.toHaveBeenCalled();
+			} finally {
+				await conn.execute("UPDATE tanah_perek SET pasuk_count=25 WHERE id=2");
+			}
+		},
+	);
+	it.each([false, true])(
+		"preserves a human's existing nonliteral proposal while copying exact feedback (sequence supplied:%s)",
+		async (includeChanges) => {
+			await conn.execute(
+				"UPDATE tanah_article SET content='<p>בראשית א כו.</p>' WHERE id=1",
+			);
+			const prior = await proposed([
+				{
+					...command,
+					target: { pasukCoordinates: [{ perekId: 1, pasuk: 1 }] },
+				},
+			]);
+			const quote = "תיאור מדויק 😀 ";
+			const task = await claimedArticleTask(
+				prior,
+				`Append exactly to the description: "${quote}"`,
+			);
+			const comment = task.item.events.find(
+				(event) => event.kind === "comment",
+			);
+			if (!comment) throw new Error("Missing exact-copy comment");
+			const changes = task.item.changes.map(({ kind, targetId, after }) => ({
+				kind,
+				targetId,
+				after,
+			}));
+			await task.worker.completeContributionGeneration({
+				...task.identity,
+				receipts: task.receipts,
+				content: JSON.stringify({
+					outcome: "revised",
+					summary: "הטקסט הועתק",
+					responses: [
+						{ commentId: comment.id, status: "addressed", body: "התיאור תוקן" },
+					],
+					draft: {
+						description: `${prior.description}\n${quote}`,
+						...(includeChanges ? { changes } : {}),
+					},
+				}),
+			});
+			const revised = await fresh(prior);
+			expect(revised.description).toBe(`${prior.description}\n${quote}`);
+			expect(revised.title).toBe(prior.title);
+			expect(
+				revised.changes.map(({ kind, targetId, after }) => ({
+					kind,
+					targetId,
+					after,
+				})),
+			).toEqual(changes);
+			expect(revised.evidence).toEqual(prior.evidence);
+			expect(revised.revision).toBe(prior.revision + 1);
+			expect(reviewStatus(revised)).toBe("required");
+			expect(
+				revised.events.find((event) => event.id === comment.id)?.body,
+			).toBe(comment.body);
+			expect(api.write).not.toHaveBeenCalled();
+		},
+	);
+	it("rejects a false addressed quotation before any PR revision", async () => {
+		const prior = await proposed();
+		const task = await claimedArticleTask(
+			prior,
+			'Replace the description with exactly "טקסט מדויק"',
+		);
+		const comment = task.item.events.find((event) => event.kind === "comment");
+		if (!comment) throw new Error("Missing exact-copy comment");
+		await expect(
+			task.worker.completeContributionGeneration({
+				...task.identity,
+				receipts: task.receipts,
+				content: JSON.stringify({
+					outcome: "revised",
+					summary: "תוקן",
+					responses: [
+						{ commentId: comment.id, status: "addressed", body: "תוקן" },
+					],
+					draft: { description: "paraphrased" },
+				}),
+			}),
+		).rejects.toThrow("requested exact text");
+		const unchanged = await fresh(prior);
+		expect(unchanged.revision).toBe(prior.revision);
+		expect(unchanged.description).toBe(prior.description);
+		expect(unchanged.changes).toEqual(prior.changes);
+		expect(
+			unchanged.events.some((event) => event.kind === "agent_response"),
+		).toBe(false);
+		expect(api.write).not.toHaveBeenCalled();
+	});
+	it.each(["unmatched pair", "source changed", "chapter changed"])(
+		"gates discovery engine both on %s before legacy rows/checkpoints/promotion",
+		async (mode) => {
+			await conn.execute(
+				"UPDATE tanah_article SET content='<p>בראשית א כו.</p>' WHERE id=1",
+			);
+			const pipeline = await import("~/server/article-link-pipeline");
+			pipeline._setLinkLlmCaller(async () => {
+				if (mode === "source changed")
+					await conn.execute(
+						"UPDATE tanah_article SET content='<p>המקור הוסר</p>' WHERE id=1",
+					);
+				if (mode === "chapter changed")
+					await conn.execute(
+						"UPDATE tanah_perek SET pasuk_count=25 WHERE id=1",
+					);
+				return {
+					model: "fixture-model",
+					promptTokens: null,
+					completionTokens: null,
+					content: JSON.stringify({
+						proposals: [
+							{
+								relationshipKey: "coveringSources",
+								action: "add",
+								target: {
+									citations: [
+										{
+											sefer: "בראשית",
+											perek: "א",
+											pasuk: mode === "unmatched pair" ? "א" : "כו",
+										},
+									],
+								},
+								evidence: [{ quote: "בראשית א כו" }],
+							},
+						],
+					}),
+				};
+			});
+			try {
+				const result = await pipeline.runLinkGeneration({
+					articleIds: [1],
+					engine: "both",
+					force: true,
+				});
+				expect(result.outcomes[0].outcome).toBe("error");
+				expect(result.outcomes[0].error).toMatch(
+					/literal citations|chapter changed/,
+				);
+				for (const table of [
+					"tanah_article_link_proposal",
+					"tanah_article_link_checkpoint",
+					"tanahpedia_article_link_import",
+					"tanahpedia_contribution",
+				])
+					expect(
+						(await conn.query(`SELECT COUNT(*) AS total FROM ${table}`))[0],
+					).toEqual([{ total: 0 }]);
+				expect(api.write).not.toHaveBeenCalled();
+			} finally {
+				pipeline._setLinkLlmCaller(null);
+				await conn.execute("UPDATE tanah_perek SET pasuk_count=31 WHERE id=1");
+			}
+		},
+	);
+	it("keeps literal discovery checkpoint replay on the same reviewed PR without another model call", async () => {
+		await conn.execute(
+			"UPDATE tanah_article SET content='<p>בראשית א כו.</p>' WHERE id=1",
+		);
+		const pipeline = await import("~/server/article-link-pipeline");
+		let calls = 0;
+		pipeline._setLinkLlmCaller(async () => {
+			calls++;
+			return {
+				model: "fixture-model",
+				promptTokens: null,
+				completionTokens: null,
+				content: JSON.stringify({
+					proposals: [
+						{
+							relationshipKey: "coveringSources",
+							action: "add",
+							target: {
+								citations: [{ sefer: "בראשית", perek: "א", pasuk: "כו" }],
+							},
+							evidence: [{ quote: "בראשית א כו" }],
+						},
+					],
+				}),
+			};
+		});
+		try {
+			const first = await pipeline.runLinkGeneration({
+				articleIds: [1],
+				engine: "llm",
+			});
+			expect(first.outcomes[0].outcome).toBe("generated");
+			const [before] = await conn.query(
+				"SELECT id FROM tanahpedia_contribution WHERE kind='pr'",
+			);
+			expect(before).toHaveLength(1);
+			const second = await pipeline.runLinkGeneration({
+				articleIds: [1],
+				engine: "llm",
+			});
+			expect(second.outcomes[0].outcome).toBe("skipped-checkpoint");
+			expect(
+				(
+					await conn.query(
+						"SELECT id FROM tanahpedia_contribution WHERE kind='pr'",
+					)
+				)[0],
+			).toEqual(before);
+			expect(calls).toBe(1);
+			expect(
+				(
+					await conn.query(
+						"SELECT prompt_version FROM tanah_article_link_checkpoint",
+					)
+				)[0],
+			).toEqual([{ prompt_version: "linking-v3" }]);
+			expect(
+				(await conn.query("SELECT * FROM tanah_article_covering_source"))[0],
+			).toEqual([]);
+			expect(api.write).not.toHaveBeenCalled();
+		} finally {
+			pipeline._setLinkLlmCaller(null);
+		}
+	});
 	it("grounds a body-only verse26 in the ordinary article text read without canonical writes", async () => {
 		await conn.execute(
 			"UPDATE tanah_article SET content='<p>🙂 פתיחה. בראשית א כו. סוף.</p>' WHERE id=1",
@@ -487,6 +892,7 @@ describe("Article link contribution transactions", () => {
 												commands: [
 													{
 														...command,
+														action: kind === "ambiguous" ? "remove" : "add",
 														target: {
 															pasukCoordinates: [{ perekId: 1, pasuk: 26 }],
 														},

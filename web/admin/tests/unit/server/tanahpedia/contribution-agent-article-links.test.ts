@@ -10,7 +10,21 @@ const catalogue: ModelCatalogue = {
 	people: [],
 	places: [],
 	entities: [],
-	targets: [{ kind: "article_links", id: "27" }],
+	targets: [
+		{
+			kind: "article_links",
+			id: "27",
+			current: { sourceHash: "a".repeat(64), coveringSources: [] },
+		},
+	],
+	articleGroundings: [
+		{
+			articleId: "27",
+			sourceHash: "a".repeat(64),
+			coordinates: [{ perekId: 1, pasuk: 2 }],
+			chapters: [{ id: 1, fingerprint: "b".repeat(64) }],
+		},
+	],
 	references: {
 		perek: [{ id: 1, name: "בראשית א" }],
 		dedication: [{ id: 2, name: "הקדשה" }],
@@ -46,6 +60,114 @@ const commands = [
 ];
 
 describe("article-link agent output authority", () => {
+	it("rejects a new verse even when its chapter was read unless the exact pair is literally grounded", () => {
+		expect(() =>
+			assertAgentArticleLinkReferences(
+				change([
+					{
+						...commands[1],
+						target: { pasukCoordinates: [{ perekId: 1, pasuk: 1 }] },
+					},
+				]),
+				catalogue,
+			),
+		).toThrow("explicit literal citations");
+	});
+	it("keeps literal decoder coordinate pairs separated by exact article identity", () => {
+		const second = {
+			...catalogue,
+			targets: [
+				...catalogue.targets,
+				{
+					kind: "article_links",
+					id: "28",
+					current: { sourceHash: "c".repeat(64), coveringSources: [] },
+				},
+			],
+			references: {
+				...catalogue.references,
+				perek: [
+					{ id: 1, name: "בראשית א" },
+					{ id: 2, name: "בראשית ב" },
+				],
+			},
+			articleGroundings: [
+				...(catalogue.articleGroundings ?? []),
+				{
+					articleId: "28",
+					sourceHash: "c".repeat(64),
+					coordinates: [{ perekId: 2, pasuk: 26 }],
+					chapters: [],
+				},
+			],
+		};
+		expect(() =>
+			assertAgentArticleLinkReferences(
+				change([
+					{
+						...commands[1],
+						target: { pasukCoordinates: [{ perekId: 2, pasuk: 26 }] },
+					},
+				]),
+				second,
+			),
+		).toThrow("explicit literal citations");
+		const schema = agentArticleLinkVariant(second) as unknown as {
+			oneOf: {
+				properties: {
+					targetId: { enum: string[] };
+					after: {
+						properties: {
+							commands: {
+								items: {
+									oneOf: {
+										properties: {
+											relationshipKey: { const: string };
+											action: { const: string };
+											target: {
+												properties: {
+													pasukCoordinates: {
+														items: {
+															oneOf: {
+																properties: {
+																	perekId: { const: number };
+																	pasuk: { enum: number[] };
+																};
+															}[];
+														};
+													};
+												};
+											};
+										};
+									}[];
+								};
+							};
+						};
+					};
+				};
+			}[];
+		};
+		const pairs = schema.oneOf.map((variant) => ({
+			article: variant.properties.targetId.enum[0],
+			pairs: variant.properties.after.properties.commands.items.oneOf
+				.find(
+					(command) =>
+						command.properties.relationshipKey.const === "coveringSources" &&
+						command.properties.action.const === "add",
+				)
+				?.properties.target.properties.pasukCoordinates.items.oneOf.flatMap(
+					(point) =>
+						point.properties.pasuk.enum.map((pasuk) => [
+							point.properties.perekId.const,
+							pasuk,
+						]),
+				),
+		}));
+		expect(pairs).toEqual([
+			{ article: "27", pairs: [[1, 2]] },
+			{ article: "28", pairs: [[2, 26]] },
+		]);
+	});
 	it("permits all four typed intents after their identities were read", () => {
 		expect(() =>
 			assertAgentArticleLinkReferences(change(commands), catalogue),
@@ -111,6 +233,44 @@ describe("article-link agent output authority", () => {
 		expect(schema).not.toContain('"enum":[]');
 		expect(schema).not.toContain("primaryPerek");
 		expect(schema).not.toContain("dedicationAssignments");
+	});
+	it("groups a thousand allowed pairs by chapter instead of repeating a decoder object per verse", () => {
+		const coordinates = Array.from({ length: 1000 }, (_, index) => ({
+			perekId: index < 500 ? 1 : 2,
+			pasuk: (index % 500) + 1,
+		}));
+		const source: ModelCatalogue = {
+			...catalogue,
+			references: {
+				...catalogue.references,
+				perek: [
+					{ id: 1, name: "פרק א" },
+					{ id: 2, name: "פרק ב" },
+				],
+			},
+			articleGroundings: [
+				{
+					articleId: "27",
+					sourceHash: "a".repeat(64),
+					coordinates,
+					chapters: [],
+				},
+			],
+		};
+		const encoded = JSON.stringify(agentArticleLinkVariant(source));
+		expect(encoded.length).toBeLessThan(20000);
+		expect(encoded.match(/"perekId":\{"const":/g)).toHaveLength(4);
+		expect(() =>
+			assertAgentArticleLinkReferences(
+				change([
+					{
+						...commands[1],
+						target: { pasukCoordinates: [{ perekId: 2, pasuk: 501 }] },
+					},
+				]),
+				source,
+			),
+		).toThrow("explicit literal citations");
 	});
 	it("ignores noncanonical or out-of-range supplied reference identities", () => {
 		const source = {

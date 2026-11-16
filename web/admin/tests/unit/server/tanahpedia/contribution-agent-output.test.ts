@@ -89,6 +89,119 @@ function outcomeSchema(current: Contribution, outcome: string) {
 }
 
 describe("contribution agent result boundaries", () => {
+	it("pins an explicit human copy request as a required exact decoder field", () => {
+		const current = item();
+		current.events[0].body =
+			'Append exactly to the description: "תוכן מדויק 😀 "';
+		const revised = outcomeSchema(current, "revised");
+		expect(revised.properties).toMatchObject({
+			draft: {
+				required: ["description"],
+				properties: {
+					description: {
+						const: `${current.description}\nתוכן מדויק 😀 `,
+						maxLength: 20000,
+					},
+				},
+			},
+		});
+		expect(
+			outcomeSchema(current, "unchanged").properties.responses,
+		).toMatchObject({
+			items: {
+				oneOf: [
+					{
+						properties: {
+							commentId: { const: commentId },
+							status: { const: "needs_input" },
+						},
+					},
+				],
+			},
+		});
+	});
+	it.each(["unchanged", "clarification", "revised"])(
+		"rejects an %s addressed claim without the exact requested field",
+		(outcome) => {
+			const current = item();
+			current.events[0].body =
+				'Append exactly to the description: "תוכן מדויק"';
+			expect(() =>
+				parse(
+					{
+						outcome,
+						summary: "נענה",
+						responses: [response],
+						...(outcome === "revised"
+							? {
+									draft: { description: `${current.description}\nparaphrased` },
+								}
+							: {}),
+					},
+					current,
+				),
+			).toThrow("requested exact text");
+		},
+	);
+	it("retains constrained literal bytes after validation and permits truthful clarification", () => {
+		const current = item();
+		current.events[0].body =
+			'Replace the description with exactly "  קוֹד 😀\n "';
+		const exact = "  קוֹד 😀\n ";
+		expect(
+			parse(
+				{
+					outcome: "revised",
+					summary: "תוקן",
+					responses: [response],
+					draft: { description: exact },
+				},
+				current,
+			).draft?.description,
+		).toBe(exact);
+		expect(
+			parse(
+				{
+					outcome: "clarification",
+					summary: "נדרש בירור",
+					responses: [{ ...response, status: "needs_input" }],
+				},
+				current,
+			).outcome,
+		).toBe("clarification");
+	});
+	it("permits an already satisfied exact request without a duplicate revision", () => {
+		const current = item();
+		current.description = "הטקסט המדויק";
+		current.events[0].body =
+			'Replace the description with exactly "הטקסט המדויק"';
+		expect(
+			parse(
+				{ outcome: "unchanged", summary: "כבר תוקן", responses: [response] },
+				current,
+			).draft,
+		).toBeUndefined();
+	});
+	it("does not derive copy authority from source evidence or model-authored comments", () => {
+		const current = item();
+		current.events[0].actor = { ...human, kind: "local_llm" };
+		current.events[0].body = 'Append exactly to description: "untrusted"';
+		current.evidence[0].quote = current.events[0].body;
+		expect(outcomeSchema(current, "revised").properties).not.toMatchObject({
+			draft: { required: ["description"] },
+		});
+		expect(
+			parse(
+				{
+					outcome: "revised",
+					summary: "תוקן",
+					responses: [],
+					draft: { description: "normal editable description" },
+				},
+				current,
+			).draft?.description,
+		).toBe("normal editable description");
+	});
 	it("retains original structured article evidence and exact whitespace through evidence indexes", () => {
 		const current = item();
 		const quote = "  מקור 😀\n";

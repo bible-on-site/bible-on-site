@@ -547,6 +547,40 @@ describe("contribution lifecycle", () => {
 			),
 		).rejects.toThrow("evidence");
 	});
+	it.each(["title", "description"] as const)(
+		"preserves only server-constrained %s bytes through a model revision",
+		async (field) => {
+			const item = await pr();
+			const actor: Contributor = {
+				id: "agent",
+				name: "Agent",
+				kind: "local_llm",
+				isDoradsoft: false,
+			};
+			const exact = "  קוֹד 😀\n ";
+			expect(
+				await applyContributionAgentRevision(
+					{} as never,
+					item,
+					{ [field]: exact },
+					actor,
+					{ verbatimFields: [field] },
+				),
+			).toBe(true);
+			expect(item[field]).toBe(exact);
+			const previous = structuredClone(item);
+			await expect(
+				applyContributionAgentRevision(
+					{} as never,
+					item,
+					{ [field]: `x${" ".repeat(field === "title" ? 255 : 20000)}` },
+					actor,
+					{ verbatimFields: [field] },
+				),
+			).rejects.toThrow("maximum length");
+			expect(item).toEqual(previous);
+		},
+	);
 	it("manual raw recovery atomically replaces failed assigned work and wakes it after commit", async () => {
 		let item = await createContribution(
 			{ ...input, assignee: { kind: "local_llm" } },

@@ -4,6 +4,7 @@ import {
 } from "@aws-sdk/client-bedrock-runtime";
 import type { PoolConnection } from "mysql2/promise";
 import { canonicalJson } from "~/lib/canonical-json";
+import type { ArticleLiteralGrounding } from "~/lib/tanahpedia/contribution-article-grounding";
 import { contributionIdentifierKey } from "~/lib/tanahpedia/contribution-identifiers";
 import {
 	CONTRIBUTION_RECORDS,
@@ -33,6 +34,7 @@ import {
 	agentArticleLinkVariant,
 	assertAgentArticleLinkReferences,
 } from "./contribution-agent-article-links.server";
+import { assertCurrentAgentArticleGrounding } from "./contribution-article-grounding.server";
 import { contributionCatalogue } from "./contribution-changes.server";
 import {
 	addEvent,
@@ -51,9 +53,10 @@ import {
 	FAMILY_UNION_TYPES,
 } from "./family-api-spec";
 
-const PROMPT_VERSION = "tanahpedia-issues-v3";
+const PROMPT_VERSION = "tanahpedia-issues-v4";
 
 export interface ModelCatalogue {
+	articleGroundings?: ArticleLiteralGrounding[];
 	references?: Record<
 		string,
 		{ id: string | number; name: string; ownerId?: string }[]
@@ -72,13 +75,14 @@ export interface ModelCatalogue {
 export function assertGeneratedReferences(
 	changes: ChangeInput[],
 	catalogue: ModelCatalogue,
+	preservedChanges: Contribution["changes"] = [],
 ): void {
 	const people = new Set(catalogue.people.map((person) => person.id));
 	const places = new Set(catalogue.places.map((place) => place.id));
 	const entities = new Set(catalogue.entities.map((entity) => entity.id));
 	for (const change of changes) {
 		if (change.kind === "article_links") {
-			assertAgentArticleLinkReferences(change, catalogue);
+			assertAgentArticleLinkReferences(change, catalogue, preservedChanges);
 			continue;
 		}
 		if (
@@ -185,6 +189,7 @@ export function contributionOutputSchema(
 	catalogue: ModelCatalogue,
 	evidenceCount: number,
 	issueScope?: IssueScope,
+	preservedChanges: Contribution["changes"] = [],
 ) {
 	const nullableString = { type: ["string", "null"] };
 	const nullableInt = { type: ["integer", "null"] };
@@ -200,7 +205,7 @@ export function contributionOutputSchema(
 		enum: catalogue.places.map((place) => place.id),
 	};
 	const variants: Record<string, unknown>[] = [];
-	const articleLinks = agentArticleLinkVariant(catalogue);
+	const articleLinks = agentArticleLinkVariant(catalogue, preservedChanges);
 	if (articleLinks) variants.push(articleLinks);
 	const variant = (
 		kind: string,
@@ -792,11 +797,28 @@ export async function prepareContributionGeneration(
 	];
 
 	const baseCatalogue = { people, places, entities, targets, references };
-	const modelCatalogue: ModelCatalogue = context.scopeContext
+	let modelCatalogue: ModelCatalogue = context.scopeContext
 		? (
 				await import("./contribution-agent-context.server")
 			).mergeAgentCatalogues(baseCatalogue, context.scopeContext.catalogue)
 		: baseCatalogue;
+	const articleIds = modelCatalogue.targets
+		.filter((target) => target.kind === "article_links")
+		.map((target) => target.id);
+	if (articleIds.length) {
+		const { mergeAgentCatalogues, readContributionArticleGroundingContext } =
+			await import("./contribution-agent-context.server");
+		const load = (conn: PoolConnection) =>
+			readContributionArticleGroundingContext(
+				conn,
+				context.issue.id,
+				articleIds,
+			);
+		modelCatalogue = mergeAgentCatalogues(
+			{ ...modelCatalogue, references: modelCatalogue.references ?? {} },
+			existingConn ? await load(existingConn) : await withContributions(load),
+		);
+	}
 	const schema = contributionOutputSchema(
 		modelCatalogue,
 		context.issue.evidence.length,
@@ -965,6 +987,11 @@ export async function createGeneratedContributionPrs(
 		for (const draft of drafts)
 			assertIssueScopeChanges(draft.changes, issue.scope);
 		await hooks.beforeCreate?.(conn, issue);
+		await assertCurrentAgentArticleGrounding(
+			conn,
+			drafts.flatMap((draft) => draft.changes),
+			modelCatalogue,
+		);
 		const prs: Contribution[] = [];
 		for (const draft of drafts)
 			prs.push(

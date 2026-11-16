@@ -17,6 +17,7 @@ import {
 	cataloguePerekLabel,
 	type TargetCatalogue,
 } from "~/lib/article-linking/catalogue";
+import { extractCitations } from "~/lib/article-linking/citations";
 import { buildHeuristicDrafts } from "~/lib/article-linking/heuristic";
 import { extractPlainText } from "~/lib/article-linking/html-text";
 import {
@@ -41,15 +42,26 @@ import {
 } from "~/lib/article-linking/validate";
 import { ARTICLE_RELATIONSHIP_REGISTRY } from "~/lib/article-relationships";
 import { canonicalJson } from "~/lib/canonical-json";
+import {
+	type ArticleLiteralGrounding,
+	assertLiteralArticleCoverage,
+	expandLiteralCitationCoordinates,
+} from "~/lib/tanahpedia/contribution-article-grounding";
+import {
+	type ArticleLinkChangeInput,
+	validateArticleLinkChange,
+} from "~/lib/tanahpedia/contribution-article-links";
 import { articleApiConfigured } from "./article-relationships-api";
 import { isCoveringSourceSchemaMissing } from "./covering-sources";
 import { execute, query, queryOne, transaction, txExecute } from "./db";
 import { callOpenAiJson, llmConfigured } from "./llm-json";
+import { assertCurrentAgentArticleGrounding } from "./tanahpedia/contribution-article-grounding.server";
 import {
 	articleLinkContributionIds,
 	ensureArticleLinkPromotionSchema,
 	promoteLegacyArticleLinkProposals,
 } from "./tanahpedia/contribution-article-import.server";
+import { articleSourceHash } from "./tanahpedia/contribution-article-links.server";
 
 // ---------------------------------------------------------------------------
 // Lazy schema ensure — same DDL as data/mysql/tanah_article_link_proposal_upgrade.sql,
@@ -614,6 +626,38 @@ export async function runLinkGeneration(
 			const contentHash = row.content_hash ?? "";
 			const plainText = articlePlainText(row);
 			const snapshot = await loadSnapshot(articleId);
+			const literalCitations = extractCitations(plainText, catalogue).resolved;
+			const grounding: ArticleLiteralGrounding = {
+				articleId: String(articleId),
+				sourceHash: articleSourceHash({
+					name: row.name,
+					abstract: row.abstract,
+					content: row.content,
+					authorId: row.author_id,
+				}),
+				coordinates: expandLiteralCitationCoordinates(literalCitations),
+				chapters: [
+					...new Set(literalCitations.map((citation) => citation.perekId)),
+				]
+					.sort((a, b) => a - b)
+					.map((id) => {
+						const perek = catalogue.perakim.find((perek) => perek.id === id);
+						if (!perek) throw new Error("Missing literal citation chapter");
+						return {
+							id,
+							fingerprint: createHash("sha256")
+								.update(
+									canonicalJson({
+										seferName: perek.seferName,
+										additionalLetter: perek.additionalLetter,
+										perekInContext: perek.perekInContext,
+										pasukCount: perek.pasukCount,
+									}),
+								)
+								.digest("hex"),
+						};
+					}),
+			};
 			const drafts: InsertableProposal[] = [];
 			const successfulGenerators = new Set<string>();
 
@@ -766,6 +810,48 @@ export async function runLinkGeneration(
 				successfulGenerators.add(generator);
 			}
 
+			const coverageChanges: ArticleLinkChangeInput[] = [];
+			for (const item of drafts) {
+				const draft = item.draft;
+				if (
+					draft.relationshipKey !== "coveringSources" ||
+					!["add", "replace"].includes(draft.action)
+				)
+					continue;
+				const coordinates =
+					"pasukCoordinates" in draft.target
+						? draft.target.pasukCoordinates
+						: undefined;
+				if (!coordinates?.length) {
+					if (
+						draft.action === "add" &&
+						item.generator !== HEURISTIC_GENERATOR_ID
+					)
+						throw new Error(
+							"Literal citations could not be resolved; no proposals were created",
+						);
+					continue;
+				}
+				const change = validateArticleLinkChange({
+					kind: "article_links",
+					targetId: String(articleId),
+					after: {
+						commands: [
+							{
+								relationshipKey: "coveringSources",
+								action: draft.action,
+								target: { pasukCoordinates: coordinates },
+							},
+						],
+					},
+				});
+				assertLiteralArticleCoverage(
+					change,
+					{ ...snapshot, sourceHash: grounding.sourceHash },
+					[grounding],
+				);
+				coverageChanges.push(change);
+			}
 			if (data.dryRun) {
 				outcomes.push({
 					articleId,
@@ -776,6 +862,13 @@ export async function runLinkGeneration(
 			}
 
 			const inserted = await transaction(async (conn) => {
+				await assertCurrentAgentArticleGrounding(conn, coverageChanges, {
+					people: [],
+					places: [],
+					entities: [],
+					targets: [],
+					articleGroundings: [grounding],
+				});
 				const count = await insertProposals(conn, drafts);
 				await promoteLegacyArticleLinkProposals(conn, articleId);
 				for (const generator of successfulGenerators) {
