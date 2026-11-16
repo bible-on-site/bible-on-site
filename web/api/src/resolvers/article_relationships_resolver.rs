@@ -119,7 +119,8 @@ impl ArticleRelationshipsMutation {
     /// transaction: `perekId`/`authorId` single-valued replacements and/or
     /// the `coveringSources` + `coverageVerified` set. Omitted fields keep
     /// their stored state; an explicit empty covering list clears it.
-    /// Freshness guards (`expectedContentHash`, `expectedCoveringSources`)
+    /// Freshness guards (`expectedContentHash`, `expectedCoveringSources`,
+    /// `expectedMoedIds`, `expectedCoverageVerified`)
     /// reject stale edits so a newer link is never overwritten by an unseen
     /// one. `previous` in the result is the supported undo record.
     /// Requires `Authorization: Bearer <ARTICLE_API_KEY>`.
@@ -477,6 +478,54 @@ mod tests {
             response.errors[0].extensions.as_ref().unwrap().get("code"),
             Some(&Value::from("BAD_REQUEST"))
         );
+    }
+
+    #[tokio::test]
+    async fn coverage_precondition_uses_the_graphql_boolean_and_rejects_both_stale_states() {
+        for expected in [true, false] {
+            let mut current = article_model(7);
+            current.coverage_verified = !expected;
+            let db = Database::from_connection(
+                MockDatabase::new(DatabaseBackend::MySql)
+                    .append_query_results([vec![current]])
+                    .into_connection(),
+            );
+            let response = schema(db.clone())
+                .execute(
+                    Request::new(format!(
+                        "mutation {{ updateArticleRelationships(articleId: 7, input: {{ source: \"admin\", expectedCoverageVerified: {expected} }}) {{ revalidation }} }}",
+                    ))
+                    .data(auth(Some("article-key"))),
+                )
+                .await;
+            assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+            assert!(
+                response.errors[0]
+                    .message
+                    .contains("coverage verification changed")
+            );
+            assert_eq!(
+                response.errors[0].extensions.as_ref().unwrap().get("code"),
+                Some(&Value::from("BAD_REQUEST"))
+            );
+            let log = format!("{:?}", db.get_connection().clone().into_transaction_log());
+            assert!(log.contains("FOR UPDATE"), "{log}");
+            for verb in ["INSERT INTO", "UPDATE `", "DELETE FROM"] {
+                assert!(!log.contains(verb), "unexpected write {verb}: {log}");
+            }
+        }
+    }
+
+    #[test]
+    fn coverage_precondition_is_a_nullable_boolean_in_the_public_input_schema() {
+        let db =
+            Database::from_connection(MockDatabase::new(DatabaseBackend::MySql).into_connection());
+        let sdl = schema(db).sdl();
+        let field = sdl
+            .lines()
+            .find(|line| line.trim_start().starts_with("expectedCoverageVerified:"))
+            .unwrap();
+        assert_eq!(field.trim(), "expectedCoverageVerified: Boolean");
     }
 
     #[tokio::test]
