@@ -179,7 +179,7 @@ jobs:
             sysctl -n machdep.cpu.brand_string hw.memsize hw.ncpu
             df -h /
             echo "== xcode =="
-            sudo xcode-select --switch "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)/Contents/Developer"
+            sudo xcode-select --switch "$(ls -d /Applications/Xcode_27.2*.app | sort -V | tail -1)/Contents/Developer"
             xcodebuild -version
             xcode-select -p
             ls -d /Applications/Xcode*.app
@@ -190,15 +190,15 @@ jobs:
       - name: Verify Xcode 27 layout used by iOS legs
         run: |
           set -euo pipefail
-          # app-mobile-e2e-runner.yml selects the newest /Applications/Xcode_27*.app
-          # on every iOS leg; the workload's iOS 27.2 SDK needs Xcode ≥27.2 —
-          # an image carrying only 27.0/27.1 fails every shard at setup, so the
-          # probe fails here instead — the iteration aborts cheaply.
-          newest=$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)
-          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$newest/Contents/Info.plist")
-          echo "Newest Xcode 27: $newest ($version)"
+          # app-mobile-e2e-runner.yml selects the matching /Applications/Xcode_27.2*.app
+          # on every iOS leg; the workload's iOS 27.2 SDK accepts exactly Xcode
+          # 27.2 — an image carrying only 27.0/27.1, or only newer/beta toolchains,
+          # fails every shard at setup, so the probe fails here instead.
+          selected=$(ls -d /Applications/Xcode_27.2*.app | sort -V | tail -1)
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$selected/Contents/Info.plist")
+          echo "Selected Xcode 27: $selected ($version)"
           minor=${version#*.}; minor=${minor%%.*}
-          [ "$minor" -ge 2 ] || { echo "Xcode $version < 27.2 required by the iOS 27.2 workload"; exit 1; }
+          [ "$minor" = 2 ] || { echo "Xcode $version != 27.2 required by the iOS 27.2 workload"; exit 1; }
       - name: Upload probe report
         if: always()
         uses: actions/upload-artifact@v7
