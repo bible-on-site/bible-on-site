@@ -111,6 +111,9 @@ export async function inspectMsStore({ flightId, releaseTag, tenantId, clientId,
 		selection: before.published ? "lastPublishedFlightSubmission" : "pendingFlightSubmission",
 		status, published: before.published === submissionId && status === "Published" && matched[0].fileStatus === "Uploaded",
 		package: matched[0], packages: packageRows, pointersStable: true, groupsVerified: true,
+		// Partner Center exposes package identity/status here, not a content
+		// digest. The release asset digest below remains GitHub metadata.
+		packageByteEqualityVerified: false,
 		hasListingMetadata: field(submission, "listings") != null,
 		release: { tag: releaseTag, source: provenance.ref, ciRunId: String(provenance.ci_run_id), assetName: expectedName, assetDigest: assets[0].digest },
 		verifiedAt: new Date().toISOString(),

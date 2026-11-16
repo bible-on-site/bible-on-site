@@ -30,10 +30,11 @@ function fixture(overrides = {}) {
 	return { calls, request };
 }
 
-test("inspection proves the immutable published package, stable pointers and configured group without store writes", async () => {
+test("inspection verifies published package identity and stable pointers while disclosing the byte-verification limit", async () => {
 	const { calls, request } = fixture();
 	const result = await inspectMsStore(input, request);
 	assert.equal(result.published, true);
+	assert.equal(result.packageByteEqualityVerified, false);
 	assert.equal(result.status, "Published");
 	assert.equal(result.package.version, "5.1.22.0");
 	assert.equal(result.release.source, "a".repeat(40));
