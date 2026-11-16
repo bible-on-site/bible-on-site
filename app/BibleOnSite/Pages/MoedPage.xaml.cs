@@ -86,6 +86,8 @@ public partial class MoedPage : ContentPage, IQueryAttributable //NOSONAR
             {
                 ReloadArticlesAsync = ShowUnitArticlesAsync,
                 CurrentUnit = () => _viewModel.Unit,
+                OpenNavigationAsync = () => ShellAppNavigator.Instance.GoToAsync(
+                    AppRoutes.FlyoutPage(AppRoutes.Moadim, Shell.Current.CurrentState.Location.OriginalString)),
                 ScrollReadingToStart = () => ReaderScrollTop.ScrollListToStart(MoedRowsCollection),
                 SelectArticle = id => _viewModel.SelectedArticleId = id,
                 CanGoPrevious = () => _viewModel.CanGoToPreviousUnit,
