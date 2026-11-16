@@ -26,7 +26,6 @@ import {
 	SesSuppressedError,
 } from "./ses-client.server";
 
-export { SesSuppressedError as DeliverySuppressed } from "./ses-client.server";
 export interface EmailRuntime extends SesConfig {
 	queueUrl: string;
 	accountId: string;
