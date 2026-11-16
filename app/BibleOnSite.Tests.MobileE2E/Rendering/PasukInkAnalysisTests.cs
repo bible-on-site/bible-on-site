@@ -257,8 +257,8 @@ public sealed class PasukInkAnalysisTests
     [Fact]
     public void RegionMeasureReadsOnlyTheRequestedRectangle()
     {
-        // The shared-capture path measures one rectangle of a full screenshot;
-        // ink outside the element's frame must not leak into the verdict.
+        // The shared-capture path measures one rectangle of a full screenshot,
+        // and ink outside the element's frame must not leak into the verdict.
         // Without the crop these two half-lines merge into one "full" band.
         var profile = PasukInkAnalysis.Measure(
             Capture(200, 50, new Line(2, 12, 0, 45), new Line(2, 12, 155, 199)),

@@ -20,7 +20,7 @@ namespace BibleOnSite.Controls;
 /// </summary>
 /// <remarks>
 /// TextKit splits rendering into a background pass (NSBackgroundColorAttribute
-/// runs — recitation highlighting) and a glyph pass (letters, decorations);
+/// runs — recitation highlighting) and a glyph pass (letters, decorations).
 /// UILabel folds both into its typesetter. DrawText performs both passes in
 /// UITextView order so highlighted spans keep their tint.
 /// </remarks>
