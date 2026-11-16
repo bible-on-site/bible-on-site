@@ -8,6 +8,7 @@
 
 import { toLetters } from "gematry";
 import { sefarim } from "@/data/db/sefarim";
+import { warmDerived } from "@/data/db/warm-derived";
 import { getPerekByPerekId } from "@/data/perek-dto";
 import { pasukPlainText } from "@/lib/tanach/pasuk-plain-text";
 import { normalizeSearchText } from "./normalize";
@@ -44,49 +45,61 @@ const server = globalThis as typeof globalThis & {
 const cache = server[corpusKey] ?? {};
 server[corpusKey] = cache;
 
-export function getPerekIndex(): PerekIndexEntry[] {
-	if (!cache.perakim) {
-		const entries: PerekIndexEntry[] = [];
-		for (let perekId = 1; perekId <= TOTAL_PERAKIM; perekId++) {
-			const perek = getPerekByPerekId(perekId);
-			entries.push({
-				perekId,
-				source: perek.source,
-				header: perek.header,
-				normalizedSource: normalizeSearchText(perek.source),
-				normalizedHeader: normalizeSearchText(perek.header),
+function buildPerekIndex(): PerekIndexEntry[] {
+	const entries: PerekIndexEntry[] = [];
+	for (let perekId = 1; perekId <= TOTAL_PERAKIM; perekId++) {
+		const perek = getPerekByPerekId(perekId);
+		entries.push({
+			perekId,
+			source: perek.source,
+			header: perek.header,
+			normalizedSource: normalizeSearchText(perek.source),
+			normalizedHeader: normalizeSearchText(perek.header),
+		});
+	}
+	return entries;
+}
+
+function buildPasukIndex(): PasukIndexEntry[] {
+	const entries: PasukIndexEntry[] = [];
+	for (const sefer of sefarim) {
+		const books = "additionals" in sefer ? sefer.additionals : [sefer];
+		for (const book of books) {
+			book.perakim.forEach((perek, perekIdx) => {
+				const perekId = book.perekFrom + perekIdx;
+				const { source } = getPerekByPerekId(perekId);
+				perek.pesukim.forEach((pasuk, pasukIdx) => {
+					const pasukNum = pasukIdx + 1;
+					const text = pasukPlainText(pasuk);
+					entries.push({
+						perekId,
+						pasukNum,
+						text,
+						normalized: normalizeSearchText(text),
+						reference: `${source} ${toLetters(pasukNum)}`,
+					});
+				});
 			});
 		}
-		cache.perakim = entries;
 	}
+	return entries;
+}
+
+/**
+ * Cold-start cost is dominated by building these indexes from the corpus on
+ * the event loop; production reads the verified build artifact instead
+ * (`warm-derived.ts`), keeping every entry identical while the fallback keeps
+ * the live computation for dev/test and any stale or missing artifact.
+ */
+export function getPerekIndex(): PerekIndexEntry[] {
+	if (!cache.perakim)
+		cache.perakim = warmDerived()?.perakim ?? buildPerekIndex();
 	return cache.perakim;
 }
 
 export function getPasukIndex(): PasukIndexEntry[] {
-	if (!cache.pesukim) {
-		const entries: PasukIndexEntry[] = [];
-		for (const sefer of sefarim) {
-			const books = "additionals" in sefer ? sefer.additionals : [sefer];
-			for (const book of books) {
-				book.perakim.forEach((perek, perekIdx) => {
-					const perekId = book.perekFrom + perekIdx;
-					const { source } = getPerekByPerekId(perekId);
-					perek.pesukim.forEach((pasuk, pasukIdx) => {
-						const pasukNum = pasukIdx + 1;
-						const text = pasukPlainText(pasuk);
-						entries.push({
-							perekId,
-							pasukNum,
-							text,
-							normalized: normalizeSearchText(text),
-							reference: `${source} ${toLetters(pasukNum)}`,
-						});
-					});
-				});
-			}
-		}
-		cache.pesukim = entries;
-	}
+	if (!cache.pesukim)
+		cache.pesukim = warmDerived()?.pesukim ?? buildPasukIndex();
 	return cache.pesukim;
 }
 

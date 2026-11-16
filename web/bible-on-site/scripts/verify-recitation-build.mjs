@@ -39,19 +39,59 @@ async function largestJavaScript(directory) {
 
 const canonicalFile = "src/data/db/sefaria-dump-5784-sivan-4.tanah_view.json";
 const original = await fingerprint(path.join(website, canonicalFile));
-const compressed = path.join(website, ".next/standalone", `${canonicalFile}.br`);
+const compressed = path.join(
+	website,
+	".next/standalone",
+	`${canonicalFile}.br`,
+);
 const decompressed = brotliDecompressSync(readFileSync(compressed));
 const standalone = {
 	bytes: decompressed.length,
 	sha256: createHash("sha256").update(decompressed).digest("hex"),
 	compressedBytes: (await stat(compressed)).size,
 };
-if (original.bytes !== standalone.bytes || original.sha256 !== standalone.sha256)
-	throw new Error("Standalone canonical data differs from the original source bytes");
-const largest = await largestJavaScript(path.join(website, ".next/standalone/.next/server"));
-console.log(JSON.stringify({ canonicalStandalone: standalone, largestServerJavaScript: largest }));
+if (
+	original.bytes !== standalone.bytes ||
+	original.sha256 !== standalone.sha256
+)
+	throw new Error(
+		"Standalone canonical data differs from the original source bytes",
+	);
+// The warm-up artifact must be traced into the standalone layout and bound
+// to exactly the corpus bytes the server hashes at boot (#2997): a missing or
+// stale artifact silently downgrades cold starts to live computation.
+const derivedFile = "src/data/db/warm-derived.generated.json.br";
+const derived = JSON.parse(
+	brotliDecompressSync(
+		readFileSync(path.join(website, ".next/standalone", derivedFile)),
+	).toString("utf8"),
+);
+const corpusBrSha256 = createHash("sha256")
+	.update(readFileSync(compressed))
+	.digest("hex");
+if (derived.corpusSha256 !== corpusBrSha256)
+	throw new Error(
+		"Warm-derived artifact is stale relative to the standalone corpus",
+	);
+if (
+	derived.perakim?.length !== 929 ||
+	!(derived.pesukim?.length >= 20000) ||
+	!derived.recitations?.length
+)
+	throw new Error("Warm-derived artifact is incomplete");
+const largest = await largestJavaScript(
+	path.join(website, ".next/standalone/.next/server"),
+);
+console.log(
+	JSON.stringify({
+		canonicalStandalone: standalone,
+		largestServerJavaScript: largest,
+	}),
+);
 if (largest.bytes >= original.bytes)
-	throw new Error("Production server JavaScript still contains a canonical-data-sized payload");
+	throw new Error(
+		"Production server JavaScript still contains a canonical-data-sized payload",
+	);
 
 const port = await getPort({ host: "127.0.0.1" });
 const server = spawn(process.execPath, [".next/standalone/server.js"], {
