@@ -13,7 +13,9 @@ import {
 	type Contribution,
 	type Evidence,
 	FIELD_LABELS,
+	type IssueScope,
 	validateChanges,
+	validateIssueScope,
 } from "~/lib/tanahpedia/contributions";
 import { ENTITY_TYPE_LABELS } from "~/lib/tanahpedia/labels";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
@@ -27,6 +29,7 @@ import {
 	ContributionArticleLinkFields,
 	type PreviewContributionArticle,
 } from "./ContributionArticleLinks";
+import { ContributionIssueScopeFields } from "./ContributionIssueScope";
 import {
 	ContributionRecordFields,
 	draftField,
@@ -576,6 +579,7 @@ export interface ComposeContribution {
 	changes: ChangeInput[];
 	issueId: string | null;
 	closeIssue: boolean;
+	scope?: IssueScope | null;
 }
 
 export function ContributionComposer({
@@ -604,6 +608,9 @@ export function ContributionComposer({
 		initial?.title ?? linkedIssue?.title ?? "",
 	);
 	const [description, setDescription] = useState(initial?.description ?? "");
+	const [scope, setScope] = useState<IssueScope | undefined>(
+		kind === "issue" ? initial?.scope : undefined,
+	);
 	const [assignee, setAssignee] = useState<Assignee>(
 		initial?.assignee ?? { kind: "unassigned" },
 	);
@@ -669,6 +676,13 @@ export function ContributionComposer({
 						changes: inputs,
 						issueId: initial?.issueId ?? linkedIssue?.id ?? null,
 						closeIssue,
+						...(kind === "issue"
+							? scope
+								? { scope: validateIssueScope(scope) }
+								: initial?.scope
+									? { scope: null }
+									: {}
+							: {}),
 					});
 				} catch (failure) {
 					setError(failure instanceof Error ? failure.message : "השמירה נכשלה");
@@ -709,6 +723,14 @@ export function ContributionComposer({
 					}
 				/>
 			</label>
+			{kind === "issue" && (
+				<ContributionIssueScopeFields
+					value={scope}
+					onChange={setScope}
+					catalogue={catalogue}
+					disabled={busy}
+				/>
+			)}
 			<AssigneePicker
 				value={assignee}
 				onChange={setAssignee}

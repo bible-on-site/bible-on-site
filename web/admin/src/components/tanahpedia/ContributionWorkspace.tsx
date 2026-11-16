@@ -52,6 +52,7 @@ import {
 	ContributionComposer,
 } from "./ContributionComposer";
 import { ContributionDiff } from "./ContributionDiff";
+import { ContributionIssueScopeSummary } from "./ContributionIssueScope";
 
 export interface ContributionSearch {
 	id?: string;
@@ -231,6 +232,7 @@ function RevisionSnapshot({
 			</summary>
 			<h3>{snapshot.title}</h3>
 			<p className="contribution-description">{snapshot.description}</p>
+			<ContributionIssueScopeSummary scope={snapshot.scope} />
 			<EvidenceList item={snapshot} />
 			<p>רצף הפעולות שנשמר בגרסה זו (API v{snapshot.apiVersion})</p>
 			<pre className="contribution-raw-sequence" dir="ltr">
@@ -578,6 +580,9 @@ function Detail({
 								</header>
 								<div className="contribution-card-body">
 									<p>{item.description}</p>
+									{item.kind === "issue" && (
+										<ContributionIssueScopeSummary scope={item.scope} />
+									)}
 									<EvidenceList item={item} />
 								</div>
 							</article>

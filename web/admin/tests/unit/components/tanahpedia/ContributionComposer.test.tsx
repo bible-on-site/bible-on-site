@@ -107,6 +107,57 @@ function description() {
 }
 
 describe("contribution composer", () => {
+	it("submits optional article scope separately from the issue's free text", async () => {
+		const { submit } = setup();
+		description();
+		fireEvent.change(screen.getByLabelText("סוג השינוי המבוקש"), {
+			target: { value: "article_links" },
+		});
+		fireEvent.change(screen.getByLabelText("מספר מאמר (רשות)"), {
+			target: { value: "123" },
+		});
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					description: "תיאור מבוסס ראיות",
+					scope: { kind: "article_links", targetId: "123" },
+					changes: [],
+				}),
+			),
+		);
+	});
+	it("retains an existing scope while editing and explicitly clears it when requested", async () => {
+		const initial = {
+			kind: "issue",
+			title: "Existing issue",
+			description: "Existing context",
+			assignee: { kind: "unassigned" },
+			evidence: [],
+			changes: [],
+			scope: { kind: "article_links", targetId: "123" },
+		} as unknown as Contribution;
+		const { submit } = setup("issue", { initial });
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenLastCalledWith(
+				expect.objectContaining({ scope: initial.scope }),
+			),
+		);
+		fireEvent.change(screen.getByLabelText("סוג השינוי המבוקש"), {
+			target: { value: "" },
+		});
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenLastCalledWith(
+				expect.objectContaining({ scope: null }),
+			),
+		);
+	});
+	it("keeps issue scope controls out of manual PR composition", () => {
+		setup("pr");
+		expect(screen.queryByText("הכוונה לסוכן (רשות)")).not.toBeInTheDocument();
+	});
 	it("retains structured evidence on note edits and drops stale offsets when its quote changes", async () => {
 		const articleSource = {
 			articleId: "17",

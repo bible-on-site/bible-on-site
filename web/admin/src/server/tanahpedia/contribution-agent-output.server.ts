@@ -1,6 +1,7 @@
 import { latestContributionAgentResponses } from "~/lib/tanahpedia/contribution-agent-responses";
 import type { ContributionAgentResponse } from "~/lib/tanahpedia/contribution-agents";
 import {
+	assertIssueScopeChanges,
 	type Contribution,
 	record,
 	textField,
@@ -29,8 +30,11 @@ export function contributionAgentResultSchema(
 	item: Contribution,
 	catalogue: ModelCatalogue,
 ) {
-	const prs = contributionOutputSchema(catalogue, item.evidence.length)
-		.properties.pullRequests;
+	const prs = contributionOutputSchema(
+		catalogue,
+		item.evidence.length,
+		item.kind === "issue" ? item.scope : undefined,
+	).properties.pullRequests;
 	const preservesEmpty =
 		item.kind === "pr" &&
 		item.changes.length === 0 &&
@@ -86,7 +90,10 @@ export function contributionAgentResultSchema(
 							},
 						}),
 					]
-				: item.evidence.length
+				: item.evidence.length &&
+						prs.items.properties.changes.items.oneOf.some(
+							(variant) => variant.properties,
+						)
 					? [branch("implemented", { pullRequests: { ...prs, minItems: 1 } })]
 					: []),
 			branch("unchanged"),
@@ -152,6 +159,15 @@ export function parseContributionAgentResult(
 		throw new Error("Only implemented issues may create PRs");
 	if (outcome !== "revised" && output.draft !== undefined)
 		throw new Error("Only revised PRs may contain a replacement draft");
+	if (outcome === "implemented" && item.scope) {
+		if (!Array.isArray(output.pullRequests))
+			throw new Error("Agent PRs are required");
+		for (const proposal of output.pullRequests)
+			assertIssueScopeChanges(
+				validateChanges(record(proposal).changes),
+				item.scope,
+			);
+	}
 	let draft:
 		| {
 				title?: string;

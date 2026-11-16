@@ -4,6 +4,7 @@ import {
 } from "@aws-sdk/client-bedrock-runtime";
 import type { PoolConnection } from "mysql2/promise";
 import { canonicalJson } from "~/lib/canonical-json";
+import { contributionIdentifierKey } from "~/lib/tanahpedia/contribution-identifiers";
 import {
 	CONTRIBUTION_RECORDS,
 	type ContributionField,
@@ -13,14 +14,18 @@ import {
 import { SOURCE_TARGETS } from "~/lib/tanahpedia/contribution-specials";
 import type {
 	ChangeInput,
+	ChangeState,
 	Contribution,
 	Contributor,
+	IssueScope,
 } from "~/lib/tanahpedia/contributions";
 import {
+	assertIssueScopeChanges,
 	record,
 	textField,
 	uuidField,
 	validateChanges,
+	validateIssueScope,
 } from "~/lib/tanahpedia/contributions";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
 import {
@@ -56,7 +61,12 @@ export interface ModelCatalogue {
 	people: { id: string; name: string }[];
 	places: { id: string; name: string }[];
 	entities: { id: string; name: string }[];
-	targets: { id: string; kind: string }[];
+	targets: {
+		id: string;
+		kind: string;
+		after?: ChangeState;
+		current?: ChangeState;
+	}[];
 }
 
 export function assertGeneratedReferences(
@@ -174,6 +184,7 @@ export function assertGeneratedReferences(
 export function contributionOutputSchema(
 	catalogue: ModelCatalogue,
 	evidenceCount: number,
+	issueScope?: IssueScope,
 ) {
 	const nullableString = { type: ["string", "null"] };
 	const nullableInt = { type: ["integer", "null"] };
@@ -437,6 +448,37 @@ export function contributionOutputSchema(
 			);
 		}
 	}
+	const scope = validateIssueScope(issueScope);
+	const scopedVariants = scope
+		? variants.flatMap((variant) => {
+				const properties = variant.properties as Record<
+					string,
+					{ const?: string; enum?: string[] }
+				>;
+				if (properties.kind.const !== scope.kind) return [];
+				if (scope.kind === "entry") {
+					const { targetId: _targetId, ...creation } = properties;
+					return [{ ...variant, properties: creation }];
+				}
+				const desiredTarget = scope.targetId;
+				if (desiredTarget === undefined) return [variant];
+				const target = properties.targetId?.enum?.find(
+					(id) =>
+						contributionIdentifierKey(id) ===
+						contributionIdentifierKey(desiredTarget),
+				);
+				if (!target) return [];
+				return [
+					{
+						...variant,
+						required: [
+							...new Set([...(variant.required as string[]), "targetId"]),
+						],
+						properties: { ...properties, targetId: { enum: [target] } },
+					},
+				];
+			})
+		: variants;
 	return {
 		type: "object",
 		additionalProperties: false,
@@ -466,7 +508,9 @@ export function contributionOutputSchema(
 							type: "array",
 							minItems: 1,
 							maxItems: 40,
-							items: { oneOf: variants },
+							items: {
+								oneOf: scopedVariants.length ? scopedVariants : [{ not: {} }],
+							},
 						},
 					},
 				},
@@ -616,7 +660,16 @@ export async function prepareContributionGeneration(
 			throw new Error("Assign the issue to Local LLM or AWS LLM first");
 		if (issue.evidence.length === 0)
 			throw new Error("Add evidence to the issue before generating PRs");
-		return { issue, catalogue: await contributionCatalogue(conn) };
+		const scopeContext = issue.scope
+			? await (
+					await import("./contribution-agent-context.server")
+				).readContributionIssueScopeContext(conn, issue)
+			: undefined;
+		return {
+			issue,
+			catalogue: await contributionCatalogue(conn),
+			scopeContext,
+		};
 	};
 	const context = existingConn
 		? await load(existingConn)
@@ -629,6 +682,7 @@ export async function prepareContributionGeneration(
 		title: context.issue.title,
 		description: context.issue.description,
 		evidence: context.issue.evidence,
+		...(context.issue.scope ? { scope: context.issue.scope } : {}),
 		comments,
 	};
 	const searchable = canonicalJson(issueContext).normalize("NFC");
@@ -737,17 +791,24 @@ export async function prepareContributionGeneration(
 			.map((id) => ({ id, name: "קבוצת דעות חלופיות" })),
 	];
 
-	const modelCatalogue = { people, places, entities, targets, references };
+	const baseCatalogue = { people, places, entities, targets, references };
+	const modelCatalogue: ModelCatalogue = context.scopeContext
+		? (
+				await import("./contribution-agent-context.server")
+			).mergeAgentCatalogues(baseCatalogue, context.scopeContext.catalogue)
+		: baseCatalogue;
 	const schema = contributionOutputSchema(
 		modelCatalogue,
 		context.issue.evidence.length,
+		context.issue.scope,
 	);
 	// The decoder's vocabulary constrains syntax; the model also needs the
 	// operation meanings in its messages. Include only context-supported kinds.
 	const available = new Set(
 		schema.properties.pullRequests.items.properties.changes.items.oneOf.map(
 			(variant) =>
-				(variant.properties as { kind: { const: string } }).kind.const,
+				(variant.properties as { kind: { const: string } } | undefined)?.kind
+					.const,
 		),
 	);
 	const guide = Object.entries(CONTRIBUTION_RECORDS)
@@ -760,11 +821,19 @@ export async function prepareContributionGeneration(
 		issue: issueContext,
 		catalogue: {
 			...modelCatalogue,
-			targets: targets.map(({ after, ...target }) => ({
-				...target,
-				current: after,
-			})),
+			targets: context.scopeContext
+				? modelCatalogue.targets.map(({ after, ...target }) => ({
+						...target,
+						current: target.current ?? after,
+					}))
+				: targets.map(({ after, ...target }) => ({
+						...target,
+						current: after,
+					})),
 		},
+		...(context.scopeContext
+			? { currentRecords: context.scopeContext.records }
+			: {}),
 	});
 	return {
 		issue: context.issue,
@@ -853,6 +922,7 @@ export async function createGeneratedContributionPrs(
 		)
 			throw new Error("The model cited evidence that is not in the issue");
 		const changes = validateChanges(draft.changes);
+		assertIssueScopeChanges(changes, context.issue.scope);
 		assertGeneratedReferences(changes, modelCatalogue);
 		const allowedCitations = new Set(
 			context.issue.evidence.map((source) => source.citation),
@@ -892,6 +962,8 @@ export async function createGeneratedContributionPrs(
 	return withContributions(async (conn) => {
 		const issue = await readContribution(conn, id, true);
 		assertVersion(issue, context.issue.version);
+		for (const draft of drafts)
+			assertIssueScopeChanges(draft.changes, issue.scope);
 		await hooks.beforeCreate?.(conn, issue);
 		const prs: Contribution[] = [];
 		for (const draft of drafts)

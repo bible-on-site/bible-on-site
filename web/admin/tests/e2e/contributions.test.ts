@@ -242,6 +242,62 @@ test.describe("Issues and typed pull requests", () => {
 			page.getByRole("combobox", { name: "תפקיד ההורה", exact: true }),
 		).toBeVisible();
 	});
+	test("keeps optional issue targets in versioned history while retaining free-form editing", async ({
+		page,
+	}, testInfo) => {
+		await page.goto("/?tab=issues&id=new");
+		const title = `תחום פנייה לבדיקה ${randomUUID().slice(0, 8)}`;
+		const description = "הטקסט החופשי נשמר גם כשמגדירים סוג שינוי ויעד לסוכן.";
+		await page.getByRole("textbox", { name: "כותרת", exact: true }).fill(title);
+		await page
+			.getByRole("textbox", { name: "תיאור", exact: true })
+			.fill(description);
+		await page.getByText("הכוונה לסוכן (רשות)", { exact: true }).click();
+		await page
+			.getByRole("combobox", { name: "סוג השינוי המבוקש", exact: true })
+			.selectOption("article_links");
+		await page.getByLabel("מספר מאמר (רשות)", { exact: true }).fill("1");
+		await capture(page, testInfo, "optional-issue-scope-composer");
+		await page
+			.getByRole("button", { name: "פתיחת פנייה", exact: true })
+			.click();
+		await expect(
+			page.getByRole("region", { name: "תחום הפנייה" }),
+		).toContainText("מאמר 1");
+		await page.getByRole("button", { name: "עריכה", exact: true }).click();
+		await expect(
+			page.getByRole("textbox", { name: "תיאור", exact: true }),
+		).toHaveValue(description);
+		await expect(
+			page.getByLabel("מספר מאמר (רשות)", { exact: true }),
+		).toHaveValue("1");
+		await page
+			.getByRole("combobox", { name: "סוג השינוי המבוקש", exact: true })
+			.selectOption("");
+		await page
+			.getByRole("button", { name: "שמירת עדכון", exact: true })
+			.click();
+		await expect(page.getByRole("region", { name: "תחום הפנייה" })).toHaveCount(
+			0,
+		);
+		await expect(
+			page.getByText(description, { exact: true }).first(),
+		).toBeVisible();
+		await page
+			.getByText(/^הצגת גרסה /)
+			.first()
+			.click();
+		await expect(
+			page.getByRole("region", { name: "תחום הפנייה" }),
+		).toContainText("מאמר 1");
+		await capture(page, testInfo, "optional-issue-scope-history");
+		await page
+			.getByRole("button", { name: "סגירה ללא מיזוג", exact: true })
+			.click();
+		await expect(
+			page.getByRole("button", { name: "פתיחה מחדש", exact: true }),
+		).toBeVisible();
+	});
 	test("assignment starts a workstation implementation and human PR comments trigger another reviewed pass", async ({
 		page,
 	}, testInfo) => {
@@ -251,6 +307,10 @@ test.describe("Issues and typed pull requests", () => {
 		await page
 			.getByLabel("תיאור", { exact: true })
 			.fill("נדרש ערך חדש לאברם עם מטא-נתונים בלבד, בהתבסס על המקור המצורף.");
+		await page.getByText("הכוונה לסוכן (רשות)", { exact: true }).click();
+		await page
+			.getByRole("combobox", { name: "סוג השינוי המבוקש", exact: true })
+			.selectOption("entry");
 		await page
 			.getByRole("combobox", { name: "אחראי", exact: true })
 			.selectOption("local_llm");
@@ -278,73 +338,84 @@ test.describe("Issues and typed pull requests", () => {
 			if (
 				request.url !== "/api/chat" ||
 				request.headers.authorization ||
-				!input.format
+				Boolean(input.format) === Array.isArray(input.tools)
 			) {
 				response.writeHead(400);
 				response.end();
 				return;
 			}
 			inferenceCalls++;
-			const { context, turns } = JSON.parse(input.messages[1].content);
+			const { context } = JSON.parse(input.messages[1].content);
 			const issue = context.item.kind === "issue";
-			const action =
-				!issue && turns.length === 0
-					? {
-							action: "tool",
-							name: "discussion",
-							arguments: { source: "item" },
-						}
-					: {
-							action: "complete",
-							result: issue
-								? {
-										outcome: "implemented",
-										summary: "נוצרה הצעה לסקירת אדם",
-										responses: [],
-										pullRequests: [
-											{
-												title: "ערך לאברם לפי המקור",
-												description: "מטא-נתונים עם מקור; ללא טקסט לערך.",
-												evidenceIndexes: [0],
-												changes: [
-													{
-														kind: "entry",
-														after: {
-															title: "אברם",
-															uniqueName: `worker-${randomUUID()}`,
-															entityType: "PERSON",
-															displayName: "אברם",
-														},
-													},
-												],
-											},
-										],
-									}
-								: {
-										outcome: "revised",
-										summary: "תיאור ההצעה עודכן לפי ההערה",
-										responses: context.pendingCommentIds.map(
-											(commentId: string) => ({
-												commentId,
-												status: "addressed",
-												body: "תיאור ההצעה עודכן; ההערה המקורית נשמרת",
-											}),
-										),
-										draft: {
-											description:
-												"התיאור תוקן בעקבות תגובת האדם, ונדרשת סקירה מחודשת.",
+			const toolMessages = input.messages.filter(
+				(message: { role: string }) => message.role === "tool",
+			);
+			const result = issue
+				? {
+						outcome: "implemented",
+						summary: "נוצרה הצעה לסקירת אדם",
+						responses: [],
+						pullRequests: [
+							{
+								title: "ערך לאברם לפי המקור",
+								description: "מטא-נתונים עם מקור; ללא טקסט לערך.",
+								evidenceIndexes: [0],
+								changes: [
+									{
+										kind: "entry",
+										after: {
+											title: "אברם",
+											uniqueName: `worker-${randomUUID()}`,
+											entityType: "PERSON",
+											displayName: "אברם",
 										},
 									},
-						};
-			if (!issue && turns.length)
-				expect(JSON.stringify(turns)).toContain(
+								],
+							},
+						],
+					}
+				: {
+						outcome: "revised",
+						summary: "תיאור ההצעה עודכן לפי ההערה",
+						responses: context.pendingCommentIds.map((commentId: string) => ({
+							commentId,
+							status: "addressed",
+							body: "תיאור ההצעה עודכן; ההערה המקורית נשמרת",
+						})),
+						draft: {
+							description:
+								"התיאור תוקן בעקבות תגובת האדם, ונדרשת סקירה מחודשת.",
+						},
+					};
+			if (!issue && toolMessages.length)
+				expect(JSON.stringify(toolMessages)).toContain(
 					"יש להסביר שההצעה עוסקת במטא-נתונים בלבד",
 				);
+			const message = Array.isArray(input.tools)
+				? !issue && toolMessages.length === 0
+					? {
+							role: "assistant",
+							content: "",
+							tool_calls: [
+								{
+									function: {
+										name: "discussion",
+										arguments: { source: "item" },
+									},
+								},
+							],
+						}
+					: { role: "assistant", content: "המידע זמין לניסוח התוצאה." }
+				: { role: "assistant", content: JSON.stringify(result) };
 			response.setHeader("Content-Type", "application/json");
 			response.end(
 				JSON.stringify({
 					model: "doradsoft",
-					message: { content: JSON.stringify(action) },
+					done: true,
+					done_reason: "stop",
+					prompt_eval_count: 100,
+					eval_count: 20,
+					message,
 				}),
 			);
 		});
@@ -379,7 +450,7 @@ test.describe("Issues and typed pull requests", () => {
 			const { stdout } = await run(issueId);
 			expect(stdout).toContain("completed");
 			expect(stdout).not.toContain("ויולד את אברם");
-			expect(inferenceCalls).toBe(1);
+			expect(inferenceCalls).toBe(2);
 			await expect(
 				page.getByText("הסוכן סיים את העבודה", { exact: true }),
 			).toBeVisible();
@@ -431,7 +502,7 @@ test.describe("Issues and typed pull requests", () => {
 					exact: true,
 				}),
 			).toBeVisible();
-			expect(inferenceCalls).toBe(3);
+			expect(inferenceCalls).toBe(5);
 			await expect(
 				page.getByText("יש להסביר שההצעה עוסקת במטא-נתונים בלבד", {
 					exact: true,

@@ -135,6 +135,60 @@ export type ChangeInput =
 	| { kind: "metadata"; targetId: string; after: { displayName: string } }
 	| { kind: "entry"; targetId?: string; after: EntryShellChange };
 
+export interface IssueScope {
+	kind: ChangeInput["kind"];
+	targetId?: string;
+}
+
+export const CONTRIBUTION_ISSUE_SCOPE_KINDS: readonly ChangeInput["kind"][] = [
+	"parent_child",
+	"union",
+	"place",
+	"metadata",
+	"entry",
+	"alias_mapping",
+	"source_reference",
+	"article_links",
+	...(Object.keys(
+		CONTRIBUTION_RECORDS,
+	) as (keyof typeof CONTRIBUTION_RECORDS)[]),
+];
+
+export function validateIssueScope(value: unknown): IssueScope | undefined {
+	if (value == null) return undefined;
+	const input = record(value, "scope");
+	rejectUnknown(input, ["kind", "targetId"]);
+	const kind = oneOf(input.kind, CONTRIBUTION_ISSUE_SCOPE_KINDS, "scope.kind");
+	if (input.targetId === undefined) return { kind };
+	if (kind === "entry")
+		throw new Error("Entry creation cannot select an existing target");
+	const targetId =
+		kind === "article_links"
+			? contributionArticleId(input.targetId)
+			: contributionRecordId(input.targetId, "scope.targetId");
+	return { kind, targetId };
+}
+
+/** Scope constrains model implementation of an issue, never subsequent human PR work. */
+export function assertIssueScopeChanges(
+	changes: ChangeInput[],
+	value?: IssueScope,
+): void {
+	const scope = validateIssueScope(value);
+	if (!scope) return;
+	for (const change of changes) {
+		if (
+			change.kind !== scope.kind ||
+			(scope.targetId !== undefined &&
+				(!change.targetId ||
+					contributionIdentifierKey(change.targetId) !==
+						contributionIdentifierKey(scope.targetId))) ||
+			(scope.kind === "entry" && change.targetId !== undefined)
+		)
+			throw new Error("The generated change is outside the issue scope");
+	}
+}
+
 export type ChangeValue =
 	| string
 	| number
@@ -199,6 +253,7 @@ export interface ContributionRevisionSnapshot {
 	changes: ReviewedChange[];
 	issueId: string | null;
 	closeIssue: boolean;
+	scope?: IssueScope;
 	at: string;
 }
 
@@ -216,6 +271,7 @@ export function contributionSnapshot(
 		changes: item.changes,
 		issueId: item.issueId,
 		closeIssue: item.closeIssue,
+		scope: item.scope,
 		at: new Date().toISOString(),
 	});
 }
@@ -270,6 +326,7 @@ export interface Contribution {
 	author: Contributor;
 	revisionAuthor?: Contributor;
 	assignee: Assignee;
+	scope?: IssueScope;
 	evidence: Evidence[];
 	changes: ReviewedChange[];
 	issueId: string | null;

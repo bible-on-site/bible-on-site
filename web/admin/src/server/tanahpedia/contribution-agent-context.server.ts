@@ -19,6 +19,7 @@ import {
 	type ContributionRevisionSnapshot,
 	type ReviewedChange,
 	reviewStatus,
+	validateIssueScope,
 } from "~/lib/tanahpedia/contributions";
 import { txQuery, txQueryOne } from "../db";
 import { readArticleLinkContext } from "./contribution-article-links.server";
@@ -862,6 +863,25 @@ function semanticItem(item: Contribution) {
 	};
 }
 
+async function preloadIssueScope(reader: ContextReader, item: Contribution) {
+	const scope =
+		item.kind === "issue" ? validateIssueScope(item.scope) : undefined;
+	if (scope?.targetId) await reader.target(scope.kind, scope.targetId);
+	return scope;
+}
+
+/** Exact scope reads also support the retained single-pass issue generator. */
+export async function readContributionIssueScopeContext(
+	conn: PoolConnection,
+	item: Contribution,
+) {
+	if (item.kind !== "issue" || !item.scope) return undefined;
+	const reader = new ContextReader(conn, item.id, false);
+	await reader.reference("alternative", item.id);
+	await preloadIssueScope(reader, item);
+	return { catalogue: reader.catalogue, records: reader.records };
+}
+
 function summary(item: Contribution) {
 	return {
 		id: item.id,
@@ -874,6 +894,7 @@ function summary(item: Contribution) {
 		revisionAuthor: item.revisionAuthor ?? item.author,
 		reviewStatus: item.kind === "pr" ? reviewStatus(item) : null,
 		assignee: item.assignee,
+		...(item.kind === "issue" && item.scope ? { scope: item.scope } : {}),
 		evidence: item.evidence,
 		changes: item.changes,
 		apiVersion: item.apiVersion ?? 1,
@@ -911,6 +932,7 @@ export async function readContributionAgentInitialContext(
 		lockReferences,
 	);
 	await reader.reference("alternative", issue?.id ?? current.id);
+	const scope = await preloadIssueScope(reader, current);
 	for (const change of current.changes) {
 		// Failed migrations retain their untouched operations for recovery. They
 		// remain visible in the summary but cannot select a domain SQL reader.
@@ -967,6 +989,18 @@ export async function readContributionAgentInitialContext(
 		),
 		pendingCommentIds: pending.map((event) => event.id),
 		currentRecords: reader.records,
+		...(scope?.targetId
+			? {
+					scopeTarget: {
+						kind: scope.kind,
+						id: scope.targetId,
+						readLocator: {
+							tool: "record",
+							arguments: { kind: `target:${scope.kind}`, id: scope.targetId },
+						},
+					},
+				}
+			: {}),
 	};
 	return {
 		data,
