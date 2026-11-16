@@ -321,6 +321,41 @@ afterAll(async () => {
 });
 
 describe("Article link contribution transactions", () => {
+	it("rejects an array article-link action before persisting or projecting an ordinary proposal", async () => {
+		await conn.query(
+			"INSERT INTO tanah_article_covering_source VALUES(1,1,1),(1,1,2)",
+		);
+		const [before] = await conn.query(
+			"SELECT * FROM tanah_article_covering_source ORDER BY article_id,perek_id,pasuk",
+		);
+		const [discussions] = await conn.query(
+			"SELECT id,version,data FROM tanahpedia_contribution ORDER BY id",
+		);
+		await expect(
+			proposed([
+				{
+					...command,
+					action: ["remove"],
+					target: { pasukCoordinates: [{ perekId: 1, pasuk: 1 }] },
+				},
+			]),
+		).rejects.toThrow("Unsupported article-link action");
+		expect(
+			(
+				await conn.query(
+					"SELECT * FROM tanah_article_covering_source ORDER BY article_id,perek_id,pasuk",
+				)
+			)[0],
+		).toEqual(before);
+		expect(
+			(
+				await conn.query(
+					"SELECT id,version,data FROM tanahpedia_contribution ORDER BY id",
+				)
+			)[0],
+		).toEqual(discussions);
+		expect(api.write).not.toHaveBeenCalled();
+	});
 	const coverageDraft = (
 		articleId: string,
 		perekId: number,
@@ -610,6 +645,56 @@ describe("Article link contribution transactions", () => {
 		expect(
 			unchanged.events.some((event) => event.kind === "agent_response"),
 		).toBe(false);
+		expect(api.write).not.toHaveBeenCalled();
+	});
+	it("rejects an array response status before exact-text acknowledgement handling or any revision", async () => {
+		const prior = await proposed();
+		const task = await claimedArticleTask(
+			prior,
+			'Replace the description with exactly "נוסח בדיקה מדויק"',
+		);
+		const comment = task.item.events.find((event) => event.kind === "comment");
+		if (!comment) throw new Error("Missing exact-copy comment");
+		const [canonical] = await conn.query(
+			"SELECT * FROM tanah_article ORDER BY id",
+		);
+		const [coverage] = await conn.query(
+			"SELECT * FROM tanah_article_covering_source ORDER BY article_id,perek_id,pasuk",
+		);
+		await expect(
+			task.worker.completeContributionGeneration({
+				...task.identity,
+				receipts: task.receipts,
+				content: JSON.stringify({
+					outcome: "revised",
+					summary: "תוקן",
+					responses: [
+						{
+							commentId: comment.id,
+							status: ["addressed"],
+							body: "תגובה שלא אושרה",
+						},
+					],
+					draft: { description: "נוסח בדיקה מדויק" },
+				}),
+			}),
+		).rejects.toThrow("Invalid agent response");
+		const unchanged = await fresh(prior);
+		expect(unchanged.description).toBe(prior.description);
+		expect(unchanged.revision).toBe(prior.revision);
+		expect(unchanged.changes).toEqual(prior.changes);
+		expect(unchanged.evidence).toEqual(prior.evidence);
+		expect(unchanged.events).toEqual(task.item.events);
+		expect(
+			(await conn.query("SELECT * FROM tanah_article ORDER BY id"))[0],
+		).toEqual(canonical);
+		expect(
+			(
+				await conn.query(
+					"SELECT * FROM tanah_article_covering_source ORDER BY article_id,perek_id,pasuk",
+				)
+			)[0],
+		).toEqual(coverage);
 		expect(api.write).not.toHaveBeenCalled();
 	});
 	it("rejects a misquoted acknowledgement despite the exact requested field without saving any revision", async () => {

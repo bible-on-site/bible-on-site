@@ -365,18 +365,21 @@ export function validateContributionList(
 	raw: unknown,
 ): ContributionListRequest {
 	const input = record(raw ?? {});
-	if (input.kind !== undefined && !["issue", "pr"].includes(String(input.kind)))
+	if (
+		input.kind !== undefined &&
+		(typeof input.kind !== "string" || !["issue", "pr"].includes(input.kind))
+	)
 		throw new Error("Invalid discussion kind");
 	if (
 		input.state !== undefined &&
-		!["open", "closed", "all"].includes(String(input.state))
+		(typeof input.state !== "string" ||
+			!["open", "closed", "all"].includes(input.state))
 	)
 		throw new Error("Invalid discussion state");
 	if (
 		input.assignee !== undefined &&
-		!["unassigned", "human", "aws_llm", "local_llm"].includes(
-			String(input.assignee),
-		)
+		(typeof input.assignee !== "string" ||
+			!["unassigned", "human", "aws_llm", "local_llm"].includes(input.assignee))
 	)
 		throw new Error("Invalid assignee filter");
 	if (

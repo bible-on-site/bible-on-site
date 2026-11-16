@@ -231,11 +231,12 @@ export function parseContributionAgentResult(
 	const output = record(JSON.parse(content), "agent result");
 	const outcome = output.outcome;
 	if (
+		typeof outcome !== "string" ||
 		!(
 			item.kind === "issue"
 				? ["implemented", "unchanged", "clarification"]
 				: ["revised", "unchanged", "clarification"]
-		).includes(String(outcome))
+		).includes(outcome)
 	)
 		throw new Error("Invalid agent outcome");
 	const allowedFields = [
@@ -275,7 +276,8 @@ export function parseContributionAgentResult(
 			Object.keys(response).some(
 				(key) => !["commentId", "status", "body"].includes(key),
 			) ||
-			!["addressed", "needs_input"].includes(String(response.status))
+			typeof response.status !== "string" ||
+			!["addressed", "needs_input"].includes(response.status)
 		)
 			throw new Error("Invalid agent response");
 		seen.add(commentId);

@@ -174,7 +174,10 @@ export function validateArticleLinkChange(
 				};
 			}
 			if (command.relationshipKey === "dedicationAssignments") {
-				if (!["add", "remove", "replace"].includes(String(command.action)))
+				if (
+					typeof command.action !== "string" ||
+					!["add", "remove", "replace"].includes(command.action)
+				)
 					throw new Error("Unsupported dedication assignment action");
 				return {
 					relationshipKey: "dedicationAssignments",
@@ -183,7 +186,8 @@ export function validateArticleLinkChange(
 				};
 			}
 			if (
-				!["add", "remove", "replace", "clear"].includes(String(command.action))
+				typeof command.action !== "string" ||
+				!["add", "remove", "replace", "clear"].includes(command.action)
 			)
 				throw new Error("Unsupported article-link action");
 			const action = command.action as "add" | "remove" | "replace" | "clear";
