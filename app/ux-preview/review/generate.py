@@ -39,6 +39,8 @@ def main():
     for number, item in enumerate(comparisons, 1):
         before = picture('before', item['before'], item['before_caption'])
         after = picture('after', item['after'], item['after_caption'])
+        before_md = before.replace('width="1080" height="2400"', 'width="300"')
+        after_md = after.replace('width="1080" height="2400"', 'width="300"')
         figures = []
         for side, img in [('before', before), ('after', after)]:
             label = 'לפני - הענף הראשי' if side == 'before' else 'אחרי - הצעת UX'
@@ -56,8 +58,8 @@ def main():
             f'## {item["title"]}', '', item['description'], '',
             '<table dir="rtl">', '<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>',
             '<tbody><tr>',
-            f'<td align="right">{before.replace("width=\"1080\" height=\"2400\"", "width=\"300\"")}<br>{escape(item["before_caption"])}</td>',
-            f'<td align="right">{after.replace("width=\"1080\" height=\"2400\"", "width=\"300\"")}<br>{escape(item["after_caption"])}</td>',
+            f'<td align="right">{before_md}<br>{escape(item["before_caption"])}</td>',
+            f'<td align="right">{after_md}<br>{escape(item["after_caption"])}</td>',
             '</tr></tbody></table>', ''
         ])
     sections.append(f'''<article id="motion">
@@ -114,8 +116,8 @@ def main():
         'פעולה ראשית בכחול מלא, פעולה משנית בלבן והסרה באדום. אותם סגנונות משמשים בבוררים, בהעדפות, בחבילות ובתמיכה.', '',
         '[ארבע דוגמאות בדף HTML](buttons.html) · [תמיכה במצב כהה](assets/after/support-dark.png)', '',
         '<p dir="rtl">'
-        '<img src="assets/after/extension-packs.png" width="240" alt="כפתורי הורדה ראשיים בכחול">'
-        '<img src="assets/after/support.png" width="240" alt="ייצוא לוגים כפעולה משנית לבנה"></p>', '',
+        + '<img src="assets/after/extension-packs.png" width="240" alt="כפתורי הורדה ראשיים בכחול">'
+        + '<img src="assets/after/support.png" width="240" alt="ייצוא לוגים כפעולה משנית לבנה"></p>', '',
     ])
     (ROOT / 'REVIEW.md').write_text('\n'.join(markdown), encoding='utf-8')
     print(f'Generated {len(comparisons)} comparisons against {baseline}')
