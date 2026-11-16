@@ -15,6 +15,9 @@ import {
 	type ModelCatalogue,
 } from "./contribution-llm.server";
 
+export const CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT =
+	"הנוסח המדויק שהתבקש נשמר בשדה.";
+
 export function pendingContributionAgentComments(item: Contribution): string[] {
 	const responses = latestContributionAgentResponses(item.events);
 	return item.events
@@ -58,6 +61,17 @@ export function assertContributionAgentVerbatimResult(
 		)
 			throw new Error(
 				"The agent did not preserve the human's requested exact text",
+			);
+		if (
+			result.responses.some(
+				(response) =>
+					constraint.commentIds.includes(response.commentId) &&
+					response.status === "addressed" &&
+					response.body !== CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT,
+			)
+		)
+			throw new Error(
+				"The agent did not use the required exact-text acknowledgement",
 			);
 	}
 }
@@ -117,6 +131,55 @@ export function contributionAgentResultSchema(
 			},
 		},
 	};
+	const exactResponses = (outcome: string) => ({
+		...shared.responses,
+		items: {
+			oneOf: commentIds.flatMap((commentId) => {
+				const constraints = verbatim.filter((constraint) =>
+					constraint.commentIds.includes(commentId),
+				);
+				const needsInput =
+					outcome !== "revised" &&
+					constraints.some(
+						(constraint) => item[constraint.field] !== constraint.expected,
+					);
+				const response = shared.responses.items;
+				const properties = {
+					...response.properties,
+					commentId: { const: commentId },
+				};
+				return constraints.length && !needsInput
+					? [
+							{
+								...response,
+								properties: {
+									...properties,
+									status: { const: "addressed" },
+									body: {
+										...properties.body,
+										const: CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT,
+									},
+								},
+							},
+							{
+								...response,
+								properties: { ...properties, status: { const: "needs_input" } },
+							},
+						]
+					: [
+							{
+								...response,
+								properties: {
+									...properties,
+									status: needsInput
+										? { const: "needs_input" }
+										: properties.status,
+								},
+							},
+						];
+			}),
+		},
+	});
 	const branch = (outcome: string, payload: Record<string, unknown> = {}) => ({
 		type: "object",
 		additionalProperties: false,
@@ -125,32 +188,7 @@ export function contributionAgentResultSchema(
 			outcome: { const: outcome },
 			...shared,
 			...payload,
-			...(outcome !== "revised" &&
-			verbatim.some(
-				(constraint) => item[constraint.field] !== constraint.expected,
-			)
-				? {
-						responses: {
-							...shared.responses,
-							items: {
-								oneOf: commentIds.map((commentId) => ({
-									...shared.responses.items,
-									properties: {
-										...shared.responses.items.properties,
-										commentId: { const: commentId },
-										status: verbatim.some(
-											(constraint) =>
-												constraint.commentIds.includes(commentId) &&
-												item[constraint.field] !== constraint.expected,
-										)
-											? { const: "needs_input" }
-											: shared.responses.items.properties.status,
-									},
-								})),
-							},
-						},
-					}
-				: {}),
+			...(verbatim.length ? { responses: exactResponses(outcome) } : {}),
 		},
 	});
 	return {
@@ -241,6 +279,16 @@ export function parseContributionAgentResult(
 		)
 			throw new Error("Invalid agent response");
 		seen.add(commentId);
+		if (
+			response.status === "addressed" &&
+			verbatim.some((constraint) =>
+				constraint.commentIds.includes(commentId),
+			) &&
+			response.body !== CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT
+		)
+			throw new Error(
+				"The agent did not use the required exact-text acknowledgement",
+			);
 		return {
 			commentId,
 			status: response.status as ContributionAgentResponse["status"],

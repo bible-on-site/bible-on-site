@@ -505,6 +505,9 @@ describe("Article link contribution transactions", () => {
 	it.each([false, true])(
 		"preserves a human's existing nonliteral proposal while copying exact feedback (sequence supplied:%s)",
 		async (includeChanges) => {
+			const { CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT } = await import(
+				"~/server/tanahpedia/contribution-agent-output.server"
+			);
 			await conn.execute(
 				"UPDATE tanah_article SET content='<p>בראשית א כו.</p>' WHERE id=1",
 			);
@@ -535,7 +538,11 @@ describe("Article link contribution transactions", () => {
 					outcome: "revised",
 					summary: "הטקסט הועתק",
 					responses: [
-						{ commentId: comment.id, status: "addressed", body: "התיאור תוקן" },
+						{
+							commentId: comment.id,
+							status: "addressed",
+							body: CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT,
+						},
 					],
 					draft: {
 						description: `${prior.description}\n${quote}`,
@@ -555,6 +562,11 @@ describe("Article link contribution transactions", () => {
 			).toEqual(changes);
 			expect(revised.evidence).toEqual(prior.evidence);
 			expect(revised.revision).toBe(prior.revision + 1);
+			expect(
+				revised.events
+					.flatMap((event) => event.responses ?? [])
+					.find((response) => response.commentId === comment.id)?.body,
+			).toBe(CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT);
 			expect(reviewStatus(revised)).toBe("required");
 			expect(
 				revised.events.find((event) => event.id === comment.id)?.body,
@@ -563,6 +575,9 @@ describe("Article link contribution transactions", () => {
 		},
 	);
 	it("rejects a false addressed quotation before any PR revision", async () => {
+		const { CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT } = await import(
+			"~/server/tanahpedia/contribution-agent-output.server"
+		);
 		const prior = await proposed();
 		const task = await claimedArticleTask(
 			prior,
@@ -578,7 +593,11 @@ describe("Article link contribution transactions", () => {
 					outcome: "revised",
 					summary: "תוקן",
 					responses: [
-						{ commentId: comment.id, status: "addressed", body: "תוקן" },
+						{
+							commentId: comment.id,
+							status: "addressed",
+							body: CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT,
+						},
 					],
 					draft: { description: "paraphrased" },
 				}),
@@ -591,6 +610,56 @@ describe("Article link contribution transactions", () => {
 		expect(
 			unchanged.events.some((event) => event.kind === "agent_response"),
 		).toBe(false);
+		expect(api.write).not.toHaveBeenCalled();
+	});
+	it("rejects a misquoted acknowledgement despite the exact requested field without saving any revision", async () => {
+		const prior = await proposed();
+		const task = await claimedArticleTask(
+			prior,
+			'Replace the description with exactly "נוסח בדיקה מדויק"',
+		);
+		const comment = task.item.events.find((event) => event.kind === "comment");
+		if (!comment) throw new Error("Missing exact-copy comment");
+		const [canonical] = await conn.query(
+			"SELECT * FROM tanah_article ORDER BY id",
+		);
+		const [coverage] = await conn.query(
+			"SELECT * FROM tanah_article_covering_source ORDER BY article_id,perek_id,pasuk",
+		);
+		await expect(
+			task.worker.completeContributionGeneration({
+				...task.identity,
+				receipts: task.receipts,
+				content: JSON.stringify({
+					outcome: "revised",
+					summary: "תוקן",
+					responses: [
+						{
+							commentId: comment.id,
+							status: "addressed",
+							body: "נוסח reactionary הועתק",
+						},
+					],
+					draft: { description: "נוסח בדיקה מדויק" },
+				}),
+			}),
+		).rejects.toThrow("exact-text acknowledgement");
+		const unchanged = await fresh(prior);
+		expect(unchanged.description).toBe(prior.description);
+		expect(unchanged.revision).toBe(prior.revision);
+		expect(unchanged.changes).toEqual(prior.changes);
+		expect(unchanged.evidence).toEqual(prior.evidence);
+		expect(unchanged.events).toEqual(task.item.events);
+		expect(
+			(await conn.query("SELECT * FROM tanah_article ORDER BY id"))[0],
+		).toEqual(canonical);
+		expect(
+			(
+				await conn.query(
+					"SELECT * FROM tanah_article_covering_source ORDER BY article_id,perek_id,pasuk",
+				)
+			)[0],
+		).toEqual(coverage);
 		expect(api.write).not.toHaveBeenCalled();
 	});
 	it.each(["unmatched pair", "source changed", "chapter changed"])(

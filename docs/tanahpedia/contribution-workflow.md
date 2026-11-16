@@ -408,9 +408,13 @@ description, v10 derives an exact field constraint from pending human comments.
 Both the decoder and final transaction enforce the original bytes, and a false
 addressed response is rejected before a revision is saved. Constrained agent
 fields preserve whitespace/Unicode while retaining existing size/nonblank checks.
+An addressed response to a recognized exact-copy request uses one fixed Hebrew
+acknowledgement, enforced by the decoder, parser and final transaction. The model
+cannot paraphrase the quotation in that acknowledgement; needs-input responses
+and unrelated comments retain their ordinary text. Existing audit text is never rewritten.
 Unclear, conflicting, negative or critical quotations stay outside this narrow
 mechanism; evidence and model-authored text cannot grant edit authority. Manual
-human editing is unchanged. API v5, protocol v2 and runtime v5 remain unchanged.
+human editing is unchanged. The v10 release retained API v5, protocol v2 and runtime v5.
 
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these
