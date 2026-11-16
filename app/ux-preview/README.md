@@ -4,7 +4,7 @@ This is a long-lived UX review branch. Keep PR #3385 in draft. Do not merge it,
 mark it ready, or enable auto-merge without Dorad's explicit instruction.
 
 Review the real emulator captures in [the GitHub comparison](review/REVIEW.md)
-or open [the static HTML gallery](review/index.html) locally. Both contain sixteen
+or open [the static HTML gallery](review/index.html) locally. Both contain seventeen
 screen comparisons against the actual default branch (`master`), plus a
 before/after continuous-scroll recording. Before is always on the right and
 After on the left, including the GitHub-rendered Markdown tables.
@@ -44,10 +44,10 @@ their existing native screens. No demonstration content is added to the database
 
 The daily chapter and index open a reader above home. All pages use the same
 large Back and Home controls. The preview disables the side drawer and removes
-the reader fan. Its dock uses explicit action labels: `תצוגת הטקסט` opens actual
-font/display preferences, `בחירת פירושים` opens the picker for inline commentary,
-and `מאמרי הפרק` opens articles with a separate count badge. In articles mode the
-first action becomes `חזרה לפסוקים`. Its chapter title opens the chapter picker;
+the reader fan. Its dock keeps `ניווט בתנ"ך` available in both text and articles,
+opening the reader's existing picker. `בחירת פירושים` opens inline commentary
+selection. `מאמרי הפרק` opens articles with a separate count badge; that same
+action becomes `חזרה לפרק` in articles mode. Its chapter title also opens the picker;
 the tools sheet opens search and other reading options. Secondary destinations
 have full-surface, single-column tiles within the same scrolling home page.
 
@@ -66,8 +66,8 @@ return home, choose a chapter in the index, visit the calendar and a content
 destination, then return. Repeat with large text and both appearance modes.
 
 The editorial home uses blue for primary actions, oversized Hebrew typography
-and cool neutral surfaces. The wide parasha and holiday cards share the daily
-card's dark blue, oversized type and faint background glyphs. Small tiles for
+and cool neutral surfaces. Home surfaces use white, navy (`#102648`) and blue
+(`#2866E7`). The wide learning cards use oversized type and faint background glyphs. Small tiles for
 Tanahpedia, traditional masora, authors, the bulletin, contact and donations
 alternate between the wide cards. Search stays fixed above home content
 and uses the existing `FloatingSearchBar` and `SearchViewModel`. Its `מה לחפש`
@@ -95,9 +95,9 @@ visibility, chapter swipes, system Back, index selection, populated calendar,
 destination returns, navigation search, content-result navigation, articles after
 a hidden text toolbar, and app links with two reader instances. An Android
 ANR fails the run immediately and records its screen. The reading-options check
-also verifies the display-settings destination, commentary explanation and
-position above the dock, Screen filter and result navigation, Bible navigation
-picker selection, and contextual return-to-verses action. The explicit fullscreen
+also verifies the dock's navigation picker in text and article modes, commentary
+explanation and coverage of the dock in Z order, Screen filter and result navigation,
+Bible navigation selection, and return through the articles action. The explicit fullscreen
 action is absent from the preview. Title surfaces and buttons share a 52dp height;
 hidden trailing actions do not reserve horizontal space.
 Keep that emulator free of manual input during the run.

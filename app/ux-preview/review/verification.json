@@ -40,12 +40,12 @@
     "shared search Screen kind",
     "Screen result navigation category",
     "full-width equal-height header",
-    "commentary sheet above dock",
     "no explicit fullscreen action",
     "initial controls visible",
     "both controls hidden after cooldown",
     "second drag and repeated cooldown",
-    "constant viewport"
+    "constant viewport",
+    "commentary overlays and covers dock in Z order"
   ],
   "baseline_branch": "master",
   "baseline_commit": "95c202eb5276e285e870b0187129daba9a732a54",
@@ -72,7 +72,7 @@
     "check_screen_navigation",
     "check_reading_options"
   ],
-  "unit_tests_passed": 4284,
+  "unit_tests_passed": 4287,
   "host_application_lines_covered": 20246,
   "host_application_lines_total": 20343,
   "instrumented_changed_application_lines_covered": 161,
@@ -137,6 +137,33 @@
     "passed": true,
     "holiday_catalogue_state": "Existing production GraphQL catalogue returned Internal Server Error; native destination navigation verified."
   },
-  "comparison_count": 16,
-  "rds_contract_tests_passed": 92
+  "comparison_count": 17,
+  "rds_contract_tests_passed": 92,
+  "navigation_revision": {
+    "passed": [
+      "home copy and single-column terms tile",
+      "commentary covers dock visually and intercepts its touch area",
+      "fixed navigation in text and articles; articles action returns to chapter",
+      "dock picker navigates to selected book and chapter"
+    ],
+    "date": "2026-11-16",
+    "viewport": [
+      27,
+      128,
+      1059,
+      2337
+    ],
+    "sheet_bounds": [
+      2,
+      1311,
+      1077,
+      2335
+    ],
+    "covered_dock_bounds": [
+      711,
+      2072,
+      1024,
+      2294
+    ]
+  }
 }

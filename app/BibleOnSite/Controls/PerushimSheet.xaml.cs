@@ -64,9 +64,9 @@ public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
         _expandedHeight = Math.Max(_panelHeight, maxExpandedHeight);
         if (Config.HomeUxPreview.Enabled)
         {
-            var dock = (Parent as Layout)?.Children.OfType<ReaderBottomBar>().FirstOrDefault();
-            Margin = new Thickness(12, 0, 12, Math.Max(dock?.Height ?? 0, ReaderBottomBar.TotalHeight) + 8);
-            var available = Math.Max(0, maxExpandedHeight - Margin.VerticalThickness);
+            ZIndex = 120; // Cover the dock (100), while menus (160) and the navigation picker (200) remain above this sheet.
+            Margin = Thickness.Zero;
+            var available = Math.Max(0, maxExpandedHeight);
             _panelHeight = Math.Min(_panelHeight, available);
             _expandedHeight = available;
         }
