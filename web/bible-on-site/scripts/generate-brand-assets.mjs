@@ -23,7 +23,7 @@ const defsStart = appIcon.indexOf("<defs>");
 if (artStart < 0 || defsStart < 0)
 	throw new Error("Unexpected brand icon structure");
 for (const [name, svg] of [
-	["appicon.svg", `${appIcon.slice(0, artStart)}</svg>\n`],
+	["appicon.svg", appIcon.slice(0, artStart).concat("</svg>\n")],
 	["appiconfg.svg", appIcon.slice(0, defsStart) + appIcon.slice(artStart)],
 	["appicon_full.svg", appIcon],
 ]) {

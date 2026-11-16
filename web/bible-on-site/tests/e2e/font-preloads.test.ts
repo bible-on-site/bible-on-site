@@ -9,19 +9,41 @@ test.describe("Al Heperek font loading", () => {
 			});
 			await page.goto(path);
 			await page.evaluate(() => document.fonts.ready);
-			const typography = await page.evaluate(() => ({
-				brand: getComputedStyle(document.documentElement)
+			const typography = await page.evaluate(() => {
+				const brand = getComputedStyle(document.documentElement)
 					.getPropertyValue("--font-al-heperek")
-					.trim(),
-				body: getComputedStyle(document.body).fontFamily,
-				loaded: document.fonts.status,
-			}));
+					.trim();
+				const primary = brand.split(",")[0].replace(/"/g, "");
+				return {
+					brand,
+					body: getComputedStyle(document.body).fontFamily,
+					loaded: Array.from(document.fonts).some(
+						(face) =>
+							face.family.replace(/"/g, "") === primary &&
+							face.weight === "400" &&
+							face.status === "loaded",
+					),
+				};
+			});
 			expect(typography.brand).not.toBe("");
 			expect(typography.body).toContain(
 				typography.brand.split(",")[0].replace(/"/g, ""),
 			);
-			expect(typography.loaded).toBe("loaded");
+			expect(typography.loaded).toBe(true);
 			expect(legacyRequests).toHaveLength(0);
+		});
+	}
+	for (const weight of ["Regular", "SemiBold", "Bold"]) {
+		test(`public ${weight} face can load in email clients across origins`, async ({
+			request,
+		}) => {
+			const response = await request.get(`/fonts/AlHeperekUI-${weight}.woff2`, {
+				headers: { Origin: "https://mail.example" },
+			});
+			expect(response.ok()).toBe(true);
+			expect(response.headers()["access-control-allow-origin"]).toBe("*");
+			expect(response.headers()["content-type"]).toContain("font/woff2");
+			expect((await response.body()).subarray(0, 4).toString()).toBe("wOF2");
 		});
 	}
 });

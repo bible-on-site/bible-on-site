@@ -185,6 +185,11 @@ const nextConfig = {
 
 	async headers() {
 		return [
+			// Authorized email content loads these public font assets across origins.
+			{
+				source: "/fonts/:path*",
+				headers: [{ key: "Access-Control-Allow-Origin", value: "*" }],
+			},
 			// Stable join routes (#2939) resolve admin-managed destinations at
 			// request time; the redirect may never be cached by browsers or
 			// the CDN.

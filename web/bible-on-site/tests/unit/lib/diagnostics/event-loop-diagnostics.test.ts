@@ -518,10 +518,7 @@ describe("createEventLoopDiagnostics", () => {
 			...deps,
 		});
 		handle.start();
-		expect(deps.setTimeout).toHaveBeenCalledWith(
-			expect.any(Function),
-			60_000,
-		);
+		expect(deps.setTimeout).toHaveBeenCalledWith(expect.any(Function), 60_000);
 	});
 
 	it("emits through the real GC observer, uptime, console sink and version", async () => {
@@ -536,17 +533,16 @@ describe("createEventLoopDiagnostics", () => {
 		const consoleSpy = jest
 			.spyOn(console, "log")
 			.mockImplementation(() => undefined);
+		const handle = createEventLoopDiagnostics({
+			intervalMs: 5000,
+			...defaults,
+		});
 		try {
-			const handle = createEventLoopDiagnostics({
-				intervalMs: 5000,
-				...defaults,
-			});
 			handle.start();
-			// Allocation churn guarantees the real GC observer delivers entries.
-			for (let i = 0; i < 200; i++) {
-				const churn = new Array(1e6).fill(i);
-				churn.length = 0;
-			}
+			// The test runner exposes V8 GC so this integration check does not
+			// allocate 1.6GB or depend on the heap's collection threshold.
+			expect(global.gc).toBeDefined();
+			global.gc?.();
 			await new Promise((resolve) => setImmediate(resolve));
 			await new Promise((resolve) => setImmediate(resolve));
 			setNow(5000);
@@ -562,8 +558,8 @@ describe("createEventLoopDiagnostics", () => {
 			expect(summary.version).toBe(packageJson.version);
 			expect(summary.uptimeSeconds).toBeGreaterThan(0);
 			expect(summary.gc.count).toBeGreaterThan(0);
-			handle.stop();
 		} finally {
+			handle.stop();
 			consoleSpy.mockRestore();
 		}
 	});
