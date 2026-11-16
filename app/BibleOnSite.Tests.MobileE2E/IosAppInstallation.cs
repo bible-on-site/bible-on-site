@@ -45,7 +45,7 @@ internal static class IosAppInstallation
                 remainingMs = (budget - started.Elapsed).TotalMilliseconds
             });
             File.AppendAllText(Path.Combine(configuration.ArtifactDirectory, "ios-preparation-process.jsonl"), json + "\n");
-            Console.Error.WriteLine("iOS preparation process: " + json);
+            Console.Out.WriteLine("iOS preparation process: " + json);
         }, Console.Error.WriteLine, "iOS preparation milestone");
         var portValue = environment("MOBILE_IOS_PREPARATION_PORT");
         var token = environment("MOBILE_IOS_PREPARATION_TOKEN");
