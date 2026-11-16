@@ -47,12 +47,12 @@ const saves = workflows.flatMap(({ name, workflow }) =>
 	),
 );
 
-test("all four verified-audio publishers are included in the trust matrix", () => {
+test("includes all four verified-audio publishers in the trust matrix", () => {
 	assert.equal(saves.length, 4);
 });
 
 for (const { name, job, step } of saves) {
-	test(`${name}/${job} shares audio only from master cache misses`, () => {
+	test(`shares ${name}/${job} audio only from master cache misses`, () => {
 		for (const [event, ref, expected] of [
 			["push", "refs/heads/master", true],
 			["workflow_dispatch", "refs/heads/master", true],
