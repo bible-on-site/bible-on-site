@@ -749,6 +749,9 @@ jobs:
             image=moby/buildkit:v0.22.0
 
       - name: Dockerize Admin
+        env:
+          # Browser-facing asset CDN opt-in (#2576); unset/empty keeps S3 URLs.
+          BROWSER_ASSETS_BASE_URL: ${{ vars.BROWSER_ASSETS_BASE_URL }}
         run: |
           docker buildx build --load \
             --platform linux/amd64 \
@@ -757,6 +760,7 @@ jobs:
             --progress=plain \
             --label "org.opencontainers.image.revision=$GITHUB_SHA" \
             --label "org.opencontainers.image.version=${{ steps.get_version.outputs.MODULE_VERSION }}" \
+            --build-arg ASSETS_BASE_URL="$BROWSER_ASSETS_BASE_URL" \
             -f ${{ env.ADMIN_DIRECTORY }}/Dockerfile \
             -t ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
@@ -836,6 +840,9 @@ jobs:
             image=moby/buildkit:v0.22.0
 
       - name: Dockerize Admin
+        env:
+          # Browser-facing asset CDN opt-in (#2576); unset/empty keeps S3 URLs.
+          BROWSER_ASSETS_BASE_URL: ${{ vars.BROWSER_ASSETS_BASE_URL }}
         run: |
           docker buildx build --load \
             --platform linux/arm64 \
@@ -844,6 +851,7 @@ jobs:
             --progress=plain \
             --label "org.opencontainers.image.revision=$GITHUB_SHA" \
             --label "org.opencontainers.image.version=${{ steps.get_version.outputs.MODULE_VERSION }}" \
+            --build-arg ASSETS_BASE_URL="$BROWSER_ASSETS_BASE_URL" \
             -f ${{ env.ADMIN_DIRECTORY }}/Dockerfile \
             -t ${{ env.ADMIN_DOCKER_IMAGE_NAME }}:v${{ steps.get_version.outputs.MODULE_VERSION }} \
             ${{ env.SHARED_ROOT_DIR }}
