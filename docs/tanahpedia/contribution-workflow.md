@@ -340,7 +340,7 @@ content-rebase path, which creates a new revision and requires renewed review.
 
 The explicit v4-to-v5 identity adapter adds article-link operations while keeping
 existing sequences and approvals intact. Agent instructions/tools advance
-independently to bundle v6; the worker protocol remains v2.
+independently to bundle v7; the worker protocol remains v2.
 
 Bundle v5 closes the `search`/`record` kind vocabulary against the same pure registry
 used by server dispatch: 28 reference families and 46 `target:<operationKind>` names.
@@ -356,6 +356,16 @@ Hebrew labels, including split-book letters. Full verse references are checked
 against known verse bounds; ambiguous book parts remain separate results. Book-only
 and free-text searches retain pagination. Exact reference validation locks only the
 chapter, book and additional-letter rows, without unrelated calendar joins.
+
+Bundle v7 adds deterministic citation candidates to `article_text`, using the
+existing discovery matcher over the same complete plaintext. Returned coordinates
+are integers with exact source quotes, absolute UTF-16 spans and source hashes;
+ambiguous citations remain held. Candidates overlap the requested text window,
+including references crossing its boundary, and have independent bounded
+`citationCursor`/`citationLimit` pagination with explicit total/nextCursor. Both
+resolved and identifiable held chapter dependencies join the current read receipts,
+so changed bounds or book parts invalidate completion. These candidates guide
+literal reference handling without removing reviewed semantic-link proposals.
 
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these

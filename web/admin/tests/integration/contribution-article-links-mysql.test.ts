@@ -199,6 +199,25 @@ beforeAll(async () => {
  CREATE TABLE tanah_perek_view (id INT NOT NULL PRIMARY KEY,sefer_name VARCHAR(255) NOT NULL,additional_letter VARCHAR(2) NULL,perek_in_context INT NOT NULL,pasuk_count INT NULL) ENGINE=InnoDB;
  INSERT INTO tanah_perek_view VALUES (1,'בראשית',NULL,1,31),(2,'בראשית',NULL,2,25);
  INSERT INTO tanah_dedication VALUES (9,'הקדשת בדיקה');INSERT INTO tanah_moed VALUES (3,'מועד בדיקה');`);
+	const referenceSchema = readFileSync(
+		new URL(
+			"../../../../data/mysql/tanah_static_structure.sql",
+			import.meta.url,
+		),
+		"utf8",
+	);
+	for (const table of ["tanah_sefer", "tanah_perek", "tanah_additional"]) {
+		const ddl = [
+			...referenceSchema.matchAll(
+				/CREATE TABLE `([^`]+)` \([\s\S]*?\) ENGINE[^;]*;/g,
+			),
+		].find((match) => match[1] === table)?.[0];
+		if (!ddl) throw new Error("Missing canonical chapter dependency fixture");
+		await conn.query(ddl);
+	}
+	await conn.query(
+		"INSERT INTO tanah_sefer(id,name,perek_id_from,perek_id_to) VALUES(1,'בראשית',1,2); INSERT INTO tanah_perek(id,perek,pasuk_count) VALUES(1,1,31),(2,2,25); CREATE TABLE tanah_author(id SMALLINT PRIMARY KEY,name TEXT NOT NULL,details TEXT NOT NULL) ENGINE=InnoDB; INSERT INTO tanah_author VALUES(7,'מחבר בדיקה','')",
+	);
 	configured.pathname = `/${schema}`;
 	configured.searchParams.set("ssl-mode", "DISABLED");
 	vi.stubEnv("DB_URL", configured.href);
@@ -299,6 +318,203 @@ afterAll(async () => {
 });
 
 describe("Article link contribution transactions", () => {
+	it("grounds a body-only verse26 in the ordinary article text read without canonical writes", async () => {
+		await conn.execute(
+			"UPDATE tanah_article SET content='<p>🙂 פתיחה. בראשית א כו. סוף.</p>' WHERE id=1",
+		);
+		const issue = await service.createContribution(
+			{
+				kind: "issue",
+				title: "קישור מקורות",
+				description: "בדיקת מקורות המאמר",
+				evidence,
+				scope: { kind: "article_links", targetId: "1" },
+			},
+			human,
+		);
+		const context = await import(
+			"~/server/tanahpedia/contribution-agent-context.server"
+		);
+		const result = await store.withContributions((tx) =>
+			context.readContributionAgentTool(
+				tx,
+				issue,
+				"article_text",
+				{ id: "1" },
+				true,
+			),
+		);
+		const data = result.data as {
+			text: string;
+			sourceHash: string;
+			citations: {
+				items: { quote: string; spanStart: number; spanEnd: number }[];
+			};
+		};
+		expect(result.data).toMatchObject({
+			citations: {
+				items: [
+					{
+						kind: "resolved",
+						perekId: 1,
+						pasuk: 26,
+						pasukTo: 26,
+						sourceHash: data.sourceHash,
+					},
+				],
+				total: 1,
+				nextCursor: null,
+			},
+		});
+		const candidate = data.citations.items[0];
+		expect(data.text.slice(candidate.spanStart, candidate.spanEnd)).toBe(
+			candidate.quote,
+		);
+		expect(candidate.quote).toBe("בראשית א כו");
+		expect(result.catalogue.references.perek).toEqual([
+			{ id: 1, name: "בראשית א" },
+		]);
+		expect((result.data as { records: unknown[] }).records).toContainEqual({
+			kind: "perek_coordinates",
+			id: 1,
+			current: {
+				seferName: "בראשית",
+				additionalLetter: null,
+				perekInContext: 1,
+				pasukCount: 31,
+			},
+		});
+		expect(api.write).not.toHaveBeenCalled();
+		const [links] = await conn.query(
+			"SELECT * FROM tanah_article_covering_source",
+		);
+		expect(links).toEqual([]);
+	});
+	it.each(["resolved", "ambiguous"] as const)(
+		"rejects changed chapter bounds for a %s article citation after the final RR snapshot",
+		async (kind) => {
+			await conn.execute("UPDATE tanah_article SET content=? WHERE id=1", [
+				`<p>בראשית א ${kind === "resolved" ? "כו" : "לב"}.</p>`,
+			]);
+			const registry = await import(
+					"~/server/tanahpedia/contribution-agent-registry.server"
+				),
+				worker = await import("~/server/tanahpedia/contribution-worker.server"),
+				context = await import(
+					"~/server/tanahpedia/contribution-agent-context.server"
+				);
+			const agent = await registry.installRegisteredContributionAgent({
+				name: "Citation fixture",
+				provider: "local_llm",
+				model: "fixture-model",
+				enabled: true,
+			});
+			const issue = await service.createContribution(
+				{
+					kind: "issue",
+					title: "בדיקת מקור",
+					description: "בדיקת קישורי מאמר",
+					evidence,
+					assignee: { kind: "local_llm", agentId: agent.id },
+				},
+				human,
+			);
+			const job = await worker.claimContributionGeneration({
+				workerId: "citation-fixture",
+				protocolVersion: 2,
+				supportedTasks: ["issue_implementation", "pr_resolution"],
+				issueId: issue.id,
+			});
+			if (!job || !("protocolVersion" in job) || job.protocolVersion !== 2)
+				throw new Error("Missing fixture lease");
+			const identity = {
+				issueId: job.issueId,
+				jobId: job.id,
+				version: job.version,
+				token: job.token,
+				apiVersion: job.apiVersion,
+				protocolVersion: 2,
+				model: "fixture-model",
+			};
+			const source = await worker.readContributionWorkerContext({
+				...identity,
+				name: "article_text",
+				arguments: { id: "1" },
+			});
+			expect(source.data).toMatchObject({
+				citations: { items: [{ kind }], total: 1 },
+			});
+			const target = await worker.readContributionWorkerContext({
+				...identity,
+				name: "record",
+				arguments: { kind: "target:article_links", id: "1" },
+			});
+			const writer = await db.pool.getConnection();
+			await writer.beginTransaction();
+			await writer.execute("UPDATE tanah_perek SET pasuk_count=? WHERE id=1", [
+				kind === "resolved" ? 25 : 35,
+			]);
+			const original = context.readContributionAgentTool;
+			let committed = false;
+			const commitAfterSnapshot = vi
+				.spyOn(context, "readContributionAgentTool")
+				.mockImplementation(async (...params) => {
+					if (params[4] && params[2] === "article_text" && !committed) {
+						await writer.commit();
+						committed = true;
+					}
+					return original(...params);
+				});
+			try {
+				await expect(
+					worker.completeContributionGeneration({
+						...identity,
+						receipts: [source.receipt, target.receipt],
+						content: JSON.stringify({
+							outcome: "implemented",
+							summary: "Draft source links",
+							responses: [],
+							pullRequests: [
+								{
+									title: "קישורי מאמר",
+									description: "לסקירה",
+									evidenceIndexes: [0],
+									changes: [
+										{
+											kind: "article_links",
+											targetId: "1",
+											after: {
+												commands: [
+													{
+														...command,
+														target: {
+															pasukCoordinates: [{ perekId: 1, pasuk: 26 }],
+														},
+													},
+												],
+											},
+										},
+									],
+								},
+							],
+						}),
+					}),
+				).rejects.toThrow("tool-read record");
+				expect(committed).toBe(true);
+				const [prs] = await conn.execute(
+					"SELECT id FROM tanahpedia_contribution WHERE issue_id=?",
+					[issue.id],
+				);
+				expect(prs).toEqual([]);
+				expect(api.write).not.toHaveBeenCalled();
+			} finally {
+				commitAfterSnapshot.mockRestore();
+				await writer.rollback();
+				writer.release();
+				await conn.execute("UPDATE tanah_perek SET pasuk_count=31 WHERE id=1");
+			}
+		},
+	);
 	it.each(["HTTP relationship write", "independent dedication transaction"])(
 		"waits out old %s before its metadata fence and invalidates reused prepared status metadata",
 		async (path) => {

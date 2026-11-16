@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
+import { articleCitationPage } from "~/lib/article-linking/citation-page";
 import { canonicalJson } from "~/lib/canonical-json";
 import { isContributionAgentReadKind } from "~/lib/tanahpedia/contribution-agent-read-kinds";
 import { latestContributionAgentResponses } from "~/lib/tanahpedia/contribution-agent-responses";
@@ -252,7 +253,19 @@ function articleTextPage(args: Record<string, unknown>) {
 		limit > 16000
 	)
 		throw new Error("Invalid article text page");
-	return { cursor, limit };
+	const citationCursor = args.citationCursor ?? 0;
+	const citationLimit = args.citationLimit ?? 25;
+	if (
+		typeof citationCursor !== "number" ||
+		!Number.isSafeInteger(citationCursor) ||
+		citationCursor < 0 ||
+		typeof citationLimit !== "number" ||
+		!Number.isInteger(citationLimit) ||
+		citationLimit < 1 ||
+		citationLimit > 50
+	)
+		throw new Error("Invalid article citation page");
+	return { cursor, limit, citationCursor, citationLimit };
 }
 
 function pageArguments(args: Record<string, unknown>) {
@@ -287,7 +300,7 @@ function argumentsFor(name: string, raw: unknown): Record<string, unknown> {
 		search: ["kind", "query", "cursor", "limit"],
 		record: ["kind", "id"],
 		related: ["cursor", "limit", "id", "section"],
-		article_text: ["id", "cursor", "limit"],
+		article_text: ["id", "cursor", "limit", "citationCursor", "citationLimit"],
 	};
 	if (!Object.hasOwn(fields, name))
 		throw new Error("Unsupported contribution agent tool");
@@ -776,24 +789,49 @@ export async function readContributionAgentTool(
 	}
 	if (name === "article_text") {
 		const id = contributionArticleId(args.id);
-		const { cursor, limit } = articleTextPage(args);
+		const page = articleTextPage(args),
+			{ cursor, limit } = page;
 		const article = await reader.article(id);
+		if (!article)
+			return {
+				data: { id, record: null, records: reader.records },
+				catalogue: reader.catalogue,
+			};
+		const citations = articleCitationPage(
+			article.plainText,
+			{
+				perakim: await searchAgentPerakim(conn, ""),
+				authors: [],
+				dedications: [],
+			},
+			{ ...page, sourceHash: article.state.sourceHash },
+		);
+		const dependencies = [
+			...new Set(
+				citations.items.flatMap((citation) =>
+					citation.kind === "resolved"
+						? [citation.perekId]
+						: (citation.dependencyPerekIds ?? []),
+				),
+			),
+		].sort((a, b) => a - b);
+		for (const perekId of dependencies)
+			await reader.reference("perek", perekId);
 		return {
-			data: article
-				? {
-						id,
-						title: article.title,
-						sourceHash: article.state.sourceHash,
-						contentHash: article.state.contentHash,
-						encoding: "UTF-16",
-						cursor,
-						total: article.plainText.length,
-						text: article.plainText.slice(cursor, cursor + limit),
-						nextCursor:
-							cursor + limit < article.plainText.length ? cursor + limit : null,
-						records: reader.records,
-					}
-				: { id, record: null, records: reader.records },
+			data: {
+				id,
+				title: article.title,
+				sourceHash: article.state.sourceHash,
+				contentHash: article.state.contentHash,
+				encoding: "UTF-16",
+				cursor,
+				total: article.plainText.length,
+				text: article.plainText.slice(cursor, cursor + limit),
+				citations,
+				nextCursor:
+					cursor + limit < article.plainText.length ? cursor + limit : null,
+				records: reader.records,
+			},
 			catalogue: reader.catalogue,
 		};
 	}
