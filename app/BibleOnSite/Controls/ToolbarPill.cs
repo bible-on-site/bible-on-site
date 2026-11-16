@@ -15,15 +15,15 @@ public class ToolbarPill : Border
         {
             CornerRadius = SharedTopBar.PillCornerRadius,
         };
-        Stroke = Colors.Transparent;
-        StrokeThickness = 0;
+        Stroke = Config.HomeUxPreview.Enabled ? Color.FromArgb("#E3E7ED") : Colors.Transparent;
+        StrokeThickness = Config.HomeUxPreview.Enabled ? 1 : 0;
         Padding = new Thickness(12, 0);
         HeightRequest = SharedTopBar.PillHeight;
         Margin = Config.HomeUxPreview.Enabled ? 0 : new Thickness(4, 0);
         VerticalOptions = LayoutOptions.Center;
         HorizontalOptions = LayoutOptions.Fill;
         this.SetAppThemeColor(BackgroundColorProperty,
-            Config.HomeUxPreview.Enabled ? Color.FromArgb("#E4EAF4") : LightColor,
+            Config.HomeUxPreview.Enabled ? Colors.White : LightColor,
             Config.HomeUxPreview.Enabled ? Color.FromArgb("#243C5D") : DarkColor);
     }
 }

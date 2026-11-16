@@ -23,11 +23,13 @@ public partial class PerekPage
         if (!HomeUxPreview.Enabled) { return; }
         HomePreviewButton.IsVisible = false;
         FanMenu.IsVisible = false;
-        ReaderToolbar.SetAppThemeColor(BackgroundColorProperty, Color.FromArgb("#F5F7FB"), Color.FromArgb("#111C2C"));
+        ReaderToolbar.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#111C2C"));
         NormalNavigationTitle.HeightRequest = 52;
         NormalNavigationTitle.FontSize = 22;
         NormalNavigationTitle.CornerRadius = 16;
-        NormalNavigationTitle.SetAppThemeColor(BackgroundColorProperty, Color.FromArgb("#E4EAF4"), Color.FromArgb("#243C5D"));
+        NormalNavigationTitle.BorderWidth = 1;
+        NormalNavigationTitle.BorderColor = Color.FromArgb("#E3E7ED");
+        NormalNavigationTitle.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#243C5D"));
         SemanticProperties.SetHint(NormalNavigationTitle, "בחירת ספר ופרק");
         ToolTipProperties.SetText(NormalNavigationTitle, "בחירת ספר ופרק");
         ReaderMenuButton.WidthRequest = 52;
@@ -35,7 +37,7 @@ public partial class PerekPage
         ReaderMenuButton.CornerRadius = 16;
         ReaderMenuButton.FontSize = 24;
         ReaderMenuButton.Text = Fonts.FluentUI.options_24_regular;
-        ReaderMenuButton.SetAppThemeColor(BackgroundColorProperty, Color.FromArgb("#E4EAF4"), Color.FromArgb("#243C5D"));
+        ReaderMenuButton.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#243C5D"));
         SemanticProperties.SetDescription(ReaderMenuButton, "כלי הקריאה");
         FinishSearchIntroduction();
         // The content occupies one permanent viewport. Only the OVERLAY bar

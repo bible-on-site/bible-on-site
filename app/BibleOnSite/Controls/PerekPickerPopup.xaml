@@ -20,7 +20,7 @@
         </BoxView>
 
         <!-- Picker container: from below perek header to above satellite buttons -->
-        <Border Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+        <Border x:Name="PickerCard" Stroke="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                 StrokeThickness="1"
                 BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}"
                 Padding="0"
@@ -35,10 +35,10 @@
 
             <Grid RowDefinitions="Auto,*,Auto">
                 <!-- Header -->
-                <Border Grid.Row="0"
+                <Border x:Name="PickerHeader" Grid.Row="0"
                         BackgroundColor="{StaticResource Primary}"
                         Padding="16,12">
-                    <Label Text="בחירת פרק"
+                    <Label x:Name="PickerHeading" Text="בחירת פרק"
                            FontSize="18"
                            FontAttributes="Bold"
                            TextColor="White"
