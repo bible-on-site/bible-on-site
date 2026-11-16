@@ -363,6 +363,8 @@ jobs:
         id: ios-boot
         if: inputs.mode != 'build' && (inputs.platform == 'iOS')
         shell: bash
+        env:
+          IOS_SIM_CACHE_HIT: ${{ steps.ios-sim-cache.outputs.cache-hit }}
         run: bun run --cwd app/mobile-e2e ios:boot:start 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/ios-boot-start.log"
 
       # The boot kicked above is still in flight; the wait also warms Appium's
@@ -376,6 +378,7 @@ jobs:
         if: inputs.mode != 'build' && (inputs.platform == 'iOS')
         background: true
         env:
+          IOS_SIM_CACHE_HIT: ${{ steps.ios-sim-cache.outputs.cache-hit }}
           # Keep the exact device selected by start; listing all devices again
           # can stall CoreSimulator while that device is already booting.
           MOBILE_UDID: ${{ steps.ios-boot.outputs.udid }}
