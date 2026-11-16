@@ -72,18 +72,25 @@ jobs:
           java-version: "17"
           verify-signature: true
       - name: 'Install MAUI Android workload'
-        # The head leg pins the workload set matching its SDK band; the base
-        # leg resolves whatever set its merge-base SDK band serves. Foreign-band
-        # sdk-manifests claiming the same packs abort the install — drop them.
+        # Both snapshot trees resolve their own SDK through global.json. SDK
+        # patches share a feature band (10.0.403 uses 10.0.400 manifests), and
+        # workload-set servicing versions do not follow SDK patch numbers.
+        # Keep this inline: older snapshot checkouts do not contain new helpers.
         run: |
-          band=$(dotnet --version)
-          if [ "${{ matrix.source }}" = 'head' ]; then
-            for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "$band" ] || sudo rm -rf "$d"; done
-            dotnet workload update
-            dotnet workload install maui-android --version "$band.1"
-          else
-            dotnet workload install maui-android
+          sdk_version=$(dotnet --version)
+          if [[ ! "$sdk_version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]{3})(-[0-9A-Za-z.-]+)?$ ]]; then
+            printf 'Unsupported .NET SDK version: %s\n' "$sdk_version" >&2
+            exit 1
           fi
+          feature_band="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((10#${BASH_REMATCH[3]} / 100 * 100))"
+          for manifests in "${DOTNET_ROOT:?}/sdk-manifests"/*; do
+            [ -d "$manifests" ] || continue
+            if [ "${manifests##*/}" != "$feature_band" ]; then
+              sudo rm -rf -- "$manifests"
+            fi
+          done
+          dotnet workload update
+          dotnet workload install maui-android
       - name: 'Restore NuGet projects'
         run: |
           # Read the Android TFM from whichever tree is checked out — the
