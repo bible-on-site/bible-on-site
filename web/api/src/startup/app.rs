@@ -63,7 +63,7 @@ impl ActixApp {
                     ))
             }
         })
-        .listen_auto_h2c(listener)?
+        .listen(listener)?
         .run();
         tracing::info!("Server running on port {}", port);
         Ok(Self {
