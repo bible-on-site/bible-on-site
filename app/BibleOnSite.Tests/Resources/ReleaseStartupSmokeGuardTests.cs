@@ -43,7 +43,7 @@ public class ReleaseStartupSmokeGuardTests
         // The guard must build the real Release pipeline — the configuration
         // carries profiled AOT, R8 and the analytics startup branch.
         Assert.Contains("SetConfiguration(\"Release\")", body);
-        Assert.Contains("\"net10.0-android\"", body);
+        Assert.Contains("\"net11.0-android\"", body);
         // DisableAnalytics is the switch that compiled the crash site out of
         // every green build while the store build died. Setting it here would
         // re-create the blind spot the leg exists to close (#2120 isolation is

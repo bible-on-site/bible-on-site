@@ -92,9 +92,8 @@ row-based notes DB, emits v2, and verifies every decoded record against the sour
 `--format sqlite` also emits a ready-to-query FTS5 search index next to the
 notes DB (verses + notes documents, `search_metadata` fingerprints binding it
 to the exact generation it was built from). The app adopts it instead of
-re-importing ~363K notes on-device. Its `.gz` is **not** committed — at ~121 MB
-it exceeds GitHub's push limit — so the index travels via CI artifacts into the
-same PAD/ODR pack.
+re-importing ~372K notes on-device. Its `.gz` is **not** committed. The index
+travels via CI artifacts into the same PAD/ODR pack.
 
 Rebuilding only the index without MongoDB:
 `--format search-index --input <v2 notes.sqlite> --output <index.sqlite>`
@@ -284,6 +283,21 @@ the matching catalog/notes/search SQLite triple with
 `app/devops/prepare_perushim_assets.py`; the search index ships through the CI
 artifact and is not committed. Updating only one catalog before generating the
 remaining outputs intentionally fails the baseline identity check.
+
+### Verify a published update
+
+Generation and publication are separate checks. Successful producer jobs and
+uploaded baseline artifacts do not mean that a production update was deployed.
+
+- Follow the normal master push CI through Cross Module CI and Release Data.
+  A skipped release job does not import its generated pack.
+- Match the data deployment to its source commit, CI run and attempt, and the
+  immutable SQL artifact ID and digest. Confirm the production deployment result.
+- Follow the matching website release through deployment, then check the serving
+  version, published work IDs, canonical commentary pages and live sitemap.
+- Follow native release and distribution status separately. Keep catalog, notes
+  and search fingerprints aligned; web numeric work IDs belong to another
+  namespace and must not be used to identify native notes.
 
 ### Excluded Titles
 

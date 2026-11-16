@@ -39,7 +39,9 @@ public partial class PerushimSheet : Border, IReaderPerushimSheetSurface
 
     public PerushimSheet()
     {
+        DebugLog.Write("[Startup] PerushimSheet InitializeComponent");
         InitializeComponent();
+        DebugLog.Write("[Startup] PerushimSheet constructed");
     }
 
     /// <summary>

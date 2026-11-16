@@ -58,6 +58,50 @@ public sealed class IosRelaunchEnvironmentTests
         Assert.False(IosPlatformAdapter.IsTransientLaunchError(persistent));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void StartupCorrectsOrientationBeforeLaunchAndOnlyCoverageDisablesAlertScans(bool coverageEnabled)
+    {
+        var executor = new RelaunchExecutor { InitialOrientation = "LANDSCAPE" };
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var environment = new Dictionary<string, string>
+        {
+            [ReaderStartupReadiness.LaunchIdEnvironmentVariable] = ReaderStartupReadiness.CreateLaunchId()
+        };
+        new IosPlatformAdapter().RestartApp(driver, environment, coverageEnabled);
+
+        var expected = coverageEnabled
+            ? new[] { "updateSettings", "terminateApp", "getOrientation", "setOrientation", "launchApp" }
+            : new[] { "terminateApp", "getOrientation", "setOrientation", "launchApp" };
+        Assert.Equal(expected, executor.StartupCommands);
+        Assert.Equal(environment[ReaderStartupReadiness.LaunchIdEnvironmentVariable],
+            Assert.Single(executor.Launches)[ReaderStartupReadiness.LaunchIdEnvironmentVariable]);
+        if (coverageEnabled)
+        {
+            var settings = Assert.Single(executor.Settings);
+            Assert.Equal("", settings["autoClickAlertSelector"]);
+            Assert.Single(settings);
+        }
+        else
+        {
+            Assert.Empty(executor.Settings);
+        }
+    }
+
+    [Fact]
+    public void EveryCoverageRestartSuppressesAlertScansBeforeTermination()
+    {
+        var executor = new RelaunchExecutor();
+        using var driver = new IosSnapshotDriver(executor, new AppiumOptions { PlatformName = "iOS" });
+        var adapter = new IosPlatformAdapter();
+        adapter.RestartApp(driver, null, true);
+        adapter.RestartApp(driver, null, true);
+        Assert.Equal(["updateSettings", "terminateApp", "getOrientation", "launchApp",
+            "updateSettings", "terminateApp", "launchApp"], executor.StartupCommands);
+        Assert.Equal(2, executor.Settings.Count);
+    }
+
     private static void AssertBaselineEnvironment(Dictionary<string, object> environment)
     {
         var baseline = MobilePlatformAdapter.IosE2eEnvironment;
@@ -72,6 +116,9 @@ public sealed class IosRelaunchEnvironmentTests
     {
         public int Terminations { get; private set; }
         public List<Dictionary<string, object>> Launches { get; } = [];
+        public List<string> StartupCommands { get; } = [];
+        public List<Dictionary<string, object>> Settings { get; } = [];
+        public string InitialOrientation { get; init; } = "PORTRAIT";
         public bool LaunchTimeout { get; init; }
         private readonly Dictionary<string, CommandInfo> _commands = [];
         public bool TryAddCommand(string name, CommandInfo? info) =>
@@ -88,12 +135,14 @@ public sealed class IosRelaunchEnvironmentTests
             }
             else if (command.Name == "terminateApp")
             {
+                StartupCommands.Add(command.Name);
                 Terminations++;
                 value = true;
             }
             else if (command.Name == DriverCommand.ExecuteScript)
             {
                 Assert.Equal("mobile: launchApp", command.Parameters["script"]);
+                StartupCommands.Add("launchApp");
                 var args = Assert.IsType<Dictionary<string, object>>(
                     Assert.Single((IEnumerable<object>)command.Parameters["args"]!));
                 Assert.Equal("com.tanah.daily929", args["bundleId"]);
@@ -109,7 +158,18 @@ public sealed class IosRelaunchEnvironmentTests
             }
             else if (command.Name == "getOrientation")
             {
-                value = "PORTRAIT";
+                StartupCommands.Add(command.Name);
+                value = InitialOrientation;
+            }
+            else if (command.Name == "setOrientation")
+            {
+                StartupCommands.Add(command.Name);
+                Assert.Equal("PORTRAIT", command.Parameters["orientation"]);
+            }
+            else if (command.Name == "updateSettings")
+            {
+                StartupCommands.Add(command.Name);
+                Settings.Add(Assert.IsType<Dictionary<string, object>>(command.Parameters["settings"]));
             }
             return Task.FromResult(new Response("relaunch-session", value, status));
         }

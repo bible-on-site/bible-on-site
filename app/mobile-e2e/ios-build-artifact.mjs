@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 const execute = promisify(execFile);
-export const appBundle = "app/BibleOnSite/bin/Debug/net10.0-ios/iossimulator-arm64/BibleOnSite.app";
+export const appBundle = "app/BibleOnSite/bin/Debug/net11.0-ios/iossimulator-arm64/BibleOnSite.app";
 const projectOutputs = [
   "app/devops/bin/Debug", "app/devops/obj",
   "app/BibleOnSite.Tests.MobileE2E/bin/Debug", "app/BibleOnSite.Tests.MobileE2E/obj",
@@ -18,10 +18,10 @@ const requiredFiles = [
   `${appBundle}/_CodeSignature/CodeResources`,
   "app/devops/bin/Debug/_build.dll", "app/devops/bin/Debug/_build.deps.json",
   "app/devops/bin/Debug/_build.runtimeconfig.json", "app/devops/obj/project.assets.json",
-  "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.dll",
-  "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.deps.json",
-  "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/BibleOnSite.Tests.MobileE2E.runtimeconfig.json",
-  "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net10.0/testconfig.json",
+  "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net11.0/BibleOnSite.Tests.MobileE2E.dll",
+  "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net11.0/BibleOnSite.Tests.MobileE2E.deps.json",
+  "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net11.0/BibleOnSite.Tests.MobileE2E.runtimeconfig.json",
+  "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net11.0/testconfig.json",
   "app/BibleOnSite.Tests.MobileE2E/obj/project.assets.json",
   "coverage-app/template.opencover.xml", "coverage-app/coverage-manifest.json",
 ];

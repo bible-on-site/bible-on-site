@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using BibleOnSite.Tests.MobileE2E.Configuration;
 using BibleOnSite.Tests.MobileE2E.Pages;
 using BibleOnSite.Tests.MobileE2E.Platforms;
@@ -78,14 +79,14 @@ public abstract class MobileDeviceTest : IAsyncLifetime
             // the session still re-attempts teardown before creating anything.
             if (!TransportRecovery(exception))
             {
-                SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
+                SaveStartupDiagnostics(exception);
                 throw;
             }
             Output.WriteLine($"{Configuration.Platform}: adb transport recovered; acquiring the session once more.");
         }
         catch (Exception exception)
         {
-            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
+            SaveStartupDiagnostics(exception);
             throw;
         }
         try
@@ -94,10 +95,20 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         }
         catch (Exception exception)
         {
-            SaveDiagnostics($"SessionStartup-{Guid.NewGuid():N}", "failed", exception);
+            SaveStartupDiagnostics(exception);
             throw;
         }
         return default;
+    }
+
+    private void SaveStartupDiagnostics(Exception exception)
+    {
+        var name = $"SessionStartup-{Guid.NewGuid():N}";
+        if (exception is ReaderStartupTimeoutException readinessFailure)
+        {
+            FailureDiagnostics.BeforeStartupFailure(name, Driver?.SessionId?.ToString(), Output.WriteLine, readinessFailure);
+        }
+        FailureDiagnostics.PreserveFailure(() => SaveDiagnostics(name, "failed", exception), Output.WriteLine);
     }
 
     // The collection fixture owns the driver's lifetime, so a finished test
@@ -137,6 +148,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     private void Run(Action body, string name)
     {
+        var scenarioStartedAtUtc = DateTimeOffset.UtcNow;
         // The caller-member name is the [Fact]/[Theory] method; combining it
         // with the declaring type reproduces the xUnit FullyQualifiedName the
         // coverage tree uses as test identity (#2085). That identity also names
@@ -157,7 +169,7 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         }
         catch
         {
-            FailureDiagnostics.BeforeFailure(test, Driver?.SessionId?.ToString(), Output.WriteLine);
+            FailureDiagnostics.BeforeFailure(test, Driver?.SessionId?.ToString(), Output.WriteLine, scenarioStartedAtUtc);
             FailureDiagnostics.PreserveFailure(WriteDriverTelemetry, Output.WriteLine);
             FailureDiagnostics.PreserveFailure(() =>
             {
@@ -205,9 +217,29 @@ public abstract class MobileDeviceTest : IAsyncLifetime
         // Attribute session creation, app restart, startup wait and coverage
         // collection to the scenario that follows them.
         DriverTelemetry.Reset();
-        AcquireSession();
+        var launchId = Configuration.Platform == MobilePlatform.IOS && AppCoverage.Enabled
+            ? ReaderStartupReadiness.CreateLaunchId()
+            : null;
+        AcquireSession(launchId);
         Page = new(Driver!, Platform);
-        Page.WaitForStartup();
+        if (launchId == null)
+        {
+            Page.WaitForStartup();
+            if (Configuration.Platform == MobilePlatform.IOS)
+            {
+                MobilePlatformAdapter.EnsurePortrait(Driver!);
+            }
+        }
+        else
+        {
+            var budget = TimeSpan.FromSeconds(45);
+            var startup = Stopwatch.StartNew();
+            _ = ReaderStartupReadiness.WaitForReady(launchId, budget);
+            // Creation/recovery can inherit landscape. Read orientation only
+            // after readiness, counting correction in the same startup budget.
+            MobilePlatformAdapter.EnsurePortrait(Driver!);
+            Page.WaitForStartup(budget - startup.Elapsed);
+        }
         // Launch code (App.xaml.cs, MauiProgram, startup navigation) only ever
         // runs before the first reset; attribute it to a startup dump so the
         // merged report still counts it (#1232). Later connects overwrite it —
@@ -218,7 +250,21 @@ public abstract class MobileDeviceTest : IAsyncLifetime
 
     // Unit coverage substitutes IMobileDeviceSession to observe this path
     // without a device.
-    protected void AcquireSession() => _session.Acquire(LaunchEnvironment);
+    protected void AcquireSession() => AcquireSession(null);
+
+    protected void AcquireSession(string? launchId)
+    {
+        if (launchId == null)
+        {
+            _session.Acquire(LaunchEnvironment);
+            return;
+        }
+        var environment = LaunchEnvironment is { } supplied
+            ? new Dictionary<string, string>(supplied)
+            : new Dictionary<string, string>();
+        environment[ReaderStartupReadiness.LaunchIdEnvironmentVariable] = launchId;
+        _session.Acquire(environment);
+    }
 
     protected void SaveDiagnostics(string name, string outcome) =>
         SaveDiagnostics(name, outcome, null);
