@@ -126,7 +126,7 @@ jobs:
 
       - name: Build the Hebrew TestFlight notes for this exact build
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        id: changelog
+        id: generated_notes
         env:
           GH_TOKEN: ${{ github.token }}
           STORE_NOTES_OVERRIDE: ${{ inputs.release_notes_override }}
@@ -150,17 +150,12 @@ jobs:
             exit 1
           fi
           if [ -s "$RUNNER_TEMP/store-notes/release-notes.txt" ]; then
-            cp "$RUNNER_TEMP/store-notes/release-notes.txt" "$RUNNER_TEMP/testflight-changelog.txt"
+            cp "$RUNNER_TEMP/store-notes/release-notes.txt" "$RUNNER_TEMP/testflight-changelog-source.txt"
           else
             # Releases that predate curated entries have no Hebrew manifest —
             # only those rollbacks keep the legacy English changelog path.
-            node "$RUNNER_TEMP/release-notes.mjs" --testflight "app-v$MODULE_VERSION" > "$RUNNER_TEMP/testflight-changelog.txt"
+            node "$RUNNER_TEMP/release-notes.mjs" --testflight "app-v$MODULE_VERSION" > "$RUNNER_TEMP/testflight-changelog-source.txt"
           fi
-          {
-            echo "CHANGELOG<<EOF"
-            cat "$RUNNER_TEMP/testflight-changelog.txt"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
 
       - name: Install Fastlane
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -174,6 +169,16 @@ jobs:
             export PATH="$FASTLANE_BIN_DIR:$PATH"
           fi
           fastlane --version
+
+      - name: Prepare one final notes file with the installed Fastlane sanitizer
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: changelog
+        run: |
+          node "$RUNNER_TEMP/testflight-build.mjs" prepare-notes \
+            "$RUNNER_TEMP/store-notes/release-notes-manifest.json" \
+            "$RUNNER_TEMP/testflight-changelog-source.txt" \
+            "$RUNNER_TEMP/testflight-changelog.txt" \
+            "$RUNNER_TEMP/testflight-notes-preparation.json"
 
       - name: Distribute the exact iOS build to the beta group
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -208,6 +213,8 @@ jobs:
           API_KEY_PATH: ${{ runner.temp }}/testflight-api-key.json
           TESTFLIGHT_BETA_GROUP: ${{ secrets.TESTFLIGHT_BETA_GROUP_NAME }}
           EXPECTED_TESTFLIGHT_NOTES_FILE: ${{ runner.temp }}/testflight-changelog.txt
+          TESTFLIGHT_NOTES_MANIFEST: ${{ runner.temp }}/store-notes/release-notes-manifest.json
+          TESTFLIGHT_NOTES_PREPARATION_PATH: ${{ runner.temp }}/testflight-notes-preparation.json
           TESTFLIGHT_RECEIPT_PATH: ${{ runner.temp }}/testflight-distribution-inspection.json
         run: node "$RUNNER_TEMP/testflight-build.mjs" distribution-verify
 
@@ -215,7 +222,9 @@ jobs:
         if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
         with:
           name: testflight-distribution-inspection-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/testflight-distribution-inspection.json
+          path: |
+            ${{ runner.temp }}/testflight-notes-preparation.json
+            ${{ runner.temp }}/testflight-distribution-inspection.json
           retention-days: 14
 
       - name: Record distribution result

@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { createHash, createPrivateKey, sign } from "node:crypto";
+import { createHash, createPrivateKey, randomUUID, sign } from "node:crypto";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { request as githubRequest } from "./deployment-state.mjs";
@@ -237,6 +237,7 @@ const EXTERNAL_STATES = new Set([
 	"IN_BETA_REVIEW",
 	"BETA_REJECTED",
 	"BETA_APPROVED",
+	"NOT_APPLICABLE",
 ]);
 const REVIEW_STATES = new Set([
 	"WAITING_FOR_REVIEW",
@@ -258,7 +259,151 @@ export function notesDigest(text) {
 		.digest("hex");
 }
 
-export function distributionOptions(groups, expectedNotesDigest = "") {
+export function notesPolicy(manifest, version) {
+	if (
+		typeof version !== "string" ||
+		!/^\d+\.\d+\.\d+$/.test(version) ||
+		manifest?.module !== "app" ||
+		manifest.target !== "app-ios-beta" ||
+		manifest.version !== version ||
+		manifest.tag !== `app-v${version}` ||
+		typeof manifest.entriesSupported !== "boolean" ||
+		typeof manifest.override !== "boolean" ||
+		Object.hasOwn(manifest, "error")
+	)
+		throw new Error(
+			"TestFlight notes manifest is invalid or belongs to another release",
+		);
+	if (
+		!manifest.entriesSupported &&
+		(manifest.override ||
+			manifest.notes !== null ||
+			manifest.digest !== null ||
+			!Array.isArray(manifest.features) ||
+			manifest.features.length !== 0)
+	)
+		throw new Error(
+			"Legacy TestFlight notes are not authorized by the generation manifest",
+		);
+	if (
+		manifest.entriesSupported &&
+		(typeof manifest.notes !== "string" ||
+			!manifest.notes.trim() ||
+			!/^[a-f0-9]{64}$/.test(manifest.digest))
+	)
+		throw new Error("Curated TestFlight manifest has no verified source notes");
+	return {
+		mode: manifest.entriesSupported ? "hebrew" : "legacy",
+		requireHebrew: manifest.entriesSupported,
+	};
+}
+
+function notesSourcePolicy(original, manifest, version) {
+	const policy = notesPolicy(manifest, version);
+	if (
+		policy.requireHebrew &&
+		notesDigest(original) !== notesDigest(manifest.notes)
+	)
+		throw new Error(
+			"TestFlight source notes differ from the generation manifest",
+		);
+	return policy;
+}
+
+export function prepareNotesReceipt(
+	original,
+	prepared,
+	manifestBytes,
+	version,
+	fastlaneVersion,
+) {
+	const manifest = JSON.parse(manifestBytes);
+	const policy = notesSourcePolicy(original, manifest, version);
+	if (
+		typeof prepared !== "string" ||
+		!prepared.trim() ||
+		Buffer.byteLength(prepared, "utf8") > 4000 ||
+		(policy.requireHebrew && !/[\u05d0-\u05ea]/.test(prepared)) ||
+		typeof fastlaneVersion !== "string" ||
+		!fastlaneVersion
+	)
+		throw new Error(
+			"Prepared TestFlight notes do not satisfy the manifest and Fastlane byte limit",
+		);
+	return {
+		mode: policy.mode,
+		version,
+		fastlaneVersion,
+		originalManifestDigest: manifest.digest ?? null,
+		sourceManifestSha256: createHash("sha256")
+			.update(manifestBytes)
+			.digest("hex"),
+		originalNotesSha256: notesDigest(original),
+		preparedNotesSha256: notesDigest(prepared),
+		originalBytes: Buffer.byteLength(original, "utf8"),
+		preparedBytes: Buffer.byteLength(prepared, "utf8"),
+		transformed: original !== prepared,
+	};
+}
+
+// Use the very same installed Fastlane sanitizer that pilot will invoke later.
+// This avoids a second, potentially different emoji database or UTF-8 truncator.
+export function prepareNotes(
+	manifestPath,
+	originalPath,
+	preparedPath,
+	receiptPath,
+	version,
+	execute = execFileSync,
+) {
+	const manifestBytes = readFileSync(manifestPath, "utf8");
+	const original = readFileSync(originalPath, "utf8");
+	notesSourcePolicy(original, JSON.parse(manifestBytes), version);
+	const metadataPath = `${preparedPath}.sanitizer.json`;
+	execute(
+		"ruby",
+		[
+			"-r",
+			"fastlane",
+			"-r",
+			"pilot",
+			"-r",
+			"json",
+			"-e",
+			`
+original = File.read(ARGV[0], encoding: 'UTF-8')
+prepared = Pilot::BuildManager.sanitize_changelog(original)
+File.open(ARGV[1], File::WRONLY | File::CREAT | File::EXCL, 0600) { |f| f.write(prepared) }
+File.open(ARGV[2], File::WRONLY | File::CREAT | File::EXCL, 0600) { |f| f.write(JSON.generate({version: Fastlane::VERSION})) }
+`,
+			originalPath,
+			preparedPath,
+			metadataPath,
+		],
+		{ timeout: 15000, maxBuffer: 1048576 },
+	);
+	const prepared = readFileSync(preparedPath, "utf8");
+	const info = JSON.parse(readFileSync(metadataPath, "utf8"));
+	const receipt = prepareNotesReceipt(
+		original,
+		prepared,
+		manifestBytes,
+		version,
+		info.version,
+	);
+	writeFileSync(receiptPath, JSON.stringify(receipt, null, 2), {
+		flag: "wx",
+		mode: 0o600,
+	});
+	return { prepared, receipt };
+}
+
+export function distributionOptions(
+	groups,
+	expectedNotesDigest = "",
+	manifest = null,
+	version = manifest?.version,
+) {
 	if (typeof groups !== "string")
 		throw new Error("Configured TestFlight groups are required");
 	const expectedGroups = groups.split(",").map((value) => value.trim());
@@ -269,7 +414,13 @@ export function distributionOptions(groups, expectedNotesDigest = "") {
 		throw new Error("Configured TestFlight groups are empty or ambiguous");
 	if (expectedNotesDigest !== "" && !/^[a-f0-9]{64}$/.test(expectedNotesDigest))
 		throw new Error("Expected TestFlight notes digest is invalid");
-	return { expectedGroups, expectedNotesDigest };
+	return {
+		expectedGroups,
+		expectedNotesDigest,
+		notesPolicy: manifest
+			? notesPolicy(manifest, version)
+			: { mode: "hebrew", requireHebrew: true },
+	};
 }
 
 // Apple's build relationships bind each included resource to this exact build.
@@ -363,7 +514,9 @@ export function distributionSnapshot(build, included, options) {
 	const notesVerified =
 		options.expectedNotesDigest !== "" &&
 		notes.some(
-			(note) => note.hebrewText && note.digest === options.expectedNotesDigest,
+			(note) =>
+				(note.hebrewText || !options.notesPolicy.requireHebrew) &&
+				note.digest === options.expectedNotesDigest,
 		);
 	return {
 		expectedGroupCount: options.expectedGroups.length,
@@ -376,6 +529,7 @@ export function distributionSnapshot(build, included, options) {
 		externalState,
 		reviewState,
 		notes,
+		notesPolicy: options.notesPolicy.mode,
 		notesVerified,
 		submissionVerified:
 			build.attributes.processingState === "VALID" &&
@@ -518,6 +672,23 @@ async function main() {
 		checkUploadResult(process.argv[4], readFileSync(process.argv[3], "utf8"));
 		return;
 	}
+	if (phase === "prepare-notes") {
+		if (process.argv.length !== 7)
+			throw new Error("Expected four TestFlight notes paths");
+		const result = prepareNotes(
+			...process.argv.slice(3),
+			process.env.MODULE_VERSION,
+		);
+		if (process.env.GITHUB_OUTPUT) {
+			const delimiter = `TESTFLIGHT_${randomUUID()}`;
+			appendFileSync(
+				process.env.GITHUB_OUTPUT,
+				`CHANGELOG<<${delimiter}\n${result.prepared}\n${delimiter}\n`,
+			);
+		}
+		console.log(JSON.stringify({ phase, ...result.receipt }));
+		return;
+	}
 	const metadata = readIpa(process.env.IPA_FILE, process.env.MODULE_VERSION);
 	const credentials = process.env.API_KEY_PATH
 		? JSON.parse(readFileSync(process.env.API_KEY_PATH, "utf8"))
@@ -543,15 +714,41 @@ async function main() {
 			throw new Error(
 				"TestFlight verification requires the intended notes digest",
 			);
+		const manifestBytes = process.env.TESTFLIGHT_NOTES_MANIFEST
+			? readFileSync(process.env.TESTFLIGHT_NOTES_MANIFEST, "utf8")
+			: null;
+		const manifest = manifestBytes ? JSON.parse(manifestBytes) : null;
+		let preparation = null;
+		if (phase === "distribution-verify") {
+			if (!manifestBytes || !process.env.TESTFLIGHT_NOTES_PREPARATION_PATH)
+				throw new Error(
+					"TestFlight verification requires its trusted generation manifest and preparation receipt",
+				);
+			preparation = JSON.parse(
+				readFileSync(process.env.TESTFLIGHT_NOTES_PREPARATION_PATH, "utf8"),
+			);
+			if (
+				preparation.version !== metadata.version ||
+				preparation.preparedNotesSha256 !== expectedDigest ||
+				preparation.sourceManifestSha256 !==
+					createHash("sha256").update(manifestBytes).digest("hex")
+			)
+				throw new Error(
+					"TestFlight prepared notes are not bound to the generation manifest",
+				);
+		}
 		const options = distributionOptions(
 			process.env.TESTFLIGHT_BETA_GROUP,
 			expectedDigest,
+			manifest,
+			metadata.version,
 		);
 		const build = await findBuild(metadata, credentials, fetch, options);
 		const receipt = {
 			phase,
 			mode: "read-only",
 			build,
+			preparation,
 			verifiedAt: new Date().toISOString(),
 		};
 		if (process.env.TESTFLIGHT_RECEIPT_PATH)
