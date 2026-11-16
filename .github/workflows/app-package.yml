@@ -138,7 +138,15 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Install MAUI workload
-        run: dotnet workload install maui-windows
+        # The image's sdk-manifests carry manifests for every baked SDK band;
+        # a foreign-band manifest claiming the same workload pack aborts the
+        # install — drop every band except the SDK's own 11.0.100.
+        run: |
+          Get-ChildItem "$env:DOTNET_ROOT\sdk-manifests" -Directory | Where-Object Name -ne '11.0.100' | Remove-Item -Recurse -Force
+          # Populate the 11-band advertising manifests — without them the SDK
+          # cannot map workload IDs (maui-windows not recognized).
+          dotnet workload update
+          dotnet workload install maui-windows --version 11.0.100.1
 
       - name: Decode signing certificate
         if: ${{ !inputs.compile_only }}
@@ -226,7 +234,7 @@ jobs:
       - name: Compile Windows Release
         if: ${{ inputs.compile_only }}
         working-directory: ${{ env.APP_DIRECTORY }}
-        run: dotnet build BibleOnSite/BibleOnSite.csproj -c Release -f net10.0-windows10.0.19041.0
+        run: dotnet build BibleOnSite/BibleOnSite.csproj -c Release -f net11.0-windows10.0.19041.0
 
       - name: Package MSIX
         if: ${{ !inputs.compile_only }}
@@ -345,11 +353,15 @@ jobs:
             ${{ runner.os }}-nuget-maui-android-
             ${{ runner.os }}-nuget-
 
-      # Workload set 10.0.402.1 pins Android SDK 36.1.118 — the first servicing
-      # release honoring AndroidR8ObfuscationMode and emitting the r8.json build
-      # metadata Play reads for code-optimization scoring (#2708).
+      # Workload set 11.0.100.1 pins Android SDK 37.2.x — honors
+      # AndroidR8ObfuscationMode and emits the r8.json build metadata Play
+      # reads for code-optimization scoring (#2708).
       - name: Install MAUI workload
-        run: dotnet workload install maui-android --version 10.0.402.1
+        # Foreign-band sdk-manifests claiming the same packs abort the install.
+        run: |
+          for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
+          dotnet workload update
+          dotnet workload install maui-android --version 11.0.100.1
 
       - name: Restore perushim notes SQLite for AAB asset pack
         if: ${{ inputs.perushim_notes_sqlite_artifact != '' && inputs.perushim_notes_sqlite_artifact != env.PERUSHIM_NOTES_SQLITE_ARTIFACT_NAME_MASTER }}
@@ -604,10 +616,13 @@ jobs:
         run: |
           # Show .NET SDK info to debug
           dotnet --info
-          # Pin the iOS 27.0 workload set for Xcode 27.0; see https://github.com/bible-on-site/bible-on-site/issues/1871
-          # 10.0.402.1 selects iOS 27.1 needing Xcode 27.1, which the xcode-27
-          # image lacks — deferred until the image ships it; see #2566.
-          dotnet workload install maui-ios --version 10.0.401.1
+          # .NET 11 set 11.0.100.1 selects iOS 27.2, which needs the newest
+          # Xcode 27.x the xcode-27 image carries; #2566 tracked the earlier
+          # deferral while the image lagged. Foreign-band sdk-manifests
+          # claiming the same packs abort the install — drop them first.
+          for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
+          dotnet workload update
+          dotnet workload install maui-ios --version 11.0.100.1
           # Show installed workloads
           dotnet workload list
 
@@ -617,15 +632,9 @@ jobs:
           echo "Available Xcode installations:"
           ls -la /Applications/ | grep -i xcode || true
 
-          # The current MAUI iOS workload requires Xcode 27.
-          XCODE_PATH=/Applications/Xcode_27.app
-          if [ ! -d "$XCODE_PATH" ]; then
-            XCODE_PATH=""
-          fi
-          if [ -z "$XCODE_PATH" ]; then
-            echo "Xcode 27.0 not found, trying the newest available 27.x"
-            XCODE_PATH=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
-          fi
+          # The .NET 11 iOS workload (27.2.x) requires the newest Xcode 27.x
+          # the image carries; sort -V picks 27.2 over 27.0 when both exist.
+          XCODE_PATH=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
           if [ -z "$XCODE_PATH" ]; then
             # Fallback to default Xcode
             echo "Xcode 27.x not found, using default Xcode"
@@ -649,7 +658,7 @@ jobs:
         run: |
           XCODE_VER=$(xcodebuild -version | tr '\n' '-' | tr -d ' ')
           DOTNET_VER=$(dotnet --version)
-          echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios10.0.401.1" >> "$GITHUB_OUTPUT"
+          echo "id=xcode${XCODE_VER}-dotnet${DOTNET_VER}-mauiios11.0.100.1" >> "$GITHUB_OUTPUT"
 
       # .NET's DerivedData equivalent: the obj tree holds the mtouch/AOT output
       # that dominates the publish step. Restoring the last master build turns

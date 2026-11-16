@@ -2479,12 +2479,18 @@ jobs:
 
       - name: Verify Android release package
         run: |
-          # Workload set 10.0.402.1 pins Android SDK 36.1.118 — the first servicing
-          # release honoring AndroidR8ObfuscationMode and emitting r8.json (#2708).
-          dotnet workload install maui-android --version 10.0.402.1
-          dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net10.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64
+          # Workload set 11.0.100.1 pins Android SDK 37.2.x — honors
+          # AndroidR8ObfuscationMode and emits r8.json (#2708). Foreign-band
+          # sdk-manifests claiming the same packs abort the install.
+          for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
+          dotnet workload update
+          dotnet workload install maui-android --version 11.0.100.1
+          # PublishReadyToRun participates in package resolution: restoring
+          # without it skips the R2R packs and the Release build fails
+          # NETSDK1094 under CoreCLR.
+          dotnet restore BibleOnSite/BibleOnSite.csproj -p:TargetFramework=net11.0-android -p:RuntimeIdentifiers=android-arm64 -r android-arm64 -p:PublishReadyToRun=true
           # Exercise D8 and release linking before merging, without store signing keys.
-          dotnet build BibleOnSite/BibleOnSite.csproj --no-restore -c Release -f net10.0-android -r android-arm64 -p:RuntimeIdentifiers=android-arm64 -p:AndroidPackageFormats=aab
+          dotnet build BibleOnSite/BibleOnSite.csproj --no-restore -c Release -f net11.0-android -r android-arm64 -p:RuntimeIdentifiers=android-arm64 -p:AndroidPackageFormats=aab
           # #2708: the bundle must carry r8.json (enabled stages plus the
           # no*Percentage stats Play scores) and proguard.map; the verifier
           # enforces each Play score ≥25% over the 10 MB DEX threshold.

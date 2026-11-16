@@ -73,7 +73,7 @@ public class ReaderFanMenuTests
 
     private static void SendTapped(VisualElement owner, TapGestureRecognizer gesture) =>
         typeof(TapGestureRecognizer)
-            .GetMethod("SendTapped", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetMethod("SendTapped", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)!
             .Invoke(gesture, [owner, null]);
 
     private sealed class AppResources : IDisposable

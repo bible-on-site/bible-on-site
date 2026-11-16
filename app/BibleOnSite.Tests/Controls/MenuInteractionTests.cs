@@ -125,7 +125,7 @@ public class MenuInteractionTests
         var gesture = item.GestureRecognizers.OfType<TapGestureRecognizer>().Single();
         // MAUI's recognizer dispatch method is internal; invoke the actual gesture
         // entry point rather than calling the app's private event handler directly.
-        typeof(TapGestureRecognizer).GetMethod("SendTapped", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+        typeof(TapGestureRecognizer).GetMethod("SendTapped", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)!
             .Invoke(gesture, [item, null]);
         sender.Should().BeSameAs(item);
     }
@@ -136,7 +136,7 @@ public class MenuInteractionTests
         var item = new CircularMenuItem();
         var gesture = item.GestureRecognizers.OfType<TapGestureRecognizer>().Single();
         FluentActions.Invoking(() => typeof(TapGestureRecognizer)
-            .GetMethod("SendTapped", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetMethod("SendTapped", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)!
             .Invoke(gesture, [item, null])).Should().NotThrow();
     }
 
