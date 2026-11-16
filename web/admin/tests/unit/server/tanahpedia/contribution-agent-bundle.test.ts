@@ -18,7 +18,7 @@ describe("versioned contribution agent declarations", () => {
 		expect(buildContributionAgentBundle()).toEqual({ ...bundle, hash });
 		expect(bundle.apiVersion).toBe(CONTRIBUTION_API_VERSION);
 		expect(bundle.protocolVersion).toBe(2);
-		expect(bundle.version).toBe("tanahpedia-agents-v5");
+		expect(bundle.version).toBe("tanahpedia-agents-v6");
 	});
 	it("closes search and record vocabulary without discarding the other parameter constraints", () => {
 		const original = buildContributionAgentBundle();

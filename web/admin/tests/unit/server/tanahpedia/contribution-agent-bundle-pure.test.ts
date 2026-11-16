@@ -19,7 +19,7 @@ import {
 import { buildContributionAgentBundle } from "~/server/tanahpedia/contribution-agent-bundle.server";
 
 it("builds immutable declarations without a database, model client or runtime", () => {
-	expect(buildContributionAgentBundle().version).toBe("tanahpedia-agents-v5");
+	expect(buildContributionAgentBundle().version).toBe("tanahpedia-agents-v6");
 	expect(CONTRIBUTION_AGENT_REFERENCE_KINDS).toHaveLength(28);
 	expect(CONTRIBUTION_AGENT_TARGET_KINDS).toHaveLength(46);
 	expect(CONTRIBUTION_AGENT_READ_KINDS).toHaveLength(74);

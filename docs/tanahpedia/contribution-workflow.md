@@ -340,7 +340,7 @@ content-rebase path, which creates a new revision and requires renewed review.
 
 The explicit v4-to-v5 identity adapter adds article-link operations while keeping
 existing sequences and approvals intact. Agent instructions/tools advance
-independently to bundle v5; the worker protocol remains v2.
+independently to bundle v6; the worker protocol remains v2.
 
 Bundle v5 closes the `search`/`record` kind vocabulary against the same pure registry
 used by server dispatch: 28 reference families and 46 `target:<operationKind>` names.
@@ -349,6 +349,13 @@ Chapter lookup uses `perek`; verses remain integer coordinates within a chapter.
 Exact `currentRecords` and supplied referenced IDs already count as completed reads,
 so agents reuse them and fetch only missing records or paged article text. API v5,
 the native worker transport and its existing execution deadline are unchanged.
+
+Bundle v6 uses the shared scripture catalogue to resolve Hebrew and legacy Arabic
+chapter references deterministically. Search and exact reads return the same plain
+Hebrew labels, including split-book letters. Full verse references are checked
+against known verse bounds; ambiguous book parts remain separate results. Book-only
+and free-text searches retain pagination. Exact reference validation locks only the
+chapter, book and additional-letter rows, without unrelated calendar joins.
 
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these

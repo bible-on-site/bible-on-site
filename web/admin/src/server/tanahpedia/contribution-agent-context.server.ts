@@ -29,6 +29,11 @@ import {
 	readMetadataNames,
 } from "./contribution-changes.server";
 import {
+	CONTRIBUTION_PEREK_SELECT,
+	readAgentPerek,
+	searchAgentPerakim,
+} from "./contribution-perek-reads.server";
+import {
 	type ContributionReference,
 	REFERENCE_SELECTS,
 } from "./contribution-records.server";
@@ -67,6 +72,7 @@ const ALT_TABLES = [
 ];
 const REFERENCES: Record<string, string> = {
 	...REFERENCE_SELECTS,
+	perek: CONTRIBUTION_PEREK_SELECT,
 	article: "SELECT id,name FROM tanah_article",
 	article_author: "SELECT id,name FROM tanah_author",
 	dedication: "SELECT id,subject AS name FROM tanah_dedication",
@@ -107,10 +113,6 @@ const REFERENCE_ID_COLUMNS: Record<string, string> = {
 	perush: "id",
 	place_identification: "i.id",
 };
-// Only these fields contribute to REFERENCE_SELECTS.perek's projected label.
-// Excluding the view's date joins avoids locking unrelated scheduling rows.
-const PEREK_LOCK_SELECT =
-	"SELECT p.id,CONCAT(s.name,' ',CASE WHEN a.id IS NOT NULL THEN p.id-a.perek_from+1 ELSE p.id-s.perek_id_from+1 END) AS name FROM tanah_perek p JOIN tanah_sefer s ON p.id BETWEEN s.perek_id_from AND s.perek_id_to LEFT JOIN tanah_additional a ON a.sefer_id=s.id AND p.id BETWEEN a.perek_from AND a.perek_to";
 const SPECIAL_SEARCHES: Record<string, string> = {
 	article_links: REFERENCES.article,
 	metadata: REFERENCE_SELECTS.entity,
@@ -339,6 +341,17 @@ class ContextReader {
 		id: string | number,
 		sql: string,
 	): Promise<ContributionReference | null> {
+		if (kind === "perek") {
+			const row = await readAgentPerek(this.conn, id, this.lockReferences);
+			if (!row) return null;
+			const { coordinates, ...reference } = row;
+			this.records.push({
+				kind: "perek_coordinates",
+				id,
+				current: coordinates,
+			});
+			return reference;
+		}
 		if (!this.lockReferences && !ARTICLE_REFERENCES.has(kind))
 			return txQueryOne<ContributionReference>(
 				this.conn,
@@ -349,10 +362,9 @@ class ContextReader {
 		const column = REFERENCE_ID_COLUMNS[kind];
 		if (!column)
 			throw new Error("Missing contribution reference lock contract");
-		const projection = kind === "perek" ? PEREK_LOCK_SELECT : sql;
 		return txQueryOne<ContributionReference>(
 			this.conn,
-			`${projection} WHERE ${column}=? ${ARTICLE_REFERENCES.has(kind) ? "FOR SHARE" : "FOR UPDATE NOWAIT"}`,
+			`${sql} WHERE ${column}=? ${ARTICLE_REFERENCES.has(kind) ? "FOR SHARE" : "FOR UPDATE NOWAIT"}`,
 			[id],
 		);
 	}
@@ -814,6 +826,27 @@ export async function readContributionAgentTool(
 	const { cursor, limit } = pageArguments(args);
 	if (typeof args.query !== "string" || args.query.length > 255)
 		throw new Error("Invalid contribution catalogue search");
+	if (!isTarget && kind === "perek") {
+		const found = await searchAgentPerakim(conn, args.query),
+			rows = found.slice(cursor, cursor + limit),
+			items = [];
+		for (const row of rows) {
+			const current = await reader.reference("perek", row.id);
+			if (current) items.push(current);
+		}
+		return {
+			data: {
+				items,
+				total: found.length,
+				nextCursor:
+					rows.length > 0 && cursor + rows.length < found.length
+						? cursor + rows.length
+						: null,
+				records: reader.records,
+			},
+			catalogue: reader.catalogue,
+		};
+	}
 	const pattern = `%${args.query.replace(/=/g, "==").replace(/%/g, "=%").replace(/_/g, "=_")}%`;
 	const where =
 		"WHERE candidate.name LIKE ? ESCAPE '=' OR CAST(candidate.id AS CHAR) LIKE ? ESCAPE '='";
