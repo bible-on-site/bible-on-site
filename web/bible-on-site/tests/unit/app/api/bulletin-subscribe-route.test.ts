@@ -107,6 +107,25 @@ describe("/api/bulletin/subscribe", () => {
 		expect(mockRequest).not.toHaveBeenCalled();
 	});
 
+	it("rejects an unreadable body with a warning", async () => {
+		const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+		const response = await POST(
+			new Request("http://localhost/api/bulletin/subscribe", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: new ReadableStream<Uint8Array>({
+					start(controller) {
+						controller.error(new Error("stream failed"));
+					},
+				}),
+				duplex: "half",
+			} as RequestInit),
+		);
+		expect(response.status).toBe(400);
+		expect(mockRequest).not.toHaveBeenCalled();
+		expect(warn).toHaveBeenCalledWith("Bulletin subscribe body read failed");
+	});
+
 	it("rejects an oversized declared length before consuming the body", async () => {
 		const response = await POST(
 			new Request("http://localhost/api/bulletin/subscribe", {
