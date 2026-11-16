@@ -7,6 +7,11 @@ import {
 import type { EntityType } from "~/lib/tanahpedia/labels";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
 import { query } from "../db";
+import {
+	isMissingMysqlSchema,
+	placeholders,
+	toNum,
+} from "./sql-helpers";
 
 export type PersonSex = "MALE" | "FEMALE" | "UNKNOWN";
 
@@ -49,17 +54,6 @@ export interface EntryStructuralContext {
 
 const MAIN_NAME_TYPE = "MAIN";
 
-function placeholders(count: number): string {
-	return Array.from({ length: count }, () => "?").join(", ");
-}
-
-function toNum(v: unknown): number | null {
-	if (v === null || v === undefined) return null;
-	if (typeof v === "number" && !Number.isNaN(v)) return v;
-	const n = Number.parseFloat(String(v));
-	return Number.isFinite(n) ? n : null;
-}
-
 function isDbEntityType(t: string): t is EntityType {
 	return (ADMIN_CREATABLE_ENTITY_TYPES as readonly string[]).includes(t);
 }
@@ -88,11 +82,6 @@ function groupByKey<T>(rows: T[], keyOf: (row: T) => string): Map<string, T[]> {
 		else map.set(key, [row]);
 	}
 	return map;
-}
-
-/** ER_NO_SUCH_TABLE — the external_reference deploy has not run here yet. */
-function isMissingMysqlSchema(error: unknown): boolean {
-	return (error as { code?: string })?.code === "ER_NO_SUCH_TABLE";
 }
 
 /**

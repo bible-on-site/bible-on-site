@@ -1,0 +1,46 @@
+name: Inspect Microsoft Store flight
+
+on:
+  workflow_dispatch:
+    inputs:
+      flight_id:
+        description: "Existing CI-created flight UUID to inspect without changing it"
+        required: true
+        type: string
+      release_tag:
+        description: "Published immutable app release, for example app-v5.1.22"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: ${{ github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: devops/package.json
+      - name: Read the exact existing flight and immutable release identity
+        env:
+          FLIGHT_ID: ${{ inputs.flight_id }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          PARTNER_CENTER_TENANT_ID: ${{ secrets.MS_STORE_TENANT_ID }}
+          PARTNER_CENTER_CLIENT_ID: ${{ secrets.MS_STORE_CLIENT_ID }}
+          PARTNER_CENTER_CLIENT_SECRET: ${{ secrets.MS_STORE_CLIENT_SECRET }}
+          PARTNER_CENTER_FLIGHT_GROUP_ID: ${{ secrets.MS_STORE_FLIGHT_GROUP_ID }}
+          GH_TOKEN: ${{ github.token }}
+          RECEIPT_PATH: ${{ runner.temp }}/msstore-flight-inspection.json
+        run: node devops/github/release/msstore-status.mjs
+      - uses: actions/upload-artifact@v7
+        if: ${{ always() }}
+        with:
+          name: msstore-flight-inspection-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/msstore-flight-inspection.json
+          retention-days: 14

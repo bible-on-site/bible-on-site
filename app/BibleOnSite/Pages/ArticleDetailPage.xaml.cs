@@ -26,9 +26,12 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
     public int ArticleId { get; set; }
     public int PerekId { get; set; }
 
-    /// <summary>Logical screen identity with article context (#2119).</summary>
-    public string? AnalyticsScreenName =>
-        ArticleId > 0 ? $"Article/{ArticleId}" : nameof(ArticleDetailPage);
+    /// <summary>
+    /// Self-reported (#3378): the logical screen resolves only once the
+    /// article's metadata loads — a Shell-level event at Navigated time would
+    /// ship an id-only name, and a second emit would double-count the visit.
+    /// </summary>
+    public AnalyticsScreen? AnalyticsScreen => null;
 
     /// <summary>
     /// Search-result excerpt anchoring the jump target — the query string keeps
@@ -85,6 +88,13 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
         if (ArticleId > 0)
         {
             await LoadArticleAsync();
+            SetAnalyticsScreenForArticle();
+        }
+        else
+        {
+            // A malformed nav still marks the visit with the bare page family.
+            AnalyticsScreens.Report(new AnalyticsScreen(
+                nameof(ArticleDetailPage), nameof(ArticleDetailPage)));
         }
     }
 
@@ -118,6 +128,29 @@ public partial class ArticleDetailPage : ContentPage, IAnalyticsScreenName
             _viewModel.ErrorMessage = $"שגיאה בטעינת המאמר: {ex.Message}";
         }
     }
+
+    /// <summary>
+    /// Emits this visit's single screen_view once the article identity
+    /// resolves (#3378): the loaded article wins over the route's claims —
+    /// its public title, stable id and real perek context. An unresolved
+    /// load (not found / error) still marks the visit with the id-only name.
+    /// </summary>
+    private void SetAnalyticsScreenForArticle()
+    {
+        var article = _viewModel.Article;
+        var perekId = article?.PerekId is > 0 ? article.PerekId : PerekId;
+        AnalyticsScreens.Report(AnalyticsScreens.ForArticle(
+            article?.Id ?? ArticleId,
+            article is { } resolved ? ArticleTitle(resolved) : null,
+            perekId > 0 ? perekId : null,
+            perekId > 0 ? PerekDataService.Instance.GetPerekSource(perekId) : null));
+    }
+
+    /// <summary>The public title — the article's name, else its header text.</summary>
+    private static string? ArticleTitle(Article article) =>
+        !string.IsNullOrWhiteSpace(article.Name) ? article.Name
+        : !string.IsNullOrWhiteSpace(article.ShortAbstract) ? article.ShortAbstract
+        : null;
 
     private void BuildArticleContent(Article article)
     {

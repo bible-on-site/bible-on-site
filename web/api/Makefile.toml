@@ -9,7 +9,6 @@ BASH_BIN = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "bash", ma
 
 HOST = "127.0.0.1"
 PORT = 3003
-BUMP_VERSION_SCRIPT_PATH = { source = "${CARGO_MAKE_RUST_TARGET_OS}", default_value = "/devops/bump_version.sh", mapping = { "windows" = "\\devops\\bump_version.sh" } }
 
 [tasks.run-api]
 env = { PROFILE = "dev" }
@@ -269,10 +268,4 @@ args = [
 command = "echo"
 args = ["${CARGO_MAKE_CRATE_VERSION}"]
 
-[tasks.bump-version]
-command = "${BASH_BIN}"
-args = [
-  "${CARGO_MAKE_WORKING_DIRECTORY}${BUMP_VERSION_SCRIPT_PATH}",
-  "-v",
-  "${CARGO_MAKE_CRATE_VERSION}",
-]
+

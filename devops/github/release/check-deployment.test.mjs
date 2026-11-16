@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
+import { parse } from "yaml";
 import { checkDeployment, newerVersion } from "./check-deployment.mjs";
 
 const sha = "a".repeat(40);
@@ -171,6 +175,83 @@ test("API failures are never interpreted as permission to deploy", () => {
 		/API unavailable/,
 	);
 });
+
+test("app deployment grants reusable workflows their declared permissions", () => {
+	const readWorkflow = (file) =>
+		parse(
+			readFileSync(
+				new URL(`../../../.github/workflows/${file}`, import.meta.url),
+				"utf8",
+			),
+		);
+	const workflow = readWorkflow("cd-app.yml");
+	for (const [name, job] of Object.entries(workflow.jobs)) {
+		const localWorkflow = job.uses?.match(/^\.\/\.github\/workflows\/(.+)$/);
+		if (!localWorkflow) continue;
+		const called = readWorkflow(localWorkflow[1]);
+		assert.deepEqual(
+			job.permissions ?? workflow.permissions,
+			called.permissions,
+			`${name} must allow the called workflow without granting extra permissions`,
+		);
+	}
+});
+
+for (const file of ["cd-app.yml", "testflight-distribution.yml"]) {
+	test(`${file} exposes newly installed Fastlane in the current and next step`, {
+		skip: process.platform === "win32",
+	}, (t) => {
+		const workflow = parse(readFileSync(new URL(`../../../.github/workflows/${file}`, import.meta.url), "utf8"));
+		const install = Object.values(workflow.jobs).flatMap(job => job.steps ?? []).find(step => step.name === "Install Fastlane");
+		assert.ok(install?.run);
+		const directory = mkdtempSync(join(tmpdir(), "fastlane bootstrap "));
+		t.after(() => rmSync(directory, { recursive: true, force: true }));
+		const githubPath = join(directory, "github-path");
+		const argumentsFile = join(directory, "gem-arguments");
+		const fastlane = "#!/bin/sh\nprintf 'controlled-fastlane %s\\n' \"$1\"\n";
+		const gem = `#!/bin/sh
+printf '%s\\n' "$@" > "$INSTALL_ARGUMENTS"
+if [ "$GEM_RESULT" != 0 ]; then exit "$GEM_RESULT"; fi
+if [ "$GEM_OMIT_BIN" = 1 ]; then exit 0; fi
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = --bindir ]; then shift; destination="$1"; fi
+  shift
+done
+/bin/mkdir -p "$destination"
+printf '%s' "$FASTLANE_FIXTURE" > "$destination/fastlane"
+/bin/chmod +x "$destination/fastlane"
+`;
+		writeFileSync(join(directory, "gem"), gem);
+		chmodSync(join(directory, "gem"), 0o755);
+		const env = { ...process.env, PATH: directory, RUNNER_TEMP: directory, GITHUB_PATH: githubPath,
+			INSTALL_ARGUMENTS: argumentsFile, FASTLANE_FIXTURE: fastlane, GEM_RESULT: "0", GEM_OMIT_BIN: "0" };
+		const run = (overrides = {}) => spawnSync("/bin/bash", ["-e", "-c", install.run], { env: { ...env, ...overrides }, encoding: "utf8" });
+		const installed = run();
+		assert.equal(installed.status, 0, installed.stderr);
+		assert.match(installed.stdout, /controlled-fastlane --version/);
+		const bin = join(directory, "fastlane-bin");
+		assert.equal(readFileSync(githubPath, "utf8"), `${bin}\n`);
+		const argumentsList = readFileSync(argumentsFile, "utf8").trim().split("\n");
+		assert.ok(argumentsList.includes("--user-install"));
+		assert.equal(argumentsList[argumentsList.indexOf("--bindir") + 1], bin);
+		const next = spawnSync("/bin/bash", ["-e", "-c", "fastlane --version"], { env: { ...env, PATH: `${bin}:${directory}` }, encoding: "utf8" });
+		assert.equal(next.status, 0, next.stderr);
+		assert.match(next.stdout, /controlled-fastlane --version/);
+
+		writeFileSync(join(directory, "fastlane"), fastlane);
+		chmodSync(join(directory, "fastlane"), 0o755);
+		writeFileSync(githubPath, "");
+		rmSync(argumentsFile);
+		assert.equal(run({ GEM_RESULT: "23" }).status, 0, "a preinstalled tool must not invoke gem");
+		assert.equal(existsSync(argumentsFile), false);
+		assert.equal(readFileSync(githubPath, "utf8"), "");
+		rmSync(join(directory, "fastlane"));
+		rmSync(bin, { recursive: true });
+		assert.equal(run({ GEM_RESULT: "23" }).status, 23, "installation errors must fail the step");
+		assert.equal(readFileSync(githubPath, "utf8"), "");
+		assert.equal(run({ GEM_OMIT_BIN: "1" }).status, 127, "a successful install without an executable must fail immediately");
+	});
+}
 
 for (const file of [
 	"cd-aws.yml",
