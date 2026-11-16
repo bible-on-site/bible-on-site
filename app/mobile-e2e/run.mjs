@@ -181,6 +181,7 @@ try {
             environment: { ...iosNodeEnvironment(process.env, process.execPath), ...environment, MOBILE_E2E_ARTIFACTS: artifacts },
             report: value => appendFileSync(resolve(artifacts, "ios-preparation-process.jsonl"),
               `${JSON.stringify({ kind: "ios-install-owner/1", at: new Date().toISOString(), ...value })}\n`),
+            retainDiagnostics: output => writeFileSync(resolve(artifacts, `ios-installer-${nonce}.stderr.log`), output),
           });
           writeFileSync(resolve(artifacts, `ios-installer-${nonce}.stdout.log`), output);
           return output;
