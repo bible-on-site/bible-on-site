@@ -1,8 +1,11 @@
 namespace BibleOnSite.Helpers;
 
-/// <summary>Self-contained typography for the offline article WebView.</summary>
+/// <summary>Shared brand faces for native text and offline article HTML.</summary>
 public static class BrandFonts
 {
+    public static readonly string RegularFamily = "AlHeperekRegular";
+    public static readonly string BoldFamily = "AlHeperekBold";
+
     private static readonly Lazy<string> Css = new(() =>
         FontFace("Regular", 400) + FontFace("SemiBold", 600) + FontFace("Bold", 700));
 
