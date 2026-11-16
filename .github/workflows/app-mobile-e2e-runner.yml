@@ -184,10 +184,13 @@ jobs:
 
       - name: Select compatible Xcode
         if: inputs.platform == 'iOS'
-        # The .NET 11 iOS workload (27.2.x) requires the newest Xcode 27.x the
-        # image carries; sort -V picks 27.2 over 27.0 when both are present.
+        # The .NET 11 iOS workload (27.2.x) requires Xcode 27.2; prefer the
+        # newest stable Xcode 27.x and keep betas as a last resort — the image
+        # also carries Xcode_27.3_beta.app, which the 27.2 SDK rejects.
         run: |
-          XCODE_DIR="$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)/Contents/Developer"
+          XCODE_APP="$(ls -d /Applications/Xcode_27*.app | grep -v '_beta' | sort -V | tail -1)"
+          XCODE_APP="${XCODE_APP:-$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)}"
+          XCODE_DIR="$XCODE_APP/Contents/Developer"
           sudo xcode-select --switch "$XCODE_DIR"
           echo "DEVELOPER_DIR=$XCODE_DIR" >> "$GITHUB_ENV"
 

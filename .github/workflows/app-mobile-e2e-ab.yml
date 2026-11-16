@@ -179,7 +179,10 @@ jobs:
             sysctl -n machdep.cpu.brand_string hw.memsize hw.ncpu
             df -h /
             echo "== xcode =="
-            sudo xcode-select --switch "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)/Contents/Developer"
+            # Prefer the newest stable Xcode 27.x (betas last resort) so the
+            # probe measures the same toolchain the iOS legs will select.
+            XCODE_APP="$(ls -d /Applications/Xcode_27*.app | grep -v '_beta' | sort -V | tail -1)"
+            sudo xcode-select --switch "${XCODE_APP:-$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)}/Contents/Developer"
             xcodebuild -version
             xcode-select -p
             ls -d /Applications/Xcode*.app
@@ -190,11 +193,13 @@ jobs:
       - name: Verify Xcode 27 layout used by iOS legs
         run: |
           set -euo pipefail
-          # app-mobile-e2e-runner.yml selects the newest /Applications/Xcode_27*.app
-          # on every iOS leg; the workload's iOS 27.2 SDK needs Xcode ≥27.2 —
-          # an image carrying only 27.0/27.1 fails every shard at setup, so the
-          # probe fails here instead — the iteration aborts cheaply.
-          newest=$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)
+          # app-mobile-e2e-runner.yml selects the newest stable
+          # /Applications/Xcode_27*.app (betas only as fallback) on every iOS
+          # leg; the workload's iOS 27.2 SDK needs Xcode =27.2 — an image
+          # carrying only 27.0/27.1 fails every shard at setup, so the probe
+          # fails here instead — the iteration aborts cheaply.
+          newest=$(ls -d /Applications/Xcode_27*.app | grep -v '_beta' | sort -V | tail -1)
+          newest=${newest:-$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)}
           version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$newest/Contents/Info.plist")
           echo "Newest Xcode 27: $newest ($version)"
           minor=${version#*.}; minor=${minor%%.*}
