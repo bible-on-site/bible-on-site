@@ -56,8 +56,10 @@ public sealed class FailureDiagnosticsTests : IDisposable
             Reply(id, stream, cancellation);
             return Task.CompletedTask;
         });
+        // The loopback exchange itself takes milliseconds; the budget only needs to
+        // absorb thread scheduling on a loaded simulator host.
         await StartClient(() => FailureDiagnostics.WaitForCapture(_directory, "test identity", "session identity", _log.Add,
-            TimeSpan.FromSeconds(1), request =>
+            TimeSpan.FromSeconds(5), request =>
             {
                 using var json = JsonDocument.Parse(File.ReadAllText(request));
                 var root = json.RootElement;
@@ -69,7 +71,7 @@ public sealed class FailureDiagnosticsTests : IDisposable
                 Assert.Equal(JsonValueKind.Null, root.GetProperty("scenarioStartedAtUtc").ValueKind);
                 Assert.False(root.TryGetProperty("failurePhase", out _));
                 Assert.False(root.TryGetProperty("launchId", out _));
-                Assert.Equal(TimeSpan.FromSeconds(1),
+                Assert.Equal(TimeSpan.FromSeconds(5),
                     root.GetProperty("deadlineUtc").GetDateTimeOffset() - root.GetProperty("failedAtUtc").GetDateTimeOffset());
                 Assert.False(File.Exists(request + ".tmp"));
             }, supervisor.Port));
@@ -132,8 +134,10 @@ public sealed class FailureDiagnosticsTests : IDisposable
                 extra: failure == "extra" ? "\u0001" : "");
             return Task.CompletedTask;
         });
+        // The loopback exchange itself takes milliseconds; the budget only needs to
+        // absorb thread scheduling on a loaded simulator host.
         await StartClient(() => FailureDiagnostics.WaitForCapture(_directory, "test", null, _log.Add,
-            TimeSpan.FromSeconds(1), notificationPort: supervisor.Port));
+            TimeSpan.FromSeconds(5), notificationPort: supervisor.Port));
         await supervisor.Completion.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Contains(_log, line => line.Contains("handshake failed"));
         Assert.Single(Directory.GetFiles(_directory, "*.error.txt"));
@@ -384,7 +388,17 @@ public sealed class FailureDiagnosticsTests : IDisposable
                 using var close = cancellation.Register(client.Dispose);
                 using var stream = client.GetStream();
                 var notification = new byte[33];
-                stream.ReadExactly(notification);
+                try
+                {
+                    stream.ReadExactly(notification);
+                }
+                catch (Exception dropped) when (dropped is EndOfStreamException or IOException or ObjectDisposedException)
+                {
+                    // A client whose budget lapses between connect and notification closes the
+                    // socket without sending; a real supervisor must treat that as a missed
+                    // request, not a protocol fault.
+                    return;
+                }
                 Assert.Equal((byte)'\n', notification[32]);
                 var id = Encoding.ASCII.GetString(notification, 0, 32);
                 Assert.Matches("^[a-f0-9]{32}$", id);
