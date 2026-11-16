@@ -616,9 +616,9 @@ jobs:
         run: |
           # Show .NET SDK info to debug
           dotnet --info
-          # .NET 11 set 11.0.100.1 selects iOS 27.2, which needs the newest
-          # Xcode 27.x the xcode-27 image carries; #2566 tracked the earlier
-          # deferral while the image lagged. Foreign-band sdk-manifests
+          # .NET 11 set 11.0.100.1 selects iOS 27.2, whose SDK accepts exactly
+          # Xcode 27.2; #2566 tracked the earlier deferral while the image
+          # lagged. Foreign-band sdk-manifests
           # claiming the same packs abort the install — drop them first.
           for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
           dotnet workload update
