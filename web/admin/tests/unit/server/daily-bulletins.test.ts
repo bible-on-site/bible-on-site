@@ -280,6 +280,35 @@ describe("prepared bulletins", () => {
 		expect(mocks.commit).toHaveBeenCalledOnce();
 		expect(mocks.release).toHaveBeenCalledOnce();
 	});
+
+	it("falls back to the perek-only dedication join when the expanded schema is not deployed", async () => {
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 1 })
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(row);
+		mocks.query
+			.mockResolvedValueOnce([])
+			.mockRejectedValueOnce(
+				Object.assign(new Error("no such table"), {
+					code: "ER_NO_SUCH_TABLE",
+				}),
+			)
+			.mockResolvedValueOnce([{ subject: "לזכרון" }])
+			.mockResolvedValueOnce(deliveries);
+		await prepareBulletin(input.date);
+		// The third query() call is the legacy perek-only join — no
+		// sefer/helek ancestor tables.
+		expect(mocks.query.mock.calls[2]?.[0]).toContain(
+			"tanah_perek_dedication",
+		);
+		expect(mocks.query.mock.calls[2]?.[0]).not.toContain(
+			"tanah_helek_dedication",
+		);
+		expect(mocks.render).toHaveBeenCalledWith(
+			expect.objectContaining({ dedications: ["לזכרון"] }),
+		);
+	});
 });
 
 describe("Hebrew-date article override (#3098)", () => {
