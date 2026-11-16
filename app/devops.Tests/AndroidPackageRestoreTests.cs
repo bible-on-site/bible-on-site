@@ -11,10 +11,10 @@ public sealed class AndroidPackageRestoreTests
     [InlineData("Debug", false)]
     public void RestoreAcquiresTheRuntimeToolsRequiredByThePublishConfiguration(string configuration, bool readyToRun)
     {
-        var directory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "android-package-restore-" + Guid.NewGuid().ToString("N")));
+        var directory = Directory.CreateDirectory(Path.Join(Path.GetTempPath(), "android-package-restore-" + Guid.NewGuid().ToString("N")));
         try
         {
-            var project = Path.Combine(directory.FullName, "Fixture.csproj");
+            var project = Path.Join(directory.FullName, "Fixture.csproj");
             // A workload-independent SDK project isolates the restore/publish
             // contract. Android CoreCLR has this same Release-only R2R default.
             File.WriteAllText(project, """
@@ -26,7 +26,7 @@ public sealed class AndroidPackageRestoreTests
                   </PropertyGroup>
                 </Project>
                 """);
-            File.WriteAllText(Path.Combine(directory.FullName, "Program.cs"), "System.Console.WriteLine(\"package fixture\");");
+            File.WriteAllText(Path.Join(directory.FullName, "Program.cs"), "System.Console.WriteLine(\"package fixture\");");
             var runtime = RuntimeInformation.RuntimeIdentifier;
             var settings = Build.AndroidPackageRestoreSettings(project, configuration)
                 .SetProperty("TargetFramework", "net11.0")
@@ -34,7 +34,7 @@ public sealed class AndroidPackageRestoreTests
                 .SetRuntime(runtime);
             DotNetRestore(settings);
 
-            using var assets = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory.FullName, "obj", "project.assets.json")));
+            using var assets = JsonDocument.Parse(File.ReadAllText(Path.Join(directory.FullName, "obj", "project.assets.json")));
             var framework = assets.RootElement.GetProperty("project").GetProperty("frameworks").GetProperty("net11.0");
             var hasCrossgen = framework.TryGetProperty("downloadDependencies", out var downloads) &&
                 downloads.EnumerateArray().Any(package => package.GetProperty("name").GetString()!
@@ -49,7 +49,7 @@ public sealed class AndroidPackageRestoreTests
                 .SetRuntime(runtime)
                 .SetConfiguration(configuration)
                 .EnableNoRestore());
-            Assert.True(File.Exists(Path.Combine(directory.FullName, "bin", configuration, "net11.0", runtime, "publish", "Fixture.dll")));
+            Assert.True(File.Exists(Path.Join(directory.FullName, "bin", configuration, "net11.0", runtime, "publish", "Fixture.dll")));
         }
         finally
         {

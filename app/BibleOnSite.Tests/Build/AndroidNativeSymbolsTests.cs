@@ -501,8 +501,11 @@ public class AndroidNativeSymbolsTests : IDisposable
 
     private sealed class SymbolHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(respond(request));
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(respond(request));
+        }
     }
 
     private sealed class ZeroStream(long length) : Stream
@@ -521,11 +524,29 @@ public class AndroidNativeSymbolsTests : IDisposable
             remaining -= count;
             return count;
         }
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(Read(buffer.Span));
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(Read(buffer.Span));
+        }
         public override void Flush() => throw new NotSupportedException();
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            _ = offset;
+            _ = origin;
+            throw new NotSupportedException();
+        }
+        public override void SetLength(long value)
+        {
+            _ = value;
+            throw new NotSupportedException();
+        }
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            _ = buffer;
+            _ = offset;
+            _ = count;
+            throw new NotSupportedException();
+        }
     }
 }
