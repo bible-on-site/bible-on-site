@@ -207,11 +207,23 @@ public sealed class PasukInkAnalysisTests
     [Fact]
     public void SingleShortLineSkipsTheMissingLineCheck()
     {
-        // A one-line pasuk element keeps slack below its only line by design,
-        // so even a large empty tail is not a missing-line signal there.
-        var profile = Measure(100, 60, new Line(10, 24, 50, 99));
+        // A one-line pasuk element keeps slack below its only line by design:
+        // the tail is far shorter than the line itself, so nothing is missing.
+        var profile = Measure(100, 38, new Line(10, 24, 50, 99));
 
         Assert.False(profile.HasMissingLines);
+    }
+
+    [Fact]
+    public void SingleBandWithLineSizedTailReportsMissingLines()
+    {
+        // A single band inside a label tall enough for another whole line is
+        // the same mismatch: the typesetter drew less than the measure
+        // reserved room for. Real short pesukim stay clean — their slack is
+        // a small fraction of the line's height.
+        var profile = Measure(100, 60, new Line(5, 19, 0, 99));
+
+        Assert.True(profile.HasMissingLines);
     }
 
     [Fact]

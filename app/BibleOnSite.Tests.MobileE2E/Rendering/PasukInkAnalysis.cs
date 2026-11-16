@@ -39,8 +39,11 @@ internal static class PasukInkAnalysis
     /// <param name="EmptyTailRows">Element rows below the last row containing
     /// any ink.</param>
     /// <param name="Height">Captured element height in pixels.</param>
+    /// <param name="MaxBandRows">Row count of the tallest text band — a full
+    /// rendered line's height inside this element; a tail at least that tall
+    /// could hide a dropped line even under a single band.</param>
     public sealed record InkProfile(int InkRows, int Bands, int LineBands, string BandKinds,
-        string LastLine, bool TrailingLeftRun, int EmptyTailRows, int Height)
+        string LastLine, bool TrailingLeftRun, int EmptyTailRows, int Height, int MaxBandRows)
     {
         /// <summary>
         /// The final text line flushed left — the #3380 defect. Interior bands
@@ -56,10 +59,13 @@ internal static class PasukInkAnalysis
         /// The typesetter drew fewer lines than the label measured for, leaving
         /// the element's bottom empty — PasukUILabel draws through TextKit while
         /// UILabel measures, so a real mismatch would surface as missing text.
-        /// A correct last line's slack stays small even without descenders.
+        /// A correct last line's slack stays small even without descenders; a
+        /// single band still flags when the tail could hold another whole
+        /// line, which is the same mismatch with only one line drawn.
         /// </summary>
         public bool HasMissingLines =>
-            LineBands >= 2 && EmptyTailRows > Math.Max(14, (int)(Height * 0.30));
+            EmptyTailRows > Math.Max(14, (int)(Height * 0.30))
+            && (LineBands >= 2 || (LineBands == 1 && EmptyTailRows >= MaxBandRows));
     }
 
     // Ink is whatever deviates enough in luminance from the sampled background,
@@ -130,7 +136,7 @@ internal static class PasukInkAnalysis
         height = Math.Clamp(height, 0, capture.Height - y);
         if (width <= 0 || height <= 0)
         {
-            return new InkProfile(0, 0, 0, string.Empty, "none", false, height, height);
+            return new InkProfile(0, 0, 0, string.Empty, "none", false, height, height, 0);
         }
         var rgba = new byte[width * height * 4];
         for (var row = 0; row < height; row++)
@@ -220,11 +226,12 @@ internal static class PasukInkAnalysis
 
         var kinds = new List<string>(bands.Count);
         var lineBands = 0;
+        var maxBandRows = 0;
         var lastLine = "none";
         foreach (var band in bands)
         {
             var span = band.Right - band.Left;
-            var coverage = band.Ink / (double)(band.Rows * Math.Max(1, span));
+            var coverage = band.Ink / ((double)band.Rows * Math.Max(1, span));
             var isText = band.Rows >= minLineRows && coverage >= MinLineCoverage && span >= minLineSpan;
             string kind;
             if (!isText)
@@ -249,6 +256,7 @@ internal static class PasukInkAnalysis
             if (isText)
             {
                 lineBands++;
+                maxBandRows = Math.Max(maxBandRows, band.Rows);
                 lastLine = kind;
             }
         }
@@ -272,13 +280,13 @@ internal static class PasukInkAnalysis
             runInk += rowInk[y];
         }
         var runSpan = runRows > 0 ? Math.Max(1, runRight - runLeft) : 0;
-        var runCoverage = runRows > 0 ? runInk / (double)(runRows * runSpan) : 0;
+        var runCoverage = runRows > 0 ? runInk / ((double)runRows * runSpan) : 0;
         var trailingLeftRun = runRows >= minRunRows && runLeft <= leftEdge
             && runSpan >= minLineSpan && runCoverage >= MinLineCoverage;
 
         var emptyTailRows = lastInkRow < 0 ? height : height - 1 - lastInkRow;
         return new InkProfile(inkRows, bands.Count, lineBands, string.Join(',', kinds),
-            lastLine, trailingLeftRun, emptyTailRows, height);
+            lastLine, trailingLeftRun, emptyTailRows, height, maxBandRows);
     }
 
     private static bool IsInk(byte[] rgba, int offset, double background) =>
