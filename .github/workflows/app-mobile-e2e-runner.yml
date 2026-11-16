@@ -359,32 +359,18 @@ jobs:
           mkdir -p "$MOBILE_E2E_ARTIFACTS"
           node --test app/mobile-e2e/release-smoke.test.mjs 2>&1 | tee -a "$MOBILE_E2E_ARTIFACTS/harness-validation.log"
 
-      - name: Start iPhone simulator boot
-        id: ios-boot
-        if: inputs.mode != 'build' && (inputs.platform == 'iOS')
-        shell: bash
-        env:
-          IOS_SIM_CACHE_HIT: ${{ steps.ios-sim-cache.outputs.cache-hit }}
-        run: bun run --cwd app/mobile-e2e ios:boot:start 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/ios-boot-start.log"
-
-      # The boot kicked above is still in flight; the wait also warms Appium's
-      # CoreSimulator bridge and exports MOBILE_UDID plus MOBILE_OS_VERSION —
-      # each shard is its own runner with a single simulator (#2263). Running
-      # it as a background step overlaps all of that with the shared-build
-      # archive transfer; `wait` below is the gate that surfaces the
-      # finished boot and the exported variables to the test step.
-      - name: Finish iPhone simulator setup
+      # Identity is not readiness. The installer owns the run's one normal
+      # boot immediately before installation, within its existing session
+      # deadline; an early background boot could disappear before that point.
+      - name: Identify iPhone simulator for session preparation
         id: simulator
         if: inputs.mode != 'build' && (inputs.platform == 'iOS')
-        background: true
         env:
           IOS_SIM_CACHE_HIT: ${{ steps.ios-sim-cache.outputs.cache-hit }}
-          # Keep the exact device selected by start; listing all devices again
-          # can stall CoreSimulator while that device is already booting.
-          MOBILE_UDID: ${{ steps.ios-boot.outputs.udid }}
-          MOBILE_OS_VERSION: ${{ steps.ios-boot.outputs.version }}
+          MOBILE_UDID: ${{ steps.ios-device.outputs.udid }}
+          MOBILE_OS_VERSION: ${{ steps.ios-device.outputs.version }}
         shell: bash
-        run: bun run --cwd app/mobile-e2e ios:boot:wait 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/ios-boot-wait.log"
+        run: bun run --cwd app/mobile-e2e ios:boot:identify 2>&1 | tee "$MOBILE_E2E_ARTIFACTS/ios-identity.log"
 
       # WebDriverAgent preparation only needs node_modules and the selected
       # Xcode, so it runs in the background too, overlapping
@@ -843,9 +829,9 @@ jobs:
             ${{ steps.sdk-key.outputs.sdk-home }}/platform-tools
           key: ${{ steps.sdk-cache.outputs.cache-primary-key }}
 
-      # Gates both background steps: simulator readiness + env exports and the
-      # prebuilt WebDriverAgent. A no-op on the Android leg, which has none.
-      - name: Wait for iPhone simulator
+      # Joins the prebuilt WebDriverAgent and other background artifacts.
+      # Current simulator readiness is established by the installer, not here.
+      - name: Wait for iOS automation artifacts
         wait-all:
 
       # Each runner owns one simulator/session and the case manifest the plan
@@ -917,7 +903,7 @@ jobs:
       # the directory is a consistent Shutdown image. A device that does not
       # match the resolved UDID is never captured under its key.
       - name: Quiesce iOS simulator for state capture
-        if: inputs.mode != 'build' && (inputs.platform == 'iOS' && always() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.ios-device.outputs.udid != '' && steps.ios-sim-cache.outputs.cache-hit != 'true' && steps.simulator.outcome == 'success' && inputs.publish_caches)
+        if: inputs.mode != 'build' && (inputs.platform == 'iOS' && always() && github.event_name != 'pull_request' && github.event_name != 'merge_group' && steps.ios-device.outputs.udid != '' && steps.ios-sim-cache.outputs.cache-hit != 'true' && steps.simulator.outcome == 'success' && steps.pilot-ios.outcome == 'success' && inputs.publish_caches)
         id: ios-sim-quiesce
         run: node app/mobile-e2e/ios-sim-state.mjs quiesce "${{ steps.ios-device.outputs.udid }}"
 

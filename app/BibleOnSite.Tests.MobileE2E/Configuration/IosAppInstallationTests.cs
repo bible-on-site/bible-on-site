@@ -16,7 +16,8 @@ public sealed class IosAppInstallationTests
     {
         ["kind"] = "ios-verified-install/1", ["udid"] = Configuration.DeviceId,
         ["appPath"] = Configuration.AppPath, ["nonce"] = Nonce,
-        ["bundleId"] = "com.tanah.daily929", ["bundleSha256"] = new string('a', 64), ["keepData"] = false
+        ["bundleId"] = "com.tanah.daily929", ["bundleSha256"] = new string('a', 64), ["keepData"] = false,
+        ["observerAcknowledged"] = true
     };
 
     [Fact]
@@ -44,6 +45,18 @@ public sealed class IosAppInstallationTests
     {
         var receipt = Receipt();
         receipt[field] = value;
+        Assert.Throws<InvalidOperationException>(() =>
+            IosAppInstallation.ParseReceipt(JsonSerializer.Serialize(receipt), Configuration, Nonce));
+    }
+
+    [Fact]
+    public void ReaderAcknowledgementMustBePresentAndTrueBeforeDriverCapabilities()
+    {
+        var receipt = Receipt();
+        receipt.Remove("observerAcknowledged");
+        Assert.Throws<InvalidOperationException>(() =>
+            IosAppInstallation.ParseReceipt(JsonSerializer.Serialize(receipt), Configuration, Nonce));
+        receipt["observerAcknowledged"] = false;
         Assert.Throws<InvalidOperationException>(() =>
             IosAppInstallation.ParseReceipt(JsonSerializer.Serialize(receipt), Configuration, Nonce));
     }

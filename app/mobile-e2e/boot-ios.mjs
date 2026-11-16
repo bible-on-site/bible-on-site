@@ -46,7 +46,7 @@ export async function bootIos({
   observe = startIosBootObservation,
   log = console.log,
 } = {}) {
-  if (!["start", "wait", "boot", "resolve"].includes(mode)) throw new Error(`Unknown ios:boot mode '${mode}'.`);
+  if (!["start", "wait", "boot", "resolve", "identify"].includes(mode)) throw new Error(`Unknown ios:boot mode '${mode}'.`);
   const sdk = run("--sdk", "iphonesimulator", "--show-sdk-version").trim();
   const listDevices = () => JSON.parse(run("simctl", "list", "devices", "available", "--json")).devices;
   const select = () => selectSimulator(listDevices(), sdk);
@@ -55,6 +55,7 @@ export async function bootIos({
   // Standalone wait still selects normally; a partial handoff must never pick
   // another device or download a runtime instead.
   const handoff = mode === "wait" && (env.MOBILE_UDID !== undefined || env.MOBILE_OS_VERSION !== undefined);
+  const expected = mode === "identify" && (env.MOBILE_UDID || env.MOBILE_OS_VERSION) ? handedOffSimulator(env, sdk) : undefined;
   let primary = handoff ? handedOffSimulator(env, sdk) : select();
   const capture = (stage) => {
     if (!env.MOBILE_E2E_ARTIFACTS) return;
@@ -72,11 +73,25 @@ export async function bootIos({
     }
     return;
   }
+  if (mode === "identify" && expected && !primary) {
+    throw new Error("The owned simulator identity disappeared after optional cache restore.");
+  }
   if (!primary) {
     downloadPlatform();
     primary = select();
   }
   if (!primary) throw new Error(`No available iPhone simulator runtime compatible with iOS SDK ${sdk}.`);
+  if (mode === "identify") {
+    if (expected && (expected.udid.toLowerCase() !== primary.udid.toLowerCase() || compareVersions(expected.version, primary.version) !== 0)) {
+      throw new Error("The owned simulator identity changed after optional cache restore.");
+    }
+    capture("before-boot");
+    const identity = `MOBILE_UDID=${primary.udid}\nMOBILE_OS_VERSION=${primary.version}\n`;
+    if (env.GITHUB_ENV) appendFileSync(env.GITHUB_ENV, identity);
+    if (env.GITHUB_OUTPUT) appendFileSync(env.GITHUB_OUTPUT, `udid=${primary.udid}\nversion=${primary.version}\n`);
+    log(`Resolved owned simulator ${primary.udid}, iOS ${primary.version}; session preparation owns readiness.`);
+    return;
+  }
   // Every shard has its own runner and boots exactly one simulator.
   const kick = (device) => {
     if (device.state !== "Shutdown") return;

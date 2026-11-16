@@ -346,3 +346,51 @@ test("successful boot joins diagnostic readers before exporting readiness", asyn
   assert.deepEqual(stages, ["wait-start", "wait-ready"]);
   assert(existsSync(env.GITHUB_ENV));
 });
+
+test("CI identity selection exports only ownership and never starts a normal boot or reader", async t => {
+  const { options, env, calls } = fixture(t);
+  await bootIos({ ...options, mode: "identify", env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } });
+  assert.equal(readFileSync(env.GITHUB_ENV, "utf8"), `MOBILE_UDID=${UDID}\nMOBILE_OS_VERSION=27.0\n`);
+  assert.equal(readFileSync(env.GITHUB_OUTPUT, "utf8"), `udid=${UDID}\nversion=27.0\n`);
+  assert(!calls.some(([kind, , command]) => kind === "async" || kind === "driver" || kind === "native" || command === "boot"));
+});
+
+test("identity cannot silently switch to another device after optional cache restore", async t => {
+  const { options, env, calls, setDevices } = fixture(t);
+  setDevices({ "com.apple.CoreSimulator.SimRuntime.iOS-27-0": [
+    { udid: OTHER_UDID, name: "iPhone 17", isAvailable: true, state: "Shutdown" },
+  ] });
+  await assert.rejects(bootIos({ ...options, mode: "identify", env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } }), /identity changed/);
+  assert(!existsSync(env.GITHUB_ENV));
+  assert(!calls.some(([kind, , command]) => kind === "download" || command === "boot"));
+});
+
+test("missing handed-off identity fails without downloading or booting a substitute", async t => {
+  const { options, env, calls, setDevices } = fixture(t);
+  setDevices({});
+  await assert.rejects(bootIos({ ...options, mode: "identify", env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } }), /identity disappeared/);
+  assert(!calls.some(([kind, , command]) => kind === "download" || command === "boot"));
+  assert(!existsSync(env.GITHUB_ENV));
+});
+
+test("identity retains missing-runtime installation without claiming a booted device", async t => {
+  const { options, env, calls, setDevices } = fixture(t);
+  setDevices({});
+  await bootIos({ ...options, mode: "identify", downloadPlatform: () => {
+    calls.push(["download"]);
+    setDevices({ "com.apple.CoreSimulator.SimRuntime.iOS-27-0": [
+      { udid: UDID, name: "iPhone 17", isAvailable: true, state: "Shutdown" },
+    ] });
+  } });
+  assert.equal(calls.filter(([kind]) => kind === "download").length, 1);
+  assert(!calls.some(([kind, , command]) => kind === "async" || command === "boot"));
+  assert(existsSync(env.GITHUB_ENV));
+});
+
+test("CI gives the installer sole normal boot ownership and never captures a failed pilot", () => {
+  const workflow = readFileSync(new URL("../../.github/workflows/app-mobile-e2e-runner.yml", import.meta.url), "utf8");
+  assert(!/ios:boot:(?:start|wait)\b/.test(workflow));
+  assert.match(workflow, /ios:boot:identify/);
+  assert.match(workflow, /Quiesce iOS simulator[\s\S]*?steps\.pilot-ios\.outcome == 'success'/);
+  assert.match(workflow, /Wait for iOS automation artifacts\s+wait-all:/);
+});
