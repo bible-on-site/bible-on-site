@@ -21,6 +21,12 @@ which resolves to the app's legacy `iw` tag. The fields applied per listing:
 | Short description | `<locale>/short-description.txt` (80 chars max) |
 | Phone screenshots | `screenshots/android/*.png` (sorted by name; replaces the existing set on the default `iw` listing only — other locales inherit its graphic assets) |
 
+The `en-US` copy intentionally uses English search terms (Tanakh/Tanach,
+Hebrew Bible, chapter, verse) that the project terminology table otherwise
+avoids: Play discovery for that locale comes from transliterated queries, so
+the listing text is an accepted ASO exception (#2124) — do not "correct" it to
+the internal Tanah/Perek/Pasuk terms.
+
 To sync the listing without shipping a build, run the `Store Listing` workflow
 (`.github/workflows/store-listing.yml`, `workflow_dispatch`), or locally:
 
