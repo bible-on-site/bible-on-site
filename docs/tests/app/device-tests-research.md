@@ -165,8 +165,8 @@ Windows coverage path is the least complete part of their offering).
 Pinned: `microsoft.dotnet.xharness.cli` + `Microsoft.DotNet.XHarness.TestRunners.Xunit`
 `11.0.0-prerelease.26466.1` (dotnet-eng feed
 `https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json`),
-`xunit 2.9.3` + `xunit.runner.utility 2.9.3`, `Microsoft.Maui.Controls 10.0.120`,
-SDK 10.0.403, maui-android 10.0.110. Emulator: `sdk_gphone64_x86_64`, API 36.
+`xunit 2.9.3` + `xunit.runner.utility 2.9.3`, `Microsoft.Maui.Controls 11.0.10`,
+SDK 11.0.100, maui-android 11.0.100.1. Emulator: `sdk_gphone64_x86_64`, API 36.
 
 ```bash
 # tool (prerelease, dotnet-eng feed only)
