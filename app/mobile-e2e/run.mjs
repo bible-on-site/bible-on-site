@@ -85,7 +85,8 @@ const interactions = platform === "ios" ? iosInteractionDiagnostics({
   nativeLog: resolve(artifacts, "device-live.log"), execute, inspectorPath,
 }) : undefined;
 const hangMonitor = interactions ? monitorNativeInteractions((command, request) =>
-  interactions.capture(command, request)) : undefined;
+  interactions.capture(command, request),
+  { pin: request => interactions.pin(request) }) : undefined;
 const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/index.js"),
   "--address", "127.0.0.1", "--port", appiumPort, "--log-no-colors", "--log-timestamp",
   "--use-drivers", platform === "android" ? "uiautomator2" : "xcuitest"], {
