@@ -50,8 +50,9 @@ least one shard** (6 runs had only never-started shard placeholders).
 |---|---|
 | First-attempt shard jobs that ran | **312** |
 | — succeeded | 271 |
-| — failed | **36 (11.54%)** |
-| — cancelled mid-flight | 5 |
+| — failed | **36** |
+| — cancelled mid-flight (excluded from the rate denominator) | 5 |
+| **Failure rate over non-cancelled first-attempt shards** | **36/307 = 11.73%** (36/312 = 11.54% if cancelled shards are counted) |
 | First-attempt shard jobs skipped before start | 6 |
 | Rerun shard attempts (`run_attempt` > 1) | 3 (all passed; one manual full-workflow rerun of an already-green run, `41491927041`) |
 
@@ -120,11 +121,11 @@ from experiment serialization).
 
 | Metric | `xcode-27` (n=20) | `namespace` (n=20) | ns vs x27 |
 |---|---|---|---|
-| Shard job duration, median | 1669s (27.8m) | **488s (8.1m)** | **3.4x faster** |
+| Shard job duration, median | 1657.5s (27.6m) | **482.5s (8.0m)** | **3.4x faster** |
 | Shard job duration, mean | 1602s | 581s | 2.8x faster |
-| Runner queue wait, median | 573s | 503s | ~equal |
-| Runner queue wait, mean | 1146s | 357s | shorter tail on ns |
-| Wait + run (queue + duration), median | 2244s | **961s** | **2.3x faster** |
+| Runner queue wait, median | 559s | 421.5s | ~equal |
+| Runner queue wait, mean | 1147s | 357s | shorter tail on ns |
+| Wait + run (queue + duration), median | 2203.5s | **938.5s** | **2.3x faster** |
 | Leg wall (dep-ready → last shard end), median | 2441s (40.7m) | **1024s (17.1m)** | **2.4x faster** |
 
 The speed advantage is large and consistent with the earlier single-sample
