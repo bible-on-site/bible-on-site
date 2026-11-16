@@ -51,6 +51,6 @@ export function signSimulatorApp(app, { execute = execFileSync, platform = proce
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const app = process.env.MOBILE_APP_PATH ?? resolve(fileURLToPath(new URL("../BibleOnSite/bin/Debug/net10.0-ios/iossimulator-arm64/BibleOnSite.app", import.meta.url)));
+  const app = process.env.MOBILE_APP_PATH ?? resolve(fileURLToPath(new URL("../BibleOnSite/bin/Debug/net11.0-ios/iossimulator-arm64/BibleOnSite.app", import.meta.url)));
   console.log(`Signed and verified ${signSimulatorApp(app)} simulator code targets.`);
 }

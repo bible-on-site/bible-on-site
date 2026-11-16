@@ -260,7 +260,7 @@ public class PackagedDatabaseTests
     [Fact]
     public async Task WithoutAppIdentity_KeepsHashVerify_AndWritesNoMarker()
     {
-        // The net10.0 reference assembly has no AppInfo: every launch must fall
+        // The net11.0 reference assembly has no AppInfo: every launch must fall
         // back to hashing — exactly the pre-marker behavior.
         await using var storage = new TestStorage();
         storage.PackageFiles[DbName] = Payload("bundled");

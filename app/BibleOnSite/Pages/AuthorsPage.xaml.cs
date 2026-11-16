@@ -25,13 +25,13 @@ public partial class AuthorsPage : ContentPage
     }
 
 
-    private void OnClearSearchClicked(object sender, EventArgs e)
+    private void OnClearSearchClicked(object? sender, EventArgs e)
     {
         AuthorsSearchInput.Text = string.Empty;
         AuthorsSearchInput.Focus();
     }
 
-    private void OnSearchTextChanged(object sender, TextChangedEventArgs e)
+    private void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
     {
         ClearSearchButton.IsVisible = !string.IsNullOrEmpty(e.NewTextValue);
         // The binding handles the search phrase update
@@ -39,7 +39,7 @@ public partial class AuthorsPage : ContentPage
         OnPropertyChanged(nameof(_viewModel.FilteredAuthors));
     }
 
-    private async void OnAuthorTapped(object sender, TappedEventArgs e)
+    private async void OnAuthorTapped(object? sender, TappedEventArgs e)
     {
         if (e.Parameter is Author author)
         {

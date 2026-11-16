@@ -48,7 +48,7 @@ public partial class TanahpediaPage : ContentPage
         }
     }
 
-    private async void OnSearchTitleClicked(object sender, EventArgs e) //NOSONAR
+    private async void OnSearchTitleClicked(object? sender, EventArgs e) //NOSONAR
     {
         await TanahpediaSearch.OpenAsync();
     }
