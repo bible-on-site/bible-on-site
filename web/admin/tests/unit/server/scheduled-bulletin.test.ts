@@ -4,17 +4,30 @@ import { deferred } from "../../util/deferred";
 const m = vi.hoisted(() => ({
 	prepare: vi.fn(),
 	email: vi.fn(),
+	rolloutEmail: vi.fn(),
 	telegram: vi.fn(),
 	whatsapp: vi.fn(),
 	emailSettings: vi.fn(),
 	telegramSettings: vi.fn(),
 	whatsappSettings: vi.fn(),
+	rolloutSummary: vi.fn(),
+	NoConfirmedRecipientsError: class extends Error {
+		constructor() {
+			super("אין נמענים שאישרו קבלת דיוור ברשימה שנבחרה");
+			this.name = "NoConfirmedRecipientsError";
+		}
+	},
 }));
 vi.mock("~/server/daily-bulletins.server", () => ({
 	prepareBulletin: m.prepare,
 }));
 vi.mock("~/server/ses-delivery.server", () => ({
 	enqueueBulletinEmail: m.email,
+	enqueueBulletinRolloutEmail: m.rolloutEmail,
+	NoConfirmedRecipientsError: m.NoConfirmedRecipientsError,
+}));
+vi.mock("~/server/rollout-state.server", () => ({
+	getBulletinRolloutSummary: m.rolloutSummary,
 }));
 vi.mock("~/server/ses-settings.server", () => ({
 	readAudienceSettings: m.emailSettings,
@@ -63,6 +76,8 @@ beforeEach(() => {
 	m.emailSettings.mockResolvedValue({ audience: "test", revision: 2 });
 	m.telegramSettings.mockResolvedValue({ audience: "real", revision: 3 });
 	m.whatsappSettings.mockResolvedValue({ audience: "real", revision: 4 });
+	m.rolloutSummary.mockResolvedValue(null);
+	m.rolloutEmail.mockResolvedValue(null);
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("scheduled bulletin orchestration", () => {
@@ -205,6 +220,55 @@ describe("scheduled bulletin orchestration", () => {
 				expect(fn).toHaveBeenCalledTimes(1);
 		},
 	);
+	it("adds the limited real-cohort email job only while the rollout delivers admitted members", async () => {
+		m.rolloutSummary.mockResolvedValue({
+			state: "running",
+			admitted: 3,
+			remaining: 49,
+			excluded: 0,
+		});
+		expect(await run()).toBe(true);
+		expect(m.rolloutEmail).toHaveBeenCalledExactlyOnceWith(
+			"2026-10-29",
+			scheduledBulletinRequestKey("2026-10-29", "email"),
+			2,
+		);
+	});
+	it.each([
+		{ state: "paused", admitted: 2 },
+		{ state: "completed", admitted: 52 },
+	])("keeps the cohort job while deliveries continue (%j)", async (rollout) => {
+		m.rolloutSummary.mockResolvedValue(rollout);
+		expect(await run()).toBe(true);
+		expect(m.rolloutEmail).toHaveBeenCalledTimes(1);
+	});
+	it.each([
+		null,
+		{ state: "disabled", admitted: 0, remaining: 52 },
+		{ state: "running", admitted: 0, remaining: 52 },
+		{ state: "paused", admitted: 0, remaining: 52 },
+	])(
+		"skips the cohort job without a delivering, non-empty cohort (%j)",
+		async (rollout) => {
+			m.rolloutSummary.mockResolvedValue(rollout);
+			expect(await run()).toBe(true);
+			expect(m.rolloutEmail).not.toHaveBeenCalled();
+			expect(m.email).toHaveBeenCalledTimes(1);
+		},
+	);
+	it("treats a cohort emptied between the gate and the enqueue as a skip, not a failure", async () => {
+		m.rolloutSummary.mockResolvedValue({ state: "running", admitted: 1 });
+		m.rolloutEmail.mockRejectedValueOnce(new m.NoConfirmedRecipientsError());
+		expect(await run()).toBe(true);
+		expect(m.rolloutEmail).toHaveBeenCalledTimes(1);
+	});
+	it("fails the run when the cohort enqueue rejects for another reason", async () => {
+		m.rolloutSummary.mockResolvedValue({ state: "running", admitted: 1 });
+		m.rolloutEmail.mockRejectedValueOnce(new Error("provider down"));
+		await expect(run()).rejects.toThrow(
+			"Scheduled bulletin channel enqueue incomplete",
+		);
+	});
 
 	it("fans out holiday dates as separate render receipts with exact wire JSON", async () => {
 		const trigger = {

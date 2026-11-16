@@ -1,3 +1,4 @@
+import type { EmailRolloutSummary } from "./bulletin-rollout";
 import { validateBulletinDate } from "./daily-bulletin";
 
 export type EmailAudience = "test" | "real";
@@ -45,6 +46,10 @@ export interface BulletinEmailState {
 	realRecipients: number;
 	unverifiedRecipients: number;
 	job: EmailJobSummary | null;
+	/** Original-cohort rollout operator view; null while the schema is absent. */
+	rollout: EmailRolloutSummary | null;
+	/** The limited-cohort 'real' job for this date, when it differs from `job`. */
+	rolloutJob: EmailJobSummary | null;
 }
 
 export function validateAudienceChange(
