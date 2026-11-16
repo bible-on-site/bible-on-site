@@ -97,7 +97,7 @@ internal static class HtmlAttributedStringFactory
 
     private static UIFont ResolveFont(NFloat size, UIFont face, bool italic)
     {
-        var font = face.WithSize(size);
+        var font = face.WithSize(size) ?? face;
         if (!italic)
         {
             return font;

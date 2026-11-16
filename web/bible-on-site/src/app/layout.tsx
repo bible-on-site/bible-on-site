@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import packageJson from "../../package.json";
 import "./globals.css";
 
 import { READER_SETTINGS_BOOTSTRAP } from "@/lib/reader-settings";
@@ -69,7 +70,7 @@ export default function RootLayout({
 			<body>
 				<TopNav />
 
-				<NavBar />
+				<NavBar version={packageJson.version} />
 				{children}
 			</body>
 		</html>

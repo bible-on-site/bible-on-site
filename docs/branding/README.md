@@ -1,6 +1,6 @@
 # Al Heperek typography and logos
 
-The shared brand face is Al Heperek Font UI 0.8.0, exported from the approved inscription design in the private `bible-on-site/al-heperek-font` repository. The export is reproducible with `tools/export_ui.py` at commit `e17a4fec33bc83da76a0ed74d8abe26155ab9ce8`. `font-manifest.json` records the source design and binary hashes.
+The shared brand face is Al Heperek Font UI 0.9.2, exported from the Yehuda reconstruction in the private `bible-on-site/al-heperek-font` repository. The export is reproducible with `tools/export_yehuda_ui.py`; `font-manifest.json` records the source design, export commit and binary hashes. The website, native application and logos use the same `ss03` drawings and companion figures by default, through the existing family names and asset paths.
 
 The website, admin, native UI, article WebView and PDF prose use the same Hebrew drawings at weights 400, 600 and 700. The native article WebView embeds its font data for offline use. Scripture uses the existing Taamey D face. Cantillated article quotations in the bulletin renderer continue to use its separately licensed cantillation face so complete Hebrew clusters retain their mark positioning.
 
@@ -8,9 +8,11 @@ Al Heperek Font files carry the restricted `AlHeperek-license.txt`, including th
 
 ## Brand artwork
 
-The canonical outlined wordmark and launcher artwork are in `web/bible-on-site/source-assets/logos/`. The wordmark reads `על הפרק` beside the emblem. The reversed SVG is in `public/images/logos/header-logo-reversed.svg`. Each small icon has an individually fitted 16, 24, 32 or 48 pixel SVG and PNG. The favicon ICO packages those exact PNGs.
+The logo lettering uses the Yehuda reconstruction in Al Heperek Font 0.9.2 Bold, feature `ss03`. Every text run, including each instance of על, is outlined from that same face. `logo-manifest.json` records the font hash, source font commit and canonical SVG hashes. The glyph-free layouts and outline generator live in the private font repository at `sources/yehuda/logo-layouts/` and `tools/yehuda_logos.py`.
 
-Run `node scripts/generate-brand-assets.mjs` from `web/bible-on-site/` to regenerate native launcher artwork, legacy web images, the touch icon and the shared PDF/header JPEG. Native icons combine a full-bleed background with transparent artwork. Android scales the artwork into the adaptive icon's safe zone before applying the launcher's mask. The loading view uses the complete composite. Historical web-image URLs keep serving the current artwork.
+The canonical light/reversed wordmarks, launcher artwork and fitted SVG icons are in `web/bible-on-site/source-assets/logos/`. The wordmark reads `על הפרק` beside the unframed emblem. Each small icon has an individually fitted 16, 24, 32 or 48 pixel SVG and PNG. The 24px icon uses exactly the 32px composition. The favicon ICO packages those exact PNGs.
+
+Run `node scripts/generate-brand-assets.mjs` from `web/bible-on-site/` to regenerate all 22 shared assets: public SVG copies, native launcher layers and splash, fitted favicon PNGs and both website/admin ICOs, legacy web images, the touch icon and shared PDF/header JPEG. Add `--check` to verify that every output matches its canonical source without writing. Native icons combine a full-bleed background with transparent artwork. Android scales the artwork into the adaptive icon's safe zone before applying the launcher's mask. The loading view uses the complete composite. Historical web-image URLs keep serving the current artwork.
 
 Run `node web/bulletin/scripts/prepare-email-assets.mjs --sharp-module web/bible-on-site/node_modules/sharp` from the repository root to regenerate the email/PDF manifest. The email wordmark is served from the website at `/images/logos/header-logo.jpg`. Existing content-addressed S3 images remain available. These commands write repository files and require no asset upload.
 
@@ -20,6 +22,6 @@ The changes update repository assets for subsequent builds. App-store listing ar
 
 ## Validation and rollback
 
-The font export tests compare shaped glyphs and positions against the approved `ss02` design at every weight. UI checks include real browser captures, header alignment, font loading, and native unit tests. Bulletin PDF checks inspect embedded fonts, cantillation and missing glyphs.
+The font export tests compare shaped glyphs and positions against the `ss03` design at every weight. UI checks include real browser captures, header alignment, font loading, and native unit tests. Bulletin PDF checks inspect embedded fonts, cantillation and missing glyphs.
 
 The change preserves public routes and the existing Taamey D and reader-preference behavior. Calendar PDF render fingerprints include the new font filenames and logo bytes so generated documents refresh through the existing publication workflow. Reverting the adoption commit restores the prior typography and logo assets. Previously published content-addressed PDFs and images retain their URLs.

@@ -161,7 +161,7 @@ jobs:
 
   # Cheap pre-flight on the experimental runner: proves the
   # namespace-profile-mac-os pool still schedules for this repo and that its
-  # image carries the Xcode_27.app layout every iOS leg hard-selects. A queued
+  # image carries the Xcode_27.2.app layout every iOS leg hard-selects. A queued
   # or failed probe stops both legs before any shard minutes are spent.
   probe_namespace:
     name: Probe namespace-profile-mac-os runner
@@ -179,7 +179,12 @@ jobs:
             sysctl -n machdep.cpu.brand_string hw.memsize hw.ncpu
             df -h /
             echo "== xcode =="
-            sudo xcode-select --switch "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)/Contents/Developer"
+            xcode_app="/Applications/Xcode_27.2.app"
+            if [ ! -d "$xcode_app/Contents/Developer" ]; then
+              echo "::error::Xcode 27.2 is required by the pinned .NET iOS 27.2 workload"
+              exit 1
+            fi
+            sudo xcode-select --switch "$xcode_app/Contents/Developer"
             xcodebuild -version
             xcode-select -p
             ls -d /Applications/Xcode*.app
@@ -187,18 +192,18 @@ jobs:
             xcrun simctl list runtimes
             xcrun simctl list devices available
           } 2>&1 | tee "$REPORT"
-      - name: Verify Xcode 27 layout used by iOS legs
+      - name: Verify Xcode 27.2 layout used by iOS legs
         run: |
           set -euo pipefail
-          # app-mobile-e2e-runner.yml selects the newest /Applications/Xcode_27*.app
-          # on every iOS leg; the workload's iOS 27.2 SDK needs Xcode ≥27.2 —
-          # an image carrying only 27.0/27.1 fails every shard at setup, so the
-          # probe fails here instead — the iteration aborts cheaply.
-          newest=$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)
-          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$newest/Contents/Info.plist")
-          echo "Newest Xcode 27: $newest ($version)"
-          minor=${version#*.}; minor=${minor%%.*}
-          [ "$minor" -ge 2 ] || { echo "Xcode $version < 27.2 required by the iOS 27.2 workload"; exit 1; }
+          # Match the exact SDK family selected by app-mobile-e2e-runner.yml.
+          # A newer Xcode beta is also incompatible with the pinned workload.
+          xcode_app="/Applications/Xcode_27.2.app"
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$xcode_app/Contents/Info.plist")
+          echo "Compatible Xcode: $xcode_app ($version)"
+          case "$version" in
+            27.2|27.2.*) ;;
+            *) echo "::error::Xcode $version is incompatible with the pinned .NET iOS 27.2 workload"; exit 1 ;;
+          esac
       - name: Upload probe report
         if: always()
         uses: actions/upload-artifact@v7

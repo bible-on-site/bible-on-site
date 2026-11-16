@@ -89,7 +89,10 @@ async function addAsset(id, sourcePath, extension, render, attribution) {
 		sha256: hash,
 		file,
 		s3Key,
-		url: id === "logo-header" ? "https://xn--febl3a.co.il/images/logos/header-logo.jpg" : `${cdnOrigin}/${s3Key}`,
+		url:
+			id === "logo-header"
+				? "https://xn--febl3a.co.il/images/logos/header-logo.jpg"
+				: `${cdnOrigin}/${s3Key}`,
 		contentType: extension === "jpg" ? "image/jpeg" : "image/png",
 		width: metadata.width,
 		height: metadata.height,
@@ -104,7 +107,7 @@ await addAsset(
 	"app/BibleOnSite/Resources/Images/logo_header.jpg",
 	"jpg",
 	async (source) => source,
-	"Approved Al Heperek inscription wordmark, shared with the native application and PDF header.",
+	"Al Heperek Yehuda 0.9.2 outlined wordmark, shared with the native application and PDF header.",
 );
 
 const sources = {
