@@ -84,7 +84,9 @@ async function fixture(t, options = {}) {
   let installed = options.installed ?? true;
   let clock = 1000;
   const calls = [];
+  const observations = [];
   const device = { udid, state: "Booted", isAvailable: true, ...options.device };
+  let listCalls = 0;
   const execute = async (command, args, execution) => {
     calls.push({ command, args, timeout: execution.timeout });
     assert.ok(execution.timeout > 0 && execution.timeout <= 300000);
@@ -92,9 +94,16 @@ async function fixture(t, options = {}) {
     if (options.fail === key) throw new Error(`failed ${key}`);
     let stdout = "";
     if (command === "plutil") stdout = args.at(-1) === "-" ? execution.input : JSON.stringify({ ...info, ...options.info });
-    else if (key === "simctl list") stdout = JSON.stringify({ devices: {
-      [options.runtime ?? "com.apple.CoreSimulator.SimRuntime.iOS-27-2"]: [device],
-    } });
+    else if (key === "simctl list") {
+      listCalls++;
+      if (options.raceAfterBoot && listCalls > 1) device.udid = "00000000-0000-4000-A000-000000000000";
+      stdout = JSON.stringify({ devices: {
+        [options.runtime ?? "com.apple.CoreSimulator.SimRuntime.iOS-27-2"]: options.duplicateDevice ? [device, { ...device }] : [device],
+      } });
+    }
+    else if (key === "simctl boot") { device.state = "Booting"; if (options.expireOnBoot) clock = 301000; }
+    else if (key === "simctl bootstatus") device.state = options.postBootState ?? "Booted";
+    else if (key === "simctl spawn") stdout = "PID Status Label\n1 0 launchd_sim\n";
     else if (key === "simctl listapps") stdout = JSON.stringify(installed ? { [bundleId]: {} } : {});
     else if (key === "simctl uninstall") { if (!options.stuckReset) installed = false; }
     else if (key === "simctl terminate") { if (options.terminationError) throw options.terminationError; }
@@ -110,8 +119,18 @@ async function fixture(t, options = {}) {
     return { stdout };
   };
   const config = { appPath, udid, nonce, devicesRoot, platform: "darwin", execute,
+    reserveTransition: async identity => {
+      observations.push({ phase: "reserve", identity });
+      clock += options.reserveMs ?? 0;
+      return { transitionAllowed: options.transitionAllowed ?? true };
+    },
+    confirmReady: async identity => {
+      observations.push({ phase: "ready", identity });
+      if (options.observerFailure) throw new Error("parent reader acknowledgement failed");
+      if (options.expireDuringAck) clock = 301000;
+    },
     now: () => clock, deadlineMs: 301000, ...options.configuration };
-  return { root, appPath, container, calls, config };
+  return { root, appPath, container, calls, config, observations };
 }
 
 test("normal preparation proves reset, exact installed payload and session identity before reuse", async t => {
@@ -126,7 +145,7 @@ test("normal preparation proves reset, exact installed payload and session ident
   assert.equal(result.installMs, 10);
   assert.ok(result.preparationMs >= result.installMs);
   const operations = calls.filter(call => call.command === "xcrun").map(call => call.args[1]);
-  assert.deepEqual(operations, ["list", "listapps", "uninstall", "listapps", "install", "listapps", "get_app_container"]);
+  assert.deepEqual(operations, ["list", "listapps", "uninstall", "listapps", "install", "listapps", "get_app_container", "spawn"]);
   for (const { command, args } of calls) {
     assert.ok(!["lipo", "uname", "codesign", "dotnet"].includes(command));
     if (command === "xcrun" && args[1] !== "list") assert.equal(args[2], udid);
@@ -173,7 +192,8 @@ for (const [name, options, message] of [
   ["arm64 device Mach-O", { platform: 2 }, /iPhoneSimulator/],
   ["invalid load command", { commandBytes: 4096 }, /load command size/],
   ["wrong UDID", { device: { udid: "A1B2C3D4-0000-4000-A000-123456789ABC" } }, /uniquely available/],
-  ["shutdown simulator", { device: { state: "Shutdown" } }, /uniquely available/],
+  ["ambiguous simulator", { duplicateDevice: true }, /uniquely available/],
+  ["shutting-down simulator", { device: { state: "Shutting Down" } }, /uniquely available/],
   ["unavailable simulator", { device: { isAvailable: false } }, /uniquely available/],
   ["wrong runtime", { runtime: "com.apple.CoreSimulator.SimRuntime.tvOS-27-2" }, /uniquely available/],
   ["failed reset", { fail: "simctl uninstall" }, /failed simctl uninstall/],
@@ -218,4 +238,53 @@ test("whole-bundle digest includes managed content and rejects external symlinks
   await symlink(outside, join(appPath, "external"));
   await assert.rejects(bundleDigest(appPath), /escapes its app/);
   assert.equal(await readFile(outside, "utf8"), "outside");
+});
+
+for (const state of ["Shutdown", "Booting"]) {
+  test(`the first parent-reserved ${state} transition is established once inside preparation`, async t => {
+    const { config, calls, observations } = await fixture(t, { device: { state }, commandMs: 10, reserveMs: 20 });
+    const proof = await prepareIosApp(config);
+    const commands = calls.filter(call => call.command === "xcrun").map(call => call.args[1]);
+    assert.equal(commands.filter(command => command === "boot").length, state === "Shutdown" ? 1 : 0);
+    assert.equal(commands.filter(command => command === "bootstatus").length, 1);
+    assert.equal(proof.initialState, state);
+    assert.equal(proof.bootMs, state === "Shutdown" ? 30 : 20);
+    assert.equal(proof.observerAcknowledged, true);
+    assert.deepEqual(observations.map(value => value.phase), ["reserve", "ready"]);
+    assert.equal(observations[1].identity.state, "Booted");
+    assert.equal(observations[1].identity.deadlineMs, config.deadlineMs);
+    assert(calls.at(-1).timeout < calls[0].timeout - 20);
+  });
+}
+
+for (const [name, options, message] of [
+  ["later lost readiness", { device: { state: "Shutdown" }, transitionAllowed: false }, /already claimed/],
+  ["failed normal boot", { device: { state: "Shutdown" }, fail: "simctl boot" }, /failed simctl boot/],
+  ["failed bootstatus", { device: { state: "Shutdown" }, fail: "simctl bootstatus" }, /failed simctl bootstatus/],
+  ["still booting", { device: { state: "Shutdown" }, postBootState: "Booting" }, /did not establish readiness/],
+  ["identity changed during boot", { device: { state: "Shutdown" }, raceAfterBoot: true }, /uniquely available/],
+  ["original deadline during boot", { device: { state: "Shutdown" }, expireOnBoot: true }, /300 second/],
+  ["reservation consumed the deadline", { device: { state: "Shutdown" }, reserveMs: 300000 }, /300 second/],
+]) {
+  test(`${name} cannot retry or install the app`, async t => {
+    const { config, calls, observations } = await fixture(t, options);
+    await assert.rejects(prepareIosApp(config), message);
+    assert(calls.filter(call => call.args[1] === "boot").length <= 1);
+    assert(!calls.some(call => call.args[1] === "install" || call.args[1] === "uninstall"));
+    assert(!observations.some(value => value.phase === "ready"));
+  });
+}
+
+test("a stale launchd session or failed reader acknowledgement cannot produce a driver receipt", async t => {
+  for (const options of [{ fail: "simctl spawn" }, { observerFailure: true }, { expireDuringAck: true }]) {
+    const { config } = await fixture(t, options);
+    await assert.rejects(prepareIosApp(config), /failed simctl spawn|reader acknowledgement|300 second/);
+  }
+});
+
+test("an installer cannot create its own run-scoped ownership or omit the parent acknowledgement", async t => {
+  const { config, calls } = await fixture(t);
+  await assert.rejects(prepareIosApp({ ...config, reserveTransition: undefined }), /run-scoped/);
+  await assert.rejects(prepareIosApp({ ...config, confirmReady: undefined }), /run-scoped/);
+  assert.equal(calls.length, 0);
 });

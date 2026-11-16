@@ -23,6 +23,33 @@ export function executeIosCommand(command, args, { input, ...options } = {}) {
 const bundleId = "com.tanah.daily929";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export async function requestIosPreparation(phase, identity, {
+  environment = process.env, request = fetch, now = Date.now,
+} = {}) {
+  const port = environment.MOBILE_IOS_PREPARATION_PORT;
+  const token = environment.MOBILE_IOS_PREPARATION_TOKEN;
+  const remaining = identity.deadlineMs - now();
+  if (!/^\d{1,5}$/.test(port ?? "") || Number(port) < 1 || Number(port) > 65535 ||
+      !/^[0-9a-f]{64}$/.test(token ?? "") || !["reserve", "ready"].includes(phase) ||
+      !Number.isFinite(remaining) || remaining <= 0 || remaining > 300000) {
+    throw new Error("A live parent-owned iOS preparation observer and original deadline are required.");
+  }
+  const response = await request(`http://127.0.0.1:${port}/prepare`, {
+    method: "POST", redirect: "error", signal: AbortSignal.timeout(Math.max(1, Math.floor(remaining))),
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json",
+      "X-Ios-Preparation-Deadline": String(identity.deadlineMs) },
+    body: JSON.stringify({ kind: "ios-preparation/1", phase, ...identity }),
+  });
+  if (response.status !== 200) throw new Error(`Parent iOS preparation ${phase} rejected (${response.status}).`);
+  const ack = await response.json();
+  const kind = phase === "reserve" ? "ios-preparation-reservation/1" : "ios-preparation-ack/1";
+  if (now() >= identity.deadlineMs || ack.kind !== kind || ack.udid !== identity.udid || ack.nonce !== identity.nonce ||
+      (phase === "reserve" && typeof ack.transitionAllowed !== "boolean")) {
+    throw new Error("The parent iOS preparation acknowledgement is stale or mismatched.");
+  }
+  return ack;
+}
+
 export function iosNodeEnvironment(environment, nodeExecutable) {
   const entries = Object.entries(environment);
   const inheritedPath = entries.find(([key]) => key.toLowerCase() === "path")?.[1] ?? "";
@@ -111,6 +138,7 @@ export async function prepareIosApp({
   appPath, udid, nonce, keepData = false, deadlineMs,
   execute = executeIosCommand, now = Date.now, platform = process.platform,
   devicesRoot = join(homedir(), "Library/Developer/CoreSimulator/Devices"),
+  reserveTransition, confirmReady,
 }) {
   const started = now();
   if (platform !== "darwin") throw new Error("iOS installation requires macOS.");
@@ -119,6 +147,9 @@ export async function prepareIosApp({
   }
   if (!Number.isFinite(deadlineMs) || deadlineMs <= started || deadlineMs - started > 300000) {
     throw new Error("iOS preparation must share the existing 300 second session deadline.");
+  }
+  if (typeof reserveTransition !== "function" || typeof confirmReady !== "function") {
+    throw new Error("iOS preparation requires the parent's run-scoped transition and reader acknowledgement.");
   }
   const checkDeadline = () => {
     if (now() >= deadlineMs) throw new Error("iOS preparation exhausted the 300 second session deadline.");
@@ -143,13 +174,30 @@ export async function prepareIosApp({
   }
   await verifySimulatorExecutable(join(appPath, info.CFBundleExecutable));
   const expectedDigest = await bundleDigest(appPath, checkDeadline);
-  const devices = JSON.parse(await run("xcrun", ["simctl", "list", "devices", "--json"])).devices;
-  const matching = Object.entries(devices).flatMap(([runtime, list]) =>
-    list.filter(device => device.udid === udid).map(device => ({ ...device, runtime })));
-  if (matching.length !== 1 || matching[0].state !== "Booted" || !matching[0].isAvailable ||
-      !matching[0].runtime.startsWith("com.apple.CoreSimulator.SimRuntime.iOS-")) {
-    throw new Error("The selected iOS simulator is not uniquely available and booted.");
+  const currentDevice = async () => {
+    const devices = JSON.parse(await run("xcrun", ["simctl", "list", "devices", "--json"])).devices;
+    const matching = Object.entries(devices).flatMap(([runtime, list]) =>
+      list.filter(device => device.udid === udid).map(device => ({ ...device, runtime })));
+    if (matching.length !== 1 || matching[0].isAvailable !== true ||
+        !matching[0].runtime.startsWith("com.apple.CoreSimulator.SimRuntime.iOS-") ||
+        !["Shutdown", "Booting", "Booted"].includes(matching[0].state)) {
+      throw new Error(`The selected iOS simulator is not uniquely available: ${JSON.stringify({ udid, matching })}`);
+    }
+    return matching[0];
+  };
+  const initial = await currentDevice();
+  const identity = { udid, nonce, bundleId, bundleSha256: expectedDigest, deadlineMs };
+  const reservation = await reserveTransition({ ...identity, state: initial.state });
+  checkDeadline();
+  const bootStarted = now();
+  if (initial.state !== "Booted") {
+    if (reservation.transitionAllowed !== true) throw new Error("The run already claimed its normal iOS boot; later readiness loss is fatal.");
+    if (initial.state === "Shutdown") await run("xcrun", ["simctl", "boot", udid]);
+    await run("xcrun", ["simctl", "bootstatus", udid]);
+    const current = await currentDevice();
+    if (current.state !== "Booted") throw new Error(`Normal iOS boot did not establish readiness: ${JSON.stringify(current)}`);
   }
+  const bootMs = now() - bootStarted;
   const installedApps = async () => {
     const listing = await run("xcrun", ["simctl", "listapps", udid]);
     return JSON.parse(await run("plutil", ["-convert", "json", "-o", "-", "-"], { input: listing }));
@@ -186,9 +234,14 @@ export async function prepareIosApp({
       await bundleDigest(appPath, checkDeadline) !== expectedDigest) {
     throw new Error("Installed iOS AUT bytes differ from the exact input bundle.");
   }
+  // A persisted Booted plist is not a current SimLaunchHost session. This
+  // single owned-device probe is immediately before reader attachment/launch.
+  await run("xcrun", ["simctl", "spawn", udid, "launchctl", "list"]);
+  await confirmReady({ ...identity, state: "Booted" });
   checkDeadline();
   return { kind: "ios-verified-install/1", udid, appPath: requestedAppPath, canonicalAppPath: appPath, nonce,
-    bundleId, bundleSha256: expectedDigest, keepData, installMs, preparationMs: now() - started };
+    bundleId, bundleSha256: expectedDigest, keepData, installMs, preparationMs: now() - started,
+    bootMs, initialState: initial.state, observerAcknowledged: true };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -196,5 +249,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (process.argv.length !== 8 || !["reset", "keep"].includes(keep)) throw new Error("Invalid iOS installation arguments.");
   await verifyNodeInterpreter(expectedNode);
   console.log(JSON.stringify(await prepareIosApp({ appPath, udid, nonce,
-    keepData: keep === "keep", deadlineMs: Number(deadline) })));
+    keepData: keep === "keep", deadlineMs: Number(deadline),
+    reserveTransition: identity => requestIosPreparation("reserve", identity),
+    confirmReady: identity => requestIosPreparation("ready", identity) })));
 }

@@ -13,7 +13,8 @@ import { prepareWda } from "./prepare-wda.mjs";
 import { exportNativeLog, iosAutomationLogArguments, iosHostLogArguments, startIosClassicHostLog, startNativeLog, stopNativeLogStreams } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
 import { installAppUnderTest } from "./android-install.mjs";
-import { iosNodeEnvironment } from "./ios-install.mjs";
+import { bundleDigest, iosNodeEnvironment } from "./ios-install.mjs";
+import { observeIosPreparations } from "./ios-preparation-observer.mjs";
 import { collectAndroidCrashDiagnostics } from "./android-crash-diagnostics.mjs";
 import { iosAppLogPids } from "./ios-processes.mjs";
 import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
@@ -117,14 +118,10 @@ let test;
 let diagnosticsFailed = false;
 const androidEmulator = platform === "android" && /^emulator-\d+$/.test(process.env.MOBILE_UDID);
 let nativeStream;
-let automationStream;
 let hostStream;
 let classicHostStream;
-if (platform === "ios") {
-  nativeStream = startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
-    "log", "stream", "--style", "compact", "--level", "info", "--predicate", 'process == "BibleOnSite"'],
-    resolve(artifacts, "device-live.log"));
-} else if (androidEmulator) {
+let iosPreparations;
+if (androidEmulator) {
   try {
     // Record before the first AUT launch so a process that dies between tests
     // still leaves its PID, lifecycle and native crash output in this run.
@@ -164,7 +161,7 @@ let failureObserverConfirmed = false;
 const failureDirectory = resolve(hostDiagnostics, "scenario-failures");
 if (platform === "ios") mkdirSync(failureDirectory, { recursive: true });
 let failureMonitor;
-const stop = () => { test?.kill(); server.kill(); nativeStream?.kill(); automationStream?.kill(); hostStream?.kill(); classicHostStream?.kill(); };
+const stop = () => { test?.kill(); server.kill(); nativeStream?.kill(); iosPreparations?.kill(); hostStream?.kill(); classicHostStream?.kill(); };
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
@@ -174,13 +171,25 @@ try {
     hostStream = startNativeLog("/usr/bin/log", iosHostLogArguments(),
       resolve(artifacts, "simulator-host-live.log"));
     classicHostStream = startIosClassicHostLog(resolve(artifacts, "simulator-host-classic-live.log"));
-    const args = iosAutomationLogArguments(process.env.MOBILE_UDID);
-    writeFileSync(resolve(artifacts, "automation-log-start.json"), JSON.stringify({
-      time: new Date().toISOString(), source: process.env.GITHUB_SHA ?? null,
-      udid: process.env.MOBILE_UDID, command: "xcrun", args,
-      artifact: "automation-live.log", observationOnly: true,
-    }, null, 2), { flag: "wx" });
-    automationStream = startNativeLog("xcrun", args, resolve(artifacts, "automation-live.log"));
+    iosPreparations = await observeIosPreparations({
+      udid: process.env.MOBILE_UDID,
+      expectedBundleSha256: signal => bundleDigest(appPath, () => signal.throwIfAborted()),
+      report: value => appendFileSync(resolve(artifacts, "ios-preparation-observer.jsonl"), `${JSON.stringify(value)}\n`),
+      readerFactories: [
+        onOutput => startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
+          "log", "stream", "--style", "compact", "--level", "info", "--predicate", 'process == "BibleOnSite"'],
+          resolve(artifacts, "device-live.log"), { onOutput }),
+        onOutput => {
+          const args = iosAutomationLogArguments(process.env.MOBILE_UDID);
+          writeFileSync(resolve(artifacts, "automation-log-start.json"), JSON.stringify({
+            time: new Date().toISOString(), source: process.env.GITHUB_SHA ?? null,
+            udid: process.env.MOBILE_UDID, command: "xcrun", args,
+            artifact: "automation-live.log", observationOnly: true,
+          }, null, 2), { flag: "wx" });
+          return startNativeLog("xcrun", args, resolve(artifacts, "automation-live.log"), { onOutput });
+        },
+      ],
+    });
   }
   failureMonitor = interactions ? await listenScenarioFailures(failureDirectory, async (request, { signal } = {}) => {
     const result = await interactions.failure(request, { signal });
@@ -196,6 +205,7 @@ try {
   test = spawn("dotnet", [...launch, "TestMobileE2E", "--configuration", "Debug"], {
     cwd: resolve(directory, ".."), windowsHide: true, stdio: ["inherit", "pipe", "pipe"],
     env: { ...(platform === "ios" ? iosNodeEnvironment(process.env, process.execPath) : process.env),
+      ...iosPreparations?.environment,
       MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts, MOBILE_E2E_HOST_DIAGNOSTICS: hostDiagnostics,
       MOBILE_E2E_FAILURE_DIAGNOSTICS: failureMonitor ? failureDirectory : "",
       MOBILE_E2E_FAILURE_DIAGNOSTICS_PORT: failureMonitor ? String(failureMonitor.port) : "",
@@ -240,8 +250,12 @@ try {
     console.error("Could not finish native hang capture:", error);
   }
   try {
-    await phase("native-log-stream", () => platform === "ios"
-      ? stopNativeLogStreams([nativeStream, automationStream, hostStream, classicHostStream]) : nativeStream?.stop());
+    await phase("native-log-stream", async () => {
+      if (platform !== "ios") return nativeStream?.stop();
+      const joined = await Promise.allSettled([iosPreparations?.stop(), stopNativeLogStreams([hostStream, classicHostStream])]);
+      const errors = joined.filter(result => result.status === "rejected").map(result => result.reason);
+      if (errors.length) throw new AggregateError(errors, "Could not finish iOS native log ownership.");
+    });
   } catch (error) {
     if (platform === "ios") diagnosticsFailed = true;
     else writeFileSync(resolve(artifacts, "android-native-log-stop-error.txt"), String(error));
