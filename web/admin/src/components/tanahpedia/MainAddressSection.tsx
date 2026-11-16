@@ -4,6 +4,7 @@ import {
 	pediaNameFromInput,
 	pediaPublicUrl,
 } from "~/lib/tanahpedia/pedia-names";
+import { useDebouncedValue } from "~/lib/use-debounced-value";
 import { checkPediaName } from "~/server/tanahpedia/aliases";
 
 interface MainAddressSectionProps {
@@ -20,15 +21,6 @@ interface MainAddressSectionProps {
 }
 
 const STATUS_DEBOUNCE_MS = 300;
-
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-	const [debounced, setDebounced] = useState(value);
-	useEffect(() => {
-		const t = setTimeout(() => setDebounced(value), delayMs);
-		return () => clearTimeout(t);
-	}, [value, delayMs]);
-	return debounced;
-}
 
 /**
  * The entry's main public address: the unique_name that determines the
