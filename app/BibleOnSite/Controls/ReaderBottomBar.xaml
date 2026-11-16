@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <Grid xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+      xmlns:controls="clr-namespace:BibleOnSite.Controls"
       xmlns:helpers="clr-namespace:BibleOnSite.Helpers"
       xmlns:fonts="clr-namespace:Fonts"
       x:Class="BibleOnSite.Controls.ReaderBottomBar"
@@ -35,40 +36,25 @@
                 AutomationId="PerushimChevronButton"
                 SemanticProperties.Description="פרושים"
                 ToolTipProperties.Text="פרושים"
+                Style="{x:Static controls:AppButtonStyles.CompactIcon}"
                 Text="{x:Static fonts:FluentUI.chevron_up_24_regular}"
-                FontFamily="FluentIcons"
                 FontSize="20"
-                WidthRequest="44"
-                HeightRequest="44"
-                Padding="0"
-                BackgroundColor="Transparent"
-                TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
                 Clicked="OnPerushimChevronClicked"
                 AbsoluteLayout.LayoutBounds="0.08,0.55"
-                AbsoluteLayout.LayoutFlags="PositionProportional">
-            <VisualStateManager.VisualStateGroups>
-                <VisualStateGroup x:Name="CommonStates">
-                    <VisualState x:Name="Normal"/>
-                    <VisualState x:Name="Disabled"/>
-                </VisualStateGroup>
-            </VisualStateManager.VisualStateGroups>
-        </Button>
+                AbsoluteLayout.LayoutFlags="PositionProportional"/>
 
         <!-- Text Button at 28% - vertical א ב ג -->
         <Button x:Name="TextButton"
                 AutomationId="TextButton"
+                Style="{x:Static controls:AppButtonStyles.CompactIcon}"
                 Text="א&#x0a;ב&#x0a;ג"
+                FontFamily="OpenSansRegular"
                 FontAutoScalingEnabled="False"
                 SemanticProperties.Description="הצגת הטקסט"
                 ToolTipProperties.Text="הצגת הטקסט"
                 FontSize="10"
                 FontAttributes="Bold"
-                WidthRequest="44"
-                HeightRequest="44"
-                Padding="0"
                 LineBreakMode="WordWrap"
-                BackgroundColor="Transparent"
-                TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
                 Clicked="OnTextButtonClicked"
                 AbsoluteLayout.LayoutBounds="0.28,0.55"
                 AbsoluteLayout.LayoutFlags="PositionProportional"/>
@@ -81,14 +67,9 @@
             <Button x:Name="ArticlesButton" AutomationId="ArticlesButton"
                     SemanticProperties.Description="מאמרים"
                     ToolTipProperties.Text="מאמרים"
+                    Style="{x:Static controls:AppButtonStyles.CompactIcon}"
                     Text="{x:Static fonts:FluentUI.document_24_regular}"
-                    FontFamily="FluentIcons"
                     FontSize="20"
-                    WidthRequest="44"
-                    HeightRequest="44"
-                    Padding="0"
-                    BackgroundColor="Transparent"
-                    TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
                     Clicked="OnArticlesButtonClicked"
                     HorizontalOptions="Center"/>
             <Border x:Name="ArticlesBadge"
@@ -115,14 +96,9 @@
                 AutomationId="FullScreenButton"
                 SemanticProperties.Description="מסך מלא"
                 ToolTipProperties.Text="{OnPlatform Default='מסך מלא', WinUI='מסך מלא (F11)'}"
+                Style="{x:Static controls:AppButtonStyles.CompactIcon}"
                 Text="{x:Static fonts:FluentUI.full_screen_maximize_24_regular}"
-                FontFamily="FluentIcons"
                 FontSize="22"
-                WidthRequest="44"
-                HeightRequest="44"
-                Padding="0"
-                BackgroundColor="Transparent"
-                TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray300}}"
                 Clicked="OnFullScreenClicked"
                 AbsoluteLayout.LayoutBounds="0.92,0.55"
                 AbsoluteLayout.LayoutFlags="PositionProportional"/>
