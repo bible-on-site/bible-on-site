@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
+import { BulletinEmailRollout } from "~/components/BulletinEmailRollout";
 import { BulletinJoinLinks } from "~/components/BulletinJoinLinks";
 import { BulletinTelegramControls } from "~/components/BulletinTelegramControls";
 import type {
@@ -373,6 +374,13 @@ export function DailyBulletinPage() {
 											))}
 										</ul>
 									</div>
+								)}
+								{state.rollout && (
+									<BulletinEmailRollout
+										rollout={state.rollout}
+										job={state.rolloutJob}
+										disabled={busy || email.isFetching || !!email.error}
+									/>
 								)}
 							</>
 						)}

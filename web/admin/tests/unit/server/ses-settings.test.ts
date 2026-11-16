@@ -380,6 +380,31 @@ describe("audience settings and subscriber overview", () => {
 		expect(mocks.latestJob).toHaveBeenCalledWith("2026-10-28", "test");
 	});
 
+	it("reports the real-audience job itself as the cohort job without a second lookup", async () => {
+		mocks.queryOne.mockResolvedValue({ audience: "real", revision: 5 });
+		mockSubscribers([
+			{
+				email: "reader@example.com",
+				audience: "real",
+				consent_status: "confirmed",
+			},
+		]);
+		const job = { id: "real-job", status: "delivered" };
+		mocks.latestJob.mockResolvedValue(job);
+		expect(await settings.getBulletinEmailState("2026-10-28")).toMatchObject(
+			{
+				settings: { audience: "real", revision: 5 },
+				job,
+				rollout: null,
+				rolloutJob: job,
+			},
+		);
+		expect(mocks.latestJob).toHaveBeenCalledExactlyOnceWith(
+			"2026-10-28",
+			"real",
+		);
+	});
+
 	it("reads the persisted audience and numeric revision", async () => {
 		mocks.queryOne.mockResolvedValue({ audience: "test", revision: "3" });
 		expect(await settings.readAudienceSettings()).toEqual({
@@ -764,5 +789,107 @@ describe("send-slot reservation", () => {
 		expect(mocks.wait.mock.calls).toEqual([[1_000]]);
 		expect(mocks.txExecute).toHaveBeenCalledTimes(2);
 		expect(next).toBe("2026-10-28T08:00:02.000Z");
+	});
+});
+
+describe("send-slot reservation under the original-cohort rollout", () => {
+	function mockRolloutSlot(
+		rollout: { state: string } | null | Error,
+		overrides: Record<string, unknown> = {},
+	) {
+		const subscriber = {
+			audience: "real",
+			consent_status: "confirmed",
+			...overrides,
+		};
+		mocks.txQueryOne.mockImplementation(async (_conn, sql: string) => {
+			if (sql.includes("email_rollout")) {
+				if (rollout instanceof Error) throw rollout;
+				return rollout;
+			}
+			return sql.includes("email_settings")
+				? slot({ audience: "test" })
+				: subscriber;
+		});
+		mocks.queryOne.mockImplementation(async (sql: string) =>
+			sql.includes("email_rollout")
+				? rollout instanceof Error
+					? null
+					: rollout
+				: latest({ audience: "test" }),
+		);
+	}
+	it.each(["running", "paused", "completed"])(
+		"licenses a real send while the global audience stays on test (%s)",
+		async (state) => {
+			mockRolloutSlot({ state });
+			await settings.reserveSendSlot("real", 3, 42);
+			expect(mocks.txExecute).toHaveBeenCalledTimes(1);
+			expect(mocks.queryOne).toHaveBeenCalled();
+		},
+	);
+	it.each([null, { state: "disabled" }])(
+		"suppresses a real send without a rollout license %j",
+		async (rollout) => {
+			mockRolloutSlot(rollout);
+			await expect(
+				settings.reserveSendSlot("real", 3, 42),
+			).rejects.toBeInstanceOf(SesSuppressedError);
+			expect(mocks.txExecute).not.toHaveBeenCalled();
+		},
+	);
+	it("suppresses a real send when the rollout schema is absent", async () => {
+		mockRolloutSlot(
+			Object.assign(new Error("missing"), { code: "ER_NO_SUCH_TABLE" }),
+		);
+		await expect(
+			settings.reserveSendSlot("real", 3, 42),
+		).rejects.toBeInstanceOf(SesSuppressedError);
+	});
+	it.each(["pending", "unsubscribed", "bounced", "complained"])(
+		"suppresses a rollout send when recipient consent is %s",
+		async (consent_status) => {
+			mockRolloutSlot({ state: "running" }, { consent_status });
+			await expect(
+				settings.reserveSendSlot("real", 3, 42),
+			).rejects.toBeInstanceOf(SesSuppressedError);
+			expect(mocks.txExecute).not.toHaveBeenCalled();
+		},
+	);
+	it("suppresses a rollout send when the license was withdrawn during the wait", async () => {
+		mockRolloutSlot({ state: "running" });
+		const settingsRow = slot({
+			audience: "test",
+			next_send_at: "2026-10-28T08:00:01.000Z",
+		});
+		mocks.txQueryOne.mockImplementation(async (_conn, sql: string) =>
+			sql.includes("email_rollout")
+				? { state: "running" }
+				: sql.includes("email_settings")
+					? settingsRow
+					: { audience: "real", consent_status: "confirmed" },
+		);
+		mocks.wait.mockImplementation(async () =>
+			mocks.queryOne.mockImplementation(async (sql: string) =>
+				sql.includes("email_rollout")
+					? { state: "disabled" }
+					: latest({ audience: "test" }),
+			),
+		);
+		await expect(
+			settings.reserveSendSlot("real", 3, 42),
+		).rejects.toBeInstanceOf(SesSuppressedError);
+	});
+	it("keeps the settings-audience path authoritative once real is the global audience", async () => {
+		mocks.txQueryOne.mockImplementation(async (_conn, sql: string) =>
+			sql.includes("email_settings")
+				? slot({ audience: "real" })
+				: { audience: "real", consent_status: "confirmed" },
+		);
+		mocks.queryOne.mockResolvedValue(
+			latest({ audience: "real", consent_status: "confirmed" }),
+		);
+		await settings.reserveSendSlot("real", 3, 42);
+		expect(mocks.txExecute).toHaveBeenCalledTimes(1);
 	});
 });

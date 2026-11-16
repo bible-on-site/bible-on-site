@@ -4,6 +4,7 @@ import {
 	validateEmailQueueRequest,
 	validateSubscriberChange,
 } from "~/lib/bulletin-email";
+import { validateRolloutChange } from "~/lib/bulletin-rollout";
 import { validateBulletinDate } from "~/lib/daily-bulletin";
 
 export const getDailyBulletinEmail = createServerFn({ method: "GET" })
@@ -35,4 +36,11 @@ export const changeDailyBulletinSubscriber = createServerFn({ method: "POST" })
 	.handler(async ({ data }) => {
 		const { changeSubscriber } = await import("./ses-settings.server");
 		return changeSubscriber(data);
+	});
+
+export const setDailyBulletinEmailRollout = createServerFn({ method: "POST" })
+	.validator(validateRolloutChange)
+	.handler(async ({ data }) => {
+		const { setRolloutState } = await import("./rollout-state.server");
+		return setRolloutState(data);
 	});
