@@ -7,6 +7,7 @@ using Xunit;
 namespace BibleOnSite.Tests.MobileE2E.Configuration;
 
 [Trait("Category", "Unit")]
+[Collection("Failure diagnostics environment")]
 public sealed class IosAppInstallationTests
 {
     private const string Nonce = "50a16675077e44749d1e4eb503c1ea67";
@@ -132,6 +133,59 @@ public sealed class IosAppInstallationTests
             Assert.True(Guid.TryParseExact(proof.Nonce, "N", out _));
             Assert.Equal(1, calls);
             Assert.True(File.Exists(Path.Combine(configuration.ArtifactDirectory, "ios-installations.jsonl")));
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PreparationMilestonesUseOutputWhileDiagnosticFailuresUseError(bool unavailableMilestoneLog)
+    {
+        WithArtifacts(configuration =>
+        {
+            if (unavailableMilestoneLog)
+            {
+                Directory.CreateDirectory(Path.Combine(configuration.ArtifactDirectory, "ios-preparation-process.jsonl"));
+            }
+            using var output = new StringWriter();
+            using var error = new StringWriter();
+            var originalOutput = Console.Out;
+            var originalError = Console.Error;
+            try
+            {
+                Console.SetOut(output);
+                Console.SetError(error);
+                var handler = new Handler(async (request, cancellation) =>
+                {
+                    using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellation));
+                    var receipt = Receipt();
+                    receipt["nonce"] = body.RootElement.GetProperty("nonce").GetString()!;
+                    return Response(HttpStatusCode.OK, receipt);
+                });
+                var proof = IosAppInstallation.Prepare(configuration, TimeSpan.FromMinutes(5), Environment,
+                    remaining => new HttpClient(handler) { Timeout = remaining });
+                Assert.Equal(configuration.DeviceId, proof.DeviceId);
+            }
+            finally
+            {
+                Console.SetOut(originalOutput);
+                Console.SetError(originalError);
+            }
+            if (unavailableMilestoneLog)
+            {
+                Assert.Empty(output.ToString());
+                Assert.Contains("iOS preparation milestone failed:", error.ToString());
+                Assert.True(File.Exists(Path.Combine(configuration.ArtifactDirectory, "ios-installations.jsonl")));
+            }
+            else
+            {
+                var lines = output.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                Assert.Equal(2, lines.Length);
+                Assert.All(lines, line => Assert.StartsWith("iOS preparation process: ", line));
+                Assert.Contains("\"phase\":\"request-starting\"", lines[0]);
+                Assert.Contains("\"phase\":\"response-returned\"", lines[1]);
+                Assert.Empty(error.ToString());
+            }
         });
     }
 
