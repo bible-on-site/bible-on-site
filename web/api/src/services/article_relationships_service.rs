@@ -582,7 +582,7 @@ pub async fn search_targets(
             moadim
                 .into_iter()
                 .map(|model| TargetHit {
-                    id: model.id,
+                    id: model.id as i32,
                     hint: Some(model.slug.clone()),
                     label: model.name,
                 })
@@ -1624,7 +1624,7 @@ mod tests {
             assert!(matches!(err, ServiceError::BadRequest(_)));
         }
 
-        fn moed_row(id: i32, slug: &str) -> moed::Model {
+        fn moed_row(id: u16, slug: &str) -> moed::Model {
             moed::Model {
                 id,
                 slug: slug.to_string(),
@@ -1637,14 +1637,15 @@ mod tests {
             }
         }
 
-        fn moed_link(moed_id: i32) -> article_moed::Model {
+        fn moed_link(moed_id: u16) -> article_moed::Model {
             article_moed::Model {
                 article_id: 7,
                 moed_id,
                 created_at: chrono::NaiveDate::from_ymd_opt(2020, 1, 1)
                     .unwrap()
                     .and_hms_opt(0, 0, 0)
-                    .unwrap(),
+                    .unwrap()
+                    .and_utc(),
             }
         }
 
