@@ -1791,6 +1791,7 @@ describe("assignment-driven agents with actual MySQL transactions", () => {
 		["perek", "record"],
 		["alternative", "record"],
 		["entity", "search"],
+		["perek", "search"],
 	] as const)(
 		"rejects a fresh %s %s change committed after the final transaction snapshot but before its locking read",
 		async (kind, toolName) => {
@@ -1846,6 +1847,63 @@ describe("assignment-driven agents with actual MySQL transactions", () => {
 			}
 		},
 	);
+	it("rejects a verse-bound-only change after the final snapshot before its current perek reread", async () => {
+		const reference = await referenceFixture("perek"),
+			{ item } = await assignedIssue(),
+			job = await claim(item);
+		await conn.execute("UPDATE tanah_perek SET pasuk_count=2 WHERE id=?", [
+			reference.id,
+		]);
+		const read = await worker.readContributionWorkerContext({
+			...identity(job),
+			name: "search",
+			arguments: { kind: "perek", query: "ספר בדיקה ב א ב" },
+		});
+		expect(read.data).toMatchObject({
+			items: [{ id: reference.id, name: "ספר בדיקה ב א" }],
+			total: 1,
+		});
+		const writer = await db.pool.getConnection();
+		await writer.beginTransaction();
+		await writer.execute("UPDATE tanah_perek SET pasuk_count=1 WHERE id=?", [
+			reference.id,
+		]);
+		const context = await import(
+				"~/server/tanahpedia/contribution-agent-context.server"
+			),
+			original = context.readContributionAgentTool;
+		let committed = false;
+		const commitAfterSnapshot = vi
+			.spyOn(context, "readContributionAgentTool")
+			.mockImplementation(async (...params) => {
+				if (params[4] && params[2] === "search" && !committed) {
+					await writer.commit();
+					committed = true;
+				}
+				return original(...params);
+			});
+		try {
+			await expect(
+				worker.completeContributionGeneration({
+					...identity(job),
+					receipts: [read.receipt],
+					content: implementation(`stale-verse-bound-${randomUUID()}`),
+				}),
+			).rejects.toThrow("tool-read record");
+			expect(committed).toBe(true);
+			expect((await fresh(item)).generation?.status).toBe("failed");
+			const [created] = await conn.execute<RowDataPacket[]>(
+				"SELECT id FROM tanahpedia_contribution WHERE issue_id=?",
+				[item.id],
+			);
+			expect(created).toHaveLength(0);
+		} finally {
+			commitAfterSnapshot.mockRestore();
+			await writer.rollback();
+			writer.release();
+			await reference.cleanup();
+		}
+	});
 	it("fails closed immediately when an authoritative reference is busy during final validation", async () => {
 		const reference = await referenceFixture("entity"),
 			{ item } = await assignedIssue(),
@@ -2202,6 +2260,124 @@ function metadata(name: string) {
 		after: { displayName: name },
 	};
 }
+
+describe("canonical agent chapter lookup with actual MySQL", () => {
+	async function reader() {
+		const item = await service.createContribution(
+			{
+				kind: "issue",
+				title: "בדיקת מקורות",
+				description: "בדיקת חיפוש בלבד",
+				evidence,
+			},
+			alice,
+		);
+		const context = await import(
+			"~/server/tanahpedia/contribution-agent-context.server"
+		);
+		return (name: "search" | "record", args: Record<string, unknown>) =>
+			store.withContributions((tx) =>
+				context.readContributionAgentTool(tx, item, name, {
+					kind: "perek",
+					...args,
+				}),
+			);
+	}
+	it("returns one canonical chapter identity for Hebrew, Arabic and complete legacy verse references", async () => {
+		const read = await reader();
+		const record = await read("record", { id: 1 });
+		expect(record.data).toMatchObject({ record: { id: 1, name: "בראשית א" } });
+		for (const query of [
+			"בראשית א",
+			"בראשית 1",
+			"בְּרֵאשִׁית א׳",
+			"בראשית א כו",
+			"בראשית א:26",
+			"בראשית א, כו-כח",
+		]) {
+			const result = await read("search", { query });
+			expect(result.data).toMatchObject({
+				items: [{ id: 1, name: "בראשית א" }],
+				total: 1,
+				nextCursor: null,
+			});
+			expect((result.data as { records: unknown[] }).records).toEqual(
+				(record.data as { records: unknown[] }).records,
+			);
+		}
+		for (const query of [
+			"בראשית אא",
+			"בראשית א לב",
+			"בראשית 0",
+			"בראשית פרק",
+			"בראשית א פסוק",
+		]) {
+			expect((await read("search", { query })).data).toMatchObject({
+				items: [],
+				total: 0,
+				nextCursor: null,
+			});
+		}
+	});
+	it("keeps split-book identities and ambiguous chapter results distinct across pages", async () => {
+		await conn.execute(
+			"INSERT INTO tanah_sefer (id,name,perek_id_from,perek_id_to) VALUES (8000,'שמואל',800001,800004)",
+		);
+		await conn.execute(
+			"INSERT INTO tanah_perek (id,perek,pasuk_count) VALUES (800001,1,28),(800002,2,36),(800003,1,27),(800004,2,32)",
+		);
+		await conn.execute(
+			"INSERT INTO tanah_additional (id,sefer_id,letter,tanach_us_name,perek_from,perek_to) VALUES (8001,8000,'א','test-a',800001,800002),(8002,8000,'ב','test-b',800003,800004)",
+		);
+		try {
+			const read = await reader();
+			const first = await read("search", { query: "שמואל 1", limit: 1 });
+			expect(first.data).toMatchObject({
+				items: [{ id: 800001, name: "שמואל א א" }],
+				total: 2,
+				nextCursor: 1,
+			});
+			expect(
+				(await read("search", { query: "שמואל 1", limit: 1, cursor: 1 })).data,
+			).toMatchObject({
+				items: [{ id: 800003, name: "שמואל ב א" }],
+				total: 2,
+				nextCursor: null,
+			});
+			expect((await read("search", { query: "שמואל א" })).data).toMatchObject({
+				items: [
+					{ id: 800001, name: "שמואל א א" },
+					{ id: 800002, name: "שמואל א ב" },
+				],
+				total: 2,
+			});
+			expect(
+				(await read("search", { query: "שמואל ב א כז" })).data,
+			).toMatchObject({ items: [{ id: 800003, name: "שמואל ב א" }], total: 1 });
+			expect(
+				(await read("search", { query: "שמואל ב א כח" })).data,
+			).toMatchObject({ items: [], total: 0 });
+			expect((await read("record", { id: 800003 })).data).toMatchObject({
+				record: { id: 800003, name: "שמואל ב א" },
+			});
+			expect((await read("search", { query: "800003" })).data).toMatchObject({
+				items: [{ id: 800003, name: "שמואל ב א" }],
+				total: 1,
+			});
+			expect(
+				(await read("search", { query: "שמואל 1", cursor: 2 })).data,
+			).toMatchObject({ items: [], total: 2, nextCursor: null });
+		} finally {
+			await conn.execute(
+				"DELETE FROM tanah_additional WHERE id IN (8001,8002)",
+			);
+			await conn.execute(
+				"DELETE FROM tanah_perek WHERE id BETWEEN 800001 AND 800004",
+			);
+			await conn.execute("DELETE FROM tanah_sefer WHERE id=8000");
+		}
+	});
+});
 
 describe("durable issue assignment", () => {
 	it.each([

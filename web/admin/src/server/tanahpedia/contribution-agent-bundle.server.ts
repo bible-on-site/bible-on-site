@@ -14,7 +14,7 @@ import {
 } from "./family-api-spec";
 
 /** Bump when instructions or tool semantics change, independently of API data migrations. */
-export const CONTRIBUTION_AGENT_BUNDLE_VERSION = "tanahpedia-agents-v5";
+export const CONTRIBUTION_AGENT_BUNDLE_VERSION = "tanahpedia-agents-v6";
 const object = (properties: Record<string, unknown>, required: string[]) => ({
 	type: "object",
 	additionalProperties: false,

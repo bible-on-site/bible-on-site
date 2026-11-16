@@ -1,5 +1,6 @@
 import type { PoolConnection } from "mysql2/promise";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CataloguePerek } from "~/lib/article-linking/catalogue";
 import { CONTRIBUTION_AGENT_READ_KINDS } from "~/lib/tanahpedia/contribution-agent-read-kinds";
 import type { ArticleLinkState } from "~/lib/tanahpedia/contribution-article-links";
 import type {
@@ -19,6 +20,7 @@ import {
 	readContributionAgentTool,
 	readContributionIssueScopeContext,
 } from "~/server/tanahpedia/contribution-agent-context.server";
+import { CONTRIBUTION_PEREK_SELECT } from "~/server/tanahpedia/contribution-perek-reads.server";
 import {
 	type ContributionReference,
 	REFERENCE_SELECTS,
@@ -72,7 +74,10 @@ const actor = {
 	kind: "human",
 	isDoradsoft: false,
 } as const;
-const references = new Map<string, ContributionReference>();
+const references = new Map<
+	string,
+	ContributionReference & Partial<Omit<CataloguePerek, "id">>
+>();
 const proposals = new Map<string, Contribution>();
 let item: Contribution;
 let issue: Contribution;
@@ -211,6 +216,8 @@ beforeEach(() => {
 	mocks.source.mockResolvedValue(null);
 	mocks.query.mockResolvedValue([]);
 	mocks.one.mockImplementation(async (_conn, sql, args) => {
+		if (sql.startsWith(`${CONTRIBUTION_PEREK_SELECT} WHERE p.id=?`))
+			return references.get(`perek:${args[0]}`) ?? null;
 		for (const [kind, select] of Object.entries(REFERENCE_SELECTS)) {
 			if (
 				sql ===
@@ -457,7 +464,13 @@ describe("complete contribution agent context", () => {
 	});
 
 	it("locks the physical perek label dependencies without the view's unrelated date joins", async () => {
-		mocks.one.mockResolvedValue({ id: 929, name: "דברי הימים ב 36" });
+		mocks.one.mockResolvedValue({
+			id: 929,
+			seferName: "דברי הימים",
+			additionalLetter: "ב",
+			perekInContext: 36,
+			pasukCount: 23,
+		});
 		await readContributionAgentTool(
 			conn,
 			item,
@@ -474,6 +487,84 @@ describe("complete contribution agent context", () => {
 		expect(sql.endsWith("WHERE p.id=? FOR UPDATE NOWAIT")).toBe(true);
 		expect(sql).not.toContain("tanah_perek_view");
 		expect(sql).not.toContain("tanah_perek_date");
+	});
+
+	it("pages canonical Hebrew chapter results and records the exact same current identities as record reads", async () => {
+		const rows = [1, 2, 11].map((chapter) => ({
+			id: chapter,
+			seferName: "בראשית",
+			additionalLetter: null,
+			perekInContext: chapter,
+			pasukCount: 31,
+			name: `בראשית ${chapter}`,
+		}));
+		for (const row of rows) references.set(`perek:${row.id}`, row);
+		mocks.query.mockResolvedValue(rows);
+		const first = await readContributionAgentTool(conn, item, "search", {
+			kind: "perek",
+			query: "בראשית",
+			limit: 2,
+		});
+		expect(first.data).toMatchObject({
+			items: [
+				{ id: 1, name: "בראשית א" },
+				{ id: 11, name: "בראשית יא" },
+			],
+			total: 3,
+			nextCursor: 2,
+		});
+		const last = await readContributionAgentTool(conn, item, "search", {
+			kind: "perek",
+			query: "בראשית",
+			limit: 2,
+			cursor: 2,
+		});
+		expect(last.data).toMatchObject({
+			items: [{ id: 2, name: "בראשית ב" }],
+			total: 3,
+			nextCursor: null,
+		});
+		const exact = await readContributionAgentTool(conn, item, "search", {
+			kind: "perek",
+			query: "בראשית א",
+		});
+		const record = await readContributionAgentTool(conn, item, "record", {
+			kind: "perek",
+			id: 1,
+		});
+		expect(exact.data).toMatchObject({
+			items: [{ id: 1, name: "בראשית א" }],
+			total: 1,
+			nextCursor: null,
+		});
+		expect((exact.data as { records: unknown[] }).records).toEqual(
+			(record.data as { records: unknown[] }).records,
+		);
+		expect((exact.data as { records: unknown[] }).records).toContainEqual({
+			kind: "perek_coordinates",
+			id: 1,
+			current: {
+				seferName: "בראשית",
+				additionalLetter: null,
+				perekInContext: 1,
+				pasukCount: 31,
+			},
+		});
+		expect(
+			mocks.query.mock.calls.every(
+				([, sql]) => sql === `${CONTRIBUTION_PEREK_SELECT} ORDER BY p.id`,
+			),
+		).toBe(true);
+		const empty = await readContributionAgentTool(conn, item, "search", {
+			kind: "perek",
+			query: "בראשית אא",
+		});
+		expect(empty.data).toMatchObject({
+			items: [],
+			total: 0,
+			nextCursor: null,
+			records: [],
+		});
 	});
 
 	it("locks a place identification directly rather than a derived union or view", async () => {
@@ -1163,7 +1254,14 @@ describe("complete contribution agent context", () => {
 			ownerId: entityId,
 		});
 		references.set(`entity:${entityId}`, { id: entityId, name: "Entity" });
-		references.set("perek:929", { id: 929, name: "דברי הימים ב לו" });
+		references.set("perek:929", {
+			id: 929,
+			name: "דברי הימים ב לו",
+			seferName: "דברי הימים",
+			additionalLetter: "ב",
+			perekInContext: 36,
+			pasukCount: 23,
+		});
 		const result = await readContributionAgentTool(conn, item, "record", {
 			kind: "target:source_reference",
 			id,
@@ -1796,7 +1894,14 @@ describe("fresh article source context", () => {
 			},
 		};
 		for (const perek of [1, 3])
-			references.set(`perek:${perek}`, { id: perek, name: `פרק ${perek}` });
+			references.set(`perek:${perek}`, {
+				id: perek,
+				name: `בראשית ${perek}`,
+				seferName: "בראשית",
+				additionalLetter: null,
+				perekInContext: perek,
+				pasukCount: 31,
+			});
 		const previous = mocks.one.getMockImplementation();
 		mocks.one.mockImplementation(async (...args) => {
 			const [, sql, values] = args;
