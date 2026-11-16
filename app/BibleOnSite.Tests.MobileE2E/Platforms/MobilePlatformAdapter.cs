@@ -246,7 +246,7 @@ public abstract class MobilePlatformAdapter
         // open_from_bundles SIGSEGV (#2773).
         var reuseInstalledApp = verifiedIos || configuration.KeepAppForReview || (android && configuration.AppPreinstalled);
         options.AddAdditionalAppiumOption("noReset", reuseInstalledApp);
-        // Verified iOS preparation already reset/reinstalled this exact AUT;
+        // Verified iOS preparation owns the fresh install of this exact AUT.
         // keep Appium from repeating it or performing a warning-only scrub.
         options.AddAdditionalAppiumOption("fullReset", android && !reuseInstalledApp);
         // noReset keeps a leftover app process alive across sessions, and

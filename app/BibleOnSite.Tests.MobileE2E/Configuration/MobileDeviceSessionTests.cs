@@ -179,7 +179,7 @@ public sealed class MobileDeviceSessionTests
         var original = Assert.Single(factory.Executors);
         original.FailTermination(new WebDriverTimeoutException("The old launch did not answer."));
         var failure = new InvalidOperationException("Executor resources could not be released.");
-        original.DisposalFailure = failure;
+        original.FailDisposal(failure);
 
         var disposal = Assert.Throws<InvalidOperationException>(() => session.Acquire(ScenarioEnvironment(NextLaunchId, false)));
         Assert.Same(failure, disposal.InnerException);
@@ -201,7 +201,7 @@ public sealed class MobileDeviceSessionTests
         var teardown = new UnknownErrorException("DELETE /session was not confirmed.");
         var disposal = new UnknownErrorException("invalid session id during executor disposal");
         original.FailQuit(teardown);
-        original.DisposalFailure = disposal;
+        original.FailDisposal(disposal);
         var failure = Assert.Throws<AggregateException>(() => session.Acquire(ScenarioEnvironment(NextLaunchId, false)));
         Assert.Equal([teardown, disposal], failure.InnerExceptions);
         Assert.Null(session.Driver);
@@ -322,15 +322,16 @@ public sealed class MobileDeviceSessionTests
         private readonly Dictionary<string, CommandInfo> _commands = [];
         private WebDriverException? _terminationFailure;
         private WebDriverException? _quitFailure;
+        private Exception? _disposalFailure;
         private bool _quitFailureOnce;
         public int SessionCreations { get; private set; }
         public int Terminations { get; private set; }
         public int Activations { get; private set; }
         public int Quits { get; private set; }
         public int ConfirmedQuitRegistrations { get; private set; }
-        public Exception? DisposalFailure { get; set; }
         public void FailTermination(WebDriverException exception) => _terminationFailure = exception;
         public void FailQuit(WebDriverException exception) => _quitFailure = exception;
+        public void FailDisposal(Exception exception) => _disposalFailure = exception;
         public void FailNextQuit(WebDriverException exception)
         {
             _quitFailure = exception;
@@ -347,9 +348,9 @@ public sealed class MobileDeviceSessionTests
         }
         public void Dispose()
         {
-            if (DisposalFailure != null)
+            if (_disposalFailure != null)
             {
-                throw DisposalFailure;
+                throw _disposalFailure;
             }
             _commands.Clear();
         }

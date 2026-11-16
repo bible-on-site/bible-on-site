@@ -13,6 +13,7 @@ import { prepareWda } from "./prepare-wda.mjs";
 import { exportNativeLog, iosAutomationLogArguments, iosHostLogArguments, startIosClassicHostLog, startNativeLog, stopNativeLogStreams } from "./native-logs.mjs";
 import { waitForAndroidDevice } from "./android-readiness.mjs";
 import { installAppUnderTest } from "./android-install.mjs";
+import { iosNodeEnvironment } from "./ios-install.mjs";
 import { collectAndroidCrashDiagnostics } from "./android-crash-diagnostics.mjs";
 import { iosAppLogPids } from "./ios-processes.mjs";
 import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
@@ -194,12 +195,13 @@ try {
     : ["run", "--project", "devops", "--"];
   test = spawn("dotnet", [...launch, "TestMobileE2E", "--configuration", "Debug"], {
     cwd: resolve(directory, ".."), windowsHide: true, stdio: ["inherit", "pipe", "pipe"],
-    env: { ...process.env, MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts, MOBILE_E2E_HOST_DIAGNOSTICS: hostDiagnostics,
+    env: { ...(platform === "ios" ? iosNodeEnvironment(process.env, process.execPath) : process.env),
+      MOBILE_APP_PATH: appPath, MOBILE_E2E_ARTIFACTS: artifacts, MOBILE_E2E_HOST_DIAGNOSTICS: hostDiagnostics,
       MOBILE_E2E_FAILURE_DIAGNOSTICS: failureMonitor ? failureDirectory : "",
       MOBILE_E2E_FAILURE_DIAGNOSTICS_PORT: failureMonitor ? String(failureMonitor.port) : "",
       ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}),
       ...(platform === "android" ? { MOBILE_APP_PREINSTALLED: "1" } : {}),
-      ...(platform === "ios" ? { MOBILE_APP_PREINSTALLED: "", MOBILE_NODE_EXECUTABLE: process.execPath } : {}),
+      ...(platform === "ios" ? { MOBILE_APP_PREINSTALLED: "" } : {}),
       APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },
   });
   for (const [name, stream, output] of [["stdout", test.stdout, process.stdout], ["stderr", test.stderr, process.stderr]]) {

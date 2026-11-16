@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { lstat, open, readlink, readdir, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -22,6 +22,20 @@ export function executeIosCommand(command, args, { input, ...options } = {}) {
 }
 const bundleId = "com.tanah.daily929";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function iosNodeEnvironment(environment, nodeExecutable) {
+  const entries = Object.entries(environment);
+  const inheritedPath = entries.find(([key]) => key.toLowerCase() === "path")?.[1] ?? "";
+  return { ...Object.fromEntries(entries.filter(([key]) => key.toLowerCase() !== "path")),
+    PATH: `${dirname(nodeExecutable)}${delimiter}${inheritedPath}`, MOBILE_NODE_EXECUTABLE: nodeExecutable };
+}
+
+export async function verifyNodeInterpreter(expectedPath) {
+  if (typeof expectedPath !== "string" || !isAbsolute(expectedPath) ||
+      await realpath(expectedPath) !== await realpath(process.execPath)) {
+    throw new Error("iOS preparation did not use the exact parent Node interpreter.");
+  }
+}
 
 // Read the small Mach-O header directly. Starting lipo/uname for this same
 // immutable executable delayed a measured Appium session by 199 seconds.
@@ -178,8 +192,9 @@ export async function prepareIosApp({
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [appPath, udid, nonce, keep, deadline] = process.argv.slice(2);
-  if (process.argv.length !== 7 || !["reset", "keep"].includes(keep)) throw new Error("Invalid iOS installation arguments.");
+  const [appPath, udid, nonce, keep, deadline, expectedNode] = process.argv.slice(2);
+  if (process.argv.length !== 8 || !["reset", "keep"].includes(keep)) throw new Error("Invalid iOS installation arguments.");
+  await verifyNodeInterpreter(expectedNode);
   console.log(JSON.stringify(await prepareIosApp({ appPath, udid, nonce,
     keepData: keep === "keep", deadlineMs: Number(deadline) })));
 }
