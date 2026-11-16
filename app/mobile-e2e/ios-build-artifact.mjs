@@ -22,6 +22,7 @@ const requiredFiles = [
   "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net11.0/BibleOnSite.Tests.MobileE2E.deps.json",
   "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net11.0/BibleOnSite.Tests.MobileE2E.runtimeconfig.json",
   "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net11.0/testconfig.json",
+  "app/BibleOnSite.Tests.MobileE2E/bin/Debug/net11.0/ios-install.mjs",
   "app/BibleOnSite.Tests.MobileE2E/obj/project.assets.json",
   "coverage-app/template.opencover.xml", "coverage-app/coverage-manifest.json",
 ];
