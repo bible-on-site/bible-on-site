@@ -82,7 +82,7 @@ const state = {
 	cohort: new Map<number, CohortRow>(),
 	admissions: new Map<string, Admission>(),
 	/** Optional failure hook applied to every read (e.g. missing schema). */
-	throwOn: null as null | ((sql: string) => Error | null),
+	throwOn: null as null | ((sql: string) => unknown),
 
 	admissionKey(cohort: string, localDate: string) {
 		return `${cohort}|${localDate}`;
@@ -804,5 +804,14 @@ describe("original-cohort admission sweep", () => {
 			reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00")),
 		).rejects.toThrow("disk gone");
 		expect(state.rollout.last_error).toBe("disk gone");
+	});
+	it("records a generic sweep error for a non-Error rejection", async () => {
+		seed([{ id: 1, email: "a@x.invalid", consent: "pending" }]);
+		state.throwOn = (sql) =>
+			sql.includes("local_date < ?") ? "raw driver failure" : null;
+		await expect(
+			reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00")),
+		).rejects.toBe("raw driver failure");
+		expect(state.rollout.last_error).toBe("sweep");
 	});
 });
