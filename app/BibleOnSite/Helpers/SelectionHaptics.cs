@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace BibleOnSite.Helpers;
 
 /// <summary>
@@ -6,6 +8,8 @@ namespace BibleOnSite.Helpers;
 public static class SelectionHaptics
 {
     /// <summary>Triggers haptic feedback (vibration) for selection mode entry.</summary>
+    [ExcludeFromCodeCoverage(
+        Justification = "Platform haptics — each branch is #if-gated to its OS, so the unit-test host compiles to a no-op; the mobile E2E suite covers the real device path.")]
     public static void Trigger()
     {
         try
