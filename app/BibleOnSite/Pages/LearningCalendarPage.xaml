@@ -107,8 +107,6 @@
             <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Grid.Column="1"
                     Text="היום"
                     FontSize="14"
-                    FontFamily=""
-                    HeightRequest="40"
                     Padding="10,0"
                     SemanticProperties.Description="חזרה לחודש הנוכחי"
                     AutomationId="CalendarToday"
