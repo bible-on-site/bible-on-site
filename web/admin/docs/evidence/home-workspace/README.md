@@ -28,3 +28,28 @@ optional issue scopes and history, and assigned-agent implementation plus
 automatic handling of human comments. The local Vite captures include the
 development-only router inspector. The two Monocart error samples are intermediate
 archive-upload `expect.poll` observations; their final assertions passed.
+
+The `local-llm-*.png` captures are real Chromium screens from the final genuine
+`qwen3:8b` run on source `d4930c450b08854524a0407f1e92eb4239357910`, standalone
+worker v6 and static bundle v11. The issue contained no verse coordinates; the
+agent read the article body and its deterministic citation candidate, then opened
+one ordinary PR for `בראשית א כו` in 54.366 seconds. Merging remained disabled
+pending doradsoft review throughout.
+
+The original human comment automatically scheduled another pass on that same PR.
+In 68.742 seconds it reached revision 2 with the exact requested description and
+fixed Hebrew acknowledgement. The original comment, title, evidence and typed link
+sequence stayed unchanged. Both jobs used the existing 120-second deadline and
+the source worker unloaded its configured model after each job; the measurement
+harness did not unload or rewrite model output.
+
+- [Generated explicit-citation PR and review gate](local-llm-explicit-citation.png)
+- [Same-PR exact field and acknowledgement](local-llm-exact-comment.png)
+- [Unchanged domain diff after the comment](local-llm-unchanged-diff.png)
+
+Both synthetic discussions were closed without approval or merge. The canonical
+article hash and all three link tables remained unchanged, and only the owned
+article/author fixtures were removed. This is local verification, not a production
+deployment claim. This genuine run made no invalid tool read; typed argument-error
+recovery is covered separately by CLI, HTTP and real MySQL tests. Earlier failed
+or qualified runs remain separate historical receipts.
