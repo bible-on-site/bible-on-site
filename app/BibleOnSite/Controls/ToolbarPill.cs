@@ -15,7 +15,7 @@ public class ToolbarPill : Border
         {
             CornerRadius = SharedTopBar.PillCornerRadius,
         };
-        Stroke = Config.HomeUxPreview.Enabled ? Color.FromArgb("#E3E7ED") : Colors.Transparent;
+        Stroke = Config.HomeUxPreview.Enabled ? AppButtonStyles.StrokeLight : Colors.Transparent;
         StrokeThickness = Config.HomeUxPreview.Enabled ? 1 : 0;
         Padding = new Thickness(12, 0);
         HeightRequest = SharedTopBar.PillHeight;
@@ -23,7 +23,7 @@ public class ToolbarPill : Border
         VerticalOptions = LayoutOptions.Center;
         HorizontalOptions = LayoutOptions.Fill;
         this.SetAppThemeColor(BackgroundColorProperty,
-            Config.HomeUxPreview.Enabled ? Colors.White : LightColor,
-            Config.HomeUxPreview.Enabled ? Color.FromArgb("#243C5D") : DarkColor);
+            Config.HomeUxPreview.Enabled ? AppButtonStyles.SurfaceLight : LightColor,
+            Config.HomeUxPreview.Enabled ? AppButtonStyles.SurfaceDark : DarkColor);
     }
 }

@@ -666,11 +666,8 @@ public partial class FloatingSearchBar : ContentView, IReaderSearchSurface
         SearchHeader.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#111C2C"));
         foreach (var action in new[] { NavigationButton, ClearButton })
         {
-            action.HeightRequest = action.WidthRequest = 52;
-            action.CornerRadius = 16;
+            action.Style = AppButtonStyles.Icon;
             action.VerticalOptions = LayoutOptions.Center;
-            action.Padding = 0;
-            action.SetAppThemeColor(Button.BackgroundColorProperty, Colors.White, Color.FromArgb("#243C5D"));
         }
         SearchInput.HeightRequest = 52;
         SearchInput.FontSize = 19;

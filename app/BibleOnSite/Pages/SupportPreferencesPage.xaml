@@ -32,12 +32,9 @@
                                FontSize="15"
                                LineBreakMode="WordWrap"
                                TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                        <Button Text="ייצוא לוגים לתמיכה"
+                        <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Text="ייצוא לוגים לתמיכה"
                                 Command="{Binding ExportLogsCommand}"
-                                AutomationId="ExportPerushimLogsButton"
-                                BackgroundColor="{StaticResource Primary}"
-                                TextColor="White"
-                                CornerRadius="8"/>
+                                AutomationId="ExportPerushimLogsButton"/>
                     </VerticalStackLayout>
                 </Border>
             </VerticalStackLayout>

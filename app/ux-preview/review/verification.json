@@ -72,7 +72,7 @@
     "check_screen_navigation",
     "check_reading_options"
   ],
-  "unit_tests_passed": 4289,
+  "unit_tests_passed": 4299,
   "host_application_lines_covered": 20246,
   "host_application_lines_total": 20343,
   "instrumented_changed_application_lines_covered": 161,
@@ -263,5 +263,67 @@
       "chapter selection navigates correctly",
       "idle hides both bars without changing viewport"
     ]
+  },
+  "shared_button_styles": {
+    "passed": [
+      "commentary covers dock visually and intercepts its touch area",
+      "fixed navigation in text and articles; articles action returns to chapter",
+      "dock picker navigates to selected book and chapter"
+    ],
+    "date": "2026-11-16",
+    "toolbar_shadow_removed": true,
+    "toolbar_works_over_scrolled_content": true,
+    "network_mode": "offline with existing production cache",
+    "button_colors": {
+      "display-options:ResetPasukFontPercentButton": [
+        255,
+        255,
+        255
+      ],
+      "support:ExportPerushimLogsButton": [
+        255,
+        255,
+        255
+      ],
+      "support-dark:ExportPerushimLogsButton": [
+        36,
+        60,
+        93
+      ],
+      "extension-packs:DownloadPerushimButton": [
+        21,
+        82,
+        172
+      ],
+      "commentary:GoToPerushimSettingsButton": [
+        21,
+        82,
+        172
+      ],
+      "commentary:ExportPerushimLogsButton": [
+        255,
+        255,
+        255
+      ]
+    },
+    "viewport": [
+      27,
+      128,
+      1059,
+      2337
+    ],
+    "sheet_bounds": [
+      2,
+      1311,
+      1077,
+      2335
+    ],
+    "covered_dock_bounds": [
+      711,
+      2072,
+      1024,
+      2294
+    ],
+    "picker_highlight_uses_readable_white_text": true
   }
 }

@@ -27,13 +27,11 @@
                 </controls:ToolbarPill>
             </controls:SharedTopBar.CenterContent>
             <controls:SharedTopBar.TrailingContent>
-                <Button Text="{x:Static fonts:FluentUI.share_android_24_regular}"
+                <Button Style="{x:Static controls:AppButtonStyles.Icon}" Text="{x:Static fonts:FluentUI.share_android_24_regular}"
                         FontFamily="FluentIcons"
                         FontSize="22"
                         WidthRequest="40"
                         Padding="0"
-                        BackgroundColor="Transparent"
-                        TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"
                         Command="{Binding ShareCommand}"
                         VerticalOptions="Center"
                         SemanticProperties.Description="שתף"/>

@@ -34,23 +34,16 @@
             <controls:SharedTopBar x:Name="NormalNavigationBar" NavigationAutomationId="ReaderNavigationButton">
                 <controls:SharedTopBar.CenterContent>
                     <Grid ColumnDefinitions="Auto,*">
-                <Button x:Name="HomePreviewButton" AutomationId="ReaderHomeButton" Text="בית" IsVisible="False"
-                        FontSize="15" FontAttributes="Bold" HeightRequest="40" Padding="12,0" CornerRadius="14"
-                        BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
-                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                <Button Style="{x:Static controls:AppButtonStyles.ToolbarTitle}" x:Name="HomePreviewButton" AutomationId="ReaderHomeButton" Text="בית" IsVisible="False"
+                        FontSize="15" FontAttributes="Bold" Padding="12,0"
                         Clicked="OnHomePreviewClicked"/>
-                <Button x:Name="NormalNavigationTitle"
+                <Button Style="{x:Static controls:AppButtonStyles.ToolbarTitle}" x:Name="NormalNavigationTitle"
                    Grid.Column="1"
                    AutomationId="PerekSource"
                    Text="{Binding Source}"
                    FontSize="20"
                    Padding="12,0"
-                   HeightRequest="40"
-                   CornerRadius="14"
-                   BorderWidth="0"
                    IsVisible="True"
-                   BackgroundColor="{AppThemeBinding Light=#E4EFFD, Dark=#2C4569}"
-                   TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                    VerticalOptions="Center"
                    HorizontalOptions="Fill"
                    Margin="4,0"
@@ -70,10 +63,9 @@
                     </Grid>
                 </controls:SharedTopBar.CenterContent>
                 <controls:SharedTopBar.TrailingContent>
-                <Button x:Name="ReaderMenuButton" AutomationId="ReaderMenuButton"
+                <Button Style="{x:Static controls:AppButtonStyles.Icon}" x:Name="ReaderMenuButton" AutomationId="ReaderMenuButton"
                         Text="{x:Static fonts:FluentUI.more_vertical_24_regular}" FontFamily="FluentIcons" FontSize="20"
-                        WidthRequest="48" HeightRequest="44" Padding="0" BackgroundColor="Transparent"
-                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
+                        WidthRequest="48" HeightRequest="44" Padding="0"
                         VerticalOptions="Center" SemanticProperties.Description="אפשרויות הקריאה"
                         Clicked="OnReaderMenuButtonClicked"/>
                 </controls:SharedTopBar.TrailingContent>
@@ -211,7 +203,7 @@
                                 </VerticalStackLayout>
                                 <!-- קריינות: plays the whole perek; shown when the global
                                      קריינות preference is on and this perek has audio -->
-                                <Button x:Name="HeaderPlayButton"
+                                <Button Style="{x:Static controls:AppButtonStyles.CompactIcon}" x:Name="HeaderPlayButton"
                                         AutomationId="HeaderPlayButton"
                                         Text="{x:Static fonts:FluentUI.headphones_24_regular}"
                                         FontFamily="FluentIcons"
@@ -219,8 +211,6 @@
                                         WidthRequest="40"
                                         HeightRequest="40"
                                         Padding="0"
-                                        BackgroundColor="Transparent"
-                                        TextColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource AccentOnDark}}"
                                         HorizontalOptions="Start"
                                         VerticalOptions="Center"
                                         Margin="8,0"

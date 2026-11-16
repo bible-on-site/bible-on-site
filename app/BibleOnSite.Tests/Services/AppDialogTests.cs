@@ -59,11 +59,11 @@ public class AppDialogTests
 		AppDialogPolicy.IsAffirmative(role).Should().Be(expected);
 
 	[Theory]
-	[InlineData(AppDialogActionRole.Cancel, "AppDialogAction")]
+	[InlineData(AppDialogActionRole.Cancel, "AppDialogCancelAction")]
 	[InlineData(AppDialogActionRole.Acknowledge, "AppDialogAction")]
 	[InlineData(AppDialogActionRole.Confirm, "AppDialogAction")]
 	[InlineData(AppDialogActionRole.Destructive, "AppDialogDestructiveAction")]
-	public void StyleKeyFor_MapsDestructiveToRedAndEverythingElseToThemeBlue(
+	public void StyleKeyFor_DistinguishesConfirmationDismissalAndRemoval(
 		AppDialogActionRole role, string expected) =>
 		AppDialogPolicy.StyleKeyFor(role).Should().Be(expected);
 

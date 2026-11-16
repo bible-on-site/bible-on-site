@@ -80,13 +80,8 @@ public sealed class NumberPicker : ContentView
             Text = glyph,
             FontFamily = "FluentIcons",
             FontSize = 20,
-            WidthRequest = 40,
-            HeightRequest = 40,
-            Padding = new Thickness(8),
-            BorderWidth = 0,
-            BackgroundColor = Colors.Transparent,
+            Style = AppButtonStyles.CompactIcon,
         };
-        button.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#1552AC"), Color.FromArgb("#AACBFF"));
         SemanticProperties.SetDescription(button, description);
         return button;
     }
