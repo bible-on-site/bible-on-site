@@ -315,14 +315,18 @@ class NativeDevice:
     def back(self):
         self.adb("shell", "input", "keyevent", 4)
 
+    def launch(self):
+        """Force-stop and cold-start the app, then wait out its launch."""
+        package = "com.tanah.daily929"
+        self.unlock()
+        self.adb("shell", "am", "force-stop", package)
+        self.adb("shell", "monkey", "-p", package,
+                 "-c", "android.intent.category.LAUNCHER", 1)
+        self.settle_launch()
+
 
 def check_home_and_daily(device, check):
-    package = "com.tanah.daily929"
-    device.unlock()
-    device.adb("shell", "am", "force-stop", package)
-    device.adb("shell", "monkey", "-p", package,
-               "-c", "android.intent.category.LAUNCHER", 1)
-    device.settle_launch()
+    device.launch()
     items = device.home()
     daily_source = find(items, "HomeDailySource").get("text")
     check.assertTrue(daily_source)
@@ -460,15 +464,19 @@ def check_scroll_and_swipe(device, check):
     device.record("idle_cycle", {
         "hidden_viewport": viewport, "white_band_rgb": list(band),
         "repeat_hide_and_reveal": True, "top_bar_clickable_over_scroll": True})
+    # The entered perek depends on the daily schedule, so chapter-swipe
+    # expectations are relative: forward must land on a different perek and
+    # back must return to the entered one.
+    entered_source = source(initial)
     device.swipe(0.2, 0.55, 0.8, 0.55)
     device.tap_node(menu)
-    device.wait(lambda ns: source(ns) == "בראשית ב" and device.verses(ns),
+    device.wait(lambda ns: source(ns) not in (None, entered_source) and device.verses(ns),
                 "Chapter swipe")
     device.back()
     device.swipe(0.8, 0.55, 0.2, 0.55)
-    items = device.wait(lambda ns: source(ns) == "בראשית א" and device.verses(ns),
+    items = device.wait(lambda ns: source(ns) == entered_source and device.verses(ns),
                         "Reverse chapter swipe")
-    check.assertEqual(source(items), "בראשית א")
+    check.assertEqual(source(items), entered_source)
     device.tap_node(articles)
     device.wait(lambda ns: find(ns, "TopBarHomeButton") is not None and not device.verses(ns),
                 "Articles restore reader navigation")
@@ -841,6 +849,9 @@ def main():
             parser.error(f"unknown checks: {sorted(unknown)}")
         scenarios = [s for s in scenarios if s.__name__ in wanted]
     checks = []
+    if check_home_and_daily not in scenarios:
+        # Filtered runs skip the scenario that launches the app — do it here.
+        device.launch()
     device.home()
     for scenario in scenarios:
         scenario(device, check)
