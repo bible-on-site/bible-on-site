@@ -150,6 +150,7 @@ interface DrawContext {
 	doc: Awaited<ReturnType<typeof PDFDocument.create>>;
 	font: PDFFont;
 	boldFont: PDFFont;
+	scriptureFont: PDFFont;
 	y: number;
 	pageNum: number;
 }
@@ -167,6 +168,13 @@ function currentPage(ctx: DrawContext) {
 	return pages[pages.length - 1];
 }
 
+function textFont(ctx: DrawContext, text: string, preferred: PDFFont): PDFFont {
+	// Keep complete Hebrew clusters together when prose quotes scripture marks.
+	return /[\u0591-\u05af\u05bd\u05c0\u05c3-\u05c6]/u.test(text)
+		? ctx.scriptureFont
+		: preferred;
+}
+
 function drawRtlLine(
 	ctx: DrawContext,
 	text: string,
@@ -177,10 +185,11 @@ function drawRtlLine(
 ): void {
 	const page = currentPage(ctx);
 	// One UAX #9 pass per line — reused for both width and draw.
+	const face = textFont(ctx, text, font);
 	const runs = visualTextRuns(text);
-	const textWidth = bidiRunsWidth(font, runs, size);
+	const textWidth = bidiRunsWidth(face, runs, size);
 	const x = PAGE_WIDTH - MARGIN - textWidth;
-	drawBidiRuns(page, runs, font, size, Math.max(MARGIN, x), ctx.y, color);
+	drawBidiRuns(page, runs, face, size, Math.max(MARGIN, x), ctx.y, color);
 }
 
 function drawRtlWrapped(
@@ -192,13 +201,14 @@ function drawRtlWrapped(
 	color = rgb(0, 0, 0),
 ): void {
 	// Measure via bidi runs so wrapping uses the same shaped runs as drawing.
+	const face = textFont(ctx, text, font);
 	const measuringFont = {
-		widthOfTextAtSize: (t: string, s: number) => bidiTextWidth(font, t, s),
+		widthOfTextAtSize: (t: string, s: number) => bidiTextWidth(face, t, s),
 	};
 	const lines = wrapText(text, measuringFont, size, MAX_WIDTH);
 	for (const line of lines) {
 		ensureSpace(ctx, lineHeight);
-		drawRtlLine(ctx, line, font, size, color);
+		drawRtlLine(ctx, line, face, size, color);
 		ctx.y -= lineHeight;
 	}
 }
@@ -243,7 +253,14 @@ export async function buildTanachPdfForPerekRange(
 		await doc.embedFont(getScriptureFontBytes(), { subset: true }),
 	);
 
-	const ctx: DrawContext = { doc, font, boldFont, y: 0, pageNum: 0 };
+	const ctx: DrawContext = {
+		doc,
+		font,
+		boldFont,
+		scriptureFont,
+		y: 0,
+		pageNum: 0,
+	};
 
 	for (let i = 0; i < perekIds.length; i++) {
 		const perekId = perekIds[i];

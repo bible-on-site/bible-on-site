@@ -327,7 +327,7 @@ fn push_article_text(out: &mut String, text: &str, cantillation_font: Option<&st
             out.push_str(&typst_string(font));
             out.push_str(")[");
             out.push_str(&typst_escape(&chunk[lead..end]));
-            out.push(']');
+            out.push_str("];");
             out.push_str(&chunk[end..]);
         } else {
             out.push_str(&typst_escape(chunk));
@@ -1106,9 +1106,9 @@ mod tests {
         // applies (the CLM family has real bold/italic faces). וַיֹּאמֶר is
         // nikud-only — it correctly stays on the article font.
         assert!(!daily.contains("#text(font: \"Taamey Frank CLM\")[וַיֹּאמֶר]"));
-        assert!(daily.contains("#strong[#text(font: \"Taamey Frank CLM\")[דָּבָ֖ר]]"));
-        assert!(daily.contains("#text(weight: 700)[#text(font: \"Taamey Frank CLM\")[אֵלָ֑יו]]"));
-        assert!(daily.contains("#emph[#text(font: \"Taamey Frank CLM\")[כֹּ֥ה]]"));
+        assert!(daily.contains("#strong[#text(font: \"Taamey Frank CLM\")[דָּבָ֖ר];]"));
+        assert!(daily.contains("#text(weight: 700)[#text(font: \"Taamey Frank CLM\")[אֵלָ֑יו];]"));
+        assert!(daily.contains("#emph[#text(font: \"Taamey Frank CLM\")[כֹּ֥ה];]"));
         assert!(daily.contains("#text(font: \"Taamey Frank CLM\")[וַיֹּאמֶ֣ר׃]"));
         // Meteg belongs to the scripture face. The whole Hebrew run switches
         // together so the mark remains attached to its authored base glyph.
@@ -1134,7 +1134,7 @@ mod tests {
         );
         // The whole heading phrase (maqaf included) is one cantillation run.
         assert!(daily.contains(
-            "#heading(level: 3, numbering: none)[#text(font: \"Taamey Frank CLM\")[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה]]"
+            "#heading(level: 3, numbering: none)[#text(font: \"Taamey Frank CLM\")[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה];]"
         ));
     }
 

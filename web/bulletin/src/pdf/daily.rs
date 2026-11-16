@@ -241,7 +241,7 @@ mod tests {
         req.perakim[0].articles[0].2 = "<h1>אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה</h1><p>וַיֹּאמֶ֞ר אֵלָ֑יו</p>".into();
         let (source, _) = markup(&req, "כא חשוון תשפז", &[]);
         assert!(source.contains(
-            "fill: rgb(\"173E52\"))[#text(font: \"Taamey Frank CLM\")[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה]]"
+            "fill: rgb(\"173E52\"))[#text(font: \"Taamey Frank CLM\")[אֶל־רֵעֵ֛הוּ בִּדְבַ֥ר יְהוָ֖ה];]"
         ));
         assert!(source.contains("#text(font: \"Taamey Frank CLM\")[וַיֹּאמֶ֞ר אֵלָ֑יו]"));
     }

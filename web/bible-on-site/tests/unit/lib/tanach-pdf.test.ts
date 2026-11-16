@@ -438,6 +438,25 @@ describe("buildTanachPdfForPerekRange", () => {
 		expect(scripture).toContain("\u05c3");
 	});
 
+	it("uses scripture glyphs in pointed chapter headings and article abstracts", async () => {
+		mockGetPerekByPerekId.mockReturnValue(
+			makePerek("בראשית", "א", "אֹתָֽם׃", []) as ReturnType<
+				typeof getPerekByPerekId
+			>,
+		);
+		mockGetArticlesByPerekId.mockResolvedValue([
+			{ name: "וַיֹּאמֶ֞ר", authorName: "מחבר", abstract: "<p>הָאָֽרֶץ׃</p>" },
+		] as Awaited<ReturnType<typeof getArticlesByPerekId>>);
+		await buildTanachPdfForPerekRange([1]);
+		const calls = pdfLib.__mockPages[0].drawText.mock.calls;
+		const pointed = calls.filter((call: [string]) =>
+			/[\u05bd\u059e]/u.test(call[0]),
+		);
+		expect(pointed.length).toBeGreaterThanOrEqual(3);
+		for (const call of pointed)
+			expect(call[1].font).toBe(pdfLib.__mockScriptureFont);
+	});
+
 	it("creates a new page for each perek", async () => {
 		mockGetPerekByPerekId
 			.mockReturnValueOnce(
