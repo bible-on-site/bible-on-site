@@ -69,6 +69,7 @@ const consent = {
 	source: "Explicit newsletter signup",
 };
 let settings: typeof import("~/server/ses-settings.server");
+let SesSuppressedError: typeof import("~/server/ses-client.server").SesSuppressedError;
 let account: Record<string, unknown>;
 let identity: Record<string, unknown>;
 
@@ -162,6 +163,7 @@ beforeEach(async () => {
 	mocks.ensureSubscribed.mockResolvedValue("subscribed");
 	mocks.unsubscribe.mockResolvedValue(undefined);
 	settings = await import("~/server/ses-settings.server");
+	({ SesSuppressedError } = await import("~/server/ses-client.server"));
 });
 
 afterEach(() => {
@@ -665,7 +667,7 @@ describe("send-slot reservation", () => {
 			mocks.txQueryOne.mockResolvedValue(row);
 			await expect(
 				settings.reserveSendSlot("test", 3, 42),
-			).rejects.toBeInstanceOf(settings.DeliverySuppressed);
+			).rejects.toBeInstanceOf(SesSuppressedError);
 			expect(mocks.txExecute).not.toHaveBeenCalled();
 		},
 	);
@@ -680,7 +682,7 @@ describe("send-slot reservation", () => {
 		mocks.txQueryOne.mockResolvedValueOnce(slot()).mockResolvedValueOnce(row);
 		await expect(
 			settings.reserveSendSlot("test", 3, 42),
-		).rejects.toBeInstanceOf(settings.DeliverySuppressed);
+		).rejects.toBeInstanceOf(SesSuppressedError);
 		expect(mocks.txExecute).not.toHaveBeenCalled();
 	});
 
@@ -711,7 +713,7 @@ describe("send-slot reservation", () => {
 			);
 			await expect(
 				settings.reserveSendSlot("test", 3, 42),
-			).rejects.toBeInstanceOf(settings.DeliverySuppressed);
+			).rejects.toBeInstanceOf(SesSuppressedError);
 		},
 	);
 

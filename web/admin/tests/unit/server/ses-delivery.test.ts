@@ -59,15 +59,11 @@ vi.mock("~/server/ses-client.server", () => {
 		},
 	};
 });
-vi.mock("~/server/ses-settings.server", async () => {
-	const { SesSuppressedError } = await import("~/server/ses-client.server");
-	return {
-		DeliverySuppressed: SesSuppressedError,
-		loadEmailRuntime: mocks.runtime,
-		getEmailReadiness: mocks.readiness,
-		reserveSendSlot: mocks.reserve,
-	};
-});
+vi.mock("~/server/ses-settings.server", () => ({
+	loadEmailRuntime: mocks.runtime,
+	getEmailReadiness: mocks.readiness,
+	reserveSendSlot: mocks.reserve,
+}));
 vi.mock("~/server/ses-events.server", () => ({ parseSesEvent: mocks.parse }));
 vi.mock("~/server/whatsapp-delivery.server", () => ({
 	processWhatsAppJob: mocks.whatsappProcess,
