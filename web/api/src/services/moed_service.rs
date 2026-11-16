@@ -295,7 +295,7 @@ struct UnionRow {
 /// a `coverage_verified` article matches when any covering row lands inside
 /// a slice; an unverified one falls back to its primary perek. Explicit
 /// links match only while the article's primary perek is a routable public
-/// chapter (1-929) — an explicit link cannot resurrect a dead route, the
+/// one (1-929) — an explicit link cannot resurrect a dead route, the
 /// same bound the website applies in `getMoedArticleSummaries`. Ordering
 /// mirrors the website range matcher: the article's FIRST matched slice
 /// order, editorial priority within that slice, then id — explicit-only
