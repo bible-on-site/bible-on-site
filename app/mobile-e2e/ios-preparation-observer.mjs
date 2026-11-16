@@ -7,18 +7,22 @@ import { observeIosHostLog } from "./verify-ios-host-log.mjs";
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const noncePattern = /^[0-9a-f]{32}$/i;
 const keys = new Set(["kind", "phase", "udid", "nonce", "bundleId", "bundleSha256", "deadlineMs", "state"]);
+const installationKeys = new Set(["kind", "phase", "udid", "nonce", "deadlineMs", "keepData"]);
 
 // One parent owns the run's normal simulator transition and device readers.
 // A later lost simulator cannot obtain another boot by creating a fresh child.
-export async function observeIosPreparations({ udid, expectedBundleSha256, readerFactories, report = () => {} }) {
+export async function observeIosPreparations({ udid, expectedBundleSha256, readerFactories, report = () => {},
+  installer, appPath, keepData = false,
+}) {
   assert(uuid.test(udid ?? ""), "An exact simulator UUID is required.");
   assert.equal(typeof expectedBundleSha256, "function");
   assert(Array.isArray(readerFactories) && readerFactories.length > 0);
+  if (installer) { assert.equal(typeof installer, "function"); assert.equal(typeof appPath, "string"); }
   const token = randomBytes(32).toString("hex");
-  const readers = [], sockets = new Set(), seen = new Set(), handlers = new Set();
+  const readers = [], sockets = new Set(), seen = new Set(), installations = new Set(), handlers = new Set();
   const lifetime = new AbortController();
   const readerState = observeIosHostLog(udid, { startupSources: readerFactories.map((_, index) => String(index)) });
-  let closing = false, failure, stopped, readerStop, startup, bundleHash, claimed = false, reserved;
+  let closing = false, failure, cleanupUncertainty, stopped, readerStop, startup, bundleHash, claimed = false, reserved, installing, ready;
   const killFailures = [];
   const stopReaders = () => readerStop ??= stopNativeLogStreams(readers);
   const reply = (response, status, value) => {
@@ -65,17 +69,41 @@ export async function observeIosPreparations({ udid, expectedBundleSha256, reade
         chunks.push(chunk);
       }
       const value = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-      if (!value || typeof value !== "object" || Array.isArray(value) || Object.keys(value).some(key => !keys.has(key)) ||
-        value.kind !== "ios-preparation/1" || !["reserve", "ready"].includes(value.phase) || value.udid !== udid ||
-        value.bundleId !== "com.tanah.daily929" || !noncePattern.test(value.nonce ?? "") ||
-        !/^[0-9a-f]{64}$/.test(value.bundleSha256 ?? "") || value.deadlineMs !== deadline) {
+      if (!value || typeof value !== "object" || Array.isArray(value) || value.udid !== udid ||
+        !noncePattern.test(value.nonce ?? "") || value.deadlineMs !== deadline) {
         return reply(response, 400, { error: "INVALID_IDENTITY" });
       }
       signal.throwIfAborted();
       if (failure) throw failure;
+      if (value.phase === "install") {
+        if (!installer || value.kind !== "ios-install-request/1" ||
+            Object.keys(value).some(key => !installationKeys.has(key)) || value.keepData !== keepData) {
+          return reply(response, 400, { error: "INVALID_INSTALLATION" });
+        }
+        if (installing || reserved || installations.has(value.nonce)) return reply(response, 409, { error: "INSTALLATION_NOT_AVAILABLE" });
+        installations.add(value.nonce);
+        installing = { nonce: value.nonce, deadline };
+        try {
+          const output = await installer({ nonce: value.nonce, deadlineMs: deadline, keepData, signal,
+            environment: { MOBILE_IOS_PREPARATION_PORT: String(server.address().port), MOBILE_IOS_PREPARATION_TOKEN: token } });
+          signal.throwIfAborted();
+          const receipt = JSON.parse(output);
+          if (!ready || ready.nonce !== value.nonce || receipt.kind !== "ios-verified-install/1" ||
+              receipt.udid !== udid || receipt.nonce !== value.nonce || receipt.bundleId !== "com.tanah.daily929" ||
+              receipt.appPath !== appPath || receipt.bundleSha256 !== bundleHash || receipt.keepData !== keepData ||
+              receipt.observerAcknowledged !== true) throw new Error("The owned installer returned an unverified receipt.");
+          return reply(response, 200, receipt);
+        } finally { installing = undefined; }
+      }
+      if (value.kind !== "ios-preparation/1" || !["reserve", "ready"].includes(value.phase) ||
+          Object.keys(value).some(key => !keys.has(key)) || value.bundleId !== "com.tanah.daily929" ||
+          !/^[0-9a-f]{64}$/.test(value.bundleSha256 ?? "")) return reply(response, 400, { error: "INVALID_IDENTITY" });
       if (value.phase === "reserve") {
         if (reserved || seen.has(value.nonce) || !["Shutdown", "Booting", "Booted"].includes(value.state) ||
-          (claimed && value.state !== "Booted")) return reply(response, 409, { error: "TRANSITION_NOT_AVAILABLE" });
+          (claimed && value.state !== "Booted") || installer &&
+          (!installing || installing.nonce !== value.nonce || installing.deadline !== deadline)) {
+          return reply(response, 409, { error: "TRANSITION_NOT_AVAILABLE" });
+        }
         seen.add(value.nonce);
         const transitionAllowed = !claimed;
         claimed = true;
@@ -93,11 +121,13 @@ export async function observeIosPreparations({ udid, expectedBundleSha256, reade
       await attachReaders(signal);
       signal.throwIfAborted();
       if (failure) throw failure;
+      ready = { nonce: value.nonce, hash: bundleHash };
       reserved = undefined;
       report({ phase: "ready", udid, nonce: value.nonce, bundleSha256: bundleHash, at: new Date().toISOString() });
       reply(response, 200, { kind: "ios-preparation-ack/1", udid, nonce: value.nonce });
     } catch (error) {
       failure ??= error;
+      if (error.cleanupUncertain) { cleanupUncertainty ??= error; lifetime.abort(error); }
       // Aborted startup must join its owned readers before a later phase can run.
       if (startup) { try { await startup; } catch {} }
       reply(response, 500, { error: "PREPARATION_OBSERVER_FAILED" });
@@ -130,7 +160,8 @@ export async function observeIosPreparations({ udid, expectedBundleSha256, reade
       return stopped ??= (async () => {
         kill();
         const joined = await Promise.allSettled([closed, ...handlers, stopReaders()]);
-        const errors = [...killFailures, ...joined.filter(result => result.status === "rejected").map(result => result.reason)];
+        const errors = [...killFailures, ...(cleanupUncertainty ? [cleanupUncertainty] : []),
+          ...joined.filter(result => result.status === "rejected").map(result => result.reason)];
         if (errors.length) throw new AggregateError(errors, "Could not stop owned iOS preparation observers.");
       })();
     },

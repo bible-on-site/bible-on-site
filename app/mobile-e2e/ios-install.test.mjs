@@ -133,6 +133,43 @@ async function fixture(t, options = {}) {
   return { root, appPath, container, calls, config, observations };
 }
 
+test("command milestones retain the exact boot boundary and debit the original deadline", async t => {
+  const { config } = await fixture(t, { device: { state: "Shutdown" }, commandMs: 10 });
+  const events = [];
+  await prepareIosApp({ ...config, report: event => events.push(event) });
+  const boot = events.filter(event => event.argv[1] === "boot" || event.argv[1] === "bootstatus");
+  assert.deepEqual(boot.map(event => [event.phase, event.argv[1]]),
+    [["command-start", "boot"], ["command-end", "boot"], ["command-start", "bootstatus"], ["command-end", "bootstatus"]]);
+  assert(boot.every(event => event.argv[2] === udid && event.remainingMs <= 300000));
+  assert.equal(boot[1].commandMs, 10);
+  assert.equal(boot[3].remainingMs, boot[0].remainingMs - 20);
+});
+
+test("failed-command tracing preserves the original cause and never retains child output", async t => {
+  const { config } = await fixture(t, { device: { state: "Shutdown" } });
+  const failure = Object.assign(new Error("controlled bootstatus failure"),
+    { code: 7, stderr: "controlled secret output", stdout: "controlled secret response" });
+  const events = [];
+  const execute = (command, args, options) => args[1] === "bootstatus" ? Promise.reject(failure) : config.execute(command, args, options);
+  await assert.rejects(prepareIosApp({ ...config, execute, report: event => events.push(event) }), error => error === failure);
+  assert.equal(events.at(-1).argv[1], "bootstatus");
+  assert.equal(events.at(-1).success, false);
+  assert.equal(events.at(-1).code, 7);
+  assert(!JSON.stringify(events).includes("controlled secret"));
+  const traceFailure = new Error("controlled trace write failure");
+  await assert.rejects(prepareIosApp({ ...config, execute, report: event => {
+    if (event.phase === "command-end" && event.success === false) throw traceFailure;
+  } }), error => error instanceof AggregateError && error.errors[0] === failure && error.errors[1] === traceFailure);
+});
+
+test("milestone retention cannot start a command after consuming its remaining deadline", async t => {
+  const { config, calls } = await fixture(t);
+  let clock = 1000;
+  await assert.rejects(prepareIosApp({ ...config, now: () => clock,
+    report: () => { clock = config.deadlineMs; } }), /300 second session deadline/);
+  assert.equal(calls.length, 0);
+});
+
 test("normal preparation proves reset, exact installed payload and session identity before reuse", async t => {
   const { config, calls, appPath } = await fixture(t, { commandMs: 10 });
   const result = await prepareIosApp(config);

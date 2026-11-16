@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { createReadStream } from "node:fs";
+import { appendFileSync, createReadStream } from "node:fs";
 import { lstat, open, readlink, readdir, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -138,7 +138,7 @@ export async function prepareIosApp({
   appPath, udid, nonce, keepData = false, deadlineMs,
   execute = executeIosCommand, now = Date.now, platform = process.platform,
   devicesRoot = join(homedir(), "Library/Developer/CoreSimulator/Devices"),
-  reserveTransition, confirmReady,
+  reserveTransition, confirmReady, report = () => {},
 }) {
   const started = now();
   if (platform !== "darwin") throw new Error("iOS installation requires macOS.");
@@ -156,10 +156,32 @@ export async function prepareIosApp({
   };
   const run = async (command, args, options = {}) => {
     checkDeadline();
-    const result = await execute(command, args, {
-      ...options, timeout: Math.max(1, Math.floor(deadlineMs - now())), killSignal: "SIGKILL",
-      maxBuffer: 8 * 1024 * 1024, encoding: "utf8", windowsHide: true,
-    });
+    // Only the helper's fixed command vocabulary is retained; never stdin,
+    // process environment, observer token or arbitrary subprocess output.
+    const allowed = command === "plutil" && args[0] === "-convert" ||
+      command === "xcrun" && args[0] === "simctl" &&
+      ["list", "boot", "bootstatus", "listapps", "terminate", "uninstall", "install", "get_app_container", "spawn"].includes(args[1]);
+    if (!allowed || args.some(argument => typeof argument !== "string")) throw new Error("Unrecognized iOS preparation command.");
+    const commandStarted = now();
+    const commandIdentity = { command, argv: [...args] };
+    report({ phase: "command-start", ...commandIdentity, elapsedMs: now() - started, remainingMs: deadlineMs - now() });
+    checkDeadline();
+    let result, commandFailure;
+    try {
+      result = await execute(command, args, {
+        ...options, timeout: Math.max(1, Math.floor(deadlineMs - now())), killSignal: "SIGKILL",
+        maxBuffer: 8 * 1024 * 1024, encoding: "utf8", windowsHide: true,
+      });
+    } catch (error) { commandFailure = error; }
+    try {
+      report({ phase: "command-end", ...commandIdentity, success: !commandFailure,
+        elapsedMs: now() - started, commandMs: now() - commandStarted, remainingMs: deadlineMs - now(),
+        ...(commandFailure ? { code: commandFailure.code ?? null, signal: commandFailure.signal ?? null } : {}) });
+    } catch (traceFailure) {
+      if (commandFailure) throw new AggregateError([commandFailure, traceFailure], "iOS command and diagnostic retention both failed.");
+      throw traceFailure;
+    }
+    if (commandFailure) throw commandFailure;
     checkDeadline();
     return result.stdout;
   };
@@ -248,8 +270,13 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const [appPath, udid, nonce, keep, deadline, expectedNode] = process.argv.slice(2);
   if (process.argv.length !== 8 || !["reset", "keep"].includes(keep)) throw new Error("Invalid iOS installation arguments.");
   await verifyNodeInterpreter(expectedNode);
+  const artifacts = process.env.MOBILE_E2E_ARTIFACTS;
+  if (!artifacts || !isAbsolute(artifacts)) throw new Error("An absolute parent-owned iOS artifact directory is required.");
   console.log(JSON.stringify(await prepareIosApp({ appPath, udid, nonce,
     keepData: keep === "keep", deadlineMs: Number(deadline),
     reserveTransition: identity => requestIosPreparation("reserve", identity),
-    confirmReady: identity => requestIosPreparation("ready", identity) })));
+    confirmReady: identity => requestIosPreparation("ready", identity),
+    report: event => appendFileSync(join(artifacts, "ios-preparation-commands.jsonl"),
+      `${JSON.stringify({ kind: "ios-preparation-command/1", at: new Date().toISOString(), pid: process.pid, udid, nonce, ...event })}\n`),
+  })));
 }
