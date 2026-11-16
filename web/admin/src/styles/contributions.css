@@ -252,6 +252,9 @@
 	text-align: center;
 	color: var(--muted);
 }
+.contribution-empty > svg {
+	margin-inline: auto;
+}
 .contribution-empty h2 {
 	color: #1f2328;
 	font-size: 22px;

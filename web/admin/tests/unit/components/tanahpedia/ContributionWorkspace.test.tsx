@@ -34,11 +34,26 @@ vi.mock("@tanstack/react-router", () => ({
 		search?: Record<string, unknown>;
 		children: React.ReactNode;
 	}) => (
-		<a href={`${to}${search?.id ? `?id=${search.id}` : ""}`} {...props}>
+		<a
+			href={`${to}${
+				search
+					? `?${new URLSearchParams(
+							Object.entries(search)
+								.filter(([, value]) => value !== undefined)
+								.map(([key, value]) => [key, String(value)]),
+						)}`
+					: ""
+			}`}
+			{...props}
+		>
 			{children}
 		</a>
 	),
-	createFileRoute: () => (config: unknown) => config,
+	createFileRoute: () => (config: object) => ({
+		...config,
+		useSearch: () => mocks.search,
+	}),
+	redirect: (options: unknown) => options,
 }));
 vi.mock("~/server/tanahpedia/contributions", () => ({
 	getContributions: mocks.list,
@@ -57,8 +72,10 @@ vi.mock("~/server/tanahpedia/contributions", () => ({
 
 import {
 	ContributionWorkspace,
+	validateContributionHomeSearch,
 	validateContributionSearch,
 } from "~/components/tanahpedia/ContributionWorkspace";
+import { Route as HomeRoute } from "~/routes/index";
 import { Route as IssueRoute } from "~/routes/issues";
 import { Route as PrRoute } from "~/routes/pull-requests";
 
@@ -302,8 +319,8 @@ describe("issues and PR administration", () => {
 		show("pr");
 		fireEvent.click(await screen.findByRole("button", { name: "ביטול" }));
 		expect(mocks.navigate).toHaveBeenCalledWith({
-			to: "/pull-requests",
-			search: {},
+			to: "/",
+			search: { tab: "prs" },
 		});
 	});
 	it("navigates a newly saved PR to the PR discussion", async () => {
@@ -331,8 +348,8 @@ describe("issues and PR administration", () => {
 		fireEvent.click(screen.getByRole("button", { name: "פתיחת PR" }));
 		await waitFor(() =>
 			expect(mocks.navigate).toHaveBeenCalledWith({
-				to: "/pull-requests",
-				search: { id: PRID },
+				to: "/",
+				search: { id: PRID, tab: "prs" },
 			}),
 		);
 	});
@@ -510,7 +527,7 @@ describe("issues and PR administration", () => {
 		expect(screen.queryByText("שינוי שם")).not.toBeInTheDocument();
 		expect(screen.getByRole("link", { name: "+ פנייה חדשה" })).toHaveAttribute(
 			"href",
-			"/issues?id=new",
+			"/?id=new&tab=issues",
 		);
 		fireEvent.change(screen.getByLabelText("חיפוש דיונים"), {
 			target: { value: "אברהם" },
@@ -839,7 +856,7 @@ describe("issues and PR administration", () => {
 		expect(await screen.findByText(/טרם נוספו מקורות/)).toBeInTheDocument();
 		expect(
 			screen.getByRole("link", { name: "פתיחת PR ידנית" }),
-		).toHaveAttribute("href", "/pull-requests?id=new");
+		).toHaveAttribute("href", `/?id=new&issueId=${ID}&tab=prs`);
 		expect(
 			screen.queryByRole("button", { name: "יצירת PRs עם AWS LLM" }),
 		).not.toBeInTheDocument();
@@ -945,8 +962,8 @@ describe("issues and PR administration", () => {
 		fireEvent.submit(screen.getByRole("form"));
 		await waitFor(() => expect(mocks.create).toHaveBeenCalled());
 		expect(mocks.navigate).toHaveBeenCalledWith({
-			to: "/issues",
-			search: { id: ID },
+			to: "/",
+			search: { id: ID, tab: "issues" },
 		});
 	});
 	it("edits an issue using its current optimistic version", async () => {
@@ -1148,8 +1165,8 @@ describe("issues and PR administration", () => {
 		show("pr");
 		fireEvent.click(await screen.findByRole("button", { name: "ביטול" }));
 		expect(mocks.navigate).toHaveBeenCalledWith({
-			to: "/pull-requests",
-			search: {},
+			to: "/",
+			search: { tab: "prs" },
 		});
 	});
 	it("validates deep-link and filter state and exposes both routes", () => {
@@ -1183,9 +1200,77 @@ describe("issues and PR administration", () => {
 		expect(validateContributionSearch({ q: "a".repeat(600) }).q).toHaveLength(
 			500,
 		);
-		for (const route of [IssueRoute, PrRoute])
-			expect(
-				(route as unknown as { component: () => unknown }).component(),
-			).toBeTruthy();
+		expect(
+			validateContributionHomeSearch({ tab: "prs", id: PRID }),
+		).toMatchObject({ tab: "prs", id: PRID });
+		expect(validateContributionHomeSearch({ tab: "invalid" }).tab).toBe(
+			"issues",
+		);
+		for (const [route, tab] of [
+			[IssueRoute, "issues"],
+			[PrRoute, "prs"],
+		] as const) {
+			const beforeLoad = (
+				route as unknown as {
+					beforeLoad: (context: { search: Record<string, unknown> }) => never;
+				}
+			).beforeLoad;
+			expect(() =>
+				beforeLoad({ search: { id: PRID, q: "term", state: "all" } }),
+			).toThrow(
+				expect.objectContaining({
+					to: "/",
+					replace: true,
+					search: { id: PRID, q: "term", state: "all", tab },
+				}),
+			);
+		}
+	});
+	it("clears an issue action error when switching the home queue", async () => {
+		mocks.search = { tab: "issues", id: ID };
+		mocks.update.mockRejectedValue(new Error("Issue update failed"));
+		const Page = (HomeRoute as unknown as { component: () => React.ReactNode })
+			.component;
+		client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		const view = render(
+			<QueryClientProvider client={client}>
+				<Page />
+			</QueryClientProvider>,
+		);
+		fireEvent.change(await screen.findByLabelText("הוספת תגובה"), {
+			target: { value: "Retry later" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "שליחת תגובה" }));
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"Issue update failed",
+		);
+		mocks.search = { tab: "prs" };
+		view.rerender(
+			<QueryClientProvider client={client}>
+				<Page />
+			</QueryClientProvider>,
+		);
+		expect(
+			await screen.findByRole("link", { name: "שינוי שם" }),
+		).toBeInTheDocument();
+		expect(screen.queryByText("Issue update failed")).not.toBeInTheDocument();
+	});
+	it.each([
+		["issues", "בדיקת מקורות"],
+		["prs", "שינוי שם"],
+	])("opens the %s queue directly on the homepage", async (tab, title) => {
+		mocks.search = { tab };
+		const Page = (HomeRoute as unknown as { component: () => React.ReactNode })
+			.component;
+		client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		render(
+			<QueryClientProvider client={client}>
+				<Page />
+			</QueryClientProvider>,
+		);
+		expect(await screen.findByRole("link", { name: title })).toHaveAttribute(
+			"href",
+			`/?id=${tab === "prs" ? PRID : ID}&tab=${tab}`,
+		);
 	});
 });

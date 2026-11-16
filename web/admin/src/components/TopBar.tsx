@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useArchiveBusy } from "~/lib/archive-busy";
 
 const linkClass =
@@ -80,50 +80,79 @@ function ArchiveLogout({ admin }: { admin: boolean }) {
 	);
 }
 
-function AdminLinks() {
+function AdminLinks({ onNavigate }: { onNavigate: () => void }) {
 	return (
 		<>
 			<Link
 				to="/"
 				className={linkClass}
 				activeProps={activeLink}
-				activeOptions={{ exact: true }}
+				activeOptions={{ exact: true, includeSearch: false }}
+				onClick={onNavigate}
 			>
 				בית
 			</Link>
-			<Link to="/articles" className={linkClass} activeProps={activeLink}>
+			<Link
+				to="/articles"
+				className={linkClass}
+				activeProps={activeLink}
+				onClick={onNavigate}
+			>
 				מאמרים
 			</Link>
 			<Link
-				to="/link-proposals"
-				search={{ articleId: undefined }}
+				to="/bulletins"
 				className={linkClass}
 				activeProps={activeLink}
+				onClick={onNavigate}
 			>
-				הצעות קישור
-			</Link>
-			<Link to="/bulletins" className={linkClass}>
 				עלון יומי
 			</Link>
-			<Link to="/moadim" className={linkClass} activeProps={activeLink}>
+			<Link
+				to="/moadim"
+				className={linkClass}
+				activeProps={activeLink}
+				onClick={onNavigate}
+			>
 				מועדים
 			</Link>
-			<Link to="/dedications" className={linkClass} activeProps={activeLink}>
+			<Link
+				to="/dedications"
+				className={linkClass}
+				activeProps={activeLink}
+				onClick={onNavigate}
+			>
 				הקדשות
 			</Link>
-			<Link to="/rabbis" className={linkClass} activeProps={activeLink}>
+			<Link
+				to="/rabbis"
+				className={linkClass}
+				activeProps={activeLink}
+				onClick={onNavigate}
+			>
 				רבנים
 			</Link>
-			<Link to="/archive" className={linkClass} activeProps={activeLink}>
+			<Link
+				to="/archive"
+				className={linkClass}
+				activeProps={activeLink}
+				onClick={onNavigate}
+			>
 				ארכיון
 			</Link>
-			<Link to="/tanahpedia" className={linkClass} activeProps={activeLink}>
+			<Link
+				to="/tanahpedia"
+				className={linkClass}
+				activeProps={activeLink}
+				onClick={onNavigate}
+			>
 				תנכפדיה
 			</Link>
 			<Link
 				to="/contribution-agents"
 				className={linkClass}
 				activeProps={activeLink}
+				onClick={onNavigate}
 			>
 				סוכנים
 			</Link>
@@ -141,46 +170,43 @@ function AdminLinks() {
 export function TopBar({ archive = false }: { archive?: boolean }) {
 	const session = useArchiveSession(archive);
 	const admin = !archive || session.data?.isAdmin === true;
+	const [menuOpen, setMenuOpen] = useState(false);
+	const [interactive, setInteractive] = useState(false);
+	useEffect(() => setInteractive(true), []);
 	return (
-		<nav className="bg-white shadow-md border-b border-gray-200 sticky top-0 z-50">
+		<nav
+			className="admin-header bg-white shadow-md border-b border-gray-200 sticky top-0 z-50"
+			aria-label="ניווט ראשי"
+		>
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-				<div className="flex flex-wrap items-center justify-between min-h-16 gap-2 py-2">
-					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2">
-						<Link
-							to={admin ? "/" : "/archive"}
-							className="flex shrink-0 items-center gap-2 whitespace-nowrap"
-						>
-							<span className="text-xl sm:text-2xl">📖</span>
-							<span className="text-base sm:text-xl font-bold bg-linear-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
-								ניהול תנ"ך על הפרק
-							</span>
-						</Link>
-						<div className="hidden sm:flex flex-wrap gap-1">
-							{admin ? (
-								<AdminLinks />
-							) : (
-								<Link
-									to="/archive"
-									className={linkClass}
-									activeProps={activeLink}
-								>
-									ארכיון
-								</Link>
-							)}
-						</div>
-					</div>
-					<div className="flex shrink-0 items-center gap-1 sm:gap-4">
-						{admin && (
+				<div className="admin-header-inner">
+					<Link to={admin ? "/" : "/archive"} className="admin-header-brand">
+						<span className="admin-header-logo" aria-hidden="true">
+							📖
+						</span>
+						<span className="admin-header-title font-bold bg-linear-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
+							ניהול תנ"ך על הפרק
+						</span>
+					</Link>
+					<div
+						id="admin-primary-links"
+						className="admin-header-links"
+						data-collapsible={admin}
+						data-open={menuOpen}
+					>
+						{admin ? (
+							<AdminLinks onNavigate={() => setMenuOpen(false)} />
+						) : (
 							<Link
-								to="/issues"
-								search={{}}
+								to="/archive"
 								className={linkClass}
 								activeProps={activeLink}
 							>
-								<span className="hidden lg:inline">פניות ושינויים</span>
-								<span className="lg:hidden">פניות</span>
+								ארכיון
 							</Link>
 						)}
+					</div>
+					<div className="admin-header-account">
 						{archive ? (
 							session.data ? (
 								<>
@@ -201,6 +227,31 @@ export function TopBar({ archive = false }: { archive?: boolean }) {
 							</a>
 						)}
 					</div>
+					{admin && (
+						<button
+							type="button"
+							className="admin-header-toggle"
+							disabled={!interactive}
+							aria-expanded={menuOpen}
+							aria-controls="admin-primary-links"
+							aria-label={
+								menuOpen ? "סגירת תפריט הניווט" : "פתיחת תפריט הניווט"
+							}
+							onClick={() => setMenuOpen((open) => !open)}
+						>
+							<svg
+								width="22"
+								height="22"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="1.8"
+								aria-hidden="true"
+							>
+								<path d="M4 6h16M4 12h16M4 18h16" />
+							</svg>
+						</button>
+					)}
 				</div>
 			</div>
 		</nav>
