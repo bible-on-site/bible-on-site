@@ -586,6 +586,12 @@ public class ReaderChromeTests
         chrome.IsShowingArticles.Should().BeTrue();
         rig.Articles.IsVisible.Should().BeTrue(
             "readers with no ⋮ menu (masora, moed) keep the swap unchanged (#3401)");
+
+        rig.BottomBar.RaiseTextMode();
+
+        chrome.IsShowingArticles.Should().BeFalse();
+        rig.Articles.IsVisible.Should().BeFalse(
+            "the return to scripture must not trip on the missing menu surface either (#3401)");
     }
 
     // — Reading-progress placement (issue #3364) ———————————————————————————
