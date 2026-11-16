@@ -413,6 +413,27 @@ fn daily_article_scripture_quotes_render_all_marks_without_tofu() {
 }
 
 #[test]
+fn adjacent_citations_compile_in_sefer_and_daily_exports() {
+    for quote in ["אֹתָֽם׃", "וַיֹּאמֶ֞ר"] {
+        let req = melachim_request(format!("<p>{quote}(בראשית א כז)</p>"));
+        for bytes in [
+            pdf::build_pdf(&req, &fonts_dir()).unwrap(),
+            pdf::build_daily_pdf(&req, &fonts_dir(), "תאריך", &[]).unwrap(),
+        ] {
+            let doc = Document::load_mem(&bytes).unwrap();
+            let shown = shown_texts(&doc);
+            assert!(shown.iter().all(|run| run.notdef == 0));
+            let citation: String = shown
+                .iter()
+                .filter(|run| run.font.contains("AlHeperekUI"))
+                .map(|run| run.text.as_str())
+                .collect();
+            assert!(citation.contains("בראשית") || citation.contains("תישארב"));
+        }
+    }
+}
+
+#[test]
 fn daily_article_without_taamim_never_loads_cantillation_face() {
     let mut req = melachim_request("<h1>כותרת רגילה</h1><p>טקסט רגיל ללא טעמים כלל.</p>".into());
     let buf = pdf::build_daily_pdf(&req, &fonts_dir(), "תאריך", &[]).unwrap();
