@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
 import { canonicalJson } from "~/lib/canonical-json";
+import { isContributionAgentReadKind } from "~/lib/tanahpedia/contribution-agent-read-kinds";
 import { latestContributionAgentResponses } from "~/lib/tanahpedia/contribution-agent-responses";
 import {
 	type ArticleLinkChange,
@@ -124,6 +125,17 @@ const SPECIAL_SEARCHES: Record<string, string> = {
 	source_reference:
 		"SELECT s.id,CONCAT(g.target_id,' / ',s.perek_id,' / ',COALESCE(s.pasuk_number,'')) AS name FROM tanahpedia_tanah_source s JOIN tanahpedia_source_group g ON g.id=s.source_group_id UNION ALL SELECT s.id,CONCAT(g.target_id,' / ',s.source_text) AS name FROM tanahpedia_non_tanah_source s JOIN tanahpedia_source_group g ON g.id=s.source_group_id",
 };
+
+/** Exact accepted dispatch keys, checked against the pure declaration vocabulary. */
+export function contributionAgentReadDispatchKinds(): string[] {
+	return [
+		...Object.keys(REFERENCES),
+		...[
+			...Object.keys(CONTRIBUTION_RECORDS),
+			...Object.keys(SPECIAL_SEARCHES),
+		].map((kind) => `target:${kind}`),
+	];
+}
 
 function emptyCatalogue(): AgentCatalogue {
 	return { people: [], places: [], entities: [], targets: [], references: {} };
@@ -775,6 +787,12 @@ export async function readContributionAgentTool(
 	}
 	if (typeof args.kind !== "string")
 		throw new Error("Missing contribution tool kind");
+	if (!isContributionAgentReadKind(args.kind))
+		throw new Error(
+			args.kind.startsWith("target:")
+				? "Unsupported contribution target kind"
+				: "Unsupported contribution reference kind",
+		);
 	const isTarget = args.kind.startsWith("target:");
 	const kind = isTarget ? targetKind(args.kind.slice(7)) : args.kind;
 	const sql = isTarget

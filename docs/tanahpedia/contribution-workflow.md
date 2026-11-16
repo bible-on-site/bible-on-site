@@ -331,7 +331,15 @@ content-rebase path, which creates a new revision and requires renewed review.
 
 The explicit v4-to-v5 identity adapter adds article-link operations while keeping
 existing sequences and approvals intact. Agent instructions/tools advance
-independently to bundle v4; the worker protocol remains v2.
+independently to bundle v5; the worker protocol remains v2.
+
+Bundle v5 closes the `search`/`record` kind vocabulary against the same pure registry
+used by server dispatch: 28 reference families and 46 `target:<operationKind>` names.
+This fixes an observed unsupported `source` lookup without broadening read authority.
+Chapter lookup uses `perek`; verses remain integer coordinates within a chapter.
+Exact `currentRecords` and supplied referenced IDs already count as completed reads,
+so agents reuse them and fetch only missing records or paged article text. API v5,
+the native worker transport and its existing execution deadline are unchanged.
 
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these

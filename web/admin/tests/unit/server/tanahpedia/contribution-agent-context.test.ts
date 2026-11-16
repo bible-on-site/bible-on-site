@@ -1,5 +1,6 @@
 import type { PoolConnection } from "mysql2/promise";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CONTRIBUTION_AGENT_READ_KINDS } from "~/lib/tanahpedia/contribution-agent-read-kinds";
 import type { ArticleLinkState } from "~/lib/tanahpedia/contribution-article-links";
 import type {
 	ChangeInput,
@@ -11,6 +12,7 @@ import type {
 import { CONTRIBUTION_ISSUE_SCOPE_KINDS } from "~/lib/tanahpedia/contributions";
 import {
 	type AgentCatalogue,
+	contributionAgentReadDispatchKinds,
 	lockContributionAgentContext,
 	mergeAgentCatalogues,
 	readContributionAgentInitialContext,
@@ -221,6 +223,24 @@ beforeEach(() => {
 });
 
 describe("complete contribution agent context", () => {
+	it("keeps the finite declared read vocabulary equal to the exact accepted SQL dispatch sets", () => {
+		expect(contributionAgentReadDispatchKinds().sort()).toEqual(
+			[...CONTRIBUTION_AGENT_READ_KINDS].sort(),
+		);
+	});
+	it.each(["search", "record"])(
+		"rejects unsupported source-family %s before any SQL",
+		async (name) => {
+			await expect(
+				readContributionAgentTool(conn, item, name, {
+					kind: "source",
+					...(name === "search" ? { query: "chapter" } : { id: personId }),
+				}),
+			).rejects.toThrow("Unsupported contribution reference kind");
+			expect(mocks.one).not.toHaveBeenCalled();
+			expect(mocks.query).not.toHaveBeenCalled();
+		},
+	);
 	it("keeps the retained issue scope reader bounded and leaves unscoped/PR context alone", async () => {
 		expect(await readContributionIssueScopeContext(conn, item)).toBeUndefined();
 		item.kind = "issue";
