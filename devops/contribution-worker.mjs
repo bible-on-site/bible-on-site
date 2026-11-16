@@ -14,7 +14,7 @@ const adminHosts = new Set(["admin.xn--febl3a.co.il", "admin.xn--febl3a.com"]);
 const AWS_ACCOUNT = "250598594267", // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 	AWS_REGION = "il-central-1";
 const executeFile = promisify(execFile);
-export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v2";
+export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v3";
 const workerTasks = ["issue_implementation", "pr_resolution"];
 function parseJson(content, message) {
 	try {
@@ -44,6 +44,96 @@ const canonical = (value) =>
 					.join(",")}}`
 			: JSON.stringify(value);
 
+const object = (value) =>
+	value !== null && typeof value === "object" && !Array.isArray(value);
+
+/** Preserve the full server schema, including unions and limits that native
+ * tool parameter decoders may discard. Final results use the format path. */
+function agentResultSchema(schema) {
+	if (
+		!object(schema) ||
+		schema.type !== "object" ||
+		!Array.isArray(schema.oneOf)
+	)
+		throw new Error("Invalid worker result schema");
+	const branches = schema.oneOf.filter(
+		(branch) => branch?.properties?.action?.const === "complete",
+	);
+	const branch = branches[0];
+	if (
+		branches.length !== 1 ||
+		branch.type !== "object" ||
+		branch.additionalProperties !== false ||
+		!Array.isArray(branch.required) ||
+		canonical([...branch.required].sort()) !== '["action","result"]' ||
+		canonical(Object.keys(branch.properties).sort()) !==
+			'["action","result"]' ||
+		!object(branch.properties.result) ||
+		branch.properties.result.type !== "object" ||
+		!Array.isArray(branch.properties.result.oneOf) ||
+		!branch.properties.result.oneOf.length
+	)
+		throw new Error("Invalid worker result schema");
+	return branch.properties.result;
+}
+
+function nativeModelMessage(body, bundle) {
+	if (body?.prompt_eval_count >= 16384)
+		throw new Error(
+			"Agent context reached the model window; no result was applied",
+		);
+	if (body?.done_reason === "length")
+		throw new Error(
+			"Local model reached its output limit; no result was applied",
+		);
+	const message = body?.message;
+	if (
+		!object(body) ||
+		body.done !== true ||
+		!Number.isSafeInteger(body.prompt_eval_count) ||
+		body.prompt_eval_count < 0 ||
+		!object(message) ||
+		message.role !== "assistant" ||
+		typeof message.content !== "string" ||
+		canonical(message).length > 100000 ||
+		(message.thinking !== undefined && typeof message.thinking !== "string") ||
+		(message.tool_calls !== undefined && !Array.isArray(message.tool_calls))
+	)
+		throw new Error("Invalid local model response");
+	const calls = message.tool_calls ?? [];
+	const ids = new Set();
+	for (const call of calls) {
+		if (
+			!object(call) ||
+			!object(call.function) ||
+			!bundle.tools.some((tool) => tool.name === call.function.name) ||
+			!object(call.function.arguments) ||
+			(call.id !== undefined &&
+				(typeof call.id !== "string" ||
+					!call.id.trim() ||
+					call.id.length > 255 ||
+					ids.has(call.id)))
+		)
+			throw new Error("Invalid local model tool call");
+		if (call.id !== undefined) ids.add(call.id);
+	}
+	if (!calls.length && !message.content.trim())
+		throw new Error("Invalid local model response");
+	return message;
+}
+
+function nativeAgentSystem(bundle) {
+	return [
+		bundle.system.replace(
+			"Return JSON matching the supplied action schema.",
+			"Use the supplied native read functions to obtain missing context; the final proposal uses a separately constrained result schema.",
+		),
+		"Operation guide:",
+		...bundle.operationGuide,
+		"Transport: use native function calls for reads. Do not invent IDs or substitute another operation because a target has not been read. When no further reads are needed, give a brief readiness response; the next phase requests the typed final result. Read functions cannot write, approve or merge.",
+	].join("\n");
+}
+
 export function validateWorkerBundle(value, expectedHash) {
 	if (
 		value?.protocolVersion !== 2 ||
@@ -58,8 +148,10 @@ export function validateWorkerBundle(value, expectedHash) {
 				!tool ||
 				typeof tool.name !== "string" ||
 				typeof tool.description !== "string" ||
-				!tool.inputSchema,
-		)
+				!object(tool.inputSchema) ||
+				tool.inputSchema.type !== "object",
+		) ||
+		new Set(value.tools.map((tool) => tool.name)).size !== value.tools.length
 	)
 		throw new Error("Invalid agent bundle");
 	const { hash, ...payload } = value;
@@ -397,18 +489,28 @@ export function createContributionWorker(
 					executionSignal = signal
 						? AbortSignal.any([signal, timeout])
 						: timeout;
-				const system = [
-					bundle.system,
-					"Operation guide:",
-					...bundle.operationGuide,
-					"Read tools:",
-					JSON.stringify(bundle.tools),
-					'Every turn returns either {"action":"tool","name":"...","arguments":{...}} or {"action":"complete","result":{...}}. Tool reads do not apply changes.',
-				].join("\n");
-				const turns = [],
-					receipts = [];
+				const messages = [
+					{ role: "system", content: nativeAgentSystem(bundle) },
+					{
+						role: "user",
+						content: canonical({
+							task: job.task,
+							context: parseJson(job.user, "Invalid worker task context"),
+						}),
+					},
+				];
+				const receipts = [],
+					tools = bundle.tools.map((tool) => ({
+						type: "function",
+						function: {
+							name: tool.name,
+							description: tool.description,
+							parameters: tool.inputSchema,
+						},
+					}));
 				let schema = job.schema;
-				while (true) {
+				agentResultSchema(schema);
+				const infer = async (history, declaration) => {
 					executionSignal.throwIfAborted();
 					const response = await request(new URL("/api/chat", options.ollama), {
 						method: "POST",
@@ -420,47 +522,53 @@ export function createContributionWorker(
 							stream: false,
 							keep_alive: 0,
 							think: false,
-							format: schema,
+							truncate: false,
+							shift: false,
 							options: { temperature: 0, num_predict: 4096, num_ctx: 16384 },
-							messages: [
-								{ role: "system", content: system },
-								{
-									role: "user",
-									content: canonical({
-										task: job.task,
-										context: parseJson(job.user, "Invalid worker task context"),
-										turns,
-									}),
-								},
-							],
+							messages: history,
+							...declaration,
 						}),
 					});
 					if (!response.ok)
 						throw new Error(`Local model returned HTTP ${response.status}`);
-					const body = await readJson(response, "Invalid local model response"),
-						content = body.message?.content;
+					const body = await readJson(response, "Invalid local model response");
 					executionSignal.throwIfAborted();
-					if (
-						typeof content !== "string" ||
-						!content.trim() ||
-						content.length > 100000
-					)
-						throw new Error("Invalid local model response");
-					if (body.prompt_eval_count >= 16384)
-						throw new Error(
-							"Agent context reached the model window; no result was applied",
+					return { body, message: nativeModelMessage(body, bundle) };
+				};
+				while (true) {
+					const { message } = await infer(messages, { tools });
+					messages.push(message);
+					if (!message.tool_calls?.length) {
+						// Native parameter decoding can drop JSON-schema constraints.
+						// Only this separate final request receives the full result schema.
+						const final = await infer(
+							[
+								...messages,
+								{
+									role: "user",
+									content:
+										"Now return only the final result object matching the supplied JSON response schema. Preserve the original task and all unrequested fields; do not wrap the result in an action object.",
+								},
+							],
+							{ format: agentResultSchema(schema) },
 						);
-					const action = parseJson(content, "Invalid local model response");
-					if (action.action === "complete") {
+						if (final.message.tool_calls?.length)
+							throw new Error("Unexpected tool call during final generation");
+						const output = parseJson(
+							final.message.content,
+							"Invalid local model response",
+						);
+						if (!object(output))
+							throw new Error("Invalid local model response");
 						const result = await api(
 							"complete",
 							{
 								...identity,
 								receipts,
-								content: canonical(action.result),
+								content: canonical(output),
 								model:
-									typeof body.model === "string"
-										? body.model
+									typeof final.body.model === "string"
+										? final.body.model
 										: job.model || options.model,
 							},
 							executionSignal,
@@ -471,26 +579,31 @@ export function createContributionWorker(
 							prIds: result.prIds,
 						};
 					}
-					if (
-						action.action !== "tool" ||
-						!bundle.tools.some((tool) => tool.name === action.name)
-					)
-						throw new Error("Unsupported agent action");
-					const read = await api(
-						"context",
-						{
-							...identity,
-							receipts,
-							name: action.name,
-							arguments: action.arguments,
-						},
-						executionSignal,
-					);
-					if (!read.receipt || !read.schema)
-						throw new Error("Invalid agent context response");
-					receipts.push(read.receipt);
-					schema = read.schema;
-					turns.push({ request: action, response: read.data });
+					for (const call of message.tool_calls) {
+						executionSignal.throwIfAborted();
+						const read = await api(
+							"context",
+							{
+								...identity,
+								receipts,
+								name: call.function.name,
+								arguments: call.function.arguments,
+							},
+							executionSignal,
+						);
+						executionSignal.throwIfAborted();
+						if (!object(read) || !read.receipt || !Object.hasOwn(read, "data"))
+							throw new Error("Invalid agent context response");
+						agentResultSchema(read.schema);
+						receipts.push(read.receipt);
+						schema = read.schema;
+						messages.push({
+							role: "tool",
+							tool_name: call.function.name,
+							...(call.id !== undefined ? { tool_call_id: call.id } : {}),
+							content: canonical(read.data),
+						});
+					}
 				}
 			}
 			const timeout = AbortSignal.timeout(MODEL_TIMEOUT);

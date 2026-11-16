@@ -20,6 +20,7 @@ import {
 	validateAssignee,
 	validateChanges,
 	validateEvidence,
+	validateIssueScope,
 } from "~/lib/tanahpedia/contributions";
 import { query } from "../db";
 import { pediaInvalidation, revalidateWebsite } from "../website-revalidate";
@@ -338,6 +339,9 @@ export async function createContribution(
 	const title = textField(input.title, "title"),
 		description = textField(input.description, "description", 20000);
 	const evidence = validateEvidence(input.evidence ?? []);
+	const scope = validateIssueScope(input.scope);
+	if (input.kind !== "issue" && scope)
+		throw new Error("Only issues support a change scope");
 	const assignee = validateAssignee(input.assignee ?? { kind: "unassigned" });
 	const changes = input.kind === "pr" ? validateChanges(input.changes) : [];
 	if (input.kind === "pr" && evidence.length === 0)
@@ -370,6 +374,7 @@ export async function createContribution(
 			author: actor,
 			revisionAuthor: actor,
 			assignee,
+			...(scope ? { scope } : {}),
 			evidence: freshEvidence,
 			changes: preparedChanges,
 			issueId,
@@ -406,6 +411,10 @@ export async function editContribution(
 		const item = await readContribution(conn, id, true);
 		assertVersion(item, input.version);
 		if (item.state !== "open") throw new Error("Reopen before editing");
+		const scope =
+			input.scope === undefined ? item.scope : validateIssueScope(input.scope);
+		if (item.kind !== "issue" && scope)
+			throw new Error("Only issues support a change scope");
 		const changes =
 			item.kind === "pr"
 				? await prepareChanges(conn, editedChanges(item, input.changes), {
@@ -432,6 +441,7 @@ export async function editContribution(
 				evidence: item.evidence,
 				changes: item.changes,
 				closeIssue: item.closeIssue,
+				scope: item.scope,
 			},
 			{
 				title,
@@ -439,6 +449,7 @@ export async function editContribution(
 				evidence: freshEvidence,
 				changes,
 				closeIssue: input.closeIssue !== false,
+				scope,
 			},
 		);
 		if (item.articleLinkMerge && !contentChanged)
@@ -471,6 +482,7 @@ export async function editContribution(
 			"The issue was edited after generation was requested",
 		);
 		item.description = description;
+		item.scope = scope;
 		item.evidence = freshEvidence;
 		item.changes = changes;
 		delete item.domainConflict;

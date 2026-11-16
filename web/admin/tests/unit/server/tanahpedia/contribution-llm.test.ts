@@ -11,7 +11,17 @@ const mocks = vi.hoisted(() => ({
 	destroy: vi.fn(),
 	fetch: vi.fn(),
 	clientSettings: vi.fn(),
+	scopeContext: vi.fn(),
 }));
+vi.mock(
+	"~/server/tanahpedia/contribution-agent-context.server",
+	async (original) => ({
+		...(await original<
+			typeof import("~/server/tanahpedia/contribution-agent-context.server")
+		>()),
+		readContributionIssueScopeContext: mocks.scopeContext,
+	}),
+);
 vi.mock("@aws-sdk/client-bedrock-runtime", () => ({
 	BedrockRuntimeClient: class {
 		constructor(settings: unknown) {
@@ -49,6 +59,7 @@ import {
 	contributionLlmStatus,
 	contributionOutputSchema,
 	contributionSystemPrompt,
+	createGeneratedContributionPrs,
 	generateContributionPrs,
 	prepareContributionGeneration,
 } from "~/server/tanahpedia/contribution-llm.server";
@@ -85,6 +96,118 @@ function localOutput(output: unknown) {
 }
 
 describe("issue-to-PR LLM generation", () => {
+	it("preloads an exact scoped target beyond bounded name-search candidates", async () => {
+		issue.scope = { kind: "metadata", targetId: ID };
+		mocks.scopeContext.mockResolvedValue({
+			catalogue: {
+				people: [],
+				places: [],
+				entities: [{ id: ID, name: "Canonical" }],
+				targets: [
+					{ kind: "metadata", id: ID, current: { displayName: "Canonical" } },
+				],
+				references: { entity: [{ id: ID, name: "Canonical" }] },
+			},
+			records: [
+				{
+					kind: "target:metadata",
+					id: ID,
+					current: { displayName: "Canonical" },
+				},
+			],
+		});
+		const context = await prepareContributionGeneration(input);
+		expect(mocks.scopeContext).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ scope: issue.scope }),
+		);
+		expect(context.modelCatalogue.entities).toEqual([
+			{ id: ID, name: "Canonical" },
+		]);
+		expect(JSON.parse(context.user)).toMatchObject({
+			issue: { scope: issue.scope },
+			catalogue: {
+				targets: [
+					{ kind: "metadata", id: ID, current: { displayName: "Canonical" } },
+				],
+			},
+			currentRecords: [
+				{
+					kind: "target:metadata",
+					id: ID,
+					current: { displayName: "Canonical" },
+				},
+			],
+		});
+		expect(
+			context.schema.properties.pullRequests.items.properties.changes.items
+				.oneOf,
+		).toHaveLength(1);
+	});
+	it("validates every generated draft before inserting any PR", async () => {
+		issue.scope = { kind: "entry" };
+		const unrelated = {
+			...draft,
+			changes: [
+				{ kind: "metadata", targetId: ID, after: { displayName: "Changed" } },
+			],
+		};
+		await expect(
+			createGeneratedContributionPrs(
+				{
+					issue,
+					provider: "local_llm",
+					modelCatalogue: {
+						people: [],
+						places: [],
+						entities: [{ id: ID, name: "Name" }],
+						targets: [],
+					},
+				},
+				{
+					content: JSON.stringify({ pullRequests: [draft, unrelated] }),
+					model: "local",
+				},
+			),
+		).rejects.toThrow("outside the issue scope");
+		expect(mocks.create).not.toHaveBeenCalled();
+	});
+	it("rechecks the locked issue scope even when the earlier context omitted it", async () => {
+		issue.scope = { kind: "entry" };
+		const stale = { ...structuredClone(issue), scope: undefined };
+		await expect(
+			createGeneratedContributionPrs(
+				{
+					issue: stale,
+					provider: "local_llm",
+					modelCatalogue: {
+						people: [],
+						places: [],
+						entities: [{ id: ID, name: "Name" }],
+						targets: [],
+					},
+				},
+				{
+					content: JSON.stringify({
+						pullRequests: [
+							{
+								...draft,
+								changes: [
+									{
+										kind: "metadata",
+										targetId: ID,
+										after: { displayName: "Changed" },
+									},
+								],
+							},
+						],
+					}),
+					model: "local",
+				},
+			),
+		).rejects.toThrow("outside the issue scope");
+		expect(mocks.create).not.toHaveBeenCalled();
+	});
 	it.each(["queued", "running", "completed"] as const)(
 		"does not bypass the registry through legacy generation for a %s assigned-agent job",
 		async (status) => {

@@ -230,6 +230,114 @@ describe("contribution lifecycle", () => {
 		}));
 	});
 	afterEach(() => vi.restoreAllMocks());
+	it("persists optional issue scope, preserves old-client edits, and refreshes work when scope changes", async () => {
+		let item = await createContribution(
+			{
+				kind: "issue",
+				title: "Issue",
+				description: "Description",
+				evidence,
+				assignee: { kind: "local_llm" },
+				scope: { kind: "metadata", targetId: ID },
+			},
+			alice,
+		);
+		expect(item.scope).toEqual({ kind: "metadata", targetId: ID });
+		const originalJob = item.generation?.id;
+		const unchanged = await editContribution(
+			{
+				id: item.id,
+				version: item.version,
+				title: item.title,
+				description: item.description,
+				evidence,
+			},
+			alice,
+		);
+		expect(unchanged.scope).toEqual(item.scope);
+		expect(unchanged.version).toBe(item.version);
+		expect(unchanged.generation?.id).toBe(originalJob);
+		item = await editContribution(
+			{
+				id: item.id,
+				version: item.version,
+				title: item.title,
+				description: item.description,
+				evidence,
+				scope: { kind: "metadata", targetId: OTHER },
+			},
+			alice,
+		);
+		expect(item.scope).toEqual({ kind: "metadata", targetId: OTHER });
+		expect(item.revision).toBe(2);
+		expect(item.revisionHistory?.at(-1)?.scope).toEqual({
+			kind: "metadata",
+			targetId: ID,
+		});
+		expect(item.generation).toMatchObject({
+			status: "queued",
+			trigger: "edit",
+		});
+		expect(item.generation?.id).not.toBe(originalJob);
+		await expect(
+			editContribution(
+				{
+					id: item.id,
+					version: 1,
+					title: item.title,
+					description: item.description,
+					evidence,
+					scope: null,
+				},
+				alice,
+			),
+		).rejects.toThrow("Reload");
+		const cleared = await editContribution(
+			{
+				id: item.id,
+				version: item.version,
+				title: item.title,
+				description: item.description,
+				evidence,
+				scope: null,
+			},
+			alice,
+		);
+		expect(cleared.scope).toBeUndefined();
+		expect(cleared.revisionHistory?.at(-1)?.scope).toEqual({
+			kind: "metadata",
+			targetId: OTHER,
+		});
+	});
+	it("keeps human PRs independent of the linked issue's model scope", async () => {
+		const scoped = await createContribution(
+			{
+				kind: "issue",
+				title: "Issue",
+				description: "Description",
+				scope: { kind: "entry" },
+			},
+			alice,
+		);
+		expect(
+			await createContribution({ ...input, issueId: scoped.id }, alice),
+		).toMatchObject({ kind: "pr", changes: [change] });
+		await expect(
+			createContribution({ ...input, scope: { kind: "metadata" } }, alice),
+		).rejects.toThrow("Only issues");
+		const manual = await pr();
+		await expect(
+			editContribution(
+				{
+					...input,
+					id: manual.id,
+					version: manual.version,
+					scope: { kind: "metadata" },
+				},
+				alice,
+			),
+		).rejects.toThrow("Only issues");
+	});
 	it.each(["issue", "pr"])(
 		"creating an assigned %s queues its implementation task atomically",
 		async (kind) => {

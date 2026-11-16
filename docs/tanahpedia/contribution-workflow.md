@@ -44,6 +44,11 @@ continued the task through production verification after that window ended.
 - Assigning an LLM queues implementation of an issue or review-comment handling
   on the same PR. New human comments trigger another pass. Model output passes
   the same typed validation as human input and cannot approve or merge changes.
+- Issues can optionally select a change kind and an existing target. The model's
+  issue implementation is constrained to that scope, and its dynamic context
+  includes the canonical target and read locators. Free-form issues remain
+  available. Scope is versioned with the issue; it does not override a human's
+  later feedback on an existing PR.
 - Family relationship choices come from the existing family API contract:
   biological/adoptive/step/foster parenthood and marriage/pilegesh/
   forbidden-with-gentile/banned-incest/betrothal unions. They share one Family
@@ -189,6 +194,12 @@ assignments use the same protocol through a serial background runtime. A changed
 discussion, assignment, agent configuration, API contract or read catalogue
 rejects stale output. PR creation or revision, per-comment responses and the
 completion receipt commit together; an identical replay returns that receipt.
+The standalone local worker runtime v3 uses Ollama's native read functions and
+assistant/tool messages. Once research ends, one separate request receives the
+complete constrained result schema. This avoids losing schema constraints in
+Ollama's native function-parameter representation. Both phases share the existing
+120-second execution deadline, 16K context and 4,096-token output limit; reads
+still pass through the same server lease, identity and receipt validation.
 A disconnected worker can be replaced after lease expiry, with three automatic
 claim attempts per request. An editor can explicitly retry or cancel by closing,
 editing or reassigning the issue. Background job refreshes preserve unsaved drafts.

@@ -8,12 +8,14 @@ import type {
 	ContributionEvent,
 	ContributionRevisionSnapshot,
 } from "~/lib/tanahpedia/contributions";
+import { CONTRIBUTION_ISSUE_SCOPE_KINDS } from "~/lib/tanahpedia/contributions";
 import {
 	type AgentCatalogue,
 	lockContributionAgentContext,
 	mergeAgentCatalogues,
 	readContributionAgentInitialContext,
 	readContributionAgentTool,
+	readContributionIssueScopeContext,
 } from "~/server/tanahpedia/contribution-agent-context.server";
 import {
 	type ContributionReference,
@@ -219,6 +221,83 @@ beforeEach(() => {
 });
 
 describe("complete contribution agent context", () => {
+	it("keeps the retained issue scope reader bounded and leaves unscoped/PR context alone", async () => {
+		expect(await readContributionIssueScopeContext(conn, item)).toBeUndefined();
+		item.kind = "issue";
+		item.issueId = null;
+		expect(await readContributionIssueScopeContext(conn, item)).toBeUndefined();
+		item.scope = { kind: "entry" };
+		const context = await readContributionIssueScopeContext(conn, item);
+		expect(context?.catalogue.targets).toEqual([]);
+		expect(context?.catalogue.references.alternative).toEqual([
+			{ id: item.id, name: "קבוצת דעות חדשה לפנייה" },
+		]);
+		expect(mocks.state).not.toHaveBeenCalled();
+	});
+	it.each(
+		CONTRIBUTION_ISSUE_SCOPE_KINDS.filter(
+			(kind) => kind !== "entry" && kind !== "article_links",
+		),
+	)(
+		"preloads the exact %s scope target without name inference",
+		async (kind) => {
+			item.kind = "issue";
+			item.issueId = null;
+			item.scope = { kind, targetId: personId };
+			const result = await readContributionAgentInitialContext(conn, item);
+			expect(mocks.state).toHaveBeenCalledWith(conn, kind, personId, undefined);
+			expect(result.data).toMatchObject({
+				item: { scope: item.scope },
+				currentRecords: expect.arrayContaining([
+					{ kind: `target:${kind}`, id: personId, current: null },
+				]),
+				scopeTarget: {
+					kind,
+					id: personId,
+					readLocator: {
+						tool: "record",
+						arguments: { kind: `target:${kind}`, id: personId },
+					},
+				},
+			});
+		},
+	);
+	it("pins the scoped target and its references in fresh context receipts", async () => {
+		item.kind = "issue";
+		item.issueId = null;
+		item.scope = { kind: "metadata", targetId: entityId };
+		references.set(`entity:${entityId}`, {
+			id: entityId,
+			name: "Canonical name",
+		});
+		mocks.state.mockResolvedValue({ entityId, displayName: "Current" });
+		const first = await readContributionAgentInitialContext(conn, item);
+		expect(first.catalogue.entities).toEqual([
+			{ id: entityId, name: "Canonical name" },
+		]);
+		expect(first.catalogue.targets).toContainEqual({
+			kind: "metadata",
+			id: entityId,
+			current: { entityId, displayName: "Current" },
+		});
+		mocks.state.mockResolvedValue({
+			entityId,
+			displayName: "Changed outside the issue",
+		});
+		expect(
+			(await readContributionAgentInitialContext(conn, item)).hash,
+		).not.toBe(first.hash);
+		item.scope = { kind: "metadata", targetId: personId };
+		mocks.state.mockResolvedValue(null);
+		expect(
+			(await readContributionAgentInitialContext(conn, item)).hash,
+		).not.toBe(first.hash);
+	});
+	it("does not preload a linked issue's scope while resolving a human PR", async () => {
+		issue.scope = { kind: "metadata", targetId: entityId };
+		await readContributionAgentInitialContext(conn, item);
+		expect(mocks.state).not.toHaveBeenCalled();
+	});
 	it("locks a prepared PR's issue before deduplicated ordered sibling primary keys without a consistent or range read", async () => {
 		const order: unknown[] = [];
 		mocks.item.mockImplementation(async (_conn, requestedId, lock) => {
@@ -1727,6 +1806,33 @@ describe("fresh article source context", () => {
 		mocks.article.mockImplementation(async () => structuredClone(article));
 	});
 
+	it("preloads a scoped article's full link state, typed references and complete text locator", async () => {
+		item.kind = "issue";
+		item.issueId = null;
+		item.scope = { kind: "article_links", targetId: "27" };
+		const result = await readContributionAgentInitialContext(conn, item);
+		expect(result.catalogue.targets).toContainEqual({
+			kind: "article_links",
+			id: "27",
+			current: article.state,
+		});
+		expect(result.catalogue.references.moed).toEqual([{ id: 5, name: "מועד" }]);
+		expect(result.data).toMatchObject({
+			currentRecords: expect.arrayContaining([
+				expect.objectContaining({
+					kind: "article_source",
+					id: "27",
+					current: expect.objectContaining({
+						plainTextLength: article.plainText.length,
+						readLocator: {
+							tool: "article_text",
+							arguments: { id: "27", cursor: 0, limit: 4000 },
+						},
+					}),
+				}),
+			]),
+		});
+	});
 	function attachArticleChange() {
 		item.changes = [
 			{
