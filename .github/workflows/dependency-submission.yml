@@ -69,7 +69,7 @@ jobs:
         with:
           # The pinned Android SDK rejects Microsoft's five-part JDK versions.
           distribution: "temurin"
-          java-version: "17"
+          java-version: "25"
           verify-signature: true
       - name: 'Install MAUI Android workload'
         # The head leg pins the workload set matching its SDK band; the base
