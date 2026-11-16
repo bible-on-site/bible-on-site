@@ -34,4 +34,28 @@ public class AccessibleItemTextTests
     {
         AccessibleItemText.Compose(["\uE70D"]).Should().BeEmpty();
     }
+
+    [Theory]
+    [InlineData("Microsoft.Maui.Controls.Platform.ItemTemplateContext")]
+    [InlineData("BibleOnSite.Models.PasukDisplayItem")]
+    [InlineData("BibleOnSite.Models.MoedUnit")]
+    public void IsClrTypeName_FrameworkNames_AreRejected(string name)
+    {
+        AccessibleItemText.IsClrTypeName(name).Should().BeTrue(
+            "the framework stamps the item wrapper's CLR name on row containers — Narrator must never read it");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("וַיֹּאמֶר")]
+    [InlineData("א, וַיַּגֵּד אַחְאָב לְאִיזֶבֶל")]
+    [InlineData("מאמרים")]
+    [InlineData("Article card")]
+    [InlineData("1.2.3")]
+    public void IsClrTypeName_ReadableText_IsKept(string? name)
+    {
+        AccessibleItemText.IsClrTypeName(name).Should().BeFalse(
+            "authored names contain spaces or Hebrew and must survive the filter");
+    }
 }

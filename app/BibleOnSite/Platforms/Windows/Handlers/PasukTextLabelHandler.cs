@@ -21,6 +21,8 @@ public sealed class PasukTextLabelHandler : LabelHandler
             static (handler, _) => handler.ApplyJustification());
         mapper.AppendToMapping(nameof(PasukTextLabel.Justify),
             static (handler, _) => handler.ApplyJustification());
+        mapper.AppendToMapping(nameof(PasukTextLabel.Selectable),
+            static (handler, _) => handler.ApplySelectability());
         return mapper;
     }
 
@@ -44,6 +46,20 @@ public sealed class PasukTextLabelHandler : LabelHandler
             // Restore whatever MAUI's own alignment mapping produces.
             LabelHandler.Mapper.UpdateProperty(this, label,
                 nameof(ITextAlignment.HorizontalTextAlignment));
+        }
+    }
+
+    /// <summary>
+    /// Desktop copy support: IsTextSelectionEnabled gives the TextBlock
+    /// drag-selection and Ctrl+C-copyable text (#2766). Only surfaces that
+    /// opted in via <see cref="PasukTextLabel.Selectable"/> — never the
+    /// gesture-rich pasuk cell — take part.
+    /// </summary>
+    private void ApplySelectability()
+    {
+        if (PlatformView is { } textBlock && VirtualView is PasukTextLabel label)
+        {
+            textBlock.IsTextSelectionEnabled = label.Selectable;
         }
     }
 }
