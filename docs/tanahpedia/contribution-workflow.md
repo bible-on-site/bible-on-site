@@ -159,6 +159,8 @@ access token and never copies the service secret to disk. This scope only grants
 claim, bundle/context reads, complete and fail endpoints; ordinary `admin-api/service` tokens and
 browser cookies cannot authenticate them. Worker tokens cannot review, merge or
 use the general admin API. Logs omit evidence, prompts, tokens and lease secrets.
+Malformed JSON from a model, context, worker endpoint or token response produces
+a fixed diagnostic, without a parser snippet or retained raw error cause.
 Expired SSO requires another AWS sign-in; queued issues remain saved meanwhile.
 The user chose to keep reusing AWS SSO rather than maintain a separate worker
 credential; refreshing that existing session lets the watch worker resume.
