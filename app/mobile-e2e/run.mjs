@@ -89,6 +89,9 @@ const hangMonitor = interactions ? monitorNativeInteractions((command, request) 
   { pin: request => interactions.pin(request) }) : undefined;
 const server = spawn(process.execPath, [resolve(directory, "node_modules/appium/index.js"),
   "--address", "127.0.0.1", "--port", appiumPort, "--log-no-colors", "--log-timestamp",
+  // Appium 4 defaults to info; the diagnostics below rely on the driver-level
+  // debug surface v3 emitted implicitly, so keep it explicit (#3419 review).
+  "--log-level", "debug",
   "--use-drivers", platform === "android" ? "uiautomator2" : "xcuitest"], {
   cwd: directory, windowsHide: true, stdio: ["ignore", hangMonitor ? "pipe" : serverLog, hangMonitor ? "pipe" : serverLog],
 });
