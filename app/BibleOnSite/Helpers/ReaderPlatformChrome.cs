@@ -312,6 +312,11 @@ public sealed class ReaderPlatformChrome
     /// </summary>
     private void ConfigureStatusBar()
     {
+        if (Config.HomeUxPreview.Enabled)
+        {
+            _ui.Page.SetAppThemeColor(VisualElement.BackgroundColorProperty, Colors.White, Color.FromArgb("#111C2C"));
+            _ui.StatusBarColorSource?.SetAppThemeColor(VisualElement.BackgroundColorProperty, Colors.White, Color.FromArgb("#111C2C"));
+        }
 #if ANDROID || IOS
         if (_ui.StatusBarColorSource is { } colorSource &&
             (OperatingSystem.IsAndroid() || OperatingSystem.IsIOS()))

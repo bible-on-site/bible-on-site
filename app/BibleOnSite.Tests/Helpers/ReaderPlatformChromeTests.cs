@@ -1,9 +1,11 @@
 using BibleOnSite.Controls;
+using BibleOnSite.Config;
 using BibleOnSite.Helpers;
 using BibleOnSite.Services;
 using BibleOnSite.Tests.Support;
 using FluentAssertions;
 using Microsoft.Maui.Controls;
+using Microsoft.Maui.Graphics;
 
 namespace BibleOnSite.Tests.Helpers;
 
@@ -61,6 +63,7 @@ public class ReaderPlatformChromeTests : IDisposable
     {
         public readonly ContentPage Page = new();
         public readonly Grid Root = new();
+        public readonly Grid StatusBarSource = new();
         public readonly SharedTopBar NavigationBar = new();
         public readonly Grid BottomBar = new();
         public readonly ReaderFanMenu Fan = new();
@@ -81,6 +84,7 @@ public class ReaderPlatformChromeTests : IDisposable
                 {
                     Page = Page,
                     Root = Root,
+                    StatusBarColorSource = StatusBarSource,
                     NavigationBar = NavigationBar,
                     BottomBar = BottomBar,
                     FanMenu = Fan,
@@ -105,7 +109,24 @@ public class ReaderPlatformChromeTests : IDisposable
 
     public void Dispose()
     {
+        HomeUxPreview.TestEnabled = null;
         PreferencesService.ResetForTesting();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Preview_WhitesTheSafeAreaAndHeaderWithoutRecoloringRegularReaders(bool preview)
+    {
+        HomeUxPreview.TestEnabled = preview;
+        var rig = new Rig();
+        rig.Page.BackgroundColor = Colors.Bisque;
+        rig.StatusBarSource.BackgroundColor = Colors.Azure;
+
+        _ = rig.CreateChrome();
+
+        rig.Page.BackgroundColor.Should().Be(preview ? Colors.White : Colors.Bisque);
+        rig.StatusBarSource.BackgroundColor.Should().Be(preview ? Colors.White : Colors.Azure);
     }
 
     [Fact]

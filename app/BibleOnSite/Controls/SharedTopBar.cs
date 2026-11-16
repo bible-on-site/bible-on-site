@@ -90,12 +90,23 @@ public class SharedTopBar : ContentView
 
     public static readonly BindableProperty CenterContentProperty =
         BindableProperty.Create(nameof(CenterContent), typeof(View), typeof(SharedTopBar),
-            propertyChanged: (bindable, _, value) => ((SharedTopBar)bindable)._centerHost.Content = (View?)value);
+            propertyChanged: (bindable, _, value) => ((SharedTopBar)bindable).SetCenterContent((View?)value));
     /// <summary>Content placed in the center slot (title pill, search field).</summary>
     public View? CenterContent
     {
         get => (View?)GetValue(CenterContentProperty);
         set => SetValue(CenterContentProperty, value);
+    }
+
+    private void SetCenterContent(View? content)
+    {
+        _centerHost.Content = content;
+        if (HomeUxPreview.Enabled && content is Button title)
+        {
+            title.SetAppThemeColor(Button.BackgroundColorProperty, Colors.White, Color.FromArgb("#243C5D"));
+            title.BorderWidth = 1;
+            title.BorderColor = Color.FromArgb("#E3E7ED");
+        }
     }
 
     public static readonly BindableProperty TrailingContentProperty =
@@ -119,7 +130,9 @@ public class SharedTopBar : ContentView
             action.CornerRadius = 16;
             action.Padding = 0;
             action.VerticalOptions = LayoutOptions.Center;
-            action.SetAppThemeColor(Button.BackgroundColorProperty, Color.FromArgb("#E4EAF4"), Color.FromArgb("#243C5D"));
+            action.SetAppThemeColor(Button.BackgroundColorProperty, Colors.White, Color.FromArgb("#243C5D"));
+            action.BorderWidth = 1;
+            action.BorderColor = Color.FromArgb("#E3E7ED");
             action.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#1552AC"), Color.FromArgb("#AACBFF"));
         }
         UpdatePreviewTrailingWidth();
@@ -291,13 +304,15 @@ public class SharedTopBar : ContentView
         _capsuleBorder.Margin = 0;
         _capsuleBorder.BackgroundColor = Colors.Transparent;
         _capsule.Spacing = 6;
-        _band.SetAppThemeColor(BackgroundColorProperty, Color.FromArgb("#F5F7FB"), Color.FromArgb("#111C2C"));
+        _band.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#111C2C"));
         foreach (var button in new[] { NavigationButton, BackButton })
         {
             button.WidthRequest = 52;
             button.HeightRequest = 52;
             button.CornerRadius = 16;
-            button.SetAppThemeColor(Button.BackgroundColorProperty, Color.FromArgb("#E4EAF4"), Color.FromArgb("#243C5D"));
+            button.BorderWidth = 1;
+            button.BorderColor = Color.FromArgb("#E3E7ED");
+            button.SetAppThemeColor(Button.BackgroundColorProperty, Colors.White, Color.FromArgb("#243C5D"));
             button.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#1552AC"), Color.FromArgb("#AACBFF"));
         }
         NavigationButton.Text = BackGlyph(FlowDirection.RightToLeft);
