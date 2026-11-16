@@ -27,14 +27,16 @@ mod tests {
             mongo_host_port_from_vars(|_| None),
             ("localhost".to_string(), "27017".to_string())
         );
+        let vars = |key: &str| match key {
+            "MONGO_HOST" => Some("mongo".to_string()),
+            "MONGO_PORT" => Some("28017".to_string()),
+            _ => None,
+        };
         assert_eq!(
-            mongo_host_port_from_vars(|key| match key {
-                "MONGO_HOST" => Some("mongo".to_string()),
-                "MONGO_PORT" => Some("28017".to_string()),
-                _ => None,
-            }),
+            mongo_host_port_from_vars(vars),
             ("mongo".to_string(), "28017".to_string())
         );
+        assert_eq!(vars("UNRELATED"), None);
         assert_eq!(mongodb_uri("mongo", "28017"), "mongodb://mongo:28017");
     }
 
