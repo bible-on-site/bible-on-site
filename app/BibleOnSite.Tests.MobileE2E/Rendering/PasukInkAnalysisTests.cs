@@ -38,7 +38,7 @@ public sealed class PasukInkAnalysisTests
         PasukInkAnalysis.MeasurePixels(width, height, BuildPixels(width, height, lines));
 
     [Fact]
-    public void FullyJustifiedLinesHaveNoShortLineAndNoRightGap()
+    public void FullyJustifiedLinesHaveNoShortFinalLineAndNoDefect()
     {
         var profile = Measure(100, 40,
             new Line(2, 12, 0, 99),
@@ -47,12 +47,13 @@ public sealed class PasukInkAnalysisTests
 
         Assert.False(profile.HasShortFinalLine);
         Assert.False(profile.HasLeftFlushedLine);
-        Assert.Equal(0, profile.RightGapRows);
-        Assert.Equal(0, profile.LeftGapRows);
+        Assert.Equal("full", profile.LastLine);
+        Assert.Equal("full,full,full", profile.BandKinds);
+        Assert.Equal(3, profile.LineBands);
     }
 
     [Fact]
-    public void RightAnchoredShortFinalLineCountsAsShortWithoutRightGap()
+    public void RightAnchoredShortFinalLineQualifiesWithoutDefect()
     {
         var profile = Measure(100, 40,
             new Line(2, 12, 0, 99),
@@ -62,8 +63,7 @@ public sealed class PasukInkAnalysisTests
         Assert.True(profile.HasShortFinalLine);
         Assert.False(profile.HasLeftFlushedLine);
         Assert.False(profile.HasMissingLines);
-        Assert.Equal(0, profile.RightGapRows);
-        Assert.Equal(9, profile.LeftGapRows);
+        Assert.Equal("right", profile.LastLine);
     }
 
     [Fact]
@@ -76,17 +76,17 @@ public sealed class PasukInkAnalysisTests
 
         Assert.True(profile.HasShortFinalLine);
         Assert.True(profile.HasLeftFlushedLine);
-        Assert.Equal(9, profile.RightGapRows);
-        Assert.Equal(0, profile.LeftGapRows);
+        Assert.Equal("left", profile.LastLine);
     }
 
     [Fact]
-    public void SingleRightAnchoredLineCountsAsShortWithoutRightGap()
+    public void SingleRightAnchoredLineQualifiesWithoutDefect()
     {
         var profile = Measure(100, 40, new Line(15, 30, 50, 99));
 
         Assert.True(profile.HasShortFinalLine);
         Assert.False(profile.HasLeftFlushedLine);
+        Assert.Equal("right", profile.LastLine);
     }
 
     [Fact]
@@ -96,6 +96,7 @@ public sealed class PasukInkAnalysisTests
 
         Assert.True(profile.HasShortFinalLine);
         Assert.True(profile.HasLeftFlushedLine);
+        Assert.Equal("left", profile.LastLine);
     }
 
     [Fact]
@@ -104,40 +105,89 @@ public sealed class PasukInkAnalysisTests
         var profile = Measure(100, 40);
 
         Assert.Equal(0, profile.InkRows);
+        Assert.Equal("none", profile.LastLine);
         Assert.False(profile.HasShortFinalLine);
         Assert.False(profile.HasLeftFlushedLine);
+        Assert.False(profile.HasMissingLines);
     }
 
     [Fact]
-    public void StrayAccentRowsUnderAJustifiedLineNeverReadAsLeftFlushed()
+    public void SparseMarkRowsInsideAFullLineNeverReadAsLeftFlushed()
     {
-        // Cantillation marks under the middle of a justified line form rows
-        // whose only ink sits mid-line. Because they never reach the left
-        // edge they count as left-gap rows, so even a cluster above the old
-        // row threshold cannot fabricate the defect.
+        // The real CI failure family: a justified line's taamim/nikud rows
+        // begin at the left edge yet stop far short of the right edge. Judged
+        // per row they look like left-flushed lines; banded with their line
+        // they are absorbed into the line's full-width bounds.
+        var profile = Measure(100, 40,
+            new Line(2, 4, 0, 99),
+            new Line(5, 7, 0, 45),
+            new Line(8, 12, 0, 99),
+            new Line(16, 26, 0, 99),
+            new Line(30, 38, 55, 99));
+
+        Assert.Equal("full,full,right", profile.BandKinds);
+        Assert.False(profile.HasLeftFlushedLine);
+        Assert.True(profile.HasShortFinalLine);
+    }
+
+    [Fact]
+    public void DetachedAccentClusterBelowTheLastLineStaysFloating()
+    {
+        // A short detached cluster of marks below a right-anchored final line
+        // is too few rows to be a text line, so it cannot fabricate the defect
+        // or shadow the real last line from the verdict.
         var profile = Measure(100, 40,
             new Line(2, 12, 0, 99),
-            new Line(16, 26, 0, 99),
-            new Line(28, 28, 45, 52),
-            new Line(30, 30, 45, 52),
-            new Line(32, 32, 45, 52),
-            new Line(34, 34, 45, 52));
+            new Line(16, 26, 55, 99),
+            new Line(30, 33, 0, 60));
 
-        Assert.Equal(0, profile.RightGapRows);
+        Assert.Equal("full,right,floating", profile.BandKinds);
+        Assert.Equal("right", profile.LastLine);
+        Assert.False(profile.HasLeftFlushedLine);
+        Assert.True(profile.HasShortFinalLine);
+    }
+
+    [Fact]
+    public void InteriorLeftFragmentDoesNotFlagWhenLastLineIsRight()
+    {
+        // Interior bands of a justified paragraph are definitionally full; a
+        // left-anchored band above the last line is overlay/stray ink, not the
+        // #3380 signature, and must not fail the element.
+        var profile = Measure(100, 40,
+            new Line(2, 12, 0, 45),
+            new Line(16, 26, 0, 99),
+            new Line(30, 38, 55, 99));
+
+        Assert.Equal("left", profile.BandKinds.Split(',')[0]);
+        Assert.Equal("right", profile.LastLine);
         Assert.False(profile.HasLeftFlushedLine);
     }
 
     [Fact]
-    public void LeftEdgeAccentStrayDoesNotReadAsLeftFlushed()
+    public void MergedBandHidingALeftFlushedTailFlagsViaTrailingRun()
     {
-        // A mark under a justified line's leftmost letter does reach the left
-        // edge, but its span is far narrower than any real text line.
-        var profile = Measure(100, 40,
-            new Line(2, 12, 0, 99),
-            new Line(16, 26, 0, 99),
-            new Line(28, 34, 0, 6));
+        // When line spacing is too tight for bands to split, a justified line
+        // merges with a left-flushed final line and the band reads "full",
+        // masking the defect. The trailing run of right-gap rows still exposes
+        // the final line's own anchor.
+        var profile = Measure(100, 50,
+            new Line(2, 24, 0, 99),
+            new Line(25, 44, 0, 45));
 
-        Assert.Equal(0, profile.RightGapRows);
+        Assert.Equal("full", profile.LastLine);
+        Assert.True(profile.TrailingLeftRun);
+        Assert.True(profile.HasLeftFlushedLine);
+    }
+
+    [Fact]
+    public void MergedBandWithRightAnchoredTailDoesNotFlag()
+    {
+        var profile = Measure(100, 50,
+            new Line(2, 24, 0, 99),
+            new Line(25, 44, 55, 99));
+
+        Assert.Equal("full", profile.LastLine);
+        Assert.False(profile.TrailingLeftRun);
         Assert.False(profile.HasLeftFlushedLine);
     }
 
@@ -156,11 +206,39 @@ public sealed class PasukInkAnalysisTests
     [Fact]
     public void SingleShortLineSkipsTheMissingLineCheck()
     {
-        // A one-line pasuk element has all its ink in gap rows; even a large
-        // empty tail is not a missing-line signal there.
+        // A one-line pasuk element keeps slack below its only line by design,
+        // so even a large empty tail is not a missing-line signal there.
         var profile = Measure(100, 60, new Line(10, 24, 50, 99));
 
         Assert.False(profile.HasMissingLines);
+    }
+
+    [Fact]
+    public void MidAnchoredLineIsUnverifiableNotADefect()
+    {
+        // A text band that reaches neither edge cannot confirm an RTL anchor.
+        // It is neither the defect signature nor a qualifying short line.
+        var profile = Measure(100, 40,
+            new Line(2, 12, 0, 99),
+            new Line(16, 26, 30, 80));
+
+        Assert.Equal("floating", profile.LastLine);
+        Assert.False(profile.HasShortFinalLine);
+        Assert.False(profile.HasLeftFlushedLine);
+    }
+
+    [Fact]
+    public void ShortSliverStaysBelowTheTextGate()
+    {
+        // A clipped sliver of a line has too few rows to be a text band.
+        var profile = Measure(100, 40,
+            new Line(2, 12, 0, 99),
+            new Line(30, 33, 50, 99));
+
+        Assert.Equal("full,floating", profile.BandKinds);
+        Assert.Equal("full", profile.LastLine);
+        Assert.False(profile.HasShortFinalLine);
+        Assert.False(profile.HasLeftFlushedLine);
     }
 
     [Fact]

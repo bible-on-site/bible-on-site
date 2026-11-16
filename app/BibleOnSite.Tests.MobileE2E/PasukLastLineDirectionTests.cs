@@ -10,10 +10,12 @@ namespace BibleOnSite.Tests.MobileE2E;
 // edge like the inline commentary does. UILabel resolves that last line by the
 // app's preferred language, so on English-locale devices it flushed left even
 // though the paragraph style pinned BaseWritingDirection (#3057). These checks
-// measure ink columns inside each captured PasukText element — a rendered
-// property, not a declared one — across the shared reader states where cells
-// rebuild: initial display, recycled scroll, perek navigation, rotation and
-// the landscape→portrait→relaunch sequence the defect report exercised.
+// measure the last ink band's bounds inside each captured PasukText element —
+// a rendered property, not a declared one — across the shared reader states
+// where cells rebuild: initial display, recycled scroll, perek navigation,
+// rotation and the landscape→portrait→relaunch sequence the defect report
+// exercised. Elements overlapped by the floating bottom chrome are skipped:
+// their screenshots contain the overlay's ink, not the text's.
 [Collection("Mobile device")]
 [Trait("Category", "MobileE2E")]
 [Trait("Platform", "Shared")]
@@ -62,24 +64,44 @@ public sealed class PasukLastLineDirectionTests(ITestOutputHelper output, Mobile
         AssertShortFinalLinesFlushRight("after relaunch");
     });
 
-    // Analyzes every fully visible PasukText element: rows whose ink stops
-    // short of the right edge mean a left-flushed line (the defect); a left
-    // margin means the correct RTL anchor. A large empty tail flags a
-    // measure/draw line-count mismatch between UILabel and TextKit. Only
-    // elements that actually render a short final line qualify, and at least
+    // Floating bottom chrome that can cover a PasukText element's tail. The
+    // element screenshot captures the overlay's ink — the circular menu FAB
+    // and nav icons are indistinguishable from text by luminance — so an
+    // element dipping into the strip cannot be measured honestly.
+    private static readonly string[] BottomChromeIds =
+    [
+        "CircularMenuButton", "TextButton", "FullScreenButton",
+        "ArticlesButton", "PerushimChevronButton",
+    ];
+
+    // Analyzes every fully visible PasukText element: the last line band's
+    // bounds decide the verdict — stopping short of the right edge while
+    // anchored left is the defect; a left margin with ink at the right edge is
+    // the correct RTL anchor. A large empty tail flags a measure/draw
+    // line-count mismatch between UILabel and TextKit. Only elements that
+    // actually render a short final line qualify, and at least
     // `minimumQualifying` must — a screen full of edge-to-edge lines would
     // silently prove nothing.
     private void AssertShortFinalLinesFlushRight(string stage, int minimumQualifying = 2)
     {
         var window = DriverTelemetry.WindowSize(Driver!);
+        var chromeTop = window.Height;
+        foreach (var chromeId in BottomChromeIds)
+        {
+            foreach (var (_, _, chromeFrame) in Page.RenderedElements(chromeId))
+            {
+                chromeTop = Math.Min(chromeTop, chromeFrame.Location.Y);
+            }
+        }
         var qualifying = 0;
         var failures = new List<string>();
         foreach (var (element, text, frame) in Page.RenderedElements("PasukText"))
         {
             if (frame.Size.Height <= 0 || frame.Location.Y < 0 ||
-                frame.Location.Y + frame.Size.Height > window.Height)
+                frame.Location.Y + frame.Size.Height > Math.Min(window.Height, chromeTop))
             {
-                // A viewport-clipped cell can drop its final line's ink.
+                // A viewport- or chrome-clipped cell can drop its final line's
+                // ink — or capture the floating overlay's ink in its place.
                 continue;
             }
             byte[] png;
@@ -100,7 +122,7 @@ public sealed class PasukLastLineDirectionTests(ITestOutputHelper output, Mobile
             }
             if (profile.HasLeftFlushedLine)
             {
-                failures.Add($"'{preview}' flushed left (ink rows: {profile.InkRows}, right-gap rows: {profile.RightGapRows})");
+                failures.Add($"'{preview}' flushed left (last line band: {profile.LastLine}, trailing left run: {profile.TrailingLeftRun}, bands: {profile.BandKinds})");
             }
             if (profile.HasMissingLines)
             {

@@ -5,37 +5,52 @@ namespace BibleOnSite.Tests.MobileE2E.Rendering;
 /// <summary>
 /// Measures where text ink lands inside a captured PasukText element so a test
 /// can assert the rendered short-line direction, not just declared properties.
-/// A justified line always draws ink up to the right text edge; a short final
-/// line must anchor to that same right edge for RTL (#3380). On the defect's
-/// rendering the short line flushes left instead, leaving a right-side gap —
-/// detected here as rows whose ink never reaches the edge.
+/// Rows are grouped into line bands before judging edges: Hebrew taamim and
+/// nikud scatter sparse rows through a justified line that begin near the left
+/// edge yet never reach the right, so a per-row verdict fabricates left-flush
+/// defects the rendered text does not have. A whole line band's bounds — its
+/// dense rows carry the letters, its sparse rows are marks that stay inside
+/// the band — is the unit that separates a real left-flushed line from accent
+/// noise. A justified line always draws ink up to the right text edge; a short
+/// final line must anchor to that same right edge for RTL (#3380).
 /// </summary>
 internal static class PasukInkAnalysis
 {
     /// <summary>
-    /// A captured element's per-line ink coverage summary.
+    /// A captured element's ink-line summary.
     /// </summary>
-    /// <param name="InkRows">Rows containing any text ink.</param>
-    /// <param name="RightGapRows">Rows that reach the left edge but stop short
-    /// of the right edge — the signature of a left-flushed short line (the
-    /// #3380 defect). Mid-line stray marks do not reach the left edge, so they
-    /// count as left-gap rows instead and cannot fabricate the defect.</param>
-    /// <param name="LeftGapRows">Rows whose ink starts right of the left edge —
-    /// the signature of a correctly right-anchored short line.</param>
+    /// <param name="InkRows">Rows containing any ink.</param>
+    /// <param name="Bands">Ink bands found (rows grouped across small
+    /// vertical gaps).</param>
+    /// <param name="LineBands">Bands tall, dense and wide enough to be a
+    /// rendered text line — detached accent clusters and overlay fragments
+    /// stay below the gate.</param>
+    /// <param name="BandKinds">Comma-separated anchor class per band, in row
+    /// order: "full" (reaches both edges — justified), "right" (right-anchored
+    /// short), "left" (left-flushed short — the #3380 defect), "floating"
+    /// (below the text gate or reaching neither edge).</param>
+    /// <param name="LastLine">Anchor class of the last text line band —
+    /// "full"/"right"/"left"/"floating", or "none" when no band passed the
+    /// text gate.</param>
+    /// <param name="TrailingLeftRun">True when the rows ending at the last
+    /// inked row form a tall, dense, left-anchored run that stops short of the
+    /// right edge — catches a left-flushed last line that merged into the band
+    /// above when inter-line spacing is too tight to split.</param>
     /// <param name="EmptyTailRows">Element rows below the last row containing
     /// any ink.</param>
     /// <param name="Height">Captured element height in pixels.</param>
-    public sealed record InkProfile(int InkRows, int RightGapRows, int LeftGapRows, int EmptyTailRows, int Height)
+    public sealed record InkProfile(int InkRows, int Bands, int LineBands, string BandKinds,
+        string LastLine, bool TrailingLeftRun, int EmptyTailRows, int Height)
     {
-        /// <summary>At least one real line left a right-side ink gap — the defect.</summary>
-        public bool HasLeftFlushedLine => RightGapRows >= Math.Max(3, InkRows / 12);
+        /// <summary>
+        /// The final text line flushed left — the #3380 defect. Interior bands
+        /// are justified lines by construction, so only the last line band (or
+        /// a merged-band trailing run) can carry the signature.
+        /// </summary>
+        public bool HasLeftFlushedLine => LastLine == "left" || TrailingLeftRun;
 
         /// <summary>The element rendered a short final line worth verifying.</summary>
-        public bool HasShortFinalLine => RightGapRows + LeftGapRows >= 5;
-
-        // A short last line is the element's only gap row set when the pasuk
-        // fits one line; clearly more ink rows than that means multiple lines.
-        private bool IsMultiLine => InkRows > LeftGapRows + 8;
+        public bool HasShortFinalLine => LastLine is "right" or "left";
 
         /// <summary>
         /// The typesetter drew fewer lines than the label measured for, leaving
@@ -44,7 +59,7 @@ internal static class PasukInkAnalysis
         /// A correct last line's slack stays small even without descenders.
         /// </summary>
         public bool HasMissingLines =>
-            IsMultiLine && EmptyTailRows > Math.Max(14, (int)(Height * 0.30));
+            LineBands >= 2 && EmptyTailRows > Math.Max(14, (int)(Height * 0.30));
     }
 
     // Ink is whatever deviates enough in luminance from the sampled background,
@@ -65,6 +80,25 @@ internal static class PasukInkAnalysis
     private const double MinLineSpanFraction = 0.05;
     private const int MinLineSpanPixels = 10;
 
+    // Marks sit within a couple of empty rows of their line body while the gap
+    // between rendered text lines is wider, so splitting a band only on a run
+    // of three or more empty rows keeps accent rows attached to their line and
+    // still separates Android's tight line spacing.
+    private const int LineGapTolerance = 3;
+
+    // A band must look like a rendered text line — several rows tall, dense,
+    // and spanning multiple words — before its edge geometry is judged; a
+    // detached accent cluster or an overlay sliver stays "floating".
+    private const double MinLineRowsFraction = 0.08;
+    private const int MinLineRowsPixels = 8;
+    private const double MinLineCoverage = 0.07;
+
+    // The trailing-run backstop for a last line merged into the band above: a
+    // real line is a sizable fraction of the element's height, a dangling
+    // accent tail is a few sparse rows.
+    private const double MinRunRowsFraction = 0.10;
+    private const int MinRunRowsPixels = 10;
+
     public static InkProfile Measure(byte[] pngBytes)
     {
         var image = ImageResult.FromMemory(pngBytes, ColorComponents.RedGreenBlueAlpha);
@@ -79,48 +113,137 @@ internal static class PasukInkAnalysis
         var rightEdge = width - Math.Max(EdgeTolerancePixels, (int)(width * RightEdgeFraction));
         var leftEdge = Math.Max(EdgeTolerancePixels, (int)(width * LeftEdgeFraction));
         var minLineSpan = Math.Max(MinLineSpanPixels, (int)(width * MinLineSpanFraction));
-        int inkRows = 0, rightGapRows = 0, leftGapRows = 0, lastInkRow = -1;
+        var minLineRows = Math.Max(MinLineRowsPixels, (int)(height * MinLineRowsFraction));
+        var minRunRows = Math.Max(MinRunRowsPixels, (int)(height * MinRunRowsFraction));
+
+        var hasInk = new bool[height];
+        var rowLeft = new int[height];
+        var rowRight = new int[height];
+        var rowInk = new int[height];
+        int inkRows = 0, lastInkRow = -1;
         for (var y = 0; y < height; y++)
         {
             var row = y * width * 4;
-            int left = -1, right = -1;
+            int left = -1, right = -1, ink = 0;
             for (var x = 0; x < width; x++)
             {
-                if (IsInk(rgba, row + x * 4, background))
+                if (!IsInk(rgba, row + x * 4, background))
+                {
+                    continue;
+                }
+                if (left < 0)
                 {
                     left = x;
-                    break;
                 }
+                right = x;
+                ink++;
             }
             if (left < 0)
             {
                 continue;
             }
-            for (var x = width - 1; x > left; x--)
-            {
-                if (IsInk(rgba, row + x * 4, background))
-                {
-                    right = x;
-                    break;
-                }
-            }
-            if (right < 0)
-            {
-                right = left;
-            }
+            hasInk[y] = true;
+            rowLeft[y] = left;
+            rowRight[y] = right;
+            rowInk[y] = ink;
             inkRows++;
             lastInkRow = y;
-            if (right < rightEdge && left <= leftEdge && right - left >= minLineSpan)
+        }
+
+        // Group ink rows into bands: rows separated by more than the gap
+        // tolerance belong to different lines (or to no line).
+        var bands = new List<(int Rows, int Left, int Right, long Ink)>();
+        int bandRows = 0, bandLeft = 0, bandRight = 0, prevInk = -1;
+        long bandInk = 0;
+        for (var y = 0; y < height; y++)
+        {
+            if (!hasInk[y])
             {
-                rightGapRows++;
+                continue;
             }
-            else if (left > leftEdge)
+            if (bandRows > 0 && y - prevInk > LineGapTolerance)
             {
-                leftGapRows++;
+                bands.Add((bandRows, bandLeft, bandRight, bandInk));
+                bandRows = 0;
+            }
+            if (bandRows == 0)
+            {
+                bandLeft = rowLeft[y];
+                bandRight = rowRight[y];
+                bandInk = 0;
+            }
+            bandRows++;
+            bandLeft = Math.Min(bandLeft, rowLeft[y]);
+            bandRight = Math.Max(bandRight, rowRight[y]);
+            bandInk += rowInk[y];
+            prevInk = y;
+        }
+        if (bandRows > 0)
+        {
+            bands.Add((bandRows, bandLeft, bandRight, bandInk));
+        }
+
+        var kinds = new List<string>(bands.Count);
+        var lineBands = 0;
+        var lastLine = "none";
+        foreach (var band in bands)
+        {
+            var span = band.Right - band.Left;
+            var coverage = band.Ink / (double)(band.Rows * Math.Max(1, span));
+            var isText = band.Rows >= minLineRows && coverage >= MinLineCoverage && span >= minLineSpan;
+            string kind;
+            if (!isText)
+            {
+                kind = "floating";
+            }
+            else if (band.Right >= rightEdge)
+            {
+                kind = band.Left <= leftEdge ? "full" : "right";
+            }
+            else if (band.Left <= leftEdge)
+            {
+                kind = "left";
+            }
+            else
+            {
+                // Text that reaches neither edge cannot be judged for an RTL
+                // anchor; it stays unverifiable rather than reading as a gap.
+                kind = "floating";
+            }
+            kinds.Add(kind);
+            if (isText)
+            {
+                lineBands++;
+                lastLine = kind;
             }
         }
+
+        // Backstop for a last line merged into the band above by tight line
+        // spacing: walk up from the last inked row through rows that stop
+        // short of the right edge. A real left-flushed tail forms a tall dense
+        // run anchored at the left edge; a dangling accent tail is short and
+        // sparse and stays below the run gate.
+        int runRows = 0, runLeft = int.MaxValue, runRight = -1;
+        long runInk = 0;
+        for (var y = lastInkRow; y >= 0; y--)
+        {
+            if (!hasInk[y] || rowRight[y] >= rightEdge)
+            {
+                break;
+            }
+            runRows++;
+            runLeft = Math.Min(runLeft, rowLeft[y]);
+            runRight = Math.Max(runRight, rowRight[y]);
+            runInk += rowInk[y];
+        }
+        var runSpan = runRows > 0 ? Math.Max(1, runRight - runLeft) : 0;
+        var runCoverage = runRows > 0 ? runInk / (double)(runRows * runSpan) : 0;
+        var trailingLeftRun = runRows >= minRunRows && runLeft <= leftEdge
+            && runSpan >= minLineSpan && runCoverage >= MinLineCoverage;
+
         var emptyTailRows = lastInkRow < 0 ? height : height - 1 - lastInkRow;
-        return new InkProfile(inkRows, rightGapRows, leftGapRows, emptyTailRows, height);
+        return new InkProfile(inkRows, bands.Count, lineBands, string.Join(',', kinds),
+            lastLine, trailingLeftRun, emptyTailRows, height);
     }
 
     private static bool IsInk(byte[] rgba, int offset, double background) =>
