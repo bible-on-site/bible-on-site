@@ -18,7 +18,7 @@ describe("versioned contribution agent declarations", () => {
 		expect(buildContributionAgentBundle()).toEqual({ ...bundle, hash });
 		expect(bundle.apiVersion).toBe(CONTRIBUTION_API_VERSION);
 		expect(bundle.protocolVersion).toBe(2);
-		expect(bundle.version).toBe("tanahpedia-agents-v7");
+		expect(bundle.version).toBe("tanahpedia-agents-v8");
 	});
 	it("closes search and record vocabulary without discarding the other parameter constraints", () => {
 		const original = buildContributionAgentBundle();
@@ -69,6 +69,12 @@ describe("versioned contribution agent declarations", () => {
 		expect(system).toContain("Human review is mandatory");
 		expect(system).toContain("not a truncated discussion");
 		expect(system).toContain("single article_links change and a separate PR");
+		expect(system).toContain(
+			"When a human explicitly requests quoted text verbatim in a supported editable field, copy that text exactly byte-for-byte",
+		);
+		expect(system).toContain(
+			"Do not translate, paraphrase, correct or normalize it. Preserve all unrequested fields.",
+		);
 		expect(
 			bundle.tools.find((tool) => tool.name === "article_text")?.inputSchema,
 		).toMatchObject({

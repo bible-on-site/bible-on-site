@@ -340,7 +340,7 @@ content-rebase path, which creates a new revision and requires renewed review.
 
 The explicit v4-to-v5 identity adapter adds article-link operations while keeping
 existing sequences and approvals intact. Agent instructions/tools advance
-independently to bundle v7; the worker protocol remains v2.
+independently to bundle v8; the worker protocol remains v2.
 
 Bundle v5 closes the `search`/`record` kind vocabulary against the same pure registry
 used by server dispatch: 28 reference families and 46 `target:<operationKind>` names.
@@ -366,6 +366,11 @@ including references crossing its boundary, and have independent bounded
 resolved and identifiable held chapter dependencies join the current read receipts,
 so changed bounds or book parts invalidate completion. These candidates guide
 literal reference handling without removing reviewed semantic-link proposals.
+
+Bundle v8 clarifies exact quotation intent: human-requested verbatim text is
+copied without translation, paraphrase, spelling corrections or Unicode/whitespace
+normalization, while unrequested fields are retained. Runtime, read tools and
+operation schemas are unchanged from v7.
 
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these
