@@ -247,7 +247,7 @@ public sealed class MobileDeviceSession : IMobileDeviceSession, IAsyncLifetime
                 var budget = TimeSpan.FromMinutes(5);
                 if (configuration.Platform == MobilePlatform.IOS)
                 {
-                    var proof = _prepareIos(configuration, budget);
+                    var proof = _prepareIos(configuration, budget - started.Elapsed);
                     proof.VerifyIdentity(configuration);
                     configuration = configuration with { VerifiedIosApp = proof };
                     preparationMs = started.ElapsedMilliseconds;

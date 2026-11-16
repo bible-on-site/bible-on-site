@@ -15,6 +15,7 @@ import { waitForAndroidDevice } from "./android-readiness.mjs";
 import { installAppUnderTest } from "./android-install.mjs";
 import { bundleDigest, iosNodeEnvironment } from "./ios-install.mjs";
 import { observeIosPreparations } from "./ios-preparation-observer.mjs";
+import { executeOwnedIosInstaller } from "./ios-install-process.mjs";
 import { collectAndroidCrashDiagnostics } from "./android-crash-diagnostics.mjs";
 import { iosAppLogPids } from "./ios-processes.mjs";
 import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
@@ -28,7 +29,7 @@ const runStarted = Date.now();
 const platform = process.env.MOBILE_PLATFORM?.toLowerCase();
 if (!["android", "ios"].includes(platform)) throw new Error("Set MOBILE_PLATFORM to Android or iOS.");
 if (!process.env.MOBILE_UDID) throw new Error("Set MOBILE_UDID to the emulator/simulator identifier.");
-const artifacts = process.env.MOBILE_E2E_ARTIFACTS ?? resolve(directory, "../.artifacts/mobile-e2e", platform);
+const artifacts = resolve(process.env.MOBILE_E2E_ARTIFACTS ?? resolve(directory, "../.artifacts/mobile-e2e", platform));
 mkdirSync(artifacts, { recursive: true });
 // Coverage evidence is per-run state: a stale record from an earlier run must
 // never attribute its automation ids to tests of this run (#2085).
@@ -173,8 +174,26 @@ try {
     classicHostStream = startIosClassicHostLog(resolve(artifacts, "simulator-host-classic-live.log"));
     iosPreparations = await observeIosPreparations({
       udid: process.env.MOBILE_UDID,
+      appPath, keepData: process.env.MOBILE_KEEP_APP === "1",
       expectedBundleSha256: signal => bundleDigest(appPath, () => signal.throwIfAborted()),
       report: value => appendFileSync(resolve(artifacts, "ios-preparation-observer.jsonl"), `${JSON.stringify(value)}\n`),
+      installer: async ({ nonce, deadlineMs, keepData, signal, environment }) => {
+        try {
+          const output = await executeOwnedIosInstaller({ appPath, udid: process.env.MOBILE_UDID, nonce, deadlineMs, keepData, signal,
+            environment: { ...iosNodeEnvironment(process.env, process.execPath), ...environment, MOBILE_E2E_ARTIFACTS: artifacts },
+            report: value => appendFileSync(resolve(artifacts, "ios-preparation-process.jsonl"),
+              `${JSON.stringify({ kind: "ios-install-owner/1", at: new Date().toISOString(), ...value })}\n`),
+          });
+          writeFileSync(resolve(artifacts, `ios-installer-${nonce}.stdout.log`), output);
+          return output;
+        } catch (error) {
+          try { writeFileSync(resolve(artifacts, `ios-installer-${nonce}.error.log`),
+            `${String(error)}\n${JSON.stringify({ cleanupUncertain: error.cleanupUncertain ?? false,
+              processGroupId: error.processGroupId ?? null, joined: error.joined ?? false })}\n${error.stderr ?? ""}`); }
+          catch (retentionError) { throw new AggregateError([error, retentionError], "Installer failure diagnostics could not be retained."); }
+          throw error;
+        }
+      },
       readerFactories: [
         onOutput => startNativeLog("xcrun", ["simctl", "spawn", process.env.MOBILE_UDID,
           "log", "stream", "--style", "compact", "--level", "info", "--predicate", 'process == "BibleOnSite"'],

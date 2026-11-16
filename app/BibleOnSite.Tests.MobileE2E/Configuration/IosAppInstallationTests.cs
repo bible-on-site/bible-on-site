@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text;
 using System.Text.Json;
 using BibleOnSite.Tests.MobileE2E.Platforms;
 using Xunit;
@@ -85,5 +87,118 @@ public sealed class IosAppInstallationTests
         Assert.Equal(Configuration.AppPath, options["appium:app"]);
         Assert.Equal(false, options["appium:noReset"]);
         Assert.Equal(true, options["appium:enforceAppInstall"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ParentRequestContainsOnlyFiniteIdentityAndPreservesTheOriginalBudget(bool keepData)
+    {
+        WithArtifacts(configuration =>
+        {
+            configuration = configuration with { KeepAppForReview = keepData };
+            var calls = 0;
+            var handler = new Handler(async (request, cancellation) =>
+            {
+                calls++;
+                Assert.Equal("http", request.RequestUri!.Scheme);
+                Assert.Equal("127.0.0.1", request.RequestUri.Host);
+                Assert.Equal(47255, request.RequestUri.Port);
+                Assert.Equal("/prepare", request.RequestUri.AbsolutePath);
+                Assert.Equal(new string('a', 64), request.Headers.Authorization!.Parameter);
+                using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellation));
+                Assert.Equal(["deadlineMs", "keepData", "kind", "nonce", "phase", "udid"],
+                    body.RootElement.EnumerateObject().Select(property => property.Name).Order());
+                var value = body.RootElement;
+                Assert.Equal("ios-install-request/1", value.GetProperty("kind").GetString());
+                Assert.Equal("install", value.GetProperty("phase").GetString());
+                Assert.Equal(configuration.DeviceId, value.GetProperty("udid").GetString());
+                Assert.Equal(keepData, value.GetProperty("keepData").GetBoolean());
+                var remaining = value.GetProperty("deadlineMs").GetInt64() - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                Assert.InRange(remaining, 1, 300000);
+                Assert.Equal(value.GetProperty("deadlineMs").GetInt64().ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    Assert.Single(request.Headers.GetValues("X-Ios-Preparation-Deadline")));
+                var receipt = Receipt();
+                receipt["nonce"] = value.GetProperty("nonce").GetString()!;
+                receipt["keepData"] = keepData;
+                return Response(HttpStatusCode.OK, receipt);
+            });
+            var proof = IosAppInstallation.Prepare(configuration, TimeSpan.FromMinutes(5), Environment,
+                remaining =>
+                {
+                    Assert.InRange(remaining.TotalMilliseconds, 1, 300000);
+                    return new HttpClient(handler) { Timeout = remaining };
+                });
+            Assert.True(Guid.TryParseExact(proof.Nonce, "N", out _));
+            Assert.Equal(1, calls);
+            Assert.True(File.Exists(Path.Combine(configuration.ArtifactDirectory, "ios-installations.jsonl")));
+        });
+    }
+
+    [Theory]
+    [InlineData("http://remote.example/", null)]
+    [InlineData("0", null)]
+    [InlineData("65536", null)]
+    [InlineData("+47255", null)]
+    [InlineData("47255/path", null)]
+    [InlineData("47255", "short")]
+    public void InvalidObserverCannotChooseADestinationOrStartARequest(string port, string? token)
+    {
+        Assert.Throws<InvalidOperationException>(() => IosAppInstallation.Prepare(Configuration,
+            TimeSpan.FromMinutes(5), key => key == "MOBILE_IOS_PREPARATION_PORT" ? port : token ?? new string('a', 64),
+            _ => throw new InvalidOperationException("A client must not be constructed.")));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(301)]
+    public void ParentRequestRejectsMissingOrExpandedStartupAllowance(int seconds) =>
+        Assert.Throws<ArgumentOutOfRangeException>(() => IosAppInstallation.Prepare(Configuration,
+            TimeSpan.FromSeconds(seconds), Environment, _ => throw new InvalidOperationException("Must not construct a client.")));
+
+    [Theory]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.Redirect)]
+    public void ParentFailureOrRedirectCannotBecomeAnInstallationReceipt(HttpStatusCode status)
+    {
+        WithArtifacts(configuration => Assert.Throws<InvalidOperationException>(() =>
+            IosAppInstallation.Prepare(configuration, TimeSpan.FromMinutes(5), Environment,
+                remaining => new HttpClient(new Handler((_, _) => Task.FromResult(Response(status, Receipt())))) { Timeout = remaining })));
+    }
+
+    [Fact]
+    public void RequestCancellationUsesTheOriginalDeadlineWithoutAProcessTreeWalk()
+    {
+        WithArtifacts(configuration =>
+        {
+            var entered = false;
+            var handler = new Handler(async (_, cancellation) =>
+            {
+                entered = true;
+                await Task.Delay(Timeout.Infinite, cancellation);
+                throw new InvalidOperationException("A cancelled request must not produce a receipt.");
+            });
+            Assert.Throws<TimeoutException>(() => IosAppInstallation.Prepare(configuration,
+                TimeSpan.FromMilliseconds(250), Environment, remaining => new HttpClient(handler) { Timeout = remaining }));
+            Assert.True(entered);
+        });
+    }
+
+    private static string? Environment(string name) => name == "MOBILE_IOS_PREPARATION_PORT" ? "47255" : new string('a', 64);
+    private static HttpResponseMessage Response(HttpStatusCode status, Dictionary<string, object> body) => new(status)
+    { Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json") };
+
+    private static void WithArtifacts(Action<MobileTestConfiguration> action)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "ios-install-client-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try { action(Configuration with { ArtifactDirectory = directory }); }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    private sealed class Handler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            send(request, cancellationToken);
     }
 }
