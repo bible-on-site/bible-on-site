@@ -2450,7 +2450,7 @@ jobs:
           RECITATION_ASSETS_ORIGIN: ${{ vars.ASSETS_BASE_URL }}
 
       - name: Save verified recitation audio cache
-        if: ${{ steps.recitation_audio.outputs.cache-hit != 'true' }}
+        if: ${{ github.ref == 'refs/heads/master' && steps.recitation_audio.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
           path: .cache/recitation-assets/*.ogg
