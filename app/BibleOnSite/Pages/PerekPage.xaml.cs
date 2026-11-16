@@ -157,6 +157,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
                 CurrentUnitId = () => _viewModel.PerekId,
                 NavigateToUnitAsync = perekId => _viewModel.NavigateToPerekAsync(perekId),
                 FullscreenStateChanged = OnReaderFullscreenStateChanged,
+                ArticlesVisibilityChanged = _ => SetAnalyticsScreenForPerek(),
             });
     }
 
@@ -489,6 +490,9 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         DebugLog.Write("[PerekLoad] stage=initial-search-landing-start");
         await ApplySearchReaderLocationAsync();
         DebugLog.Write("[PerekLoad] stage=initial-search-landing-complete");
+        // The initial visit's screen_view: NavigatedTo fired before the perek
+        // resolved, so the resolved-identity emit lives here (#3378).
+        SetAnalyticsScreenForPerek();
         _ = _viewModel.PreloadAdjacentPasukimAsync(_viewModel.PerekId);
         StartSearchIntroduction();
 
@@ -719,19 +723,29 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
 
 
     /// <summary>
-    /// The reader reports its own logical screen (AlHaperek/{perekId}) from
-    /// page lifecycle and carousel swipes — transitions a Shell-level
-    /// screen_view would double-count — so the Shell report is suppressed.
+    /// The reader reports its own logical screen from page lifecycle and
+    /// carousel swipes — transitions a Shell-level screen_view would
+    /// double-count — so the Shell report is suppressed.
     /// </summary>
-    public string? AnalyticsScreenName => null;
+    public AnalyticsScreen? AnalyticsScreen => null;
 
     /// <summary>
-    /// Logs current perek screen to analytics (legacy-style: AlHaperek/{perekId}).
+    /// Emits the visible surface's screen_view once the perek resolves
+    /// (#3378): the reader itself (AlHaperek/{id} + canonical source) or,
+    /// while the articles view is up, its perek-scoped list. A pre-load
+    /// NavigatedTo with id 0 never emits — the post-load call owns the
+    /// initial visit.
     /// </summary>
     private void SetAnalyticsScreenForPerek()
     {
-        var analytics = Microsoft.Maui.Controls.Application.Current?.Handler?.MauiContext?.Services.GetService<IAnalyticsService>();
-        analytics?.SetScreen($"AlHaperek/{_viewModel.PerekId}", "PerekPage");
+        if (_viewModel.PerekId <= 0)
+        {
+            return;
+        }
+        AnalyticsScreens.Report(_chrome.IsShowingArticles
+            ? AnalyticsScreens.ForArticlesList("ReaderArticles", ArticlesListScope.Perek,
+                _viewModel.PerekId, _viewModel.Source)
+            : AnalyticsScreens.ForPerek(_viewModel.PerekId, _viewModel.Source));
     }
 
     /// <summary>
