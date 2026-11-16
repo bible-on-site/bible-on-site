@@ -1156,6 +1156,15 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 										dryRun: false,
 									},
 								});
+								const failure = result.outcomes.find(
+									(outcome) => outcome.outcome === "error",
+								);
+								if (failure)
+									throw new Error(
+										failure.error === "article not found"
+											? "לא נמצא מאמר במספר הזה."
+											: "איתור הקישורים למאמר נכשל. אפשר לנסות שוב.",
+									);
 								return result.prIds;
 							}}
 							openPr={(id) => navigate({ to: "/", search: { tab: "prs", id } })}

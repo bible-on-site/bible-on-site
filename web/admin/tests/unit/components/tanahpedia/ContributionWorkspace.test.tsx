@@ -409,6 +409,38 @@ describe("issues and PR administration", () => {
 			},
 		});
 	});
+	it.each([
+		{
+			prIds: [],
+			error: "article not found",
+			message: "לא נמצא מאמר במספר הזה.",
+		},
+		{
+			prIds: [PRID],
+			error: "generation failed",
+			message: "איתור הקישורים למאמר נכשל. אפשר לנסות שוב.",
+		},
+	])(
+		"reports discovery failure before opening any existing PR: $error",
+		async ({ prIds, error, message }) => {
+			mocks.articleGenerate.mockResolvedValue({
+				runId: "failed-discovery",
+				outcomes: [{ articleId: 17, outcome: "error", proposals: [], error }],
+				prIds,
+			});
+			show("pr");
+			await screen.findByText("שינוי שם");
+			fireEvent.click(screen.getByText("איתור קישורים למאמר"));
+			fireEvent.change(screen.getByLabelText("מספר מאמר לאיתור"), {
+				target: { value: "17" },
+			});
+			fireEvent.submit(screen.getByRole("form", { name: "איתור קישורי מאמר" }));
+			expect(await screen.findByRole("alert")).toHaveTextContent(message);
+			expect(screen.queryByRole("status")).not.toBeInTheDocument();
+			expect(mocks.navigate).not.toHaveBeenCalled();
+			expect(screen.getByLabelText("מספר מאמר לאיתור")).toHaveValue("17");
+		},
+	);
 	it("clears search and assignee filters without retaining empty URL values", async () => {
 		mocks.search = { q: "term", assignee: "human" };
 		show();
