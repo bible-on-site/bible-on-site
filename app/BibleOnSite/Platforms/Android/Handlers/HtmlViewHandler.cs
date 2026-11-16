@@ -127,6 +127,13 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
         base.ConnectHandler(platformView);
         VirtualView.HtmlContentChanged += OnHtmlContentChanged;
         VirtualView.StyleChanged += OnStyleChanged;
+        /* UiMode is in MainActivity's ConfigurationChanges, so this handler
+           survives a system theme flip — the quote accent and text colors
+           baked into the cached spans must re-render with it (#3443). */
+        if (Microsoft.Maui.Controls.Application.Current is { } app)
+        {
+            app.RequestedThemeChanged += OnRequestedThemeChanged;
+        }
     }
 
     protected override void DisconnectHandler(TextView platformView)
@@ -141,11 +148,16 @@ public class HtmlViewHandler : ViewHandler<HtmlView, TextView>
         _measureContext = null;
         VirtualView.HtmlContentChanged -= OnHtmlContentChanged;
         VirtualView.StyleChanged -= OnStyleChanged;
+        if (Microsoft.Maui.Controls.Application.Current is { } app)
+        {
+            app.RequestedThemeChanged -= OnRequestedThemeChanged;
+        }
         base.DisconnectHandler(platformView);
     }
 
     private void OnHtmlContentChanged(object? sender, EventArgs e) => UpdateContent();
     private void OnStyleChanged(object? sender, EventArgs e) => UpdateContent();
+    private void OnRequestedThemeChanged(object? sender, AppThemeChangedEventArgs e) => UpdateContent();
 
     /// <summary>
     /// Force the native TextView to measure with EXACTLY the full available width.
