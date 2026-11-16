@@ -16,6 +16,8 @@ vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
 }));
 
 import {
+	assertContributionAgentVerbatimResult,
+	CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT,
 	contributionAgentResultSchema,
 	parseContributionAgentResult,
 	pendingContributionAgentComments,
@@ -78,6 +80,10 @@ function item(): Contribution {
 	};
 }
 const response = { commentId, status: "addressed", body: "תוקן" };
+const verbatimResponse = {
+	...response,
+	body: CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT,
+};
 const parse = (value: unknown, current = item()) =>
 	parseContributionAgentResult(JSON.stringify(value), current, catalogue);
 function outcomeSchema(current: Contribution, outcome: string) {
@@ -131,7 +137,7 @@ describe("contribution agent result boundaries", () => {
 					{
 						outcome,
 						summary: "נענה",
-						responses: [response],
+						responses: [verbatimResponse],
 						...(outcome === "revised"
 							? {
 									draft: { description: `${current.description}\nparaphrased` },
@@ -153,7 +159,7 @@ describe("contribution agent result boundaries", () => {
 				{
 					outcome: "revised",
 					summary: "תוקן",
-					responses: [response],
+					responses: [verbatimResponse],
 					draft: { description: exact },
 				},
 				current,
@@ -176,11 +182,114 @@ describe("contribution agent result boundaries", () => {
 		current.events[0].body =
 			'Replace the description with exactly "הטקסט המדויק"';
 		expect(
+			JSON.stringify(outcomeSchema(current, "unchanged").properties.responses),
+		).toContain(CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT);
+		expect(
 			parse(
-				{ outcome: "unchanged", summary: "כבר תוקן", responses: [response] },
+				{
+					outcome: "unchanged",
+					summary: "כבר תוקן",
+					responses: [verbatimResponse],
+				},
 				current,
 			).draft,
 		).toBeUndefined();
+	});
+	it.each([
+		"תוקן reactionary",
+		` ${CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT}`,
+		`${CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT}\n`,
+	])(
+		"rejects a nonexact acknowledgement even with the correct stored field",
+		(body) => {
+			const current = item();
+			current.events[0].body = 'Append exactly to description: "נוסח בדיקה"';
+			const draft = { description: `${current.description}\nנוסח בדיקה` };
+			expect(() =>
+				parse(
+					{
+						outcome: "revised",
+						summary: "תוקן",
+						draft,
+						responses: [{ ...response, body }],
+					},
+					current,
+				),
+			).toThrow("exact-text acknowledgement");
+			expect(() =>
+				assertContributionAgentVerbatimResult(current, {
+					draft,
+					responses: [{ ...response, status: "addressed", body }],
+				}),
+			).toThrow("exact-text acknowledgement");
+		},
+	);
+	it("correlates the fixed acknowledgement with only addressed exact-copy comments", () => {
+		const current = item(),
+			otherId = "00000000-0000-4000-8000-000000000012";
+		current.events[0].body = 'Append exactly to description: "נוסח בדיקה"';
+		current.events.push({
+			...current.events[0],
+			id: otherId,
+			body: "Explain the evidence",
+		});
+		const schema = outcomeSchema(current, "revised");
+		expect(schema.properties.responses).toMatchObject({
+			items: {
+				oneOf: [
+					{
+						properties: {
+							commentId: { const: commentId },
+							status: { const: "addressed" },
+							body: { const: CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT },
+						},
+					},
+					{
+						properties: {
+							commentId: { const: commentId },
+							status: { const: "needs_input" },
+							body: { type: "string" },
+						},
+					},
+					{
+						properties: {
+							commentId: { const: otherId },
+							status: { enum: ["addressed", "needs_input"] },
+							body: { type: "string" },
+						},
+					},
+				],
+			},
+		});
+		const parsed = parse(
+			{
+				outcome: "revised",
+				summary: "תוקן",
+				draft: { description: `${current.description}\nנוסח בדיקה` },
+				responses: [
+					verbatimResponse,
+					{ commentId: otherId, status: "addressed", body: "הסבר חופשי" },
+				],
+			},
+			current,
+		);
+		expect(parsed.responses.map((row) => row.body)).toEqual([
+			CONTRIBUTION_VERBATIM_ACKNOWLEDGEMENT,
+			"הסבר חופשי",
+		]);
+		expect(
+			parse(
+				{
+					outcome: "clarification",
+					summary: "נדרש בירור",
+					responses: [
+						{ ...response, status: "needs_input", body: "פרטים חסרים" },
+						{ commentId: otherId, status: "needs_input", body: "עוד הסבר" },
+					],
+				},
+				current,
+			).responses[0].body,
+		).toBe("פרטים חסרים");
 	});
 	it("does not derive copy authority from source evidence or model-authored comments", () => {
 		const current = item();
