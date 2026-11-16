@@ -306,3 +306,43 @@ for (const sdk of ["not-a-version", "27.0\nEXTRA=value"]) {
     assert.equal(existsSync(env.GITHUB_ENV), false);
   });
 }
+
+test("bootstrap evidence captures pre-restore and pre-boot state without extra device commands", async t => {
+  const stages = [];
+  const { options, calls, env } = fixture(t);
+  const evidence = { ...env, MOBILE_E2E_ARTIFACTS: "/controlled-artifacts" };
+  const snapshot = value => stages.push([value.stage, value.udid]);
+  await bootIos({ ...options, mode: "resolve", env: evidence, snapshot });
+  await bootIos({ ...options, mode: "start", env: evidence, snapshot });
+  assert.deepEqual(stages, [["before-cache", UDID], ["before-boot", UDID]]);
+  assert.equal(calls.filter(([kind, , command]) => kind === "sync" && command === "boot").length, 1);
+  assert(!calls.some(([kind]) => kind === "async"));
+});
+
+test("boot failure remains primary after bounded diagnostic teardown and never exports readiness", async t => {
+  const { options, env } = fixture(t);
+  const stages = [];
+  const failure = new Error("original bootstatus deadline");
+  let stopped = false;
+  await assert.rejects(bootIos({ ...options, mode: "wait",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0", MOBILE_E2E_ARTIFACTS: "/controlled-artifacts" },
+    execute: async (_command, _args, config) => { assert.equal(config.timeout, 300000); throw failure; },
+    observe: () => ({ snapshot: stage => stages.push(stage), async stop() { stopped = true; throw new Error("reader teardown failure"); } }),
+  }), error => error === failure);
+  assert.equal(stopped, true);
+  assert.deepEqual(stages, ["wait-start", "wait-failed"]);
+  assert(!existsSync(env.GITHUB_ENV));
+});
+
+test("successful boot joins diagnostic readers before exporting readiness", async t => {
+  const { options, env } = fixture(t);
+  const stages = [];
+  let stopped = false;
+  await bootIos({ ...options, mode: "wait",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0", MOBILE_E2E_ARTIFACTS: "/controlled-artifacts" },
+    observe: () => ({ snapshot: stage => stages.push(stage), async stop() { assert(!existsSync(env.GITHUB_ENV)); stopped = true; } }),
+  });
+  assert(stopped);
+  assert.deepEqual(stages, ["wait-start", "wait-ready"]);
+  assert(existsSync(env.GITHUB_ENV));
+});
