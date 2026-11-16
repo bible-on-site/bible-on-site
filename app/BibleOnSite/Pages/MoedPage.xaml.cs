@@ -77,6 +77,8 @@ public partial class MoedPage : ContentPage, IQueryAttributable, IAnalyticsScree
                 ExitFullscreenButton = ExitFullScreenButton,
                 ArticlesView = ArticlesCollection,
                 ReaderContent = MoedRowsCollection,
+                // This reader has no ⋮ options menu — nothing to re-scope.
+                MenuPanel = null,
                 ReadingProgressIndicator = null,
                 Toolbar = ReaderToolbar,
                 Host = MainGrid,

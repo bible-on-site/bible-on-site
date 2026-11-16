@@ -6,6 +6,7 @@
                 xmlns:converters="clr-namespace:BibleOnSite.Converters"
                 x:Class="BibleOnSite.Controls.ReaderArticlesView"
                 x:Name="ArticlesRoot"
+                AutomationId="ReaderArticlesView"
                 IsVisible="False"
                 SelectionMode="Single"
                 Margin="8,8,8,0">
