@@ -124,7 +124,8 @@ class NativeDevice:
         return any(marker in lowered for marker in ("929", "daily929", "tanah"))
 
     def _raise_on_app_anr(self, items, description):
-        """Abort on our app's ANR; dismiss stale system/keyboard ANRs instead.
+        """
+        Abort on our app's ANR; dismiss stale system/keyboard ANRs instead.
 
         Emulator cold boots frequently surface System UI or IME "isn't
         responding" dialogs. Those are environment noise, not a regression in
@@ -152,7 +153,8 @@ class NativeDevice:
         self.adb("shell", "wm", "dismiss-keyguard")
 
     def settle_launch(self):
-        """Wait out a slow cold start; a startup ANR is waited, not fatal.
+        """
+        Wait out a slow cold start; a startup ANR is waited, not fatal.
 
         A first launch on a freshly booted or loaded emulator can trip a
         "failed to complete startup" ANR while ART/MAUI warm up. The process
@@ -259,7 +261,8 @@ class NativeDevice:
                  round(y2 * self.height), 600)
 
     def to_home(self):
-        """Return to the home page wherever a cold start resumed.
+        """
+        Return to the home page wherever a cold start resumed.
 
         The app restores the last-open perek into the reader on relaunch, so
         the suite can start on the reader (or with a flyout/overlay) instead
@@ -383,7 +386,7 @@ def check_scroll_and_swipe(device, check):
     preload_marker = device.log_count("[Carousel] PreloadAdjacent")
     device.home()
     device.tap("HomeDailyPerek")
-    device.wait(lambda ns: device.verses(ns), "Daily reader")
+    device.wait(device.verses, "Daily reader")
     if device.log_count("[PerekLoad] stage=loaded") > loaded_marker:
         # Every fresh load schedules a heavy carousel preload a few seconds in;
         # the app logs when it finishes. Waiting for that real signal keeps the
@@ -694,7 +697,8 @@ def check_home_tile_fills(device, check):
 
 
 def check_search_layout(device, check):
-    """Prove the authors search pill fills the remaining top-bar width.
+    """
+    Prove the authors search pill fills the remaining top-bar width.
 
     A hidden trailing clear action must not reserve space.
     """
@@ -738,7 +742,8 @@ def check_search_layout(device, check):
 
 
 def check_shared_button_styles(device, check):
-    """Sample real pixels for the shared button styles.
+    """
+    Sample real pixels for the shared button styles.
 
     Secondary actions are white, primary actions filled blue, and dark mode
     surfaces switch to navy.
