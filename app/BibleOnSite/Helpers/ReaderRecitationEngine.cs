@@ -191,8 +191,11 @@ public sealed class ReaderRecitationEngine
             _cursor.MarkResume(segment.PerekId, resume);
         }
 
+        // Buffering is an active session too — MediaElement v11 reports it on
+        // Android during open/buffer where v10 surfaced Paused.
         if (_cursor.PlayingKey == key && _player.Exists &&
-            _player.CurrentState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused)
+            _player.CurrentState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused
+                or RecitationPlaybackState.Buffering)
         {
             TogglePaused();
             return;
@@ -213,7 +216,8 @@ public sealed class ReaderRecitationEngine
         // tapped-word preview it shows Play, which starts continuous playback
         // at the bookmark rather than pausing the word (#2157).
         if (!_cursor.BarIssued || !_player.Exists || _player.CurrentState is not
-            (RecitationPlaybackState.Playing or RecitationPlaybackState.Paused))
+            (RecitationPlaybackState.Playing or RecitationPlaybackState.Paused
+                or RecitationPlaybackState.Buffering))
         {
             return false;
         }
