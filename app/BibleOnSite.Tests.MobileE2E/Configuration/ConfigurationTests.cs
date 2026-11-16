@@ -53,6 +53,7 @@ public sealed class ConfigurationTests
             // Idle checks are disabled (0): a churning reader never reaches
             // XCTest's idle threshold, so every proxied WDA command stalled.
             Assert.Equal(0, options["appium:waitForIdleTimeout"]);
+            Assert.False(options.ContainsKey("appium:waitForQuiescence"));
             Assert.False(options.ContainsKey("appium:animationCoolOffTimeout"));
             Assert.Equal(true, options["appium:skipLogCapture"]);
             Assert.Equal(false, options["appium:shouldTerminateApp"]);
