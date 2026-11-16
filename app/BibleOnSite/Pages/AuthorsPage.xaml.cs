@@ -5,9 +5,8 @@ using BibleOnSite.ViewModels;
 
 namespace BibleOnSite.Pages;
 
-// Codacy: S2333 false positive — partial is required by the XAML code generator.
-#pragma warning disable S2333
-public partial class AuthorsPage : ContentPage, IWindowsDesktopSurface, IWindowsSearchSurface //NOSONAR
+#pragma warning disable S2333 // MAUI XAML generates the other partial declaration.
+public partial class AuthorsPage : ContentPage, IWindowsDesktopSurface, IWindowsSearchSurface
 #pragma warning restore S2333
 {
     private readonly AuthorsViewModel _viewModel = new();
