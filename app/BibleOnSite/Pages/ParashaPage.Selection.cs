@@ -253,7 +253,7 @@ public partial class ParashaPage
         var recitationVisual =
             RecitationPlayerState == RecitationPlaybackState.Playing && Recitation.Cursor.BarIssued
                 ? ReaderSelectionBar.RecitationVisual.Pause
-                : RecitationPlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused
+                : RecitationPlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused or RecitationPlaybackState.Buffering
                     ? ReaderSelectionBar.RecitationVisual.Resume : ReaderSelectionBar.RecitationVisual.Play;
         var hint = Recitation.Busy ? "טוען את הקלטת הפרשה..." :
             !_viewModel.HasCurrentUnitRecitation ? "אין הקלטה לפרשה זו - הורידו את הקלטות הספר בהעדפות" :
