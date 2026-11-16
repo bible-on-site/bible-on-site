@@ -1,3 +1,29 @@
 @import "tailwindcss";
 @import "./admin-prose.css";
 @import "./contributions.css";
+
+@font-face {
+	font-family: "Al Heperek Font UI";
+	font-style: normal;
+	font-weight: 400;
+	font-display: swap;
+	src: url("/fonts/AlHeperekUI-Regular.woff2") format("woff2");
+}
+@font-face {
+	font-family: "Al Heperek Font UI";
+	font-style: normal;
+	font-weight: 600;
+	font-display: swap;
+	src: url("/fonts/AlHeperekUI-SemiBold.woff2") format("woff2");
+}
+@font-face {
+	font-family: "Al Heperek Font UI";
+	font-style: normal;
+	font-weight: 700;
+	font-display: swap;
+	src: url("/fonts/AlHeperekUI-Bold.woff2") format("woff2");
+}
+
+:root {
+	--font-sans: "Al Heperek Font UI", system-ui, sans-serif;
+}

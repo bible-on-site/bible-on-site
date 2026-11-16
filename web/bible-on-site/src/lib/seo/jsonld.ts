@@ -51,7 +51,7 @@ export function organizationNode(): Organization {
 		"@id": ORG_ID,
 		name: SITE_NAME,
 		url: absUrl("/"),
-		logo: absUrl("/images/logos/logo-white-letters-69.webp"),
+		logo: absUrl("/images/logos/logo192.webp"),
 		sameAs: ORG_SAME_AS,
 	};
 }

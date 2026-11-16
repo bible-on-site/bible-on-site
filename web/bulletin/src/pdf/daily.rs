@@ -9,7 +9,7 @@ use super::{
     typst_string,
 };
 
-const LOGO: &[u8] = include_bytes!("../../assets/email/logo-header-bfaa157e34c2.jpg");
+const LOGO: &[u8] = include_bytes!("../../assets/email/logo-header-06e724f0db1e.jpg");
 const ICONS: [(&str, &[u8]); 5] = [
     (
         "email",
@@ -35,7 +35,7 @@ const ICONS: [(&str, &[u8]); 5] = [
 
 fn section(markup: &mut String, title: &str) {
     markup.push_str(&format!(
-        "#block(width: 100%, fill: rgb(\"F5F1E6\"), inset: (x: 9pt, y: 5pt), radius: 3pt, above: 0.8em, below: 0.55em, sticky: true)[#text(font: \"Frank Ruhl Libre\", size: 14pt, weight: \"bold\", fill: rgb(\"28758A\"))[{}]]\n",
+        "#block(width: 100%, fill: rgb(\"F5F1E6\"), inset: (x: 9pt, y: 5pt), radius: 3pt, above: 0.8em, below: 0.55em, sticky: true)[#text(font: \"Al Heperek Font UI\", size: 14pt, weight: \"bold\", fill: rgb(\"28758A\"))[{}]]\n",
         typst_escape(title)
     ));
 }
@@ -61,16 +61,16 @@ fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, Typs
     let mut out = String::from(
         r##"#set document(title: "תנ\"ך על הפרק", author: "תנ\"ך על הפרק")
 #set page(paper: "a4", fill: rgb("F5F9FA"), margin: (top: 14mm, bottom: 18mm, left: 13mm, right: 13mm))
-#set text(font: ("Taamey D", "Frank Ruhl Libre"), size: 13pt, fill: rgb("233D48"), dir: rtl, lang: "he")
+#set text(font: ("Al Heperek Font UI", "Taamey D"), size: 13pt, fill: rgb("233D48"), dir: rtl, lang: "he")
 #set par(justify: true, leading: 0.4em, spacing: 0.35em)
-#set page(footer: context align(center, text(font: "Frank Ruhl Libre", size: 9.5pt, fill: rgb("637780"))[תנ\"ך על הפרק #h(6pt) · #h(6pt) #counter(page).display()]))
+#set page(footer: context align(center, text(font: "Al Heperek Font UI", size: 9.5pt, fill: rgb("637780"))[תנ\"ך על הפרק #h(6pt) · #h(6pt) #counter(page).display()]))
 #block(width: 100%, fill: white, inset: 12pt, radius: 6pt, breakable: true)[
 #align(center, image("daily-logo.jpg", width: 40mm))
 #v(3pt)
 "##,
     );
     out.push_str(&format!(
-        "#align(center, text(font: \"Frank Ruhl Libre\", size: 22pt, weight: \"bold\", fill: rgb(\"173E52\"))[{}])\n#align(center, text(size: 11.5pt, fill: rgb(\"637780\"))[{}])\n",
+        "#align(center, text(font: \"Al Heperek Font UI\", size: 22pt, weight: \"bold\", fill: rgb(\"173E52\"))[{}])\n#align(center, text(size: 11.5pt, fill: rgb(\"637780\"))[{}])\n",
         typst_escape(&source), typst_escape(date),
     ));
     if !perek.header.trim().is_empty() {
@@ -96,7 +96,7 @@ fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, Typs
         let verse = pasuk_markup(segments);
         if !verse.is_empty() {
             out.push_str(&format!(
-                "#text(size: 11.5pt, weight: \"bold\", fill: rgb(\"28758A\"))[{}]~{} ",
+                "#text(size: 11.5pt, weight: \"bold\", fill: rgb(\"28758A\"))[{}]~#text(font: \"Taamey D\")[{}] ",
                 typst_escape(&to_hebrew_letter(index + 1)),
                 verse,
             ));
@@ -113,7 +113,7 @@ fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, Typs
             let mut heading_markup = String::new();
             push_article_text(&mut heading_markup, &heading, Some(CANTILLATION_FONT));
             out.push_str(&format!(
-                "#block(sticky: true, above: 0.4em, below: 0.45em)[#text(font: \"Frank Ruhl Libre\", size: 15.5pt, weight: \"bold\", fill: rgb(\"173E52\"))[{}]",
+                "#block(sticky: true, above: 0.4em, below: 0.45em)[#text(font: \"Al Heperek Font UI\", size: 15.5pt, weight: \"bold\", fill: rgb(\"173E52\"))[{}]",
                 heading_markup,
             ));
             if !author.trim().is_empty() {
@@ -125,7 +125,7 @@ fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, Typs
             out.push_str("]\n");
             let body = daily_html_to_typst(&body, &mut files);
             if !body.trim().is_empty() {
-                out.push_str("#{ set text(font: \"Frank Ruhl Libre\", size: 12.5pt)\nshow heading: it => block(width: 100%, above: 0.85em, below: 0.35em, sticky: true)[#text(size: (18pt, 16.5pt, 15.5pt, 14.5pt, 14pt, 13.5pt).at(it.level - 1), weight: \"bold\", fill: rgb(\"173E52\"))[#it.body]]\n[\n");
+                out.push_str("#{ set text(font: \"Al Heperek Font UI\", size: 12.5pt)\nshow heading: it => block(width: 100%, above: 0.85em, below: 0.35em, sticky: true)[#text(size: (18pt, 16.5pt, 15.5pt, 14.5pt, 14pt, 13.5pt).at(it.level - 1), weight: \"bold\", fill: rgb(\"173E52\"))[#it.body]]\n[\n");
                 out.push_str(body.trim());
                 out.push_str("\n] }\n\n");
             }
@@ -214,7 +214,7 @@ mod tests {
         );
         assert!(source.contains("בְּרֵאשִׁ֖ית") && source.contains("וְעַל־פְּנֵ֥י"));
         assert!(!source.contains("sup("));
-        assert!(source.contains("]~בְּרֵאשִׁ֖ית"));
+        assert!(source.contains("]~#text(font: \"Taamey D\")[בְּרֵאשִׁ֖ית"));
     }
 
     #[test]
@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn article_heading_and_body_wrap_cantillated_runs() {
-        // #2961: article titles (leading h1s) print in Frank Ruhl Libre too —
+        // #2961: article titles (leading h1s) print in Al Heperek Font UI too —
         // a cantillated quote in the heading needs the same wrapped face.
         let mut req = request();
         // Real pasuk fragment (מלכים א כ לה) — canonical maqaf, not invented text.
@@ -279,11 +279,7 @@ mod tests {
             .collect();
         // Compiling style markup is insufficient: the exported PDF must embed
         // real bold and italic faces, rather than silently selecting regular.
-        assert!(
-            faces
-                .iter()
-                .any(|name| name.contains("FrankRuhlLibre-Bold"))
-        );
+        assert!(faces.iter().any(|name| name.contains("AlHeperekUI-Bold")));
         assert!(
             faces
                 .iter()

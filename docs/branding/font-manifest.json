@@ -1,0 +1,48 @@
+{
+  "family": "Al Heperek Font UI",
+  "version": "0.8.0",
+  "sourceRepository": "https://github.com/bible-on-site/al-heperek-font",
+  "designCommit": "ccd0fcd74df0fc45f800a183c4bece997a89136b",
+  "defaultHebrewCut": "ss02",
+  "export": "tools/export_ui.py",
+  "files": [
+    {
+      "weight": 400,
+      "sha256": "55e5b0d4534807c099bf7a26ff731a36bfdaf9394241f8d7c7550a8ae4e51bb5",
+      "sourceSha256": "38c4a03436830e7c265ea1908a015a3b668a1a1449efc0eaa0dd4c3060419ed2",
+      "file": "AlHeperekUI-Regular.ttf"
+    },
+    {
+      "weight": 400,
+      "sha256": "fa10294953983a6079124f27178fde8ddb1e02f187a978704873d2e79300e5f2",
+      "sourceSha256": "38c4a03436830e7c265ea1908a015a3b668a1a1449efc0eaa0dd4c3060419ed2",
+      "file": "AlHeperekUI-Regular.woff2"
+    },
+    {
+      "weight": 600,
+      "sha256": "33a6697329f8faa191c07e85fd230c6287ed9416af5ab1e600b617ba0346035b",
+      "sourceSha256": "7c93720cecec45cc120771b085513efcae15875b39ad99cf1ae589686958550e",
+      "file": "AlHeperekUI-SemiBold.ttf"
+    },
+    {
+      "weight": 600,
+      "sha256": "0055a73db2553e4551ec54f2e0422a12c7bbf7d5c3d61438077db7992c279134",
+      "sourceSha256": "7c93720cecec45cc120771b085513efcae15875b39ad99cf1ae589686958550e",
+      "file": "AlHeperekUI-SemiBold.woff2"
+    },
+    {
+      "weight": 700,
+      "sha256": "a330482d2cd4a037ecdc77d6d23571f6fcc140d708c2ed4fed856a1c192fbddd",
+      "sourceSha256": "54a3ccb34173a34a7f29d128b582c1f2291c6a4b93697a60949a4f9f2562053b",
+      "file": "AlHeperekUI-Bold.ttf"
+    },
+    {
+      "weight": 700,
+      "sha256": "24681f53debf2164f2ebec86508ca6fddf2fc54e1f2ad5730e18660ae8dcca02",
+      "sourceSha256": "54a3ccb34173a34a7f29d128b582c1f2291c6a4b93697a60949a4f9f2562053b",
+      "file": "AlHeperekUI-Bold.woff2"
+    }
+  ],
+  "license": "LicenseRef-Al-Heperek-Proprietary",
+  "exportCommit": "e17a4fec33bc83da76a0ed74d8abe26155ab9ce8"
+}

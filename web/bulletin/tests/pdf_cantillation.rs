@@ -1,5 +1,5 @@
 //! #2961: daily bulletin articles must render cantillated scripture quotes.
-//! The daily article face (Frank Ruhl Libre) has zero glyphs for
+//! The daily article face (Al Heperek Font UI) has zero glyphs for
 //! U+0591–U+05AF (and U+05C4–U+05C6); quotes must run through a bundled
 //! cantillation-capable face so marks stay attached to their bases.
 //!
@@ -16,15 +16,15 @@ fn fonts_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fonts")
 }
 
-/// Every mark Frank Ruhl Libre lacks, per its bundled cmap.
-const FRL_MISSING_MARKS: [char; 34] = [
+/// Every mark Al Heperek Font UI lacks, per its bundled cmap.
+const FRL_MISSING_MARKS: [char; 35] = [
     // All taamim U+0591–U+05AF …
     '\u{0591}', '\u{0592}', '\u{0593}', '\u{0594}', '\u{0595}', '\u{0596}', '\u{0597}', '\u{0598}',
     '\u{0599}', '\u{059A}', '\u{059B}', '\u{059C}', '\u{059D}', '\u{059E}', '\u{059F}', '\u{05A0}',
     '\u{05A1}', '\u{05A2}', '\u{05A3}', '\u{05A4}', '\u{05A5}', '\u{05A6}', '\u{05A7}', '\u{05A8}',
     '\u{05A9}', '\u{05AA}', '\u{05AB}', '\u{05AC}', '\u{05AD}', '\u{05AE}', '\u{05AF}',
     // … plus the rare upper/lower marks U+05C4–U+05C6.
-    '\u{05C4}', '\u{05C5}', '\u{05C6}',
+    '\u{05C4}', '\u{05C5}', '\u{05C6}', '\u{05BD}',
 ];
 
 fn is_missing_mark(c: char) -> bool {
@@ -308,7 +308,7 @@ fn daily_article_scripture_quotes_render_all_marks_without_tofu() {
     );
 
     // Every FRL-missing mark must be drawn — and only by cantillation fonts:
-    // Taamey Frank CLM (article) or Taamey D (perek), never Frank Ruhl Libre.
+    // Taamey Frank CLM (article) or Taamey D (perek), never Al Heperek Font UI.
     let clm_text: String = shown
         .iter()
         .filter(|s| s.font.contains("TaameyFrankCLM"))
@@ -325,7 +325,7 @@ fn daily_article_scripture_quotes_render_all_marks_without_tofu() {
         );
     }
     for s in &shown {
-        if s.font.contains("FrankRuhlLibre") {
+        if s.font.contains("AlHeperekUI") {
             assert!(
                 !s.text.chars().any(is_missing_mark),
                 "{} drew a mark it has no glyph for: {:?}",
@@ -388,7 +388,7 @@ fn daily_article_scripture_quotes_render_all_marks_without_tofu() {
     // Visual-order decoding may flip multi-glyph words — accept both.
     let frl_text: String = shown
         .iter()
-        .filter(|s| s.font.contains("FrankRuhlLibre"))
+        .filter(|s| s.font.contains("AlHeperekUI"))
         .map(|s| s.text.as_str())
         .collect();
     for prose in ["מלכים", "לה", "יג", "307", "perek"] {

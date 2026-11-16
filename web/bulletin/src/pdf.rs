@@ -102,7 +102,7 @@ fn collapse_maqaf_spaces(text: &str) -> String {
 }
 
 /// Dashes that no bundled font has a glyph for are printed as ASCII hyphens.
-/// En/em dash and minus render via the Frank Ruhl Libre fallback font, and the
+/// En/em dash and minus render via the Al Heperek Font UI fallback font, and the
 /// biblical maqaf (U+05BE) is never touched.
 fn normalize_unsupported_dash(c: char) -> char {
     match c {
@@ -287,10 +287,9 @@ fn consume_html_entity(chars: &mut impl Iterator<Item = char>) -> String {
 /// keep real bold/italic emphasis intact.
 const CANTILLATION_FONT: &str = "Taamey Frank CLM";
 
-/// Combining marks that Frank Ruhl Libre does not cover: all taamim
-/// (U+0591–U+05AF) plus the rare upper/lower marks U+05C4–U+05C6.
+/// Scripture marks and punctuation outside the Al Heperek UI character set.
 fn needs_cantillation_face(c: char) -> bool {
-    matches!(c, '\u{0591}'..='\u{05AF}' | '\u{05C4}'..='\u{05C6}')
+    matches!(c, '\u{0591}'..='\u{05AF}' | '\u{05BD}' | '\u{05C0}' | '\u{05C3}'..='\u{05C6}')
 }
 
 /// Characters that belong to a Hebrew text run: the whole Hebrew block
@@ -349,7 +348,7 @@ fn push_article_text(out: &mut String, text: &str, cantillation_font: Option<&st
 ///   li       → bullet item
 ///   Other tags are silently consumed (content preserved).
 fn html_to_typst(html: &str, files: &mut TypstFiles) -> String {
-    html_to_typst_with_headings(html, files, false, None)
+    html_to_typst_with_headings(html, files, false, Some(CANTILLATION_FONT))
 }
 
 fn daily_html_to_typst(html: &str, files: &mut TypstFiles) -> String {
@@ -427,7 +426,7 @@ fn html_to_typst_with_headings(
                             options.push(format!("weight: {weight}"));
                         }
                         if let Some(italic) = style.italic {
-                            // Frank Ruhl Libre has no italic face. Use the bundled
+                            // Al Heperek Font UI has no italic face. Use the bundled
                             // Hebrew family with real italic/bold-italic outlines.
                             if italic {
                                 options.push("font: \"Taamey Frank CLM\"".into());
@@ -778,11 +777,11 @@ fn generate_typst_markup(req: &PdfRequest) -> (String, TypstFiles) {
     let mut markup = String::with_capacity(16 * 1024);
     let mut files: TypstFiles = Vec::new();
 
-    // Page and text settings. Frank Ruhl Libre supplies glyphs Taamey D lacks
+    // Page and text settings. Al Heperek Font UI supplies glyphs Taamey D lacks
     // (en/em dash, minus) so they don't vanish from article text.
     markup.push_str(
         r#"#set page(paper: "a4", margin: (top: 20mm, bottom: 20mm, left: 15mm, right: 15mm))
-#set text(font: ("Taamey D", "Frank Ruhl Libre"), size: 11pt, dir: rtl, lang: "he")
+#set text(font: ("Al Heperek Font UI", "Taamey D"), size: 11pt, dir: rtl, lang: "he")
 #set par(justify: true)
 "#,
     );
@@ -847,7 +846,11 @@ fn generate_typst_markup(req: &PdfRequest) -> (String, TypstFiles) {
                 continue;
             }
             let prefix = to_hebrew_letter(i + 1);
-            markup.push_str(&format!("*{}* {}\n\n", typst_escape(&prefix), text));
+            markup.push_str(&format!(
+                "*{}* #text(font: \"Taamey D\")[{}]\n\n",
+                typst_escape(&prefix),
+                text
+            ));
         }
 
         // Articles
@@ -909,8 +912,8 @@ fn compile_pdf(markup: String, files: TypstFiles, fonts_dir: &Path) -> anyhow::R
     };
     let fonts = [
         read_font("TaameyD-Regular.ttf")?,
-        read_font("FrankRuhlLibre-Regular.ttf")?,
-        read_font("FrankRuhlLibre-Bold.ttf")?,
+        read_font("AlHeperekUI-Regular.ttf")?,
+        read_font("AlHeperekUI-Bold.ttf")?,
         read_font("TaameyFrankCLM-Regular.ttf")?,
         read_font("TaameyFrankCLM-Bold.ttf")?,
         read_font("TaameyFrankCLM-Italic.ttf")?,
@@ -1069,7 +1072,7 @@ mod tests {
 
     #[test]
     fn daily_article_taamim_runs_use_bundled_cantillation_face() {
-        // #2961: Frank Ruhl Libre (the daily article face) has no glyphs for
+        // #2961: Al Heperek Font UI (the daily article face) has no glyphs for
         // U+0591–U+05AF — cantillated quotes must be wrapped in a bundled
         // cantillation-capable face so marks stay attached to their bases.
         let daily = daily_html_to_typst(
@@ -1085,13 +1088,12 @@ mod tests {
         // The source reference and following prose keep the article font.
         assert!(daily.contains("(מלכים א כ לה) ועוד"));
 
-        // Nikud-only Hebrew renders fine in Frank Ruhl Libre — no wrap.
+        // Nikud-only Hebrew renders fine in Al Heperek Font UI — no wrap.
         let daily = daily_html_to_typst("<p>אָמַר שָׁלוֹם תָּמִיד</p>", &mut Vec::new());
         assert!(!daily.contains("Taamey Frank CLM"));
 
-        // The sefer-export path keeps its (Taamey D, Frank Ruhl Libre) stack
-        // untouched — Taamey D already covers taamim.
-        assert!(!to_typst("<p>וַיֹּאמֶ֞ר אֵלָ֑יו</p>").contains("Taamey Frank CLM"));
+        // Cantillated article runs also select a complete shaping face in sefer exports.
+        assert!(to_typst("<p>וַיֹּאמֶ֞ר אֵלָ֑יו</p>").contains("Taamey Frank CLM"));
     }
 
     #[test]
@@ -1108,11 +1110,11 @@ mod tests {
         assert!(daily.contains("#text(weight: 700)[#text(font: \"Taamey Frank CLM\")[אֵלָ֑יו]]"));
         assert!(daily.contains("#emph[#text(font: \"Taamey Frank CLM\")[כֹּ֥ה]]"));
         assert!(daily.contains("#text(font: \"Taamey Frank CLM\")[וַיֹּאמֶ֣ר׃]"));
-        // Meteg (U+05BD) and shin/sin dots are covered by Frank Ruhl Libre —
-        // they don't trigger a wrap on their own.
-        assert!(!daily_html_to_typst("<p>הָאָֽרֶץ</p>", &mut Vec::new()).contains("Taamey Frank CLM"));
+        // Meteg belongs to the scripture face. The whole Hebrew run switches
+        // together so the mark remains attached to its authored base glyph.
+        assert!(daily_html_to_typst("<p>הָאָֽרֶץ</p>", &mut Vec::new()).contains("Taamey Frank CLM"));
 
-        // Rare marks missing from Frank Ruhl Libre (U+05C4–U+05C6) also wrap.
+        // Rare marks missing from Al Heperek Font UI (U+05C4–U+05C6) also wrap.
         let daily = daily_html_to_typst("<p>א\u{05C4}ב\u{05C5}ג\u{05C6} דבר</p>", &mut Vec::new());
         assert!(
             daily.contains("#text(font: \"Taamey Frank CLM\")[א\u{05C4}ב\u{05C5}ג\u{05C6} דבר]")
@@ -1258,7 +1260,10 @@ mod tests {
         assert!(markup.contains("tracking: 0.05em, \"Genesis\")"));
         assert!(!markup.contains("tracking: 0.08em"));
         assert!(markup.contains("Genesis 1"));
-        assert!(markup.contains(&format!("*{}* First \\/ escaped", to_hebrew_letter(1))));
+        assert!(markup.contains(&format!(
+            "*{}* #text(font: \"Taamey D\")[First \\/ escaped]",
+            to_hebrew_letter(1)
+        )));
         assert!(!markup.contains(&format!("*{}*    ", to_hebrew_letter(2))));
         assert!(markup.contains("[Article \\/ Name \\/ Author]"));
         assert!(markup.contains("#strong[bold]"));

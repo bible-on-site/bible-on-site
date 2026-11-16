@@ -15,7 +15,7 @@
   border-radius: var(--radius-lg);
   border-right: 4px solid #6366f1;
   /* אחיד עם גופן הגוף (כולל עברית); ז/נ יורשים ולא נופלים ל־fallback במשקל כבד */
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: inherit;
 }
 
 .title {
