@@ -113,7 +113,9 @@ def main():
         '', '## כפתורים במסכים הנוכחיים', '',
         'פעולה ראשית בכחול מלא, פעולה משנית בלבן והסרה באדום. אותם סגנונות משמשים בבוררים, בהעדפות, בחבילות ובתמיכה.', '',
         '[ארבע דוגמאות בדף HTML](buttons.html) · [תמיכה במצב כהה](assets/after/support-dark.png)', '',
-        '<p dir="rtl"><img src="assets/after/extension-packs.png" width="240" alt="כפתורי הורדה ראשיים בכחול"><img src="assets/after/support.png" width="240" alt="ייצוא לוגים כפעולה משנית לבנה"></p>', '',
+        '<p dir="rtl">'
+        '<img src="assets/after/extension-packs.png" width="240" alt="כפתורי הורדה ראשיים בכחול">'
+        '<img src="assets/after/support.png" width="240" alt="ייצוא לוגים כפעולה משנית לבנה"></p>', '',
     ])
     (ROOT / 'REVIEW.md').write_text('\n'.join(markdown), encoding='utf-8')
     print(f'Generated {len(comparisons)} comparisons against {baseline}')
