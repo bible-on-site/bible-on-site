@@ -235,10 +235,8 @@
                        FontAttributes="Bold"
                        HorizontalTextAlignment="Center"
                        TextColor="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray100}}"/>
-                <Button Text="חזרה לתנכפדיה"
+                <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Text="חזרה לתנכפדיה"
                         Clicked="OnBackToPediaClicked"
-                        BackgroundColor="{StaticResource Primary}"
-                        TextColor="White"
                         HorizontalOptions="Center"/>
             </VerticalStackLayout>
 
@@ -271,10 +269,8 @@
                        FontSize="14"
                        HorizontalTextAlignment="Center"
                        TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"/>
-                <Button Text="נסו שוב"
+                <Button Style="{x:Static controls:AppButtonStyles.Primary}" Text="נסו שוב"
                         Command="{Binding LoadCommand}"
-                        BackgroundColor="{StaticResource Primary}"
-                        TextColor="White"
                         HorizontalOptions="Center"/>
             </VerticalStackLayout>
         </Grid>

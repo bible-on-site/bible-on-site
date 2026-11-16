@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentView xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
              xmlns:viewmodels="clr-namespace:BibleOnSite.ViewModels"
              xmlns:fonts="clr-namespace:Fonts"
              x:Class="BibleOnSite.Controls.ExtensionPacksView"
@@ -32,11 +33,9 @@
                                LineBreakMode="WordWrap"/>
 
                         <!-- One action area per lifecycle state: הורדה → מוריד…+ביטול → הסרה -->
-                        <Button Text="הורדת חבילת הפירושים"
+                        <Button Style="{x:Static controls:AppButtonStyles.Primary}" Text="הורדת חבילת הפירושים"
                                 Command="{Binding DownloadPerushimCommand}"
                                 AutomationId="DownloadPerushimButton"
-                                TextColor="White"
-                                CornerRadius="8"
                                 IsVisible="{Binding ShowPerushimDownloadButton}">
                             <Button.ImageSource>
                                 <FontImageSource FontFamily="FluentIcons"
@@ -59,31 +58,19 @@
                                                    HeightRequest="18"/>
                             </Grid>
                             <ProgressBar Progress="{Binding PerushimDownloadProgress}"/>
-                            <Button Text="ביטול ההורדה"
+                            <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Text="ביטול ההורדה"
                                     Command="{Binding CancelPerushimDownloadCommand}"
-                                    AutomationId="CancelPerushimDownloadButton"
-                                    BackgroundColor="Transparent"
-                                    BorderColor="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
-                                    BorderWidth="1"
-                                    CornerRadius="8"
-                                    TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
-                                    FontSize="13"/>
+                                    AutomationId="CancelPerushimDownloadButton"/>
                         </VerticalStackLayout>
 
-                        <Button Text="הסרת חבילת הפירושים"
+                        <Button Style="{x:Static controls:AppButtonStyles.Destructive}" Text="הסרת חבילת הפירושים"
                                 Command="{Binding RemovePerushimCommand}"
                                 AutomationId="RemovePerushimButton"
-                                BackgroundColor="Transparent"
-                                BorderColor="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"
-                                BorderWidth="1"
-                                CornerRadius="8"
-                                TextColor="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"
-                                FontSize="13"
                                 IsVisible="{Binding ShowPerushimRemove}">
                             <Button.ImageSource>
                                 <FontImageSource FontFamily="FluentIcons"
                                                  Glyph="{x:Static fonts:FluentUI.delete_24_regular}"
-                                                 Color="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"
+                                                 Color="{AppThemeBinding Light={x:Static controls:AppButtonStyles.DestructiveInkLight}, Dark={x:Static controls:AppButtonStyles.DestructiveInkDark}}"
                                                  Size="16"/>
                             </Button.ImageSource>
                         </Button>
@@ -149,30 +136,19 @@
                                                    VerticalOptions="Center"
                                                    Margin="8,0"
                                                    IsVisible="{Binding ShowProgress}"/>
-                                            <Button Text="{Binding DownloadLabel}"
+                                            <Button Style="{x:Static controls:AppButtonStyles.Primary}" Text="{Binding DownloadLabel}"
                                                     Clicked="OnDownloadBookClicked"
                                                     CommandParameter="{Binding}"
                                                     AutomationId="DownloadBookButton"
                                                     SemanticProperties.Description="{Binding Name, StringFormat='הורדת הקלטות {0}'}"
                                                     IsVisible="{Binding ShowDownload}"
-                                                    TextColor="White"
-                                                    CornerRadius="8"
-                                                    FontSize="12"
-                                                    Padding="12,4"
                                                     Margin="8,4"/>
-                                            <Button Text="הסרה"
+                                            <Button Style="{x:Static controls:AppButtonStyles.Destructive}" Text="הסרה"
                                                     Clicked="OnRemoveBookClicked"
                                                     CommandParameter="{Binding}"
                                                     AutomationId="RemoveBookButton"
                                                     IsVisible="{Binding ShowRemove}"
-                                                    BackgroundColor="Transparent"
-                                                    BorderColor="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"
-                                                    BorderWidth="1"
-                                                    CornerRadius="8"
-                                                    FontSize="12"
-                                                    Padding="12,4"
                                                     Margin="8,4"
-                                                    TextColor="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"
                                                     SemanticProperties.Description="{Binding Name, StringFormat='הסרת הקלטות {0}'}"/>
                                         </FlexLayout>
                                     </VerticalStackLayout>
@@ -181,12 +157,10 @@
                         </VerticalStackLayout>
 
                         <!-- Whole-pack actions: one-step download-all and remove-all -->
-                        <Button Text="הורדת כל תנ&quot;ך (כ-935 MB)"
+                        <Button Style="{x:Static controls:AppButtonStyles.Primary}" Text="הורדת כל תנ&quot;ך (כ-935 MB)"
                                 Command="{Binding Packs.DownloadAllCommand}"
                                 IsEnabled="{Binding Packs.IsIdle}"
-                                AutomationId="RecitationDownloadAllButton"
-                                TextColor="White"
-                                CornerRadius="8">
+                                AutomationId="RecitationDownloadAllButton">
                             <Button.ImageSource>
                                 <FontImageSource FontFamily="FluentIcons"
                                                  Glyph="{x:Static fonts:FluentUI.arrow_download_24_regular}"
@@ -196,29 +170,18 @@
                         </Button>
                         <VerticalStackLayout Spacing="6" IsVisible="{Binding Packs.IsDownloading}">
                             <ProgressBar Progress="{Binding Packs.Progress}"/>
-                            <Button Text="ביטול ההורדה"
+                            <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Text="ביטול ההורדה"
                                     Command="{Binding Packs.CancelDownloadCommand}"
-                                    AutomationId="RecitationCancelDownloadButton"
-                                    BackgroundColor="Transparent"
-                                    BorderColor="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}"
-                                    BorderWidth="1"
-                                    CornerRadius="8"
-                                    TextColor="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray400}}"
-                                    FontSize="13"/>
+                                    AutomationId="RecitationCancelDownloadButton"/>
                         </VerticalStackLayout>
-                        <Button Text="הסרת כל ההקלטות"
+                        <Button Style="{x:Static controls:AppButtonStyles.Destructive}" Text="הסרת כל ההקלטות"
                                 Command="{Binding Packs.RemoveAllCommand}"
                                 AutomationId="RemoveAllRecitationButton"
-                                IsEnabled="{Binding Packs.CanRemove}"
-                                BackgroundColor="Transparent"
-                                BorderColor="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"
-                                BorderWidth="1"
-                                CornerRadius="8"
-                                TextColor="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}">
+                                IsEnabled="{Binding Packs.CanRemove}">
                             <Button.ImageSource>
                                 <FontImageSource FontFamily="FluentIcons"
                                                  Glyph="{x:Static fonts:FluentUI.delete_24_regular}"
-                                                 Color="{AppThemeBinding Light={StaticResource Error}, Dark={StaticResource ErrorDark}}"
+                                                 Color="{AppThemeBinding Light={x:Static controls:AppButtonStyles.DestructiveInkLight}, Dark={x:Static controls:AppButtonStyles.DestructiveInkDark}}"
                                                  Size="16"/>
                             </Button.ImageSource>
                         </Button>

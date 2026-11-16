@@ -192,16 +192,15 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
     private static Button PreviewAction(string text, string id, string glyph, EventHandler tapped)
     {
         var icon = new FontImageSource { Glyph = glyph, FontFamily = "FluentIcons", Size = 24 };
-        icon.SetAppThemeColor(FontImageSource.ColorProperty, Color.FromArgb("#1552AC"), Color.FromArgb("#AACBFF"));
+        icon.SetAppThemeColor(FontImageSource.ColorProperty, AppButtonStyles.InkLight, AppButtonStyles.InkDark);
         var button = new Button
         {
-            Text = text, AutomationId = id, FontSize = 14, FontAttributes = FontAttributes.Bold,
+            Text = text, AutomationId = id, Style = AppButtonStyles.Secondary, FontSize = 14, FontAttributes = FontAttributes.Bold,
             LineBreakMode = LineBreakMode.WordWrap,
-            CornerRadius = 19, Padding = new Thickness(4, 5), MinimumHeightRequest = 78,
+            Padding = new Thickness(4, 5), MinimumHeightRequest = 78,
             ContentLayout = new Button.ButtonContentLayout(Button.ButtonContentLayout.ImagePosition.Top, 3),
             ImageSource = icon
         };
-        button.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#192B45"), Color.FromArgb("#F5F7FB"));
         button.Clicked += tapped;
         return button;
     }
@@ -219,9 +218,7 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
         ApplyBadgeCount(ArticlesBadgeCount);
         foreach (var action in new[] { _previewText, _previewPerushim, _previewArticles })
         {
-            action.SetAppThemeColor(BackgroundColorProperty,
-                action == selected ? Color.FromArgb("#DEE7F7") : Color.FromArgb("#F5F7FB"),
-                action == selected ? Color.FromArgb("#314F78") : Color.FromArgb("#233956"));
+            action.Style = action == selected ? AppButtonStyles.Selected : AppButtonStyles.Secondary;
         }
         _previewPerushim.IsEnabled = !IsArticlesActive;
     }
