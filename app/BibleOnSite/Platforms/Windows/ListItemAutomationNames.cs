@@ -103,7 +103,7 @@ internal static class ListItemAutomationNames
 		args.Element.ClearValue(AutomationProperties.NameProperty);
 	}
 
-	private static void OnElementLoaded(object sender, RoutedEventArgs e)
+	private static void OnElementLoaded(object sender, RoutedEventArgs _)
 	{
 		if (sender is UIElement element)
 		{
@@ -111,7 +111,7 @@ internal static class ListItemAutomationNames
 		}
 	}
 
-	private static void OnRetryLayoutUpdated(object? sender, object e)
+	private static void OnRetryLayoutUpdated(object? sender, object _)
 	{
 		if (sender is UIElement element)
 		{
