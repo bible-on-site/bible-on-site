@@ -14,7 +14,7 @@ const adminHosts = new Set(["admin.xn--febl3a.co.il", "admin.xn--febl3a.com"]);
 const AWS_ACCOUNT = "250598594267", // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 	AWS_REGION = "il-central-1";
 const executeFile = promisify(execFile);
-export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v3";
+export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v4";
 const workerTasks = ["issue_implementation", "pr_resolution"];
 function parseJson(content, message) {
 	try {
@@ -403,6 +403,7 @@ export function createContributionWorker(
 		request = fetch,
 		getToken = workerTokenProvider(),
 		log = () => {},
+		now = () => performance.now(),
 		signal,
 	} = {},
 ) {
@@ -464,6 +465,7 @@ export function createContributionWorker(
 		log(
 			`${job.protocolVersion === 2 ? (job.task === "pr_resolution" ? "Resolving PR" : "Implementing issue") : "Generating issue"} ${job.issueId} with ${job.model || options.model}`,
 		);
+		let modelToRelease;
 		try {
 			if (job.protocolVersion === 2) {
 				if (
@@ -485,10 +487,21 @@ export function createContributionWorker(
 					bundle.version !== job.bundleVersion
 				)
 					throw new Error("Agent bundle version does not match the task");
-				const timeout = AbortSignal.timeout(MODEL_TIMEOUT),
+				const deadline = now() + MODEL_TIMEOUT,
+					timeout = AbortSignal.timeout(MODEL_TIMEOUT),
 					executionSignal = signal
 						? AbortSignal.any([signal, timeout])
 						: timeout;
+				const remainingBudget = () => {
+					executionSignal.throwIfAborted();
+					const remaining = Math.floor(deadline - now());
+					if (remaining <= 0)
+						throw new DOMException(
+							"The operation was aborted due to timeout",
+							"TimeoutError",
+						);
+					return Math.min(MODEL_TIMEOUT, remaining);
+				};
 				const messages = [
 					{ role: "system", content: nativeAgentSystem(bundle) },
 					{
@@ -511,16 +524,20 @@ export function createContributionWorker(
 				let schema = job.schema;
 				agentResultSchema(schema);
 				const infer = async (history, declaration) => {
-					executionSignal.throwIfAborted();
+					const remaining = remainingBudget();
+					modelToRelease = job.model || options.model;
 					const response = await request(new URL("/api/chat", options.ollama), {
 						method: "POST",
 						redirect: "error",
 						signal: executionSignal,
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify({
-							model: job.model || options.model,
+							model: modelToRelease,
 							stream: false,
-							keep_alive: 0,
+							// Reuse weights and prefix cache within this job. Ollama's
+							// idle TTL starts after each response, so it is only a
+							// bounded fallback; finally explicitly releases the model.
+							keep_alive: `${remaining}ms`,
 							think: false,
 							truncate: false,
 							shift: false,
@@ -532,7 +549,7 @@ export function createContributionWorker(
 					if (!response.ok)
 						throw new Error(`Local model returned HTTP ${response.status}`);
 					const body = await readJson(response, "Invalid local model response");
-					executionSignal.throwIfAborted();
+					remainingBudget();
 					return { body, message: nativeModelMessage(body, bundle) };
 				};
 				while (true) {
@@ -560,6 +577,7 @@ export function createContributionWorker(
 						);
 						if (!object(output))
 							throw new Error("Invalid local model response");
+						remainingBudget();
 						const result = await api(
 							"complete",
 							{
@@ -580,7 +598,7 @@ export function createContributionWorker(
 						};
 					}
 					for (const call of message.tool_calls) {
-						executionSignal.throwIfAborted();
+						remainingBudget();
 						const read = await api(
 							"context",
 							{
@@ -591,7 +609,7 @@ export function createContributionWorker(
 							},
 							executionSignal,
 						);
-						executionSignal.throwIfAborted();
+						remainingBudget();
 						if (!object(read) || !read.receipt || !Object.hasOwn(read, "data"))
 							throw new Error("Invalid agent context response");
 						agentResultSchema(read.schema);
@@ -647,6 +665,44 @@ export function createContributionWorker(
 				error instanceof Error ? error.message : "Local generation failed";
 			await api("fail", { ...identity, error: message.slice(0, 1000) });
 			return { status: "failed", issueId: job.issueId, error: message };
+		} finally {
+			if (modelToRelease !== undefined) {
+				let confirmed = false;
+				try {
+					const released = await request(new URL("/api/chat", options.ollama), {
+						method: "POST",
+						redirect: "error",
+						// Cleanup must also run after the shared inference signal
+						// aborts. This is the existing I/O bound, not more inference.
+						signal: AbortSignal.timeout(API_TIMEOUT),
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							model: modelToRelease,
+							messages: [],
+							stream: false,
+							keep_alive: 0,
+						}),
+					});
+					if (released.ok) {
+						const body = await readJson(
+							released,
+							"Invalid model release response",
+						);
+						confirmed = body?.done === true && body.done_reason === "unload";
+					}
+				} catch {
+					// Transport/parser details may contain private model content.
+				}
+				if (!confirmed) {
+					try {
+						log(
+							"Local model release was not confirmed; bounded residency may remain",
+						);
+					} catch {
+						// A broken log sink must also preserve the primary outcome.
+					}
+				}
+			}
 		}
 	};
 }

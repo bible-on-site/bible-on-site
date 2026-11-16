@@ -112,10 +112,13 @@ function agentFixture({
 	replies,
 	contexts = [],
 	intercept,
+	now,
+	onLog,
 	signal,
 } = {}) {
 	const calls = [],
 		models = [],
+		releases = [],
 		reads = [],
 		completed = [],
 		failed = [],
@@ -125,8 +128,15 @@ function agentFixture({
 		const target = String(url),
 			body = JSON.parse(request.body);
 		calls.push({ target, body, signal: request.signal });
+		const release =
+			target.endsWith("/api/chat") &&
+			body.keep_alive === 0 &&
+			Array.isArray(body.messages) &&
+			body.messages.length === 0;
+		if (release) releases.push({ body, signal: request.signal });
 		const custom = await intercept?.(target, body, request);
 		if (custom !== undefined) return custom;
+		if (release) return Response.json({ done: true, done_reason: "unload" });
 		if (target.endsWith("/claim"))
 			return Response.json({
 				...claim,
@@ -177,11 +187,16 @@ function agentFixture({
 	return {
 		run: createContributionWorker(options, {
 			request,
+			...(now ? { now } : {}),
 			signal,
-			log: (...args) => logs.push(args),
+			log: (...args) => {
+				logs.push(args);
+				onLog?.(...args);
+			},
 		}),
 		calls,
 		models,
+		releases,
 		reads,
 		completed,
 		failed,
@@ -325,12 +340,225 @@ test("native API five batches keep real tool history, ordered receipts and the f
 			num_predict: 4096,
 			num_ctx: 16384,
 		});
-		assert.equal(model.body.keep_alive, 0);
+		assert.match(model.body.keep_alive, /^\d+ms$/);
+		assert.ok(Number.parseInt(model.body.keep_alive, 10) <= 120000);
 		assert.equal(model.body.think, false);
 		assert.equal(model.body.truncate, false);
 		assert.equal(model.body.shift, false);
 	}
-	assert.equal(fixture.calls[0].body.runtimeVersion, "tanahpedia-worker-v3");
+	assert.equal(fixture.calls[0].body.runtimeVersion, "tanahpedia-worker-v4");
+});
+
+test("native residency reuses one original deadline, then releases the requested model after completion", async (t) => {
+	let clock = 1000;
+	const bounds = [],
+		originalTimeout = AbortSignal.timeout;
+	t.mock.method(AbortSignal, "timeout", (duration) => {
+		bounds.push(duration);
+		return originalTimeout(duration);
+	});
+	const fixture = agentFixture({
+		now: () => clock,
+		job: { model: "configured-model" },
+		replies: (_body, number) => {
+			clock += 20000;
+			return nativeReply(
+				number === 3 ? '{"outcome":"unchanged"}' : "Ready",
+				number === 1 ? [readCall()] : undefined,
+				{ model: "provider-reported-model" },
+			);
+		},
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.deepEqual(
+		fixture.models.map(({ body }) => body.keep_alive),
+		["120000ms", "100000ms", "80000ms"],
+	);
+	assert.equal(new Set(fixture.models.map(({ signal }) => signal)).size, 1);
+	assert.equal(bounds.filter((duration) => duration === 120000).length, 1);
+	assert.ok(bounds.every((duration) => [30000, 120000].includes(duration)));
+	assert.equal(fixture.models.length, 3);
+	assert.equal(fixture.releases.length, 1);
+	assert.deepEqual(fixture.releases[0].body, {
+		model: "configured-model",
+		messages: [],
+		stream: false,
+		keep_alive: 0,
+	});
+	assert.notEqual(fixture.releases[0].signal, fixture.models[0].signal);
+	assert.equal(fixture.releases[0].signal.aborted, false);
+	assert.ok(fixture.calls.at(-2).target.endsWith("/complete"));
+	assert.ok(fixture.calls.at(-1).target.endsWith("/api/chat"));
+	assert.equal(fixture.completed[0].model, "provider-reported-model");
+});
+
+test("the original deadline prevents another generation even before its timer can run", async () => {
+	let clock = 0;
+	const fixture = agentFixture({
+		now: () => clock,
+		replies: () => {
+			clock = 120001;
+			return nativeReply("", [readCall()]);
+		},
+	});
+	assert.match((await fixture.run()).error, /aborted due to timeout/);
+	assert.equal(fixture.models.length, 1);
+	assert.equal(fixture.completed.length, 0);
+	assert.equal(fixture.failed.length, 1);
+	assert.equal(fixture.releases.length, 1);
+	assert.ok(fixture.calls.at(-2).target.endsWith("/fail"));
+});
+
+test("a final response after the monotonic deadline never reaches completion", async () => {
+	let clock = 0;
+	const fixture = agentFixture({
+		now: () => clock,
+		replies: (body) => {
+			if (body.format) clock = 120001;
+			return nativeReply(body.format ? '{"outcome":"unchanged"}' : "Ready");
+		},
+	});
+	assert.match((await fixture.run()).error, /aborted due to timeout/);
+	assert.equal(fixture.models.length, 2);
+	assert.equal(fixture.completed.length, 0);
+	assert.equal(fixture.failed.length, 1);
+	assert.equal(fixture.releases.length, 1);
+});
+
+test("a context read consuming the original deadline prevents later batch reads", async () => {
+	let clock = 0;
+	const fixture = agentFixture({
+		now: () => clock,
+		replies: [
+			nativeReply("", [readCall(), readCall("discussion", {}, "read-2")]),
+		],
+		intercept: (target) => {
+			if (target.endsWith("/context")) clock = 120001;
+		},
+	});
+	assert.match((await fixture.run()).error, /aborted due to timeout/);
+	assert.equal(fixture.models.length, 1);
+	assert.equal(fixture.reads.length, 1);
+	assert.equal(fixture.completed.length, 0);
+	assert.equal(fixture.failed.length, 1);
+	assert.equal(fixture.releases.length, 1);
+});
+
+test("native abort releases after failure acknowledgement with an independent cleanup signal", async () => {
+	const controller = new AbortController();
+	const fixture = agentFixture({
+		signal: controller.signal,
+		replies: (_body, _number, request) => {
+			controller.abort(new Error("Original cancellation"));
+			request.signal.throwIfAborted();
+		},
+	});
+	assert.equal((await fixture.run()).error, "Original cancellation");
+	assert.equal(fixture.models.length, 1);
+	assert.equal(fixture.models[0].signal.aborted, true);
+	assert.equal(fixture.releases.length, 1);
+	assert.equal(fixture.releases[0].signal.aborted, false);
+	assert.notEqual(fixture.releases[0].signal, controller.signal);
+	assert.ok(fixture.calls.at(-2).target.endsWith("/fail"));
+});
+
+test("model release waits for completion or failure acknowledgement", async () => {
+	for (const failed of [false, true]) {
+		let acknowledge, entered;
+		const waiting = new Promise((resolve) => {
+			entered = resolve;
+		});
+		const fixture = agentFixture({
+			...(failed
+				? {
+						replies: () => {
+							throw new Error("Model unavailable");
+						},
+					}
+				: {}),
+			intercept: async (target) => {
+				if (!target.endsWith(failed ? "/fail" : "/complete")) return;
+				entered();
+				await new Promise((resolve) => {
+					acknowledge = resolve;
+				});
+				return Response.json({ prIds: [] });
+			},
+		});
+		const pending = fixture.run();
+		await waiting;
+		assert.equal(fixture.releases.length, 0);
+		acknowledge();
+		assert.equal((await pending).status, failed ? "failed" : "completed");
+		assert.equal(fixture.releases.length, 1);
+	}
+});
+
+test("cleanup failures are private warnings and preserve completed or failed job outcomes", async () => {
+	const marker = "private_release_marker";
+	for (const primaryFailure of [false, true]) {
+		for (const cleanupFailure of [
+			"transport",
+			"http",
+			"json",
+			"wrong-response",
+			"log-sink",
+		]) {
+			const fixture = agentFixture({
+				onLog: (message) => {
+					if (
+						cleanupFailure === "log-sink" &&
+						message.startsWith("Local model release")
+					)
+						throw new Error(marker);
+				},
+				replies: (body) => {
+					if (primaryFailure) throw new Error("Original model failure");
+					return nativeReply(body.format ? '{"outcome":"unchanged"}' : "Ready");
+				},
+				intercept: (target, body) => {
+					if (!target.endsWith("/api/chat") || body.keep_alive !== 0) return;
+					if (cleanupFailure === "transport") throw new Error(marker);
+					if (cleanupFailure === "http")
+						return new Response(marker, { status: 503 });
+					if (cleanupFailure === "json") return new Response(marker);
+					return Response.json({ done: true, done_reason: marker });
+				},
+			});
+			const result = await fixture.run();
+			assert.equal(result.status, primaryFailure ? "failed" : "completed");
+			assert.equal(
+				result.error,
+				primaryFailure ? "Original model failure" : undefined,
+			);
+			assert.equal(fixture.releases.length, 1);
+			assert.equal(fixture.failed.length, primaryFailure ? 1 : 0);
+			assert.equal(fixture.completed.length, primaryFailure ? 0 : 1);
+			assert.equal(
+				fixture.logs.at(-1)[0],
+				"Local model release was not confirmed; bounded residency may remain",
+			);
+			assert.ok(!inspect({ result, logs: fixture.logs }).includes(marker));
+		}
+	}
+});
+
+test("idle work and failures before model dispatch never unload a model", async () => {
+	for (const job of [null, { schema: {} }, { user: "malformed-json" }]) {
+		const fixture = agentFixture({
+			...(job
+				? { job }
+				: {
+						intercept: (target) =>
+							target.endsWith("/claim")
+								? new Response(null, { status: 204 })
+								: undefined,
+					}),
+		});
+		assert.equal((await fixture.run()).status, job ? "failed" : "idle");
+		assert.equal(fixture.models.length, 0);
+		assert.equal(fixture.releases.length, 0);
+	}
 });
 
 test("native PR resolution retains fresh comments, same-PR identity and only immutable bundle caching", async () => {
@@ -766,6 +994,7 @@ test("real CLI preserves native tool history, typed final format and private evi
 		bundle,
 		job: {
 			...claim,
+			model: "configured-cli-model",
 			user: JSON.stringify({ evidence: marker }),
 			protocolVersion: 2,
 			task: "pr_resolution",
@@ -779,21 +1008,26 @@ test("real CLI preserves native tool history, typed final format and private evi
 	};
 	const bootstrap = `data:text/javascript,${encodeURIComponent(`
 const fixture = JSON.parse(process.env.CONTRIBUTION_NATIVE_CLI_FIXTURE);
-let models = 0;
+let models = 0, completed = false;
 globalThis.fetch = async (url, request) => {
   const path = new URL(url).pathname, body = JSON.parse(request.body);
   if (path.endsWith('/claim')) return Response.json(fixture.job);
   if (path.endsWith('/bundle')) return Response.json(fixture.bundle);
   if (path.endsWith('/context')) return Response.json({receipt:fixture.receipt,data:{text:fixture.marker},schema:fixture.job.schema});
   if (path.endsWith('/api/chat')) {
+    if (body.keep_alive === 0 && body.messages.length === 0) {
+      if (!completed || body.model !== 'configured-cli-model' || body.tools || body.format) throw Error('Invalid model release');
+      console.log('native_release_verified'); return Response.json({done:true,done_reason:'unload'});
+    }
     models++;
+    if (!/^[1-9][0-9]*ms$/.test(body.keep_alive) || Number.parseInt(body.keep_alive,10)>120000) throw Error('Invalid model residency');
     if (models===2 && (body.messages.at(-1).role!=='tool' || !body.messages.at(-1).content.includes(fixture.marker))) throw Error('Native history was lost');
     if (models===3 && (body.tools || JSON.stringify(body.format)!==JSON.stringify(fixture.job.schema.oneOf[0].properties.result))) throw Error('Typed format was changed');
-    return Response.json({done:true,done_reason:'stop',prompt_eval_count:100,message:{role:'assistant',content:models===1?'':models===2?'Ready':JSON.stringify(fixture.result),...(models===1?{tool_calls:[{id:'one',function:{name:'discussion',arguments:{}}}]}:{})}});
+    return Response.json({done:true,done_reason:'stop',prompt_eval_count:100,model:'untrusted-provider-model',message:{role:'assistant',content:models===1?'':models===2?'Ready':JSON.stringify(fixture.result),...(models===1?{tool_calls:[{id:'one',function:{name:'discussion',arguments:{}}}]}:{})}});
   }
   if (path.endsWith('/complete')) {
     if(models!==3 || body.receipts.length!==1 || JSON.parse(body.content).outcome!=='unchanged') throw Error('Invalid native completion');
-    console.log('native_fixture_verified');return Response.json({prIds:[]});
+    completed = true;console.log('native_fixture_verified');return Response.json({prIds:[]});
   }
   if (path.endsWith('/fail')) return Response.json({updated:true});
   throw Error('Unexpected CLI fixture route');
@@ -818,6 +1052,7 @@ globalThis.fetch = async (url, request) => {
 		},
 	);
 	assert.match(stdout, /native_fixture_verified/);
+	assert.match(stdout, /native_release_verified/);
 	assert.match(stdout, /completed/);
 	assert.ok(!`${stdout}${stderr}`.includes(marker));
 });
