@@ -3,10 +3,10 @@ import {
 	getPerushMetric,
 	getPerushMetricsByPerekId,
 	getPerushMetricsByPerekIds,
-	isReadingMetricsSchemaMissing,
 	metricOrFallback,
 } from "../reading-metrics";
 import type { ReadingMetric } from "../reading-metrics";
+import { isMissingMysqlSchema } from "../mysql-errors";
 import type { ScriptureRange } from "../reading/contract";
 import {
 	groupedSliceSelects,
@@ -425,7 +425,7 @@ export async function getPerushNotesForRanges(
 				selectParams,
 			);
 		} catch (error) {
-			if (!isReadingMetricsSchemaMissing(error)) throw error;
+			if (!isMissingMysqlSchema(error)) throw error;
 			rows = await query<RangedNoteRow>(
 				`SELECT n.perek_id, n.pasuk, n.note_idx, n.note_content
 				 FROM note n

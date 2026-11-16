@@ -154,6 +154,9 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 ExitFullscreenButton = ExitFullScreenButton,
                 ArticlesView = ArticlesCollection,
                 ReaderContent = ParashaCarousel,
+                // The ⋮ menu follows the articles/text swap — articles show
+                // only הסתר שם השם (#3401).
+                MenuPanel = ReaderMenuOverlay,
                 // This reader has no reading-position indicator yet.
                 ReadingProgressIndicator = null,
                 Toolbar = ReaderToolbar,
@@ -171,6 +174,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
                 CurrentUnitId = () => _viewModel.UnitId,
                 NavigateToUnitAsync = unitId => _viewModel.NavigateToUnitAsync(unitId),
                 FullscreenStateChanged = OnReaderFullscreenStateChanged,
+                ArticlesVisibilityChanged = _ => SetAnalyticsScreenForUnit(),
             });
     }
 
@@ -701,11 +705,11 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
     #region Analytics
 
     /// <summary>
-    /// The reader reports its own logical screen (ParashaAlHaperek/{unitId}) from
-    /// page lifecycle and carousel swipes — transitions a Shell-level
-    /// screen_view would double-count — so the Shell report is suppressed.
+    /// The reader reports its own logical screen from page lifecycle and
+    /// carousel swipes — transitions a Shell-level screen_view would
+    /// double-count — so the Shell report is suppressed.
     /// </summary>
-    public string? AnalyticsScreenName => null;
+    public AnalyticsScreen? AnalyticsScreen => null;
 
     protected override void OnNavigatedTo(NavigatedToEventArgs args)
     {
@@ -722,11 +726,23 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
         base.OnNavigatedFrom(args);
     }
 
-    /// <summary>Logs current parasha screen to analytics (legacy-style: ParashaAlHaperek/{unitId}).</summary>
+    /// <summary>
+    /// Emits the visible surface's screen_view once the parasha resolves
+    /// (#3378): the reader itself (ParashaAlHaperek/{id} + parasha title) or,
+    /// while the articles view is up, its parasha-scoped list. A pre-load
+    /// NavigatedTo with id 0 never emits — the post-load call owns the
+    /// initial visit.
+    /// </summary>
     private void SetAnalyticsScreenForUnit()
     {
-        var analytics = Microsoft.Maui.Controls.Application.Current?.Handler?.MauiContext?.Services.GetService<IAnalyticsService>();
-        analytics?.SetScreen($"ParashaAlHaperek/{_viewModel.UnitId}", "ParashaPage");
+        if (_viewModel.UnitId <= 0)
+        {
+            return;
+        }
+        AnalyticsScreens.Report(_chrome.IsShowingArticles
+            ? AnalyticsScreens.ForArticlesList("ReaderArticles", ArticlesListScope.Parasha,
+                _viewModel.UnitId, _viewModel.Title)
+            : AnalyticsScreens.ForParasha(_viewModel.UnitId, _viewModel.Title));
     }
 
     /// <summary>

@@ -8,6 +8,8 @@
  * a plain exported function that touches ./db would ship mysql2 into the
  * browser bundle and crash at module init.
  */
+import { isMysqlSchemaMissing } from "./mysql-errors";
+
 export interface CoveringSource {
 	perek_id: number;
 	pasuk: number;
@@ -21,14 +23,10 @@ export interface CoveringSource {
  * degrade on; anything else is a real failure.
  */
 export function isCoveringSourceSchemaMissing(error: unknown): boolean {
-	if (typeof error !== "object" || error === null) return false;
-	const { code, errno } = error as { code?: unknown; errno?: unknown };
-	return (
-		code === "ER_BAD_FIELD_ERROR" ||
-		code === "ER_NO_SUCH_TABLE" ||
-		errno === 1054 ||
-		errno === 1146
-	);
+	return isMysqlSchemaMissing(error, {
+		codes: ["ER_BAD_FIELD_ERROR", "ER_NO_SUCH_TABLE"],
+		errnos: [1054, 1146],
+	});
 }
 
 /**

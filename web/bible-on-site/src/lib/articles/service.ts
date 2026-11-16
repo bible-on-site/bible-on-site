@@ -186,14 +186,6 @@ export async function getArticleSummariesByPerekIds(
 }
 
 /**
- * Whether a query rejection means the covering-source schema (#2189)
- * is not deployed yet — the missing `coverage_verified` column or the
- * missing `tanah_article_covering_source` table. Anything else is a
- * real failure.
- */
-const isCoveringSourceSchemaMissing = isMissingMysqlSchema;
-
-/**
  * Fetch article summaries whose scripture coverage overlaps the given
  * canonical ranges — the shared unit->article path for the reading
  * divisions (מסורה units, פרשה ranges, ordered multi-range Haftarah
@@ -267,7 +259,7 @@ export async function getArticleSummariesForRanges(
 			...covering.params,
 			...coveringRank.params,
 		]).catch((error: unknown) => {
-			if (!isCoveringSourceSchemaMissing(error)) throw error;
+			if (!isMissingMysqlSchema(error)) throw error;
 			console.warn(
 				"Article covering-source schema is not deployed yet; " +
 					"matching articles by primary perek until the migration runs.",
@@ -340,7 +332,7 @@ export async function getArticleSummariesForRangeGroups(
 			coveringSourceSql,
 			slicesTable.params,
 		).catch((error: unknown) => {
-			if (!isCoveringSourceSchemaMissing(error)) throw error;
+			if (!isMissingMysqlSchema(error)) throw error;
 			console.warn(
 				"Article covering-source schema is not deployed yet; " +
 					"matching articles by primary perek until the migration runs.",

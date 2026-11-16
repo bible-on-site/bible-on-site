@@ -32,6 +32,12 @@ export function localAssetEnvironment(env = process.env) {
 	};
 }
 
+/** RustFS uses its default region independently of the source AWS bucket. */
+export function assetBucketCreateArgs({ bucket, region, endpoint }) {
+	return ["s3", "mb", `s3://${bucket}`, "--region", endpoint ? "us-east-1" : region,
+		...(endpoint ? ["--endpoint-url", endpoint] : [])];
+}
+
 /** Keep the download cache outside checkouts so worktrees reuse unchanged bytes. */
 export function assetMirrorDirectory(bucket, region, root = path.join(homedir(), ".cache", "bible-on-site", "s3-mirrors")) {
 	if (!validBucket(bucket)) {
@@ -67,7 +73,7 @@ export function syncLocalAssetMirror(
 		execute(["s3", "sync", `s3://${sourceBucket}`, directory, "--delete", "--region", region, "--no-progress", "--only-show-errors"], env, "Production asset download");
 		// Hold the lock until upload completes, so another worktree cannot change
 		// the mirror while RustFS is reading it. Never erase it after a sync.
-		execute(["s3", "sync", directory, `s3://${targetBucket}`, "--delete", "--endpoint-url", target.origin, "--region", region, "--no-progress", "--only-show-errors"], localAssetEnvironment(env), "Local asset upload");
+		execute(["s3", "sync", directory, `s3://${targetBucket}`, "--delete", "--endpoint-url", target.origin, "--region", "us-east-1", "--no-progress", "--only-show-errors"], localAssetEnvironment(env), "Local asset upload");
 		return directory;
 	} finally {
 		// Empty-directory removal only; cached files are deliberately retained.

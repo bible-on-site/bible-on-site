@@ -23,15 +23,8 @@ public static class ParashaUnitText
         unit.AllRanges().SelectMany(range => MasoraUnitText.PerekSlicesForRange(range)).ToList();
 
     /// <summary>Distinct perek ids the unit's readings overlap, in first-appearance order.</summary>
-    public static List<int> PerekIdsForUnit(ParashaUnit unit)
-    {
-        var seen = new HashSet<int>();
-        foreach (var slice in PerekSlicesForUnit(unit))
-        {
-            seen.Add(slice.PerekId);
-        }
-        return seen.ToList();
-    }
+    public static List<int> PerekIdsForUnit(ParashaUnit unit) =>
+        PerekSlicesForUnit(unit).Select(slice => slice.PerekId).Distinct().ToList();
 
     /// <summary>
     /// Builds the display rows for a unit: a "תורה" section header followed

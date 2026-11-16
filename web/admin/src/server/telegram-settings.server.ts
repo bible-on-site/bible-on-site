@@ -7,6 +7,7 @@ import type {
 	TelegramSettings,
 	TelegramTargetView,
 } from "~/lib/bulletin-telegram";
+import { loadBulletinQueue } from "./bulletin-queue.server";
 import { queryOne, transaction, txExecute, txQueryOne } from "./db";
 import {
 	TelegramClient,
@@ -48,32 +49,7 @@ export function loadTelegramRuntime(): TelegramRuntime | null {
 	const testChatId = chatId(test);
 	const realChatId = real ? chatId(real) : null;
 	if (realChatId === testChatId) throw new Error(CONFIG_ERROR);
-	const region =
-		process.env.BULLETIN_SES_REGION || process.env.AWS_REGION || "il-central-1";
-	const account = process.env.BULLETIN_SES_ACCOUNT_ID;
-	const queueUrl = process.env.BULLETIN_EMAIL_QUEUE_URL?.trim();
-	if (!account || !/^[0-9]{12}$/.test(account) || !queueUrl)
-		throw new Error(CONFIG_ERROR);
-	let url: URL;
-	try {
-		url = new URL(queueUrl);
-	} catch {
-		throw new Error(CONFIG_ERROR);
-	}
-	const queuePath = url.pathname.split("/");
-	if (
-		url.protocol !== "https:" ||
-		url.hostname !== `sqs.${region}.amazonaws.com` ||
-		url.port ||
-		url.search ||
-		url.hash ||
-		url.username ||
-		url.password ||
-		queuePath.length !== 3 ||
-		queuePath[1] !== account ||
-		!/^[A-Za-z0-9_-]+$/.test(queuePath[2] ?? "")
-	)
-		throw new Error(CONFIG_ERROR);
+	const { queueUrl, region } = loadBulletinQueue(CONFIG_ERROR);
 	return {
 		token,
 		expectedBotUsername,
