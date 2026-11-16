@@ -125,6 +125,16 @@ public class AppButtonStyleContractTests
             "the active state swaps the shared style instead of overriding the palette");
     }
 
+    [Fact]
+    public void ReaderBottomBar_active_articles_keeps_the_compact_icon_face()
+    {
+        var code = File.ReadAllText(Path.Join(AppRoot, "Controls", "ReaderBottomBar.xaml.cs"));
+
+        code.Should().Contain("AppButtonStyles.CompactIconSelected",
+            "the active articles icon must keep its FluentIcons glyph and 44dp target — " +
+            "the text Selected variant carries OpenSansRegular and the 48dp floor");
+    }
+
     [Theory]
     [InlineData("PerekPickerPopup.xaml")]
     [InlineData("ParashaUnitPickerPopup.xaml")]

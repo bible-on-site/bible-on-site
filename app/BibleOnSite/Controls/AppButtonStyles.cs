@@ -45,7 +45,7 @@ public static class AppButtonStyles
             button.RemoveBinding(property);
             button.ClearValue(property);
         }
-        if (style == Icon || style == CompactIcon)
+        if (style == Icon || style == CompactIcon || style == CompactIconSelected)
         {
             button.ClearValue(VisualElement.WidthRequestProperty);
             button.ClearValue(VisualElement.HeightRequestProperty);
@@ -92,7 +92,8 @@ public static class AppButtonStyles
 
     public static Style CompactIcon { get; } = CreateCompactIcon();
     public static Style ToolbarTitle { get; } = CreateToolbarTitle();
-    public static Style Selected { get; } = CreateSelected();
+    public static Style Selected { get; } = CreateSelected(Secondary);
+    public static Style CompactIconSelected { get; } = CreateSelected(CompactIcon);
 
     private static Style CreateToolbarTitle()
     {
@@ -114,9 +115,9 @@ public static class AppButtonStyles
         return style;
     }
 
-    private static Style CreateSelected()
+    private static Style CreateSelected(Style basedOn)
     {
-        var style = new Style(typeof(Button)) { BasedOn = Secondary };
+        var style = new Style(typeof(Button)) { BasedOn = basedOn };
         style.Setters.Add(new Setter { Property = PaletteProperty,
             Value = new Palette((SurfaceLight, SurfaceDark), (InkLight, InkDark), (InkLight, InkDark)) });
         style.Setters.Add(new Setter { Property = Button.BorderWidthProperty, Value = 2d });

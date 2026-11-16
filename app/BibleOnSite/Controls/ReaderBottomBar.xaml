@@ -70,8 +70,6 @@
                     Style="{x:Static controls:AppButtonStyles.CompactIcon}"
                     Text="{x:Static fonts:FluentUI.document_24_regular}"
                     FontSize="20"
-                    MinimumHeightRequest="44"
-                    MinimumWidthRequest="44"
                     Clicked="OnArticlesButtonClicked"
                     HorizontalOptions="Center"/>
             <Border x:Name="ArticlesBadge"

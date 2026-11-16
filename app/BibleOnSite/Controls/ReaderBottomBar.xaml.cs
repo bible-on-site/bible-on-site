@@ -117,9 +117,10 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
     {
         ApplyPreviewDockState();
         PerushimChevronButton.IsEnabled = !isActive;
-        // The shared Selected face marks the active articles action the same
-        // way the preview dock marks its selected action — no palette override.
-        ArticlesButton.Style = isActive ? AppButtonStyles.Selected : AppButtonStyles.CompactIcon;
+        // The shared selected face marks the active articles action the same
+        // way the preview dock marks its selected action — CompactIconSelected
+        // keeps the FluentIcons glyph and 44dp target that Selected would drop.
+        ArticlesButton.Style = isActive ? AppButtonStyles.CompactIconSelected : AppButtonStyles.CompactIcon;
     }
 
     private void ConfigurePreviewDock()
