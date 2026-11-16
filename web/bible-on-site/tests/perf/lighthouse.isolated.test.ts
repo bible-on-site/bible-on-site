@@ -12,6 +12,7 @@ import lighthouse, {
 import { pageFunctions } from "lighthouse/core/lib/page-functions.js";
 import { lighthouseCpuProfile } from "../../scripts/lighthouse-cpu-profile.mjs";
 import { largestObservedTopLevelTask } from "../../scripts/lighthouse-observed-task.mjs";
+import { warmUpAuditTarget } from "../../scripts/lighthouse-warmup.mjs";
 import {
 	lighthouseBenchmarkEntry,
 	lighthouseBenchmarkName,
@@ -127,9 +128,10 @@ const test = base.extend<
 							pageFunctions.computeBenchmarkIndex,
 						);
 
-						// Warm up the page
-						await page.goto(url, { waitUntil: "networkidle" });
-						await page.close();
+						// Warm up the page; about:blank before close keeps the
+						// warmed document's deferred teardown out of the audited
+						// navigation's trace (issue #3163).
+						await warmUpAuditTarget(page, url);
 
 						// Run Lighthouse
 						const audit = await runLighthouseAudit(
