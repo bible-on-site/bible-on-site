@@ -6,18 +6,28 @@ import { homedir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { iosBootDiagnosticOutput, startIosResourceSampler, withIosResourceSampler } from "./ios-boot-diagnostics.mjs";
 
 const executeFile = promisify(execFile);
-export function executeIosCommand(command, args, { input, ...options } = {}) {
+export function executeIosCommand(command, args, { input, onOutput, ...options } = {}) {
   const pending = executeFile(command, args, options);
-  let inputError;
+  let inputError, outputError;
+  if (onOutput) for (const [stream, pipe] of [["stdout", pending.child.stdout], ["stderr", pending.child.stderr]]) {
+    pipe.on("data", chunk => {
+      try { onOutput(stream, chunk); } catch (error) { outputError ??= error; }
+    });
+  }
   // A child that rejects its arguments may exit before consuming stdin.
   // Retain its exit code/stderr rather than crashing on an unhandled EPIPE.
   pending.child.stdin.on("error", error => { inputError = error; });
   pending.child.stdin.end(input);
   return pending.then(result => {
     if (inputError) throw new Error("Could not deliver the complete iOS command input.", { cause: inputError });
+    if (outputError) throw new Error("Could not retain iOS command diagnostics.", { cause: outputError });
     return result;
+  }, failure => {
+    if (outputError) throw new AggregateError([failure, outputError], "iOS command and output retention failed.");
+    throw failure;
   });
 }
 const bundleId = "com.tanah.daily929";
@@ -138,7 +148,7 @@ export async function prepareIosApp({
   appPath, udid, nonce, keepData = false, deadlineMs,
   execute = executeIosCommand, now = Date.now, platform = process.platform,
   devicesRoot = join(homedir(), "Library/Developer/CoreSimulator/Devices"),
-  reserveTransition, confirmReady, report = () => {},
+  reserveTransition, confirmReady, report = () => {}, bootOutput, startResources,
 }) {
   const started = now();
   if (platform !== "darwin") throw new Error("iOS installation requires macOS.");
@@ -171,6 +181,7 @@ export async function prepareIosApp({
       result = await execute(command, args, {
         ...options, timeout: Math.max(1, Math.floor(deadlineMs - now())), killSignal: "SIGKILL",
         maxBuffer: 8 * 1024 * 1024, encoding: "utf8", windowsHide: true,
+        ...(command === "xcrun" && args[0] === "simctl" && args[1] === "bootstatus" ? { onOutput: bootOutput } : {}),
       });
     } catch (error) { commandFailure = error; }
     try {
@@ -211,59 +222,63 @@ export async function prepareIosApp({
   const identity = { udid, nonce, bundleId, bundleSha256: expectedDigest, deadlineMs };
   const reservation = await reserveTransition({ ...identity, state: initial.state });
   checkDeadline();
-  const bootStarted = now();
-  if (initial.state !== "Booted") {
-    if (reservation.transitionAllowed !== true) throw new Error("The run already claimed its normal iOS boot; later readiness loss is fatal.");
-    if (initial.state === "Shutdown") await run("xcrun", ["simctl", "boot", udid]);
-    await run("xcrun", ["simctl", "bootstatus", udid]);
-    const current = await currentDevice();
-    if (current.state !== "Booted") throw new Error(`Normal iOS boot did not establish readiness: ${JSON.stringify(current)}`);
-  }
-  const bootMs = now() - bootStarted;
-  const installedApps = async () => {
-    const listing = await run("xcrun", ["simctl", "listapps", udid]);
-    return JSON.parse(await run("plutil", ["-convert", "json", "-o", "-", "-"], { input: listing }));
-  };
-  if (Object.hasOwn(await installedApps(), bundleId)) {
-    if (keepData) {
-      // simctl reports an exact error when this app is already stopped.
-      // Any other failure leaves process ownership uncertain and is fatal.
-      try { await run("xcrun", ["simctl", "terminate", udid, bundleId]); }
-      catch (error) {
-        const report = String(error.stderr ?? "");
-        if (error.code !== 3 || !report.includes("domain=NSPOSIXErrorDomain, code=3") ||
-            !report.includes("found nothing to terminate")) throw error;
-        checkDeadline();
-      }
-    } else {
-      await run("xcrun", ["simctl", "uninstall", udid, bundleId]);
-      if (Object.hasOwn(await installedApps(), bundleId)) throw new Error("iOS reset left the AUT installed.");
+  const receipt = await withIosResourceSampler(async () => {
+    const bootStarted = now();
+    if (initial.state !== "Booted") {
+      if (reservation.transitionAllowed !== true) throw new Error("The run already claimed its normal iOS boot; later readiness loss is fatal.");
+      if (initial.state === "Shutdown") await run("xcrun", ["simctl", "boot", udid]);
+      await run("xcrun", ["simctl", "bootstatus", udid]);
+      const current = await currentDevice();
+      if (current.state !== "Booted") throw new Error(`Normal iOS boot did not establish readiness: ${JSON.stringify(current)}`);
     }
-  }
-  const installStarted = now();
-  await run("xcrun", ["simctl", "install", udid, appPath]);
-  const installMs = now() - installStarted;
-  if (!Object.hasOwn(await installedApps(), bundleId)) throw new Error("iOS install did not register the AUT.");
-  const installedPath = (await run("xcrun", ["simctl", "get_app_container", udid, bundleId, "app"])).trim();
-  const containerRoot = join(await realpath(devicesRoot), udid, "data/Containers/Bundle/Application");
-  const installedRealPath = await realpath(installedPath);
-  const parts = relative(containerRoot, installedRealPath).split(sep);
-  if (!isAbsolute(installedPath) || installedRealPath === appPath || parts.length !== 2 ||
-      !uuid.test(parts[0]) || parts[1] !== "BibleOnSite.app") {
-    throw new Error("iOS install did not identify this simulator's exact AUT container.");
-  }
-  if (await bundleDigest(installedPath, checkDeadline) !== expectedDigest ||
-      await bundleDigest(appPath, checkDeadline) !== expectedDigest) {
-    throw new Error("Installed iOS AUT bytes differ from the exact input bundle.");
-  }
-  // A persisted Booted plist is not a current SimLaunchHost session. This
-  // single owned-device probe is immediately before reader attachment/launch.
-  await run("xcrun", ["simctl", "spawn", udid, "launchctl", "list"]);
-  await confirmReady({ ...identity, state: "Booted" });
+    const bootMs = now() - bootStarted;
+    const installedApps = async () => {
+      const listing = await run("xcrun", ["simctl", "listapps", udid]);
+      return JSON.parse(await run("plutil", ["-convert", "json", "-o", "-", "-"], { input: listing }));
+    };
+    if (Object.hasOwn(await installedApps(), bundleId)) {
+      if (keepData) {
+        // simctl reports an exact error when this app is already stopped.
+        // Any other failure leaves process ownership uncertain and is fatal.
+        try { await run("xcrun", ["simctl", "terminate", udid, bundleId]); }
+        catch (error) {
+          const report = String(error.stderr ?? "");
+          if (error.code !== 3 || !report.includes("domain=NSPOSIXErrorDomain, code=3") ||
+              !report.includes("found nothing to terminate")) throw error;
+          checkDeadline();
+        }
+      } else {
+        await run("xcrun", ["simctl", "uninstall", udid, bundleId]);
+        if (Object.hasOwn(await installedApps(), bundleId)) throw new Error("iOS reset left the AUT installed.");
+      }
+    }
+    const installStarted = now();
+    await run("xcrun", ["simctl", "install", udid, appPath]);
+    const installMs = now() - installStarted;
+    if (!Object.hasOwn(await installedApps(), bundleId)) throw new Error("iOS install did not register the AUT.");
+    const installedPath = (await run("xcrun", ["simctl", "get_app_container", udid, bundleId, "app"])).trim();
+    const containerRoot = join(await realpath(devicesRoot), udid, "data/Containers/Bundle/Application");
+    const installedRealPath = await realpath(installedPath);
+    const parts = relative(containerRoot, installedRealPath).split(sep);
+    if (!isAbsolute(installedPath) || installedRealPath === appPath || parts.length !== 2 ||
+        !uuid.test(parts[0]) || parts[1] !== "BibleOnSite.app") {
+      throw new Error("iOS install did not identify this simulator's exact AUT container.");
+    }
+    if (await bundleDigest(installedPath, checkDeadline) !== expectedDigest ||
+        await bundleDigest(appPath, checkDeadline) !== expectedDigest) {
+      throw new Error("Installed iOS AUT bytes differ from the exact input bundle.");
+    }
+    // A persisted Booted plist is not a current SimLaunchHost session. This
+    // single owned-device probe is immediately before reader attachment/launch.
+    await run("xcrun", ["simctl", "spawn", udid, "launchctl", "list"]);
+    await confirmReady({ ...identity, state: "Booted" });
+    checkDeadline();
+    return { kind: "ios-verified-install/1", udid, appPath: requestedAppPath, canonicalAppPath: appPath, nonce,
+      bundleId, bundleSha256: expectedDigest, keepData, installMs, preparationMs: now() - started,
+      bootMs, initialState: initial.state, observerAcknowledged: true };
+  }, startResources);
   checkDeadline();
-  return { kind: "ios-verified-install/1", udid, appPath: requestedAppPath, canonicalAppPath: appPath, nonce,
-    bundleId, bundleSha256: expectedDigest, keepData, installMs, preparationMs: now() - started,
-    bootMs, initialState: initial.state, observerAcknowledged: true };
+  return { ...receipt, preparationMs: now() - started };
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -272,10 +287,13 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   await verifyNodeInterpreter(expectedNode);
   const artifacts = process.env.MOBILE_E2E_ARTIFACTS;
   if (!artifacts || !isAbsolute(artifacts)) throw new Error("An absolute parent-owned iOS artifact directory is required.");
+  const diagnostics = iosBootDiagnosticOutput({ udid, nonce, deadlineMs: Number(deadline) });
   console.log(JSON.stringify(await prepareIosApp({ appPath, udid, nonce,
     keepData: keep === "keep", deadlineMs: Number(deadline),
     reserveTransition: identity => requestIosPreparation("reserve", identity),
     confirmReady: identity => requestIosPreparation("ready", identity),
+    bootOutput: diagnostics.bootstatus,
+    startResources: () => startIosResourceSampler(diagnostics["host-resources"], { deadlineMs: Number(deadline) }),
     report: event => appendFileSync(join(artifacts, "ios-preparation-commands.jsonl"),
       `${JSON.stringify({ kind: "ios-preparation-command/1", at: new Date().toISOString(), pid: process.pid, udid, nonce, ...event })}\n`),
   })));

@@ -5,6 +5,7 @@ import { delimiter, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { bundleDigest, executeIosCommand, iosNodeEnvironment, prepareIosApp, verifyNodeInterpreter } from "./ios-install.mjs";
+import { iosBootDiagnosticOutput } from "./ios-boot-diagnostics.mjs";
 
 const udid = "4AD2086B-7B8F-4608-A742-AA422A0B8D74";
 const bundleId = "com.tanah.daily929";
@@ -26,6 +27,34 @@ test("early child failure retains its exit status and stderr when stdin closes",
     ["-e", "process.stderr.write('controlled failure');process.exit(7)"],
     { input: "x".repeat(1024 * 1024), encoding: "utf8", timeout: 5000 }),
     error => error.code === 7 && error.stderr.includes("controlled failure"));
+});
+
+test("boot-phase output is observed live before a real native child reaches its deadline", { timeout: 5000 }, async () => {
+  const output = [];
+  await assert.rejects(executeIosCommand(process.execPath,
+    ["-e", "process.stdout.write('Waiting on data migration');process.stderr.write('phase detail');setInterval(()=>{},1000)"],
+    { encoding: "utf8", timeout: 500, killSignal: "SIGKILL", onOutput: (stream, chunk) => output.push([stream, String(chunk)]) }),
+    error => error.signal === "SIGKILL");
+  assert(output.some(([stream, text]) => stream === "stdout" && text.includes("Waiting on data migration")));
+  assert(output.some(([stream, text]) => stream === "stderr" && text.includes("phase detail")));
+});
+
+test("the executor keeps draining boot output after its diagnostic prefix is full", { timeout: 5000 }, async () => {
+  const records = [];
+  const output = iosBootDiagnosticOutput({ udid, nonce, deadlineMs: Date.now() + 4000,
+    write: line => records.push(JSON.parse(line)) });
+  const result = await executeIosCommand(process.execPath, ["-e", "process.stdout.write('x'.repeat(1048576))"],
+    { encoding: "utf8", timeout: 4000, onOutput: output.bootstatus });
+  assert.equal(result.stdout.length, 1048576);
+  assert.equal(records.at(-1).retainedBytes, 65536);
+  assert.equal(records.filter(record => record.truncated).length, 1);
+});
+
+test("observed command failure preserves its cause when output retention also fails", { timeout: 5000 }, async () => {
+  const retention = new Error("controlled output failure");
+  await assert.rejects(executeIosCommand(process.execPath, ["-e", "process.stdout.write('phase');process.exitCode=7"],
+    { encoding: "utf8", timeout: 4000, onOutput: () => { throw retention; } }),
+    error => error instanceof AggregateError && error.errors[0].code === 7 && error.errors[1] === retention);
 });
 
 test("a fixed node command selects the exact parent interpreter ahead of inherited PATH", async () => {
@@ -143,6 +172,19 @@ test("command milestones retain the exact boot boundary and debit the original d
   assert(boot.every(event => event.argv[2] === udid && event.remainingMs <= 300000));
   assert.equal(boot[1].commandMs, 10);
   assert.equal(boot[3].remainingMs, boot[0].remainingMs - 20);
+});
+
+test("only fixed bootstatus output reaches diagnostics and sampler cleanup consumes the original deadline", async t => {
+  const { config } = await fixture(t, { device: { state: "Shutdown" } });
+  const output = () => {};
+  let clock = 1000, stopped = 0;
+  const execute = (command, args, options) => {
+    assert.equal(options.onOutput, args[1] === "bootstatus" ? output : undefined);
+    return config.execute(command, args, options);
+  };
+  await assert.rejects(prepareIosApp({ ...config, execute, now: () => clock, bootOutput: output,
+    startResources: () => ({ stop: async () => { stopped++; clock = config.deadlineMs; } }) }), /300 second session deadline/);
+  assert.equal(stopped, 1);
 });
 
 test("failed-command tracing preserves the original cause and never retains child output", async t => {
