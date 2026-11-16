@@ -3,10 +3,11 @@ import { setImmediate as tick } from "node:timers/promises";
 import { test } from "node:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { observeIosPreparations } from "./ios-preparation-observer.mjs";
 import { requestIosPreparation } from "./ios-install.mjs";
 import { startNativeLog } from "./native-logs.mjs";
+import { resolveMobileAppPath } from "./app-path.mjs";
 
 const udid = "4AD2086B-7B8F-4608-A742-AA422A0B8D74";
 const hash = "a".repeat(64);
@@ -40,7 +41,7 @@ async function fixture(t, options = {}) {
     return reader;
   });
   const observer = await observeIosPreparations({ udid, readerFactories: factories, report: value => reports.push(value),
-    appPath: "/owned/BibleOnSite.app", keepData: false,
+    appPath: options.appPath ?? "/owned/BibleOnSite.app", keepData: false,
     installer: options.installer ? request => options.installer(request, (phase, value) => call(phase, value)) : undefined,
     expectedBundleSha256: async signal => { hashReads++; return options.hash ? options.hash(signal) : hash; } });
   t.after(async () => { try { await observer.stop(); } catch {} });
@@ -80,6 +81,16 @@ test("a bounded install request returns only a current hash-bound reader-acknowl
   assert.equal(receipt.bundleSha256, hash);
   assert.equal(f.readers.length, 2);
   await assert.rejects(f.install(value), /rejected \(409\)/);
+});
+
+test("absolute overrides with dot segments share the helper's receipt identity without resolving symlink aliases", async t => {
+  const raw = `${resolve("/requested-alias/app/mobile-e2e")}/../BibleOnSite.app`;
+  const selected = resolveMobileAppPath(resolve("/checkout/app/mobile-e2e"), "ios", raw);
+  assert.equal(selected, resolve("/requested-alias/app/BibleOnSite.app"));
+  assert.notEqual(selected, raw);
+  const f = await fixture(t, { appPath: selected, installer: async (...args) =>
+    JSON.stringify({ ...JSON.parse(await verifiedInstaller(...args)), appPath: resolve(raw) }) });
+  assert.equal((await f.install(f.identity())).appPath, selected);
 });
 
 test("installation endpoint never accepts paths, commands, modes or another device", async t => {
