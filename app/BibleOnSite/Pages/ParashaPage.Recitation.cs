@@ -332,7 +332,7 @@ public partial class ParashaPage
         // A double tap's first press paused this pasuk's preview through the
         // shared toggle — opening its focused view resumes it so the clip does
         // not sit silently paused.
-        if (_recitation?.PlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused &&
+        if (_recitation?.PlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused or RecitationPlaybackState.Buffering &&
             Recitation.Cursor.ResumesOnPasukFocus(row.PerekId, pasuk.PasukNum,
                 _recitation.PlayerState == RecitationPlaybackState.Playing))
         {
