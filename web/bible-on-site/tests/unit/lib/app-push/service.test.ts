@@ -31,7 +31,7 @@ const mockFetch = jest.fn();
 const jsonResponse = (body: unknown, status = 200) =>
 	new Response(JSON.stringify(body), { status });
 const oauthResponse = () =>
-	jsonResponse({ access_token: "ya29.access", expires_in: 3600 });
+	jsonResponse({ access_token: "test-access-token", expires_in: 3600 });
 const SEND_URL =
 	"https://fcm.googleapis.com/v1/projects/tanah-al-haperek/messages:send";
 
@@ -73,8 +73,24 @@ describe("app-push service", () => {
 			JSON.stringify({ client_email: SERVICE_ACCOUNT.client_email }),
 		])("treats malformed service account %s as unconfigured", (raw) => {
 			process.env.FCM_SERVICE_ACCOUNT_JSON = raw;
+			const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 			expect(service.isDeviceRegistryConfigured()).toBe(false);
 			expect(service.isAppPushConfigured()).toBe(false);
+			warn.mockRestore();
+		});
+
+		it("warns once when the credential cannot be parsed", () => {
+			process.env.FCM_SERVICE_ACCOUNT_JSON = "not json";
+			const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+			service.isDeviceRegistryConfigured();
+			service.isDeviceRegistryConfigured();
+
+			expect(warn).toHaveBeenCalledTimes(1);
+			expect(warn).toHaveBeenCalledWith(
+				"FCM_SERVICE_ACCOUNT_JSON is malformed; app push is disabled",
+			);
+			warn.mockRestore();
 		});
 	});
 
@@ -138,6 +154,12 @@ describe("app-push service", () => {
 			{ ...validDevice, topics: ["daily perek"] },
 			{ ...validDevice, topics: [42] },
 			{ ...validDevice, topics: Array(33).fill("daily_perek") },
+			{
+				...validDevice,
+				// 26 individually-valid topics serialize past the VARCHAR(1024)
+				// column — validated so registration fails 400, not 503.
+				topics: Array(26).fill("a".repeat(40)),
+			},
 			{ ...validDevice, appVersion: "" },
 			{ ...validDevice, appVersion: "a".repeat(65) },
 			{ ...validDevice, appVersion: "5.1.8\ninjected" },
@@ -221,7 +243,7 @@ describe("app-push service", () => {
 			const [, init] = sendCalls()[0];
 			expect(init.method).toBe("POST");
 			expect(init.headers).toEqual({
-				authorization: "Bearer ya29.access",
+				authorization: "Bearer test-access-token",
 				"content-type": "application/json",
 			});
 			const { message } = sendBody();
@@ -236,11 +258,21 @@ describe("app-push service", () => {
 				tag: "daily-perek",
 			});
 			expect(message.android).toEqual({
+				ttl: "43200s",
 				notification: { channel_id: "daily_perek" },
 			});
-			expect(message.apns).toEqual({
-				payload: { aps: { sound: "default", "thread-id": "daily-perek" } },
+			const apns = message.apns as {
+				headers: Record<string, string>;
+				payload: { aps: Record<string, unknown> };
+			};
+			expect(apns.payload.aps).toEqual({
+				sound: "default",
+				"thread-id": "daily-perek",
 			});
+			// The reminder must die with its study day, not weeks later.
+			const expiration = Number(apns.headers["apns-expiration"]);
+			expect(expiration).toBeGreaterThan(Date.now() / 1000 + 11 * 3600);
+			expect(expiration).toBeLessThan(Date.now() / 1000 + 13 * 3600);
 		});
 
 		it("targets a single token instead of the topic", async () => {
@@ -300,14 +332,22 @@ describe("app-push service", () => {
 			expect(sendCalls()).toHaveLength(2);
 		});
 
-		it("drops a targeted registration FCM reports as unregistered", async () => {
-			for (const status of [400, 404]) {
+		it.each([
+			["404 NOT_FOUND", 404, { error: { status: "NOT_FOUND" } }],
+			[
+				"400 with UNREGISTERED detail",
+				400,
+				{ error: { details: [{ errorCode: "UNREGISTERED" }] } },
+			],
+		])(
+			"drops a targeted registration FCM reports as unregistered (%s)",
+			async (_label, status, errorBody) => {
 				mockFetch.mockReset();
 				jest.resetModules();
 				service = await import("@/lib/app-push");
 				mockFetch
 					.mockResolvedValueOnce(oauthResponse())
-					.mockResolvedValueOnce(jsonResponse({ error: {} }, status));
+					.mockResolvedValueOnce(jsonResponse(errorBody, status));
 
 				const result = await service.sendDailyPerekToDevices(1, TOKEN);
 
@@ -316,8 +356,34 @@ describe("app-push service", () => {
 					expect.stringContaining("DELETE FROM tanah_push_device WHERE token"),
 					[TOKEN],
 				);
-			}
-		});
+			},
+		);
+
+		it.each([
+			["no UNREGISTERED detail", { error: { status: "INVALID_ARGUMENT" } }],
+			["an unreadable body", "plain text"],
+		])(
+			"keeps the row on a targeted 400 that is not a dead token (%s)",
+			async (_label, errorBody) => {
+				mockFetch.mockReset();
+				jest.resetModules();
+				service = await import("@/lib/app-push");
+				mockFetch
+					.mockResolvedValueOnce(oauthResponse())
+					.mockResolvedValueOnce(
+						typeof errorBody === "string"
+							? new Response(errorBody, { status: 400 })
+							: jsonResponse(errorBody, 400),
+					);
+				const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+				const result = await service.sendDailyPerekToDevices(1, TOKEN);
+
+				expect(result).toEqual({ sent: 0, removed: 0, failed: 1 });
+				expect(mockQuery).not.toHaveBeenCalled();
+				warn.mockRestore();
+			},
+		);
 
 		it.each([400, 404, 500])(
 			"counts a broadcast failure without deleting rows (%s)",

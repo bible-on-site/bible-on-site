@@ -38,9 +38,12 @@ const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 // FCM registration tokens: printable ASCII without spaces (covers the
 // observed `[A-Za-z0-9_:-]` alphabet and future rotations).
 const TOKEN_PATTERN = /^[\x21-\x7e]{8,1024}$/;
-// FCM topic-name rules, and the per-registration cap against storage abuse.
+// FCM topic-name rules, and the per-registration caps against storage abuse
+// — topics serialize into a VARCHAR(1024) column, so the stored form must be
+// bounded too or a valid-looking list fails the INSERT with a 503.
 const TOPIC_PATTERN = /^[a-zA-Z0-9\-_.~%]{1,900}$/;
 const MAX_TOPICS = 32;
+const MAX_TOPICS_SERIALIZED = 1024;
 const PLATFORMS = new Set(["android", "ios", "other"]);
 const VERSION_PATTERN = /^[\x20-\x7e]{1,64}$/;
 
@@ -50,6 +53,10 @@ const JWT_BEARER_GRANT = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 const DAILY_PEREK_TOPIC = "daily_perek";
 // Refresh a minute early: the OAuth token nominally lives an hour.
 const TOKEN_EXPIRY_MARGIN_MS = 60_000;
+// Same 12-hour ceiling as the web-push sender: a daily reminder delivered
+// after its study day ends is wrong, not late — FCM/APNs would otherwise
+// retain undelivered messages for weeks (device offline, Shabbat gate).
+const DAILY_TTL_SECONDS = 12 * 60 * 60;
 
 interface ServiceAccount {
 	projectId: string;
@@ -57,9 +64,22 @@ interface ServiceAccount {
 	privateKey: string;
 }
 
+let configWarned = false;
+
 function serviceAccount(): ServiceAccount | null {
 	const raw = process.env.FCM_SERVICE_ACCOUNT_JSON;
 	if (!raw) return null;
+	const malformed = () => {
+		// Called on every gated request — one diagnostic per process, and no
+		// detail that could echo credential material into the log.
+		if (!configWarned) {
+			configWarned = true;
+			console.warn(
+				"FCM_SERVICE_ACCOUNT_JSON is malformed; app push is disabled",
+			);
+		}
+		return null;
+	};
 	try {
 		const parsed = JSON.parse(raw) as Record<string, unknown>;
 		const account = {
@@ -75,11 +95,11 @@ function serviceAccount(): ServiceAccount | null {
 			typeof account.privateKey !== "string" ||
 			!account.privateKey.startsWith("-----BEGIN PRIVATE KEY-----")
 		) {
-			return null;
+			return malformed();
 		}
 		return account as ServiceAccount;
 	} catch {
-		return null;
+		return malformed();
 	}
 }
 
@@ -127,6 +147,7 @@ export function parseDeviceRegistration(body: unknown): PushDevice | null {
 	if (
 		!Array.isArray(topics) ||
 		topics.length > MAX_TOPICS ||
+		JSON.stringify(topics).length > MAX_TOPICS_SERIALIZED ||
 		!topics.every(
 			(topic) => typeof topic === "string" && TOPIC_PATTERN.test(topic),
 		)
@@ -249,12 +270,36 @@ async function fcmAccessToken(account: ServiceAccount): Promise<string> {
 }
 
 /**
+ * Whether a failed send proves the targeted token dead. FCM HTTP v1 maps a
+ * dead registration to 404 NOT_FOUND, or to 400 INVALID_ARGUMENT whose
+ * `google.firebase.fcm.v1.FcmError` detail carries `UNREGISTERED`. Other
+ * 400s are message-shape errors — a send failure, not dead registration
+ * data, so the row must survive.
+ */
+async function isUnregisteredToken(response: Response): Promise<boolean> {
+	if (response.status === 404) return true;
+	if (response.status !== 400) return false;
+	try {
+		const body = (await response.json()) as {
+			error?: { details?: { errorCode?: string }[] };
+		};
+		return (
+			body.error?.details?.some(
+				(detail) => detail.errorCode === "UNREGISTERED",
+			) ?? false
+		);
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Sends today's perek to the `daily_perek` FCM topic — or to the single
  * registration `token` when given, for the controlled one-device delivery
  * check the operator runs before the daily schedule is armed. A targeted
- * token FCM reports as unregistered/invalid is deleted from the store;
- * other failures are counted without logging provider details (which echo
- * the token back).
+ * token FCM reports as unregistered is deleted from the store; other
+ * failures are counted without logging provider details (which echo the
+ * token back).
  */
 export async function sendDailyPerekToDevices(
 	perekId: number,
@@ -280,9 +325,13 @@ export async function sendDailyPerekToDevices(
 					notification: { title: payload.title, body: payload.body },
 					data: { url: payload.url, tag: payload.tag },
 					android: {
+						ttl: `${DAILY_TTL_SECONDS}s`,
 						notification: { channel_id: DAILY_PEREK_TOPIC },
 					},
 					apns: {
+						headers: {
+							"apns-expiration": `${Math.floor(Date.now() / 1000) + DAILY_TTL_SECONDS}`,
+						},
 						payload: {
 							aps: { sound: "default", "thread-id": payload.tag },
 						},
@@ -294,10 +343,7 @@ export async function sendDailyPerekToDevices(
 	if (response.ok) {
 		return { sent: 1, removed: 0, failed: 0 };
 	}
-	// FCM HTTP v1 maps legacy `NotRegistered`/`InvalidRegistration` to 404
-	// NOT_FOUND and 400 INVALID_ARGUMENT — a targeted token producing either
-	// is dead registration data.
-	if (token && (response.status === 400 || response.status === 404)) {
+	if (token && (await isUnregisteredToken(response))) {
 		await deleteDeviceToken(token);
 		return { sent: 0, removed: 1, failed: 0 };
 	}

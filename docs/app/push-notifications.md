@@ -102,9 +102,10 @@ Semantics the backend implements (`src/lib/app-push/service.ts`):
   truth is the device's FCM topic subscription — the sender uses the topic,
   not per-token fan-out.
 - **DELETE** removes the row entirely (opt-out).
-- **Stale-token cleanup**: on FCM send errors to a targeted token
-  (`INVALID_ARGUMENT`/`NOT_FOUND` — the HTTP v1 mapping of legacy
-  `NotRegistered`/`InvalidRegistration`) the sender drops the token's row.
+- **Stale-token cleanup**: only a genuine dead-token verdict drops the row —
+  `404 NOT_FOUND`, or `400` whose `FcmError` detail carries `UNREGISTERED`
+  (the HTTP v1 mapping of legacy `NotRegistered`/`InvalidRegistration`).
+  Other 400s are message-shape errors and leave the row alone.
 - No authentication is required (public daily-perek content), matching the
   self-claimed-row model of `/api/push/subscription`. `POST` reports itself
   unconfigured (404) until the FCM service account is deployed; `DELETE`
@@ -124,7 +125,10 @@ body broadcasts to the topic, while `{ "token": "<fcm registration token>" }`
 targets exactly one device for the controlled delivery check — a mistyped or
 invalid key is a 400, never a broadcast. `.github/workflows/app-push-daily.yml`
 calls it on the same 05:00 UTC schedule as the web-push sender, armed by the
-`APP_PUSH_ENABLED` repository variable.
+`APP_PUSH_ENABLED` repository variable. Messages carry the same 12-hour
+expiry as the web sender — `android.ttl` plus the `apns-expiration` header —
+so a device that reconnects later (Shabbat, offline) never receives
+yesterday's reminder on a different study day.
 
 Configuration: the `FCM_SERVICE_ACCOUNT_JSON` environment value is the Google
 service account JSON (`project_id`, `client_email`, `private_key`) for a
