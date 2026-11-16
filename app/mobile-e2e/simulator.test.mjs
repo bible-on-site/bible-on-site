@@ -79,6 +79,13 @@ function fixture(t, extra = {}) {
     ],
   };
   let nativeDevices = [{ udid: UDID, runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-27-0", state: 2 }];
+  let simState = "Booted";
+  const simQueue = [];
+  const simulator = {
+    stat: async () => { calls.push(["sim-stat"]); return { state: simQueue.length ? simQueue.shift() : simState }; },
+    boot: async () => { calls.push(["sim-boot"]); },
+    waitForBoot: async () => { calls.push(["sim-wait"]); },
+  };
   const options = {
     env,
     run: (...args) => {
@@ -90,15 +97,18 @@ function fixture(t, extra = {}) {
     },
     downloadPlatform: () => { calls.push(["download"]); },
     execute: async (...args) => { calls.push(["async", ...args]); return { stdout: "" }; },
-    loadDriver: async () => ({ getSimulator: async (udid, lookup) => { calls.push(["driver", udid, ...(lookup ? [lookup] : [])]); } }),
+    loadDriver: async () => ({ getSimulator: async (udid, lookup) => { calls.push(["driver", udid, ...(lookup ? [lookup] : [])]); return simulator; } }),
     loadNativeDriver: async () => ({ NativeSimctl: class {
       constructor(options) { calls.push(["native", options]); }
       async getDevices() { calls.push(["native-devices"]); return nativeDevices; }
     } }),
+    sleep: async (ms) => { calls.push(["sleep", ms]); },
+    settleMs: 0,
     log: () => {},
     ...extra,
   };
-  return { options, calls, env, setDevices: (value) => { devices = value; },
+  return { options, calls, env, simQueue, setSimState: (value) => { simState = value; },
+    setDevices: (value) => { devices = value; },
     setNativeDevices: (value) => { nativeDevices = value; } };
 }
 
@@ -306,3 +316,30 @@ for (const sdk of ["not-a-version", "27.0\nEXTRA=value"]) {
     assert.equal(existsSync(env.GITHUB_ENV), false);
   });
 }
+
+test("wait boots a device the runner powered off after it reported booted, then exports readiness", async (t) => {
+  const { options, calls, env, simQueue } = fixture(t);
+  simQueue.push("Shutdown", "Booted");
+  await bootIos({ ...options, mode: "wait",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } });
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-boot"), [["sim-boot"]]);
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-wait"), [["sim-wait"]]);
+  assert.equal(readFileSync(env.GITHUB_ENV, "utf8"), `MOBILE_UDID=${UDID}\nMOBILE_OS_VERSION=27.0\n`);
+});
+
+test("wait refuses to hand off a device that keeps powering off", async (t) => {
+  const { options, calls, env, setSimState } = fixture(t);
+  setSimState("Shutdown");
+  await assert.rejects(bootIos({ ...options, mode: "wait",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } }), /powering off|unstable/);
+  assert.equal(calls.filter(([kind]) => kind === "sim-boot").length, 1);
+  assert.equal(existsSync(env.GITHUB_ENV), false);
+});
+
+test("wait keeps observing a transitional state without rebooting and never counts it stable", async (t) => {
+  const { options, calls, env, simQueue } = fixture(t);
+  simQueue.push("Booting", "Booted");
+  await bootIos({ ...options, mode: "wait",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } });
+  assert.equal(calls.filter(([kind]) => kind === "sim-boot").length, 0);
+});
