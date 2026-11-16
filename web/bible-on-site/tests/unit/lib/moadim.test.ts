@@ -116,6 +116,10 @@ describe("moadim service", () => {
 			annualOrder: 1,
 		});
 		expect(mockQuery.mock.calls[0][0]).toContain("published = TRUE");
+		// #3381 — the retired editorial summary is never selected or
+		// mapped; only the Tanahpedia entry preview may introduce a moed.
+		expect(mockQuery.mock.calls[0][0]).not.toContain("summary");
+		expect(moadim[0]).not.toHaveProperty("summary");
 	});
 
 	it("returns an empty catalogue while the moed schema is missing", async () => {
