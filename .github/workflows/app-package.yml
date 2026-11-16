@@ -616,9 +616,9 @@ jobs:
         run: |
           # Show .NET SDK info to debug
           dotnet --info
-          # .NET 11 set 11.0.100.1 selects iOS 27.2, which requires the matching
-          # Xcode 27.2 installation; #2566 tracked the earlier
-          # deferral while the image lagged. Foreign-band sdk-manifests
+          # .NET 11 set 11.0.100.1 selects iOS 27.2, whose SDK accepts exactly
+          # Xcode 27.2; #2566 tracked the earlier deferral while the image
+          # lagged. Foreign-band sdk-manifests
           # claiming the same packs abort the install — drop them first.
           for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
           dotnet workload update
@@ -632,18 +632,21 @@ jobs:
           echo "Available Xcode installations:"
           ls -la /Applications/ | grep -i xcode || true
 
-          # The pinned .NET iOS 27.2 SDK requires Xcode 27.2. Selecting the
-          # newest major-version match can pick an incompatible beta.
-          XCODE_PATH="/Applications/Xcode_27.2.app"
-          if [ ! -d "$XCODE_PATH/Contents/Developer" ]; then
-            echo "::error::Xcode 27.2 is required by the pinned .NET iOS 27.2 workload"
+          # The .NET 11 iOS workload (27.2.x) builds only against Xcode 27.2 —
+          # probe each Xcode_27 app for its real version; a newest-27* glob
+          # would grab the image's 27.3 beta (also aliased as Xcode_27.3.app),
+          # which the workload rejects.
+          XCODE_PATH=""
+          for app in /Applications/Xcode_27*.app; do
+            ver="$(DEVELOPER_DIR="$app/Contents/Developer" xcodebuild -version 2>/dev/null | awk 'NR==1 {print $2}')"
+            case "$ver" in
+              27.2|27.2.*) XCODE_PATH="$app"; break ;;
+            esac
+          done
+          if [ -z "$XCODE_PATH" ]; then
+            echo "::error::No Xcode 27.2 installation under /Applications — required by the iOS 27.2 workload"
             exit 1
           fi
-          XCODE_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$XCODE_PATH/Contents/Info.plist")
-          case "$XCODE_VERSION" in
-            27.2|27.2.*) ;;
-            *) echo "::error::Xcode $XCODE_VERSION is incompatible with the pinned .NET iOS 27.2 workload"; exit 1 ;;
-          esac
 
           echo "Selecting Xcode: $XCODE_PATH"
           sudo xcode-select -s "$XCODE_PATH/Contents/Developer"

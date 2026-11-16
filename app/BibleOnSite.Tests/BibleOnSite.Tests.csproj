@@ -60,6 +60,7 @@
     <Compile Include="..\BibleOnSite\Helpers\*.cs" Link="Helpers\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Models\*.cs" Link="Models\%(Filename)%(Extension)" />
     <Compile Include="..\BibleOnSite\Services\BaseGraphQLService.cs" Link="Services\BaseGraphQLService.cs" />
+    <Compile Include="..\BibleOnSite\Services\ApiSigningHandler.cs" Link="Services\ApiSigningHandler.cs" />
     <Compile Include="..\BibleOnSite\Services\CalendarPdfAssetService.cs" Link="Services\CalendarPdfAssetService.cs" />
     <Compile Include="..\BibleOnSite\Services\CycleDisplayFormatter.cs" Link="Services\CycleDisplayFormatter.cs" />
     <Compile Include="..\BibleOnSite\Services\LearningCalendarPolicy.cs" Link="Services\LearningCalendarPolicy.cs" />
@@ -112,6 +113,8 @@
     <!-- Exercise the section=packs overview/pack-view swap on the real page with the test XAML shells. -->
     <Compile Include="..\BibleOnSite\Pages\PreferencesPage.xaml.cs" Link="Pages\PreferencesPage.xaml.cs" />
     <Compile Include="..\BibleOnSite\Controls\ExtensionPacksView.xaml.cs" Link="Controls\ExtensionPacksView.xaml.cs" />
+    <!-- Exercise the articles-mode capability contract on the real menu code-behind with the test XAML shell. -->
+    <Compile Include="..\BibleOnSite\Controls\ReaderMenuPanel.xaml.cs" Link="Controls\ReaderMenuPanel.xaml.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\IPerushimSheetViewModel.cs" Link="ViewModels\IPerushimSheetViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.cs" Link="ViewModels\MasoraViewModel.cs" />
     <Compile Include="..\BibleOnSite\ViewModels\MasoraViewModel.Perushim.cs" Link="ViewModels\MasoraViewModel.Perushim.cs" />

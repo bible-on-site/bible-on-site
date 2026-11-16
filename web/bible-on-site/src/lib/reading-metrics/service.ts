@@ -12,6 +12,7 @@
 import "server-only";
 
 import { query } from "../api-client";
+import { isMissingMysqlSchema } from "../mysql-errors";
 import type { ReadingMetric, ReadingProgressUnit } from "./types";
 
 interface MetricRow {
@@ -41,21 +42,6 @@ function toUnit(key: string | null, row: UnitRow): ReadingProgressUnit {
 	};
 }
 
-/**
- * Whether a rejection means the reading-metrics schema is not deployed yet.
- * Mirrors `isCoveringSourceSchemaMissing` semantics in articles/service.
- */
-export function isReadingMetricsSchemaMissing(error: unknown): boolean {
-	if (typeof error !== "object" || error === null) return false;
-	const { code, errno } = error as { code?: unknown; errno?: unknown };
-	return (
-		code === "ER_NO_SUCH_TABLE" ||
-		code === "ER_BAD_FIELD_ERROR" ||
-		errno === 1146 ||
-		errno === 1054
-	);
-}
-
 /** Wrap a metric query: missing schema → fallback, anything else → throw. */
 async function orMetricMissing<T>(
 	run: () => Promise<T>,
@@ -64,7 +50,7 @@ async function orMetricMissing<T>(
 	try {
 		return await run();
 	} catch (error) {
-		if (!isReadingMetricsSchemaMissing(error)) throw error;
+		if (!isMissingMysqlSchema(error)) throw error;
 		return fallback;
 	}
 }

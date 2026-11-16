@@ -7,10 +7,11 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createServerFn } from "@tanstack/react-start";
 
 // S3 configuration from environment
-const S3_REGION =
-	process.env.S3_REGION || process.env.AWS_REGION || "il-central-1";
-const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-assets";
 const S3_ENDPOINT = process.env.S3_ENDPOINT; // Optional: for local S3 (RustFS)
+const S3_REGION = S3_ENDPOINT
+	? "us-east-1"
+	: process.env.S3_REGION || process.env.AWS_REGION || "il-central-1";
+const S3_BUCKET = process.env.S3_BUCKET || "bible-on-site-assets";
 const S3_FORCE_PATH_STYLE = process.env.S3_FORCE_PATH_STYLE === "true"; // Required for local S3
 const S3_ACCESS_KEY =
 	process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;

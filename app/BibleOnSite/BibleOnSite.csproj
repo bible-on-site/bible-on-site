@@ -245,6 +245,9 @@
 	</ItemGroup>
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 		<BundleResource Include="Platforms\iOS\GoogleService-Info.plist" LogicalName="GoogleService-Info.plist" />
+		<!-- One shared UIKit HtmlViewHandler for both Apple TFMs; iOS files are
+		     outside the maccatalyst platform glob, so link it in explicitly. -->
+		<Compile Include="Platforms\iOS\Handlers\HtmlViewHandler.cs" Link="Platforms\MacCatalyst\Handlers\HtmlViewHandler.cs" />
 	</ItemGroup>
 
 	<!-- ============================================================

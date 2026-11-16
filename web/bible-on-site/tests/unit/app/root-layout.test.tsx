@@ -9,7 +9,7 @@ import RootLayout from "@/app/layout";
 import packageJson from "../../../package.json";
 
 it("passes only the current version string across the navigation client boundary", () => {
-	const root = RootLayout({ children: <main>Page content</main> });
+	const root = RootLayout({ children: <main /> });
 	const body = Children.toArray(root.props.children).find(
 		(child) => isValidElement(child) && child.type === "body",
 	) as ReactElement<{ children: ReactNode }>;

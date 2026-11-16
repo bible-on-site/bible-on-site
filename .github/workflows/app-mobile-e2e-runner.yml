@@ -91,7 +91,7 @@ jobs:
       DOTNET_SDK_VERSION: "11.0.100"
       # .NET 11 workload sets are band-scoped to 11.0.1xx; 11.0.100.1 is the
       # band's first set and selects iOS 27.2 (Xcode 27.2 required) — the
-      # xcode-27 image's matching Xcode_27.2.app is selected below; #2566 tracked the
+      # matching Xcode_27* installation is selected below; #2566 tracked the
       # earlier deferral while the image lagged.
       MAUI_WORKLOAD_SET: "11.0.100.1"
       # The Android legs pin the same 11.0.100.1 set: it ships Android SDK
@@ -184,20 +184,22 @@ jobs:
 
       - name: Select compatible Xcode
         if: inputs.platform == 'iOS'
-        # The pinned .NET iOS 27.2 SDK requires Xcode 27.2, including when
-        # the runner also carries a newer Xcode beta.
+        # The .NET 11 iOS workload (27.2.x) builds only against Xcode 27.2 —
+        # probe each Xcode_27 app for its real version; a newest-27* glob would
+        # grab the image's 27.3 beta (also aliased as Xcode_27.3.app), which the
+        # workload rejects.
         run: |
-          XCODE_APP="/Applications/Xcode_27.2.app"
-          if [ ! -d "$XCODE_APP/Contents/Developer" ]; then
-            echo "::error::Xcode 27.2 is required by the pinned .NET iOS 27.2 workload"
+          XCODE_DIR=""
+          for app in /Applications/Xcode_27*.app; do
+            ver="$(DEVELOPER_DIR="$app/Contents/Developer" xcodebuild -version 2>/dev/null | awk 'NR==1 {print $2}')"
+            case "$ver" in
+              27.2|27.2.*) XCODE_DIR="$app/Contents/Developer"; break ;;
+            esac
+          done
+          if [ -z "$XCODE_DIR" ]; then
+            echo "::error::No Xcode 27.2 installation under /Applications — required by the iOS 27.2 workload"
             exit 1
           fi
-          XCODE_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$XCODE_APP/Contents/Info.plist")
-          case "$XCODE_VERSION" in
-            27.2|27.2.*) ;;
-            *) echo "::error::Xcode $XCODE_VERSION is incompatible with the pinned .NET iOS 27.2 workload"; exit 1 ;;
-          esac
-          XCODE_DIR="$XCODE_APP/Contents/Developer"
           sudo xcode-select --switch "$XCODE_DIR"
           echo "DEVELOPER_DIR=$XCODE_DIR" >> "$GITHUB_ENV"
 

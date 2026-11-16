@@ -1,4 +1,5 @@
 using BibleOnSite.Models;
+using BibleOnSite.Services;
 using BibleOnSite.ViewModels;
 
 namespace BibleOnSite.Pages;
@@ -10,7 +11,10 @@ namespace BibleOnSite.Pages;
 [QueryProperty(nameof(PerekTitle), "perekTitle")]
 [QueryProperty(nameof(AuthorId), "authorId")]
 [QueryProperty(nameof(AuthorName), "authorName")]
-public partial class ArticlesPage : ContentPage
+// Codacy: S2333 false positive — partial is required by the XAML code generator.
+#pragma warning disable S2333
+public partial class ArticlesPage : ContentPage, IAnalyticsScreenName //NOSONAR
+#pragma warning restore S2333
 {
     private readonly ArticlesViewModel _viewModel;
 
@@ -18,6 +22,24 @@ public partial class ArticlesPage : ContentPage
     public string PerekTitle { get; set; } = string.Empty;
     public int AuthorId { get; set; }
     public string AuthorName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Catalogue-scope identity (#3378): the perek or author filter that
+    /// brought the user here — or an explicitly global row — never the bare
+    /// page name, and never a fabricated article identity.
+    /// </summary>
+    public AnalyticsScreen? AnalyticsScreen =>
+        AuthorId > 0
+            ? AnalyticsScreens.ForArticlesList(nameof(ArticlesPage),
+                ArticlesListScope.Author, AuthorId, AuthorName)
+            : AnalyticsScreens.ForArticlesList(nameof(ArticlesPage),
+                PerekId > 0 ? ArticlesListScope.Perek : ArticlesListScope.All,
+                PerekId,
+                PerekId > 0
+                    // The canonical source re-derived from the stable id wins
+                    // over the query's label — a hand-crafted URL can lie.
+                    ? PerekDataService.Instance.GetPerekSource(PerekId) ?? PerekTitle
+                    : null);
 
     public ArticlesPage()
     {
