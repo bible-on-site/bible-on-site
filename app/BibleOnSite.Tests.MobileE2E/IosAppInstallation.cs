@@ -92,8 +92,11 @@ internal static class IosAppInstallation
                 throw new InvalidOperationException($"Parent iOS installation rejected ({(int)response.StatusCode}): {json}");
             }
         }
-        catch (OperationCanceledException exception) when (deadline.IsCancellationRequested || started.Elapsed >= budget)
+        catch (OperationCanceledException exception) when (deadline.IsCancellationRequested || started.Elapsed >= budget ||
+            exception is TaskCanceledException { InnerException: TimeoutException })
         {
+            // HttpClient's finite timeout can win the timer race before our
+            // cancellation token/stopwatch observes the shared deadline.
             Milestone("cancellation-observed");
             throw new TimeoutException("iOS preparation exhausted the existing 300 second session deadline.", exception);
         }
