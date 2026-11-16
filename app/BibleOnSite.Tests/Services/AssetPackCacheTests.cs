@@ -218,7 +218,7 @@ public class AssetPackCacheTests
     [Fact]
     public async Task UnsupportedPlatform_DeliveryIsANoOp()
     {
-        // The net10.0 test host compiles the no-PAD/ODR branch of the service.
+        // The net11.0 test host compiles the no-PAD/ODR branch of the service.
         var service = PadDeliveryService.Instance;
 
         (await service.TryGetAssetPathAsync(Pack, TestContext.Current.CancellationToken)).Should().BeNull();

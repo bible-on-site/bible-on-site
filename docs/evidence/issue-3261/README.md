@@ -1,7 +1,7 @@
 # Evidence — #3261 Native מועדים על הפרק reader
 
 Captures from the Windows unpackaged debug build
-(`net10.0-windows10.0.19041.0/win-x64/BibleOnSite.exe`), driven through UI
+(`net11.0-windows10.0.19041.0/win-x64/BibleOnSite.exe`), driven through UI
 Automation (`UIAutomationClient` from PowerShell) against the live app data
 directory. The flyout nav pane is pinned open on wide windows, so the
 catalogue/reader captures also show the pinned pane with the

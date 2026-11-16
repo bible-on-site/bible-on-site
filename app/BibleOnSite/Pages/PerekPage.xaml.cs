@@ -1015,7 +1015,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
         {
             this.SetAppThemeColor(Shell.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
             // SharedTopBar, not VisualElement — the iOS-specific using alias
-            // shadows VisualElement on net10.0-ios.
+            // shadows VisualElement on net11.0-ios.
             ReaderToolbar.SetAppThemeColor(SharedTopBar.BackgroundColorProperty, SharedTopBar.BandLight, SharedTopBar.BandDark);
         }
         NormalNavigationBar.BarVisible = !selectionBarMode && !searching;

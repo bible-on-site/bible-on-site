@@ -49,7 +49,7 @@ coverage — the issue's requirement to keep essential E2E is met by retaining A
 
 | Layer | Scale | Runtime evidence |
 |---|---|---|
-| Portable unit + integration | 2 194 `[Fact]`/`[Theory]` in 181 files (`BibleOnSite.Tests`, net10.0, xunit.v3 4.0.2 + MTP, linked sources, stubs for native deps) | CI run `43265570785` (2026-11-12): unit+coverage 116 s, integration+coverage 185 s inside `App CI` job 936 s |
+| Portable unit + integration | 2 194 `[Fact]`/`[Theory]` in 181 files (`BibleOnSite.Tests`, net11.0, xunit.v3 4.0.2 + MTP, linked sources, stubs for native deps) | CI run `43265570785` (2026-11-12): unit+coverage 116 s, integration+coverage 185 s inside `App CI` job 936 s |
 | Appium mobile E2E | 17 scenario methods: 13 `Platform=Shared` (`PerekPilot` 8, `LearningCalendar` 3, `PerekPicker` 2) + 4 `Platform=iOS` (`IosReader` 2, scroll-stability 2); 86 host-side harness tests (`Category=Unit`) | Run `40162816924` (2026-10-25): Android leg 676 s total — app build 122 s, SDK/AVD ~215 s, **pilot 219 s for 8 tests ≈ 25–27 s/test**. iOS: build once 317 s; shards 718 s/940 s with ~470–590 s fixed overhead each (sim-state restore 37 s, sim setup 129 s, **WDA+Appium agent prep 133 s**, artifact downloads ~200 s); shard execution 463 s for 6 tests ≈ **75–77 s/test** |
 | Windows E2E (FlaUI) | ~17 cases in `BibleOnSite.Tests.E2E` (PerekPage 5, SelectionMode 8, Articles 3, toolbars) | runs in `App CI` |
 | Native audio leg | `App iOS native audio CI` | 86 s |
@@ -179,7 +179,7 @@ dotnet build -c Release -p:AndroidPackageFormat=apk -p:RunAOTCompilation=false
 
 # run
 ./tools/xharness android test \
-  --app bin/Release/net10.0-android/com.bibleonsite.devicetests-Signed.apk \
+  --app bin/Release/net11.0-android/com.bibleonsite.devicetests-Signed.apk \
   --package-name com.bibleonsite.devicetests \
   --instrumentation com.bibleonsite.devicetests.TestInstrumentation \
   --output-directory ./results --device-id emulator-5554 --timeout 00:05:00
@@ -188,7 +188,7 @@ dotnet build -c Release -p:AndroidPackageFormat=apk -p:RunAOTCompilation=false
 The PoC source is committed under [`device-tests-poc/`](device-tests-poc/README.md)
 (research code, not in the solution and not built by CI — deliberately kept out of
 `app/` because the app NuGet-cache key hashes every `app/*.csproj`). It is a normal
-single-project MAUI app (`net10.0-android`, `UseMaui`, `IsTestProject=false`) plus:
+single-project MAUI app (`net11.0-android`, `UseMaui`, `IsTestProject=false`) plus:
 ~240-line `Runner.cs` (TestDevice, HeadlessTestRunner extending
 `AndroidApplicationEntryPoint`, `MauiTestActivity`, `MauiTestInstrumentation` with
 the MediaStore results export), 4 entry-point classes (`[Application]`,

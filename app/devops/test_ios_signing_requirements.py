@@ -35,7 +35,7 @@ class ProjectFixture:
         self.settings = {}
         self.calls = []
         self.app.write_text("""<Project><PropertyGroup>
-<TargetFrameworks>net10.0-android;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
+<TargetFrameworks>net11.0-android;net11.0-ios;net11.0-maccatalyst</TargetFrameworks>
 <ApplicationId>org.example.application</ApplicationId></PropertyGroup>
 <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'">
 <CodesignEntitlements>mac.entitlements</CodesignEntitlements></PropertyGroup>
@@ -122,7 +122,7 @@ class DiscoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             fixture = ProjectFixture(Path(temporary))
             text = fixture.app.read_text(encoding="utf8").replace("</Project>", """
-<PropertyGroup Condition="'$(Configuration)' == 'Release' AND '$(TargetFramework)' == 'net10.0-ios'">
+<PropertyGroup Condition="'$(Configuration)' == 'Release' AND '$(TargetFramework)' == 'net11.0-ios'">
 <ApplicationId>org.example.release</ApplicationId></PropertyGroup></Project>""")
             fixture.app.write_text(text, encoding="utf8")
             fixture.write_plist(fixture.root / "ios.entitlements", {GROUP_KEY: ["group.$(CFBundleIdentifier)"]})
@@ -134,7 +134,7 @@ class DiscoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             fixture = ProjectFixture(Path(temporary))
             fixture.app.write_text('''<Project><PropertyGroup>
-<TargetFramework>net10.0-ios</TargetFramework><ApplicationId>org.example.reader</ApplicationId>
+<TargetFramework>net11.0-ios</TargetFramework><ApplicationId>org.example.reader</ApplicationId>
 <EnableSharing>false</EnableSharing><SigningFile>unused.entitlements</SigningFile></PropertyGroup>
 <PropertyGroup Condition="'$(Configuration)' == 'Release'">
 <EnableSharing>true</EnableSharing><SigningFile>ios.entitlements</SigningFile></PropertyGroup>
@@ -167,7 +167,7 @@ class DiscoveryTests(unittest.TestCase):
     def test_directory_build_declarations_are_included_before_and_after_the_app(self):
         with tempfile.TemporaryDirectory() as temporary:
             fixture = ProjectFixture(Path(temporary))
-            fixture.app.write_text('''<Project><PropertyGroup><TargetFramework>net10.0-ios</TargetFramework>
+            fixture.app.write_text('''<Project><PropertyGroup><TargetFramework>net11.0-ios</TargetFramework>
 <ApplicationId>org.example.reader</ApplicationId></PropertyGroup></Project>''', encoding="utf8")
             (fixture.root / "Directory.Build.props").write_text('''<Project>
 <PropertyGroup Condition="'$(Configuration)' == 'Release'"><SigningFile>unused.entitlements</SigningFile></PropertyGroup>
@@ -193,17 +193,17 @@ class DiscoveryTests(unittest.TestCase):
         for declaration, message in forms:
             with self.subTest(declaration=declaration), tempfile.TemporaryDirectory() as temporary:
                 fixture = ProjectFixture(Path(temporary))
-                fixture.app.write_text('''<Project><PropertyGroup><TargetFramework>net10.0-ios</TargetFramework>
+                fixture.app.write_text('''<Project><PropertyGroup><TargetFramework>net11.0-ios</TargetFramework>
 <ApplicationId>org.example.reader</ApplicationId></PropertyGroup>''' + declaration + "</Project>", encoding="utf8")
                 with self.assertRaisesRegex(signing.SigningError, message):
                     requirements.app_requirement(fixture.app)
 
     def test_platform_functions_use_their_actual_framework_and_expanded_host_arguments(self):
-        properties = {"TargetFramework": "net10.0-ios", "OtherFramework": "net10.0-android", "Host": "OSX"}
+        properties = {"TargetFramework": "net11.0-ios", "OtherFramework": "net11.0-android", "Host": "OSX"}
         self.assertFalse(requirements.ios_condition(
             "$([MSBuild]::GetTargetPlatformIdentifier('$(OtherFramework)')) == 'ios'", properties))
         self.assertFalse(requirements.ios_condition(
-            "$([MSBuild]::GetTargetPlatformIdentifier('net10.0-android')) == 'ios'", properties))
+            "$([MSBuild]::GetTargetPlatformIdentifier('net11.0-android')) == 'ios'", properties))
         self.assertTrue(requirements.ios_condition("$([MSBuild]::IsOSPlatform('$(Host)'))", properties))
         with self.assertRaisesRegex(signing.SigningError, "Unresolved"):
             requirements.ios_condition("$([MSBuild]::IsOSPlatform('$(UnknownHost)'))", properties)
