@@ -119,11 +119,7 @@ partial class Build
             }
             else if (Platform.Equals("Android", StringComparison.OrdinalIgnoreCase))
             {
-                DotNetRestore(s => s
-                    .SetProjectFile(MainProject)
-                    .SetProperty("TargetFramework", "net11.0-android")
-                    .SetProperty("RuntimeIdentifiers", "android-arm64")
-                    .SetRuntime("android-arm64"));
+                DotNetRestore(AndroidPackageRestoreSettings(MainProject, Configuration));
             }
             else if (Platform.Equals("iOS", StringComparison.OrdinalIgnoreCase))
             {
@@ -138,6 +134,17 @@ partial class Build
                 DotNetRestore(s => s.SetProjectFile(MainProject));
             }
         });
+
+    internal static DotNetRestoreSettings AndroidPackageRestoreSettings(string project, string configuration) =>
+        new DotNetRestoreSettings()
+            .SetProjectFile(project)
+            // Android Release enables CoreCLR ReadyToRun. Restore must evaluate
+            // the same configuration as --no-restore publish to acquire Crossgen2.
+            // Let the SDK retain its normal Debug/Release compilation defaults.
+            .SetProperty("Configuration", configuration)
+            .SetProperty("TargetFramework", "net11.0-android")
+            .SetProperty("RuntimeIdentifiers", "android-arm64")
+            .SetRuntime("android-arm64");
 
     void PackageWindows()
     {
