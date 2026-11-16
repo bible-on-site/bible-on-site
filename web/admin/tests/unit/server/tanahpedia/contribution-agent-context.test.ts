@@ -2072,6 +2072,137 @@ describe("fresh article source context", () => {
 		});
 	});
 
+	it("grounds body-only citations in exact numeric coordinates and pins the supplied chapter without a second lookup", async () => {
+		article.plainText = `${article.title}\n😀 פתיחה. בראשית א כו נאמר במאמר.`;
+		mocks.query.mockResolvedValue([
+			{
+				id: 1,
+				seferName: "בראשית",
+				additionalLetter: null,
+				perekInContext: 1,
+				pasukCount: 31,
+			},
+		]);
+		const result = await readContributionAgentTool(conn, item, "article_text", {
+			id: "27",
+		});
+		const start = article.plainText.indexOf("בראשית");
+		expect(result.data).toMatchObject({
+			citations: {
+				items: [
+					{
+						kind: "resolved",
+						perekId: 1,
+						pasuk: 26,
+						pasukTo: 26,
+						label: "בראשית א כו",
+						quote: "בראשית א כו",
+						spanStart: start,
+						spanEnd: start + "בראשית א כו".length,
+						sourceHash: article.state.sourceHash,
+					},
+				],
+				total: 1,
+				nextCursor: null,
+			},
+			records: expect.arrayContaining([
+				{
+					kind: "perek_coordinates",
+					id: 1,
+					current: {
+						seferName: "בראשית",
+						additionalLetter: null,
+						perekInContext: 1,
+						pasukCount: 31,
+					},
+				},
+			]),
+		});
+		expect(result.catalogue.references.perek).toEqual([
+			{ id: 1, name: "בראשית א" },
+		]);
+	});
+	it("pages every candidate explicitly and keeps the text page unchanged while continuing citations", async () => {
+		article.plainText = "בראשית א כו. בראשית א ב. בראשית א ג.";
+		mocks.query.mockResolvedValue([
+			{
+				id: 1,
+				seferName: "בראשית",
+				additionalLetter: null,
+				perekInContext: 1,
+				pasukCount: 31,
+			},
+		]);
+		const first = await readContributionAgentTool(conn, item, "article_text", {
+			id: "27",
+			citationLimit: 1,
+		});
+		const second = await readContributionAgentTool(conn, item, "article_text", {
+			id: "27",
+			citationLimit: 1,
+			citationCursor: 1,
+		});
+		expect(first.data).toMatchObject({
+			text: article.plainText,
+			citations: { total: 3, nextCursor: 1, items: [{ pasuk: 26 }] },
+		});
+		expect(second.data).toMatchObject({
+			text: article.plainText,
+			citations: { total: 3, nextCursor: 2, items: [{ pasuk: 2 }] },
+		});
+	});
+	it("pins held citation dependencies too, so a bound-only current read invalidates an older ambiguous match", async () => {
+		article.plainText = "בראשית א לב.";
+		mocks.query.mockResolvedValue([
+			{
+				id: 1,
+				seferName: "בראשית",
+				additionalLetter: null,
+				perekInContext: 1,
+				pasukCount: 31,
+			},
+		]);
+		const first = await readContributionAgentTool(
+			conn,
+			item,
+			"article_text",
+			{ id: "27" },
+			true,
+		);
+		expect(first.data).toMatchObject({
+			citations: {
+				items: [{ kind: "ambiguous", dependencyPerekIds: [1] }],
+				total: 1,
+			},
+		});
+		const row = references.get("perek:1");
+		if (!row) throw new Error("Missing fixture reference");
+		row.pasukCount = 35;
+		const second = await readContributionAgentTool(
+			conn,
+			item,
+			"article_text",
+			{ id: "27" },
+			true,
+		);
+		expect(second.data).toMatchObject({
+			citations: { items: [{ kind: "ambiguous" }] },
+			records: expect.arrayContaining([
+				{
+					kind: "perek_coordinates",
+					id: 1,
+					current: {
+						seferName: "בראשית",
+						additionalLetter: null,
+						perekInContext: 1,
+						pasukCount: 35,
+					},
+				},
+			]),
+		});
+		expect(JSON.stringify(second)).not.toBe(JSON.stringify(first));
+	});
+
 	it("invalidates an initial fingerprint when prose outside the read page changes", async () => {
 		attachArticleChange();
 		const initial = await readContributionAgentInitialContext(conn, item);
@@ -2166,6 +2297,12 @@ describe("fresh article source context", () => {
 		{ id: "27", limit: 16001 },
 		{ id: "27", limit: 1.5 },
 		{ id: "27", sql: "untrusted" },
+		{ id: "27", citationCursor: -1 },
+		{ id: "27", citationCursor: 0.5 },
+		{ id: "27", citationCursor: Number.MAX_SAFE_INTEGER + 1 },
+		{ id: "27", citationLimit: 0 },
+		{ id: "27", citationLimit: 51 },
+		{ id: "27", citationLimit: 1.5 },
 	])(
 		"rejects invalid text read arguments before canonical reads: %j",
 		async (args) => {

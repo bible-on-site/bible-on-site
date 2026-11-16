@@ -44,6 +44,7 @@ describe("buildHeuristicDrafts", () => {
 				{ perekId: 18, pasuk: 3 },
 			],
 		});
+		expect(drafts[0].targetLabel).toBe("בראשית יח");
 	});
 
 	it("surfaces ambiguous citations as held drafts and quotes", () => {
