@@ -9,6 +9,11 @@ continued the task through production verification after that window ended.
 
 ## Decisions
 
+- The admin home opens the issue queue directly, with a second tab for PRs.
+  The welcome promotion and duplicate navigation cards are removed. Bookmarks
+  under `/issues` and `/pull-requests` redirect to home while retaining their
+  discussion ID and filters. The header keeps brand, navigation and logout in
+  one desktop row; narrow screens use one accessible expandable menu.
 - Issues describe a problem; PRs carry evidence and typed operations. The
   description and changes have separate tabs. Diffs show domain fields,
   family relationships, and coordinates rather than source files.
@@ -36,8 +41,9 @@ continued the task through production verification after that window ended.
 - PERSON display-name changes also update MAIN person names. Their reviewed
   values participate in conflict checks and appear in the diff, so independent
   name edits cannot be silently overwritten.
-- LLM assignment does not itself execute a model or merge changes. Generation
-  is explicit, and model output passes the same typed validation as human input.
+- Assigning an LLM queues implementation of an issue or review-comment handling
+  on the same PR. New human comments trigger another pass. Model output passes
+  the same typed validation as human input and cannot approve or merge changes.
 - Family relationship choices come from the existing family API contract:
   biological/adoptive/step/foster parenthood and marriage/pilegesh/
   forbidden-with-gentile/banned-incest/betrothal unions. They share one Family

@@ -57,6 +57,17 @@ export interface ContributionSearch {
 	state?: "open" | "closed" | "all";
 	assignee?: string;
 }
+export interface ContributionHomeSearch extends ContributionSearch {
+	tab?: "issues" | "prs";
+}
+export function validateContributionHomeSearch(
+	search: Record<string, unknown>,
+): ContributionHomeSearch {
+	return {
+		...validateContributionSearch(search),
+		tab: search.tab === "prs" ? "prs" : "issues",
+	};
+}
 export function validateContributionSearch(
 	search: Record<string, unknown>,
 ): ContributionSearch {
@@ -781,8 +792,8 @@ function Detail({
 						<section>
 							<h3>פתרון הפנייה</h3>
 							<Link
-								to="/pull-requests"
-								search={{ id: "new", issueId: item.id }}
+								to="/"
+								search={{ id: "new", issueId: item.id, tab: "prs" }}
 								className="contribution-button"
 							>
 								פתיחת PR ידנית
@@ -795,8 +806,8 @@ function Detail({
 							{linkedIssue && (
 								<Link
 									className="contribution-link"
-									to="/issues"
-									search={{ id: linkedIssue.id }}
+									to="/"
+									search={{ id: linkedIssue.id, tab: "issues" }}
 								>
 									#{linkedIssue.number} {linkedIssue.title}
 								</Link>
@@ -805,8 +816,8 @@ function Detail({
 								<p key={pr.id}>
 									<Link
 										className="contribution-link"
-										to="/pull-requests"
-										search={{ id: pr.id }}
+										to="/"
+										search={{ id: pr.id, tab: "prs" }}
 									>
 										#{pr.number} {pr.title}
 									</Link>
@@ -841,7 +852,13 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 	const [editingItem, setEditingItem] = useState<Contribution | null>(null);
 	const editing = editingItem?.id === search.id ? editingItem : null;
 	const [actionError, setActionError] = useState("");
-	const path = kind === "issue" ? "/issues" : "/pull-requests";
+	const path = "/";
+	const queueSearch = (
+		next: ContributionSearch = {},
+	): ContributionHomeSearch => ({
+		...next,
+		tab: kind === "pr" ? "prs" : "issues",
+	});
 	const filters: ContributionListRequest =
 		search.id && search.id !== "new"
 			? { relatedTo: search.id }
@@ -938,8 +955,8 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 			setEditingItem(null);
 			refresh();
 			await navigate({
-				to: item.kind === "issue" ? "/issues" : "/pull-requests",
-				search: { id: item.id },
+				to: "/",
+				search: { id: item.id, tab: item.kind === "pr" ? "prs" : "issues" },
 			});
 		},
 	});
@@ -957,22 +974,21 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 		<div className="contributions">
 			<div className="contribution-nav">
 				<Link
-					to="/issues"
-					search={{}}
+					to="/"
+					search={{ tab: "issues" }}
 					aria-current={kind === "issue" ? "page" : undefined}
 				>
 					<WorkflowIcon /> Issues{" "}
 					<span className="contribution-count">{counts.issues}</span>
 				</Link>
 				<Link
-					to="/pull-requests"
-					search={{}}
+					to="/"
+					search={{ tab: "prs" }}
 					aria-current={kind === "pr" ? "page" : undefined}
 				>
 					<WorkflowIcon kind="pr" /> Pull requests{" "}
 					<span className="contribution-count">{counts.prs}</span>
 				</Link>
-				<Link to="/contribution-agents">סוכנים</Link>
 			</div>
 			{(list.error ||
 				detail.error ||
@@ -1004,7 +1020,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 				<Link
 					className="contribution-link"
 					to={path}
-					search={{}}
+					search={queueSearch()}
 					onClick={() => setEditingItem(null)}
 				>
 					→ חזרה לרשימה
@@ -1046,7 +1062,8 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 									}}
 									onCancel={() => {
 										setEditingItem(null);
-										if (!editing) void navigate({ to: path, search: {} });
+										if (!editing)
+											void navigate({ to: path, search: queueSearch() });
 									}}
 								/>
 							</div>
@@ -1078,14 +1095,14 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 							<h1>{kind === "issue" ? "פניות" : "הצעות שינוי"}</h1>
 							<p>
 								{kind === "issue"
-									? "מה צריך לחקור, לתקן או להוסיף לתנכפדיה"
+								? "מה צריך לחקור, לתקן או להוסיף"
 									: "סקירה, ראיות ומיזוג של שינויים מובנים בתנכפדיה"}
 							</p>
 						</div>
 						<Link
 							className="contribution-button primary"
 							to={path}
-							search={{ id: "new" }}
+							search={queueSearch({ id: "new" })}
 						>
 							{kind === "issue" ? "+ פנייה חדשה" : "+ PR חדש"}
 						</Link>
@@ -1099,7 +1116,10 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 							onChange={(event) =>
 								void navigate({
 									to: path,
-									search: { ...search, q: event.target.value || undefined },
+									search: queueSearch({
+										...search,
+										q: event.target.value || undefined,
+									}),
 									replace: true,
 								})
 							}
@@ -1111,10 +1131,10 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 							onChange={(event) =>
 								void navigate({
 									to: path,
-									search: {
+									search: queueSearch({
 										...search,
 										assignee: event.target.value || undefined,
-									},
+									}),
 								})
 							}
 						>
@@ -1139,7 +1159,10 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 									key={state}
 									aria-pressed={(search.state ?? "open") === state}
 									onClick={() =>
-										void navigate({ to: path, search: { ...search, state } })
+										void navigate({
+											to: path,
+											search: queueSearch({ ...search, state }),
+										})
 									}
 								>
 									{label}{" "}
@@ -1181,7 +1204,7 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 										<Link
 											className="contribution-row-title"
 											to={path}
-											search={{ id: row.id }}
+											search={queueSearch({ id: row.id })}
 										>
 											{row.title}
 										</Link>
