@@ -23,6 +23,9 @@ import {
 	findBuild,
 	findBuildUploads,
 	notesDigest,
+	notesPolicy,
+	prepareNotes,
+	prepareNotesReceipt,
 	previousDelivery,
 	readIpa,
 } from "./testflight-build.mjs";
@@ -694,6 +697,17 @@ test("binary IPA metadata rather than current checkout determines build identity
 const intendedNotes = 'שיפורים בלימוד תנ"ך ובחיפוש.';
 const distributionConfig = () =>
 	distributionOptions("Private external group", notesDigest(intendedNotes));
+const notesManifest = (notes = intendedNotes) => ({
+	module: "app",
+	target: "app-ios-beta",
+	version: metadata.version,
+	tag: `app-v${metadata.version}`,
+	entriesSupported: true,
+	override: false,
+	features: [],
+	notes,
+	digest: "a".repeat(64),
+});
 function distributionResponse() {
 	const value = response();
 	const build = value.data[0];
@@ -808,6 +822,12 @@ test("reports pending review, absent groups and internal groups without widening
 	).attributes.externalBuildState = "READY_FOR_BETA_SUBMISSION";
 	assert.equal(snapshot(unsubmitted).reviewState, "NOT_SUBMITTED");
 	assert.equal(snapshot(unsubmitted).externalAccessVerified, false);
+	const inapplicable = distributionResponse();
+	inapplicable.included.find(
+		(row) => row.type === "buildBetaDetails",
+	).attributes.externalBuildState = "NOT_APPLICABLE";
+	assert.equal(snapshot(inapplicable).externalAccessVerified, false);
+	assert.equal(snapshot(inapplicable).submissionVerified, false);
 });
 
 test("distinguishes intended Hebrew notes from stale, absent and English content", () => {
@@ -963,7 +983,31 @@ test("retains real command receipts for pending review and failed group verifica
 	]);
 	const notesFile = path.join(directory, "notes.txt");
 	writeFileSync(notesFile, `${intendedNotes}\n`);
-	const run = (label, phase, value, overrides = {}) => {
+	const run = (
+		label,
+		phase,
+		value,
+		overrides = {},
+		manifest = notesManifest(),
+		expectedNotes = intendedNotes,
+	) => {
+		writeFileSync(notesFile, `${expectedNotes}\n`);
+		const manifestPath = path.join(directory, `${label}.manifest.json`);
+		const preparationPath = path.join(directory, `${label}.preparation.json`);
+		const manifestBytes = JSON.stringify(manifest);
+		writeFileSync(manifestPath, manifestBytes);
+		writeFileSync(
+			preparationPath,
+			JSON.stringify(
+				prepareNotesReceipt(
+					manifest.entriesSupported ? manifest.notes : expectedNotes,
+					expectedNotes,
+					manifestBytes,
+					metadata.version,
+					"2.242.0",
+				),
+			),
+		);
 		const preload = path.join(directory, `${label}.mjs`);
 		writeFileSync(
 			preload,
@@ -1002,6 +1046,8 @@ globalThis.fetch = async (url, options) => {
 					TESTFLIGHT_BETA_GROUP: "Private external group",
 					EXPECTED_TESTFLIGHT_NOTES_FILE: notesFile,
 					EXPECTED_TESTFLIGHT_NOTES_SHA256: "",
+					TESTFLIGHT_NOTES_MANIFEST: manifestPath,
+					TESTFLIGHT_NOTES_PREPARATION_PATH: preparationPath,
 					TESTFLIGHT_RECEIPT_PATH: receiptPath,
 					GITHUB_OUTPUT: outputPath,
 					...overrides,
@@ -1074,6 +1120,282 @@ globalThis.fetch = async (url, options) => {
 	assert.equal(absent.result.status, 0, absent.result.stderr);
 	assert.equal(absent.receipt.build, null);
 	assert.match(absent.output, /external_state=BUILD_NOT_FOUND/);
+	const legacyText = "Automated build v5.0.126";
+	const legacyManifest = {
+		...notesManifest(),
+		entriesSupported: false,
+		notes: null,
+		digest: null,
+	};
+	const legacyResponse = distributionResponse();
+	legacyResponse.included.find(
+		(row) => row.type === "betaBuildLocalizations",
+	).attributes.whatsNew = legacyText;
+	const legacy = run(
+		"legacy",
+		"distribution-verify",
+		legacyResponse,
+		{},
+		legacyManifest,
+		legacyText,
+	);
+	assert.equal(legacy.result.status, 0, legacy.result.stderr);
+	assert.equal(legacy.receipt.build.distribution.notesVerified, true);
+	assert.equal(legacy.receipt.build.distribution.notesPolicy, "legacy");
+	const normalizedText = "שיפור .";
+	const normalizedResponse = distributionResponse();
+	normalizedResponse.included.find(
+		(row) => row.type === "betaBuildLocalizations",
+	).attributes.whatsNew = normalizedText;
+	const normalized = run(
+		"normalized",
+		"distribution-verify",
+		normalizedResponse,
+		{},
+		notesManifest("שיפור 🚀<."),
+		normalizedText,
+	);
+	assert.equal(normalized.result.status, 0, normalized.result.stderr);
+	assert.equal(normalized.receipt.preparation.transformed, true);
+	assert.notEqual(
+		normalized.receipt.preparation.originalNotesSha256,
+		normalized.receipt.preparation.preparedNotesSha256,
+	);
+	const notApplicable = distributionResponse();
+	notApplicable.included.find(
+		(row) => row.type === "buildBetaDetails",
+	).attributes.externalBuildState = "NOT_APPLICABLE";
+	const unavailable = run(
+		"not-applicable",
+		"distribution-inspect",
+		notApplicable,
+	);
+	assert.equal(unavailable.result.status, 0, unavailable.result.stderr);
+	assert.equal(
+		unavailable.receipt.build.distribution.externalState,
+		"NOT_APPLICABLE",
+	);
+	assert.equal(
+		unavailable.receipt.build.distribution.externalAccessVerified,
+		false,
+	);
+});
+
+test("retains compatible notes and transparently binds Fastlane emoji, less-than and UTF-8 transformations", () => {
+	for (const [original, prepared] of [
+		[intendedNotes, intendedNotes],
+		["שיפור 🚀.", "שיפור ."],
+		["עדכון <טקסט>", "עדכון טקסט>"],
+		["א".repeat(2100), `${"א".repeat(1998)}...`],
+	]) {
+		const manifest = notesManifest(original);
+		const receipt = prepareNotesReceipt(
+			original,
+			prepared,
+			JSON.stringify(manifest),
+			metadata.version,
+			"2.242.0",
+		);
+		assert.equal(receipt.preparedNotesSha256, notesDigest(prepared));
+		assert.equal(receipt.originalManifestDigest, manifest.digest);
+		assert.equal(receipt.transformed, original !== prepared);
+		assert(receipt.preparedBytes <= 4000);
+		assert.doesNotMatch(prepared, /\ufffd/);
+	}
+	assert.throws(
+		() =>
+			prepareNotesReceipt(
+				intendedNotes,
+				"א".repeat(2100),
+				JSON.stringify(notesManifest()),
+				metadata.version,
+				"2.242.0",
+			),
+		/byte limit/,
+	);
+	assert.throws(
+		() =>
+			prepareNotesReceipt(
+				"English",
+				"English",
+				JSON.stringify(notesManifest("English")),
+				metadata.version,
+				"2.242.0",
+			),
+		/manifest and Fastlane/,
+	);
+	assert.throws(
+		() =>
+			prepareNotesReceipt(
+				"תוכן אחר",
+				intendedNotes,
+				JSON.stringify(notesManifest()),
+				metadata.version,
+				"2.242.0",
+			),
+		/differ/,
+	);
+	for (const bad of [
+		{ ...notesManifest(), version: "9.9.9" },
+		{ ...notesManifest(), entriesSupported: false },
+		{
+			...notesManifest(),
+			entriesSupported: false,
+			notes: null,
+			override: true,
+		},
+		{ ...notesManifest(), error: "generation failed" },
+	])
+		assert.throws(() => notesPolicy(bad, metadata.version));
+	assert.throws(
+		() =>
+			distributionOptions("group", notesDigest("English"), {
+				entriesSupported: false,
+			}),
+		/manifest/,
+	);
+});
+
+test("delegates final notes to the installed Fastlane Ruby sanitizer using fixed argv and owned files", (t) => {
+	const directory = mkdtempSync(path.join(tmpdir(), "testflight-preparation-"));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const original = "שיפור 🚀<.";
+	const prepared = "שיפור .";
+	const originalPath = path.join(directory, "original notes.txt"),
+		preparedPath = path.join(directory, "prepared.txt"),
+		manifestPath = path.join(directory, "manifest.json"),
+		receiptPath = path.join(directory, "receipt.json");
+	writeFileSync(originalPath, original);
+	writeFileSync(manifestPath, JSON.stringify(notesManifest(original)));
+	let calls = 0;
+	const result = prepareNotes(
+		manifestPath,
+		originalPath,
+		preparedPath,
+		receiptPath,
+		metadata.version,
+		(command, argv) => {
+			calls++;
+			assert.equal(command, "ruby");
+			assert.deepEqual(argv.slice(0, 7), [
+				"-r",
+				"fastlane",
+				"-r",
+				"pilot",
+				"-r",
+				"json",
+				"-e",
+			]);
+			assert.match(
+				argv[7],
+				/Pilot::BuildManager\.sanitize_changelog\(original\)/,
+			);
+			assert.match(argv[7], /File::EXCL/);
+			assert.deepEqual(argv.slice(-3), [
+				originalPath,
+				preparedPath,
+				`${preparedPath}.sanitizer.json`,
+			]);
+			assert(!argv.includes(original));
+			writeFileSync(preparedPath, prepared, { flag: "wx" });
+			writeFileSync(
+				`${preparedPath}.sanitizer.json`,
+				JSON.stringify({ version: "2.242.0" }),
+				{ flag: "wx" },
+			);
+		},
+	);
+	assert.equal(calls, 1);
+	assert.equal(result.prepared, prepared);
+	assert.deepEqual(
+		JSON.parse(readFileSync(receiptPath, "utf8")),
+		result.receipt,
+	);
+	writeFileSync(
+		manifestPath,
+		JSON.stringify({ ...notesManifest(original), tag: "app-v9.9.9" }),
+	);
+	assert.throws(
+		() =>
+			prepareNotes(
+				manifestPath,
+				originalPath,
+				preparedPath,
+				receiptPath,
+				metadata.version,
+				() => assert.fail("must reject before loading Ruby"),
+			),
+		/manifest/,
+	);
+});
+
+test("prepares the real command before credentials and binds its final file and safe multiline output", (t) => {
+	const directory = mkdtempSync(
+		path.join(tmpdir(), "testflight-prepare-command-"),
+	);
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const original = "שיפור 🚀<.\nEOF\nתוכן נוסף";
+	const prepared = "שיפור .\nEOF\nתוכן נוסף";
+	const manifest = path.join(directory, "manifest.json"),
+		raw = path.join(directory, "raw.txt"),
+		final = path.join(directory, "final.txt"),
+		receipt = path.join(directory, "preparation.json"),
+		output = path.join(directory, "github-output.txt"),
+		preload = path.join(directory, "preload.mjs");
+	writeFileSync(manifest, JSON.stringify(notesManifest(original)));
+	writeFileSync(raw, original);
+	writeFileSync(
+		preload,
+		`
+import assert from 'node:assert/strict';
+import cp from 'node:child_process';
+import {writeFileSync} from 'node:fs';
+import {syncBuiltinESMExports} from 'node:module';
+cp.execFileSync=(command,argv)=>{
+ assert.equal(command,'ruby');
+ assert.deepEqual(argv.slice(0,7),['-r','fastlane','-r','pilot','-r','json','-e']);
+ writeFileSync(argv.at(-2),${JSON.stringify(prepared)},{flag:'wx'});
+ writeFileSync(argv.at(-1),JSON.stringify({version:'2.242.0'}),{flag:'wx'});
+};
+syncBuiltinESMExports();
+globalThis.fetch=()=>assert.fail('preparation must not contact Apple');
+`,
+	);
+	const result = spawnSync(
+		process.execPath,
+		[
+			"--import",
+			pathToFileURL(preload).href,
+			fileURLToPath(new URL("./testflight-build.mjs", import.meta.url)),
+			"prepare-notes",
+			manifest,
+			raw,
+			final,
+			receipt,
+		],
+		{
+			encoding: "utf8",
+			env: {
+				...process.env,
+				MODULE_VERSION: metadata.version,
+				GITHUB_OUTPUT: output,
+				API_KEY_PATH: "",
+				API_KEY_BASE64: "",
+			},
+		},
+	);
+	assert.equal(result.status, 0, result.stderr);
+	const proof = JSON.parse(readFileSync(receipt, "utf8"));
+	assert.equal(proof.preparedNotesSha256, notesDigest(prepared));
+	assert.equal(proof.originalNotesSha256, notesDigest(original));
+	assert.equal(readFileSync(final, "utf8"), prepared);
+	const generated = readFileSync(output, "utf8");
+	const delimiter = generated.split("\n")[0].split("<<")[1];
+	assert.match(delimiter, /^TESTFLIGHT_[a-f0-9-]+$/);
+	assert.equal(
+		generated,
+		`CHANGELOG<<${delimiter}\n${prepared}\n${delimiter}\n`,
+	);
 });
 
 test("verifies TestFlight metadata before recording delivery and distinguishes external availability", () => {
@@ -1119,12 +1441,29 @@ test("verifies TestFlight metadata before recording delivery and distinguishes e
 			(step) =>
 				step.uses === "actions/upload-artifact@v7" &&
 				step.if.includes("always()") &&
-				step.with.path.endsWith("/testflight-distribution-inspection.json"),
+				step.with.path
+					.trim()
+					.endsWith("/testflight-distribution-inspection.json"),
 		),
 	);
 	assert.match(
 		steps.find((step) => step.name === "Distribution summary").run,
 		/external_access_verified == 'true'/,
+	);
+	const prepare = steps.findIndex((step) =>
+		step.run?.includes(" prepare-notes "),
+	);
+	const install = steps.findIndex((step) => step.name === "Install Fastlane");
+	assert(prepare > install && prepare < distribute);
+	assert.match(steps[prepare].run, /testflight-changelog-source\.txt/);
+	assert.match(steps[prepare].run, /store-notes\/release-notes-manifest\.json/);
+	assert.match(
+		steps[verify].env.TESTFLIGHT_NOTES_MANIFEST,
+		/release-notes-manifest\.json$/,
+	);
+	assert.match(
+		steps[verify].env.TESTFLIGHT_NOTES_PREPARATION_PATH,
+		/testflight-notes-preparation\.json$/,
 	);
 	const status = parse(
 		readFileSync(
@@ -1187,8 +1526,8 @@ test("passes literal changelog metacharacters as one real shell argument without
 			encoding: "utf8",
 			env: {
 				...process.env,
-			ARG_FILE: captured.replace(/\\/g, "/"),
-			MARKER: marker.replace(/\\/g, "/"),
+				ARG_FILE: captured.replace(/\\/g, "/"),
+				MARKER: marker.replace(/\\/g, "/"),
 				TESTFLIGHT_CHANGELOG: notes,
 				API_KEY_PATH: "synthetic-key-file",
 				APP_IDENTIFIER: metadata.bundle,
