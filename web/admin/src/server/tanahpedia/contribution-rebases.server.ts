@@ -92,7 +92,7 @@ async function refreshContributionBase(
 	const deferred = Boolean(item.deferredContentMerge);
 	delete item.deferredContentMerge;
 	let next: Contribution["changes"];
-	let evidence = item.evidence;
+	let evidence: Contribution["evidence"];
 	try {
 		const inputs = item.changes.length
 			? validateChanges(
