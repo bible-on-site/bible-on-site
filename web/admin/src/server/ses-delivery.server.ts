@@ -32,7 +32,6 @@ import {
 } from "./ses-client.server";
 import { parseSesEvent, type SesEvent } from "./ses-events.server";
 import {
-	DeliverySuppressed,
 	getEmailReadiness,
 	loadEmailRuntime,
 	reserveSendSlot,
@@ -376,7 +375,7 @@ export async function enqueueBulletinEmail(
 			settings.audience !== expected.audience ||
 			Number(settings.revision) !== expected.revision
 		)
-			throw new DeliverySuppressed();
+			throw new SesSuppressedError();
 		const existing = await txQueryOne<JobRow>(
 			connection,
 			"SELECT j.*, DATE_FORMAT(j.bulletin_date, '%Y-%m-%d') AS bulletin_date, DATE_FORMAT(j.created_at, '%Y-%m-%dT%H:%i:%sZ') AS created_at FROM tanah_daily_bulletin_email_job j WHERE bulletin_date = ? AND audience = ? AND idempotency_key = ?",
@@ -451,7 +450,7 @@ export async function enqueueBulletinEmail(
 				 AND provider_message_id IS NULL AND sent_at IS NULL AND lease_token IS NULL AND lease_until IS NULL`,
 				["sending", `ses:${id}`, date],
 			);
-			if (reserved.affectedRows !== 1) throw new DeliverySuppressed();
+			if (reserved.affectedRows !== 1) throw new SesSuppressedError();
 		}
 		const inserted = await txQueryOne<JobRow>(
 			connection,
@@ -526,7 +525,7 @@ export async function processEmailRecipient(id: number): Promise<void> {
 			current.subscriber_audience !== row.audience ||
 			current.email.toLowerCase() !== current.subscriber_email.toLowerCase()
 		)
-			throw new DeliverySuppressed();
+			throw new SesSuppressedError();
 		const bulletin = await readBulletinEmailContent(
 			dateOnly(row.bulletin_date),
 		);
@@ -541,7 +540,7 @@ export async function processEmailRecipient(id: number): Promise<void> {
 						Number(row.subscriber_id),
 					);
 				} catch (error) {
-					suppressed = error instanceof DeliverySuppressed;
+					suppressed = error instanceof SesSuppressedError;
 					throw error;
 				}
 				providerStarted = true;
@@ -595,9 +594,7 @@ export async function processEmailRecipient(id: number): Promise<void> {
 		if (!persisted) throw new Error(UNCERTAIN);
 	} catch (error) {
 		const state =
-			suppressed ||
-			error instanceof DeliverySuppressed ||
-			error instanceof SesSuppressedError
+			suppressed || error instanceof SesSuppressedError
 				? "suppressed"
 				: error instanceof SesError
 					? error.outcome
