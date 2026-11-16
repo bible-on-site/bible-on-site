@@ -194,7 +194,9 @@
 
 	<ItemGroup>
 		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" />
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg">
+			<ForegroundScale Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">0.66</ForegroundScale>
+		</MauiIcon>
 
 		<!-- Splash Screen -->
 		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#1552ac" BaseSize="320,98" />
@@ -202,7 +204,7 @@
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
 		<!-- Launcher icons are not runtime images on iOS; bundle the same artwork for the loading page. -->
-		<MauiImage Include="Resources\AppIcon\appicon.svg" Link="loading_logo.svg" BaseSize="150,150" />
+		<MauiImage Include="Resources\AppIcon\appicon_full.svg" Link="loading_logo.svg" BaseSize="150,150" />
 
 		<!-- Custom Fonts -->
 		<EmbeddedResource Include="Resources/Fonts/TaameyD-Regular.ttf" LogicalName="TikkunFont.ttf" />

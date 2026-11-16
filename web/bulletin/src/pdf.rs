@@ -335,6 +335,14 @@ fn push_article_text(out: &mut String, text: &str, cantillation_font: Option<&st
     }
 }
 
+/// Chapter headings can retain meteg after stripping taamim. Shape their full
+/// Hebrew runs on the scripture face rather than invoking per-glyph fallback.
+fn scripture_aware_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    push_article_text(&mut out, text, Some("Taamey D"));
+    out
+}
+
 /// Convert article HTML to Typst markup, preserving semantic structure.
 ///
 /// Supported tags:
@@ -737,7 +745,7 @@ fn append_toc_page(markup: &mut String, req: &PdfRequest) {
         let label = perek_label(idx);
         markup.push_str(&format!(
             "#block(inset: (right: 0.2em))[#link({label})[{} #box(width: 1fr, repeat[.]) #context counter(page).at({label}).first()]]\n#v(0.28em)\n",
-            typst_escape(&strip_taamim(&line))
+            scripture_aware_text(&strip_taamim(&line))
         ));
     }
 }
@@ -815,7 +823,7 @@ fn generate_typst_markup(req: &PdfRequest) -> (String, TypstFiles) {
         };
         markup.push_str(&format!(
             "#align(center, text(size: 16pt, weight: \"bold\")[{}])\n",
-            typst_escape(&strip_taamim(&title_text))
+            scripture_aware_text(&strip_taamim(&title_text))
         ));
         markup.push_str("#v(0.5em)\n");
 

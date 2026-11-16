@@ -423,6 +423,10 @@ fn adjacent_citations_compile_in_sefer_and_daily_exports() {
             let doc = Document::load_mem(&bytes).unwrap();
             let shown = shown_texts(&doc);
             assert!(shown.iter().all(|run| run.notdef == 0));
+            assert!(
+                shown.iter().all(|run| !run.text.contains(';')),
+                "Typst expression terminators must never become article punctuation: {shown:?}"
+            );
             let citation: String = shown
                 .iter()
                 .filter(|run| run.font.contains("AlHeperekUI"))
@@ -430,6 +434,32 @@ fn adjacent_citations_compile_in_sefer_and_daily_exports() {
                 .collect();
             assert!(citation.contains("בראשית") || citation.contains("תישארב"));
         }
+    }
+}
+
+#[test]
+fn pointed_chapter_headings_use_complete_scripture_runs() {
+    let mut req = melachim_request(String::new());
+    req.perakim[0].header = "אֹתָֽם׃".into();
+    req.perakim[0].pesukim.clear();
+    req.perakim[0].articles.clear();
+    for bytes in [
+        pdf::build_pdf(&req, &fonts_dir()).unwrap(),
+        pdf::build_daily_pdf(&req, &fonts_dir(), "תאריך", &[]).unwrap(),
+    ] {
+        let doc = Document::load_mem(&bytes).unwrap();
+        let shown = shown_texts(&doc);
+        assert!(shown.iter().all(|run| run.notdef == 0));
+        assert!(
+            shown
+                .iter()
+                .filter(|run| run.font.contains("AlHeperekUI"))
+                .all(|run| !run
+                    .text
+                    .chars()
+                    .any(|c| ('\u{05B0}'..='\u{05BD}').contains(&c))),
+            "a pointed scripture heading must shape as one run: {shown:?}"
+        );
     }
 }
 

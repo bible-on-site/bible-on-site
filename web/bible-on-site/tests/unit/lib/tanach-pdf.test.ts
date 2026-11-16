@@ -445,7 +445,7 @@ describe("buildTanachPdfForPerekRange", () => {
 			>,
 		);
 		mockGetArticlesByPerekId.mockResolvedValue([
-			{ name: "וַיֹּאמֶ֞ר", authorName: "מחבר", abstract: "<p>הָאָֽרֶץ׃</p>" },
+			{ name: "וַיֹּאמֶ֞ר", authorName: "מחבר", abstract: "<p>הָאָֽרֶץ׃ — …</p>" },
 		] as Awaited<ReturnType<typeof getArticlesByPerekId>>);
 		await buildTanachPdfForPerekRange([1]);
 		const calls = pdfLib.__mockPages[0].drawText.mock.calls;
@@ -455,6 +455,14 @@ describe("buildTanachPdfForPerekRange", () => {
 		expect(pointed.length).toBeGreaterThanOrEqual(3);
 		for (const call of pointed)
 			expect(call[1].font).toBe(pdfLib.__mockScriptureFont);
+		expect(calls.find((call: [string]) => call[0].includes("•"))[1].font).toBe(
+			pdfLib.__mockBoldFont,
+		);
+		for (const punctuation of ["—", "…"]) {
+			expect(
+				calls.find((call: [string]) => call[0].includes(punctuation))[1].font,
+			).toBe(pdfLib.__mockFont);
+		}
 	});
 
 	it("creates a new page for each perek", async () => {
