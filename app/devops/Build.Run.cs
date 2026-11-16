@@ -260,7 +260,7 @@ partial class Build
 
             DotNetRun(s => s
                 .SetProjectFile(MainProject)
-                .SetFramework("net10.0-windows10.0.19041.0")
+                .SetFramework("net11.0-windows10.0.19041.0")
                 .SetConfiguration(Configuration)
                 .EnableNoRestore()
                 .EnableNoBuild());
@@ -279,7 +279,7 @@ partial class Build
             }
             DotNetRun(s => s
                 .SetProjectFile(MainProject)
-                .SetFramework("net10.0-windows10.0.19041.0")
+                .SetFramework("net11.0-windows10.0.19041.0")
                 .SetConfiguration(Configuration)
                 .SetProperty("WindowsPackageType", "None")
                 .SetProperty("WindowsAppSDKSelfContained", "false")
@@ -312,7 +312,7 @@ partial class Build
                 using (var clean = Process.Start(new ProcessStartInfo
                 {
                     FileName = "dotnet",
-                    Arguments = $"clean \"{MainProject}\" -c {Configuration} -f net10.0-android",
+                    Arguments = $"clean \"{MainProject}\" -c {Configuration} -f net11.0-android",
                     WorkingDirectory = RootDirectory,
                     UseShellExecute = false,
                     CreateNoWindow = true,
@@ -327,7 +327,7 @@ partial class Build
                 var watchInfo = new ProcessStartInfo
                 {
                     FileName = "dotnet",
-                    Arguments = $"watch build -t:Run -f net10.0-android -c {Configuration} {embedArg}".Trim(),
+                    Arguments = $"watch build -t:Run -f net11.0-android -c {Configuration} {embedArg}".Trim(),
                     WorkingDirectory = SourceDirectory,
                     UseShellExecute = false,
                 };
@@ -347,7 +347,7 @@ partial class Build
                 var buildInfo = new ProcessStartInfo
                 {
                     FileName = "dotnet",
-                    Arguments = $"build -t:Install -f net10.0-android -c {Configuration} {embedArg}".Trim(),
+                    Arguments = $"build -t:Install -f net11.0-android -c {Configuration} {embedArg}".Trim(),
                     WorkingDirectory = SourceDirectory,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
@@ -902,7 +902,7 @@ partial class Build
             var startInfo = new ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = $"build \"{MainProject}\" -t:Run -f net10.0-ios -c {Configuration} --no-restore",
+                Arguments = $"build \"{MainProject}\" -t:Run -f net11.0-ios -c {Configuration} --no-restore",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -924,7 +924,7 @@ partial class Build
             var startInfo = new ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = $"build \"{MainProject}\" -t:Run -f net10.0-maccatalyst -c {Configuration} --no-restore",
+                Arguments = $"build \"{MainProject}\" -t:Run -f net11.0-maccatalyst -c {Configuration} --no-restore",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,

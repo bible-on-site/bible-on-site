@@ -77,7 +77,7 @@ public class ScriptureFontTests
     {
         Assert.Equal("TaameyD", ScriptureFonts.Family);
         // Regular and Bold share one face — Bold only adds the weight flag a
-        // canvas can honor (Windows); on the net10.0 test target the canvas
+        // canvas can honor (Windows); on the net11.0 test target the canvas
         // name is the alias itself.
         Assert.Equal(ScriptureFonts.Regular.Name, ScriptureFonts.Bold.Name);
         Assert.Equal(Microsoft.Maui.Graphics.FontWeights.Bold, ScriptureFonts.Bold.Weight);
