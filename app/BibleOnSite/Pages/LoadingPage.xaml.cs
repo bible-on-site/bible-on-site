@@ -12,7 +12,7 @@ public partial class LoadingPage : ContentPage, IAnalyticsScreenName
     private bool _isLoading;
 
     /// <summary>Transient bootstrap screen — never a reportable GA screen.</summary>
-    public string? AnalyticsScreenName => null;
+    public AnalyticsScreen? AnalyticsScreen => null;
 
     public LoadingPage()
     {
