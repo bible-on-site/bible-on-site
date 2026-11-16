@@ -704,6 +704,20 @@ describe("resolveEntityChanges", () => {
 		warn.mockRestore();
 	});
 
+	it("propagates a moed-name lookup failure instead of under-invalidating", async () => {
+		stubDb({ entryId: "e1" });
+		const inner = mockQuery.getMockImplementation();
+		if (inner == null) throw new Error("stubDb must run first");
+		mockQuery.mockImplementation(async (sql: string) => {
+			if (/FROM tanah_moed WHERE published/.test(sql))
+				throw new Error("connection lost");
+			return inner(sql);
+		});
+		await expect(
+			resolveEntityChanges([{ kind: "pedia-entry", uniqueName: "פסח" }]),
+		).rejects.toThrow("connection lost");
+	});
+
 	it("coalesces repeated changes into one dependency set", async () => {
 		stubDb({});
 		const out = await resolveEntityChanges([

@@ -18,7 +18,6 @@ import {
 	getPublishedMoedSlugs,
 	type Moed,
 	MOED_STALE_BOUND_SECONDS,
-	moedDateLine,
 	moedHref,
 } from "@/lib/moadim";
 import { getCachedMoadim } from "@/lib/moadim/catalogue-cache";
@@ -31,6 +30,7 @@ import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
 import { MoedBreadcrumb } from "../components/MoedBreadcrumb";
+import { MoedDateLine } from "../components/MoedDateLabels";
 import styles from "./page.module.css";
 
 // Published moadim are a growing DB set — a slug added after build
@@ -159,14 +159,13 @@ export default async function MoedPage({
 			getCachedMoedEntryPreview(moed),
 		]);
 	const firstPerekId = perekIds[0] ?? 1;
-	const dateLine = moedDateLine(moed);
 
 	return (
 		<div className={styles.container}>
 			<MoedBreadcrumb moed={moed} siblings={siblings} />
 			<header className={styles.header}>
 				<h1 className={styles.heading}>{moed.name}</h1>
-				{dateLine && <p className={styles.dateLine}>{dateLine}</p>}
+				<MoedDateLine moed={moed} className={styles.dateLine} />
 				{entryPreview && (
 					<p className={styles.intro}>
 						{entryPreview.text}{" "}

@@ -5,7 +5,6 @@ import {
 	bandRotation,
 	buildMoedWheel,
 	MOADIM_ROOT,
-	moedDateCarriesMonth,
 	moedHref,
 	polar,
 	sectorPath,
@@ -14,6 +13,7 @@ import {
 	wrapMoedName,
 } from "@/lib/moadim";
 import { getCachedMoadim } from "@/lib/moadim/catalogue-cache";
+import { MoedMonthChip } from "./components/MoedDateLabels";
 import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import styles from "./page.module.css";
@@ -252,12 +252,10 @@ export default async function MoadimLanding() {
 									{/* The month chip is information, not decoration:
 									    it shows only when the date does not already
 									    name the month (#3381). */}
-									{slice.moed.hebrewMonth &&
-										!moedDateCarriesMonth(slice.moed) && (
-											<span className={styles.indexMonth}>
-												{slice.moed.hebrewMonth}
-											</span>
-										)}
+									<MoedMonthChip
+										moed={slice.moed}
+										className={styles.indexMonth}
+									/>
 								</Link>
 							</li>
 						))}
