@@ -63,7 +63,7 @@ public class AppFixture : IAsyncLifetime
 
     /// <summary>
     /// Path to the API directory (for starting the API server).
-    /// From: app\BibleOnSite.Tests.E2E\bin\Debug\net10.0-windows10.0.19041.0\win-x64\
+    /// From: app\BibleOnSite.Tests.E2E\bin\Debug\net11.0-windows10.0.19041.0\win-x64\
     /// To:   web\api
     /// </summary>
     private static string ApiDirectory
@@ -72,15 +72,15 @@ public class AppFixture : IAsyncLifetime
         {
             var baseDir = Path.GetDirectoryName(typeof(AppFixture).Assembly.Location)
                 ?? throw new InvalidOperationException("Cannot determine assembly location");
-            // Go up 6 levels (win-x64 -> net10.0... -> Debug -> bin -> BibleOnSite.Tests.E2E -> app) then into web/api
+            // Go up 6 levels (win-x64 -> net11.0... -> Debug -> bin -> BibleOnSite.Tests.E2E -> app) then into web/api
             return Path.GetFullPath(Path.Join(baseDir, "..", "..", "..", "..", "..", "..", "web", "api"));
         }
     }
 
     /// <summary>
     /// Path to the built MAUI Windows executable.
-    /// From: app\BibleOnSite.Tests.E2E\bin\Debug\net10.0-windows10.0.19041.0\win-x64\
-    /// To:   app\BibleOnSite\bin\Debug\net10.0-windows10.0.19041.0\win-x64\
+    /// From: app\BibleOnSite.Tests.E2E\bin\Debug\net11.0-windows10.0.19041.0\win-x64\
+    /// To:   app\BibleOnSite\bin\Debug\net11.0-windows10.0.19041.0\win-x64\
     /// </summary>
     private static string AppPath
     {
@@ -90,14 +90,14 @@ public class AppFixture : IAsyncLifetime
                 ?? throw new InvalidOperationException("Cannot determine assembly location");
 
             // Navigate from test output to app output (go up to app/, then into BibleOnSite/bin/...)
-            var appDir = Path.GetFullPath(Path.Join(baseDir, "..", "..", "..", "..", "..", "BibleOnSite", "bin", "Debug", "net10.0-windows10.0.19041.0", "win-x64"));
+            var appDir = Path.GetFullPath(Path.Join(baseDir, "..", "..", "..", "..", "..", "BibleOnSite", "bin", "Debug", "net11.0-windows10.0.19041.0", "win-x64"));
             var exePath = Path.Join(appDir, "BibleOnSite.exe");
 
             if (!File.Exists(exePath))
             {
                 throw new FileNotFoundException(
                     $"App executable not found at {exePath}. " +
-                    "Make sure to build the app first: dotnet build BibleOnSite/BibleOnSite.csproj -f net10.0-windows10.0.19041.0");
+                    "Make sure to build the app first: dotnet build BibleOnSite/BibleOnSite.csproj -f net11.0-windows10.0.19041.0");
             }
 
             return exePath;
@@ -228,7 +228,7 @@ public class AppFixture : IAsyncLifetime
         var startInfo = new ProcessStartInfo
         {
             FileName = "dotnet",
-            Arguments = "run -f net10.0-windows10.0.19041.0 --no-build",
+            Arguments = "run -f net11.0-windows10.0.19041.0 --no-build",
             WorkingDirectory = projectDir,
             UseShellExecute = false,
             CreateNoWindow = true,
