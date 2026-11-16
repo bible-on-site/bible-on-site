@@ -34,7 +34,11 @@ import {
 	memoizeGlyphEncoding,
 	visualTextRuns,
 } from "./bidi-text";
-import { getBoldFontBytes, getRegularFontBytes } from "./pdf-fonts";
+import {
+	getBoldFontBytes,
+	getRegularFontBytes,
+	getScriptureFontBytes,
+} from "./pdf-fonts";
 import { semanticPagesToPerekIds } from "./semantic-pages";
 import type { SemanticPageInfo } from "./types";
 
@@ -235,6 +239,9 @@ export async function buildTanachPdfForPerekRange(
 	const boldFont = memoizeGlyphEncoding(
 		await doc.embedFont(boldBytes, { subset: true }),
 	);
+	const scriptureFont = memoizeGlyphEncoding(
+		await doc.embedFont(getScriptureFontBytes(), { subset: true }),
+	);
 
 	const ctx: DrawContext = { doc, font, boldFont, y: 0, pageNum: 0 };
 
@@ -260,7 +267,7 @@ export async function buildTanachPdfForPerekRange(
 		for (const pasuk of perek.pesukim) {
 			const text = stripTaamim(segmentsToText(pasuk.segments));
 			if (!text) continue;
-			drawRtlWrapped(ctx, text, font, BODY_SIZE, BODY_LINE_HEIGHT);
+			drawRtlWrapped(ctx, text, scriptureFont, BODY_SIZE, BODY_LINE_HEIGHT);
 			ctx.y -= 2; // tiny inter-pasuk gap
 		}
 

@@ -171,7 +171,9 @@ test("email images preserve their original sources and published content hashes"
 		assert.equal(asset.s3Key, `branding/daily-bulletin/${asset.file}`);
 		assert.equal(
 			asset.url,
-			`https://bible-on-site-assets.s3.il-central-1.amazonaws.com/${asset.s3Key}`,
+			asset.id === "logo-header"
+				? "https://xn--febl3a.co.il/images/logos/header-logo.jpg"
+				: `https://bible-on-site-assets.s3.il-central-1.amazonaws.com/${asset.s3Key}`,
 		);
 		if (asset.id === "logo-header") {
 			assert.deepEqual(bytes, source, "use the exact original wordmark");

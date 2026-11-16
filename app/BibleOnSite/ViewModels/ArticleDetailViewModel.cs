@@ -66,13 +66,14 @@ public partial class ArticleDetailViewModel : ObservableObject
     <meta charset=""UTF-8"">
     <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
     <style>
+        {BibleOnSite.Helpers.BrandFonts.WebViewCss}
         * {{
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }}
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Al Heperek Font UI', sans-serif;
             font-size: 16px;
             line-height: 1.6;
             direction: rtl;
