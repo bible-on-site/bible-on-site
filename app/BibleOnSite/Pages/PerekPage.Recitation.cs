@@ -508,7 +508,9 @@ public partial class PerekPage
         // verses range, or a pasuk preview) toggles pause and resume — a tapped
         // word preview is a bookmark, not the bar's playback (#2157), so Play
         // during one starts continuous playback at that word instead.
-        if (_recitationCursor.BarIssued && RecitationPlayer is { } player && player.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
+        // Buffering is an active session too — MediaElement v11 reports it on
+        // Android during open/buffer where v10 surfaced Paused.
+        if (_recitationCursor.BarIssued && RecitationPlayer is { } player && player.CurrentState is MediaElementState.Playing or MediaElementState.Paused or MediaElementState.Buffering)
         {
             if (player.CurrentState == MediaElementState.Playing)
             {
@@ -566,7 +568,7 @@ public partial class PerekPage
         }
         var continuous = start == null && ranges == null;
 
-        if (_recitationCursor.PlayingKey == key && RecitationPlayer is { } existing && existing.CurrentState is MediaElementState.Playing or MediaElementState.Paused)
+        if (_recitationCursor.PlayingKey == key && RecitationPlayer is { } existing && existing.CurrentState is MediaElementState.Playing or MediaElementState.Paused or MediaElementState.Buffering)
         {
             if (existing.CurrentState == MediaElementState.Playing)
             {
@@ -718,6 +720,9 @@ public partial class PerekPage
             return;
         }
 
+        // MediaElement v11 also reports a throwing source-change event handler
+        // through MediaFailed — ErrorMessage distinguishes it from a bad source.
+        System.Diagnostics.Debug.WriteLine($"Recitation media failed: {e.ErrorMessage}");
         StopRecitation(); UpdateSelectionBar();
         await ShellAppNavigator.Instance.DisplayAlertAsync("הקראה", "לא ניתן להשמיע את ההקלטה במכשיר זה.", "אישור");
     }
