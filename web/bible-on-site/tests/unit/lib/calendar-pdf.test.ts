@@ -4,7 +4,7 @@
  * Visual bidi regression for the learning-calendar PDF (issue #2620) plus the
  * branded layout contract (issue #2727).
  *
- * Generates real PDFs with the production Frank Ruhl fonts and inspects the
+ * Generates real PDFs with the bundled UI fonts and inspects the
  * emitted content stream: every text-show op's glyph codes are decoded back
  * to Unicode through the embedded ToUnicode CMap. The decoded sequence is
  * the visual order a renderer paints — it must equal the bidi-reordered
@@ -38,12 +38,12 @@ import {
 	type MonthCell,
 	type MonthRef,
 } from "@/data/learning-schedule";
-import { SITE_ORIGIN } from "@/lib/seo/jsonld";
 import {
 	type CalendarPdfInput,
 	type CalendarPdfMonth,
 	generateCalendarPdf,
 } from "@/lib/download/calendar-pdf";
+import { SITE_ORIGIN } from "@/lib/seo/jsonld";
 
 const bidi = bidiFactory();
 
@@ -120,10 +120,7 @@ async function extractLinkAnnots(pdf: Uint8Array): Promise<LinkAnnot[][]> {
 				.lookup(dict.get(PDFName.of("Rect")), PDFArray)
 				.asArray()
 				.map((n) => doc.context.lookup(n, PDFNumber).asNumber());
-			const action = doc.context.lookup(
-				dict.get(PDFName.of("A")),
-				PDFDict,
-			);
+			const action = doc.context.lookup(dict.get(PDFName.of("A")), PDFDict);
 			const uri = doc.context
 				.lookup(action.get(PDFName.of("URI")), PDFString)
 				.decodeText();
@@ -133,7 +130,10 @@ async function extractLinkAnnots(pdf: Uint8Array): Promise<LinkAnnot[][]> {
 }
 
 /** Whether a page draws an embedded image (the brand logo). */
-async function pageDrawsImage(pdf: Uint8Array, pageIndex: number): Promise<boolean> {
+async function pageDrawsImage(
+	pdf: Uint8Array,
+	pageIndex: number,
+): Promise<boolean> {
 	const doc = await PDFDocument.load(pdf);
 	const page = doc.getPages()[pageIndex];
 	const xobjects = lookupDict(
@@ -431,9 +431,7 @@ describe("merged Friday-Shabbat review block (issue #2365)", () => {
 	});
 
 	it("dims the block only when both days dim", async () => {
-		const input = (
-			dimmed: (day: CalendarDay) => boolean,
-		): CalendarPdfInput =>
+		const input = (dimmed: (day: CalendarDay) => boolean): CalendarPdfInput =>
 			fakeInput([fakeMonth("אלול", cellsForDays(pair))], {
 				dayLabel: (day) => getPerekSource(day.perekId ?? 1),
 				dimmed,
@@ -515,7 +513,9 @@ describe("branded layout (issue #2727)", () => {
 			.join("");
 		expect(footer).toContain("1");
 		const texts = pages[0].map((o) => o.text).join("");
-		expect(texts).toContain(visualOrder('לוח לימוד יומי - אלול ה\'תשפה - תנ"ך על הפרק'));
+		expect(texts).toContain(
+			visualOrder("לוח לימוד יומי - אלול ה'תשפה - תנ\"ך על הפרק"),
+		);
 	});
 
 	it("renders a 12-month year as cover plus six two-month pages", async () => {
@@ -571,7 +571,7 @@ describe("branded layout (issue #2727)", () => {
 		const pdf = await generateCalendarPdf(
 			fakeInput(months, {
 				scope: "cycle",
-				title: "לוח לימוד יומי - מחזור 4 - תנ\"ך על הפרק",
+				title: 'לוח לימוד יומי - מחזור 4 - תנ"ך על הפרק',
 				subtitle: "כ״ה אדר ה'תשפ״ה - כ״ד אדר ה'תשצ״ו",
 			}),
 		);
@@ -664,6 +664,37 @@ describe("chapter link annotations (#2727)", () => {
 	async function linksFor(input: CalendarPdfInput): Promise<LinkAnnot[][]> {
 		return extractLinkAnnots(await generateCalendarPdf(input));
 	}
+
+	it("creates a valid link when the page omits its optional annotations array", async () => {
+		const doc = await PDFDocument.create({ updateMetadata: false });
+		const addPage = doc.addPage.bind(doc);
+		jest.spyOn(doc, "addPage").mockImplementation((page) => {
+			const added = addPage(page);
+			const drawText = added.drawText.bind(added);
+			jest.spyOn(added, "drawText").mockImplementation((...args) => {
+				const result = drawText(...args);
+				// Model a writer that omits unused optional arrays, including
+				// after drawing normalizes the page's content structures.
+				const annots = added.node.lookupMaybe(PDFName.of("Annots"), PDFArray);
+				if (annots?.size() === 0) added.node.delete(PDFName.of("Annots"));
+				return result;
+			});
+			return added;
+		});
+		const create = jest.spyOn(PDFDocument, "create").mockResolvedValueOnce(doc);
+		try {
+			const pages = await linksFor(
+				fakeInput([fakeMonth("אלול", cellsForDays([STUDY]))], {
+					linkBase: LINK_BASE,
+					dayLabel: (day) => getPerekSource(day.perekId ?? 1),
+				}),
+			);
+			expect(pages[0]).toHaveLength(1);
+			expect(pages[0][0].uri).toBe(`${LINK_BASE}/1`);
+		} finally {
+			create.mockRestore();
+		}
+	});
 
 	it("links a scheduled study-day source to its canonical perek page", async () => {
 		const study = scheduleDay({ day: 10, perekId: 45, dayOfWeek: 1 });

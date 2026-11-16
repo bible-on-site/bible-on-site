@@ -1,0 +1,39 @@
+{
+  "sourceRepository": "https://github.com/bible-on-site/al-heperek-font",
+  "fontVersion": "0.9.2",
+  "fontSha256": "8614176a237ad45613425f724ae19125176f11b14bde392c65daebf8d538b9a3",
+  "weight": 700,
+  "feature": "ss03",
+  "generatedBy": "tools/yehuda_logos.py",
+  "fontSourceCommit": "0f27be29bdae3226470ca49aee2df416dcb7b6f8",
+  "canonicalAssets": [
+    {
+      "file": "web/bible-on-site/source-assets/logos/app-icon.svg",
+      "sha256": "9498e6a2079a09b239f71432e371f9217275570c3c5c5aa58fb4f5f2c79d4916"
+    },
+    {
+      "file": "web/bible-on-site/source-assets/logos/favicon-16.svg",
+      "sha256": "01edc6b22fc13cbedb90a1d2383b81a0146ce66ad02379688eeb2ae8f9a21604"
+    },
+    {
+      "file": "web/bible-on-site/source-assets/logos/favicon-24.svg",
+      "sha256": "03c8ce131fdc066742269601a0bab72ee04cad74b4470138306bd46637d0553a"
+    },
+    {
+      "file": "web/bible-on-site/source-assets/logos/favicon-32.svg",
+      "sha256": "7d15abc8cd8feade7afeea4959ab3b8854b2e56dca2fb6d580f6b0a808b299fc"
+    },
+    {
+      "file": "web/bible-on-site/source-assets/logos/favicon-48.svg",
+      "sha256": "37c11a45f32bbe67b14b5149d558f572feb429fa75e803b253ae83f42dde962f"
+    },
+    {
+      "file": "web/bible-on-site/source-assets/logos/header-logo-reversed.svg",
+      "sha256": "d5aadaefe4804f1acb4e1c8ad39475e6ffe53eae87b82731557cd68282129d3a"
+    },
+    {
+      "file": "web/bible-on-site/source-assets/logos/header-logo.svg",
+      "sha256": "17a8cbcd6cf3f13a6ceeee6907996323929734db2717f156d8cc16a52d59a951"
+    }
+  ]
+}

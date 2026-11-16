@@ -91,7 +91,7 @@ jobs:
       DOTNET_SDK_VERSION: "11.0.100"
       # .NET 11 workload sets are band-scoped to 11.0.1xx; 11.0.100.1 is the
       # band's first set and selects iOS 27.2 (Xcode 27.2 required) — the
-      # xcode-27 image's newest Xcode_27* is selected below; #2566 tracked the
+      # xcode-27 image's matching Xcode_27.2.app is selected below; #2566 tracked the
       # earlier deferral while the image lagged.
       MAUI_WORKLOAD_SET: "11.0.100.1"
       # The Android legs pin the same 11.0.100.1 set: it ships Android SDK
@@ -184,10 +184,20 @@ jobs:
 
       - name: Select compatible Xcode
         if: inputs.platform == 'iOS'
-        # The .NET 11 iOS workload (27.2.x) requires the newest Xcode 27.x the
-        # image carries; sort -V picks 27.2 over 27.0 when both are present.
+        # The pinned .NET iOS 27.2 SDK requires Xcode 27.2, including when
+        # the runner also carries a newer Xcode beta.
         run: |
-          XCODE_DIR="$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)/Contents/Developer"
+          XCODE_APP="/Applications/Xcode_27.2.app"
+          if [ ! -d "$XCODE_APP/Contents/Developer" ]; then
+            echo "::error::Xcode 27.2 is required by the pinned .NET iOS 27.2 workload"
+            exit 1
+          fi
+          XCODE_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$XCODE_APP/Contents/Info.plist")
+          case "$XCODE_VERSION" in
+            27.2|27.2.*) ;;
+            *) echo "::error::Xcode $XCODE_VERSION is incompatible with the pinned .NET iOS 27.2 workload"; exit 1 ;;
+          esac
+          XCODE_DIR="$XCODE_APP/Contents/Developer"
           sudo xcode-select --switch "$XCODE_DIR"
           echo "DEVELOPER_DIR=$XCODE_DIR" >> "$GITHUB_ENV"
 

@@ -616,8 +616,8 @@ jobs:
         run: |
           # Show .NET SDK info to debug
           dotnet --info
-          # .NET 11 set 11.0.100.1 selects iOS 27.2, which needs the newest
-          # Xcode 27.x the xcode-27 image carries; #2566 tracked the earlier
+          # .NET 11 set 11.0.100.1 selects iOS 27.2, which requires the matching
+          # Xcode 27.2 installation; #2566 tracked the earlier
           # deferral while the image lagged. Foreign-band sdk-manifests
           # claiming the same packs abort the install — drop them first.
           for d in "$DOTNET_ROOT"/sdk-manifests/*/; do [ "$(basename "$d")" = "11.0.100" ] || sudo rm -rf "$d"; done
@@ -632,14 +632,18 @@ jobs:
           echo "Available Xcode installations:"
           ls -la /Applications/ | grep -i xcode || true
 
-          # The .NET 11 iOS workload (27.2.x) requires the newest Xcode 27.x
-          # the image carries; sort -V picks 27.2 over 27.0 when both exist.
-          XCODE_PATH=$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -1)
-          if [ -z "$XCODE_PATH" ]; then
-            # Fallback to default Xcode
-            echo "Xcode 27.x not found, using default Xcode"
-            XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
+          # The pinned .NET iOS 27.2 SDK requires Xcode 27.2. Selecting the
+          # newest major-version match can pick an incompatible beta.
+          XCODE_PATH="/Applications/Xcode_27.2.app"
+          if [ ! -d "$XCODE_PATH/Contents/Developer" ]; then
+            echo "::error::Xcode 27.2 is required by the pinned .NET iOS 27.2 workload"
+            exit 1
           fi
+          XCODE_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$XCODE_PATH/Contents/Info.plist")
+          case "$XCODE_VERSION" in
+            27.2|27.2.*) ;;
+            *) echo "::error::Xcode $XCODE_VERSION is incompatible with the pinned .NET iOS 27.2 workload"; exit 1 ;;
+          esac
 
           echo "Selecting Xcode: $XCODE_PATH"
           sudo xcode-select -s "$XCODE_PATH/Contents/Developer"

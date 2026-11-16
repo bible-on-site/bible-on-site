@@ -27,13 +27,7 @@
 import * as _fontkit from "@pdf-lib/fontkit";
 import { toLetters } from "gematry";
 import type { PDFFont, PDFImage, PDFPage } from "pdf-lib";
-import {
-	PDFArray,
-	PDFDocument,
-	PDFName,
-	PDFString,
-	rgb,
-} from "pdf-lib";
+import { PDFArray, PDFDocument, PDFName, PDFString, rgb } from "pdf-lib";
 import {
 	type CalendarDay,
 	getMonthLabel,
@@ -49,7 +43,11 @@ import {
 	memoizeGlyphEncoding,
 	visualTextRuns,
 } from "./bidi-text";
-import { getBoldFontBytes, getLogoBytes, getRegularFontBytes } from "./pdf-fonts";
+import {
+	getBoldFontBytes,
+	getLogoBytes,
+	getRegularFontBytes,
+} from "./pdf-fonts";
 
 /* istanbul ignore next -- branch depends on bundler environment at runtime */
 // biome-ignore lint/suspicious/noExplicitAny: CJS/ESM interop — unwrap .default when bundler wraps it
@@ -122,8 +120,16 @@ function drawRtlCentered(
 }
 
 function fitText(text: string, font: PDFFont, size: number, maxWidth: number) {
-	if (bidiTextWidth(font, text, size) <= maxWidth) {
-		return text;
+	const width = bidiTextWidth(font, text, size);
+	if (width <= maxWidth) {
+		return { text, size };
+	}
+	// Keep complete source references when a font's proportions put them
+	// just beyond the cell width. Round down so measurement precision cannot
+	// trigger truncation again; captions stay at least 6pt for readability.
+	const fittedSize = Math.floor((size * maxWidth * 100) / width) / 100;
+	if (fittedSize >= 6) {
+		return { text, size: fittedSize };
 	}
 	// Longest prefix that still fits — binary search keeps this O(log n)
 	// shaping passes instead of one per truncated character.
@@ -140,7 +146,7 @@ function fitText(text: string, font: PDFFont, size: number, maxWidth: number) {
 			hi = mid - 1;
 		}
 	}
-	return text.slice(0, best);
+	return { text: text.slice(0, best), size };
 }
 
 /**
@@ -307,13 +313,18 @@ function drawMonthGrid(
 			dim ? MUTED : INK,
 		);
 		if (day.perekId !== undefined && !dim) {
-			const label = fitText(ctx.input.dayLabel(day), ctx.font, 6.5, cellW - 6);
+			const { text: label, size: labelSize } = fitText(
+				ctx.input.dayLabel(day),
+				ctx.font,
+				6.5,
+				cellW - 6,
+			);
 			const labelY = top - CELL_H + 8;
 			drawRtlCentered(
 				page,
 				label,
 				ctx.font,
-				6.5,
+				labelSize,
 				cx,
 				labelY,
 				day.status === "review" ? REVIEW : MUTED,
@@ -321,7 +332,7 @@ function drawMonthGrid(
 			// Links only on scheduled chapter sources — never a whole review
 			// range pointing at its last perek, and never on dimmed cells.
 			if (day.status === "study" && ctx.input.linkBase) {
-				const width = bidiTextWidth(ctx.font, label, 6.5);
+				const width = bidiTextWidth(ctx.font, label, labelSize);
 				addUriLink(ctx, page, `${ctx.input.linkBase}/${day.perekId}`, [
 					cx - width / 2,
 					labelY - 2,
@@ -401,7 +412,15 @@ function drawDataPage(
 		width: logoWidth,
 		height: logoHeight,
 	});
-	drawRtlCentered(page, ctx.input.title, ctx.bold, 10, PAGE_WIDTH / 2, y - 10, INK);
+	drawRtlCentered(
+		page,
+		ctx.input.title,
+		ctx.bold,
+		10,
+		PAGE_WIDTH / 2,
+		y - 10,
+		INK,
+	);
 	y -= 26;
 	page.drawLine({
 		start: { x: MARGIN, y },
