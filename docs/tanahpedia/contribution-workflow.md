@@ -194,7 +194,7 @@ assignments use the same protocol through a serial background runtime. A changed
 discussion, assignment, agent configuration, API contract or read catalogue
 rejects stale output. PR creation or revision, per-comment responses and the
 completion receipt commit together; an identical replay returns that receipt.
-The standalone local worker runtime v4 uses Ollama's native read functions and
+The standalone local worker runtime v5 uses Ollama's native read functions and
 assistant/tool messages. Once research ends, one separate request receives the
 complete constrained result schema. This avoids losing schema constraints in
 Ollama's native function-parameter representation. Both phases share the existing
@@ -209,6 +209,12 @@ independent cleanup signal. A release warning preserves the primary outcome;
 the acknowledgement confirms a request, not immediate physical memory release.
 Legacy protocol 1 still unloads after each response. The change avoids measured
 repeated model loading/prefill without extending inference or adding retries.
+Every native read batch still executes against the server and retains its real
+receipts/history. A whole batch repeating the latest identical arguments, data
+and schema moves directly to the single final generation. Before another research
+request, 45 seconds or less remaining also selects that final phase. This is a
+soft reserve within the original deadline; it neither cancels nor extends an
+in-flight request. Changed data or schema remains new information.
 A disconnected worker can be replaced after lease expiry, with three automatic
 claim attempts per request. An editor can explicitly retry or cancel by closing,
 editing or reassigning the issue. Background job refreshes preserve unsaved drafts.
@@ -340,7 +346,7 @@ content-rebase path, which creates a new revision and requires renewed review.
 
 The explicit v4-to-v5 identity adapter adds article-link operations while keeping
 existing sequences and approvals intact. Agent instructions/tools advance
-independently to bundle v8; the worker protocol remains v2.
+independently to bundle v9; the worker protocol remains v2.
 
 Bundle v5 closes the `search`/`record` kind vocabulary against the same pure registry
 used by server dispatch: 28 reference families and 46 `target:<operationKind>` names.
@@ -371,6 +377,12 @@ Bundle v8 clarifies exact quotation intent: human-requested verbatim text is
 copied without translation, paraphrase, spelling corrections or Unicode/whitespace
 normalization, while unrequested fields are retained. Runtime, read tools and
 operation schemas are unchanged from v7.
+
+Bundle v9 retains exact quotation handling and tells agents to finalize from the
+verified context when research repeats unchanged information or the transport
+reserves the remaining time for its final answer. Missing evidence still yields
+clarification. This does not extend the existing execution deadline or change the
+read tools, typed operations or approval rules.
 
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these

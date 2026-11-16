@@ -18,7 +18,7 @@ describe("versioned contribution agent declarations", () => {
 		expect(buildContributionAgentBundle()).toEqual({ ...bundle, hash });
 		expect(bundle.apiVersion).toBe(CONTRIBUTION_API_VERSION);
 		expect(bundle.protocolVersion).toBe(2);
-		expect(bundle.version).toBe("tanahpedia-agents-v8");
+		expect(bundle.version).toBe("tanahpedia-agents-v9");
 	});
 	it("closes search and record vocabulary without discarding the other parameter constraints", () => {
 		const original = buildContributionAgentBundle();
@@ -74,6 +74,12 @@ describe("versioned contribution agent declarations", () => {
 		);
 		expect(system).toContain(
 			"Do not translate, paraphrase, correct or normalize it. Preserve all unrequested fields.",
+		);
+		expect(system).toContain(
+			"Repeated identical trusted reads do not add evidence.",
+		);
+		expect(system).toContain(
+			"return clarification naming what is missing rather than inventing facts.",
 		);
 		expect(
 			bundle.tools.find((tool) => tool.name === "article_text")?.inputSchema,
