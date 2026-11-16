@@ -25,6 +25,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseDbUrl } from "./website-mysql.mts";
 
 interface CliFlags {
 	envFile: string;
@@ -97,17 +98,6 @@ function loadDbUrl(envFile: string): string | null {
 		}
 	}
 	return process.env.DB_URL ?? null;
-}
-
-function parseDbUrl(url: string) {
-	const u = new URL(url.replace(/^mysql:\/\//, "http://"));
-	return {
-		host: u.hostname || "localhost",
-		port: Number.parseInt(u.port || "3306", 10),
-		user: u.username || "root",
-		password: u.password || "",
-		database: u.pathname?.slice(1)?.split("?")[0] || "tanah-dev",
-	};
 }
 
 /**
