@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import {
+	MAX_JSON_BODY_BYTES,
+	readBoundedJson,
+} from "@/lib/bounded-json";
+import {
 	deleteSubscription,
 	getVapidPublicKey,
 	isPushServiceEndpoint,
@@ -10,27 +14,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
-/** A `PushSubscription.toJSON()` body is well under 1 KB. */
-const MAX_BODY_BYTES = 4 * 1024;
-
 const notConfigured = () =>
 	NextResponse.json({ error: "Web push is not configured" }, { status: 404 });
-
-async function readJson(request: Request): Promise<unknown> {
-	let text: string;
-	try {
-		text = await request.text();
-	} catch {
-		console.warn("Push subscription body read failed");
-		return null;
-	}
-	if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) return null;
-	try {
-		return JSON.parse(text);
-	} catch {
-		return null;
-	}
-}
 
 /**
  * Daily perek push subscriptions (#1096).
@@ -49,7 +34,13 @@ export function GET() {
 
 export async function POST(request: Request) {
 	if (!isWebPushConfigured()) return notConfigured();
-	const subscription = parseSubscription(await readJson(request));
+	const body = await readBoundedJson(request, MAX_JSON_BODY_BYTES);
+	if (body.status === "unreadable") {
+		console.warn("Push subscription body read failed");
+	}
+	const subscription = parseSubscription(
+		body.status === "parsed" ? body.value : null,
+	);
 	if (!subscription) {
 		return NextResponse.json(
 			{ error: "Invalid subscription" },
@@ -66,8 +57,15 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-	const body = await readJson(request);
-	const endpoint = (body as { endpoint?: unknown } | null)?.endpoint;
+	const result = await readBoundedJson(request, MAX_JSON_BODY_BYTES);
+	if (result.status === "unreadable") {
+		console.warn("Push subscription body read failed");
+	}
+	const body =
+		result.status === "parsed"
+			? (result.value as { endpoint?: unknown } | null)
+			: null;
+	const endpoint = body?.endpoint;
 	if (!isPushServiceEndpoint(endpoint)) {
 		return NextResponse.json({ error: "Invalid endpoint" }, { status: 400 });
 	}

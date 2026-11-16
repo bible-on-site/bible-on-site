@@ -150,8 +150,13 @@ describe("POST /api/push/daily", () => {
 			const request = new Request("http://localhost/api/push/daily", {
 				method: "POST",
 				headers: { authorization: "Bearer s3cret" },
-			});
-			jest.spyOn(request, "text").mockRejectedValue(privateFailure());
+				body: new ReadableStream<Uint8Array>({
+					start(controller) {
+						controller.error(privateFailure());
+					},
+				}),
+				duplex: "half",
+			} as RequestInit);
 			expect((await POST(request)).status).toBe(400);
 			expect(mockSend).not.toHaveBeenCalled();
 			expect(warn).toHaveBeenCalledTimes(1);
