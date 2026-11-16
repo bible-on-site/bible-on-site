@@ -1,6 +1,7 @@
 import { execFile, execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { compareVersions, loadIosNativeSimulator, loadIosSimulatorDriver, selectSimulator } from "./simulator.mjs";
@@ -41,6 +42,8 @@ export async function bootIos({
   execute = promisify(execFile),
   loadDriver = loadIosSimulatorDriver,
   loadNativeDriver = loadIosNativeSimulator,
+  sleep = delay,
+  settleMs = 120000,
   log = console.log,
 } = {}) {
   if (!["start", "wait", "boot", "resolve"].includes(mode)) throw new Error(`Unknown ios:boot mode '${mode}'.`);
@@ -105,11 +108,47 @@ export async function bootIos({
   // Monitor without -b: it never re-issues a boot, and still waits out a Booted
   // device whose startup is in progress. Warm the locked driver's native bridge
   // for this exact UDID before allowing the test session to start.
-  await Promise.all([
+  const [, simulator] = await Promise.all([
     execute("xcrun", ["simctl", "bootstatus", primary.udid], { encoding: "utf8", timeout: 300000 })
       .then(({ stdout }) => process.stdout.write(stdout)),
     warmup(),
   ]);
+  // The xcode-27-arm64 20261112.0361.1 runner image lets simdiskimaged unmount
+  // the iOS runtime while a device boots; a straddling boot still reports
+  // Booted here, then powers off about a minute later when the cleanup lands
+  // (actions/runner-images#15334). Hold the device under observation across
+  // that window and boot it once more through the native bridge if the runner
+  // destroyed it, so the handed-off device actually stays usable.
+  let stableSince = Date.now();
+  const settleDeadline = stableSince + settleMs + 300000 + settleMs;
+  for (let reboots = 0;;) {
+    let state;
+    try {
+      state = (await simulator.stat()).state;
+    } catch (error) {
+      // The unmount also breaks CoreSimulator lookups; count an observation
+      // failure as unstable and let the deadline bound the hold.
+      log(`Simulator state observation failed while settling: ${error?.message ?? error}`);
+    }
+    if (state === "Shutdown") {
+      reboots += 1;
+      if (reboots > 1) {
+        throw new Error(`Simulator ${primary.udid} keeps powering off after boot; this runner's iOS runtime is unstable.`);
+      }
+      log(`Simulator ${primary.udid} shut down after reporting booted; booting it again.`);
+      await simulator.boot();
+      await simulator.waitForBoot(300000);
+      stableSince = Date.now();
+    } else if (state === "Booted") {
+      if (Date.now() - stableSince >= settleMs) break;
+    } else {
+      stableSince = Date.now();
+    }
+    if (Date.now() > settleDeadline) {
+      throw new Error(`Simulator ${primary.udid} never stayed booted for ${settleMs / 1000}s.`);
+    }
+    await sleep(5000);
+  }
   log("Appium CoreSimulator lookup is ready.");
   const envLines = `MOBILE_UDID=${primary.udid}\nMOBILE_OS_VERSION=${primary.version}\n`;
   if (env.GITHUB_ENV) appendFileSync(env.GITHUB_ENV, envLines);
