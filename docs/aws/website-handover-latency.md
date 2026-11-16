@@ -104,6 +104,40 @@ load, and the page-render warm is awaited together with the query instead of
 behind it — all gates are unchanged, the same check still runs once per
 admission and the database is still re-verified on every sequential probe.
 
+## Build-time derived warm-up data
+
+The remaining synchronous cost inside the readiness check was all
+corpus-deterministic: building the pasuk and perek search indexes and the
+validated recitation track metadata on the event loop. Measured on a
+developer machine these stages cost ~1.8–2.5 s (`getPasukIndex` ~0.85 s,
+`recitationPackage` ~0.9–1.6 s — 929 validated chapter manifests producing
+the ~8 MB response body, `getPerekIndex` ~0.02–0.04 s), before page renders
+— several times more on the 0.5 vCPU task.
+
+`prebuild` now runs `scripts/generate-warm-derived.mts` (after
+`compress-canonical-data.mjs`), which executes the *same* production
+functions over the compressed corpus and writes
+`src/data/db/warm-derived.generated.json.br` — traced into the standalone
+image beside the corpus. Because generation runs the real validators, an
+inconsistent corpus or recording manifest now fails the build instead of a
+deployment — a strictly earlier gate than the runtime check it replaces.
+
+At request time `src/data/db/warm-derived.ts` sha256-verifies the artifact
+against the shipped corpus `.br` bytes before trusting it, so a stale or
+missing artifact degrades to the identical live computation — never a gate,
+never wrong data. Recitation `audioUrl`s are the one deploy-dependent field:
+they are stripped from the stored tracks and re-attached from live storage
+settings per response, keeping the body byte-identical (verified in tests).
+Measured effect on a developer machine: the three index/recitation stages
+drop from ~1.8 s to ~0.46 s (~1.3 s saved, ~74% of the remaining warm CPU) —
+artifact read, Brotli decompress, sha256 verify and JSON parse included —
+and the ~8 MB response body is byte-identical to the computed package;
+the parsed artifact is shared process-wide through `globalThis` exactly like
+the corpus cache, so all route bundles read one copy. The same artifact
+serves first hits outside the health check (search, recitation extension).
+`WARM_DERIVED_DISABLE=1` forces live computation; `IS_TEST_ENV` keeps Jest
+on it always.
+
 The launcher registers SIGTERM and SIGINT handlers before spawning the server
 and starting the readiness probe. Initializing the first HTTP client can block
 the wrapper synchronously while the child is already listening; a shutdown
