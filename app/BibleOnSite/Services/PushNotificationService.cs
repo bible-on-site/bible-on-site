@@ -26,8 +26,8 @@ public enum PushEnableResult
     Failed,
 }
 
-/// <summary>Device-registration row for the documented
-/// <c>POST /api/push/device</c> contract (backend deferred — see
+/// <summary>Device-registration row for the
+/// <c>POST /api/push/device</c> contract (see
 /// docs/app/push-notifications.md). <paramref name="UserId"/> is the durable
 /// notification identity (seeded from the Firebase Installation ID and kept
 /// stable across reinstalls where the platform store allows); a rotating
@@ -88,11 +88,11 @@ public interface IPushStateStore
 }
 
 /// <summary>
-/// Best-effort device registration against the documented
+/// Best-effort device registration against the
 /// <c>POST/DELETE /api/push/device</c> contract. Calls throw on transport or
 /// non-success responses; <see cref="PushNotificationService"/> treats them as
-/// log-only because the backend is not yet deployed (deferred — see
-/// docs/app/push-notifications.md).
+/// log-only — the route answers 404 until the FCM sender credential is
+/// deployed (see docs/app/push-notifications.md).
 /// </summary>
 public interface IPushDeviceRegistry
 {
@@ -426,8 +426,8 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
     /// Resolves and persists the durable notification identity, then POSTs the
     /// device-registration row — but only when the
     /// (user, installation, token, topics) tuple actually changed, so routine
-    /// launches stay silent. Registration is best-effort: the contract
-    /// endpoint is not deployed yet, so failures log and move on.
+    /// launches stay silent. Registration is best-effort: failures (including
+    /// the route's 404 before the FCM credential is deployed) log and move on.
     /// </summary>
     private async Task SyncRegistrationAsync(CancellationToken ct)
     {
@@ -452,8 +452,8 @@ public sealed class PushNotificationService : IPushNotificationService, IDisposa
                 _appVersion()), ct);
             await _stateStore.SetAsync(RegistrationFingerprintKey, fingerprint, ct);
         }
-        #pragma warning disable S2221 // Deliberate failure boundary: the backend route is deferred — registration failure is log-only
-        catch (Exception ex) //NOSONAR — the backend route is deferred; registration failure is log-only.
+        #pragma warning disable S2221 // Deliberate failure boundary: registration is best-effort — failure is log-only
+        catch (Exception ex) //NOSONAR — registration is best-effort; failure is log-only.
         {
             #pragma warning restore S2221
             Console.Error.WriteLine($"[Push] device registration failed: {ex.Message}");
