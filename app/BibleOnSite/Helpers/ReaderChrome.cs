@@ -88,10 +88,9 @@ public sealed class ReaderChromeSurfaces
 
     /// <summary>
     /// The ⋮ options menu whose actions follow the active content mode
-    /// (#3401) — required but null on readers with no menu (masora, moed),
-    /// so each page declares its surface explicitly.
+    /// (#3401). Readers without an options menu leave this surface null.
     /// </summary>
-    public required IReaderMenuSurface? MenuPanel { get; init; }
+    public IReaderMenuSurface? MenuPanel { get; init; }
 
     /// <summary>
     /// The reading-position indicator owned by the reading content — the
@@ -266,8 +265,8 @@ public sealed class ReaderChrome
         _ui.ReaderContent.IsVisible = true;
         _ui.ReadingProgressIndicator?.IsVisible = true;
 
-        _ui.BottomBar.IsArticlesActive = false;
         _ui.MenuPanel?.IsArticlesMode = false;
+        _ui.BottomBar.IsArticlesActive = false;
     }
 
     /// <summary>Bottom-bar chevron — toggles the perushim sheet.</summary>
@@ -325,11 +324,11 @@ public sealed class ReaderChrome
             // leaving it drawn painted it over the article cards (#3364).
             _ui.ReadingProgressIndicator?.IsVisible = false;
 
-            _ui.BottomBar.IsArticlesActive = true;
             // The menu now serves the article catalogue — only הסתר שם השם
             // applies there (#3401). Set only after the swap so a failed
             // load leaves the scripture menu untouched.
             _ui.MenuPanel?.IsArticlesMode = true;
+            _ui.BottomBar.IsArticlesActive = true;
         }
 #pragma warning disable S2221 // Deliberate failure boundary: articles-view transition must not crash the reader
         catch (Exception ex) //NOSONAR — articles-view transition must not crash the reader.

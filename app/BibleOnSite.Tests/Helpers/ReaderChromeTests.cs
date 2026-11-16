@@ -231,6 +231,7 @@ public class ReaderChromeTests
         public readonly FakePerushimSheet Sheet = new();
         public readonly FakeArticlesView Articles = new();
         public readonly FakeMenuPanel Menu = new();
+        public bool IncludeMenuPanel { get; init; } = true;
         public readonly ReaderFanMenu Fan = new();
         public readonly ReaderFanMenuSatellite Prev = new();
         public readonly ReaderFanMenuSatellite Next = new();
@@ -264,7 +265,7 @@ public class ReaderChromeTests
             Toolbar.Arrange(new Rect(0, 0, 400, 56));
         }
 
-        public ReaderChrome CreateChrome(bool withFullscreenHandler = true, Func<bool>? scrollReadingToStart = null, bool includeProgressIndicator = true, bool includeMenuPanel = true)
+        public ReaderChrome CreateChrome(bool withFullscreenHandler = true, Func<bool>? scrollReadingToStart = null, bool includeProgressIndicator = true)
         {
             return new ReaderChrome(
                 new ReaderChromeSurfaces
@@ -277,7 +278,7 @@ public class ReaderChromeTests
                     ExitFullscreenButton = ExitButton,
                     ArticlesView = Articles,
                     ReaderContent = Content,
-                    MenuPanel = includeMenuPanel ? Menu : null,
+                    MenuPanel = IncludeMenuPanel ? Menu : null,
                     ReadingProgressIndicator = includeProgressIndicator ? Progress : null,
                     Toolbar = Toolbar,
                     Host = Host,
@@ -578,8 +579,8 @@ public class ReaderChromeTests
     [Fact]
     public void ArticlesButton_WithoutMenuPanel_StillSwapsViews()
     {
-        var rig = new Rig();
-        var chrome = rig.CreateChrome(includeMenuPanel: false);
+        var rig = new Rig { IncludeMenuPanel = false };
+        var chrome = rig.CreateChrome();
 
         rig.BottomBar.RaiseArticles();
 
