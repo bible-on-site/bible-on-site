@@ -309,6 +309,24 @@ describe("prepared bulletins", () => {
 			expect.objectContaining({ dedications: ["לזכרון"] }),
 		);
 	});
+
+	it("rethrows dedication query failures that are not missing-schema errors", async () => {
+		mocks.queryOne
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ perek_id: 1 })
+			.mockResolvedValueOnce(null);
+		mocks.query
+			.mockResolvedValueOnce([])
+			.mockRejectedValueOnce(
+				Object.assign(new Error("deadlock found"), {
+					code: "ER_LOCK_DEADLOCK",
+				}),
+			);
+		await expect(prepareBulletin(input.date)).rejects.toThrow(
+			"deadlock found",
+		);
+		expect(mocks.render).not.toHaveBeenCalled();
+	});
 });
 
 describe("Hebrew-date article override (#3098)", () => {
