@@ -96,6 +96,14 @@ bounded canonical pages at a reasonable pace.
 - [/openapi.json](/openapi.json) — OpenAPI description of the public
   read endpoints.
 - [/robots.txt](/robots.txt) — crawl policy + Content Signals.
+- [/.well-known/ard.json](/.well-known/ard.json) — ARD v0.91 agent
+  capability manifest (also served at the predecessor path
+  /.well-known/ai-catalog.json).
+- [/.well-known/agent-skills/index.json](/.well-known/agent-skills/index.json)
+  — Agent Skills index (v0.2.0): SKILL.md files that teach correct
+  traversal, search and citation of this corpus.
+- [/auth.md](/auth.md) — one-line truth about authentication: there is
+  none — every public read is anonymous, no registration or keys exist.
 
 ## Attribution and licences
 

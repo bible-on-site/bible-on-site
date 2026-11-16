@@ -116,6 +116,7 @@ export function canonicalParashaTarget(segments: string[]): string | null {
 const DISCOVERY_LINKS = [
 	'</llms.txt>; rel="help"; type="text/markdown"',
 	'</.well-known/api-catalog>; rel="api-catalog"',
+	'</.well-known/ard.json>; rel="ard"; type="application/ard+json"',
 	'</sitemap.xml>; rel="sitemap"; type="application/xml"',
 ] as const;
 

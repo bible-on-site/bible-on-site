@@ -26,6 +26,7 @@ User-agent: *
 Content-Signal: search=yes, ai-input=yes, ai-train=yes
 Allow: /
 Allow: /api/search
+Allow: /api/health
 Disallow: /api/
 Disallow: /dev
 
@@ -34,6 +35,7 @@ Disallow: /dev
 # DataForSeoBot): hard-blocked at the edge/proxy — they ignore robots.
 
 Sitemap: ${SITE_ORIGIN}/sitemap.xml
+Agentmap: ${SITE_ORIGIN}/.well-known/ard.json
 `;
 
 export function GET(): NextResponse {

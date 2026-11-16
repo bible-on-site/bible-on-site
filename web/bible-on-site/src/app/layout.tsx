@@ -54,6 +54,10 @@ export default function RootLayout({
 		>
 			<head>
 				<link rel="privacy-policy" href="/#privacyPolicy" />
+				{/* ARD/AI Catalog discovery (issue #3257): registries and the
+				    readiness scanner resolve these rels in page head. */}
+				<link rel="ard" href="/.well-known/ard.json" />
+				<link rel="ai-catalog" href="/.well-known/ai-catalog.json" />
 				{/* Run on the initial document so client-side chapter navigation
 				    inherits saved settings too, before the reader's first paint. */}
 				<script>{READER_SETTINGS_BOOTSTRAP}</script>
