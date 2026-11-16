@@ -845,6 +845,14 @@ jobs:
       - name: Wait for iPhone simulator
         wait-all:
 
+      # The xcode-27-arm64 20261112.0361.1 runner image can destroy a simulator
+      # after it already reported booted (actions/runner-images#15334). Verify
+      # the handed-off device is still usable right before the session so the
+      # fixed 300-second Appium session deadline is not spent re-booting it.
+      - name: Verify iPhone simulator survived boot
+        if: inputs.mode != 'build' && (inputs.platform == 'iOS')
+        run: bun run --cwd app/mobile-e2e ios:boot:heal
+
       # Each runner owns one simulator/session and the case manifest the plan
       # assigned it (#2263). The final merge verifies the executed union equals
       # the planned run set exactly once.
