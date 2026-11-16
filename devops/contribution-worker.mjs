@@ -16,6 +16,23 @@ const AWS_ACCOUNT = "250598594267", // nosemgrep: generic.secrets.security.detec
 const executeFile = promisify(execFile);
 export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v2";
 const workerTasks = ["issue_implementation", "pr_resolution"];
+function parseJson(content, message) {
+	try {
+		return JSON.parse(content);
+	} catch (error) {
+		// Parser errors can contain private input. Keep only a fixed diagnostic.
+		if (error instanceof SyntaxError) throw new Error(message);
+		throw error;
+	}
+}
+async function readJson(response, message) {
+	try {
+		return await response.json();
+	} catch (error) {
+		if (error instanceof SyntaxError) throw new Error(message);
+		throw error;
+	}
+}
 const canonical = (value) =>
 	Array.isArray(value)
 		? `[${value.map(canonical).join(",")}]`
@@ -29,8 +46,7 @@ const canonical = (value) =>
 
 export function validateWorkerBundle(value, expectedHash) {
 	if (
-		!value ||
-		value.protocolVersion !== 2 ||
+		value?.protocolVersion !== 2 ||
 		typeof value.version !== "string" ||
 		!Number.isSafeInteger(value.apiVersion) ||
 		typeof value.system !== "string" ||
@@ -272,7 +288,10 @@ export function workerTokenProvider(
 		});
 		if (!response.ok)
 			throw new Error(`Worker authentication failed (${response.status})`);
-		const body = await response.json();
+		const body = await readJson(
+			response,
+			"Invalid worker authentication response",
+		);
 		if (
 			typeof body.access_token !== "string" ||
 			!body.access_token ||
@@ -317,7 +336,9 @@ export function createContributionWorker(
 		);
 		if (!response.ok)
 			throw new Error(`Worker ${action} failed (${response.status})`);
-		return response.status === 204 ? null : response.json();
+		return response.status === 204
+			? null
+			: readJson(response, `Invalid worker ${action} response`);
 	}
 	return async () => {
 		const job = await api("claim", {
@@ -407,7 +428,7 @@ export function createContributionWorker(
 									role: "user",
 									content: canonical({
 										task: job.task,
-										context: JSON.parse(job.user),
+										context: parseJson(job.user, "Invalid worker task context"),
 										turns,
 									}),
 								},
@@ -416,7 +437,7 @@ export function createContributionWorker(
 					});
 					if (!response.ok)
 						throw new Error(`Local model returned HTTP ${response.status}`);
-					const body = await response.json(),
+					const body = await readJson(response, "Invalid local model response"),
 						content = body.message?.content;
 					executionSignal.throwIfAborted();
 					if (
@@ -429,7 +450,7 @@ export function createContributionWorker(
 						throw new Error(
 							"Agent context reached the model window; no result was applied",
 						);
-					const action = JSON.parse(content);
+					const action = parseJson(content, "Invalid local model response");
 					if (action.action === "complete") {
 						const result = await api(
 							"complete",
@@ -494,7 +515,7 @@ export function createContributionWorker(
 			});
 			if (!response.ok)
 				throw new Error(`Local model returned HTTP ${response.status}`);
-			const body = await response.json();
+			const body = await readJson(response, "Invalid local model response");
 			const content = body.message?.content,
 				model = typeof body.model === "string" ? body.model : options.model;
 			if (

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { inspect } from "node:util";
+import { fileURLToPath } from "node:url";
+import { inspect, promisify } from "node:util";
 import {
 	createContributionWorker,
 	runContributionWorker,
@@ -64,6 +66,203 @@ function agentBundle() {
 		hash: createHash("sha256").update(canonicalFixture(payload)).digest("hex"),
 	};
 }
+
+test("malformed JSON never includes private input in failed jobs or returned errors", async () => {
+	const privateFragment = "pv_7F2k9";
+	assert.throws(
+		() => JSON.parse(privateFragment),
+		(error) => error.message.includes(privateFragment),
+		"the fixture must exercise a parser diagnostic that exposes its input",
+	);
+	for (const [stage, expected] of [
+		["model-content", "Invalid local model response"],
+		["model-envelope", "Invalid local model response"],
+		["legacy-envelope", "Invalid local model response"],
+		["task-context", "Invalid worker task context"],
+		["bundle", "Invalid worker bundle response"],
+		["context", "Invalid worker context response"],
+		["complete", "Invalid worker complete response"],
+		["fail", "Invalid worker fail response"],
+		["claim", "Invalid worker claim response"],
+	]) {
+		const bundle = agentBundle(),
+			job = {
+				...claim,
+				user: stage === "task-context" ? privateFragment : "{}",
+				protocolVersion: 2,
+				task: "pr_resolution",
+				bundleHash: bundle.hash,
+				bundleVersion: bundle.version,
+			};
+		if (stage === "legacy-envelope") delete job.protocolVersion;
+		let failedJob, result, rejection;
+		const run = createContributionWorker(options, {
+			request: async (url, request) => {
+				const target = String(url);
+				if (target.endsWith("/claim"))
+					return stage === "claim"
+						? new Response(privateFragment)
+						: Response.json(job);
+				if (target.endsWith("/bundle"))
+					return stage === "bundle"
+						? new Response(privateFragment)
+						: Response.json(bundle);
+				if (target.endsWith("/api/chat")) {
+					if (stage.endsWith("envelope")) return new Response(privateFragment);
+					return Response.json({
+						message: {
+							content:
+								stage === "model-content" || stage === "fail"
+									? privateFragment
+									: JSON.stringify(
+											stage === "context"
+												? { action: "tool", name: "discussion", arguments: {} }
+												: { action: "complete", result: {} },
+										),
+						},
+					});
+				}
+				if (target.endsWith("/context") || target.endsWith("/complete"))
+					return new Response(privateFragment);
+				if (target.endsWith("/fail")) {
+					failedJob = JSON.parse(request.body);
+					return stage === "fail"
+						? new Response(privateFragment)
+						: Response.json({ updated: true });
+				}
+				throw new Error("Unexpected request");
+			},
+		});
+		try {
+			result = await run();
+		} catch (error) {
+			rejection = error;
+		}
+		assert.equal(result?.error ?? rejection?.message, expected, stage);
+		assert.equal(rejection?.cause, undefined, stage);
+		assert.ok(
+			!inspect({ failedJob, result, rejection }).includes(privateFragment),
+		);
+		if (stage !== "claim") {
+			assert.equal(
+				failedJob.error,
+				stage === "fail" ? "Invalid local model response" : expected,
+			);
+			assert.equal(failedJob.token, claim.token);
+		}
+	}
+});
+
+test("malformed OAuth JSON is safe for direct callers without hiding transport failures", async () => {
+	await assert.rejects(
+		workerTokenProvider(credentials, {
+			request: async () => new Response("pv_7F2k9"),
+		})(),
+		(error) => {
+			assert.equal(error.message, "Invalid worker authentication response");
+			assert.equal(error.cause, undefined);
+			return true;
+		},
+	);
+	for (const error of [
+		new DOMException("Worker stopped", "AbortError"),
+		new Error("Connection unavailable"),
+	])
+		await assert.rejects(
+			workerTokenProvider(credentials, {
+				request: async () => ({
+					ok: true,
+					json: async () => {
+						throw error;
+					},
+				}),
+			})(),
+			(actual) => actual === error,
+		);
+});
+
+test("watch logs fixed diagnostics for malformed claim, model and authentication JSON", async () => {
+	const privateFragment = "pv_7F2k9";
+	for (const stage of ["claim", "model", "authentication"]) {
+		const stop = new AbortController(),
+			logs = [],
+			bundle = agentBundle(),
+			savedFetch = globalThis.fetch;
+		globalThis.fetch = async () => new Response(privateFragment);
+		try {
+			await runContributionWorker(
+				[
+					"--watch",
+					...(stage === "authentication"
+						? []
+						: ["--dev", "--origin", "http://localhost:3101"]),
+				],
+				stage === "authentication" ? credentials : {},
+				{
+					signal: stop.signal,
+					log: (...args) => {
+						logs.push(args);
+						if (args[0] === "Local contribution worker:") stop.abort();
+					},
+					pause: async () => stop.abort(),
+					request: async (url) => {
+						const target = String(url);
+						if (target.endsWith("/claim"))
+							return stage === "claim"
+								? new Response(privateFragment)
+								: Response.json({
+										...claim,
+										user: "{}",
+										protocolVersion: 2,
+										task: "pr_resolution",
+										bundleHash: bundle.hash,
+										bundleVersion: bundle.version,
+									});
+						if (target.endsWith("/bundle")) return Response.json(bundle);
+						if (target.endsWith("/api/chat"))
+							return Response.json({ message: { content: privateFragment } });
+						if (target.endsWith("/fail"))
+							return Response.json({ updated: true });
+						throw new Error("Unexpected request");
+					},
+				},
+			);
+		} finally {
+			globalThis.fetch = savedFetch;
+		}
+		assert.ok(!inspect(logs).includes(privateFragment), stage);
+		assert.match(inspect(logs), /Invalid (?:worker|local model)/, stage);
+	}
+});
+
+test("the CLI never prints malformed response contents", async () => {
+	const execute = promisify(execFile),
+		privateFragment = "pv_7F2k9",
+		bootstrap = `data:text/javascript,${encodeURIComponent(
+			`globalThis.fetch = async () => new Response(${JSON.stringify(privateFragment)});`,
+		)}`;
+	await assert.rejects(
+		execute(
+			process.execPath,
+			[
+				"--import",
+				bootstrap,
+				fileURLToPath(new URL("./contribution-worker.mjs", import.meta.url)),
+				"--once",
+				"--dev",
+				"--origin",
+				"http://localhost:3101",
+			],
+			{ windowsHide: true },
+		),
+		(error) => {
+			assert.equal(error.code, 1);
+			assert.equal(error.stderr.trim(), "Invalid worker claim response");
+			assert.ok(!`${error.stdout}${error.stderr}`.includes(privateFragment));
+			return true;
+		},
+	);
+});
 
 test("protocol two reads fresh context then resolves the same PR and caches only its immutable bundle", async () => {
 	const bundle = agentBundle(),
