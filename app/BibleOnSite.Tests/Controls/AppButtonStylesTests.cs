@@ -46,12 +46,24 @@ public class AppButtonStylesTests
         Contrast(AppButtonStyles.DestructiveInkDark, AppButtonStyles.SurfaceDark).Should().BeGreaterThanOrEqualTo(4.5);
     }
 
+    [Fact]
+    public void CompactIconSelected_KeepsTheGlyphFontAndCompactTarget()
+    {
+        var button = new Button { Style = AppButtonStyles.CompactIconSelected };
+
+        button.FontFamily.Should().Be("FluentIcons");
+        button.WidthRequest.Should().Be(44);
+        button.HeightRequest.Should().Be(44);
+        button.BorderWidth.Should().Be(2);
+    }
+
     [Theory]
     [InlineData("primary")]
     [InlineData("secondary")]
     [InlineData("destructive")]
     [InlineData("icon")]
     [InlineData("compact")]
+    [InlineData("compact-selected")]
     [InlineData("selected")]
     [InlineData("toolbar")]
     public void ActionStates_RestoreAppearanceAndPreserveTouchTargets(string role)
@@ -62,6 +74,7 @@ public class AppButtonStylesTests
             "destructive" => AppButtonStyles.Destructive,
             "icon" => AppButtonStyles.Icon,
             "compact" => AppButtonStyles.CompactIcon,
+            "compact-selected" => AppButtonStyles.CompactIconSelected,
             "selected" => AppButtonStyles.Selected,
             "toolbar" => AppButtonStyles.ToolbarTitle,
             _ => AppButtonStyles.Secondary,

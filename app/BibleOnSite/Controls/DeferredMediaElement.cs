@@ -42,7 +42,10 @@ public sealed class DeferredMediaElement : ContentView
             Text = FluentUI.play_circle_48_regular,
             FontFamily = "FluentIcons",
             FontSize = isVideo ? 48 : 30,
+            // Ghost overlay on the media surface: the shared Secondary
+            // outline would ring the play glyph (#3454).
             BackgroundColor = Colors.Transparent,
+            BorderWidth = 0,
             HorizontalOptions = LayoutOptions.Center,
             VerticalOptions = LayoutOptions.Center,
             Padding = 0,

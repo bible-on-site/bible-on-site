@@ -198,7 +198,11 @@ public class SharedTopBar : ContentView
             FontSize = 24,
             WidthRequest = EdgeWidth,
             Padding = 0,
+            // Ghost chrome inside the capsule pill: the shared Secondary
+            // outline and 48dp floor have no surface to ring here (#3454).
             BackgroundColor = Colors.Transparent,
+            BorderWidth = 0,
+            MinimumHeightRequest = 0,
             VerticalOptions = LayoutOptions.Fill,
         };
         NavigationButton.SetAppThemeColor(Button.TextColorProperty, Colors.Black, Colors.White);
@@ -218,7 +222,11 @@ public class SharedTopBar : ContentView
             FontSize = 22,
             WidthRequest = EdgeWidth,
             Padding = 0,
+            // Ghost chrome inside the capsule pill: the shared Secondary
+            // outline and 48dp floor have no surface to ring here (#3454).
             BackgroundColor = Colors.Transparent,
+            BorderWidth = 0,
+            MinimumHeightRequest = 0,
             VerticalOptions = LayoutOptions.Fill,
             IsVisible = CapsuleBackDefault,
             IsEnabled = false,
