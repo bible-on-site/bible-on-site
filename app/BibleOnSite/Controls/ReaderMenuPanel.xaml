@@ -3,6 +3,7 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
       xmlns:controls="clr-namespace:BibleOnSite.Controls"
       x:Class="BibleOnSite.Controls.ReaderMenuPanel"
+      x:Name="ReaderMenuPanelRoot"
       AutomationId="ReaderMenuOverlay"
       IsVisible="False"
       BackgroundColor="Transparent">
@@ -31,8 +32,11 @@
                  elements (pre-#3252): no SemanticProperties.Description on the
                  TappableView, which would collapse the subtree on iOS. The
                  Windows handler still names the row from the label text. -->
-            <!-- שניים מקרא - checkbox toggle -->
-            <controls:TappableView Activated="OnShnayimMikraTapped">
+            <!-- שניים מקרא - checkbox toggle. Hidden in articles mode (#3401):
+                 scripture-only action. IsVisible collapses the whole row — no
+                 blank space, hit target, focus stop or accessibility action. -->
+            <controls:TappableView Activated="OnShnayimMikraTapped"
+                    IsVisible="{Binding IsArticlesMode, Source={x:Reference ReaderMenuPanelRoot}, Converter={StaticResource InvertedBoolConverter}}">
             <Grid Padding="10,6">
                 <Grid ColumnDefinitions="Auto,*">
                     <CheckBox AutomationId="ShnayimMikraCheckBox"
@@ -47,8 +51,9 @@
                 </Grid>
             </Grid>
             </controls:TappableView>
-            <!-- תיקון קוראים - checkbox toggle -->
-            <controls:TappableView Activated="OnTikkunKorimTapped">
+            <!-- תיקון קוראים - checkbox toggle. Hidden in articles mode (#3401). -->
+            <controls:TappableView Activated="OnTikkunKorimTapped"
+                    IsVisible="{Binding IsArticlesMode, Source={x:Reference ReaderMenuPanelRoot}, Converter={StaticResource InvertedBoolConverter}}">
             <Grid Padding="10,6">
                 <Grid ColumnDefinitions="Auto,*">
                     <CheckBox AutomationId="TikkunKorimCheckBox"
