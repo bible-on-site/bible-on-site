@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ArticlesSection } from "@/app/929/[number]/components/ArticlesSection";
@@ -13,6 +14,7 @@ import { getPerekByPerekId } from "@/data/perek-dto";
 import {
 	getMoedArticleSummaries,
 	getMoedBySlug,
+	getMoedEntryPreview,
 	getPublishedMoedSlugs,
 	type Moed,
 	MOED_STALE_BOUND_SECONDS,
@@ -28,6 +30,7 @@ import { SITE_NAME } from "@/lib/seo/jsonld";
 import { pageMetadata } from "@/lib/seo/opengraph";
 import { fetchAllEntityRefs } from "@/lib/tanahpedia/perek-entity-refs";
 import { MoedBreadcrumb } from "../components/MoedBreadcrumb";
+import { MoedDateLine } from "../components/MoedDateLabels";
 import styles from "./page.module.css";
 
 // Published moadim are a growing DB set — a slug added after build
@@ -67,6 +70,24 @@ const getCachedMoedArticles = cachedPerKey(
 	(moed) => getMoedArticleSummaries(moed.id, moed.ranges),
 );
 
+/** The name-keyed Tanahpedia entry preview (#3381). Pedia changes whose
+ * name union contains the moed's name emit moed:{slug} surgically
+ * (dependencies.ts); every other pedia name-table write — including the
+ * admin's path-only alias edits — carries the mention-refs collection
+ * tag, which the mention decorations and this cache both consume. The
+ * hourly bound lets a pre-migration pedia schema self-heal. */
+const getCachedMoedEntryPreview = cachedPerKey(
+	"moed-entry-preview",
+	(moed: Moed) => moed.slug,
+	(slug) => [
+		COLLECTION_TAGS.moadim,
+		moedTag(slug),
+		COLLECTION_TAGS.pediaMentionRefs,
+	],
+	(moed) => getMoedEntryPreview(moed.name),
+	MOED_STALE_BOUND_SECONDS,
+);
+
 /** Every perek a section's ranges touch — the range player loads and
  * validates each one's recitation manifest (issue #3259). */
 function sectionPerakim(ranges: ScriptureRange[]) {
@@ -98,10 +119,13 @@ export async function generateMetadata({
 	if (!moed) {
 		return {};
 	}
+	// Metadata mirrors the rendered introduction: a resolved entry
+	// preview, never the retired free-text summary (#3381).
+	const preview = await getCachedMoedEntryPreview(moed);
 	return pageMetadata({
 		title: `${moed.name} | מועדים על הפרק | ${SITE_NAME}`,
 		description:
-			moed.summary ??
+			preview?.text ??
 			`קריאת התנ"ך ל${moed.name} — פסוקים, פירושים ומאמרים על הפרק.`,
 		canonical: moedHref(moed.slug),
 	});
@@ -126,12 +150,14 @@ export default async function MoedPage({
 	}
 	const perekSources = rangePerekSources(moed.ranges);
 	const perekIds = Object.keys(perekSources).map(Number);
-	const [entityRefsByPerek, perushim, articles, siblings] = await Promise.all([
-		fetchAllEntityRefs(perekIds),
-		getCachedMoedPerushim(moed),
-		getCachedMoedArticles(moed),
-		getCachedMoadim(),
-	]);
+	const [entityRefsByPerek, perushim, articles, siblings, entryPreview] =
+		await Promise.all([
+			fetchAllEntityRefs(perekIds),
+			getCachedMoedPerushim(moed),
+			getCachedMoedArticles(moed),
+			getCachedMoadim(),
+			getCachedMoedEntryPreview(moed),
+		]);
 	const firstPerekId = perekIds[0] ?? 1;
 
 	return (
@@ -139,12 +165,15 @@ export default async function MoedPage({
 			<MoedBreadcrumb moed={moed} siblings={siblings} />
 			<header className={styles.header}>
 				<h1 className={styles.heading}>{moed.name}</h1>
-				{(moed.hebrewMonth || moed.dateLabel) && (
-					<p className={styles.dateLine}>
-						{[moed.hebrewMonth, moed.dateLabel].filter(Boolean).join(" · ")}
+				<MoedDateLine moed={moed} className={styles.dateLine} />
+				{entryPreview && (
+					<p className={styles.intro}>
+						{entryPreview.text}{" "}
+						<Link href={entryPreview.href} className={styles.entryLink}>
+							ללימוד הערך המלא בתנכפדיה
+						</Link>
 					</p>
 				)}
-				{moed.summary && <p className={styles.summary}>{moed.summary}</p>}
 			</header>
 			{moed.sections.map((section) => (
 				<section

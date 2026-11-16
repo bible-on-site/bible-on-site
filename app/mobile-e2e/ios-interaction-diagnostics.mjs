@@ -198,7 +198,20 @@ export async function samplePinnedIosApp({ udid, pid, prefix, deadlineUtc, execu
 export function iosInteractionDiagnostics({ artifacts, udid, nativeLog, execute, inspectorPath, devicesRoot,
   readPid = () => readLoggedIosAppPid(nativeLog), now = Date.now }) {
   const records = [];
+  const pinned = [];
   return {
+    // Every issued request pins the app process it addresses, while the live
+    // log still names it. A request that completes or faults inside
+    // milliseconds never reaches the 25s pending capture, yet the failed
+    // scenario's last command is exactly the evidence that identifies its app.
+    pin(request) {
+      let pid = null;
+      let identityError;
+      try { pid = readPid(); }
+      catch (error) { identityError = errorDetails(error); }
+      pinned.push({ request, pid, pinnedAt: new Date(now()).toISOString(),
+        ...(identityError ? { identityError } : {}) });
+    },
     async capture(command, request) {
       const prefix = resolve(artifacts, `native-interaction-${String(request.sequence).padStart(4, '0')}`);
       let pid = null;
@@ -282,11 +295,34 @@ export function iosInteractionDiagnostics({ artifacts, udid, nativeLog, execute,
           && Number.isFinite(startedAt) && startedAt >= scenarioStartedAt
           && startedAt <= capturedAt && capturedAt >= scenarioStartedAt;
       });
-      const result = record
-        ? await samplePinnedIosApp({ udid, pid: record.pid, prefix,
+      let observation = record ?? null;
+      let pid = Number.isSafeInteger(record?.pid) && record.pid > 1 ? record.pid : null;
+      if (pid == null) {
+        // Fast-failing requests never spend 25s pending, so nothing captured
+        // them — yet the last command the scenario issued still names the app
+        // it drove. Its issue-time pin cannot be a replacement process: the
+        // failed test blocks before any further launch can run.
+        const command = pinned.findLast(entry => {
+          const info = entry.request;
+          const startedAt = Date.parse(info.startedAt);
+          if (info.sessionId !== request.sessionId || !Number.isFinite(failedAt)
+            || !Number.isFinite(startedAt) || startedAt > failedAt) return false;
+          if (!hasScenarioBoundary) return info.pending || info.status >= 400;
+          return Number.isFinite(scenarioStartedAt) && startedAt >= scenarioStartedAt;
+        });
+        if (command) {
+          observation = { request: command.request, pid: command.pid,
+            observedAt: command.pinnedAt,
+            source: 'passive app identity pinned when the scenario issued the command',
+            ...(command.identityError ? { identityError: command.identityError } : {}) };
+          pid = command.pid;
+        }
+      }
+      const result = pid != null
+        ? await samplePinnedIosApp({ udid, pid, prefix,
           deadlineUtc: request.deadlineUtc, execute, inspectorPath, devicesRoot, now, signal })
         : { status: 'unknown', pid: null, reason: 'No pending or failed request had a passively pinned app identity.' };
-      writeFileSync(`${prefix}.json`, JSON.stringify({ request, observation: record ?? null, result }, null, 2));
+      writeFileSync(`${prefix}.json`, JSON.stringify({ request, observation, result }, null, 2));
       return result;
     },
   };

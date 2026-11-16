@@ -3,13 +3,33 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { assetMirrorDirectory, localAssetEnvironment, syncLocalAssetMirror } from "./asset-mirror.mjs";
+import { assetBucketCreateArgs, assetMirrorDirectory, localAssetEnvironment, syncLocalAssetMirror } from "./asset-mirror.mjs";
 
 function fixture(t) {
 	const cacheRoot = mkdtempSync(path.join(tmpdir(), "asset-mirror-"));
 	t.after(() => rmSync(cacheRoot, { recursive: true, force: true }));
 	return { sourceBucket: "prod-assets", region: "il-central-1", targetBucket: "local-assets-dev", endpoint: "http://localhost:4566", cacheRoot };
 }
+
+test("fresh custom local buckets use the RustFS region; AWS bucket creation retains its configured region", () => {
+	const options = { bucket: "local-assets-sandbox", region: "il-central-1" };
+	assert.deepEqual(assetBucketCreateArgs({ ...options, endpoint: "http://localhost:4566" }),
+		["s3", "mb", "s3://local-assets-sandbox", "--region", "us-east-1", "--endpoint-url", "http://localhost:4566"]);
+	assert.deepEqual(assetBucketCreateArgs(options),
+		["s3", "mb", "s3://local-assets-sandbox", "--region", "il-central-1"]);
+});
+
+test("production downloads and local uploads use their own regions", (t) => {
+	const commands = [];
+	syncLocalAssetMirror(fixture(t), { run: (_command, args) => {
+		commands.push(args);
+		return { status: 0 };
+	} });
+	assert.equal(commands[0][commands[0].indexOf("--region") + 1], "il-central-1");
+	assert.equal(commands[1][commands[1].indexOf("--region") + 1], "us-east-1");
+	assert.ok(!commands[0].includes("--endpoint-url"));
+	assert.ok(commands[1].includes("http://localhost:4566"));
+});
 
 test("separate worktrees reuse a persistent incremental download and still refresh changed objects", (t) => {
 	const options = fixture(t);

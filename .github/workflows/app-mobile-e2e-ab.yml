@@ -161,7 +161,7 @@ jobs:
 
   # Cheap pre-flight on the experimental runner: proves the
   # namespace-profile-mac-os pool still schedules for this repo and that its
-  # image carries the Xcode_27.app layout every iOS leg hard-selects. A queued
+  # image carries the Xcode 27.2 installation every iOS leg requires. A queued
   # or failed probe stops both legs before any shard minutes are spent.
   probe_namespace:
     name: Probe namespace-profile-mac-os runner
@@ -179,7 +179,15 @@ jobs:
             sysctl -n machdep.cpu.brand_string hw.memsize hw.ncpu
             df -h /
             echo "== xcode =="
-            sudo xcode-select --switch "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)/Contents/Developer"
+            xcode_dir=""
+            for app in /Applications/Xcode_27*.app; do
+              version=$(DEVELOPER_DIR="$app/Contents/Developer" xcodebuild -version 2>/dev/null | awk 'NR==1 {print $2}') || continue
+              case "$version" in
+                27.2|27.2.*) xcode_dir="$app/Contents/Developer"; break ;;
+              esac
+            done
+            [ -n "$xcode_dir" ] || { echo "No Xcode 27.2 installation found for the runner report"; exit 1; }
+            sudo xcode-select --switch "$xcode_dir"
             xcodebuild -version
             xcode-select -p
             ls -d /Applications/Xcode*.app
@@ -190,15 +198,20 @@ jobs:
       - name: Verify Xcode 27 layout used by iOS legs
         run: |
           set -euo pipefail
-          # app-mobile-e2e-runner.yml selects the newest /Applications/Xcode_27*.app
-          # on every iOS leg; the workload's iOS 27.2 SDK needs Xcode ≥27.2 —
-          # an image carrying only 27.0/27.1 fails every shard at setup, so the
-          # probe fails here instead — the iteration aborts cheaply.
-          newest=$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)
-          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$newest/Contents/Info.plist")
-          echo "Newest Xcode 27: $newest ($version)"
-          minor=${version#*.}; minor=${minor%%.*}
-          [ "$minor" -ge 2 ] || { echo "Xcode $version < 27.2 required by the iOS 27.2 workload"; exit 1; }
+          # app-mobile-e2e-runner.yml selects the /Applications/Xcode_27*.app
+          # whose real version is 27.2 — the workload's iOS 27.2 SDK rejects
+          # both older releases and the newer 27.3 beta. An image without any
+          # 27.2 installation fails every shard at setup, so the probe fails
+          # here instead — the iteration aborts cheaply.
+          found=""
+          for app in /Applications/Xcode_27*.app; do
+            version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist" 2>/dev/null || true)
+            case "$version" in
+              27.2|27.2.*) found="$app ($version)"; break ;;
+            esac
+          done
+          [ -n "$found" ] || { echo "No Xcode 27.2 installation found — required by the iOS 27.2 workload"; exit 1; }
+          echo "Xcode 27.2 installation: $found"
       - name: Upload probe report
         if: always()
         uses: actions/upload-artifact@v7

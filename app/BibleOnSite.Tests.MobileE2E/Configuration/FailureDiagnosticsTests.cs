@@ -384,7 +384,17 @@ public sealed class FailureDiagnosticsTests : IDisposable
                 using var close = cancellation.Register(client.Dispose);
                 using var stream = client.GetStream();
                 var notification = new byte[33];
-                stream.ReadExactly(notification);
+                try
+                {
+                    stream.ReadExactly(notification);
+                }
+                catch (Exception dropped) when (dropped is EndOfStreamException or IOException or ObjectDisposedException)
+                {
+                    // A client whose budget lapses between connect and notification closes the
+                    // socket without sending; a real supervisor must treat that as a missed
+                    // request, not a protocol fault.
+                    return;
+                }
                 Assert.Equal((byte)'\n', notification[32]);
                 var id = Encoding.ASCII.GetString(notification, 0, 32);
                 Assert.Matches("^[a-f0-9]{32}$", id);

@@ -1,5 +1,11 @@
 import { execFile, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
@@ -49,6 +55,7 @@ describe("ensure-s3-seeded", () => {
 	let populated: () => boolean;
 	let mode: "objects" | "empty" | "missing";
 	let stubDir: string;
+	let authorization: string | undefined;
 
 	beforeAll(() => {
 		stubDir = mkdtempSync(join(tmpdir(), "s3-seeded-cargo-"));
@@ -56,7 +63,7 @@ describe("ensure-s3-seeded", () => {
 			join(stubDir, "cargo_stub.rs"),
 			`fn main() {
 	let m = std::env::var("POPULATE_MARKER").expect("POPULATE_MARKER");
-	std::fs::write(m, "ok").expect("marker");
+	std::fs::write(m, std::env::var("S3_REGION").unwrap_or_default()).expect("marker");
 }
 `,
 		);
@@ -76,11 +83,13 @@ describe("ensure-s3-seeded", () => {
 	beforeEach(async () => {
 		dir = mkdtempSync(join(tmpdir(), "s3-seeded-"));
 		mode = "objects";
+		authorization = undefined;
 		const marker = join(dir, "populated.marker");
 		process.env.POPULATE_MARKER = marker;
 		populated = () => existsSync(marker);
 
-		server = createServer((_req, res) => {
+		server = createServer((req, res) => {
+			authorization = req.headers.authorization;
 			if (mode === "missing") {
 				res.writeHead(404, { "content-type": "application/xml" });
 				res.end(
@@ -130,10 +139,24 @@ describe("ensure-s3-seeded", () => {
 		expect(populated()).toBe(false);
 	}, 30_000);
 
+	it("signs local seed checks for RustFS even when AWS uses the production region", async () => {
+		await run({ S3_REGION: "il-central-1" });
+		expect(authorization).toContain("/us-east-1/s3/aws4_request");
+		expect(populated()).toBe(false);
+	}, 30_000);
+
 	it("runs the populator when the dev bucket is empty", async () => {
 		mode = "empty";
 		await run();
 		expect(populated()).toBe(true);
+	}, 30_000);
+
+	it("seeds an empty local bucket with the RustFS region when AWS uses the production region", async () => {
+		mode = "empty";
+		await run({ S3_REGION: "il-central-1" });
+		expect(readFileSync(join(dir, "populated.marker"), "utf8")).toBe(
+			"us-east-1",
+		);
 	}, 30_000);
 
 	it("runs the populator when the dev bucket is missing", async () => {
