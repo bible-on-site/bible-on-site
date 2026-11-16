@@ -22,6 +22,8 @@ const NEGATIVE_DIRECTIVE =
 	/\b(?:not|never|avoid|without|don't|do\s+not|instead\s+of)\b|(?<![\p{L}\p{N}_])(?:לא|אל|בלי|ללא)(?![\p{L}\p{N}_])/iu;
 const NEGATIVE_COPY =
 	/\b(?:do\s+not|don't|never)\s+(?:append|add|set|replace|copy)\b|(?<![\p{L}\p{N}_])(?:אל|לא)\s+(?:תוסיף|תוסיפו|תצרף|תחליף|תחליפו|תגדיר|תקבע|תעתיק|להוסיף|להחליף|להעתיק)(?![\p{L}\p{N}_])/iu;
+const NEGATIVE_FIELD_EDIT =
+	/\b(?:do\s+not|don't|never)\s+(?:change|edit|modify|alter|touch)\b|(?<![\p{L}\p{N}_])(?:אל|לא)\s+(?:תשנה|תשנו|תערוך|תערכו|לשנות|לערוך)(?![\p{L}\p{N}_])/iu;
 
 /** Only one balanced quotation is actionable; its contents remain opaque data. */
 function quotedRequest(body: string) {
@@ -115,6 +117,20 @@ function expectedValue(request: CopyRequest, current: string): string {
 	return current + (current.length ? separator : "") + request.quote;
 }
 
+function negatedCopyFields(body: string): VerbatimFieldConstraint["field"][] {
+	const quoted = quotedRequest(body);
+	// Unbalanced/multiple quotes cannot establish which field names are data.
+	if (!quoted && /["“”״‘’]|(?<![A-Za-z])'|'(?![A-Za-z])/u.test(body)) return [];
+	const outside = quoted ? `${quoted.before} ${quoted.after}` : body;
+	return outside
+		.split(/[.!?;\n]/u)
+		.filter(
+			(clause) =>
+				NEGATIVE_COPY.test(clause) || NEGATIVE_FIELD_EDIT.test(clause),
+		)
+		.flatMap(namedFields);
+}
+
 /**
  * Derive data-only constraints from pending human instructions, never evidence.
  * Deliberately narrow: unclear intent is left for clarification, not guessed.
@@ -123,13 +139,16 @@ export function deriveVerbatimFieldConstraints(
 	comments: readonly { id: string; body: string }[],
 	current: { title: string; description: string },
 ): VerbatimFieldConstraint[] {
+	const negated = new Set(
+		comments.flatMap((comment) => negatedCopyFields(comment.body)),
+	);
 	const requests = new Map<
 		VerbatimFieldConstraint["field"],
 		{ request: CopyRequest; commentIds: string[]; conflicting: boolean }
 	>();
 	for (const comment of comments) {
 		const request = copyRequest(comment.body);
-		if (!request) continue;
+		if (!request || negated.has(request.field)) continue;
 		const previous = requests.get(request.field);
 		if (!previous) {
 			requests.set(request.field, {
