@@ -66,7 +66,12 @@ public partial class App : Application
             WidthRequest = 46,
             HeightRequest = 32,
             Padding = 0,
+            // Title-bar chrome keeps its authored compact size: the shared
+            // Secondary outline and 48dp floor would stretch and ring it (#3454).
             BackgroundColor = Colors.Transparent,
+            BorderWidth = 0,
+            MinimumHeightRequest = 0,
+            MinimumWidthRequest = 0,
             AutomationId = "TitleBarBackButton",
             IsEnabled = false,
         };

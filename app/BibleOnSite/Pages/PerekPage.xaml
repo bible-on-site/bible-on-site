@@ -64,8 +64,7 @@
                 </controls:SharedTopBar.CenterContent>
                 <controls:SharedTopBar.TrailingContent>
                 <Button Style="{x:Static controls:AppButtonStyles.Icon}" x:Name="ReaderMenuButton" AutomationId="ReaderMenuButton"
-                        Text="{x:Static fonts:FluentUI.more_vertical_24_regular}" FontFamily="FluentIcons" FontSize="20"
-                        WidthRequest="48" HeightRequest="44" Padding="0"
+                        Text="{x:Static fonts:FluentUI.more_vertical_24_regular}" FontSize="20"
                         VerticalOptions="Center" SemanticProperties.Description="אפשרויות הקריאה"
                         Clicked="OnReaderMenuButtonClicked"/>
                 </controls:SharedTopBar.TrailingContent>
@@ -206,11 +205,7 @@
                                 <Button Style="{x:Static controls:AppButtonStyles.CompactIcon}" x:Name="HeaderPlayButton"
                                         AutomationId="HeaderPlayButton"
                                         Text="{x:Static fonts:FluentUI.headphones_24_regular}"
-                                        FontFamily="FluentIcons"
                                         FontSize="20"
-                                        WidthRequest="40"
-                                        HeightRequest="40"
-                                        Padding="0"
                                         HorizontalOptions="Start"
                                         VerticalOptions="Center"
                                         Margin="8,0"
