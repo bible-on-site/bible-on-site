@@ -202,6 +202,116 @@ test("uses the independent fallback when Ubuntu DNS fails", async () => {
 	);
 });
 
+test("joins cancelled fallback probes as soon as the preferred mirror is complete", async () => {
+	let active = 0,
+		cancelled = 0,
+		completed = false;
+	const selection = selectUbuntuArchive("noble", async (url, { signal }) => {
+		if (new URL(url).hostname === "archive.ubuntu.com")
+			return new Response(signedMetadata);
+		active++;
+		try {
+			await new Promise((_resolve, reject) =>
+				signal.addEventListener(
+					"abort",
+					() => {
+						cancelled++;
+						reject(signal.reason);
+					},
+					{ once: true },
+				),
+			);
+		} finally {
+			active--;
+		}
+	}).then((result) => {
+		completed = true;
+		return result;
+	});
+	await new Promise((resolve) => setImmediate(resolve));
+	const completedBeforeAnotherEventLoopTurn = completed;
+	assert.equal(await selection, primary);
+	assert.equal(completedBeforeAnotherEventLoopTurn, true);
+	assert.equal(active, 0);
+	assert.equal(cancelled, 4);
+});
+
+test("a faster healthy fallback does not change the preferred mirror", async () => {
+	let finish;
+	const pending = new Promise((resolve) => {
+		finish = resolve;
+	});
+	let complete = false;
+	const selection = selectUbuntuArchive("noble", async (url) => {
+		if (new URL(url).hostname === "archive.ubuntu.com") await pending;
+		return new Response(signedMetadata);
+	}).then((result) => {
+		complete = true;
+		return result;
+	});
+	await new Promise((resolve) => setImmediate(resolve));
+	assert.equal(complete, false);
+	finish();
+	assert.equal(await selection, primary);
+});
+
+test("failed selection exposes bounded request stages and network causes without remote bodies or raw errors", async () => {
+	await assert.rejects(
+		selectUbuntuArchive("noble", async (url) => {
+			if (new URL(url).hostname === "mirrors.kernel.org") {
+				throw new TypeError("private request failure", {
+					cause: new AggregateError([
+						Object.assign(new Error("private DNS detail"), {
+							code: "ENOTFOUND",
+						}),
+						Object.assign(new Error("private routing detail"), {
+							code: "ENETUNREACH",
+						}),
+					]),
+				});
+			}
+			if (url.includes("-updates/")) return new Response("private remote body");
+			if (url.includes("-security/"))
+				return {
+					ok: true,
+					status: 200,
+					text: async () => {
+						throw Object.assign(new Error("private body error"), {
+							code: "ECONNRESET",
+						});
+					},
+				};
+			return new Response(signedMetadata, { status: 503 });
+		}),
+		(error) => {
+			assert.match(error.message, /within five seconds/);
+			assert(error.cause instanceof AggregateError);
+			assert.equal(error.cause.errors.length, 8);
+			const details = error.cause.errors
+				.map((probe) => probe.message)
+				.join("\n");
+			assert.match(
+				details,
+				/noble-updates\/InRelease phase=signature http=200 reason=invalid_metadata elapsed=\d+ms/,
+			);
+			assert.match(
+				details,
+				/noble-security\/InRelease phase=body http=200 reason=ECONNRESET/,
+			);
+			assert.match(
+				details,
+				/phase=http_status http=503 reason=invalid_metadata/,
+			);
+			assert.match(
+				details,
+				/phase=headers http=none reason=ENOTFOUND,ENETUNREACH/,
+			);
+			assert(!details.includes("private"));
+			return true;
+		},
+	);
+});
+
 test("rejects incomplete mirrors, HTTP errors, and captive HTML without rewriting sources", async (t) => {
 	const directory = await fixture(t);
 	const file = join(directory, "apt-mirrors.txt");
@@ -255,32 +365,54 @@ test("rejects missing or malformed codenames before any network request", async 
 	}
 });
 
-test("all stalled probes share one five-second cap and leave the source file intact", async (t) => {
+test("stalled headers and bodies share one five-second cap and leave the source file intact", async (t) => {
 	const directory = await fixture(t);
 	const file = join(directory, "apt-mirrors.txt");
 	await writeFile(file, mirrors);
 	let pending = 0;
+	let failure;
+	const waitForDeadline = async (signal) => {
+		pending++;
+		try {
+			await new Promise((_resolve, reject) =>
+				signal.addEventListener("abort", () => reject(signal.reason), {
+					once: true,
+				}),
+			);
+		} finally {
+			pending--;
+		}
+	};
 	// Keep the test process alive; AbortSignal.timeout uses an unref'ed timer.
 	const keepAlive = setInterval(() => {}, 100);
 	t.after(() => clearInterval(keepAlive));
 	await assert.rejects(
 		configureUbuntuAptMirrors(file, {
 			codename: "noble",
-			fetchMetadata: async (_url, { signal }) => {
-				pending++;
-				try {
-					await new Promise((_resolve, reject) =>
-						signal.addEventListener("abort", () => reject(signal.reason), {
-							once: true,
-						}),
-					);
-				} finally {
-					pending--;
-				}
+			fetchMetadata: async (url, { signal }) => {
+				if (url.includes("-updates/") || url.includes("-security/"))
+					return { ok: true, status: 200, text: () => waitForDeadline(signal) };
+				await waitForDeadline(signal);
 			},
 		}),
-		/within five seconds/,
+		(error) => {
+			failure = error;
+			return /within five seconds/.test(error.message);
+		},
 	);
 	assert.equal(pending, 0);
 	assert.equal(await readFile(file, "utf8"), mirrors);
+	const details = failure.cause.errors.map((error) => error.message);
+	assert.equal(
+		details.filter((message) =>
+			message.includes("phase=headers http=none reason=deadline"),
+		).length,
+		4,
+	);
+	assert.equal(
+		details.filter((message) =>
+			message.includes("phase=body http=200 reason=deadline"),
+		).length,
+		4,
+	);
 });
