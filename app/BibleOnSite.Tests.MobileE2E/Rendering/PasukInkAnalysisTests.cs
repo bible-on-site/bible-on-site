@@ -1,3 +1,4 @@
+using StbImageSharp;
 using Xunit;
 
 namespace BibleOnSite.Tests.MobileE2E.Rendering;
@@ -240,6 +241,68 @@ public sealed class PasukInkAnalysisTests
         Assert.False(profile.HasShortFinalLine);
         Assert.False(profile.HasLeftFlushedLine);
     }
+
+    [Fact]
+    public void RegionMeasureReadsOnlyTheRequestedRectangle()
+    {
+        // The shared-capture path measures one rectangle of a full screenshot;
+        // ink outside the element's frame must not leak into the verdict.
+        // Without the crop these two half-lines merge into one "full" band.
+        var profile = PasukInkAnalysis.Measure(
+            Capture(200, 50, new Line(2, 12, 0, 45), new Line(2, 12, 155, 199)),
+            100, 0, 100, 50);
+
+        Assert.Equal("right", profile.LastLine);
+        Assert.True(profile.HasShortFinalLine);
+        Assert.False(profile.HasLeftFlushedLine);
+    }
+
+    [Fact]
+    public void RegionMeasureStillFlagsALeftFlushedLastLine()
+    {
+        // A left-flushed final line inside the element's rectangle keeps its
+        // verdict when the rest of the screen is cropped away.
+        var profile = PasukInkAnalysis.Measure(
+            Capture(200, 50, new Line(2, 12, 100, 199), new Line(16, 26, 100, 145)),
+            100, 0, 100, 50);
+
+        Assert.Equal("left", profile.LastLine);
+        Assert.True(profile.HasLeftFlushedLine);
+    }
+
+    [Fact]
+    public void RegionMeasureClampsToTheCaptureBounds()
+    {
+        // A frame can overshoot the capture by a rounding pixel after the
+        // points-to-pixels scale; the crop clamps instead of reading outside
+        // the buffer.
+        var profile = PasukInkAnalysis.Measure(
+            Capture(100, 40, new Line(15, 30, 50, 99)),
+            20, 0, 120, 60);
+
+        Assert.Equal("right", profile.LastLine);
+    }
+
+    [Fact]
+    public void EmptyRegionMeasuresAsNoInk()
+    {
+        var profile = PasukInkAnalysis.Measure(
+            Capture(100, 40, new Line(15, 30, 0, 99)),
+            0, 0, 0, 40);
+
+        Assert.Equal("none", profile.LastLine);
+        Assert.Equal(0, profile.InkRows);
+        Assert.False(profile.HasShortFinalLine);
+    }
+
+    private static ImageResult Capture(int width, int height, params Line[] lines) =>
+        new()
+        {
+            Width = width,
+            Height = height,
+            Comp = ColorComponents.RedGreenBlueAlpha,
+            Data = BuildPixels(width, height, lines),
+        };
 
     [Fact]
     public void LightInkOnDarkBackgroundStillCountsAsInk()

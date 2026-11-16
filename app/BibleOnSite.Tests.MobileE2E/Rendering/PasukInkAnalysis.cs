@@ -105,6 +105,41 @@ internal static class PasukInkAnalysis
         return MeasurePixels(image.Width, image.Height, image.Data);
     }
 
+    /// <summary>
+    /// Decodes a full-frame capture once so every element's rectangle can be
+    /// measured from it. XCUITest's element screenshots come back rotated in
+    /// landscape — a 830x36-pt pasuk row arrived as a 104x2490-px portrait
+    /// strip — so the test measures element frames inside one correctly
+    /// oriented screen capture instead (#3380).
+    /// </summary>
+    public static ImageResult Decode(byte[] pngBytes) =>
+        ImageResult.FromMemory(pngBytes, ColorComponents.RedGreenBlueAlpha);
+
+    /// <summary>
+    /// Measures an element's rectangle inside a decoded screen capture — the
+    /// same verdict <see cref="Measure(byte[])"/> gives an element screenshot,
+    /// without trusting the driver's screenshot orientation. The rectangle is
+    /// clamped to the capture, so a frame that overshoots by a rounding pixel
+    /// still measures what the element rendered.
+    /// </summary>
+    public static InkProfile Measure(ImageResult capture, int x, int y, int width, int height)
+    {
+        x = Math.Clamp(x, 0, capture.Width);
+        y = Math.Clamp(y, 0, capture.Height);
+        width = Math.Clamp(width, 0, capture.Width - x);
+        height = Math.Clamp(height, 0, capture.Height - y);
+        if (width <= 0 || height <= 0)
+        {
+            return new InkProfile(0, 0, 0, string.Empty, "none", false, height, height);
+        }
+        var rgba = new byte[width * height * 4];
+        for (var row = 0; row < height; row++)
+        {
+            Array.Copy(capture.Data, ((y + row) * capture.Width + x) * 4, rgba, row * width * 4, width * 4);
+        }
+        return MeasurePixels(width, height, rgba);
+    }
+
     // Unit tests feed synthetic RGBA buffers here directly so the analysis is
     // exercised without a PNG round-trip.
     internal static InkProfile MeasurePixels(int width, int height, byte[] rgba)

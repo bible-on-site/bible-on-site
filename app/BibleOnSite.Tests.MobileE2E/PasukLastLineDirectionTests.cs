@@ -65,7 +65,7 @@ public sealed class PasukLastLineDirectionTests(ITestOutputHelper output, Mobile
     });
 
     // Floating bottom chrome that can cover a PasukText element's tail. The
-    // element screenshot captures the overlay's ink — the circular menu FAB
+    // captured frame contains the overlay's ink — the circular menu FAB
     // and nav icons are indistinguishable from text by luminance — so an
     // element dipping into the strip cannot be measured honestly.
     private static readonly string[] BottomChromeIds =
@@ -93,9 +93,17 @@ public sealed class PasukLastLineDirectionTests(ITestOutputHelper output, Mobile
                 chromeTop = Math.Min(chromeTop, chromeFrame.Location.Y);
             }
         }
+        // XCUITest's element screenshots come back rotated in landscape — a
+        // wide pasuk row arrives as a tall portrait strip — so every element
+        // is measured inside one correctly oriented full-frame capture,
+        // cropped to its reported frame. Element frames are points, the
+        // capture pixels; per-axis factors carry the device's density.
+        var capture = PasukInkAnalysis.Decode(Driver!.GetScreenshot().AsByteArray);
+        var scaleX = capture.Width / (double)window.Width;
+        var scaleY = capture.Height / (double)window.Height;
         var qualifying = 0;
         var failures = new List<string>();
-        foreach (var (element, text, frame) in Page.RenderedElements("PasukText"))
+        foreach (var (_, text, frame) in Page.RenderedElements("PasukText"))
         {
             if (frame.Size.Height <= 0 || frame.Location.Y < 0 ||
                 frame.Location.Y + frame.Size.Height > Math.Min(window.Height, chromeTop))
@@ -104,17 +112,11 @@ public sealed class PasukLastLineDirectionTests(ITestOutputHelper output, Mobile
                 // ink — or capture the floating overlay's ink in its place.
                 continue;
             }
-            byte[] png;
-            try
-            {
-                png = element.GetScreenshot().AsByteArray;
-            }
-            catch (StaleElementReferenceException)
-            {
-                // The collection recycled the cell between snapshot and capture.
-                continue;
-            }
-            var profile = PasukInkAnalysis.Measure(png);
+            var profile = PasukInkAnalysis.Measure(capture,
+                (int)Math.Round(frame.Location.X * scaleX),
+                (int)Math.Round(frame.Location.Y * scaleY),
+                (int)Math.Round(frame.Size.Width * scaleX),
+                (int)Math.Round(frame.Size.Height * scaleY));
             var preview = text.Length > 24 ? text[..24] + "…" : text;
             if (profile.HasShortFinalLine)
             {
