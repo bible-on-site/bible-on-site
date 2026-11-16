@@ -663,14 +663,14 @@ public partial class FloatingSearchBar : ContentView, IReaderSearchSurface
     {
         SearchHeader.HeightRequest = SharedTopBar.BarHeight;
         SearchHeader.Padding = new Thickness(8);
-        SearchHeader.SetAppThemeColor(BackgroundColorProperty, Color.FromArgb("#F5F7FB"), Color.FromArgb("#111C2C"));
+        SearchHeader.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#111C2C"));
         foreach (var action in new[] { NavigationButton, ClearButton })
         {
             action.HeightRequest = action.WidthRequest = 52;
             action.CornerRadius = 16;
             action.VerticalOptions = LayoutOptions.Center;
             action.Padding = 0;
-            action.SetAppThemeColor(Button.BackgroundColorProperty, Color.FromArgb("#E4EAF4"), Color.FromArgb("#243C5D"));
+            action.SetAppThemeColor(Button.BackgroundColorProperty, Colors.White, Color.FromArgb("#243C5D"));
         }
         SearchInput.HeightRequest = 52;
         SearchInput.FontSize = 19;

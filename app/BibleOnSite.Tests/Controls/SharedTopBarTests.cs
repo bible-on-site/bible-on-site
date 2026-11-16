@@ -38,7 +38,7 @@ public class SharedTopBarTests : IDisposable
         var band = ((Grid)bar.Content!).Children.OfType<Grid>().Single();
 
         band.HeightRequest.Should().Be(72);
-        band.BackgroundColor.Should().Be(Color.FromArgb("#F5F7FB"));
+        band.BackgroundColor.Should().Be(Colors.White);
         bar.NavigationButton.AutomationId.Should().Be("TopBarBackButton");
         bar.BackButton.AutomationId.Should().Be("TopBarHomeButton");
         bar.BackButton.IsVisible.Should().BeTrue("Home remains available when the old Back preference is hidden");
@@ -49,6 +49,11 @@ public class SharedTopBarTests : IDisposable
         var pill = new ToolbarPill();
         pill.HeightRequest.Should().Be(bar.BackButton.HeightRequest);
         pill.BackgroundColor.Should().Be(bar.BackButton.BackgroundColor);
+        pill.BackgroundColor.Should().Be(Colors.White);
+        var title = new Button { WidthRequest = 200, BackgroundColor = Colors.Blue };
+        bar.CenterContent = title;
+        title.BackgroundColor.Should().Be(Colors.White);
+        title.WidthRequest.Should().Be(200, "the shared treatment must preserve the title width");
         band.ColumnDefinitions[2].Width.Value.Should().Be(0, "an empty action slot must not steal search width");
         bar.TrailingContent = new Button();
         band.ColumnDefinitions[2].Width.Value.Should().Be(52);

@@ -34,6 +34,13 @@ public partial class PerekPickerPopup : ContentView
     public PerekPickerPopup()
     {
         InitializeComponent();
+        if (Config.HomeUxPreview.Enabled)
+        {
+            PickerHeader.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#111C2C"));
+            PickerHeading.SetAppThemeColor(Label.TextColorProperty, Color.FromArgb("#102648"), Colors.White);
+            PickerCard.SetAppTheme<Brush>(Border.StrokeProperty, new SolidColorBrush(Color.FromArgb("#E3E7ED")),
+                new SolidColorBrush(Color.FromArgb("#334B6C")));
+        }
         _scrollColumns = new PickerScrollColumns(Dispatcher,
             new PickerScrollColumn(SeferGroupList, SeferGroupUpArrow, SeferGroupDownArrow, SeferGroupItemSizer),
             new PickerScrollColumn(SeferList, SeferUpArrow, SeferDownArrow, SeferItemSizer),

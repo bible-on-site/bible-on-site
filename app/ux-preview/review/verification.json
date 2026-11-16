@@ -72,7 +72,7 @@
     "check_screen_navigation",
     "check_reading_options"
   ],
-  "unit_tests_passed": 4287,
+  "unit_tests_passed": 4289,
   "host_application_lines_covered": 20246,
   "host_application_lines_total": 20343,
   "instrumented_changed_application_lines_covered": 161,
@@ -164,6 +164,104 @@
       2072,
       1024,
       2294
+    ]
+  },
+  "white_template_revision": {
+    "passed": [
+      "eight alternating small tile fills",
+      "white reader safe area, band, title and buttons",
+      "white chapter picker heading",
+      "all shared header screenshots refreshed",
+      "holiday calendar uses Hebrew day"
+    ],
+    "date": "2026-11-16",
+    "tile_colors": {
+      "HomeIndex": [
+        255,
+        255,
+        255
+      ],
+      "HomeCalendar": [
+        40,
+        102,
+        231
+      ],
+      "HomeTanahpedia": [
+        40,
+        102,
+        231
+      ],
+      "HomeMasora": [
+        255,
+        255,
+        255
+      ],
+      "HomeAuthors": [
+        255,
+        255,
+        255
+      ],
+      "HomeBulletin": [
+        40,
+        102,
+        231
+      ],
+      "HomeContact": [
+        40,
+        102,
+        231
+      ],
+      "HomeDonations": [
+        255,
+        255,
+        255
+      ]
+    },
+    "white_header_pixels": [
+      [
+        500,
+        60,
+        255,
+        255,
+        255
+      ],
+      [
+        10,
+        200,
+        255,
+        255,
+        255
+      ],
+      [
+        500,
+        166,
+        255,
+        255,
+        255
+      ],
+      [
+        837,
+        166,
+        255,
+        255,
+        255
+      ],
+      [
+        980,
+        166,
+        255,
+        255,
+        255
+      ]
+    ],
+    "unit_tests_passed": 4289,
+    "reader_regressions_passed": [
+      "navigation from text and articles",
+      "articles action returns to chapter",
+      "picker cancellation preserves reading mode",
+      "commentary covers and intercepts dock",
+      "chapter selection navigates correctly",
+      "idle hides both bars without changing viewport"
     ]
   }
 }
