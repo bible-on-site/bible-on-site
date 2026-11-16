@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	CONTRIBUTION_AGENT_TOOL_ERRORS,
+	ContributionAgentToolInputError,
+} from "~/lib/tanahpedia/contribution-agent-tool-errors";
 import type { RegisteredContributionAgent } from "~/lib/tanahpedia/contribution-agents";
 import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
 import type { Contribution } from "~/lib/tanahpedia/contributions";
@@ -733,6 +737,142 @@ describe("assignment-driven leased contribution work", () => {
 		expect(mocks.query.mock.calls[0][2][0]).toBe("local_llm");
 		expect(current().generation?.leaseHash).not.toBe(input.token);
 	});
+	it("returns only fixed argument feedback after a valid lease without reading or writing a target", async () => {
+		const input = await claim(),
+			before = structuredClone(current());
+		expect(
+			await readContributionWorkerContext({
+				...input,
+				name: "record",
+				arguments: { kind: "target:article_links", id },
+			}),
+		).toEqual({
+			error: {
+				type: "invalid_tool_arguments",
+				code: "invalid_article_id",
+				message: CONTRIBUTION_AGENT_TOOL_ERRORS.invalid_article_id,
+			},
+		});
+		expect(mocks.tool).not.toHaveBeenCalled();
+		expect(current()).toEqual(before);
+		expect(mocks.create).not.toHaveBeenCalled();
+		expect(mocks.revise).not.toHaveBeenCalled();
+	});
+	it("does not turn lease, stale context or prior-receipt rejection into recoverable input feedback", async () => {
+		const input = await claim(),
+			request = {
+				...input,
+				name: "record",
+				arguments: { kind: "target:article_links", id },
+			};
+		await expect(
+			readContributionWorkerContext({ ...request, token: "a".repeat(64) }),
+		).rejects.toThrow("owns");
+		mocks.initial.mockResolvedValueOnce({
+			data: {},
+			catalogue: empty,
+			hash: "stale",
+		});
+		await expect(readContributionWorkerContext(request)).rejects.toThrow(
+			"context changed",
+		);
+		mocks.tool.mockRejectedValueOnce(
+			new ContributionAgentToolInputError("invalid_arguments"),
+		);
+		await expect(
+			readContributionWorkerContext({
+				...request,
+				receipts: [
+					{
+						name: "record",
+						arguments: { kind: "entity", id },
+						hash: "a".repeat(64),
+					},
+				],
+			}),
+		).rejects.toBeInstanceOf(ContributionAgentToolInputError);
+		expect(current().generation?.status).toBe("running");
+	});
+	it.each([
+		new Error("Proposal is not linked to this issue"),
+		Object.assign(new Error("private SQL"), { code: "ER_LOCK_NOWAIT" }),
+		new Error("Missing contribution reference lock contract"),
+	])("leaves read execution and storage errors fatal", async (failure) => {
+		const input = await claim();
+		mocks.tool.mockRejectedValueOnce(failure);
+		await expect(
+			readContributionWorkerContext({
+				...input,
+				name: "record",
+				arguments: { kind: "entity", id },
+			}),
+		).rejects.toBe(failure);
+		expect(mocks.revise).not.toHaveBeenCalled();
+	});
+	it("retains a receipt-bearing null result for a valid missing record", async () => {
+		const input = await claim();
+		mocks.tool.mockResolvedValueOnce({
+			data: { record: null },
+			catalogue: empty,
+		});
+		const read = await readContributionWorkerContext({
+			...input,
+			name: "record",
+			arguments: { kind: "entity", id },
+		});
+		expect(read).toMatchObject({
+			data: { record: null },
+			receipt: { hash: expect.any(String) },
+			schema: expect.any(Object),
+		});
+		expect(read).not.toHaveProperty("error");
+	});
+	it("AWS receives the same rejected-call feedback without a new receipt or schema authority", async () => {
+		agent().provider = "aws_llm";
+		current().assignee = { kind: "aws_llm", agentId: jobId };
+		job().provider = "aws_llm";
+		mocks.aws
+			.mockResolvedValueOnce({
+				content: JSON.stringify({
+					action: "tool",
+					name: "record",
+					arguments: { kind: "target:article_links", id },
+				}),
+				model: "configured-model",
+			})
+			.mockResolvedValueOnce({
+				content: JSON.stringify({
+					action: "complete",
+					result: JSON.parse(output()),
+				}),
+				model: "configured-model",
+			});
+		expect(await runAwsContributionAgentTask()).toMatchObject({
+			status: "completed",
+		});
+		expect(mocks.tool).not.toHaveBeenCalled();
+		expect(mocks.aws.mock.calls[1][2]).toEqual(mocks.aws.mock.calls[0][2]);
+		expect(JSON.parse(mocks.aws.mock.calls[1][1]).turns).toEqual([
+			{
+				request: {
+					action: "tool",
+					name: "record",
+					arguments: { kind: "target:article_links", id },
+				},
+				response: {
+					error: {
+						type: "invalid_tool_arguments",
+						code: "invalid_article_id",
+						message: CONTRIBUTION_AGENT_TOOL_ERRORS.invalid_article_id,
+					},
+				},
+			},
+		]);
+		expect(mocks.aws.mock.calls[1][3].signal).toBe(
+			mocks.aws.mock.calls[0][3].signal,
+		);
+		expect(mocks.revise).not.toHaveBeenCalled();
+	});
 	it("validates dynamic read receipts and expands permitted final IDs", async () => {
 		const input = await claim();
 		const read = await readContributionWorkerContext({
@@ -740,6 +880,7 @@ describe("assignment-driven leased contribution work", () => {
 			name: "record",
 			arguments: { kind: "entity", id },
 		});
+		if ("error" in read) throw new Error("Expected a successful read");
 		expect(read.receipt.hash).toMatch(/^[a-f0-9]{64}$/);
 		expect(JSON.stringify(read.schema)).toContain(id);
 		await completeContributionAgentWork({
@@ -771,7 +912,7 @@ describe("assignment-driven leased contribution work", () => {
 	it("uses API five article read receipts to resolve the same PR with known nested identities", async () => {
 		const input = await claim();
 		expect(input.apiVersion).toBe(5);
-		expect(agent().installedVersion).toBe("tanahpedia-agents-v10");
+		expect(agent().installedVersion).toBe("tanahpedia-agents-v11");
 		mocks.tool.mockResolvedValue({
 			data: {
 				kind: "target:article_links",

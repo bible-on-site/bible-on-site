@@ -1,6 +1,11 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
 import { canonicalJson } from "~/lib/canonical-json";
+import { validateContributionAgentToolArguments } from "~/lib/tanahpedia/contribution-agent-tool-arguments";
+import {
+	ContributionAgentToolInputError,
+	contributionAgentToolErrorResult,
+} from "~/lib/tanahpedia/contribution-agent-tool-errors";
 import type {
 	ContributionAgentProvider,
 	ContributionAgentTask,
@@ -401,10 +406,17 @@ export async function readContributionWorkerContext(raw: unknown) {
 	return withContributions(async (conn) => {
 		const input = record(raw),
 			prepared = await prepareAgentLease(conn, raw),
-			name = textField(input.name, "tool name", 64),
-			args = record(input.arguments, "tool arguments");
+			name = textField(input.name, "tool name", 64);
 		if (!prepared.agent.bundle.tools.some((tool) => tool.name === name))
 			throw new ContributionWorkerConflict("Unsupported agent tool");
+		let args: Record<string, unknown>;
+		try {
+			args = validateContributionAgentToolArguments(name, input.arguments);
+		} catch (error) {
+			if (error instanceof ContributionAgentToolInputError)
+				return contributionAgentToolErrorResult(error);
+			throw error;
+		}
 		const result = await readContributionAgentTool(
 			conn,
 			prepared.item,
@@ -648,6 +660,10 @@ export async function runAwsContributionAgentTask() {
 				name: action.name,
 				arguments: action.arguments,
 			});
+			if ("error" in read) {
+				turns.push({ request: action, response: read });
+				continue;
+			}
 			receipts.push(read.receipt);
 			schema = read.schema;
 			turns.push({ request: action, response: read.data });

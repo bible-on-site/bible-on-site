@@ -44,6 +44,11 @@ continued the task through production verification after that window ended.
 - Assigning an LLM queues implementation of an issue or review-comment handling
   on the same PR. New human comments trigger another pass. Model output passes
   the same typed validation as human input and cannot approve or merge changes.
+- A valid agent lease may receive fixed, typed feedback for invalid current-call
+  read arguments. Rejected reads supply no receipt, catalogue entries or output
+  schema. Auth, stale context, prior-receipt replay, linked-PR authority and
+  storage failures remain fatal. Local and AWS agents may correct their own
+  arguments within the original deadline; the server never retargets a call.
 - Issues can optionally select a change kind and an existing target. The model's
   issue implementation is constrained to that scope, and its dynamic context
   includes the canonical target and read locators. Free-form issues remain

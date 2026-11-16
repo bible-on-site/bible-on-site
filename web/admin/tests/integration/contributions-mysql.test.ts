@@ -1316,6 +1316,105 @@ describe("assignment-driven agents with actual MySQL transactions", () => {
 			observe.mockRestore();
 		}
 	});
+	it("returns typed current-call feedback over HTTP after real lease checks without any writes", async () => {
+		const { item } = await assignedIssue(),
+			job = await claim(item);
+		const environment = await import("~/server/environment.server");
+		const local = vi
+			.spyOn(environment, "skipAuthEnabled")
+			.mockReturnValue(true);
+		const { handleContributionWorkerRequest } = await import(
+			"~/server/tanahpedia/contribution-worker-http.server"
+		);
+		const snapshot = async () => {
+			const [items] = await conn.query<RowDataPacket[]>(
+				"SELECT id,version,data FROM tanahpedia_contribution ORDER BY id",
+			);
+			const [agents] = await conn.query<RowDataPacket[]>(
+				"SELECT id,version,data FROM tanahpedia_contribution_agent ORDER BY id",
+			);
+			const [entities] = await conn.query<RowDataPacket[]>(
+				"SELECT id,name FROM tanahpedia_entity ORDER BY id",
+			);
+			return { items, agents, entities };
+		};
+		const before = await snapshot();
+		const request = (body: unknown) =>
+			handleContributionWorkerRequest(
+				new Request("http://127.0.0.1/api/contributions/worker/context", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(body),
+				}),
+			);
+		const invalid = {
+			...identity(job),
+			name: "record",
+			arguments: { kind: "target:article_links", id: item.id },
+		};
+		try {
+			const rejected = await request(invalid);
+			expect(rejected.status).toBe(200);
+			expect(await rejected.json()).toEqual({
+				error: {
+					type: "invalid_tool_arguments",
+					code: "invalid_article_id",
+					message:
+						"Use the numeric article ID from currentRecords or an article lookup. A PR or discussion UUID is not an article ID.",
+				},
+			});
+			const badFields = await request({
+				...identity(job),
+				name: "history",
+				arguments: { sql: "private SQL" },
+			});
+			expect(badFields.status).toBe(200);
+			expect(await badFields.json()).toEqual({
+				error: {
+					type: "invalid_tool_arguments",
+					code: "invalid_arguments",
+					message:
+						"The read tool arguments are invalid. Use only its declared fields, kinds and page limits.",
+				},
+			});
+			const revoked = await request({ ...invalid, token: "0".repeat(64) });
+			expect(revoked.status).toBe(409);
+			expect(await revoked.text()).not.toContain("invalid_tool_arguments");
+			const forged = await request({
+				...invalid,
+				receipts: [
+					{
+						name: "record",
+						arguments: { kind: "target:article_links", id: item.id },
+						hash: "a".repeat(64),
+					},
+				],
+			});
+			expect(forged.status).toBe(400);
+			expect(await forged.text()).not.toContain("invalid_tool_arguments");
+			const missing = await request({
+				...identity(job),
+				name: "record",
+				arguments: { kind: "entity", id: randomUUID() },
+			});
+			expect(missing.status).toBe(200);
+			expect(await missing.json()).toMatchObject({
+				data: { record: null },
+				receipt: { hash: expect.any(String) },
+				schema: expect.any(Object),
+			});
+			expect(await snapshot()).toEqual(before);
+			expect(
+				(
+					await store.withContributions((tx) =>
+						store.readContribution(tx, item.id),
+					)
+				).generation?.status,
+			).toBe("running");
+		} finally {
+			local.mockRestore();
+		}
+	});
 	it("creates a source-backed issue proposal under the registered identity through v2 reads and completion", async () => {
 		const { item, agent } = await assignedIssue(),
 			entityId = await isolatedEntity(),

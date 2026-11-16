@@ -15,7 +15,7 @@ const adminHosts = new Set(["admin.xn--febl3a.co.il", "admin.xn--febl3a.com"]);
 const AWS_ACCOUNT = "250598594267", // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 	AWS_REGION = "il-central-1";
 const executeFile = promisify(execFile);
-export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v5";
+export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v6";
 const workerTasks = ["issue_implementation", "pr_resolution"];
 function parseJson(content, message) {
 	try {
@@ -47,6 +47,28 @@ const canonical = (value) =>
 
 const object = (value) =>
 	value !== null && typeof value === "object" && !Array.isArray(value);
+
+const readArgumentMessages = {
+	invalid_arguments:
+		"The read tool arguments are invalid. Use only its declared fields, kinds and page limits.",
+	invalid_article_id:
+		"Use the numeric article ID from currentRecords or an article lookup. A PR or discussion UUID is not an article ID.",
+};
+function readArgumentError(value) {
+	if (!object(value) || !Object.hasOwn(value, "error")) return null;
+	const error = value.error;
+	if (
+		canonical(Object.keys(value)) !== '["error"]' ||
+		!object(error) ||
+		canonical(Object.keys(error).sort()) !== '["code","message","type"]' ||
+		error.type !== "invalid_tool_arguments" ||
+		typeof error.code !== "string" ||
+		!Object.hasOwn(readArgumentMessages, error.code) ||
+		error.message !== readArgumentMessages[error.code]
+	)
+		throw new Error("Invalid agent context response");
+	return value;
+}
 
 /** Preserve the full server schema, including unions and limits that native
  * tool parameter decoders may discard. Final results use the format path. */
@@ -514,6 +536,7 @@ export function createContributionWorker(
 					},
 				];
 				const research = new Map(),
+					rejections = new Map(),
 					receipts = [],
 					tools = bundle.tools.map((tool) => ({
 						type: "function",
@@ -616,31 +639,48 @@ export function createContributionWorker(
 							executionSignal,
 						);
 						remainingBudget();
-						if (!object(read) || !read.receipt || !Object.hasOwn(read, "data"))
-							throw new Error("Invalid agent context response");
-						agentResultSchema(read.schema);
 						const query = canonical({
 							name: call.function.name,
 							arguments: call.function.arguments,
 						});
-						const facts = createHash("sha256")
-							.update(canonical({ data: read.data, schema: read.schema }))
-							.digest("hex");
-						// Compare the latest facts: A -> B -> A is a current change,
-						// even though an older response also contained A.
-						if (research.get(query) !== facts) repeated = false;
-						research.set(query, facts);
-						receipts.push(read.receipt);
-						schema = read.schema;
+						const rejection = readArgumentError(read);
+						let data;
+						if (rejection) {
+							const fingerprint = canonical(rejection);
+							if (rejections.get(query) !== fingerprint) repeated = false;
+							rejections.set(query, fingerprint);
+							// The actual error is feedback, never a trusted read receipt,
+							// catalogue fact or permission to widen the result schema.
+							data = rejection;
+						} else {
+							if (
+								!object(read) ||
+								!read.receipt ||
+								!Object.hasOwn(read, "data")
+							)
+								throw new Error("Invalid agent context response");
+							agentResultSchema(read.schema);
+							const facts = createHash("sha256")
+								.update(canonical({ data: read.data, schema: read.schema }))
+								.digest("hex");
+							// Compare the latest facts: A -> B -> A is a current change,
+							// even though an older response also contained A.
+							if (rejections.delete(query) || research.get(query) !== facts)
+								repeated = false;
+							research.set(query, facts);
+							receipts.push(read.receipt);
+							schema = read.schema;
+							data = read.data;
+						}
 						messages.push({
 							role: "tool",
 							tool_name: call.function.name,
 							...(call.id !== undefined ? { tool_call_id: call.id } : {}),
-							content: canonical(read.data),
+							content: canonical(data),
 						});
 					}
 					// Every read still ran and entered history. Only a whole batch
-					// adding no new trusted facts/schema ends the research phase.
+					// adding no new facts/schema or argument feedback ends research.
 					if (repeated) return await finalize();
 				}
 			}
