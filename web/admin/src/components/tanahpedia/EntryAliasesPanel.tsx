@@ -6,6 +6,7 @@ import {
 } from "~/components/editor/EntryLinkPicker";
 import { searchEntriesForLink } from "~/components/editor/entryLinkSearch";
 import { classifySaveError } from "~/lib/server-fn-errors";
+import { useDebouncedValue } from "~/lib/use-debounced-value";
 import {
 	aliasKindForTargetCount,
 	pediaNameFromInput,
@@ -54,15 +55,6 @@ interface EditorState {
 }
 
 const NAME_CHECK_DEBOUNCE_MS = 300;
-
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-	const [debounced, setDebounced] = useState(value);
-	useEffect(() => {
-		const t = setTimeout(() => setDebounced(value), delayMs);
-		return () => clearTimeout(t);
-	}, [value, delayMs]);
-	return debounced;
-}
 
 function CopyButton({ url }: { url: string }) {
 	const [copied, setCopied] = useState(false);
