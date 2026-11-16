@@ -199,6 +199,7 @@ try {
       MOBILE_E2E_FAILURE_DIAGNOSTICS_PORT: failureMonitor ? String(failureMonitor.port) : "",
       ...(wdaPath ? { MOBILE_WDA_PATH: wdaPath } : {}),
       ...(platform === "android" ? { MOBILE_APP_PREINSTALLED: "1" } : {}),
+      ...(platform === "ios" ? { MOBILE_APP_PREINSTALLED: "", MOBILE_NODE_EXECUTABLE: process.execPath } : {}),
       APPIUM_SERVER: `http://127.0.0.1:${appiumPort}` },
   });
   for (const [name, stream, output] of [["stdout", test.stdout, process.stdout], ["stderr", test.stderr, process.stderr]]) {

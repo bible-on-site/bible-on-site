@@ -14,7 +14,10 @@ namespace BibleOnSite.Tests.MobileE2E.Platforms;
 internal sealed class IosSnapshotDriver : IOSDriver
 {
     public IosSnapshotDriver(Uri server, AppiumOptions options)
-        : base(server, options, TimeSpan.FromMinutes(5)) { }
+        : this(server, options, TimeSpan.FromMinutes(5)) { }
+
+    public IosSnapshotDriver(Uri server, AppiumOptions options, TimeSpan startupBudget)
+        : this(new IosSessionCommandExecutor(server, startupBudget), options) { }
 
     internal IosSnapshotDriver(ICommandExecutor executor, AppiumOptions options)
         : base(executor, options) { }
