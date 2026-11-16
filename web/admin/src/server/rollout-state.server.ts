@@ -9,11 +9,13 @@ import {
 	rolloutTransition,
 } from "~/lib/bulletin-rollout";
 import { query, queryOne, transaction, txExecute, txQueryOne } from "./db";
+import { isMysqlSchemaMissing } from "./mysql-errors";
 
 /** ER_NO_SUCH_TABLE / ER_BAD_FIELD_ERROR — the rollout upgrade is not deployed yet. */
 export function isMissingRolloutSchema(error: unknown): boolean {
-	const code = (error as { code?: string })?.code;
-	return code === "ER_NO_SUCH_TABLE" || code === "ER_BAD_FIELD_ERROR";
+	return isMysqlSchemaMissing(error, {
+		codes: ["ER_NO_SUCH_TABLE", "ER_BAD_FIELD_ERROR"],
+	});
 }
 
 export interface EmailRolloutRow {

@@ -9,6 +9,7 @@ import type {
 	WhatsAppTargetView,
 	WhatsAppVerification,
 } from "~/lib/bulletin-whatsapp";
+import { loadBulletinQueue } from "./bulletin-queue.server";
 import {
 	execute,
 	query,
@@ -81,32 +82,7 @@ export function loadWhatsAppRuntime(): WhatsAppRuntime | null {
 				values.REAL_GROUP_ID === values.TEST_GROUP_ID))
 	)
 		throw new Error(CONFIG_ERROR);
-	const region =
-		process.env.BULLETIN_SES_REGION || process.env.AWS_REGION || "il-central-1";
-	const account = process.env.BULLETIN_SES_ACCOUNT_ID;
-	const queueUrl = process.env.BULLETIN_EMAIL_QUEUE_URL?.trim();
-	if (!account || !/^\d{12}$/.test(account) || !queueUrl)
-		throw new Error(CONFIG_ERROR);
-	let queue: URL;
-	try {
-		queue = new URL(queueUrl);
-	} catch {
-		throw new Error(CONFIG_ERROR);
-	}
-	const parts = queue.pathname.split("/");
-	if (
-		queue.protocol !== "https:" ||
-		queue.hostname !== `sqs.${region}.amazonaws.com` ||
-		queue.port ||
-		queue.username ||
-		queue.password ||
-		queue.search ||
-		queue.hash ||
-		parts.length !== 3 ||
-		parts[1] !== account ||
-		!/^[A-Za-z0-9_-]+$/.test(parts[2] ?? "")
-	)
-		throw new Error(CONFIG_ERROR);
+	const { queueUrl, region } = loadBulletinQueue(CONFIG_ERROR);
 	const runtime: WhatsAppRuntime = {
 		instanceId: values.INSTANCE_ID,
 		apiToken: values.API_TOKEN,

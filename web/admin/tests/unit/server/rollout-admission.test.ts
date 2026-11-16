@@ -51,7 +51,8 @@ interface CohortRow {
 }
 interface Admission {
 	cohort: string;
-	local_date: string;
+	/** mysql2 may hand a DATE column back as a Date despite DATE_FORMAT. */
+	local_date: string | Date;
 	subscriber_id: number | null;
 	status: string;
 	last_error: string | null;
@@ -68,6 +69,9 @@ const runtime = {
 };
 
 /** In-memory implementation of the exact SQL contract the sweep issues. */
+/** Test override for the claim-time rollout read (undefined = use state.rollout). */
+let claimRollout: { state: string; cohort: string } | null | undefined;
+
 const state = {
 	rollout: {
 		state: "disabled",
@@ -77,13 +81,21 @@ const state = {
 	subscribers: new Map<number, Subscriber>(),
 	cohort: new Map<number, CohortRow>(),
 	admissions: new Map<string, Admission>(),
+	/** Optional failure hook applied to every read (e.g. missing schema). */
+	throwOn: null as null | ((sql: string) => Error | null),
 
 	admissionKey(cohort: string, localDate: string) {
 		return `${cohort}|${localDate}`;
 	},
 	query(sql: string, params: unknown[] = []) {
-		if (sql.includes("tanah_daily_bulletin_email_rollout"))
+		const failure = this.throwOn?.(sql);
+		if (failure) throw failure;
+		if (sql.includes("tanah_daily_bulletin_email_rollout")) {
+			// Only the claim read selects the cohort alongside the state.
+			if (sql.includes("state, cohort") && claimRollout !== undefined)
+				return claimRollout ? [{ ...claimRollout }] : [];
 			return [{ ...this.rollout }];
+		}
 		// The next-member select embeds a NOT EXISTS subselect over the
 		// admission table, so it must dispatch before the admission patterns.
 		if (sql.includes("FROM tanah_daily_bulletin_email_cohort c")) {
@@ -110,12 +122,17 @@ const state = {
 		if (sql.includes("tanah_daily_bulletin_email_admission")) {
 			if (sql.includes("WHERE status = 'reserved' AND local_date < ?")) {
 				const limit = Number(params[1]);
+				const dayOf = (value: string | Date) =>
+					value instanceof Date
+						? value.toISOString().slice(0, 10)
+						: String(value);
 				return [...this.admissions.values()]
 					.filter(
 						(row) =>
-							row.status === "reserved" && row.local_date < String(params[0]),
+							row.status === "reserved" &&
+							dayOf(row.local_date) < String(params[0]),
 					)
-					.sort((a, b) => a.local_date.localeCompare(b.local_date))
+					.sort((a, b) => dayOf(a.local_date).localeCompare(dayOf(b.local_date)))
 					.slice(0, limit)
 					.map((row) => ({ ...row }));
 			}
@@ -312,6 +329,8 @@ const at = (utc: string) => new Date(`${utc}Z`);
 
 beforeEach(() => {
 	vi.resetAllMocks();
+	claimRollout = undefined;
+	state.throwOn = null;
 	state.rollout = { state: "disabled", cohort: "original", last_error: null };
 	state.subscribers.clear();
 	state.cohort.clear();
@@ -657,5 +676,133 @@ describe("original-cohort admission sweep", () => {
 			(row) => row.status === "pending",
 		).length;
 		expect(remaining).toBeGreaterThan(0);
+	});
+	it.each([null, { state: "paused", cohort: "original" }])(
+		"claims nothing when the locked rollout row reads %j at claim time",
+		async (row) => {
+			// The cheap gate passed, but the locked control row disagrees at
+			// claim time — the reservation is never even taken.
+			claimRollout = row;
+			seed([{ id: 1, email: "a@x.invalid", consent: "pending" }]);
+			await reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00"));
+			expect(state.admissions.size).toBe(0);
+			expect(m.ensureSubscribed).not.toHaveBeenCalled();
+		},
+	);
+	it("lapses an abandoned empty reservation and still admits today", async () => {
+		seed([{ id: 1, email: "fresh@x.invalid", consent: "pending" }]);
+		state.admissions.set("original|2026-11-01", {
+			cohort: "original",
+			local_date: "2026-11-01",
+			subscriber_id: null,
+			status: "reserved",
+			last_error: null,
+		});
+		await reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00"));
+		expect(state.admissions.get("original|2026-11-01")).toMatchObject({
+			status: "lapsed",
+			last_error: "lapsed-reservation",
+		});
+		expect(state.admissions.get("original|2026-11-02")).toMatchObject({
+			status: "admitted",
+			subscriber_id: 1,
+		});
+	});
+	it("lapses a stale reservation whose recorded subscriber no longer exists", async () => {
+		seed([{ id: 2, email: "fresh@x.invalid", consent: "pending" }]);
+		state.admissions.set("original|2026-11-01", {
+			cohort: "original",
+			local_date: "2026-11-01",
+			subscriber_id: 99,
+			status: "reserved",
+			last_error: null,
+		});
+		await reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00"));
+		expect(state.admissions.get("original|2026-11-01")).toMatchObject({
+			status: "lapsed",
+			last_error: "missing-subscriber",
+		});
+		expect(state.cohort.get(2)).toMatchObject({
+			status: "admitted",
+			admission_date: "2026-11-02",
+		});
+	});
+	it("settles a stale reservation recorded with a driver-typed Date", async () => {
+		seed([{ id: 1, email: "stale@x.invalid", consent: "pending" }]);
+		state.admissions.set("original|2026-11-01", {
+			cohort: "original",
+			local_date: new Date("2026-11-01T00:00:00Z"),
+			subscriber_id: 1,
+			status: "reserved",
+			last_error: null,
+		});
+		await reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00"));
+		expect(state.admissions.get("original|2026-11-01")?.status).toBe(
+			"admitted",
+		);
+		expect(state.cohort.get(1)?.admission_date).toBe("2026-11-01");
+	});
+	it("records a generic provider error for a non-Error SES failure", async () => {
+		seed([{ id: 1, email: "a@x.invalid", consent: "pending" }]);
+		m.ensureSubscribed.mockRejectedValueOnce("flaky transport");
+		await reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00"));
+		expect(state.admissions.get("original|2026-11-02")).toMatchObject({
+			status: "reserved",
+			subscriber_id: 1,
+			last_error: "provider",
+		});
+	});
+	it("leaves a superseded reservation untouched instead of activating it twice", async () => {
+		seed([
+			{ id: 1, email: "held@x.invalid", consent: "pending" },
+			{ id: 2, email: "next@x.invalid", consent: "pending" },
+		]);
+		state.admissions.set("original|2026-11-01", {
+			cohort: "original",
+			local_date: "2026-11-01",
+			subscriber_id: 1,
+			status: "reserved",
+			last_error: null,
+		});
+		m.ensureSubscribed.mockImplementation(async (email: string) => {
+			if (email === "held@x.invalid") {
+				// A superseding worker already concluded this reservation.
+				const row = state.admissions.get("original|2026-11-01");
+				if (row) row.status = "lapsed";
+			}
+			return "subscribed";
+		});
+		await reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00"));
+		// The guarded conclude touched nothing on the lapsed row; the still
+		// eligible member was legitimately claimed under today's reservation.
+		expect(state.admissions.get("original|2026-11-01")?.status).toBe(
+			"lapsed",
+		);
+		expect(state.cohort.get(1)).toMatchObject({
+			status: "admitted",
+			admission_date: "2026-11-02",
+		});
+		expect(state.subscribers.get(2)?.consent_status).toBe("pending");
+	});
+	it("ignores a not-yet-deployed rollout schema during the sweep", async () => {
+		seed([{ id: 1, email: "a@x.invalid", consent: "pending" }]);
+		state.throwOn = (sql) =>
+			sql.includes("local_date < ?")
+				? Object.assign(new Error("no table"), {
+						code: "ER_NO_SUCH_TABLE",
+					})
+				: null;
+		await reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00"));
+		expect(state.rollout.last_error).toBeNull();
+		expect(state.admissions.size).toBe(0);
+	});
+	it("records a sweep-level failure on the control row and rethrows it", async () => {
+		seed([{ id: 1, email: "a@x.invalid", consent: "pending" }]);
+		state.throwOn = (sql) =>
+			sql.includes("local_date < ?") ? new Error("disk gone") : null;
+		await expect(
+			reconcileRolloutAdmission(undefined, at("2026-11-02T06:00:00")),
+		).rejects.toThrow("disk gone");
+		expect(state.rollout.last_error).toBe("disk gone");
 	});
 });

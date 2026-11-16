@@ -60,15 +60,11 @@ vi.mock("~/server/ses-client.server", () => {
 		},
 	};
 });
-vi.mock("~/server/ses-settings.server", async () => {
-	const { SesSuppressedError } = await import("~/server/ses-client.server");
-	return {
-		DeliverySuppressed: SesSuppressedError,
-		loadEmailRuntime: mocks.runtime,
-		getEmailReadiness: mocks.readiness,
-		reserveSendSlot: mocks.reserve,
-	};
-});
+vi.mock("~/server/ses-settings.server", () => ({
+	loadEmailRuntime: mocks.runtime,
+	getEmailReadiness: mocks.readiness,
+	reserveSendSlot: mocks.reserve,
+}));
 vi.mock("~/server/ses-events.server", () => ({ parseSesEvent: mocks.parse }));
 vi.mock("~/server/whatsapp-delivery.server", () => ({
 	processWhatsAppJob: mocks.whatsappProcess,
@@ -2305,6 +2301,69 @@ describe("optional Telegram dispatch in the existing worker", () => {
 			}
 		},
 	);
+
+	it("isolates rollout admission failure so a native email event still completes", async () => {
+		configureTelegram();
+		const row = seed("test", "accepted");
+		const controller = new AbortController();
+		mocks.parse.mockReturnValue(delivery());
+		mocks.rolloutSweep.mockRejectedValueOnce(new Error("private details"));
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		messages(controller, ['{"eventType":"Delivery"}']);
+		try {
+			await startEmailWorker(controller.signal);
+			expect(row.status).toBe("delivered");
+			expect(log).toHaveBeenCalledExactlyOnceWith(
+				"Rollout admission reconciliation failed",
+			);
+			expect(
+				mocks.sqs.mock.calls.some(([command]) => command.kind === "delete"),
+			).toBe(true);
+		} finally {
+			log.mockRestore();
+		}
+	});
+
+	it.each([false, true])(
+		"stops after rollout reconciliation aborts (rejects=%s)",
+		async (rejects) => {
+			const controller = new AbortController();
+			mocks.rolloutSweep.mockImplementationOnce(async (signal) => {
+				expect(signal).toBe(controller.signal);
+				controller.abort();
+				if (rejects) throw new Error("shutdown interrupted rollout work");
+			});
+			const log = vi.spyOn(console, "error").mockImplementation(() => {});
+			try {
+				await startEmailWorker(controller.signal);
+				expect(mocks.rolloutSweep).toHaveBeenCalledOnce();
+				expect(mocks.telegramSweep).not.toHaveBeenCalled();
+				expect(mocks.whatsappSweep).not.toHaveBeenCalled();
+				expect(mocks.destroy).toHaveBeenCalledOnce();
+				expect(log).not.toHaveBeenCalled();
+			} finally {
+				log.mockRestore();
+			}
+		},
+	);
+
+	it("stops inside the Telegram gate when shutdown lands during its module load", async () => {
+		configureTelegram();
+		const controller = new AbortController();
+		mocks.rolloutSweep.mockImplementationOnce(async () => {
+			// Lands between the post-rollout shutdown check and the one inside
+			// the Telegram try: one resolved-promise tick is exactly the gap
+			// `await optionalTelegramDelivery()` leaves between them.
+			void Promise.resolve().then(() =>
+				Promise.resolve().then(() => controller.abort()),
+			);
+		});
+		await startEmailWorker(controller.signal);
+		expect(mocks.rolloutSweep).toHaveBeenCalledOnce();
+		expect(mocks.telegramSweep).not.toHaveBeenCalled();
+		expect(mocks.whatsappSweep).not.toHaveBeenCalled();
+		expect(mocks.destroy).toHaveBeenCalledOnce();
+	});
 
 	it("isolates Telegram outbox failure so a native email event still completes", async () => {
 		configureTelegram();

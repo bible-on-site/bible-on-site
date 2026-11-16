@@ -12,46 +12,13 @@
  * traversal indices. Position-independence is what lets the AST comparison
  * layer join nodes across revisions.
  */
-import { createHash } from "node:crypto";
+import { canonicalize, fingerprint, isHexSha } from "../github/ci/e2e-impact/model.ts";
 
 export const EXEC_TREE_KIND = "exec-coverage-tree";
 export const EXEC_TREE_SCHEMA_VERSION = 1;
 
-/** Canonical serialization: sorted keys — stable hashing and diffs. */
-export function canonicalize(value: unknown): string {
-	return JSON.stringify(sortRecursively(value));
-}
-
-function sortRecursively(value: unknown): unknown {
-	if (Array.isArray(value)) return value.map(sortRecursively);
-	if (value !== null && typeof value === "object") {
-		return Object.fromEntries(
-			Object.entries(value as Record<string, unknown>)
-				.sort(([a], [b]) => a.localeCompare(b))
-				.map(([key, entry]) => [key, sortRecursively(entry)]),
-		);
-	}
-	return value;
-}
-
-export function sha256(parts: unknown[]): string {
-	return createHash("sha256")
-		.update(parts.map((part) => canonicalize(part)).join("\n"))
-		.digest("hex");
-}
-
-/** `^[0-9a-f]{40}$` without the regex engine — snapshot ids are plain data. */
-export function isHexSha(value: string): boolean {
-	if (value.length !== 40) return false;
-	for (const char of value) {
-		const hex =
-			(char >= "0" && char <= "9") ||
-			(char >= "a" && char <= "f") ||
-			(char >= "A" && char <= "F");
-		if (!hex) return false;
-	}
-	return true;
-}
+// Shared canonical-JSON hashing helpers live in e2e-impact's model.
+export { canonicalize, isHexSha, fingerprint as sha256 };
 
 /** A source declaration covered by execution evidence. */
 export interface CoveredNode {

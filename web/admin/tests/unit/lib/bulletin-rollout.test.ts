@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	admissionLocalDate,
+	type EmailRolloutAction,
 	rolloutAdmits,
 	rolloutDelivers,
 	rolloutTransition,
@@ -62,6 +63,11 @@ describe("rollout state machine", () => {
 		["completed", "resume"],
 	] as const)("rejects %s + %s", (state, action) => {
 		expect(rolloutTransition(state, action)).toBeNull();
+	});
+	it("rejects an unknown action reaching the switch default", () => {
+		expect(
+			rolloutTransition("running", "bogus" as EmailRolloutAction),
+		).toBeNull();
 	});
 });
 

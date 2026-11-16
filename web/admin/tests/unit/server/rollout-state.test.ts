@@ -15,6 +15,7 @@ import {
 	getBulletinRolloutSummary,
 	isMissingRolloutSchema,
 	readRolloutDeliveryState,
+	readRolloutRow,
 	rolloutDeliveryStateForUpdate,
 	setRolloutState,
 } from "~/server/rollout-state.server";
@@ -48,6 +49,35 @@ describe("isMissingRolloutSchema", () => {
 	});
 });
 
+describe("readRolloutRow", () => {
+	it("returns null when no row is persisted or the schema is absent", async () => {
+		m.queryOne.mockResolvedValue(null);
+		expect(await readRolloutRow()).toBeNull();
+		m.queryOne.mockRejectedValue(missing());
+		expect(await readRolloutRow()).toBeNull();
+	});
+	it("rethrows failures unrelated to a missing migration", async () => {
+		m.queryOne.mockRejectedValue(new Error("denied"));
+		await expect(readRolloutRow()).rejects.toThrow("denied");
+	});
+	it("returns null for a malformed singleton row", async () => {
+		m.queryOne.mockResolvedValue({
+			state: "bogus",
+			cohort: "original",
+			revision: 1,
+			last_error: null,
+		});
+		expect(await readRolloutRow()).toBeNull();
+		m.queryOne.mockResolvedValue({
+			state: "running",
+			cohort: 7,
+			revision: 1,
+			last_error: null,
+		});
+		expect(await readRolloutRow()).toBeNull();
+	});
+});
+
 describe("readRolloutDeliveryState", () => {
 	it("returns the persisted state, or null while the schema is absent", async () => {
 		m.queryOne.mockResolvedValue({ state: "paused" });
@@ -63,6 +93,16 @@ describe("readRolloutDeliveryState", () => {
 			"running",
 		);
 		expect(m.txQueryOne.mock.calls[0][1]).toContain("FOR UPDATE");
+	});
+	it("degrades to no license while the schema is absent and rethrows other failures", async () => {
+		m.txQueryOne.mockRejectedValue(missing());
+		expect(
+			await rolloutDeliveryStateForUpdate(connection as never),
+		).toBeNull();
+		m.txQueryOne.mockRejectedValue(new Error("denied"));
+		await expect(
+			rolloutDeliveryStateForUpdate(connection as never),
+		).rejects.toThrow("denied");
 	});
 });
 
@@ -102,6 +142,59 @@ describe("getBulletinRolloutSummary", () => {
 		m.queryOne.mockRejectedValue(missing());
 		expect(await getBulletinRolloutSummary()).toBeNull();
 	});
+	it("reports an empty reservation and accepts a driver-typed Date", async () => {
+		m.queryOne.mockResolvedValueOnce(rolloutRow()).mockResolvedValueOnce({
+			local_date: new Date("2026-11-02T00:00:00Z"),
+			status: "reserved",
+			subscriber_id: null,
+			last_error: "provider timeout",
+		});
+		m.query.mockResolvedValue([]);
+		const summary = await getBulletinRolloutSummary(
+			new Date("2026-11-02T06:00:00Z"),
+		);
+		expect(summary?.admission).toEqual({
+			localDate: "2026-11-02",
+			status: "reserved",
+			subscriberId: null,
+			lastError: "provider timeout",
+		});
+	});
+	it("omits the admission when none or an undated one is recorded", async () => {
+		m.queryOne.mockResolvedValueOnce(rolloutRow()).mockResolvedValueOnce(
+			null,
+		);
+		m.query.mockResolvedValue([]);
+		let summary = await getBulletinRolloutSummary(
+			new Date("2026-11-02T06:00:00Z"),
+		);
+		expect(summary?.admission).toBeNull();
+		m.queryOne.mockResolvedValueOnce(rolloutRow()).mockResolvedValueOnce({
+			local_date: null,
+			status: "reserved",
+			subscriber_id: null,
+			last_error: null,
+		});
+		summary = await getBulletinRolloutSummary(
+			new Date("2026-11-02T06:00:00Z"),
+		);
+		expect(summary?.admission).toBeNull();
+	});
+	it("degrades to null on a mid-read missing schema and rethrows other failures", async () => {
+		m.queryOne
+			.mockResolvedValueOnce(rolloutRow())
+			.mockRejectedValueOnce(missing());
+		m.query.mockResolvedValue([]);
+		expect(
+			await getBulletinRolloutSummary(new Date("2026-11-02T06:00:00Z")),
+		).toBeNull();
+		m.queryOne
+			.mockResolvedValueOnce(rolloutRow())
+			.mockRejectedValueOnce(new Error("denied"));
+		await expect(
+			getBulletinRolloutSummary(new Date("2026-11-02T06:00:00Z")),
+		).rejects.toThrow("denied");
+	});
 });
 
 describe("setRolloutState", () => {
@@ -137,5 +230,18 @@ describe("setRolloutState", () => {
 			state: "disabled",
 			revision: 5,
 		});
+	});
+	it("rethrows unrelated lock-read failures", async () => {
+		m.txQueryOne.mockRejectedValue(new Error("denied"));
+		await expect(
+			setRolloutState({ action: "pause", revision: 4 }),
+		).rejects.toThrow("denied");
+	});
+	it("leaves the revision untouched when the action keeps the state", async () => {
+		m.txQueryOne.mockResolvedValue({ state: "disabled", revision: 4 });
+		expect(await setRolloutState({ action: "disable", revision: 4 })).toEqual(
+			{ state: "disabled", revision: 4 },
+		);
+		expect(m.txExecute).not.toHaveBeenCalled();
 	});
 });

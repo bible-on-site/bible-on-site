@@ -142,6 +142,85 @@ test.describe("מועדים על הפרק", () => {
 		).toHaveCount(0);
 	});
 
+	// #3381 — a stored date label already carries the month: the header
+	// shows the date alone, and the catalogue index drops its standalone
+	// month chip. `hebrew_month` still feeds the wheel's month band.
+	test("detail date line drops the repeated month label", async ({
+		page,
+	}) => {
+		await page.goto(`${MOADIM_ROOT}/${encodeURIComponent("צום-גדליה")}`);
+		await expect(
+			page.getByRole("heading", { name: "צום גדליה", level: 1 }),
+		).toBeVisible();
+		// Exact text — the old `תשרי · ג' בתשרי` would fail this match.
+		await expect(page.getByText("ג' בתשרי", { exact: true })).toBeVisible();
+		expect(await page.content()).not.toContain("תשרי ·");
+
+		// Multi-day ranges keep their full label with no month prefix.
+		await page.goto(`${MOADIM_ROOT}/${encodeURIComponent("ראש-השנה")}`);
+		await expect(
+			page.getByText("א'-ב' בתשרי", { exact: true }),
+		).toBeVisible();
+	});
+
+	test("index drops the standalone month chip the date already names", async ({
+		page,
+	}) => {
+		await page.goto(MOADIM_ROOT);
+		const index = page.getByRole("navigation", { name: "רשימת המועדים" });
+		const tzom = index.getByRole("link", { name: /צום גדליה/ });
+		await expect(tzom).toContainText("ג' בתשרי");
+		// Every seeded moed's date label carries its month, so no
+		// indexMonth chip renders anywhere in the catalogue today; a moed
+		// whose date omits the month would still legitimately show one.
+		await expect(index.locator('[class*="indexMonth"]')).toHaveCount(0);
+	});
+
+	test("a moed with an exact Tanahpedia entry renders the 20-word preview and canonical link", async ({
+		page,
+	}) => {
+		await page.goto(`${MOADIM_ROOT}/${encodeURIComponent("מועד-בדיקה")}`);
+		// The fixture entry's 30+ word body renders only its first 20
+		// whole words, closed by the truncation ellipsis.
+		const intro = page.getByText(/מועד לבדיקות מערכת/);
+		await expect(intro).toBeVisible();
+		await expect(intro).toContainText("…");
+		await expect(intro).not.toContainText("עשרים");
+		const link = page.getByRole("link", {
+			name: "ללימוד הערך המלא בתנכפדיה",
+			exact: true,
+		});
+		await expect(link).toHaveAttribute(
+			"href",
+			`/pedia/${encodeURIComponent("מועד בדיקה")}`,
+		);
+		// The retired free-text summary never renders — not even as a
+		// fallback alongside the entry preview.
+		expect(await page.content()).not.toContain("מועד לבדיקות אוטומטיות");
+	});
+
+	test("a moed with no matching entry renders no introduction or link", async ({
+		page,
+	}) => {
+		await page.goto(
+			`${MOADIM_ROOT}/${encodeURIComponent("מועד-בדיקה-קישור")}`,
+		);
+		await expect(
+			page.getByRole("heading", { name: "מועד בדיקה קישור", level: 1 }),
+		).toBeVisible();
+		// Exact name — a bare /תנכפדיה/ regex also matches the site nav's
+		// pedia menu link, which lives on every page.
+		await expect(
+			page.getByRole("link", {
+				name: "ללימוד הערך המלא בתנכפדיה",
+				exact: true,
+			}),
+		).toHaveCount(0);
+		expect(await page.content()).not.toContain(
+			"מועד לבדיקת קישור ידני בלבד",
+		);
+	});
+
 	// Regression for #3160 — the owner's editorial correction: the
 	// conditional-haftarah wording is gone from the stored יום העצמאות
 	// content, so it reaches neither visible copy nor generated metadata,
@@ -154,10 +233,12 @@ test.describe("מועדים על הפרק", () => {
 			page.getByRole("heading", { name: "יום העצמאות", level: 1 }),
 		).toBeVisible();
 
-		// The summary is the bare editorial line, verbatim.
-		await expect(
-			page.getByText("יום העצמאות - ה' באייר, יום הכרזת מדינת ישראל."),
-		).toBeVisible();
+		// #3381 — the retired free-text summary is gone from copy and
+		// metadata; only a resolved Tanahpedia preview may introduce a
+		// moed, and יום העצמאות resolves none today.
+		const html = await page.content();
+		expect(html).not.toContain("יום הכרזת מדינת ישראל");
+		expect(html).not.toContain("הכרזת מדינת ישראל.");
 
 		// The reading section heading is exactly הפטרה — no qualification.
 		await expect(
@@ -170,7 +251,6 @@ test.describe("מועדים על הפרק", () => {
 
 		// Neither removed phrase survives anywhere in the document — body
 		// copy, description, Open Graph or Twitter metadata.
-		const html = await page.content();
 		expect(html).not.toContain("ההפטרה נקבעה מנהג");
 		expect(html).not.toContain("כאשר נהוג לקרוא");
 

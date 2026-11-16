@@ -39,21 +39,21 @@ interface MoedRow {
 	id: number;
 	slug: string;
 	name: string;
-	summary: string | null;
 	hebrew_month: string | null;
 	date_label: string | null;
 	annual_order: number;
 }
 
-const MOED_COLUMNS =
-	"id, slug, name, summary, hebrew_month, date_label, annual_order";
+// The stored `summary` column stays in the table (existing data is not
+// destructively deleted) but is never read — the introduction renders a
+// resolved Tanahpedia entry preview or nothing (#3381).
+const MOED_COLUMNS = "id, slug, name, hebrew_month, date_label, annual_order";
 
 function toSummary(row: MoedRow): MoedSummary {
 	return {
 		id: row.id,
 		slug: row.slug,
 		name: row.name,
-		summary: row.summary,
 		hebrewMonth: row.hebrew_month,
 		dateLabel: row.date_label,
 		annualOrder: row.annual_order,

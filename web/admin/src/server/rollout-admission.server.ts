@@ -232,6 +232,9 @@ async function settleCandidate(
 	runtime: NonNullable<ReturnType<typeof loadEmailRuntime>>,
 	abort: AbortSignal,
 ): Promise<boolean> {
+	// Callers only settle recorded members — stray empty reservations are
+	// released before settling, never passed here.
+	/* v8 ignore next */
 	if (candidate.subscriberId === null) return candidate.reselectable;
 	const subscriber = await queryOne<SubscriberRow>(
 		"SELECT id, email, consent_status FROM tanah_daily_bulletin_subscriber WHERE id = ?",

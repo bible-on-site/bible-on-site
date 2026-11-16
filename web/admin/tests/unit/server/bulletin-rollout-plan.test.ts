@@ -119,6 +119,23 @@ describe("cohort enrollment SQL", () => {
 		);
 		expect(sql).toContain("INSERT INTO tanah_daily_bulletin_email_cohort");
 	});
+	it("rejects a snapshot email that survives validation but not SQL escaping", () => {
+		// A backslash is a legal printable address yet unsafe inside a SQL
+		// literal — the guarded builder must refuse it outright.
+		const members = [member(1, "pending", "back\\slash@example.invalid")];
+		const plan = planBulletinCohort(members);
+		expect(() => bulletinCohortSql(members, plan)).toThrow(
+			"Invalid cohort email",
+		);
+	});
+	it("rejects a tampered snapshot email at SQL build time", () => {
+		const members = [member(1)];
+		const plan = planBulletinCohort(members);
+		const tampered = [{ ...members[0], email: "not-an-email" }];
+		expect(() => bulletinCohortSql(tampered, plan)).toThrow(
+			"Invalid cohort email",
+		);
+	});
 	it("rejects a plan that no longer matches the snapshot", () => {
 		const members = [member(1), member(2)];
 		const plan = planBulletinCohort(members);

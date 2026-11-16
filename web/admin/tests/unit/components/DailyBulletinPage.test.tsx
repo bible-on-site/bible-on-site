@@ -699,4 +699,30 @@ describe("daily bulletin preview and SES delivery", () => {
 		expect(mocks.emailRead).toHaveBeenCalledTimes(calls);
 		expect(mocks.emailSend).not.toHaveBeenCalled();
 	});
+	it("renders the original-cohort rollout panel and locks it on a failed refresh", async () => {
+		serverState = {
+			...serverState,
+			rollout: {
+				state: "running" as const,
+				cohort: "original",
+				revision: 3,
+				admitted: 4,
+				remaining: 40,
+				excluded: 1,
+				admission: null,
+				lastError: null,
+			},
+		};
+		const client = renderPage();
+		await loaded();
+		const pause = await screen.findByRole("button", {
+			name: "השהיית צירופים",
+		});
+		expect(pause).toBeEnabled();
+		mocks.emailRead.mockRejectedValueOnce(new Error("refresh failed"));
+		await act(async () => {
+			await client.invalidateQueries({ queryKey: ["bulletin-email"] });
+		});
+		await waitFor(() => expect(pause).toBeDisabled());
+	});
 });

@@ -8,7 +8,10 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BulletinEmailRollout } from "~/components/BulletinEmailRollout";
-import type { EmailRolloutSummary } from "~/lib/bulletin-rollout";
+import type {
+	EmailAdmissionStatus,
+	EmailRolloutSummary,
+} from "~/lib/bulletin-rollout";
 
 const mocks = vi.hoisted(() => ({ change: vi.fn() }));
 vi.mock("~/server/bulletin-email", () => ({
@@ -117,5 +120,49 @@ describe("BulletinEmailRollout", () => {
 		} as never);
 		expect(screen.getByText(/משלוח מנויים הדרגתי להיום/)).toBeDefined();
 		expect(screen.getByText(/בשליחה/)).toBeDefined();
+	});
+	it("renders an unknown admission status and its recorded error verbatim", () => {
+		mount(
+			summary({
+				admission: {
+					localDate: "2026-11-15",
+					status: "bogus" as EmailAdmissionStatus,
+					subscriberId: null,
+					lastError: "provider timeout",
+				},
+			}),
+		);
+		expect(screen.getByText(/bogus/)).toBeDefined();
+		expect(screen.getByText(/provider timeout/)).toBeDefined();
+	});
+	it("shows the rollout-level last error when one is recorded", () => {
+		mount(summary({ lastError: "sweep blew up" }));
+		expect(screen.getByText(/שגיאה אחרונה/)).toBeDefined();
+		expect(screen.getByText(/sweep blew up/)).toBeDefined();
+	});
+	it("renders an unrecognized job status verbatim", () => {
+		mount(summary(), { id: "job-9", status: "mystery" } as never);
+		expect(screen.getByText(/mystery/)).toBeDefined();
+	});
+	it("marks only the in-flight action while a transition is pending", async () => {
+		let release: (value: unknown) => void = () => {};
+		mocks.change.mockImplementation(
+			() => new Promise((resolve) => (release = resolve)),
+		);
+		mount();
+		fireEvent.click(screen.getByRole("button", { name: "השהיית צירופים" }));
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "מבצע..." }),
+			).toBeDefined(),
+		);
+		// The sibling action stays on its label while disabled.
+		expect(screen.getByRole("button", { name: "ביטול מלא" })).toBeDefined();
+		release({ state: "paused", revision: 8 });
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "השהיית צירופים" }),
+			).toBeDefined(),
+		);
 	});
 });

@@ -69,6 +69,7 @@ const consent = {
 	source: "Explicit newsletter signup",
 };
 let settings: typeof import("~/server/ses-settings.server");
+let SesSuppressedError: typeof import("~/server/ses-client.server").SesSuppressedError;
 let account: Record<string, unknown>;
 let identity: Record<string, unknown>;
 
@@ -162,6 +163,7 @@ beforeEach(async () => {
 	mocks.ensureSubscribed.mockResolvedValue("subscribed");
 	mocks.unsubscribe.mockResolvedValue(undefined);
 	settings = await import("~/server/ses-settings.server");
+	({ SesSuppressedError } = await import("~/server/ses-client.server"));
 });
 
 afterEach(() => {
@@ -376,6 +378,31 @@ describe("audience settings and subscriber overview", () => {
 			job,
 		});
 		expect(mocks.latestJob).toHaveBeenCalledWith("2026-10-28", "test");
+	});
+
+	it("reports the real-audience job itself as the cohort job without a second lookup", async () => {
+		mocks.queryOne.mockResolvedValue({ audience: "real", revision: 5 });
+		mockSubscribers([
+			{
+				email: "reader@example.com",
+				audience: "real",
+				consent_status: "confirmed",
+			},
+		]);
+		const job = { id: "real-job", status: "delivered" };
+		mocks.latestJob.mockResolvedValue(job);
+		expect(await settings.getBulletinEmailState("2026-10-28")).toMatchObject(
+			{
+				settings: { audience: "real", revision: 5 },
+				job,
+				rollout: null,
+				rolloutJob: job,
+			},
+		);
+		expect(mocks.latestJob).toHaveBeenCalledExactlyOnceWith(
+			"2026-10-28",
+			"real",
+		);
 	});
 
 	it("reads the persisted audience and numeric revision", async () => {
@@ -665,7 +692,7 @@ describe("send-slot reservation", () => {
 			mocks.txQueryOne.mockResolvedValue(row);
 			await expect(
 				settings.reserveSendSlot("test", 3, 42),
-			).rejects.toBeInstanceOf(settings.DeliverySuppressed);
+			).rejects.toBeInstanceOf(SesSuppressedError);
 			expect(mocks.txExecute).not.toHaveBeenCalled();
 		},
 	);
@@ -680,7 +707,7 @@ describe("send-slot reservation", () => {
 		mocks.txQueryOne.mockResolvedValueOnce(slot()).mockResolvedValueOnce(row);
 		await expect(
 			settings.reserveSendSlot("test", 3, 42),
-		).rejects.toBeInstanceOf(settings.DeliverySuppressed);
+		).rejects.toBeInstanceOf(SesSuppressedError);
 		expect(mocks.txExecute).not.toHaveBeenCalled();
 	});
 
@@ -711,7 +738,7 @@ describe("send-slot reservation", () => {
 			);
 			await expect(
 				settings.reserveSendSlot("test", 3, 42),
-			).rejects.toBeInstanceOf(settings.DeliverySuppressed);
+			).rejects.toBeInstanceOf(SesSuppressedError);
 		},
 	);
 
@@ -807,7 +834,7 @@ describe("send-slot reservation under the original-cohort rollout", () => {
 			mockRolloutSlot(rollout);
 			await expect(
 				settings.reserveSendSlot("real", 3, 42),
-			).rejects.toBeInstanceOf(settings.DeliverySuppressed);
+			).rejects.toBeInstanceOf(SesSuppressedError);
 			expect(mocks.txExecute).not.toHaveBeenCalled();
 		},
 	);
@@ -817,7 +844,7 @@ describe("send-slot reservation under the original-cohort rollout", () => {
 		);
 		await expect(
 			settings.reserveSendSlot("real", 3, 42),
-		).rejects.toBeInstanceOf(settings.DeliverySuppressed);
+		).rejects.toBeInstanceOf(SesSuppressedError);
 	});
 	it.each(["pending", "unsubscribed", "bounced", "complained"])(
 		"suppresses a rollout send when recipient consent is %s",
@@ -825,7 +852,7 @@ describe("send-slot reservation under the original-cohort rollout", () => {
 			mockRolloutSlot({ state: "running" }, { consent_status });
 			await expect(
 				settings.reserveSendSlot("real", 3, 42),
-			).rejects.toBeInstanceOf(settings.DeliverySuppressed);
+			).rejects.toBeInstanceOf(SesSuppressedError);
 			expect(mocks.txExecute).not.toHaveBeenCalled();
 		},
 	);
@@ -851,7 +878,7 @@ describe("send-slot reservation under the original-cohort rollout", () => {
 		);
 		await expect(
 			settings.reserveSendSlot("real", 3, 42),
-		).rejects.toBeInstanceOf(settings.DeliverySuppressed);
+		).rejects.toBeInstanceOf(SesSuppressedError);
 	});
 	it("keeps the settings-audience path authoritative once real is the global audience", async () => {
 		mocks.txQueryOne.mockImplementation(async (_conn, sql: string) =>
