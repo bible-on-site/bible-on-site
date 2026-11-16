@@ -334,6 +334,14 @@
 	color: var(--hc-muted, #6b5835);
 }
 
+/* Selection scope under the deep-linked perush's title (#2607): the
+   reading-time badge beside it aggregates only the filtered notes, so
+   the narrowed scope stays explicit. */
+.deepScope {
+	font-size: 0.72rem;
+	color: #8b7355;
+}
+
 /* Reading-time estimate on the deep-linked perush header (#2607). */
 .deepMetric {
 	display: block;
