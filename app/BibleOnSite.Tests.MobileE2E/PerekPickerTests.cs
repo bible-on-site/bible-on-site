@@ -88,13 +88,9 @@ public sealed class PerekPickerTests(ITestOutputHelper output, MobileDeviceSessi
         NavigateToPerek("תהילים", 119, "קיט");
         OpenPicker();
 
-        AssertItemFullyInsidePerekColumn("קיט");
-        // Centered, not just inside: realized items flank the selection on
-        // both sides, so an edge-pinned landing cannot pass this test.
-        var rendered = Page.RenderedElements("PickerPerekItem").ToList();
-        var target = rendered.First(element => element.Text == "קיט");
-        Assert.Contains(rendered, element => element.Frame.Location.Y < target.Frame.Location.Y);
-        Assert.Contains(rendered, element => element.Frame.Location.Y > target.Frame.Location.Y);
+        // Centered, not just inside: the item's center sits within one item
+        // height of the column's center — an edge-pinned landing cannot pass.
+        AssertItemCenteredInPerekColumn("קיט");
         // The preselection is real — the confirm button only enables once a
         // perek is selected.
         Page.WaitFor("PerekPickerConfirm", element => element.Enabled);
@@ -239,6 +235,48 @@ public sealed class PerekPickerTests(ITestOutputHelper output, MobileDeviceSessi
             Thread.Sleep(200);
         }
         Assert.Fail($"chapter '{text}' never rendered fully inside the perek column viewport ({last}).");
+    }
+
+    /// <summary>
+    /// The same landing check as <see cref="AssertItemFullyInsidePerekColumn"/>,
+    /// plus centering: the item's center sits within one item height of the
+    /// column's center, so a top- or bottom-pinned landing cannot pass. Only
+    /// for targets whose list extent actually allows centering — an item
+    /// clamped at the list end legitimately lands off-center.
+    /// </summary>
+    private void AssertItemCenteredInPerekColumn(string text)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        var last = "no frames read";
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                var list = Page.RenderedElements("PerekPickerPerekList").FirstOrDefault();
+                var item = Page.RenderedElements("PickerPerekItem").FirstOrDefault(element => element.Text == text);
+                if (item.Element != null && list.Element != null)
+                {
+                    var centerDelta = item.Frame.Location.Y + item.Frame.Size.Height / 2.0
+                        - (list.Frame.Location.Y + list.Frame.Size.Height / 2.0);
+                    if (FullyInside(list.Frame, item.Frame) && Math.Abs(centerDelta) <= item.Frame.Size.Height)
+                    {
+                        return;
+                    }
+                    last = $"item={FrameText(item.Frame)}, list={FrameText(list.Frame)}, centerDelta={centerDelta:0}";
+                }
+                else
+                {
+                    last = $"item={(item.Element == null ? "absent" : FrameText(item.Frame))}, " +
+                        $"list={(list.Element == null ? "absent" : FrameText(list.Frame))}";
+                }
+            }
+            catch (StaleElementReferenceException)
+            {
+                // The column re-realizes while the open scroll lands — retry.
+            }
+            Thread.Sleep(200);
+        }
+        Assert.Fail($"chapter '{text}' never rendered centered inside the perek column viewport ({last}).");
     }
 
     /// <summary>Every edge of the inner frame lies inside the outer frame.</summary>
