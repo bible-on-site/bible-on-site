@@ -16,6 +16,7 @@ import { installAppUnderTest } from "./android-install.mjs";
 import { bundleDigest, iosNodeEnvironment } from "./ios-install.mjs";
 import { observeIosPreparations } from "./ios-preparation-observer.mjs";
 import { executeOwnedIosInstaller } from "./ios-install-process.mjs";
+import { resolveMobileAppPath } from "./app-path.mjs";
 import { collectAndroidCrashDiagnostics } from "./android-crash-diagnostics.mjs";
 import { iosAppLogPids } from "./ios-processes.mjs";
 import { terminateIosTestApp } from "./ios-app-cleanup.mjs";
@@ -37,10 +38,7 @@ rmSync(resolve(artifacts, "coverage-evidence"), { recursive: true, force: true }
 // Same for executable coverage dumps pulled from the instrumented app
 // process (#1232): a stale dump would merge another build's hits.
 rmSync(resolve(artifacts, "app-coverage"), { recursive: true, force: true });
-const appPath = process.env.MOBILE_APP_PATH ?? resolve(directory,
-  platform === "android"
-    ? "../BibleOnSite/bin/Debug/net11.0-android/android-x64/com.tanah.daily929-Signed.apk"
-    : "../BibleOnSite/bin/Debug/net11.0-ios/iossimulator-arm64/BibleOnSite.app");
+const appPath = resolveMobileAppPath(directory, platform, process.env.MOBILE_APP_PATH);
 if (!existsSync(appPath)) throw new Error(`Build the app with bun run build:app first: ${appPath}`);
 if (platform === "ios" && !existsSync(resolve(appPath, "GoogleService-Info.plist"))) {
   throw new Error("The iOS app is missing its root Firebase configuration resource.");
