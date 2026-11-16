@@ -192,7 +192,7 @@
 				"/^web\\/bible-on-site\\/scripts\\/toggle-flip-book-dep\\.mjs$/"
 			],
 			"matchStrings": [
-				"NPM_VERSION = \"(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+-alpha\\.[0-9]+)\""
+				"NPM_VERSION = \"(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+(?:-alpha\\.[0-9]+)?)\""
 			],
 			"depNameTemplate": "html-flip-book-react",
 			"datasourceTemplate": "npm",
