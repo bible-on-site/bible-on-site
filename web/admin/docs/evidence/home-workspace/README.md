@@ -17,7 +17,14 @@ that no article text or canonical link changed and closes the synthetic PRs.
 The captures verify local implementation; production verification follows the
 normal CI, merge and deployment workflow.
 
-Final capture run: 2026-11-16, all 30 Chromium tests passed across six files,
+The `optional-issue-scope-*.png` captures show an optional change kind and exact
+target on an issue, and their retained revision after the issue is edited back
+to free-form. They use an unassigned synthetic issue and do not change an article.
+
+Final capture run: 2026-11-16, all 31 Chromium tests passed across six files,
 with zero retries or skipped cases. This includes legacy bookmarks, the compact
 desktop/mobile header, archive navigation/logout, ordinary article-link PRs,
-and assigned-agent implementation plus automatic handling of human comments.
+optional issue scopes and history, and assigned-agent implementation plus
+automatic handling of human comments. The local Vite captures include the
+development-only router inspector. The two Monocart error samples are intermediate
+archive-upload `expect.poll` observations; their final assertions passed.
