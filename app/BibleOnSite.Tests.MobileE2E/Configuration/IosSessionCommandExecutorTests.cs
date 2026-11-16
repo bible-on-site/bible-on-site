@@ -101,6 +101,10 @@ public sealed class IosSessionCommandExecutorTests
         public Exception? DisposalFailure { get; init; }
         public bool TryAddCommand(string name, CommandInfo? info)
         {
+            if (info == null)
+            {
+                return false;
+            }
             Registrations.Add(name);
             return true;
         }

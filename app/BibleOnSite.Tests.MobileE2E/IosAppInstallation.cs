@@ -23,8 +23,11 @@ internal static class IosAppInstallation
     {
         var started = Stopwatch.StartNew();
         var nonce = Guid.NewGuid().ToString("N");
-        var start = new ProcessStartInfo(configuration.NodeExecutable
-            ?? throw new InvalidOperationException("npm test must supply the current Node executable for iOS preparation."))
+        var expectedNode = configuration.NodeExecutable
+            ?? throw new InvalidOperationException("npm test must supply the current Node interpreter identity for iOS preparation.");
+        // run.mjs puts its own Node directory first in PATH. The helper also
+        // verifies that exact canonical executable before touching a device.
+        var start = new ProcessStartInfo("node")
         {
             UseShellExecute = false, CreateNoWindow = true,
             RedirectStandardOutput = true, RedirectStandardError = true
@@ -32,7 +35,8 @@ internal static class IosAppInstallation
         foreach (var argument in new[] {
             Path.Combine(AppContext.BaseDirectory, "ios-install.mjs"), configuration.AppPath,
             configuration.DeviceId, nonce, configuration.KeepAppForReview ? "keep" : "reset",
-            DateTimeOffset.UtcNow.Add(budget).ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture)
+            DateTimeOffset.UtcNow.Add(budget).ToUnixTimeMilliseconds().ToString(System.Globalization.CultureInfo.InvariantCulture),
+            expectedNode
         })
         {
             start.ArgumentList.Add(argument);
