@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	ContributionAgentToolInputError,
+	contributionAgentToolErrorResult,
+} from "~/lib/tanahpedia/contribution-agent-tool-errors";
 
 const mocks = vi.hoisted(() => ({
 	verify: vi.fn(),
@@ -56,6 +60,31 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 describe("local worker HTTP trust boundary", () => {
+	it("transports only the fixed post-lease feedback as a successful context result", async () => {
+		const feedback = contributionAgentToolErrorResult(
+			new ContributionAgentToolInputError("invalid_article_id"),
+		);
+		mocks.context.mockResolvedValueOnce(feedback);
+		const response = await handleContributionWorkerRequest(request("context"));
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual(feedback);
+		expect(response.headers.get("Cache-Control")).toBe("no-store");
+	});
+	it.each([
+		[new Error("Invalid worker payload"), 400],
+		[new ContributionWorkerConflict("Context changed"), 409],
+		[Object.assign(new Error("private SQL"), { code: "ER_LOCK_NOWAIT" }), 503],
+	])(
+		"keeps context request failures outside the recoverable envelope",
+		async (error, status) => {
+			mocks.context.mockRejectedValueOnce(error);
+			const response = await handleContributionWorkerRequest(
+				request("context"),
+			);
+			expect(response.status).toBe(status);
+			expect(await response.text()).not.toContain("invalid_tool_arguments");
+		},
+	);
 	it("authenticates the service token and dispatches only supported worker operations", async () => {
 		for (const [action, expected] of [
 			["claim", { id: "job" }],

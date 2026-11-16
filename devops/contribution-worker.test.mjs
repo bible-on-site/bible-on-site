@@ -106,6 +106,16 @@ const readCall = (name = "discussion", args = {}, callId = "read-1") => ({
 	id: callId,
 	function: { name, arguments: args },
 });
+const readRejection = (code = "invalid_arguments") => ({
+	error: {
+		type: "invalid_tool_arguments",
+		code,
+		message:
+			code === "invalid_arguments"
+				? "The read tool arguments are invalid. Use only its declared fields, kinds and page limits."
+				: "Use the numeric article ID from currentRecords or an article lookup. A PR or discussion UUID is not an article ID.",
+	},
+});
 function agentFixture({
 	bundle = agentBundle(),
 	job = {},
@@ -354,7 +364,310 @@ test("native API five batches keep real tool history, ordered receipts and the f
 		assert.equal(model.body.truncate, false);
 		assert.equal(model.body.shift, false);
 	}
-	assert.equal(fixture.calls[0].body.runtimeVersion, "tanahpedia-worker-v5");
+	assert.equal(fixture.calls[0].body.runtimeVersion, "tanahpedia-worker-v6");
+});
+
+test("typed argument errors enter real tool history without receipts or schema changes", async () => {
+	const error = readRejection("invalid_article_id"),
+		schema = actionSchema(),
+		fixture = agentFixture({
+			bundle: agentBundle({
+				tools: [
+					{
+						name: "record",
+						description: "Read",
+						inputSchema: { type: "object" },
+					},
+				],
+			}),
+			replies: [
+				nativeReply("", [
+					readCall(
+						"record",
+						{ kind: "target:article_links", id: issueId },
+						"bad",
+					),
+				]),
+				nativeReply("", [
+					readCall(
+						"record",
+						{ kind: "target:article_links", id: "27" },
+						"chosen-by-model",
+					),
+				]),
+				nativeReply(),
+				nativeReply('{"outcome":"unchanged"}'),
+			],
+			contexts: [
+				error,
+				{ receipt: { id: "actual-read" }, data: { articleId: "27" }, schema },
+			],
+		});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.deepEqual(
+		fixture.reads.map((read) => read.arguments.id),
+		[issueId, "27"],
+	);
+	assert.deepEqual(
+		fixture.reads.map((read) => read.receipts),
+		[[], []],
+	);
+	assert.deepEqual(
+		JSON.parse(fixture.models[1].body.messages.at(-1).content),
+		error,
+	);
+	assert.equal(fixture.models[1].body.messages.at(-1).tool_call_id, "bad");
+	assert.equal(fixture.models[1].body.messages.at(-1).tool_name, "record");
+	assert.deepEqual(fixture.completed[0].receipts, [{ id: "actual-read" }]);
+	assert.deepEqual(
+		fixture.models.at(-1).body.format,
+		schema.oneOf[0].properties.result,
+	);
+	assert.equal(fixture.models.length, 4);
+	assert.equal(fixture.releases.length, 1);
+});
+
+test("verified preloaded context can complete after a redundant rejected read without forced clarification", async () => {
+	const schema = actionSchema(),
+		fixture = agentFixture({
+			replies: [
+				nativeReply("", [readCall()]),
+				nativeReply(),
+				nativeReply('{"outcome":"unchanged"}'),
+			],
+			contexts: [readRejection()],
+		});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.reads.length, 1);
+	assert.equal(fixture.models.length, 3);
+	assert.deepEqual(fixture.completed[0].receipts, []);
+	assert.deepEqual(
+		fixture.models.at(-1).body.format,
+		schema.oneOf[0].properties.result,
+	);
+});
+
+test("an identical rejected whole batch enters the one ordinary final phase", async () => {
+	const fixture = agentFixture({
+		replies: (body) =>
+			nativeReply(
+				body.format ? '{"outcome":"unchanged"}' : "",
+				body.format ? undefined : [readCall()],
+			),
+		contexts: [readRejection(), readRejection()],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.models.length, 3);
+	assert.equal(fixture.reads.length, 2);
+	assert.deepEqual(fixture.completed[0].receipts, []);
+	assert.equal(
+		fixture.models
+			.at(-1)
+			.body.messages.filter((message) => message.role === "tool").length,
+		2,
+	);
+	assert.equal(fixture.failed.length, 0);
+});
+
+test("rejected reads retain the latest trusted schema and previously earned receipts", async () => {
+	const latest = actionSchema({
+		type: "object",
+		oneOf: [
+			{
+				type: "object",
+				properties: {
+					outcome: { const: "revised" },
+					description: { const: "Exact human text" },
+				},
+			},
+		],
+	});
+	const fixture = agentFixture({
+		replies: (body) =>
+			nativeReply(
+				body.format
+					? '{"outcome":"revised","description":"Exact human text"}'
+					: "",
+				body.format ? undefined : [readCall()],
+			),
+		contexts: [
+			{ receipt: { id: "earned" }, data: { value: "actual" }, schema: latest },
+			readRejection(),
+			readRejection(),
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.deepEqual(
+		fixture.reads.map((read) => read.receipts),
+		[[], [{ id: "earned" }], [{ id: "earned" }]],
+	);
+	assert.deepEqual(fixture.completed[0].receipts, [{ id: "earned" }]);
+	assert.deepEqual(
+		fixture.models.at(-1).body.format,
+		latest.oneOf[0].properties.result,
+	);
+	assert.equal(fixture.reads.length, 3);
+	assert.equal(fixture.models.length, 4);
+});
+
+test("a repeated rejection mixed with a new real read completes the batch and continues planning", async () => {
+	const fixture = agentFixture({
+		replies: [
+			nativeReply("", [readCall()]),
+			nativeReply("", [
+				readCall("discussion", {}, "bad-again"),
+				readCall("discussion", { cursor: 10 }, "new-read"),
+			]),
+			nativeReply(),
+			nativeReply('{"outcome":"unchanged"}'),
+		],
+		contexts: [
+			readRejection(),
+			readRejection(),
+			{
+				receipt: { id: "new" },
+				data: { items: ["new"] },
+				schema: actionSchema(),
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.reads.length, 3);
+	assert.equal(fixture.models.length, 4);
+	assert.ok(fixture.models[2].body.tools);
+	assert.deepEqual(fixture.completed[0].receipts, [{ id: "new" }]);
+});
+
+test("success/error transitions are new information without changing trusted facts on rejection", async () => {
+	const read = (id) => ({
+		receipt: { id },
+		data: { value: 1 },
+		schema: actionSchema(),
+	});
+	const fixture = agentFixture({
+		replies: (body) =>
+			nativeReply(
+				body.format ? '{"outcome":"unchanged"}' : "",
+				body.format ? undefined : [readCall()],
+			),
+		contexts: [
+			read("first"),
+			readRejection(),
+			read("returned"),
+			readRejection(),
+			readRejection(),
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.reads.length, 5);
+	assert.equal(fixture.models.length, 6);
+	assert.deepEqual(fixture.completed[0].receipts, [
+		{ id: "first" },
+		{ id: "returned" },
+	]);
+	assert.ok(fixture.models[4].body.tools);
+});
+
+test("changed finite error feedback remains new but property order does not", async () => {
+	const error = readRejection("invalid_article_id");
+	const fixture = agentFixture({
+		replies: (body) =>
+			nativeReply(
+				body.format ? '{"outcome":"unchanged"}' : "",
+				body.format ? undefined : [readCall()],
+			),
+		contexts: [
+			readRejection(),
+			error,
+			{
+				error: {
+					message: error.error.message,
+					code: error.error.code,
+					type: error.error.type,
+				},
+			},
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.reads.length, 3);
+	assert.equal(fixture.models.length, 4);
+	assert.deepEqual(fixture.completed[0].receipts, []);
+});
+
+test("malformed or unrecognized read-error envelopes remain fatal and private", async () => {
+	const marker = "pv_bad_read_envelope",
+		valid = readRejection();
+	for (const value of [
+		{ error: null },
+		{ error: [] },
+		{ error: marker },
+		{ error: {} },
+		{ error: { ...valid.error, type: "storage_error" } },
+		{ error: { ...valid.error, code: "constructor" } },
+		{ error: { ...valid.error, code: marker } },
+		{ error: { ...valid.error, message: marker } },
+		{ error: { type: valid.error.type, code: valid.error.code } },
+		{ error: { ...valid.error, cause: marker } },
+		{ ...valid, data: marker },
+		{ ...valid, receipt: {} },
+		{ ...valid, schema: actionSchema() },
+	]) {
+		const fixture = agentFixture({
+			replies: [nativeReply("", [readCall()])],
+			contexts: [value],
+		});
+		const result = await fixture.run();
+		assert.equal(result.error, "Invalid agent context response");
+		assert.equal(fixture.models.length, 1);
+		assert.equal(fixture.completed.length, 0);
+		assert.equal(fixture.failed.length, 1);
+		assert.equal(fixture.releases.length, 1);
+		assert.ok(
+			!inspect([result, fixture.failed, fixture.logs]).includes(marker),
+		);
+	}
+});
+
+test("HTTP errors never become recoverable even with a valid typed body", async () => {
+	for (const status of [400, 401, 403, 409, 500]) {
+		const fixture = agentFixture({
+			replies: [nativeReply("", [readCall()])],
+			intercept: (target) =>
+				target.endsWith("/context")
+					? Response.json(readRejection(), { status })
+					: undefined,
+		});
+		assert.equal(
+			(await fixture.run()).error,
+			`Worker context failed (${status})`,
+		);
+		assert.equal(fixture.models.length, 1);
+		assert.equal(fixture.completed.length, 0);
+	}
+});
+
+test("recoverable feedback uses the same deadline/reserve and still releases after a failed final", async () => {
+	let clock = 0;
+	const fixture = agentFixture({
+		now: () => clock,
+		contexts: [readRejection()],
+		replies: (body, number) => {
+			if (number === 1) {
+				clock = 75000;
+				return nativeReply("", [readCall()]);
+			}
+			assert.equal(body.keep_alive, "45000ms");
+			assert.ok(body.format);
+			throw new Error("Final unavailable");
+		},
+	});
+	assert.equal((await fixture.run()).error, "Final unavailable");
+	assert.equal(fixture.models.length, 2);
+	assert.equal(fixture.reads.length, 1);
+	assert.equal(new Set(fixture.models.map((model) => model.signal)).size, 1);
+	assert.equal(fixture.completed.length, 0);
+	assert.equal(fixture.failed.length, 1);
+	assert.equal(fixture.releases.length, 1);
 });
 
 test("an unchanged whole research batch enters final format with every actual read and receipt", async () => {
@@ -1280,6 +1593,82 @@ globalThis.fetch = async (url, request) => {
 	);
 	assert.match(stdout, /native_fixture_verified/);
 	assert.match(stdout, /native_release_verified/);
+	assert.match(stdout, /completed/);
+	assert.ok(!`${stdout}${stderr}`.includes(marker));
+});
+
+test("real CLI receives typed error feedback, executes the model's next read and keeps private evidence out of logs", async () => {
+	const bundle = agentBundle(),
+		marker = "pv_recoverable_cli_private";
+	const fixture = {
+		bundle,
+		marker,
+		error: readRejection(),
+		job: {
+			...claim,
+			model: "configured-cli-model",
+			user: JSON.stringify({ evidence: marker }),
+			protocolVersion: 2,
+			task: "pr_resolution",
+			bundleHash: bundle.hash,
+			bundleVersion: bundle.version,
+			schema: actionSchema(),
+		},
+	};
+	const bootstrap = `data:text/javascript,${encodeURIComponent(`
+const fixture = JSON.parse(process.env.CONTRIBUTION_RECOVERABLE_CLI_FIXTURE);
+let models = 0, reads = 0, completed = false;
+globalThis.fetch = async (url, request) => {
+ const path = new URL(url).pathname, body = JSON.parse(request.body);
+ if(path.endsWith('/claim')) return Response.json(fixture.job);
+ if(path.endsWith('/bundle')) return Response.json(fixture.bundle);
+ if(path.endsWith('/context')) {
+   reads++;
+   if(body.receipts.length || body.arguments.cursor !== (reads===1?-1:0) || models!==reads) throw Error('Read was automatically changed or retried');
+   return Response.json(reads===1 ? fixture.error : {receipt:{id:'earned'},data:{text:fixture.marker},schema:fixture.job.schema});
+ }
+ if(path.endsWith('/api/chat')) {
+   if(body.keep_alive===0 && body.messages.length===0) {
+     if(!completed || body.model!=='configured-cli-model') throw Error('Invalid cleanup');
+     console.log('recoverable_release_verified'); return Response.json({done:true,done_reason:'unload'});
+   }
+   models++;
+   if(models===2) {
+     const feedback=JSON.parse(body.messages.at(-1).content);
+     if(feedback.error?.type!==fixture.error.error.type || feedback.error.code!==fixture.error.error.code || feedback.error.message!==fixture.error.error.message) throw Error('Actual error feedback missing');
+   }
+   if(models===3 && !body.messages.at(-1).content.includes(fixture.marker)) throw Error('Actual successful read missing');
+   if(models===4 && (body.tools || JSON.stringify(body.format)!==JSON.stringify(fixture.job.schema.oneOf[0].properties.result))) throw Error('Final schema was changed');
+   return Response.json({done:true,prompt_eval_count:100,message:{role:'assistant',content:models<=2?'':models===3?'Ready':'{"outcome":"unchanged"}',...(models<=2?{tool_calls:[{id:models===1?'invalid':'valid',function:{name:'discussion',arguments:{cursor:models===1?-1:0}}}]}:{})}});
+ }
+ if(path.endsWith('/complete')) {
+   if(models!==4 || reads!==2 || JSON.stringify(body.receipts)!=='[{"id":"earned"}]') throw Error('Invalid receipt/progress boundary');
+   completed=true; console.log('recoverable_cli_verified'); return Response.json({prIds:[]});
+ }
+ if(path.endsWith('/fail')) return Response.json({updated:true});
+ throw Error('Unexpected fixture route');
+};`)}`;
+	const { stdout, stderr } = await promisify(execFile)(
+		process.execPath,
+		[
+			"--import",
+			bootstrap,
+			fileURLToPath(new URL("./contribution-worker.mjs", import.meta.url)),
+			"--once",
+			"--dev",
+			"--origin",
+			"http://localhost:3101",
+		],
+		{
+			windowsHide: true,
+			env: {
+				...process.env,
+				CONTRIBUTION_RECOVERABLE_CLI_FIXTURE: JSON.stringify(fixture),
+			},
+		},
+	);
+	assert.match(stdout, /recoverable_cli_verified/);
+	assert.match(stdout, /recoverable_release_verified/);
 	assert.match(stdout, /completed/);
 	assert.ok(!`${stdout}${stderr}`.includes(marker));
 });
