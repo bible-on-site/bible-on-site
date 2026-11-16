@@ -239,7 +239,7 @@ test("the CLI never prints malformed response contents", async () => {
 	const execute = promisify(execFile),
 		privateFragment = "pv_7F2k9",
 		bootstrap = `data:text/javascript,${encodeURIComponent(
-			`globalThis.fetch = async () => new Response(${JSON.stringify(privateFragment)});`,
+			"globalThis.fetch = async () => new Response(process.env.CONTRIBUTION_TEST_MALFORMED_BODY);",
 		)}`;
 	await assert.rejects(
 		execute(
@@ -253,7 +253,13 @@ test("the CLI never prints malformed response contents", async () => {
 				"--origin",
 				"http://localhost:3101",
 			],
-			{ windowsHide: true },
+			{
+				windowsHide: true,
+				env: {
+					...process.env,
+					CONTRIBUTION_TEST_MALFORMED_BODY: `${privateFragment}"'\\\n`,
+				},
+			},
 		),
 		(error) => {
 			assert.equal(error.code, 1);
