@@ -188,7 +188,7 @@ jobs:
         # newest stable Xcode 27.x and keep betas as a last resort — the image
         # also carries Xcode_27.3_beta.app, which the 27.2 SDK rejects.
         run: |
-          XCODE_APP="$(ls -d /Applications/Xcode_27*.app | grep -v '_beta' | sort -V | tail -1)"
+          XCODE_APP="$(ls -d /Applications/Xcode_27*.app | sort -V | awk '!/_beta/' | tail -1)"
           XCODE_APP="${XCODE_APP:-$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)}"
           XCODE_DIR="$XCODE_APP/Contents/Developer"
           sudo xcode-select --switch "$XCODE_DIR"

@@ -181,7 +181,7 @@ jobs:
             echo "== xcode =="
             # Prefer the newest stable Xcode 27.x (betas last resort) so the
             # probe measures the same toolchain the iOS legs will select.
-            XCODE_APP="$(ls -d /Applications/Xcode_27*.app | grep -v '_beta' | sort -V | tail -1)"
+            XCODE_APP="$(ls -d /Applications/Xcode_27*.app | sort -V | awk '!/_beta/' | tail -1)"
             sudo xcode-select --switch "${XCODE_APP:-$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)}/Contents/Developer"
             xcodebuild -version
             xcode-select -p
@@ -198,7 +198,7 @@ jobs:
           # leg; the workload's iOS 27.2 SDK needs Xcode =27.2 — an image
           # carrying only 27.0/27.1 fails every shard at setup, so the probe
           # fails here instead — the iteration aborts cheaply.
-          newest=$(ls -d /Applications/Xcode_27*.app | grep -v '_beta' | sort -V | tail -1)
+          newest=$(ls -d /Applications/Xcode_27*.app | sort -V | awk '!/_beta/' | tail -1)
           newest=${newest:-$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)}
           version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$newest/Contents/Info.plist")
           echo "Newest Xcode 27: $newest ($version)"
