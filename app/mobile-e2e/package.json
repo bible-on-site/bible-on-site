@@ -21,7 +21,6 @@
 	},
 	"_driverSecurityIssue": "https://github.com/bible-on-site/bible-on-site/issues/1995",
 	"_driverCompatibilityIssue": "https://github.com/bible-on-site/bible-on-site/issues/2967",
-	"_uiautomator2CompatibilityIssue": "https://github.com/bible-on-site/bible-on-site/issues/3397",
 	"devDependencies": {
 		"appium": "3.9.0",
 		"appium-uiautomator2-driver": "9.0.3",
