@@ -179,7 +179,15 @@ jobs:
             sysctl -n machdep.cpu.brand_string hw.memsize hw.ncpu
             df -h /
             echo "== xcode =="
-            sudo xcode-select --switch "$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)/Contents/Developer"
+            xcode_dir=""
+            for app in /Applications/Xcode_27*.app; do
+              version=$(DEVELOPER_DIR="$app/Contents/Developer" xcodebuild -version 2>/dev/null | awk 'NR==1 {print $2}') || continue
+              case "$version" in
+                27.2|27.2.*) xcode_dir="$app/Contents/Developer"; break ;;
+              esac
+            done
+            [ -n "$xcode_dir" ] || { echo "No Xcode 27.2 installation found for the runner report"; exit 1; }
+            sudo xcode-select --switch "$xcode_dir"
             xcodebuild -version
             xcode-select -p
             ls -d /Applications/Xcode*.app
