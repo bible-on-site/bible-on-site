@@ -1,3 +1,4 @@
+pub mod access_gate;
 pub mod app;
 pub mod profile;
 pub mod schema_builder;

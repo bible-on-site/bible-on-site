@@ -1,3 +1,9 @@
+export { moedDateCarriesMonth, moedDateLine } from "./display";
+export {
+	getMoedEntryPreview,
+	MOED_ENTRY_PREVIEW_WORDS,
+} from "./entry-preview";
+export type { MoedEntryPreview } from "./entry-preview";
 export {
 	getMoedArticleSummaries,
 	getMoedBySlug,

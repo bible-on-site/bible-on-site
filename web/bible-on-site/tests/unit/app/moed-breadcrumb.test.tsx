@@ -32,7 +32,6 @@ const moed = (over: Partial<MoedSummary>): MoedSummary => ({
 	id: 1,
 	slug: "פסח",
 	name: "פסח",
-	summary: null,
 	hebrewMonth: "ניסן",
 	dateLabel: 'ט"ו בניסן',
 	annualOrder: 1,

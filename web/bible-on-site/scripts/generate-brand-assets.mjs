@@ -59,8 +59,12 @@ const foreground =
 	metadata +
 	definitions +
 	artworkAndClose;
+const background = Buffer.concat([
+	Buffer.from(squarePrefix),
+	Buffer.from("</svg>\n"),
+]);
 for (const [name, svg] of [
-	["appicon.svg", `${squarePrefix}</svg>\n`],
+	["appicon.svg", background],
 	["appiconfg.svg", foreground],
 	["appicon_full.svg", appIcon],
 ]) {
