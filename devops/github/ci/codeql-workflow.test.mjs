@@ -12,17 +12,17 @@ const document = parseDocument(
 assert.deepEqual(document.errors, []);
 const workflow = document.toJS();
 
-test("CodeQL scans a newly requested merge group, without reacting to its destruction", () => {
+test("scans requested merge groups without reacting to their destruction", () => {
 	assert.deepEqual(workflow.on.merge_group, { types: ["checks_requested"] });
 });
 
-test("merge-group scanning retains PR, protected-branch and scheduled scans", () => {
+test("retains PR, protected-branch and scheduled scans", () => {
 	assert.deepEqual(workflow.on.push, { branches: ["master"] });
 	assert.deepEqual(workflow.on.pull_request, { branches: ["master"] });
 	assert.deepEqual(workflow.on.schedule, [{ cron: "27 3 * * 1" }]);
 });
 
-test("each merge-group language scans the default checked-out synthetic commit", () => {
+test("scans the default checked-out synthetic commit in each language", () => {
 	const job = workflow.jobs.analyze;
 	assert.equal(
 		job.if,
@@ -63,7 +63,7 @@ test("each merge-group language scans the default checked-out synthetic commit",
 	assert.equal(analyze.with.sha, undefined);
 });
 
-test("merge groups retain isolated concurrency, bounded execution and existing permissions", () => {
+test("preserves merge-group concurrency, deadlines and permissions", () => {
 	assert.equal(
 		workflow.concurrency.group,
 		`codeql-\${{ github.workflow }}-\${{ github.ref }}`,
