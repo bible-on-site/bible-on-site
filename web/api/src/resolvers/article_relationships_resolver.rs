@@ -251,7 +251,8 @@ mod tests {
                     created_at: chrono::NaiveDate::from_ymd_opt(2020, 1, 1)
                         .unwrap()
                         .and_hms_opt(0, 0, 0)
-                        .unwrap(),
+                        .unwrap()
+                        .and_utc(),
                 },
             ]])
             .append_query_results::<entities::moed::Model, Vec<_>, _>([vec![

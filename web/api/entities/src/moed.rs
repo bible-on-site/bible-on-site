@@ -6,8 +6,9 @@ use sea_orm::entity::prelude::*;
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "tanah_moed")]
 pub struct Model {
+    /// SMALLINT UNSIGNED — sqlx refuses a signed decode for unsigned columns.
     #[sea_orm(primary_key)]
-    pub id: i32,
+    pub id: u16,
     pub slug: String,
     pub name: String,
     #[sea_orm(column_type = "Text", nullable)]
