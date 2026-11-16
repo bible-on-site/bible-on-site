@@ -35,9 +35,12 @@ test("an already cancelled request never starts another installer", async () => 
 
 test("fixed installer uses the exact interpreter and joins exit and pipes without exposing environment", { skip: !posix, timeout: 5000 }, async () => {
   const records = [];
+  let diagnostics;
   const output = await executeOwnedIosInstaller({ ...options(), report: value => records.push(value),
-    launch: fixture("process.stdout.write('controlled receipt')") });
+    retainDiagnostics: value => { diagnostics = value; },
+    launch: fixture("process.stdout.write('controlled receipt');process.stderr.write('bounded phase diagnostic')") });
   assert.equal(output, "controlled receipt");
+  assert.equal(diagnostics, "bounded phase diagnostic");
   assert.equal(records.at(-1).phase, "installer-joined");
   assert.equal(records.filter(record => record.phase === "group-kill-starting").length, 1);
   assert(!JSON.stringify(records).includes("never log this environment value"));
@@ -48,6 +51,14 @@ test("nonzero installer exit preserves stderr and still joins its owned group", 
   await assert.rejects(executeOwnedIosInstaller({ ...options(), report: value => records.push(value),
     launch: fixture("process.stderr.write('controlled child failure');process.exitCode=7") }),
     error => error.code === 7 && error.stderr === "controlled child failure");
+  assert.equal(records.at(-1).phase, "installer-joined");
+});
+
+test("joined installer diagnostics cannot silently fail retention", { skip: !posix, timeout: 5000 }, async () => {
+  const failure = new Error("controlled joined diagnostic retention failure"), records = [];
+  await assert.rejects(executeOwnedIosInstaller({ ...options(), report: value => records.push(value),
+    retainDiagnostics: () => { throw failure; }, launch: fixture("process.stdout.write('receipt')") }),
+    error => error === failure && error.joined === true);
   assert.equal(records.at(-1).phase, "installer-joined");
 });
 

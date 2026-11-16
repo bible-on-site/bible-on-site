@@ -7,7 +7,7 @@ const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 // This parent owns one POSIX process group, including the fixed installer's
 // native children. Cancellation never enumerates or stops unrelated processes.
 export async function executeOwnedIosInstaller({ appPath, udid, nonce, keepData, deadlineMs,
-  environment, signal, report = () => {}, launch = spawn,
+  environment, signal, report = () => {}, retainDiagnostics = () => {}, launch = spawn,
   signalGroup = pid => process.kill(-pid, "SIGKILL"),
 }) {
   signal.throwIfAborted();
@@ -93,6 +93,10 @@ export async function executeOwnedIosInstaller({ appPath, udid, nonce, keepData,
       finished = true;
       signal.removeEventListener("abort", cancelled);
       record({ phase: cleanupFailure ? "installer-channels-closed" : "installer-joined", code, signal: exitSignal });
+      try { retainDiagnostics(Buffer.concat(stderr).toString("utf8")); }
+      catch (error) {
+        primary = primary ? new AggregateError([primary, error], "Installer and joined diagnostic retention failed.") : error;
+      }
       if (settled) return;
       if (!primary && (code !== 0 || exitSignal)) {
         primary = Object.assign(new Error("The fixed iOS installer failed."), { code, signal: exitSignal });
