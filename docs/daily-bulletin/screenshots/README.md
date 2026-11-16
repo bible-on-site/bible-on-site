@@ -82,3 +82,12 @@ Real captures from the local Next.js dev server (`.dev.env`, `tanah-dev`) at `lo
 - [Admin join links](join-admin-links.png): the "קישורי הצטרפות לעלון" panel on the admin `/bulletins` page — per-channel enable toggle, validated destination field, stable public URL display, save with optimistic-concurrency revision, and the append-only audit list. Captured with `SKIP_AUTH=true`; telegram shown seeded enabled at the verified public channel, whatsapp still unset.
 
 Verified live at capture time: `GET`/`HEAD /dailyBulletin/join/telegram` → 307 to `https://t.me/alhaperek` with `Cache-Control: no-store`; an unconfigured channel → 307 to `/dailyBulletin`; `POST /api/bulletin/subscribe` → 202 generic acknowledgement with the subscriber confirmed and the intent persisted for SES contact sync.
+
+## Original-cohort rollout panel evidence (#3382)
+
+Panel captures from the local Vite admin at `localhost:3101` (`.test.env`, `tanah_test`, `SKIP_AUTH=true`) at a 1440 x 1100 viewport through an isolated Chromium session.
+
+- [Running](rollout-panel-running.png): the rollout panel enabled — cumulative admitted/remaining/excluded counts, today's Jerusalem reservation marked הושלם, and the revision-checked השהיית צירופים / ביטול מלא controls.
+- [Disabled](rollout-panel-disabled.png): the same panel after clicking ביטול מלא — the server function applied the revision-checked transition and refreshed to the כבויה state, proving the controls work end to end; admitted history remains visible.
+
+The fixture used only `example.invalid` addresses in the disposable local `tanah_test` schema: one admitted, two pending and one excluded `original`-cohort member plus a saved bulletin fixture for the capture date. No real subscriber data, provider calls or sends occurred.

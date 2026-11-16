@@ -701,6 +701,10 @@ async fn apply_daily_bulletin_upgrades(conn: &mut MySqlConnection, base_path: &P
             "tanah_daily_bulletin_join_upgrade.sql",
             "daily-bulletin-join-upgrade",
         ),
+        (
+            "tanah_daily_bulletin_rollout_upgrade.sql",
+            "daily-bulletin-rollout-upgrade",
+        ),
     ] {
         execute_script(conn, &base_path.join("..").join(filename), label).await?;
     }
@@ -1603,6 +1607,8 @@ SELECT 1";
             apply_daily_bulletin_upgrades(&mut conn, base_path).await?;
             apply_daily_bulletin_upgrades(&mut conn, base_path).await?;
             assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_article WHERE id = 42 AND distributable = TRUE AND content = 'Retained content'").fetch_one(&mut conn).await?, 1);
+            // The rollout tables survive fresh and repeated population.
+            assert_eq!(query_scalar::<MySql, i64>("SELECT COUNT(*) FROM tanah_daily_bulletin_email_rollout WHERE id = 1 AND cohort = 'original' AND state = 'disabled'").fetch_one(&mut conn).await?, 1);
 
             // Simulate the pre-content-hash schema on the retained row: the
             // guarded ALTER must add the generated column, backfill the
