@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using BibleOnSite.Controls;
+using BibleOnSite.Helpers;
 using HtmlAgilityPack;
 using WinBrush = Microsoft.UI.Xaml.Media.Brush;
 using WinFlowDirection = Microsoft.UI.Xaml.FlowDirection;
@@ -57,6 +58,8 @@ public class HtmlViewHandler : ViewHandler<HtmlView, RichTextBlock>
     {
         return new RichTextBlock
         {
+            FontFamily = this.GetRequiredService<IFontManager>()
+                .GetFontFamily(Microsoft.Maui.Font.OfSize(BrandFonts.RegularFamily, 14)),
             TextWrapping = WinTextWrapping.Wrap,
             IsTextSelectionEnabled = true
         };
