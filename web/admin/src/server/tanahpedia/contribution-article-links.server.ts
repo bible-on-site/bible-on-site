@@ -45,7 +45,9 @@ async function readArticle(
 	return row;
 }
 
-function sourceHash(row: ArticleRow): string {
+export function articleSourceHash(
+	row: Pick<ArticleRow, "name" | "abstract" | "content" | "authorId">,
+): string {
 	// The API's contentHash also changes when primaryPerek changes. This
 	// independent hash distinguishes our approved link write from a prose edit
 	// when recovering an interrupted API response; it never edits those fields.
@@ -94,7 +96,7 @@ async function articleState(
 	]);
 	return validateArticleLinkState({
 		contentHash: row.contentHash,
-		sourceHash: sourceHash(row),
+		sourceHash: articleSourceHash(row),
 		perekId: Number(row.perekId),
 		authorId: Number(row.authorId),
 		coverageVerified: Number(row.coverageVerified) === 1,

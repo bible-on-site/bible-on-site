@@ -1,9 +1,17 @@
 import { createHash } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
 import { articleCitationPage } from "~/lib/article-linking/citation-page";
+import {
+	extractCitations,
+	type ResolvedCitation,
+} from "~/lib/article-linking/citations";
 import { canonicalJson } from "~/lib/canonical-json";
 import { isContributionAgentReadKind } from "~/lib/tanahpedia/contribution-agent-read-kinds";
 import { latestContributionAgentResponses } from "~/lib/tanahpedia/contribution-agent-responses";
+import {
+	type ArticleLiteralGrounding,
+	expandLiteralCitationCoordinates,
+} from "~/lib/tanahpedia/contribution-article-grounding";
 import {
 	type ArticleLinkChange,
 	type ArticleLinkState,
@@ -42,6 +50,7 @@ import { readContributionSourceFact } from "./contribution-specials.server";
 import { readContribution } from "./contribution-store.server";
 
 export interface AgentCatalogue {
+	articleGroundings?: ArticleLiteralGrounding[];
 	people: { id: string; name: string }[];
 	places: { id: string; name: string }[];
 	entities: { id: string; name: string }[];
@@ -155,7 +164,12 @@ export function mergeAgentCatalogues(
 	const families = new Set(
 		catalogues.flatMap((catalogue) => Object.keys(catalogue.references)),
 	);
+	const articleGroundings = latest(
+		catalogues.flatMap((catalogue) => catalogue.articleGroundings ?? []),
+		canonicalJson,
+	);
 	return {
+		...(articleGroundings.length ? { articleGroundings } : {}),
 		people: latest(
 			catalogues.flatMap((catalogue) => catalogue.people),
 			key,
@@ -457,6 +471,34 @@ class ContextReader {
 			},
 		});
 		return article;
+	}
+
+	async groundArticleCitations(
+		articleId: string,
+		sourceHash: string,
+		citations: readonly ResolvedCitation[],
+	) {
+		const chapters: ArticleLiteralGrounding["chapters"] = [];
+		for (const id of [
+			...new Set(citations.map((citation) => citation.perekId)),
+		].sort((a, b) => a - b)) {
+			if (!(await this.reference("perek", id)))
+				throw new Error("An article citation chapter changed during execution");
+			const coordinates = this.records.find(
+				(record) =>
+					record.kind === "perek_coordinates" && Number(record.id) === id,
+			);
+			if (!coordinates)
+				throw new Error("Missing article citation chapter receipt");
+			chapters.push({ id, fingerprint: hash(coordinates.current) });
+		}
+		this.catalogue.articleGroundings ??= [];
+		this.catalogue.articleGroundings.push({
+			articleId,
+			sourceHash,
+			coordinates: expandLiteralCitationCoordinates(citations),
+			chapters,
+		});
 	}
 
 	async target(
@@ -817,6 +859,11 @@ export async function readContributionAgentTool(
 		].sort((a, b) => a - b);
 		for (const perekId of dependencies)
 			await reader.reference("perek", perekId);
+		await reader.groundArticleCitations(
+			id,
+			article.state.sourceHash,
+			citations.items.filter((citation) => citation.kind === "resolved"),
+		);
 		return {
 			data: {
 				id,
@@ -969,6 +1016,34 @@ export async function readContributionIssueScopeContext(
 	await reader.reference("alternative", item.id);
 	await preloadIssueScope(reader, item);
 	return { catalogue: reader.catalogue, records: reader.records };
+}
+
+/** The retained one-pass generator has no read-tool loop; ground its selected article targets server-side. */
+export async function readContributionArticleGroundingContext(
+	conn: PoolConnection,
+	issueId: string,
+	articleIds: string[],
+) {
+	const reader = new ContextReader(conn, issueId, false);
+	if (!articleIds.length) return reader.catalogue;
+	const catalogue = {
+		perakim: await searchAgentPerakim(conn, ""),
+		authors: [],
+		dedications: [],
+	};
+	for (const id of [...new Set(articleIds)].sort(
+		(a, b) => Number(a) - Number(b),
+	)) {
+		await reader.target("article_links", id);
+		const article = await reader.article(id);
+		if (!article) throw new Error("Article not found");
+		await reader.groundArticleCitations(
+			id,
+			article.state.sourceHash,
+			extractCitations(article.plainText, catalogue).resolved,
+		);
+	}
+	return reader.catalogue;
 }
 
 function summary(item: Contribution) {

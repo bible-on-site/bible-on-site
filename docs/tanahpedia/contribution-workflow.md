@@ -346,7 +346,7 @@ content-rebase path, which creates a new revision and requires renewed review.
 
 The explicit v4-to-v5 identity adapter adds article-link operations while keeping
 existing sequences and approvals intact. Agent instructions/tools advance
-independently to bundle v9; the worker protocol remains v2.
+independently to bundle v10; the worker protocol remains v2.
 
 Bundle v5 closes the `search`/`record` kind vocabulary against the same pure registry
 used by server dispatch: 28 reference families and 46 `target:<operationKind>` names.
@@ -383,6 +383,29 @@ verified context when research repeats unchanged information or the transport
 reserves the remaining time for its final answer. Missing evidence still yields
 clarification. This does not extend the existing execution deadline or change the
 read tools, typed operations or approval rules.
+
+Bundle v10 enforces the current agent policy on the server and in the decoder:
+new verse-article coverage additions/replacements require explicit, resolved literal
+citations from that exact article. Ranges expand deterministically; chapter constants
+and chapter-specific verse lists preserve coordinate pairs without a large repeated
+schema. Meaning-only links are deferred until explicit citations are exhausted;
+there is no semantic fallback. This applies to modern workers, retained issue
+generation and retained discovery models. Source hashes and chapter fingerprints
+are rechecked under current locks before any proposal/revision/checkpoint writes.
+Existing canonical links and the current PR's prior sequence can be retained;
+removal/clear and other link metadata keep their normal validation, and human
+manual proposals remain independent. Retained discovery advances to linking-v3
+and retained issue generation to tanahpedia-issues-v4; historical proposals and
+heuristic-v1 checkpoints are preserved.
+
+For clear human requests to append/replace an exact quotation in a named title or
+description, v10 derives an exact field constraint from pending human comments.
+Both the decoder and final transaction enforce the original bytes, and a false
+addressed response is rejected before a revision is saved. Constrained agent
+fields preserve whitespace/Unicode while retaining existing size/nonblank checks.
+Unclear, conflicting, negative or critical quotations stay outside this narrow
+mechanism; evidence and model-authored text cannot grant edit authority. Manual
+human editing is unchanged. API v5, protocol v2 and runtime v5 remain unchanged.
 
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these

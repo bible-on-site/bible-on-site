@@ -28,7 +28,9 @@ import {
 	readContributionAgentTool,
 } from "./contribution-agent-context.server";
 import {
+	assertContributionAgentVerbatimResult,
 	contributionAgentResultSchema,
+	contributionAgentVerbatimConstraints,
 	parseContributionAgentResult,
 	pendingContributionAgentComments,
 } from "./contribution-agent-output.server";
@@ -42,6 +44,7 @@ import {
 	readContributionAgentBundle,
 	touchContributionAgent,
 } from "./contribution-agent-registry.server";
+import { assertCurrentAgentArticleGrounding } from "./contribution-article-grounding.server";
 import {
 	awsGenerate,
 	contributionOutputSchema,
@@ -538,8 +541,26 @@ export async function completeContributionAgentWork(
 			const item = await readContribution(conn, lease.issueId, true);
 			if (replay(item)) return { prIds: item.generation?.prIds ?? [] };
 			await prepareAgentLease(conn, raw, true);
+			assertContributionAgentVerbatimResult(item, result);
+			if (result.draft?.changes)
+				await assertCurrentAgentArticleGrounding(
+					conn,
+					result.draft.changes,
+					context.catalogue,
+					item.changes,
+				);
 			const changed = result.draft
-				? await applyContributionAgentRevision(conn, item, result.draft, actor)
+				? await applyContributionAgentRevision(
+						conn,
+						item,
+						result.draft,
+						actor,
+						{
+							verbatimFields: contributionAgentVerbatimConstraints(item).map(
+								(constraint) => constraint.field,
+							),
+						},
+					)
 				: false;
 			finish(item, changed, []);
 			await saveContribution(conn, item);

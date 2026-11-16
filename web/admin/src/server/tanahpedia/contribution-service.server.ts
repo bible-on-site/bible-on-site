@@ -111,18 +111,32 @@ export async function applyContributionAgentRevision(
 		changes?: unknown;
 	},
 	actor: Contributor,
+	options: { verbatimFields?: readonly ("title" | "description")[] } = {},
 ): Promise<boolean> {
 	assertNoArticleLinkMerge(item);
 	if (item.kind !== "pr" || item.state !== "open")
 		throw new Error("Agent revisions require an open PR");
 	if (!["local_llm", "aws_llm"].includes(actor.kind) || actor.isDoradsoft)
 		throw new Error("Agent revisions require model authorship");
+	const fieldText = (
+		value: unknown,
+		field: "title" | "description",
+		max: number,
+	) => {
+		const validated = textField(value, field, max);
+		if (!options.verbatimFields?.includes(field)) return validated;
+		if (typeof value !== "string" || value.length > max)
+			throw new Error(`${field}: exceeds maximum length`);
+		return value;
+	};
 	const title =
-		draft.title === undefined ? item.title : textField(draft.title, "title");
+		draft.title === undefined
+			? item.title
+			: fieldText(draft.title, "title", 255);
 	const description =
 		draft.description === undefined
 			? item.description
-			: textField(draft.description, "description", 20000);
+			: fieldText(draft.description, "description", 20000);
 	let evidence =
 		draft.evidence === undefined
 			? item.evidence

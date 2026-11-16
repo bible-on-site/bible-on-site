@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => {
 	return {
 		conn,
 		promote: vi.fn().mockResolvedValue([]),
+		literalGuard: vi.fn().mockResolvedValue(undefined),
 		prIds: vi.fn().mockResolvedValue(["ordinary-pr"]),
 		legacy: vi
 			.fn()
@@ -36,6 +37,9 @@ vi.mock("~/server/tanahpedia/contribution-article-import.server", () => ({
 	ensureArticleLinkPromotionSchema: vi.fn().mockResolvedValue(undefined),
 	articleLinkContributionIds: mocks.prIds,
 	legacyArticleLinkContribution: mocks.legacy,
+}));
+vi.mock("~/server/tanahpedia/contribution-article-grounding.server", () => ({
+	assertCurrentAgentArticleGrounding: mocks.literalGuard,
 }));
 vi.mock("~/server/tanahpedia/contribution-identity.server", () => ({
 	contributionIdentity: mocks.identity,
@@ -242,6 +246,7 @@ describe("article link proposals server", () => {
 	beforeEach(() => {
 		for (const mock of [
 			mocks.promote,
+			mocks.literalGuard,
 			mocks.prIds,
 			mocks.legacy,
 			mocks.identity,
@@ -258,6 +263,7 @@ describe("article link proposals server", () => {
 		])
 			mock.mockReset();
 		mocks.promote.mockResolvedValue([]);
+		mocks.literalGuard.mockResolvedValue(undefined);
 		mocks.prIds.mockResolvedValue(["ordinary-pr"]);
 		mocks.legacy.mockResolvedValue({
 			id: "ordinary-pr",
@@ -336,6 +342,41 @@ describe("article link proposals server", () => {
 				result.runId,
 				inserts.length,
 			]);
+			expect(mocks.literalGuard).toHaveBeenCalledWith(
+				mocks.conn,
+				expect.arrayContaining([
+					expect.objectContaining({ kind: "article_links", targetId: "7" }),
+				]),
+				expect.objectContaining({
+					articleGroundings: [
+						expect.objectContaining({
+							articleId: "7",
+							coordinates: [
+								{ perekId: 18, pasuk: 2 },
+								{ perekId: 605, pasuk: 7 },
+							],
+						}),
+					],
+				}),
+			);
+			expect(mocks.literalGuard.mock.invocationCallOrder[0]).toBeLessThan(
+				mocks.txExecute.mock.invocationCallOrder[0],
+			);
+		});
+
+		it("rejects stale transactional grounding before any proposal, promotion or checkpoint write", async () => {
+			mocks.literalGuard.mockRejectedValueOnce(
+				new Error("Article source changed"),
+			);
+			const result = await generateLinkProposals({ data: { articleIds: [7] } });
+			expect(result.outcomes[0]).toMatchObject({
+				outcome: "error",
+				proposals: [],
+				error: "Article source changed",
+			});
+			expect(mocks.literalGuard).toHaveBeenCalledTimes(1);
+			expect(mocks.txExecute).not.toHaveBeenCalled();
+			expect(mocks.promote).not.toHaveBeenCalled();
 		});
 
 		it("persists nothing on dry-run", async () => {
@@ -384,14 +425,14 @@ describe("article link proposals server", () => {
 					"INSERT IGNORE INTO tanah_article_link_proposal",
 				),
 			);
-			expect(insert?.[2][16]).toBe("linking-v2");
+			expect(insert?.[2][16]).toBe("linking-v3");
 			const draft = llmDrafts[0];
 			const expectedKey = createHash("sha256")
 				.update(
 					canonicalJson([
 						"dedupe",
 						insert?.[2][14],
-						"linking-v2",
+						"linking-v3",
 						7,
 						HASH,
 						draft.relationshipKey,
@@ -407,10 +448,45 @@ describe("article link proposals server", () => {
 			expect(checkpoint?.[2].slice(0, 4)).toEqual([
 				7,
 				insert?.[2][14],
-				"linking-v2",
+				"linking-v3",
 				HASH,
 			]);
 		});
+		it.each([false, true])(
+			"rejects an unresolved LLM coverage addition even for dryRun=%s",
+			async (dryRun) => {
+				_setLinkLlmCaller(async () => ({
+					content: JSON.stringify({
+						proposals: [
+							{
+								relationshipKey: "coveringSources",
+								action: "add",
+								target: {
+									citations: [{ sefer: "לא ידוע", perek: "א", pasuk: "א" }],
+								},
+								evidence: [{ quote: "בראשית יח, ב" }],
+							},
+						],
+					}),
+					model: "mock-model",
+					promptTokens: 10,
+					completionTokens: 5,
+				}));
+				const result = await generateLinkProposals({
+					data: { articleIds: [7], engine: "llm", dryRun },
+				});
+				expect(result.outcomes[0]).toMatchObject({
+					outcome: "error",
+					proposals: [],
+					error: expect.stringContaining(
+						"Literal citations could not be resolved",
+					),
+				});
+				expect(mocks.literalGuard).not.toHaveBeenCalled();
+				expect(mocks.txExecute).not.toHaveBeenCalled();
+				expect(mocks.promote).not.toHaveBeenCalled();
+			},
+		);
 
 		it.each([
 			{
@@ -466,7 +542,7 @@ describe("article link proposals server", () => {
 					String(call[1]).includes("INSERT INTO tanah_article_link_checkpoint"),
 				);
 				expect(writes).toHaveLength(1);
-				expect(writes[0][2][2]).toBe("linking-v2");
+				expect(writes[0][2][2]).toBe("linking-v3");
 				expect(writes[0][2][5]).toBe(0);
 				expect(
 					mocks.txExecute.mock.calls.some((call) =>
@@ -655,7 +731,7 @@ describe("article link proposals server", () => {
 			);
 			expect(writes).toHaveLength(1);
 			expect(writes[0][2][1]).toMatch(/^openai:/);
-			expect(writes[0][2][2]).toBe("linking-v2");
+			expect(writes[0][2][2]).toBe("linking-v3");
 			expect(writes[0][2][5]).toBe(0);
 		});
 
@@ -1221,41 +1297,47 @@ describe("article link proposals server", () => {
 			expect(result.outcomes[0].error).toBe("kaput");
 		});
 
-		it("inserts pending and held drafts with their conflict fields", async () => {
-			_setLinkLlmCaller(async () => ({
-				content: JSON.stringify({
-					proposals: [
-						{
-							relationshipKey: "coveringSources",
-							action: "add",
-							target: {
-								citations: [{ sefer: "בראשית", perek: "יח", pasuk: "ב" }],
+		it.each(["llm", "both"] as const)(
+			"rejects an unsupported coverage claim before any %s proposals are persisted",
+			async (engine) => {
+				_setLinkLlmCaller(async () => ({
+					content: JSON.stringify({
+						proposals: [
+							{
+								relationshipKey: "coveringSources",
+								action: "add",
+								target: {
+									citations: [{ sefer: "בראשית", perek: "יח", pasuk: "ב" }],
+								},
+								evidence: [{ quote: "בראשית יח, ב" }],
 							},
-							evidence: [{ quote: "בראשית יח, ב" }],
-						},
-						{
-							relationshipKey: "coveringSources",
-							action: "add",
-							target: {
-								citations: [{ sefer: "בראשית", perek: "יח", pasuk: "ג" }],
+							{
+								relationshipKey: "coveringSources",
+								action: "add",
+								target: {
+									citations: [{ sefer: "בראשית", perek: "יח", pasuk: "ג" }],
+								},
+								evidence: [{ quote: "ציטוט שלא קיים במאמר" }],
 							},
-							evidence: [{ quote: "ציטוט שלא קיים במאמר" }],
-						},
-					],
-				}),
-				model: "mock",
-				promptTokens: null,
-				completionTokens: null,
-			}));
-			const result = await generateLinkProposals({
-				data: { articleIds: [7], engine: "llm" },
-			});
-			expect(result.outcomes[0].outcome).toBe("generated");
-			expect(result.outcomes[0].proposals.map((p) => p.status).sort()).toEqual([
-				"held",
-				"pending",
-			]);
-		});
+						],
+					}),
+					model: "mock",
+					promptTokens: null,
+					completionTokens: null,
+				}));
+				const result = await generateLinkProposals({
+					data: { articleIds: [7], engine },
+				});
+				expect(result.outcomes[0]).toMatchObject({
+					outcome: "error",
+					proposals: [],
+					error: expect.stringContaining("explicit literal citations"),
+				});
+				expect(mocks.literalGuard).not.toHaveBeenCalled();
+				expect(mocks.txExecute).not.toHaveBeenCalled();
+				expect(mocks.promote).not.toHaveBeenCalled();
+			},
+		);
 	});
 
 	describe("pipeline status", () => {

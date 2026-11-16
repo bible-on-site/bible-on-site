@@ -1,5 +1,6 @@
 import { latestContributionAgentResponses } from "~/lib/tanahpedia/contribution-agent-responses";
 import type { ContributionAgentResponse } from "~/lib/tanahpedia/contribution-agents";
+import { deriveVerbatimFieldConstraints } from "~/lib/tanahpedia/contribution-verbatim-constraints";
 import {
 	assertIssueScopeChanges,
 	type Contribution,
@@ -26,6 +27,41 @@ export function pendingContributionAgentComments(item: Contribution): string[] {
 		.map((event) => event.id);
 }
 
+export function contributionAgentVerbatimConstraints(item: Contribution) {
+	if (item.kind !== "pr") return [];
+	const pending = new Set(pendingContributionAgentComments(item));
+	return deriveVerbatimFieldConstraints(
+		item.events.filter(
+			(event) => event.actor.kind === "human" && pending.has(event.id),
+		),
+		item,
+	);
+}
+
+export function assertContributionAgentVerbatimResult(
+	item: Contribution,
+	result: {
+		draft?: { title?: unknown; description?: unknown };
+		responses: readonly ContributionAgentResponse[];
+	},
+) {
+	for (const constraint of contributionAgentVerbatimConstraints(item)) {
+		const addressed = result.responses.some(
+			(response) =>
+				constraint.commentIds.includes(response.commentId) &&
+				response.status === "addressed",
+		);
+		if (
+			(addressed || Object.hasOwn(result.draft ?? {}, constraint.field)) &&
+			(result.draft?.[constraint.field] ?? item[constraint.field]) !==
+				constraint.expected
+		)
+			throw new Error(
+				"The agent did not preserve the human's requested exact text",
+			);
+	}
+}
+
 export function contributionAgentResultSchema(
 	item: Contribution,
 	catalogue: ModelCatalogue,
@@ -34,6 +70,7 @@ export function contributionAgentResultSchema(
 		catalogue,
 		item.evidence.length,
 		item.kind === "issue" ? item.scope : undefined,
+		item.kind === "pr" ? item.changes : [],
 	).properties.pullRequests;
 	const preservesEmpty =
 		item.kind === "pr" &&
@@ -51,6 +88,14 @@ export function contributionAgentResultSchema(
 			},
 		},
 	};
+	const verbatim = contributionAgentVerbatimConstraints(item);
+	for (const constraint of verbatim)
+		Object.assign(draft.properties, {
+			[constraint.field]: {
+				...draft.properties[constraint.field],
+				const: constraint.expected,
+			},
+		});
 	const commentIds = pendingContributionAgentComments(item);
 	const shared = {
 		summary: { type: "string", minLength: 1, maxLength: 10000 },
@@ -76,7 +121,37 @@ export function contributionAgentResultSchema(
 		type: "object",
 		additionalProperties: false,
 		required: ["outcome", "summary", "responses", ...Object.keys(payload)],
-		properties: { outcome: { const: outcome }, ...shared, ...payload },
+		properties: {
+			outcome: { const: outcome },
+			...shared,
+			...payload,
+			...(outcome !== "revised" &&
+			verbatim.some(
+				(constraint) => item[constraint.field] !== constraint.expected,
+			)
+				? {
+						responses: {
+							...shared.responses,
+							items: {
+								oneOf: commentIds.map((commentId) => ({
+									...shared.responses.items,
+									properties: {
+										...shared.responses.items.properties,
+										commentId: { const: commentId },
+										status: verbatim.some(
+											(constraint) =>
+												constraint.commentIds.includes(commentId) &&
+												item[constraint.field] !== constraint.expected,
+										)
+											? { const: "needs_input" }
+											: shared.responses.items.properties.status,
+									},
+								})),
+							},
+						},
+					}
+				: {}),
+		},
 	});
 	return {
 		type: "object",
@@ -86,7 +161,15 @@ export function contributionAgentResultSchema(
 						branch("revised", {
 							draft: {
 								...draft,
-								required: requiresNewOperations ? ["changes"] : [],
+								required: [
+									...(requiresNewOperations ? ["changes"] : []),
+									...verbatim
+										.filter(
+											(constraint) =>
+												item[constraint.field] !== constraint.expected,
+										)
+										.map((constraint) => constraint.field),
+								],
 							},
 						}),
 					]
@@ -126,6 +209,19 @@ export function parseContributionAgentResult(
 	if (Object.keys(output).some((key) => !allowedFields.includes(key)))
 		throw new Error("Unsupported agent result field");
 	const summary = textField(output.summary, "agent summary", 10000);
+	const verbatim = contributionAgentVerbatimConstraints(item);
+	const fieldText = (
+		value: unknown,
+		field: "title" | "description",
+		max: number,
+	) => {
+		const validated = textField(value, field, max);
+		if (!verbatim.some((constraint) => constraint.field === field))
+			return validated;
+		if (typeof value !== "string" || value.length > max)
+			throw new Error(`${field}: exceeds maximum length`);
+		return value;
+	};
 	const pending = pendingContributionAgentComments(item);
 	if (!Array.isArray(output.responses) || output.responses.length > 1000)
 		throw new Error("Agent responses are required");
@@ -195,9 +291,10 @@ export function parseContributionAgentResult(
 		)
 			throw new Error("Unsupported agent draft field");
 		draft = {};
-		if (raw.title !== undefined) draft.title = textField(raw.title, "title");
+		if (raw.title !== undefined)
+			draft.title = fieldText(raw.title, "title", 255);
 		if (raw.description !== undefined)
-			draft.description = textField(raw.description, "description", 20000);
+			draft.description = fieldText(raw.description, "description", 20000);
 		if (raw.evidenceIndexes !== undefined) {
 			if (
 				!Array.isArray(raw.evidenceIndexes) ||
@@ -222,7 +319,7 @@ export function parseContributionAgentResult(
 				raw.changes.length === 0
 					? []
 					: validateChanges(raw.changes);
-			assertGeneratedReferences(draft.changes, catalogue);
+			assertGeneratedReferences(draft.changes, catalogue, item.changes);
 			const citations = new Set(item.evidence.map((source) => source.citation));
 			for (const change of draft.changes)
 				for (const field of [
@@ -240,6 +337,7 @@ export function parseContributionAgentResult(
 				}
 		}
 	}
+	assertContributionAgentVerbatimResult(item, { draft, responses });
 	return {
 		outcome: outcome as
 			| "implemented"
