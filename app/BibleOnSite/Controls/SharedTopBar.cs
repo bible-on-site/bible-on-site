@@ -103,9 +103,7 @@ public class SharedTopBar : ContentView
         _centerHost.Content = content;
         if (HomeUxPreview.Enabled && content is Button title)
         {
-            title.SetAppThemeColor(Button.BackgroundColorProperty, Colors.White, Color.FromArgb("#243C5D"));
-            title.BorderWidth = 1;
-            title.BorderColor = Color.FromArgb("#E3E7ED");
+            AppButtonStyles.Apply(title, AppButtonStyles.ToolbarTitle);
         }
     }
 
@@ -126,14 +124,8 @@ public class SharedTopBar : ContentView
         if (content is not null) { content.PropertyChanged += OnTrailingContentChanged; }
         if (HomeUxPreview.Enabled && content is Button action)
         {
-            action.WidthRequest = action.HeightRequest = 52;
-            action.CornerRadius = 16;
-            action.Padding = 0;
+            AppButtonStyles.Apply(action, AppButtonStyles.Icon);
             action.VerticalOptions = LayoutOptions.Center;
-            action.SetAppThemeColor(Button.BackgroundColorProperty, Colors.White, Color.FromArgb("#243C5D"));
-            action.BorderWidth = 1;
-            action.BorderColor = Color.FromArgb("#E3E7ED");
-            action.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#1552AC"), Color.FromArgb("#AACBFF"));
         }
         UpdatePreviewTrailingWidth();
     }
@@ -307,13 +299,7 @@ public class SharedTopBar : ContentView
         _band.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#111C2C"));
         foreach (var button in new[] { NavigationButton, BackButton })
         {
-            button.WidthRequest = 52;
-            button.HeightRequest = 52;
-            button.CornerRadius = 16;
-            button.BorderWidth = 1;
-            button.BorderColor = Color.FromArgb("#E3E7ED");
-            button.SetAppThemeColor(Button.BackgroundColorProperty, Colors.White, Color.FromArgb("#243C5D"));
-            button.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#1552AC"), Color.FromArgb("#AACBFF"));
+            AppButtonStyles.Apply(button, AppButtonStyles.Icon);
         }
         NavigationButton.Text = BackGlyph(FlowDirection.RightToLeft);
         SemanticProperties.SetDescription(NavigationButton, "חזרה");

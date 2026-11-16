@@ -24,20 +24,12 @@ public partial class PerekPage
         HomePreviewButton.IsVisible = false;
         FanMenu.IsVisible = false;
         ReaderToolbar.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#111C2C"));
-        NormalNavigationTitle.HeightRequest = 52;
         NormalNavigationTitle.FontSize = 22;
-        NormalNavigationTitle.CornerRadius = 16;
-        NormalNavigationTitle.BorderWidth = 1;
-        NormalNavigationTitle.BorderColor = Color.FromArgb("#E3E7ED");
-        NormalNavigationTitle.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#243C5D"));
+        NormalNavigationTitle.Style = AppButtonStyles.ToolbarTitle;
         SemanticProperties.SetHint(NormalNavigationTitle, "בחירת ספר ופרק");
         ToolTipProperties.SetText(NormalNavigationTitle, "בחירת ספר ופרק");
-        ReaderMenuButton.WidthRequest = 52;
-        ReaderMenuButton.HeightRequest = 52;
-        ReaderMenuButton.CornerRadius = 16;
-        ReaderMenuButton.FontSize = 24;
+        ReaderMenuButton.Style = AppButtonStyles.Icon;
         ReaderMenuButton.Text = Fonts.FluentUI.options_24_regular;
-        ReaderMenuButton.SetAppThemeColor(BackgroundColorProperty, Colors.White, Color.FromArgb("#243C5D"));
         SemanticProperties.SetDescription(ReaderMenuButton, "כלי הקריאה");
         FinishSearchIntroduction();
         // The content occupies one permanent viewport. Only the OVERLAY bar
@@ -54,6 +46,8 @@ public partial class PerekPage
             if (ReaderToolbar.Handler?.PlatformView is Android.Views.View nativeBar)
             {
                 nativeBar.Elevation = 8 * (nativeBar.Resources?.DisplayMetrics?.Density ?? 1);
+                // Keep the toolbar above scrolling content without casting a shadow.
+                nativeBar.OutlineProvider = null;
             }
         };
 #endif

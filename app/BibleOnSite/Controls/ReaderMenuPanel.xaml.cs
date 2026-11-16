@@ -61,11 +61,9 @@ public partial class ReaderMenuPanel : Grid
     {
         var action = new Button
         {
-            Text = title, AutomationId = id, HeightRequest = 56, FontSize = 17,
-            FontAttributes = FontAttributes.Bold, CornerRadius = 16, Padding = new Thickness(16, 0)
+            Text = title, AutomationId = id, Style = AppButtonStyles.Secondary, HeightRequest = 56, FontSize = 17,
+            FontAttributes = FontAttributes.Bold
         };
-        action.SetAppThemeColor(BackgroundColorProperty, Color.FromArgb("#E4EAF4"), Color.FromArgb("#243C5D"));
-        action.SetAppThemeColor(Button.TextColorProperty, Color.FromArgb("#1552AC"), Color.FromArgb("#AACBFF"));
         action.Clicked += (_, args) => { Close(); selected(this, args); };
         return action;
     }

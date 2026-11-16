@@ -43,10 +43,8 @@
                         <Label Text="על הפרק" FontSize="22" FontAttributes="Bold" CharacterSpacing="-0.5"
                                TextColor="{AppThemeBinding Light=#102648, Dark=White}" VerticalOptions="Center"/>
                     </HorizontalStackLayout>
-                    <Button Grid.Column="1" Text="העדפות" AutomationId="HomePreferences" Clicked="OnPreferencesClicked"
-                            FontSize="17" FontAttributes="Bold" HeightRequest="56" MinimumWidthRequest="118" Padding="14,0" CornerRadius="18" ContentLayout="Left,8"
-                            BackgroundColor="{AppThemeBinding Light=White, Dark=#102648}"
-                            TextColor="{AppThemeBinding Light=#2866E7, Dark=White}">
+                    <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Grid.Column="1" Text="העדפות" AutomationId="HomePreferences" Clicked="OnPreferencesClicked"
+                            FontSize="17" FontAttributes="Bold" HeightRequest="56" MinimumWidthRequest="118" Padding="14,0" ContentLayout="Left,8">
                         <Button.ImageSource>
                             <FontImageSource Glyph="{x:Static fonts:FluentUI.settings_24_regular}" FontFamily="FluentIcons" Size="22"
                                              Color="{AppThemeBinding Light=#2866E7, Dark=White}"/>
@@ -108,7 +106,7 @@
                 </controls:TappableView>
                 <VerticalStackLayout x:Name="HomeError" IsVisible="False" Spacing="8">
                     <Label Text="לא ניתן לטעון את הפרק כרגע" Style="{StaticResource HomeSecondary}"/>
-                    <Button Text="ניסיון נוסף" Clicked="OnRetryClicked"/>
+                    <Button Style="{x:Static controls:AppButtonStyles.Primary}" Text="ניסיון נוסף" Clicked="OnRetryClicked"/>
                 </VerticalStackLayout>
 
                 <Label Text="לאן הסקרנות לוקחת אותך?" Style="{StaticResource HomeHeading}" FontSize="18"/>

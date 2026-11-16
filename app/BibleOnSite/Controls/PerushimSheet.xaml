@@ -166,16 +166,14 @@
                 <Label Text="{Binding PerushimEmptyMessage}" FontSize="14"
                        HorizontalTextAlignment="Center"
                        TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray400}}"/>
-                <Button x:Name="GoToPerushimSettingsButton" AutomationId="GoToPerushimSettingsButton"
+                <Button Style="{x:Static controls:AppButtonStyles.Primary}" x:Name="GoToPerushimSettingsButton" AutomationId="GoToPerushimSettingsButton"
                         Text="הורדת חבילת פירושים"
                         IsVisible="{Binding ShowDownloadPerushimButton}"
                         Clicked="OnGoToPerushimSettingsClicked"/>
-                <Button Text="ייצוא לוגים לתמיכה"
+                <Button Style="{x:Static controls:AppButtonStyles.Secondary}" Text="ייצוא לוגים לתמיכה"
                         Command="{Binding ExportPerushimLogsCommand}"
                         AutomationId="ExportPerushimLogsButton"
-                        IsVisible="{Binding ShowDownloadPerushimButton}"
-                        BackgroundColor="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray700}}"
-                        TextColor="{AppThemeBinding Light={StaticResource Gray800}, Dark={StaticResource Gray200}}"/>
+                        IsVisible="{Binding ShowDownloadPerushimButton}"/>
             </VerticalStackLayout>
         </ScrollView>
     </Grid>

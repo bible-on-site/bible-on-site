@@ -126,6 +126,7 @@ public partial class CircularMenu : ContentView
         // Create toggle button with circular shape
         _toggleButton = new Button
         {
+            Style = AppButtonStyles.Primary,
             Text = "☰",
             FontSize = 24,
             WidthRequest = ToggleButtonSize,

@@ -93,17 +93,14 @@
                                                LineBreakMode="WordWrap"
                                                TextColor="{StaticResource Gray600}"/>
                                     </VerticalStackLayout>
-                                    <Button Grid.Row="2"
+                                    <Button Style="{x:Static controls:AppButtonStyles.Primary}" Grid.Row="2"
                                             Text="{Binding JoinLabel}"
                                             Command="{Binding BindingContext.JoinCommand, Source={x:Reference JoinCards}}"
                                             CommandParameter="{Binding .}"
                                             AutomationId="{Binding AutomationId}"
                                             SemanticProperties.Description="{Binding SemanticDescription}"
-                                            BackgroundColor="{Binding BrandColor}"
-                                            TextColor="White"
                                             FontSize="16"
                                             FontAttributes="Bold"
-                                            CornerRadius="8"
                                             HeightRequest="48"
                                             Margin="20,0,20,20"/>
                                 </Grid>

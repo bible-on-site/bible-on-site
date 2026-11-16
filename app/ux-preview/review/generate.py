@@ -31,7 +31,7 @@ def main():
     sections = []
     markdown = [
         '# על הפרק - לפני ואחרי מול הענף הראשי', '', NOTICE, '',
-        f'[PR #3385]({PR_URL}) · [גלריית HTML בדפדפן](index.html) · [המסכים הנוכחיים](current.html)', '', intro, '',
+        f'[PR #3385]({PR_URL}) · [גלריית HTML בדפדפן](index.html) · [המסכים הנוכחיים](current.html) · [סגנונות הכפתורים](buttons.html)', '', intro, '',
         f'בסיס צילומי "לפני": `{baseline}`. עודכן: {catalog["updated"]}.', '',
         'הפרק היומי, הפרשות והמועדים מקבלים אריחים רחבים בבית. ביניהם אריחים בודדים. צילומי "אחרי" מתעדכנים באותם שמות קבצים.', '',
         'GitHub מציג את ה-Markdown כתוכן מעוצב ותומך ב-rich diff ב-Files changed. ה-HTML נשמר כקוד ונפתח מקומית עם קובצי ה-CSS וה-assets.', ''
@@ -97,7 +97,7 @@ def main():
   <div class="notice">{escape(NOTICE)}</div>
   <div class="meta"><span>עודכן: {catalog['updated']}</span><span>בסיס: <bdi>{baseline}</bdi></span>
     <a href="{PR_URL}">הדיון ב-PR #3385</a><a href="REVIEW.md">ההשוואה ב-GitHub</a>
-    <a href="current.html">המסכים הנוכחיים</a></div>
+    <a href="current.html">המסכים הנוכחיים</a><a href="buttons.html">סגנונות הכפתורים</a></div>
 </header>
 <nav aria-label="מעבר בין ההשוואות"><div class="nav-inner">{nav}<a href="#motion">וידאו גלילה</a></div></nav>
 <main>
@@ -109,6 +109,12 @@ def main():
 </html>
 '''
     (ROOT / 'index.html').write_text(html, encoding='utf-8')
+    markdown.extend([
+        '', '## כפתורים במסכים הנוכחיים', '',
+        'פעולה ראשית בכחול מלא, פעולה משנית בלבן והסרה באדום. אותם סגנונות משמשים בבוררים, בהעדפות, בחבילות ובתמיכה.', '',
+        '[ארבע דוגמאות בדף HTML](buttons.html) · [תמיכה במצב כהה](assets/after/support-dark.png)', '',
+        '<p dir="rtl"><img src="assets/after/extension-packs.png" width="240" alt="כפתורי הורדה ראשיים בכחול"><img src="assets/after/support.png" width="240" alt="ייצוא לוגים כפעולה משנית לבנה"></p>', '',
+    ])
     (ROOT / 'REVIEW.md').write_text('\n'.join(markdown), encoding='utf-8')
     print(f'Generated {len(comparisons)} comparisons against {baseline}')
 

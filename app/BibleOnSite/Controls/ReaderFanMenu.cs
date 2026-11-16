@@ -76,6 +76,7 @@ public class ReaderFanMenu : Grid
 
         ToggleButton = new Button
         {
+            Style = AppButtonStyles.Primary,
             AutomationId = "CircularMenuButton",
             Text = Fonts.FluentUI.navigation_24_regular,
             FontFamily = "FluentIcons",

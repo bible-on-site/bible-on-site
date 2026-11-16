@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <Grid xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:BibleOnSite.Controls"
       x:Class="BibleOnSite.Controls.ReaderLoadingOverlay"
       IsVisible="False"
       BackgroundColor="{AppThemeBinding Light=White, Dark={StaticResource OffBlack}}">
@@ -33,11 +34,8 @@
                LineBreakMode="WordWrap"
                HorizontalTextAlignment="Center"
                TextColor="{AppThemeBinding Light={StaticResource Gray600}, Dark={StaticResource Gray200}}"/>
-        <Button x:Name="RetryButton"
+        <Button Style="{x:Static controls:AppButtonStyles.Primary}" x:Name="RetryButton"
                 Text="נסו שוב"
-                BackgroundColor="{StaticResource Primary}"
-                TextColor="White"
-                CornerRadius="8"
                 Padding="32,10"
                 Clicked="OnRetryClicked"/>
     </VerticalStackLayout>
