@@ -16,6 +16,7 @@ import {
 	validateChanges,
 } from "~/lib/tanahpedia/contributions";
 import { query } from "../db";
+import { refreshArticleLinkEvidence } from "./contribution-article-evidence.server";
 import { prepareChanges } from "./contribution-changes.server";
 import {
 	readContribution,
@@ -34,8 +35,15 @@ function identifiers(value: unknown, result = new Set<string>()): Set<string> {
 		result.add(contributionIdentifierKey(value));
 	else if (Array.isArray(value))
 		for (const child of value) identifiers(child, result);
-	else if (value && typeof value === "object")
+	else if (value && typeof value === "object") {
+		const candidate = value as Record<string, unknown>;
+		if (
+			candidate.kind === "article_links" &&
+			typeof candidate.targetId === "string"
+		)
+			result.add(`article:${candidate.targetId}`);
 		for (const child of Object.values(value)) identifiers(child, result);
+	}
 	return result;
 }
 function changesAddressSpace(item: Contribution): boolean {
@@ -84,6 +92,7 @@ async function refreshContributionBase(
 	const deferred = Boolean(item.deferredContentMerge);
 	delete item.deferredContentMerge;
 	let next: Contribution["changes"];
+	let evidence = item.evidence;
 	try {
 		const inputs = item.changes.length
 			? validateChanges(
@@ -95,6 +104,10 @@ async function refreshContributionBase(
 				)
 			: [];
 		next = await prepareChanges(conn, inputs, { refresh: true });
+		evidence = await refreshArticleLinkEvidence(conn, {
+			changes: next,
+			evidence: item.evidence,
+		});
 	} catch (error) {
 		// A storage failure rolls back this transaction and retains its marker.
 		if (error && typeof error === "object" && "code" in error) throw error;
@@ -111,12 +124,17 @@ async function refreshContributionBase(
 		await saveContribution(conn, item);
 		return "blocked";
 	}
-	if (sameState(next, item.changes) && !item.domainConflict) {
+	if (
+		sameState(next, item.changes) &&
+		sameState(evidence, item.evidence) &&
+		!item.domainConflict
+	) {
 		if (deferred) await saveContribution(conn, item);
 		return "unchanged";
 	}
 	changedSequence(item, trigger);
 	item.changes = next;
+	item.evidence = evidence;
 	delete item.domainConflict;
 	item.apiVersion = CONTRIBUTION_API_VERSION;
 	await saveContribution(conn, item);
@@ -201,7 +219,7 @@ export async function refreshPendingContributionBases(trigger: Contribution) {
 			const outcome = await withContributions(async (conn) => {
 				const item = await readContribution(conn, row.id, true);
 				if (item.kind !== "pr" || item.state !== "open") return "unchanged";
-				if (migrationBlocked(item)) {
+				if (migrationBlocked(item) || item.articleLinkMerge) {
 					if (!item.deferredContentMerge) {
 						item.deferredContentMerge = {
 							id: trigger.id,

@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("~/server/tanahpedia/contribution-article-import.server", () => ({
+	importLegacyArticleLinkProposals: vi
+		.fn()
+		.mockResolvedValue({ articles: 0, prIds: [] }),
+}));
+
 const mocks = vi.hoisted(() => ({
 	verify: vi.fn(),
 	migrate: vi.fn(),
@@ -66,6 +72,7 @@ describe("deployment migration authentication", () => {
 			migrated: 1,
 			failed: 1,
 			unchanged: 1,
+			articleLinks: { articles: 0, created: 0 },
 			agents: { updated: 2, unchanged: 1, scanned: 3, queued: 1 },
 		});
 		expect(mocks.verify).toHaveBeenCalledWith(

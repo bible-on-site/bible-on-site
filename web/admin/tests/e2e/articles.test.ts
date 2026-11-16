@@ -51,6 +51,10 @@ test.describe("Articles Management", () => {
 		await expect(
 			page.getByRole("heading", { name: "מועדים", exact: true }),
 		).toBeVisible();
+		await page.getByRole("link", { name: "PRs לקישורי מאמר זה ←" }).click();
+		await expect(page).toHaveURL(
+			(url) => url.pathname === "/" && url.searchParams.get("tab") === "prs",
+		);
 	});
 
 	test("quick navigation to perek works", async ({ page }) => {

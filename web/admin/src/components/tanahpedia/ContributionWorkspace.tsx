@@ -24,11 +24,13 @@ import {
 	contributionCitation,
 	reviewStatus,
 } from "~/lib/tanahpedia/contributions";
+import { generateLinkProposals } from "~/server/article-link-proposals";
 import {
 	createContributionItem,
 	editContributionItem,
 	getContribution,
 	getContributionAgents,
+	getContributionArticleLinkPreview,
 	getContributionCatalogue,
 	getContributionSession,
 	getContributions,
@@ -43,6 +45,7 @@ import {
 	isAgentAssigned,
 	latestAgentResponses,
 } from "./ContributionAgentWork";
+import { ContributionArticleLinkGenerator } from "./ContributionArticleLinkGenerator";
 import {
 	AssigneePicker,
 	type ComposeContribution,
@@ -417,6 +420,11 @@ function Detail({
 		[comment, setComment] = useState("");
 	const status = reviewStatus(item);
 	const incompatible = migrationBlocked(item);
+	const articlePr = item.changes.some(
+		(change) => change.kind === "article_links",
+	);
+	const articleMergePending =
+		item.state === "open" && Boolean(item.articleLinkMerge);
 	const agentPending = Boolean(
 		item.generation &&
 			(item.generation.status === "queued" ||
@@ -454,7 +462,11 @@ function Detail({
 						</span>
 						{item.author.kind !== "human" && (
 							<span className="contribution-type">
-								{item.author.kind === "local_llm" ? "Local LLM" : "AWS LLM"}
+								{item.author.kind === "local_llm"
+									? "Local LLM"
+									: item.author.kind === "aws_llm"
+										? "AWS LLM"
+										: "כללים אוטומטיים"}
 							</span>
 						)}
 						<span>גרסה {item.revision}</span>
@@ -472,7 +484,7 @@ function Detail({
 						onClick={edit}
 						disabled={busy || incompatible}
 					>
-						עריכה
+						{articleMergePending ? "עריכה וסקירה מחדש" : "עריכה"}
 					</button>
 				)}
 			</div>
@@ -674,16 +686,22 @@ function Detail({
 							<h3>
 								{item.state === "merged"
 									? "ההצעה מוזגה בהצלחה"
-									: agentMergePending
-										? "ממתין לסיום הטיפול של הסוכן"
-										: REVIEW_LABELS[status]}
+									: articleMergePending
+										? "מיזוג קישורי המאמר ממתין להשלמה"
+										: agentMergePending
+											? "ממתין לסיום הטיפול של הסוכן"
+											: REVIEW_LABELS[status]}
 							</h3>
 							<p>
 								{item.state === "merged"
 									? "השינויים והיסטוריית המיזוג נשמרו במסד הנתונים."
-									: agentMergePending
-										? "המעבר שהתבקש מהסוכן עדיין פתוח. אפשר למזג לאחר סיומו או להסיר את השיוך לסוכן."
-										: "במיזוג ייבדק שהנתונים עדיין תואמים להשוואה. כל השינויים יוחלו יחד, או שלא יוחל אף שינוי."}
+									: articleMergePending
+										? "ייתכן שחלק מהקישורים כבר נשמרו. אפשר להמשיך את אותו מיזוג, או לערוך את ההצעה לפי המצב הנוכחי ולסקור אותה מחדש."
+										: agentMergePending
+											? "המעבר שהתבקש מהסוכן עדיין פתוח. אפשר למזג לאחר סיומו או להסיר את השיוך לסוכן."
+											: articlePr
+												? "במיזוג ייבדק שהקישורים עדיין תואמים להשוואה. ההתקדמות נשמרת, ואם המיזוג נקטע אפשר להמשיך אותו בלי להחיל שוב קישורים שכבר נשמרו."
+												: "במיזוג ייבדק שהנתונים עדיין תואמים להשוואה. כל השינויים יוחלו יחד, או שלא יוחל אף שינוי."}
 							</p>
 							{item.state === "open" && (
 								<div className="contribution-form-actions">
@@ -691,7 +709,7 @@ function Detail({
 										<>
 											<button
 												className="contribution-button"
-												disabled={busy}
+												disabled={busy || articleMergePending}
 												type="button"
 												onClick={() =>
 													void act("request_changes", { body: comment })
@@ -701,7 +719,9 @@ function Detail({
 											</button>
 											<button
 												className="contribution-button"
-												disabled={busy || status === "approved"}
+												disabled={
+													busy || articleMergePending || status === "approved"
+												}
 												type="button"
 												onClick={() => void act("approve", { body: comment })}
 											>
@@ -721,7 +741,11 @@ function Detail({
 										}
 										onClick={() => void act("merge")}
 									>
-										{busy ? "מעדכן..." : "מיזוג PR"}
+										{busy
+											? "מעדכן..."
+											: articleMergePending
+												? "המשך מיזוג PR"
+												: "מיזוג PR"}
 									</button>
 								</div>
 							)}
@@ -749,7 +773,12 @@ function Detail({
 				<aside className="contribution-sidebar">
 					<section>
 						<h3>אחראי</h3>
-						<AssignmentForm item={item} agents={agents} busy={busy} act={act} />
+						<AssignmentForm
+							item={item}
+							agents={agents}
+							busy={busy || articleMergePending}
+							act={act}
+						/>
 					</section>
 					{item.kind === "pr" && (
 						<section>
@@ -776,7 +805,7 @@ function Detail({
 							<button
 								className="contribution-button"
 								type="button"
-								disabled={busy || agentPending}
+								disabled={busy || agentPending || articleMergePending}
 								onClick={() => void act("run_agent")}
 							>
 								הפעלה נוספת
@@ -830,7 +859,7 @@ function Detail({
 							<button
 								type="button"
 								className="contribution-button"
-								disabled={busy}
+								disabled={busy || articleMergePending}
 								onClick={() =>
 									void act(item.state === "open" ? "close" : "reopen")
 								}
@@ -932,6 +961,12 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 		onSuccess: (updated) => {
 			queryClient.setQueryData(["contribution", updated.id], updated);
 			refresh();
+		},
+		onError: async () => {
+			// A failed external merge can still have reserved a durable intent and
+			// a newer version. Keep the mutation busy until its detail is reread.
+			await queryClient.invalidateQueries({ queryKey: ["contribution"] });
+			void queryClient.invalidateQueries({ queryKey: ["contributions"] });
 		},
 	});
 	const act = async (action: string, extra?: Record<string, unknown>) => {
@@ -1056,6 +1091,9 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 									initial={editing ?? undefined}
 									linkedIssue={issue.data}
 									catalogue={catalogue.data}
+									previewArticle={(id) =>
+										getContributionArticleLinkPreview({ data: id })
+									}
 									busy={save.isPending}
 									onSubmit={async (value) => {
 										await save.mutateAsync(value);
@@ -1095,8 +1133,8 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 							<h1>{kind === "issue" ? "פניות" : "הצעות שינוי"}</h1>
 							<p>
 								{kind === "issue"
-								? "מה צריך לחקור, לתקן או להוסיף"
-									: "סקירה, ראיות ומיזוג של שינויים מובנים בתנכפדיה"}
+									? "מה צריך לחקור, לתקן או להוסיף"
+									: "סקירה, ראיות ומיזוג של שינויים מובנים"}
 							</p>
 						</div>
 						<Link
@@ -1107,6 +1145,22 @@ export function ContributionWorkspace({ kind }: { kind: "issue" | "pr" }) {
 							{kind === "issue" ? "+ פנייה חדשה" : "+ PR חדש"}
 						</Link>
 					</div>
+					{kind === "pr" && (
+						<ContributionArticleLinkGenerator
+							generate={async (id) => {
+								const result = await generateLinkProposals({
+									data: {
+										articleIds: [Number(id)],
+										engine: "heuristic",
+										force: false,
+										dryRun: false,
+									},
+								});
+								return result.prIds;
+							}}
+							openPr={(id) => navigate({ to: "/", search: { tab: "prs", id } })}
+						/>
+					)}
 					<div className="contribution-filters">
 						<input
 							className="contribution-input"

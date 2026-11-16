@@ -58,7 +58,7 @@ Local structured generation follows [Ollama structured outputs](https://docs.oll
 ## Supported changes
 
 All additional category types reviewed by the user are included. The current
-contract has 45 operation kinds; family choices use the nine existing API types.
+contract has 46 operation kinds; family choices use the nine existing API types.
 
 | Category | Structured changes |
 | --- | --- |
@@ -76,6 +76,7 @@ contract has 45 operation kinds; family choices use the nine existing API types.
 | Books | Match to an existing canonical biblical book |
 | Entry identity | Existing entry title, entry/entity links, complete alias target sets and disambiguation labels |
 | Sources | Entity/verse/segment links; scripture/commentary or bibliographic references attached to existing entities, entries or structured facts |
+| Article links | Primary chapter, verse coverage, dedication assignments with UTC expiry, and existing moed links |
 | Assets | Existing 3D asset key, format and label; no upload or access-policy change |
 | New entries | Empty entry and linked subtype for all 13 creatable entity types |
 
@@ -93,6 +94,39 @@ removal operations, applied before their parent. Roles and war sides retain thei
 owner when edited. Competing facts can share an alternative-group identifier and
 carry separate evidence. Moving one source preserves other citations sharing its
 old source group.
+
+## Article links
+
+Article links use the ordinary home PR queue, evidence, visual diff and owner
+review gate. One PR groups commands for one article; unrelated targets use
+separate PRs. Add/remove intents retain unrelated links when the current base
+refreshes. The composer previews one selected article without loading its prose.
+The queue's deterministic discovery form reuses the existing citation matcher;
+repeated discovery opens its existing PR. Local agents can read complete source
+text through the paged `article_text` tool and propose the same operation kind.
+
+Existing proposals retain immutable original rows, review decisions, generator
+metadata and evidence in their import audit. Active proposals require ordinary
+owner review; historical applied/rejected proposals remain historical. Invalid
+or unsupported sequences become gray PRs with raw recovery in the same record.
+Technical origin metadata stays out of the generated description and quote.
+Structured article evidence binds exact UTF-16 spans and source hashes; a content
+refresh relocates only an unambiguous surviving quote. Editing its quote manually
+clears the previous structured anchor while retaining the original audit.
+
+The legacy write fence uses an in-place rename of physical `status` to
+`legacy_status`, followed by a virtual compatibility `status` that masks approved
+rows as stale. The rename waits for earlier legacy transactions before retiring
+the old apply path; interrupted initialization resumes the missing virtual column.
+Original status remains available for audit. Retain this fence on rollback:
+old legacy approval/apply writes fail closed. Ordinary article editing and public
+URLs remain available. The migration needs `ALTER`, with no trigger/SUPER grant.
+
+Article merges record durable intent before their guarded API call and finish
+dedication changes with the local merged marker. An interrupted response can
+resume without repeating satisfied writes; typed repair captures the actual
+current state and requires review under normal content rules. Deploy the additive
+API coverage precondition before API5 admin merges; old API callers remain valid.
 
 Alias changes review the complete destination set, including labels. These
 operations can explicitly change public alias routing after approval and merge;
@@ -253,8 +287,8 @@ and verify a fresh assignment and comment pass. Retain the previous worker file.
 
 ## API evolution
 
-The merge operation contract is currently version 4, independently of package or
-release versions. Versions 1, 2 and 3 are retained in migration history. `convertApiVersion`
+The merge operation contract is currently version 5, independently of package or
+release versions. Versions 1 through 4 are retained in migration history. `convertApiVersion`
 and its asynchronous counterpart compose explicit directed adapters through
 intermediate versions. Register reverse adapters when a reverse route is needed;
 no reverse transformation is inferred. Retain historical adapters for PRs that
@@ -283,6 +317,10 @@ approval.
 The v3-to-v4 adapter adds existing-entry title operations without changing saved
 sequences or approvals. Resolving a creation to an existing entry belongs to the
 content-rebase path, which creates a new revision and requires renewed review.
+
+The explicit v4-to-v5 identity adapter adds article-link operations while keeping
+existing sequences and approvals intact. Agent instructions/tools advance
+independently to bundle v4; the worker protocol remains v2.
 
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these

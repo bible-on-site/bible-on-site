@@ -89,6 +89,162 @@ function outcomeSchema(current: Contribution, outcome: string) {
 }
 
 describe("contribution agent result boundaries", () => {
+	it("retains original structured article evidence and exact whitespace through evidence indexes", () => {
+		const current = item();
+		const quote = "  מקור 😀\n";
+		current.evidence = [
+			{
+				citation: "מאמר 27",
+				quote,
+				url: null,
+				note: "מקור מאומת",
+				articleSource: {
+					articleId: "27",
+					contentHash: "a".repeat(32),
+					sourceHash: "b".repeat(64),
+					spanStart: 10,
+					spanEnd: 10 + quote.length,
+				},
+			},
+		];
+		const result = parse(
+			{
+				outcome: "revised",
+				summary: "תיאור עודכן",
+				responses: [response],
+				draft: { description: "תיאור", evidenceIndexes: [0] },
+			},
+			current,
+		);
+		expect(result.draft?.evidence).toEqual(current.evidence);
+		expect(result.draft?.evidence?.[0].quote).toBe(quote);
+		expect(() =>
+			parse(
+				{
+					outcome: "revised",
+					summary: "תיקון",
+					responses: [response],
+					draft: {
+						evidence: [
+							{ ...current.evidence[0], articleSource: { articleId: "28" } },
+						],
+					},
+				},
+				current,
+			),
+		).toThrow("Unsupported agent draft field");
+	});
+
+	it("accepts article link commands only after exact target and referenced records were read", () => {
+		const articleCatalogue = {
+			...catalogue,
+			targets: [{ kind: "article_links", id: "27" }],
+			references: {
+				perek: [{ id: 1, name: "בראשית א" }],
+				dedication: [{ id: 2, name: "הקדשה" }],
+				moed: [{ id: 3, name: "פסח" }],
+			},
+		};
+		const result = {
+			outcome: "revised",
+			summary: "הקישורים עודכנו",
+			responses: [response],
+			draft: {
+				evidenceIndexes: [0],
+				changes: [
+					{
+						kind: "article_links",
+						targetId: "27",
+						after: {
+							commands: [
+								{
+									relationshipKey: "primaryPerek",
+									action: "replace",
+									target: { perekId: 1 },
+								},
+								{
+									relationshipKey: "dedicationAssignments",
+									action: "add",
+									target: { dedicationId: 2 },
+								},
+								{
+									relationshipKey: "moadim",
+									action: "add",
+									target: { moedIds: [3] },
+								},
+							],
+						},
+					},
+				],
+			},
+		};
+		expect(
+			parseContributionAgentResult(
+				JSON.stringify(result),
+				item(),
+				articleCatalogue,
+			),
+		).toMatchObject({
+			outcome: "revised",
+			draft: { changes: [{ targetId: "27" }] },
+		});
+		expect(() =>
+			parseContributionAgentResult(JSON.stringify(result), item(), catalogue),
+		).toThrow("did not read this article");
+		const unread = structuredClone(result);
+		unread.draft.changes[0].after.commands.splice(0, 1, {
+			relationshipKey: "primaryPerek",
+			action: "replace",
+			target: { perekId: 99 },
+		});
+		expect(() =>
+			parseContributionAgentResult(
+				JSON.stringify(unread),
+				item(),
+				articleCatalogue,
+			),
+		).toThrow("outside its read catalogue");
+	});
+
+	it.each([true, false])(
+		"rejects an agent's attempt to set coverage verification to %s",
+		(coverageVerified) => {
+			const articleCatalogue = {
+				...catalogue,
+				targets: [{ kind: "article_links", id: "27" }],
+			};
+			const result = {
+				outcome: "revised",
+				summary: "תיקון",
+				responses: [response],
+				draft: {
+					changes: [
+						{
+							kind: "article_links",
+							targetId: "27",
+							after: {
+								commands: [
+									{
+										relationshipKey: "coveringSources",
+										action: "replace",
+										target: { pasukCoordinates: [], coverageVerified },
+									},
+								],
+							},
+						},
+					],
+				},
+			};
+			expect(() =>
+				parseContributionAgentResult(
+					JSON.stringify(result),
+					item(),
+					articleCatalogue,
+				),
+			).toThrow("cannot change article coverage verification");
+		},
+	);
+
 	it("the constrained decoder forbids the captured clarification-with-replacement shape, without normalizing it into an edit", () => {
 		const current = item(),
 			clarification = outcomeSchema(current, "clarification");

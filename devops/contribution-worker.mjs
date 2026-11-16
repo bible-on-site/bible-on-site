@@ -91,7 +91,7 @@ export async function workerAwsCredentials(profile, { call } = {}) {
 						timeout: API_TIMEOUT,
 						maxBuffer: 1048576,
 						windowsHide: true,
-						env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
+						env: { ...process.env, AWS_CLI_OUTPUT_ENCODING: "UTF-8" },
 					},
 				);
 				return JSON.parse(stdout);

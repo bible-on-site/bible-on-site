@@ -38,3 +38,25 @@ SET @contributionBundleSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanahpedia_c
 PREPARE contributionBundleUpgrade FROM @contributionBundleSql;
 EXECUTE contributionBundleUpgrade;
 DEALLOCATE PREPARE contributionBundleUpgrade;
+
+-- Immutable legacy origins; the unique persisted proposal identity makes
+-- transactional PR promotion safe to replay after a crash or concurrent CD.
+SET @articleLinkImportSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanahpedia_article_link_import (
+	proposal_id CHAR(36) NOT NULL PRIMARY KEY,
+	contribution_id CHAR(36) NOT NULL,
+	article_id INT NOT NULL,
+	original JSON NOT NULL,
+	created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+	KEY idx_article_link_import_pr (contribution_id),
+	KEY idx_article_link_import_article (article_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+PREPARE articleLinkImportUpgrade FROM @articleLinkImportSql;
+EXECUTE articleLinkImportUpgrade;
+DEALLOCATE PREPARE articleLinkImportUpgrade;
+
+SET @articleLinkImportLockSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanahpedia_article_link_import_lock (
+	article_id INT NOT NULL PRIMARY KEY
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+PREPARE articleLinkImportLockUpgrade FROM @articleLinkImportLockSql;
+EXECUTE articleLinkImportLockUpgrade;
+DEALLOCATE PREPARE articleLinkImportLockUpgrade;

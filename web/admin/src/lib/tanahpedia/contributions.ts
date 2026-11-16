@@ -19,6 +19,14 @@ import {
 	migrationBlocked,
 } from "./contribution-api";
 import {
+	type ArticleLinkChange,
+	type ArticleLinkChangeInput,
+	articleLinksHaveEffect,
+	contributionArticleId,
+	validateArticleLinkChange,
+	validateArticleLinkState,
+} from "./contribution-article-links";
+import {
 	contributionIdentifierKey,
 	contributionRecordId,
 } from "./contribution-identifiers";
@@ -53,6 +61,13 @@ export interface Evidence {
 	quote: string;
 	url: string | null;
 	note: string;
+	articleSource?: {
+		articleId: string;
+		contentHash: string;
+		sourceHash?: string;
+		spanStart: number;
+		spanEnd: number;
+	};
 }
 
 /** Normalize recognizable scripture references for display, retaining stored
@@ -113,6 +128,7 @@ export interface EntryShellChange {
 export type ChangeInput =
 	| ContributionRecordInput
 	| SpecialChangeInput
+	| ArticleLinkChangeInput
 	| { kind: "parent_child"; targetId?: string; after: ParentChildChange | null }
 	| { kind: "union"; targetId?: string; after: UnionChange | null }
 	| { kind: "place"; targetId?: string; after: PlaceChange | null }
@@ -124,7 +140,8 @@ export type ChangeValue =
 	| number
 	| boolean
 	| null
-	| { entryId: string; label: string }[];
+	| { [key: string]: ChangeValue }
+	| ChangeValue[];
 export type ChangeState = Record<string, ChangeValue>;
 
 export interface ReviewedChange {
@@ -271,6 +288,10 @@ export interface Contribution {
 	domainConflict?: string;
 	rebasePending?: boolean;
 	deferredContentMerge?: { id: string; number: number };
+	/** Durable intent precedes external API writes. Retries use the same reviewed
+	 * revision; authored edits cannot race an unresolved external write. */
+	articleLinkMerge?: { id: string; revision: number; startedAt: string };
+	legacyArticleLinks?: { articleId: number; proposalIds: string[] };
 }
 
 export interface ContributionListRequest {
@@ -345,6 +366,7 @@ export const CHANGE_LABELS: Record<ChangeInput["kind"], string> = {
 	place: "זיהוי מקום",
 	metadata: "מטא-נתונים",
 	entry: "ערך חדש",
+	article_links: "קישורי מאמר",
 };
 
 /** Proper names and the canonical migration status requested for both queues. */
@@ -491,11 +513,53 @@ export function validateEvidence(value: unknown): Evidence[] {
 		const url = optionalText(input.url, "url", 2000);
 		if (url && !["http:", "https:"].includes(new URL(url).protocol))
 			throw new Error("Evidence URLs must use http or https");
+		const quote =
+			input.articleSource !== undefined &&
+			typeof input.quote === "string" &&
+			input.quote.length <= 8000
+				? input.quote
+				: (optionalText(input.quote, "quote", 8000) ?? "");
+		let articleSource: Evidence["articleSource"];
+		if (input.articleSource !== undefined) {
+			const source = record(input.articleSource, "articleSource");
+			rejectUnknown(source, [
+				"articleId",
+				"contentHash",
+				"sourceHash",
+				"spanStart",
+				"spanEnd",
+			]);
+			const articleId = contributionArticleId(source.articleId);
+			if (
+				typeof source.contentHash !== "string" ||
+				!/^[0-9a-f]{32}$/.test(source.contentHash) ||
+				(source.sourceHash !== undefined &&
+					(typeof source.sourceHash !== "string" ||
+						!/^[0-9a-f]{64}$/.test(source.sourceHash))) ||
+				!Number.isSafeInteger(source.spanStart) ||
+				!Number.isSafeInteger(source.spanEnd) ||
+				Number(source.spanStart) < 0 ||
+				Number(source.spanEnd) > 4000000 ||
+				Number(source.spanEnd) - Number(source.spanStart) !== quote.length ||
+				!quote.length
+			)
+				throw new Error("Invalid structured article evidence span or hash");
+			articleSource = {
+				articleId,
+				contentHash: source.contentHash,
+				...(source.sourceHash === undefined
+					? {}
+					: { sourceHash: source.sourceHash as string }),
+				spanStart: Number(source.spanStart),
+				spanEnd: Number(source.spanEnd),
+			};
+		}
 		return {
 			citation,
-			quote: optionalText(input.quote, "quote", 8000) ?? "",
+			quote,
 			url,
 			note: optionalText(input.note, "note", 4000) ?? "",
+			...(articleSource ? { articleSource } : {}),
 		};
 	});
 }
@@ -503,6 +567,7 @@ export function validateEvidence(value: unknown): Evidence[] {
 export function validateChange(value: unknown): ChangeInput {
 	const input = record(value, "change");
 	rejectUnknown(input, ["kind", "targetId", "after"]);
+	if (input.kind === "article_links") return validateArticleLinkChange(input);
 	if (isContributionRecordKind(input.kind))
 		return validateContributionRecord(input);
 	if (input.kind === "alias_mapping" || input.kind === "source_reference")
@@ -661,6 +726,13 @@ export function validateChanges(value: unknown): ChangeInput[] {
 	if (!Array.isArray(value) || value.length === 0 || value.length > 40)
 		throw new Error("A PR requires 1-40 typed changes");
 	const changes = value.map(validateChange);
+	if (
+		changes.some((change) => change.kind === "article_links") &&
+		changes.length !== 1
+	)
+		throw new Error(
+			"An article-link PR contains one article aggregate; create separate PRs for other targets",
+		);
 	const targets = changes
 		.filter((c) => c.targetId)
 		.map((c) => `${c.kind}:${contributionIdentifierKey(c.targetId as string)}`);
@@ -723,6 +795,11 @@ export function sameState(a: unknown, b: unknown): boolean {
 	return canonicalJson(a) === canonicalJson(b);
 }
 export function contributionHasEffect(change: ReviewedChange): boolean {
+	if (change.kind === "article_links")
+		return articleLinksHaveEffect(
+			validateArticleLinkState(change.before),
+			change.after as unknown as ArticleLinkChange,
+		);
 	return (
 		!sameState(change.before, change.after) ||
 		(change.kind === "metadata" &&

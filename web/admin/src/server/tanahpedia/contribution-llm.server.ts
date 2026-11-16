@@ -23,6 +23,11 @@ import {
 	validateChanges,
 } from "~/lib/tanahpedia/contributions";
 import { ADMIN_CREATABLE_ENTITY_TYPES } from "~/lib/tanahpedia/schema-registry";
+import {
+	ARTICLE_LINK_AGENT_GUIDE,
+	agentArticleLinkVariant,
+	assertAgentArticleLinkReferences,
+} from "./contribution-agent-article-links.server";
 import { contributionCatalogue } from "./contribution-changes.server";
 import {
 	addEvent,
@@ -62,6 +67,10 @@ export function assertGeneratedReferences(
 	const places = new Set(catalogue.places.map((place) => place.id));
 	const entities = new Set(catalogue.entities.map((entity) => entity.id));
 	for (const change of changes) {
+		if (change.kind === "article_links") {
+			assertAgentArticleLinkReferences(change, catalogue);
+			continue;
+		}
 		if (
 			change.targetId &&
 			!(change.kind === "metadata"
@@ -180,6 +189,8 @@ export function contributionOutputSchema(
 		enum: catalogue.places.map((place) => place.id),
 	};
 	const variants: Record<string, unknown>[] = [];
+	const articleLinks = agentArticleLinkVariant(catalogue);
+	if (articleLinks) variants.push(articleLinks);
 	const variant = (
 		kind: string,
 		fields: Record<string, unknown>,
@@ -496,6 +507,7 @@ export function contributionSystemPrompt(): string {
 		"metadata: targetId is an existing entity ID; after:{displayName}",
 		"entry_title edits the title of an EXISTING ENTRY, with its exact catalogue targetId and after:{title}. Use this for a requested title edit; never substitute entry creation. It preserves the existing address and article body.",
 		`entry: after:{title,uniqueName,entityType:${ADMIN_CREATABLE_ENTITY_TYPES.join("|")},displayName}; body is always empty, never propose content.`,
+		ARTICLE_LINK_AGENT_GUIDE,
 		"Use the JSON schema for additional category operations. They cover person metadata, roles/reigns, events, wars, nations, sayings, prophecies, animals, plants, astronomy, books, entry links, aliases, evidence attachments and model references. Never emit article or saying content.",
 		"Dates are integers using the repository's YYYYMMDD convention. Use plain Hebrew source references without punctuation.",
 		"Write review descriptions and titles in Hebrew. Explain uncertainty explicitly. Human review is mandatory.",
@@ -659,6 +671,9 @@ export async function prepareContributionGeneration(
 				perek: ["perekId", "perek_id"],
 				perush: ["perushId", "perush_id"],
 				tanah_sefer: ["tanahSeferId", "tanah_sefer_id"],
+				article: ["articleId", "article_id", "מאמר"],
+				dedication: ["dedicationId", "dedication_id", "הקדשה"],
+				moed: ["moedId", "moed_id", "מועד"],
 			};
 			return [kind, matching(rows, idNames[kind] ?? [])];
 		}),
@@ -689,12 +704,23 @@ export async function prepareContributionGeneration(
 	const targets = context.catalogue.targets
 		.filter(
 			(target) =>
-				searchable.includes(target.id) ||
+				(target.kind === "article_links"
+					? (references.article ?? []).some(
+							(article) => String(article.id) === target.id,
+						)
+					: searchable.includes(target.id)) ||
 				Object.values(target.after).some((value) =>
 					typeof value === "string"
 						? referenced.has(value)
 						: Array.isArray(value) &&
-							value.some((t) => referenced.has(t.entryId)),
+							value.some(
+								(target) =>
+									target !== null &&
+									typeof target === "object" &&
+									!Array.isArray(target) &&
+									typeof target.entryId === "string" &&
+									referenced.has(target.entryId),
+							),
 				),
 		)
 		.slice(0, 150);

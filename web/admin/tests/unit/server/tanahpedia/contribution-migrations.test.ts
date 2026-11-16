@@ -26,6 +26,12 @@ vi.mock("~/server/tanahpedia/contribution-agent-runtime.server", () => ({
 	ensureContributionAgentRuntimeStarted: vi.fn(),
 }));
 
+vi.mock("~/server/tanahpedia/contribution-article-import.server", () => ({
+	importLegacyArticleLinkProposals: vi
+		.fn()
+		.mockResolvedValue({ articles: 0, prIds: [] }),
+}));
+
 const mocks = vi.hoisted(() => ({
 	query: vi.fn(),
 	ensure: vi.fn(),

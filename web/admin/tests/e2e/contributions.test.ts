@@ -525,6 +525,155 @@ test.describe("Issues and typed pull requests", () => {
 		).toBeVisible();
 	});
 
+	test("uses ordinary PRs for manual and deterministic article-link changes", async ({
+		page,
+	}, testInfo) => {
+		const address = new URL(process.env.DB_URL ?? "");
+		if (
+			!["localhost", "127.0.0.1", "[::1]"].includes(address.hostname) ||
+			!/^\/tanah_(?:test|e2e_[a-f0-9]{4,16})$/.test(address.pathname)
+		)
+			throw new Error(
+				"Article-link E2E requires a disposable loopback Tanah fixture",
+			);
+		address.searchParams.delete("ssl-mode");
+		const connection = await mysql.createConnection(address.toString());
+		const articleName = `מאמר קישורים לבדיקה ${randomUUID().slice(0, 8)}`;
+		const content = "<p>הפניה מפורשת לבראשית א א לצורך בדיקת קישורי המאמר.</p>";
+		let articleId: number | undefined, authorId: number | undefined;
+		try {
+			const [chapters] = await connection.execute<RowDataPacket[]>(
+				"SELECT id FROM tanah_perek WHERE pasuk_count > 0 ORDER BY id LIMIT 1",
+			);
+			if (!chapters.length) throw new Error("Canonical test chapter missing");
+			const chapter = Number(chapters[0].id);
+			const [author] = await connection.execute<mysql.ResultSetHeader>(
+				"INSERT INTO tanah_author (name,details) VALUES (?,?)",
+				[articleName, "מחבר לבדיקת ממשק מבודדת"],
+			);
+			authorId = author.insertId;
+			const [article] = await connection.execute<mysql.ResultSetHeader>(
+				"INSERT INTO tanah_article (perek_id,author_id,name,abstract,content,priority) VALUES (?,?,?,?,?,0)",
+				[chapter, authorId, articleName, "תקציר בדיקה", content],
+			);
+			articleId = article.insertId;
+			await page.goto("/?tab=prs&id=new");
+			await page
+				.getByLabel("כותרת", { exact: true })
+				.fill(`קישור מוצע - ${articleName}`);
+			await page
+				.getByLabel("תיאור", { exact: true })
+				.fill("הוספת כיסוי פסוק מתוך הפניה מפורשת, ללא עריכת גוף המאמר.");
+			await page
+				.getByRole("button", { name: "+ הוספת מקור", exact: true })
+				.click();
+			await page
+				.getByLabel("הפניה למקור", { exact: true })
+				.fill(`מאמר ${articleId}`);
+			await page
+				.getByLabel("ציטוט רלוונטי", { exact: true })
+				.fill("בראשית א א");
+			await page
+				.getByRole("combobox", { name: "סוג שינוי", exact: true })
+				.selectOption("article_links");
+			await page
+				.getByLabel("מספר מאמר", { exact: true })
+				.fill(String(articleId));
+			await page
+				.getByRole("button", { name: "טעינת המאמר", exact: true })
+				.click();
+			await expect(
+				page.getByRole("region", { name: "המאמר שנבחר" }),
+			).toContainText(articleName);
+			await page
+				.getByRole("button", { name: "+ הוספת קישור מוצע", exact: true })
+				.click();
+			await page
+				.getByLabel("פרק בקישור 1 פסוק 1", { exact: true })
+				.fill(String(chapter));
+			await page
+				.getByLabel("מספר פסוק בקישור 1 פסוק 1", { exact: true })
+				.fill("1");
+			await capture(page, testInfo, "article-link-ordinary-pr-composer");
+			await page.getByRole("button", { name: "פתיחת PR", exact: true }).click();
+			await expect(page.getByRole("heading", { level: 1 })).toContainText(
+				articleName,
+			);
+			await expect(
+				page.getByRole("button", { name: "מיזוג PR", exact: true }),
+			).toBeDisabled();
+			await page.getByRole("tab", { name: "שינויים 1", exact: true }).click();
+			await expect(
+				page.getByRole("region", { name: "השוואת קישורי המאמר" }),
+			).toContainText("בראשית א א");
+			await expect(page.locator(".contribution-diff tbody")).not.toContainText(
+				"contentHash",
+			);
+			await capture(page, testInfo, "article-link-ordinary-pr-diff");
+			await page
+				.getByRole("button", { name: "סגירה ללא מיזוג", exact: true })
+				.click();
+
+			// Discovery and a repeated checkpoint request open the very same PR.
+			const discover = async () => {
+				await page.goto("/?tab=prs");
+				await page.getByText("איתור קישורים למאמר", { exact: true }).click();
+				await page
+					.getByLabel("מספר מאמר לאיתור", { exact: true })
+					.fill(String(articleId));
+				await page
+					.getByRole("button", { name: "איתור ופתיחת PR", exact: true })
+					.click();
+				await expect(page).toHaveURL(
+					(url) =>
+						url.pathname === "/" &&
+						url.searchParams.get("tab") === "prs" &&
+						Boolean(url.searchParams.get("id")),
+				);
+				return new URL(page.url()).searchParams.get("id");
+			};
+			const generatedId = await discover();
+			await expect(
+				page.getByRole("button", { name: "מיזוג PR", exact: true }),
+			).toBeDisabled();
+			await expect(
+				page.getByText("נדרש אישור מ-doradsoft", { exact: true }).first(),
+			).toBeVisible();
+			await capture(page, testInfo, "deterministic-article-link-pr-review");
+			expect(await discover()).toBe(generatedId);
+			await page
+				.getByRole("button", { name: "סגירה ללא מיזוג", exact: true })
+				.click();
+			const [unchanged] = await connection.execute<RowDataPacket[]>(
+				"SELECT content,coverage_verified,(SELECT COUNT(*) FROM tanah_article_covering_source WHERE article_id=?) AS links FROM tanah_article WHERE id=?",
+				[articleId, articleId],
+			);
+			expect(unchanged[0]).toMatchObject({
+				content,
+				coverage_verified: 0,
+				links: 0,
+			});
+		} finally {
+			if (articleId !== undefined) {
+				await connection.execute(
+					"DELETE FROM tanah_article_link_proposal WHERE article_id=?",
+					[articleId],
+				);
+				await connection.execute(
+					"DELETE FROM tanah_article_link_checkpoint WHERE article_id=?",
+					[articleId],
+				);
+				await connection.execute("DELETE FROM tanah_article WHERE id=?", [
+					articleId,
+				]);
+			}
+			if (authorId !== undefined)
+				await connection.execute("DELETE FROM tanah_author WHERE id=?", [
+					authorId,
+				]);
+			await connection.end();
+		}
+	});
 	test("creates an evidence-backed metadata-only entry PR with a domain diff", async ({
 		page,
 	}, testInfo) => {

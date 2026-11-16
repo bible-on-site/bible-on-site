@@ -5,6 +5,14 @@ const mocks = vi.hoisted(() => {
 	const conn = { marker: "tx-conn" };
 	return {
 		conn,
+		promote: vi.fn().mockResolvedValue([]),
+		prIds: vi.fn().mockResolvedValue(["ordinary-pr"]),
+		legacy: vi
+			.fn()
+			.mockResolvedValue({ id: "ordinary-pr", number: 42, state: "open" }),
+		identity: vi
+			.fn()
+			.mockResolvedValue({ id: "owner", kind: "human", isDoradsoft: true }),
 		execute: vi.fn(),
 		query: vi.fn(),
 		queryOne: vi.fn(),
@@ -18,6 +26,20 @@ const mocks = vi.hoisted(() => {
 		llmIsConfigured: vi.fn(() => true),
 	};
 });
+
+vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
+	ensureContributionSchema: vi.fn().mockResolvedValue(undefined),
+	withContributions: (fn: (conn: unknown) => unknown) => fn(mocks.conn),
+}));
+vi.mock("~/server/tanahpedia/contribution-article-import.server", () => ({
+	promoteLegacyArticleLinkProposals: mocks.promote,
+	ensureArticleLinkPromotionSchema: vi.fn().mockResolvedValue(undefined),
+	articleLinkContributionIds: mocks.prIds,
+	legacyArticleLinkContribution: mocks.legacy,
+}));
+vi.mock("~/server/tanahpedia/contribution-identity.server", () => ({
+	contributionIdentity: mocks.identity,
+}));
 
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: () => ({
@@ -61,6 +83,7 @@ import {
 import {
 	applyLinkProposals,
 	generateLinkProposals,
+	getArticleLinkContribution,
 	getLinkPipelineStatus,
 	getLinkProposal,
 	listLinkProposals,
@@ -218,6 +241,10 @@ const apiResult = {
 describe("article link proposals server", () => {
 	beforeEach(() => {
 		for (const mock of [
+			mocks.promote,
+			mocks.prIds,
+			mocks.legacy,
+			mocks.identity,
 			mocks.execute,
 			mocks.query,
 			mocks.queryOne,
@@ -230,6 +257,18 @@ describe("article link proposals server", () => {
 			mocks.llmIsConfigured,
 		])
 			mock.mockReset();
+		mocks.promote.mockResolvedValue([]);
+		mocks.prIds.mockResolvedValue(["ordinary-pr"]);
+		mocks.legacy.mockResolvedValue({
+			id: "ordinary-pr",
+			number: 42,
+			state: "open",
+		});
+		mocks.identity.mockResolvedValue({
+			id: "owner",
+			kind: "human",
+			isDoradsoft: true,
+		});
 		mocks.apiConfigured.mockReturnValue(true);
 		mocks.llmIsConfigured.mockReturnValue(true);
 		mocks.execute.mockResolvedValue({ affectedRows: 0 });
@@ -664,132 +703,6 @@ describe("article link proposals server", () => {
 		);
 	});
 
-	describe("reviewLinkProposal", () => {
-		it("approves a pending proposal and records the reviewer", async () => {
-			proposalRow = makeProposalRow({ status: "pending" });
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await reviewLinkProposal({
-				data: { id: "prop-1", decision: "approve" },
-			});
-			expect(result.status).toBe("approved");
-			const update = mocks.txExecute.mock.calls.find((c) =>
-				String(c[1]).includes("SET status = 'approved'"),
-			);
-			expect(update).toBeTruthy();
-			expect(update?.[2]?.[0]).toBe("editor-test");
-		});
-
-		it("rejects and keeps the row in history", async () => {
-			proposalRow = makeProposalRow({ status: "pending" });
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await reviewLinkProposal({
-				data: { id: "prop-1", decision: "reject", reviewNotes: "לא רלוונטי" },
-			});
-			expect(result.status).toBe("rejected");
-		});
-
-		it("refuses approving a held proposal without a patch", async () => {
-			proposalRow = makeProposalRow({ status: "held" });
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			await expect(
-				reviewLinkProposal({
-					data: { id: "prop-1", decision: "approve" },
-				}),
-			).rejects.toThrow(/מוקפאת|תיקון/);
-		});
-
-		it("refuses approving when the article changed since generation", async () => {
-			proposalRow = makeProposalRow({ status: "pending" });
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			mocks.queryOne.mockImplementation(async (sql: string) => {
-				if (sql.includes("HEX(content_hash)")) return { h: "0".repeat(32) };
-				return dispatchQueryOne(sql);
-			});
-			await expect(
-				reviewLinkProposal({
-					data: { id: "prop-1", decision: "approve" },
-				}),
-			).rejects.toThrow(/השתנה/);
-		});
-	});
-
-	describe("applyLinkProposals", () => {
-		it("applies an approved covering add through the API contract", async () => {
-			proposalRow = makeProposalRow();
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("applied");
-			expect(mocks.updateApi).toHaveBeenCalledOnce();
-			const input = mocks.updateApi.mock.calls[0][1] as {
-				coveringSources?: { perekId: number; pasuk: number }[];
-				expectedContentHash?: string;
-			};
-			expect(input.coveringSources).toContainEqual({ perekId: 18, pasuk: 2 });
-			expect(input.expectedContentHash).toBe(HASH);
-			expect(
-				mocks.txExecute.mock.calls.some((c) =>
-					String(c[1]).includes("SET status = 'applied'"),
-				),
-			).toBe(true);
-		});
-
-		it("marks the proposal stale when content changed", async () => {
-			proposalRow = makeProposalRow();
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			mocks.queryOne.mockImplementation(async (sql: string) => {
-				if (sql.includes("HEX(content_hash)")) return { h: "0".repeat(32) };
-				return dispatchQueryOne(sql);
-			});
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("stale");
-			expect(mocks.updateApi).not.toHaveBeenCalled();
-		});
-
-		it("returns already-applied on repeat apply", async () => {
-			proposalRow = makeProposalRow({ status: "applied" });
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("already-applied");
-			expect(mocks.updateApi).not.toHaveBeenCalled();
-		});
-
-		it("completes the record when the live state already matches", async () => {
-			// Retry after a crash between the write and the mark: the covering
-			// set already contains the proposed coordinate.
-			proposalRow = makeProposalRow();
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			mocks.query.mockImplementation(async (sql: string) => {
-				if (sql.includes("tanah_article_covering_source")) {
-					return [
-						{ perekId: 1, pasuk: 1 },
-						{ perekId: 18, pasuk: 2 },
-					];
-				}
-				return dispatchQuery(sql);
-			});
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("already-applied");
-		});
-
-		it("refuses applying a non-approved proposal", async () => {
-			proposalRow = makeProposalRow({ status: "pending" });
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("error");
-			expect(mocks.updateApi).not.toHaveBeenCalled();
-		});
-	});
-
 	describe("listLinkProposals", () => {
 		it("maps rows and flags stale proposals", async () => {
 			proposalRows = [
@@ -898,205 +811,6 @@ describe("article link proposals server", () => {
 				data: { articleIds: [7] },
 			});
 			expect(result.outcomes[0].error).toContain("dedupe");
-		});
-	});
-
-	describe("reviewLinkProposal edge paths", () => {
-		it.each([undefined, { authorId: 99 }])(
-			"refuses to approve a legacy author proposal with patch %j",
-			async (reviewPatch) => {
-				mocks.txQueryOne.mockResolvedValue(
-					makeProposalRow({
-						relationship_key: "author",
-						status: "pending",
-					}),
-				);
-				await expect(
-					reviewLinkProposal({
-						data: { id: "prop-1", decision: "approve", reviewPatch },
-					}),
-				).rejects.toThrow(/author attribution is fixed/);
-				expect(mocks.txExecute).not.toHaveBeenCalled();
-				expect(mocks.updateApi).not.toHaveBeenCalled();
-			},
-		);
-
-		it("allows rejection of a legacy author proposal", async () => {
-			mocks.txQueryOne.mockResolvedValue(
-				makeProposalRow({ relationship_key: "author", status: "pending" }),
-			);
-			const result = await reviewLinkProposal({
-				data: { id: "prop-1", decision: "reject" },
-			});
-			expect(result.status).toBe("rejected");
-			expect(mocks.updateApi).not.toHaveBeenCalled();
-		});
-
-		it("throws when the proposal does not exist", async () => {
-			mocks.txQueryOne.mockResolvedValue(null);
-			await expect(
-				reviewLinkProposal({ data: { id: "nope", decision: "approve" } }),
-			).rejects.toThrow(/לא נמצאה/);
-		});
-
-		it("refuses to review an applied proposal", async () => {
-			mocks.txQueryOne.mockResolvedValue(
-				makeProposalRow({ status: "applied" }),
-			);
-			await expect(
-				reviewLinkProposal({ data: { id: "prop-1", decision: "reject" } }),
-			).rejects.toThrow(/יושמה/);
-		});
-
-		it("treats a repeat reject as idempotent", async () => {
-			mocks.txQueryOne.mockResolvedValue(
-				makeProposalRow({ status: "rejected" }),
-			);
-			const result = await reviewLinkProposal({
-				data: { id: "prop-1", decision: "reject" },
-			});
-			expect(result.status).toBe("rejected");
-		});
-
-		it("stores a normalized human patch on approve", async () => {
-			mocks.txQueryOne.mockResolvedValue(makeProposalRow({ status: "held" }));
-			const result = await reviewLinkProposal({
-				data: {
-					id: "prop-1",
-					decision: "approve",
-					reviewPatch: {
-						pasukCoordinates: [{ perekId: 18, pasuk: 2 }],
-					},
-				},
-			});
-			expect(result.status).toBe("approved");
-			const update = mocks.txExecute.mock.calls.find((c) =>
-				String(c[1]).includes("review_patch_json = ?"),
-			);
-			expect(update?.[2]?.[0]).toBe("editor-test");
-			expect(update?.[2]?.[1]).toBe(
-				JSON.stringify({ pasukCoordinates: [{ perekId: 18, pasuk: 2 }] }),
-			);
-		});
-
-		it("rejects an invalid human patch", async () => {
-			mocks.txQueryOne.mockResolvedValue(makeProposalRow({ status: "held" }));
-			await expect(
-				reviewLinkProposal({
-					data: {
-						id: "prop-1",
-						decision: "approve",
-						reviewPatch: {
-							pasukCoordinates: [{ perekId: 9999, pasuk: 1 }],
-						},
-					},
-				}),
-			).rejects.toThrow(/אינו חוקי/);
-		});
-	});
-
-	describe("applyLinkProposals edge paths", () => {
-		it("requires the API write path to be configured", async () => {
-			mocks.apiConfigured.mockReturnValue(false);
-			await expect(
-				applyLinkProposals({ data: { ids: ["prop-1"] } }),
-			).rejects.toThrow(/ARTICLE_API_KEY/);
-		});
-
-		it("rejects an empty id list at the validator", () => {
-			expect(() => applyLinkProposals({ data: { ids: [] } })).toThrow(/הצעות/);
-		});
-
-		it("reports a missing proposal row", async () => {
-			mocks.txQueryOne.mockResolvedValue(null);
-			const result = await applyLinkProposals({
-				data: { ids: ["nope"] },
-			});
-			expect(result.outcomes[0]).toEqual({
-				id: "nope",
-				outcome: "error",
-				detail: "not found",
-			});
-		});
-
-		it("marks a conflict when the plan cannot apply", async () => {
-			proposalRow = makeProposalRow({
-				relationship_key: "primaryPerek",
-				action: "add",
-				target_json: JSON.stringify({ perekId: 18 }),
-			});
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("conflict");
-			expect(mocks.updateApi).not.toHaveBeenCalled();
-		});
-
-		it("marks a conflict when the API rejects the write", async () => {
-			proposalRow = makeProposalRow();
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			mocks.updateApi.mockRejectedValue(new Error("freshness mismatch"));
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("conflict");
-			expect(result.outcomes[0].detail).toContain("freshness mismatch");
-		});
-
-		it("applies a dedication assignment through the aggregate", async () => {
-			proposalRow = makeProposalRow({
-				relationship_key: "dedicationAssignments",
-				target_json: JSON.stringify({ dedicationId: 5 }),
-			});
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("applied");
-			expect(mocks.applyDed).toHaveBeenCalledWith(
-				expect.objectContaining({
-					dedicationId: 5,
-					articleId: 7,
-					op: "add",
-				}),
-			);
-			expect(mocks.updateApi).not.toHaveBeenCalled();
-		});
-
-		it("completes a dedication retry when the link already exists", async () => {
-			proposalRow = makeProposalRow({
-				relationship_key: "dedicationAssignments",
-				target_json: JSON.stringify({ dedicationId: 5 }),
-			});
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			mocks.applyDed.mockResolvedValue({ changed: false });
-			mocks.query.mockImplementation(async (sql: string) => {
-				if (sql.includes("tanah_article_dedication"))
-					return [{ dedication_id: 5 }];
-				return dispatchQuery(sql);
-			});
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("already-applied");
-		});
-
-		it("marks a conflict when the dedication write is refused", async () => {
-			proposalRow = makeProposalRow({
-				relationship_key: "dedicationAssignments",
-				target_json: JSON.stringify({ dedicationId: 5 }),
-			});
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			mocks.applyDed.mockResolvedValue({
-				changed: false,
-				reason: "dedication retired",
-			});
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("conflict");
-			expect(result.outcomes[0].detail).toContain("dedication retired");
 		});
 	});
 
@@ -1245,61 +959,6 @@ describe("article link proposals server", () => {
 			await expect(listLinkProposals({ data: {} })).rejects.toThrow(
 				"list boom",
 			);
-		});
-	});
-
-	describe("applyLinkProposals idempotency", () => {
-		it("completes a covering remove the live state already satisfies", async () => {
-			proposalRow = makeProposalRow({
-				action: "remove",
-				target_json: JSON.stringify({
-					pasukCoordinates: [{ perekId: 18, pasuk: 9 }],
-				}),
-			});
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("already-applied");
-			expect(mocks.updateApi).not.toHaveBeenCalled();
-		});
-
-		it("marks a conflict for a dedication target without an id", async () => {
-			proposalRow = makeProposalRow({
-				relationship_key: "dedicationAssignments",
-				target_json: JSON.stringify({ dedicationId: "x" }),
-			});
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("conflict");
-		});
-
-		it("marks a conflict for a dedication action outside add/remove", async () => {
-			proposalRow = makeProposalRow({
-				relationship_key: "dedicationAssignments",
-				action: "replace",
-				target_json: JSON.stringify({ dedicationId: 5 }),
-			});
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("conflict");
-		});
-
-		it("processes every id in the batch", async () => {
-			mocks.txQueryOne
-				.mockResolvedValueOnce(makeProposalRow())
-				.mockResolvedValueOnce(
-					makeProposalRow({ id: "prop-2", status: "applied" }),
-				);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1", "prop-2"] },
-			});
-			expect(result.outcomes).toHaveLength(2);
-			expect(result.outcomes[1].outcome).toBe("already-applied");
 		});
 	});
 
@@ -1599,135 +1258,6 @@ describe("article link proposals server", () => {
 		});
 	});
 
-	describe("reviewLinkProposal remaining paths", () => {
-		it("rejects without optional notes", async () => {
-			proposalRow = makeProposalRow({ status: "pending" });
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await reviewLinkProposal({
-				data: { id: "prop-1", decision: "reject" },
-			});
-			expect(result.status).toBe("rejected");
-		});
-	});
-
-	describe("applyLinkProposals idempotency edges", () => {
-		it("maps an unparseable stored target to the empty patch", async () => {
-			proposalRow = makeProposalRow({ target_json: "{broken" });
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("already-applied");
-			expect(mocks.updateApi).not.toHaveBeenCalled();
-		});
-
-		it("completes a redundant primaryPerek replace as already applied", async () => {
-			proposalRow = makeProposalRow({
-				relationship_key: "primaryPerek",
-				action: "replace",
-				target_json: JSON.stringify({ perekId: 1 }),
-			});
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("already-applied");
-			expect(mocks.updateApi).not.toHaveBeenCalled();
-		});
-
-		it.each([2, 99])(
-			"blocks a legacy approved author replace targeting %i",
-			async (authorId) => {
-				proposalRow = makeProposalRow({
-					relationship_key: "author",
-					action: "replace",
-					target_json: JSON.stringify({ authorId }),
-				});
-				mocks.txQueryOne.mockResolvedValue(proposalRow);
-				const result = await applyLinkProposals({
-					data: { ids: ["prop-1"] },
-				});
-				expect(result.outcomes[0].outcome).toBe("conflict");
-				expect(result.outcomes[0].detail).toContain(
-					"author attribution is fixed",
-				);
-				expect(mocks.updateApi).not.toHaveBeenCalled();
-				expect(mocks.applyDed).not.toHaveBeenCalled();
-			},
-		);
-
-		it("conflicts an author action the write contract cannot express", async () => {
-			proposalRow = makeProposalRow({
-				relationship_key: "author",
-				action: "add",
-				target_json: JSON.stringify({ authorId: 2 }),
-			});
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("conflict");
-			expect(mocks.updateApi).not.toHaveBeenCalled();
-		});
-
-		it("conflicts a proposal key with no write path", async () => {
-			proposalRow = makeProposalRow({
-				relationship_key: "moadim",
-				action: "add",
-				target_json: JSON.stringify({ moedName: "סוכות" }),
-			});
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("conflict");
-			expect(result.outcomes[0].detail).toContain("no applicable write path");
-		});
-
-		it("completes a dedication remove the live state already satisfies", async () => {
-			proposalRow = makeProposalRow({
-				relationship_key: "dedicationAssignments",
-				action: "remove",
-				target_json: JSON.stringify({ dedicationId: 5 }),
-			});
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("already-applied");
-		});
-
-		it("conflicts when the dedication write refuses without a reason", async () => {
-			proposalRow = makeProposalRow({
-				relationship_key: "dedicationAssignments",
-				target_json: JSON.stringify({ dedicationId: 5 }),
-			});
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			mocks.applyDed.mockResolvedValue({ changed: false });
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("conflict");
-			expect(result.outcomes[0].detail).toBeUndefined();
-			expect(
-				mocks.txExecute.mock.calls.some((c) =>
-					String(c[2]?.[0]).includes("dedication write refused"),
-				),
-			).toBe(true);
-		});
-
-		it("records a non-Error API rejection", async () => {
-			proposalRow = makeProposalRow();
-			mocks.txQueryOne.mockResolvedValue(proposalRow);
-			mocks.updateApi.mockRejectedValue("api exploded");
-			const result = await applyLinkProposals({
-				data: { ids: ["prop-1"] },
-			});
-			expect(result.outcomes[0].outcome).toBe("conflict");
-			expect(result.outcomes[0].detail).toBe("api exploded");
-		});
-	});
-
 	describe("pipeline status", () => {
 		it("reports llmEnabled for an injected caller without server config", async () => {
 			mocks.llmIsConfigured.mockReturnValue(false);
@@ -1739,6 +1269,121 @@ describe("article link proposals server", () => {
 			}));
 			const status = await getLinkPipelineStatus({});
 			expect(status.llmEnabled).toBe(true);
+		});
+	});
+	describe("ordinary PR bridge", () => {
+		it("rejects legacy approval with the ordinary PR review location and no canonical write", async () => {
+			await expect(
+				reviewLinkProposal({ data: { id: "proposal-1", decision: "approve" } }),
+			).rejects.toThrow("/?tab=prs&id=ordinary-pr");
+			expect(mocks.updateApi).not.toHaveBeenCalled();
+			expect(mocks.applyDed).not.toHaveBeenCalled();
+			expect(mocks.txExecute).not.toHaveBeenCalled();
+		});
+		it("does not retain a separate legacy rejection workflow", async () => {
+			await expect(
+				reviewLinkProposal({ data: { id: "proposal-1", decision: "reject" } }),
+			).rejects.toThrow("PR #42");
+			expect(mocks.txExecute).not.toHaveBeenCalled();
+		});
+		it("requires the ordinary PR merge and reports already-merged history without applying twice", async () => {
+			expect(
+				await applyLinkProposals({ data: { ids: ["proposal-1"] } }),
+			).toEqual({
+				outcomes: [
+					{
+						id: "proposal-1",
+						outcome: "conflict",
+						detail: expect.stringContaining("/?tab=prs&id=ordinary-pr"),
+					},
+				],
+			});
+			mocks.legacy.mockResolvedValue({
+				id: "ordinary-pr",
+				number: 42,
+				state: "merged",
+			});
+			expect(
+				(await applyLinkProposals({ data: { ids: ["proposal-1"] } }))
+					.outcomes[0].outcome,
+			).toBe("already-applied");
+			expect(mocks.updateApi).not.toHaveBeenCalled();
+			expect(mocks.applyDed).not.toHaveBeenCalled();
+		});
+		it("preserves missing-record failures without inventing a PR", async () => {
+			mocks.legacy.mockResolvedValue(null);
+			await expect(
+				reviewLinkProposal({ data: { id: "missing", decision: "approve" } }),
+			).rejects.toThrow("לא נמצאה");
+			expect(
+				(await applyLinkProposals({ data: { ids: ["missing"] } })).outcomes[0]
+					.outcome,
+			).toBe("error");
+		});
+		it("requires verified contribution identity before deterministic generation can persist proposals", async () => {
+			mocks.identity.mockRejectedValue(
+				new Error("Authenticated editor required"),
+			);
+			await expect(
+				generateLinkProposals({
+					data: { articleIds: [7], engine: "heuristic" },
+				}),
+			).rejects.toThrow("Authenticated editor required");
+			expect(mocks.transaction).not.toHaveBeenCalled();
+			expect(mocks.promote).not.toHaveBeenCalled();
+		});
+		it("promotes inside the same proposal/checkpoint transaction and returns stable PR identities", async () => {
+			const result = await generateLinkProposals({
+				data: { articleIds: [7], engine: "heuristic" },
+			});
+			expect(mocks.promote).toHaveBeenCalledWith(mocks.conn, 7);
+			expect(result.prIds).toEqual(["ordinary-pr"]);
+		});
+		it("does not promote or look up PRs on a dry run", async () => {
+			const result = await generateLinkProposals({
+				data: { articleIds: [7], engine: "heuristic", dryRun: true },
+			});
+			expect(result.prIds).toEqual([]);
+			expect(mocks.promote).not.toHaveBeenCalled();
+			expect(mocks.prIds).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("legacy URL resolution", () => {
+		it("authenticates before resolving a stable legacy proposal identity", async () => {
+			const id = "00000000-0000-4000-8000-000000000001";
+			expect(await getArticleLinkContribution({ data: { id } })).toBe(
+				"ordinary-pr",
+			);
+			expect(mocks.legacy).toHaveBeenCalledWith(id);
+			mocks.legacy.mockResolvedValue(null);
+			expect(await getArticleLinkContribution({ data: { id } })).toBeNull();
+		});
+		it("returns the existing article PR and leaves an unfiltered queue lookup inert", async () => {
+			expect(await getArticleLinkContribution({ data: { articleId: 7 } })).toBe(
+				"ordinary-pr",
+			);
+			expect(mocks.promote).toHaveBeenCalledWith(mocks.conn, 7);
+			mocks.promote.mockClear();
+			expect(await getArticleLinkContribution({ data: {} })).toBeNull();
+			expect(mocks.promote).not.toHaveBeenCalled();
+			mocks.prIds.mockResolvedValue([]);
+			expect(
+				await getArticleLinkContribution({ data: { articleId: 7 } }),
+			).toBeNull();
+		});
+		it.each([
+			null,
+			[],
+			{ id: 7 },
+			{ id: "invalid" },
+			{ articleId: 0 },
+			{ articleId: -1 },
+			{ articleId: 1.5 },
+			{ articleId: "7" },
+			{ articleId: 2147483648 },
+		])("rejects invalid locators %j", (data) => {
+			expect(() => getArticleLinkContribution({ data })).toThrow();
 		});
 	});
 });

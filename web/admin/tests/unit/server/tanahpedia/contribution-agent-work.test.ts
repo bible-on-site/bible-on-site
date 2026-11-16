@@ -39,9 +39,26 @@ vi.mock("~/server/tanahpedia/contribution-agent-context.server", () => ({
 	readContributionAgentInitialContext: mocks.initial,
 	readContributionAgentTool: mocks.tool,
 	lockContributionAgentContext: mocks.lockContext,
-	mergeAgentCatalogues: (...catalogues: { entities: unknown[] }[]) => ({
+	mergeAgentCatalogues: (
+		...catalogues: {
+			entities: unknown[];
+			targets: unknown[];
+			references: Record<string, unknown[]>;
+		}[]
+	) => ({
 		...catalogues[0],
 		entities: catalogues.flatMap((catalogue) => catalogue.entities),
+		targets: catalogues.flatMap((catalogue) => catalogue.targets),
+		references: Object.fromEntries(
+			[
+				...new Set(
+					catalogues.flatMap((catalogue) => Object.keys(catalogue.references)),
+				),
+			].map((family) => [
+				family,
+				catalogues.flatMap((catalogue) => catalogue.references[family] ?? []),
+			]),
+		),
 	}),
 }));
 vi.mock("~/server/tanahpedia/contribution-service.server", () => ({
@@ -455,7 +472,10 @@ describe("assignment-driven leased contribution work", () => {
 			if (incompatible === "protocol")
 				Object.assign(agent().bundle, { protocolVersion: 3 });
 			if (incompatible === "newer-release")
-				agent().installedVersion = "tanahpedia-agents-v4";
+				agent().installedVersion = agent().installedVersion.replace(
+					/\d+$/,
+					(version) => String(Number(version) + 1),
+				);
 			if (incompatible === "older-release")
 				agent().installedVersion = "tanahpedia-agents-v0";
 			if (incompatible === "job-api") job().apiVersion++;
@@ -484,7 +504,9 @@ describe("assignment-driven leased contribution work", () => {
 		mocks.assigned
 			.mockResolvedValueOnce({
 				...agent(),
-				installedVersion: "tanahpedia-agents-v4",
+				installedVersion: agent().installedVersion.replace(/\d+$/, (version) =>
+					String(Number(version) + 1),
+				),
 			})
 			.mockResolvedValueOnce(agent());
 		mocks.query
@@ -745,6 +767,82 @@ describe("assignment-driven leased contribution work", () => {
 		expect(mocks.lockContext.mock.invocationCallOrder[0]).toBeLessThan(
 			mocks.tool.mock.invocationCallOrder[lockedReads[0].index],
 		);
+	});
+	it("uses API five article read receipts to resolve the same PR with known nested identities", async () => {
+		const input = await claim();
+		expect(input.apiVersion).toBe(5);
+		expect(agent().installedVersion).toBe("tanahpedia-agents-v4");
+		mocks.tool.mockResolvedValue({
+			data: {
+				kind: "target:article_links",
+				id: "27",
+				sourceHash: "a".repeat(64),
+			},
+			catalogue: {
+				...empty,
+				targets: [{ kind: "article_links", id: "27" }],
+				references: { perek: [{ id: 99, name: "פרק" }] },
+			},
+		});
+		const read = await readContributionWorkerContext({
+			...input,
+			name: "record",
+			arguments: { kind: "target:article_links", id: "27" },
+		});
+		expect(JSON.stringify(read.schema)).toContain('"const":"article_links"');
+		const changes = [
+			{
+				kind: "article_links",
+				targetId: "27",
+				after: {
+					commands: [
+						{
+							relationshipKey: "primaryPerek",
+							action: "replace",
+							target: { perekId: 99 },
+						},
+					],
+				},
+			},
+		];
+		await completeContributionAgentWork({
+			...input,
+			receipts: [read.receipt],
+			content: output("revised", { draft: { changes } }),
+		});
+		expect(mocks.revise).toHaveBeenCalledOnce();
+		expect(mocks.revise.mock.calls[0][2]).toMatchObject({ changes });
+		expect(mocks.create).not.toHaveBeenCalled();
+	});
+
+	it("rejects an article source hash change outside the read text page before authoring", async () => {
+		const input = await claim();
+		const data = {
+			id: "27",
+			text: "unchanged first page",
+			total: 40000,
+			nextCursor: 4000,
+			sourceHash: "a".repeat(64),
+		};
+		mocks.tool.mockResolvedValue({ data, catalogue: empty });
+		const read = await readContributionWorkerContext({
+			...input,
+			name: "article_text",
+			arguments: { id: "27", cursor: 0 },
+		});
+		mocks.tool.mockResolvedValue({
+			data: { ...data, sourceHash: "b".repeat(64) },
+			catalogue: empty,
+		});
+		await expect(
+			completeContributionAgentWork({
+				...input,
+				receipts: [read.receipt],
+				content: output("revised", { draft: { title: "Must not apply" } }),
+			}),
+		).rejects.toThrow("tool-read record or discussion changed");
+		expect(mocks.revise).not.toHaveBeenCalled();
+		expect(mocks.create).not.toHaveBeenCalled();
 	});
 	it("writes one authored same-PR revision and an idempotent immutable response receipt", async () => {
 		const input = await claim(),

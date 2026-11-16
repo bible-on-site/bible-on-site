@@ -1,5 +1,6 @@
 /** Client imports receive RPC stubs; persistence and providers stay server-only. */
 import { createServerFn } from "@tanstack/react-start";
+import { contributionArticleId } from "~/lib/tanahpedia/contribution-article-links";
 import {
 	record,
 	uuidField,
@@ -14,6 +15,7 @@ import {
 	notifyContributionAgentWork,
 	reconcileContributionAgentAssignments,
 } from "./contribution-agent-runtime.server";
+import { readArticleLinkPreview } from "./contribution-article-links.server";
 import { contributionCatalogue } from "./contribution-changes.server";
 import { contributionIdentity } from "./contribution-identity.server";
 import {
@@ -82,6 +84,14 @@ export const getContributionCatalogue = createServerFn({
 	await contributionIdentity();
 	return withContributions(contributionCatalogue);
 });
+export const getContributionArticleLinkPreview = createServerFn({
+	method: "GET",
+})
+	.validator(contributionArticleId)
+	.handler(async ({ data }) => {
+		await contributionIdentity();
+		return withContributions((conn) => readArticleLinkPreview(conn, data));
+	});
 export const createContributionItem = createServerFn({ method: "POST" })
 	.validator((data: unknown) => data)
 	.handler(async ({ data }) =>

@@ -1,7 +1,9 @@
 import type { PoolConnection } from "mysql2/promise";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ArticleLinkState } from "~/lib/tanahpedia/contribution-article-links";
 import type {
 	ChangeInput,
+	ChangeState,
 	Contribution,
 	ContributionEvent,
 	ContributionRevisionSnapshot,
@@ -25,6 +27,7 @@ const mocks = vi.hoisted(() => ({
 	state: vi.fn(),
 	names: vi.fn(),
 	source: vi.fn(),
+	article: vi.fn(),
 }));
 vi.mock("~/server/db", () => ({
 	txQueryOne: mocks.one,
@@ -40,6 +43,9 @@ vi.mock("~/server/tanahpedia/contribution-changes.server", () => ({
 }));
 vi.mock("~/server/tanahpedia/contribution-specials.server", () => ({
 	readContributionSourceFact: mocks.source,
+}));
+vi.mock("~/server/tanahpedia/contribution-article-links.server", () => ({
+	readArticleLinkContext: mocks.article,
 }));
 vi.mock("~/server/tanahpedia/revisions", () => ({
 	saveEntryTitleRevisioned: vi.fn(),
@@ -1663,4 +1669,279 @@ describe("complete contribution agent context", () => {
 		expect([first, second]).toEqual(before);
 		expect(mergeAgentCatalogues()).toEqual(emptyCatalogue());
 	});
+});
+
+describe("fresh article source context", () => {
+	let article: {
+		id: string;
+		title: string;
+		plainText: string;
+		state: ArticleLinkState;
+	};
+	beforeEach(() => {
+		article = {
+			id: "27",
+			title: "מאמר עדכני",
+			plainText: `מאמר עדכני\n${"מקור 😀 ".repeat(6000)}`,
+			state: {
+				contentHash: "a".repeat(32),
+				sourceHash: "b".repeat(64),
+				perekId: 1,
+				authorId: 2,
+				coverageVerified: false,
+				coveringSources: [{ perekId: 3, pasuk: 4 }],
+				dedicationAssignments: [
+					{ dedicationId: 4, expiresAt: "2027-01-01 00:00:00" },
+				],
+				moedIds: [5],
+			},
+		};
+		for (const perek of [1, 3])
+			references.set(`perek:${perek}`, { id: perek, name: `פרק ${perek}` });
+		const previous = mocks.one.getMockImplementation();
+		mocks.one.mockImplementation(async (...args) => {
+			const [, sql, values] = args;
+			const requested = Number(values?.[0]);
+			if (sql === "SELECT id,name FROM tanah_article WHERE id=? FOR SHARE")
+				return requested === 27 ? { id: 27, name: article.title } : null;
+			if (sql === "SELECT id,name FROM tanah_author WHERE id=? FOR SHARE")
+				return requested === 2 ? { id: 2, name: "מחבר" } : null;
+			if (
+				sql ===
+				"SELECT id,subject AS name FROM tanah_dedication WHERE id=? FOR SHARE"
+			)
+				return [4, 6].includes(requested)
+					? { id: requested, name: "הקדשה" }
+					: null;
+			if (sql === "SELECT id,name FROM tanah_moed WHERE id=? FOR SHARE")
+				return [5, 7].includes(requested)
+					? { id: requested, name: "מועד" }
+					: null;
+			if (
+				sql.includes("FROM tanah_perek p ") &&
+				sql.endsWith("FOR UPDATE NOWAIT")
+			)
+				return references.get(`perek:${requested}`) ?? null;
+			return previous?.(...args);
+		});
+		mocks.article.mockImplementation(async () => structuredClone(article));
+	});
+
+	function attachArticleChange() {
+		item.changes = [
+			{
+				kind: "article_links",
+				targetId: "27",
+				before: article.state as unknown as ChangeState,
+				after: {
+					commands: [
+						{
+							relationshipKey: "primaryPerek",
+							action: "replace",
+							target: { perekId: 3 },
+						},
+						{
+							relationshipKey: "coveringSources",
+							action: "remove",
+							target: { pasukCoordinates: [{ perekId: 3, pasuk: 4 }] },
+						},
+						{
+							relationshipKey: "dedicationAssignments",
+							action: "add",
+							target: { dedicationId: 6, expiresAt: null },
+						},
+						{
+							relationshipKey: "moadim",
+							action: "add",
+							target: { moedIds: [7] },
+						},
+					],
+				},
+				labels: {},
+			},
+		];
+	}
+
+	it("indexes current source metadata and all link identities without silently embedding truncated prose", async () => {
+		attachArticleChange();
+		const initial = await readContributionAgentInitialContext(conn, item, true);
+		expect(initial.catalogue.targets).toContainEqual({
+			kind: "article_links",
+			id: "27",
+			current: article.state,
+		});
+		expect(initial.catalogue.references.article_author).toEqual([
+			{ id: 2, name: "מחבר" },
+		]);
+		expect(
+			initial.catalogue.references.dedication?.map((row) => row.id),
+		).toEqual([4, 6]);
+		expect(initial.catalogue.references.moed?.map((row) => row.id)).toEqual([
+			5, 7,
+		]);
+		expect(initial.data).toMatchObject({
+			currentRecords: expect.arrayContaining([
+				{
+					kind: "article_source",
+					id: "27",
+					current: expect.objectContaining({
+						sourceHash: article.state.sourceHash,
+						plainTextLength: article.plainText.length,
+						readLocator: {
+							tool: "article_text",
+							arguments: { id: "27", cursor: 0, limit: 4000 },
+						},
+					}),
+				},
+			]),
+		});
+		expect(JSON.stringify(initial.data)).not.toContain(
+			article.plainText.slice(0, 100),
+		);
+		expect(mocks.article).toHaveBeenCalledExactlyOnceWith(conn, "27", {
+			current: true,
+		});
+	});
+
+	it("reads the entire exact UTF-16 source in bounded pages and declares every remaining page", async () => {
+		let cursor: number | null = 0;
+		let full = "";
+		while (cursor !== null) {
+			const result = await readContributionAgentTool(
+				conn,
+				item,
+				"article_text",
+				{ id: "27", cursor, limit: 16000 },
+			);
+			const data = result.data as {
+				text: string;
+				total: number;
+				nextCursor: number | null;
+				records: unknown;
+			};
+			expect(data.text.length).toBeLessThanOrEqual(16000);
+			expect(data.total).toBe(article.plainText.length);
+			expect(JSON.stringify(data.records)).not.toContain(
+				article.plainText.slice(0, 100),
+			);
+			expect(result.catalogue.targets).toEqual([]);
+			full += data.text;
+			cursor = data.nextCursor;
+		}
+		expect(full).toBe(article.plainText);
+		const end = await readContributionAgentTool(conn, item, "article_text", {
+			id: "27",
+			cursor: full.length,
+		});
+		expect(end.data).toMatchObject({
+			text: "",
+			total: full.length,
+			nextCursor: null,
+			encoding: "UTF-16",
+		});
+	});
+
+	it("invalidates an initial fingerprint when prose outside the read page changes", async () => {
+		attachArticleChange();
+		const initial = await readContributionAgentInitialContext(conn, item);
+		const first = await readContributionAgentTool(conn, item, "article_text", {
+			id: "27",
+			limit: 1,
+		});
+		article.plainText += "שינוי בסוף המאמר";
+		article.state.sourceHash = "c".repeat(64);
+		const second = await readContributionAgentTool(conn, item, "article_text", {
+			id: "27",
+			limit: 1,
+		});
+		expect(second.data).toMatchObject({
+			text: "מ",
+			sourceHash: "c".repeat(64),
+		});
+		expect(first.data).toMatchObject({ text: "מ", sourceHash: "b".repeat(64) });
+		expect(
+			(await readContributionAgentInitialContext(conn, item, true)).hash,
+		).not.toBe(initial.hash);
+	});
+
+	it("uses the current source label and typed article ID after a stale search index read", async () => {
+		const previous = mocks.one.getMockImplementation();
+		mocks.one.mockImplementation(async (...args) =>
+			args[1].startsWith(
+				"SELECT COUNT(*) AS total FROM (SELECT id,name FROM tanah_article)",
+			)
+				? { total: 1 }
+				: previous?.(...args),
+		);
+		mocks.query.mockResolvedValue([{ id: 27, name: "כותרת ישנה" }]);
+		const result = await readContributionAgentTool(conn, item, "search", {
+			kind: "target:article_links",
+			query: "מאמר",
+		});
+		expect(result.data).toMatchObject({
+			items: [{ id: 27, label: article.title, current: article.state }],
+			total: 1,
+			nextCursor: null,
+		});
+		expect(result.catalogue.targets).toContainEqual({
+			id: "27",
+			kind: "article_links",
+			current: article.state,
+		});
+		const exact = await readContributionAgentTool(conn, item, "record", {
+			kind: "target:article_links",
+			id: 27,
+		});
+		expect(exact.data).toMatchObject({ record: article.state });
+	});
+
+	it("reports a missing source without inventing an article or querying its body", async () => {
+		const result = await readContributionAgentTool(conn, item, "article_text", {
+			id: "28",
+		});
+		expect(result.data).toMatchObject({ id: "28", record: null });
+		expect(result.catalogue.targets).toEqual([]);
+		expect(mocks.article).not.toHaveBeenCalled();
+	});
+
+	it("keeps failed raw migrations visible without interpreting their identifiers or obsolete shape", async () => {
+		attachArticleChange();
+		item.changes[0].targetId = "obsolete article address";
+		item.apiMigration = {
+			id,
+			status: "failed",
+			from: 4,
+			to: 5,
+			steps: [],
+			at: "now",
+			error: "Invalid old shape",
+			sequence: JSON.stringify(item.changes),
+		};
+		const result = await readContributionAgentInitialContext(conn, item);
+		expect(result.data).toMatchObject({
+			item: { changes: [{ targetId: "obsolete article address" }] },
+		});
+		expect(result.catalogue.targets).toEqual([]);
+		expect(mocks.article).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		{ id: "027" },
+		{ id: 27 },
+		{ id: "2147483648" },
+		{ id: "27", cursor: -1 },
+		{ id: "27", cursor: 0.5 },
+		{ id: "27", limit: 0 },
+		{ id: "27", limit: 16001 },
+		{ id: "27", limit: 1.5 },
+		{ id: "27", sql: "untrusted" },
+	])(
+		"rejects invalid text read arguments before canonical reads: %j",
+		async (args) => {
+			await expect(
+				readContributionAgentTool(conn, item, "article_text", args),
+			).rejects.toThrow();
+			expect(mocks.article).not.toHaveBeenCalled();
+		},
+	);
 });

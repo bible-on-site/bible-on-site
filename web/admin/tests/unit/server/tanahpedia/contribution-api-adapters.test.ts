@@ -22,6 +22,28 @@ vi.mock("~/server/tanahpedia/contribution-specials.server", () => ({
 }));
 const id = "00000000-0000-4000-8000-000000000001",
 	nameId = "00000000-0000-4000-8000-000000000002";
+it("adds API5 through an explicit identity4→5 adapter without content reads", async () => {
+	const contract = currentContributionApiContract({} as never);
+	const operation = {
+		kind: "metadata",
+		targetId: id,
+		before: { displayName: "Old" },
+		after: { displayName: "New" },
+		labels: {},
+		personNames: [],
+	};
+	const result = await convertApiVersionAsync(
+		[operation] as unknown,
+		4,
+		5,
+		contract.adapters,
+	);
+	expect(result.payload).toEqual([operation]);
+	expect(result.steps).toEqual([
+		{ from: 4, to: 5, id: "article-link-operations" },
+	]);
+	expect(mocks.read).not.toHaveBeenCalled();
+});
 const legacy = {
 	kind: "metadata",
 	targetId: id,
