@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 
 const API_TIMEOUT = 30000;
 const MODEL_TIMEOUT = 120000;
+const FINAL_RESERVE = 45000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const loopback = (host) => ["localhost", "127.0.0.1", "[::1]"].includes(host);
 const adminHosts = new Set(["admin.xn--febl3a.co.il", "admin.xn--febl3a.com"]);
@@ -14,7 +15,7 @@ const adminHosts = new Set(["admin.xn--febl3a.co.il", "admin.xn--febl3a.com"]);
 const AWS_ACCOUNT = "250598594267", // nosemgrep: generic.secrets.security.detected-aws-account-id.detected-aws-account-id
 	AWS_REGION = "il-central-1";
 const executeFile = promisify(execFile);
-export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v4";
+export const CONTRIBUTION_WORKER_RUNTIME_VERSION = "tanahpedia-worker-v5";
 const workerTasks = ["issue_implementation", "pr_resolution"];
 function parseJson(content, message) {
 	try {
@@ -512,7 +513,8 @@ export function createContributionWorker(
 						}),
 					},
 				];
-				const receipts = [],
+				const research = new Map(),
+					receipts = [],
 					tools = bundle.tools.map((tool) => ({
 						type: "function",
 						function: {
@@ -552,51 +554,55 @@ export function createContributionWorker(
 					remainingBudget();
 					return { body, message: nativeModelMessage(body, bundle) };
 				};
+				const finalize = async () => {
+					// Native parameter decoding can drop JSON-schema constraints.
+					// Only this separate final request receives the full result schema.
+					const final = await infer(
+						[
+							...messages,
+							{
+								role: "user",
+								content:
+									"Now return only the final result object matching the supplied JSON response schema. Preserve the original task and all unrequested fields; do not wrap the result in an action object. Ground facts in actual source/tool data and original human feedback, not unverified preliminary research prose. Copy requested verbatim text directly from the original human text rather than your research draft.",
+							},
+						],
+						{ format: agentResultSchema(schema) },
+					);
+					if (final.message.tool_calls?.length)
+						throw new Error("Unexpected tool call during final generation");
+					const output = parseJson(
+						final.message.content,
+						"Invalid local model response",
+					);
+					if (!object(output)) throw new Error("Invalid local model response");
+					remainingBudget();
+					const result = await api(
+						"complete",
+						{
+							...identity,
+							receipts,
+							content: canonical(output),
+							model:
+								typeof final.body.model === "string"
+									? final.body.model
+									: job.model || options.model,
+						},
+						executionSignal,
+					);
+					return {
+						status: "completed",
+						issueId: job.issueId,
+						prIds: result.prIds,
+					};
+				};
 				while (true) {
+					// This reserves time inside the original deadline; it does not
+					// cancel, retry or extend an in-flight model request.
+					if (remainingBudget() <= FINAL_RESERVE) return await finalize();
 					const { message } = await infer(messages, { tools });
 					messages.push(message);
-					if (!message.tool_calls?.length) {
-						// Native parameter decoding can drop JSON-schema constraints.
-						// Only this separate final request receives the full result schema.
-						const final = await infer(
-							[
-								...messages,
-								{
-									role: "user",
-									content:
-										"Now return only the final result object matching the supplied JSON response schema. Preserve the original task and all unrequested fields; do not wrap the result in an action object.",
-								},
-							],
-							{ format: agentResultSchema(schema) },
-						);
-						if (final.message.tool_calls?.length)
-							throw new Error("Unexpected tool call during final generation");
-						const output = parseJson(
-							final.message.content,
-							"Invalid local model response",
-						);
-						if (!object(output))
-							throw new Error("Invalid local model response");
-						remainingBudget();
-						const result = await api(
-							"complete",
-							{
-								...identity,
-								receipts,
-								content: canonical(output),
-								model:
-									typeof final.body.model === "string"
-										? final.body.model
-										: job.model || options.model,
-							},
-							executionSignal,
-						);
-						return {
-							status: "completed",
-							issueId: job.issueId,
-							prIds: result.prIds,
-						};
-					}
+					if (!message.tool_calls?.length) return await finalize();
+					let repeated = true;
 					for (const call of message.tool_calls) {
 						remainingBudget();
 						const read = await api(
@@ -613,6 +619,17 @@ export function createContributionWorker(
 						if (!object(read) || !read.receipt || !Object.hasOwn(read, "data"))
 							throw new Error("Invalid agent context response");
 						agentResultSchema(read.schema);
+						const query = canonical({
+							name: call.function.name,
+							arguments: call.function.arguments,
+						});
+						const facts = createHash("sha256")
+							.update(canonical({ data: read.data, schema: read.schema }))
+							.digest("hex");
+						// Compare the latest facts: A -> B -> A is a current change,
+						// even though an older response also contained A.
+						if (research.get(query) !== facts) repeated = false;
+						research.set(query, facts);
 						receipts.push(read.receipt);
 						schema = read.schema;
 						messages.push({
@@ -622,6 +639,9 @@ export function createContributionWorker(
 							content: canonical(read.data),
 						});
 					}
+					// Every read still ran and entered history. Only a whole batch
+					// adding no new trusted facts/schema ends the research phase.
+					if (repeated) return await finalize();
 				}
 			}
 			const timeout = AbortSignal.timeout(MODEL_TIMEOUT);

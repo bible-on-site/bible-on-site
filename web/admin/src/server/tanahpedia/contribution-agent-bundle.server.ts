@@ -14,7 +14,7 @@ import {
 } from "./family-api-spec";
 
 /** Bump when instructions or tool semantics change, independently of API data migrations. */
-export const CONTRIBUTION_AGENT_BUNDLE_VERSION = "tanahpedia-agents-v8";
+export const CONTRIBUTION_AGENT_BUNDLE_VERSION = "tanahpedia-agents-v9";
 const object = (properties: Record<string, unknown>, required: string[]) => ({
 	type: "object",
 	additionalProperties: false,
@@ -47,6 +47,7 @@ export function buildContributionAgentBundle(): ContributionAgentBundle {
 			"A requested field correction on an existing PR uses outcome revised and draft with that correction. Keep the PR's existing target IDs and unrequested operation fields. Clarification means missing evidence or unresolved identity after reading the available feedback; it has no draft or pullRequests. Never combine a clarification outcome with proposed edits.",
 			"Write titles, descriptions and responses in Hebrew. Use plain Hebrew source references separated by spaces, ASCII hyphens/quotes, and integer YYYYMMDD dates.",
 			"When a human explicitly requests quoted text verbatim in a supported editable field, copy that text exactly byte-for-byte, preserving its spelling, punctuation, whitespace and Unicode characters. Do not translate, paraphrase, correct or normalize it. Preserve all unrequested fields.",
+			"Repeated identical trusted reads do not add evidence. When research repeats unchanged information or the reserved final-answer phase begins, finish from the verified context already supplied instead of requesting more read tools. If evidence or identity is still missing, return clarification naming what is missing rather than inventing facts.",
 			"Supported special operations: parent_child, union, place, metadata, entry (empty body metadata only), alias_mapping (complete destination set), source_reference (existing evidence only). Additional operations and fields follow in operationGuide.",
 			'Issue result: {"outcome":"implemented","summary":"...","responses":[{"commentId":"...","status":"addressed|needs_input","body":"..."}],"pullRequests":[{"title":"...","description":"...","evidenceIndexes":[0],"changes":[{"kind":"...","targetId":"existing ID only","after":{}}]}]}. Split independent changes into 1-5 proposals.',
 			'PR result: {"outcome":"revised","summary":"...","responses":[...],"draft":{"title":"optional replacement","description":"optional replacement","evidenceIndexes":[0],"changes":[...]}}. Omitted draft fields preserve current values. The changes array replaces the entire proposal sequence, so retain unrequested operations.',

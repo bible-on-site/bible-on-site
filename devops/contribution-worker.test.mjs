@@ -325,6 +325,14 @@ test("native API five batches keep real tool history, ordered receipts and the f
 	);
 	assert.deepEqual(fixture.models.at(-1).body.format, finalSchema);
 	assert.equal(fixture.models.at(-1).body.tools, undefined);
+	assert.match(
+		fixture.models.at(-1).body.messages.at(-1).content,
+		/Ground facts in actual source\/tool data and original human feedback/,
+	);
+	assert.match(
+		fixture.models.at(-1).body.messages.at(-1).content,
+		/Copy requested verbatim text directly from the original human text rather than your research draft/,
+	);
 	assert.deepEqual(fixture.completed[0].receipts, [
 		receipt1,
 		receipt2,
@@ -346,7 +354,226 @@ test("native API five batches keep real tool history, ordered receipts and the f
 		assert.equal(model.body.truncate, false);
 		assert.equal(model.body.shift, false);
 	}
-	assert.equal(fixture.calls[0].body.runtimeVersion, "tanahpedia-worker-v4");
+	assert.equal(fixture.calls[0].body.runtimeVersion, "tanahpedia-worker-v5");
+});
+
+test("an unchanged whole research batch enters final format with every actual read and receipt", async () => {
+	const schema = actionSchema(),
+		data = { items: [{ id: "known", body: "Private source" }], total: 1 },
+		fixture = agentFixture({
+			replies: [
+				nativeReply("", [
+					readCall("discussion", { source: "item", cursor: 0 }, "first"),
+				]),
+				nativeReply("", [
+					readCall("discussion", { cursor: 0, source: "item" }, "second"),
+				]),
+				nativeReply('{"outcome":"unchanged"}'),
+			],
+			contexts: [
+				{ data, schema, receipt: { id: "first", at: "earlier" } },
+				{
+					data: { total: 1, items: data.items },
+					schema: { oneOf: schema.oneOf, type: "object" },
+					receipt: { id: "second", at: "later" },
+				},
+			],
+		});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.models.length, 3);
+	assert.equal(fixture.reads.length, 2);
+	assert.equal(fixture.models[2].body.tools, undefined);
+	assert.deepEqual(
+		fixture.models[2].body.format,
+		schema.oneOf[0].properties.result,
+	);
+	assert.deepEqual(
+		fixture.completed[0].receipts.map((receipt) => receipt.id),
+		["first", "second"],
+	);
+	assert.deepEqual(
+		fixture.models[2].body.messages.map((message) => message.role),
+		["system", "user", "assistant", "tool", "assistant", "tool", "user"],
+	);
+	assert.equal(
+		fixture.models[2].body.messages.filter((message) => message.role === "tool")
+			.length,
+		2,
+	);
+	assert.equal(fixture.releases.length, 1);
+	assert.equal(fixture.failed.length, 0);
+	assert.equal(new Set(fixture.models.map((model) => model.signal)).size, 1);
+});
+
+test("a mixed repeated/new batch finishes all reads and continues research", async () => {
+	const bundle = agentBundle({
+		tools: ["discussion", "history"].map((name) => ({
+			name,
+			description: "Read",
+			inputSchema: { type: "object" },
+		})),
+	});
+	const fixture = agentFixture({
+		bundle,
+		replies: [
+			nativeReply("", [readCall()]),
+			nativeReply("", [
+				readCall("discussion", {}, "again"),
+				readCall("history", {}, "new"),
+			]),
+			nativeReply("Ready"),
+			nativeReply('{"outcome":"unchanged"}'),
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.reads.length, 3);
+	assert.equal(fixture.models.length, 4);
+	assert.ok(fixture.models[2].body.tools);
+	assert.equal(
+		fixture.models[2].body.messages.filter((message) => message.role === "tool")
+			.length,
+		3,
+	);
+	assert.equal(fixture.completed[0].receipts.length, 3);
+});
+
+test("changed trusted data or admissible schema remains new information for the same call", async () => {
+	for (const changed of ["data", "schema"]) {
+		const first = {
+			data: { record: { value: 1 } },
+			schema: actionSchema(),
+			receipt: { id: "first" },
+		};
+		const second = {
+			data: { record: { value: changed === "data" ? 2 : 1 } },
+			schema:
+				changed === "schema"
+					? actionSchema({
+							type: "object",
+							oneOf: [
+								{
+									type: "object",
+									properties: {
+										outcome: { const: "unchanged" },
+										newField: { type: "string" },
+									},
+								},
+							],
+						})
+					: actionSchema(),
+			receipt: { id: "second" },
+		};
+		const fixture = agentFixture({
+			contexts: [first, second],
+			replies: [
+				nativeReply("", [readCall()]),
+				nativeReply("", [readCall()]),
+				nativeReply("Ready"),
+				nativeReply('{"outcome":"unchanged"}'),
+			],
+		});
+		assert.equal((await fixture.run()).status, "completed", changed);
+		assert.equal(fixture.models.length, 4, changed);
+		assert.ok(fixture.models[2].body.tools, changed);
+		assert.deepEqual(
+			fixture.models[3].body.format,
+			second.schema.oneOf[0].properties.result,
+		);
+		assert.equal(fixture.reads.length, 2);
+	}
+});
+
+test("a current value reverting to an older value remains new information", async () => {
+	const fixture = agentFixture({
+		contexts: [1, 2, 1].map((value, index) => ({
+			data: { value },
+			schema: actionSchema(),
+			receipt: { id: index },
+		})),
+		replies: [
+			nativeReply("", [readCall()]),
+			nativeReply("", [readCall()]),
+			nativeReply("", [readCall()]),
+			nativeReply("Ready"),
+			nativeReply('{"outcome":"unchanged"}'),
+		],
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.models.length, 5);
+	assert.equal(fixture.reads.length, 3);
+	assert.ok(fixture.models[3].body.tools);
+	assert.equal(fixture.models[4].body.tools, undefined);
+});
+
+test("repeated unknown context can finalize as clarification without invented changes", async () => {
+	const result = {
+			outcome: "clarification",
+			summary: "Missing source",
+			responses: [],
+		},
+		schema = actionSchema({
+			type: "object",
+			oneOf: [
+				{ type: "object", properties: { outcome: { const: "clarification" } } },
+			],
+		});
+	const fixture = agentFixture({
+		job: { schema },
+		contexts: [1, 2].map((id) => ({
+			data: { record: null },
+			schema,
+			receipt: { id },
+		})),
+		replies: (body) =>
+			nativeReply(
+				body.format ? JSON.stringify(result) : "",
+				body.format ? undefined : [readCall()],
+			),
+	});
+	assert.equal((await fixture.run()).status, "completed");
+	assert.equal(fixture.models.length, 3);
+	assert.equal(fixture.reads.length, 2);
+	assert.deepEqual(JSON.parse(fixture.completed[0].content), result);
+	assert.equal(fixture.completed[0].receipts.length, 2);
+});
+
+test("the soft final reserve redirects only the next planning call inside the original deadline", async () => {
+	for (const remaining of [45000, 45001]) {
+		let clock = 0;
+		const fixture = agentFixture({
+			now: () => clock,
+			replies: (body, number) => {
+				if (number === 1) {
+					clock = 120000 - remaining;
+					return nativeReply("", [readCall()]);
+				}
+				return nativeReply(body.format ? '{"outcome":"unchanged"}' : "Ready");
+			},
+		});
+		assert.equal((await fixture.run()).status, "completed");
+		assert.equal(fixture.models.length, remaining === 45000 ? 2 : 3);
+		assert.equal(Boolean(fixture.models[1].body.format), remaining === 45000);
+		assert.equal(fixture.models[1].body.keep_alive, `${remaining}ms`);
+		assert.equal(new Set(fixture.models.map((model) => model.signal)).size, 1);
+		assert.equal(fixture.releases.length, 1);
+		assert.equal(fixture.failed.length, 0);
+	}
+});
+
+test("a failed final after repeated reads is acknowledged and unloaded without retry", async () => {
+	const fixture = agentFixture({
+		replies: (body) => {
+			if (body.format) throw new Error("Final unavailable");
+			return nativeReply("", [readCall()]);
+		},
+	});
+	assert.equal((await fixture.run()).error, "Final unavailable");
+	assert.equal(fixture.models.length, 3);
+	assert.equal(fixture.reads.length, 2);
+	assert.equal(fixture.completed.length, 0);
+	assert.equal(fixture.failed.length, 1);
+	assert.equal(fixture.releases.length, 1);
+	assert.ok(fixture.calls.at(-2).target.endsWith("/fail"));
 });
 
 test("native residency reuses one original deadline, then releases the requested model after completion", async (t) => {
@@ -1023,10 +1250,10 @@ globalThis.fetch = async (url, request) => {
     if (!/^[1-9][0-9]*ms$/.test(body.keep_alive) || Number.parseInt(body.keep_alive,10)>120000) throw Error('Invalid model residency');
     if (models===2 && (body.messages.at(-1).role!=='tool' || !body.messages.at(-1).content.includes(fixture.marker))) throw Error('Native history was lost');
     if (models===3 && (body.tools || JSON.stringify(body.format)!==JSON.stringify(fixture.job.schema.oneOf[0].properties.result))) throw Error('Typed format was changed');
-    return Response.json({done:true,done_reason:'stop',prompt_eval_count:100,model:'untrusted-provider-model',message:{role:'assistant',content:models===1?'':models===2?'Ready':JSON.stringify(fixture.result),...(models===1?{tool_calls:[{id:'one',function:{name:'discussion',arguments:{}}}]}:{})}});
+    return Response.json({done:true,done_reason:'stop',prompt_eval_count:100,model:'untrusted-provider-model',message:{role:'assistant',content:models<=2?'':JSON.stringify(fixture.result),...(models<=2?{tool_calls:[{id:models===1?'one':'two',function:{name:'discussion',arguments:{}}}]}:{})}});
   }
   if (path.endsWith('/complete')) {
-    if(models!==3 || body.receipts.length!==1 || JSON.parse(body.content).outcome!=='unchanged') throw Error('Invalid native completion');
+    if(models!==3 || body.receipts.length!==2 || JSON.parse(body.content).outcome!=='unchanged') throw Error('Invalid native completion');
     completed = true;console.log('native_fixture_verified');return Response.json({prIds:[]});
   }
   if (path.endsWith('/fail')) return Response.json({updated:true});
