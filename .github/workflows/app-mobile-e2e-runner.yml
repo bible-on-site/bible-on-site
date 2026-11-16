@@ -90,9 +90,9 @@ jobs:
       # is pinned by the root global.json, which must stay identical to this.
       DOTNET_SDK_VERSION: "11.0.100"
       # .NET 11 workload sets are band-scoped to 11.0.1xx; 11.0.100.1 is the
-      # band's first set and selects iOS 27.2 (Xcode 27.2 required) — the
-      # xcode-27 image's newest Xcode_27* is selected below; #2566 tracked the
-      # earlier deferral while the image lagged.
+      # band's first set and selects iOS 27.2 (Xcode 27.2 required exactly —
+      # newer 27.x betas are rejected) — the matching Xcode_27.2* is pinned
+      # below; #2566 tracked the earlier deferral while the image lagged.
       MAUI_WORKLOAD_SET: "11.0.100.1"
       # The Android legs pin the same 11.0.100.1 set: it ships Android SDK
       # 37.2.x, which honors AndroidR8ObfuscationMode and emits the r8.json
@@ -184,10 +184,13 @@ jobs:
 
       - name: Select compatible Xcode
         if: inputs.platform == 'iOS'
-        # The .NET 11 iOS workload (27.2.x) requires the newest Xcode 27.x the
-        # image carries; sort -V picks 27.2 over 27.0 when both are present.
+        # The .NET 11 iOS workload (27.2.x) requires Xcode 27.2 exactly; the
+        # xcode-27 image also carries newer 27.x betas that the workload
+        # rejects, so pin the 27.2 minor rather than taking the newest 27.x.
         run: |
-          XCODE_DIR="$(ls -d /Applications/Xcode_27*.app | sort -V | tail -1)/Contents/Developer"
+          XCODE_APP="$(ls -d /Applications/Xcode_27.2*.app 2>/dev/null | sort -V | tail -1)"
+          [ -n "$XCODE_APP" ] || { echo "::error::Xcode 27.2 not found in /Applications — required by the pinned iOS 27.2 workload"; exit 1; }
+          XCODE_DIR="$XCODE_APP/Contents/Developer"
           sudo xcode-select --switch "$XCODE_DIR"
           echo "DEVELOPER_DIR=$XCODE_DIR" >> "$GITHUB_ENV"
 
