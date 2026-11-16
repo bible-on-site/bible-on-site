@@ -434,16 +434,7 @@ public partial class MoedPage : ContentPage, IQueryAttributable, IAnalyticsScree
     {
         // Match the other readers' foreground-first policy: a focused pasuk
         // owns Back before the commentary sheet covered by its overlay (#3307).
-        var owner = ReaderBackPolicy.Resolve(
-            exitFullScreenVisible: ExitFullScreenButton.IsVisible,
-            unitPickerOpen: false,
-            fanMenuOpen: FanMenu.IsOpen,
-            menuOverlayOpen: false,
-            chapterSearchOpen: false,
-            focusedPasuk: _focusedPasuk != null,
-            perushimSheetOpen: PerushimPanel.IsOpen,
-            selectionSurfacesActive: ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
-                _unitRecitationSelection, focusedPasuk: false, Recitation.Cursor.PlayingKey != null));
+        var owner = ResolveBackOwner();
         switch (owner)
         {
             case ReaderBackSurface.ExitFullScreen:
@@ -463,6 +454,23 @@ public partial class MoedPage : ContentPage, IQueryAttributable, IAnalyticsScree
                 return false;
         }
     }
+
+    /// <summary>
+    /// The transient surface that owns input right now, in the shared
+    /// foreground-first order — <see cref="ReaderBackSurface.None"/> means a
+    /// plain Back falls through to navigation and PgUp/PgDn may step units
+    /// (#2766).
+    /// </summary>
+    private ReaderBackSurface ResolveBackOwner() => ReaderBackPolicy.Resolve(
+        exitFullScreenVisible: ExitFullScreenButton.IsVisible,
+        unitPickerOpen: false,
+        fanMenuOpen: FanMenu.IsOpen,
+        menuOverlayOpen: false,
+        chapterSearchOpen: false,
+        focusedPasuk: _focusedPasuk != null,
+        perushimSheetOpen: PerushimPanel.IsOpen,
+        selectionSurfacesActive: ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
+            _unitRecitationSelection, focusedPasuk: false, Recitation.Cursor.PlayingKey != null));
 
     /// <summary>
     /// The capsule back affordance stays enabled while any transient surface

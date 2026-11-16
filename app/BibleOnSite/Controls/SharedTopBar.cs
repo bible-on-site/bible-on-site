@@ -401,4 +401,24 @@ public class SharedTopBar : ContentView
             plainShell.FlyoutIsPresented = true;
         }
     }
+
+    /// <summary>
+    /// Focuses the first top bar's hamburger under <paramref name="root"/> —
+    /// the shared keyboard entry point every top-barred page offers (#2766).
+    /// Returns false when the tree has no usable bar, so callers can keep a
+    /// page-specific fallback.
+    /// </summary>
+    public static bool FocusNavigationButton(Element root)
+    {
+        var button = root.GetVisualTreeDescendants()
+            .OfType<SharedTopBar>()
+            .Select(topBar => topBar.NavigationButton)
+            .FirstOrDefault(button => button is { IsEnabled: true, IsVisible: true });
+        if (button is null)
+        {
+            return false;
+        }
+        button.Focus();
+        return true;
+    }
 }
