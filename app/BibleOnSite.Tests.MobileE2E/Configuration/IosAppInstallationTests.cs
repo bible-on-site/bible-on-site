@@ -238,6 +238,33 @@ public sealed class IosAppInstallationTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NormalizesTransportTimeoutsWithoutHidingUnrelatedCancellation(bool transportTimeout)
+    {
+        WithArtifacts(configuration =>
+        {
+            var failure = new TaskCanceledException("controlled transport cancellation",
+                transportTimeout ? new TimeoutException("controlled HTTP timeout") : null);
+            var handler = new Handler((_, cancellation) =>
+            {
+                Assert.False(cancellation.IsCancellationRequested);
+                return Task.FromException<HttpResponseMessage>(failure);
+            });
+            var exception = Record.Exception(() => IosAppInstallation.Prepare(configuration,
+                TimeSpan.FromMinutes(5), Environment, remaining => new HttpClient(handler) { Timeout = remaining }));
+            if (transportTimeout)
+            {
+                Assert.Same(failure, Assert.IsType<TimeoutException>(exception).InnerException);
+            }
+            else
+            {
+                Assert.Same(failure, exception);
+            }
+        });
+    }
+
     private static string? Environment(string name) => name == "MOBILE_IOS_PREPARATION_PORT" ? "47255" : new string('a', 64);
     private static HttpResponseMessage Response(HttpStatusCode status, Dictionary<string, object> body) => new(status)
     { Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json") };
