@@ -93,6 +93,8 @@ public partial class MasoraPage : ContentPage, IQueryAttributable, IAnalyticsScr
                 ExitFullscreenButton = ExitFullScreenButton,
                 ArticlesView = ArticlesCollection,
                 ReaderContent = MasoraCarousel,
+                // This reader has no ⋮ options menu — nothing to re-scope.
+                MenuPanel = null,
                 // This reader has no reading-position indicator yet.
                 ReadingProgressIndicator = null,
                 Toolbar = ReaderToolbar,

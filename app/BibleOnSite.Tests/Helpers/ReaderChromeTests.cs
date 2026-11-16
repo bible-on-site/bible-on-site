@@ -213,6 +213,14 @@ public class ReaderChromeTests
         public void RaiseSelected(Article article) => _articleSelected?.Invoke(this, article);
     }
 
+    private sealed class FakeMenuPanel : IReaderMenuSurface
+    {
+        // A backing field keeps Codacy's cross-file view honest — the
+        // coordinator assigns through the interface, which S3459 misses.
+        private bool _isArticlesMode;
+        public bool IsArticlesMode { get => _isArticlesMode; set => _isArticlesMode = value; }
+    }
+
     /// <summary>
     /// The rig every reader page constructs in its SetupReaderChrome: the same
     /// surface wiring, with fake bar/sheet/articles and real fan controls.
@@ -222,6 +230,8 @@ public class ReaderChromeTests
         public readonly FakeBottomBar BottomBar = new();
         public readonly FakePerushimSheet Sheet = new();
         public readonly FakeArticlesView Articles = new();
+        public readonly FakeMenuPanel Menu = new();
+        public bool IncludeMenuPanel { get; init; } = true;
         public readonly ReaderFanMenu Fan = new();
         public readonly ReaderFanMenuSatellite Prev = new();
         public readonly ReaderFanMenuSatellite Next = new();
@@ -268,6 +278,7 @@ public class ReaderChromeTests
                     ExitFullscreenButton = ExitButton,
                     ArticlesView = Articles,
                     ReaderContent = Content,
+                    MenuPanel = IncludeMenuPanel ? Menu : null,
                     ReadingProgressIndicator = includeProgressIndicator ? Progress : null,
                     Toolbar = Toolbar,
                     Host = Host,
@@ -455,6 +466,7 @@ public class ReaderChromeTests
                 ExitFullscreenButton = rig.ExitButton,
                 ArticlesView = rig.Articles,
                 ReaderContent = rig.Content,
+                MenuPanel = rig.Menu,
                 ReadingProgressIndicator = rig.Progress,
                 Toolbar = rig.Toolbar,
                 Host = rig.Host,
@@ -495,6 +507,93 @@ public class ReaderChromeTests
         rig.Articles.IsVisible.Should().BeFalse();
         rig.Content.IsVisible.Should().BeTrue();
         rig.BottomBar.IsArticlesActive.Should().BeFalse();
+    }
+
+    // — ⋮ menu content mode (issue #3401) ———————————————————————————————————
+
+    [Fact]
+    public void ArticlesButton_ShowsArticles_PutsTheMenuInArticlesMode()
+    {
+        var rig = new Rig();
+        _ = rig.CreateChrome();
+        rig.Menu.IsArticlesMode.Should().BeFalse("the menu starts on scripture actions");
+
+        rig.BottomBar.RaiseArticles();
+
+        rig.Menu.IsArticlesMode.Should().BeTrue(
+            "in articles mode the menu shows only הסתר שם השם — the scripture reading modes do not apply (#3401)");
+    }
+
+    [Fact]
+    public void TextButton_FromArticles_RestoresTheScriptureMenu()
+    {
+        var rig = new Rig();
+        _ = rig.CreateChrome();
+        rig.BottomBar.RaiseArticles();
+        rig.Menu.IsArticlesMode.Should().BeTrue();
+
+        rig.BottomBar.RaiseTextMode();
+
+        rig.Menu.IsArticlesMode.Should().BeFalse(
+            "returning to the perek view restores the full scripture menu — hiding rows never reset the saved modes (#3401)");
+    }
+
+    [Fact]
+    public void ArticlesButton_WhenReloadThrows_KeepsTheScriptureMenu()
+    {
+        var rig = new Rig();
+        _ = new ReaderChrome(
+            new ReaderChromeSurfaces
+            {
+                BottomBar = rig.BottomBar,
+                PerushimSheet = rig.Sheet,
+                FanMenu = rig.Fan,
+                PreviousSatellite = rig.Prev,
+                NextSatellite = rig.Next,
+                ExitFullscreenButton = rig.ExitButton,
+                ArticlesView = rig.Articles,
+                ReaderContent = rig.Content,
+                MenuPanel = rig.Menu,
+                ReadingProgressIndicator = rig.Progress,
+                Toolbar = rig.Toolbar,
+                Host = rig.Host,
+                ContentArea = rig.ContentArea,
+            },
+            new ReaderChromeActions
+            {
+                ReloadArticlesAsync = () => throw new InvalidOperationException("service down"),
+                CurrentUnit = () => rig.Unit,
+                SelectArticle = _ => { },
+                CanGoPrevious = () => true,
+                CanGoNext = () => true,
+                IsSelectableUnit = _ => true,
+                CurrentUnitId = () => 1,
+                NavigateToUnitAsync = _ => Task.CompletedTask,
+            });
+
+        FluentActions.Invoking(() => rig.BottomBar.RaiseArticles()).Should().NotThrow();
+
+        rig.Menu.IsArticlesMode.Should().BeFalse(
+            "a failed articles load never swapped the surfaces — the menu still serves the visible scripture (#3401)");
+    }
+
+    [Fact]
+    public void ArticlesButton_WithoutMenuPanel_StillSwapsViews()
+    {
+        var rig = new Rig { IncludeMenuPanel = false };
+        var chrome = rig.CreateChrome();
+
+        rig.BottomBar.RaiseArticles();
+
+        chrome.IsShowingArticles.Should().BeTrue();
+        rig.Articles.IsVisible.Should().BeTrue(
+            "readers with no ⋮ menu (masora, moed) keep the swap unchanged (#3401)");
+
+        rig.BottomBar.RaiseTextMode();
+
+        chrome.IsShowingArticles.Should().BeFalse();
+        rig.Articles.IsVisible.Should().BeFalse(
+            "the return to scripture must not trip on the missing menu surface either (#3401)");
     }
 
     // — Reading-progress placement (issue #3364) ———————————————————————————
