@@ -406,18 +406,22 @@ partial class Build
     }
 
     /// <summary>
-    /// Documents which bundled arm64 libraries ship without debug symbols —
-    /// .NET/Android runtime libraries are stripped-only upstream, and Play
-    /// accepts partial coverage. Reported honestly instead of claiming
-    /// complete symbol coverage (#2970).
+    /// Reports unavailable symbols separately from SDK-generated data stores.
+    /// Partial coverage remains explicit instead of claiming completeness (#2970).
     /// </summary>
     static void LogSymbolCoverage(IReadOnlyList<string> uncovered)
     {
-        if (uncovered.Count > 0)
+        var missing = uncovered.Where(name => !AndroidNativeSymbols.IsDataContainer(name)).ToArray();
+        if (missing.Length > 0)
         {
             Serilog.Log.Warning(
-                $"No debug symbols for {uncovered.Count} bundled arm64 libraries shipped stripped-only " +
-                $"by the .NET/Android runtime: {string.Join(", ", uncovered)}");
+                $"No matching native debug symbols supplied locally or by the public Microsoft symbol server " +
+                $"for {missing.Length} bundled arm64 libraries: {string.Join(", ", missing)}");
+        }
+        var data = uncovered.Where(AndroidNativeSymbols.IsDataContainer).ToArray();
+        if (data.Length > 0)
+        {
+            Serilog.Log.Information($"Excluded SDK assembly-store data from native debug symbols: {string.Join(", ", data)}");
         }
     }
 
