@@ -504,7 +504,7 @@ public partial class MasoraPage
         _focusedClipEnd = row.ClipEndIndex;
         // A double tap's first press paused this row's preview through the
         // shared toggle — opening its focused view resumes it.
-        if (_recitation?.PlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused &&
+        if (_recitation?.PlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused or RecitationPlaybackState.Buffering &&
             Recitation.Cursor.ResumesOnPasukFocus($"pasuk:{row.PerekId}:{row.PasukNum}",
                 _recitation.PlayerState == RecitationPlaybackState.Playing))
         {
@@ -768,7 +768,7 @@ public partial class MasoraPage
         var recitationVisual =
             RecitationPlayerState == RecitationPlaybackState.Playing && Recitation.Cursor.BarIssued
                 ? ReaderSelectionBar.RecitationVisual.Pause
-                : RecitationPlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused
+                : RecitationPlayerState is RecitationPlaybackState.Playing or RecitationPlaybackState.Paused or RecitationPlaybackState.Buffering
                     ? ReaderSelectionBar.RecitationVisual.Resume : ReaderSelectionBar.RecitationVisual.Play;
         var hint = Recitation.Busy ? "טוען את הקלטת הפרשה..." :
             !_viewModel.HasCurrentUnitRecitation ? "אין הקלטה לפרשה זו - הורידו את הקלטות הספר בהעדפות" :

@@ -82,15 +82,8 @@ public static class MasoraUnitText
         unit.Ranges.SelectMany(range => PerekSlicesForRange(range)).ToList();
 
     /// <summary>Distinct perek ids a unit's ranges overlap, in first-appearance order.</summary>
-    public static List<int> PerekIdsForUnit(MasoraUnit unit)
-    {
-        var seen = new HashSet<int>();
-        foreach (var slice in PerekSlicesForUnit(unit))
-        {
-            seen.Add(slice.PerekId);
-        }
-        return seen.ToList();
-    }
+    public static List<int> PerekIdsForUnit(MasoraUnit unit) =>
+        PerekSlicesForUnit(unit).Select(slice => slice.PerekId).Distinct().ToList();
 
     /// <summary>Whether a unit's primary ranges span more than one canonical perek.</summary>
     public static bool IsMultiPerek(MasoraUnit unit) => PerekIdsForUnit(unit).Count > 1;

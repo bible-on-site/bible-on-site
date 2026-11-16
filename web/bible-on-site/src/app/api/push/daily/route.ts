@@ -2,6 +2,10 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { resolveCalendarDay } from "@/data/learning-schedule";
 import {
+	MAX_JSON_BODY_BYTES,
+	readBoundedJson,
+} from "@/lib/bounded-json";
+import {
 	isPushServiceEndpoint,
 	isWebPushConfigured,
 	sendDailyPerek,
@@ -10,34 +14,6 @@ import { getCurrentDate } from "@/util/date";
 import { constructTsetAwareHDate } from "@/util/hebdates-util";
 
 export const dynamic = "force-dynamic";
-
-/** A targeting body of `{"endpoint": "<url>"}` is well under 1 KB. */
-const MAX_BODY_BYTES = 4 * 1024;
-
-/**
- * Read the optional targeting body. An empty body is the broadcast path;
- * anything non-empty must be well-formed JSON within the size limit, so a
- * malformed request can never silently broadcast to every subscriber.
- */
-async function readBody(
-	request: Request,
-): Promise<{ ok: boolean; body: unknown }> {
-	let text: string;
-	try {
-		text = await request.text();
-	} catch {
-		console.warn("Push daily request body read failed");
-		return { ok: false, body: null };
-	}
-	if (text.length === 0) return { ok: true, body: undefined };
-	if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES)
-		return { ok: false, body: null };
-	try {
-		return { ok: true, body: JSON.parse(text) };
-	} catch {
-		return { ok: false, body: null };
-	}
-}
 
 const digest = (value: string) => createHash("sha256").update(value).digest();
 
@@ -73,10 +49,17 @@ export async function POST(request: Request) {
 	if (!isAuthorized(request)) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
-	const parsed = await readBody(request);
-	const body = parsed.body;
+	// An empty body is the broadcast path; anything non-empty must be
+	// well-formed JSON within the size limit, so a malformed request can
+	// never silently broadcast to every subscriber.
+	const result = await readBoundedJson(request, MAX_JSON_BODY_BYTES);
+	if (result.status === "unreadable") {
+		console.warn("Push daily request body read failed");
+	}
+	const ok = result.status === "parsed" || result.status === "empty";
+	const body = result.status === "parsed" ? result.value : undefined;
 	if (
-		!parsed.ok ||
+		!ok ||
 		(body !== undefined &&
 			(body === null || typeof body !== "object" || Array.isArray(body)))
 	) {

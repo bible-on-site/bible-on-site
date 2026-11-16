@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { parse } from "yaml";
 import { checkDeployment, newerVersion } from "./check-deployment.mjs";
 
 const sha = "a".repeat(40);
@@ -170,6 +171,27 @@ test("API failures are never interpreted as permission to deploy", () => {
 			}),
 		/API unavailable/,
 	);
+});
+
+test("app deployment grants reusable workflows their declared permissions", () => {
+	const readWorkflow = (file) =>
+		parse(
+			readFileSync(
+				new URL(`../../../.github/workflows/${file}`, import.meta.url),
+				"utf8",
+			),
+		);
+	const workflow = readWorkflow("cd-app.yml");
+	for (const [name, job] of Object.entries(workflow.jobs)) {
+		const localWorkflow = job.uses?.match(/^\.\/\.github\/workflows\/(.+)$/);
+		if (!localWorkflow) continue;
+		const called = readWorkflow(localWorkflow[1]);
+		assert.deepEqual(
+			job.permissions ?? workflow.permissions,
+			called.permissions,
+			`${name} must allow the called workflow without granting extra permissions`,
+		);
+	}
 });
 
 for (const file of [

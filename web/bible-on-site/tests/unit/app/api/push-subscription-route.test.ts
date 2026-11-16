@@ -85,8 +85,15 @@ describe("/api/push/subscription", () => {
 		async (method) => {
 			const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
 			const handler = method === "POST" ? POST : DELETE;
-			const req = request(method, subscription);
-			jest.spyOn(req, "text").mockRejectedValue(privateFailure());
+			const req = new Request("http://localhost/api/push/subscription", {
+				method,
+				body: new ReadableStream<Uint8Array>({
+					start(controller) {
+						controller.error(privateFailure());
+					},
+				}),
+				duplex: "half",
+			} as RequestInit);
 			expect((await handler(req)).status).toBe(400);
 			expect(mockSave).not.toHaveBeenCalled();
 			expect(mockDelete).not.toHaveBeenCalled();

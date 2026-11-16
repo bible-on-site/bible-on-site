@@ -34,15 +34,8 @@ public static class MoedUnitText
             .SelectMany(PerekSlicesForSection).ToList();
 
     /// <summary>Distinct perek ids the moed's readings overlap, in first-appearance order.</summary>
-    public static List<int> PerekIdsForUnit(MoedUnit moed)
-    {
-        var seen = new HashSet<int>();
-        foreach (var slice in PerekSlicesForUnit(moed))
-        {
-            seen.Add(slice.PerekId);
-        }
-        return seen.ToList();
-    }
+    public static List<int> PerekIdsForUnit(MoedUnit moed) =>
+        PerekSlicesForUnit(moed).Select(slice => slice.PerekId).Distinct().ToList();
 
     /// <summary>
     /// Formats a section's ordered ranges as canonical references joined for

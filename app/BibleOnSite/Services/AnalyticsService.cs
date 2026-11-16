@@ -27,7 +27,11 @@ public sealed class AnalyticsService : IAnalyticsService
 		false;
 #endif
 
-	public void SetScreen(string screenName, string? screenClassOverride)
+	public void SetScreen(string screenName, string? screenClassOverride) =>
+		SetScreen(screenName, screenClassOverride, null);
+
+	public void SetScreen(string screenName, string? screenClassOverride,
+		IReadOnlyDictionary<string, object>? parameters)
 	{
 #if ANDROID || IOS
 		if (!IsAvailable)
@@ -39,11 +43,8 @@ public sealed class AnalyticsService : IAnalyticsService
 		{
 			var analytics = CrossFirebaseAnalytics.Current;
 			// GA4: log screen_view event (replaces deprecated setCurrentScreen)
-			analytics.LogEvent("screen_view", new Dictionary<string, object>
-			{
-				["screen_name"] = screenName,
-				["screen_class"] = screenClassOverride ?? screenName
-			});
+			analytics.LogEvent("screen_view",
+				BuildScreenViewParams(screenName, screenClassOverride, parameters));
 		}
 		#pragma warning disable S2221 // Deliberate failure boundary: analytics event failure must never crash the reader
 		catch (Exception ex) //NOSONAR — analytics event failure must never crash the reader.
@@ -52,5 +53,35 @@ public sealed class AnalyticsService : IAnalyticsService
 			System.Diagnostics.Debug.WriteLine($"[Analytics] SetScreen failed: {ex.Message}");
 		}
 #endif
+	}
+
+	/// <summary>
+	/// GA4 screen_view params: the logical name plus the stable page-family
+	/// class, merged with public content identity (#3378). Content parameters
+	/// can never spoof the reserved screen_name/screen_class fields — the
+	/// descriptor always wins those keys.
+	/// </summary>
+	internal static Dictionary<string, object> BuildScreenViewParams(
+		string screenName, string? screenClassOverride,
+		IReadOnlyDictionary<string, object>? parameters)
+	{
+		var merged = new Dictionary<string, object>
+		{
+			["screen_name"] = screenName,
+			["screen_class"] = screenClassOverride ?? screenName,
+		};
+		if (parameters is null)
+		{
+			return merged;
+		}
+		foreach (var (key, value) in parameters)
+		{
+			if (key is "screen_name" or "screen_class")
+			{
+				continue;
+			}
+			merged[key] = value;
+		}
+		return merged;
 	}
 }
