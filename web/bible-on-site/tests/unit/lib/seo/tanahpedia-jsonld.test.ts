@@ -179,25 +179,33 @@ describe("seo/tanahpedia-jsonld", () => {
 			expect(nodeByType(empty, "DefinedTerm")?.description).toBeUndefined();
 		});
 
-		it("emits the stored entry metric on the DefinedTerm, not the entity (#2607)", () => {
+		it("emits the stored entry metric on the WebPage (CreativeWork) node (#2607)", () => {
 			const graph = buildEntryGraph({
 				...baseInput(),
 				entry: entry({
 					metric: { wordCount: 181, estimatedSeconds: 50 },
 				}),
 			});
+			// The estimate describes the page's prose, so it hangs on the
+			// CreativeWork node — the DefinedTerm and entity (Person/Place)
+			// nodes stay metric-free, never reading time "on a person".
+			const page = nodeByType(graph, "WebPage");
+			expect(page?.wordCount).toBe(181);
+			expect(page?.timeRequired).toBe("PT50S");
 			const term = nodeByType(graph, "DefinedTerm");
-			expect(term?.wordCount).toBe(181);
-			expect(term?.timeRequired).toBe("PT50S");
-			// The entity node (a Person) stays metric-free — the metric describes
-			// the entry's text, not the person.
+			expect(term?.wordCount).toBeUndefined();
+			expect(term?.timeRequired).toBeUndefined();
 			const entity = nodeByType(graph, "Person");
 			expect(entity?.wordCount).toBeUndefined();
 			expect(entity?.timeRequired).toBeUndefined();
 		});
 
 		it("omits reading metrics when the entry metric is unknown", () => {
-			const term = nodeByType(buildEntryGraph(baseInput()), "DefinedTerm");
+			const graph = buildEntryGraph(baseInput());
+			const page = nodeByType(graph, "WebPage");
+			expect(page?.wordCount).toBeUndefined();
+			expect(page?.timeRequired).toBeUndefined();
+			const term = nodeByType(graph, "DefinedTerm");
 			expect(term?.wordCount).toBeUndefined();
 			expect(term?.timeRequired).toBeUndefined();
 		});
