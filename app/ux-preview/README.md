@@ -32,9 +32,16 @@ dotnet build BibleOnSite/BibleOnSite.csproj -f net10.0-android -c Debug `
 Install the signed APK from `BibleOnSite/bin/Debug/net10.0-android/android-x64/`
 with `adb -s <emulator-serial> install -r <apk>`, then launch
 `com.tanah.daily929`. Scope every ADB command to the intended emulator.
-For live article counters, use the existing ignored
-`BibleOnSite/Resources/Raw/api-config.txt` override with the production API URL;
-without it the existing Debug local API setting and offline fallback apply.
+For live article counters, point the app at the production API with the Mono
+env override (Debug builds honor `DebugApiUrl`):
+
+```powershell
+adb -s <emulator-serial> shell setprop debug.mono.env "DebugApiUrl=https://api.xn--febl3a.com"
+```
+
+Without it the existing Debug local API setting
+(`http://10.0.2.2:3003`) and offline fallback apply; a dead local endpoint makes
+starter fetches wait on timeouts and adds main-thread load.
 
 The home screen uses the packaged scripture and the existing daily schedule.
 Verse counts are loaded from the database; article counters come from the live
@@ -90,6 +97,10 @@ python BibleOnSite.Tests.E2E/Android/home_ux_preview.py `
   --serial emulator-5564 --artifacts <output-directory>
 ```
 
+`--checks a,b` reruns only the named scenarios (each run anchors at the home
+screen). No concurrency: do not run `dotnet build` or other heavy host work
+while the harness measures gestures.
+
 The checks exercise real native controls, record screenshots, and verify toolbar
 visibility, chapter swipes, system Back, index selection, populated calendar,
 destination returns, navigation search, content-result navigation, articles after
@@ -101,3 +112,11 @@ Bible navigation selection, and return through the articles action. The explicit
 action is absent from the preview. Title surfaces and buttons share a 52dp height;
 hidden trailing actions do not reserve horizontal space.
 Keep that emulator free of manual input during the run.
+
+Latest run (2026-11-16, emulator-5554, production API): all eleven scenarios
+except `check_scroll_and_swipe` passed. Its toolbar-hide and fixed-viewport
+assertions passed, but the scroll-advance assertion was environment-blocked:
+the host's sustained skipped-frame and GC storms cancelled the injected drag,
+while identical manual swipes in quiet windows behaved correctly. Validated on
+a degraded emulator; needs one clean-CI/quiet-host run. See
+`review/verification.json` → `latest_native_run` for the full record.

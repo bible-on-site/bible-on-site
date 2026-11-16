@@ -1,16 +1,16 @@
 {
   "screen_kind_present": true,
   "authors_search_bounds": [
-    36,
-    154,
-    753,
-    291
+    70,
+    200,
+    718,
+    261
   ],
   "home_button_bounds": [
     769,
-    154,
+    162,
     906,
-    291
+    299
   ],
   "commentary_bounds": [
     33,
@@ -68,10 +68,41 @@
     "check_scroll_and_swipe",
     "check_stacked_reader_links",
     "check_destinations",
+    "check_home_tile_fills",
     "check_global_search",
+    "check_search_layout",
     "check_screen_navigation",
-    "check_reading_options"
+    "check_reading_options",
+    "check_shared_button_styles"
   ],
+  "latest_native_run": {
+    "date": "2026-11-16",
+    "serial": "emulator-5554",
+    "api_mode": "production API (debug.mono.env DebugApiUrl override); 68 authors loaded live",
+    "passed": [
+      "check_home_and_daily",
+      "check_index",
+      "check_stacked_reader_links",
+      "check_destinations",
+      "check_home_tile_fills",
+      "check_global_search",
+      "check_search_layout",
+      "check_screen_navigation",
+      "check_reading_options",
+      "check_shared_button_styles"
+    ],
+    "scroll_and_swipe": {
+      "status": "environment-blocked",
+      "passed_assertions": [
+        "controls hidden after release + 1.8s cooldown",
+        "constant viewport bounds"
+      ],
+      "blocked_assertion": "first injected drag scrolls past pasuk א",
+      "reason": "emulator/host degraded: sustained Choreographer skipped-frame storms (45-387 frames) and explicit concurrent mark compact GC bursts starve the main thread; injected 600ms swipes are coalesced/cancelled, and one window showed an input-dispatch ANR (KeyEvent BACK waited 5001ms). Identical manual swipes succeed in quiet settled states.",
+      "toolbar_logic_verified": "repeated manual swipes hide/reveal both bars with unchanged viewport in quiet host windows"
+    },
+    "limitation": "validated on a degraded emulator; needs one clean-CI/quiet-host run."
+  },
   "unit_tests_passed": 4299,
   "host_application_lines_covered": 20246,
   "host_application_lines_total": 20343,
