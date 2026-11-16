@@ -182,6 +182,7 @@ jobs:
           APP_IDENTIFIER: ${{ steps.build.outputs.app_identifier }}
           APP_VERSION: ${{ steps.build.outputs.app_version }}
           BUILD_NUMBER: ${{ steps.build.outputs.build_number }}
+          TESTFLIGHT_CHANGELOG: ${{ steps.changelog.outputs.CHANGELOG }}
         run: |
           # Listing copy is versioned in app/store-listing; refs that predate it
           # fall back to the embedded text so old-release redistributions work.
@@ -198,7 +199,24 @@ jobs:
             --beta_app_description "$BETA_DESC" \
             --beta_app_feedback_email "tanah.site@gmail.com" \
             --beta_app_review_info '{"contact_email":"tanah.site@gmail.com","contact_first_name":"Dorad","contact_last_name":"Levinshtein","contact_phone":"+372 5707 8640"}' \
-            --changelog "${{ steps.changelog.outputs.CHANGELOG }}"
+            --changelog "$TESTFLIGHT_CHANGELOG"
+
+      - name: Verify the configured group and intended Hebrew notes after distribution
+        if: ${{ steps.guard.outputs.deploy == 'true' }}
+        id: readback
+        env:
+          API_KEY_PATH: ${{ runner.temp }}/testflight-api-key.json
+          TESTFLIGHT_BETA_GROUP: ${{ secrets.TESTFLIGHT_BETA_GROUP_NAME }}
+          EXPECTED_TESTFLIGHT_NOTES_FILE: ${{ runner.temp }}/testflight-changelog.txt
+          TESTFLIGHT_RECEIPT_PATH: ${{ runner.temp }}/testflight-distribution-inspection.json
+        run: node "$RUNNER_TEMP/testflight-build.mjs" distribution-verify
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ always() && steps.guard.outputs.deploy == 'true' }}
+        with:
+          name: testflight-distribution-inspection-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/testflight-distribution-inspection.json
+          retention-days: 14
 
       - name: Record distribution result
         if: ${{ always() && steps.guard.outputs.deployment_id != '' }}
@@ -218,3 +236,5 @@ jobs:
           echo "## TestFlight Distribution Summary" >> "$GITHUB_STEP_SUMMARY"
           echo "**Version:** $MODULE_VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo "**Status:** ${{ job.status == 'success' && 'Submitted to the beta group ✅' || 'Failed ❌ — see the failing step log for the actionable cause' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**External availability:** ${{ steps.readback.outputs.external_access_verified == 'true' && 'Verified for the configured group' || 'Not verified' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Apple external state:** ${{ steps.readback.outputs.external_state || 'UNAVAILABLE' }}" >> "$GITHUB_STEP_SUMMARY"

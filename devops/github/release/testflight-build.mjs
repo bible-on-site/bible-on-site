@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { createPrivateKey, sign } from "node:crypto";
-import { appendFileSync, readFileSync } from "node:fs";
+import { createHash, createPrivateKey, sign } from "node:crypto";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { request as githubRequest } from "./deployment-state.mjs";
 
@@ -166,7 +166,12 @@ export async function findApp(metadata, read) {
 	return apps[0];
 }
 
-export async function findBuild(metadata, credentials, fetcher = fetch) {
+export async function findBuild(
+	metadata,
+	credentials,
+	fetcher = fetch,
+	distribution = null,
+) {
 	const read = appleReader(credentials, fetcher);
 	const expectedApp = await findApp(metadata, read);
 	const result = await read("builds", {
@@ -174,7 +179,13 @@ export async function findBuild(metadata, credentials, fetcher = fetch) {
 		"filter[version]": metadata.number,
 		"filter[preReleaseVersion.version]": metadata.version,
 		"filter[preReleaseVersion.platform]": "IOS",
-		include: "app,preReleaseVersion",
+		include: distribution
+			? "app,preReleaseVersion,betaGroups,betaBuildLocalizations,buildBetaDetail,betaAppReviewSubmission"
+			: "app,preReleaseVersion",
+		...(distribution && {
+			"limit[betaGroups]": "50",
+			"limit[betaBuildLocalizations]": "50",
+		}),
 		limit: "200",
 	});
 	if (result.data.length > 1)
@@ -203,7 +214,181 @@ export async function findBuild(metadata, credentials, fetcher = fetch) {
 		)
 	)
 		throw new Error("App Store Connect returned a mismatched or invalid build");
-	return { id: build.id, state: build.attributes.processingState, ...metadata };
+	return {
+		id: build.id,
+		state: build.attributes.processingState,
+		...metadata,
+		...(distribution && {
+			distribution: distributionSnapshot(build, result.included, distribution),
+		}),
+	};
+}
+
+const EXTERNAL_STATES = new Set([
+	"PROCESSING",
+	"PROCESSING_EXCEPTION",
+	"MISSING_EXPORT_COMPLIANCE",
+	"READY_FOR_BETA_TESTING",
+	"IN_BETA_TESTING",
+	"EXPIRED",
+	"READY_FOR_BETA_SUBMISSION",
+	"IN_EXPORT_COMPLIANCE_REVIEW",
+	"WAITING_FOR_BETA_REVIEW",
+	"IN_BETA_REVIEW",
+	"BETA_REJECTED",
+	"BETA_APPROVED",
+]);
+const REVIEW_STATES = new Set([
+	"WAITING_FOR_REVIEW",
+	"IN_REVIEW",
+	"REJECTED",
+	"APPROVED",
+]);
+const SUBMITTED_STATES = new Set([
+	"WAITING_FOR_BETA_REVIEW",
+	"IN_BETA_REVIEW",
+	"BETA_APPROVED",
+	"READY_FOR_BETA_TESTING",
+	"IN_BETA_TESTING",
+]);
+
+export function notesDigest(text) {
+	return createHash("sha256")
+		.update(text.replace(/\r\n/g, "\n").trim())
+		.digest("hex");
+}
+
+export function distributionOptions(groups, expectedNotesDigest = "") {
+	if (typeof groups !== "string")
+		throw new Error("Configured TestFlight groups are required");
+	const expectedGroups = groups.split(",").map((value) => value.trim());
+	if (
+		expectedGroups.some((value) => !value) ||
+		new Set(expectedGroups).size !== expectedGroups.length
+	)
+		throw new Error("Configured TestFlight groups are empty or ambiguous");
+	if (expectedNotesDigest !== "" && !/^[a-f0-9]{64}$/.test(expectedNotesDigest))
+		throw new Error("Expected TestFlight notes digest is invalid");
+	return { expectedGroups, expectedNotesDigest };
+}
+
+// Apple's build relationships bind each included resource to this exact build.
+// Never follow response URLs, create groups, submit review, or notify testers.
+export function distributionSnapshot(build, included, options) {
+	if (!Array.isArray(included))
+		throw new Error("Missing TestFlight related resources");
+	const resource = (identity, type) => {
+		if (
+			!identity ||
+			identity.type !== type ||
+			typeof identity.id !== "string" ||
+			!identity.id
+		)
+			throw new Error("Invalid TestFlight relationship identity");
+		const matches = included.filter(
+			(item) => item.type === type && item.id === identity.id,
+		);
+		if (matches.length !== 1)
+			throw new Error("Missing or ambiguous TestFlight related resource");
+		return matches[0];
+	};
+	const relationship = (name, type, many) => {
+		const value = build.relationships?.[name];
+		if (!value || value.links?.next || !Object.hasOwn(value, "data"))
+			throw new Error("Incomplete TestFlight relationship");
+		if (!many) return value.data === null ? null : resource(value.data, type);
+		if (
+			!Array.isArray(value.data) ||
+			(value.meta?.paging?.total != null &&
+				value.meta.paging.total !== value.data.length) ||
+			(value.data.length >= 50 && value.meta?.paging?.total == null) ||
+			new Set(value.data.map((item) => item.id)).size !== value.data.length
+		)
+			throw new Error(
+				"Incomplete or duplicate TestFlight relationship collection",
+			);
+		return value.data.map((item) => resource(item, type));
+	};
+	const groups = relationship("betaGroups", "betaGroups", true);
+	for (const group of groups) {
+		if (
+			typeof group.attributes?.name !== "string" ||
+			typeof group.attributes.isInternalGroup !== "boolean"
+		)
+			throw new Error("Invalid TestFlight group metadata");
+	}
+	const matches = options.expectedGroups.map((expected) =>
+		groups.filter(
+			(group) => group.id === expected || group.attributes.name === expected,
+		),
+	);
+	const groupsMatched = matches.every(
+		(rows) => rows.length === 1 && !rows[0].attributes.isInternalGroup,
+	);
+	const details = relationship("buildBetaDetail", "buildBetaDetails", false);
+	const externalState =
+		details?.attributes?.externalBuildState ?? "NOT_AVAILABLE";
+	if (details && !EXTERNAL_STATES.has(externalState))
+		throw new Error("Unknown external TestFlight state");
+	const review = relationship(
+		"betaAppReviewSubmission",
+		"betaAppReviewSubmissions",
+		false,
+	);
+	const reviewState = review?.attributes?.betaReviewState ?? "NOT_SUBMITTED";
+	if (review && !REVIEW_STATES.has(reviewState))
+		throw new Error("Unknown TestFlight review state");
+	const localizations = relationship(
+		"betaBuildLocalizations",
+		"betaBuildLocalizations",
+		true,
+	);
+	const locales = new Set();
+	const notes = localizations.map(({ attributes }) => {
+		if (
+			typeof attributes?.locale !== "string" ||
+			!/^[a-z]{2,3}(?:-[A-Za-z0-9]+)*$/.test(attributes.locale) ||
+			locales.has(attributes.locale) ||
+			(attributes.whatsNew != null && typeof attributes.whatsNew !== "string")
+		)
+			throw new Error("Invalid or duplicate TestFlight localization");
+		locales.add(attributes.locale);
+		const text = attributes.whatsNew ?? "";
+		return {
+			locale: attributes.locale,
+			digest: notesDigest(text),
+			hebrewText: /[\u05d0-\u05ea]/.test(text),
+		};
+	});
+	const notesVerified =
+		options.expectedNotesDigest !== "" &&
+		notes.some(
+			(note) => note.hebrewText && note.digest === options.expectedNotesDigest,
+		);
+	return {
+		expectedGroupCount: options.expectedGroups.length,
+		groupsMatched,
+		groupState: groupsMatched
+			? "MATCHED"
+			: matches.some((rows) => rows.length > 1)
+				? "AMBIGUOUS"
+				: "MISSING_OR_INTERNAL",
+		externalState,
+		reviewState,
+		notes,
+		notesVerified,
+		submissionVerified:
+			build.attributes.processingState === "VALID" &&
+			groupsMatched &&
+			notesVerified &&
+			SUBMITTED_STATES.has(externalState) &&
+			reviewState !== "REJECTED",
+		externalAccessVerified:
+			build.attributes.processingState === "VALID" &&
+			groupsMatched &&
+			externalState === "IN_BETA_TESTING" &&
+			(reviewState === "APPROVED" || reviewState === "NOT_SUBMITTED"),
+	};
 }
 
 /** Upload diagnostics remain read-only and never authorize another upload. */
@@ -330,10 +515,7 @@ export async function checkBuild({
 async function main() {
 	const phase = process.argv[2];
 	if (phase === "upload-result") {
-		checkUploadResult(
-			process.argv[4],
-			readFileSync(process.argv[3], "utf8"),
-		);
+		checkUploadResult(process.argv[4], readFileSync(process.argv[3], "utf8"));
 		return;
 	}
 	const metadata = readIpa(process.env.IPA_FILE, process.env.MODULE_VERSION);
@@ -346,6 +528,53 @@ async function main() {
 					"utf8",
 				),
 			};
+	if (["distribution-inspect", "distribution-verify"].includes(phase)) {
+		if (
+			process.env.EXPECTED_TESTFLIGHT_NOTES_FILE &&
+			process.env.EXPECTED_TESTFLIGHT_NOTES_SHA256
+		)
+			throw new Error("Expected TestFlight notes inputs are ambiguous");
+		const expectedDigest = process.env.EXPECTED_TESTFLIGHT_NOTES_FILE
+			? notesDigest(
+					readFileSync(process.env.EXPECTED_TESTFLIGHT_NOTES_FILE, "utf8"),
+				)
+			: (process.env.EXPECTED_TESTFLIGHT_NOTES_SHA256 ?? "");
+		if (phase === "distribution-verify" && !expectedDigest)
+			throw new Error(
+				"TestFlight verification requires the intended notes digest",
+			);
+		const options = distributionOptions(
+			process.env.TESTFLIGHT_BETA_GROUP,
+			expectedDigest,
+		);
+		const build = await findBuild(metadata, credentials, fetch, options);
+		const receipt = {
+			phase,
+			mode: "read-only",
+			build,
+			verifiedAt: new Date().toISOString(),
+		};
+		if (process.env.TESTFLIGHT_RECEIPT_PATH)
+			writeFileSync(
+				process.env.TESTFLIGHT_RECEIPT_PATH,
+				JSON.stringify(receipt, null, 2),
+				{ mode: 0o600, flag: "wx" },
+			);
+		console.log(JSON.stringify(receipt));
+		if (process.env.GITHUB_OUTPUT)
+			appendFileSync(
+				process.env.GITHUB_OUTPUT,
+				`external_access_verified=${build?.distribution.externalAccessVerified === true}\nexternal_state=${build?.distribution.externalState ?? "BUILD_NOT_FOUND"}\n`,
+			);
+		if (
+			phase === "distribution-verify" &&
+			build?.distribution.submissionVerified !== true
+		)
+			throw new Error(
+				"TestFlight readback does not confirm the configured groups, intended Hebrew notes and accepted beta state",
+			);
+		return;
+	}
 	const previous =
 		phase === "preflight" &&
 		previousDelivery({
@@ -390,8 +619,5 @@ async function main() {
 		);
 }
 
-if (
-	process.argv[1] &&
-	import.meta.url === pathToFileURL(process.argv[1]).href
-)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
 	await main();
