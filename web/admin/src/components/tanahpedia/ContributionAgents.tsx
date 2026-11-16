@@ -226,11 +226,11 @@ export function ContributionAgents() {
 	});
 	return (
 		<div className="contributions">
-			<nav className="contribution-nav" aria-label="פניות ושינויים">
-				<Link to="/issues" search={{}}>
+			<nav className="contribution-nav" aria-label="תורי עבודה וסוכנים">
+				<Link to="/" search={{ tab: "issues" }}>
 					Issues
 				</Link>
-				<Link to="/pull-requests" search={{}}>
+				<Link to="/" search={{ tab: "prs" }}>
 					Pull requests
 				</Link>
 				<Link to="/contribution-agents" aria-current="page">

@@ -2,6 +2,11 @@ import { createHash } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
 import { canonicalJson } from "~/lib/canonical-json";
 import { latestContributionAgentResponses } from "~/lib/tanahpedia/contribution-agent-responses";
+import {
+	type ArticleLinkChange,
+	type ArticleLinkState,
+	contributionArticleId,
+} from "~/lib/tanahpedia/contribution-article-links";
 import { contributionRecordId } from "~/lib/tanahpedia/contribution-identifiers";
 import {
 	CONTRIBUTION_RECORDS,
@@ -16,6 +21,7 @@ import {
 	reviewStatus,
 } from "~/lib/tanahpedia/contributions";
 import { txQuery, txQueryOne } from "../db";
+import { readArticleLinkContext } from "./contribution-article-links.server";
 import {
 	readChangeState,
 	readMetadataNames,
@@ -59,6 +65,10 @@ const ALT_TABLES = [
 ];
 const REFERENCES: Record<string, string> = {
 	...REFERENCE_SELECTS,
+	article: "SELECT id,name FROM tanah_article",
+	article_author: "SELECT id,name FROM tanah_author",
+	dedication: "SELECT id,subject AS name FROM tanah_dedication",
+	moed: "SELECT id,name FROM tanah_moed",
 	place_identification:
 		"SELECT i.id,CONCAT(e.name,' - ',COALESCE(i.modern_name,'')) AS name FROM tanahpedia_place_identification i JOIN tanahpedia_place p ON p.id=i.place_id JOIN tanahpedia_entity e ON e.id=p.entity_id",
 	alternative: ALT_TABLES.map(
@@ -67,6 +77,10 @@ const REFERENCES: Record<string, string> = {
 	).join(" UNION "),
 };
 const REFERENCE_ID_COLUMNS: Record<string, string> = {
+	article: "id",
+	article_author: "id",
+	dedication: "id",
+	moed: "id",
 	person: "r.id",
 	place: "r.id",
 	nation: "r.id",
@@ -96,6 +110,7 @@ const REFERENCE_ID_COLUMNS: Record<string, string> = {
 const PEREK_LOCK_SELECT =
 	"SELECT p.id,CONCAT(s.name,' ',CASE WHEN a.id IS NOT NULL THEN p.id-a.perek_from+1 ELSE p.id-s.perek_id_from+1 END) AS name FROM tanah_perek p JOIN tanah_sefer s ON p.id BETWEEN s.perek_id_from AND s.perek_id_to LEFT JOIN tanah_additional a ON a.sefer_id=s.id AND p.id BETWEEN a.perek_from AND a.perek_to";
 const SPECIAL_SEARCHES: Record<string, string> = {
+	article_links: REFERENCES.article,
 	metadata: REFERENCE_SELECTS.entity,
 	entry: REFERENCE_SELECTS.entry,
 	place: REFERENCES.place_identification,
@@ -193,6 +208,38 @@ function identifier(value: unknown): string | number {
 	throw new Error("Invalid contribution tool record identifier");
 }
 
+function targetIdentifier(
+	kind: ReviewedChange["kind"],
+	value: unknown,
+): string {
+	return kind === "article_links"
+		? contributionArticleId(typeof value === "number" ? String(value) : value)
+		: contributionRecordId(value, "id");
+}
+
+const ARTICLE_REFERENCES = new Set([
+	"article",
+	"article_author",
+	"dedication",
+	"moed",
+]);
+
+function articleTextPage(args: Record<string, unknown>) {
+	const cursor = args.cursor ?? 0;
+	const limit = args.limit ?? 4000;
+	if (
+		typeof cursor !== "number" ||
+		!Number.isSafeInteger(cursor) ||
+		cursor < 0 ||
+		typeof limit !== "number" ||
+		!Number.isInteger(limit) ||
+		limit < 1 ||
+		limit > 16000
+	)
+		throw new Error("Invalid article text page");
+	return { cursor, limit };
+}
+
 function pageArguments(args: Record<string, unknown>) {
 	const cursor = args.cursor ?? 0;
 	const limit = args.limit ?? 25;
@@ -225,6 +272,7 @@ function argumentsFor(name: string, raw: unknown): Record<string, unknown> {
 		search: ["kind", "query", "cursor", "limit"],
 		record: ["kind", "id"],
 		related: ["cursor", "limit", "id", "section"],
+		article_text: ["id", "cursor", "limit"],
 	};
 	if (!Object.hasOwn(fields, name))
 		throw new Error("Unsupported contribution agent tool");
@@ -241,6 +289,10 @@ class ContextReader {
 	readonly records: { kind: string; id: string | number; current: unknown }[] =
 		[];
 	private readonly seen = new Set<string>();
+	private readonly articles = new Map<
+		string,
+		Awaited<ReturnType<typeof readArticleLinkContext>> | null
+	>();
 	constructor(
 		private readonly conn: PoolConnection,
 		private readonly alternativeId: string,
@@ -274,7 +326,7 @@ class ContextReader {
 		id: string | number,
 		sql: string,
 	): Promise<ContributionReference | null> {
-		if (!this.lockReferences)
+		if (!this.lockReferences && !ARTICLE_REFERENCES.has(kind))
 			return txQueryOne<ContributionReference>(
 				this.conn,
 				`SELECT candidate.* FROM (${sql}) candidate WHERE candidate.id=?`,
@@ -287,7 +339,7 @@ class ContextReader {
 		const projection = kind === "perek" ? PEREK_LOCK_SELECT : sql;
 		return txQueryOne<ContributionReference>(
 			this.conn,
-			`${projection} WHERE ${column}=? FOR UPDATE NOWAIT`,
+			`${projection} WHERE ${column}=? ${ARTICLE_REFERENCES.has(kind) ? "FOR SHARE" : "FOR UPDATE NOWAIT"}`,
 			[id],
 		);
 	}
@@ -296,6 +348,10 @@ class ContextReader {
 		kind: string,
 		id: string | number,
 	): Promise<ContributionReference | null> {
+		if (ARTICLE_REFERENCES.has(kind))
+			id = Number(
+				contributionArticleId(typeof id === "number" ? String(id) : id),
+			);
 		const key = `reference:${kind}:${String(id).toLowerCase()}`;
 		if (this.seen.has(key))
 			return (
@@ -335,6 +391,36 @@ class ContextReader {
 		return row;
 	}
 
+	async article(id: string) {
+		if (this.articles.has(id)) return this.articles.get(id) ?? null;
+		// Pin the exact article before reading its text and link state. All
+		// canonical reads use the current version, even after a lock wait.
+		if (!(await this.reference("article", Number(id)))) {
+			this.articles.set(id, null);
+			return null;
+		}
+		const article = await readArticleLinkContext(this.conn, id, {
+			current: true,
+		});
+		this.articles.set(id, article);
+		this.records.push({
+			kind: "article_source",
+			id,
+			current: {
+				title: article.title,
+				sourceHash: article.state.sourceHash,
+				contentHash: article.state.contentHash,
+				plainTextLength: article.plainText.length,
+				encoding: "UTF-16",
+				readLocator: {
+					tool: "article_text",
+					arguments: { id, cursor: 0, limit: 4000 },
+				},
+			},
+		});
+		return article;
+	}
+
 	async target(
 		kind: ReviewedChange["kind"],
 		id: string,
@@ -349,7 +435,11 @@ class ContextReader {
 				)?.current ?? null
 			);
 		this.seen.add(key);
-		const current = await readChangeState(this.conn, kind, id, context);
+		const current =
+			kind === "article_links"
+				? (((await this.article(id))?.state as unknown as ChangeState | null) ??
+					null)
+				: await readChangeState(this.conn, kind, id, context);
 		this.records.push({ kind: `target:${kind}`, id, current });
 		if (current) {
 			this.catalogue.targets.push({ kind, id, current });
@@ -369,6 +459,33 @@ class ContextReader {
 		kind: ReviewedChange["kind"],
 		state: ChangeState,
 	): Promise<void> {
+		if (kind === "article_links") {
+			if (Array.isArray(state.commands)) {
+				for (const command of (state as unknown as ArticleLinkChange)
+					.commands) {
+					if (command.relationshipKey === "primaryPerek")
+						await this.reference("perek", command.target.perekId);
+					if (command.relationshipKey === "coveringSources")
+						for (const coordinate of command.target.pasukCoordinates)
+							await this.reference("perek", coordinate.perekId);
+					if (command.relationshipKey === "dedicationAssignments")
+						await this.reference("dedication", command.target.dedicationId);
+					if (command.relationshipKey === "moadim")
+						for (const id of command.target.moedIds)
+							await this.reference("moed", id);
+				}
+			} else {
+				const article = state as unknown as ArticleLinkState;
+				await this.reference("perek", article.perekId);
+				await this.reference("article_author", article.authorId);
+				for (const coordinate of article.coveringSources)
+					await this.reference("perek", coordinate.perekId);
+				for (const assignment of article.dedicationAssignments)
+					await this.reference("dedication", assignment.dedicationId);
+				for (const id of article.moedIds) await this.reference("moed", id);
+			}
+			return;
+		}
 		const fields: Record<string, string> = isContributionRecordKind(kind)
 			? Object.fromEntries(
 					Object.entries(CONTRIBUTION_RECORDS[kind].fields)
@@ -392,8 +509,16 @@ class ContextReader {
 				await this.reference(family, id);
 		}
 		if (kind === "alias_mapping" && Array.isArray(state.targets)) {
-			for (const destination of state.targets)
+			for (const destination of state.targets) {
+				if (
+					!destination ||
+					typeof destination !== "object" ||
+					Array.isArray(destination) ||
+					typeof destination.entryId !== "string"
+				)
+					throw new Error("Invalid contribution alias reference");
 				await this.reference("entry", destination.entryId);
+			}
 		}
 		if (
 			kind === "source_reference" &&
@@ -624,6 +749,29 @@ export async function readContributionAgentTool(
 			catalogue: reader.catalogue,
 		};
 	}
+	if (name === "article_text") {
+		const id = contributionArticleId(args.id);
+		const { cursor, limit } = articleTextPage(args);
+		const article = await reader.article(id);
+		return {
+			data: article
+				? {
+						id,
+						title: article.title,
+						sourceHash: article.state.sourceHash,
+						contentHash: article.state.contentHash,
+						encoding: "UTF-16",
+						cursor,
+						total: article.plainText.length,
+						text: article.plainText.slice(cursor, cursor + limit),
+						nextCursor:
+							cursor + limit < article.plainText.length ? cursor + limit : null,
+						records: reader.records,
+					}
+				: { id, record: null, records: reader.records },
+			catalogue: reader.catalogue,
+		};
+	}
 	if (typeof args.kind !== "string")
 		throw new Error("Missing contribution tool kind");
 	const isTarget = args.kind.startsWith("target:");
@@ -636,7 +784,7 @@ export async function readContributionAgentTool(
 		const record = isTarget
 			? await reader.target(
 					kind as ReviewedChange["kind"],
-					contributionRecordId(id, "id"),
+					targetIdentifier(kind as ReviewedChange["kind"], id),
 				)
 			: await reader.reference(kind, id);
 		return {
@@ -666,9 +814,13 @@ export async function readContributionAgentTool(
 		if (isTarget) {
 			const current = await reader.target(
 				kind as ReviewedChange["kind"],
-				String(row.id),
+				targetIdentifier(kind as ReviewedChange["kind"], row.id),
 			);
-			items.push({ kind, id: row.id, label: row.name, current });
+			const label =
+				kind === "article_links"
+					? ((await reader.article(String(row.id)))?.title ?? row.name)
+					: row.name;
+			items.push({ kind, id: row.id, label, current });
 		} else {
 			const current = await reader.reference(kind, row.id);
 			if (current) items.push(current);
@@ -763,13 +915,14 @@ export async function readContributionAgentInitialContext(
 		// Failed migrations retain their untouched operations for recovery. They
 		// remain visible in the summary but cannot select a domain SQL reader.
 		if (
-			!isContributionRecordKind(change.kind) &&
-			!Object.hasOwn(SPECIAL_SEARCHES, change.kind)
+			current.apiMigration?.status === "failed" ||
+			(!isContributionRecordKind(change.kind) &&
+				!Object.hasOwn(SPECIAL_SEARCHES, change.kind))
 		)
 			continue;
 		const state = await reader.target(
 			targetKind(change.kind),
-			change.targetId,
+			targetIdentifier(change.kind, change.targetId),
 			change.before ?? change.after,
 		);
 		if (!state && current.kind === "pr" && !change.before && change.after) {

@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
 	session: vi.fn(),
 	detail: vi.fn(),
 	catalogue: vi.fn(),
+	articlePreview: vi.fn(),
+	articleGenerate: vi.fn(),
 	status: vi.fn(),
 	agents: vi.fn(),
 	create: vi.fn(),
@@ -60,6 +62,7 @@ vi.mock("~/server/tanahpedia/contributions", () => ({
 	getContributionSession: mocks.session,
 	getContribution: mocks.detail,
 	getContributionCatalogue: mocks.catalogue,
+	getContributionArticleLinkPreview: mocks.articlePreview,
 	getContributionLlmStatus: mocks.status,
 	getContributionAgents: mocks.agents,
 	createContributionItem: mocks.create,
@@ -68,6 +71,9 @@ vi.mock("~/server/tanahpedia/contributions", () => ({
 	mergeContributionItem: mocks.merge,
 	recoverContributionItem: mocks.recover,
 	generateIssuePrs: mocks.generate,
+}));
+vi.mock("~/server/article-link-proposals", () => ({
+	generateLinkProposals: mocks.articleGenerate,
 }));
 
 import {
@@ -133,6 +139,32 @@ function item(overrides: Partial<Contribution> = {}): Contribution {
 		...overrides,
 	};
 }
+function articleChange(): Contribution["changes"][number] {
+	return {
+		kind: "article_links",
+		targetId: "17",
+		before: {
+			contentHash: "a".repeat(32),
+			sourceHash: "b".repeat(64),
+			perekId: 1,
+			authorId: 2,
+			coverageVerified: false,
+			coveringSources: [],
+			dedicationAssignments: [],
+			moedIds: [],
+		},
+		after: {
+			commands: [
+				{
+					relationshipKey: "coveringSources",
+					action: "add",
+					target: { pasukCoordinates: [{ perekId: 1, pasuk: 1 }] },
+				},
+			],
+		},
+		labels: { "article:17": "מאמר לדוגמה", "perek:1": "בראשית א" },
+	};
+}
 let issue: Contribution, pr: Contribution, client: QueryClient;
 function show(kind: "issue" | "pr" = "issue") {
 	client = new QueryClient({
@@ -154,6 +186,8 @@ describe("issues and PR administration", () => {
 			mocks.session,
 			mocks.detail,
 			mocks.catalogue,
+			mocks.articlePreview,
+			mocks.articleGenerate,
 			mocks.status,
 			mocks.agents,
 			mocks.create,
@@ -238,6 +272,142 @@ describe("issues and PR administration", () => {
 	});
 	afterEach(() => {
 		client?.clear();
+	});
+	it("labels deterministic authors honestly and explains resumable article merges", async () => {
+		mocks.search = { id: PRID };
+		pr.author = {
+			id: "article-linker",
+			name: "article-linker",
+			kind: "system",
+			isDoradsoft: false,
+		};
+		pr.changes = [articleChange()];
+		show("pr");
+		expect(await screen.findByText("כללים אוטומטיים")).toBeInTheDocument();
+		expect(screen.getByText(/ההתקדמות נשמרת/)).toBeInTheDocument();
+		expect(screen.queryByText(/כל השינויים יוחלו יחד/)).not.toBeInTheDocument();
+	});
+	it("offers an interrupted article merge for retry or typed recovery while keeping other mutations disabled", async () => {
+		mocks.search = { id: PRID };
+		pr.articleLinkMerge = {
+			id: "intent",
+			revision: 1,
+			startedAt: pr.updatedAt,
+		};
+		pr.changes = [articleChange()];
+		pr.assignee = { kind: "local_llm" };
+		pr.events.push({
+			id: "approval",
+			kind: "approved",
+			actor: owner,
+			at: pr.updatedAt,
+			body: "reviewed",
+			revision: 1,
+		});
+		show("pr");
+		expect(
+			await screen.findByRole("heading", {
+				name: "מיזוג קישורי המאמר ממתין להשלמה",
+			}),
+		).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "המשך מיזוג PR" })).toBeEnabled();
+		expect(screen.getByRole("button", { name: "בקשת שינויים" })).toBeDisabled();
+		expect(
+			screen.getByRole("button", { name: "סגירה ללא מיזוג" }),
+		).toBeDisabled();
+		expect(screen.getByRole("button", { name: "הפעלה נוספת" })).toBeDisabled();
+		expect(screen.getByRole("combobox", { name: "אחראי" })).toBeDisabled();
+		fireEvent.change(screen.getByLabelText("הוספת תגובה"), {
+			target: { value: "הערה מותרת" },
+		});
+		expect(screen.getByRole("button", { name: "שליחת תגובה" })).toBeEnabled();
+		fireEvent.click(screen.getByRole("button", { name: "עריכה וסקירה מחדש" }));
+		expect(
+			await screen.findByRole("heading", { name: "עריכת הדיון" }),
+		).toBeInTheDocument();
+		expect(await screen.findByLabelText("מספר מאמר")).toHaveValue("17");
+	});
+	it("rereads a failed merge's newly reserved version before allowing a retry", async () => {
+		mocks.search = { id: PRID };
+		pr.author = owner;
+		mocks.merge.mockImplementationOnce(async () => {
+			pr = {
+				...pr,
+				version: 2,
+				articleLinkMerge: {
+					id: "intent",
+					revision: 1,
+					startedAt: pr.updatedAt,
+				},
+			};
+			throw new Error("Interrupted merge");
+		});
+		show("pr");
+		fireEvent.change(await screen.findByLabelText("הוספת תגובה"), {
+			target: { value: "Retained draft" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "מיזוג PR" }));
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"Interrupted merge",
+		);
+		expect(screen.getByLabelText("הוספת תגובה")).toHaveValue("Retained draft");
+		fireEvent.click(screen.getByRole("button", { name: "המשך מיזוג PR" }));
+		await waitFor(() =>
+			expect(mocks.merge).toHaveBeenLastCalledWith({
+				data: { id: PRID, version: 2, action: "merge" },
+			}),
+		);
+	});
+	it("loads an authenticated one-article preview in the normal PR composer", async () => {
+		mocks.search = { id: "new" };
+		mocks.articlePreview.mockResolvedValue({
+			id: "17",
+			title: "מאמר לדוגמה",
+			state: { perekId: 1 },
+			labels: { "perek:1": "בראשית א" },
+			references: { dedication: [], moed: [] },
+			hasMore: { dedication: false, moed: false },
+		});
+		show("pr");
+		fireEvent.change(await screen.findByLabelText("סוג שינוי"), {
+			target: { value: "article_links" },
+		});
+		fireEvent.change(screen.getByLabelText("מספר מאמר"), {
+			target: { value: "17" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "טעינת המאמר" }));
+		expect(
+			await screen.findByRole("link", { name: "מאמר לדוגמה" }),
+		).toBeInTheDocument();
+		expect(mocks.articlePreview).toHaveBeenCalledWith({ data: "17" });
+	});
+	it("opens a discovered article-link PR from the ordinary PR queue", async () => {
+		mocks.articleGenerate.mockResolvedValue({
+			runId: "discovery",
+			outcomes: [],
+			prIds: [PRID],
+		});
+		show("pr");
+		await screen.findByText("שינוי שם");
+		fireEvent.click(screen.getByText("איתור קישורים למאמר"));
+		fireEvent.change(screen.getByLabelText("מספר מאמר לאיתור"), {
+			target: { value: "17" },
+		});
+		fireEvent.submit(screen.getByRole("form", { name: "איתור קישורי מאמר" }));
+		await waitFor(() =>
+			expect(mocks.navigate).toHaveBeenCalledWith({
+				to: "/",
+				search: { tab: "prs", id: PRID },
+			}),
+		);
+		expect(mocks.articleGenerate).toHaveBeenCalledWith({
+			data: {
+				articleIds: [17],
+				engine: "heuristic",
+				force: false,
+				dryRun: false,
+			},
+		});
 	});
 	it("clears search and assignee filters without retaining empty URL values", async () => {
 		mocks.search = { q: "term", assignee: "human" };

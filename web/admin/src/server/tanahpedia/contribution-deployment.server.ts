@@ -49,12 +49,23 @@ export async function handleContributionMigrationRequest(
 		return new Response("Unauthorized", { status: 401, headers });
 	}
 	try {
+		const { importLegacyArticleLinkProposals } = await import(
+			"./contribution-article-import.server"
+		);
+		const articleLinks = await importLegacyArticleLinkProposals();
 		const migration = await migrateOpenContributionPrs();
 		const agents = await refreshRegisteredContributionAgents();
 		const work = await reconcileContributionAgentAssignments();
 		notifyContributionAgentWork();
 		return Response.json(
-			{ ...migration, agents: { ...agents, ...work } },
+			{
+				...migration,
+				articleLinks: {
+					articles: articleLinks.articles,
+					created: articleLinks.prIds.length,
+				},
+				agents: { ...agents, ...work },
+			},
 			{ headers },
 		);
 	} catch {

@@ -1,12 +1,6 @@
 import type { PoolConnection } from "mysql2/promise";
-import { query, queryOne, transaction, txExecute } from "./db";
-import {
-	currentTargets,
-	mergeChanges,
-	syncDedicationExpiry,
-} from "./dedication-expiry";
+import { query, txExecute, txQueryOne } from "./db";
 import type { DedicationTargetInput } from "./dedications";
-import { dedicationChange, revalidateWebsite } from "./website-revalidate";
 
 /**
  * Server-only transactional helpers for the dedication target tables —
@@ -198,58 +192,73 @@ export async function insertTarget(
 	}
 }
 
-/**
- * Adds or removes one article target on an existing dedication — the
- * aggregate write path the link-proposal apply step calls (#3103): the
- * dedication owns its full target set, so this rewrites the target list
- * through the same validation, transaction and invalidation as
- * updateDedication rather than touching the link table directly.
- */
-export async function applyArticleDedicationLink(params: {
-	dedicationId: number;
-	articleId: number;
-	op: "add" | "remove";
-	expiresAt?: string | null;
-}): Promise<{ changed: boolean; reason?: string }> {
-	const dedication = await queryOne<{ id: number }>(
-		"SELECT id FROM tanah_dedication WHERE id = ?",
+/** Acquire dedication owners in canonical order before locking their child
+ * assignments. This agrees with ordinary dedication update/delete and prevents
+ * a parent/child lock inversion after the external article API has committed. */
+export async function lockReviewedArticleDedicationOwners(
+	connection: PoolConnection,
+	ids: number[],
+): Promise<void> {
+	for (const id of [...new Set(ids)].sort((a, b) => a - b)) {
+		if (
+			!(await txQueryOne(
+				connection,
+				"SELECT id FROM tanah_dedication WHERE id=? FOR UPDATE",
+				[id],
+			))
+		)
+			throw new Error("Referenced dedication does not exist");
+	}
+}
+
+/** Contribution merges edit one target through its owning dedication aggregate.
+ * Lock and compare that assignment in the caller's transaction, preserving all
+ * other target kinds and expiries instead of rewriting an unlocked snapshot. */
+export async function setReviewedArticleDedicationTarget(
+	connection: PoolConnection,
+	params: {
+		dedicationId: number;
+		articleId: number;
+		before: { expiresAt: string | null } | null;
+		after: { expiresAt: string | null } | null;
+	},
+): Promise<void> {
+	const dedication = await txQueryOne<{ id: number }>(
+		connection,
+		"SELECT id FROM tanah_dedication WHERE id=? FOR UPDATE",
 		[params.dedicationId],
 	);
-	if (!dedication) {
-		return { changed: false, reason: "ההקדשה לא נמצאה" };
-	}
-	const targets = await currentTargets(params.dedicationId);
-	const hasArticle = targets.some(
-		(t) => t.kind === "article" && t.articleId === params.articleId,
+	if (!dedication) throw new Error("Referenced dedication does not exist");
+	const current = await txQueryOne<{ expiresAt: string | null }>(
+		connection,
+		"SELECT DATE_FORMAT(expires_at,'%Y-%m-%d %H:%i:%s') AS expiresAt FROM tanah_article_dedication WHERE dedication_id=? AND article_id=? FOR UPDATE",
+		[params.dedicationId, params.articleId],
 	);
-	const expiresAt = normalizeExpiry(params.expiresAt);
-	let next: DedicationTargetInput[];
-	if (params.op === "add") {
-		if (hasArticle) {
-			return { changed: false, reason: "המאמר כבר משויך להקדשה" };
-		}
-		next = [
-			...targets,
-			{ kind: "article", articleId: params.articleId, expiresAt },
-		];
+	if (
+		Boolean(current) !== Boolean(params.before) ||
+		(current && current.expiresAt !== params.before?.expiresAt)
+	)
+		throw new Error("Conflict: dedication assignment changed since review");
+	if (params.after === null) {
+		if (current)
+			await txExecute(
+				connection,
+				"DELETE FROM tanah_article_dedication WHERE dedication_id=? AND article_id=?",
+				[params.dedicationId, params.articleId],
+			);
 	} else {
-		if (!hasArticle) {
-			return { changed: false, reason: "המאמר אינו משויך להקדשה" };
-		}
-		next = targets.filter(
-			(t) => !(t.kind === "article" && t.articleId === params.articleId),
-		);
+		const expiry = normalizeExpiry(params.after.expiresAt);
+		if (current)
+			await txExecute(
+				connection,
+				"UPDATE tanah_article_dedication SET expires_at=? WHERE dedication_id=? AND article_id=?",
+				[expiry, params.dedicationId, params.articleId],
+			);
+		else
+			await insertTarget(connection, params.dedicationId, {
+				kind: "article",
+				articleId: params.articleId,
+				expiresAt: expiry,
+			});
 	}
-	await validateReferenceTargets(next);
-	await transaction(async (connection) => {
-		await deleteTargetRows(connection, params.dedicationId);
-		for (const target of next) {
-			await insertTarget(connection, params.dedicationId, target);
-		}
-	});
-	void revalidateWebsite([
-		dedicationChange(mergeChanges(params.dedicationId, targets, next)),
-	]);
-	void syncDedicationExpiry(params.dedicationId);
-	return { changed: true };
 }

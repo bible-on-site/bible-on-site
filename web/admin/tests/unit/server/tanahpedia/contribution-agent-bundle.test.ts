@@ -17,6 +17,7 @@ describe("versioned contribution agent declarations", () => {
 		expect(buildContributionAgentBundle()).toEqual({ ...bundle, hash });
 		expect(bundle.apiVersion).toBe(CONTRIBUTION_API_VERSION);
 		expect(bundle.protocolVersion).toBe(2);
+		expect(bundle.version).toBe("tanahpedia-agents-v4");
 	});
 	it("declares complete read tools separately from typed output and authority", () => {
 		const bundle = buildContributionAgentBundle();
@@ -26,6 +27,7 @@ describe("versioned contribution agent declarations", () => {
 			"history",
 			"search",
 			"record",
+			"article_text",
 		]);
 		expect(
 			bundle.operationGuide.some((guide) => guide.startsWith("entry_title ")),
@@ -35,6 +37,7 @@ describe("versioned contribution agent declarations", () => {
 		expect(system).toContain("no SQL");
 		expect(system).toContain("Human review is mandatory");
 		expect(system).toContain("not a truncated discussion");
+		expect(system).toContain("single article_links change and a separate PR");
 	});
 	it("permits only declared tool action shapes and the supplied final decoder schema", () => {
 		const bundle = buildContributionAgentBundle(),

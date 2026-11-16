@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 	updateAgent: vi.fn(),
 	reconcileAgents: vi.fn(),
 	notifyAgents: vi.fn(),
+	preview: vi.fn(),
 }));
 vi.mock("~/server/tanahpedia/contribution-agent-registry.server", () => ({
 	listContributionAgents: mocks.agents,
@@ -40,6 +41,9 @@ vi.mock("@tanstack/react-start", () => ({
 }));
 vi.mock("~/server/tanahpedia/contribution-identity.server", () => ({
 	contributionIdentity: mocks.identity,
+}));
+vi.mock("~/server/tanahpedia/contribution-article-links.server", () => ({
+	readArticleLinkPreview: mocks.preview,
 }));
 vi.mock("~/server/tanahpedia/contribution-store.server", () => ({
 	listContributions: mocks.list,
@@ -69,6 +73,7 @@ import {
 	generateIssuePrs,
 	getContribution,
 	getContributionAgents,
+	getContributionArticleLinkPreview,
 	getContributionCatalogue,
 	getContributionLlmStatus,
 	getContributionSession,
@@ -81,6 +86,23 @@ import {
 } from "~/server/tanahpedia/contributions";
 
 describe("contribution RPC boundary", () => {
+	it("requires verified identity and a canonical numeric ID before article preview", async () => {
+		mocks.identity.mockResolvedValue({ id: "human" });
+		mocks.preview.mockResolvedValue({ id: "123", title: "מאמר", state: {} });
+		expect(
+			await getContributionArticleLinkPreview({ data: "123" }),
+		).toMatchObject({ id: "123" });
+		expect(mocks.preview).toHaveBeenCalledWith({}, "123");
+		expect(() =>
+			getContributionArticleLinkPreview({ data: "00123" }),
+		).toThrow();
+		mocks.identity.mockRejectedValue(new Error("Sign in"));
+		mocks.preview.mockClear();
+		await expect(
+			getContributionArticleLinkPreview({ data: "123" }),
+		).rejects.toThrow("Sign in");
+		expect(mocks.preview).not.toHaveBeenCalled();
+	});
 	beforeEach(() => {
 		for (const mock of Object.values(mocks)) mock.mockReset();
 		mocks.identity.mockResolvedValue({ id: "verified" });

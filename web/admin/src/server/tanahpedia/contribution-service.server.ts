@@ -25,6 +25,14 @@ import { query } from "../db";
 import { pediaInvalidation, revalidateWebsite } from "../website-revalidate";
 import { getAssignedContributionAgent } from "./contribution-agent-registry.server";
 import { notifyContributionAgentWork } from "./contribution-agent-runtime.server";
+import { refreshArticleLinkEvidence } from "./contribution-article-evidence.server";
+import {
+	applyReviewedArticleLinks,
+	assertArticleLinkMergeBase,
+	assertNoArticleLinkMerge,
+	invalidateMergedArticleLinks,
+	isArticleLinkPr,
+} from "./contribution-article-merge.server";
 import {
 	applyChange,
 	assertMetadataNames,
@@ -103,6 +111,7 @@ export async function applyContributionAgentRevision(
 	},
 	actor: Contributor,
 ): Promise<boolean> {
+	assertNoArticleLinkMerge(item);
 	if (item.kind !== "pr" || item.state !== "open")
 		throw new Error("Agent revisions require an open PR");
 	if (!["local_llm", "aws_llm"].includes(actor.kind) || actor.isDoradsoft)
@@ -113,7 +122,7 @@ export async function applyContributionAgentRevision(
 		draft.description === undefined
 			? item.description
 			: textField(draft.description, "description", 20000);
-	const evidence =
+	let evidence =
 		draft.evidence === undefined
 			? item.evidence
 			: validateEvidence(draft.evidence);
@@ -132,6 +141,7 @@ export async function applyContributionAgentRevision(
 		),
 		{ refresh: true },
 	);
+	evidence = await refreshArticleLinkEvidence(conn, { changes, evidence });
 	if (
 		sameState(
 			{ title, description, evidence, changes },
@@ -178,6 +188,71 @@ function cancelGeneration(item: Contribution, reason: string): void {
 	}
 }
 
+/** Accepted human feedback must not disappear behind an interrupted API merge.
+ * Serialize on the PR, retain the attempt receipt, and refresh any observed
+ * partial result before queueing the ordinary comment-resolution pass. */
+async function reconcileInterruptedArticleFeedback(
+	conn: PoolConnection,
+	item: Contribution,
+): Promise<void> {
+	const attempt = item.articleLinkMerge;
+	if (!attempt) return;
+	let changes = item.changes;
+	let evidence = item.evidence;
+	let conflict: string | undefined;
+	try {
+		changes = await prepareChanges(
+			conn,
+			validateChanges(
+				item.changes.map(({ kind, targetId, after }) => ({
+					kind,
+					targetId,
+					after,
+				})),
+			),
+			{ refresh: true },
+		);
+		evidence = await refreshArticleLinkEvidence(conn, { changes, evidence });
+	} catch (error) {
+		if (error && typeof error === "object" && "code" in error) throw error;
+		conflict =
+			error instanceof Error
+				? error.message
+				: "Could not refresh the interrupted article merge";
+	}
+	const changed =
+		Boolean(conflict) ||
+		!sameState(
+			{ changes, evidence },
+			{ changes: item.changes, evidence: item.evidence },
+		);
+	if (changed) {
+		rememberRevision(item);
+		item.changes = changes;
+		item.evidence = evidence;
+		item.revision++;
+		item.revisionAuthor = {
+			id: "system:article-merge-feedback",
+			name: "המערכת",
+			kind: "system",
+			isDoradsoft: false,
+		};
+		item.domainConflict = conflict;
+	}
+	delete item.articleLinkMerge;
+	addEvent(
+		item,
+		{
+			id: "system:article-merge-feedback",
+			name: "המערכת",
+			kind: "system",
+			isDoradsoft: false,
+		},
+		changed ? "rebased" : "comment",
+		`ניסיון מיזוג ${attempt.id} נשמר בהיסטוריה לאחר תגובה חדשה. ${changed ? "ההשוואה רועננה לפי המצב בפועל ונדרשת סקירה מחודשת." : "ההשוואה לא השתנתה."}`,
+	);
+}
+
 /** Assignment and human feedback commit their durable work request together.
  * Replacing an active job revokes its lease; a stale model cannot overwrite it. */
 export async function queueAssignedContributionAgent(
@@ -189,6 +264,7 @@ export async function queueAssignedContributionAgent(
 ): Promise<boolean> {
 	if (
 		item.state !== "open" ||
+		item.articleLinkMerge ||
 		!["human", "system"].includes(actor.kind) ||
 		(item.assignee.kind !== "local_llm" && item.assignee.kind !== "aws_llm")
 	)
@@ -279,6 +355,11 @@ export async function createContribution(
 				assertVersion(issue, input.issueVersion);
 		}
 		const now = new Date().toISOString();
+		const preparedChanges = await prepareChanges(conn, changes);
+		const freshEvidence = await refreshArticleLinkEvidence(conn, {
+			changes: preparedChanges,
+			evidence,
+		});
 		const item: Contribution = {
 			id: randomUUID(),
 			number: 0,
@@ -289,8 +370,8 @@ export async function createContribution(
 			author: actor,
 			revisionAuthor: actor,
 			assignee,
-			evidence,
-			changes: await prepareChanges(conn, changes),
+			evidence: freshEvidence,
+			changes: preparedChanges,
 			issueId,
 			revision: 1,
 			version: 1,
@@ -335,6 +416,10 @@ export async function editContribution(
 				: [];
 		if (item.kind === "pr" && evidence.length === 0)
 			throw new Error("PRs require evidence");
+		const freshEvidence = await refreshArticleLinkEvidence(conn, {
+			changes,
+			evidence,
+		});
 		const assignee =
 			input.assignee === undefined
 				? item.assignee
@@ -351,11 +436,13 @@ export async function editContribution(
 			{
 				title,
 				description,
-				evidence,
+				evidence: freshEvidence,
 				changes,
 				closeIssue: input.closeIssue !== false,
 			},
 		);
+		if (item.articleLinkMerge && !contentChanged)
+			assertNoArticleLinkMerge(item);
 		if (!contentChanged && !assignmentChanged) return item;
 		if (assignmentChanged) {
 			cancelGeneration(item, "The issue assignee changed");
@@ -369,13 +456,22 @@ export async function editContribution(
 			return saveContribution(conn, item);
 		}
 		rememberRevision(item);
+		if (item.articleLinkMerge) {
+			addEvent(
+				item,
+				actor,
+				"comment",
+				`ניסיון מיזוג ${item.articleLinkMerge.id} נשמר בהיסטוריה. העריכה קראה מחדש את המצב בפועל; נדרש אישור להשוואה החדשה.`,
+			);
+			delete item.articleLinkMerge;
+		}
 		item.title = title;
 		cancelGeneration(
 			item,
 			"The issue was edited after generation was requested",
 		);
 		item.description = description;
-		item.evidence = evidence;
+		item.evidence = freshEvidence;
 		item.changes = changes;
 		delete item.domainConflict;
 		item.revisionAuthor = actor;
@@ -415,8 +511,20 @@ export async function recoverContributionSequence(
 		if (item.state !== "open" || !migrationBlocked(item))
 			throw new Error("Only an incompatible open PR can be recovered");
 		rememberRevision(item);
+		delete item.articleLinkMerge;
 		item.changes = await prepareChanges(conn, changes);
 		delete item.domainConflict;
+		try {
+			item.evidence = await refreshArticleLinkEvidence(conn, item);
+		} catch (error) {
+			if (error && typeof error === "object" && "code" in error) throw error;
+			// Recover the executable vocabulary first so the ordinary editor can
+			// repair obsolete evidence. Do not trap a gray PR behind its raw-only UI.
+			item.domainConflict =
+				error instanceof Error
+					? error.message
+					: "Structured evidence requires repair";
+		}
 		item.revisionAuthor = actor;
 		item.apiVersion = CONTRIBUTION_API_VERSION;
 		delete item.apiMigration;
@@ -443,7 +551,10 @@ export async function updateContribution(
 	return withContributions(async (conn) => {
 		const item = await readContribution(conn, id, true);
 		assertVersion(item, input.version);
+		if (input.action !== "comment") assertNoArticleLinkMerge(item);
 		if (input.action === "comment") {
+			if (actor.kind === "human")
+				await reconcileInterruptedArticleFeedback(conn, item);
 			addEvent(item, actor, "comment", textField(input.body, "comment", 10000));
 			if (actor.kind === "human")
 				await queueAssignedContributionAgent(conn, item, actor, "comment", [
@@ -604,11 +715,37 @@ export async function mergeContribution(
 ): Promise<Contribution> {
 	const input = record(raw),
 		id = uuidField(input.id, "id");
-	const prepared = await withContributions((conn) =>
-		readCurrentContribution(conn, id, (item) =>
-			assertVersion(item, input.version),
-		),
-	);
+	let prepared = await withContributions(async (conn) => {
+		return readCurrentContribution(conn, id, (current) =>
+			assertVersion(current, input.version),
+		);
+	});
+	if (isArticleLinkPr(prepared)) {
+		// A rolling deployment may receive a manual/agent PR before startup
+		// backfill finishes. Fence the retired writers before canonical calls;
+		// DDL stays outside every contribution transaction (implicit commit).
+		const { ensureArticleLinkPromotionSchema } = await import(
+			"./contribution-article-import.server"
+		);
+		await ensureArticleLinkPromotionSchema();
+		prepared = await withContributions(async (conn) => {
+			const item = await readContribution(conn, id, true);
+			assertVersion(item, prepared.version);
+			assertMergeAllowed(item);
+			if (!item.articleLinkMerge) {
+				await assertArticleLinkMergeBase(conn, item);
+				item.articleLinkMerge = {
+					id: randomUUID(),
+					revision: item.revision,
+					startedAt: new Date().toISOString(),
+				};
+				// Commit recovery intent only after old writers have drained and
+				// the reviewed base has been compared against their final state.
+				await saveContribution(conn, item);
+			}
+			return item;
+		});
+	}
 	let merged = await withContributions(async (conn) => {
 		// Agent completions lock the issue before its related PRs. Keep that
 		// order when merging may close the issue, including leave-open merges.
@@ -620,8 +757,10 @@ export async function mergeContribution(
 		// Any later authored edit/review still requires the caller to reload.
 		assertVersion(item, prepared.version);
 		assertMergeAllowed(item);
-		await applyReviewedChanges(conn, item);
+		if (isArticleLinkPr(item)) await applyReviewedArticleLinks(conn, item);
+		else await applyReviewedChanges(conn, item);
 		item.state = "merged";
+		delete item.articleLinkMerge;
 		item.rebasePending = true;
 		addEvent(
 			item,
@@ -655,6 +794,10 @@ export async function mergeContribution(
 		);
 	}
 	// Invalidate only after committing; a website read must see merged data.
+	if (isArticleLinkPr(merged)) {
+		await invalidateMergedArticleLinks(merged);
+		return merged;
+	}
 	try {
 		const people = new Set<string>(),
 			entities = new Set<string>(),

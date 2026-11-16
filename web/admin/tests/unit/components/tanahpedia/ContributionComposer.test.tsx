@@ -107,6 +107,167 @@ function description() {
 }
 
 describe("contribution composer", () => {
+	it("retains structured evidence on note edits and drops stale offsets when its quote changes", async () => {
+		const articleSource = {
+			articleId: "17",
+			contentHash: "a".repeat(32),
+			sourceHash: "b".repeat(64),
+			spanStart: 2,
+			spanEnd: 7,
+		};
+		const initial = {
+			id: ID,
+			kind: "issue",
+			title: "מקור",
+			description: "תיאור",
+			assignee: { kind: "unassigned" },
+			evidence: [
+				{
+					citation: "מאמר 17",
+					quote: "מקור ",
+					note: "",
+					url: null,
+					articleSource,
+				},
+			],
+			changes: [],
+			issueId: null,
+			closeIssue: true,
+		} as unknown as Contribution;
+		const { submit } = setup("issue", { initial });
+		fireEvent.change(screen.getByLabelText("מה המקור מוכיח?"), {
+			target: { value: "הסבר מעודכן" },
+		});
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					evidence: [
+						expect.objectContaining({ quote: "מקור ", articleSource }),
+					],
+				}),
+			),
+		);
+		submit.mockClear();
+		fireEvent.change(screen.getByLabelText("ציטוט רלוונטי"), {
+			target: { value: "ציטוט אחר" },
+		});
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					evidence: [
+						expect.objectContaining({
+							quote: "ציטוט אחר",
+							articleSource: undefined,
+						}),
+					],
+				}),
+			),
+		);
+		expect(initial.evidence[0].articleSource).toEqual(articleSource);
+	});
+	it("submits article links as an ordinary typed PR without converting numeric IDs to encyclopedia UUIDs", async () => {
+		const { submit } = setup("pr");
+		description();
+		fireEvent.change(screen.getByLabelText("סוג שינוי"), {
+			target: { value: "article_links" },
+		});
+		fireEvent.change(screen.getByLabelText("מספר מאמר"), {
+			target: { value: "17" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "+ הוספת קישור מוצע" }));
+		fireEvent.change(screen.getByLabelText("פרק בקישור 1 פסוק 1"), {
+			target: { value: "1" },
+		});
+		fireEvent.change(screen.getByLabelText("מספר פסוק בקישור 1 פסוק 1"), {
+			target: { value: "2" },
+		});
+		expect(
+			screen.getByRole("button", { name: "+ הוספת שינוי" }),
+		).toBeDisabled();
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					kind: "pr",
+					changes: [
+						{
+							kind: "article_links",
+							targetId: "17",
+							after: {
+								commands: [
+									{
+										relationshipKey: "coveringSources",
+										action: "add",
+										target: { pasukCoordinates: [{ perekId: 1, pasuk: 2 }] },
+									},
+								],
+							},
+						},
+					],
+				}),
+			),
+		);
+	});
+	it("retains a reviewed article-link command and expiry when editing the ordinary PR", async () => {
+		const change = {
+			kind: "article_links",
+			targetId: "17",
+			before: {},
+			after: {
+				commands: [
+					{
+						relationshipKey: "dedicationAssignments",
+						action: "replace",
+						target: { dedicationId: 3, expiresAt: "2030-01-02 03:04:05" },
+					},
+				],
+			},
+			labels: {},
+		};
+		const initial = {
+			id: ID,
+			kind: "pr",
+			title: "קישורי מאמר",
+			description: "תיאור",
+			assignee: { kind: "unassigned" },
+			evidence: [
+				{ citation: "בראשית א ב", quote: "מקור", note: "", url: null },
+			],
+			changes: [change],
+			issueId: null,
+			closeIssue: true,
+		} as unknown as Contribution;
+		const { submit } = setup("pr", { initial });
+		expect(screen.getByLabelText("מספר מאמר")).toHaveValue("17");
+		expect(screen.getByLabelText("תוקף הקדשה 1")).toHaveValue(
+			"2030-01-02T03:04:05",
+		);
+		fireEvent.submit(screen.getByRole("form"));
+		await waitFor(() =>
+			expect(submit).toHaveBeenCalledWith(
+				expect.objectContaining({
+					changes: [
+						{
+							kind: change.kind,
+							targetId: change.targetId,
+							after: change.after,
+						},
+					],
+				}),
+			),
+		);
+	});
+	it("offers an article aggregate only when there is one change in the PR", () => {
+		setup("pr");
+		fireEvent.click(screen.getByRole("button", { name: "+ הוספת שינוי" }));
+		expect(screen.getAllByRole("option", { name: "קישורי מאמר" })).toHaveLength(
+			2,
+		);
+		for (const option of screen.getAllByRole("option", { name: "קישורי מאמר" }))
+			expect(option).toBeDisabled();
+	});
 	it.each([undefined, "failed", "succeeded"] as const)(
 		"preserves an existing empty sequence only after a successful migration (%s)",
 		async (status) => {

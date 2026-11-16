@@ -503,7 +503,15 @@ describe("registered agent configuration and immutable declarations", () => {
 	it("older processes retain newer registrations and install from the newest retained release", async () => {
 		const newer = {
 			...mocks.bundle,
-			version: "tanahpedia-agents-v3",
+			version: "tanahpedia-agents-v4",
+			apiVersion: 5,
+			tools: [
+				{
+					name: "article_text",
+					description: "Read current article pages",
+					inputSchema: { type: "object" },
+				},
+			],
 			hash: "c".repeat(64),
 		};
 		mocks.bundleRows.mockResolvedValue([

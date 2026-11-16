@@ -46,7 +46,7 @@ const canonicalFixture = (value) =>
 					)
 					.join(",")}}`
 			: JSON.stringify(value);
-function agentBundle() {
+function agentBundle(overrides = {}) {
 	const payload = {
 		protocolVersion: 2,
 		version: "fixture-v1",
@@ -60,12 +60,142 @@ function agentBundle() {
 				inputSchema: { type: "object" },
 			},
 		],
+		...overrides,
 	};
 	return {
 		...payload,
 		hash: createHash("sha256").update(canonicalFixture(payload)).digest("hex"),
 	};
 }
+
+test("protocol two implements API five article links using the versioned read-only tool bundle", async () => {
+	const bundle = agentBundle({
+		version: "tanahpedia-agents-v4",
+		apiVersion: 5,
+		operationGuide: [
+			"article_links requires exact decimal targetId and typed commands; no prose or approval",
+		],
+		tools: ["record", "article_text"].map((name) => ({
+			name,
+			description: "Read current versioned data",
+			inputSchema: { type: "object" },
+		})),
+	});
+	const actions = [
+		{
+			action: "tool",
+			name: "record",
+			arguments: { kind: "target:article_links", id: "27" },
+		},
+		{
+			action: "tool",
+			name: "article_text",
+			arguments: { id: "27", cursor: 0, limit: 4000 },
+		},
+		{ action: "tool", name: "record", arguments: { kind: "perek", id: 99 } },
+		{
+			action: "complete",
+			result: {
+				outcome: "implemented",
+				summary: "הוצע קישור למאמר",
+				responses: [],
+				pullRequests: [
+					{
+						title: "קישור",
+						description: "מבוסס על המקור",
+						evidenceIndexes: [0],
+						changes: [
+							{
+								kind: "article_links",
+								targetId: "27",
+								after: {
+									commands: [
+										{
+											relationshipKey: "primaryPerek",
+											action: "replace",
+											target: { perekId: 99 },
+										},
+									],
+								},
+							},
+						],
+					},
+				],
+			},
+		},
+	];
+	const receipts = [];
+	const schemas = [{ type: "object", title: "initial" }];
+	let modelCalls = 0;
+	let completed;
+	const run = createContributionWorker(options, {
+		request: async (url, request) => {
+			const target = String(url);
+			const body = JSON.parse(request.body);
+			if (target.endsWith("/claim")) {
+				assert.equal(body.protocolVersion, 2);
+				return Response.json({
+					...claim,
+					apiVersion: 5,
+					user: "{}",
+					protocolVersion: 2,
+					task: "issue_implementation",
+					bundleHash: bundle.hash,
+					bundleVersion: bundle.version,
+					schema: schemas[0],
+				});
+			}
+			if (target.endsWith("/bundle")) return Response.json(bundle);
+			if (target.endsWith("/api/chat")) {
+				assert.deepEqual(body.format, schemas.at(-1));
+				assert.match(body.messages[0].content, /article_links/);
+				const dynamic = JSON.parse(body.messages[1].content);
+				assert.equal(dynamic.turns.length, modelCalls);
+				if (modelCalls >= 2)
+					assert.equal(dynamic.turns[1].response.sourceHash, "b".repeat(64));
+				return Response.json({
+					message: { content: JSON.stringify(actions[modelCalls++]) },
+				});
+			}
+			if (target.endsWith("/context")) {
+				assert.equal(body.apiVersion, 5);
+				assert.deepEqual(body.receipts, receipts);
+				const receipt = {
+					name: body.name,
+					arguments: body.arguments,
+					hash: String(receipts.length + 1).repeat(64),
+				};
+				receipts.push(receipt);
+				const schema = { type: "object", title: `read-${receipts.length}` };
+				schemas.push(schema);
+				return Response.json({
+					receipt,
+					schema,
+					data:
+						body.name === "article_text"
+							? {
+									text: "מקור",
+									total: 4,
+									nextCursor: null,
+									sourceHash: "b".repeat(64),
+								}
+							: { record: { id: body.arguments.id } },
+				});
+			}
+			if (target.endsWith("/complete")) {
+				completed = body;
+				return Response.json({ prIds: [id] });
+			}
+			throw new Error("Unexpected article worker request");
+		},
+	});
+	assert.deepEqual(await run(), { status: "completed", issueId, prIds: [id] });
+	assert.equal(completed.apiVersion, 5);
+	assert.equal(completed.protocolVersion, 2);
+	assert.deepEqual(completed.receipts, receipts);
+	assert.deepEqual(JSON.parse(completed.content), actions.at(-1).result);
+	assert.equal(modelCalls, 4);
+});
 
 test("malformed JSON never includes private input in failed jobs or returned errors", async () => {
 	const privateFragment = "pv_7F2k9";

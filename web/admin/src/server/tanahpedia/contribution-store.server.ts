@@ -39,12 +39,28 @@ export const CONTRIBUTION_AGENT_BUNDLE_SCHEMA = `CREATE TABLE IF NOT EXISTS tana
 	created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
 
+export const ARTICLE_LINK_IMPORT_SCHEMA = `CREATE TABLE IF NOT EXISTS tanahpedia_article_link_import (
+	proposal_id CHAR(36) NOT NULL PRIMARY KEY,
+	contribution_id CHAR(36) NOT NULL,
+	article_id INT NOT NULL,
+	original JSON NOT NULL,
+	created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+	KEY idx_article_link_import_pr (contribution_id),
+	KEY idx_article_link_import_article (article_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
+
+export const ARTICLE_LINK_IMPORT_LOCK_SCHEMA = `CREATE TABLE IF NOT EXISTS tanahpedia_article_link_import_lock (
+	article_id INT NOT NULL PRIMARY KEY
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`;
+
 let schemaPromise: Promise<unknown> | undefined;
 export async function ensureContributionSchema(): Promise<void> {
 	schemaPromise ??= (async () => {
 		await execute(CONTRIBUTION_SCHEMA);
 		await execute(CONTRIBUTION_AGENT_SCHEMA);
 		await execute(CONTRIBUTION_AGENT_BUNDLE_SCHEMA);
+		await execute(ARTICLE_LINK_IMPORT_SCHEMA);
+		await execute(ARTICLE_LINK_IMPORT_LOCK_SCHEMA);
 	})().catch((error: unknown) => {
 		schemaPromise = undefined;
 		throw error;

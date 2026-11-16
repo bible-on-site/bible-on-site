@@ -24,6 +24,10 @@ import {
 	FAMILY_UNION_TYPES,
 } from "~/server/tanahpedia/family-api-spec";
 import {
+	ContributionArticleLinkFields,
+	type PreviewContributionArticle,
+} from "./ContributionArticleLinks";
+import {
 	ContributionRecordFields,
 	draftField,
 	HebrewDateField,
@@ -146,6 +150,7 @@ const NUMBERS = new Set([
 	"endDate",
 ]);
 const DEFAULTS: Record<ChangeInput["kind"], Record<string, string>> = {
+	article_links: { commands: "[]" },
 	...(Object.fromEntries(
 		Object.entries(CONTRIBUTION_RECORDS).map(([kind, spec]) => [
 			kind,
@@ -252,10 +257,14 @@ function ChangeFields({
 	value,
 	onChange,
 	catalogue,
+	previewArticle,
+	allowArticleLinks,
 }: {
 	value: DraftChange;
 	onChange: (value: DraftChange) => void;
 	catalogue: ContributionCatalogue;
+	previewArticle?: PreviewContributionArticle;
+	allowArticleLinks: boolean;
 }) {
 	const targets = catalogue.targets.filter(
 		(target) => target.kind === value.kind,
@@ -294,7 +303,11 @@ function ChangeFields({
 								!isContributionRecordKind(key),
 						)
 						.map(([key, label]) => (
-							<option key={key} value={key}>
+							<option
+								key={key}
+								value={key}
+								disabled={key === "article_links" && !allowArticleLinks}
+							>
 								{label}
 							</option>
 						))}
@@ -355,7 +368,19 @@ function ChangeFields({
 					</select>
 				</label>
 			)}
-			{!["metadata", "entry"].includes(value.kind) && (
+			{value.kind === "article_links" && (
+				<ContributionArticleLinkFields
+					targetId={value.targetId}
+					commands={value.fields.commands}
+					references={catalogue.references}
+					previewArticle={previewArticle}
+					onTargetChange={(targetId) => onChange({ ...value, targetId })}
+					onCommandsChange={(commands) =>
+						onChange({ ...value, fields: { commands } })
+					}
+				/>
+			)}
+			{!["metadata", "entry", "article_links"].includes(value.kind) && (
 				<>
 					<label>
 						{structured ? "רשומה קיימת" : "קשר או זיהוי קיים"}
@@ -444,7 +469,7 @@ function ChangeFields({
 					catalogue={catalogue}
 				/>
 			)}
-			{!value.deleting && !structured && (
+			{!value.deleting && !structured && value.kind !== "article_links" && (
 				<div className="contribution-form-grid">
 					{Object.entries(value.fields)
 						.filter(
@@ -562,6 +587,7 @@ export function ContributionComposer({
 	onSubmit,
 	onCancel,
 	agents,
+	previewArticle,
 }: {
 	kind: "issue" | "pr";
 	initial?: Contribution;
@@ -571,6 +597,7 @@ export function ContributionComposer({
 	onSubmit: (value: ComposeContribution) => Promise<void>;
 	onCancel: () => void;
 	agents?: ContributionAgentSummary[];
+	previewArticle?: PreviewContributionArticle;
 }) {
 	const formId = useId();
 	const [title, setTitle] = useState(
@@ -612,20 +639,24 @@ export function ContributionComposer({
 										targetId: change.targetId || undefined,
 										after: change.deleting
 											? null
-											: Object.fromEntries(
-													Object.entries(change.fields).map(([key, value]) => [
-														key,
-														isContributionRecordKind(change.kind) ||
-														change.kind === "alias_mapping" ||
-														change.kind === "source_reference"
-															? recordFieldValue(change.kind, key, value)
-															: NUMBERS.has(key)
-																? value === ""
-																	? null
-																	: Number(value)
-																: value,
-													]),
-												),
+											: change.kind === "article_links"
+												? { commands: JSON.parse(change.fields.commands) }
+												: Object.fromEntries(
+														Object.entries(change.fields).map(
+															([key, value]) => [
+																key,
+																isContributionRecordKind(change.kind) ||
+																change.kind === "alias_mapping" ||
+																change.kind === "source_reference"
+																	? recordFieldValue(change.kind, key, value)
+																	: NUMBERS.has(key)
+																		? value === ""
+																			? null
+																			: Number(value)
+																		: value,
+															],
+														),
+													),
 									})),
 								)
 							: [];
@@ -717,7 +748,13 @@ export function ContributionComposer({
 													setEvidence(
 														evidence.map((item) =>
 															item.key === source.key
-																? { ...item, [key]: event.target.value }
+																? {
+																		...item,
+																		[key]: event.target.value,
+																		...(key === "quote"
+																			? { articleSource: undefined }
+																			: {}),
+																	}
 																: item,
 														),
 													)
@@ -793,6 +830,8 @@ export function ContributionComposer({
 								<ChangeFields
 									value={change}
 									catalogue={catalogue}
+									previewArticle={previewArticle}
+									allowArticleLinks={changes.length === 1}
 									onChange={(next) =>
 										setChanges(
 											changes.map((item) =>
@@ -820,7 +859,10 @@ export function ContributionComposer({
 						<button
 							className="contribution-button"
 							type="button"
-							disabled={changes.length >= 40}
+							disabled={
+								changes.length >= 40 ||
+								changes.some((change) => change.kind === "article_links")
+							}
 							onClick={() => setChanges([...changes, newChange()])}
 						>
 							+ הוספת שינוי
