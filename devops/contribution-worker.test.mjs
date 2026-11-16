@@ -1547,7 +1547,10 @@ test("real CLI preserves native tool history, typed final format and private evi
 		result,
 	};
 	const bootstrap = `data:text/javascript,${encodeURIComponent(`
+import assert from 'node:assert/strict';
 const fixture = JSON.parse(process.env.CONTRIBUTION_NATIVE_CLI_FIXTURE);
+// Reversing object property order must preserve the complete schema semantics.
+const expectedFormat = Object.fromEntries(Object.entries(fixture.job.schema.oneOf[0].properties.result).reverse());
 let models = 0, completed = false;
 globalThis.fetch = async (url, request) => {
   const path = new URL(url).pathname, body = JSON.parse(request.body);
@@ -1562,7 +1565,10 @@ globalThis.fetch = async (url, request) => {
     models++;
     if (!/^[1-9][0-9]*ms$/.test(body.keep_alive) || Number.parseInt(body.keep_alive,10)>120000) throw Error('Invalid model residency');
     if (models===2 && (body.messages.at(-1).role!=='tool' || !body.messages.at(-1).content.includes(fixture.marker))) throw Error('Native history was lost');
-    if (models===3 && (body.tools || JSON.stringify(body.format)!==JSON.stringify(fixture.job.schema.oneOf[0].properties.result))) throw Error('Typed format was changed');
+    if (models===3) {
+      if (body.tools) throw Error('Typed format was changed');
+      assert.deepEqual(body.format, expectedFormat);
+    }
     return Response.json({done:true,done_reason:'stop',prompt_eval_count:100,model:'untrusted-provider-model',message:{role:'assistant',content:models<=2?'':JSON.stringify(fixture.result),...(models<=2?{tool_calls:[{id:models===1?'one':'two',function:{name:'discussion',arguments:{}}}]}:{})}});
   }
   if (path.endsWith('/complete')) {
@@ -1616,7 +1622,9 @@ test("real CLI receives typed error feedback, executes the model's next read and
 		},
 	};
 	const bootstrap = `data:text/javascript,${encodeURIComponent(`
+import assert from 'node:assert/strict';
 const fixture = JSON.parse(process.env.CONTRIBUTION_RECOVERABLE_CLI_FIXTURE);
+const expectedFormat = Object.fromEntries(Object.entries(fixture.job.schema.oneOf[0].properties.result).reverse());
 let models = 0, reads = 0, completed = false;
 globalThis.fetch = async (url, request) => {
  const path = new URL(url).pathname, body = JSON.parse(request.body);
@@ -1638,11 +1646,15 @@ globalThis.fetch = async (url, request) => {
      if(feedback.error?.type!==fixture.error.error.type || feedback.error.code!==fixture.error.error.code || feedback.error.message!==fixture.error.error.message) throw Error('Actual error feedback missing');
    }
    if(models===3 && !body.messages.at(-1).content.includes(fixture.marker)) throw Error('Actual successful read missing');
-   if(models===4 && (body.tools || JSON.stringify(body.format)!==JSON.stringify(fixture.job.schema.oneOf[0].properties.result))) throw Error('Final schema was changed');
+   if(models===4) {
+     if(body.tools) throw Error('Final schema was changed');
+     assert.deepEqual(body.format, expectedFormat);
+   }
    return Response.json({done:true,prompt_eval_count:100,message:{role:'assistant',content:models<=2?'':models===3?'Ready':'{"outcome":"unchanged"}',...(models<=2?{tool_calls:[{id:models===1?'invalid':'valid',function:{name:'discussion',arguments:{cursor:models===1?-1:0}}}]}:{})}});
  }
  if(path.endsWith('/complete')) {
-   if(models!==4 || reads!==2 || JSON.stringify(body.receipts)!=='[{"id":"earned"}]') throw Error('Invalid receipt/progress boundary');
+   if(models!==4 || reads!==2) throw Error('Invalid receipt/progress boundary');
+   assert.deepEqual(body.receipts, [{id:'earned'}]);
    completed=true; console.log('recoverable_cli_verified'); return Response.json({prIds:[]});
  }
  if(path.endsWith('/fail')) return Response.json({updated:true});
