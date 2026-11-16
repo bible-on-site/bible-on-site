@@ -148,7 +148,7 @@ test("a symlinked checkout keeps the requested path identity while verifying can
   const requested = join(link, "BibleOnSite.app");
   const result = await prepareIosApp({ ...config, appPath: requested });
   assert.equal(result.appPath, requested);
-  assert.equal(result.canonicalAppPath, appPath);
+  assert.equal(result.canonicalAppPath, await realpath(appPath));
 });
 
 test("explicit review mode terminates the old process and preserves its data", async t => {
