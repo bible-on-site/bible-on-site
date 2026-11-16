@@ -1,5 +1,6 @@
 import type { PoolConnection } from "mysql2/promise";
 import { cataloguePerekLabel } from "~/lib/article-linking/catalogue";
+import { CONTRIBUTION_AGENT_ROOT_REFERENCE_KINDS } from "~/lib/tanahpedia/contribution-agent-read-kinds";
 import {
 	CONTRIBUTION_RECORDS,
 	type ContributionRecordKind,
@@ -18,21 +19,7 @@ export interface ContributionReference {
 	name: string;
 	ownerId?: string;
 }
-const ROOTS = [
-	"person",
-	"place",
-	"nation",
-	"event",
-	"war",
-	"animal",
-	"object",
-	"temple_tool",
-	"plant",
-	"astronomical_object",
-	"sefer",
-	"saying",
-	"prophecy",
-] as const;
+const ROOTS = CONTRIBUTION_AGENT_ROOT_REFERENCE_KINDS;
 export const REFERENCE_SELECTS: Record<string, string> = {
 	...Object.fromEntries(
 		ROOTS.map((kind) => [

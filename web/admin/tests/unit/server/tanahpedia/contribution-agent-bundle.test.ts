@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { canonicalJson } from "~/lib/canonical-json";
+import { CONTRIBUTION_AGENT_READ_KINDS } from "~/lib/tanahpedia/contribution-agent-read-kinds";
 import { CONTRIBUTION_API_VERSION } from "~/lib/tanahpedia/contribution-api";
 import { buildContributionAgentBundle } from "~/server/tanahpedia/contribution-agent-bundle.server";
 import {
@@ -17,7 +18,37 @@ describe("versioned contribution agent declarations", () => {
 		expect(buildContributionAgentBundle()).toEqual({ ...bundle, hash });
 		expect(bundle.apiVersion).toBe(CONTRIBUTION_API_VERSION);
 		expect(bundle.protocolVersion).toBe(2);
-		expect(bundle.version).toBe("tanahpedia-agents-v4");
+		expect(bundle.version).toBe("tanahpedia-agents-v5");
+	});
+	it("closes search and record vocabulary without discarding the other parameter constraints", () => {
+		const original = buildContributionAgentBundle();
+		for (const name of ["search", "record"]) {
+			const tool = original.tools.find((tool) => tool.name === name);
+			expect(tool?.inputSchema).toMatchObject({
+				type: "object",
+				additionalProperties: false,
+				properties: {
+					kind: { type: "string", enum: [...CONTRIBUTION_AGENT_READ_KINDS] },
+				},
+			});
+		}
+		const search = original.tools.find(
+			(tool) => tool.name === "search",
+		)?.inputSchema;
+		expect(search).toMatchObject({
+			required: ["kind", "query"],
+			properties: { limit: { maximum: 50 }, query: { maxLength: 255 } },
+		});
+		if (!search) throw new Error("Missing search declaration");
+		const kind = (search.properties as { kind: { enum: string[] } }).kind;
+		kind.enum.push("source");
+		expect(buildContributionAgentBundle().hash).toBe(original.hash);
+		expect(buildContributionAgentBundle().system).toContain(
+			"already-completed reads",
+		);
+		expect(buildContributionAgentBundle().operationGuide.join("\n")).toContain(
+			"search kind perek",
+		);
 	});
 	it("declares complete read tools separately from typed output and authority", () => {
 		const bundle = buildContributionAgentBundle();

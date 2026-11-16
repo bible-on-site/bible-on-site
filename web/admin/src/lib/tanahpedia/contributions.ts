@@ -9,6 +9,7 @@ import {
 	type FamilyUnionEndReason,
 	type FamilyUnionType,
 } from "~/server/tanahpedia/family-api-spec";
+import { CONTRIBUTION_AGENT_TARGET_KINDS } from "./contribution-agent-read-kinds";
 import type {
 	ContributionAgentProvider,
 	ContributionAgentResponse,
@@ -141,17 +142,7 @@ export interface IssueScope {
 }
 
 export const CONTRIBUTION_ISSUE_SCOPE_KINDS: readonly ChangeInput["kind"][] = [
-	"parent_child",
-	"union",
-	"place",
-	"metadata",
-	"entry",
-	"alias_mapping",
-	"source_reference",
-	"article_links",
-	...(Object.keys(
-		CONTRIBUTION_RECORDS,
-	) as (keyof typeof CONTRIBUTION_RECORDS)[]),
+	...CONTRIBUTION_AGENT_TARGET_KINDS,
 ];
 
 export function validateIssueScope(value: unknown): IssueScope | undefined {
