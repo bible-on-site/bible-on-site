@@ -95,6 +95,42 @@ function outcomeSchema(current: Contribution, outcome: string) {
 }
 
 describe("contribution agent result boundaries", () => {
+	it.each(
+		[["unchanged"], ["clarification"], ["revised"], null, {}, true, 0].map(
+			(value) => ({ value }),
+		),
+	)(
+		"rejects non-string outcome %j instead of coercing a JSON value to an enum",
+		({ value: outcome }) => {
+			expect(() =>
+				parse({ outcome, summary: "תוצאה", responses: [response] }),
+			).toThrow("Invalid agent outcome");
+		},
+	);
+	it("rejects an array-wrapped issue outcome before generation", () => {
+		expect(() =>
+			parse(
+				{ outcome: ["implemented"], summary: "תוצאה", responses: [] },
+				{ ...item(), kind: "issue" },
+			),
+		).toThrow("Invalid agent outcome");
+	});
+	it.each(
+		[["addressed"], ["needs_input"], null, {}, true, 0].map((value) => ({
+			value,
+		})),
+	)(
+		"rejects non-string response status %j before typed handling",
+		({ value: status }) => {
+			expect(() =>
+				parse({
+					outcome: "unchanged",
+					summary: "תוצאה",
+					responses: [{ ...response, status }],
+				}),
+			).toThrow("Invalid agent response");
+		},
+	);
 	it("pins an explicit human copy request as a required exact decoder field", () => {
 		const current = item();
 		current.events[0].body =

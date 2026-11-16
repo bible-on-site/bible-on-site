@@ -58,6 +58,46 @@ const moadim = (
 });
 
 describe("article-link operation boundary", () => {
+	it.each([
+		["coveringSources", ["remove"], { pasukCoordinates: [] }],
+		[
+			"coveringSources",
+			["clear"],
+			{ pasukCoordinates: [coordinate(1, 1)], coverageVerified: true },
+		],
+		["moadim", ["remove"], { moedIds: [] }],
+		["moadim", ["clear"], { moedIds: [2] }],
+		["dedicationAssignments", ["remove"], { dedicationId: 9, expiresAt: null }],
+		[
+			"dedicationAssignments",
+			["replace"],
+			{ dedicationId: 9, expiresAt: null },
+		],
+		["coveringSources", null, { pasukCoordinates: [] }],
+		["moadim", {}, { moedIds: [] }],
+		["dedicationAssignments", true, { dedicationId: 9, expiresAt: null }],
+	])(
+		"rejects a non-string %s action before projection",
+		(relationshipKey, action, target) => {
+			expect(() =>
+				validateArticleLinkChange(
+					change([{ relationshipKey, action, target }]),
+				),
+			).toThrow(/Unsupported .*action/);
+		},
+	);
+	it("keeps unrelated coordinates when a valid string remove is projected", () => {
+		const current = {
+			...base(),
+			coveringSources: [coordinate(1, 1), coordinate(1, 2)],
+		};
+		const parsed = validateArticleLinkChange(
+			change([covering("remove", [coordinate(1, 1)])]),
+		);
+		expect(projectArticleLinks(current, parsed.after).coveringSources).toEqual([
+			coordinate(1, 2),
+		]);
+	});
 	it.each(["1", "123", "2147483647"])(
 		"accepts canonical native article ID %s",
 		(id) => expect(contributionArticleId(id)).toBe(id),
