@@ -102,8 +102,6 @@ function fixture(t, extra = {}) {
       constructor(options) { calls.push(["native", options]); }
       async getDevices() { calls.push(["native-devices"]); return nativeDevices; }
     } }),
-    sleep: async (ms) => { calls.push(["sleep", ms]); },
-    settleMs: 0,
     log: () => {},
     ...extra,
   };
@@ -317,29 +315,45 @@ for (const sdk of ["not-a-version", "27.0\nEXTRA=value"]) {
   });
 }
 
-test("wait boots a device the runner powered off after it reported booted, then exports readiness", async (t) => {
-  const { options, calls, env, simQueue } = fixture(t);
-  simQueue.push("Shutdown", "Booted");
-  await bootIos({ ...options, mode: "wait",
+test("heal leaves a still-booted handed-off device alone", async (t) => {
+  const { options, calls, env } = fixture(t);
+  await bootIos({ ...options, mode: "heal",
     env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } });
-  assert.deepEqual(calls.filter(([kind]) => kind === "sim-boot"), [["sim-boot"]]);
-  assert.deepEqual(calls.filter(([kind]) => kind === "sim-wait"), [["sim-wait"]]);
-  assert.equal(readFileSync(env.GITHUB_ENV, "utf8"), `MOBILE_UDID=${UDID}\nMOBILE_OS_VERSION=27.0\n`);
-});
-
-test("wait refuses to hand off a device that keeps powering off", async (t) => {
-  const { options, calls, env, setSimState } = fixture(t);
-  setSimState("Shutdown");
-  await assert.rejects(bootIos({ ...options, mode: "wait",
-    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } }), /powering off|unstable/);
-  assert.equal(calls.filter(([kind]) => kind === "sim-boot").length, 1);
+  assert.deepEqual(calls.filter(([kind]) => kind === "driver"), [["driver", UDID]]);
+  assert.ok(!calls.some(([kind]) => kind === "sim-boot" || kind === "sim-wait"
+    || kind === "async" || kind === "native" || kind === "download"));
+  assert.ok(!calls.some(([kind, , command]) => kind === "sync" && command === "boot"));
   assert.equal(existsSync(env.GITHUB_ENV), false);
 });
 
-test("wait keeps observing a transitional state without rebooting and never counts it stable", async (t) => {
-  const { options, calls, env, simQueue } = fixture(t);
-  simQueue.push("Booting", "Booted");
-  await bootIos({ ...options, mode: "wait",
+test("heal boots a handed-off device the runner powered off and waits for it", async (t) => {
+  const { options, calls, env, setSimState } = fixture(t);
+  setSimState("Shutdown");
+  await bootIos({ ...options, mode: "heal",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } });
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-boot"), [["sim-boot"]]);
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-wait"), [["sim-wait"]]);
+  assert.ok(!calls.some(([kind, , command]) => kind === "sync" && command === "boot"));
+});
+
+test("heal waits out a still-booting handed-off device without rebooting", async (t) => {
+  const { options, calls, env, setSimState } = fixture(t);
+  setSimState("Booting");
+  await bootIos({ ...options, mode: "heal",
     env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" } });
   assert.equal(calls.filter(([kind]) => kind === "sim-boot").length, 0);
+  assert.deepEqual(calls.filter(([kind]) => kind === "sim-wait"), [["sim-wait"]]);
+});
+
+test("heal propagates a failed recovery boot without exporting readiness", async (t) => {
+  const { options, env, setSimState } = fixture(t);
+  setSimState("Shutdown");
+  await assert.rejects(bootIos({ ...options, mode: "heal",
+    env: { ...env, MOBILE_UDID: UDID, MOBILE_OS_VERSION: "27.0" },
+    loadDriver: async () => ({ getSimulator: async () => ({
+      stat: async () => ({ state: "Shutdown" }),
+      boot: async () => { throw new Error("native boot failed"); },
+      waitForBoot: async () => {},
+    }) }) }), /native boot failed/);
+  assert.equal(existsSync(env.GITHUB_ENV), false);
 });
