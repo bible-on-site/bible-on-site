@@ -1,11 +1,12 @@
 import type { ScriptureRange } from "../reading/contract";
 
-/** One published moed in the annual-wheel catalogue (#3101). */
+/** One published moed in the annual-wheel catalogue (#3101). The
+ * stored `summary` column is deliberately not read: the introduction
+ * renders only a resolved Tanahpedia entry preview (#3381). */
 export interface MoedSummary {
 	id: number;
 	slug: string;
 	name: string;
-	summary: string | null;
 	hebrewMonth: string | null;
 	dateLabel: string | null;
 	annualOrder: number;
