@@ -81,6 +81,7 @@ internal static class IosAppInstallation
         using var document = JsonDocument.Parse(json);
         var receipt = document.RootElement;
         if (receipt.GetProperty("kind").GetString() != "ios-verified-install/1" ||
+            !receipt.TryGetProperty("observerAcknowledged", out var acknowledged) || acknowledged.ValueKind != JsonValueKind.True ||
             receipt.GetProperty("nonce").GetString() != nonce ||
             receipt.GetProperty("bundleId").GetString() != "com.tanah.daily929" ||
             receipt.GetProperty("keepData").GetBoolean() != configuration.KeepAppForReview)
