@@ -125,6 +125,14 @@ public sealed class ReaderChromeActions
     /// closing the search surface or refreshing the Android Back callback.
     /// </summary>
     public Action<bool>? FullscreenStateChanged { get; init; }
+
+    /// <summary>
+    /// Runs after the articles/reading-view swap actually settles — the page
+    /// re-reads <see cref="ReaderChrome.IsShowingArticles"/> and reports the
+    /// analytics surface that is now on screen (#3378). A failed articles
+    /// load never swapped the surfaces and notifies nothing.
+    /// </summary>
+    public Action<bool>? ArticlesVisibilityChanged { get; init; }
 }
 
 /// <summary>
@@ -245,6 +253,7 @@ public sealed class ReaderChrome
         _ui.ReadingProgressIndicator?.IsVisible = true;
 
         _ui.BottomBar.IsArticlesActive = false;
+        _actions.ArticlesVisibilityChanged?.Invoke(false);
     }
 
     /// <summary>Bottom-bar chevron — toggles the perushim sheet.</summary>
@@ -303,6 +312,7 @@ public sealed class ReaderChrome
             _ui.ReadingProgressIndicator?.IsVisible = false;
 
             _ui.BottomBar.IsArticlesActive = true;
+            _actions.ArticlesVisibilityChanged?.Invoke(true);
         }
 #pragma warning disable S2221 // Deliberate failure boundary: articles-view transition must not crash the reader
         catch (Exception ex) //NOSONAR — articles-view transition must not crash the reader.
