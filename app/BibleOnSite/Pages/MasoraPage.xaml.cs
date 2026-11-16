@@ -103,6 +103,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable //NOSONAR
             {
                 ReloadArticlesAsync = ShowUnitArticlesAsync,
                 CurrentUnit = () => _viewModel.Unit,
+                OpenNavigationAsync = () => { MasoraUnitPickerPopup.Show(_viewModel.UnitId); return Task.CompletedTask; },
                 SelectArticle = id => _viewModel.SelectedArticleId = id,
                 CanGoPrevious = () => _viewModel.CanGoToPreviousUnit,
                 CanGoNext = () => _viewModel.CanGoToNextUnit,

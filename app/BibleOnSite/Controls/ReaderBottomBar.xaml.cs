@@ -93,9 +93,10 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
     {
         if (_previewArticles is { } preview && _previewArticleBadge is { } badge && _previewArticleCount is { } label)
         {
-            badge.IsVisible = count > 0;
+            badge.IsVisible = count > 0 && !IsArticlesActive;
             label.Text = count.ToString();
-            SemanticProperties.SetDescription(preview, count > 0 ? $"מאמרי הפרק, {count} מאמרים" : "מאמרי הפרק");
+            SemanticProperties.SetDescription(preview, IsArticlesActive ? "חזרה לפרק"
+                : count > 0 ? $"מאמרי הפרק, {count} מאמרים" : "מאמרי הפרק");
         }
         ArticlesBadge.IsVisible = count > 0;
         if (count > 0)
@@ -145,7 +146,7 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
                 }
             }
         };
-        _previewText = PreviewAction("תצוגת\nהטקסט", "TextButton", Fonts.FluentUI.text_font_size_24_regular, OnPreviewDisplayClicked);
+        _previewText = PreviewAction("ניווט\nבתנ\"ך", "TextButton", Fonts.FluentUI.library_24_regular, OnTextButtonClicked);
         _previewPerushim = PreviewAction("בחירת\nפירושים", "PerushimChevronButton", Fonts.FluentUI.text_bullet_list_square_24_regular, OnPerushimChevronClicked);
         _previewArticles = PreviewAction("מאמרי\nהפרק", "ArticlesButton", Fonts.FluentUI.document_24_regular, OnArticlesButtonClicked);
         SemanticProperties.SetDescription(_previewPerushim, "בחירת הפירושים שיוצגו לצד הפסוקים");
@@ -209,12 +210,13 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
     {
         if (_previewText is null || _previewPerushim is null || _previewArticles is null) { return; }
         var selected = IsArticlesActive ? _previewArticles : IsPerushimOpen ? _previewPerushim : null;
-        _previewText.Text = IsArticlesActive ? "חזרה\nלפסוקים" : "תצוגת\nהטקסט";
-        SemanticProperties.SetDescription(_previewText, IsArticlesActive ? "חזרה לפסוקי הפרק" : "שינוי גודל הגופן ותצוגת הטקסט");
-        if (_previewText.ImageSource is FontImageSource icon)
+        SemanticProperties.SetDescription(_previewText, "ניווט בתנ\"ך ובחירת ספר ופרק");
+        _previewArticles.Text = IsArticlesActive ? "חזרה\nלפרק" : "מאמרי\nהפרק";
+        if (_previewArticles.ImageSource is FontImageSource icon)
         {
-            icon.Glyph = IsArticlesActive ? Fonts.FluentUI.book_open_24_regular : Fonts.FluentUI.text_font_size_24_regular;
+            icon.Glyph = IsArticlesActive ? Fonts.FluentUI.book_open_24_regular : Fonts.FluentUI.document_24_regular;
         }
+        ApplyBadgeCount(ArticlesBadgeCount);
         foreach (var action in new[] { _previewText, _previewPerushim, _previewArticles })
         {
             action.SetAppThemeColor(BackgroundColorProperty,
@@ -222,12 +224,6 @@ public partial class ReaderBottomBar : Grid, IReaderBottomBarSurface
                 action == selected ? Color.FromArgb("#314F78") : Color.FromArgb("#233956"));
         }
         _previewPerushim.IsEnabled = !IsArticlesActive;
-    }
-
-    private async void OnPreviewDisplayClicked(object? sender, EventArgs e)
-    {
-        if (IsArticlesActive) { OnTextButtonClicked(sender, e); }
-        else { await Services.ShellAppNavigator.Instance.GoToAsync(Services.AppRoutes.DisplayPreferences); }
     }
 
     private void OnPerushimChevronClicked(object? sender, EventArgs e) =>

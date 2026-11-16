@@ -6,7 +6,7 @@
 
 כל צילומי ה"לפני" הם מהענף הראשי של המאגר, ולא מאיטרציות קודמות בענף ה-UX. מימין: המצב הקיים. משמאל: ההצעה הנוכחית. כל הצילומים והסרטונים נלקחו מהאפליקציה האמיתית באמולטור Android.
 
-בסיס צילומי "לפני": `master / 95c202eb5`. עודכן: 2026-11-15.
+בסיס צילומי "לפני": `master / 95c202eb5`. עודכן: 2026-11-16.
 
 הפרק היומי, הפרשות והמועדים מקבלים אריחים רחבים בבית. ביניהם אריחים בודדים. צילומי "אחרי" מתעדכנים באותם שמות קבצים.
 
@@ -34,15 +34,26 @@ GitHub מציג את ה-Markdown כתוכן מעוצב ותומך ב-rich diff �
 <td align="right"><img width="300" src="assets/after/home-navigation.png" alt="הכניסות בהמשך הבית" loading="lazy"><br>הכניסות בהמשך הבית</td>
 </tr></tbody></table>
 
-## כלים שמשנים את הקריאה - עם שמות של פעולות
+## ניווט, פירושים ומאמרי הפרק
 
-תצוגת הטקסט פותחת גודל גופן ותצוגה. בחירת פירושים קובעת אילו פירושים יוצגו לצד הפסוקים. מאמרי הפרק פותחים תוכן נוסף, עם מונה נפרד. הכפתורים אינם מוצגים כשלוש לשוניות ניווט מקבילות.
+ניווט בתנ"ך פותח בחירת ספר ופרק ונשאר קבוע גם במאמרים. בחירת פירושים קובעת מה יוצג לצד הפסוקים. מאמרי הפרק מתחלף לחזרה לפרק באותו מקום.
 
 <table dir="rtl">
 <thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
 <tbody><tr>
 <td align="right"><img width="300" src="assets/before/reader.png" alt="הקורא ופס האייקונים הקיים" loading="lazy"><br>הקורא ופס האייקונים הקיים</td>
-<td align="right"><img width="300" src="assets/after/reader.png" alt="פעולות מפורשות וכפתורים גדולים" loading="lazy"><br>פעולות מפורשות וכפתורים גדולים</td>
+<td align="right"><img width="300" src="assets/after/reader.png" alt="ניווט קבוע והחלפת פעולה באותו כפתור" loading="lazy"><br>ניווט קבוע והחלפת פעולה באותו כפתור</td>
+</tr></tbody></table>
+
+## ניווט בתנ"ך מתוך הסרגל
+
+אותו בורר ספר ופרק נפתח מכפתור ניווט בתנ"ך. הכפתור נשאר קבוע גם כשמוצגים מאמרי הפרק.
+
+<table dir="rtl">
+<thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
+<tbody><tr>
+<td align="right"><img width="300" src="assets/before/reader.png" alt="הניווט דרך כותרת הפרק ב-master" loading="lazy"><br>הניווט דרך כותרת הפרק ב-master</td>
+<td align="right"><img width="300" src="assets/after/reader-navigation.png" alt="בחירת ספר ופרק מתוך הסרגל" loading="lazy"><br>בחירת ספר ופרק מתוך הסרגל</td>
 </tr></tbody></table>
 
 ## גלילה - אזור הקריאה נשאר יציב
@@ -67,37 +78,37 @@ GitHub מציג את ה-Markdown כתוכן מעוצב ותומך ב-rich diff �
 <td align="right"><img width="300" src="assets/after/reader-tools.png" alt="גיליון האפשרויות החדש" loading="lazy"><br>גיליון האפשרויות החדש</td>
 </tr></tbody></table>
 
-## תצוגת הטקסט - הפעולה מובילה לשינוי התצוגה
+## גודל הגופן ותצוגת הטקסט נמצאים בהעדפות
 
-המסך משנה את גודל הגופן והתצוגה בפועל. הוא נגיש כעת מהקורא בכפתור עם אייקון גודל אות ושם מפורש, במקום כפתור בשם קריאה. המעטפת משתמשת באפור קריר, לבן וכחול.
+מסך העדפות התצוגה ממשיך לשנות את הגופן והתצוגה. הכפתור בסרגל הקורא הוחלף לניווט בתנ"ך.
 
 <table dir="rtl">
 <thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
 <tbody><tr>
 <td align="right"><img width="300" src="assets/before/display-options.png" alt="העדפות התצוגה ב-master" loading="lazy"><br>העדפות התצוגה ב-master</td>
-<td align="right"><img width="300" src="assets/after/display-options.png" alt="הכניסה הישירה מתצוגת הטקסט" loading="lazy"><br>הכניסה הישירה מתצוגת הטקסט</td>
+<td align="right"><img width="300" src="assets/after/display-options.png" alt="העדפות התצוגה של האפליקציה" loading="lazy"><br>העדפות התצוגה של האפליקציה</td>
 </tr></tbody></table>
 
-## בוחרים אילו פירושים יופיעו לצד הפסוקים
+## חלונית הפירושים מכסה את הסרגל
 
-הכפתור נקרא בחירת פירושים, והגיליון מסביר את התוצאה של הבחירה. הגיליון יושב מעל הסרגל התחתון, כך שהסרגל אינו מכסה את אפשרויות הבחירה.
+החלונית נמצאת לפני הסרגל התחתון בציר Z, ומכסה אותו חזותית ובמגע. היא מתחילה בתחתית המסך, ללא רווח שמור לסרגל.
 
 <table dir="rtl">
 <thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
 <tbody><tr>
 <td align="right"><img width="300" src="assets/before/commentary.png" alt="גיליון הפירושים הקיים" loading="lazy"><br>גיליון הפירושים הקיים</td>
-<td align="right"><img width="300" src="assets/after/commentary.png" alt="כותרת והסבר שמתארים את הפעולה" loading="lazy"><br>כותרת והסבר שמתארים את הפעולה</td>
+<td align="right"><img width="300" src="assets/after/commentary.png" alt="הפירושים מכסים את הסרגל התחתון" loading="lazy"><br>הפירושים מכסים את הסרגל התחתון</td>
 </tr></tbody></table>
 
 ## מאמרי הפרק - תוכן נוסף עם דרך חזרה ברורה
 
-המספר מופיע כתג נפרד מהכיתוב. כשמציגים מאמרים, הכפתור הראשון משתנה לחזרה לפסוקים. במצב זה הוא מחזיר לטקסט, ובמצב הפסוקים הוא פותח את תצוגת הטקסט.
+במצב מאמרים, כפתור מאמרי הפרק עצמו מתחלף לחזרה לפרק. ניווט בתנ"ך נשאר באותו מקום וממשיך לפתוח את בורר הניווט.
 
 <table dir="rtl">
 <thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
 <tbody><tr>
 <td align="right"><img width="300" src="assets/before/articles.png" alt="מאמרי הפרק ב-master" loading="lazy"><br>מאמרי הפרק ב-master</td>
-<td align="right"><img width="300" src="assets/after/articles.png" alt="מאמרים וחזרה מפורשת לפסוקים" loading="lazy"><br>מאמרים וחזרה מפורשת לפסוקים</td>
+<td align="right"><img width="300" src="assets/after/articles.png" alt="חזרה לפרק באותו כפתור של מאמרי הפרק" loading="lazy"><br>חזרה לפרק באותו כפתור של מאמרי הפרק</td>
 </tr></tbody></table>
 
 ## פרשה על הפרק - אריח רחב בבית
@@ -111,9 +122,9 @@ GitHub מציג את ה-Markdown כתוכן מעוצב ותומך ב-rich diff �
 <td align="right"><img width="300" src="assets/after/home-parasha.png" alt="אריח פרשות ברוחב מלא בתוך הבית" loading="lazy"><br>אריח פרשות ברוחב מלא בתוך הבית</td>
 </tr></tbody></table>
 
-## מועדים על הפרק - מקום למעגל השנה
+## לימוד התנ"ך במעגל השנה
 
-אריח המועדים ממשיך את השפה של הפרק היומי בכחול עמוק, עם לוח שנה עדין ברקע וכניסה ישירה לחגים ולמועדים. תנכפדיה ומסורה מופיעות מעליו באריחים בודדים.
+אריח המועדים בכחול בהיר, עם קריאות החגים ומועדים, מקורותיהם בתנ"ך ומאמרים. האריחים בבית משלבים לבן ושני גווני כחול: כחול עמוק וכחול בהיר.
 
 <table dir="rtl">
 <thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
@@ -124,13 +135,13 @@ GitHub מציג את ה-Markdown כתוכן מעוצב ותומך ב-rich diff �
 
 ## יצירת קשר ותרומות - קרוב לתוכן
 
-יצירת קשר ותרומות מקבלות אריחים בודדים ונוחים ללחיצה בהמשך הבית, לצד רבנים וכותבים והעלון היומי. כל אריח פותח ישירות את המסך הקיים.
+הרבנים הכותבים מאפשר איתור מאמר לפי המחבר; העלון מציע גליון יומי אצלכם בתיבה. תרומות מוגדרות כתמיכה בתוכנית. תנאי שימוש ופרטיות מוצגים באריח קטן לצד יתר הכניסות.
 
 <table dir="rtl">
 <thead><tr><th align="right">לפני - הענף הראשי</th><th align="right">אחרי - הצעת UX</th></tr></thead>
 <tbody><tr>
 <td align="right"><img width="300" src="assets/before/navigation.png" alt="קשר ותמיכה דרך המגירה ב-master" loading="lazy"><br>קשר ותמיכה דרך המגירה ב-master</td>
-<td align="right"><img width="300" src="assets/after/home-community.png" alt="אריחים קטנים ליצירת קשר ולתרומות" loading="lazy"><br>אריחים קטנים ליצירת קשר ולתרומות</td>
+<td align="right"><img width="300" src="assets/after/home-community.png" alt="הניסוחים המעודכנים ואריח קטן לתנאי השימוש" loading="lazy"><br>הניסוחים המעודכנים ואריח קטן לתנאי השימוש</td>
 </tr></tbody></table>
 
 ## חיפוש בתוכן וגם ביעדי האפליקציה

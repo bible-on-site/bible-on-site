@@ -164,6 +164,7 @@ public partial class ParashaPage : ContentPage, IQueryAttributable, IAnalyticsSc
             {
                 ReloadArticlesAsync = ShowUnitArticlesAsync,
                 CurrentUnit = () => _viewModel.Unit,
+                OpenNavigationAsync = () => { ParashaUnitPickerPopup.Show(_viewModel.UnitId); return Task.CompletedTask; },
                 SelectArticle = id => _viewModel.SelectedArticleId = id,
                 CanGoPrevious = () => _viewModel.CanGoToPreviousUnit,
                 CanGoNext = () => _viewModel.CanGoToNextUnit,

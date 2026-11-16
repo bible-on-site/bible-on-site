@@ -152,6 +152,7 @@ public partial class PerekPage : ContentPage, IQueryAttributable, IAnalyticsScre
             {
                 ReloadArticlesAsync = () => { LoadArticles(); return Task.CompletedTask; },
                 CurrentUnit = () => _viewModel.Perek,
+                OpenNavigationAsync = () => { PerekPickerPopup.Show(_viewModel.PerekId); return Task.CompletedTask; },
                 SelectArticle = id => _viewModel.SelectedArticleId = id,
                 CanGoPrevious = () => _viewModel.CanGoToPreviousPerek,
                 CanGoNext = () => _viewModel.CanGoToNextPerek,
