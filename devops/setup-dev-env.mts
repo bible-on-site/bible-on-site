@@ -966,7 +966,16 @@ function assertRustVersion() {
 function assertMAUIVersion() {
 	// TODO: check using semver, TODO: inform if MAUI is not installed
 	console.info("Checking .NET MAUI version...");
-	const supportedMauiVersions = ["9.0.100"];
+	// `dotnet workload list` reports the SDK feature band ("SDK 11.0.100"),
+	// not the workload manifest — derive the expected band from the app
+	// global.json pin so this check cannot go stale on SDK bumps.
+	const sdkPin = JSON.parse(
+		fs.readFileSync(path.join(projectDir, "app", "global.json"), "utf8"),
+	).sdk.version;
+	const [sdkMajor, sdkMinor, sdkPatch] = sdkPin.split(".").map(Number);
+	const supportedMauiVersions = [
+		`${sdkMajor}.${sdkMinor}.${Math.floor(sdkPatch / 100) * 100}`,
+	];
 	const result = spawnSync("dotnet", ["workload", "list"], {
 		shell: isWin,
 	});
