@@ -41,7 +41,7 @@ internal static class ListItemAutomationNames
 		TryAttachRepeater(itemsView);
 	}
 
-	private static void OnItemsViewLoaded(object sender, RoutedEventArgs e)
+	private static void OnItemsViewLoaded(object sender, RoutedEventArgs _)
 	{
 		if (sender is WItemsView itemsView)
 		{
@@ -145,6 +145,7 @@ internal static class ListItemAutomationNames
 		if (args.InRecycleQueue)
 		{
 			container.Loaded -= OnElementLoaded;
+			container.LayoutUpdated -= OnRetryLayoutUpdated;
 			container.ClearValue(AutomationProperties.NameProperty);
 			return;
 		}
@@ -167,7 +168,7 @@ internal static class ListItemAutomationNames
 	private static void ApplyName(UIElement element)
 	{
 		var parts = new List<string>();
-		Collect(element, parts);
+		var sawInteractiveChild = Collect(element, parts);
 		var name = AccessibleItemText.Compose(parts);
 		if (name.Length == 0)
 		{
@@ -178,8 +179,11 @@ internal static class ListItemAutomationNames
 			AutomationProperties.SetAccessibilityView(element, AccessibilityView.Raw);
 			// Content can materialize after prepare/loaded (virtualized rows
 			// realize their child on first layout). Keep retrying on layout
-			// until a name sticks or the container is recycled.
-			if (element is FrameworkElement framework)
+			// until a name sticks or the container is recycled — except rows
+			// whose content is a self-named interactive control (a TappableView
+			// row is one button that carries its own UIA name): those never
+			// compose a name and would be rescanned on every layout.
+			if (!sawInteractiveChild && element is FrameworkElement framework)
 			{
 				framework.LayoutUpdated -= OnRetryLayoutUpdated;
 				framework.LayoutUpdated += OnRetryLayoutUpdated;
@@ -197,8 +201,9 @@ internal static class ListItemAutomationNames
 		}
 	}
 
-	private static void Collect(DependencyObject node, List<string> parts)
+	private static bool Collect(DependencyObject node, List<string> parts)
 	{
+		var sawInteractiveChild = false;
 		var count = VisualTreeHelper.GetChildrenCount(node);
 		for (var i = 0; i < count; i++)
 		{
@@ -206,8 +211,13 @@ internal static class ListItemAutomationNames
 			// Buttons inside a row are their own UIA elements with their own
 			// names. A nested list names its own items — absorbing its rows
 			// into the parent row's name would read the whole list.
-			if (child is ButtonBase or ListViewBase or WItemsView or SelectorItem
-				or UIElement { Visibility: Visibility.Collapsed })
+			if (child is ButtonBase or ListViewBase or WItemsView or SelectorItem)
+			{
+				sawInteractiveChild = true;
+				continue;
+			}
+
+			if (child is UIElement { Visibility: Visibility.Collapsed })
 			{
 				continue;
 			}
@@ -228,10 +238,12 @@ internal static class ListItemAutomationNames
 					parts.AddRange(rich.Blocks.OfType<Paragraph>().Select(p => InlineText(p.Inlines)));
 					continue;
 				default:
-					Collect(child, parts);
+					sawInteractiveChild |= Collect(child, parts);
 					break;
 			}
 		}
+
+		return sawInteractiveChild;
 	}
 
 	private static string InlineText(InlineCollection inlines) =>
