@@ -23,6 +23,7 @@ import {
 	pediaInvalidation,
 	revalidateWebsite,
 } from "../website-revalidate";
+import { placeholders } from "./sql-helpers";
 
 /**
  * Admin management of an entry's public address names — the aliases stored in
@@ -104,10 +105,6 @@ function mergeTargets(rows: AliasTarget[]): AliasTarget[] {
 		}
 	}
 	return [...byId.values()];
-}
-
-function placeholders(count: number): string {
-	return Array.from({ length: count }, () => "?").join(", ");
 }
 
 async function loadAliasTargets(name: string): Promise<AliasTarget[]> {
