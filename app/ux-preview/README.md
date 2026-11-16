@@ -104,8 +104,10 @@ while the harness measures gestures.
 The checks exercise real native controls, record screenshots, and verify toolbar
 visibility, chapter swipes, system Back, index selection, populated calendar,
 destination returns, navigation search, content-result navigation, articles after
-a hidden text toolbar, and app links with two reader instances. An Android
-ANR fails the run immediately and records its screen. The reading-options check
+a hidden text toolbar, and app links with two reader instances. An app ANR
+during an interactive scenario fails the run immediately and records its
+screen; a startup ANR while the app cold-starts on a loaded emulator is
+dismissed and counted in `startup_anrs_waited` in `results.json`. The reading-options check
 also verifies the dock's navigation picker in text and article modes, commentary
 explanation and coverage of the dock in Z order, Screen filter and result navigation,
 Bible navigation selection, and return through the articles action. The explicit fullscreen
