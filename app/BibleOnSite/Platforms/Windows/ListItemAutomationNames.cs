@@ -103,7 +103,10 @@ internal static class ListItemAutomationNames
 		args.Element.ClearValue(AutomationProperties.NameProperty);
 	}
 
-	private static void OnElementLoaded(object sender, RoutedEventArgs _)
+	// Codacy S1172: the event-args parameter is required by RoutedEventHandler.
+#pragma warning disable S1172
+	private static void OnElementLoaded(object sender, RoutedEventArgs _) //NOSONAR
+#pragma warning restore S1172
 	{
 		if (sender is UIElement element)
 		{
@@ -111,7 +114,11 @@ internal static class ListItemAutomationNames
 		}
 	}
 
-	private static void OnRetryLayoutUpdated(object? sender, object _)
+	// Codacy S1172: the second argument is required by the
+	// EventHandler<object> signature even though it goes unused.
+#pragma warning disable S1172
+	private static void OnRetryLayoutUpdated(object? sender, object _) //NOSONAR
+#pragma warning restore S1172
 	{
 		if (sender is UIElement element)
 		{
