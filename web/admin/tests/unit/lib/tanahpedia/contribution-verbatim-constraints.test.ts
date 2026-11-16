@@ -225,6 +225,78 @@ describe("deterministic human verbatim field constraints", () => {
 			),
 		).toEqual([{ field: "title", expected: "Final", commentIds: ["three"] }]);
 	});
+	it.each([
+		'Do not append "Neutral" verbatim to description.',
+		"Don't append to description.",
+		'אל תוסיף לתיאור בדיוק "Neutral".',
+		"לא להוסיף לתיאור.",
+		"Do not change the description.",
+		"אל תשנה את התיאור.",
+	])(
+		"suppresses a mechanical edit contradicted by another pending human directive: %s",
+		(body) => {
+			const positive = {
+				id: "positive",
+				body: 'Append "Neutral" verbatim to description.',
+			};
+			const negative = { id: "negative", body };
+			for (const comments of [
+				[positive, negative],
+				[negative, positive],
+			])
+				expect(deriveVerbatimFieldConstraints(comments, current)).toEqual([]);
+		},
+	);
+	it("keeps unrelated fields and later unrelated negative clauses independent", () => {
+		expect(
+			deriveVerbatimFieldConstraints(
+				[
+					{ id: "positive", body: 'Append "Neutral" verbatim to description.' },
+					{
+						id: "title-negative",
+						body: 'Do not append "Description" to title.',
+					},
+					{ id: "title-unchanged", body: "Do not change the title." },
+					{
+						id: "unrelated",
+						body: "Do not add another PR; the description is satisfactory.",
+					},
+				],
+				current,
+			),
+		).toEqual([
+			{
+				field: "description",
+				expected: "Existing description\nNeutral",
+				commentIds: ["positive"],
+			},
+		]);
+	});
+	it("does not treat negative copy wording or field names inside a quote as authority", () => {
+		expect(
+			deriveVerbatimFieldConstraints(
+				[
+					{ id: "positive", body: 'Append "Neutral" verbatim to description.' },
+					{
+						id: "title",
+						body: 'Set title to "Do not append to description" verbatim.',
+					},
+				],
+				current,
+			),
+		).toEqual([
+			{
+				field: "description",
+				expected: "Existing description\nNeutral",
+				commentIds: ["positive"],
+			},
+			{
+				field: "title",
+				expected: "Do not append to description",
+				commentIds: ["title"],
+			},
+		]);
+	});
 	it("retains an overlength expected value so it cannot be truncated into false success", () => {
 		const quote = "x".repeat(256);
 		expect(derive(`Set title to "${quote}" verbatim.`)[0].expected).toBe(quote);
