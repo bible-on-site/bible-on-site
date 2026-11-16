@@ -9,7 +9,7 @@ const ROOT_URL = "http://127.0.0.1:3003";
  *   article 1 — linked AND range-matched (deduplicates to one entry)
  *   articles 2-4 — range-matched only (unverified primary-perek fallback)
  *   article 5 — linked but excluded: its primary perek (5000) is not a
- *   routable public chapter, so the link alone cannot resurrect a dead
+ *   routable public one, so the link alone cannot resurrect a dead
  *   route (mirrors getMoedArticleSummaries on the website)
  *   article 3 — the explicit-only link on moed 92
  */
