@@ -232,6 +232,20 @@ class NativeDevice:
             and bounds(n)[2] - bounds(n)[0] > self.width / 2
         )]
 
+    def log_count(self, needle):
+        """Occurrences of an app DebugLog line in the current logcat buffer."""
+        out = self.adb("shell", "logcat", "-d", "-s", "DOTNET:I")
+        return out.decode("utf-8", "replace").count(needle)
+
+    def wait_log(self, needle, count, description):
+        """Block until the app logs `needle` more than `count` times."""
+        deadline = time.monotonic() + 90
+        while time.monotonic() < deadline:
+            if self.log_count(needle) > count:
+                return
+            self.poll_interval.wait(0.5)
+        raise AssertionError(description)
+
     def capture(self, name):
         self.adb("shell", "screencap", "-p", "/sdcard/home-ux.png")
         self.adb("pull", "/sdcard/home-ux.png", self.artifacts / f"{name}.png")
@@ -357,11 +371,43 @@ def check_index(device, check):
 
 
 def check_scroll_and_swipe(device, check):
-    initial = device.nodes()
+    # Re-enter the daily reader through the home card. It was opened (not
+    # scrolled) by check_home_and_daily, so the verse list still starts at
+    # pasuk א and — unlike a fresh navigation — no heavy carousel initialize
+    # or preload lands inside the measured window.
+    loaded_marker = device.log_count("[PerekLoad] stage=loaded")
+    preload_marker = device.log_count("[Carousel] PreloadAdjacent")
+    device.home()
+    device.tap("HomeDailyPerek")
+    device.wait(lambda ns: device.verses(ns), "Daily reader")
+    if device.log_count("[PerekLoad] stage=loaded") > loaded_marker:
+        # Every fresh load schedules a heavy carousel preload a few seconds in;
+        # the app logs when it finishes. Waiting for that real signal keeps the
+        # measured drag out of the preload window on any host speed.
+        device.wait_log("[Carousel] PreloadAdjacent", preload_marker,
+                        "carousel preload did not finish")
+    # Async inserts (dedication line, reading-time badge) rebind the collection
+    # and reset its scroll position. Measuring a drag against a moving layout
+    # is racy, so require a stable verse layout first.
+    signature = {}
+
+    def settled(ns):
+        sig = tuple((v.get("text", "")[:24], bounds(v)) for v in device.verses(ns))
+        if not sig:
+            return None
+        if sig == signature.get("sig"):
+            signature["stable"] = signature.get("stable", 0) + 1
+        else:
+            signature["sig"], signature["stable"] = sig, 0
+        return sig if signature["stable"] >= 3 else None
+
+    initial = device.wait(settled, "Reading content did not settle")
     viewport = bounds(find(initial, "PasukimCollection"))
     menu = find(initial, "ReaderMenuButton")
     articles = find(initial, "ArticlesButton")
     home = find(initial, "TopBarHomeButton")
+    check.assertIsNotNone(menu, "Reader menu action missing on re-entry")
+    check.assertIsNotNone(home, "Reader home action missing on re-entry")
     device.swipe(0.5, 0.76, 0.5, 0.34)
     items = device.wait(
         lambda ns: find(ns, "TopBarHomeButton") is None and find(ns, "TextButton") is None and device.verses(ns),
@@ -655,7 +701,10 @@ def check_search_layout(device, check):
     check.assertTrue(any(box[1] < b[3] and box[3] > b[1] for b in actions.values()),
                      "Search input is not in the top actions row")
     right_gap = min(b[0] - box[2] for b in actions.values() if b[0] >= box[2])
-    check.assertTrue(0 <= right_gap <= 48,
+    # The pill's own margin keeps it off the action row; a hidden clear action
+    # would reserve an extra button-width on this side only. Bound the gap by
+    # the input's own leading inset so both sides share one margin language.
+    check.assertTrue(0 <= right_gap <= box[0],
                      f"Hidden clear action reserves trailing space: {right_gap}px")
     check.assertIsNone(find(items, "ClearAuthorsSearchButton"),
                        "Clear action should be hidden while the field is empty")
@@ -664,10 +713,13 @@ def check_search_layout(device, check):
     items = device.wait(lambda ns: find(ns, "ClearAuthorsSearchButton") is not None,
                         "Clear action while typing")
     shrunk = bounds(find(items, "AuthorsSearchInput"))
-    check.assertGreater(box[2] - shrunk[2], 12,
+    # RTL: the clear action takes the start edge, so measure the width delta
+    # rather than a fixed side.
+    check.assertGreater((box[2] - box[0]) - (shrunk[2] - shrunk[0]), 12,
                         "Revealed clear action did not take layout space")
     device.tap_node(find(items, "ClearAuthorsSearchButton"))
-    items = device.wait(lambda ns: find(ns, "ClearAuthorsSearchButton") is None,
+    items = device.wait(lambda ns: find(ns, "ClearAuthorsSearchButton") is None
+                        and find(ns, "AuthorsSearchInput") is not None,
                         "Clear action hides again")
     check.assertEqual(bounds(find(items, "AuthorsSearchInput")), box,
                       "Search input did not reclaim the cleared width")
@@ -771,16 +823,26 @@ def main():
     parser.add_argument("--adb", default=str(sdk / "platform-tools" / executable))
     parser.add_argument("--serial", required=True)
     parser.add_argument("--artifacts", required=True, type=Path)
+    parser.add_argument("--checks", default=None,
+                        help="Comma-separated scenario names to run (default: all)")
     args = parser.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
     device = NativeDevice(args)
     check = unittest.TestCase()
+    scenarios = [check_home_and_daily, check_index, check_scroll_and_swipe,
+                 check_stacked_reader_links, check_destinations,
+                 check_home_tile_fills, check_global_search,
+                 check_search_layout, check_screen_navigation,
+                 check_reading_options, check_shared_button_styles]
+    if args.checks:
+        wanted = {name.strip() for name in args.checks.split(",") if name.strip()}
+        unknown = wanted - {scenario.__name__ for scenario in scenarios}
+        if unknown:
+            parser.error(f"unknown checks: {sorted(unknown)}")
+        scenarios = [s for s in scenarios if s.__name__ in wanted]
     checks = []
-    for scenario in (check_home_and_daily, check_index, check_scroll_and_swipe,
-                     check_stacked_reader_links, check_destinations,
-                     check_home_tile_fills, check_global_search,
-                     check_search_layout, check_screen_navigation,
-                     check_reading_options, check_shared_button_styles):
+    device.home()
+    for scenario in scenarios:
         scenario(device, check)
         checks.append(scenario.__name__)
         print(f"PASS {scenario.__name__}", flush=True)
