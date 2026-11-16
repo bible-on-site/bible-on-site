@@ -36,8 +36,8 @@ rmSync(resolve(artifacts, "coverage-evidence"), { recursive: true, force: true }
 rmSync(resolve(artifacts, "app-coverage"), { recursive: true, force: true });
 const appPath = process.env.MOBILE_APP_PATH ?? resolve(directory,
   platform === "android"
-    ? "../BibleOnSite/bin/Debug/net10.0-android/android-x64/com.tanah.daily929-Signed.apk"
-    : "../BibleOnSite/bin/Debug/net10.0-ios/iossimulator-arm64/BibleOnSite.app");
+    ? "../BibleOnSite/bin/Debug/net11.0-android/android-x64/com.tanah.daily929-Signed.apk"
+    : "../BibleOnSite/bin/Debug/net11.0-ios/iossimulator-arm64/BibleOnSite.app");
 if (!existsSync(appPath)) throw new Error(`Build the app with bun run build:app first: ${appPath}`);
 if (platform === "ios" && !existsSync(resolve(appPath, "GoogleService-Info.plist"))) {
   throw new Error("The iOS app is missing its root Firebase configuration resource.");

@@ -28,7 +28,7 @@ public class ReaderExitFullscreenButtonTests
         button.ExitRequested += (s, _) => sender = s;
         var tap = button.GestureRecognizers.OfType<TapGestureRecognizer>().Single();
         typeof(TapGestureRecognizer)
-            .GetMethod("SendTapped", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetMethod("SendTapped", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)!
             .Invoke(tap, [button, null]);
         sender.Should().BeSameAs(button);
     }
@@ -53,7 +53,7 @@ public class ReaderExitFullscreenButtonTests
         var button = new ReaderExitFullscreenButton();
         var tap = button.GestureRecognizers.OfType<TapGestureRecognizer>().Single();
         FluentActions.Invoking(() => typeof(TapGestureRecognizer)
-            .GetMethod("SendTapped", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetMethod("SendTapped", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)!
             .Invoke(tap, [button, null])).Should().NotThrow();
     }
 

@@ -103,8 +103,8 @@ test("a missing optional package does not prevent removal of installed large pac
 		"php8.4-cli",
 		"mongodb-org",
 		"mysql-client-8.4",
-		"dotnet-sdk-10.0",
-		"aspnetcore-runtime-10.0",
+		"dotnet-sdk-11.0",
+		"aspnetcore-runtime-11.0",
 		"google-cloud-cli",
 	];
 	const inventory = [
