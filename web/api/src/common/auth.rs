@@ -1,5 +1,7 @@
 use std::env;
 
+use actix_web::HttpRequest;
+
 use crate::common::error_handling::ServiceError;
 
 /// Name of the environment variable holding the shared secret that external AI
@@ -118,6 +120,26 @@ impl ApiAuth {
             _ => Err(ServiceError::unauthorized("Invalid or missing API key")),
         }
     }
+
+    /// Whether the presented bearer authenticates under **any** configured
+    /// manager scope. The access gate (#3066) treats such requests as the
+    /// authenticated lane — they pass the signature check unchanged; an
+    /// invalid or missing bearer earns no exemption.
+    pub fn is_authorized_manager(&self) -> bool {
+        self.authorize_revision_manager().is_ok()
+            || self.authorize_dedication_manager().is_ok()
+            || self.authorize_article_manager().is_ok()
+    }
+}
+
+/// Extracts a `Authorization: Bearer <token>` header value, if present.
+pub(crate) fn extract_bearer(req: &HttpRequest) -> Option<String> {
+    req.headers()
+        .get(actix_web::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .map(|token| token.trim().to_string())
+        .filter(|token| !token.is_empty())
 }
 
 /// Constant-time string comparison. Returns `false` immediately on length
@@ -220,5 +242,53 @@ mod tests {
             .authorize_article_manager()
             .is_ok()
         );
+    }
+
+    #[test]
+    fn is_authorized_manager_accepts_any_configured_scope() {
+        for auth in [
+            ApiAuth::with_revision_api_key(Some("k".to_string()), Some("k".to_string())),
+            ApiAuth::with_dedication_api_key(Some("k".to_string()), Some("k".to_string())),
+            ApiAuth::with_article_api_key(Some("k".to_string()), Some("k".to_string())),
+        ] {
+            assert!(auth.is_authorized_manager());
+        }
+    }
+
+    #[test]
+    fn is_authorized_manager_rejects_unconfigured_wrong_and_absent_bearers() {
+        // No scope configured: the credential lane fails closed.
+        assert!(
+            !ApiAuth::with_revision_api_key(None, Some("k".to_string())).is_authorized_manager()
+        );
+        assert!(
+            !ApiAuth::with_revision_api_key(Some("k".to_string()), None).is_authorized_manager()
+        );
+        // A bearer valid under one scope does not pass when that scope is unset.
+        let mut auth = ApiAuth::with_revision_api_key(Some("k".to_string()), Some("k".to_string()));
+        auth.bearer = Some("wrong".to_string());
+        assert!(!auth.is_authorized_manager());
+    }
+
+    #[actix_web::test]
+    async fn extract_bearer_reads_only_well_formed_authorization() {
+        for (header, expected) in [
+            (Some("Bearer abc 123"), Some("abc 123".to_string())),
+            (Some("Bearer   padded  "), Some("padded".to_string())),
+            (Some("Bearer "), None),
+            (Some("Basic abc"), None),
+            (Some("bearer abc"), None),
+            (None, None),
+        ] {
+            let mut req = actix_web::test::TestRequest::default();
+            if let Some(value) = header {
+                req = req.insert_header((actix_web::http::header::AUTHORIZATION, value));
+            }
+            assert_eq!(
+                extract_bearer(&req.to_http_request()),
+                expected,
+                "{header:?}"
+            );
+        }
     }
 }

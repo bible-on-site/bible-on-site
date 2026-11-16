@@ -94,6 +94,33 @@ public sealed class AppConfig
         return _mapboxToken;
     }
 
+    // Cached API signing credential from build-time config (api-signing-key.txt)
+    private ApiSigningCredential? _apiSigningCredential;
+    private bool _apiSigningCredentialLoaded;
+
+    /// <summary>
+    /// The app-signing credential for the API access gate (#3066), packaged by
+    /// CI as api-signing-key.txt ("key-id:secret") — the same gitignored
+    /// raw-asset channel as mapbox-token.txt — or the API_SIGNING_KEY env
+    /// override for local signing tests. Null without either source: the
+    /// build stays unsigned (the gate's observe/grace lane).
+    /// </summary>
+    public async Task<ApiSigningCredential?> GetApiSigningCredentialAsync()
+    {
+        var envCredential = ApiSigningCredential.Parse(Environment.GetEnvironmentVariable("API_SIGNING_KEY"));
+        if (envCredential is not null)
+        {
+            return envCredential;
+        }
+
+        if (!_apiSigningCredentialLoaded)
+        {
+            _apiSigningCredential = ApiSigningCredential.Parse(await ReadPackagedValueAsync("api-signing-key.txt"));
+            _apiSigningCredentialLoaded = true;
+        }
+        return _apiSigningCredential;
+    }
+
     /// <summary>Reads a trimmed packaged raw-asset value; null when missing/blank.</summary>
     private async Task<string?> ReadPackagedValueAsync(string assetName)
     {
@@ -161,6 +188,7 @@ public sealed class AppConfig
     {
         await GetApiUrlOverrideAsync();
         await GetMapboxAccessTokenAsync();
+        await GetApiSigningCredentialAsync();
     }
 
     /// <summary>

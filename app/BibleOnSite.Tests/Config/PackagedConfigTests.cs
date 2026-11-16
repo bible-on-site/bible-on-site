@@ -96,4 +96,83 @@ public class PackagedConfigTests
             Environment.SetEnvironmentVariable("MAPBOX_ACCESS_TOKEN", previousToken);
         }
     }
+
+    // --- API signing credential (#3066) ---
+
+    // Whitespace handling mirrors the API's parse_signing_keys: each side of
+    // the colon is trimmed, so "k1: secret" on the wire must sign the same
+    // bytes the server verifies.
+    [Theory]
+    [InlineData("k1:secret", "k1", "secret")]
+    [InlineData("  k2:sec:with:colons  ", "k2", "sec:with:colons")]
+    [InlineData("k3 : secret", "k3", "secret")]
+    [InlineData("k4:  padded  ", "k4", "padded")]
+    [InlineData("no-colon", null, null)]
+    [InlineData(":empty-id", null, null)]
+    [InlineData("empty-secret:", null, null)]
+    [InlineData(" : id-whitespace-only", null, null)]
+    [InlineData("secret-whitespace-only:  ", null, null)]
+    [InlineData("   ", null, null)]
+    [InlineData(null, null, null)]
+    public void SigningCredential_Parse_RequiresIdAndSecret(string? raw, string? id, string? secret)
+    {
+        var credential = ApiSigningCredential.Parse(raw);
+        if (id is null)
+        {
+            credential.Should().BeNull();
+        }
+        else
+        {
+            credential.Should().NotBeNull();
+            credential!.KeyId.Should().Be(id);
+            Encoding.UTF8.GetString(credential.Secret).Should().Be(secret);
+        }
+    }
+
+    [Fact]
+    public async Task GetApiSigningCredential_ReadsAndCachesPackagedPair()
+    {
+        var previous = Environment.GetEnvironmentVariable("API_SIGNING_KEY");
+        Environment.SetEnvironmentVariable("API_SIGNING_KEY", null);
+        try
+        {
+            await using var storage = new TestStorage();
+            storage.PackageFiles["api-signing-key.txt"] = Encoding.UTF8.GetBytes(" k1:packaged-secret\n");
+            var device = new Mock<IDeviceInfo>();
+            var config = new AppConfig(storage.FileSystem.Object, device.Object);
+            var credential = await config.GetApiSigningCredentialAsync();
+            credential!.KeyId.Should().Be("k1");
+            Encoding.UTF8.GetString(credential.Secret).Should().Be("packaged-secret");
+            await config.GetApiSigningCredentialAsync();
+            storage.FileSystem.Verify(f => f.OpenAppPackageFileAsync("api-signing-key.txt"), Times.Once);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("API_SIGNING_KEY", previous);
+        }
+    }
+
+    [Fact]
+    public async Task GetApiSigningCredential_MissingAsset_AndEnvOverride()
+    {
+        var previous = Environment.GetEnvironmentVariable("API_SIGNING_KEY");
+        try
+        {
+            Environment.SetEnvironmentVariable("API_SIGNING_KEY", null);
+            await using var storage = new TestStorage();
+            var device = new Mock<IDeviceInfo>();
+            var config = new AppConfig(storage.FileSystem.Object, device.Object);
+            (await config.GetApiSigningCredentialAsync()).Should().BeNull();
+
+            Environment.SetEnvironmentVariable("API_SIGNING_KEY", "env-k:env-secret");
+            var credential = await config.GetApiSigningCredentialAsync();
+            credential!.KeyId.Should().Be("env-k");
+            Encoding.UTF8.GetString(credential.Secret).Should().Be("env-secret");
+            storage.FileSystem.Verify(f => f.OpenAppPackageFileAsync("api-signing-key.txt"), Times.Once);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("API_SIGNING_KEY", previous);
+        }
+    }
 }
