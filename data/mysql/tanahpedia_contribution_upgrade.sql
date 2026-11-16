@@ -39,7 +39,7 @@ PREPARE contributionBundleUpgrade FROM @contributionBundleSql;
 EXECUTE contributionBundleUpgrade;
 DEALLOCATE PREPARE contributionBundleUpgrade;
 
--- Immutable legacy origins; the unique persisted proposal identity makes
+-- Immutable legacy origins. the unique persisted proposal identity makes
 -- transactional PR promotion safe to replay after a crash or concurrent CD.
 SET @articleLinkImportSql = CONCAT('CREATE ', 'TABLE IF NOT EXISTS tanahpedia_article_link_import (
 	proposal_id CHAR(36) NOT NULL PRIMARY KEY,
