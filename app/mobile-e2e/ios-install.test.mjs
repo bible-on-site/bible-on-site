@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { delimiter, dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { bundleDigest, executeIosCommand, prepareIosApp } from "./ios-install.mjs";
+import { bundleDigest, executeIosCommand, iosNodeEnvironment, prepareIosApp, verifyNodeInterpreter } from "./ios-install.mjs";
 
 const udid = "4AD2086B-7B8F-4608-A742-AA422A0B8D74";
 const bundleId = "com.tanah.daily929";
@@ -25,6 +26,30 @@ test("early child failure retains its exit status and stderr when stdin closes",
     ["-e", "process.stderr.write('controlled failure');process.exit(7)"],
     { input: "x".repeat(1024 * 1024), encoding: "utf8", timeout: 5000 }),
     error => error.code === 7 && error.stderr.includes("controlled failure"));
+});
+
+test("a fixed node command selects the exact parent interpreter ahead of inherited PATH", async () => {
+  const env = iosNodeEnvironment(process.env, process.execPath);
+  const { stdout } = await executeIosCommand("node", ["-p", "process.execPath"],
+    { env, encoding: "utf8", timeout: 5000 });
+  assert.equal(await realpath(stdout.trim()), await realpath(process.execPath));
+  assert.equal(env.MOBILE_NODE_EXECUTABLE, process.execPath);
+  await verifyNodeInterpreter(env.MOBILE_NODE_EXECUTABLE);
+});
+
+test("interpreter pinning removes duplicate Windows PATH keys and retains other environment", () => {
+  const env = iosNodeEnvironment({ Path: "old-node", PATH: "ambiguous-node", KEEP: "original" }, process.execPath);
+  assert.deepEqual(Object.keys(env).filter(key => key.toLowerCase() === "path"), ["PATH"]);
+  assert.equal(env.PATH, `${dirname(process.execPath)}${delimiter}old-node`);
+  assert.equal(env.KEEP, "original");
+});
+
+test("the installer CLI rejects a different interpreter identity before device preparation", async t => {
+  const { appPath } = await fixture(t);
+  await assert.rejects(executeIosCommand(process.execPath,
+    [fileURLToPath(new URL("./ios-install.mjs", import.meta.url)), appPath, udid, nonce,
+      "reset", String(Date.now() + 300000), appPath], { encoding: "utf8", timeout: 5000 }),
+    error => error.stderr.includes("exact parent Node interpreter"));
 });
 
 function executable({ cpu = 0x100000c, platform = 7, commandBytes = 24 } = {}) {
