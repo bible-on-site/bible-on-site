@@ -194,12 +194,21 @@ assignments use the same protocol through a serial background runtime. A changed
 discussion, assignment, agent configuration, API contract or read catalogue
 rejects stale output. PR creation or revision, per-comment responses and the
 completion receipt commit together; an identical replay returns that receipt.
-The standalone local worker runtime v3 uses Ollama's native read functions and
+The standalone local worker runtime v4 uses Ollama's native read functions and
 assistant/tool messages. Once research ends, one separate request receives the
 complete constrained result schema. This avoids losing schema constraints in
 Ollama's native function-parameter representation. Both phases share the existing
 120-second execution deadline, 16K context and 4,096-token output limit; reads
 still pass through the same server lease, identity and receipt validation.
+Native turns reuse model residency and prefix cache during one job. Their memory
+idle TTL is bounded by the remaining original deadline at dispatch; Ollama starts
+that TTL after responding, so it is a crash fallback, not an absolute expiry.
+After completion/failure acknowledgement, the worker sends an empty unload
+request for the configured model, using the existing 30-second I/O bound and an
+independent cleanup signal. A release warning preserves the primary outcome;
+the acknowledgement confirms a request, not immediate physical memory release.
+Legacy protocol 1 still unloads after each response. The change avoids measured
+repeated model loading/prefill without extending inference or adding retries.
 A disconnected worker can be replaced after lease expiry, with three automatic
 claim attempts per request. An editor can explicitly retry or cancel by closing,
 editing or reassigning the issue. Background job refreshes preserve unsaved drafts.

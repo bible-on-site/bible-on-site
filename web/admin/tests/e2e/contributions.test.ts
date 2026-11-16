@@ -331,20 +331,45 @@ test.describe("Issues and typed pull requests", () => {
 			page.getByText("העבודה נמצאת בתור", { exact: true }),
 		).toBeVisible();
 		let inferenceCalls = 0;
+		const generationModels: string[] = [];
+		const retentionDurations: unknown[] = [];
+		const unloadedModels: string[] = [];
 		const ollama = createServer(async (request, response) => {
 			const parts: Buffer[] = [];
 			for await (const chunk of request) parts.push(Buffer.from(chunk));
 			const input = JSON.parse(Buffer.concat(parts).toString("utf8"));
+			if (request.url !== "/api/chat" || request.headers.authorization) {
+				response.writeHead(400);
+				response.end();
+				return;
+			}
 			if (
-				request.url !== "/api/chat" ||
-				request.headers.authorization ||
-				Boolean(input.format) === Array.isArray(input.tools)
+				Array.isArray(input.messages) &&
+				input.messages.length === 0 &&
+				input.keep_alive === 0 &&
+				!input.format &&
+				!input.tools &&
+				!input.options
 			) {
+				unloadedModels.push(input.model);
+				response.setHeader("Content-Type", "application/json");
+				response.end(
+					JSON.stringify({
+						model: input.model,
+						done: true,
+						done_reason: "unload",
+					}),
+				);
+				return;
+			}
+			if (Boolean(input.format) === Array.isArray(input.tools)) {
 				response.writeHead(400);
 				response.end();
 				return;
 			}
 			inferenceCalls++;
+			generationModels.push(input.model);
+			retentionDurations.push(input.keep_alive);
 			const { context } = JSON.parse(input.messages[1].content);
 			const issue = context.item.kind === "issue";
 			const toolMessages = input.messages.filter(
@@ -451,6 +476,8 @@ test.describe("Issues and typed pull requests", () => {
 			expect(stdout).toContain("completed");
 			expect(stdout).not.toContain("ויולד את אברם");
 			expect(inferenceCalls).toBe(2);
+			expect(unloadedModels).toEqual([generationModels[0]]);
+			expect(unloadedModels).not.toContain("doradsoft");
 			await expect(
 				page.getByText("הסוכן סיים את העבודה", { exact: true }),
 			).toBeVisible();
@@ -503,6 +530,18 @@ test.describe("Issues and typed pull requests", () => {
 				}),
 			).toBeVisible();
 			expect(inferenceCalls).toBe(5);
+			expect(unloadedModels).toEqual([
+				generationModels[0],
+				generationModels[2],
+			]);
+			expect(unloadedModels).not.toContain("doradsoft");
+			for (const duration of retentionDurations) {
+				expect(typeof duration).toBe("string");
+				expect(String(duration)).toMatch(/^\d+ms$/);
+				const remaining = Number.parseInt(String(duration), 10);
+				expect(remaining).toBeGreaterThan(0);
+				expect(remaining).toBeLessThanOrEqual(120000);
+			}
 			await expect(
 				page.getByText("יש להסביר שההצעה עוסקת במטא-נתונים בלבד", {
 					exact: true,
