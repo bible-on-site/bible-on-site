@@ -1,6 +1,6 @@
 import "@tanstack/react-start/server-only";
 import { createHash, randomUUID } from "node:crypto";
-import { SendMessageBatchCommand, SQSClient } from "@aws-sdk/client-sqs";
+import { SQSClient } from "@aws-sdk/client-sqs";
 import type { PoolConnection } from "mysql2/promise";
 import {
 	type BulletinWhatsAppState,
@@ -14,6 +14,7 @@ import {
 	type WhatsAppSettings,
 } from "~/lib/bulletin-whatsapp";
 import { validateBulletinDate } from "~/lib/daily-bulletin";
+import { publishJobs } from "./bulletin-queue.server";
 import { readPreparedBulletin } from "./daily-bulletins.server";
 import {
 	execute,
@@ -294,36 +295,6 @@ async function existingRequest(
 	);
 }
 
-async function publishJobs(
-	client: SQSClient,
-	queueUrl: string,
-	jobs: { id: string }[],
-	signal?: AbortSignal,
-): Promise<void> {
-	const abortSignal = signal ?? AbortSignal.timeout(15_000);
-	try {
-		for (let offset = 0; offset < jobs.length; offset += 10) {
-			abortSignal.throwIfAborted();
-			const entries = jobs.slice(offset, offset + 10).map(({ id }) => ({
-				Id: id,
-				MessageBody: JSON.stringify({ kind: "whatsapp.send", jobId: id }),
-			}));
-			const response = await client.send(
-				new SendMessageBatchCommand({ QueueUrl: queueUrl, Entries: entries }),
-				{ abortSignal },
-			);
-			abortSignal.throwIfAborted();
-			const accepted = new Set(response.Successful?.map((item) => item.Id));
-			if (
-				response.Failed?.length ||
-				entries.some(({ Id }) => !accepted.has(Id))
-			)
-				throw new Error(QUEUE_FAILED);
-		}
-	} catch {
-		throw new Error(QUEUE_FAILED);
-	}
-}
 async function publishQueued(
 	id: string,
 	runtime: WhatsAppRuntime,
@@ -335,7 +306,14 @@ async function publishQueued(
 	if (!rows.length) return;
 	const client = new SQSClient({ region: runtime.region, maxAttempts: 1 });
 	try {
-		await publishJobs(client, runtime.queueUrl, rows);
+		await publishJobs(
+			client,
+			runtime.queueUrl,
+			"whatsapp.send",
+			rows,
+			undefined,
+			QUEUE_FAILED,
+		);
 	} finally {
 		client.destroy();
 	}
@@ -873,6 +851,13 @@ export async function reconcileWhatsAppOutbox(
 			"SELECT id FROM tanah_daily_bulletin_whatsapp_job WHERE status = 'queued' AND (available_after IS NULL OR available_after <= UTC_TIMESTAMP(3)) ORDER BY id LIMIT 100",
 		);
 		outboxSignal.throwIfAborted();
-		await publishJobs(client, queueUrl, queued, outboxSignal);
+		await publishJobs(
+			client,
+			queueUrl,
+			"whatsapp.send",
+			queued,
+			outboxSignal,
+			QUEUE_FAILED,
+		);
 	});
 }
