@@ -24,11 +24,15 @@ describe("/robots.txt (issue #3257)", () => {
 		);
 	});
 
-	it("keeps management/private APIs out while allowing /api/search", async () => {
+	it("keeps management/private APIs out while allowing documented reads", async () => {
 		const body = await GET().text();
 		expect(body).toContain("Disallow: /api/");
-		// The narrow exception must come before/around the blanket api rule.
+		// Each documented public endpoint under /api/ gets a narrow exception
+		// (issue #3257): the search API and the health status the API catalog
+		// advertises. No other /api/ path is allowed.
 		expect(body).toContain("Allow: /api/search");
+		expect(body).toContain("Allow: /api/health");
+		expect(body.match(/^Allow: \/api\//gm)).toHaveLength(2);
 		expect(body).toContain("Disallow: /dev");
 	});
 
@@ -70,8 +74,11 @@ describe("/robots.txt (issue #3257)", () => {
 		expect(body).not.toMatch(/^User-agent: Applebot$/m);
 	});
 
-	it("points crawlers at the canonical sitemap", async () => {
+	it("points crawlers at the canonical sitemap and the ARD manifest", async () => {
 		const body = await GET().text();
 		expect(body).toContain("Sitemap: https://canonical.example/sitemap.xml");
+		expect(body).toContain(
+			"Agentmap: https://canonical.example/.well-known/ard.json",
+		);
 	});
 });

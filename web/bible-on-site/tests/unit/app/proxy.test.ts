@@ -221,6 +221,13 @@ describe("proxy", () => {
 			"/מסורה/7",
 			"/pedia",
 			"/dev/dashboard",
+			// The agent-facing manifests get the same links — they are
+			// public reads like any page.
+			"/.well-known/ard.json",
+			"/.well-known/ai-catalog.json",
+			"/.well-known/agent-skills/index.json",
+			"/.well-known/agent-skills/tanah-corpus-map/SKILL.md",
+			"/auth.md",
 			// Even a defunct `.md` path gets the same plain pass-through —
 			// there is no Markdown representation to discover (PR #3299
 			// review).
@@ -231,6 +238,9 @@ describe("proxy", () => {
 			const link = response?.headers.get("link") ?? "";
 			expect(link).toContain('</llms.txt>; rel="help"');
 			expect(link).toContain('rel="api-catalog"');
+			expect(link).toContain(
+				'</.well-known/ard.json>; rel="ard"; type="application/ard+json"',
+			);
 			expect(link).toContain('</sitemap.xml>; rel="sitemap"');
 			// No alternate representation and no negotiation contract.
 			expect(link).not.toContain('rel="alternate"');

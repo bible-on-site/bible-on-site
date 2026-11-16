@@ -46,7 +46,13 @@ export default defineConfig({
 	webServer: {
 		...(baseConfig.webServer as TestConfigWebServer),
 		command: webServerCommand,
-		env: webPushEnv,
+		// Merge, don't replace: the base env carries WEB_PORT for the
+		// per-worktree derived port (issue #2881) — dropping it bound the
+		// launcher to :3001 while the suite waited on the derived port.
+		env: {
+			...(baseConfig.webServer as TestConfigWebServer).env,
+			...webPushEnv,
+		},
 	},
 	fullyParallel: true,
 	// Browser-timing nondeterminism under parallel CI load (e.g. the lazy
