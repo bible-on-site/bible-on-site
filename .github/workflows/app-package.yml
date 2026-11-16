@@ -632,12 +632,19 @@ jobs:
           echo "Available Xcode installations:"
           ls -la /Applications/ | grep -i xcode || true
 
-          # The .NET 11 iOS workload (27.2.x) requires Xcode 27.2 exactly;
-          # the image also carries newer 27.x betas the workload rejects,
-          # so pin the 27.2 minor rather than taking the newest 27.x.
-          XCODE_PATH=$(ls -d /Applications/Xcode_27.2*.app 2>/dev/null | sort -V | tail -1)
+          # The .NET 11 iOS workload (27.2.x) builds only against Xcode 27.2 —
+          # probe each Xcode_27 app for its real version; a newest-27* glob
+          # would grab the image's 27.3 beta (also aliased as Xcode_27.3.app),
+          # which the workload rejects.
+          XCODE_PATH=""
+          for app in /Applications/Xcode_27*.app; do
+            ver="$(DEVELOPER_DIR="$app/Contents/Developer" xcodebuild -version 2>/dev/null | awk 'NR==1 {print $2}')"
+            case "$ver" in
+              27.2|27.2.*) XCODE_PATH="$app"; break ;;
+            esac
+          done
           if [ -z "$XCODE_PATH" ]; then
-            echo "::error::Xcode 27.2 not found in /Applications — required by the pinned iOS 27.2 workload"
+            echo "::error::No Xcode 27.2 installation under /Applications — required by the iOS 27.2 workload"
             exit 1
           fi
 
