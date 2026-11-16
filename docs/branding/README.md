@@ -10,7 +10,7 @@ Al Heperek Font files carry the restricted `AlHeperek-license.txt`, including th
 
 The canonical outlined wordmark and launcher artwork are in `web/bible-on-site/source-assets/logos/`. The wordmark reads `על הפרק` beside the emblem. The reversed SVG is in `public/images/logos/header-logo-reversed.svg`. Each small icon has an individually fitted 16, 24, 32 or 48 pixel SVG and PNG. The favicon ICO packages those exact PNGs.
 
-Run `node scripts/generate-brand-assets.mjs` from `web/bible-on-site/` to regenerate native launcher artwork, legacy web images, the touch icon and the shared PDF/header JPEG. Native icons use an opaque square background and receive the platform's launcher mask. Historical web-image URLs keep serving the current artwork.
+Run `node scripts/generate-brand-assets.mjs` from `web/bible-on-site/` to regenerate native launcher artwork, legacy web images, the touch icon and the shared PDF/header JPEG. Native icons combine a full-bleed background with transparent artwork. Android scales the artwork into the adaptive icon's safe zone before applying the launcher's mask. The loading view uses the complete composite. Historical web-image URLs keep serving the current artwork.
 
 Run `node web/bulletin/scripts/prepare-email-assets.mjs --sharp-module web/bible-on-site/node_modules/sharp` from the repository root to regenerate the email/PDF manifest. The email wordmark is served from the website at `/images/logos/header-logo.jpg`. Existing content-addressed S3 images remain available. These commands write repository files and require no asset upload.
 

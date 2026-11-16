@@ -5,8 +5,8 @@ use anyhow::{Result, ensure};
 
 use super::{
     CANTILLATION_FONT, PdfRequest, TypstFiles, compile_pdf, daily_html_to_typst, pasuk_markup,
-    push_article_text, split_article_header, strip_taamim, to_hebrew_letter, typst_escape,
-    typst_string,
+    push_article_text, scripture_aware_text, split_article_header, strip_taamim, to_hebrew_letter,
+    typst_escape, typst_string,
 };
 
 const LOGO: &[u8] = include_bytes!("../../assets/email/logo-header-06e724f0db1e.jpg");
@@ -76,7 +76,7 @@ fn markup(req: &PdfRequest, date: &str, dedications: &[String]) -> (String, Typs
     if !perek.header.trim().is_empty() {
         out.push_str(&format!(
             "#v(3pt)\n#align(center, text(size: 12pt, fill: rgb(\"28758A\"))[{}])\n",
-            typst_escape(&strip_taamim(&perek.header)),
+            scripture_aware_text(&strip_taamim(&perek.header)),
         ));
     }
     out.push_str(
