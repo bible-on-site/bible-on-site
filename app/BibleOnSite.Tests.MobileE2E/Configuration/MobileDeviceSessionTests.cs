@@ -278,12 +278,14 @@ public sealed class MobileDeviceSessionTests
         public List<Dictionary<string, object>> Options { get; } = [];
         public List<SessionExecutor> Executors { get; } = [];
         public List<MobileTestConfiguration> Preparations { get; } = [];
+        public List<TimeSpan> PreparationBudgets { get; } = [];
         public List<TimeSpan> DriverBudgets { get; } = [];
         public Exception? PreparationFailure { get; set; }
         public VerifiedIosApp Prepare(MobileTestConfiguration configuration, TimeSpan budget)
         {
             Preparations.Add(configuration);
-            Assert.Equal(TimeSpan.FromMinutes(5), budget);
+            PreparationBudgets.Add(budget);
+            Assert.InRange(budget, TimeSpan.FromTicks(1), TimeSpan.FromMinutes(5));
             if (PreparationFailure != null)
             {
                 throw PreparationFailure;
@@ -298,6 +300,7 @@ public sealed class MobileDeviceSessionTests
             if (Platform == MobilePlatform.IOS)
             {
                 Assert.True(budget < TimeSpan.FromMinutes(5));
+                Assert.True(budget < PreparationBudgets[^1]);
             }
             else
             {
