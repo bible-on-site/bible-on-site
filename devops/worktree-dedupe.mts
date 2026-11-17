@@ -69,6 +69,9 @@ interface Cli {
 	settleMs: number;
 	maxFiles: number;
 	log?: string;
+	/** Test seam: invoked after the scan, before hashing — simulates an
+	 *  external writer mutating files mid-run. */
+	afterScan?: () => void;
 }
 
 export function parseDays(name: string, v: string | undefined): number {
@@ -213,6 +216,7 @@ export function dedupe(paths: string[], cli: Cli): DedupeResult {
 		res.scanned++;
 	}
 	res.candidates = candidates.length;
+	cli.afterScan?.();
 
 	// size buckets — only sizes seen >1 can duplicate
 	const bySize = new Map<number, Candidate[]>();

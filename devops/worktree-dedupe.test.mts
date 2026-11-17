@@ -131,7 +131,7 @@ describe("dedupe", () => {
 			cleanup();
 		}
 	});
-	it("drops a drifted alias instead of hashing its replacement content", () => {
+	it("drops an alias replaced mid-run instead of corrupting its sibling", () => {
 		const { dir, cleanup } = makeTree();
 		try {
 			const contentA = Buffer.alloc(64 * 1024, "a");
@@ -141,17 +141,19 @@ describe("dedupe", () => {
 			const c = join(dir, "wt2/node_modules/p/y");
 			linkSync(b, c); // b,c share inode holding A
 			utimesSync(c, OLD, OLD);
-			// installer replaces b's path with B's content: unlink+write
-			// gives a new inode while c keeps the original inode+content A
-			unlinkSync(b);
-			writeFileSync(b, contentB);
-			utimesSync(b, OLD, OLD); // forged old mtime; inode still differs
 			const inoC = statSync(c).ino;
-			const r = dedupe([join(dir, "wt1"), join(dir, "wt2")], CLI);
-			// b now holds B's content, so relinking it to canonical B is
-			// legitimate; the invariant is that c — still holding A —
-			// must never be relinked to mismatched bytes.
-			assert.equal(r.linked, 1);
+			// Installer replaces b with B's content after the scan but
+			// before hashing — the exact race the stillSame checks guard.
+			const r = dedupe([join(dir, "wt1"), join(dir, "wt2")], {
+				...CLI,
+				afterScan: () => {
+					unlinkSync(b);
+					writeFileSync(b, contentB);
+					utimesSync(b, OLD, OLD); // forged old mtime; inode differs
+				},
+			});
+			// b drifted: skipped this run. c must keep inode+content A.
+			assert.equal(r.linked, 0);
 			assert.equal(statSync(c).ino, inoC);
 			assert.equal(readFileSync(c).toString(), contentA.toString());
 		} finally {
