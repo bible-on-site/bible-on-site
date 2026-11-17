@@ -342,6 +342,9 @@ public partial class ParashaViewModel : ObservableObject, IPerushimSheetViewMode
         _navigator = navigator ?? ShellAppNavigator.Instance;
         _fileSystem = fileSystem ?? FileSystem.Current;
         _share = share ?? Share.Default;
+#if MAUI
+        InitializePerushimController();
+#endif
         _dedicationService = dedicationService ?? DedicationService.Instance;
         _articlesLoader = articlesLoader;
         _hebrewDateProvider = hebrewDateProvider ?? HebrewDateHelper.GetTodayDateNumber;
