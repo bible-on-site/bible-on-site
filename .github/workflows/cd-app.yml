@@ -494,8 +494,16 @@ jobs:
 
       - name: Install Fastlane
         if: ${{ steps.guard.outputs.deploy == 'true' }}
-        # macos-15's image ships fastlane; install only when it is missing.
-        run: command -v fastlane >/dev/null 2>&1 || gem install fastlane -NV
+        run: |
+          if ! command -v fastlane >/dev/null 2>&1; then
+            # Linux images can install gems outside PATH. Keep executables in
+            # a known runner-owned directory for this and subsequent steps.
+            FASTLANE_BIN_DIR="$RUNNER_TEMP/fastlane-bin"
+            gem install fastlane --user-install --bindir "$FASTLANE_BIN_DIR" --no-document
+            echo "$FASTLANE_BIN_DIR" >> "$GITHUB_PATH"
+            export PATH="$FASTLANE_BIN_DIR:$PATH"
+          fi
+          fastlane --version
 
       - name: Check the exact TestFlight build before uploading
         if: ${{ steps.guard.outputs.deploy == 'true' }}
@@ -665,7 +673,8 @@ jobs:
     needs: deploy_app_store
     if: ${{ always() && needs.deploy_app_store.result == 'success' && ((github.event.client_payload.artifacts.ios_artifact_name || github.event.client_payload.ios_artifact_name) != '' || inputs.ios_artifact_name != '') && !inputs.inspect_ios_build }}
     permissions:
-      contents: read
+      # The called workflow uploads the release-notes manifest to the release.
+      contents: write
       actions: read
       deployments: write
     uses: ./.github/workflows/testflight-distribution.yml

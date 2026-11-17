@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { execute, query, queryOne, transaction, txExecute } from "../db";
 import { revalidateWebsite } from "../website-revalidate";
 import { pediaChangesForEntities } from "./paths";
+import { toNum } from "./sql-helpers";
 
 export interface TanahpediaPlace {
 	id: string;
@@ -16,13 +17,6 @@ export interface TanahpediaPlaceIdentification {
 	modern_name: string | null;
 	latitude: number | null;
 	longitude: number | null;
-}
-
-function toNum(v: unknown): number | null {
-	if (v === null || v === undefined) return null;
-	if (typeof v === "number" && !Number.isNaN(v)) return v;
-	const n = Number.parseFloat(String(v));
-	return Number.isFinite(n) ? n : null;
 }
 
 export const getPlaces = createServerFn({ method: "GET" }).handler(async () => {

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
 	queue: vi.fn(),
 	audience: vi.fn(),
 	subscriber: vi.fn(),
+	rollout: vi.fn(),
 }));
 vi.mock("@tanstack/react-start", () => ({
 	createServerFn: ({ method }: { method: string }) => {
@@ -28,12 +29,16 @@ vi.mock("~/server/ses-settings.server", () => ({
 vi.mock("~/server/ses-delivery.server", () => ({
 	enqueueBulletinEmail: mocks.queue,
 }));
+vi.mock("~/server/rollout-state.server", () => ({
+	setRolloutState: mocks.rollout,
+}));
 
 import {
 	changeDailyBulletinSubscriber,
 	getDailyBulletinEmail,
 	queueDailyBulletinEmail,
 	setDailyBulletinEmailAudience,
+	setDailyBulletinEmailRollout,
 } from "~/server/bulletin-email";
 
 const request = {
@@ -50,7 +55,7 @@ describe("bulletin email server functions", () => {
 		mocks.subscriber.mockReset();
 	});
 	it("exposes state as GET and all changes as explicit POSTs", () => {
-		expect(mocks.methods).toEqual(["GET", "POST", "POST", "POST"]);
+		expect(mocks.methods).toEqual(["GET", "POST", "POST", "POST", "POST"]);
 	});
 	it("forwards only validated subscriber fields to the consent service", async () => {
 		const invoke = changeDailyBulletinSubscriber as (request: {
@@ -123,6 +128,23 @@ describe("bulletin email server functions", () => {
 			}),
 		).rejects.toThrow("המנוי חסום לדיוור");
 		expect(mocks.subscriber).toHaveBeenCalledOnce();
+	});
+	it("forwards a validated rollout control to the state service", async () => {
+		mocks.rollout.mockResolvedValue({ state: "running", revision: 5 });
+		await expect(
+			setDailyBulletinEmailRollout({
+				data: { action: "enable", revision: 4 },
+			}),
+		).resolves.toEqual({ state: "running", revision: 5 });
+		expect(mocks.rollout).toHaveBeenCalledExactlyOnceWith({
+			action: "enable",
+			revision: 4,
+		});
+		await expect(
+			setDailyBulletinEmailRollout({
+				data: { action: "wipe", revision: 4 },
+			}),
+		).rejects.toThrow();
 	});
 	it("forwards only a validated calendar date to the state service", async () => {
 		const state = { settings: { audience: "test", revision: 4 }, job: null };

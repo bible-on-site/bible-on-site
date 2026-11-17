@@ -20,8 +20,23 @@ public abstract class BaseGraphQLService
 
     protected BaseGraphQLService()
     {
-        _client = new Lazy<GraphQLHttpClient>(() =>
-            new GraphQLHttpClient(AppConfig.Instance.GetApiUrl(), SharedSerializer));
+        _client = new Lazy<GraphQLHttpClient>(CreateClient);
+    }
+
+    /// <summary>
+    /// Builds the shared client: one HTTP pipeline for every GraphQL service.
+    /// The signing handler (#3066) is a pass-through unless CI packaged a
+    /// signing credential into this build, so unsigned builds keep working.
+    /// </summary>
+    private static GraphQLHttpClient CreateClient()
+    {
+        var options = new GraphQLHttpClientOptions
+        {
+            EndPoint = new Uri(AppConfig.Instance.GetApiUrl())
+        };
+        var httpClient = new HttpClient(
+            new ApiSigningHandler(_ => AppConfig.Instance.GetApiSigningCredentialAsync()));
+        return new GraphQLHttpClient(options, SharedSerializer, httpClient);
     }
 
     /// <summary>

@@ -229,7 +229,7 @@ export function loadRules(path: string): SuiteRules {
 }
 
 /** `^[0-9a-f]{40}$` without the regex engine — snapshot ids are plain data. */
-function isHexSha(value: string): boolean {
+export function isHexSha(value: string): boolean {
 	if (value.length !== 40) return false;
 	for (const char of value) {
 		const hex =

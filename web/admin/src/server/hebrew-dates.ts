@@ -3,6 +3,7 @@ import { hasBulletinArticleText } from "~/lib/bulletin-article";
 import { hebrewBulletinMonthDay } from "~/lib/daily-bulletin";
 import { MAX_DAY_FOR_HEBREW_MONTH } from "~/lib/hebrew-calendar";
 import { execute, query, txExecute, txQuery } from "./db";
+import { isMysqlSchemaMissing } from "./mysql-errors";
 
 /**
  * One recurring Hebrew month/day an article is assigned to (#3098) — one row
@@ -20,14 +21,10 @@ export interface HebrewDateAssignment {
  * same MySQL signals the covering-source path degrades on.
  */
 export function isHebrewDateSchemaMissing(error: unknown): boolean {
-	if (typeof error !== "object" || error === null) return false;
-	const { code, errno } = error as { code?: unknown; errno?: unknown };
-	return (
-		code === "ER_BAD_FIELD_ERROR" ||
-		code === "ER_NO_SUCH_TABLE" ||
-		errno === 1054 ||
-		errno === 1146
-	);
+	return isMysqlSchemaMissing(error, {
+		codes: ["ER_BAD_FIELD_ERROR", "ER_NO_SUCH_TABLE"],
+		errnos: [1054, 1146],
+	});
 }
 
 /**

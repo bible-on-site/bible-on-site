@@ -1,5 +1,6 @@
 import { query } from "../db";
 import type { EntityChange, RevalidateRequest } from "../website-revalidate";
+import { placeholders } from "./sql-helpers";
 
 /**
  * Maps tanahpedia rows to typed entity-change events for the website's
@@ -9,10 +10,6 @@ import type { EntityChange, RevalidateRequest } from "../website-revalidate";
  * affected entries and source perakim can no longer be enumerated. The
  * website unions these with the relationships it can still resolve.
  */
-
-function placeholders(count: number): string {
-	return Array.from({ length: count }, () => "?").join(", ");
-}
 
 interface EntryRelations {
 	uniqueName: string;

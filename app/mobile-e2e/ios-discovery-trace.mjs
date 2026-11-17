@@ -98,13 +98,10 @@ export function traceSelector(original, start) {
 export function discoveryLoadHook({ helperUrl, report }) {
 	return (url, context, nextLoad) => {
 		const result = nextLoad(url, context);
-		const native =
-			/\/node_modules\/@appium\/coresim\/lib\/src\/native-simctl\.js$/.test(
-				url,
-			);
-		const xcode = /\/node_modules\/appium-xcode\/build\/lib\/xcode\.js$/.test(
-			url,
+		const native = url.endsWith(
+			"/node_modules/@appium/coresim/lib/src/native-simctl.js",
 		);
+		const xcode = url.endsWith("/node_modules/appium-xcode/build/lib/xcode.js");
 		if (!native && !xcode) return result;
 		if (result.format !== "module" || result.source == null)
 			throw new Error("Unsupported iOS discovery module format.");

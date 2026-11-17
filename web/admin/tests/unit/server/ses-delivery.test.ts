@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
 	telegramSweep: vi.fn(),
 	whatsappSweep: vi.fn(),
 	signupSweep: vi.fn(),
+	rolloutSweep: vi.fn(),
 	scheduledProcess: vi.fn(),
 }));
 vi.mock("~/server/db", () => mocks);
@@ -59,15 +60,11 @@ vi.mock("~/server/ses-client.server", () => {
 		},
 	};
 });
-vi.mock("~/server/ses-settings.server", async () => {
-	const { SesSuppressedError } = await import("~/server/ses-client.server");
-	return {
-		DeliverySuppressed: SesSuppressedError,
-		loadEmailRuntime: mocks.runtime,
-		getEmailReadiness: mocks.readiness,
-		reserveSendSlot: mocks.reserve,
-	};
-});
+vi.mock("~/server/ses-settings.server", () => ({
+	loadEmailRuntime: mocks.runtime,
+	getEmailReadiness: mocks.readiness,
+	reserveSendSlot: mocks.reserve,
+}));
 vi.mock("~/server/ses-events.server", () => ({ parseSesEvent: mocks.parse }));
 vi.mock("~/server/whatsapp-delivery.server", () => ({
 	processWhatsAppJob: mocks.whatsappProcess,
@@ -82,6 +79,9 @@ vi.mock("~/server/scheduled-bulletin.server", () => ({
 }));
 vi.mock("~/server/signup-delivery.server", () => ({
 	reconcileSignupOutbox: mocks.signupSweep,
+}));
+vi.mock("~/server/rollout-admission.server", () => ({
+	reconcileRolloutAdmission: mocks.rolloutSweep,
 }));
 vi.mock("node:timers/promises", () => ({ setTimeout: mocks.delay }));
 vi.mock("@aws-sdk/client-sqs", () => ({
@@ -110,6 +110,8 @@ import { SesError, SesSuppressedError } from "~/server/ses-client.server";
 import {
 	applySesEvent,
 	enqueueBulletinEmail,
+	enqueueBulletinRolloutEmail,
+	NoConfirmedRecipientsError,
 	processEmailRecipient,
 	readLatestEmailJob,
 	startEmailWorker,
@@ -155,6 +157,7 @@ interface State {
 	subscribers: Subscriber[];
 	recipients: Recipient[];
 	settings: { audience: Audience; revision: number };
+	rollout: string | null;
 	channel: string;
 	legacyEmail: {
 		attempt_count: number;
@@ -230,6 +233,8 @@ function read(sqlRaw: string, params: unknown[] = []): unknown[] {
 		return state.legacyEmail
 			? [{ status: state.channel, ...state.legacyEmail }]
 			: [];
+	if (sql.includes("FROM tanah_daily_bulletin_email_rollout"))
+		return state.rollout ? [{ state: state.rollout }] : [];
 	if (sql.includes("FROM tanah_daily_bulletin_email_settings"))
 		return [{ ...state.settings }];
 	if (sql.includes("FROM tanah_daily_bulletin_subscriber")) {
@@ -535,11 +540,13 @@ beforeEach(() => {
 	mocks.whatsappProcess.mockReset().mockResolvedValue(true);
 	mocks.whatsappSweep.mockReset().mockResolvedValue(undefined);
 	mocks.signupSweep.mockReset().mockResolvedValue(undefined);
+	mocks.rolloutSweep.mockReset().mockResolvedValue(undefined);
 	state = {
 		jobs: [],
 		subscribers: [subscriber(), subscriber(2)],
 		recipients: [],
 		settings: { audience: "test", revision: 0 },
+		rollout: null,
 		channel: "pending",
 		legacyEmail: {
 			attempt_count: 0,
@@ -898,6 +905,79 @@ describe("enqueue", () => {
 		await expect(
 			enqueueBulletinEmail(date, key, { audience: "test", revision: -1 }),
 		).rejects.toThrow();
+	});
+});
+
+describe("rollout enqueue", () => {
+	it("creates the durable real job for confirmed subscribers while settings stay on test", async () => {
+		state.rollout = "running";
+		state.subscribers = [
+			subscriber(1),
+			subscriber(2, "real"),
+			subscriber(3, "real"),
+			{ ...subscriber(4, "real"), consent_status: "pending" },
+			{ ...subscriber(5, "real"), consent_status: "unsubscribed" },
+		];
+		const result = await enqueueBulletinRolloutEmail(date, key, 0);
+		expect(result).toMatchObject({
+			date,
+			audience: "real",
+			status: "queued",
+			counts: { queued: 2 },
+		});
+		expect(state.jobs[0]).toMatchObject({
+			audience: "real",
+			idempotency_key: "production",
+		});
+		expect(state.recipients.map((r) => r.email)).toEqual([
+			"reader2@example.com",
+			"reader3@example.com",
+		]);
+		expect(state.settings.audience).toBe("test");
+		expect(state.channel).toBe("sending");
+		expect(mocks.sqs).toHaveBeenCalled();
+	});
+	it.each(["paused", "completed"])(
+		"keeps the cohort delivery license while the rollout is %s",
+		async (rollout) => {
+			state.rollout = rollout;
+			state.subscribers = [subscriber(1, "real")];
+			const result = await enqueueBulletinRolloutEmail(date, key, 0);
+			expect(result.audience).toBe("real");
+		},
+	);
+	it.each([null, "disabled"])(
+		"suppresses the cohort job when the rollout license is %j",
+		async (rollout) => {
+			state.rollout = rollout;
+			state.subscribers = [subscriber(1, "real")];
+			await expect(
+				enqueueBulletinRolloutEmail(date, key, 0),
+			).rejects.toBeInstanceOf(SesSuppressedError);
+			expect(state.jobs).toHaveLength(0);
+			expect(mocks.sqs).not.toHaveBeenCalled();
+		},
+	);
+	it("suppresses a stale settings revision and reports an emptied cohort", async () => {
+		state.rollout = "running";
+		state.subscribers = [subscriber(1, "real")];
+		await expect(
+			enqueueBulletinRolloutEmail(date, key, 9),
+		).rejects.toBeInstanceOf(SesSuppressedError);
+		state.subscribers = [];
+		await expect(
+			enqueueBulletinRolloutEmail(date, key, 0),
+		).rejects.toBeInstanceOf(NoConfirmedRecipientsError);
+		expect(state.jobs).toHaveLength(0);
+		expect(mocks.sqs).not.toHaveBeenCalled();
+	});
+	it("reuses the same production job on redelivery", async () => {
+		state.rollout = "running";
+		state.subscribers = [subscriber(1, "real")];
+		const first = await enqueueBulletinRolloutEmail(date, key, 0);
+		const second = await enqueueBulletinRolloutEmail(date, key, 0);
+		expect(second.id).toBe(first.id);
+		expect(state.jobs).toHaveLength(1);
 	});
 });
 
@@ -2221,6 +2301,69 @@ describe("optional Telegram dispatch in the existing worker", () => {
 			}
 		},
 	);
+
+	it("isolates rollout admission failure so a native email event still completes", async () => {
+		configureTelegram();
+		const row = seed("test", "accepted");
+		const controller = new AbortController();
+		mocks.parse.mockReturnValue(delivery());
+		mocks.rolloutSweep.mockRejectedValueOnce(new Error("private details"));
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		messages(controller, ['{"eventType":"Delivery"}']);
+		try {
+			await startEmailWorker(controller.signal);
+			expect(row.status).toBe("delivered");
+			expect(log).toHaveBeenCalledExactlyOnceWith(
+				"Rollout admission reconciliation failed",
+			);
+			expect(
+				mocks.sqs.mock.calls.some(([command]) => command.kind === "delete"),
+			).toBe(true);
+		} finally {
+			log.mockRestore();
+		}
+	});
+
+	it.each([false, true])(
+		"stops after rollout reconciliation aborts (rejects=%s)",
+		async (rejects) => {
+			const controller = new AbortController();
+			mocks.rolloutSweep.mockImplementationOnce(async (signal) => {
+				expect(signal).toBe(controller.signal);
+				controller.abort();
+				if (rejects) throw new Error("shutdown interrupted rollout work");
+			});
+			const log = vi.spyOn(console, "error").mockImplementation(() => {});
+			try {
+				await startEmailWorker(controller.signal);
+				expect(mocks.rolloutSweep).toHaveBeenCalledOnce();
+				expect(mocks.telegramSweep).not.toHaveBeenCalled();
+				expect(mocks.whatsappSweep).not.toHaveBeenCalled();
+				expect(mocks.destroy).toHaveBeenCalledOnce();
+				expect(log).not.toHaveBeenCalled();
+			} finally {
+				log.mockRestore();
+			}
+		},
+	);
+
+	it("stops inside the Telegram gate when shutdown lands during its module load", async () => {
+		configureTelegram();
+		const controller = new AbortController();
+		mocks.rolloutSweep.mockImplementationOnce(async () => {
+			// Lands between the post-rollout shutdown check and the one inside
+			// the Telegram try: one resolved-promise tick is exactly the gap
+			// `await optionalTelegramDelivery()` leaves between them.
+			void Promise.resolve().then(() =>
+				Promise.resolve().then(() => controller.abort()),
+			);
+		});
+		await startEmailWorker(controller.signal);
+		expect(mocks.rolloutSweep).toHaveBeenCalledOnce();
+		expect(mocks.telegramSweep).not.toHaveBeenCalled();
+		expect(mocks.whatsappSweep).not.toHaveBeenCalled();
+		expect(mocks.destroy).toHaveBeenCalledOnce();
+	});
 
 	it("isolates Telegram outbox failure so a native email event still completes", async () => {
 		configureTelegram();
