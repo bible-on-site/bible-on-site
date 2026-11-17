@@ -189,6 +189,38 @@ export function getCycleForDate(date: HebrewDate): StudyCycle | null {
 }
 
 /**
+ * The day a canonical perek is studied in the given cycle (#3612): the stored
+ * schedule entry for confirmed cycles; projected cycles follow the same
+ * Sunday–Thursday cadence resolveProjectedDay applies (perek 1 on the cycle's
+ * first Sunday, five study days a week, perek 929 on day 1298) — its exact
+ * inverse.
+ */
+export function getPerekDateInCycle(
+	perekId: number,
+	cycle: StudyCycle,
+): HebrewDate {
+	if (perekId < 1 || perekId > PERAKIM_PER_CYCLE) {
+		throw new Error(`Invalid perekId: ${perekId}`);
+	}
+	if (!cycle.projected) {
+		// The schedule array indexes each perek's dates by confirmed cycle.
+		const scheduled = catalog.schedule[perekId - 1].date[cycle.number - 1];
+		/* istanbul ignore if: every confirmed cycle dates all 929 perakim */
+		if (scheduled === undefined) {
+			throw new Error(
+				`No schedule for perek ${perekId} in cycle ${cycle.number}`,
+			);
+		}
+		return parseNumericalDateToHebcalDate(scheduled);
+	}
+	const index = perekId - 1;
+	return cycle.start.add(
+		Math.floor(index / STUDY_DAYS_PER_WEEK) * 7 +
+			(index % STUDY_DAYS_PER_WEEK),
+	);
+}
+
+/**
  * Completed Hebrew years since the program's first study day — the day perek 1
  * of cycle 1 was scheduled (the canonical first entry in cycles.json, not a
  * launch date or the current cycle's start). A year counts only once the
