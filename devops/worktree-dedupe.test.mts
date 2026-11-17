@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {
 	linkSync,
 	mkdirSync,
+	readFileSync,
+	unlinkSync,
 	mkdtempSync,
 	rmSync,
 	statSync,
@@ -125,6 +127,33 @@ describe("dedupe", () => {
 			assert.equal(r.linked, 2); // both aliases leave the donor inode
 			assert.equal(r.reclaimedBytes, payload.length); // reclaimed once
 			assert.equal(statSync(a).ino, statSync(c).ino);
+		} finally {
+			cleanup();
+		}
+	});
+	it("drops a drifted alias instead of hashing its replacement content", () => {
+		const { dir, cleanup } = makeTree();
+		try {
+			const contentA = Buffer.alloc(64 * 1024, "a");
+			const contentB = Buffer.alloc(64 * 1024, "b");
+			settled(dir, "wt1/node_modules/p/x", contentB); // canonical = B
+			const b = settled(dir, "wt2/node_modules/p/x", contentA);
+			const c = join(dir, "wt2/node_modules/p/y");
+			linkSync(b, c); // b,c share inode holding A
+			utimesSync(c, OLD, OLD);
+			// installer replaces b's path with B's content: unlink+write
+			// gives a new inode while c keeps the original inode+content A
+			unlinkSync(b);
+			writeFileSync(b, contentB);
+			utimesSync(b, OLD, OLD); // forged old mtime; inode still differs
+			const inoC = statSync(c).ino;
+			const r = dedupe([join(dir, "wt1"), join(dir, "wt2")], CLI);
+			// b now holds B's content, so relinking it to canonical B is
+			// legitimate; the invariant is that c — still holding A —
+			// must never be relinked to mismatched bytes.
+			assert.equal(r.linked, 1);
+			assert.equal(statSync(c).ino, inoC);
+			assert.equal(readFileSync(c).toString(), contentA.toString());
 		} finally {
 			cleanup();
 		}

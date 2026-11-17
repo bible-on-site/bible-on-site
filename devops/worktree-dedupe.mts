@@ -225,72 +225,96 @@ export function dedupe(paths: string[], cli: Cli): DedupeResult {
 	// Canonical file per (device, hash): hardlinks cannot cross volumes,
 	// so each device gets its own canonical for the same content.
 	const canonByKey = new Map<string, Candidate>();
+	// A candidate's hash always describes that candidate's own content at
+	// hash time — never a group-mate's — so a path replaced mid-run can only
+	// be relinked to content it provably held. Candidates that still match
+	// the scan snapshot (size+mtime+inode) are "stable"; same-inode paths
+	// share the cached hash because a live inode's index is unique.
+	const hashByInode = new Map<string, string>();
 	for (const [, group] of bySize) {
 		if (group.length < 2) continue;
-		// Aliases of one inode share storage and content: hash once, then
-		// relink every alias — a donor inode's bytes are reclaimed only
-		// when its last alias leaves.
-		const byInode = new Map<string, Candidate[]>();
-		for (const c of group) {
-			const k = `${c.dev}:${c.ino}`;
-			const arr = byInode.get(k);
-			if (arr) arr.push(c);
-			else byInode.set(k, [c]);
-		}
-		for (const [, aliases] of byInode) {
-			let h: string;
+		const stillSame = (c: Candidate): Candidate | null => {
 			try {
-				h = hash(aliases[0].path);
-			} catch (e) {
-				res.errors.push(`hash ${aliases[0].path}: ${(e as Error).message}`);
-				continue;
+				const st = statSync(c.path);
+				return st.size === c.size &&
+					st.mtimeMs === c.mtimeMs &&
+					st.ino === c.ino
+					? c
+					: null;
+			} catch {
+				return null;
 			}
-			res.hashed++;
-			const key = `${aliases[0].dev}:${h}`;
-			const canon = canonByKey.get(key);
-			if (!canon) {
-				canonByKey.set(key, aliases[0]);
-				continue;
-			}
-			if (canon.dev === aliases[0].dev && canon.ino === aliases[0].ino)
-				continue; // already shares the canonical inode
-			let relinked = 0;
-			for (const c of aliases) {
-				if (!cli.apply) {
-					relinked++;
+		};
+		const stable = group.filter((c) => stillSame(c) !== null);
+		// Reclaim accounting: a recorded inode's storage frees only when
+		// every stable alias has been relinked elsewhere.
+		const inodeLeft = new Map<string, number>();
+		for (const c of stable) {
+			const k = `${c.dev}:${c.ino}`;
+			inodeLeft.set(k, (inodeLeft.get(k) ?? 0) + 1);
+		}
+		for (const c of stable) {
+			// Re-verify before trusting the recorded inode: a path replaced
+			// since the filter must not borrow a cached hash or a canonical
+			// slot its current content does not own.
+			if (stillSame(c) === null) continue;
+			const ikey = `${c.dev}:${c.ino}`;
+			let h = hashByInode.get(ikey);
+			if (!h) {
+				try {
+					h = hash(c.path);
+				} catch (e) {
+					res.errors.push(`hash ${c.path}: ${(e as Error).message}`);
 					continue;
 				}
-				// atomic replace: re-verify then link temp + rename over
-				try {
-					const st = statSync(c.path);
-					if (st.size !== c.size || st.mtimeMs !== c.mtimeMs) continue;
-					const cst = statSync(canon.path);
-					if (cst.size !== canon.size || cst.mtimeMs !== canon.mtimeMs) {
-						// Canonical was rewritten since the scan; this verified
-						// donor inode still holds the hashed content and becomes
-						// the new canonical — its other aliases need no relink.
-						canonByKey.set(key, c);
-						break;
-					}
-					const tmp = `${c.path}.dedupe-${process.pid}`;
-					linkSync(canon.path, tmp);
-					try {
-						renameSync(tmp, c.path);
-					} catch (re) {
-						try {
-							unlinkSync(tmp);
-						} catch {
-							/* temp alias could not be removed */
-						}
-						throw re;
-					}
-					relinked++;
-				} catch (e) {
-					res.errors.push(`link ${c.path}: ${(e as Error).message}`);
-				}
+				hashByInode.set(ikey, h);
+				res.hashed++;
 			}
-			res.linked += relinked;
-			if (relinked === aliases.length) res.reclaimedBytes += aliases[0].size;
+			const key = `${c.dev}:${h}`;
+			let canon = canonByKey.get(key);
+			if (canon && canon.dev === c.dev && canon.ino === c.ino) continue;
+			if (!canon) {
+				canonByKey.set(key, c);
+				continue;
+			}
+			if (!cli.apply) {
+				res.linked++;
+				const left = (inodeLeft.get(ikey) ?? 1) - 1;
+				inodeLeft.set(ikey, left);
+				if (left === 0) res.reclaimedBytes += c.size;
+				continue;
+			}
+			// atomic replace: re-verify then link temp + rename over
+			try {
+				if (stillSame(c) === null) continue;
+				const cst = statSync(canon.path);
+				if (cst.size !== canon.size || cst.mtimeMs !== canon.mtimeMs) {
+					// Canonical was rewritten since the scan; this verified
+					// candidate still holds the hashed content and becomes
+					// the new canonical.
+					canonByKey.set(key, c);
+					canon = c;
+					continue;
+				}
+				const tmp = `${c.path}.dedupe-${process.pid}`;
+				linkSync(canon.path, tmp);
+				try {
+					renameSync(tmp, c.path);
+				} catch (re) {
+					try {
+						unlinkSync(tmp);
+					} catch {
+						/* temp alias could not be removed */
+					}
+					throw re;
+				}
+				res.linked++;
+				const left = (inodeLeft.get(ikey) ?? 1) - 1;
+				inodeLeft.set(ikey, left);
+				if (left === 0) res.reclaimedBytes += c.size;
+			} catch (e) {
+				res.errors.push(`link ${c.path}: ${(e as Error).message}`);
+			}
 		}
 	}
 	return res;
