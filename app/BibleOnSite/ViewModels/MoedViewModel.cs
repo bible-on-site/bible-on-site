@@ -166,6 +166,9 @@ public partial class MoedViewModel : ObservableObject, IPerushimSheetViewModel /
         _navigator = navigator ?? ShellAppNavigator.Instance;
         _fileSystem = fileSystem ?? FileSystem.Current;
         _share = share ?? Share.Default;
+#if MAUI
+        InitializePerushimController();
+#endif
 
         _fontFactor = _preferencesService.PasukFontFactor;
         WeakPreferencesSubscription.Subscribe(this, _preferencesService, static model => model.RefreshPreferences());
