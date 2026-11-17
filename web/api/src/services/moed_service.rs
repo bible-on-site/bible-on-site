@@ -1264,6 +1264,22 @@ mod db_tests {
     }
 
     #[tokio::test]
+    async fn upsert_moed_id_outside_smallint_unsigned_is_not_found() {
+        // i32 caller ids outside u16 can never match the PK — not found,
+        // no lookup issued.
+        for id in [-1i32, 70000] {
+            let db = mock_db(MockDatabase::new(DatabaseBackend::MySql));
+            let mut input = upsert_input();
+            input.id = Some(id);
+            let err = upsert_moed(&db, &skipped_revalidator(), input)
+                .await
+                .unwrap_err();
+            assert!(matches!(err, ServiceError::NotFound(_)), "id {id}: {err:?}");
+            assert_no_writes(&db);
+        }
+    }
+
+    #[tokio::test]
     async fn upsert_moed_rejects_blank_name_and_bad_annual_order() {
         let db = mock_db(MockDatabase::new(DatabaseBackend::MySql));
         let mut input = upsert_input();
@@ -1417,6 +1433,16 @@ mod db_tests {
             .await
             .unwrap_err();
         assert!(matches!(err, ServiceError::NotFound(_)));
+
+        // Caller ids outside u16 can never match the SMALLINT UNSIGNED PK —
+        // not found without a lookup.
+        for id in [-1i32, 70000] {
+            let db = mock_db(MockDatabase::new(DatabaseBackend::MySql));
+            let err = delete_moed(&db, &skipped_revalidator(), id)
+                .await
+                .unwrap_err();
+            assert!(matches!(err, ServiceError::NotFound(_)), "id {id}: {err:?}");
+        }
     }
 
     #[tokio::test]
