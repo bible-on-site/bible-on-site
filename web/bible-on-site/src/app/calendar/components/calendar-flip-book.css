@@ -452,3 +452,15 @@ button.cal-cell:focus-visible {
 		font-size: 2.1cqw;
 	}
 }
+
+/* ---------- toolbar ---------- */
+
+/* alpha.121 paints toolbar text white on vertical-axis books
+   (.flipbook-toolbar[data-flip-axis=vertical] { color:#fff }); the page
+   indicator input keeps its light field background, so the month label
+   became white-on-white. Restore the readable dark-on-light pairing —
+   the same colors upstream uses for its --editing state. */
+.cal-book-wrap .flipbook-toolbar input.flipbook-toolbar-indicator {
+	color: #1a1a1a;
+	background: #fff;
+}

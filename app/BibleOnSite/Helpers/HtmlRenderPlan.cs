@@ -26,7 +26,8 @@ public readonly record struct HtmlRenderSpan(
 /// their native span types (Android SpannableStringBuilder, etc.) without
 /// re-parsing markup.
 /// </summary>
-public sealed record HtmlRenderPlan(string Text, IReadOnlyList<HtmlRenderSpan> Spans)
+public sealed record HtmlRenderPlan(
+    string Text, IReadOnlyList<HtmlRenderSpan> Spans, IReadOnlyList<HtmlQuoteBlock> QuoteBlocks)
 {
     /// <summary>
     /// Parses <paramref name="html"/> into runs and flattens them into display
@@ -63,7 +64,13 @@ public sealed record HtmlRenderPlan(string Text, IReadOnlyList<HtmlRenderSpan> S
                 spans.Add(span);
             }
         }
-        return new HtmlRenderPlan(text.ToString(), spans);
+        // The RLM prefix shifts every run position by one — quote ranges
+        // computed in run space slide along with it (#3443).
+        var shift = rtl ? 1 : 0;
+        var quoteBlocks = HtmlRuns.QuoteBlocks(runs)
+            .Select(block => block with { Start = block.Start + shift, End = block.End + shift })
+            .ToList();
+        return new HtmlRenderPlan(text.ToString(), spans, quoteBlocks);
     }
 
     /// <summary>

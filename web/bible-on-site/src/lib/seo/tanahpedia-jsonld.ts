@@ -202,14 +202,6 @@ export function buildEntryGraph(input: EntryGraphInput): Graph {
 		name: entry.title,
 		url: pageUrl,
 		inDefinedTermSet: { "@id": TANAHPEDIA_SET_ID },
-		// Stored complete-text baseline (#2607) — on the DefinedTerm content
-		// node, never on the entity (Person/Place) nodes.
-		...(entry.metric?.wordCount != null
-			? { wordCount: entry.metric.wordCount }
-			: {}),
-		...(entry.metric?.estimatedSeconds != null
-			? { timeRequired: isoDurationSeconds(entry.metric.estimatedSeconds) }
-			: {}),
 	};
 	if (hasContent(entry.content)) {
 		/* Normalized HTML keeps generated footnote markers (data-marker
@@ -242,6 +234,16 @@ export function buildEntryGraph(input: EntryGraphInput): Graph {
 		isPartOf: { "@id": WEBSITE_ID },
 		breadcrumb: { "@id": breadcrumb["@id"] },
 		mainEntity: { "@id": termId },
+		// Stored complete-text baseline (#2607) — on the WebPage
+		// (CreativeWork) node describing the entry's prose. The DefinedTerm
+		// and Person/Place/Thing entity nodes stay metric-free: reading
+		// time never hangs on the catalogued entity as if it were prose.
+		...(entry.metric?.wordCount != null
+			? { wordCount: entry.metric.wordCount }
+			: {}),
+		...(entry.metric?.estimatedSeconds != null
+			? { timeRequired: isoDurationSeconds(entry.metric.estimatedSeconds) }
+			: {}),
 	};
 	if (focal) {
 		webPage.about = {

@@ -49,9 +49,14 @@ describe("durable contribution storage", () => {
 			store.ensureContributionSchema(),
 			store.ensureContributionSchema(),
 		]);
-		expect(mocks.execute).toHaveBeenCalledExactlyOnceWith(
-			expect.stringContaining("IF NOT EXISTS"),
-		);
+		expect(mocks.execute).toHaveBeenCalledTimes(5);
+		expect(mocks.execute.mock.calls.map(([sql]) => sql)).toEqual([
+			store.CONTRIBUTION_SCHEMA,
+			store.CONTRIBUTION_AGENT_SCHEMA,
+			store.CONTRIBUTION_AGENT_BUNDLE_SCHEMA,
+			store.ARTICLE_LINK_IMPORT_SCHEMA,
+			store.ARTICLE_LINK_IMPORT_LOCK_SCHEMA,
+		]);
 		expect(store.CONTRIBUTION_SCHEMA).not.toContain("DROP");
 	});
 	it("retries schema initialization after an actual failure", async () => {
@@ -60,7 +65,7 @@ describe("durable contribution storage", () => {
 			"unavailable",
 		);
 		await store.ensureContributionSchema();
-		expect(mocks.execute).toHaveBeenCalledTimes(2);
+		expect(mocks.execute).toHaveBeenCalledTimes(6);
 	});
 	it("reads JSON stored as a string and uses authoritative scalar columns", async () => {
 		mocks.one.mockResolvedValue(row);

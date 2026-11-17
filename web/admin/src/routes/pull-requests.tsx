@@ -1,10 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
-import {
-	ContributionWorkspace,
-	validateContributionSearch,
-} from "~/components/tanahpedia/ContributionWorkspace";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { validateContributionSearch } from "~/components/tanahpedia/ContributionWorkspace";
 
 export const Route = createFileRoute("/pull-requests")({
 	validateSearch: validateContributionSearch,
-	component: () => <ContributionWorkspace kind="pr" />,
+	beforeLoad: ({ search }) => {
+		throw redirect({
+			to: "/",
+			search: { ...search, tab: "prs" },
+			replace: true,
+		});
+	},
 });

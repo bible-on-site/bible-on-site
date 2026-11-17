@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 	valid: vi.fn(),
 	metrics: vi.fn(),
 	saveTitle: vi.fn(),
+	article: vi.fn(),
 }));
 vi.mock("~/server/db", () => ({
 	txQueryOne: mocks.one,
@@ -23,6 +24,9 @@ vi.mock("~/server/tanahpedia/revisions", () => ({
 }));
 vi.mock("~/server/reading-metrics", () => ({
 	recomputeEntryMetrics: mocks.metrics,
+}));
+vi.mock("~/server/tanahpedia/contribution-article-links.server", () => ({
+	readArticleLinkState: mocks.article,
 }));
 
 import {
@@ -53,6 +57,36 @@ function reviewed(
 }
 
 describe("typed contribution domain API", () => {
+	it("reads article bases through the guarded article adapter and rejects the generic SQL executor", async () => {
+		const state = {
+			contentHash: "a".repeat(32),
+			sourceHash: "b".repeat(64),
+			perekId: 1,
+			authorId: 2,
+			coverageVerified: false,
+			coveringSources: [],
+			dedicationAssignments: [],
+			moedIds: [],
+		};
+		mocks.article.mockResolvedValue(state);
+		expect(await readChangeState(conn, "article_links", "27")).toEqual(state);
+		expect(mocks.article).toHaveBeenCalledExactlyOnceWith(conn, "27");
+		mocks.execute.mockClear();
+		await expect(
+			applyChange(
+				conn,
+				{
+					kind: "article_links",
+					targetId: "27",
+					before: null,
+					after: null,
+					labels: {},
+				},
+				"source",
+			),
+		).rejects.toThrow("guarded API merge executor");
+		expect(mocks.execute).not.toHaveBeenCalled();
+	});
 	it("requires choosing an existing alias before editing its complete target set", async () => {
 		mocks.one.mockResolvedValue({ name: "Alias" });
 		mocks.query.mockResolvedValue([{ entryId: ID, label: "" }]);

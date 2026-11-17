@@ -125,6 +125,18 @@ test("upload directory accepts arbitrary files and shows completed files", async
 		path: testInfo.outputPath("archive-author.png"),
 		fullPage: true,
 	});
+	await page.setViewportSize({ width: 390, height: 844 });
+	expect(
+		await page.evaluate(
+			() => document.documentElement.scrollWidth <= innerWidth,
+		),
+	).toBe(true);
+	await expect(
+		page.getByRole("link", { name: "ארכיון", exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "יציאה מהחשבון" }),
+	).toBeVisible();
 	await page.getByRole("button", { name: "יציאה מהחשבון" }).click();
 	await expect(
 		page.getByRole("heading", { name: "כניסה לארכיון" }),
@@ -282,7 +294,8 @@ test("dropped files and folders upload into the current directory", async ({
 					files: [],
 				},
 			});
-		if (request.method() === "PUT") return route.fulfill({ json: { ok: true } });
+		if (request.method() === "PUT")
+			return route.fulfill({ json: { ok: true } });
 		const data = request.postDataJSON();
 		if (data.action === "mkdir") {
 			mkdirs.push({ name: data.name, directory: data.directory });
@@ -311,14 +324,14 @@ test("dropped files and folders upload into the current directory", async ({
 		return data;
 	});
 	await zone.dispatchEvent("dragenter", { dataTransfer: transfer });
-	await expect(page.getByText("שחררו כדי להעלות לתיקייה הנוכחית")).toBeVisible();
+	await expect(
+		page.getByText("שחררו כדי להעלות לתיקייה הנוכחית"),
+	).toBeVisible();
 	await page.screenshot({
 		path: testInfo.outputPath("archive-dragover.png"),
 	});
 	await zone.dispatchEvent("drop", { dataTransfer: transfer });
-	await expect
-		.poll(() => starts.length)
-		.toBe(2);
+	await expect.poll(() => starts.length).toBe(2);
 	expect(starts).toEqual([
 		{ filename: "גרירה-1.txt", directory: "author-home" },
 		{ filename: "גרירה-2.txt", directory: "author-home" },
@@ -352,9 +365,7 @@ test("dropped files and folders upload into the current directory", async ({
 		const event = new Event("drop", { bubbles: true, cancelable: true });
 		Object.defineProperty(event, "dataTransfer", {
 			value: {
-				items: [
-					{ kind: "file", webkitGetAsEntry: () => folder },
-				],
+				items: [{ kind: "file", webkitGetAsEntry: () => folder }],
 				files: [],
 				types: ["Files"],
 			},
@@ -363,16 +374,12 @@ test("dropped files and folders upload into the current directory", async ({
 			.querySelector('section[aria-label="הוספת קבצים לתיקייה"]')
 			?.dispatchEvent(event);
 	});
-	await expect
-		.poll(() => mkdirs.length)
-		.toBe(1);
+	await expect.poll(() => mkdirs.length).toBe(1);
 	expect(mkdirs[0]).toEqual({
 		name: "תיקיית-גרירה",
 		directory: "author-home",
 	});
-	await expect
-		.poll(() => starts.length)
-		.toBe(3);
+	await expect.poll(() => starts.length).toBe(3);
 	expect(starts[2]).toEqual({
 		filename: "בתוך.txt",
 		directory: "folder-1",
@@ -432,7 +439,9 @@ test("a second drop while an upload runs is refused with a message", async ({
 		mimeType: "application/octet-stream",
 		buffer: Buffer.from("long enough to need a part"),
 	});
-	await expect(page.getByRole("button", { name: "ביטול ההעלאה" })).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "ביטול ההעלאה" }),
+	).toBeVisible();
 	const transfer = await page.evaluateHandle(() => {
 		const data = new DataTransfer();
 		data.items.add(new File(["late"], "מאוחר.txt"));
