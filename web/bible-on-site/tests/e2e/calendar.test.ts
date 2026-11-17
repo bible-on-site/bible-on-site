@@ -775,8 +775,11 @@ test.describe("/לוח vertical flip book — engine-owned exposure (#3615)", ()
 			page.locator(`${FACES}[data-page-index="${start + 1}"]`),
 		);
 
-		// Drag from the lower free edge up over a perek cell: the engine
-		// swallows the release click so a turn never opens a perek.
+		// Drag from the lower free edge up over a perek cell: the release
+		// lands on a different face, so the trailing click can only reach a
+		// common ancestor. This half proves the committed turn settles and
+		// never navigates — the same-element drag below is the part that
+		// actually exercises the engine's click suppression.
 		await page.mouse.move(
 			lowerBox.x + lowerBox.width / 2,
 			lowerBox.y + lowerBox.height - 8,
@@ -789,10 +792,66 @@ test.describe("/לוח vertical flip book — engine-owned exposure (#3615)", ()
 		);
 		await page.mouse.up();
 		// The drag commits a turn — the ?month sync proves the engine settled.
-		// A leaked release click would have pushed /929/<id> in that window,
-		// so the negative check afterwards is a real suppression assertion.
 		await expect(page).toHaveURL(/[?&]month=\d+/);
 		await expect(page).not.toHaveURL(/\/929\//);
+
+		// Suppression probe: press and release on the SAME cell with a real
+		// drag between. The browser then dispatches `click` on that cell —
+		// proven by the capture recorder — so the engine's post-drag swallow
+		// is the only thing keeping it from opening a perek. Cells are plain
+		// buttons (no Link → no prefetch), so any /929 request is a real
+		// leaked navigation: watching for the request beats watching the URL,
+		// which only updates after the RSC fetch resolves.
+		await page.evaluate(() => {
+			const w = window as unknown as { __cellClicks: number };
+			w.__cellClicks = 0;
+			document.addEventListener(
+				"click",
+				(e) => {
+					if (
+						e.target instanceof Element &&
+						e.target.closest("button.cal-cell")
+					) {
+						w.__cellClicks += 1;
+					}
+				},
+				true,
+			);
+		});
+		const dragCell = page
+			.locator(`${SHEET_FACE} button.cal-cell`)
+			.first();
+		const dragBox = await boundingBox(dragCell);
+		const pressX = dragBox.x + dragBox.width * 0.3;
+		const pressY = dragBox.y + dragBox.height / 2;
+		const sheetIndex = await sheetPageIndex(page);
+		const leakedNav = page
+			.waitForRequest(/\/929\/\d+/, { timeout: 3_000 })
+			.then(() => true)
+			.catch(() => false);
+		await page.mouse.move(pressX, pressY);
+		await page.mouse.down();
+		await page.mouse.move(
+			pressX + Math.min(24, dragBox.width * 0.4),
+			pressY,
+			{ steps: 6 },
+		);
+		await page.mouse.up();
+		await waitForFlipSettled(page);
+		// A click really was dispatched at the cell …
+		expect(
+			await page.evaluate(
+				() =>
+					(window as unknown as { __cellClicks: number }).__cellClicks,
+			),
+		).toBe(1);
+		// … and the engine swallowed it: no perek navigation, no turn.
+		expect(await leakedNav).toBe(false);
+		await expect(page).not.toHaveURL(/\/929\//);
+		await expect(page.locator(SHEET_FACE)).toHaveAttribute(
+			"data-page-index",
+			String(sheetIndex),
+		);
 
 		// A plain tap on a study-day cell still opens its perek: the click
 		// reaches onOpen → router.push, whose RSC request proves navigation
