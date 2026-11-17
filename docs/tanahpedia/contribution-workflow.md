@@ -199,8 +199,8 @@ assignments use the same protocol through a serial background runtime. A changed
 discussion, assignment, agent configuration, API contract or read catalogue
 rejects stale output. PR creation or revision, per-comment responses and the
 completion receipt commit together; an identical replay returns that receipt.
-The standalone local worker runtime v5 uses Ollama's native read functions and
-assistant/tool messages. Once research ends, one separate request receives the
+Runtime v5 introduced Ollama's native read functions and assistant/tool messages;
+the current runtime v6 retains that transport. Once research ends, one separate request receives the
 complete constrained result schema. This avoids losing schema constraints in
 Ollama's native function-parameter representation. Both phases share the existing
 120-second execution deadline, 16K context and 4,096-token output limit; reads
@@ -270,8 +270,9 @@ the requested replacement, model authorship and the mandatory owner review.
 That synthetic PR and issue were closed without applying content. The worker now
 defaults to this tested 8B model. `LOCAL_LLM_MODEL` sets the default for new local
 registrations; existing registered model choices survive CD and are edited in admin.
-Each inference request unloads the model on completion, returning its memory to the
-workstation between jobs instead of retaining an idle model while other apps run.
+The current worker reuses model residency during one job and requests unloading
+after its completion/failure acknowledgement, returning memory between jobs.
+Legacy protocol 1 retains its per-response unload behavior.
 
 ## Agent versions and context
 
@@ -416,6 +417,13 @@ Unclear, conflicting, negative or critical quotations stay outside this narrow
 mechanism; evidence and model-authored text cannot grant edit authority. Manual
 human editing is unchanged. The v10 release retained API v5, protocol v2 and runtime v5.
 
+The current bundle v11 and worker runtime v6 retain API v5, protocol v2, literal
+article-link grounding and exact-copy enforcement. They add fixed, typed feedback
+for invalid arguments in the current read call, after the normal identity, lease
+and context checks. A rejected read supplies no receipt, records or result schema.
+Local and AWS agents can correct those arguments within the original execution
+deadline; authentication, stale-context, replay and storage failures remain fatal.
+
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these
 typed domain merge operations run in the admin service's transaction. Breaking
@@ -535,12 +543,14 @@ resume old generation or merge agent-assigned proposals on that image while new
 jobs remain pending. Existing public content remains available during this pause.
 This release creates no new IAM grants, Cognito clients or public content routes.
 
-For configuration rollback, restore the prior writable Cognito client/resource
-settings from the private receipt and redeploy the prior admin task definition.
-After a later `latest` image publication, register its saved definition with the
-saved running image digest instead of relying on the mutable tag. Stop the local
-worker before removing its scope. Existing general admin service access remains
-unchanged because its original scope and client settings are preserved.
+For configuration rollback, first re-read the healthy current task definition and
+Cognito client/resource settings. Restore only the settings changed by this
+configuration operation, using its private receipt and a fresh task-definition
+clone that preserves the current image references and runtime settings. The saved
+running image digest records provenance; a configuration rollback does not restore
+older application bytes. A binary rollback uses the normal reviewed release path
+and the protocol compatibility checks above. Stop the local worker before removing
+its scope. Preserve the original general admin service scope and client settings.
 
 Validation tasks: `bun run test:unit`, `bun run coverage:unit`,
 `bun run coverage:contributions:mysql`, `bun run lint`, and `bun run build` in
