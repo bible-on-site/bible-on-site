@@ -26,7 +26,7 @@ Vulnerability reporting is in [SECURITY.md](SECURITY.md).
 - API (anonymous reads): GraphQL queries; mutations (dedications, tanahpedia aliases/family/revisions) gated by Bearer keys (`DEDICATION_API_KEY`, `TANAHPEDIA_REVISION_API_KEY`, `common/auth.rs`); search engine endpoints.
 - Admin Panel: Cognito OAuth (AWS SSO IdP) cookie session + optional client-credentials service token (`server/auth.ts`); `SKIP_AUTH=true` dev bypass (`server.tsx`); server functions writing MySQL, S3 uploads, SES, WhatsApp, LLM assistant.
 - Mobile App: talks to API, downloads asset packs.
-- CI: workflows incl. `auto-create-pr.yml`, PR-triggered jobs, self-hosted/mac runners, AWS credentials in secrets.
+- CI: `ci.yml` and PR-triggered workflows, self-hosted/mac runners, AWS credentials in secrets.
 
 **Assets.** AWS account and IAM roles used by CI; RDS data (articles, dedications incl. donor info, tanahpedia); S3 objects; Cognito client secret; API keys; SES/WhatsApp sender reputation; site integrity (defacement, Divine Name masking); app-store signing keys.
 
