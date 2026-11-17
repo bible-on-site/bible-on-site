@@ -318,9 +318,14 @@ correlate directly with nginx upstream logs. Each line carries `version`
 min/mean/max/p50/p90/p95/p99 in ms, sampled once per event-loop iteration so
 queueing delay ahead of a request handler is recorded), `eventLoopUtilization`
 (idle/active ms and the delta ratio), `cpu` (user/system ms deltas) and `gc`
-(count, total/max ms, per-kind counts). Accumulators reset every interval; the
-timer is unref'd so drain behavior is unchanged. Enabling in production is a
-separate deployment decision — the instrumentation PR does not turn it on.
+(count, total/max ms, per-kind counts). A runtime that cannot provide a
+primitive emits `{"unsupported": true}` for that field instead of zeros that
+would read as a perfectly healthy loop — under Bun, `eventLoopUtilization`
+returns a zero stub and `gc` is absent from
+`PerformanceObserver.supportedEntryTypes`, while `eventLoopDelay` and `cpu`
+report real values there. Accumulators reset every interval; the timer is
+unref'd so drain behavior is unchanged. Enabling in production is a separate
+deployment decision — the instrumentation PR does not turn it on.
 
 Local verification against the real compiled server:
 
