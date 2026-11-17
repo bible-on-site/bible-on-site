@@ -1,0 +1,32 @@
+{
+  "sourceRepository": "bible-on-site/al-heperek-font",
+  "sourceRevision": "d7c34847d6e103b6422ab9bd21355b44f352d525",
+  "choices": {
+    "א": "A22",
+    "ע": "E26",
+    "ט": "T21",
+    "צ": "C28",
+    "ש": "S35"
+  },
+  "finalTsadiFrom": "C28",
+  "weight": 700,
+  "status": "Devin backlog handoff; combined design review, not production adoption",
+  "archive": {
+    "file": "al-heperek-font-d7c3484.zip",
+    "sha256": "ee6d57fa5c8983ad10014375ad2eaaa1c99f0d5bb63b9fa2d9835394556046ba",
+    "bytes": 3615844,
+    "files": 994,
+    "verifiedCleanBuild": true
+  },
+  "selectedFontFiles": [
+    {
+      "file": "dist/selected/otf/AlHeperekSelected-Bold.otf",
+      "sha256": "835b771a6d44ca5f90cbba0a97643e6fbbb10a9819218f4c34dbfac60ed11ffe"
+    },
+    {
+      "file": "dist/selected/woff2/AlHeperekSelected-Bold.woff2",
+      "sha256": "42020669db3da47d411ac34da08e2431a11c2b2fa5b0ee2943d2008c5ff29f0e"
+    }
+  ],
+  "license": "Al Heperek restricted license; bundled LICENSE is authoritative"
+}
