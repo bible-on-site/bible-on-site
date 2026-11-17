@@ -110,6 +110,10 @@ Semantics the backend implements (`src/lib/app-push/service.ts`):
   self-claimed-row model of `/api/push/subscription`. `POST` reports itself
   unconfigured (404) until the FCM service account is deployed; `DELETE`
   always works so opt-out is never blocked.
+- Anonymous writes stay bounded (#3500): `POST` attempts are rate-limited
+  per router-supplied client address (429, a budget shared with
+  `/api/push/subscription`), and `tanah_push_device` caps new identities at
+  25,000 rows — an existing `userId` always upserts past the cap.
 
 Registration is deduplicated client-side by a stored
 `(user|installation|token|topics)` fingerprint — a routine launch only re-POSTs
@@ -123,7 +127,11 @@ grant is minted in `service.ts`. It shares the `PUSH_SEND_SECRET` bearer
 credential and the fail-closed body contract of `/api/push/daily`: an absent
 body broadcasts to the topic, while `{ "token": "<fcm registration token>" }`
 targets exactly one device for the controlled delivery check — a mistyped or
-invalid key is a 400, never a broadcast. `.github/workflows/app-push-daily.yml`
+invalid key is a 400, never a broadcast. Failure also fails closed (#3499):
+a send where every attempt failed answers 502 and a targeted check that
+matched no live device answers 404, so `curl --fail-with-body` turns the
+run red instead of passing on `{ "sent": 0 }`.
+`.github/workflows/app-push-daily.yml`
 calls it on the same 05:00 UTC schedule as the web-push sender, armed by the
 `APP_PUSH_ENABLED` repository variable. Messages carry the same 12-hour
 expiry as the web sender — `android.ttl` plus the `apns-expiration` header —
