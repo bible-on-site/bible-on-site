@@ -49,6 +49,7 @@ import {
 	readContributionAgentBundle,
 	touchContributionAgent,
 } from "./contribution-agent-registry.server";
+import { appendAgentArticleEvidence } from "./contribution-article-evidence.server";
 import { assertCurrentAgentArticleGrounding } from "./contribution-article-grounding.server";
 import {
 	awsGenerate,
@@ -561,6 +562,16 @@ export async function completeContributionAgentWork(
 					context.catalogue,
 					item.changes,
 				);
+			if (result.draft) {
+				const selected = result.draft.evidence ?? item.evidence;
+				const supplemented = await appendAgentArticleEvidence(
+					conn,
+					result.draft.changes ?? item.changes,
+					context.catalogue,
+					selected,
+				);
+				if (supplemented !== selected) result.draft.evidence = supplemented;
+			}
 			const changed = result.draft
 				? await applyContributionAgentRevision(
 						conn,

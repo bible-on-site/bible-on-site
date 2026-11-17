@@ -439,6 +439,91 @@ describe("Article link contribution transactions", () => {
 		});
 		return { item, worker, identity, receipts: [read.receipt] };
 	}
+	it("persists source-read citation evidence on an agent-created PR without applying its links", async () => {
+		await conn.execute(
+			"UPDATE tanah_article SET content='<p>בראשית א כו.</p>' WHERE id=1",
+		);
+		const task = await claimedArticleTask();
+		const result = await task.worker.completeContributionGeneration({
+			...task.identity,
+			receipts: task.receipts,
+			content: JSON.stringify({
+				outcome: "implemented",
+				summary: "קישור מפורש לסקירה",
+				responses: [],
+				pullRequests: [coverageDraft("1", 1, 26)],
+			}),
+		});
+		const pr = await store.withContributions((connection) =>
+			store.readContribution(connection, result.prIds[0]),
+		);
+		expect(pr.evidence[0]).toEqual(evidence[0]);
+		expect(pr.evidence[1]).toMatchObject({
+			citation: "בראשית א כו",
+			quote: "בראשית א כו",
+			articleSource: {
+				articleId: "1",
+				contentHash: expect.any(String),
+				sourceHash: expect.any(String),
+				spanStart: "מאמר בדיקה\n".length,
+				spanEnd: "מאמר בדיקה\nבראשית א כו".length,
+			},
+		});
+		expect(pr.evidence).toHaveLength(2);
+		expect(pr.state).toBe("open");
+		expect(reviewStatus(pr)).toBe("required");
+		expect(api.write).not.toHaveBeenCalled();
+		expect(
+			(await conn.query("SELECT * FROM tanah_article_covering_source"))[0],
+		).toEqual([]);
+	});
+	it("supplements evidence on the same reviewed PR and requires fresh approval while retaining the proposal", async () => {
+		await conn.execute(
+			"UPDATE tanah_article SET content='<p>בראשית א כו.</p>' WHERE id=1",
+		);
+		let prior = await proposed([
+			{ ...command, target: { pasukCoordinates: [{ perekId: 1, pasuk: 26 }] } },
+		]);
+		prior = await service.updateContribution(action(prior, "approve"), owner);
+		expect(reviewStatus(prior)).toBe("approved");
+		const task = await claimedArticleTask(
+			prior,
+			"צרף את האזכור המפורש לראיות ושמור את השינויים המוצעים.",
+		);
+		const comment = task.item.events.find((event) => event.kind === "comment");
+		if (!comment) throw new Error("Missing evidence feedback");
+		await task.worker.completeContributionGeneration({
+			...task.identity,
+			receipts: task.receipts,
+			content: JSON.stringify({
+				outcome: "revised",
+				summary: "נוספו ראיות מהמקור שנקרא",
+				responses: [
+					{
+						commentId: comment.id,
+						status: "addressed",
+						body: "האזכור המפורש צורף לראיות.",
+					},
+				],
+				draft: { evidenceIndexes: [0] },
+			}),
+		});
+		const revised = await fresh(prior);
+		expect(revised.id).toBe(prior.id);
+		expect(revised.title).toBe(prior.title);
+		expect(revised.description).toBe(prior.description);
+		expect(revised.changes).toEqual(prior.changes);
+		expect(revised.evidence).toHaveLength(2);
+		expect(revised.evidence[0]).toEqual(prior.evidence[0]);
+		expect(revised.evidence[1]).toMatchObject({
+			citation: "בראשית א כו",
+			quote: "בראשית א כו",
+			articleSource: { articleId: "1" },
+		});
+		expect(revised.revision).toBe(prior.revision + 1);
+		expect(reviewStatus(revised)).toBe("required");
+		expect(api.write).not.toHaveBeenCalled();
+	});
 	it("rejects an invented verse1 beside a valid literal26 before inserting any modern PR", async () => {
 		await conn.execute(
 			"UPDATE tanah_article SET content='<p>בראשית א כו.</p>' WHERE id=1",

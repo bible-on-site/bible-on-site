@@ -417,12 +417,22 @@ Unclear, conflicting, negative or critical quotations stay outside this narrow
 mechanism; evidence and model-authored text cannot grant edit authority. Manual
 human editing is unchanged. The v10 release retained API v5, protocol v2 and runtime v5.
 
-The current bundle v11 and worker runtime v6 retain API v5, protocol v2, literal
+The current bundle v12 retains API v5, protocol v2, literal
 article-link grounding and exact-copy enforcement. They add fixed, typed feedback
 for invalid arguments in the current read call, after the normal identity, lease
 and context checks. A rejected read supplies no receipt, records or result schema.
 Local and AWS agents can correct those arguments within the original execution
 deadline; authentication, stale-context, replay and storage failures remain fatal.
+
+For generated article-link PRs and agent revisions, resolved citations from the
+job's actual source reads also become structured PR evidence. The server checks
+the current source hash, exact UTF-16 span and chapter identity/bounds, includes only citations supporting
+proposed verse links, and preserves existing evidence and editor notes. Repeated
+pages or revisions do not duplicate a citation. No model-written quotation is
+accepted through this path. Supplementing evidence requires a revised draft;
+an unchanged response cannot claim that a requested edit was applied. Older
+receipts without citation spans remain readable. The normal 30-source limit
+fails explicitly rather than silently removing existing sources.
 
 Every successful public API CD calls `/api/contributions/migrate`. A separate
 production admin boot pass handles the other deployment order, because these
