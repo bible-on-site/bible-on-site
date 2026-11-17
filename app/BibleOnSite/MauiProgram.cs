@@ -85,7 +85,17 @@ public static class MauiProgram
             });
 
 #if WINDOWS
-        // Readable Narrator names for every CollectionView row (#2766).
+        // Readable Narrator names for every CollectionView row (#2766). .NET 11
+        // defaults Windows CollectionView to the Items2 handler whose platform
+        // view is a WinUI ItemsView; CarouselView (and CollectionView with the
+        // handler-2 feature switch off) still hosts a ListViewBase.
+        Microsoft.Maui.Controls.Handlers.Items2.CollectionViewHandler2.Mapper.AppendToMapping("ItemAutomationNames", (handler, _) =>
+        {
+            if (handler.PlatformView is Microsoft.UI.Xaml.Controls.ItemsView itemsView)
+            {
+                ListItemAutomationNames.Attach(itemsView);
+            }
+        });
         Microsoft.Maui.Controls.Handlers.Items.CollectionViewHandler.Mapper.AppendToMapping("ItemAutomationNames", (handler, _) =>
         {
             if (handler.PlatformView is Microsoft.UI.Xaml.Controls.ListViewBase list)

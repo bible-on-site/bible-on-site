@@ -574,16 +574,7 @@ public partial class MasoraPage : ContentPage, IQueryAttributable, IAnalyticsScr
         // through to page navigation while still visible. The shared policy
         // ranks them foreground-first, including the focused-pasuk overlay
         // added alongside shared recitation playback (#3307, #3260).
-        var owner = ReaderBackPolicy.Resolve(
-            exitFullScreenVisible: ExitFullScreenButton.IsVisible,
-            unitPickerOpen: MasoraUnitPickerPopup.IsVisible,
-            fanMenuOpen: FanMenu.IsOpen,
-            menuOverlayOpen: false,
-            chapterSearchOpen: false,
-            focusedPasuk: _focusedPasuk != null,
-            perushimSheetOpen: PerushimPanel.IsOpen,
-            selectionSurfacesActive: ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
-                _unitRecitationSelection, focusedPasuk: false, Recitation.Cursor.PlayingKey != null));
+        var owner = ResolveBackOwner();
         switch (owner)
         {
             case ReaderBackSurface.ExitFullScreen:
@@ -606,6 +597,23 @@ public partial class MasoraPage : ContentPage, IQueryAttributable, IAnalyticsScr
                 return false;
         }
     }
+
+    /// <summary>
+    /// The transient surface that owns input right now, in the shared
+    /// foreground-first order — <see cref="ReaderBackSurface.None"/> means a
+    /// plain Back falls through to navigation and PgUp/PgDn may step units
+    /// (#2766).
+    /// </summary>
+    private ReaderBackSurface ResolveBackOwner() => ReaderBackPolicy.Resolve(
+        exitFullScreenVisible: ExitFullScreenButton.IsVisible,
+        unitPickerOpen: MasoraUnitPickerPopup.IsVisible,
+        fanMenuOpen: FanMenu.IsOpen,
+        menuOverlayOpen: false,
+        chapterSearchOpen: false,
+        focusedPasuk: _focusedPasuk != null,
+        perushimSheetOpen: PerushimPanel.IsOpen,
+        selectionSurfacesActive: ReaderSurfaceState.IsActive(_viewModel.SelectedPasukCount,
+            _unitRecitationSelection, focusedPasuk: false, Recitation.Cursor.PlayingKey != null));
 
     /// <summary>
     /// The capsule back affordance stays enabled while any transient surface
